@@ -1,0 +1,320 @@
+/* Tailwind entry. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * The only global CSS allowed beyond Tailwind utilities — these match the
+ * mockup's <style> block (docs/deployment-dashboard.html lines 9–577).
+ *
+ * Sections:
+ *   - keyframes + matrix-layout helpers (.stage-box, .arrow-line, .spinner,
+ *     .pill, etc.)
+ *   - swim-lane primitives (.lane-row, .edge-overlay, .node, .leaf-pair)
+ *   - workflow-rows primitives (.svc-block, .wf-row, .arrow-gap, .chev,
+ *     .default-tag)
+ *   - per-view --leaf-width single source of truth
+ */
+@layer base {
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+/* ============== Injected-event pulse ==============
+   Mirrors docs/deployment-dashboard.html lines 195–204. Applied by the
+   app component on every incoming SSE slot-update event when
+   `dashboard.focusOnLastEvent` is on (or when the affected element is
+   already in view). The ring is rendered with `box-shadow` so it sits
+   outside the element and does NOT reflow neighbours. Kept at the @layer
+   utilities scope so Tailwind ordering doesn't strip it. */
+@layer utilities {
+  @keyframes swap-pulse {
+    0%   { box-shadow: 0 0 0 0   rgba(245,158,11,0.55); }
+    60%  { box-shadow: 0 0 0 8px rgba(245,158,11,0.18); }
+    100% { box-shadow: 0 0 0 14px rgba(245,158,11,0);   }
+  }
+  .swap-pulse { animation: swap-pulse 900ms ease-out 1; }
+}
+
+@layer components {
+  .stage-box {
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+
+  .arrow-line {
+    width: 28px;
+    height: 1px;
+    background: #d1d5db;
+    position: relative;
+  }
+  /* The CSS arrowhead is a 6 px right-pointing triangle whose tip must sit
+     6 px to the right of the line's right edge. The geometric harness used
+     in `recomputeConnectorTops()` writes `--target-line-width` such that
+     `line.right + 6 == target.box.left` — so the arrow tip lands exactly
+     on the target box's left edge. With `right: -1px` (the previous value)
+     the tip was 5 px short, which is the "lines hang in mid-air" symptom.
+     Mirrors `docs/deployment-dashboard.html` lines 121–134. */
+  .arrow-line::after {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: -3px;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 6px solid #d1d5db;
+  }
+
+  .spinner {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border: 2px solid #fed7aa;
+    border-top-color: #ea580c;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+
+  .in-progress-box {
+    animation: pulse-border 1.8s ease-in-out infinite;
+  }
+
+  /* Glance-view pill (FR-12 / mockup lines 47–82). */
+  .pill {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 110px;
+    border-radius: 6px;
+    border: 1px solid;
+    overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .pill:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+  .pill-empty {
+    min-width: 110px;
+    height: 26px;
+    border: 1px dashed #e5e7eb;
+    background: #f9fafb;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #d1d5db;
+    font-size: 11px;
+    cursor: default;
+  }
+  .pill-current {
+    padding: 2px 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.1;
+  }
+  .pill-stripe { height: 3px; }
+  .pill.in-progress { animation: pulse-border-pill 1.8s ease-in-out infinite; }
+
+  /* Focus-view row + pin (FR-12 / mockup lines 81–82). */
+  .row-expanded { background: linear-gradient(0deg, #f9fafb, white); }
+  .pin-active { color: #d97706; }
+
+  /* ============== Per-view --leaf-width source of truth (FR-13) ==============
+     One CSS custom property bound on every layout root and consumed by every
+     leaf container (matrix box wrapper, .pill, .pill-empty, .node, .wf-stage).
+     Mirrors LEAF_WIDTH_BY_VIEW from the mockup. */
+  [data-view="detailed"]      { --leaf-width: 200px; }
+  [data-view="compact"]       { --leaf-width: 160px; }
+  [data-view="glance"]        { --leaf-width: 150px; }
+  [data-view="focus"]         { --leaf-width: 160px; }
+
+  /* ============== Swim-lane / Workflow-rows shared primitives ============== */
+
+  /* env-tag — per-leaf env label rendered to the LEFT of the box in tree
+     layouts (mockup lines 304–339). The matrix layout carries the env
+     label in the page-level column header instead. NFR-09 (a): cells of
+     a .leaf-pair CSS Grid; impossible to overlap by construction. */
+  .env-tag {
+    align-self: start;
+    padding-top: 6px;
+    padding-right: 0;
+    padding-left: 0;
+    text-align: right;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    pointer-events: none;
+    white-space: nowrap;
+    line-height: 1;
+    box-sizing: border-box;
+  }
+
+  .leaf-pair {
+    display: grid;
+    grid-template-columns: auto var(--leaf-width, 160px);
+    column-gap: 6px;
+    align-items: start;
+  }
+  /* NFR-09 Glance exception — env-tag renders inside the pill; the .leaf-pair
+     collapses to a single column. */
+  .leaf-pair-glance {
+    grid-template-columns: var(--leaf-width, 150px);
+    align-items: center;
+    column-gap: 0;
+  }
+  /* Inside-pill env-tag — overrides .env-tag defaults so it sits as an
+     inline glyph at the start of .pill-current. NFR-09 Glance exception. */
+  .pill .env-tag {
+    align-self: auto;
+    padding: 0;
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  /* SVG edge overlay used by swim-lane. */
+  .edge-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+  }
+  .edge {
+    fill: none;
+    stroke: #d1d5db;
+    stroke-width: 1.5;
+  }
+  .edge-correlated {
+    stroke-dasharray: 4 3;
+  }
+
+  /* ============== Workflow-rows view ============== */
+  .svc-block {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 6px 12px;
+    display: grid;
+    grid-template-columns: 176px 1fr;
+    column-gap: 12px;
+    align-items: stretch;
+  }
+  .svc-block-meta {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding-right: 8px;
+    border-right: 1px solid #f3f4f6;
+    min-width: 0;
+  }
+  .svc-block-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .svc-block-rows {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .chev {
+    width: 18px; height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: #6b7280;
+    transition: transform 0.15s ease;
+    cursor: pointer;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .chev.disabled { color: #d1d5db; cursor: default; }
+  .chev.expanded { transform: rotate(90deg); }
+  .chev:disabled { cursor: default; }
+
+  .wf-row {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    padding: 2px 0;
+    min-height: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .wf-row + .wf-row { margin-top: 2px; }
+  .wf-row.default-row .default-tag { display: inline-flex; }
+  .wf-row .default-tag {
+    display: none;
+    align-items: center;
+    font-size: 9px;
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 999px;
+    padding: 1px 6px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Workflow-rows connector column. NFR-09 (b): the arrow line attaches
+     to the target box's mid-y and stops at target.left - 6 (one arrowhead
+     width). */
+  .arrow-gap {
+    width: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-shrink: 0;
+    align-self: stretch;
+    overflow: visible;
+  }
+  /*
+   * The arrow-line is anchored geometrically by `recomputeConnectorTops()`:
+   *   - margin-left:  source-box.right minus arrow-gap.left (often negative
+   *                   because the leaf-pair grid reserves more horizontal
+   *                   space than the inner box occupies — e.g. Detailed's
+   *                   `--leaf-width: 200px` vs `w-40 = 160px`). This makes
+   *                   the line begin flush with the source box's right edge.
+   *   - width:        target-box.left minus source-box.right minus the 6 px
+   *                   arrowhead protrusion. So `line.right + 6 == target.left`.
+   *   - margin-top:   target-box.height / 2, so the line ends at the target's
+   *                   mid-y.
+   * The fallbacks keep the line visible if JS hasn't run yet.
+   */
+  .arrow-gap .arrow-line {
+    width: var(--target-line-width, calc(100% - 6px));
+    margin-left: var(--source-offset, 0);
+    margin-top: var(--target-half, 0);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: rgba(251, 146, 60, 0.5);
+    box-shadow: 0 0 0 0 rgba(251, 146, 60, 0);
+  }
+  50% {
+    border-color: rgba(234, 88, 12, 1);
+    box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.15);
+  }
+}
+
+@keyframes pulse-border-pill {
+  0%, 100% { border-color: rgba(251, 146, 60, 0.5); }
+  50%      { border-color: rgba(234, 88, 12, 1); }
+}

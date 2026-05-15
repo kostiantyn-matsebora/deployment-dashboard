@@ -1,0 +1,6 @@
+# Per-run artefacts. Re-generated on every harness invocation.
+__screenshots__/
+node_modules/
+dist/
+test-results/
+playwright-report/

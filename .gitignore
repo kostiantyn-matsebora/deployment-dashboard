@@ -1,0 +1,58 @@
+# ---- Secrets (never commit) ---------------------------------------------
+# Local-dev configuration is inline in dev_env/docker-compose.local.yml —
+# no .env files are used here. The patterns below are a defence-in-depth
+# net: if anyone accidentally introduces an env-file anywhere in the tree
+# (including dev_env/), it stays uncommitted.
+**/.env
+**/.env.local
+**/.env.*.local
+
+# ---- .NET ----------------------------------------------------------------
+**/bin/
+**/obj/
+**/TestResults/
+**/*.user
+**/*.suo
+**/.vs/
+
+# ---- Node / Angular ------------------------------------------------------
+**/node_modules/
+**/dist/
+
+# ---- IDEs / OS junk ------------------------------------------------------
+**/.idea/
+**/.vscode/
+**/Thumbs.db
+**/.DS_Store
+**/*.swp
+**/*.swo
+**/.history/
+
+# ---- Angular CLI cache ---------------------------------------------------
+# Created on first `ng build`; must never be committed.
+**/.angular/
+
+# ---- Playwright runtime artifacts ----------------------------------------
+# Generated per-test-run under testing/e2e/. None of this is source.
+testing/e2e/test-results/
+testing/e2e/playwright-report/
+testing/e2e/.playwright/
+testing/e2e/blob-report/
+**/playwright/.cache/
+
+# ---- Code coverage / test runners ----------------------------------------
+**/coverage/
+**/.nyc_output/
+**/junit*.xml
+**/test-results*.xml
+
+# ---- Terraform (state must never live in the repo, per devops-engineer
+#       spec — state lives in Azure Storage) -------------------------------
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/crash.log
+
+# ---- Misc ----------------------------------------------------------------
+*.log

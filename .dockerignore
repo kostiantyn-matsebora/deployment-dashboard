@@ -1,0 +1,36 @@
+# Effective .dockerignore for the Read API build (context = repo root).
+# Keeps the context small so `docker build` doesn't ship hundreds of MB
+# of bin/obj/node_modules to the Docker daemon.
+
+# Build outputs
+**/bin/
+**/obj/
+**/dist/
+**/TestResults/
+
+# Local tooling caches and IDE state
+**/.vs/
+**/.idea/
+**/.vscode/
+**/*.user
+**/*.suo
+
+# Node / Angular
+**/node_modules/
+
+# Source control + repo metadata
+.git/
+.gitignore
+
+# Things irrelevant to the image build
+.github/
+.claude/
+dev_env/
+testing/
+docs/
+infrastructure/
+
+# Don't bake local secrets into images by accident
+**/.env
+**/.env.local
+**/.env.*.local

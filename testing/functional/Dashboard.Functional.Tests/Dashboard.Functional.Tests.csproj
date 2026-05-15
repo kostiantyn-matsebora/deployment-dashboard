@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Functional / API test suite for the running Deployment Dashboard stack.
+
+    Implements WBS MVP §3.2 of docs/deployment-dashboard-architecture.md.
+
+    Unlike the per-project unit tests under backend/, these tests run
+    against a real Docker Compose stack and never spin up an in-process
+    WebApplicationFactory. The runner script testing/functional/run-tests.ps1
+    handles the reachability pre-flight and the seed step before invoking
+    `dotnet test` here.
+
+    Owner: qa-engineer (.claude/agents/qa-engineer.md).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Dashboard.Functional.Tests</RootNamespace>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Versions match the existing backend test projects. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the shared DTOs / wire-format types so tests assert
+         against the same C# records the production code emits. Builds
+         in tandem with the backend solution but does not require it. -->
+    <ProjectReference Include="..\..\..\backend\shared\Dashboard.Shared\Dashboard.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

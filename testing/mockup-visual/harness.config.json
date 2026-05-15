@@ -1,0 +1,66 @@
+{
+  "$comment": "Declarative configuration for the mockup-visual harness. Per CLAUDE.md 'Configuration vs. data' — no URLs, viewport sizes, tolerances, or combination matrices live as literals inside the spec or runner. Edit this file to add/remove combinations or tune tolerances.",
+
+  "mockupRelativePath": "../../docs/deployment-dashboard.html",
+  "screenshotsDir": "./__screenshots__",
+  "reportPath": "./__screenshots__/_report.json",
+
+  "viewport": { "width": 1440, "height": 900 },
+
+  "settleTimeoutMs": 5000,
+  "postSettlePaintFrames": 2,
+
+  "tolerances": {
+    "boxContentClipPx": 2,
+    "connectorReachPx": 2,
+    "envTagSubpixelPx": 1,
+    "connectorSourceEmergePx": 2,
+    "envTagConnectorCrossPx": 3
+  },
+
+  "selectors": {
+    "viewSwitcher":   "[data-testid='view-switcher']",
+    "layoutSwitcher": "[data-testid='layout-switcher']",
+    "viewOption":     "[data-testid='view-option-{id}']",
+    "layoutOption":   "[data-testid='layout-option-{id}']",
+    "stageBox":       "[data-testid^='stage-box-']",
+    "envTag":         ".env-tag",
+    "leafPair":       ".leaf-pair",
+    "arrowLine":      ".arrow-line",
+    "arrowGap":       ".arrow-gap",
+    "svgEdgeOverlay": "svg.edge-overlay",
+    "svgEdgePath":    "svg.edge-overlay path.edge",
+    "serviceRow":     "[data-service-row]"
+  },
+
+  "views":   ["detailed", "compact", "glance", "focus"],
+  "layouts": ["matrix", "swim-lane", "workflow-rows"],
+
+  "invariants": [
+    { "id": "I0-connector-orphan-no-target",        "label": "Connector resolves to a target box (no silent skips)" },
+    { "id": "I1-no-overlap-envtag-vs-box",          "label": "No overlap: env-tag vs deployment box" },
+    { "id": "I2-envtag-not-clipped",                "label": "Env-tag text is not clipped" },
+    { "id": "I3-connector-reaches-target",          "label": "Connector reaches its target box" },
+    { "id": "I4-connector-emerges-from-source",     "label": "Connector emerges from source box edge" },
+    { "id": "I5-connector-does-not-cross-envtag",   "label": "Connector does not cross any env-tag rect" },
+    { "id": "I6-box-content-not-clipped",           "label": "Box content stays within parent box" },
+    { "id": "I7-picker-exposes-seven-attribute-checkboxes", "label": "Display picker exposes seven FR-02 attribute checkboxes (subject to per-view cap)" },
+    { "id": "I8-no-null-literal-when-ref-sha-selected",     "label": "No DOM text equals 'null' when ref/sha is selected and underlying value is null (SAD §7 null-render invariant)" }
+  ],
+
+  "$comment_FR02_attrs": "FR-02 attribute keys + per-view caps used by I7. Caps from SAD §7 'Layout views (FR-12)': Detailed 7, Compact 5, Glance 1, Focus 5. Defaults are NOT asserted here (covered by the e2e attribute-picker-cap-enforcement.spec.ts against the SPA); only the cap and the catalogue completeness are.",
+  "fr02": {
+    "attributes": ["status", "version", "run", "ago", "actor", "ref", "sha"],
+    "caps": { "detailed": 7, "compact": 5, "glance": 1, "focus": 5 }
+  },
+
+  "viewExceptions": {
+    "$comment": "Per-view exceptions to specific invariants. Each entry is narrow and cites the authoritative doc. Adding an exception here is the ONLY supported way to relax an invariant — never edit the spec to special-case a view inline.",
+    "glance": {
+      "I1-paired-envtag-inside-paired-box": {
+        "enabled": true,
+        "rationale": "SAD NFR-09 exception (just landed): in Glance view only, the env label is rendered INSIDE the deployment rectangle. This is the single allowed overlap of env-tag and box, permitted because the Glance pill's vertical extent forces the connector y to cross the env-tag y in any left-of-box layout. The env label remains visible (not clipped — Invariant 2 still applies) and the connector terminates at the pill's left edge as in other views. Scope is strictly the PAIRED env-tag inside its OWN paired box; non-paired overlaps remain violations."
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "readBaseUrl": "http://localhost:8080",
+  "writeBaseUrl": "http://localhost:8080",
+  "apiKey": "local-dev-token-not-for-production"
+}

@@ -1,0 +1,6 @@
+@Dashboard.WriteApi_HostAddress = http://localhost:5094
+
+GET {{Dashboard.WriteApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

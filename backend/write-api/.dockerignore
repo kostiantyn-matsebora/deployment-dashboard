@@ -1,0 +1,21 @@
+# NOTE: Build context for this Dockerfile is `backend/` (the parent
+# directory), not `backend/write-api/`. This .dockerignore lives next to
+# the Dockerfile because some tooling reads it from there — but the
+# authoritative .dockerignore for the backend context is also kept in
+# sync at `backend/.dockerignore` (created lazily on first build).
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/*.suo
+**/TestResults/
+**/.idea/
+**/node_modules/
+**/dist/
+**/.git/
+**/.github/
+**/.claude/
+**/dev_env/
+**/testing/
+**/docs/
+**/infrastructure/

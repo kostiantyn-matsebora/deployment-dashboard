@@ -1,0 +1,189 @@
+# Deployment Dashboard — local development stack.
+#
+# Implements WBS §11 MVP §2.1 and the App Gateway topology from SAD §7:
+# the gateway is the only host-published container; every other app
+# service is `expose:`-only on the internal Docker network. The browser,
+# CI/CD callers, and seed scripts all hit `http://localhost:8080/`.
+#
+# Run with: pwsh -NoProfile -File dev_env/start.ps1
+#
+# Zero-setup, no .env files: every value below is inline and obviously fake.
+# Real production secrets live in Azure Key Vault and are wired in via
+# Terraform + GitHub Actions Environments — never here.
+#
+# Host-published ports:
+#   - 8080  → App Gateway  (THE dashboard URL — `http://localhost:8080/`)
+#   - 5432  → Postgres     (dev-only convenience for psql / EF tooling)
+#   - 5050  → pgAdmin      (dev-only convenience)
+#
+# Internal-only (no host ports):
+#   - dashboard:80, write-api:8080, read-api:8080.
+#
+# Migrations strategy (decision): a one-shot `migrations` service runs
+# `dotnet ef database update` against the freshly-healthy DB. Both APIs
+# wait via `depends_on: migrations: service_completed_successfully`. This
+# keeps the runtime images SDK-free and migration ordering observable
+# from `docker compose logs migrations`.
+
+name: deployment-dashboard
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dashboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "dashboard"
+      POSTGRES_USER: "dashboard"
+      POSTGRES_PASSWORD: "local-dev-password"
+    ports:
+      - "5432:5432"                       # dev-only convenience
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # One-shot migration runner. Uses the .NET 10 SDK image, installs the
+  # matching dotnet-ef tool, and runs `database update` against `db`.
+  # Both APIs depend on this finishing successfully before they start.
+  migrations:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    container_name: dashboard-migrations
+    working_dir: /
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    volumes:
+      - ../backend:/backend:ro
+      - dotnet-tools:/root/.dotnet/tools
+      - nuget-cache:/root/.nuget/packages
+    depends_on:
+      db:
+        condition: service_healthy
+    # `dotnet tool install` is idempotent enough in practice — the
+    # `|| true` lets a re-run skip past "already installed".
+    #
+    # `backend/` is bind-mounted read-only into /backend; we sync it to
+    # /src first and scrub `bin/`/`obj/`. The host's obj/ contains
+    # Windows-only NuGet fallback paths (e.g. `C:\Program Files (x86)\
+    # Microsoft Visual Studio\Shared\NuGetPackages`) baked into
+    # `project.assets.json` from a developer's Visual Studio restore.
+    # Letting those leak into the Linux container fails the in-container
+    # restore with `Unable to find fallback package folder '...'`. The
+    # main image Dockerfiles avoid this via `.dockerignore`; here, where
+    # we bind-mount, we have to scrub explicitly.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        export PATH="$$PATH:/root/.dotnet/tools"
+        if ! command -v dotnet-ef >/dev/null 2>&1; then
+          dotnet tool install --global dotnet-ef --version 10.0.0
+        fi
+        rm -rf /src
+        mkdir -p /src
+        cp -R /backend/. /src/
+        find /src -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
+        cd /src
+        dotnet restore shared/Dashboard.Shared/Dashboard.Shared.csproj
+        # Use Dashboard.Shared as both project and startup project. The
+        # shared library ships an IDesignTimeDbContextFactory and has the
+        # `Microsoft.EntityFrameworkCore.Design` package referenced
+        # directly — so `dotnet ef` can build the model and connect to
+        # Postgres without dragging in either Web API's Program.cs.
+        dotnet ef database update \
+          --project shared/Dashboard.Shared/Dashboard.Shared.csproj \
+          --startup-project shared/Dashboard.Shared/Dashboard.Shared.csproj
+    restart: "no"
+
+  write-api:
+    build:
+      context: ../backend
+      dockerfile: write-api/Dockerfile
+    image: deployment-dashboard/write-api:dev
+    container_name: dashboard-write-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      API_TOKEN: "local-dev-token-not-for-production"
+      HISTORY_RETENTION_DAYS: "365"
+    expose:
+      - "8080"                            # internal-only — gateway routes POST /api/deployments here
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  read-api:
+    build:
+      context: ../backend
+      dockerfile: read-api/Dockerfile
+    image: deployment-dashboard/read-api:dev
+    container_name: dashboard-read-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      API_TOKEN: "local-dev-token-not-for-production"
+      HISTORY_RETENTION_DAYS: "365"
+    expose:
+      - "8080"                            # internal-only — gateway routes GET /api/* + /health + /api/stream here
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  dashboard:
+    build:
+      context: ../frontend
+      dockerfile: dashboard/Dockerfile
+    image: deployment-dashboard/dashboard:dev
+    container_name: dashboard-frontend
+    restart: unless-stopped
+    expose:
+      - "80"                              # internal-only — gateway routes GET / + SPA shell here
+
+  gateway:
+    build:
+      context: ../gateway
+    image: deployment-dashboard/gateway:dev
+    container_name: dashboard-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:80"                         # ONLY non-dev-convenience host port
+    depends_on:
+      dashboard:
+        condition: service_started
+      write-api:
+        condition: service_started
+      read-api:
+        condition: service_started
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: dashboard-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@example.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"                         # dev-only convenience
+    depends_on:
+      - db
+
+volumes:
+  pg-data:
+  dotnet-tools:
+  nuget-cache:

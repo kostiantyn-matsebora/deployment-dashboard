@@ -1,0 +1,161 @@
+# Deployment Dashboard — horizontally-scaled compose for NFR-05 validation.
+#
+# NOT the default local-dev experience. Use this only to verify that the
+# stack remains stateless when more than one Read API replica handles
+# traffic — no sticky sessions, SSE fan-out via PostgreSQL LISTEN/NOTIFY.
+#
+# Mirrors SAD §7 "Horizontally scaled deployment" with the App Gateway
+# topology: the gateway IS the load-balancer (Docker DNS round-robins
+# across the replica IPs of `read-api` and `write-api`). There is no
+# separate `lb` container — the gateway holds the only public port.
+#
+# Replicas:
+#   - 3 × Read API   (SSE fan-out + matrix/history reads)
+#   - 2 × Write API  (NOTIFY emission from any replica)
+#   - 1 × Dashboard  (static SPA — no need to scale)
+#   - 1 × Gateway    (stateless proxy, no replication needed for the test)
+#
+# Run with: pwsh -NoProfile -File dev_env/start.ps1 -Scaled
+#
+# Zero-setup, no .env files: every value below is inline and obviously fake.
+# Real production secrets live in Azure Key Vault and are wired in via
+# Terraform + GitHub Actions Environments — never here.
+#
+# Host-published ports:
+#   - 8080 → App Gateway  (dashboard URL — `http://localhost:8080/`)
+
+name: deployment-dashboard-scaled
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dashboard-db-scaled
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "dashboard"
+      POSTGRES_USER: "dashboard"
+      POSTGRES_PASSWORD: "local-dev-password"
+    volumes:
+      - pg-data-scaled:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  migrations:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    container_name: dashboard-migrations-scaled
+    working_dir: /
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    volumes:
+      - ../backend:/backend:ro
+      - dotnet-tools-scaled:/root/.dotnet/tools
+      - nuget-cache-scaled:/root/.nuget/packages
+    depends_on:
+      db:
+        condition: service_healthy
+    # See note in docker-compose.local.yml: we copy backend/ into /src and
+    # scrub bin/obj so the host's Windows-flavoured NuGet metadata can't
+    # leak into the Linux container.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        export PATH="$$PATH:/root/.dotnet/tools"
+        if ! command -v dotnet-ef >/dev/null 2>&1; then
+          dotnet tool install --global dotnet-ef --version 10.0.0
+        fi
+        rm -rf /src
+        mkdir -p /src
+        cp -R /backend/. /src/
+        find /src -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
+        cd /src
+        dotnet restore shared/Dashboard.Shared/Dashboard.Shared.csproj
+        # See note in docker-compose.local.yml — use Dashboard.Shared as
+        # both project and startup project; it ships the design-time
+        # factory and references Microsoft.EntityFrameworkCore.Design.
+        dotnet ef database update \
+          --project shared/Dashboard.Shared/Dashboard.Shared.csproj \
+          --startup-project shared/Dashboard.Shared/Dashboard.Shared.csproj
+    restart: "no"
+
+  write-api:
+    build:
+      context: ../backend
+      dockerfile: write-api/Dockerfile
+    image: deployment-dashboard/write-api:dev
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      API_TOKEN: "local-dev-token-not-for-production"
+      HISTORY_RETENTION_DAYS: "365"
+    deploy:
+      replicas: 2
+    expose:
+      - "8080"                            # internal-only — gateway round-robins to replica IPs
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  read-api:
+    build:
+      context: ../backend
+      dockerfile: read-api/Dockerfile
+    image: deployment-dashboard/read-api:dev
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      API_TOKEN: "local-dev-token-not-for-production"
+      HISTORY_RETENTION_DAYS: "365"
+    deploy:
+      replicas: 3
+    expose:
+      - "8080"                            # internal-only — gateway round-robins to replica IPs
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  dashboard:
+    build:
+      context: ../frontend
+      dockerfile: dashboard/Dockerfile
+    image: deployment-dashboard/dashboard:dev
+    container_name: dashboard-frontend-scaled
+    restart: unless-stopped
+    expose:
+      - "80"                              # internal-only — gateway routes / and SPA shell here
+
+  gateway:
+    build:
+      context: ../gateway
+    image: deployment-dashboard/gateway:dev
+    container_name: dashboard-gateway-scaled
+    restart: unless-stopped
+    ports:
+      - "8080:80"                         # ONLY host-published service
+    depends_on:
+      dashboard:
+        condition: service_started
+      write-api:
+        condition: service_started
+      read-api:
+        condition: service_started
+
+volumes:
+  pg-data-scaled:
+  dotnet-tools-scaled:
+  nuget-cache-scaled:

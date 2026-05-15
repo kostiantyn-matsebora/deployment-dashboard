@@ -1,0 +1,378 @@
+{
+  "_comment": [
+    "Canonical fixture corpus for the Deployment Dashboard. Two complementary sections:",
+    "",
+    "  slots[]   - the original 6-box-state corpus (Phase 1). Drives matrix tests + E2E.",
+    "              Every event now carries a stable 'deployment_id' (Phase 2 SAD update).",
+    "              These slots intentionally OMIT 'parent_deployments' so the topology",
+    "              derivation falls back to the correlation attribute (default: 'version'),",
+    "              keeping the Phase 1 assertions stable.",
+    "",
+    "  topology[] - Phase 2 topology corpus. Three independent services exercising the",
+    "              three derivation paths from SAD §5 'Topology Derivation':",
+    "                * topo-explicit  - explicit parent_deployments chain (source='explicit')",
+    "                * topo-correlated - no parents, shared version (source='correlated')",
+    "                * topo-mixed     - some events explicit, some correlated; explicit",
+    "                                   wins on (from,to) overlap per the Merge pass.",
+    "              Each topology service uses an actor outside 'qa.bot' (qa.bot-topo)",
+    "              so cleanup by actor marker still purges them.",
+    "",
+    "Derived from docs/deployment-dashboard.html and",
+    "docs/deployment-dashboard-architecture.md §4 (FR-13), §5 (Data Model + Topology",
+    "Derivation), §7 (API Contract - POST validation, Matrix response shape).",
+    "",
+    "deployment_id values are CI/CD-side identifiers (SAD §5 deployments table). They are",
+    "stable across seed re-runs, so a re-seed reuses the same id and the Write API",
+    "returns 409 Conflict for every event after the first run - the matrix view is",
+    "still deterministic because the original rows are unchanged.",
+    "",
+    "ref / sha (Phase 2, FR-05): events MAY carry the two optional source-identifier",
+    "fields. Per SAD §10 Decision #10, both are nullable, unconstrained strings - this",
+    "cycle introduces them additively, no validation. The corpus exercises every",
+    "combination so consumers across functional, SSE, and e2e suites can assert the",
+    "omit-or-null tolerance rule (SAD §7 'Matrix response shape - per service' field",
+    "rules - 'absent and null are equivalent'):",
+    "  * service-b/dev (success)                              -> both ref + sha",
+    "  * service-a/dev (running-with-last-success)            -> ref only, both events",
+    "  * service-c/dev (running-with-prev-failed-and-success) -> sha only on one event",
+    "  * service-b/qa  (failed-with-last-success)             -> neither (legacy shape)",
+    "  * service-d/uat (running)                              -> neither (legacy shape)",
+    "  * service-d/dev (running-with-prev-failed)             -> mixed across history",
+    "",
+    "Topology services topo-explicit / topo-correlated / topo-mixed intentionally",
+    "OMIT ref + sha - their concern is the parent DAG, not the source-identifier",
+    "wire shape. Two ADDITIONAL topology services exist to exercise the FR-13",
+    "'?correlationAttribute=ref|sha' query parameter against fixture data that",
+    "actually shares those identifiers across envs:",
+    "  * topo-ref-correlated  -> no parent_deployments anywhere; every event shares",
+    "                            ref='release/2026.05' across dev/qa/prod. version",
+    "                            and sha are deliberately distinct per event so the",
+    "                            topology builder MUST consult `ref` to derive the",
+    "                            chain. Default correlationAttribute=version would",
+    "                            yield ZERO edges; ?correlationAttribute=ref yields",
+    "                            two correlated edges (dev->qa, qa->prod).",
+    "  * topo-sha-correlated  -> same construction, correlating on sha='a1b2c3d4e5'.",
+    "                            ref and version differ per event. Default version",
+    "                            -> zero edges; ?correlationAttribute=sha -> two",
+    "                            correlated edges. The sha value is long enough",
+    "                            (10 chars) to exercise the SPA's first-7-char",
+    "                            truncation convention in display."
+  ],
+  "actor": "qa.bot",
+  "slots": [
+    {
+      "service": "service-b",
+      "environment": "dev",
+      "state": "success",
+      "events": [
+        {
+          "deployment_id": "seed-svcb-dev-1240",
+          "version": "v2.3.0",
+          "status": "success",
+          "run_number": 1240,
+          "run_url": "https://example.com/runs/1240",
+          "ref": "main",
+          "sha": "9f1c0d2e8a"
+        }
+      ]
+    },
+    {
+      "service": "service-a",
+      "environment": "dev",
+      "state": "running-with-last-success",
+      "events": [
+        {
+          "deployment_id": "seed-svca-dev-1247",
+          "version": "v2.3.1",
+          "status": "success",
+          "run_number": 1247,
+          "run_url": "https://example.com/runs/1247",
+          "ref": "main"
+        },
+        {
+          "deployment_id": "seed-svca-dev-1251",
+          "version": "v2.3.2",
+          "status": "in-progress",
+          "run_number": 1251,
+          "run_url": "https://example.com/runs/1251",
+          "ref": "feature/login-revamp"
+        }
+      ]
+    },
+    {
+      "service": "service-c",
+      "environment": "dev",
+      "state": "running-with-prev-failed-and-last-success",
+      "events": [
+        {
+          "deployment_id": "seed-svcc-dev-1234",
+          "version": "v3.1.0",
+          "status": "success",
+          "run_number": 1234,
+          "run_url": "https://example.com/runs/1234"
+        },
+        {
+          "deployment_id": "seed-svcc-dev-1249",
+          "version": "v3.1.1",
+          "status": "failure",
+          "run_number": 1249,
+          "run_url": "https://example.com/runs/1249",
+          "sha": "deadbeef1234"
+        },
+        {
+          "deployment_id": "seed-svcc-dev-1252",
+          "version": "v3.1.2",
+          "status": "in-progress",
+          "run_number": 1252,
+          "run_url": "https://example.com/runs/1252"
+        }
+      ]
+    },
+    {
+      "service": "service-b",
+      "environment": "qa",
+      "state": "failed-with-last-success",
+      "events": [
+        {
+          "deployment_id": "seed-svcb-qa-1216",
+          "version": "v1.7.8",
+          "status": "success",
+          "run_number": 1216,
+          "run_url": "https://example.com/runs/1216"
+        },
+        {
+          "deployment_id": "seed-svcb-qa-1232",
+          "version": "v1.7.9",
+          "status": "failure",
+          "run_number": 1232,
+          "run_url": "https://example.com/runs/1232"
+        }
+      ]
+    },
+    {
+      "service": "service-d",
+      "environment": "uat",
+      "state": "running",
+      "events": [
+        {
+          "deployment_id": "seed-svcd-uat-1253",
+          "version": "v4.0.4",
+          "status": "in-progress",
+          "run_number": 1253,
+          "run_url": "https://example.com/runs/1253"
+        }
+      ]
+    },
+    {
+      "service": "service-d",
+      "environment": "dev",
+      "state": "running-with-prev-failed",
+      "events": [
+        {
+          "deployment_id": "seed-svcd-dev-1242",
+          "version": "v4.0.1",
+          "status": "failure",
+          "run_number": 1242,
+          "run_url": "https://example.com/runs/1242",
+          "ref": "release/4.0",
+          "sha": "1111aaaa2222bbbb"
+        },
+        {
+          "deployment_id": "seed-svcd-dev-1244",
+          "version": "v4.0.2",
+          "status": "failure",
+          "run_number": 1244,
+          "run_url": "https://example.com/runs/1244",
+          "sha": "3333cccc4444dddd"
+        },
+        {
+          "deployment_id": "seed-svcd-dev-1250",
+          "version": "v4.0.3",
+          "status": "in-progress",
+          "run_number": 1250,
+          "run_url": "https://example.com/runs/1250",
+          "ref": "hotfix/d-dev-1250"
+        }
+      ]
+    }
+  ],
+  "topology": [
+    {
+      "_comment": "Pure-explicit chain: dev -> qa -> prod via parent_deployments. Every promotion event names its predecessor by deployment_id. Topology builder must emit two edges with source='explicit'.",
+      "service": "topo-explicit",
+      "events": [
+        {
+          "deployment_id": "topo-exp-dev-1",
+          "environment": "dev",
+          "version": "v1.0.0",
+          "status": "success",
+          "run_number": 7001,
+          "run_url": "https://example.com/runs/7001",
+          "parent_deployments": []
+        },
+        {
+          "deployment_id": "topo-exp-qa-1",
+          "environment": "qa",
+          "version": "v1.0.0",
+          "status": "success",
+          "run_number": 7002,
+          "run_url": "https://example.com/runs/7002",
+          "parent_deployments": ["topo-exp-dev-1"]
+        },
+        {
+          "deployment_id": "topo-exp-prod-1",
+          "environment": "prod",
+          "version": "v1.0.0",
+          "status": "success",
+          "run_number": 7003,
+          "run_url": "https://example.com/runs/7003",
+          "parent_deployments": ["topo-exp-qa-1"]
+        }
+      ]
+    },
+    {
+      "_comment": "Pure-correlated: no parent_deployments anywhere. All three events share version v2.0.0 and land in chronological order (dev -> qa -> prod). The correlation-fallback pass picks the closest-in-time parent per env, emitting (dev->qa) and (qa->prod) with source='correlated'.",
+      "service": "topo-correlated",
+      "events": [
+        {
+          "deployment_id": "topo-cor-dev-1",
+          "environment": "dev",
+          "version": "v2.0.0",
+          "status": "success",
+          "run_number": 7101,
+          "run_url": "https://example.com/runs/7101",
+          "parent_deployments": []
+        },
+        {
+          "deployment_id": "topo-cor-qa-1",
+          "environment": "qa",
+          "version": "v2.0.0",
+          "status": "success",
+          "run_number": 7102,
+          "run_url": "https://example.com/runs/7102",
+          "parent_deployments": []
+        },
+        {
+          "deployment_id": "topo-cor-prod-1",
+          "environment": "prod",
+          "version": "v2.0.0",
+          "status": "success",
+          "run_number": 7103,
+          "run_url": "https://example.com/runs/7103",
+          "parent_deployments": []
+        }
+      ]
+    },
+    {
+      "_comment": "Mixed: dev->qa is explicit; qa->prod is left to correlation (shared version v3.0.0). One topology must contain edges with BOTH sources. Per Merge pass, if explicit and correlated both produce the same (from,to) pair, explicit wins - here they don't overlap by construction so we see exactly one of each.",
+      "service": "topo-mixed",
+      "events": [
+        {
+          "deployment_id": "topo-mix-dev-1",
+          "environment": "dev",
+          "version": "v3.0.0",
+          "status": "success",
+          "run_number": 7201,
+          "run_url": "https://example.com/runs/7201",
+          "parent_deployments": []
+        },
+        {
+          "deployment_id": "topo-mix-qa-1",
+          "environment": "qa",
+          "version": "v3.0.0",
+          "status": "success",
+          "run_number": 7202,
+          "run_url": "https://example.com/runs/7202",
+          "parent_deployments": ["topo-mix-dev-1"]
+        },
+        {
+          "deployment_id": "topo-mix-prod-1",
+          "environment": "prod",
+          "version": "v3.0.0",
+          "status": "success",
+          "run_number": 7203,
+          "run_url": "https://example.com/runs/7203",
+          "parent_deployments": []
+        }
+      ]
+    },
+    {
+      "_comment": "Correlated-by-ref: no parent_deployments; every event has a DISTINCT version + sha but a SHARED ref='release/2026.05'. With the default correlationAttribute=version, the builder finds no matches across envs and emits ZERO edges. With ?correlationAttribute=ref, it emits two correlated edges (dev->qa, qa->prod). Pins the FR-02/FR-13 contract that the read API actually consults `ref` when the per-request hint or per-service override selects it.",
+      "service": "topo-ref-correlated",
+      "events": [
+        {
+          "deployment_id": "topo-refcor-dev-1",
+          "environment": "dev",
+          "version": "v7.1.0",
+          "status": "success",
+          "run_number": 7301,
+          "run_url": "https://example.com/runs/7301",
+          "parent_deployments": [],
+          "ref": "release/2026.05",
+          "sha": "aaaa111100"
+        },
+        {
+          "deployment_id": "topo-refcor-qa-1",
+          "environment": "qa",
+          "version": "v7.1.1",
+          "status": "success",
+          "run_number": 7302,
+          "run_url": "https://example.com/runs/7302",
+          "parent_deployments": [],
+          "ref": "release/2026.05",
+          "sha": "bbbb222200"
+        },
+        {
+          "deployment_id": "topo-refcor-prod-1",
+          "environment": "prod",
+          "version": "v7.1.2",
+          "status": "success",
+          "run_number": 7303,
+          "run_url": "https://example.com/runs/7303",
+          "parent_deployments": [],
+          "ref": "release/2026.05",
+          "sha": "cccc333300"
+        }
+      ]
+    },
+    {
+      "_comment": "Correlated-by-sha: mirror of topo-ref-correlated for the sha axis. Every event has a DISTINCT version + ref but a SHARED sha='a1b2c3d4e5f6' (12 hex chars — long enough that the SPA's first-7-char truncation convention can be exercised end-to-end). With default correlationAttribute=version: ZERO edges. With ?correlationAttribute=sha: two correlated edges (dev->qa, qa->prod). Pins the FR-02/FR-13 contract for sha-correlated topology.",
+      "service": "topo-sha-correlated",
+      "events": [
+        {
+          "deployment_id": "topo-shacor-dev-1",
+          "environment": "dev",
+          "version": "v8.2.0",
+          "status": "success",
+          "run_number": 7401,
+          "run_url": "https://example.com/runs/7401",
+          "parent_deployments": [],
+          "ref": "feature/sha-dev",
+          "sha": "a1b2c3d4e5f6"
+        },
+        {
+          "deployment_id": "topo-shacor-qa-1",
+          "environment": "qa",
+          "version": "v8.2.1",
+          "status": "success",
+          "run_number": 7402,
+          "run_url": "https://example.com/runs/7402",
+          "parent_deployments": [],
+          "ref": "feature/sha-qa",
+          "sha": "a1b2c3d4e5f6"
+        },
+        {
+          "deployment_id": "topo-shacor-prod-1",
+          "environment": "prod",
+          "version": "v8.2.2",
+          "status": "success",
+          "run_number": 7403,
+          "run_url": "https://example.com/runs/7403",
+          "parent_deployments": [],
+          "ref": "feature/sha-prod",
+          "sha": "a1b2c3d4e5f6"
+        }
+      ]
+    }
+  ]
+}

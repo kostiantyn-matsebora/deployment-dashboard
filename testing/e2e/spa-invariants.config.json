@@ -1,0 +1,54 @@
+{
+  "$comment": "Declarative config for the SPA visual-invariants suite (testing/e2e/tests/spa-visual-invariants.spec.ts). Mirrors testing/mockup-visual/harness.config.json so the invariants applied to the SPA stay structurally identical to those applied to the mockup. Per CLAUDE.md 'Configuration vs. data' - no URLs, selectors, tolerances, or combination matrices live as literals inside the spec.",
+
+  "viewport": { "width": 1440, "height": 900 },
+
+  "settleTimeoutMs": 5000,
+  "postSettlePaintFrames": 2,
+
+  "tolerances": {
+    "boxContentClipPx": 2,
+    "connectorReachPx": 2,
+    "envTagSubpixelPx": 1,
+    "connectorSourceEmergePx": 2,
+    "envTagConnectorCrossPx": 3
+  },
+
+  "selectors": {
+    "viewSwitcher":   "[data-testid='view-switcher']",
+    "layoutSwitcher": "[data-testid='layout-switcher']",
+    "viewOption":     "[data-testid='view-option-{id}']",
+    "layoutOption":   "[data-testid='layout-option-{id}']",
+    "pipelineMatrix": "[data-testid='pipeline-matrix']",
+    "stageBox":       "[data-testid^='stage-box-']",
+    "envTag":         ".env-tag",
+    "leafPair":       ".leaf-pair",
+    "arrowLine":      ".arrow-line",
+    "arrowGap":       ".arrow-gap",
+    "svgEdgeOverlay": "svg.edge-overlay",
+    "svgEdgePath":    "svg.edge-overlay path.edge",
+    "serviceRow":     "[data-service-row]"
+  },
+
+  "views":   ["detailed", "compact", "glance", "focus"],
+  "layouts": ["matrix", "swim-lane", "workflow-rows"],
+
+  "invariants": [
+    { "id": "I1-no-overlap-envtag-vs-box",          "label": "No overlap: env-tag vs deployment box" },
+    { "id": "I2-envtag-not-clipped",                "label": "Env-tag text is not clipped" },
+    { "id": "I3-connector-reaches-target",          "label": "Connector reaches its target box" },
+    { "id": "I4-connector-emerges-from-source",     "label": "Connector emerges from source box edge" },
+    { "id": "I5-connector-does-not-cross-envtag",   "label": "Connector does not cross any env-tag rect" },
+    { "id": "I6-box-content-not-clipped",           "label": "Box content stays within parent box" }
+  ],
+
+  "viewExceptions": {
+    "$comment": "Per-view exceptions to specific invariants, mirroring testing/mockup-visual/harness.config.json#viewExceptions. The Glance exception is the NFR-09 sanctioned overlap of the paired env-tag inside its paired pill.",
+    "glance": {
+      "I1-paired-envtag-inside-paired-box": {
+        "enabled": true,
+        "rationale": "SAD NFR-09 exception: in Glance view only, the env label is rendered INSIDE the deployment rectangle. Scope is strictly the PAIRED env-tag inside its OWN paired box; non-paired overlaps remain violations. Invariant 2 (env-tag not clipped) still applies."
+      }
+    }
+  }
+}

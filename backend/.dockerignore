@@ -1,0 +1,44 @@
+# Effective .dockerignore for the Write API build (context = `backend/`).
+#
+# Docker only reads the .dockerignore at the context root. The Write API
+# Dockerfile uses `backend/` as its context, so this file — not the one
+# next to the Dockerfile at `backend/write-api/.dockerignore` — is what
+# the daemon actually consults when packing the build context.
+#
+# Critically excludes `**/obj/`: a host-side `dotnet restore` leaves
+# `project.assets.json` and `*.nuget.g.props` behind that reference
+# Windows-only NuGet fallback folders (e.g. `C:\Program Files (x86)\
+# Microsoft Visual Studio\Shared\NuGetPackages`). If those leak into
+# the Linux container, the in-container build fails with:
+#   error MSB4018: NuGet.Packaging.Core.PackagingException:
+#   Unable to find fallback package folder '...'.
+
+# Build outputs — must stay excluded, see note above.
+**/bin/
+**/obj/
+**/TestResults/
+
+# Local tooling caches and IDE state
+**/.vs/
+**/.idea/
+**/.vscode/
+**/*.user
+**/*.suo
+
+# Things irrelevant to the backend image build
+**/.git/
+**/.github/
+**/.claude/
+**/dev_env/
+**/testing/
+**/docs/
+**/infrastructure/
+
+# Front-end source (the Write API image does not bundle the SPA)
+**/node_modules/
+**/dist/
+
+# Never bake local secrets into images
+**/.env
+**/.env.local
+**/.env.*.local

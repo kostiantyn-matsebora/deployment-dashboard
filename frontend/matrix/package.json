@@ -1,0 +1,11 @@
+{
+  "name": "@dd/matrix",
+  "version": "0.1.0",
+  "private": true,
+  "peerDependencies": {
+    "@angular/common": "^20.0.0",
+    "@angular/core": "^20.0.0",
+    "@dd/shared": "^0.1.0"
+  },
+  "sideEffects": false
+}
