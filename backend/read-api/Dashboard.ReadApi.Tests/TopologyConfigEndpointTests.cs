@@ -213,7 +213,7 @@ public sealed class TopologyConfigEndpointTests
 /// to the matrix factory but kept separate so each set of tests can evolve
 /// its DI overrides independently.
 /// </summary>
-internal sealed class TopologyApiFactory : WebApplicationFactory<Program>
+internal sealed class TopologyApiFactory : WebApplicationFactory<Dashboard.Api.Program>
 {
     private SqliteConnection? _sqlite;
 

@@ -18,7 +18,7 @@ namespace Dashboard.ReadApi.Tests;
 /// is left in place — endpoint tests can still publish to it directly to
 /// exercise the SSE path.
 /// </summary>
-public sealed class TestApplicationFactory : WebApplicationFactory<Program>
+public sealed class TestApplicationFactory : WebApplicationFactory<Dashboard.Api.Program>
 {
     private SqliteConnection? _sqlite;
 

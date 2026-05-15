@@ -18,7 +18,7 @@ namespace Dashboard.WriteApi.Tests;
 /// <see cref="DeploymentNotifier"/> for a recorder so tests can assert
 /// that NOTIFY was attempted without needing a real Postgres.
 /// </summary>
-public sealed class TestApplicationFactory : WebApplicationFactory<Program>
+public sealed class TestApplicationFactory : WebApplicationFactory<Dashboard.Api.Program>
 {
     public string ApiKey { get; } = "test-key";
     public RecordingNotifier Notifier { get; } = new();

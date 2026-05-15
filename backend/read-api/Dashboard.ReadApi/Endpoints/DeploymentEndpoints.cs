@@ -2,7 +2,9 @@ using Dashboard.Shared.Dto;
 using Dashboard.Shared.Persistence;
 using Dashboard.Shared.Queries;
 using Dashboard.Shared.Topology;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.ReadApi.Endpoints;
@@ -29,7 +31,7 @@ public static class DeploymentEndpoints
     /// <summary>Query-parameter name for the per-request correlation override.</summary>
     public const string CorrelationAttributeQueryName = "correlationAttribute";
 
-    public static void Map(WebApplication app)
+    public static void Map(IEndpointRouteBuilder app)
     {
         app.MapGet("/api/deployments", async (
             HttpContext httpContext,

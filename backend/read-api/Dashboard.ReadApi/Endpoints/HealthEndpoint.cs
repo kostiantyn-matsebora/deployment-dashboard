@@ -1,4 +1,7 @@
 using Dashboard.Shared.Persistence;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.ReadApi.Endpoints;
@@ -8,7 +11,7 @@ namespace Dashboard.ReadApi.Endpoints;
 /// </summary>
 public static class HealthEndpoint
 {
-    public static void Map(WebApplication app)
+    public static void Map(IEndpointRouteBuilder app)
     {
         app.MapGet("/health", async (DashboardDbContext db, CancellationToken ct) =>
         {

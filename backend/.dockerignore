@@ -1,9 +1,10 @@
-# Effective .dockerignore for the Write API build (context = `backend/`).
+# Effective .dockerignore for the unified API image build (context = `backend/`).
 #
-# Docker only reads the .dockerignore at the context root. The Write API
-# Dockerfile uses `backend/` as its context, so this file — not the one
-# next to the Dockerfile at `backend/write-api/.dockerignore` — is what
-# the daemon actually consults when packing the build context.
+# Per SAD §7 "Backend module architecture" and §10 Decision 11, there is
+# one backend image built from `backend/api/Dockerfile` with `backend/` as
+# its context. Docker only reads the .dockerignore at the context root —
+# so this file is the single source of truth for what does and does not
+# enter the build context.
 #
 # Critically excludes `**/obj/`: a host-side `dotnet restore` leaves
 # `project.assets.json` and `*.nuget.g.props` behind that reference

@@ -1,0 +1,37 @@
+@Dashboard.Api_HostAddress = http://localhost:8080
+
+### Read surface — health check
+GET {{Dashboard.Api_HostAddress}}/health
+Accept: application/json
+
+###
+
+### Read surface — matrix
+GET {{Dashboard.Api_HostAddress}}/api/deployments
+Accept: application/json
+
+###
+
+### Read surface — topology config (unauthenticated)
+GET {{Dashboard.Api_HostAddress}}/api/config/topology
+Accept: application/json
+
+###
+
+### Write surface — ingest deployment (requires X-Api-Key)
+POST {{Dashboard.Api_HostAddress}}/api/deployments
+Content-Type: application/json
+X-Api-Key: replace-me
+
+{
+  "deployment_id": "gh-run-1",
+  "service":       "web-portal",
+  "environment":   "dev",
+  "version":       "v0.0.1",
+  "status":        "success",
+  "run_url":       "https://example.com/runs/1",
+  "run_number":    1,
+  "actor":         "tester"
+}
+
+###

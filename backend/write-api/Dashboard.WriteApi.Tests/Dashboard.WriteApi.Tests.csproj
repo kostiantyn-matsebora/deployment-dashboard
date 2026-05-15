@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -22,6 +22,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      The Write surface is now a library; the test host bootstraps the
+      unified Dashboard.Api executable, which composes both surfaces. The
+      tests still cover only write-side endpoints (POST /api/deployments,
+      PATCH /api/config/topology), but they exercise them through the
+      single host the SAD §7 architecture defines.
+    -->
+    <ProjectReference Include="..\..\api\Dashboard.Api\Dashboard.Api.csproj" />
     <ProjectReference Include="..\Dashboard.WriteApi\Dashboard.WriteApi.csproj" />
     <ProjectReference Include="..\..\shared\Dashboard.Shared\Dashboard.Shared.csproj" />
   </ItemGroup>

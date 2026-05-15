@@ -1,17 +1,21 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- The Read API serves JSON only; the SPA lives in its own nginx container
-         behind the App Gateway. Disabling static web assets prevents the SDK
-         from emitting a manifest that references a non-existent wwwroot. -->
-    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <RootNamespace>Dashboard.ReadApi</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    Reference the ASP.NET Core shared framework so this class library can
+    expose Minimal-API endpoint extensions and DI registration helpers.
+    The Read API serves JSON only — no static-asset middleware — and the
+    host (backend/api/) is the only project that builds as Microsoft.NET.Sdk.Web.
+    See SAD §7 "Backend module architecture" + §10 Decision 11.
+  -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,7 @@
 using Dashboard.Shared.Realtime;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 
 namespace Dashboard.ReadApi.Endpoints;
 
@@ -22,7 +24,7 @@ public static class StreamEndpoint
 {
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(15);
 
-    public static void Map(WebApplication app)
+    public static void Map(IEndpointRouteBuilder app)
     {
         app.MapGet("/api/stream", async (HttpContext ctx, SlotUpdateBroker broker, CancellationToken ct) =>
         {

@@ -69,16 +69,16 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 ## 6. Constraints
 
 - **Hosting platform:** Azure only — all infrastructure must run on Microsoft Azure.
-- **Budget:** ≤ $30/month total (compute + database + storage combined).
+- **Budget:** ≤ $30/month total (compute + database + storage combined). One unified backend container app (Write + Read surfaces in a single host — see §7 "Backend module architecture") helps stay under this cap by halving the per-app overhead vs. two backend container apps.
 - **Network:** The system is deployed inside the organisation's internal network or a private Azure-hosted container; it is not publicly accessible.
 - **Technology stack:** Angular 20+ for the frontend; .NET 10 for all backend components.
-- **Platform agnosticism:** The solution must not depend on any proprietary cloud compute model (e.g. serverless Functions). All backend components must be deployable as standard containerised applications on any OCI-compliant container host.
+- **Platform agnosticism:** The solution must not depend on any proprietary cloud compute model (e.g. serverless Functions). All backend components must be deployable as standard containerised applications on any OCI-compliant container host. The single backend container app (Write + Read surfaces) is itself a standard OCI image listening on a single port — no proprietary compute model is required.
 
 ---
 
 ## 7. Target Architecture
 
-Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platform-agnosticism requirement, the backend is deployed as two containerised ASP.NET Core services on Azure Container Apps. Real-time fan-out uses **SSE + PostgreSQL `LISTEN/NOTIFY`** — Azure Container Apps imposes no HTTP timeout on long-lived SSE connections, making a separate real-time service unnecessary.
+Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platform-agnosticism requirement, the backend is deployed as **one containerised ASP.NET Core service** on Azure Container Apps. That single container hosts two logically-distinct API surfaces — **Write API** (`POST /api/deployments`, API-key-gated) and **Read API** (matrix / history / discovery / SSE / health, unauthenticated) — composed at startup from separate library projects (see §"Backend module architecture"). A future split into two containers is a host-project + gateway-config change only; the library boundary is the migration seam. Real-time fan-out uses **SSE + PostgreSQL `LISTEN/NOTIFY`** — Azure Container Apps imposes no HTTP timeout on long-lived SSE connections, making a separate real-time service unnecessary.
 
 ---
 
@@ -107,30 +107,30 @@ Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platf
               │              ▲ ONLY PUBLIC SURFACE              │
               │  routes by path + method:                       │
               │   GET  /                  → Dashboard           │
-              │   POST /api/deployments   → Write API           │
-              │   GET  /api/*             → Read API            │
-              │   GET  /api/stream  (SSE) → Read API            │
-              │   GET  /health            → Read API            │
-              └────┬──────────────┬─────────────┬──────────────┘
-                   │              │             │
-                   ▼              ▼             ▼
-        ┌──────────────────┐ ┌──────────┐ ┌────────────┐
-        │  Dashboard       │ │ Write    │ │ Read API   │
-        │  Frontend        │ │ API      │ │            │
-        │  (nginx +        │ │ (.NET 10)│ │ (.NET 10)  │
-        │   Angular static)│ │ INSERT + │ │ matrix /   │
-        │   internal-only  │ │ NOTIFY   │ │ history /  │
-        │                  │ │ internal-│ │ discovery /│
-        │                  │ │ only     │ │ SSE / LISTEN
-        │                  │ │          │ │ internal-  │
-        │                  │ │          │ │ only       │
-        └──────────────────┘ └────┬─────┘ └─────┬──────┘
-                                  │             │
-                                  ▼             ▼
-                            ┌───────────────────────┐
-                            │      PostgreSQL       │
-                            │  LISTEN/NOTIFY        │
-                            └───────────────────────┘
+              │   POST /api/deployments   → API (Write)         │
+              │   GET  /api/*             → API (Read)          │
+              │   GET  /api/stream  (SSE) → API (Read)          │
+              │   GET  /health            → API (Read)          │
+              └────┬───────────────────────────┬────────────────┘
+                   │                           │
+                   ▼                           ▼
+        ┌──────────────────┐         ┌──────────────────────────┐
+        │  Dashboard       │         │  API container (.NET 10) │
+        │  Frontend        │         │  ─ Write API surface     │
+        │  (nginx +        │         │    POST → INSERT+NOTIFY  │
+        │   Angular static)│         │    API-key gated         │
+        │   internal-only  │         │  ─ Read API surface      │
+        │                  │         │    matrix/history/disc.  │
+        │                  │         │    SSE / LISTEN          │
+        │                  │         │    unauthenticated       │
+        │                  │         │  internal-only           │
+        └──────────────────┘         └──────────┬───────────────┘
+                                                │
+                                                ▼
+                                     ┌───────────────────────┐
+                                     │      PostgreSQL       │
+                                     │  LISTEN/NOTIFY        │
+                                     └───────────────────────┘
 
                         ▲                              ▲
         Browser + CI/CD │       one origin, no CORS    │
@@ -151,6 +151,8 @@ Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platf
 ```
 
 #### C4 Component Diagram
+
+The diagram below shows the *logical* components. The **Ingest API** and **Read API** are logical surfaces; at deployment time they are composed into a single API container (see §7 "Backend module architecture"). The diagram is unchanged by the consolidation — the component-level boundaries persist; only the host packaging differs.
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════╗
@@ -200,11 +202,10 @@ Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platf
 | Component | Description | Technologies |
 |---|---|---|
 | **CI/CD Notify Step** | A step (or script) added to any existing CI/CD pipeline. Sends a deployment event to the ingest API via an HTTP POST. Works with any CI/CD tool that can run a shell command or script (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, CircleCI, etc.). | Shell / `curl` (any CI/CD tool); optional GitHub Actions composite action (`action.yml`) |
-| **App Gateway** | Single public-facing reverse proxy that fronts every component. Routes by path and HTTP method: `GET /` → Dashboard Frontend; `POST /api/deployments` → Write API; all other `GET /api/*` and `GET /api/stream` → Read API. Eliminates CORS (single origin), minimises the public surface (NFR-04), and is the only container exposed to host / public ingress. SSE pass-through tuned (`proxy_buffering off`, `proxy_read_timeout 1h`). | nginx (alpine) |
-| **Ingest API (Write API)** | Accepts deployment events from CI/CD pipelines. Validates the payload, persists the event to the store, and notifies connected SSE clients via PostgreSQL `NOTIFY`. Stateless — any number of instances can run in parallel. **Internal-only — reachable only via the App Gateway.** | C#, ASP.NET Core Minimal API, EF Core 10, Npgsql |
-| **Read API** | Serves the current deployment matrix (latest per slot), per-slot history, and environment/service discovery endpoints. Streams real-time slot-update events to browsers via SSE. Stateless — reads are satisfied from the store; events are brokered via PostgreSQL `LISTEN`. **Internal-only — reachable only via the App Gateway.** | C#, ASP.NET Core Minimal API, EF Core 10, Npgsql |
+| **App Gateway** | Single public-facing reverse proxy that fronts every component. Routes by path and HTTP method: `GET /` → Dashboard Frontend; `POST /api/deployments` → API (Write surface); all other `GET /api/*` and `GET /api/stream` → API (Read surface). Both surfaces resolve to the same single `api` upstream — the path+method-based routing matrix is preserved so a future split back into separate `write-api` / `read-api` upstreams is gateway-config-only. Eliminates CORS (single origin), minimises the public surface (NFR-04), and is the only container exposed to host / public ingress. SSE pass-through tuned (`proxy_buffering off`, `proxy_read_timeout 1h`). | nginx (alpine) |
+| **API container** | Single .NET 10 host that composes two logically-distinct API surfaces from separate library projects (see §"Backend module architecture"): **Write API surface** — accepts deployment events from CI/CD pipelines, validates payload, persists the event, notifies connected SSE clients via PostgreSQL `NOTIFY`; API-key-gated (FR-10). **Read API surface** — serves the current deployment matrix (latest per slot), per-slot history, environment/service discovery, SSE stream, and health; unauthenticated. Stateless on both surfaces — any number of instances can run in parallel; reads are satisfied from the store; events brokered via PostgreSQL `LISTEN`. **Internal-only — reachable only via the App Gateway.** | C#, ASP.NET Core Minimal API, EF Core 10, Npgsql |
 | **Deployment Store** | Durable append-only store for all deployment events. Source of truth for the matrix query, history queries, and `lastSuccessful` / `previousFailed` derivation. | PostgreSQL (production and local dev); SQLite in-memory for unit tests only |
-| **Real-time Hub** | Each Read API instance `LISTEN`s on the PostgreSQL `deployments` channel and forwards events to its own connected SSE clients. No separate broker service is required. | PostgreSQL `LISTEN/NOTIFY`, ASP.NET Core SSE (`text/event-stream`) |
+| **Real-time Hub** | Each API container instance `LISTEN`s on the PostgreSQL `deployments` channel (Read surface) and forwards events to its own connected SSE clients. No separate broker service is required. | PostgreSQL `LISTEN/NOTIFY`, ASP.NET Core SSE (`text/event-stream`) |
 | **Dashboard Frontend** | Browser-based pipeline matrix view. Renders the services × environments grid, history drawer, version highlight, and live SSE updates. Built with `ng build` and served as static files from its own nginx container; **internal-only**, reached via the App Gateway. | Angular 20 (standalone components, zoneless change detection), NgRx Signal Store, Tailwind CSS, browser-native `EventSource`; nginx (alpine) runtime |
 | **Notification Client** | Standalone desktop tray application. Polls the Read API (via the App Gateway) at a configurable interval, diffs against locally cached state, and fires OS notifications for changed slots. | .NET 10, WinForms (Windows) or MAUI (cross-platform); self-contained binary |
 
@@ -252,7 +253,7 @@ Two optional source-identifier fields — `ref` and `sha` — MAY be included on
 
 #### Dashboard Backend
 
-A stateless ASP.NET Core web service. Any number of instances can run behind a load balancer — all mutable state lives in the database.
+A stateless ASP.NET Core web service hosting both the **Write API** and **Read API** surfaces in a single OCI container. Any number of instances can run behind a load balancer — all mutable state lives in the database.
 
 | Attribute | Value |
 |---|---|
@@ -260,9 +261,9 @@ A stateless ASP.NET Core web service. Any number of instances can run behind a l
 | Framework | ASP.NET Core Minimal API |
 | ORM | EF Core 10 + Npgsql |
 | Storage | PostgreSQL (production and local dev); SQLite in-memory (unit tests only) |
-| Scalability | Horizontal — stateless; multiple instances behind a load balancer |
-| Container | Single Docker image (~120 MB self-contained) |
-| Port | 8080 |
+| Scalability | Horizontal — stateless; multiple instances behind a load balancer; the unified container scales as a whole until traffic-shape evidence justifies a split (see §"Backend module architecture" → "Future split — trigger conditions") |
+| Container | **Single Docker image** (~120 MB self-contained) hosting both surfaces; built from `backend/api/` |
+| Port | 8080 — single listener serving both `POST /api/deployments` (Write) and all read endpoints |
 
 **Statelessness constraints (required for horizontal scaling):**
 - No in-memory cache of deployment state between requests — every read hits the database
@@ -270,20 +271,65 @@ A stateless ASP.NET Core web service. Any number of instances can run behind a l
 - No sticky sessions — the load balancer may route any request to any instance; SSE connections are long-lived but reconnect transparently via `Last-Event-ID`
 
 **Responsibilities:**
-- Accept and persist deployment events via `POST /api/deployments` (Write API)
-- Serve the current deployment matrix (`GET /api/deployments`) and per-slot history (Read API)
-- Derive per-service topology (DAG of env edges) from raw deployments on every matrix read (Read API; §"Data Model" → "Topology Derivation"). SSE slot-update events carry slot state only — clients refresh topology via a follow-up `GET /api/deployments` with their own `correlationAttribute`.
+- Accept and persist deployment events via `POST /api/deployments` (Write surface; API-key-gated)
+- Serve the current deployment matrix (`GET /api/deployments`) and per-slot history (Read surface; unauthenticated)
+- Derive per-service topology (DAG of env edges) from raw deployments on every matrix read (Read surface; §"Data Model" → "Topology Derivation"). SSE slot-update events carry slot state only — clients refresh topology via a follow-up `GET /api/deployments` with their own `correlationAttribute`.
 - Expose the server-side topology correlation configuration via `GET /api/config/topology` (read-only to the SPA — used to display the system default in the picker) and accept runtime updates via `PATCH /api/config/topology` (admin / CI / ops tooling only; **not invoked by the SPA**; SPA per-user overrides travel as a `correlationAttribute` query parameter on read endpoints — see §"API Contract")
-- Stream real-time slot-update events via SSE (`GET /api/stream` — Read API); NOTIFY the PostgreSQL `deployments` channel on every successful ingest
+- Stream real-time slot-update events via SSE (`GET /api/stream` — Read surface); NOTIFY the PostgreSQL `deployments` channel on every successful ingest
 
-**Out of scope for the backend:** serving static SPA assets. The Angular build is shipped in its own **Dashboard Frontend** container (nginx), not in the Read API's `wwwroot`. The backend serves JSON only.
+**Out of scope for the backend:** serving static SPA assets. The Angular build is shipped in its own **Dashboard Frontend** container (nginx), not in the API container. The backend serves JSON only.
+
+**Backend module architecture — single host, two library surfaces:**
+
+The .NET solution under `backend/` is organised as a thin host project that composes two library projects — one per API surface — plus a shared library for cross-cutting concerns. This mirrors the modular-monolith pattern used on the frontend (single workspace, multiple libraries, one application project) and preserves the option to split the host back into two without a code rewrite.
+
+```
+backend/
+├── api/          # Host project (ASP.NET Core executable) — Program.cs, single Dockerfile,
+│                 # composition root. References write-api/ and read-api/ libraries and
+│                 # maps each library's endpoint group + middleware onto the single host.
+├── write-api/    # Library project — endpoint group for POST /api/deployments,
+│                 # request DTOs, NOTIFY dispatch. API-key middleware is applied here
+│                 # (scoped to the write surface only — see §"Security Considerations").
+├── read-api/     # Library project — endpoint groups for matrix / history / discovery /
+│                 # SSE / health / topology config. Unauthenticated. No write paths.
+├── shared/       # Class library — EF Core DbContext, entities, migrations,
+│                 # NOTIFY/LISTEN abstractions, ApiKeyMiddleware implementation, DTOs.
+└── Dashboard.sln # References api/, write-api/, read-api/, shared/, plus unit tests.
+```
+
+| Rule | Enforcement |
+|---|---|
+| Only `api/` references the two surface libraries. `write-api/` and `read-api/` do not reference each other. | Solution-level `ProjectReference` graph; reviewed in PR. |
+| Both surface libraries depend on `shared/`. `shared/` depends on neither. | Same. |
+| Each surface library exposes a single `IEndpointRouteBuilder` extension (e.g. `MapWriteEndpoints`, `MapReadEndpoints`) — the host wires them up. | Public surface enforced by being the only `public` extension method on each library. |
+| API-key middleware is applied **only** to the write endpoint group; the read group is unauthenticated. | `MapGroup("/api").RequireApiKey()` on the write group; no such call on the read group. |
+| One Dockerfile, one image, one ACA container app. | `backend/api/Dockerfile` is the only API Dockerfile. |
+| EF Core entities, `DbContext`, and migrations live in `shared/` — one migration set serves both surfaces. | Existing rule, unchanged. |
+
+**Future split — trigger conditions:**
+
+The host-composition design keeps the option open to split back into two separate container apps. Re-splitting becomes a host-project + gateway-config change only (no library code touched). Triggers that justify the split:
+
+| Trigger | Why it justifies a split |
+|---|---|
+| Asymmetric resource needs | Sustained CPU/memory profile differs between surfaces (e.g. SSE fan-out under read load saturating the container before write traffic does). Splitting allows independent scaling. |
+| Independent release cadence | One surface requires more frequent restarts / canary windows than the other and the coupling is paying a cost. |
+| Tightened security boundary | An external requirement to run the write surface on a separately-credentialed network segment (e.g. only ingest from the CI/CD VNet; read endpoints in a different subnet). |
+| Cost-cap pressure inverted | If ACA pricing changes and two small apps become cheaper than one larger one. (Today the opposite holds — see §6.) |
+
+Re-split mechanics (no library code change):
+1. Add `backend/write-api-host/Program.cs` (calls `MapWriteEndpoints`) and `backend/read-api-host/Program.cs` (calls `MapReadEndpoints`).
+2. Two new Dockerfiles under each host directory.
+3. Gateway `nginx.conf` re-introduces a second upstream (e.g. `write_api`) and the path+method routing matrix points the `POST /api/deployments` row to it.
+4. Two ACA container apps in place of one; everything else is unchanged.
 
 **Configuration — Read API topology (FR-13 / §"Topology Derivation"):**
 
-Topology is a read-side concern (the Write API has no knowledge of correlation). The Read API holds the **server-side** configuration and reloads it on every read. Server-side config is mutated only by admin / CI / ops tooling via `PATCH /api/config/topology` (§"API Contract") — the SPA never invokes PATCH. End-user picker preferences live in browser `localStorage` and reach the server as a per-request `correlationAttribute` query parameter on read endpoints (no auth required; reads are unauthenticated). Default values are bootstrapped from the read-api `appsettings.json` on first run and persisted to a single config row in the database thereafter.
+Topology is a read-side concern (the Write API surface has no knowledge of correlation). The Read API surface holds the **server-side** configuration and reloads it on every read. Server-side config is mutated only by admin / CI / ops tooling via `PATCH /api/config/topology` (§"API Contract") — the SPA never invokes PATCH. End-user picker preferences live in browser `localStorage` and reach the server as a per-request `correlationAttribute` query parameter on read endpoints (no auth required; reads are unauthenticated). Default values are bootstrapped from the API host's `appsettings.json` on first run and persisted to a single config row in the database thereafter.
 
 ```yaml
-# read-api appsettings.json (bootstrap defaults)
+# backend/api/appsettings.json (bootstrap defaults — Read surface)
 Topology:
   CorrelationAttribute: "version"     # server-side global default; one of: version, ref, sha, actor, run, ago
   PerServiceOverrides: {}             # service -> attribute; ops-managed; empty by default; updated via PATCH
@@ -302,7 +348,7 @@ The setting is explicitly not surfaced to the Write API: ingest does not depend 
 
 #### App Gateway
 
-A single nginx reverse-proxy container that fronts every other component. It is the **only** container exposed to the host (local dev) or to public ingress (Azure). All three back-end components — Write API, Read API, Dashboard Frontend — sit behind it on the internal Docker / ACA network.
+A single nginx reverse-proxy container that fronts every other component. It is the **only** container exposed to the host (local dev) or to public ingress (Azure). The two back-end components — the API container (hosting both Write and Read surfaces) and the Dashboard Frontend — sit behind it on the internal Docker / ACA network.
 
 | Attribute | Value |
 |---|---|
@@ -315,24 +361,27 @@ A single nginx reverse-proxy container that fronts every other component. It is 
 
 **Routing matrix:**
 
-| Method + Path | Upstream |
-|---|---|
-| `POST /api/deployments` | `write-api:8080/api/deployments` |
-| `GET /api/deployments` | `read-api:8080/api/deployments` |
-| `GET /api/deployments/{service}/{environment}` | `read-api:8080/...` |
-| `GET /api/deployments/{service}/{environment}/history` | `read-api:8080/...` |
-| `GET /api/environments`, `GET /api/services` | `read-api:8080/...` |
-| `GET /api/config/topology` | `read-api:8080/api/config/topology` (read-only mirror of server-side defaults; SPA-readable, no auth) |
-| `PATCH /api/config/topology` | `read-api:8080/api/config/topology` (auth-gated by `X-Api-Key`; **admin / CI / ops tooling only — not invoked by the SPA**; see §"API Contract") |
-| `GET /api/stream` | `read-api:8080/api/stream` — SSE pass-through (`proxy_buffering off`, `proxy_cache off`, `proxy_read_timeout 1h`, `X-Accel-Buffering: no`) |
-| `GET /health` | `read-api:8080/health` |
-| `GET /` and every other path | `dashboard:80/` (SPA shell + Angular bundle, with HTML5 history fallback to `index.html`) |
+Today both API surfaces resolve to a single `api` upstream (one container, both surfaces). The matrix continues to discriminate on path + method so that a future re-split into separate `write-api` / `read-api` upstreams (per §"Backend module architecture" → "Future split") is a gateway-config-only change — the row for `POST /api/deployments` simply points at the new write upstream while every other row stays the same.
+
+| Method + Path | Upstream | Surface (logical) |
+|---|---|---|
+| `POST /api/deployments` | `api:8080/api/deployments` | Write — API-key gated by the host. |
+| `GET /api/deployments` | `api:8080/api/deployments` | Read. |
+| `GET /api/deployments/{service}/{environment}` | `api:8080/...` | Read. |
+| `GET /api/deployments/{service}/{environment}/history` | `api:8080/...` | Read. |
+| `GET /api/environments`, `GET /api/services` | `api:8080/...` | Read. |
+| `GET /api/config/topology` | `api:8080/api/config/topology` (read-only mirror of server-side defaults; SPA-readable, no auth) | Read. |
+| `PATCH /api/config/topology` | `api:8080/api/config/topology` (auth-gated by `X-Api-Key` at the host; **admin / CI / ops tooling only — not invoked by the SPA**; see §"API Contract") | Write (admin). |
+| `GET /api/stream` | `api:8080/api/stream` — SSE pass-through (`proxy_buffering off`, `proxy_cache off`, `proxy_read_timeout 1h`, `X-Accel-Buffering: no`) | Read. |
+| `GET /health` | `api:8080/health` | Read. |
+| `GET /` and every other path | `dashboard:80/` (SPA shell + Angular bundle, with HTML5 history fallback to `index.html`) | n/a. |
 
 **Why a gateway (vs. CORS + multiple origins):**
 - Eliminates CORS entirely — the browser only ever sees one origin.
 - Minimises the public surface — only one container in NFR-04's internal-only network has ingress.
 - One ACA app gets public ingress in Azure; the others stay internal — matches the cost table without forcing each to expose itself publicly.
 - The SPA and CI/CD callers are upstream-agnostic — they hit one URL.
+- Decouples internal topology from external clients — collapsing two API containers into one (or re-splitting later) is invisible to every CI/CD caller and to the SPA.
 
 #### Dashboard Frontend (MVP)
 
@@ -945,18 +994,17 @@ Topology can be coalesced if multiple slot-update events arrive within a short w
 
 #### Local Development
 
-**Containers — four images, four Dockerfiles**
+**Containers — three images, three Dockerfiles**
 
-Each component has its own multi-stage Dockerfile. The Read API does **not** bundle the SPA; the SPA is shipped in its own nginx container, and both sit behind the App Gateway.
+Each component has its own multi-stage Dockerfile. The API container hosts both Write and Read surfaces (per §"Backend module architecture") and serves JSON only — it does **not** bundle the SPA. The SPA is shipped in its own nginx container, and both sit behind the App Gateway.
 
 | Image | Source path | Dockerfile context | Notes |
 |---|---|---|---|
-| `deployment-dashboard/write-api` | `backend/write-api/` | `backend/` | SDK build → aspnet:10.0 runtime; EXPOSE 8080; no SPA stage. |
-| `deployment-dashboard/read-api` | `backend/read-api/` | `backend/` | SDK build → aspnet:10.0 runtime; EXPOSE 8080; no SPA stage; no `wwwroot`. |
+| `deployment-dashboard/api` | `backend/api/` | `backend/` | SDK build → aspnet:10.0 runtime; EXPOSE 8080; no SPA stage; no `wwwroot`. Composes the `write-api/` and `read-api/` libraries into a single host (Write surface API-key-gated; Read surface unauthenticated). |
 | `deployment-dashboard/dashboard` | `frontend/dashboard/` | `frontend/` | `node:22-alpine` runs `ng build dashboard` → copies `dist/dashboard/browser/` into `nginx:alpine` and serves it on port 80 with HTML5 history fallback to `index.html`. |
 | `deployment-dashboard/gateway` | `gateway/` | `gateway/` | `nginx:alpine`; `nginx.conf` declares the routing matrix (path + method) and SSE pass-through tuning. EXPOSE 80. **The only image with public ingress.** |
 
-Conventional connection-string variables: each .NET API reads `ConnectionStrings__DefaultConnection`. `API_TOKEN` and `HISTORY_RETENTION_DAYS` are read by the Write API and Read API respectively.
+Conventional connection-string variables: the API host reads `ConnectionStrings__DefaultConnection`. The Write surface reads `API_TOKEN` (the key required on `X-Api-Key`); the Read surface reads `HISTORY_RETENTION_DAYS`. Both env vars are bound on the single API container.
 
 **Docker Compose — Local Development**
 
@@ -965,28 +1013,19 @@ services:
   gateway:
     build: { context: ../gateway }
     ports: ["8080:80"]                 # ONLY host-published service
-    depends_on: [dashboard, write-api, read-api]
+    depends_on: [dashboard, api]
 
   dashboard:
     build: { context: ../frontend, dockerfile: dashboard/Dockerfile }
     expose: ["80"]                     # internal only — no host port
 
-  write-api:
-    build: { context: ../backend, dockerfile: write-api/Dockerfile }
-    expose: ["8080"]                   # internal only
+  api:
+    build: { context: ../backend, dockerfile: api/Dockerfile }
+    expose: ["8080"]                   # internal only — hosts both Write and Read surfaces
     environment:
       ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      API_TOKEN: "local-dev-token-not-for-production"
-    depends_on:
-      db: { condition: service_healthy }
-      migrations: { condition: service_completed_successfully }
-
-  read-api:
-    build: { context: ../backend, dockerfile: read-api/Dockerfile }
-    expose: ["8080"]                   # internal only
-    environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      HISTORY_RETENTION_DAYS: "365"
+      API_TOKEN: "local-dev-token-not-for-production"     # required for the Write surface (X-Api-Key)
+      HISTORY_RETENTION_DAYS: "365"                       # consumed by the Read surface pruning job
     depends_on:
       db: { condition: service_healthy }
       migrations: { condition: service_completed_successfully }
@@ -1077,8 +1116,7 @@ All instances are stateless and share the same PostgreSQL database. SSE fan-out 
 │  ┌─── Azure Container Registry ───────────────────────────────────────┐   │
 │  │  deployment-dashboard/gateway:latest                                │   │
 │  │  deployment-dashboard/dashboard:latest                              │   │
-│  │  deployment-dashboard/write-api:latest                              │   │
-│  │  deployment-dashboard/read-api:latest                               │   │
+│  │  deployment-dashboard/api:latest      (Write + Read surfaces)       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                    ↑ pull images                                            │
 │  ┌─── Azure Container Apps Environment ────────────────────────────────┐   │
@@ -1086,27 +1124,28 @@ All instances are stateless and share the same PostgreSQL database. SSE fan-out 
 │  │  ┌──────────────────────┐                                            │   │
 │  │  │  App Gateway          │  ◄── ONLY public ingress (NFR-04)         │   │
 │  │  │  nginx:alpine         │                                           │   │
-│  │  │                       │  routes:                                  │   │
+│  │  │                       │  routes (single api upstream today):      │   │
 │  │  │                       │    GET /                  → dashboard     │   │
-│  │  │                       │    POST /api/deployments  → write-api     │   │
-│  │  │                       │    GET  /api/*            → read-api      │   │
-│  │  │                       │    GET  /api/stream (SSE) → read-api      │   │
-│  │  │                       │    GET  /health           → read-api      │   │
-│  │  └──┬────────────────┬───┘                                           │   │
-│  │     │                │                                                │   │
-│  │     ▼                ▼                                                │   │
-│  │  ┌──────────┐   ┌──────────────────┐   ┌──────────────────────────┐  │   │
-│  │  │ Dashboard│   │  Write API        │   │  Read API                │  │   │
-│  │  │ nginx +  │   │  ASP.NET Core 10  │   │  ASP.NET Core 10         │  │   │
-│  │  │ Angular  │   │  POST ingest      │   │  GET matrix / history /  │  │   │
-│  │  │ static   │   │  NOTIFY channel   │   │  discovery / SSE / health│  │   │
-│  │  │ build    │   │                   │   │  LISTEN channel          │  │   │
-│  │  │ internal │   │  internal         │   │  internal                │  │   │
-│  │  └──────────┘   └────────┬──────────┘   └──────────┬───────────────┘  │   │
-│  │                          │                          │                  │   │
-│  └──────────────────────────┼──────────────────────────┼──────────────────┘   │
-│                       writes│        queries + LISTEN │                       │
-│                             ↓                          ↓                       │
+│  │  │                       │    POST /api/deployments  → api (Write)   │   │
+│  │  │                       │    GET  /api/*            → api (Read)    │   │
+│  │  │                       │    GET  /api/stream (SSE) → api (Read)    │   │
+│  │  │                       │    GET  /health           → api (Read)    │   │
+│  │  └──┬────────────────────┬─────┘                                     │   │
+│  │     │                    │                                            │   │
+│  │     ▼                    ▼                                            │   │
+│  │  ┌──────────┐    ┌──────────────────────────────────────────────┐   │   │
+│  │  │ Dashboard│    │  API container                                │   │   │
+│  │  │ nginx +  │    │  ASP.NET Core 10 — single host                │   │   │
+│  │  │ Angular  │    │   ─ Write surface: POST ingest, NOTIFY,       │   │   │
+│  │  │ static   │    │     API-key gated (FR-10)                     │   │   │
+│  │  │ build    │    │   ─ Read surface: matrix / history /          │   │   │
+│  │  │ internal │    │     discovery / SSE / health, LISTEN          │   │   │
+│  │  │          │    │  internal                                     │   │   │
+│  │  └──────────┘    └────────────────────────┬──────────────────────┘   │   │
+│  │                                           │                            │   │
+│  └───────────────────────────────────────────┼────────────────────────────┘   │
+│                                 writes + queries + LISTEN/NOTIFY              │
+│                                              ↓                                │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  Azure Database for PostgreSQL Flexible Server  (Burstable B1ms)    │   │
 │  │  LISTEN/NOTIFY channel: "deployments"                               │   │
@@ -1123,11 +1162,11 @@ All instances are stateless and share the same PostgreSQL database. SSE fan-out 
 
 **Component Mapping**
 
-All four container apps share a **single** Azure Container Apps Environment on the **Consumption** plan, which is scale-to-zero by default — adding more small apps does not add fixed overhead. Total compute cost is dominated by vCPU-seconds × memory-seconds × request count, not by container count. The gateway and the dashboard containers in particular are static-only and idle the vast majority of the time, so their marginal cost on Consumption is close to zero.
+All three container apps share a **single** Azure Container Apps Environment on the **Consumption** plan, which is scale-to-zero by default — adding more small apps does not add fixed overhead. Total compute cost is dominated by vCPU-seconds × memory-seconds × request count, not by container count. The gateway and the dashboard containers in particular are static-only and idle the vast majority of the time, so their marginal cost on Consumption is close to zero. The unified API container further reduces the per-app overhead vs. the original two-API design and stays comfortably under NFR-02.
 
 | Logical component | Azure resource | SKU | Est. monthly cost |
 |---|---|---|---|
-| App Gateway + Dashboard + Write API + Read API (4 apps, 1 environment) | Azure Container Apps Environment + 4 Container Apps | Consumption (scale-to-zero) | ~$2–5 combined |
+| App Gateway + Dashboard + API (3 apps, 1 environment) | Azure Container Apps Environment + 3 Container Apps | Consumption (scale-to-zero) | ~$2–5 combined |
 | Container Images | Azure Container Registry | Basic | ~$5 |
 | Deployment Store | Azure Database for PostgreSQL Flexible Server | Burstable B1ms | ~$13–15 |
 | **Total** | | | **~$20–25/month** |
@@ -1155,6 +1194,7 @@ The original design considered **Azure SignalR Service with the Functions Signal
 ## 8. Security Considerations
 
 - The dashboard is **internal-only**: hosted on a private network or behind VPN. Not exposed to the internet.
+- **API-key middleware is scoped to write endpoints only.** Even though the Write and Read surfaces live in the same single API host (§7 "Backend module architecture"), the API-key middleware (`ApiKeyMiddleware`, in `shared/`) is applied **only** to the Write endpoint group (`POST /api/deployments`, `PATCH /api/config/topology`). The Read endpoint group (`GET /api/*`, `GET /api/stream`, `GET /health`) is unauthenticated by design (per FR-10 — write-only auth — and Decision #1 — read-side auth is delegated to a sidecar). The host composition wires this up via `MapGroup("/api").RequireApiKey()` on the write group only — there is no global `UseMiddleware<ApiKeyMiddleware>()` call. Future agents adding endpoints must place each new endpoint in the right group; a write-side endpoint accidentally added to the read group would skip authentication.
 - Write endpoint requires a static API key — prevents arbitrary parties from injecting fake deployment records.
 - The API key is stored as a GitHub Actions secret, not in workflow files or source code.
 - **PostgreSQL:** credentials passed via environment variable, never in source code or image; stored in Azure Key Vault in the target architecture.
@@ -1172,7 +1212,7 @@ The original design considered **Azure SignalR Service with the Functions Signal
 | Storage | PostgreSQL |
 | Frontend | Angular 20 SPA — pipeline matrix, status badges, history drawer, version highlight, live SSE updates |
 | Ingest | HTTP call (`curl` or equivalent) from any CI/CD pipeline (GitHub Actions, Azure DevOps, Jenkins, etc.) |
-| Container | Two Docker images — Write API, Read API + Angular SPA |
+| Container | Three Docker images — API (Write + Read surfaces), Dashboard Frontend (Angular SPA), App Gateway |
 | Config | `ConnectionStrings__DefaultConnection`, `API_TOKEN`, `HISTORY_RETENTION_DAYS` (default 365) |
 
 **Definition of Done:**  
@@ -1219,6 +1259,7 @@ A developer installs the tray binary, configures the dashboard URL, and receives
 | 8 | Topology delivery — SSE wire vs. follow-up GET? | **Slot updates over SSE; topology fetched via `GET /api/deployments?correlationAttribute=…` after each event.** Rationale: with a per-user `correlationAttribute` query parameter (Decision #7), SSE cannot carry "the" topology — every connected viewer might have a different picker preference, and a single broadcast payload cannot satisfy them all. The simplest correct contract is **one source of truth — the GET endpoint** — and a refresh-on-event policy on the SPA. Cost: one extra HTTP call per SSE event on a same-cluster connection; well inside NFR-03's 5 s budget. Eliminates "which topology to trust" reasoning on the client and makes `Last-Event-ID` replay trivially correct. See §"API Contract" → "SSE topology semantics". |
 | 9 | Explicit `parent_deployments` references that point to a not-yet-ingested deployment — reject or accept? | **Accept and hold as dangling.** Rationale: out-of-order ingest is normal in distributed CI/CD (different pipelines, different runners, network delays); rejecting forces callers to retry-with-backoff and ties topology correctness to ingest ordering. Dangling references contribute no edge until the missing source lands; the next read after that reconciles them automatically (§"Topology Derivation" pass 5). Cross-service references and cycles are still hard rejections (`400`). |
 | 10 | Validation of `ref` and `sha` (length, format, character set, required-when-paired)? | **Deferred — additive-only for now.** This cycle adds `ref` and `sha` as nullable, unconstrained string fields on the ingest payload and the read-side wire shape (FR-05). No length cap, no hex check on `sha`, no required-when-`ref`-set rule. A separate, larger validation overhaul is on the project backlog and will revisit every payload field (`version`, `ref`, `sha`, others) together, set length caps, define a standard format, and surface proper 4xx errors. Backward compatibility: payloads with neither field, either field, or both must continue to work. |
+| 11 | Should the Write API and Read API ship as one container or two? | **One container, two library surfaces — split deferred.** The two API surfaces (`POST /api/deployments` and the read endpoints) ship inside a single ASP.NET Core host project (`backend/api/`) that composes two separate library projects (`backend/write-api/`, `backend/read-api/`) per §7 "Backend module architecture". Rationale: (a) the two surfaces share the same `DbContext`, `LISTEN/NOTIFY` plumbing, and EF migrations — running them as one OS process avoids duplicate database connection pools and duplicate `LISTEN` subscriptions for zero functional benefit at MVP scale; (b) one ACA container app is cheaper than two on the Consumption plan and keeps NFR-02 comfortable; (c) the library boundary preserves the option to split: re-splitting becomes a host-project + gateway-config change, no library code touched (mechanics in §7 "Backend module architecture" → "Future split"). Trigger conditions for splitting are listed there. API-key middleware is scoped to the write endpoint group only (§8) — co-location does not change the auth boundary. |
 
 ---
 
@@ -1230,21 +1271,22 @@ A developer installs the tray binary, configures the dashboard URL, and receives
 
 #### 1. Implement Solution
 
-- 1.1 Ingest API (Write API — ASP.NET Core Minimal API)
+- 1.0 Backend host (`backend/api/`) — composition root that wires up Write and Read surface libraries; `Program.cs`, single Dockerfile, single ACA container app target; references `backend/write-api/`, `backend/read-api/`, `backend/shared/`. API-key middleware is applied **only** to the Write endpoint group (see §8 "Security Considerations" and §7 "Backend module architecture"). See §10 Decision 11 for rationale and future-split mechanics.
+- 1.1 Ingest API (Write surface — ASP.NET Core Minimal API library at `backend/write-api/`; composed into the API host)
   - 1.1.1 `DeploymentEvent` record with Data Annotations validation (`422` on invalid payload); fields include `deployment_id` (required) and `parent_deployments` (optional)
-  - 1.1.2 EF Core `DeploymentEntity` and `DbContext`; `deployments` table migration with `deployment_id` column + unique index on `(service, deployment_id)` and `parent_deployments` column (PostgreSQL `text[]`; SQLite JSON-encoded array)
+  - 1.1.2 EF Core `DeploymentEntity` and `DbContext` in `backend/shared/`; `deployments` table migration with `deployment_id` column + unique index on `(service, deployment_id)` and `parent_deployments` column (PostgreSQL `text[]`; SQLite JSON-encoded array). Migrations live in `shared/` and serve both surfaces.
   - 1.1.3 `201 Created` response with created resource body; `409 Conflict` on duplicate `(service, deployment_id)`; `400` on cross-service parent ref or on cycle through resolved references
-  - 1.1.4 API key middleware (`401` on missing / invalid token)
+  - 1.1.4 API key middleware applied to the Write endpoint group only (`MapGroup("/api").RequireApiKey()` on the write group; no global registration) — `401` on missing / invalid token; the Read group is unauthenticated by design
   - 1.1.5 PostgreSQL `NOTIFY deployments` channel after successful insert
   - 1.1.6 Topology cycle-check helper — validates `parent_deployments` against the already-resolved subgraph at ingest time; dangling references are accepted unchecked
-- 1.2 Read API (ASP.NET Core Minimal API)
+- 1.2 Read API (Read surface — ASP.NET Core Minimal API library at `backend/read-api/`; composed into the same API host)
   - 1.2.1 `GET /api/deployments` — matrix query with `lastSuccessful`, `previousFailed`, and per-service `topology.edges` derivation; accept optional `correlationAttribute` query parameter (validated against the allowed enum; `400` on invalid value); precedence `PerServiceOverrides[svc] > query-param > server default`
   - 1.2.2 `GET /api/deployments/{service}/{environment}/history` — last N events, `404` when no history
   - 1.2.3 `GET /api/environments` and `GET /api/services` — discovery from stored data
   - 1.2.4 `GET /api/stream` — SSE endpoint; subscribe to PostgreSQL `LISTEN deployments` per connected client; **slot-update payload only — topology is NOT carried on the wire** (the SPA refreshes topology via `GET /api/deployments?correlationAttribute=…` after each event, per §"API Contract" → "SSE topology semantics")
   - 1.2.5 `GET /health` — database connectivity check
   - 1.2.6 Topology derivation service — explicit-first + correlation fallback passes per §"Topology Derivation"; correlation attribute resolved per request using the three-tier precedence; defensive read-side cycle drop with `WARN` log
-  - 1.2.7 `GET /api/config/topology` (SPA-readable; surfaces server-side `CorrelationAttribute` + `PerServiceOverrides` so the picker can display "system default") and `PATCH /api/config/topology` (admin / CI / ops only — **not invoked by the SPA**); PATCH auth-gated via the same `X-Api-Key` middleware as the Write API (FR-10)
+  - 1.2.7 `GET /api/config/topology` (SPA-readable; surfaces server-side `CorrelationAttribute` + `PerServiceOverrides` so the picker can display "system default") and `PATCH /api/config/topology` (admin / CI / ops only — **not invoked by the SPA**). The PATCH endpoint lives on the Write endpoint group (auth-gated by the same `X-Api-Key` middleware that protects `POST /api/deployments`, per FR-10 and §8). GET is on the Read group (unauthenticated).
 - 1.3 Dashboard Frontend (Angular 20 SPA)
   - 1.3.1 Angular workspace — standalone components, zoneless change detection, Tailwind CSS
   - 1.3.2 `DeploymentMatrixStore` (NgRx Signal Store) — matrix state, `lastSuccessful`, `previousFailed`, per-service `topology.edges`
@@ -1270,7 +1312,7 @@ A developer installs the tray binary, configures the dashboard URL, and receives
 
 #### 2. Automate Local Deployment (Docker Compose + PowerShell)
 
-- 2.1 `docker-compose.yml` — Write API container + Read API container + PostgreSQL + pgAdmin
+- 2.1 `docker-compose.yml` — API container (Write + Read surfaces) + Dashboard Frontend + App Gateway + PostgreSQL + pgAdmin + migrations one-shot
 - 2.2 PowerShell `start.ps1` — bring up the stack, wait for health check, print dashboard URL
 - 2.3 PowerShell `stop.ps1` — tear down containers and volumes
 - 2.4 PowerShell `seed.ps1` — POST prefilled test deployment events via Ingest API
@@ -1300,14 +1342,14 @@ A developer installs the tray binary, configures the dashboard URL, and receives
 - 4.2 Azure PostgreSQL Flexible Server (B1ms, private access)
 - 4.3 Azure Container Registry (Basic SKU)
 - 4.4 Azure Container Apps Environment
-- 4.5 Azure Container Apps — Write API and Read API container app definitions
+- 4.5 Azure Container Apps — three container app definitions: API (Write + Read surfaces), Dashboard Frontend, App Gateway. A future split adds a second backend container app per §10 Decision 11.
 - 4.6 Azure Key Vault — store `API_TOKEN`, `ConnectionStrings__DefaultConnection`
 - 4.7 Workspace-based environments (`dev`, `prod`) with per-environment variable files
 
 #### 5. Implement Component Deployment (Terraform)
 
 - 5.1 GitHub Actions workflow — Docker build, push to ACR, update Container App revision on merge to main
-- 5.2 Angular `ng build` output is bundled into the Read API Docker image at build time (served from `wwwroot`)
+- 5.2 Angular `ng build` output is bundled into the **Dashboard Frontend** nginx image (not into the API container) — `frontend/dashboard/Dockerfile` copies `dist/dashboard/browser/` into `nginx:alpine`. The API container serves JSON only.
 - 5.3 Database migration step — run EF Core migration as part of deployment pipeline
 - 5.4 Terraform `azurerm_container_app` revision update triggered by new image digest in ACR
 
@@ -1321,12 +1363,12 @@ A developer installs the tray binary, configures the dashboard URL, and receives
 
 - 7.1 `GET /health` returns `200 OK` — confirms Container App started and PostgreSQL reachable
 - 7.2 `GET /api/stream` opens SSE connection — confirms LISTEN/NOTIFY subscription works (receive a test event within 5 s)
-- 7.3 Angular SPA loads in browser from Read API container endpoint — confirms static asset serving from `wwwroot`
+- 7.3 Angular SPA loads in a browser from the App Gateway URL — confirms the Dashboard Frontend nginx container serves the bundle and the gateway routes `GET /` correctly. (The API container does not serve static assets.)
 - 7.4 Confirm PostgreSQL `deployments` table exists with correct schema
 
 #### 8. Deploy Components
 
-- 8.1 Deploy Write API + Read API container images via CI pipeline (Docker build, push to ACR, update Container App revision)
+- 8.1 Deploy the API container image (Write + Read surfaces) via CI pipeline (Docker build, push to ACR, update Container App revision). Dashboard Frontend and App Gateway images deploy via the same pipeline as separate ACA apps.
 - 8.2 Run database schema migration (idempotent)
 
 #### 9. Functional and E2E Tests — Real Environment (API + prefilled test data)

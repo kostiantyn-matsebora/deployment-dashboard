@@ -1,92 +1,51 @@
 using Dashboard.Shared.Domain;
 using Dashboard.Shared.Dto;
-using Dashboard.Shared.Json;
 using Dashboard.Shared.Persistence;
 using Dashboard.Shared.Realtime;
 using Dashboard.Shared.Security;
+using Dashboard.Shared.Topology;
 using Dashboard.Shared.Validation;
-using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.WriteApi;
 
 /// <summary>
-/// Entry point for the Write API. Owns:
-///   - POST /api/deployments    — insert event, 201 Created
-///   - GET  /health             — liveness probe with DB ping
-///   - X-Api-Key middleware     — every write requires the configured key
-///   - PostgreSQL NOTIFY        — emitted after the insert commits
+/// Endpoint registration for the Write surface (SAD §7 "Backend module
+/// architecture" + WBS 1.1). The host composition root calls
+/// <see cref="MapWriteEndpoints"/> once, on a route group that has
+/// <see cref="RouteHandlerBuilderExtensions.RequireApiKey"/> applied —
+/// the auth boundary is wired by the host, not by this library.
 ///
-/// Stateless: no in-memory state held between requests.
+/// <para>The Write surface owns:</para>
+/// <list type="bullet">
+///   <item><c>POST /api/deployments</c> — ingest validation, persistence,
+///   and PostgreSQL <c>NOTIFY</c> dispatch (SAD §7 WBS 1.1.3 / 1.1.5).</item>
+///   <item><c>PATCH /api/config/topology</c> — admin / CI / ops only;
+///   topology config mutation. SAD §7 WBS 1.2.7: "The PATCH endpoint lives
+///   on the Write endpoint group".</item>
+/// </list>
 /// </summary>
-public sealed class Program
+public static class WriteApiEndpoints
 {
-    public static void Main(string[] args)
+    /// <summary>
+    /// Registers every Write-surface endpoint on the supplied
+    /// <paramref name="builder"/>. Apply <c>RequireApiKey()</c> on the
+    /// builder before calling this method — SAD §8 demands the auth
+    /// boundary live with the group, not inside the handler.
+    /// </summary>
+    public static IEndpointRouteBuilder MapWriteEndpoints(this IEndpointRouteBuilder builder)
     {
-        var builder = WebApplication.CreateBuilder(args);
-
-        // ---- Configuration ------------------------------------------------
-        // Standard ASP.NET Core pulls ConnectionStrings:DefaultConnection
-        // from environment (ConnectionStrings__DefaultConnection) and from
-        // appsettings.json out of the box.
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "ConnectionStrings:DefaultConnection (env ConnectionStrings__DefaultConnection) is required.");
-
-        var apiKey = Environment.GetEnvironmentVariable("API_TOKEN")
-            ?? builder.Configuration["API_TOKEN"]
-            ?? string.Empty;
-
-        // ---- Services -----------------------------------------------------
-        builder.Services.AddDbContext<DashboardDbContext>(opt =>
-            opt.UseNpgsql(connectionString, npg =>
-                npg.MigrationsAssembly(typeof(DashboardDbContext).Assembly.FullName)));
-
-        builder.Services.AddSingleton(new ApiKeyOptions { ApiKey = apiKey });
-
-        builder.Services.AddSingleton(sp => new DeploymentNotifier(
-            connectionString,
-            sp.GetRequiredService<ILoggerFactory>().CreateLogger<DeploymentNotifier>()));
-
-        // Use snake_case across the wire by default; per-DTO JsonPropertyName
-        // attributes still win for keys that must stay camelCase
-        // (lastSuccessful, previousFailed).
-        builder.Services.Configure<JsonOptions>(o =>
-        {
-            o.SerializerOptions.PropertyNamingPolicy = DashboardJson.Options.PropertyNamingPolicy;
-        });
-
-        var app = builder.Build();
-
-        // ---- Pipeline -----------------------------------------------------
-        // Health is unauthenticated by design so external orchestrators
-        // (ACA, Docker Compose, k8s) can probe without the API key.
-        MapHealth(app);
-
-        // Everything from here on is gated by the API-key middleware.
-        app.UseWhen(
-            ctx => ctx.Request.Path.StartsWithSegments("/api"),
-            sub => sub.UseApiKeyAuth(app.Services.GetRequiredService<ApiKeyOptions>()));
-
-        MapDeployments(app);
-
-        app.Run();
+        MapDeployments(builder);
+        MapTopologyConfigPatch(builder);
+        return builder;
     }
 
-    private static void MapHealth(WebApplication app)
+    private static void MapDeployments(IEndpointRouteBuilder builder)
     {
-        app.MapGet("/health", async (DashboardDbContext db, CancellationToken ct) =>
-        {
-            // SELECT 1 confirms the DB is reachable. EF Core's ExecuteSqlAsync
-            // works against both Postgres and SQLite which keeps tests honest.
-            await db.Database.ExecuteSqlRawAsync("SELECT 1", ct);
-            return Results.Ok(new { status = "ok" });
-        });
-    }
-
-    private static void MapDeployments(WebApplication app)
-    {
-        app.MapPost("/api/deployments", async (
+        builder.MapPost("/api/deployments", async (
             DeploymentEventRequest request,
             DashboardDbContext db,
             DeploymentNotifier notifier,
@@ -221,6 +180,34 @@ public sealed class Program
             await notifier.PublishAsync(response, ct);
 
             return Results.Created($"/api/deployments/{entity.Service}/{entity.Environment}", response);
+        });
+    }
+
+    private static void MapTopologyConfigPatch(IEndpointRouteBuilder builder)
+    {
+        // SAD §7 WBS 1.2.7: "The PATCH endpoint lives on the Write endpoint
+        // group (auth-gated by the same X-Api-Key middleware that protects
+        // POST /api/deployments, per FR-10 and §8). GET is on the Read
+        // group (unauthenticated)."
+        builder.MapPatch("/api/config/topology",
+            async (TopologyConfigPatch body, TopologyConfigStore store, CancellationToken ct) =>
+        {
+            try
+            {
+                var updated = await store.PatchAsync(body, ct);
+                return Results.Ok(updated);
+            }
+            catch (InvalidTopologyAttributeException ex)
+            {
+                // SAD §7 PATCH body table: "Rejected with 400 if not in this
+                // set or if `id` is supplied".
+                return Results.BadRequest(new
+                {
+                    error = "invalid_correlation_attribute",
+                    message = ex.Message,
+                    attribute = ex.Attribute,
+                });
+            }
         });
     }
 

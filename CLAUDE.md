@@ -28,11 +28,16 @@ Top-level directories — keep work in the directory that matches the concern. N
 
 ```
 deployment-dashboard/
-├── backend/                  # .NET 10 source root
-│   ├── write-api/            # Write API — POST /api/deployments, API-key middleware, NOTIFY dispatch
-│   ├── read-api/             # Read API — matrix/history/discovery, SSE stream (JSON only — no SPA)
+├── backend/                  # .NET 10 source root — modular monolith host (SAD §7 "Backend module architecture", §10 Decision 11)
+│   ├── api/                  # Host project (ASP.NET Core executable) — Program.cs, single Dockerfile,
+│   │                         # composition root. Wires Write + Read surface libraries into one host.
+│   ├── write-api/            # LIBRARY project — Write surface endpoint group (POST /api/deployments,
+│   │                         # PATCH /api/config/topology); NOTIFY dispatch. API-key middleware
+│   │                         # is applied here only — Read group is unauthenticated.
+│   ├── read-api/             # LIBRARY project — Read surface endpoint groups (matrix / history /
+│   │                         # discovery / SSE / health / GET topology config). JSON only — no SPA.
 │   ├── shared/               # Class library — EF Core DbContext, entities, migrations, DTOs,
-│   │                         # NOTIFY/LISTEN abstractions, API-key middleware
+│   │                         # NOTIFY/LISTEN abstractions, ApiKeyMiddleware implementation.
 │   ├── Dashboard.sln         # Solution referencing all backend projects
 │   └── (per-project unit tests live alongside their source project)
 │   # Owned by: backend-engineer
@@ -76,13 +81,19 @@ deployment-dashboard/
 ```
 
 ### `backend/`
-- Every component is its own .NET project.
-- `write-api/` and `read-api/` are ASP.NET Core executables — each has its own `Dockerfile`.
-- `shared/` is a class library — both APIs `ProjectReference` it.
-- EF Core entities, `DbContext`, and migrations live in `shared/` — one migration set serves both APIs.
+- Modular monolith host (SAD §7 "Backend module architecture", §10 Decision 11). One deployable container; two logical API surfaces; libraries kept separate so a future re-split is host-project + gateway-config only.
+- Every backend project is its own .NET project.
+- `api/` is the **only** ASP.NET Core executable — it has the only backend `Dockerfile`. `write-api/` and `read-api/` are **library projects** (`Microsoft.NET.Sdk` with `OutputType` library) — they expose endpoint-group extension methods (e.g. `MapWriteEndpoints`, `MapReadEndpoints`) and DO NOT have `Program.cs` or a Dockerfile.
+- Dependency rules (mirror the frontend modular-monolith pattern):
+  - `api/` → references `write-api/`, `read-api/`, `shared/`. Only `api/` references the two surface libraries.
+  - `write-api/` and `read-api/` → reference only `shared/`. Never each other; never `api/`.
+  - `shared/` → references neither surface library nor `api/`.
+- `shared/` holds: EF Core `DbContext`, entities, migrations, NOTIFY/LISTEN abstractions, `ApiKeyMiddleware`. One migration set serves both surfaces.
+- API-key middleware is applied **only** to the Write endpoint group at composition time in `api/Program.cs` — `MapGroup("/api").RequireApiKey()` on the write group. No global `UseMiddleware<ApiKeyMiddleware>()`. The Read group is unauthenticated (SAD §8).
 - SQLite-in-memory unit tests live alongside their source project.
-- Read API serves **JSON only** — no `wwwroot`, no static-file middleware. SPA hosting lives in `frontend/dashboard/`.
-- No third API in the matrix tier — new responsibility → doc update first.
+- The API container serves **JSON only** — no `wwwroot`, no static-file middleware. SPA hosting lives in `frontend/dashboard/`.
+- No third API surface in the matrix tier — new responsibility → doc update first.
+- Re-splitting the host into two container apps is a documented future option (SAD §7 "Future split — trigger conditions"). Backend engineers DO NOT pre-split; the trigger conditions in the SAD govern.
 
 ### `frontend/`
 - Modular monolith Angular workspace (SAD §7 "Module architecture").
@@ -99,12 +110,13 @@ deployment-dashboard/
 ### `gateway/`
 - Single public-facing nginx reverse proxy.
 - Only container with public ingress (host port `8080` locally; ACA public ingress in Azure).
-- Routing (path + method-based; per SAD §7):
-  | Method + Path | Upstream |
-  |---|---|
-  | `POST /api/deployments` | `write-api:8080` |
-  | `GET /api/*`, `GET /api/stream`, `GET /health` | `read-api:8080` |
-  | Everything else | `dashboard:80` |
+- Routing (path + method-based; per SAD §7). Both API surfaces resolve to a single `api` upstream today; the path+method matrix is preserved so a future re-split is a config-only change (SAD §7 "Future split").
+  | Method + Path | Upstream | Surface |
+  |---|---|---|
+  | `POST /api/deployments` | `api:8080` | Write |
+  | `PATCH /api/config/topology` | `api:8080` | Write (admin) |
+  | `GET /api/*`, `GET /api/stream`, `GET /health` | `api:8080` | Read |
+  | Everything else | `dashboard:80` | n/a |
 - SSE pass-through requirements:
   - `proxy_buffering off`
   - `proxy_cache off`
@@ -119,7 +131,7 @@ deployment-dashboard/
 
 ### `dev_env/`
 - Anything a developer runs to bring up a local stack.
-- Compose files reference images built from `backend/write-api/`, `backend/read-api/`, `frontend/dashboard/`, and `gateway/`.
+- Compose files reference images built from `backend/api/` (single backend image hosting both Write and Read surfaces), `frontend/dashboard/`, and `gateway/`.
 
 ### `testing/`
 - Layered organisation:
@@ -144,7 +156,7 @@ Five subagents in `.claude/agents/`. Route work per the table — do not do agen
 | `CLAUDE.md` rules / routing / repo-structure edits | `solution-architect` |
 | ADRs and other architectural artefacts under `docs/` | `solution-architect` |
 | Coherence audits between the SAD and the mockup; resolving the tie-breaker | `solution-architect` |
-| ASP.NET Core Minimal APIs (Write API, Read API) | `backend-engineer` |
+| ASP.NET Core Minimal APIs — Write surface, Read surface, and the `api/` host that composes them | `backend-engineer` |
 | EF Core 10 entities, `DbContext`, migrations | `backend-engineer` |
 | PostgreSQL schema, indexes, matrix/history SQL, `LISTEN/NOTIFY`, pruning job | `backend-engineer` |
 | API-key middleware, SSE endpoint, `Last-Event-ID` reconnect | `backend-engineer` |

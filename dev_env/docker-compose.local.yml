@@ -17,12 +17,17 @@
 #   - 5050  → pgAdmin      (dev-only convenience)
 #
 # Internal-only (no host ports):
-#   - dashboard:80, write-api:8080, read-api:8080.
+#   - dashboard:80, api:8080.
+#
+# Per SAD §7 "Backend module architecture" and §10 Decision 11, the two
+# API surfaces (Write, Read) compose into a single host container `api`.
+# The gateway routes path + method onto the same `api` upstream so a
+# future re-split is a gateway-config-only change.
 #
 # Migrations strategy (decision): a one-shot `migrations` service runs
-# `dotnet ef database update` against the freshly-healthy DB. Both APIs
-# wait via `depends_on: migrations: service_completed_successfully`. This
-# keeps the runtime images SDK-free and migration ordering observable
+# `dotnet ef database update` against the freshly-healthy DB. The API
+# waits via `depends_on: migrations: service_completed_successfully`. This
+# keeps the runtime image SDK-free and migration ordering observable
 # from `docker compose logs migrations`.
 
 name: deployment-dashboard
@@ -75,8 +80,8 @@ services:
     # `project.assets.json` from a developer's Visual Studio restore.
     # Letting those leak into the Linux container fails the in-container
     # restore with `Unable to find fallback package folder '...'`. The
-    # main image Dockerfiles avoid this via `.dockerignore`; here, where
-    # we bind-mount, we have to scrub explicitly.
+    # main API image avoids this via `.dockerignore`; here, where we
+    # bind-mount, we have to scrub explicitly.
     entrypoint:
       - /bin/sh
       - -c
@@ -102,12 +107,17 @@ services:
           --startup-project shared/Dashboard.Shared/Dashboard.Shared.csproj
     restart: "no"
 
-  write-api:
+  # Single backend container hosting both Write and Read API surfaces
+  # (SAD §7 "Backend module architecture", §10 Decision 11). API-key
+  # middleware is applied by the host to the write endpoint group only;
+  # the read endpoints stay unauthenticated. Internal-only — the gateway
+  # routes path + method onto the same `api` upstream.
+  api:
     build:
       context: ../backend
-      dockerfile: write-api/Dockerfile
-    image: deployment-dashboard/write-api:dev
-    container_name: dashboard-write-api
+      dockerfile: api/Dockerfile
+    image: deployment-dashboard/api:dev
+    container_name: dashboard-api
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
@@ -116,28 +126,7 @@ services:
       API_TOKEN: "local-dev-token-not-for-production"
       HISTORY_RETENTION_DAYS: "365"
     expose:
-      - "8080"                            # internal-only — gateway routes POST /api/deployments here
-    depends_on:
-      db:
-        condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
-
-  read-api:
-    build:
-      context: ../backend
-      dockerfile: read-api/Dockerfile
-    image: deployment-dashboard/read-api:dev
-    container_name: dashboard-read-api
-    restart: unless-stopped
-    environment:
-      ASPNETCORE_ENVIRONMENT: "Development"
-      ASPNETCORE_URLS: "http://+:8080"
-      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      API_TOKEN: "local-dev-token-not-for-production"
-      HISTORY_RETENTION_DAYS: "365"
-    expose:
-      - "8080"                            # internal-only — gateway routes GET /api/* + /health + /api/stream here
+      - "8080"                            # internal-only — gateway routes all /api/* + /health here
     depends_on:
       db:
         condition: service_healthy
@@ -165,9 +154,7 @@ services:
     depends_on:
       dashboard:
         condition: service_started
-      write-api:
-        condition: service_started
-      read-api:
+      api:
         condition: service_started
 
   pgadmin:
