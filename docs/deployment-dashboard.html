@@ -86,6 +86,44 @@
           share the same trunk x so the fork visibly roots in
           the source.
 
+       6. Service name is never clipped under any view × layout ×
+          theme combination. The service-name <p> renders with
+          `whitespace-normal` + `break-words` (no `truncate`, no
+          `overflow:hidden`, no `text-overflow:ellipsis`, no
+          `white-space:nowrap`) so the name wraps onto multiple
+          lines inside its column rather than being chopped with
+          `…`. The fixed column widths (matrix `w-44/w-40/w-36`,
+          swim-lane `.lane-label` 176 px, workflow-rows
+          `.svc-block` 176 px) are container constraints, not
+          clip masks — the text reflows vertically when the
+          intrinsic width exceeds the column. Enforced by
+          construction: no service-name render site applies a
+          clip-producing CSS rule.
+
+       7. Env-header columns stay aligned with the deployment-row
+          columns under any combination of expanded / collapsed
+          Focus rows. In Matrix Focus the leaf-width is a
+          single CSS custom property `--leaf-width` written on
+          the page-level Focus container — when ANY service is
+          Focus-expanded, the property is overridden to
+          `--leaf-width-expanded` (200 px) for the ENTIRE
+          matrix; the page-level env-header row and every
+          service row read the same property, so headers and
+          deployment columns align by construction regardless
+          of which subset of rows is expanded. No per-row
+          width override; no per-column width derivation needed
+          — the matrix's uniform column structure means widening
+          is binary (any-expanded vs. none-expanded). The
+          row-level "expand" affordance grows the affected row
+          VERTICALLY (Detailed leaf renderer with full attribute
+          disclosure); the per-column widening is shared across
+          all rows by the same CSS variable. Swim-lane and
+          workflow-rows are not subject to this rule — they
+          have no shared column header and apply
+          `--leaf-width-expanded` per-lane-row /
+          per-service-block respectively when that lane /
+          block is expanded.
+
        Verification: range-based reasoning (not example picking).
        Bug A is impossible by construction because the env-tag
        and box live in different grid columns of the same row.
@@ -346,8 +384,25 @@
     }
     .pill.in-progress { animation: pulse-border-pill 1.8s ease-in-out infinite; }
 
-    .row-expanded { background: linear-gradient(0deg, #f9fafb, white); }
-    .pin-active   { color: #d97706; }
+    .row-expanded { background: linear-gradient(0deg, #eff6ff, white); box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08); }
+    .pin-active   { color: #b45309; }
+    /* Focus row — subtle left accent rail so Focus reads distinctly
+       from Compact even on the first visit (before any row is
+       expanded). The accent sits on the row's leading edge in the
+       inline-padding gutter so the leaf widths and connector geometry
+       are unaffected (NFR-09 no-overlap rules untouched). */
+    .focus-row { position: relative; }
+    .focus-row::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 6px; bottom: 6px;
+      width: 3px;
+      border-radius: 0 2px 2px 0;
+      background: #bfdbfe;
+      pointer-events: none;
+    }
+    .focus-row[data-expanded="true"]::before { background: #3b82f6; }
+    .focus-row[data-pinned="true"]::before   { background: #f59e0b; }
 
     /* ============== Dropdown popover ============== */
     .popover {
@@ -813,7 +868,10 @@
     [data-theme="dark"] .svc-block-meta { border-right-color: #21262d !important; }
     [data-theme="dark"] .lane-label { border-right-color: #21262d !important; }
     [data-theme="dark"] .edge { stroke: #484f58 !important; }
-    [data-theme="dark"] .row-expanded { background: linear-gradient(0deg, #1c232b, #161b22) !important; }
+    [data-theme="dark"] .row-expanded { background: linear-gradient(0deg, #1c2233, #161b22) !important; box-shadow: 0 1px 2px rgba(88, 166, 255, 0.12) !important; }
+    [data-theme="dark"] .focus-row::before { background: #30363d !important; }
+    [data-theme="dark"] .focus-row[data-expanded="true"]::before { background: #58a6ff !important; }
+    [data-theme="dark"] .focus-row[data-pinned="true"]::before   { background: #fcd34d !important; }
     [data-theme="dark"] .env-tag { color: #7d8590 !important; }
     [data-theme="dark"] .pill .env-tag { color: #c9d1d9 !important; }
     [data-theme="dark"] .chev { color: #7d8590 !important; }
@@ -1227,7 +1285,13 @@
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
                 <div class="flex items-start">
                   <div class="w-44 shrink-0 pr-4">
-                    <p class="text-sm font-semibold text-gray-800 truncate" x-text="service.name"></p>
+                    <!-- NFR-09 #6 — service name never clipped. `whitespace-normal break-words`
+                         replaces the prior `truncate` (which combined `overflow:hidden` +
+                         `text-overflow:ellipsis` + `white-space:nowrap` and chopped longer
+                         names with `…`). The column width (`w-44`) stays a layout
+                         constraint; the name wraps vertically when its intrinsic width
+                         exceeds the column. -->
+                    <p class="text-sm font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name"></p>
                     <p x-show="showServiceMeta" class="text-xs text-gray-400 mt-0.5" x-text="failureLabel(service)"></p>
                   </div>
 
@@ -1365,7 +1429,8 @@
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
                 <div class="flex items-start">
                   <div class="w-36 shrink-0 pr-2">
-                    <p class="text-xs font-semibold text-gray-800 truncate" x-text="service.name" :title="service.name"></p>
+                    <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
+                    <p class="text-xs font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name" :title="service.name"></p>
                     <p x-show="showServiceMeta" class="text-[10px] text-gray-400 truncate leading-tight" x-text="failureLabel(service)"></p>
                   </div>
 
@@ -1520,7 +1585,8 @@
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
                 <div class="flex items-center">
                   <div class="w-40 shrink-0 pr-2">
-                    <p class="text-xs font-semibold text-gray-800 truncate" x-text="service.name" :title="service.name"></p>
+                    <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
+                    <p class="text-xs font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name" :title="service.name"></p>
                     <p x-show="showServiceMeta" class="text-[10px] text-gray-400 leading-tight" x-text="failureLabel(service)"></p>
                   </div>
 
@@ -1615,18 +1681,40 @@
       <!-- ========== FOCUS VIEW (matrix) ========== -->
       <!-- Collapsed leaf shares --leaf-width with the other layouts at
            160 px (matches Compact). Expanded leaf uses the Detailed
-           width (200 px); the brief flags the Focus × tree-layouts
-           tradeoff for a future round, so only the collapsed leaf is
-           required to be byte-identical to Compact across all layouts. -->
+           width (200 px).
+           NFR-09 #7 — env-header columns stay aligned with deployment-row
+           columns under any combination of expanded / collapsed rows.
+           --leaf-width is written ONCE on the page-level Focus container
+           and reads `hasExpanded ? 200 : leafWidthForView`. Every row's
+           box, every header cell, and the inter-column arrow gap all
+           consume that same property — so widening is binary across the
+           whole matrix and headers track by construction. The row-level
+           "expand" affordance is now purely vertical: it swaps the
+           collapsed Compact leaf body for the Detailed leaf body
+           (`expanded[service.id]`) while every column keeps the
+           uniform leaf-width. -->
       <template x-if="view === 'focus'">
-        <div :style="`--leaf-width: ${leafWidthForView}; --leaf-width-expanded: 200px`">
+        <div :style="`--leaf-width: ${hasExpanded ? '200px' : leafWidthForView}; --leaf-width-expanded: 200px; --focus-arrow-gap: ${hasExpanded ? '2.5rem' : '0.875rem'}`">
+          <!-- Focus toolbar — discoverability hint is ALWAYS visible so the
+               view's defining affordance (chevron drill-in) is apparent on
+               first paint, before any row has been expanded. Without the
+               hint, the collapsed Focus matrix is visually near-identical
+               to the Compact matrix (only the small chevron + pin icons
+               in the service-name column distinguish them) and a user
+               who lands on Focus has no signal that the view is the
+               drill-in / pin one. The pinned counter and "Collapse all"
+               button remain x-cloak'd until they have something to act on. -->
           <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-4 text-xs">
-            <span class="text-gray-500">
-              <span class="text-amber-600 font-semibold" x-show="pinnedCount > 0" x-cloak>
-                <span x-text="pinnedCount"></span> pinned
-              </span>
+            <span class="inline-flex items-center gap-1.5 text-gray-600">
+              <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+              <span>Click the chevron next to a service to drill into Detailed-size fidelity. Pin to keep it expanded across filters.</span>
             </span>
-            <button @click="collapseAll()" x-show="hasExpanded" x-cloak class="ml-auto text-gray-600 hover:text-gray-900 underline">Collapse all</button>
+            <span class="text-amber-600 font-semibold" x-show="pinnedCount > 0" x-cloak>
+              <span x-text="pinnedCount"></span> pinned
+            </span>
+            <button @click="collapseAll()" x-show="hasExpanded" x-cloak data-testid="collapse-all" class="ml-auto text-gray-600 hover:text-gray-900 underline">Collapse all</button>
           </div>
 
           <div class="px-6 pt-2 pb-1">
@@ -1635,10 +1723,17 @@
               <div class="flex items-center overflow-x-auto">
                 <template x-for="(env, idx) in environments" :key="env.id">
                   <div class="flex items-center">
+                    <!-- NFR-09 #7 — header cell width reads the SAME --leaf-width
+                         the rows below read. When any service expands, the
+                         container-level --leaf-width flips to 200 px and EVERY
+                         header cell + every row cell widens in lock-step. -->
                     <div class="text-center" style="width: var(--leaf-width)">
                       <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-400" x-text="env.label"></span>
                     </div>
-                    <div x-show="idx < environments.length - 1" class="w-3.5"></div>
+                    <!-- Header arrow-gap mirrors the per-row arrow-gap so the
+                         next env-header column anchors at the same x as the
+                         next env's deployment column. -->
+                    <div x-show="idx < environments.length - 1" style="width: var(--focus-arrow-gap)"></div>
                   </div>
                 </template>
               </div>
@@ -1647,34 +1742,56 @@
 
           <main class="px-6 pb-6 space-y-1" :class="drawerOpen ? 'mr-[26rem]' : ''" style="transition: margin-right 0.2s ease">
             <template x-for="service in filteredServices" :key="service.id">
-              <div class="bg-white rounded-md border border-gray-200 px-3 py-1.5"
-                   :class="expanded[service.id] ? 'row-expanded' : ''"
+              <div class="bg-white rounded-md border px-3 py-1.5 focus-row"
+                   :class="expanded[service.id] ? 'row-expanded border-blue-200' : 'border-gray-200'"
                    :data-service-row="service.id"
+                   :data-expanded="expanded[service.id] ? 'true' : 'false'"
+                   :data-pinned="pinned[service.id] ? 'true' : 'false'"
+                   :data-testid="expanded[service.id] ? `row-expanded-${service.id}` : `row-collapsed-${service.id}`"
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
                 <div class="flex items-start">
+                  <!-- Service-name column. The chevron + pin buttons are
+                       Focus's defining affordance — they MUST read at a
+                       glance, otherwise Focus collapses visually into
+                       Compact (the two views have the same leaf-width
+                       and the same collapsed leaf content). Sizing /
+                       colour choices: chevron rendered in a tinted
+                       button surface (blue-50 / blue-100 when expanded)
+                       so it reads as an obvious affordance against the
+                       Compact baseline; pin matches the chevron's frame
+                       and turns amber when active. Both are kept inline
+                       with the service name so the row's first visual
+                       scan-target is "this row can be expanded". -->
                   <div class="w-44 shrink-0 pr-2 flex items-start gap-1">
                     <button
                       @click="toggleExpand(service.id)"
-                      class="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0"
+                      class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                      :class="expanded[service.id] ? 'bg-blue-100 border-blue-300 text-blue-700 hover:bg-blue-200' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'"
                       :aria-expanded="expanded[service.id] ? 'true' : 'false'"
-                      :title="expanded[service.id] ? 'Collapse row' : 'Expand row'"
+                      :aria-label="expanded[service.id] ? 'Collapse row' : 'Expand row to full detail'"
+                      :title="expanded[service.id] ? 'Collapse row' : 'Expand row to full detail'"
+                      :data-testid="`row-chevron-${service.id}`"
                     >
                       <svg class="w-3.5 h-3.5 transition-transform" :class="expanded[service.id] ? 'rotate-90' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
                     <button
                       @click="togglePin(service.id)"
-                      class="shrink-0 mt-0.5"
-                      :class="pinned[service.id] ? 'pin-active' : 'text-gray-300 hover:text-gray-500'"
-                      :title="pinned[service.id] ? 'Unpin (stays expanded)' : 'Pin row (stays expanded)'"
+                      class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                      :class="pinned[service.id] ? 'pin-active bg-amber-100 border-amber-300 hover:bg-amber-200' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'"
+                      :aria-pressed="pinned[service.id] ? 'true' : 'false'"
+                      :aria-label="pinned[service.id] ? 'Unpin row' : 'Pin row to keep expanded across filters'"
+                      :title="pinned[service.id] ? 'Unpin (stays expanded)' : 'Pin row (stays expanded across filters)'"
+                      :data-testid="`row-pin-${service.id}`"
                     >
                       <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9.828 2.172a1 1 0 011.415 0l6.586 6.586a1 1 0 010 1.414l-1.415 1.415-3-3-5 5 3 3-1.414 1.414a1 1 0 01-1.415 0L2 11.414a1 1 0 010-1.414l1.414-1.414 3 3 5-5-3-3 1.414-1.414z" />
                       </svg>
                     </button>
-                    <div class="min-w-0">
-                      <p class="text-xs font-semibold text-gray-800 truncate" x-text="service.name" :title="service.name"></p>
+                    <div class="min-w-0 flex-1">
+                      <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
+                      <p class="text-xs font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name" :title="service.name"></p>
                       <p x-show="showServiceMeta" class="text-[10px] text-gray-400 leading-tight truncate" x-text="failureLabel(service)"></p>
                     </div>
                   </div>
@@ -1682,9 +1799,18 @@
                   <div class="flex items-start overflow-x-auto">
                     <template x-for="(env, idx) in environments" :key="env.id">
                       <div class="flex items-start">
+                        <!-- NFR-09 #7 — every box reads the SAME shared
+                             --leaf-width as the env header. When any service
+                             is expanded the container flips --leaf-width to
+                             200 px and every row's box widens; this row's
+                             `expanded[service.id]` flag selects the leaf
+                             BODY (Compact vs. Detailed) and the heavier
+                             border style, but the column WIDTH is shared
+                             across rows so the env-header alignment is
+                             preserved by construction. -->
                         <div
                           class="rounded-md border overflow-hidden relative transition-shadow"
-                          :style="`width: var(${expanded[service.id] ? '--leaf-width-expanded' : '--leaf-width'})`"
+                          style="width: var(--leaf-width)"
                           :class="(expanded[service.id] ? 'border-2 rounded-lg ' : '') + getBoxClass(service, env.id)"
                           :data-testid="`stage-box-${service.id}-${env.id}`"
                           @click="service.envs[env.id] && openDrawer(service, env.id)"
@@ -1822,11 +1948,20 @@
                           </template>
                         </div>
 
+                        <!-- NFR-09 #7 — per-row arrow-gap mirrors the
+                             container-level --focus-arrow-gap, which the
+                             page-level env header also reads. The two
+                             stay in lock-step so the next env column's
+                             header anchors at the same x as the next env's
+                             deployment column. The `expanded` flag still
+                             swaps the arrow-line CSS-width fallback class
+                             (arrow-w-detailed when any row is expanded,
+                             arrow-w-focus when none is). -->
                         <div x-show="idx < environments.length - 1"
                              class="arrow-col"
-                             :class="expanded[service.id] ? 'w-10' : 'w-3.5'"
+                             style="width: var(--focus-arrow-gap)"
                              :data-arrow-target="`stage-box-${service.id}-${environments[idx + 1]?.id}`">
-                          <div class="arrow-line" :class="(expanded[service.id] ? 'arrow-w-detailed ' : 'arrow-w-focus ') + (!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : '')"></div>
+                          <div class="arrow-line" :class="(hasExpanded ? 'arrow-w-detailed ' : 'arrow-w-focus ') + (!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : '')"></div>
                         </div>
                       </div>
                     </template>
@@ -1855,19 +1990,87 @@
        by the .env-tag above each leaf instead. -->
   <template x-if="layout === 'swim-lane'">
     <div>
+      <!-- Focus toolbar — discoverability hint above all three layouts so
+           the drill-in / pin affordance is apparent at first paint
+           regardless of which layout the user lands in. Mirrors the
+           Matrix Focus toolbar verbatim. -->
+      <div x-show="view === 'focus'"
+           class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-4 text-xs">
+        <span class="inline-flex items-center gap-1.5 text-gray-600">
+          <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span>Click the chevron next to a service to drill into Detailed-size fidelity. Pin to keep it expanded across filters.</span>
+        </span>
+        <span class="text-amber-600 font-semibold" x-show="pinnedCount > 0" x-cloak>
+          <span x-text="pinnedCount"></span> pinned
+        </span>
+        <button @click="collapseAll()" x-show="hasExpanded" x-cloak data-testid="collapse-all" class="ml-auto text-gray-600 hover:text-gray-900 underline">Collapse all</button>
+      </div>
+
       <main class="px-6 pt-4 pb-8" :class="drawerOpen ? 'mr-[26rem]' : ''" style="transition: margin-right 0.2s ease">
-        <div class="lane-grid" :style="`--depth-count: ${depthLabels.length}; --leaf-width: ${leafWidthForView}`">
+        <div class="lane-grid" :style="`--depth-count: ${depthLabels.length}; --leaf-width: ${leafWidthForView}; --leaf-width-expanded: 200px`">
           <template x-for="service in filteredServices" :key="service.id">
-            <div class="lane-row" :style="`grid-column: 1 / span ${depthLabels.length + 1}`"
+            <!-- Option A — when this lane is Focus-expanded, override
+                 --leaf-width on the lane row itself so every leaf-pair
+                 grid column 2 widens in lock-step. `.focus-row` adds the
+                 left accent rail (blue at rest, amber when pinned);
+                 `.row-expanded` tints the lane surface and gives Focus
+                 a distinct visual weight even when the collapsed leaves
+                 look like Compact. NFR-09 is preserved by construction:
+                 the `recomputeEdges(serviceId)` SVG re-emit fires on
+                 every `expanded[id]` flip via the `$watch('expanded',
+                 reflow)` in bootstrapPersistence — anchored to the
+                 BOX's measured rect, not the wrapper. -->
+            <div class="lane-row"
+                 :style="`grid-column: 1 / span ${depthLabels.length + 1}; ${view === 'focus' && expanded[service.id] ? '--leaf-width: var(--leaf-width-expanded);' : ''}`"
+                 :class="view === 'focus' ? ('focus-row ' + (expanded[service.id] ? 'row-expanded border-blue-200' : '')) : ''"
                  :data-service-row="service.id"
-                 :data-testid="`swim-lane-row-${service.id}`"
+                 :data-expanded="view === 'focus' && expanded[service.id] ? 'true' : 'false'"
+                 :data-pinned="view === 'focus' && pinned[service.id] ? 'true' : 'false'"
+                 :data-testid="view === 'focus' ? (expanded[service.id] ? `row-expanded-${service.id}` : `row-collapsed-${service.id}`) : `swim-lane-row-${service.id}`"
                  x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeEdges(service.id))))">
               <div class="grid items-stretch" :style="`grid-template-columns: 176px repeat(${depthLabels.length}, 1fr); column-gap: 28px`">
 
                 <!-- Service label -->
                 <div class="lane-label">
-                  <p class="text-sm font-semibold text-gray-800 truncate" x-text="service.name"></p>
-                  <template x-if="showServiceMeta">
+                  <!-- Focus-view chevron + pin — same w-5 h-5 framed buttons
+                       as Matrix Focus, hosted in the lane's leftmost gutter
+                       (the .lane-label cell) alongside the service name.
+                       Hidden in non-Focus views. -->
+                  <template x-if="view === 'focus'">
+                    <div class="flex items-center gap-1 mb-1">
+                      <button
+                        @click="toggleExpand(service.id)"
+                        class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                        :class="expanded[service.id] ? 'bg-blue-100 border-blue-300 text-blue-700 hover:bg-blue-200' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'"
+                        :aria-expanded="expanded[service.id] ? 'true' : 'false'"
+                        :aria-label="expanded[service.id] ? 'Collapse lane' : 'Expand lane to full detail'"
+                        :title="expanded[service.id] ? 'Collapse lane' : 'Expand lane to full detail'"
+                        :data-testid="`row-chevron-${service.id}`"
+                      >
+                        <svg class="w-3.5 h-3.5 transition-transform" :class="expanded[service.id] ? 'rotate-90' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      <button
+                        @click="togglePin(service.id)"
+                        class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                        :class="pinned[service.id] ? 'pin-active bg-amber-100 border-amber-300 hover:bg-amber-200' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'"
+                        :aria-pressed="pinned[service.id] ? 'true' : 'false'"
+                        :aria-label="pinned[service.id] ? 'Unpin lane' : 'Pin lane to keep expanded across filters'"
+                        :title="pinned[service.id] ? 'Unpin (stays expanded)' : 'Pin lane (stays expanded across filters)'"
+                        :data-testid="`row-pin-${service.id}`"
+                      >
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.828 2.172a1 1 0 011.415 0l6.586 6.586a1 1 0 010 1.414l-1.415 1.415-3-3-5 5 3 3-1.414 1.414a1 1 0 01-1.415 0L2 11.414a1 1 0 010-1.414l1.414-1.414 3 3 5-5-3-3 1.414-1.414z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </template>
+                  <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
+                  <p class="text-sm font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name"></p>
+                  <template x-if="showServiceMeta || (view === 'focus' && expanded[service.id])">
                     <div>
                       <p class="text-[11px] text-gray-400 leading-tight" x-text="failureLabel(service)"></p>
                       <p class="text-[10px] text-gray-400 mt-0.5 leading-tight" x-text="topologyLabel(service)"></p>
@@ -1913,8 +2116,16 @@
                         <!-- DETAILED leaf — DOM, classes, inner padding,
                              border (rounded-lg + border-2), and width
                              (--leaf-width) are byte-identical to the
-                             Matrix Detailed leaf. -->
-                        <template x-if="service.envs[envId] && view === 'detailed'">
+                             Matrix Detailed leaf.
+                             Option A: also used for Focus when this lane
+                             is expanded (Detailed-size fidelity on
+                             drill-in). Full-attribute disclosure rule
+                             (SAD §7): when rendered for Focus-expanded,
+                             every attribute renders regardless of the
+                             picker (gate becomes `(focus && expanded) ||
+                             showAttr(...)`); the null-render gate
+                             (`hasAttr`) still applies on the value side. -->
+                        <template x-if="service.envs[envId] && (view === 'detailed' || (view === 'focus' && expanded[service.id]))">
                           <div
                             class="node rounded-lg border-2 overflow-hidden relative transition-shadow"
                             :class="getBoxClass(service, envId)"
@@ -1927,9 +2138,9 @@
                             <div>
                               <div class="p-2.5">
                                 <div class="flex items-center justify-between mb-1.5"
-                                     x-show="showAttr('status') || showAttr('run')">
+                                     x-show="(view === 'focus' && expanded[service.id]) || showAttr('status') || showAttr('run')">
                                   <span
-                                    x-show="showAttr('status')"
+                                    x-show="(view === 'focus' && expanded[service.id]) || showAttr('status')"
                                     class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold"
                                     :class="statusBadgeClass(service.envs[envId].current.status)"
                                   >
@@ -1938,25 +2149,27 @@
                                     <span x-text="statusText(service.envs[envId].current.status)"></span>
                                   </span>
                                   <a :href="service.envs[envId].current.url"
-                                     x-show="showAttr('run')"
+                                     x-show="(view === 'focus' && expanded[service.id]) || showAttr('run')"
                                      class="text-xs text-blue-500 hover:underline font-mono ml-auto"
                                      x-text="service.envs[envId].current.run" @click.stop></a>
                                 </div>
-                                <p x-show="showAttr('version')"
+                                <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('version')"
                                    class="text-sm font-bold text-gray-900 font-mono leading-tight"
                                    x-text="service.envs[envId].current.version"></p>
-                                <p x-show="showAttr('ago')"
+                                <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('ago')"
                                    class="text-xs text-gray-400 mt-1 leading-tight"
                                    x-text="service.envs[envId].current.ago"></p>
-                                <p x-show="showAttr('actor')"
+                                <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('actor')"
                                    class="text-xs text-gray-400 truncate leading-tight"
                                    x-text="service.envs[envId].current.actor"></p>
-                                <!-- ref / sha — null-render invariant (SAD §7) — see Matrix Detailed leaf. -->
-                                <p x-show="showAttr('ref') && hasAttr(service.envs[envId].current.ref)"
+                                <!-- ref / sha — null-render invariant (SAD §7).
+                                     Focus-expanded ignores the picker (Full-attribute
+                                     disclosure rule); the picker still gates in Detailed. -->
+                                <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('ref')) && hasAttr(service.envs[envId].current.ref)"
                                    class="text-xs text-gray-500 truncate leading-tight"
                                    :title="service.envs[envId].current.ref"
                                    x-text="service.envs[envId].current.ref"></p>
-                                <p x-show="showAttr('sha') && hasAttr(service.envs[envId].current.sha)"
+                                <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('sha')) && hasAttr(service.envs[envId].current.sha)"
                                    class="text-xs text-gray-500 font-mono truncate leading-tight"
                                    :title="service.envs[envId].current.sha"
                                    x-text="shortSha(service.envs[envId].current.sha)"></p>
@@ -1972,11 +2185,11 @@
                                     <span class="text-xs font-mono font-semibold text-gray-600" x-text="service.envs[envId].lastSuccessful.version"></span>
                                   </div>
                                   <p class="text-xs text-gray-400 mt-0.5 leading-tight" x-text="service.envs[envId].lastSuccessful.ago"></p>
-                                  <p x-show="showAttr('ref') && hasAttr(service.envs[envId].lastSuccessful.ref)"
+                                  <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('ref')) && hasAttr(service.envs[envId].lastSuccessful.ref)"
                                      class="text-xs text-gray-500 truncate leading-tight"
                                      :title="service.envs[envId].lastSuccessful.ref"
                                      x-text="service.envs[envId].lastSuccessful.ref"></p>
-                                  <p x-show="showAttr('sha') && hasAttr(service.envs[envId].lastSuccessful.sha)"
+                                  <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('sha')) && hasAttr(service.envs[envId].lastSuccessful.sha)"
                                      class="text-xs text-gray-500 font-mono truncate leading-tight"
                                      :title="service.envs[envId].lastSuccessful.sha"
                                      x-text="shortSha(service.envs[envId].lastSuccessful.sha)"></p>
@@ -1986,13 +2199,13 @@
                           </div>
                         </template>
 
-                        <!-- COMPACT / FOCUS leaf — DOM, classes, inner
-                             padding, border (rounded-md + border), and
-                             width (--leaf-width) are byte-identical to
-                             the Matrix Compact leaf. Focus degrades to
-                             Compact at the collapsed-leaf level (see
-                             brief Out-of-scope: Focus × tree layouts). -->
-                        <template x-if="service.envs[envId] && (view === 'compact' || view === 'focus')">
+                        <!-- COMPACT / FOCUS-collapsed leaf — DOM, classes,
+                             inner padding, border (rounded-md + border),
+                             and width (--leaf-width) are byte-identical to
+                             the Matrix Compact leaf. Option A: now only
+                             used when Focus is COLLAPSED for this lane;
+                             expanded Focus uses the Detailed branch above. -->
+                        <template x-if="service.envs[envId] && (view === 'compact' || (view === 'focus' && !expanded[service.id]))">
                           <div
                             class="node rounded-md border overflow-hidden relative transition-shadow"
                             :class="getBoxClass(service, envId)"
@@ -2165,6 +2378,24 @@
   <!-- ====================== WORKFLOW-ROWS LAYOUT ====================== -->
   <template x-if="layout === 'workflow-rows'">
     <div>
+      <!-- Focus toolbar — discoverability hint above all three layouts so
+           the drill-in / pin affordance is apparent at first paint
+           regardless of which layout the user lands in. Mirrors the
+           Matrix Focus toolbar verbatim. -->
+      <div x-show="view === 'focus'"
+           class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-4 text-xs">
+        <span class="inline-flex items-center gap-1.5 text-gray-600">
+          <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span>Click the chevron next to a service to drill into Detailed-size fidelity. Pin to keep it expanded across filters.</span>
+        </span>
+        <span class="text-amber-600 font-semibold" x-show="pinnedCount > 0" x-cloak>
+          <span x-text="pinnedCount"></span> pinned
+        </span>
+        <button @click="collapseAll()" x-show="hasExpanded" x-cloak data-testid="collapse-all" class="ml-auto text-gray-600 hover:text-gray-900 underline">Collapse all</button>
+      </div>
+
       <div class="px-6 py-2 flex items-center gap-3 text-xs bg-white border-b border-gray-200">
         <button
           type="button"
@@ -2183,7 +2414,24 @@
       <main class="px-6 py-2 space-y-3" :class="drawerOpen ? 'mr-[26rem]' : ''" style="transition: margin-right 0.2s ease">
 
         <template x-for="service in filteredServices" :key="service.id">
-          <section class="svc-block" :data-service="service.id" :data-testid="`workflow-rows-${service.id}`">
+          <!-- Option A — when this service is Focus-expanded, override
+               the service-block's --leaf-width so every .wf-row in the
+               stack grows to the Detailed width (200 px) in lock-step.
+               `.focus-row` adds the left accent rail (blue at rest,
+               amber when pinned); `.row-expanded` tints the block.
+               NFR-09 preserved by construction: `recomputeConnectorTops
+               (serviceId)` re-runs on every flip via the
+               `$watch('expanded', reflow)` in bootstrapPersistence —
+               each .wf-row's `--target-line-width` and `--target-half`
+               are recomputed from the new measured rects. -->
+          <section class="svc-block"
+                   :style="`--leaf-width-expanded: 200px; ${view === 'focus' && expanded[service.id] ? '--leaf-width: var(--leaf-width-expanded);' : ''}`"
+                   :class="view === 'focus' ? ('focus-row ' + (expanded[service.id] ? 'row-expanded' : '')) : ''"
+                   :data-service="service.id"
+                   :data-service-row="service.id"
+                   :data-expanded="view === 'focus' && expanded[service.id] ? 'true' : 'false'"
+                   :data-pinned="view === 'focus' && pinned[service.id] ? 'true' : 'false'"
+                   :data-testid="view === 'focus' ? (expanded[service.id] ? `row-expanded-${service.id}` : `row-collapsed-${service.id}`) : `workflow-rows-${service.id}`">
 
             <!-- LEFT column: service info. Lives in the same row as the
                  workflow stack on the right — no header row above.
@@ -2194,6 +2442,44 @@
                  all combinations. -->
             <div class="svc-block-meta">
               <div class="svc-block-meta-row">
+                <!-- Focus drill-in chevron + pin — sits in the
+                     service-block-meta-row alongside the existing
+                     path-expand chevron. Two semantically distinct
+                     controls: the .chev (path-expand, grey) toggles
+                     "show all workflow paths"; the Focus chevron
+                     (blue, framed) toggles "drill into Detailed-size
+                     fidelity for this service". Both can be active
+                     simultaneously. Hidden when view !== 'focus'. -->
+                <template x-if="view === 'focus'">
+                  <span class="flex items-center gap-1 shrink-0">
+                    <button
+                      @click="toggleExpand(service.id)"
+                      class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                      :class="expanded[service.id] ? 'bg-blue-100 border-blue-300 text-blue-700 hover:bg-blue-200' : 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100'"
+                      :aria-expanded="expanded[service.id] ? 'true' : 'false'"
+                      :aria-label="expanded[service.id] ? 'Collapse service' : 'Expand service to full detail'"
+                      :title="expanded[service.id] ? 'Collapse service (Detailed)' : 'Expand service to Detailed-size fidelity'"
+                      :data-testid="`row-chevron-${service.id}`"
+                    >
+                      <svg class="w-3.5 h-3.5 transition-transform" :class="expanded[service.id] ? 'rotate-90' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      @click="togglePin(service.id)"
+                      class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                      :class="pinned[service.id] ? 'pin-active bg-amber-100 border-amber-300 hover:bg-amber-200' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200'"
+                      :aria-pressed="pinned[service.id] ? 'true' : 'false'"
+                      :aria-label="pinned[service.id] ? 'Unpin service' : 'Pin service to keep expanded across filters'"
+                      :title="pinned[service.id] ? 'Unpin (stays expanded)' : 'Pin service (stays expanded across filters)'"
+                      :data-testid="`row-pin-${service.id}`"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.828 2.172a1 1 0 011.415 0l6.586 6.586a1 1 0 010 1.414l-1.415 1.415-3-3-5 5 3 3-1.414 1.414a1 1 0 01-1.415 0L2 11.414a1 1 0 010-1.414l1.414-1.414 3 3 5-5-3-3 1.414-1.414z" />
+                      </svg>
+                    </button>
+                  </span>
+                </template>
                 <span
                   class="chev"
                   :class="{
@@ -2207,11 +2493,15 @@
                     <polyline points="9 6 15 12 9 18"></polyline>
                   </svg>
                 </span>
-                <p class="text-sm font-semibold text-gray-800 truncate" x-text="service.name" :title="service.name"></p>
-                <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight ml-1"
+                <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf.
+                     `flex-1 min-w-0` lets the <p> take remaining flex space and wrap
+                     vertically; the wf-count badge keeps its intrinsic width
+                     (`shrink-0`) so it stays right of the wrapping name. -->
+                <p class="text-sm font-semibold text-gray-800 whitespace-normal break-words flex-1 min-w-0" x-text="service.name" :title="service.name"></p>
+                <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight ml-1 shrink-0"
                       x-text="pathsFor(service.id).length + ' wf' + (pathsFor(service.id).length === 1 ? '' : 's')"></span>
               </div>
-              <template x-if="showServiceMeta">
+              <template x-if="showServiceMeta || (view === 'focus' && expanded[service.id])">
                 <div>
                   <div class="svc-block-meta-row">
                     <span class="text-[10px] text-gray-400 truncate" x-text="failureLabel(service)"></span>
@@ -2232,10 +2522,17 @@
                  x-transition + the swap-pulse keyframe ring. -->
             <div class="svc-block-rows">
             <template x-for="(path, pIdx) in visiblePathsFor(service)" :key="service.id + '|' + path.join('>')">
+              <!-- Option A: when this service is Focus-expanded, the .wf-row's
+                   own --leaf-width MUST defer to the parent .svc-block's
+                   expanded override (200 px). Otherwise the per-row literal
+                   would shadow the parent value and the path stays at the
+                   collapsed width. The expression below uses the expanded
+                   value when (view=focus AND expanded[service.id]) and the
+                   per-view value otherwise. -->
               <div
                 class="wf-row"
                 :data-service-row="service.id"
-                :style="`--leaf-width: ${leafWidthForView}`"
+                :style="`--leaf-width: ${view === 'focus' && expanded[service.id] ? '200px' : leafWidthForView}`"
                 :class="{
                   'default-row': pIdx === defaultPathIndex[service.id] && expandedServices.has(service.id),
                   'swap-pulse': shouldPulse(service, path)
@@ -2287,8 +2584,12 @@
                              border (rounded-lg + border-2), and width
                              (--leaf-width) byte-identical to the Matrix
                              Detailed leaf and the Swim-lane Detailed
-                             leaf. -->
-                        <template x-if="service.envs[envId] && view === 'detailed'">
+                             leaf.
+                             Option A: also used by Focus when the service
+                             is expanded — every path row shares the
+                             Detailed leaf renderer in lock-step. Full-
+                             attribute disclosure rule (SAD §7) applies. -->
+                        <template x-if="service.envs[envId] && (view === 'detailed' || (view === 'focus' && expanded[service.id]))">
                           <div
                             class="wf-stage rounded-lg border-2 overflow-hidden relative transition-shadow"
                             :class="getBoxClass(service, envId)"
@@ -2301,9 +2602,9 @@
                             <div>
                               <div class="p-2.5">
                                 <div class="flex items-center justify-between mb-1.5"
-                                     x-show="showAttr('status') || showAttr('run')">
+                                     x-show="(view === 'focus' && expanded[service.id]) || showAttr('status') || showAttr('run')">
                                   <span
-                                    x-show="showAttr('status')"
+                                    x-show="(view === 'focus' && expanded[service.id]) || showAttr('status')"
                                     class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold"
                                     :class="statusBadgeClass(service.envs[envId].current.status)"
                                   >
@@ -2312,25 +2613,27 @@
                                     <span x-text="statusText(service.envs[envId].current.status)"></span>
                                   </span>
                                   <a :href="service.envs[envId].current.url"
-                                     x-show="showAttr('run')"
+                                     x-show="(view === 'focus' && expanded[service.id]) || showAttr('run')"
                                      class="text-xs text-blue-500 hover:underline font-mono ml-auto"
                                      x-text="service.envs[envId].current.run" @click.stop></a>
                                 </div>
-                                <p x-show="showAttr('version')"
+                                <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('version')"
                                    class="text-sm font-bold text-gray-900 font-mono leading-tight"
                                    x-text="service.envs[envId].current.version"></p>
-                                <p x-show="showAttr('ago')"
+                                <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('ago')"
                                    class="text-xs text-gray-400 mt-1 leading-tight"
                                    x-text="service.envs[envId].current.ago"></p>
-                                <p x-show="showAttr('actor')"
+                                <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('actor')"
                                    class="text-xs text-gray-400 truncate leading-tight"
                                    x-text="service.envs[envId].current.actor"></p>
-                                <!-- ref / sha — null-render invariant (SAD §7) — see Matrix Detailed leaf. -->
-                                <p x-show="showAttr('ref') && hasAttr(service.envs[envId].current.ref)"
+                                <!-- ref / sha — null-render invariant (SAD §7).
+                                     Focus-expanded ignores the picker (Full-attribute
+                                     disclosure rule); the picker still gates in Detailed. -->
+                                <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('ref')) && hasAttr(service.envs[envId].current.ref)"
                                    class="text-xs text-gray-500 truncate leading-tight"
                                    :title="service.envs[envId].current.ref"
                                    x-text="service.envs[envId].current.ref"></p>
-                                <p x-show="showAttr('sha') && hasAttr(service.envs[envId].current.sha)"
+                                <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('sha')) && hasAttr(service.envs[envId].current.sha)"
                                    class="text-xs text-gray-500 font-mono truncate leading-tight"
                                    :title="service.envs[envId].current.sha"
                                    x-text="shortSha(service.envs[envId].current.sha)"></p>
@@ -2346,11 +2649,11 @@
                                     <span class="text-xs font-mono font-semibold text-gray-600" x-text="service.envs[envId].lastSuccessful.version"></span>
                                   </div>
                                   <p class="text-xs text-gray-400 mt-0.5 leading-tight" x-text="service.envs[envId].lastSuccessful.ago"></p>
-                                  <p x-show="showAttr('ref') && hasAttr(service.envs[envId].lastSuccessful.ref)"
+                                  <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('ref')) && hasAttr(service.envs[envId].lastSuccessful.ref)"
                                      class="text-xs text-gray-500 truncate leading-tight"
                                      :title="service.envs[envId].lastSuccessful.ref"
                                      x-text="service.envs[envId].lastSuccessful.ref"></p>
-                                  <p x-show="showAttr('sha') && hasAttr(service.envs[envId].lastSuccessful.sha)"
+                                  <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('sha')) && hasAttr(service.envs[envId].lastSuccessful.sha)"
                                      class="text-xs text-gray-500 font-mono truncate leading-tight"
                                      :title="service.envs[envId].lastSuccessful.sha"
                                      x-text="shortSha(service.envs[envId].lastSuccessful.sha)"></p>
@@ -2360,12 +2663,15 @@
                           </div>
                         </template>
 
-                        <!-- COMPACT / FOCUS leaf — DOM, classes, inner
-                             padding, border (rounded-md + border), and
-                             width (--leaf-width) byte-identical to the
+                        <!-- COMPACT / FOCUS-collapsed leaf — DOM, classes,
+                             inner padding, border (rounded-md + border),
+                             and width (--leaf-width) byte-identical to the
                              Matrix Compact leaf and the Swim-lane
-                             Compact/Focus leaf. -->
-                        <template x-if="service.envs[envId] && (view === 'compact' || view === 'focus')">
+                             Compact / Focus-collapsed leaf. Option A:
+                             only used when Focus is COLLAPSED for this
+                             service; expanded Focus uses the Detailed
+                             branch above. -->
+                        <template x-if="service.envs[envId] && (view === 'compact' || (view === 'focus' && !expanded[service.id]))">
                           <div
                             class="wf-stage rounded-md border overflow-hidden relative transition-shadow"
                             :class="getBoxClass(service, envId)"
