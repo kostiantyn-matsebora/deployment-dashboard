@@ -40,6 +40,8 @@ CI, generic shell) see
 | `run_url`            | no  | Derived from `github.*` context     | Link back to the CI run. |
 | `run_number`         | no  | `github.run_number`                 | Numeric run identifier. Must parse as integer. |
 | `actor`              | no  | `github.actor`                      | User who triggered the run. |
+| `ref`                | no  | `github.ref`                        | Free-form git ref - branch (`main`), PR number, tag, full ref (`refs/heads/main`), or any string. Opaque to the dashboard (SAD §10 Decision 10). Surfaces the deployed code reference in the matrix / drawer (SAD §7 "API Contract" POST body row `ref`, FR-05). Pass `""` to omit explicitly - empty values are dropped from the wire payload. |
+| `sha`                | no  | `github.sha`                        | Free-form commit SHA string. Opaque to the dashboard - no length or hex-shape validation (SAD §10 Decision 10). Surfaces the deployed commit in the matrix / drawer (SAD §7 "API Contract" POST body row `sha`, FR-05). Pass `""` to omit explicitly - empty values are dropped from the wire payload. |
 | `fail_on_error`      | no  | `true`                              | When `false`, transport or non-2xx failures emit a `::warning::` but the step succeeds. |
 
 ### Recommended `deployment_id` pattern

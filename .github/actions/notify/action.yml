@@ -87,6 +87,35 @@ inputs:
       github.actor.
     required: false
     default: ${{ github.actor }}
+  ref:
+    description: >-
+      Optional human-readable git ref associated with this deployment -
+      a branch name (`main`), a PR number (`PR-42`), a tag (`v1.2.3`), a
+      full ref (`refs/heads/main`, `refs/pull/42/merge`), or any other
+      free-form string. The dashboard does not parse or validate the
+      value (SAD §10 Decision 10 - opaque correlation attributes).
+      Surfaces the deployed code reference in the matrix / drawer per
+      SAD §7 "API Contract" POST body row `ref` and FR-05. Defaults to
+      `${{ github.ref }}` so the action "just works" with no extra
+      wiring, matching the convention already used for `run_url`,
+      `run_number`, and `actor` (sensible default sourced from the
+      github.* context, overridable by the caller). Non-GitHub callers
+      or workflows that want to emit no ref should pass an empty string
+      explicitly - empty values are dropped from the wire payload.
+    required: false
+    default: ${{ github.ref }}
+  sha:
+    description: >-
+      Optional commit SHA associated with this deployment. Free-form
+      string - the dashboard does not parse or validate length or hex
+      shape (SAD §10 Decision 10 - opaque correlation attributes).
+      Surfaces the deployed commit in the matrix / drawer per SAD §7
+      "API Contract" POST body row `sha` and FR-05. Defaults to
+      `${{ github.sha }}` so the action "just works" with no extra
+      wiring. Pass an empty string to omit explicitly - empty values
+      are dropped from the wire payload.
+    required: false
+    default: ${{ github.sha }}
   fail_on_error:
     description: >-
       When "true" (default), a non-2xx response or transport error fails
@@ -119,6 +148,8 @@ runs:
         DD_RUN_URL: ${{ inputs.run_url }}
         DD_RUN_NUMBER: ${{ inputs.run_number }}
         DD_ACTOR: ${{ inputs.actor }}
+        DD_REF: ${{ inputs.ref }}
+        DD_SHA: ${{ inputs.sha }}
         DD_FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
       run: |
         $ErrorActionPreference = 'Stop'
@@ -174,6 +205,11 @@ runs:
         # deployment_id is always emitted (required by the contract).
         # parent_deployments is emitted only when non-empty - omitting it is
         # semantically identical to sending [] and keeps the wire compact.
+        # ref / sha are optional free-form strings per SAD §7 "API Contract"
+        # POST body rows `ref` / `sha` and FR-05; also emitted only when
+        # non-empty so the wire stays compact when a caller explicitly
+        # opts out (passes ""). SAD §10 Decision 10 - the dashboard treats
+        # both as opaque correlation attributes with no shape validation.
         $payload = [ordered]@{
           deployment_id = $env:DD_DEPLOYMENT_ID
           service       = $env:DD_SERVICE
@@ -189,6 +225,12 @@ runs:
           # ConvertTo-Json otherwise collapses a 1-element array to a scalar.
           $payload['parent_deployments'] = @($parentIds)
         }
+        if (-not [string]::IsNullOrWhiteSpace($env:DD_REF)) {
+          $payload['ref'] = $env:DD_REF
+        }
+        if (-not [string]::IsNullOrWhiteSpace($env:DD_SHA)) {
+          $payload['sha'] = $env:DD_SHA
+        }
         $body = $payload | ConvertTo-Json -Compress -Depth 4
 
         $headers = @{
@@ -198,7 +240,9 @@ runs:
         }
 
         $parentSummary = if ($parentIds.Count -gt 0) { " parents=[$($parentIds -join ', ')]" } else { '' }
-        Write-Host "Notifying $endpoint for $($env:DD_SERVICE)/$($env:DD_ENVIRONMENT) @ $($env:DD_VERSION) [$($env:DD_STATUS)] deployment_id=$($env:DD_DEPLOYMENT_ID)$parentSummary"
+        $refSummary    = if (-not [string]::IsNullOrWhiteSpace($env:DD_REF)) { " ref=$($env:DD_REF)" } else { '' }
+        $shaSummary    = if (-not [string]::IsNullOrWhiteSpace($env:DD_SHA)) { " sha=$($env:DD_SHA)" } else { '' }
+        Write-Host "Notifying $endpoint for $($env:DD_SERVICE)/$($env:DD_ENVIRONMENT) @ $($env:DD_VERSION) [$($env:DD_STATUS)] deployment_id=$($env:DD_DEPLOYMENT_ID)$parentSummary$refSummary$shaSummary"
 
         # ---- HTTP call -----------------------------------------------------
         $statusCode = ''

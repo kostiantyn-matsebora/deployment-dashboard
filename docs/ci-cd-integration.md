@@ -45,73 +45,106 @@ User-Agent: deployment-dashboard-notify/1.0 (+<tool>)
 This makes dashboard access logs auditable - swap `<tool>` for
 `github-actions`, `azure-devops`, `jenkins`, `gitlab-ci`, etc.
 
-**Payload — minimum required shape (seven required fields; names match
-the API contract exactly):**
+**Payload — minimum required shape (eight required fields; names
+match the API contract exactly):**
 
 ```json
 {
-  "service":     "service-a",
-  "environment": "dev",
-  "version":     "v2.3.1",
-  "status":      "success",
-  "run_url":     "https://ci.example.com/runs/12345",
-  "run_number":  1247,
-  "actor":       "john.doe"
+  "deployment_id": "gh-12345",
+  "service":       "service-a",
+  "environment":   "dev",
+  "version":       "v2.3.1",
+  "status":        "success",
+  "run_url":       "https://ci.example.com/runs/12345",
+  "run_number":    1247,
+  "actor":         "john.doe"
 }
 ```
 
-Two optional source-identifier fields — `ref` and `sha` — MAY be added
-to the same payload (FR-05; SAD §7 "API Contract" → "POST
-`/api/deployments` request body"). They are nullable strings, may be
-omitted entirely, sent as `null`, or sent as any string. The dashboard
-stores them when present and surfaces them on read responses; no
-length or format validation is performed at this stage (deferred —
-SAD §10 Decision 10).
+Three optional fields — `parent_deployments`, `ref`, `sha` — MAY be
+added to the same payload (FR-05, FR-13; SAD §7 "API Contract" →
+"POST `/api/deployments` request body"). They are independently
+omittable; the dashboard stores any combination and surfaces them on
+read responses.
 
 ```json
 {
-  "service":     "service-a",
-  "environment": "dev",
-  "version":     "v2.3.1",
-  "status":      "success",
-  "run_url":     "https://ci.example.com/runs/12345",
-  "run_number":  1247,
-  "actor":       "john.doe",
-  "ref":         "feature/login-revamp",
-  "sha":         "9f1c0d2e8a"
+  "deployment_id":      "gh-12345",
+  "parent_deployments": ["gh-12340"],
+  "service":            "service-a",
+  "environment":        "qa",
+  "version":            "v2.3.1",
+  "status":             "success",
+  "run_url":            "https://ci.example.com/runs/12345",
+  "run_number":         1247,
+  "actor":              "john.doe",
+  "ref":                "feature/login-revamp",
+  "sha":                "9f1c0d2e8a"
 }
 ```
 
+- `deployment_id` - CI/CD-side identifier (run id, build number, guid).
+  Required (SAD §7 POST validation table row 1). Non-empty. Unique
+  within `service`; duplicate `(service, deployment_id)` → `409
+  Conflict`. Length cap 200. Namespace by tool prefix (e.g. `gh-`,
+  `ado-`, `jenkins-`) to avoid collisions across CI/CD platforms.
+- `parent_deployments` *(optional)* - JSON array of `deployment_id`
+  values referencing upstream deployments in the **same `service`**.
+  Omit, send `[]`, or send a string array. Empty / absent → the
+  Read API falls back to correlation-based topology derivation
+  (SAD §"Topology Derivation"). Cross-service references → `400
+  Bad Request`. Cycles through resolved references → `400 Bad
+  Request`. References to a not-yet-ingested `deployment_id` are
+  **accepted** and held as dangling (SAD §10 Decision 9).
 - `service` - free-form identifier; lists are derived dynamically from
   stored events (FR-09, SAD §7 "API Contract" - `GET /api/services`).
+  Length cap 200.
 - `environment` - free-form identifier; same dynamic discovery via
-  `GET /api/environments`.
+  `GET /api/environments`. Length cap 200.
 - `version` - any string. Semver, git SHA, build number - the
-  dashboard does not parse it.
+  dashboard does not parse it. Length cap 200.
 - `status` - one of `success`, `failure`, `in-progress`.
 - `run_url` - link to the originating CI run; rendered as a clickable
-  link on the matrix box (FR-02).
-- `run_number` - integer; serialised as a JSON number, **not** a
-  string.
-- `actor` - whoever or whatever triggered the run.
+  link on the matrix box (FR-02). Must validate as a URL; length
+  cap 2048.
+- `run_number` - non-negative integer; serialised as a JSON number,
+  **not** a string.
+- `actor` - whoever or whatever triggered the run. Length cap 200.
 - `ref` *(optional)* - branch name, PR number, tag, or any
   human-readable git ref. Free-form string. Omit, send `null`, or
-  send a string.
+  send a string. No length cap or format check at this stage
+  (deferred — SAD §10 Decision 10).
 - `sha` *(optional)* - commit SHA associated with this deployment.
   Free-form string at this stage (no hex check, no length cap).
-  Omit, send `null`, or send a string.
+  Omit, send `null`, or send a string. Deferred — SAD §10
+  Decision 10.
 
-Backward compatibility: pipelines that send only the seven required
-fields continue to work unchanged. Pipelines may add `ref`, `sha`, or
-both at any time without coordination.
+Backward compatibility: `deployment_id` is **required** (FR-13 cycle —
+SAD §10 Decision 9). Pipelines that previously sent the original
+seven-field shape MUST be updated to include `deployment_id` before
+their next run. The optional fields (`parent_deployments`, `ref`,
+`sha`) may be added independently at any time without coordination.
 
 **Success response:** `201 Created` with the created resource in the
 body (SAD §7 "API Contract").
 
-**Idempotency:** `POST /api/deployments` is append-only. A duplicate
-notify creates an extra history row but does not corrupt the matrix
-view, which always picks the latest event by `deployed_at` (SAD §7
-"API Contract" -> "REST constraints observed").
+**Failure responses (SAD §7 "POST `/api/deployments` validation —
+failure modes"):**
+
+| Status | When |
+|---|---|
+| `400 Bad Request` | `parent_deployments[i]` references a `deployment_id` in a different service, OR closes a cycle through already-resolved references. |
+| `401 Unauthorized` | Missing or invalid `X-Api-Key`. |
+| `409 Conflict` | Duplicate `(service, deployment_id)` — an event with this id already exists for this service. |
+| `422 Unprocessable Entity` | Missing or empty `deployment_id`; missing required field; invalid `status`; `run_number` sent as a quoted string; any other Data Annotations failure. |
+
+**Idempotency:** `POST /api/deployments` is append-only with a
+deduplication key. The CI/CD-side caller owns `deployment_id` (SAD §7
+"REST constraints observed"); retrying with the **same**
+`deployment_id` yields `409 Conflict` and does not produce a duplicate
+row. Retrying with a **new** `deployment_id` is a new event and
+creates a new history entry. The matrix view always picks the latest
+event by `deployed_at`.
 
 ## Secrets
 
@@ -135,15 +168,24 @@ curl -sf -X POST "$DEPLOYMENT_DASHBOARD_URL/api/deployments" \
   -H "X-Api-Key: $DEPLOYMENT_DASHBOARD_TOKEN" \
   -H "User-Agent: deployment-dashboard-notify/1.0 (+shell)" \
   -d "{
-    \"service\":    \"$SERVICE_NAME\",
-    \"environment\":\"$ENVIRONMENT\",
-    \"version\":    \"$VERSION\",
-    \"status\":     \"success\",
-    \"run_url\":    \"$BUILD_URL\",
-    \"run_number\": $BUILD_NUMBER,
-    \"actor\":      \"$BUILD_USER\"
+    \"deployment_id\": \"$TOOL_PREFIX-$BUILD_ID\",
+    \"service\":       \"$SERVICE_NAME\",
+    \"environment\":   \"$ENVIRONMENT\",
+    \"version\":       \"$VERSION\",
+    \"status\":        \"success\",
+    \"run_url\":       \"$BUILD_URL\",
+    \"run_number\":    $BUILD_NUMBER,
+    \"actor\":         \"$BUILD_USER\"
   }"
 ```
+
+`$TOOL_PREFIX` is a literal you set per tool (e.g. `gh`, `ado`,
+`jenkins`) so `deployment_id` is unique across CI/CD platforms (SAD §7
+"Other tools"). To wire up explicit topology, add
+`\"parent_deployments\": [\"$UPSTREAM_DEPLOYMENT_ID\"]` to the body —
+the array MUST reference `deployment_id` values from the **same
+`service`** (SAD §7 "Topology constraints"); omit the field to fall
+back to correlation-based derivation.
 
 `curl -sf` makes the step **fail the pipeline on any HTTP 4xx/5xx**.
 That is the desired default - if your platform should be best-effort
@@ -161,6 +203,8 @@ maps the tool's built-in variables onto the dashboard payload fields.
 
 | Payload field | GitHub Actions value                                                                       |
 |---------------|--------------------------------------------------------------------------------------------|
+| `deployment_id` | `gh-${{ github.run_id }}` — `gh-` namespace prefix avoids collisions with other CI/CD tools writing to the same dashboard |
+| `parent_deployments` *(optional)* | JSON array of upstream `deployment_id` values in the same `service` — e.g. `["gh-${{ needs.deploy-dev.outputs.deployment_id }}"]` when promoting from a `deploy-dev` job. Omit or `[]` to fall back to correlation. |
 | `service`     | Literal, or `${{ github.event.repository.name }}` if one repo == one service               |
 | `environment` | Literal per job/stage; commonly tied to the GitHub environment name                        |
 | `version`     | `${{ github.sha }}` (commit SHA) or a tag like `${{ github.ref_name }}`                    |
