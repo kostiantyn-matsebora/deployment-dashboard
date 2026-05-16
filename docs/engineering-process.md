@@ -51,33 +51,34 @@ Each phase below: **Goal · Actions · Artefacts · Criteria of acceptance.**
 
 ### Phase 4 — Implementation
 - **Goal.** Working code that mirrors the approved Phase 2 contracts.
-- **Actions.** `frontend-engineer` writes Angular; `backend-engineer` writes .NET; `devops-engineer` writes Dockerfile / compose / Terraform / GitHub Actions. Each works against the approved contracts in `docs/`. Test authoring (Phase 5) overlaps once Phase 3 has passed. Dispatched in parallel where independent.
+- **Actions.** `frontend-engineer` writes Angular; `backend-engineer` writes .NET; `devops-engineer` writes Dockerfile / compose / Terraform / GitHub Actions. Each works against the approved contracts in `docs/`. Test authoring (Phase 5) overlaps once Phase 3 has passed. Dispatched in parallel where independent. Runs under `### Iteration protocol — propose → review → implement` with estimation-first dispatch and stoppable intermediate states (see `### Stoppable intermediate states`).
 - **Artefacts.** Code in `frontend/`, `backend/`, `gateway/`, `infrastructure/`, `.github/`. Dockerfiles, compose files, scripts.
 - **Acceptance.** Compiles / builds clean. Per-project unit tests pass. No new lint or type errors. Presentable to Phase 5.
 
 ### Phase 5 — Testing
 - **Goal.** Verify implementation against contracts via executable suites + manual browser smoke against the running solution.
-- **Actions.** `qa-engineer` authors and runs functional / API / e2e (Playwright) / mockup-visual / Pester / smoke. Tests reference contracts, not implementation internals. Oracles must be TIGHT per **Test oracles can be wrong** below. Manual browser smoke runs against the running solution (`dev_env/start.ps1` or `ng serve dashboard`), NOT against design artefacts.
+- **Actions.** `qa-engineer` authors and runs functional / API / e2e (Playwright) / mockup-visual / Pester / smoke. Tests reference contracts, not implementation internals. Oracles must be TIGHT per **Test oracles can be wrong** below. Manual browser smoke runs against the running solution (`dev_env/start.ps1` or `ng serve dashboard`), NOT against design artefacts. Runs under `### Iteration protocol — propose → review → implement` with estimation-first dispatch and stoppable intermediate states (see `### Stoppable intermediate states`).
 - **Artefacts.** Test code under `testing/` (`functional/`, `e2e/`, `mockup-visual/`, `pester/`, `fixtures/`, `scripts/`) + per-project unit specs alongside source. Manual-smoke report.
 - **Acceptance.** Suite executes; oracle pass/fail accurately reflects correctness. Manual-smoke report recorded (with explicit caveat if smoke could not be run — e.g. headless). Failures route to Phase 6.
 
 ### Phase 6 — Bug fixing
 - **Goal.** Resolve defects found in Phase 5 (or manual smoke) until all oracles are green with no regressions.
-- **Actions.** Engineer owning the failing surface fixes the defect. QA continues exercising other scenarios in parallel — a bug fix never freezes the test run. Routes back to the specific Phase 4 surface that broke, not a full Phase 4 rerun.
+- **Actions.** Engineer owning the failing surface fixes the defect. QA continues exercising other scenarios in parallel — a bug fix never freezes the test run. Routes back to the specific Phase 4 surface that broke, not a full Phase 4 rerun. Runs under `### Iteration protocol — propose → review → implement` with estimation-first dispatch and stoppable intermediate states (see `### Stoppable intermediate states`).
 - **Artefacts.** Edits to existing Phase 4 / Phase 5 artefacts.
 - **Acceptance.** All oracles green. No regressions. Manual smoke re-run if a user-visible surface was touched.
 
 ### Phase 7 — SA review
 - **Goal.** Confirm the result complies with SAD invariants, FR/NFRs, and mockup contracts before user approval.
-- **Actions.** `solution-architect` reads the diff against SAD invariants (NFR-09, 6-box-state contract, modular-monolith dependency rules, etc.) and the mockup's behavioural contract. Verifies the Phase 5 manual-smoke section was actually written (empty section = REJECT, return to Phase 5). Sign-off; no code edits.
+- **Actions.** `solution-architect` reads the diff against SAD invariants (NFR-09, 6-box-state contract, modular-monolith dependency rules, etc.) and the mockup's behavioural contract. Verifies the Phase 5 manual-smoke section was actually written (empty section = REJECT, return to Phase 5). Sign-off; no code edits. Runs under `### Iteration protocol — propose → review → implement` with estimation-first dispatch and stoppable intermediate states (see `### Stoppable intermediate states`) when the review surfaces follow-up SAD edits that exceed the 15-min threshold.
 - **Artefacts.** Sign-off note in PR / final report; rarely a new ADR.
 - **Acceptance.** APPROVE (with or without pending additive SAD edits) or RETURN-TO-engineer with specific findings.
 
 ### Phase 8 — User approval
 - **Goal.** User confirms the delivered work satisfies the TODO line.
-- **Actions.** Orchestrator surfaces the work via `AskUserQuestion` per the TODO-driven workflow. If manual smoke wasn't run (e.g. headless), the orchestrator asks the user to run it. User picks "Yes — mark complete" or "No — needs more work" (loops back to Phase 6 with specific feedback).
+- **Actions.** Orchestrator surfaces the work via `AskUserQuestion` per the Task model. If manual smoke wasn't run (e.g. headless), the orchestrator asks the user to run it. User picks "Yes — mark complete" or "No — needs more work" (loops back to Phase 6 with specific feedback).
 - **Artefacts.** TODO line transition ☐ → ☒. PROGRESS.md refresh. Commit (only when the user explicitly asks).
 - **Acceptance.** User selects "Yes — mark complete".
+- **Post-acceptance doc optimization hook.** If the task touched any documentation (`CLAUDE.md`, `docs/*.md`, `.claude/agents/*.md`, ADRs, CRs, READMEs), the orchestrator MUST dispatch `ai-engineer` to run the Iteration protocol (`### Iteration protocol — propose → review → implement`) scoped to the doc diff from this task. Runs as a polish step, not a gate — does not block declaring the task complete. If `ai-engineer`'s first proposal batch returns "no productive proposals", the hook completes immediately (no-op acceptable). No user permission required to invoke; the user sees the cumulative optimization diff in the final report and may accept or revert as a unit.
 
 ### Cross-phase rule
 
@@ -153,7 +154,7 @@ Project-specific forbidden role-crossings table lives in the project's `CLAUDE.m
 
 ### Doc co-ownership — solution-architect ↔ ai-engineer
 
-Documentation (CLAUDE.md, this file, ADRs, READMEs, agent definitions, skills) is co-owned: `solution-architect` owns **semantics**; `ai-engineer` owns **shape and load topology**. The two agents never override each other's invariants.
+Documentation (CLAUDE.md, this file, ADRs, READMEs, agent definitions, skills) is co-owned: `solution-architect` owns **semantics**; `ai-engineer` owns **shape and load topology**. The two agents never override each other's invariants. Doc co-ownership runs under the generalized `### Iteration protocol — propose → review → implement` below.
 
 | Scenario | Routing |
 |---|---|
@@ -169,6 +170,71 @@ Documentation (CLAUDE.md, this file, ADRs, READMEs, agent definitions, skills) i
 - User explicitly targets AI-asset or doc optimization.
 - SA flags "this doc is getting unwieldy" in their final report.
 - Periodic maintenance (release cadence, post-large-feature cleanup).
+
+### Iteration protocol — propose → review → implement
+
+Generalized loop for **all team work in Phases 4–7** (Implementation, Testing, Bug fixing, SA review) with estimated total scope > 15 min, and for doc co-ownership passes between `ai-engineer` and `solution-architect`. Dispatched agents work in iterations under this protocol; user intervention is bounded to kickoff approval and the final report.
+
+The cycle:
+
+- **propose** = each dispatched agent responds with a task decomposition + per-task time estimate (no code / tests / fixes / edits yet).
+- **review** = orchestrator synthesizes proposals across all dispatched agents and surfaces the batch (total + per-task breakdown) to the user when the scope warrants; user approves the batch or redirects.
+- **implement** = each agent executes its approved batch in iterations of 3–5 min, each iteration producing a visible, resumable result per `### Stoppable intermediate states` below.
+
+**Estimation-first dispatch.** Before any code / tests / fixes / doc edits, each dispatched specialist MUST respond with a task decomposition (list of sub-tasks) + per-task time estimate. Orchestrator synthesizes across all specialists, surfaces total + per-task breakdown to the user, and waits for approval or redirect before letting any specialist enter the implement step. This applies to Phase 4 (implementation), Phase 5 (testing), Phase 6 (bug fixing), Phase 7 (SA review), and to ai-engineer ↔ SA doc co-ownership passes.
+
+**Sizing the iterations.**
+
+| Estimated total scope | Approach |
+|---|---|
+| ≤ 15 min | Single iteration: agent proposes the full pass; reviewer (orchestrator / SA / user as appropriate) reviews; agent implements. |
+| > 15 min | Multiple short iterations of 3–5 min each; each iteration produces a visible partial result. Agent scopes the next batch (3–7 sub-tasks) at the start of each iteration. |
+
+**Each iteration.**
+
+1. **Propose.** Dispatched agent submits a structured proposal listing each sub-task: change / where / why / risk / time estimate (+ lossless evidence for doc work). No edits yet.
+2. **Review.** Reviewer responds per item — accept / decline / accept-with-modification, each with one-line reasoning. Reviewer = `solution-architect` for doc co-ownership semantics; orchestrator (surfacing to user when scope warrants) for Phase 4–7 engineering work.
+3. **Implement.** Agent executes accepted items — applies reviewer's modifications, runs domain self-check (build / lint / harness / lossless check as applicable), updates cross-references in dependent files. Each iteration ends in a stoppable intermediate state.
+
+**Loop termination.**
+
+- Agent reports "no further productive proposals" in its next batch, OR
+- Agent or reviewer hit semantic territory only the user can decide, OR
+- Pre-agreed budget exhausted, OR
+- User stops the team at any iteration boundary per `### Stoppable intermediate states`.
+
+**Conflict resolution.** Tie-breaker: `solution-architect` wins on doc semantics; the domain-owning agent wins on implementation craft within their domain (per the project's "Project role boundaries" table); user wins on product intent. Agent may re-propose with new evidence ONCE per item; second decline is final.
+
+**Orchestrator role.** Drives the loop — dispatches the three steps each iteration. Surfaces the estimation batch to the user before the implement step begins; surfaces intermediate results after each iteration when the user has asked for visibility or when an iteration revealed something the user should redirect on. User involvement otherwise bounded to kickoff (scope + budget) and final report.
+
+### Stoppable intermediate states
+
+Each iteration under `### Iteration protocol` must leave the system in a valid, resumable state:
+
+- Engineers do not leave half-written code that breaks the build, fails type-check, or fails per-project unit tests.
+- QA does not leave partial test runs that pollute fixtures, leave seeded data behind, or leave the local stack in a non-reproducible state.
+- Bug fixes do not half-apply (e.g. backend half of a contract change landed, frontend half pending — gate behind a feature flag or stage the contract change behind a no-op default).
+- Doc edits do not leave broken cross-references or orphaned sections.
+
+User can stop the team at any iteration boundary. Orchestrator's stop report includes:
+
+- **Done** — sub-tasks completed, with files touched.
+- **In-progress** — sub-task interrupted, with the partial state recorded and the concrete resume instructions (same partial-result format as `### Timeframe-bounded autonomous work`).
+- **Not-started** — sub-tasks remaining in the approved batch, with original estimates intact.
+
+The user must be able to continue next day or later from the recorded state with zero rework — no recovering half-finished refactors, no re-deriving which test was running, no guessing which contract version is on disk.
+
+### Timeframe-bounded autonomous work
+
+When the user gives a timeframe (e.g., "spend 30 min on X", "do as much as you can in an hour"), the orchestrator treats it as a budget for autonomous work:
+
+- Work autonomously for the full period — drive multi-agent loops, run sequential dispatches, iterate.
+- The boundary is the checkpoint — report at the end, not before.
+- Results may be **full** (everything done), **partial** (ran out of budget), or **early** (done sooner than expected). All three are acceptable; honesty about which is required.
+- No per-iteration check-ins. Only valid mid-flight interrupts: scope creep, genuine ambiguity, semantic conflict the orchestrator can't resolve.
+- For partial results, the report must include a clear **done / in-progress / not-started** breakdown + concrete instructions to resume.
+
+Pairs with the Iteration protocol above: timeframe-bounded work runs iterations through that protocol until the timeframe expires, with each iteration ending in a stoppable intermediate state per `### Stoppable intermediate states`.
 
 ### Cross-domain bugs — integration + compliance cycle
 
@@ -241,28 +307,46 @@ Main thread orchestrates the hand-off — when an agent flags a root cause outsi
 
 When any engineer flags a needed change, the next dispatch is the owning agent with the flagged change. Engineers outside the owning domain never edit these files directly.
 
-## TODO-driven workflow
+## Task model
 
-`TODO` at the repo root tracks the user's intended next steps. User-curated — never auto-generated, never auto-extended. Glyphs: `☐` = open, `☒` = completed.
+The phased lifecycle (Phase 1–8) applies to any task. A task originates from one of three sources:
+
+| Source | Scope | State mechanic |
+|---|---|---|
+| Repo-root `TODO` | Project-wide | Glyphs `☐` / `☒`; orchestrator updates the line on completion |
+| Nested `TODO` (e.g., `frontend/TODO`, `backend/api/TODO`) | Component-scoped | Same glyph mechanic, scoped to that component file |
+| Direct user instruction | Ad hoc; scope inferred from the instruction | No `TODO` file; no glyph mechanic |
+
+`TODO` at any location is user-curated — never auto-generated, never auto-extended. Glyphs: `☐` = open, `☒` = completed.
+
+### Post-task check-in
 
 **After every completed user request** (work delivered or question answered), in this order:
 
-1. **Read `TODO`** at the repo root.
-2. **Find the first `☐` item** (top-down). If none, say so and stop — never invent an item.
-3. **Ask the user via `AskUserQuestion`** — three fixed options, include the verbatim TODO line in the prompt:
+1. **Pick the next pending item to surface.**
+   - If the user was operating in a component context AND a nested `TODO` exists at that component → check it first.
+   - Otherwise → check the repo-root `TODO`.
+   - If both have pending items and the context is ambiguous → ask which to consult.
+   - If neither has pending items → say so and stop. Never invent an item.
+
+2. **Ask the user via `AskUserQuestion`** — three fixed options, include the verbatim `TODO` line in the prompt:
    | Option | Effect |
    |---|---|
    | **Elaborate** | User explains the item before any work begins. Wait, then proceed. |
    | **Start implementing** | Proceed immediately using the routing rules above. |
    | **Something else** | Wait for the user's next message; handle as a new request. |
-4. **When the chosen item is implemented**, ask via `AskUserQuestion`:
+
+3. **When a `TODO`-sourced task completes**, ask via `AskUserQuestion`:
    | Option | Effect |
    |---|---|
-   | **Yes — mark complete** | Edit `TODO` to change that line's `☐` → `☒`. No reorder, no delete, no commit unless asked. |
+   | **Yes — mark complete** | Edit the relevant `TODO` file (root or nested) to change that line's `☐` → `☒`. No reorder, no delete, no commit unless asked. |
    | **No — needs more work** | Keep as `☐`; ask what's missing; iterate. |
 
+4. **For direct-instruction tasks** — no `TODO` state to update. Acceptance is the user's explicit confirmation. Skip the glyph mechanic; the post-Phase-8 hook still applies (per `### Phase 8 — User approval`).
+
 Rules:
-- TODO check happens **between** user requests — not in the middle of one.
-- TODO items are user-grained, larger than in-conversation tasks (`TaskCreate` / `TaskUpdate`). Mark both when same work completes.
-- Never auto-add to TODO. Mention follow-up work → *offer* to add it; do not act unilaterally.
+- `TODO` checks happen **between** user requests — not in the middle of one.
+- `TODO` items are user-grained, larger than in-conversation tasks (`TaskCreate` / `TaskUpdate`). Mark both when the same work completes.
+- Never auto-add to any `TODO` file. Mention follow-up work → *offer* to add it; do not act unilaterally.
 - User says "skip TODO" for this turn → honour it; resume next turn.
+- **Discovering nested `TODO`s.** Orchestrator may `Glob` for `**/TODO` on session start or when entering a component context — but only surface them if the user is operating in that context.

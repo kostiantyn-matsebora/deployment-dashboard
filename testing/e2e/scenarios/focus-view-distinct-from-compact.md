@@ -47,8 +47,8 @@ granularity, but the pinned set itself does not reset.
   re-renders expanded.
 - `docs/ui-compact-options.md` "Session-only state (NOT persisted)" —
   Focus row `expanded` and `pinned` reset on page reload.
-- `docs/deployment-dashboard-architecture.md` §4 FR-12 — the four named
-  layout views, one of which is Focus.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 —
+  the four named layout views, one of which is Focus.
 - `docs/deployment-dashboard.html` — canonical mockup. The `focus-row`
   template carries `data-testid="row-chevron-{id}"` and
   `data-testid="row-pin-{id}"`; the row itself flips its `data-testid`
@@ -242,9 +242,9 @@ hidden.
   pin row-gutter placement, lifecycle, and filter resilience.
 - `docs/ui-compact-options.md` "Session-only state (NOT persisted)"
   — `expanded[id]` / `pinned[id]` lifecycle.
-- `docs/deployment-dashboard-architecture.md` §4 FR-12 — the four
-  named layout views (the Focus row must remain a *distinguishable*
-  view).
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 —
+  the four named layout views (the Focus row must remain a
+  *distinguishable* view).
 - Regression history: a prior change rendered Focus
   indistinguishable from Compact because the chevron + pin existed
   but were too understated to read. This oracle exists to prevent

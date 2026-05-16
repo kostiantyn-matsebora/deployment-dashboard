@@ -7,15 +7,16 @@ reload.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-12 ("the dashboard
-  shall expose four named layout views ... view selection and per-view
-  attribute selection persist client-side in `localStorage`").
-- `docs/deployment-dashboard-architecture.md` §7 "Layout views (FR-12)"
-  — table of the four views and the default-first-visit rule
-  (Detailed).
-- `docs/deployment-dashboard-architecture.md` §7 "Client-side
-  persistence (`localStorage`)" — key `dashboard.view`, value one of
-  `'detailed' / 'compact' / 'glance' / 'focus'`.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12
+  ("the dashboard shall expose four named layout views ... view
+  selection and per-view attribute selection persist client-side in
+  `localStorage`").
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` "Layout
+  views (FR-12)" — table of the four views and the
+  default-first-visit rule (Detailed).
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Client-side persistence (`localStorage`)" — key `dashboard.view`,
+  value one of `'detailed' / 'compact' / 'glance' / 'focus'`.
 - `docs/ui-compact-options.md` — switcher behaviour + localStorage key
   shapes.
 
@@ -79,7 +80,9 @@ reload.
 
 - FR-12: four named layout views with `localStorage` persistence of
   the active view.
-- SAD §7 "Layout views (FR-12)" — the table of named views and the
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` "Layout
+  views (FR-12)" — the table of named views and the
   Detailed-as-default-first-visit rule.
-- SAD §7 "Client-side persistence (`localStorage`)" — `dashboard.view`
-  key with the documented value set.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Client-side persistence (`localStorage`)" — `dashboard.view` key
+  with the documented value set.

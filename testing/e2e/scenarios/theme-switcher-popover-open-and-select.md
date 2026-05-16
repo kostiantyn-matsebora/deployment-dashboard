@@ -14,7 +14,7 @@ switchers.
   radio options (`data-testid="theme-option-{light|dark|auto}"`).
 - `docs/ui-theme-options.md` "Switcher affordance — gear icon +
   popover" + "Three orthogonal axes" table.
-- `docs/deployment-dashboard-architecture.md` §7 "Theme axis
+- `docs/cr/CR-0006-light-dark-auto-theme.md` "Theme axis
   (presentation-only)" subsection.
 
 ## Preconditions
@@ -83,4 +83,4 @@ switchers.
   affordance contract (`data-testid`s + `aria-expanded`).
 - `docs/ui-theme-options.md` "Switcher affordance — gear icon +
   popover" section.
-- `docs/deployment-dashboard-architecture.md` §7 Theme axis subsection.
+- `docs/cr/CR-0006-light-dark-auto-theme.md` Theme axis subsection.

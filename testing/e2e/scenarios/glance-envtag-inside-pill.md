@@ -14,7 +14,7 @@ mockup harness's Invariant 1 exception.
   env-tag and box ... The env label remains visible (not clipped)
   and the connector terminates at the pill's left edge as in other
   views.").
-- `docs/deployment-dashboard-architecture.md` §7 "Glance exception
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Glance exception
   under FR-13" ("the Glance view's 'env-tag-inside-pill' rendering
   applies in all three layouts").
 - `testing/mockup-visual/mockup-invariants.spec.ts` — the original

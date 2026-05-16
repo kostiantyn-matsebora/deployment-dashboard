@@ -1,6 +1,6 @@
 # dev_env — local Deployment Dashboard stack
 
-Implements WBS §11 MVP §2 of `docs/deployment-dashboard-architecture.md`.
+Implements MVP §2 of `docs/WBS.md`.
 
 ## Topology — App Gateway in front, four app containers behind
 

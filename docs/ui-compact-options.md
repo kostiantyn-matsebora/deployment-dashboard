@@ -1,17 +1,17 @@
 # UI density + attribute display — specification
 
-The dashboard ships **four user-selectable views**, switchable at runtime, with a per-view configurable attribute picker. Canonical reference fixture: [`deployment-dashboard.html`](./deployment-dashboard.html). This document is the contract for that behaviour and the rationale for the four-view shape; the SAD §7 "Visual layout" subsection cites it.
+The dashboard ships **four user-selectable views**, switchable at runtime, with a per-view configurable attribute picker. Canonical reference fixture: [`deployment-dashboard.html`](./deployment-dashboard.html). The requirement is recorded in [CR-0002](./cr/CR-0002-four-named-views-and-attribute-picker.md); this document is the design rationale that CR cites.
 
 ---
 
 ## Views
 
-| View | Intent | Density (services / 1080p) | Default attributes | Cap |
-|---|---|---|---|---|
-| **Detailed** | Full per-slot detail. The default for first-time visitors. | ~6 | status, version, run, ago, actor | 7 |
-| **Compact** | Pack ~3× more services on screen without changing the matrix shape. Same visual language as Detailed, ~120 px boxes, ~36 px rows. | ~15 | status, version, run, ago | 5 |
-| **Glance** | Pure triage — one status pill per environment, one attribute per pill. For catalogues > 20 services. | ~25+ | version | 1 |
-| **Focus** | Compact rows by default; chevron drills any row into Detailed-size fidelity. Pin keeps a row expanded across filter changes. | ~15 collapsed; Detailed-size when expanded | status, version, run, ago | 5 (collapsed); expanded rows always show all 7 |
+Canonical per-view defaults + caps live in [CR-0002 — "Layout views (FR-12)"](./cr/CR-0002-four-named-views-and-attribute-picker.md). This-cycle extension (rationale only):
+
+- **Density targets** (services per 1080p viewport): Detailed ~6, Compact ~15, Glance ~25+, Focus ~15 collapsed / Detailed-size when expanded.
+- **Compact specifics.** ~120 px boxes, ~36 px rows; same visual language as Detailed; matrix shape unchanged.
+- **Glance specifics.** Pure triage — one status pill per environment, one attribute per pill. For catalogues > 20 services.
+- **Focus specifics.** Compact rows by default; chevron drills any row into Detailed-size fidelity. Pin keeps a row expanded across filter changes.
 
 Rationale for the names:
 - **Detailed** — describes the content density, not "default / canonical / option A". A new visitor reading the switcher understands the tradeoff immediately.
@@ -44,28 +44,18 @@ The Focus view's chevron + pin controls have a fixed placement and lifecycle. Th
 
 ---
 
-## Attribute vocabulary (per SAD §7 matrix slot)
+## Attribute vocabulary (per matrix slot)
 
-| Key | Label in picker | Source field | Notes |
-|---|---|---|---|
-| `status` | Status badge | `current.status` | Renders the "success / failed / running…" **text** badge. |
-| `version` | Version | `current.version` | Semver string. |
-| `run` | Run number | `current.run` (linked to `current.url`) | CI/CD run number, e.g. `#1251`, links to `run_url`. |
-| `ago` | Elapsed time | `current.ago` | Relative time. |
-| `actor` | Actor | `current.actor` | Person who triggered the deploy. |
-| `ref` | Source ref | `current.ref` | Free-form source identifier — branch / PR / tag. Nullable on the wire (FR-05); empty render when null/absent (SAD §7 "Null-render invariant for nullable attributes"). |
-| `sha` | Commit SHA | `current.sha` | Free-form commit SHA. Nullable on the wire; SPA MAY truncate for display (drawer keeps full value). |
+Canonical 7-attribute table (keys, picker labels, source fields, null-render invariant for `ref`/`sha`) lives in [CR-0002 → "Attribute vocabulary"](./cr/CR-0002-four-named-views-and-attribute-picker.md) and [CR-0005](./cr/CR-0005-ref-sha-display-and-topology.md). This doc adds no new attribute semantics.
 
 ### Always-on (NOT configurable)
 
-These are part of the 6-box-state contract (FR-03) and the visual treatment — the picker does not affect them.
+Always-on elements are codified in [CR-0002 → "Always-on elements (not affected by the picker)"](./cr/CR-0002-four-named-views-and-attribute-picker.md):
 
-| Element | Why it's always on |
-|---|---|
-| Box background colour (green / red / orange + pulse animation for in-progress) | Status colour is the primary at-a-glance signal; it is a visual treatment of `current.status`, not an attribute. |
-| `⚠ prev. failed` badge | FR-03 — communicates the "running + previously-failed" state. |
-| Last-successful split section (dashed-divider, with version + ago) | FR-03 — the box state's bottom half is part of the data contract. The picker controls the **top** (current) section only. |
-| Drawer content | The drawer is the source of truth and is not affected by the picker. |
+- Box background colour (green / red / orange + in-progress pulse) — status colour is the primary at-a-glance signal; it's a visual treatment of `current.status`, not an attribute.
+- `⚠ prev. failed` badge — FR-03 "running + previously-failed" state.
+- Last-successful split section (dashed divider, with version + ago) — FR-03. The picker controls the **top** (current) section only; the bottom is always shown when present.
+- Drawer content — drawer is the source of truth; picker does not affect it.
 
 ### Out of scope for the picker
 
@@ -93,19 +83,7 @@ These are part of the 6-box-state contract (FR-03) and the visual treatment — 
 
 ## localStorage shape
 
-| Key | Value | Example |
-|---|---|---|
-| `dashboard.view` | one of `'detailed' / 'compact' / 'glance' / 'focus'` | `"compact"` |
-| `dashboard.attrs.detailed` | JSON array of attribute keys (≤ 7) | `["status","version","run","ago","actor","ref","sha"]` |
-| `dashboard.attrs.compact` | JSON array (≤ 5) | `["status","version","run","ago","sha"]` |
-| `dashboard.attrs.glance` | JSON array (≤ 1) | `["ref"]` |
-| `dashboard.attrs.focus` | JSON array (≤ 5) | `["status","version","run","ago","ref"]` |
-
-Fallback rules:
-- Missing key → defaults (per the table above).
-- Malformed JSON / non-array / unknown view → defaults.
-- Array contains unknown attribute keys → those keys are silently filtered out.
-- Array exceeds the view's cap → truncated to the cap at load time.
+Canonical key shapes, examples, and load-time hardening rules (corruption → defaults; unknown attrs filtered; cap truncation; empty-array preserved) live in [CR-0002 → "Client-side persistence (`localStorage`)" + "Load-time hardening rules"](./cr/CR-0002-four-named-views-and-attribute-picker.md). Per-view caps (Detailed ≤ 7, Compact ≤ 5, Glance ≤ 1, Focus ≤ 5) are codified in CR-0002's "Layout views (FR-12)" table. Additional keys (`dashboard.layout`, `dashboard.correlationAttribute`, `dashboard.theme`) live in CR-0003 and CR-0006.
 
 ### Session-only state (NOT persisted)
 
@@ -141,12 +119,10 @@ The drawer **stays open** when the user switches views, provided the previously-
 
 ## FR / NFR coverage
 
-| Requirement | How the four-view design satisfies it |
-|---|---|
-| FR-03 (6 box states) | Always-on visual treatment + split section + `⚠ prev. failed` badge are preserved in every view; the picker controls only the supplementary attributes. |
-| FR (matrix layout, service rows × environment columns) | All four views preserve the matrix shape — they vary only in row height and per-slot content density. |
-| NFR-08 (no build step in the browser) | View + picker state is `localStorage`-only on the client; no server round-trip, no compile, no bundler change at runtime. |
-| NFR-05 (stateless backend) | View preference is client-side only; backend wire shape is unchanged. |
+- **FR-03 (6 box states)** — preserved in every view; always-on visual treatment + split section + `⚠ prev. failed` badge are not affected by the picker (it controls only supplementary attributes).
+- **FR (matrix layout, service rows × environment columns)** — all four views preserve the matrix shape; they vary only in row height and per-slot content density.
+- **NFR-05 (stateless backend)** — view preference is client-side only; backend wire shape is unchanged.
+- **NFR-08 (no build step in the browser)** — view + picker state is `localStorage`-only on the client; no server round-trip, no compile, no bundler change at runtime.
 
 ---
 
@@ -155,7 +131,7 @@ The drawer **stays open** when the user switches views, provided the previously-
 This document is the contract; the actual code lands in separate dispatches.
 
 ### Solution architect
-- SAD §7 "Dashboard Frontend (MVP) → Visual layout" cites this document as the rationale; no further SAD edit required unless the four-view shape changes.
+- [CR-0002](./cr/CR-0002-four-named-views-and-attribute-picker.md) cites this document as the rationale; no further SAD or CR edit required unless the four-view shape changes.
 
 ### Frontend engineer (`frontend/`)
 - **View switcher component** in `frontend/matrix/` (or `frontend/shared/` if more than the matrix needs the same control later).

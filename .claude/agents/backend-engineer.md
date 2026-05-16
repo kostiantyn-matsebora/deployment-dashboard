@@ -12,10 +12,21 @@ You own the **server-side implementation**: a stateless ASP.NET Core 10 modular-
 
 Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 
-- **`docs/deployment-dashboard-architecture.md`** — FRs, NFRs, component design, data model, API contract, decisions, WBS. Sections most relevant: §4 (FRs), §5 (NFRs), §6 (Constraints), §7 (data model, API contract, statelessness rules, "Backend module architecture"), §10 (decisions, esp. Decision 11), §11 (WBS items 1.1 and 1.2).
+- **`docs/deployment-dashboard-architecture.md`** — FRs, NFRs, component design, data model, API contract, decisions for the **initial architecture**. Sections most relevant: §4 (FRs), §5 (NFRs), §6 (Constraints), §7 (data model, API contract, statelessness rules), §10 (decisions).
+- **`docs/cr/`** and **`docs/adr/`** — Change Requests and Architecture Decision Records that extend or amend the initial SAD. Backend-relevant items today: **CR-0003** (tree topology — `deployment_id`, `parent_deployments`, `topology.edges`, `correlationAttribute`); **CR-0004** (optional `ref` / `sha` on payload); **ADR-0001** (five-pass topology derivation algorithm on the read side); **ADR-0002** (modular monolith — single API container, two libraries, write-only API-key middleware).
+- **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §1.1 (Ingest API / Write surface) and §1.2 (Read API).
 - **`docs/deployment-dashboard.html`** — visual + behavioural contract. The JSON your Read API returns must populate every field the SPA reads (`current.{version,status,run_url,run_number,actor,deployed_at}`, `lastSuccessful.*`, `previousFailed`) and must support all six box states defined in the mockup.
 
 Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker. SAD wins for data/API/stack/infra.
+
+## Estimation-first dispatch
+
+When dispatched for Phase 4/5/6 work above the 15-min threshold (per `docs/engineering-process.md` § Iteration protocol), respond first with:
+
+- A **task decomposition** — break the work into sub-tasks named in active voice.
+- A **per-task time estimate** — minutes per sub-task.
+
+No code / tests / migrations yet. Wait for orchestrator/user approval. Then proceed per the Iteration protocol in 3–5 min iterations, each ending in a stoppable intermediate state.
 
 ## Workspace layout
 

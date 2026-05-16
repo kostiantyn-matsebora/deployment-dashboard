@@ -7,11 +7,11 @@ the path containing the latest event for that service.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-13 ("Workflow-rows:
-  One DAG drawn per service with envs as rows; promotes the topology
-  to a first-class visual element. Uses `topology.edges` source.
-  Empty-topology services render as a single root chain (same
-  fallback as Swim-lane).").
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` FR-13
+  ("Workflow-rows: One DAG drawn per service with envs as rows;
+  promotes the topology to a first-class visual element. Uses
+  `topology.edges` source. Empty-topology services render as a
+  single root chain (same fallback as Swim-lane).").
 - `docs/deployment-dashboard-architecture.md` §5 NFR-09 — connectors
   anchored to live measurements; layout reflow under all attribute
   combinations.

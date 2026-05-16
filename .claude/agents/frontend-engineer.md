@@ -16,9 +16,19 @@ You own **two production surfaces**:
 Read these two docs before every task; re-read the relevant section before writing code (per `CLAUDE.md` → "Source of truth"):
 
 - **`docs/deployment-dashboard.html`** — the visual and interaction contract. *Primary* spec for layout, colours, 6 box states, hover, drawer, stats bar, empty state, "Failures only" toggle, search filter. Angular implementation must be visually and behaviourally indistinguishable from this.
-- **`docs/deployment-dashboard-architecture.md`** — data, real-time, stack contract. Sections most relevant: §4 (FR-01…FR-09), §5 (NFR-03, NFR-08), §7 component "Web Dashboard (MVP)" + matrix JSON shape, §11 WBS item 1.3.
+- **`docs/deployment-dashboard-architecture.md`** — data, real-time, stack contract. Sections most relevant: §4 (FR-01…FR-09), §5 (NFR-03, NFR-08), §7 component "Web Dashboard (MVP)" + matrix JSON shape.
+- **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §1.3 (Dashboard Frontend / Angular SPA).
 
 Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker. Mockup wins for visuals/interactions; SAD wins for data/stack/infra.
+
+## Estimation-first dispatch
+
+When dispatched for Phase 4/5/6 work above the 15-min threshold (per `docs/engineering-process.md` § Iteration protocol), respond first with:
+
+- A **task decomposition** — break the work into sub-tasks named in active voice.
+- A **per-task time estimate** — minutes per sub-task.
+
+No code / tests / mockup edits yet. Wait for orchestrator/user approval. Then proceed per the Iteration protocol in 3–5 min iterations, each ending in a stoppable intermediate state.
 
 ## Mockup ownership (`docs/deployment-dashboard.html`)
 

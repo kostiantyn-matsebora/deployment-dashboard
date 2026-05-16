@@ -11,14 +11,16 @@ through the same key the other five attributes do.
 ## Citations
 
 - `docs/deployment-dashboard-architecture.md` §4 FR-02 (seven-attribute
-  set: `status`, `version`, `run`, `ago`, `actor`, `ref`, `sha`).
-- `docs/deployment-dashboard-architecture.md` §4 FR-12 ("view selection
-  and per-view attribute selection persist client-side in
-  `localStorage`").
-- `docs/deployment-dashboard-architecture.md` §7 "Client-side
-  persistence (`localStorage`)" — the key shapes and the load-time
-  hardening rules; specifically, "An empty array (`[]`) is a
-  legitimate user choice ... Do not auto-restore defaults in this
+  set: `status`, `version`, `run`, `ago`, `actor`, `ref`, `sha` —
+  amended via `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  and `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12
+  ("view selection and per-view attribute selection persist
+  client-side in `localStorage`").
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Client-side persistence (`localStorage`)" — the key shapes and the
+  load-time hardening rules; specifically, "An empty array (`[]`) is
+  a legitimate user choice ... Do not auto-restore defaults in this
   case." The example values include `ref` and `sha` keys (e.g.
   `["status","version","run","ago","actor","ref","sha"]` for
   Detailed).
@@ -104,7 +106,8 @@ through the same key the other five attributes do.
 - FR-02: seven attributes — `ref` and `sha` persist alongside the
   original five.
 - FR-12: per-view attribute selection persists across reload.
-- SAD §7 "Client-side persistence (`localStorage`)" — key shapes
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Client-side persistence (`localStorage`)" — key shapes
   `dashboard.attrs.<view>` and the empty-array rule.
 - `docs/ui-compact-options.md` "Empty selection is a legitimate
   state".

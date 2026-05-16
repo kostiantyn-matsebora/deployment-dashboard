@@ -1,6 +1,6 @@
 # Deployment Dashboard — local development stack.
 #
-# Implements WBS §11 MVP §2.1 and the App Gateway topology from SAD §7:
+# Implements WBS MVP §2.1 (per `docs/WBS.md`) and the App Gateway topology from SAD §7:
 # the gateway is the only host-published container; every other app
 # service is `expose:`-only on the internal Docker network. The browser,
 # CI/CD callers, and seed scripts all hit `http://localhost:8080/`.

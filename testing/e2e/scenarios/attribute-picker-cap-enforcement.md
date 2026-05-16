@@ -9,12 +9,14 @@ Focus = 5.
 ## Citations
 
 - `docs/deployment-dashboard-architecture.md` §4 FR-02 (seven-attribute
-  set: `status`, `version`, `run`, `ago`, `actor`, `ref`, `sha`).
-- `docs/deployment-dashboard-architecture.md` §4 FR-12 ("an attribute
-  picker ... subject to a per-view cap").
-- `docs/deployment-dashboard-architecture.md` §7 "Layout views
-  (FR-12)" — `Max attributes` column per view: Detailed 7, Compact 5,
-  Glance 1, Focus 5.
+  set: `status`, `version`, `run`, `ago`, `actor`, `ref`, `sha` —
+  amended via `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  and `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12
+  ("an attribute picker ... subject to a per-view cap").
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` "Layout
+  views (FR-12)" — `Max attributes` column per view: Detailed 7,
+  Compact 5, Glance 1, Focus 5.
 - `docs/ui-compact-options.md` — "Cap enforcement: when
   `selectedAttrCount >= activeView.maxAttrs`, unchecked boxes render
   disabled ... Toggling an existing selection off frees a slot."
@@ -111,6 +113,6 @@ Focus = 5.
 
 - FR-02: seven attributes selectable in the picker.
 - FR-12: per-view cap enforcement on the attribute picker.
-- SAD §7 "Layout views (FR-12)" — `Max attributes` column (7 / 5 / 1
-  / 5).
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` "Layout
+  views (FR-12)" — `Max attributes` column (7 / 5 / 1 / 5).
 - `docs/ui-compact-options.md` "Cap enforcement" rule.

@@ -7,16 +7,16 @@ full page reload. Layout selection is orthogonal to view (FR-12).
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-13 ("the SPA shall
-  offer three layouts ... selectable from a top-bar segmented control.
-  Layout selection is orthogonal to view (FR-12): all 4 x 3 = 12
-  (view, layout) combinations are supported. Layout selection
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` FR-13 ("the SPA
+  shall offer three layouts ... selectable from a top-bar segmented
+  control. Layout selection is orthogonal to view (FR-12): all 4 x 3
+  = 12 (view, layout) combinations are supported. Layout selection
   persists client-side in `localStorage` under key `dashboard.layout`.
   Default: `Matrix` (preserves canonical first paint).").
-- `docs/deployment-dashboard-architecture.md` §7 "Layout axis (FR-13)"
-  — table of the three layouts and the Matrix-as-default-first-visit
-  rule.
-- `docs/deployment-dashboard-architecture.md` §7 "Client-side
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Layout axis
+  (FR-13)" — table of the three layouts and the
+  Matrix-as-default-first-visit rule.
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Client-side
   persistence (`localStorage`)" — key `dashboard.layout`, value one of
   `'matrix' / 'swim-lane' / 'workflow-rows'`.
 
@@ -85,7 +85,9 @@ full page reload. Layout selection is orthogonal to view (FR-12).
 
 - FR-13: three named layouts with `localStorage` persistence of the
   active layout.
-- SAD §7 "Layout axis (FR-13)" — the table of named layouts and the
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Layout axis
+  (FR-13)" — the table of named layouts and the
   Matrix-as-default-first-visit rule.
-- SAD §7 "Client-side persistence (`localStorage`)" —
-  `dashboard.layout` key with the documented value set.
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Client-side
+  persistence (`localStorage`)" — `dashboard.layout` key with the
+  documented value set.

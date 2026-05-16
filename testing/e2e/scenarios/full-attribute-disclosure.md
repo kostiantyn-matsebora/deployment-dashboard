@@ -8,23 +8,28 @@ render every FR-02 attribute (`status`, `version`, `run`, `ago`,
 (drawer only) regardless of the user's picker selection — including
 when the picker selection is empty. For nullable attributes (`ref` /
 `sha`), the drawer and the expanded row honour the null-render
-invariant (SAD §7) — when the underlying value is null the slot
-renders empty, never the literal string `"null"`.
+invariant (`docs/cr/CR-0005-ref-sha-display-and-topology.md`) — when
+the underlying value is null the slot renders empty, never the literal
+string `"null"`.
 
 ## Citations
 
 - `docs/deployment-dashboard-architecture.md` §4 FR-02 (seven-attribute
-  set: `status`, `version`, `run`, `ago`, `actor`, `ref`, `sha`).
-- `docs/deployment-dashboard-architecture.md` §4 FR-02 ("the user may
-  select a subset of these attributes for the matrix view via the
-  attribute picker (FR-12); the history drawer and any Focus-view
-  expanded row always show every attribute").
-- `docs/deployment-dashboard-architecture.md` §7 "Full-attribute
-  disclosure rule" — explicit rule that the drawer and Focus-expanded
-  rows are full-fidelity detail surfaces.
-- `docs/deployment-dashboard-architecture.md` §7 "Null-render invariant
-  for nullable attributes" — when `ref` / `sha` is null/absent, the
-  attribute slot renders empty, NOT the literal `"null"`.
+  set: `status`, `version`, `run`, `ago`, `actor`, `ref`, `sha` —
+  amended via `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  and `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-02
+  amendment ("the user may select a subset of these attributes for
+  the matrix view via the attribute picker (FR-12); the history
+  drawer and any Focus-view expanded row always show every
+  attribute").
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Full-attribute disclosure rule" — explicit rule that the drawer
+  and Focus-expanded rows are full-fidelity detail surfaces.
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Null-render
+  invariant for nullable attributes" — when `ref` / `sha` is
+  null/absent, the attribute slot renders empty, NOT the literal
+  `"null"`.
 - `docs/ui-compact-options.md` "Always-on (NOT configurable)" — the
   drawer is always full-fidelity; "dt (absolute timestamp ...) is
   drawer-only".
@@ -84,8 +89,9 @@ renders empty, never the literal string `"null"`.
 11. **Then** `drawer-current-ref` contains the text `"main"`,
 12. **And** `drawer-current-sha` contains the FULL value
     `"9f1c0d2e8a"` (the drawer is full-fidelity — no truncation per
-    SAD §7 "Full-attribute disclosure rule"). The matrix-grid render
-    MAY truncate; the drawer MUST NOT.
+    `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+    "Full-attribute disclosure rule"). The matrix-grid render MAY
+    truncate; the drawer MUST NOT.
 
 ### Part 3 — Focus expanded row always shows every attribute, even with an empty picker
 
@@ -148,9 +154,10 @@ renders empty, never the literal string `"null"`.
   `matrix-six-box-states.md` for the always-on elements; the picker
   is a no-op there because Detailed defaults include the five
   legacy attributes).
-- Focus row "pin" behaviour across filter changes — the SAD mentions
-  it under §7 Layout views but it deserves its own scenario; out of
-  scope here.
+- Focus row "pin" behaviour across filter changes —
+  `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` "Layout
+  views (FR-12)" mentions it but it deserves its own scenario; out
+  of scope here.
 - The matrix-grid render of ref/sha (covered by
   `picker-ref-sha-checkboxes.md`, `sha-truncation.md`, and
   `null-render-ref-sha.md`).
@@ -161,7 +168,8 @@ renders empty, never the literal string `"null"`.
   `sha`).
 - FR-04: drawer is the full-fidelity detail surface.
 - FR-12: matrix picker constrains only the matrix grid.
-- SAD §7 "Full-attribute disclosure rule" — the user's explicit
-  contract.
-- SAD §7 "Null-render invariant for nullable attributes" — empty
-  render, never the literal `"null"`.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Full-attribute disclosure rule" — the user's explicit contract.
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Null-render
+  invariant for nullable attributes" — empty render, never the
+  literal `"null"`.

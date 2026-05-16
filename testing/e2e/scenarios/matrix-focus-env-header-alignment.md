@@ -20,8 +20,8 @@ LOUDLY.
 - `docs/deployment-dashboard.html` — matrix Focus layout uses
   `:style="--leaf-width: ${leafWidthForView}; --leaf-width-expanded: 200px"`
   and binds each box's width conditionally on `expanded[service.id]`.
-- `docs/deployment-dashboard-architecture.md` §4 FR-12, §7 "Visual
-  layout".
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 +
+  "Visual layout" subsection.
 
 ## Preconditions
 

@@ -12,10 +12,20 @@ You own **everything between the application code and the running production ser
 
 Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 
-- **`docs/deployment-dashboard-architecture.md`** — binding constraints. Sections most relevant: §5 (NFR-01 Azure-only, NFR-02 ≤ $30/mo, NFR-04 internal-only, NFR-05 stateless, NFR-06 Terraform-defined, NFR-07 retention), §6 (Constraints — stack, platform agnosticism), §7 ("Infrastructure" — Dockerfile, Compose, Azure deployment diagram, component → SKU → cost table), §11 (WBS items §4–§8).
+- **`docs/deployment-dashboard-architecture.md`** — binding constraints. Sections most relevant: §5 (NFR-01 Azure-only, NFR-02 ≤ $30/mo, NFR-04 internal-only, NFR-05 stateless, NFR-06 Terraform-defined, NFR-07 retention), §6 (Constraints — stack, platform agnosticism), §7 ("Infrastructure" — Dockerfile, Compose, Azure deployment diagram, component → SKU → cost table).
+- **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §4–§8 (infrastructure, component deployment, deploy infrastructure, smoke, deploy components).
 - **`docs/deployment-dashboard.html`** — confirms the *outcome* you're shipping. When validating a deploy, the SPA must load and behave per the mockup.
 
 Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker. SAD wins for everything you touch; mockup is only an acceptance signal post-deploy.
+
+## Estimation-first dispatch
+
+When dispatched for Phase 4/5/6 work above the 15-min threshold (per `docs/engineering-process.md` § Iteration protocol), respond first with:
+
+- A **task decomposition** — break the work into sub-tasks named in active voice (Terraform modules, Compose changes, workflow steps, image builds, smoke wiring).
+- A **per-task time estimate** — minutes per sub-task.
+
+No Terraform / Compose / workflow / Dockerfile edits yet. Wait for orchestrator/user approval. Then proceed per the Iteration protocol in 3–5 min iterations, each ending in a stoppable intermediate state.
 
 ## Hard constraints — devops implications
 
@@ -117,7 +127,7 @@ When changing anything in `dev_env/`, re-verify the zero-setup path: on a fresh 
 - `ci.yml` (PR): restore, build, unit test, `ng build`, Docker build (no push), Terraform `fmt` + `validate`, Pester for any composite/script logic.
 - `release.yml` (on merge to `main`): build images, push to ACR, run EF Core migrations as a one-shot ACA job against target Postgres, update Write API and Read API ACA revisions to the new digest, run the smoke suite owned by `qa-engineer`.
 - Secrets stored in **GitHub Environments** with required reviewers on `prod`. Never in workflow files or repo source.
-- Secrets the dashboard itself requires (per §8 Security and §11 MVP §1):
+- Secrets the dashboard itself requires (per SAD §8 Security and `docs/WBS.md` MVP §1):
   - `API_TOKEN` — write-endpoint API key, stored in Key Vault, referenced from ACA.
   - `ConnectionStrings__DefaultConnection` — Postgres connection string, stored in Key Vault.
   - `HISTORY_RETENTION_DAYS` — plain env var on the container, default `365`.

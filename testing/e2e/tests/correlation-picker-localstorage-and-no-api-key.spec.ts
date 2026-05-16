@@ -61,7 +61,7 @@ test('Correlation picker writes to localStorage only, appends query param, and n
   const pickerVisible = await picker.count();
   if (pickerVisible === 0) {
     // The picker UI hasn't landed yet (frontend is in the middle of
-    // wiring this up under SAD §11 WBS 3.2.5). We bail with a clear
+    // wiring this up under docs/WBS.md MVP §3.2.5). We bail with a clear
     // skip message that names the missing data-testid; once frontend
     // ships the picker this test becomes the contract verifier.
     test.skip(true, 'topology-picker not yet present in the SPA - frontend WBS 3.2.5; data-testid="topology-picker-button" expected per SAD §7 "Dashboard Frontend (MVP)"');

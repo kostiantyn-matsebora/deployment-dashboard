@@ -6,21 +6,24 @@ attribute, slots whose underlying `current.ref` / `current.sha` (or
 wire must render with the attribute slot **empty** — no placeholder,
 no the literal string `"null"`, no `"undefined"`. The other selected
 attributes on the same slot continue to render normally. This is the
-SAD §7 "Null-render invariant for nullable attributes", encoded as an
-observable property of the SPA.
+`docs/cr/CR-0005-ref-sha-display-and-topology.md` "Null-render
+invariant for nullable attributes", encoded as an observable property
+of the SPA.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §7 "Null-render
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Null-render
   invariant for nullable attributes" (verbatim): "The attribute slot
   in the box body renders empty — no text, no placeholder, no the
   literal string `"null"` / `"undefined"`."
-- `docs/deployment-dashboard-architecture.md` §7 "Attribute
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Attribute
   vocabulary" — `ref` / `sha` rows ("Nullable on the wire (FR-05);
   when null/absent the picker slot renders empty per the null-render
   invariant below").
 - `docs/deployment-dashboard-architecture.md` §4 FR-02 + FR-05 (the
-  attributes' existence + nullability contract).
+  attributes' existence + nullability contract — FR-02 amended via
+  `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`; FR-05
+  amended via `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).
 - `docs/deployment-dashboard.html` head comment "Null-render
   invariant" — the mockup-side encoding of the same rule (the SPA is
   asserted against, the mockup is the contract for the SAD-level
@@ -124,7 +127,8 @@ observable property of the SPA.
 
 ## Coverage
 
-- SAD §7 "Null-render invariant for nullable attributes".
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Null-render
+  invariant for nullable attributes".
 - FR-02 (the attribute set).
 - FR-05 (the optional / nullable wire shape).
 - FR-12 (the picker controls grid rendering only).

@@ -16,8 +16,8 @@ invariant.
 - `docs/deployment-dashboard-architecture.md` §4 FR-01 / FR-02 / FR-03
   — matrix renders, slot exposes its attributes, current +
   last-successful split when running or failed.
-- `docs/deployment-dashboard-architecture.md` §7 Theme axis subsection
-  — "palette only — no semantic change".
+- `docs/cr/CR-0006-light-dark-auto-theme.md` Theme axis subsection —
+  "palette only — no semantic change".
 - `testing/e2e/scenarios/matrix-six-box-states.md` — the canonical
   6-state catalogue; this scenario re-uses the same fixture
   expectations under a different palette.
@@ -90,5 +90,5 @@ invariant.
   mapping" + "Box-state contract — always on".
 - `docs/deployment-dashboard-architecture.md` §4 FR-01 / FR-02 /
   FR-03 — palette-invariant.
-- `docs/deployment-dashboard-architecture.md` §7 Theme axis
-  subsection — "no semantic change".
+- `docs/cr/CR-0006-light-dark-auto-theme.md` Theme axis subsection —
+  "no semantic change".

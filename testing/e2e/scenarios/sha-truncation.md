@@ -5,18 +5,19 @@ conventional Git short-sha — first 7 characters of the value, followed
 by a single `…` ellipsis when the underlying value is longer than 7.
 The full value remains accessible via the slot's `title` (HTML
 tooltip) and is rendered untruncated in the history drawer. This
-matches the SAD §7 "Attribute vocabulary" sha row:
-"The SPA MAY truncate the rendered value for display (e.g. first 7
-chars) without altering the underlying stored value; the full value
-remains in the history drawer."
+matches the `docs/cr/CR-0005-ref-sha-display-and-topology.md`
+"Attribute vocabulary" sha row: "The SPA MAY truncate the rendered
+value for display (e.g. first 7 chars) without altering the underlying
+stored value; the full value remains in the history drawer."
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §7 "Attribute
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Attribute
   vocabulary" — `sha` row, truncation clause + full-attribute
   disclosure rule.
-- `docs/deployment-dashboard-architecture.md` §7 "Full-attribute
-  disclosure rule" — drawer always shows the full value.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Full-attribute disclosure rule" — drawer always shows the full
+  value.
 - `docs/deployment-dashboard.html` head comment "SHA TRUNCATION RULE"
   — conventional short-sha is 7 chars; ellipsis when the underlying
   value is longer.
@@ -81,7 +82,8 @@ remains in the history drawer."
 
 ## Out of scope
 
-- Validation of the sha format (hex, length) — SAD §10 Decision #10
+- Validation of the sha format (hex, length) —
+  `docs/cr/CR-0004-ref-and-sha-optional-fields.md` "§10 Decision 10"
   defers validation; any string is allowed.
 - The matrix-grid render of `ref` (no truncation — refs may legally
   be long, the SAD does not mandate truncation).
@@ -89,8 +91,9 @@ remains in the history drawer."
 
 ## Coverage
 
-- SAD §7 "Attribute vocabulary" — sha truncation clause.
-- SAD §7 "Full-attribute disclosure rule" — drawer keeps the full
-  value.
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Attribute
+  vocabulary" — sha truncation clause.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Full-attribute disclosure rule" — drawer keeps the full value.
 - FR-02 (sha is a first-class attribute).
 - FR-05 (sha is the optional commit-hash field).

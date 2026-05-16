@@ -7,7 +7,12 @@ Authoritative files — every agent reads them:
 | File | Role | Edited by |
 |---|---|---|
 | `docs/deployment-dashboard-architecture.md` (SAD) | Requirements, constraints, components, data model, API contract, decisions, WBS | `solution-architect` |
+| `docs/WBS.md` | Operational work plan (MVP / CI-CD Integration / v2.0 phases + per-phase items) | `solution-architect` |
 | `docs/deployment-dashboard.html` (mockup) | Visual + behavioural contract for the SPA | `frontend-engineer` (authoring); `solution-architect` (governance review, no edits) |
+| `docs/cr/CR-*.md` (after SAD finalization) | Requirements change records | `solution-architect` |
+| `docs/adr/ADR-*.md` (after SAD finalization) | Architecture change records | `solution-architect` |
+
+Post-SAD-finalization, requirements changes go to CRs and architecture changes go to ADRs — the SAD itself is frozen as the definition of initial architecture (see `solution-architect` agent for the full rule).
 
 Rules:
 - Read the relevant section of both before designing or implementing anything.
@@ -27,7 +32,7 @@ This project follows the process defined in [`docs/engineering-process.md`](docs
 - Task lifecycle (Phases 1–8)
 - Engineering principles (declarative-over-imperative + test-oracles-can-be-wrong)
 - Strict-domain rule + cross-domain bug cycle + cross-agent handoff
-- TODO-driven workflow
+- Task model
 - Documentation style
 
 ## Repository structure
@@ -65,7 +70,7 @@ deployment-dashboard/
 
 ### `backend/`
 
-*Authoritative architecture: SAD §7 "Backend module architecture" + §10 Decision 11. This section adds only repo-layout invariants not in the SAD.*
+*Authoritative architecture: [ADR-0002 — Modular monolith — single API container hosting two library surfaces](docs/adr/ADR-0002-modular-monolith-consolidation.md). This section adds only repo-layout invariants not in the ADR.*
 
 - Owned by `backend-engineer`. One deployable container (image built from `backend/api/`); two logical surfaces; libraries kept separate so a future re-split is host-project + gateway-config only.
 - `api/` is the **only** ASP.NET Core executable — only backend `Dockerfile`. `write-api/` and `read-api/` are **library projects** (`Microsoft.NET.Sdk`, `OutputType` library) — they expose endpoint-group extension methods (`MapWriteEndpoints`, `MapReadEndpoints`); no `Program.cs`, no Dockerfile.
@@ -81,11 +86,11 @@ deployment-dashboard/
 - API-key middleware applied **only** to the Write endpoint group via `MapGroup("/api").RequireApiKey()` in `api/Program.cs`. No global `UseMiddleware<ApiKeyMiddleware>()`. Read group is unauthenticated (SAD §8).
 - API container serves **JSON only** — no `wwwroot`, no static-file middleware. SPA hosting lives in `frontend/dashboard/`.
 - SQLite-in-memory unit tests live alongside their source project.
-- No third API surface — new responsibility → doc update first. Re-splitting the host into two container apps is a future option (SAD §7 "Future split — trigger conditions"); engineers do NOT pre-split.
+- No third API surface — new responsibility → doc update first. Re-splitting the host into two container apps is a future option (see ADR-0002 → "Future split — trigger conditions"); engineers do NOT pre-split.
 
 ### `frontend/`
 
-*Authoritative architecture: SAD §7 "Module architecture". This section adds only repo-layout invariants.*
+*Authoritative architecture: SAD §7 "Dashboard Frontend (MVP)" + the canonical mockup `docs/deployment-dashboard.html`. This section adds only repo-layout invariants.*
 
 - Angular source owned by `frontend-engineer`; `dashboard/Dockerfile` + `dashboard/nginx.conf` owned by `devops-engineer`.
 - Dependency rules:
@@ -103,14 +108,15 @@ deployment-dashboard/
 ### `gateway/`
 
 - Owned by `devops-engineer`. Single public-facing nginx reverse proxy; only container with public ingress (host port `8080` locally; ACA public ingress in Azure).
-- Routing (path + method-based; per SAD §7). Both API surfaces resolve to a single `api` upstream today; the path+method matrix is preserved so a future re-split is config-only (SAD §7 "Future split"):
+- Routing (path + method-based; per SAD §7 and ADR-0002). Both API surfaces resolve to a single `api` upstream today; the path+method matrix is preserved so a future re-split is config-only (see ADR-0002 → "Future split — trigger conditions"):
 
   | Method + Path | Upstream | Surface |
   |---|---|---|
   | `POST /api/deployments` | `api:8080` | Write |
-  | `PATCH /api/config/topology` | `api:8080` | Write (admin) |
   | `GET /api/*`, `GET /api/stream`, `GET /health` | `api:8080` | Read |
   | Everything else | `dashboard:80` | n/a |
+
+  Additional routes added by post-initial CRs/ADRs (e.g. `PATCH /api/config/topology` per CR-0003) live in those CR/ADR documents under `docs/cr/` and `docs/adr/`.
 - SSE pass-through requirements:
   - `proxy_buffering off`
   - `proxy_cache off`

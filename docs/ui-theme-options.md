@@ -24,17 +24,9 @@ Every (view × layout × theme) combination renders correctly. Theme controls **
 
 ## Persistence
 
-Each user choice persists independently in `localStorage`. Every key validates against a known-good list on load; corrupt or missing values fall back to the default.
+Theme uses `dashboard.theme` ∈ `{light, dark, auto}`, default `'auto'`. The requirement is recorded in [CR-0006](./cr/CR-0006-light-dark-auto-theme.md); the persistence + FOIT-safe bootstrap architecture is recorded in [ADR-0003](./adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md).
 
-| Key | Type | Default | Validation |
-|---|---|---|---|
-| `dashboard.theme` | enum | `'auto'` | must be one of `light / dark / auto` |
-| `dashboard.view` | enum | `'detailed'` | unchanged (existing) |
-| `dashboard.layout` | enum | `'matrix'` | unchanged (existing) |
-
-- Missing key → `'auto'`.
-- Unknown enum value → `'auto'`.
-- Effective theme on first paint is computed synchronously **before** Alpine.js initialises to avoid a flash of incorrect theme (FOIT).
+This-cycle extension: the effective theme on first paint is computed synchronously **before** Alpine.js initialises to avoid a flash of incorrect theme (FOIT). See "Auto resolution" below.
 
 ## Auto resolution
 
@@ -101,17 +93,10 @@ The 6 box states (status colour, ⚠ prev-failed badge, dashed-divider last-succ
 
 ## FR / NFR pointers
 
-| Requirement | Effect of theme switcher |
-|---|---|
-| FR-03 (6 box states) | unchanged — status colour + badge + split render in every theme |
-| FR-04 (history drawer) | unchanged — drawer is themed identically to the matrix |
-| FR-07 (filters) | unchanged |
-| FR-08 (live updates) | unchanged — palette swap does not affect event flow |
-| FR-12 (four named views) | unchanged — theme is orthogonal to view |
-| NFR-03 (live update ≤ 5 s) | unaffected |
-| NFR-05 (stateless backend) | unaffected — preference is per-browser `localStorage` |
-| NFR-08 (no build step) | preserved — single HTML file, Tailwind CDN + Alpine.js; `data-theme` attribute drives palette via CSS only |
-| NFR-09 (UX-RESPONSIVENESS) | unaffected — geometric invariants are independent of palette |
+Theme is palette-only — no data shape, no behavioural change. Every FR/NFR is preserved or unaffected:
+
+- **Unchanged behaviour** in every theme: FR-03 (6 box states render — status colour + badge + split), FR-04 (history drawer themed identically), FR-07 (filters), FR-08 (live updates — palette swap does not touch event flow), FR-12 (four views remain orthogonal to theme).
+- **Unaffected.** NFR-03 (live update ≤ 5 s), NFR-05 (stateless backend; preference is per-browser `localStorage`), NFR-08 (no build step; `data-theme` drives palette via CSS only), NFR-09 (UX-RESPONSIVENESS — geometric invariants are independent of palette).
 
 ## Status
 

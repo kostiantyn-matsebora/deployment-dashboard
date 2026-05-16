@@ -14,8 +14,12 @@ runs synchronously before Angular bootstraps and sets `data-theme` /
 - `docs/ui-theme-options.md` "Auto resolution" §1 ("Initial paint —
   inline `<script>` block at the top of `<head>` … sets `data-theme`
   on `<html>` immediately. No flash.").
-- `docs/deployment-dashboard-architecture.md` §7 — new `dashboard.theme`
-  row in the localStorage persistence table; new Theme axis subsection.
+- `docs/cr/CR-0006-light-dark-auto-theme.md` — new `dashboard.theme`
+  row in the localStorage persistence table; new Theme axis
+  subsection.
+- `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md` —
+  FOIT-safe inline bootstrap decision (load-time hardening +
+  corruption normalisation).
 
 ## Preconditions
 
@@ -68,5 +72,7 @@ runs synchronously before Angular bootstraps and sets `data-theme` /
 
 - `docs/deployment-dashboard.html` head FOIT-safe bootstrap block.
 - `docs/ui-theme-options.md` "Auto resolution" §1 (initial paint).
-- `docs/deployment-dashboard-architecture.md` §7 — `dashboard.theme`
+- `docs/cr/CR-0006-light-dark-auto-theme.md` — `dashboard.theme`
   localStorage row.
+- `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md` —
+  FOIT-safe inline bootstrap.

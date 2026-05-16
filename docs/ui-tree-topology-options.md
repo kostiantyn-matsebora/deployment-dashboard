@@ -21,14 +21,7 @@ Every (view × layout) combination renders correctly. View controls the *leaf re
 
 ## Persistence
 
-Each user choice persists independently in `localStorage`. Every key validates against a known-good list on load; corrupt or missing values fall back to the default.
-
-| Key | Type | Default | Validation |
-|---|---|---|---|
-| `dashboard.view` | enum | `'detailed'` | must be one of `detailed / compact / glance / focus` |
-| `dashboard.layout` | enum | `'matrix'` | must be one of `matrix / swim-lane / workflow-rows` |
-| `dashboard.attrs.{viewId}` | string[] (JSON) | per-view defaults | filtered to known attribute keys; trimmed to per-view `maxAttrs` |
-| `dashboard.focusOnLastEvent` | boolean | `true` | must parse as `'true'` or `'false'` |
+`localStorage` keys for view, layout, attrs, and focus-on-last-event are canonical in [CR-0002](./cr/CR-0002-four-named-views-and-attribute-picker.md) and [CR-0003](./cr/CR-0003-tree-topology-and-layout-axis.md). This doc adds nothing new for those keys. The `dashboard.layout` enum landed here: `'matrix' | 'swim-lane' | 'workflow-rows'`, default `'matrix'`.
 
 ## Box-state contract — always on
 
@@ -40,23 +33,14 @@ The mockup encodes topology declaratively per service via a `TOPOLOGIES` adjacen
 
 ## FR / NFR pointers
 
-| Requirement | Effect of layout switcher |
-|---|---|
-| FR-01 (per-service rows) | preserved in every layout |
-| FR-02 (5 attributes) | preserved — picker applies to whichever leaf renderer the active view defines |
-| FR-03 (6 box states) | unchanged — always on, every view × every layout |
-| FR-04 (history drawer) | preserved — click any box in any layout opens the drawer |
-| FR-07 (filters) | preserved — search + failures-only operate on the service list; every layout reflows |
-| FR-08 (live updates) | preserved — `injectEvent` flows through the same mutable state; per-layout post-injection animation routes through `applyFocusOrInPlace` |
-| FR-09 (discovered from data) | unaffected — topology is data when sourced from `promoted_from`; FR-09's spirit preserved (no static config baked into the image) |
-| FR-12 (four named views) | preserved — the four views remain peers; layout is a separate axis |
-| NFR-03 (live update ≤ 5 s) | unaffected |
-| NFR-05 (stateless backend) | unaffected — persistence is per-browser via `localStorage` |
-| NFR-08 (no build step) | preserved — single HTML file, Tailwind CDN + Alpine.js v3 |
+Layout is orthogonal to data shape and box-state semantics. All FRs and NFRs (FR-01..FR-13, NFR-03/05/08) are preserved or unaffected:
+
+- **Preserved by construction.** FR-01 (per-service rows), FR-02 (attributes), FR-03 (6 box states), FR-04 (history drawer), FR-07 (filters), FR-08 (live updates via `injectEvent` + per-layout `applyFocusOrInPlace`), FR-12 (four named views remain peers).
+- **Unaffected.** FR-09 (discovery from data — topology is itself data sourced from `promoted_from`), NFR-03 (live update ≤ 5 s), NFR-05 (stateless backend; persistence is per-browser `localStorage`), NFR-08 (no build step; Tailwind CDN + Alpine.js v3).
 
 ## Status
 
-This document is a design note, not a contract. The canonical mockup is the contract. SAD updates (additive: `promoted_from` field, `GET /api/topology` endpoint, FR-12 scoping of views to the active layout) are deferred until the user signs off the prototype and a serial dispatch (`solution-architect` → `backend-engineer` → `frontend-engineer` + `qa-engineer`) lands the change.
+This document is a design note, not a contract. The canonical mockup is the contract. The accepted scope (tree topology, three-layout axis, derivation algorithm) is recorded in [CR-0003](./cr/CR-0003-tree-topology-and-layout-axis.md) and [ADR-0001](./adr/ADR-0001-topology-derivation-five-pass.md).
 
 ## Open questions for the user
 

@@ -16,7 +16,8 @@ effective palette — the user's explicit choice wins.
   handler registered on
   `window.matchMedia('(prefers-color-scheme: dark)')`, only re-resolves
   when `themePref === 'auto'`.
-- `docs/deployment-dashboard-architecture.md` §7 Theme axis subsection.
+- `docs/cr/CR-0006-light-dark-auto-theme.md` Theme axis subsection
+  (auto-resolution semantics + MQL listener).
 
 ## Preconditions
 

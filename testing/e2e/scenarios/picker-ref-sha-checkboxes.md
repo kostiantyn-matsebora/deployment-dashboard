@@ -14,17 +14,19 @@ ref/sha-specific line is absent (covered separately by
 
 - `docs/deployment-dashboard-architecture.md` §4 FR-02 (the
   seven-attribute set: `status`, `version`, `run`, `ago`, `actor`,
-  `ref`, `sha`).
-- `docs/deployment-dashboard-architecture.md` §4 FR-05 ("Optional
-  fields ref + sha on the ingest payload, surfaced on the matrix
-  wire shape").
-- `docs/deployment-dashboard-architecture.md` §7 "Attribute
-  vocabulary" — bindings:
+  `ref`, `sha` — amended via
+  `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` and
+  `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).
+- `docs/cr/CR-0004-ref-and-sha-optional-fields.md` FR-05 amendment
+  ("Optional fields ref + sha on the ingest payload, surfaced on the
+  matrix wire shape").
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Attribute
+  vocabulary" rows for `ref` / `sha`:
   - `ref` → `current.ref` (source identifier — branch / PR / tag).
   - `sha` → `current.sha` (commit hash, truncated in display).
-- `docs/deployment-dashboard-architecture.md` §11 WBS 1.3.10
-  "Attribute picker component" — explicit "seven checkboxes
-  (`status`, `version`, `run`, `ago`, `actor`, `ref`, `sha`)".
+- `docs/WBS.md` MVP §1.3.10 "Attribute picker component" —
+  explicit "seven checkboxes (`status`, `version`, `run`, `ago`,
+  `actor`, `ref`, `sha`)".
 
 ## Preconditions
 
@@ -108,5 +110,6 @@ ref/sha-specific line is absent (covered separately by
 - FR-02 (seven-attribute set).
 - FR-05 (ref + sha additive on the matrix wire shape).
 - FR-12 (per-view picker exposes every FR-02 attribute).
-- SAD §7 "Attribute vocabulary" — `ref` and `sha` bindings.
-- SAD §11 WBS 1.3.10 — attribute picker exposes seven checkboxes.
+- `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Attribute
+  vocabulary" — `ref` and `sha` bindings.
+- `docs/WBS.md` MVP §1.3.10 — attribute picker exposes seven checkboxes.

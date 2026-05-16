@@ -21,9 +21,9 @@ regression of the same shape fails LOUDLY against ALL 24 combinations
   still represents a visual defect — the user reads the row, not the
   hover tooltip.
 - `docs/ui-compact-options.md` — service-name column sizing per view.
-- `docs/deployment-dashboard-architecture.md` §4 FR-12, §7 "Visual
-  layout" — service name is one of the always-on row metadata
-  elements; truncation is out-of-contract.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 +
+  "Visual layout" subsection — service name is one of the always-on
+  row metadata elements; truncation is out-of-contract.
 
 ## Preconditions
 
@@ -80,7 +80,8 @@ For every combination in `{detailed, compact, glance, focus} ×
 ## Coverage
 
 - `docs/ui-compact-options.md` — service-name column sizing per view.
-- `docs/deployment-dashboard-architecture.md` §4 FR-12 — the four
-  named layout views all carry service-name in the row gutter.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 —
+  the four named layout views all carry service-name in the row
+  gutter.
 - Defect history: a user-reported workflow-rows clipping defect that
   this oracle codifies as a regression test.

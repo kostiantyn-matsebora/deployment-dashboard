@@ -12,19 +12,21 @@ not a write surface.
   (`POST /api/deployments`, `PATCH /api/config/topology`) are reserved
   for CI/CD and ops tooling. The dev-environment fake API key is never
   embedded in the SPA bundle."
-- SAD §7 "API Contract" — "PATCH /api/config/topology": "Admin / CI /
-  ops tooling only — not invoked by the SPA. The SPA expresses
-  per-user picker preferences via the `correlationAttribute` query
-  parameter on read endpoints, not by writing to this endpoint."
-- SAD §10 Decision #7 — SPA stays read-only; per-user picker is
-  `localStorage`-only.
-- SAD §10 Decision #8 — SSE wire shape never carries topology; the
-  SPA refreshes via `GET /api/deployments?correlationAttribute=…`
-  after each event.
-- SAD §11 WBS 3.2.5 / 3.2.6 — picker-attribute round-trip e2e cases.
-- SAD §"Dashboard Frontend (MVP)" — "correlation-attribute picker
-  (per-user override; written to `localStorage` only; appended as
-  `correlationAttribute` query parameter on read endpoints)".
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "API Contract" —
+  "PATCH /api/config/topology": "Admin / CI / ops tooling only — not
+  invoked by the SPA. The SPA expresses per-user picker preferences
+  via the `correlationAttribute` query parameter on read endpoints,
+  not by writing to this endpoint."
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` Decision #7 — SPA
+  stays read-only; per-user picker is `localStorage`-only.
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` Decision #8 — SSE
+  wire shape never carries topology; the SPA refreshes via
+  `GET /api/deployments?correlationAttribute=…` after each event.
+- `docs/WBS.md` MVP §3.2.5 / §3.2.6 — picker-attribute round-trip e2e cases.
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Dashboard Frontend
+  (MVP)" — "correlation-attribute picker (per-user override; written to
+  `localStorage` only; appended as `correlationAttribute` query
+  parameter on read endpoints)".
 
 ## Preconditions
 
@@ -81,5 +83,7 @@ not a write surface.
 
 ## Coverage
 
-Validates: SAD §5 NFR-04, SAD §10 Decisions #7 and #8, SAD §7 "PATCH
-/api/config/topology" (admin-only), SAD §11 WBS 3.2.5 / 3.2.6.
+Validates: SAD §5 NFR-04,
+`docs/cr/CR-0003-tree-topology-and-layout-axis.md` Decisions #7 and #8,
+`docs/cr/CR-0003-tree-topology-and-layout-axis.md` "PATCH
+/api/config/topology" (admin-only), `docs/WBS.md` MVP §3.2.5 / §3.2.6.

@@ -6,19 +6,22 @@ option for every value in the allowed set
 writes the value to `localStorage["dashboard.correlationAttribute"]`
 AND appends it as `?correlationAttribute=ref` (or `=sha`) on the next
 `GET /api/deployments` request. No `PATCH /api/config/topology`
-request is ever issued by the SPA (per SAD §10 Decision #7). No
+request is ever issued by the SPA (per
+`docs/cr/CR-0003-tree-topology-and-layout-axis.md` Decision #7). No
 `X-Api-Key` header travels with any picker action (per NFR-04).
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-13 (Topology
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` FR-13 (Topology
   correlation picker — admits `ref` and `sha` as per-request hints).
-- `docs/deployment-dashboard-architecture.md` §7 "GET
-  /api/deployments — query parameters" — `correlationAttribute`
-  allowed values include `ref` and `sha`.
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "GET
+  /api/deployments — `correlationAttribute` query parameter" —
+  allowed values include `ref` and `sha` (per
+  `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Attribute
+  vocabulary" admitting `ref`/`sha` as correlation attributes).
 - `docs/deployment-dashboard-architecture.md` §5 NFR-04 (SPA is
   read-only against the API; no auth secrets in the browser).
-- `docs/deployment-dashboard-architecture.md` §10 Decision #7
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` Decision #7
   (per-user picker = `localStorage`-only; no PATCH from the SPA).
 - The companion scenario
   `correlation-picker-localstorage-and-no-api-key.md` already
@@ -112,9 +115,12 @@ request is ever issued by the SPA (per SAD §10 Decision #7). No
 
 ## Coverage
 
-- FR-13 (Topology correlation picker exposes `ref` and `sha`).
-- SAD §7 "GET /api/deployments — query parameters" allowed set
-  including `ref` and `sha`.
+- FR-13 (Topology correlation picker exposes `ref` and `sha`) — per
+  `docs/cr/CR-0003-tree-topology-and-layout-axis.md`.
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "GET
+  /api/deployments — `correlationAttribute` query parameter" allowed
+  set including `ref` and `sha` (per
+  `docs/cr/CR-0005-ref-sha-display-and-topology.md`).
 - SAD §5 NFR-04 (no `X-Api-Key` from the SPA).
-- SAD §10 Decision #7 (picker is `localStorage`-only; no PATCH from
-  the SPA).
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` Decision #7
+  (picker is `localStorage`-only; no PATCH from the SPA).

@@ -31,8 +31,8 @@ CI, generic shell) see
 |---|---|---|---|
 | `dashboard_url`      | yes | -                                   | Base URL of the dashboard, no trailing slash. Pass `${{ secrets.DEPLOYMENT_DASHBOARD_URL }}`. |
 | `api_token`          | yes | -                                   | Write API key. Pass `${{ secrets.DEPLOYMENT_DASHBOARD_TOKEN }}`. Re-masked by the action. |
-| `deployment_id`      | yes | -                                   | CI/CD-side identifier for this event. Must be non-empty and unique within `(service, deployment_id)` (SAD §7 "POST /api/deployments validation"). See "Recommended `deployment_id` pattern" below. |
-| `parent_deployments` | no  | `""`                                | Space- or comma-separated list of upstream `deployment_id` values in the same service. Empty = fall back to correlation-based topology derivation (SAD §7 "Topology Derivation"). |
+| `deployment_id`      | yes | -                                   | CI/CD-side identifier for this event. Must be non-empty and unique within `(service, deployment_id)` (CR-0003 "Removed SAD content" - "POST /api/deployments validation - failure modes"). See "Recommended `deployment_id` pattern" below. |
+| `parent_deployments` | no  | `""`                                | Space- or comma-separated list of upstream `deployment_id` values in the same service. Empty = fall back to correlation-based topology derivation (ADR-0001 "Per-service topology derivation - five-pass algorithm on the read side"). |
 | `service`            | yes | -                                   | Service identifier (e.g. `service-a`). |
 | `environment`        | yes | -                                   | Environment identifier (e.g. `dev`, `qa`, `uat`, `prod`). |
 | `version`            | yes | -                                   | Version string (semver, git SHA, build number - any string). |
@@ -40,8 +40,8 @@ CI, generic shell) see
 | `run_url`            | no  | Derived from `github.*` context     | Link back to the CI run. |
 | `run_number`         | no  | `github.run_number`                 | Numeric run identifier. Must parse as integer. |
 | `actor`              | no  | `github.actor`                      | User who triggered the run. |
-| `ref`                | no  | `github.ref`                        | Free-form git ref - branch (`main`), PR number, tag, full ref (`refs/heads/main`), or any string. Opaque to the dashboard (SAD §10 Decision 10). Surfaces the deployed code reference in the matrix / drawer (SAD §7 "API Contract" POST body row `ref`, FR-05). Pass `""` to omit explicitly - empty values are dropped from the wire payload. |
-| `sha`                | no  | `github.sha`                        | Free-form commit SHA string. Opaque to the dashboard - no length or hex-shape validation (SAD §10 Decision 10). Surfaces the deployed commit in the matrix / drawer (SAD §7 "API Contract" POST body row `sha`, FR-05). Pass `""` to omit explicitly - empty values are dropped from the wire payload. |
+| `ref`                | no  | `github.ref`                        | Free-form git ref - branch (`main`), PR number, tag, full ref (`refs/heads/main`), or any string. Opaque to the dashboard (CR-0004 "Removed SAD content" - "§10 Decision 10"). Surfaces the deployed code reference in the matrix / drawer (CR-0004 POST body row `ref`, FR-05 as amended by CR-0004). Pass `""` to omit explicitly - empty values are dropped from the wire payload. |
+| `sha`                | no  | `github.sha`                        | Free-form commit SHA string. Opaque to the dashboard - no length or hex-shape validation (CR-0004 "Removed SAD content" - "§10 Decision 10"). Surfaces the deployed commit in the matrix / drawer (CR-0004 POST body row `sha`, FR-05 as amended by CR-0004). Pass `""` to omit explicitly - empty values are dropped from the wire payload. |
 | `fail_on_error`      | no  | `true`                              | When `false`, transport or non-2xx failures emit a `::warning::` but the step succeeds. |
 
 ### Recommended `deployment_id` pattern
@@ -69,12 +69,14 @@ patterns work well:
 | Promotion (e.g. promote the dev build to qa) | the dev event's `deployment_id` |
 | Fan-in (multiple upstream deployments fed this one) | each upstream `deployment_id`, space- or comma-separated |
 
-Per SAD §7 "POST /api/deployments validation":
+Per CR-0003 "Removed SAD content" - "POST /api/deployments validation
+- failure modes":
 
 - Every entry must reference a `deployment_id` in the **same service**;
   cross-service references are rejected with `400 Bad Request`.
 - References to a `deployment_id` that does not yet exist are
-  **accepted** and reconciled automatically on the next read.
+  **accepted** and reconciled automatically on the next read
+  (CR-0003 Decision 9 - "Accept and hold as dangling").
 - A reference set that would form a directed cycle is rejected with
   `400 Bad Request`.
 
@@ -198,10 +200,10 @@ versioned tag over `@main` for stability.
 | Missing required input (incl. `deployment_id`)                                       | Fail                                  | `::error::`           |
 | `status` not in `success`/`failure`/`in-progress`                                    | Fail                                  | `::error::`           |
 | `run_number` not an integer                                                          | Fail                                  | `::error::`           |
-| `401 Unauthorized` - `X-Api-Key` missing/invalid (FR-10)                             | Fail                                  | `::error::`           |
-| `409 Conflict` - duplicate `(service, deployment_id)` (incl. workflow re-run)        | Fail                                  | `::error::`           |
-| `400 Bad Request` - `parent_deployments` cross-service ref or directed cycle         | Fail                                  | `::error::`           |
-| `422 Unprocessable Entity` - other payload validation failure                        | Fail                                  | `::error::`           |
+| `401 Unauthorized` - `X-Api-Key` missing/invalid (SAD §4 FR-10)                      | Fail                                  | `::error::`           |
+| `409 Conflict` - duplicate `(service, deployment_id)` (incl. workflow re-run; CR-0003) | Fail                                | `::error::`           |
+| `400 Bad Request` - `parent_deployments` cross-service ref or directed cycle (CR-0003) | Fail                                | `::error::`           |
+| `422 Unprocessable Entity` - other payload validation failure (CR-0003)              | Fail                                  | `::error::`           |
 | Other non-2xx response                                                               | Fail                                  | `::error::`           |
 | Transport error (DNS, TLS, timeout)                                                  | Fail                                  | `::error::`           |
 | Any of the above with `fail_on_error=false`                                          | Succeed                               | `::warning::`         |
@@ -211,8 +213,8 @@ hint (which validation rule fired) followed by the full response body,
 so pipeline authors see *why* the dashboard rejected the payload
 without re-running with extra logging.
 
-Notes on the contract-level failures (SAD §7 "POST /api/deployments
-validation"):
+Notes on the contract-level failures (CR-0003 "Removed SAD content" -
+"POST /api/deployments validation - failure modes"):
 
 | HTTP | Meaning | How to recover |
 |---|---|---|

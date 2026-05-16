@@ -9,15 +9,15 @@ as documented in NFR-09 (constructed via
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-13 ("Swim-lane:
-  One horizontal lane per service; envs laid out left-to-right
-  along the per-service env DAG (parents to the left of children).
-  Uses `topology.edges` from the matrix response. When a service
-  has no edges, it renders as a single root chain (one node per
-  env, ordered by `deployed_at` of `current`).").
+- `docs/cr/CR-0003-tree-topology-and-layout-axis.md` FR-13
+  ("Swim-lane: One horizontal lane per service; envs laid out
+  left-to-right along the per-service env DAG (parents to the left
+  of children). Uses `topology.edges` from the matrix response.
+  When a service has no edges, it renders as a single root chain
+  (one node per env, ordered by `deployed_at` of `current`).").
 - `docs/deployment-dashboard-architecture.md` §5 NFR-09 — connector
   geometry anchored to `getBoundingClientRect()`.
-- `docs/deployment-dashboard-architecture.md` §5 "Topology
+- `docs/adr/ADR-0001-topology-derivation-five-pass.md` "Topology
   Derivation" — five passes producing the edges array.
 - Fixture: `testing/fixtures/seed-data.json` →
   `topology.service[topo-explicit]` has the chain
@@ -74,5 +74,5 @@ as documented in NFR-09 (constructed via
 - FR-13 Swim-lane: topology-driven layout.
 - NFR-09: connectors anchored to live measurements; emerge from
   source, terminate at target.
-- SAD §5 Topology Derivation: explicit-first pass + per-service
-  edges array.
+- `docs/adr/ADR-0001-topology-derivation-five-pass.md` Topology
+  Derivation: explicit-first pass + per-service edges array.

@@ -13,9 +13,10 @@ palette from `prefers-color-scheme`.
   bootstrap script validates the persisted value against the literal
   set `'light' / 'dark' / 'auto'` and falls back to `'auto'` on any
   other value (including unparseable garbage).
-- `docs/deployment-dashboard-architecture.md` §7 — `dashboard.theme`
-  row in the localStorage persistence table; load-time hardening rule
-  ("missing or corrupt values fall back to default").
+- `docs/cr/CR-0006-light-dark-auto-theme.md` — `dashboard.theme` row
+  in the localStorage persistence table; load-time hardening rule
+  ("missing or corrupt values fall back to default") codified in
+  `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md`.
 
 ## Preconditions
 
@@ -66,5 +67,7 @@ palette from `prefers-color-scheme`.
 - `docs/ui-theme-options.md` "Persistence" table — "Unknown enum
   value → 'auto'.".
 - `docs/deployment-dashboard.html` head bootstrap validation logic.
-- `docs/deployment-dashboard-architecture.md` §7 — `dashboard.theme`
-  localStorage row + load-time hardening rule.
+- `docs/cr/CR-0006-light-dark-auto-theme.md` — `dashboard.theme`
+  localStorage row.
+- `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md` —
+  load-time hardening rule + corruption normalisation.

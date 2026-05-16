@@ -10,12 +10,12 @@ present under the new layout.
 
 - `docs/deployment-dashboard-architecture.md` §4 FR-04 ("clicking a
   slot shall open a side panel showing ... deployment history").
-- `docs/deployment-dashboard-architecture.md` §4 FR-12 (four views,
-  view switching).
-- `docs/deployment-dashboard-architecture.md` §7 "Full-attribute
-  disclosure rule" — "the side-panel history drawer ... always
-  display every deployment attribute available to the user,
-  regardless of the matrix attribute picker".
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12
+  (four views, view switching).
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Full-attribute disclosure rule" — "the side-panel history drawer
+  ... always display every deployment attribute available to the
+  user, regardless of the matrix attribute picker".
 - `docs/ui-compact-options.md` "Drawer behaviour on view change" —
   "The drawer **stays open** when the user switches views, provided
   the previously-clicked `(service, env)` still exists in the new
@@ -78,6 +78,7 @@ present under the new layout.
 
 - FR-04: history drawer rendering on slot click.
 - FR-12: four-view switching does not disrupt other open UI state.
-- SAD §7 "Full-attribute disclosure rule" — drawer is independent of
-  the matrix layout.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Full-attribute disclosure rule" — drawer is independent of the
+  matrix layout.
 - `docs/ui-compact-options.md` "Drawer behaviour on view change".

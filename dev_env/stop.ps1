@@ -3,7 +3,7 @@
     Tear down the Deployment Dashboard local stack.
 
 .DESCRIPTION
-    Implements WBS §11 MVP §2.3.
+    Implements `docs/WBS.md` MVP §2.3.
 
     Runs `docker compose down` for both the default local compose file
     (`docker-compose.local.yml`) and, if present, the scaled compose

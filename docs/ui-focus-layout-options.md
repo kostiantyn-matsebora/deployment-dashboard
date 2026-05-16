@@ -69,23 +69,17 @@ Both invariants are encoded in the mockup head-comment block (the canonical plac
 
 ## FR / NFR pointers
 
-| Requirement | Effect |
-|---|---|
-| FR-03 (6 box states) | unchanged — always on, every view × every layout |
-| FR-04 (history drawer) | unchanged — click any expanded or collapsed leaf opens the drawer |
-| FR-07 (filters) | unchanged — pin survives filter exclusion in every layout |
-| FR-08 (live updates) | unchanged — `injectEvent` flows through the same mutable state |
-| FR-12 (four named views) | unchanged — Focus is still a peer view |
-| NFR-03 (live update ≤ 5 s) | unaffected |
-| NFR-05 (stateless backend) | unaffected — expand / pin is per-browser, in-memory only |
-| NFR-08 (no build step) | preserved — single HTML file, Tailwind CDN + Alpine.js |
-| NFR-09 (UX-RESPONSIVENESS) | preserved — `recomputeEdges` / `recomputeConnectorTops` triggered by the existing `$watch('expanded', …)`; two new sibling invariants (#6, #7) codified in the head-comment block |
+Focus drill-in is an expand/pin overlay — no data shape, no semantic change. Every FR/NFR is preserved or unaffected:
+
+- **Unchanged.** FR-03 (6 box states — always on), FR-04 (drawer — click any expanded or collapsed leaf), FR-07 (filters — pin survives filter exclusion in every layout), FR-08 (live updates — `injectEvent` unchanged), FR-12 (Focus remains a peer view).
+- **Unaffected.** NFR-03 (live update ≤ 5 s), NFR-05 (stateless backend; expand/pin is per-browser, in-memory only), NFR-08 (no build step).
+- **NFR-09 (UX-RESPONSIVENESS) preserved** — `recomputeEdges` / `recomputeConnectorTops` triggered by the existing `$watch('expanded', …)`; two new sibling invariants (#6 service-name no-clip, #7 env-header alignment under expand) codified in the head-comment block.
 
 ## SAD updates implied
 
 - `ui-compact-options.md § Focus view specifics → "Layout scope"` — the paragraph "Matrix only" struck and replaced with the three-layout granularity table above. Owner: `solution-architect`.
 - A note in the same section codifying cross-layout pin semantics ("pin lives on `service.id`, not `(service, layout)`"). Owner: `solution-architect`.
-- SAD §"FR-12 / Focus view" — mention the new sibling invariants #6 (service-name no-clip) and #7 (env-header alignment under expand). Owner: `solution-architect`.
+- CR-0002 (Focus view) — mention the new sibling invariants #6 (service-name no-clip) and #7 (env-header alignment under expand). Owner: `solution-architect`.
 
 ## Status
 

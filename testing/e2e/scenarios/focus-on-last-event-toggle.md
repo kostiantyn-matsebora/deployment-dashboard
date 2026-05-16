@@ -15,10 +15,11 @@ already on-screen pulse to draw the eye.
 - SAD §5 NFR-03 "Live updates within 5 s of a successful ingest"
   — the toggle controls the *visual response* to the same event;
   the underlying live-update budget is unchanged either way.
-- SAD §"Client-side persistence (`localStorage`)" — pattern for
-  every other user preference (view, attribute set, layout,
-  correlation attribute); this toggle follows the same pattern with
-  the key `dashboard.focusOnLastEvent`.
+- `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
+  "Client-side persistence (`localStorage`)" — pattern for every other
+  user preference (view, attribute set, layout, correlation attribute);
+  this toggle follows the same pattern with the key
+  `dashboard.focusOnLastEvent`.
 - The previously-shipped behaviour was lost at some point during the
   four-views refactor; frontend is restoring it in this cycle.
 

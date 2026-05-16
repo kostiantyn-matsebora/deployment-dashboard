@@ -62,10 +62,10 @@ match the API contract exactly):**
 ```
 
 Three optional fields — `parent_deployments`, `ref`, `sha` — MAY be
-added to the same payload (FR-05, FR-13; SAD §7 "API Contract" →
-"POST `/api/deployments` request body"). They are independently
-omittable; the dashboard stores any combination and surfaces them on
-read responses.
+added to the same payload (CR-0003 + CR-0004; see `docs/cr/CR-0003-tree-topology-and-layout-axis.md`
+and `docs/cr/CR-0004-ref-and-sha-optional-fields.md`). They are
+independently omittable; the dashboard stores any combination and
+surfaces them on read responses.
 
 ```json
 {
@@ -84,18 +84,18 @@ read responses.
 ```
 
 - `deployment_id` - CI/CD-side identifier (run id, build number, guid).
-  Required (SAD §7 POST validation table row 1). Non-empty. Unique
-  within `service`; duplicate `(service, deployment_id)` → `409
-  Conflict`. Length cap 200. Namespace by tool prefix (e.g. `gh-`,
-  `ado-`, `jenkins-`) to avoid collisions across CI/CD platforms.
+  Required (CR-0003). Non-empty. Unique within `service`; duplicate
+  `(service, deployment_id)` → `409 Conflict`. Length cap 200.
+  Namespace by tool prefix (e.g. `gh-`, `ado-`, `jenkins-`) to avoid
+  collisions across CI/CD platforms.
 - `parent_deployments` *(optional)* - JSON array of `deployment_id`
   values referencing upstream deployments in the **same `service`**.
   Omit, send `[]`, or send a string array. Empty / absent → the
   Read API falls back to correlation-based topology derivation
-  (SAD §"Topology Derivation"). Cross-service references → `400
-  Bad Request`. Cycles through resolved references → `400 Bad
-  Request`. References to a not-yet-ingested `deployment_id` are
-  **accepted** and held as dangling (SAD §10 Decision 9).
+  (see ADR-0001). Cross-service references → `400 Bad Request`.
+  Cycles through resolved references → `400 Bad Request`. References
+  to a not-yet-ingested `deployment_id` are **accepted** and held as
+  dangling (CR-0003 § Decisions 9).
 - `service` - free-form identifier; lists are derived dynamically from
   stored events (FR-09, SAD §7 "API Contract" - `GET /api/services`).
   Length cap 200.
@@ -113,17 +113,17 @@ read responses.
 - `ref` *(optional)* - branch name, PR number, tag, or any
   human-readable git ref. Free-form string. Omit, send `null`, or
   send a string. No length cap or format check at this stage
-  (deferred — SAD §10 Decision 10).
+  (deferred — CR-0004 § Decision 10).
 - `sha` *(optional)* - commit SHA associated with this deployment.
   Free-form string at this stage (no hex check, no length cap).
-  Omit, send `null`, or send a string. Deferred — SAD §10
+  Omit, send `null`, or send a string. Deferred — CR-0004 §
   Decision 10.
 
-Backward compatibility: `deployment_id` is **required** (FR-13 cycle —
-SAD §10 Decision 9). Pipelines that previously sent the original
-seven-field shape MUST be updated to include `deployment_id` before
-their next run. The optional fields (`parent_deployments`, `ref`,
-`sha`) may be added independently at any time without coordination.
+Backward compatibility: `deployment_id` is **required** (CR-0003).
+Pipelines that previously sent the original seven-field shape MUST be
+updated to include `deployment_id` before their next run. The optional
+fields (`parent_deployments`, `ref`, `sha`) may be added independently
+at any time without coordination.
 
 **Success response:** `201 Created` with the created resource in the
 body (SAD §7 "API Contract").
@@ -160,7 +160,7 @@ workflow files or repo source.
 
 Use this as the starting point for any tool that can run a shell step.
 Maps the tool's built-in variables onto the dashboard payload fields.
-Reproduces SAD §7 "Other tools" example.
+The generic shell pattern equivalent in SAD §7 "CI/CD Integration" points here as the canonical source.
 
 ```sh
 curl -sf -X POST "$DEPLOYMENT_DASHBOARD_URL/api/deployments" \
@@ -181,10 +181,10 @@ curl -sf -X POST "$DEPLOYMENT_DASHBOARD_URL/api/deployments" \
 
 `$TOOL_PREFIX` is a literal you set per tool (e.g. `gh`, `ado`,
 `jenkins`) so `deployment_id` is unique across CI/CD platforms (SAD §7
-"Other tools"). To wire up explicit topology, add
+"CI/CD Integration" + CR-0003). To wire up explicit topology, add
 `\"parent_deployments\": [\"$UPSTREAM_DEPLOYMENT_ID\"]` to the body —
 the array MUST reference `deployment_id` values from the **same
-`service`** (SAD §7 "Topology constraints"); omit the field to fall
+`service`** (CR-0003 § Topology constraints); omit the field to fall
 back to correlation-based derivation.
 
 `curl -sf` makes the step **fail the pipeline on any HTTP 4xx/5xx**.
@@ -217,7 +217,7 @@ maps the tool's built-in variables onto the dashboard payload fields.
 
 #### Inline step
 
-Reproduced from SAD §7 "GitHub Actions (example)":
+Reproduced from SAD §7 "CI/CD Integration → GitHub Actions — reference inline step":
 
 ```yaml
 - name: Notify Deployment Dashboard
@@ -289,7 +289,7 @@ Or from another repo:
 exposed via a variable group linked to Azure Key Vault, or as
 pipeline-level secret variables marked "secret".
 
-#### PowerShell task (reproduced from SAD §7 "Azure DevOps (example)")
+#### PowerShell task
 
 ```yaml
 - task: PowerShell@2
@@ -483,5 +483,5 @@ shape). No client-side coordination is required.
 - SAD §7 "API Contract" - status codes, idempotency, REST constraints.
 - SAD §8 "Security Considerations" - why a static API key is
   sufficient for internal-only tooling.
-- SAD §11 MVP §1.4 / "CI/CD Integration" §1 - WBS items this doc and
-  the composite action satisfy.
+- `docs/WBS.md` MVP §1.4 / "CI/CD Integration" §1 - WBS items this
+  doc and the composite action satisfy.
