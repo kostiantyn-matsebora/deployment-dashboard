@@ -25,9 +25,17 @@ import { StageBoxComponent } from './stage-box.component';
     >
       <div class="flex items-center">
         <div class="w-44 shrink-0 pr-4">
+          <!-- NFR-09 #6 — single-line at intrinsic width, no truncate / no
+               ellipsis / no wrap. whitespace-nowrap + inline
+               width:max-content makes the <p> auto-size to its content
+               so scrollWidth equals clientWidth by construction. The w-44
+               container remains as a visual reservation; long names
+               overflow it visually but never clip. -->
           <p
-            class="text-sm font-semibold text-gray-800 truncate"
+            class="text-sm font-semibold text-gray-800 whitespace-nowrap"
+            style="width: max-content"
             [attr.data-testid]="'service-name-' + service().id"
+            [title]="service().name"
           >{{ service().name }}</p>
           <p class="text-xs text-gray-400 mt-0.5">{{ summary() }}</p>
         </div>

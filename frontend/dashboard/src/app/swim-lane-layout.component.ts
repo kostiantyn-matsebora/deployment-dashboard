@@ -35,7 +35,8 @@ import {
   DeploymentMatrixStore,
   type EnvironmentDescriptor,
   type ServiceDescriptor,
-  type SlotState
+  type SlotState,
+  type ViewId
 } from '@dd/shared';
 import { LayoutLeafComponent } from '@dd/matrix';
 import { depthBuckets, topologyShape } from './topology-utils';
@@ -51,6 +52,32 @@ interface EdgePath {
   imports: [CommonModule, LayoutLeafComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (store.view() === 'focus') {
+      <!-- Focus toolbar — discoverability hint, pinned count, collapse-all.
+           Mirrors mockup lines 1997-2009 (above swim-lane Focus). -->
+      <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-4 text-xs">
+        <span class="inline-flex items-center gap-1.5 text-gray-600" data-testid="focus-toolbar-hint">
+          <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span>Click the chevron next to a service to drill into Detailed-size fidelity. Pin to keep it expanded across filters.</span>
+        </span>
+        @if (pinnedCount() > 0) {
+          <span class="text-amber-600 font-semibold" data-testid="pinned-count">
+            <span>{{ pinnedCount() }}</span> pinned
+          </span>
+        }
+        @if (hasExpanded()) {
+          <button
+            type="button"
+            class="ml-auto text-gray-600 hover:text-gray-900 underline"
+            data-testid="collapse-all"
+            (click)="store.collapseAll()"
+          >Collapse all</button>
+        }
+      </div>
+    }
+
     <main
       #root
       class="px-6 pt-4 pb-8"
@@ -62,20 +89,89 @@ interface EdgePath {
     >
       <div class="space-y-2">
         @for (service of store.filteredServices(); track service.id) {
+          <!-- When this lane is Focus-expanded, the inline --leaf-width
+               override widens every leaf-pair in lock-step (Option A). -->
           <div
             class="lane-row relative bg-white rounded-lg border border-gray-200 px-3 py-2"
-            [attr.data-testid]="'swim-lane-row-' + service.id"
+            [class.focus-row]="store.view() === 'focus'"
+            [class.row-expanded]="store.view() === 'focus' && isExpanded(service.id)"
+            [class.border-blue-200]="store.view() === 'focus' && isExpanded(service.id)"
+            [attr.data-testid]="laneRowTestid(service)"
             [attr.data-service-row]="service.id"
+            [attr.data-expanded]="store.view() === 'focus' && isExpanded(service.id) ? 'true' : 'false'"
+            [attr.data-pinned]="store.view() === 'focus' && isPinned(service.id) ? 'true' : 'false'"
+            [attr.style]="laneStyle(service.id)"
           >
+            <!-- Legacy testid alias — older specs address the lane via
+                 swim-lane-row-{id}; Focus view repurposes the primary
+                 testid for row-expanded-/row-collapsed-, so this hidden
+                 marker keeps the legacy selector resolvable. -->
+            @if (store.view() === 'focus') {
+              <span class="sr-only" [attr.data-testid]="'swim-lane-row-' + service.id"></span>
+            }
             <div class="flex items-start gap-3">
               <!-- Service label column — same 176 px footprint as Matrix. -->
-              <div class="w-44 shrink-0 pr-2 self-stretch flex flex-col justify-center min-w-0">
+              <div class="w-44 shrink-0 pr-2 self-stretch flex flex-col justify-center min-w-0 lane-label">
+                @if (store.view() === 'focus') {
+                  <div class="flex items-center gap-1 mb-1">
+                    <button
+                      type="button"
+                      class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                      [class.bg-blue-100]="isExpanded(service.id)"
+                      [class.border-blue-300]="isExpanded(service.id)"
+                      [class.text-blue-700]="isExpanded(service.id)"
+                      [class.hover:bg-blue-200]="isExpanded(service.id)"
+                      [class.bg-blue-50]="!isExpanded(service.id)"
+                      [class.border-blue-200]="!isExpanded(service.id)"
+                      [class.text-blue-600]="!isExpanded(service.id)"
+                      [class.hover:bg-blue-100]="!isExpanded(service.id)"
+                      [attr.aria-expanded]="isExpanded(service.id)"
+                      [attr.aria-label]="isExpanded(service.id) ? 'Collapse lane' : 'Expand lane to full detail'"
+                      [title]="isExpanded(service.id) ? 'Collapse lane' : 'Expand lane to full detail'"
+                      [attr.data-testid]="'row-chevron-' + service.id"
+                      (click)="store.toggleExpand(service.id)"
+                    >
+                      <svg class="w-3.5 h-3.5 transition-transform" [class.rotate-90]="isExpanded(service.id)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                      [class.pin-active]="isPinned(service.id)"
+                      [class.bg-amber-100]="isPinned(service.id)"
+                      [class.border-amber-300]="isPinned(service.id)"
+                      [class.hover:bg-amber-200]="isPinned(service.id)"
+                      [class.bg-gray-50]="!isPinned(service.id)"
+                      [class.border-gray-200]="!isPinned(service.id)"
+                      [class.text-gray-400]="!isPinned(service.id)"
+                      [class.hover:bg-amber-50]="!isPinned(service.id)"
+                      [class.hover:text-amber-600]="!isPinned(service.id)"
+                      [class.hover:border-amber-200]="!isPinned(service.id)"
+                      [attr.aria-pressed]="isPinned(service.id)"
+                      [attr.aria-label]="isPinned(service.id) ? 'Unpin lane' : 'Pin lane to keep expanded across filters'"
+                      [title]="isPinned(service.id) ? 'Unpin (stays expanded)' : 'Pin lane (stays expanded across filters)'"
+                      [attr.data-testid]="'row-pin-' + service.id"
+                      (click)="store.togglePin(service.id)"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.828 2.172a1 1 0 011.415 0l6.586 6.586a1 1 0 010 1.414l-1.415 1.415-3-3-5 5 3 3-1.414 1.414a1 1 0 01-1.415 0L2 11.414a1 1 0 010-1.414l1.414-1.414 3 3 5-5-3-3 1.414-1.414z" />
+                      </svg>
+                    </button>
+                  </div>
+                }
+                <!-- NFR-09 #6 — single-line at intrinsic width. The <p>
+                     auto-sizes via whitespace-nowrap + inline
+                     width:max-content. The .lane-label cell stays at
+                     its 176 px grid width; long names overflow visually
+                     without clipping (scrollWidth equals clientWidth). -->
                 <p
-                  class="text-sm font-semibold text-gray-800 truncate"
+                  class="text-sm font-semibold text-gray-800 whitespace-nowrap"
+                  style="width: max-content"
                   [attr.data-testid]="'service-name-' + service.id"
                   [title]="service.name"
                 >{{ service.name }}</p>
-                @if (showServiceMeta()) {
+                @if (showServiceMeta() || (store.view() === 'focus' && isExpanded(service.id))) {
                   <p class="text-[11px] text-gray-400 leading-tight">{{ failureLabel(service) }}</p>
                   <p class="text-[10px] text-gray-400 italic mt-0.5 leading-tight">{{ topoLabel(service) }}</p>
                 }
@@ -101,6 +197,8 @@ interface EdgePath {
                             [service]="service"
                             [env]="envFor(envId)"
                             [slot]="slotFor(service, envId)"
+                            [viewOverride]="leafViewOverride(service.id)"
+                            [forceAllAttrs]="forceAllAttrsFor(service.id)"
                             (opened)="openSlot.emit($event)"
                           ></dd-layout-leaf>
                         </div>
@@ -174,6 +272,67 @@ export class SwimLaneLayoutComponent {
   readonly showServiceMeta = computed(() =>
     this.store.view() === 'detailed' && this.store.layout() === 'swim-lane'
   );
+
+  /** True when at least one service is currently Focus-expanded. */
+  readonly hasExpanded = computed(() => this.store.expandedServices().size > 0);
+
+  /** Number of services with the pin set — surfaced in the Focus toolbar. */
+  readonly pinnedCount = computed(() => this.store.pinnedServices().size);
+
+  /** Per-service expansion check (Focus view; layout-agnostic state). */
+  isExpanded(serviceId: string): boolean {
+    return this.store.expandedServices().has(serviceId);
+  }
+
+  /** Per-service pin check (Focus view; layout-agnostic state). */
+  isPinned(serviceId: string): boolean {
+    return this.store.pinnedServices().has(serviceId);
+  }
+
+  /**
+   * Lane row testid — Focus view uses the layout-agnostic
+   * `row-expanded-{id}` / `row-collapsed-{id}`; other views keep the
+   * existing `swim-lane-row-{id}` shape (existing e2e tests + the
+   * filter-resilience spec rely on the legacy testid).
+   */
+  laneRowTestid(service: ServiceDescriptor): string {
+    if (this.store.view() === 'focus') {
+      return (this.isExpanded(service.id) ? 'row-expanded-' : 'row-collapsed-') + service.id;
+    }
+    return 'swim-lane-row-' + service.id;
+  }
+
+  /**
+   * Inline style for the lane-row. Writes the expanded `--leaf-width`
+   * override on the lane when (view=focus AND expanded[id]). Mirrors mockup
+   * lines 2025-2027 — the per-lane override widens every leaf-pair in the
+   * lane without touching siblings. NFR-09 (b) connectors are reflown by
+   * the existing `afterEveryRender` chain.
+   */
+  laneStyle(serviceId: string): string {
+    if (this.store.view() === 'focus' && this.isExpanded(serviceId)) {
+      return '--leaf-width-expanded: 200px; --leaf-width: var(--leaf-width-expanded);';
+    }
+    return '--leaf-width-expanded: 200px;';
+  }
+
+  /**
+   * Leaf view-override for the LayoutLeafComponent. In Focus + expanded
+   * the leaf renders as Detailed (full-fidelity); collapsed Focus uses
+   * the Compact / Focus-collapsed branch (Option A — only Detailed +
+   * Compact branches participate in the Focus expand/collapse flip).
+   */
+  leafViewOverride(serviceId: string): ViewId | null {
+    if (this.store.view() === 'focus') {
+      return this.isExpanded(serviceId) ? 'detailed' : 'compact';
+    }
+    return null;
+  }
+
+  /** Force all attributes when the lane is Focus-expanded. */
+  forceAllAttrsFor(serviceId: string): boolean {
+    return this.store.view() === 'focus' && this.isExpanded(serviceId);
+  }
 
   constructor() {
     // NFR-09 (c) re-measurement: `afterEveryRender({ read })` runs after every

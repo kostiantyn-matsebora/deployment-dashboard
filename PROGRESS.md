@@ -1,141 +1,144 @@
-# Progress Snapshot — 2026-05-16 (end of session, TODO line 9 light/dark/auto theme closed)
+# Progress Snapshot — 2026-05-16 (end of session, Focus-across-all-layouts cycle landed)
 
 Resume point. Read `CLAUDE.md` first; this is a working snapshot, not authoritative.
 
 ## One-line status
 
-Theme axis (`{light, dark, auto}`) added to the SPA: Dim palette merged into the canonical mockup as the `dark` value behind a gear-popover affordance; `ThemeService` + `ThemeSwitcherComponent` shipped in `frontend/shared/` with FOIT-safe inline bootstrap, live MQL listener, and single-writer `<html data-theme>` invariant; SAD §7 Theme axis subsection extended (single-writer rule + corruption normalisation + mockup ↔ implementation naming parity). CLAUDE.md gained a new top-level "Task lifecycle — phased pipeline with maximum parallelism" section (8 phases including a new human-in-the-loop design-review gate); 136/136 frontend-shared unit tests green; 6 e2e scenarios + 6 Playwright specs authored against the contract; build clean.
+Focus view (chevron + pin + expand-to-Detailed) extended from Matrix-only to **all three layouts** (Matrix, Swim-lane, Workflow-rows); two new NFR-09 sibling invariants codified (service-name single-line auto-width + env-header column alignment under Matrix Focus expand); CLAUDE.md restructured to deterministic 4-dimension lifecycle blocks (Goal / Actions / Artefacts / Acceptance per phase) with the process section extracted to `docs/engineering-process.md`. Build clean; 227/227 Angular unit tests PASS; mockup-visual harness 12/12 PASS. Manual SPA smoke pending — user owns it (agent sandbox has no Docker).
 
-## Cycle closed this session
+## Cycles closed this session
 
-### Cycle F — Theme axis (TODO line 9)
+### Cycle G — CLAUDE.md lifecycle determinism
 
-Full eight-phase execution against the new lifecycle:
-
-| Phase | Agent | Deliverable |
-|---|---|---|
-| 1 — Analysis | `frontend-engineer` | Scoped Light / Dark / Auto + identified Theme as a third orthogonal axis alongside View and Layout. |
-| 2 — Design & architecture | `frontend-engineer` (visual) | Three option mockups (`deployment-dashboard-theme-slate.html`, `-oled.html`, `-dim.html`) + `docs/ui-theme-options.md` design note: persistence table, auto-resolution spec, palette table, tradeoff rationale. Recommendation: Slate (textual segmented) — user picked Dim (gear popover). |
-| 3 — Design review (user) | user | Picked Dim option. Approved merge. |
-| 4 — Implementation | `frontend-engineer` (in parallel with phase 5) | Merged Dim palette into canonical `docs/deployment-dashboard.html` (+416 lines: `[data-theme="dark"]` overlay, FOIT-safe head script, MQL listener, gear+popover, THEMES const, Alpine state + setters); deleted the three option forks. Angular wiring: `ThemeService` (root, signal-based) + `ThemeSwitcherComponent` (gear + popover, `data-testid` hooks) in `frontend/shared/`; FOIT-safe inline script in `frontend/dashboard/src/index.html`; CSS overlay in `styles.css`; eager bootstrap in `main.ts`; `dashboard-header.component.ts` renders the switcher. Tailwind config annotated overlay-only strategy. |
-| 5 — Testing | `qa-engineer` (in parallel with phase 4) | 6 e2e Markdown scenarios + 6 Playwright `.spec.ts` files under `testing/e2e/` (FOIT-safe initial paint; popover open + select; reload persistence; auto follows OS; invalid persisted value falls back to auto; 6-box-state contract under dark). `theme.service.spec.ts` + `theme-switcher.component.spec.ts` co-located in `frontend/shared/src/lib/`. |
-| 6 — Bug fixing | parallel | `frontend-engineer`: `isThemePreferenceerence` typo → `isThemePreference` in `view-config.ts`. `qa-engineer`: deleted stale `frontend/karma.conf.js` (referenced unexported `@angular/build/plugins/karma`); renamed `theme-prefs.service.spec.ts` → `theme.service.spec.ts`. `frontend-engineer`: stale doc-comment in `theme.service.ts:14`. |
-| 7 — SA review | `solution-architect` | **PASS with one flag** (manual smoke owed). Rulings landed: component stays in `frontend/shared/` (palette is cross-cutting); mockup ↔ implementation naming drift permitted for internal identifiers, required-identical for wire shapes + user-visible labels. SAD §7 Theme axis subsection extended with single-writer invariant + corruption-normalisation + mockup ↔ implementation naming parity. NFR-09 confirmed palette-agnostic by construction (overlay touches only colour properties; no layout-relevant property). |
-| 8 — User approval | user | TODO line 9 → ☒. Manual browser smoke deferred to user (env lacks browser). |
-
-### Cycle G — CLAUDE.md lifecycle codification
-
-After the theme cycle, user gave process feedback that promoted from feedback memory to a permanent CLAUDE.md rule:
+Promoted process feedback from memory to permanent CLAUDE.md rule. Multiple iterations as user refined the wording:
 
 | Edit | Section | Effect |
 |---|---|---|
-| New section | `## Task lifecycle — phased pipeline with maximum parallelism` (lines 195–250) | 8-phase pipeline; parallelism rules (within-phase + cross-phase overlap); dispatch pattern; cross-reference to four-phase cross-domain-bug cycle. |
-| Amendment | Phase 2 sub-deliverables | Added **API design** alongside system design, visual design, implementation plan. Ownership: backend-engineer (HTTP/JSON), frontend-engineer (SPA-visible), solution-architect (ratifies into SAD). |
-| Amendment | New Phase 3 row | Inserted **Design review — user approval gate** between Design & architecture and Implementation. Synchronous; user signs off on phase-2 artefacts (SAD diff, mockup, API contract, WBS) before implementation starts. Phases 3–7 renumbered to 4–8. |
-| Reframe | Why-line | "Work like a real engineering team" promoted from cultural framing to operational guidance — apply established software-engineering best practices (separation of concerns, contract-driven parallelism, testing as a first-class deliverable, fail-fast on contract drift, no idle agents). |
+| Insert | `## Task lifecycle — phased pipeline with maximum parallelism` | 8-phase pipeline (Analysis → Design → Design review → Implementation → Testing → Bug fixing → SA review → User approval); parallelism rules; dispatch pattern; cross-ref to four-phase cross-domain-bug cycle |
+| Amend | Phase 2 sub-deliverables | Added **API design** alongside system / visual / impl plan |
+| Insert | New Phase 3 row | **Design review — user approval gate** between Design & Implementation; phases 3–7 renumbered 4–8 |
+| Reframe | Why-line | "Work like a real engineering team" → operational guidance (not flavour) — apply established best practices |
+| Generalize | Mockup-vs-implementation rule | "Mockup edits are Phase 2, NOT Phase 4" → `### Each phase owns its own artefacts` with bulleted phase-to-artefact map; closing `Cross-phase rule — artefacts do not cross phases` |
+| Restructure | All 8 phases | Per-phase `### Phase N — Name` blocks with deterministic 4-dimension bullets: `Goal and objectives` / `Actions and expectations` / `Produces artefacts` / `Criteria of acceptance`. 32 identical lead-in labels (8 × 4) |
+| Extract | Process section → `docs/engineering-process.md` | User pulled the entire lifecycle + parallelism + engineering principles + cross-domain bugs + TODO workflow into a referenced doc; CLAUDE.md now cites the extracted file in a `## Process model` section |
+
+### Cycle H — Focus view: extend to all three layouts
+
+Multi-phase cycle following the new lifecycle:
+
+| Phase | Agent(s) | Deliverable |
+|---|---|---|
+| 1 — Analysis | orchestrator | User reported Focus regression (Matrix Focus ≈ Compact visually); identified scope: restore Focus distinct affordance; later extended to all three layouts |
+| 2 — Design (round 1) | `frontend-engineer` | Mockup: chevron + pin promoted to framed visible buttons, left-accent rail, expanded-row tint. Added `data-testid` hooks `row-chevron-{id}`, `row-pin-{id}`, `row-collapsed-{id}` / `row-expanded-{id}` |
+| 2 — Design (round 2) | `solution-architect` | Initial ruling: Path 2 (matrix-only); added "Layout scope" + "Focus exception under FR-13" to `ui-compact-options.md` + SAD §7 |
+| 1 — Analysis (round 2) | orchestrator | User signalled Focus regression in swim-lane + workflow-rows ("focus has expand/collapse in matrix mode which is overriden by swim-lane and workflow rows mode") — Path 2 ruling reversed |
+| 2 — Design (round 3) | `frontend-engineer` | Two option-fork mockups (`-a-wider.html`, `-b-taller.html`) + `docs/ui-focus-layout-options.md` design note. User picked Option A (wider + taller, matrix-parity) |
+| 3 — Design review | user | Approved Option A; pin-survives-layout-switch=YES; toolbar-above-all-layouts=YES |
+| 2 — Design (round 4) | parallel — `frontend-engineer` + `solution-architect` + `qa-engineer` | Frontend merged Option A into canonical, deleted forks, fixed two new defects flagged mid-merge (service name cut with `…` in workflow-rows; env-header misaligned in matrix Focus expand), rewrote design note to chosen-design framing. SA replaced "Layout scope" Path 2 with Path A 3-row granularity table + 2 new clauses (pin-survives-layout-switch, toolbar-above-all-layouts); SAD §7 mirror "Focus exception" → "Focus per-layout granularity (FR-13)"; added 2 NFR-09 sibling invariants. QA extended I9 across all 3 layouts, added I10 (service-name no-clip) and I11 (env-header alignment) to mockup-visual harness, authored 6 new e2e Markdown scenarios + 6 Playwright specs |
+| 4 — Implementation | `frontend-engineer` | Angular SPA mirror: matrix container `--leaf-width` page-level CSS variable (env-header + rows share), `pipeline-matrix.focusVars()` computed signal, swim-lane per-lane chevron+pin+expand wired into `recomputeEdges`, workflow-rows per-service-header chevron+pin+expand wired into `recomputeConnectorTops`, Focus toolbar above all 3 layouts, `data-testid="service-name-{svcId}"` at every site, pin already layout-agnostic in signal store |
+| 5 — Testing | `qa-engineer` | 162/166 e2e PASS, 2 specs failed on Matrix Focus env-header alignment (the user-reported defect, not yet fixed in SPA); 11/12 mockup-visual PASS (I11 fail); 227/227 Angular unit tests PASS; 8 spec-selector drift fixes landed |
+| 6 — Bug fixing (round 1) | `frontend-engineer` | NFR-09 #6 strengthened ("single-line auto-width" not "wraps vertically") via user signal "service name is oneliner without cuts". Fixed: header strip 13-px padding-left mirror (mockup + SPA); service-name `whitespace-nowrap` + inline `width: max-content` at all 6 sites (mockup + SPA). Mockup-visual harness 12/12 PASS. 227/227 unit tests still PASS. E2E specs not re-run in agent sandbox (no Docker). Flagged contradictory sanity check in `matrix-focus-env-header-alignment.spec.ts:148-153` (`expandedW - collapsedW > 20` jointly unsatisfiable with the alignment assertions under binary-widen contract) for QA to fix in follow-up |
+| 7 — SA review | pending — user manual smoke first | |
+| 8 — User approval | pending | |
 
 ## SAD edits landed this session
 
 | Section | Change |
 |---|---|
-| §7 `localStorage` persistence table | New `dashboard.theme` row (`'light'`/`'dark'`/`'auto'`, default `'auto'`); load-time hardening bullet now lists `dashboard.theme`. |
-| §7 (new subsection) | **Theme axis (presentation-only)** — orthogonal to View and Layout, palette only, no effect on 6-box-state contract or NFR-09. |
-| §7 Theme axis | Single-writer invariant — `ThemeService` is the only writer of `<html data-theme>` / `<html data-theme-pref>` after FOIT-safe bootstrap. |
-| §7 Theme axis | Corruption normalisation — corrupt persisted value resolves to `'auto'` for the session; SPA MUST NOT silently rewrite `localStorage` on a read-only load. |
-| §7 Theme axis | Mockup ↔ implementation naming parity — internal identifiers MAY drift; wire-shape names + user-visible labels MUST match. |
+| §7 "Focus per-layout granularity (FR-13)" (~line 516) | Rewritten from "Focus exception under FR-13" (matrix-only) to per-layout granularity rule + 2 new clauses (pin-survives-layout-switch; Focus toolbar above all 3 layouts) |
+| §5 NFR-09 sibling — service-name single-line auto-width | New invariant: name renders on single line at intrinsic width, no truncation/ellipsis/wrap; container auto-sizes (CSS Grid `auto` track precedent applied at `<p>`-element level) |
+| §5 NFR-09 sibling — env-header column alignment under expand | New invariant: in Matrix layout, env-header row stays column-aligned with deployment-row columns under any expanded/collapsed Focus combination; header + body share CSS Grid track definition |
 
 ## Mockup edits landed this session
 
 | Region | Change |
 |---|---|
-| `<head>` inline script | FOIT-safe synchronous palette bootstrap; reads `localStorage['dashboard.theme']`, validates enum, resolves `auto` via `prefers-color-scheme`, sets `<html data-theme="…">` before paint. |
-| Theme axis head-comment block | New invariant block sibling to the existing UX-RESPONSIVENESS / NFR-09 block. |
-| `[data-theme="dark"]` overlay | 84 dark-mode CSS overrides remapping Tailwind utility classes (`bg-white`, `bg-green-100`, `text-gray-900`, etc.) plus selectors `.arrow-line`, `.pill-empty`, `.lane-row`, `.svc-block`, `.edge`, `.env-tag`. Colour-only — no layout property touched. |
-| Header | Gear icon + popover affordance with `data-testid` hooks `theme-switcher`, `theme-gear`, `theme-option-{light\|dark\|auto}`. |
-| Alpine state | `themePref` / `effectiveTheme` / `osDark` / `themePopoverOpen` + `setThemePref` / `applyEffectiveTheme` + `$watch('themePref', …)` + persistence + MQL `change` listener wired into `bootstrapPersistence`. |
+| Head-comment NFR-09 #6 | Service-name rule sharpened from "no-clip via wrap" to "single-line via `whitespace-nowrap` + `width: max-content`" |
+| Head-comment NFR-09 #7 | New: env-header column alignment under Matrix Focus expand |
+| Matrix Focus toolbar (line ~1652) | Now renders above all three layouts when View=Focus (was Matrix-only) |
+| Matrix Focus container | Page-level `--leaf-width` / `--leaf-width-expanded` / `--focus-arrow-gap` CSS variables; env-header + every row read the same property → binary widening; header strip got `padding-left: 13px` matching the row gutter |
+| Swim-lane Focus | Chevron + pin in `.lane-label` gutter (gated on `view === 'focus'`); `--leaf-width` overridden per-lane-row when expanded; SVG connector reflow via `recomputeEdges` |
+| Workflow-rows Focus | Chevron + pin in `.svc-block-meta-row` (service-header level); `--leaf-width` overridden per-service-block when expanded; per-connector `--target-line-width` / `--target-half` rewritten via `recomputeConnectorTops(serviceId)` |
+| Service-name sites (6 total: 4 matrix views + swim-lane lane-label + workflow-rows svc-block-meta-row) | `<p class="whitespace-nowrap" style="width: max-content">{{name}}</p>`; column containers (`w-44`/`w-40`/`w-36`/`176px`) remain as visual reservation; long names extend past rather than clipping |
+| `data-testid="service-name-{svcId}"` | Added at every site for stable Angular SPA selector |
+| `data-testid="collapse-all"` | Added to the existing collapse-all button |
 
 ## CLAUDE.md edits landed this session
 
 | Region | Change |
 |---|---|
-| New top-level section | "Task lifecycle — phased pipeline with maximum parallelism" — 8-phase table, parallelism rules, dispatch pattern, relation to cross-domain-bugs cycle. |
-| Phase 2 row | API design added to sub-deliverables; ownership column expanded. |
-| New phase 3 row | Design review — user approval gate. |
-| Why-line | Reframed as binding operational guidance. |
+| `## Task lifecycle` (entire section) | Replaced phases table + per-phase notes with 8 `### Phase N — Name` subsections, each with deterministic 4-dimension bullets (`Goal and objectives` / `Actions and expectations` / `Produces artefacts` / `Criteria of acceptance`) — 32 identical lead-in labels |
+| `### Cross-phase rule — artefacts do not cross phases` | New closing subsection carrying the artefact-no-crossing rule |
+| `### Parallelism rules` / `### Dispatch pattern` / `### Relation to the cross-domain-bugs cycle` | Preserved unchanged |
+| Why-line | "Work like a real engineering team" reframed as operational guidance |
+| **Extracted to `docs/engineering-process.md`** | User-driven: entire lifecycle + parallelism + engineering principles + cross-domain bugs + TODO workflow now lives in a referenced doc; CLAUDE.md carries a `## Process model` thin section citing it |
 
-## Test suite counts
+## Angular SPA changes landed this session (Phase 4 + Phase 6)
 
-| Suite | Count | Command |
+| File | Change |
+|---|---|
+| `frontend/matrix/src/lib/pipeline-matrix.component.ts` | Focus wrapper writes page-level `--leaf-width` / `--leaf-width-expanded` / `--focus-arrow-gap` CSS variables; `focusVars()` computed signal binds to `expandedServices()` |
+| `frontend/matrix/src/lib/matrix-header.component.ts` | Reads `--leaf-width` for env-header columns; `padding-left: 13px` to align with row gutter |
+| `frontend/matrix/src/lib/focus-row.component.ts` | Framed chevron + pin (`w-5 h-5` `bg-*-50/100`); boxes consume `--leaf-width`; arrow gaps consume `--focus-arrow-gap`; new layout-agnostic testids; sr-only legacy aliases; service-name one-liner |
+| `frontend/matrix/src/lib/stage-box.component.ts` | New `widthAuto` input |
+| `frontend/matrix/src/lib/layout-leaf.component.ts` | Passes `widthAuto=true`; compact-branch reads `--leaf-width` via inline style |
+| `frontend/matrix/src/lib/detailed-row.component.ts`, `compact-row.component.ts`, `glance-row.component.ts` | Service-name one-liner (`whitespace-nowrap` + `width: max-content`) |
+| `frontend/dashboard/src/app/swim-lane-layout.component.ts` | Focus toolbar + per-lane chevron+pin + `--leaf-width` override + `LayoutLeafComponent` driven by `viewOverride='detailed'` + `forceAllAttrs=true` when expanded; service-name one-liner |
+| `frontend/dashboard/src/app/workflow-rows-layout.component.ts` | Focus toolbar + per-service-header chevron+pin + `--leaf-width` override; service-name one-liner |
+| `frontend/dashboard/src/styles.css` | `.focus-row` left-rail accent + dark-theme overrides |
+
+Signal store: `pinnedServices` was already layout-agnostic (`ReadonlySet<string>` keyed by service id). No refactor needed for pin-survives-layout-switch.
+
+## Test suite + harness changes landed this session
+
+| Surface | Change |
+|---|---|
+| `testing/mockup-visual/harness.config.json` | I9 `layoutScope` removed (now runs on all 3 layouts under Focus); I10 added (`service-name-no-clip`); I11 added (`matrix-focus-env-header-alignment`) |
+| `testing/mockup-visual/mockup-invariants.spec.ts` | I9 evaluator generalized across all 3 layouts (service-grain via distinct `data-service-row` + duplicate-suffix guard); I10 evaluator (per-layout `whitespace`/`overflow`/`scrollWidth<=clientWidth`); I11 evaluator (programmatic `toggleExpand` via Alpine root; header/expanded/collapsed rect comparison ±1 px) |
+| `testing/mockup-visual/README.md` | I9 description updated; I10 + I11 rows added (count 9 → 11) |
+| `testing/e2e/scenarios/focus-view-distinct-from-compact.md` (new) | Path A intro; per-layout assertions; Block E pin-survives-layout-switch |
+| `testing/e2e/tests/focus-view-distinct-from-compact.spec.ts` (new) | 5 test blocks (A-E) exercising Focus distinctness, chevron/pin/expand, collapseAll, pin-survives-layout-switch |
+| `testing/e2e/scenarios/service-name-no-clip-universal.md` (new) | 24 combinations (4 views × 3 layouts × 2 themes) |
+| `testing/e2e/tests/service-name-no-clip-universal.spec.ts` (new) | Asserts `scrollWidth <= clientWidth + 1` against `[data-testid="service-name-{svcId}"]` |
+| `testing/e2e/scenarios/matrix-focus-env-header-alignment.md` (new) | Pre-expand + post-expand assertions |
+| `testing/e2e/tests/matrix-focus-env-header-alignment.spec.ts` (new) | Header bounding rect ≈ expanded row's box rect AND collapsed row's box rect (±1 px) |
+| `testing/e2e/tests/focus-on-last-event-toggle.spec.ts`, `full-attribute-disclosure.spec.ts`, `spa-visual-invariants.spec.ts`, `theme-switcher-persists-across-reload.spec.ts`, `theme-switcher-popover-open-and-select.spec.ts`, `workflow-rows-expand-row.spec.ts` | Selector drift fixes after frontend changed canonical testid shape — sample fixes: `[data-testid="service-name-{svcId}"]` replaces `.truncate`; `visibleServiceCount` counts `row-collapsed-*|row-expanded-*` under Focus; `findEnclosingRow` recognises Focus-mode anchors; misc oracle hardening |
+
+## Test suite counts (end-of-session)
+
+| Suite | Count | Notes |
 |---|---|---|
-| Frontend unit (shared lib only — `ng test shared --watch=false`) | **136 / 136** PASS | `cd frontend && npx ng test shared --watch=false` |
-| Backend unit | **130 / 130** (unchanged — no backend work this cycle) | `dotnet test backend/Dashboard.sln` |
-| Functional / API | **76 / 76** (unchanged) | `pwsh -NoProfile -File testing/functional/run-tests.ps1` |
-| E2E (Playwright, chromium) | **79 + 6 new specs authored** | `pwsh -NoProfile -File testing/e2e/run-tests.ps1` |
-| Mockup visual harness | **12 / 12** (unchanged — palette is overlay; harness palette-agnostic by construction per SA review) | `pwsh -NoProfile -File testing/mockup-visual/run-tests.ps1` |
+| Frontend unit (`ng test shared/matrix/drawer/dashboard --watch=false`) | **227 / 227** PASS | shared 136 + matrix 83 + drawer 7 + dashboard 1 |
+| Backend unit | **130 / 130** (unchanged — no backend work this cycle) | |
+| Functional / API | **76 / 76** (unchanged) | |
+| Mockup visual harness | **12 / 12** PASS | I9 + I10 + I11 all green after Phase 6 fixes |
+| E2E (Playwright) | 164 / 166 (last known) + 6 new specs authored | Last run after Phase 5 selector fixes: 162/166 pass + 2 fail (the user-reported Matrix Focus env-header defects). Phase 6 fix should resolve the 2 fails; e2e not re-run in agent sandbox (no Docker). User to verify locally. |
 
-E2E theme specs not yet run end-to-end (manual smoke pending; specs authored against the fixed contract, expected to pass once stack runs).
+## Outstanding items
 
-## Contract landmarks landed today
-
-| Landmark | SAD anchor | Code anchor |
-|---|---|---|
-| Theme axis (`{light, dark, auto}`, default `auto`) | SAD §7 "Theme axis (presentation-only)" | `frontend/shared/src/lib/theme.service.ts` (single-writer); `frontend/dashboard/src/index.html` (FOIT-safe bootstrap) |
-| Single-writer `<html data-theme>` | SAD §7 Theme axis → Single-writer invariant | `ThemeService` constructor effect — only mutator of `document.documentElement.dataset.theme` |
-| Corruption normalisation policy | SAD §7 Theme axis → Corruption normalisation | `loadThemePreference()` validates against `THEMES`; falls back to `'auto'` without rewriting localStorage |
-| Mockup ↔ implementation naming parity | SAD §7 Theme axis → Naming parity | Internal: `setThemePref` (mockup) ↔ `setPreference` (Angular) permitted; wire names identical (`dashboard.theme`, `data-testid="theme-*"`) |
-| Task lifecycle — 8-phase pipeline | CLAUDE.md "Task lifecycle" | All future cycles run this pipeline |
-| Design review gate (phase 3) | CLAUDE.md "Task lifecycle" → phase 3 row | Synchronous user approval between design and implementation |
+- **Manual SPA smoke** — user-owned, in progress this session.
+- **`matrix-focus-env-header-alignment.spec.ts` contradictory sanity check** — `expandedW - collapsedW > 20` is jointly unsatisfiable with the alignment assertions under the binary-widen contract (any service expanded → entire matrix widens). Either remove the sanity check OR rephrase to "both expanded AND collapsed == 200 px when any is expanded" (matches binary-widen). Owner: `qa-engineer`. Flagged by `frontend-engineer` in Phase 6.
+- **Pre-existing scratch verification scripts** in `testing/mockup-visual/` (`focus-full-verify.mjs`, `focus-vs-compact.mjs`, `focus-vs-compact-screenshot.mjs`, `_smoke-headeralign.mjs`) — authored locally during cycle H, never staged. Owner: `qa-engineer` to clean up or adopt.
+- **Phase 7 (SA review) + Phase 8 (User approval)** for cycle H — pending Phase 6 oracle fix + manual smoke.
+- All non-blocking follow-ups from prior cycles still open (see git log + prior PROGRESS.md).
 
 ## TODO status (`TODO` is canonical — file edited this session)
 
-| # | Item | Status |
-|---|---|---|
-| 1 | Genericize service names | ☒ |
-| 2 | UX: UI compactness + four-view picker (FR-12) | ☒ |
-| 3 | UX: Tree-shaped promotion flow (Layout axis + topology) | ☒ |
-| 4 | Add `ref` + `sha` attributes (data plane) | ☒ |
-| 5 | UX: use `ref`/`sha` for Display + Topology | ☒ |
-| 6 | Architecture: merge read+write APIs into one container | ☒ |
-| 7 | **UX: light/dark/auto theme (this cycle)** | ☒ **closed this session** |
-| 8 | UX: Version column width (long versions) | ☐ open — natural next pickup |
-| 9 | Architecture: strict API validation + OpenAPI/Swagger | ☐ open |
-| 10 | Architecture: optional CI/CD fetcher component (pull-mode alternative) | ☐ open |
-| 11 | Architecture: Control API + periodic polling | ☐ open |
-| 12 | Functionality: synchronization API (reconciliation + full) | ☐ open |
-| 13 | UX: Rename "Workflow rows" → "Workflows" | ☐ open |
-| 14 (Phase 2.0) | UX: group/colorize/correlate by attribute | ☐ open |
-
-## Open follow-ups (non-blocking, surfaced during cycles)
-
-1. **Manual browser smoke for the Theme axis** — env in this session has no browser. Owner: user (or next session with browser access). 7-step checklist surfaced in chat.
-2. **Playwright DevTools-level smoke** — close the headless-integrator visual gap from prior cycle (E). Owner: `qa-engineer`. Pre-existing.
-3. **Favicon 404** — cosmetic, surfaces in gateway access log during smoke. Owner: `frontend-engineer`. Pre-existing.
-4. **`MapGroup` prefix semantic** — optional refactor; current `MapGroup(string.Empty).RequireApiKey()` is semantically identical to SAD §7's shorthand `MapGroup("/api").RequireApiKey()`. Pre-existing.
-5. **Mockup drawer drift vs SPA drawer pattern** (pre-existing). Owner: `frontend-engineer`.
-6. **Pre-existing e2e fragility**: no `localStorage.clear()` in `beforeEach`. Owner: `qa-engineer`. **Now more urgent** — theme e2e specs depend on a clean `dashboard.theme` slate.
-7. **`docs/ui-compact-options.md` not cited in CLAUDE.md authoritative-files set**. Owner: `solution-architect`. Pre-existing.
-8. **`docs/ci-cd-integration.md`** — pre-existing: ~9 sections needing `deployment_id` + `parent_deployments` additions. Modifications staged on disk from a prior session. Owner: `solution-architect`. Pre-existing.
-9. **`testing/functional/Dashboard.Functional.Tests/ConfigTopologyTests.cs`** — pre-existing stale `AllowUserOverride` test references. Owner: `qa-engineer`. Pre-existing.
-10. **In-memory `SlotUpdateBroker` ring buffer survives DB truncate** — pre-existing, post-MVP. 
-11. **Defensive `.dockerignore` from prior cycle** — pre-existing.
-12. **Stray malformed-path artifact at repo root** — pre-existing.
-13. **Cleanup of `qa-bot-*` leaked rows** — pre-existing, cosmetic.
-14. **NEW: `prefers-contrast: more`** — explicitly deferred in `docs/ui-theme-options.md` "Deferred / open"; revisit if Dim palette feels under-contrasty in practice.
-15. **NEW: `.github/actions/notify/{README.md,action.yml}` pre-existing modifications** in working tree — not part of this commit; whoever owns that work picks it up.
+Per the in-IDE state at session end, `TODO` line 9 (light/dark/auto theme) closed in commit `ad6f738`. The Focus-across-layouts work this session does NOT correspond to any TODO line — it was a regression fix surfaced mid-session. No TODO state change this commit.
 
 ## Resume instructions
 
 1. Open the working directory in Claude Code — agent definitions reload.
 2. Recommended clean cycle before substantive work: `pwsh -NoProfile -File dev_env/stop.ps1` → `pwsh -NoProfile -File dev_env/start.ps1` → `pwsh -NoProfile -File testing/scripts/seed.ps1 -Clean`.
-3. Run the theme e2e specs once the stack is up: `pwsh -NoProfile -File testing/e2e/run-tests.ps1 -Match theme-*` (or equivalent) to confirm the 6 new specs pass end-to-end.
-4. Manual browser smoke of the Theme axis still owed (see open follow-up #1).
-5. Per the TODO-driven workflow in `CLAUDE.md`: read `TODO`, ask the user about the first ☐ item — currently **TODO line 10 "UX: Version column width (long versions)"**.
-6. Address the open follow-ups (above) opportunistically when adjacent work touches the same files.
+3. **Manual SPA smoke for Cycle H** — exercise Focus × {Matrix, Swim-lane, Workflow-rows} × {Light, Dark}; verify chevron + pin visible, expand flips data-expanded, pin survives "Failures only" + Layout switch, env-header columns aligned with deployment rows pre + post expand, service-name renders on single line at intrinsic width (try long-name stress).
+4. Dispatch `qa-engineer` (single dispatch) to fix the `matrix-focus-env-header-alignment.spec.ts:148-153` contradictory sanity check + re-run the 3 affected e2e specs.
+5. Phase 7 (SA review) → Phase 8 (User approval) → close cycle H.
 
 ## Git state
 
 - Repo: local-only, branch `main`.
 - Local git config (repo scope): `user.name = kostiantyn-matsebora`, `user.email = komkom@duck.com`.
-- Working tree at session end: theme-cycle + lifecycle CLAUDE.md changes staged + committed in this session's commit.
+- Working tree at session end: cycle G (CLAUDE.md restructure + engineering-process.md extraction) and cycle H (Focus across all layouts) bundled together in this session's commit.
 - No remote configured.
-- Pre-existing unstaged modifications in `.github/actions/notify/{README.md,action.yml}` left untouched — not owned by this session.
+- Pre-existing unstaged modifications in `.claude/agents/ai-engineer.md` and `.claude/settings.local.json` left untouched — not owned by this session.
+- Scratch `.mjs` verification scripts under `testing/mockup-visual/` left unstaged — pending qa-engineer cleanup or adoption.

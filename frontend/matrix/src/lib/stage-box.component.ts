@@ -36,7 +36,9 @@ import { getBoxClass, getTooltip } from './box-styles';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
-      class="stage-box w-40 rounded-lg border-2 overflow-hidden relative"
+      class="stage-box rounded-lg border-2 overflow-hidden relative"
+      [class.w-40]="!widthAuto()"
+      [class.w-full]="widthAuto()"
       [class]="boxClass()"
       [attr.data-testid]="'stage-box-' + service().id + '-' + env().id"
       [attr.data-state]="dataState()"
@@ -174,6 +176,13 @@ export class StageBoxComponent {
    * the Focus view's expanded row (SAD "Full-attribute disclosure rule").
    */
   readonly forceAllAttrs = input<boolean>(false);
+  /**
+   * When true, the box uses `w-full` instead of the default `w-40` so its
+   * width is dictated by the parent wrapper (which writes
+   * `style="width: var(--leaf-width)"` against the Focus wrapper's
+   * `--leaf-width` CSS variable). NFR-09 sibling invariant #7.
+   */
+  readonly widthAuto = input<boolean>(false);
   readonly opened = output<{ service: ServiceDescriptor; env: EnvironmentDescriptor }>();
 
   readonly boxClass = computed(() =>

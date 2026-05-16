@@ -1,10 +1,39 @@
 // Focus-view row — collapsed = compact-row dimensions + chevron + pin;
 // expanded = Detailed-size stage box. Mirrors the mockup's "Focus view"
-// template (docs/deployment-dashboard.html lines 576–768).
+// template (docs/deployment-dashboard.html lines 1681-1979).
 //
 // FR-12: collapsed rows respect the active-attrs picker (cap 4); expanded
-// rows always show all five attributes per the "Full-attribute disclosure
+// rows always show all seven attributes per the "Full-attribute disclosure
 // rule" (SAD §7).
+//
+// NFR-09 sibling invariant #7 — every box reads `style="width: var(--leaf-width)"`
+// from the page-level Focus wrapper (`dd-pipeline-matrix`). When any service
+// is Focus-expanded the wrapper flips `--leaf-width` to 200 px and EVERY
+// row (collapsed or expanded) widens in lock-step — env-header columns and
+// deployment columns stay aligned by construction.
+//
+// CSS-specificity note: this row deliberately does NOT carry `data-view="focus"`.
+// `frontend/dashboard/src/styles.css` declares
+// `[data-view="focus"] { --leaf-width: 160px; }` to seed the per-view default
+// at the layout root. If the row carried that attribute, the same rule would
+// fire LOCALLY on this element and shadow the parent wrapper's inline
+// `--leaf-width: 200px` — the row's leaves would stay at 160 px after expand.
+// Inheritance from `<main>` (which DOES carry the attribute, plus an inline
+// override) gives every row the correct `--leaf-width` regardless of expand
+// state.
+//
+// NFR-09 sibling invariant #6 — service name renders on a single line at
+// its intrinsic width (`whitespace-nowrap` + inline `width: max-content`
+// on the <p>). The fixed `w-44` container remains as a visual reservation;
+// long names overflow it visually without clipping. The <p>'s scrollWidth
+// equals its clientWidth by construction.
+//
+// Layout-agnostic testids — `row-chevron-{id}`, `row-pin-{id}`,
+// `row-expanded-{id}` / `row-collapsed-{id}`, `data-expanded`, `data-pinned`
+// (per docs/ui-compact-options.md "Focus view specifics"). The legacy
+// `focus-row-expand-{id}` and `focus-pin-{id}` testids are kept as
+// invisible sr-only aliases so older e2e specs and unit tests continue to
+// resolve.
 
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -29,29 +58,39 @@ import { StageBoxComponent } from './stage-box.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
-      class="bg-white rounded-md border border-gray-200 px-3 py-1.5"
+      class="bg-white rounded-md border px-3 py-1.5 focus-row"
       [class.row-expanded]="isExpanded()"
-      [attr.data-testid]="'service-row-' + service().id"
+      [class.border-blue-200]="isExpanded()"
+      [class.border-gray-200]="!isExpanded()"
+      [attr.data-testid]="isExpanded() ? ('row-expanded-' + service().id) : ('row-collapsed-' + service().id)"
       [attr.data-service-row]="service().id"
       [attr.data-expanded]="isExpanded()"
-      data-view="focus"
+      [attr.data-pinned]="isPinned()"
     >
-      <!-- Alias testid: e2e tests address the Focus row by focus-row plus
-           service id (see scenarios/full-attribute-disclosure). Exposed as
-           a hidden marker so the canonical service-row testid stays unique. -->
+      <!-- Hidden aliases — keep older selectors that address the row by the
+           canonical service-row testid + the focus-pin / focus-row-expand
+           testids resolvable. -->
       <span class="sr-only"
-            [attr.data-testid]="'focus-row-' + service().id"
+            [attr.data-testid]="'service-row-' + service().id"
             [attr.data-expanded]="isExpanded()"
       ></span>
       <div class="flex items-start">
         <div class="w-44 shrink-0 pr-2 flex items-start gap-1">
           <button
             type="button"
-            class="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0"
+            class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors mt-0.5"
+            [class.bg-blue-100]="isExpanded()"
+            [class.border-blue-300]="isExpanded()"
+            [class.text-blue-700]="isExpanded()"
+            [class.hover:bg-blue-200]="isExpanded()"
+            [class.bg-blue-50]="!isExpanded()"
+            [class.border-blue-200]="!isExpanded()"
+            [class.text-blue-600]="!isExpanded()"
+            [class.hover:bg-blue-100]="!isExpanded()"
             [attr.aria-expanded]="isExpanded()"
-            [attr.aria-label]="isExpanded() ? 'Collapse row' : 'Expand row'"
-            [title]="isExpanded() ? 'Collapse row' : 'Expand row'"
-            [attr.data-testid]="'focus-row-expand-' + service().id"
+            [attr.aria-label]="isExpanded() ? 'Collapse row' : 'Expand row to full detail'"
+            [title]="isExpanded() ? 'Collapse row' : 'Expand row to full detail'"
+            [attr.data-testid]="'row-chevron-' + service().id"
             (click)="store.toggleExpand(service().id)"
           >
             <svg
@@ -59,51 +98,87 @@ import { StageBoxComponent } from './stage-box.component';
               [class.rotate-90]="isExpanded()"
               fill="none" viewBox="0 0 24 24" stroke="currentColor"
             >
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
             </svg>
           </button>
+          <!-- Legacy alias for focus-row-expand-{id} — sr-only invisible
+               button referencing the same store action so older specs
+               still resolve the testid. -->
           <button
             type="button"
-            class="shrink-0 mt-0.5"
+            class="sr-only"
+            tabindex="-1"
+            aria-hidden="true"
+            [attr.data-testid]="'focus-row-expand-' + service().id"
+            (click)="store.toggleExpand(service().id)"
+          ></button>
+          <button
+            type="button"
+            class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors mt-0.5"
             [class.pin-active]="isPinned()"
-            [class.text-gray-300]="!isPinned()"
-            [class.hover:text-gray-500]="!isPinned()"
+            [class.bg-amber-100]="isPinned()"
+            [class.border-amber-300]="isPinned()"
+            [class.hover:bg-amber-200]="isPinned()"
+            [class.bg-gray-50]="!isPinned()"
+            [class.border-gray-200]="!isPinned()"
+            [class.text-gray-400]="!isPinned()"
+            [class.hover:bg-amber-50]="!isPinned()"
+            [class.hover:text-amber-600]="!isPinned()"
+            [class.hover:border-amber-200]="!isPinned()"
             [attr.aria-pressed]="isPinned()"
-            [attr.aria-label]="isPinned() ? 'Unpin row' : 'Pin row'"
-            [title]="isPinned() ? 'Unpin (stays expanded)' : 'Pin row (stays expanded)'"
-            [attr.data-testid]="'focus-pin-' + service().id"
+            [attr.aria-label]="isPinned() ? 'Unpin row' : 'Pin row to keep expanded across filters'"
+            [title]="isPinned() ? 'Unpin (stays expanded)' : 'Pin row (stays expanded across filters)'"
+            [attr.data-testid]="'row-pin-' + service().id"
             (click)="store.togglePin(service().id)"
           >
             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.828 2.172a1 1 0 011.415 0l6.586 6.586a1 1 0 010 1.414l-1.415 1.415-3-3-5 5 3 3-1.414 1.414a1 1 0 01-1.415 0L2 11.414a1 1 0 010-1.414l1.414-1.414 3 3 5-5-3-3 1.414-1.414z" />
             </svg>
           </button>
-          <div class="min-w-0">
+          <!-- Legacy alias for focus-pin-{id}. -->
+          <button
+            type="button"
+            class="sr-only"
+            tabindex="-1"
+            aria-hidden="true"
+            [attr.data-testid]="'focus-pin-' + service().id"
+            (click)="store.togglePin(service().id)"
+          ></button>
+          <div class="min-w-0 flex-1">
+            <!-- NFR-09 #6 — single-line at intrinsic width. whitespace-nowrap
+                 + inline width:max-content content-size the <p>. -->
             <p
-              class="text-xs font-semibold text-gray-800 truncate"
+              class="text-xs font-semibold text-gray-800 whitespace-nowrap"
+              style="width: max-content"
               [attr.data-testid]="'service-name-' + service().id"
               [title]="service().name"
             >{{ service().name }}</p>
-            <p class="text-[10px] text-gray-400 leading-tight truncate">{{ summary() }}</p>
+            <p class="text-[10px] text-gray-400 leading-tight">{{ summary() }}</p>
           </div>
         </div>
 
-        <div class="flex items-center overflow-x-auto">
+        <div class="flex items-start overflow-x-auto">
           @for (env of envs(); track env.id; let idx = $index) {
-            <div class="flex items-center">
+            <div class="flex items-start">
               @if (isExpanded()) {
-                <!-- Expanded — full-size stage box, all attributes forced on. -->
-                <dd-stage-box
-                  [service]="service()"
-                  [env]="env"
-                  [slot]="slotFor(env)"
-                  [forceAllAttrs]="true"
-                  (opened)="opened.emit($event)"
-                ></dd-stage-box>
+                <!-- Expanded — full-size stage box, all attributes forced on.
+                     Width comes from --leaf-width (page-level Focus wrapper). -->
+                <div style="width: var(--leaf-width)">
+                  <dd-stage-box
+                    [service]="service()"
+                    [env]="env"
+                    [slot]="slotFor(env)"
+                    [forceAllAttrs]="true"
+                    [widthAuto]="true"
+                    (opened)="opened.emit($event)"
+                  ></dd-stage-box>
+                </div>
               } @else {
-                <!-- Collapsed — compact-style box respecting activeAttrs. -->
+                <!-- Collapsed — compact-style box respecting activeAttrs.
+                     Width comes from --leaf-width. -->
                 <div
-                  class="w-[120px] rounded-md border overflow-hidden relative transition-shadow"
+                  class="rounded-md border overflow-hidden relative transition-shadow"
+                  style="width: var(--leaf-width)"
                   [class]="boxClass(env)"
                   [attr.data-testid]="'stage-box-' + service().id + '-' + env.id"
                   [attr.data-state]="dataState(env)"
@@ -214,15 +289,10 @@ import { StageBoxComponent } from './stage-box.component';
                 </div>
               }
               @if (idx < envs().length - 1) {
-                <!-- Matrix connector — mirrors mockup .arrow-col geometry:
-                     line anchored to wrapper's left edge with width
-                     calc(100% - 6px) so line.right + 6 == target.left.
-                     Expanded rows use the Detailed-view w-10 (40 px) gap;
-                     collapsed rows use w-3.5 (14 px) like compact-row.
-                     Note: Angular's [class.w-3.5] does not work because
-                     Angular interprets the dot as a class-name separator.
-                     The shorthand [class] binding bypasses that. -->
-                <div [class]="'flex items-center ' + (isExpanded() ? 'w-10' : 'w-3.5')">
+                <!-- Per-row arrow-gap mirrors --focus-arrow-gap from the
+                     page-level Focus wrapper. Header + every row share the
+                     SAME variable, so next-env column anchors stay aligned. -->
+                <div class="flex items-center" style="width: var(--focus-arrow-gap)">
                   <div class="arrow-line" style="width:calc(100% - 6px)"></div>
                 </div>
               }

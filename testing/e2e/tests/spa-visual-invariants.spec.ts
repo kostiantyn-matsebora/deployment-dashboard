@@ -125,9 +125,17 @@ function evaluateInvariantsScript(view: string): string {
     // target candidates are STRICTLY box elements (stage-box / .node /
     // .pill) - never .leaf-pair, which extends past the box.
     function findEnclosingRow(line) {
+      // Under Focus the lane-row / workflow-rows section's primary
+      // data-testid flips to row-collapsed-{id} / row-expanded-{id};
+      // the legacy testids still exist as sr-only alias spans but they
+      // are siblings of the arrow-line wrapper, not ancestors, so
+      // closest() never matches them. Add the Focus-grade anchors so
+      // row resolution works in Focus too.
       return line.closest('[data-service-row]')
         || line.closest('[data-testid^="swim-lane-row-"]')
         || line.closest('[data-testid^="workflow-rows-"]')
+        || line.closest('[data-testid^="row-collapsed-"]')
+        || line.closest('[data-testid^="row-expanded-"]')
         || line.ownerDocument.body;
     }
     function nearestBoxByEdgeDirectional(row, edge, x, y, requireDirection, exclude) {

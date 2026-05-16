@@ -20,7 +20,18 @@ async function readDataset(page: Page): Promise<{ theme: string | null; pref: st
 }
 
 async function selectTheme(page: Page, pref: ThemePref): Promise<void> {
-  await page.getByTestId('theme-gear').click();
+  // Per the mockup contract (`docs/deployment-dashboard.html` line
+  // 1182 `x-show="themePopoverOpen"` + `setThemePref` keeps the
+  // popover open after a pick), the popover only closes via
+  // @click.outside / Escape. Clicking the gear when the popover is
+  // already open TOGGLES it shut — so we only click the gear when the
+  // popover is not already visible. This makes selectTheme() safe to
+  // call back-to-back for chained selections.
+  const popover = page.getByTestId('theme-popover');
+  if (!(await popover.isVisible())) {
+    await page.getByTestId('theme-gear').click();
+    await expect(popover).toBeVisible();
+  }
   await page.getByTestId(`theme-option-${pref}`).click();
 }
 

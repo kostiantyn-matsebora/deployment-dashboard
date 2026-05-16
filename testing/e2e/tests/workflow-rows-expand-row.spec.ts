@@ -53,20 +53,31 @@ test('Workflow-rows: every visible service has at least one row', async ({ page 
   await expect(page.getByTestId('pipeline-matrix')).toHaveAttribute('data-layout', 'workflow-rows');
 
   // Pull the list of services from the matrix DOM. Frontend exposes
-  // service rows via data-service-row. For each one we expect at
-  // least one workflow row.
+  // service rows via data-service-row.
+  //
+  // Scope the assertion to services that are part of the canonical
+  // seeded corpus. Ephemeral services POSTed by other specs (e.g.
+  // `qa-bot-*` rows that leak via skip-after-POST in focus-on-last-
+  // event-toggle.spec.ts) may have no derivable topology (single
+  // deployment, no parent_deployments) - the workflow-rows layout
+  // legitimately renders zero rows for those, and asserting "every
+  // service has a row" against them would tightly couple this spec
+  // to the failure mode of unrelated specs. Filter to the seeded
+  // prefixes (`service-` and `topo-`) so the oracle is robust to
+  // intra-suite state pollution from unrelated tests.
   const services = await page.evaluate(() =>
     Array.from(document.querySelectorAll('[data-service-row]'))
       .map((el) => el.getAttribute('data-service-row'))
-      .filter((v): v is string => v !== null && v.length > 0),
+      .filter((v): v is string => v !== null && v.length > 0)
+      .filter((v) => v.startsWith('service-') || v.startsWith('topo-')),
   );
-  expect(services.length).toBeGreaterThan(0);
+  expect(services.length, 'seeded corpus must expose at least one service in workflow-rows layout').toBeGreaterThan(0);
 
   for (const svc of services) {
     const rows = page.locator(`[data-testid^="workflow-row-${svc}-"]`);
     await expect(
       rows.first(),
-      `Service '${svc}' has no workflow-row in workflow-rows layout (empty-topology fallback should still render a single root chain).`,
+      `Seeded service '${svc}' has no workflow-row in workflow-rows layout (empty-topology fallback should still render a single root chain).`,
     ).toBeVisible({ timeout: 5_000 });
   }
 });

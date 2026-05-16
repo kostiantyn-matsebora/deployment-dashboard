@@ -3,12 +3,16 @@
 // Owner: qa-engineer (.claude/agents/qa-engineer.md).
 //
 // Loads docs/deployment-dashboard.html via file:// in a real Chromium
-// browser and runs six numeric geometric assertions against the rendered
-// DOM. Iterates the cross-product of 4 views × 3 layouts = 12
-// combinations declared in harness.config.json. Per-combination results
-// (pass/fail + offending element details) accumulate into
-// __screenshots__/_report.json which run-tests.ps1 prints as a clean
-// per-combination pass/fail table.
+// browser and runs eleven invariants against the rendered DOM:
+//   - I0 .. I6  : connector / geometry / clipping (visual numeric)
+//   - I7 / I8   : picker catalogue + null-render
+//   - I9        : Focus distinct from Compact (Path A — all layouts)
+//   - I10       : Service-name no-clip universal
+//   - I11       : Matrix Focus env-header alignment under expand
+// Iterates the cross-product of 4 views × 3 layouts = 12 combinations
+// declared in harness.config.json. Per-combination results (pass/fail +
+// offending element details) accumulate into __screenshots__/_report.json
+// which run-tests.ps1 prints as a clean per-combination pass/fail table.
 //
 // HARDENED CONNECTOR ORACLE (revised after the false-pass bug):
 //   The prior `cssLineConnectors()` did
@@ -168,7 +172,34 @@ type Fr02Config = {
   caps: Record<string, number>;
 };
 
-function evaluateInvariantsScript(view: string): string {
+type I9PerView = { chevronPerRow: boolean; pinPerRow: boolean };
+type I9ServiceScopeEntry =
+  | { selector: string; mode: 'distinct-attr'; attr: string }
+  | { selector: string; mode: 'count' };
+type I9Config = {
+  selectorChevron: string;
+  selectorPin: string;
+  selectorRow: string;
+  layoutScope?: string[];
+  selectorServiceScope?: Record<string, I9ServiceScopeEntry>;
+  perView: Record<string, I9PerView>;
+};
+type I10PerLayout = { scope: string; xText: string };
+type I10Config = {
+  perLayout: Record<string, I10PerLayout>;
+};
+type I11Config = {
+  layoutScope: string[];
+  viewScope: string[];
+  headerSelector: string;
+  headerCellSelector: string;
+  expandedRowSelector: string;
+  collapsedRowSelector: string;
+  stageBoxInRowSelector: string;
+  tolerancePx: number;
+};
+
+function evaluateInvariantsScript(view: string, layout: string): string {
   // We inline this as a string so the function body is shipped to the
   // browser context unmodified. Playwright's page.evaluate() with a
   // function ref does the same thing, but inlining keeps the failure
@@ -188,12 +219,57 @@ function evaluateInvariantsScript(view: string): string {
   const fr02 = ((harnessConfig as unknown) as { fr02?: Fr02Config }).fr02 ?? { attributes: [], caps: {} };
   const expectedAttributes = fr02.attributes;
   const expectedCap = fr02.caps[view] ?? 0;
+
+  // I9 (Focus distinct from Compact) — declarative config in
+  // harness.config.json#i9. The per-view block decides whether the
+  // chevron / pin testid sets are expected to be one-per-visible-service
+  // (Focus) or zero (Compact). Other views (Detailed, Glance) are
+  // unconstrained — no entry in perView means "no I9 assertion fires
+  // for this view".
+  //
+  // Path A: I9 fires on ALL THREE layouts (per ui-compact-options.md
+  // 'Focus view specifics > Layout scope'). Service-grain is layout-
+  // specific: matrix counts [data-service-row] elements; swim-lane
+  // counts [data-testid^='swim-lane-row-']; workflow-rows counts
+  // [data-testid^='workflow-rows-'] (the service-header section, NOT
+  // the per-path .wf-row inside it — those carry the same service id
+  // and would over-count). selectorServiceScope encodes that mapping.
+  const i9Default: I9Config = { selectorChevron: '', selectorPin: '', selectorRow: '', perView: {} };
+  const i9 = ((harnessConfig as unknown) as { i9?: I9Config }).i9 ?? i9Default;
+  const i9LayoutInScope = !i9.layoutScope || i9.layoutScope.includes(layout);
+  const i9PerView: I9PerView | null = (i9LayoutInScope && i9.perView && i9.perView[view]) ? i9.perView[view] : null;
+  const i9ServiceScope: I9ServiceScopeEntry | null =
+    (i9.selectorServiceScope && i9.selectorServiceScope[layout]) ? i9.selectorServiceScope[layout] : null;
+
+  // I10 (service-name no-clip) — declarative selectors per layout.
+  const i10Default: I10Config = { perLayout: {} };
+  const i10 = ((harnessConfig as unknown) as { i10?: I10Config }).i10 ?? i10Default;
+  const i10PerLayout: I10PerLayout | null = (i10.perLayout && i10.perLayout[layout]) ? i10.perLayout[layout] : null;
+
+  // I11 (Matrix Focus env-header alignment) — fires only on layout=matrix
+  // AND view=focus, per harness.config.json#i11.viewScope/layoutScope.
+  const i11Default: I11Config = {
+    layoutScope: [], viewScope: [], headerSelector: '', headerCellSelector: '',
+    expandedRowSelector: '', collapsedRowSelector: '', stageBoxInRowSelector: '', tolerancePx: 1,
+  };
+  const i11 = ((harnessConfig as unknown) as { i11?: I11Config }).i11 ?? i11Default;
+  const i11InScope = i11.layoutScope.includes(layout) && i11.viewScope.includes(view);
   return `(async () => {
     const TOL = ${JSON.stringify(harnessConfig.tolerances)};
     const ALLOW_PAIRED_ENVTAG_INSIDE_PAIRED_BOX = ${JSON.stringify(allowPairedEnvTagInsidePairedBox)};
     const VIEW_ID = ${JSON.stringify(view)};
     const FR02_EXPECTED_ATTRIBUTES = ${JSON.stringify(expectedAttributes)};
     const FR02_EXPECTED_CAP = ${JSON.stringify(expectedCap)};
+    const I9_SELECTOR_CHEVRON = ${JSON.stringify(i9.selectorChevron)};
+    const I9_SELECTOR_PIN     = ${JSON.stringify(i9.selectorPin)};
+    const I9_SELECTOR_ROW     = ${JSON.stringify(i9.selectorRow)};
+    const I9_SERVICE_SCOPE    = ${JSON.stringify(i9ServiceScope)};
+    const I9_PER_VIEW         = ${JSON.stringify(i9PerView)};
+    const LAYOUT_ID           = ${JSON.stringify(layout)};
+    const I10_PER_LAYOUT      = ${JSON.stringify(i10PerLayout)};
+    const I10_TOLERANCE_PX    = ${JSON.stringify((harnessConfig as { tolerances: { envTagSubpixelPx: number } }).tolerances.envTagSubpixelPx)};
+    const I11_IN_SCOPE        = ${JSON.stringify(i11InScope)};
+    const I11_CONFIG          = ${JSON.stringify(i11)};
 
     // ---- helpers for I7 / I8 — Alpine reactive state access -----------
     // The mockup is an Alpine.js single-page app rooted at <body x-data="dashboard()">.
@@ -802,6 +878,265 @@ function evaluateInvariantsScript(view: string): string {
       await settleReactive();
     }
 
+    // ---- I9 — Focus view distinct from Compact (regression oracle) -------
+    // Background: a prior change rendered Focus indistinguishable from
+    // Compact because the chevron + pin existed but were too understated
+    // to read. The existing I0-I8 oracles all stayed green because none of
+    // them asserted that the Focus-defining affordances were even present.
+    // I9 fires on the two views where the assertion is meaningful (focus,
+    // compact); other views are unconstrained (I9_PER_VIEW is null).
+    //
+    // Path A — applies to all three layouts. Service-grain is layout-
+    // specific (declared in I9_SERVICE_SCOPE):
+    //   - matrix:        count [data-service-row] (one per service-row)
+    //   - swim-lane:     count [data-testid^='swim-lane-row-'] (one per lane)
+    //   - workflow-rows: count [data-testid^='workflow-rows-'] (one per
+    //                    service-header; per-path .wf-row inside also
+    //                    carries data-service-row and would over-count)
+    //
+    // For Focus:   count('row-chevron-*') == count('row-pin-*') == serviceCount
+    //              none nested inside stage-box.
+    // For Compact: count('row-chevron-*') == count('row-pin-*') == 0.
+    if (I9_PER_VIEW && I9_SERVICE_SCOPE) {
+      // Resolve the per-layout service-count from declarative config.
+      const scopeEls = Array.from(document.querySelectorAll(I9_SERVICE_SCOPE.selector));
+      let serviceCount = 0;
+      if (I9_SERVICE_SCOPE.mode === 'distinct-attr') {
+        const attr = I9_SERVICE_SCOPE.attr;
+        const seen = new Set();
+        for (const el of scopeEls) {
+          const k = el.getAttribute(attr);
+          if (k) seen.add(k);
+        }
+        serviceCount = seen.size;
+      } else {
+        serviceCount = scopeEls.length;
+      }
+
+      const chevrons = Array.from(document.querySelectorAll(I9_SELECTOR_CHEVRON));
+      const pins     = Array.from(document.querySelectorAll(I9_SELECTOR_PIN));
+      // For Focus, expect EXACTLY one chevron + one pin per service.
+      // Workflow-rows places the chevron inside .svc-block-meta-row,
+      // not inside a per-path .wf-row — so a duplicate-per-path
+      // implementation will fail this assertion loudly.
+      const expectedChevrons = I9_PER_VIEW.chevronPerRow ? serviceCount : 0;
+      const expectedPins     = I9_PER_VIEW.pinPerRow ? serviceCount : 0;
+
+      // Also assert distinctness of the service ids the controls map to.
+      // The testid suffix carries the service id (row-chevron-{svcId});
+      // each id must appear once. Catches a duplicate-per-path regression
+      // in workflow-rows where the chevron would render N times for an
+      // N-path service.
+      function suffixesOf(els, prefix) {
+        const seen = new Set();
+        const dupes = [];
+        for (const el of els) {
+          const tid = el.getAttribute('data-testid') || '';
+          const sid = tid.startsWith(prefix) ? tid.slice(prefix.length) : '';
+          if (!sid) continue;
+          if (seen.has(sid)) dupes.push(sid);
+          seen.add(sid);
+        }
+        return { unique: seen.size, dupes };
+      }
+      const chevSuffixes = suffixesOf(chevrons, 'row-chevron-');
+      const pinSuffixes  = suffixesOf(pins, 'row-pin-');
+
+      if (chevrons.length !== expectedChevrons) {
+        push('I9-focus-distinct-from-compact',
+          \`Layout '\${LAYOUT_ID}' x View '\${VIEW_ID}' exposes \${chevrons.length} row-chevron testid(s); expected \${expectedChevrons} (one per visible service when chevronPerRow=true, zero otherwise). serviceCount=\${serviceCount}. If the count collapsed to zero in Focus, the regression that motivated this oracle has returned; if it exceeds serviceCount the chevron is rendering per-path instead of per-service (workflow-rows granularity violation).\`,
+          { view: VIEW_ID, layout: LAYOUT_ID, actualChevrons: chevrons.length, expectedChevrons, serviceCount, uniqueServiceIds: chevSuffixes.unique, duplicates: chevSuffixes.dupes });
+      }
+      if (pins.length !== expectedPins) {
+        push('I9-focus-distinct-from-compact',
+          \`Layout '\${LAYOUT_ID}' x View '\${VIEW_ID}' exposes \${pins.length} row-pin testid(s); expected \${expectedPins} (one per visible service when pinPerRow=true, zero otherwise). serviceCount=\${serviceCount}.\`,
+          { view: VIEW_ID, layout: LAYOUT_ID, actualPins: pins.length, expectedPins, serviceCount, uniqueServiceIds: pinSuffixes.unique, duplicates: pinSuffixes.dupes });
+      }
+      if ((I9_PER_VIEW.chevronPerRow || I9_PER_VIEW.pinPerRow) && (chevSuffixes.dupes.length > 0 || pinSuffixes.dupes.length > 0)) {
+        push('I9-focus-distinct-from-compact',
+          \`Layout '\${LAYOUT_ID}' x View '\${VIEW_ID}' rendered duplicate service ids in row-chevron / row-pin testids — Focus affordances are service-grain, not path-grain. chevron dupes=\${JSON.stringify(chevSuffixes.dupes)} pin dupes=\${JSON.stringify(pinSuffixes.dupes)}.\`,
+          { view: VIEW_ID, layout: LAYOUT_ID, chevronDuplicates: chevSuffixes.dupes, pinDuplicates: pinSuffixes.dupes });
+      }
+
+      // Row-gutter placement guard: chevron / pin must NOT be nested
+      // inside a stage-box (inline placement is out-of-contract per
+      // docs/ui-compact-options.md "Focus view specifics"). Only meaningful
+      // when the controls are expected to exist at all.
+      if (I9_PER_VIEW.chevronPerRow || I9_PER_VIEW.pinPerRow) {
+        const offenders = [];
+        for (const el of [...chevrons, ...pins]) {
+          if (el.closest("[data-testid^='stage-box-']")) {
+            offenders.push(el.getAttribute('data-testid') || '<no-testid>');
+          }
+        }
+        if (offenders.length > 0) {
+          push('I9-focus-distinct-from-compact',
+            \`Layout '\${LAYOUT_ID}' x View '\${VIEW_ID}' renders \${offenders.length} chevron/pin button(s) INSIDE a stage-box, but docs/ui-compact-options.md "Focus view specifics" prescribes row-gutter placement only. Offenders: \${offenders.join(', ')}.\`,
+            { view: VIEW_ID, layout: LAYOUT_ID, offenders });
+        }
+      }
+    }
+
+    // ---- I10 — Service-name no-clip universal -----------------------------
+    // User-reported defect: in workflow-rows under some configurations the
+    // service name clipped with text-overflow:ellipsis. Frontend is fixing
+    // structurally (drop .truncate in favour of whitespace-normal
+    // break-words). This oracle catches any future regression of the
+    // same shape across every View x Layout combination (the e2e
+    // companion exercises Theme too).
+    //
+    // Strategy: walk every element inside the per-layout scope, find the
+    // p (or any element) whose Alpine x-text directive points at the
+    // configured key (e.g. service.name). This is robust to whether
+    // the element carries .truncate or not — we always check the
+    // overflow against the actual rendered glyphs.
+    //
+    // Assertion per element:
+    //   scrollWidth <= clientWidth + tolerance  (no horizontal overflow,
+    //   i.e. the element is wide enough to render its full content).
+    if (I10_PER_LAYOUT) {
+      const scopes = Array.from(document.querySelectorAll(I10_PER_LAYOUT.scope));
+      // Filter scopes to elements that are actually rendered (some
+      // ancestor templates may leave detached fragments).
+      const visibleScopes = scopes.filter((s) => {
+        const r = s.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      const allEls = [];
+      for (const s of visibleScopes) {
+        // Querying by attribute selector is the most robust hook into
+        // Alpine x-text in the mockup. Browser parses x-text as a plain
+        // attribute (Alpine doesn't remove it after binding).
+        const matches = s.querySelectorAll('[x-text]');
+        for (const m of matches) {
+          if (m.getAttribute('x-text') === I10_PER_LAYOUT.xText) allEls.push(m);
+        }
+      }
+      if (visibleScopes.length === 0) {
+        push('I10-service-name-no-clip',
+          \`Layout '\${LAYOUT_ID}': scope selector '\${I10_PER_LAYOUT.scope}' matched zero visible elements. Either the layout has no service rows rendered (unexpected) or the selector drifted — flag to qa-engineer.\`,
+          { layout: LAYOUT_ID, view: VIEW_ID, scope: I10_PER_LAYOUT.scope });
+      } else if (allEls.length === 0) {
+        push('I10-service-name-no-clip',
+          \`Layout '\${LAYOUT_ID}': inside \${visibleScopes.length} visible scope(s), no element carried x-text='\${I10_PER_LAYOUT.xText}'. The service-name binding may have moved; flag to qa-engineer to update harness.config.json#i10.\`,
+          { layout: LAYOUT_ID, view: VIEW_ID, scope: I10_PER_LAYOUT.scope, xText: I10_PER_LAYOUT.xText });
+      }
+      for (const el of allEls) {
+        // scrollWidth and clientWidth are integers (CSS pixels). The tag's
+        // own text content drives scrollWidth.
+        const sw = el.scrollWidth;
+        const cw = el.clientWidth;
+        const overflowX = sw - cw;
+        if (overflowX > I10_TOLERANCE_PX) {
+          const text = (el.textContent || '').trim();
+          push('I10-service-name-no-clip',
+            \`Service name '\${text}' is clipped in Layout '\${LAYOUT_ID}' x View '\${VIEW_ID}': scrollWidth(\${sw}) > clientWidth(\${cw}) by \${overflowX} px. The container must widen (or the truncate class must drop) so the full service name renders.\`,
+            { layout: LAYOUT_ID, view: VIEW_ID, text, scrollWidth: sw, clientWidth: cw, overflowX });
+        }
+      }
+    }
+
+    // ---- I11 — Matrix Focus env-header alignment under expand ------------
+    // User-reported defect: in Matrix x Focus, when a row expands to
+    // --leaf-width-expanded (200 px), the env-header columns above the
+    // matrix no longer align with the widened deployment columns in the
+    // expanded row. Frontend is fixing structurally.
+    //
+    // Assertion: for the FIRST env in the env-header row, the header
+    // cell's left/right edges must match the corresponding stage-box's
+    // left/right edges in BOTH (a) a collapsed row AND (b) an expanded row
+    // — within tolerancePx. To exercise (b) we toggleExpand the first
+    // filtered service via the Alpine root, settle two paint frames, and
+    // re-measure. To preserve (a) we leave at least one other row
+    // collapsed (the corpus seeds 12 services, so this holds).
+    if (I11_IN_SCOPE) {
+      const root = alpineRoot();
+      if (!root) {
+        push('I11-matrix-focus-env-header-alignment',
+          'Cannot reach the Alpine root component for I11 (needed to programmatically expand a row).',
+          { layout: LAYOUT_ID, view: VIEW_ID });
+      } else {
+        // Snapshot any previously expanded ids so we can restore on exit.
+        const expandedSnapshot = Object.keys(root.expanded || {}).filter((k) => root.expanded[k]);
+
+        // Ensure at least one row is expanded and at least one is
+        // collapsed. The 6-state corpus seeds >= 4 services so this is
+        // always satisfiable.
+        const filtered = (root.filteredServices || []).slice();
+        if (filtered.length < 2) {
+          push('I11-matrix-focus-env-header-alignment',
+            \`I11 needs >= 2 filtered services to exercise both a collapsed AND an expanded row in the same render. Got \${filtered.length}. Fixture or filter state is incompatible with the invariant; flag to qa-engineer.\`,
+            { layout: LAYOUT_ID, view: VIEW_ID, filteredCount: filtered.length });
+        } else {
+          // Force first service expanded, second service collapsed.
+          if (!root.expanded[filtered[0].id]) root.toggleExpand(filtered[0].id);
+          if (root.expanded[filtered[1].id]) root.toggleExpand(filtered[1].id);
+          await settleReactive();
+
+          // Env-header cells: the matrix Focus header is .text-center
+          // with inline style 'width: var(--leaf-width)' inside the
+          // header strip above the rows. Grab them in document order.
+          // We scope to the closest header strip preceding the rows so
+          // we don't pick up the per-row header widgets (none exist in
+          // this layout but the scoping is defensive).
+          const headerCells = Array.from(document.querySelectorAll(I11_CONFIG.headerCellSelector))
+            .filter((el) => !el.closest('[data-service-row]'));
+          if (headerCells.length === 0) {
+            push('I11-matrix-focus-env-header-alignment',
+              \`No env-header cells matched selector '\${I11_CONFIG.headerCellSelector}'. Header may have changed shape; flag to qa-engineer.\`,
+              { layout: LAYOUT_ID, view: VIEW_ID });
+          } else {
+            const expandedRow = document.querySelector(I11_CONFIG.expandedRowSelector);
+            const collapsedRow = document.querySelector(I11_CONFIG.collapsedRowSelector);
+            if (!expandedRow || !collapsedRow) {
+              push('I11-matrix-focus-env-header-alignment',
+                \`Could not find both an expanded row (\${!!expandedRow}) and a collapsed row (\${!!collapsedRow}) after toggling. Fixture / Alpine state may have drifted; flag to qa-engineer.\`,
+                { layout: LAYOUT_ID, view: VIEW_ID });
+            } else {
+              const expandedCells = Array.from(expandedRow.querySelectorAll(I11_CONFIG.stageBoxInRowSelector));
+              const collapsedCells = Array.from(collapsedRow.querySelectorAll(I11_CONFIG.stageBoxInRowSelector));
+              const tol = I11_CONFIG.tolerancePx;
+              // For each env-header cell, compare to the corresponding
+              // box in the expanded AND collapsed rows by index.
+              for (let i = 0; i < headerCells.length; i++) {
+                const hr = headerCells[i].getBoundingClientRect();
+                const er = expandedCells[i] ? expandedCells[i].getBoundingClientRect() : null;
+                const cr = collapsedCells[i] ? collapsedCells[i].getBoundingClientRect() : null;
+                if (er) {
+                  const dl = Math.abs(hr.left - er.left);
+                  const dr = Math.abs(hr.right - er.right);
+                  if (dl > tol || dr > tol) {
+                    push('I11-matrix-focus-env-header-alignment',
+                      \`Env-header cell #\${i} does not align with EXPANDED row's deployment cell: header(left=\${hr.left.toFixed(1)},right=\${hr.right.toFixed(1)}) vs box(left=\${er.left.toFixed(1)},right=\${er.right.toFixed(1)}); dLeft=\${dl.toFixed(1)} dRight=\${dr.toFixed(1)} (tol \${tol} px). Most likely cause: row expanded to --leaf-width-expanded but env-header is still rendered at --leaf-width.\`,
+                      { layout: LAYOUT_ID, view: VIEW_ID, index: i, headerRect: { left: hr.left, right: hr.right }, expandedRect: { left: er.left, right: er.right }, dLeft: dl, dRight: dr });
+                  }
+                }
+                if (cr) {
+                  const dl = Math.abs(hr.left - cr.left);
+                  const dr = Math.abs(hr.right - cr.right);
+                  if (dl > tol || dr > tol) {
+                    push('I11-matrix-focus-env-header-alignment',
+                      \`Env-header cell #\${i} does not align with COLLAPSED row's deployment cell: header(left=\${hr.left.toFixed(1)},right=\${hr.right.toFixed(1)}) vs box(left=\${cr.left.toFixed(1)},right=\${cr.right.toFixed(1)}); dLeft=\${dl.toFixed(1)} dRight=\${dr.toFixed(1)} (tol \${tol} px). The base alignment regressed — typically a header padding / margin drift.\`,
+                      { layout: LAYOUT_ID, view: VIEW_ID, index: i, headerRect: { left: hr.left, right: hr.right }, collapsedRect: { left: cr.left, right: cr.right }, dLeft: dl, dRight: dr });
+                  }
+                }
+              }
+            }
+          }
+
+          // Restore expansion state so later evaluator passes (or
+          // subsequent tests in the same page) don't accumulate state.
+          for (const id of Object.keys(root.expanded || {})) {
+            if (root.expanded[id] && !expandedSnapshot.includes(id)) root.toggleExpand(id);
+          }
+          for (const id of expandedSnapshot) {
+            if (!root.expanded[id]) root.toggleExpand(id);
+          }
+          await settleReactive();
+        }
+      }
+    }
+
     return {
       violations,
       counts: {
@@ -884,7 +1219,7 @@ for (const view of harnessConfig.views) {
       // 5) Evaluate invariants in-browser. The current `view` is passed
       // so per-view exceptions in harness.config.json#viewExceptions
       // are applied without any hardcoded view name in the spec.
-      const evaluated = (await page.evaluate(evaluateInvariantsScript(view))) as {
+      const evaluated = (await page.evaluate(evaluateInvariantsScript(view, layout))) as {
         violations: InvariantViolation[];
         counts: Record<string, number>;
       };

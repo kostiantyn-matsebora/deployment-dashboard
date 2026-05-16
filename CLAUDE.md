@@ -140,7 +140,7 @@ deployment-dashboard/
 
 ## Agents — deterministic routing
 
-Five subagents in `.claude/agents/`. Route work per the table — do not do agent-owned work yourself in the main thread.
+Six subagents in `.claude/agents/`. Route work per the table — do not do agent-owned work yourself in the main thread.
 
 | Agent | Concerns |
 |---|---|
@@ -149,6 +149,7 @@ Five subagents in `.claude/agents/`. Route work per the table — do not do agen
 | `frontend-engineer` | Mockup (`docs/deployment-dashboard.html`) — HTML/CSS/JS/Alpine.js/SVG/embedded fixture edits; Angular 20 standalone components, zoneless change detection; NgRx Signal Store, derived signals, slot-update dispatch; Tailwind layout, 6 box states, hover highlight, history drawer, filters, stats bar; browser-native `EventSource` client and reconnect logic. |
 | `qa-engineer` | Functional / API tests against running stack; Playwright e2e + scenario specs; `seed.ps1`, `cleanup.ps1`, `test-notify.ps1`, `init-data.ps1`; smoke suite (post-deploy validation); Pester tests for non-trivial PowerShell or composite-action logic; mockup-visual harness assertions. |
 | `devops-engineer` | Dockerfiles, `docker-compose.*.yml`, scaled compose; Terraform (ACR, ACA, Postgres Flexible B1ms, Key Vault, networking); GitHub Actions CI + release workflows, ACA revision updates; composite `notify` action under `.github/actions/notify/`; secret provisioning, cost tracking against ≤ $30/month cap. |
+| `ai-engineer` | AI-asset and documentation optimization for LLM context economy: compaction, file splitting / lazy-loading topology, cross-referencing, vocabulary normalization, prompt-structure tightening across `.claude/agents/*.md`, `CLAUDE.md`, `docs/*.md`, READMEs, ADRs, skills. |
 
 Task spans two agents (e.g. wire contract touches backend + frontend) → dispatch to both per the dispatch rules in [`docs/engineering-process.md`](docs/engineering-process.md) § Dispatch & parallelism rules.
 
@@ -163,6 +164,7 @@ Project-specific forbidden role-crossings (the principle is in [`docs/engineerin
 | `backend-engineer` | Angular code, Tailwind, `docs/deployment-dashboard.html` (mockup); Terraform, Dockerfiles, `.github/` CI workflows. |
 | `devops-engineer` | `.csproj`, NuGet config, any C# source to dodge a build issue; Angular code or Tailwind config. |
 | `qa-engineer` | Mockup HTML, backend production C#, frontend production TypeScript. QA owns test code, fixtures, scenarios, runner scripts — never production surfaces. |
+| `ai-engineer` | Production code (`backend/`, `frontend/`, `gateway/`, `infrastructure/`, `.github/`, `testing/`); mockup HTML/CSS/JS; configuration files (`appsettings.json`, `*.tfvars`, `docker-compose.*.yml`); CI workflows. Must NOT add / remove / reword any rule, routing entry, invariant, FR/NFR, or governance decision (semantic content is `solution-architect`'s). Must NOT delete a doc without SA approval. Must NOT split a file without updating every dependent cross-reference in the same pass. |
 
 ## Stack — non-negotiable (per SAD §6, §7)
 

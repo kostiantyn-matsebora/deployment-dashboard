@@ -88,11 +88,14 @@ test.describe('Theme switcher — popover open + select', () => {
     await installPersistenceMarker(page);
 
     // Start by going to Dark so the click on Auto changes something.
+    // The popover stays open after a pick (mockup contract: setThemePref
+    // does NOT close the popover; only @click.outside / Escape close it).
+    // So we open the popover ONCE and pick both options without re-
+    // clicking the gear (a second gear click TOGGLES the popover shut).
     await page.getByTestId('theme-gear').click();
     await page.getByTestId('theme-option-dark').click();
     await expect.poll(async () => (await readDataset(page)).pref).toBe('dark');
 
-    await page.getByTestId('theme-gear').click(); // re-open if needed
     await page.getByTestId('theme-option-auto').click();
 
     await expect.poll(async () => (await readDataset(page)).pref).toBe('auto');
@@ -103,13 +106,14 @@ test.describe('Theme switcher — popover open + select', () => {
   });
 
   test('gear title contains both the persisted pref and the effective palette', async ({ page }) => {
+    // Popover stays open after a pick (see comment in the test above),
+    // so a single gear click is enough to pick both Dark and Light.
     await page.getByTestId('theme-gear').click();
     await page.getByTestId('theme-option-dark').click();
     // Title format per the mockup: `Theme: ${themePref} · effective ${effectiveTheme}`
     const titleAfterDark = (await page.getByTestId('theme-gear').getAttribute('title')) ?? '';
     expect(titleAfterDark.toLowerCase()).toContain('dark');
 
-    await page.getByTestId('theme-gear').click();
     await page.getByTestId('theme-option-light').click();
     const titleAfterLight = (await page.getByTestId('theme-gear').getAttribute('title')) ?? '';
     expect(titleAfterLight.toLowerCase()).toContain('light');

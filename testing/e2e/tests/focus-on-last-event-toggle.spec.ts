@@ -59,6 +59,21 @@ test.describe('Focus on last event - viewport response to SSE updates', () => {
       extraHTTPHeaders: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
     });
 
+    // Probe the SPA for the feature toggle BEFORE creating any
+    // ephemeral state (POSTs). If the toggle is not in the SPA yet,
+    // skipping after a POST leaves a `qa-bot-focus-*` row behind that
+    // pollutes later specs (workflow-rows-expand-row treats it as a
+    // service with no topology and fails). Probe first, skip cleanly,
+    // then POST.
+    await page.goto('/');
+    try {
+      await page.waitForSelector(TOGGLE, { state: 'attached', timeout: 10_000 });
+    } catch {
+      test.skip(true, 'focus-on-last-event-toggle not yet present in the SPA (frontend WBS in flight)');
+      await apiContext.dispose();
+      return;
+    }
+
     const suffix = runSuffix();
     const SERVICE = `qa-bot-focus-on-${suffix}`.slice(0, 32);
     const ENV = 'fn-focus';
@@ -67,20 +82,6 @@ test.describe('Focus on last event - viewport response to SSE updates', () => {
 
     // Baseline row so the matrix has SOMETHING at SERVICE/ENV before navigation.
     await postBaseline(apiContext, SERVICE, ENV);
-
-    await page.goto('/');
-    // Explicit wait — Angular bootstraps the header asynchronously after
-    // `goto`, so a synchronous `.count() === 0` check races the SPA and
-    // false-negatives this scenario into `test.skip`. Wait up to 10 s for
-    // the toggle to be attached; if it never appears, THEN we can fairly
-    // declare it missing.
-    try {
-      await page.waitForSelector(TOGGLE, { state: 'attached', timeout: 10_000 });
-    } catch {
-      test.skip(true, 'focus-on-last-event-toggle not yet present in the SPA (frontend WBS in flight)');
-      await apiContext.dispose();
-      return;
-    }
 
     // Set toggle ON via the checkbox; persistence sanity.
     await page.evaluate((key) => localStorage.removeItem(key), STORAGE_KEY);
@@ -170,16 +171,9 @@ test.describe('Focus on last event - viewport response to SSE updates', () => {
       extraHTTPHeaders: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
     });
 
-    const suffix = runSuffix();
-    const SERVICE = `qa-bot-focus-off-${suffix}`.slice(0, 32);
-    const ENV = 'fn-focus';
-    const TEST_ID = `stage-box-${SERVICE}-${ENV}`;
-    const ROW = `[data-service-row="${SERVICE}"]`;
-
-    await postBaseline(apiContext, SERVICE, ENV);
-
+    // Probe the SPA for the feature toggle BEFORE creating any
+    // ephemeral state (POSTs) - see ON-path commentary above for why.
     await page.goto('/');
-    // Explicit wait — see ON-path commentary above; same race applies here.
     try {
       await page.waitForSelector(TOGGLE, { state: 'attached', timeout: 10_000 });
     } catch {
@@ -187,6 +181,14 @@ test.describe('Focus on last event - viewport response to SSE updates', () => {
       await apiContext.dispose();
       return;
     }
+
+    const suffix = runSuffix();
+    const SERVICE = `qa-bot-focus-off-${suffix}`.slice(0, 32);
+    const ENV = 'fn-focus';
+    const TEST_ID = `stage-box-${SERVICE}-${ENV}`;
+    const ROW = `[data-service-row="${SERVICE}"]`;
+
+    await postBaseline(apiContext, SERVICE, ENV);
 
     await page.evaluate((key) => localStorage.setItem(key, 'false'), STORAGE_KEY);
     await page.reload();

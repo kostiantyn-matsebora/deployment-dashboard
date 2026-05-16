@@ -34,7 +34,8 @@ import {
   DeploymentMatrixStore,
   type EnvironmentDescriptor,
   type ServiceDescriptor,
-  type SlotState
+  type SlotState,
+  type ViewId
 } from '@dd/shared';
 import { LayoutLeafComponent } from '@dd/matrix';
 import {
@@ -49,6 +50,32 @@ import {
   imports: [CommonModule, LayoutLeafComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (store.view() === 'focus') {
+      <!-- Focus toolbar — discoverability hint, pinned count, collapse-all.
+           Mirrors mockup lines 2385-2397 (above workflow-rows Focus). -->
+      <div class="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-4 text-xs">
+        <span class="inline-flex items-center gap-1.5 text-gray-600" data-testid="focus-toolbar-hint">
+          <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span>Click the chevron next to a service to drill into Detailed-size fidelity. Pin to keep it expanded across filters.</span>
+        </span>
+        @if (pinnedCount() > 0) {
+          <span class="text-amber-600 font-semibold" data-testid="pinned-count">
+            <span>{{ pinnedCount() }}</span> pinned
+          </span>
+        }
+        @if (hasExpanded()) {
+          <button
+            type="button"
+            class="ml-auto text-gray-600 hover:text-gray-900 underline"
+            data-testid="collapse-all"
+            (click)="store.collapseAll()"
+          >Collapse all</button>
+        }
+      </div>
+    }
+
     <div class="px-6 py-2 flex items-center gap-3 text-xs bg-white border-b border-gray-200">
       <button
         type="button"
@@ -70,14 +97,78 @@ import {
       [attr.data-layout]="store.layout()"
     >
       @for (service of store.filteredServices(); track service.id) {
+        <!-- When this service is Focus-expanded, override --leaf-width on
+             the .svc-block so every .wf-row in the stack widens in lock-step.
+             Mirrors mockup lines 2427-2428. -->
         <section
           class="svc-block"
+          [class.focus-row]="store.view() === 'focus'"
+          [class.row-expanded]="store.view() === 'focus' && isFocusExpanded(service.id)"
           [attr.data-service]="service.id"
-          [attr.data-testid]="'workflow-rows-' + service.id"
+          [attr.data-service-row]="service.id"
+          [attr.data-testid]="serviceBlockTestid(service)"
+          [attr.data-expanded]="store.view() === 'focus' && isFocusExpanded(service.id) ? 'true' : 'false'"
+          [attr.data-pinned]="store.view() === 'focus' && isPinned(service.id) ? 'true' : 'false'"
+          [attr.style]="serviceBlockStyle(service.id)"
         >
+          <!-- Legacy testid alias — older specs address the section via
+               workflow-rows-{id}; Focus view repurposes the primary
+               testid for row-expanded-/row-collapsed-, so this hidden
+               marker keeps the legacy selector resolvable. -->
+          @if (store.view() === 'focus') {
+            <span class="sr-only" [attr.data-testid]="'workflow-rows-' + service.id"></span>
+          }
           <!-- Meta column. -->
           <div class="svc-block-meta">
             <div class="svc-block-meta-row">
+              @if (store.view() === 'focus') {
+                <span class="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                    [class.bg-blue-100]="isFocusExpanded(service.id)"
+                    [class.border-blue-300]="isFocusExpanded(service.id)"
+                    [class.text-blue-700]="isFocusExpanded(service.id)"
+                    [class.hover:bg-blue-200]="isFocusExpanded(service.id)"
+                    [class.bg-blue-50]="!isFocusExpanded(service.id)"
+                    [class.border-blue-200]="!isFocusExpanded(service.id)"
+                    [class.text-blue-600]="!isFocusExpanded(service.id)"
+                    [class.hover:bg-blue-100]="!isFocusExpanded(service.id)"
+                    [attr.aria-expanded]="isFocusExpanded(service.id)"
+                    [attr.aria-label]="isFocusExpanded(service.id) ? 'Collapse service' : 'Expand service to full detail'"
+                    [title]="isFocusExpanded(service.id) ? 'Collapse service (Detailed)' : 'Expand service to Detailed-size fidelity'"
+                    [attr.data-testid]="'row-chevron-' + service.id"
+                    (click)="store.toggleExpand(service.id)"
+                  >
+                    <svg class="w-3.5 h-3.5 transition-transform" [class.rotate-90]="isFocusExpanded(service.id)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
+                    [class.pin-active]="isPinned(service.id)"
+                    [class.bg-amber-100]="isPinned(service.id)"
+                    [class.border-amber-300]="isPinned(service.id)"
+                    [class.hover:bg-amber-200]="isPinned(service.id)"
+                    [class.bg-gray-50]="!isPinned(service.id)"
+                    [class.border-gray-200]="!isPinned(service.id)"
+                    [class.text-gray-400]="!isPinned(service.id)"
+                    [class.hover:bg-amber-50]="!isPinned(service.id)"
+                    [class.hover:text-amber-600]="!isPinned(service.id)"
+                    [class.hover:border-amber-200]="!isPinned(service.id)"
+                    [attr.aria-pressed]="isPinned(service.id)"
+                    [attr.aria-label]="isPinned(service.id) ? 'Unpin service' : 'Pin service to keep expanded across filters'"
+                    [title]="isPinned(service.id) ? 'Unpin (stays expanded)' : 'Pin service (stays expanded across filters)'"
+                    [attr.data-testid]="'row-pin-' + service.id"
+                    (click)="store.togglePin(service.id)"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.828 2.172a1 1 0 011.415 0l6.586 6.586a1 1 0 010 1.414l-1.415 1.415-3-3-5 5 3 3-1.414 1.414a1 1 0 01-1.415 0L2 11.414a1 1 0 010-1.414l1.414-1.414 3 3 5-5-3-3 1.414-1.414z" />
+                    </svg>
+                  </button>
+                </span>
+              }
               <button
                 type="button"
                 class="chev"
@@ -94,16 +185,26 @@ import {
                   <polyline points="9 6 15 12 9 18"></polyline>
                 </svg>
               </button>
+              <!-- NFR-09 #6 — single-line at intrinsic width. whitespace-nowrap
+                   + inline width:max-content content-size the <p> so
+                   scrollWidth equals clientWidth by construction. The
+                   .svc-block-meta-row flex container preserves the
+                   chevron/pin layout; long names overflow the 176 px
+                   .svc-block meta column visually without clipping. The
+                   former flex-1 min-w-0 (which forced flex shrinking and
+                   activated truncate-like overflow:hidden on ancestors) is
+                   dropped — content-driven width is the source of truth. -->
               <p
-                class="text-sm font-semibold text-gray-800 truncate"
+                class="text-sm font-semibold text-gray-800 whitespace-nowrap"
+                style="width: max-content"
                 [attr.data-testid]="'service-name-' + service.id"
                 [title]="service.name"
               >{{ service.name }}</p>
-              <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight ml-1">
+              <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight ml-1 shrink-0">
                 {{ pathsFor(service).length }} wf{{ pathsFor(service).length === 1 ? '' : 's' }}
               </span>
             </div>
-            @if (showServiceMeta()) {
+            @if (showServiceMeta() || (store.view() === 'focus' && isFocusExpanded(service.id))) {
               <p class="text-[10px] text-gray-400 truncate">{{ failureLabel(service) }}</p>
               <p class="text-[10px] text-gray-400 italic leading-tight truncate">{{ topoLabel(service) }}</p>
               @if (!isExpanded(service.id) && pathsFor(service).length > 1) {
@@ -141,6 +242,8 @@ import {
                           [service]="service"
                           [env]="envFor(envId)"
                           [slot]="slotFor(service, envId)"
+                          [viewOverride]="leafViewOverride(service.id)"
+                          [forceAllAttrs]="forceAllAttrsFor(service.id)"
                           (opened)="openSlot.emit($event)"
                         ></dd-layout-leaf>
                       </div>
@@ -220,6 +323,71 @@ export class WorkflowRowsLayoutComponent {
     }
     return true;
   });
+
+  /** True when at least one service is currently Focus-expanded. */
+  readonly hasExpanded = computed(() => this.store.expandedServices().size > 0);
+
+  /** Number of services with the pin set — surfaced in the Focus toolbar. */
+  readonly pinnedCount = computed(() => this.store.pinnedServices().size);
+
+  /**
+   * Focus-view expansion check (drill-into-Detailed-size). Distinct from
+   * the workflow-rows-only path expansion (`isExpanded`) which controls
+   * "show all paths" vs "default path only".
+   */
+  isFocusExpanded(serviceId: string): boolean {
+    return this.store.expandedServices().has(serviceId);
+  }
+
+  /** Per-service pin check (Focus view; layout-agnostic state). */
+  isPinned(serviceId: string): boolean {
+    return this.store.pinnedServices().has(serviceId);
+  }
+
+  /**
+   * Service-block testid — Focus view uses the layout-agnostic
+   * `row-expanded-{id}` / `row-collapsed-{id}`; other views keep the
+   * existing `workflow-rows-{id}` shape.
+   */
+  serviceBlockTestid(service: ServiceDescriptor): string {
+    if (this.store.view() === 'focus') {
+      return (this.isFocusExpanded(service.id) ? 'row-expanded-' : 'row-collapsed-') + service.id;
+    }
+    return 'workflow-rows-' + service.id;
+  }
+
+  /**
+   * Inline style for the .svc-block. When (view=focus AND focus-expanded)
+   * override --leaf-width so every .wf-row stack member grows in lock-step.
+   * Mirrors mockup lines 2427-2428.
+   *
+   * NFR-09 (b) is preserved because the existing `recomputeConnectorTops`
+   * runs on every render and re-measures the BOX rects after the leaf
+   * width flip lands.
+   */
+  serviceBlockStyle(serviceId: string): string {
+    if (this.store.view() === 'focus' && this.isFocusExpanded(serviceId)) {
+      return '--leaf-width-expanded: 200px; --leaf-width: var(--leaf-width-expanded);';
+    }
+    return '--leaf-width-expanded: 200px;';
+  }
+
+  /**
+   * Leaf view-override for the LayoutLeafComponent. In Focus + expanded
+   * the leaf renders as Detailed (full-fidelity); collapsed Focus uses
+   * the Compact / Focus-collapsed branch.
+   */
+  leafViewOverride(serviceId: string): ViewId | null {
+    if (this.store.view() === 'focus') {
+      return this.isFocusExpanded(serviceId) ? 'detailed' : 'compact';
+    }
+    return null;
+  }
+
+  /** Force all attributes when the service is Focus-expanded. */
+  forceAllAttrsFor(serviceId: string): boolean {
+    return this.store.view() === 'focus' && this.isFocusExpanded(serviceId);
+  }
 
   constructor() {
     // NFR-09 (c) re-measurement: `afterEveryRender` runs after every Angular

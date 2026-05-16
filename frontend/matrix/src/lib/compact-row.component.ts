@@ -34,8 +34,14 @@ import { getBoxClass, getTooltip } from './box-styles';
     >
       <div class="flex items-center">
         <div class="w-36 shrink-0 pr-2">
+          <!-- NFR-09 #6 — single-line at intrinsic width, no truncate / no
+               ellipsis / no wrap. The <p> auto-sizes via
+               whitespace-nowrap + inline width:max-content. The w-36
+               column is a visual reservation; long names overflow visually
+               without clipping. -->
           <p
-            class="text-xs font-semibold text-gray-800 truncate"
+            class="text-xs font-semibold text-gray-800 whitespace-nowrap"
+            style="width: max-content"
             [attr.data-testid]="'service-name-' + service().id"
             [title]="service().name"
           >{{ service().name }}</p>

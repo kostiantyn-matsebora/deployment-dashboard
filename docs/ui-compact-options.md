@@ -19,6 +19,29 @@ Rationale for the names:
 - **Glance** — names the user behaviour the view enables ("take a glance at the catalogue") rather than the layout primitive ("list" / "pills").
 - **Focus** — names what the user gets, not how it works ("expandable" / "hybrid"). When triaging an incident the user clicks the chevron to focus on one service.
 
+### Focus view specifics
+
+The Focus view's chevron + pin controls have a fixed placement and lifecycle. The mockup is the canonical reference; the rules below codify the de-facto contract so a future implementation cannot drift.
+
+| Control | Placement | Resting surface | Active surface |
+|---|---|---|---|
+| Chevron (expand / collapse) | Row gutter — leftmost edge of the row, before the service name. Framed `w-5 h-5` button. | `bg-*-50` | `bg-*-100` |
+| Pin (keep expanded across filter changes) | Row gutter — adjacent to the chevron. Framed `w-5 h-5` button. | `bg-*-50` | `bg-*-100` |
+
+- Inline placement (next to the service name or inside a leaf) is **out of contract**. The row gutter is the only valid host.
+- Pin lifecycle under filters — pin state lives in `state.pinned[id]` and is **unaffected by filters**. If a pinned row is hidden by search or "failures only", the pin is preserved; when the row re-matches the active filter set, it re-renders expanded.
+- Per-row `expanded` and `pinned` state is **session-only** (in-memory Alpine state). No `localStorage` key; a fresh load starts every row collapsed and unpinned. See the [localStorage shape](#localstorage-shape) section for the exhaustive list of persisted keys.
+- **Layout scope.** Focus row-gutter affordances (chevron + pin) apply to **all three layouts**. Granularity is layout-specific:
+
+  | Layout | Granularity | Expansion semantics |
+  |---|---|---|
+  | **Matrix** | per service-row | One chevron + one pin per service-row. Expanding grows the row vertically; all envs in the row use `--leaf-width-expanded` and show all 7 attributes. |
+  | **Swim-lane** | per service-lane | One chevron + one pin per service-lane. Expanding grows the lane vertically; each leaf-pair in the lane uses `--leaf-width-expanded` and shows all 7 attributes. SVG connectors anchored to leaf-pair boxes reflow on expand (per NFR-09 a/b) via `recomputeEdges`. |
+  | **Workflow-rows** | per service-header | One chevron + one pin per service-header. Expanding the service-header expands ALL of that service's root-to-leaf path rows simultaneously. Path-row-level affordances are **out of contract** — service-grain only. |
+
+- **Pin survives layout switch.** `state.pinned[id]` is layout-agnostic. Switching Layout while a service is pinned keeps the pin; the affordance and its expansion semantics adapt to the new layout's granularity (per the table above), but the pinned set itself does not reset.
+- **Focus toolbar discoverability hint** renders above all three layouts when View=Focus (not Matrix-only). The hint copy ("Click ▸ to expand a service for full attribute detail. Pin to keep it expanded across filters.") is layout-independent.
+
 ---
 
 ## Attribute vocabulary (per SAD §7 matrix slot)
@@ -83,6 +106,17 @@ Fallback rules:
 - Malformed JSON / non-array / unknown view → defaults.
 - Array contains unknown attribute keys → those keys are silently filtered out.
 - Array exceeds the view's cap → truncated to the cap at load time.
+
+### Session-only state (NOT persisted)
+
+The keys above are the **exhaustive** list of persisted UI state. The following per-row state lives in memory only and resets on every page load:
+
+| Domain | Where it lives | Reset trigger |
+|---|---|---|
+| Focus row `expanded` | In-memory Alpine state (`state.expanded[id]`) | Page reload / tab close |
+| Focus row `pinned` | In-memory Alpine state (`state.pinned[id]`) | Page reload / tab close |
+
+Rationale — a fresh load presenting every row collapsed and unpinned matches the principle of least surprise; pinning is a triage-session tool, not a saved preference.
 
 ---
 

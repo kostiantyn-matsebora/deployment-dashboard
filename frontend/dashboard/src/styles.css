@@ -119,6 +119,24 @@
   .row-expanded { background: linear-gradient(0deg, #f9fafb, white); }
   .pin-active { color: #d97706; }
 
+  /* Focus row — subtle left accent rail so Focus reads distinctly from
+     Compact even on the first visit (before any row is expanded). The
+     accent sits on the row's leading edge in the inline-padding gutter
+     so the leaf widths and connector geometry are unaffected (NFR-09
+     no-overlap rules untouched). Mirrors mockup lines 394-405. */
+  .focus-row { position: relative; }
+  .focus-row::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 6px; bottom: 6px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: #bfdbfe;
+    pointer-events: none;
+  }
+  .focus-row[data-expanded="true"]::before { background: #3b82f6; }
+  .focus-row[data-pinned="true"]::before   { background: #f59e0b; }
+
   /* ============== Per-view --leaf-width source of truth (FR-13) ==============
      One CSS custom property bound on every layout root and consumed by every
      leaf container (matrix box wrapper, .pill, .pill-empty, .node, .wf-stage).
@@ -446,6 +464,9 @@
 [data-theme="dark"] .lane-label { border-right-color: #21262d !important; }
 [data-theme="dark"] .edge { stroke: #484f58 !important; }
 [data-theme="dark"] .row-expanded { background: linear-gradient(0deg, #1c232b, #161b22) !important; }
+[data-theme="dark"] .focus-row::before { background: #30363d !important; }
+[data-theme="dark"] .focus-row[data-expanded="true"]::before { background: #58a6ff !important; }
+[data-theme="dark"] .focus-row[data-pinned="true"]::before   { background: #fcd34d !important; }
 [data-theme="dark"] .env-tag { color: #7d8590 !important; }
 [data-theme="dark"] .pill .env-tag { color: #c9d1d9 !important; }
 [data-theme="dark"] .chev { color: #7d8590 !important; }

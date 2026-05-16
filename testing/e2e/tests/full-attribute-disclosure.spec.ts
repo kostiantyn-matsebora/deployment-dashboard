@@ -107,8 +107,17 @@ test('Focus expanded row renders every attribute even with the picker emptied', 
 
   // Expand service-a and verify every FR-02 attribute renders for
   // every environment slot inside the expanded row.
-  await page.getByTestId('focus-row-expand-service-a').click();
-  const expandedRow = page.getByTestId('focus-row-service-a');
+  //
+  // Post focus-across-layouts cycle: the canonical chevron testid is
+  // `row-chevron-{id}` and the canonical service-row anchor is
+  // `[data-service-row="{id}"]` (whose data-testid flips to
+  // `row-expanded-{id}` when expanded). The legacy
+  // `focus-row-expand-{id}` testid is preserved as an sr-only alias
+  // (parent overlays make it unclickable from Playwright), and the
+  // older `focus-row-{id}` selector no longer exists. Use the
+  // canonical hooks.
+  await page.getByTestId('row-chevron-service-a').click();
+  const expandedRow = page.locator('[data-service-row="service-a"]');
   await expect(expandedRow).toHaveAttribute('data-expanded', 'true');
 
   // Discover the environment ids by inspecting the stage-boxes nested

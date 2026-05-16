@@ -86,19 +86,23 @@
           share the same trunk x so the fork visibly roots in
           the source.
 
-       6. Service name is never clipped under any view × layout ×
-          theme combination. The service-name <p> renders with
-          `whitespace-normal` + `break-words` (no `truncate`, no
-          `overflow:hidden`, no `text-overflow:ellipsis`, no
-          `white-space:nowrap`) so the name wraps onto multiple
-          lines inside its column rather than being chopped with
-          `…`. The fixed column widths (matrix `w-44/w-40/w-36`,
-          swim-lane `.lane-label` 176 px, workflow-rows
-          `.svc-block` 176 px) are container constraints, not
-          clip masks — the text reflows vertically when the
-          intrinsic width exceeds the column. Enforced by
-          construction: no service-name render site applies a
-          clip-producing CSS rule.
+       6. Service name renders on a single line at its intrinsic
+          width — no truncation, no ellipsis, no wrap. The
+          service-name <p> renders with `whitespace-nowrap` +
+          inline `style="width: max-content"` (no `truncate`,
+          no `overflow:hidden`, no `text-overflow:ellipsis`, no
+          `break-words`); the <p> auto-sizes to its own content
+          so `scrollWidth == clientWidth` holds by construction
+          (CSS Grid `auto` track precedent applied at the
+          <p>-element level). The column containers
+          (matrix `w-44/w-40/w-36`, swim-lane `.lane-label`
+          176 px, workflow-rows `.svc-block` 176 px) remain as
+          a visual reservation for the typical-length name; long
+          names extend visually past that reservation rather
+          than being chopped with `…`. Enforced by construction:
+          no service-name render site applies a clip-producing
+          CSS rule, and the <p>'s width is content-driven via
+          `width: max-content`.
 
        7. Env-header columns stay aligned with the deployment-row
           columns under any combination of expanded / collapsed
@@ -1285,13 +1289,16 @@
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
                 <div class="flex items-start">
                   <div class="w-44 shrink-0 pr-4">
-                    <!-- NFR-09 #6 — service name never clipped. `whitespace-normal break-words`
-                         replaces the prior `truncate` (which combined `overflow:hidden` +
-                         `text-overflow:ellipsis` + `white-space:nowrap` and chopped longer
-                         names with `…`). The column width (`w-44`) stays a layout
-                         constraint; the name wraps vertically when its intrinsic width
-                         exceeds the column. -->
-                    <p class="text-sm font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name"></p>
+                    <!-- NFR-09 #6 — service name renders single-line at its intrinsic
+                         width. The <p> uses `whitespace-nowrap` + inline
+                         `style="width: max-content"` so its scrollWidth equals its
+                         clientWidth by construction (content drives both). The
+                         legacy `truncate` (overflow:hidden + ellipsis + nowrap) is
+                         dropped. The column container keeps its `w-44` width as a
+                         visual reservation; long names overflow the 176 px column
+                         visually but never clip — the service-name no-clip oracle
+                         (I10) measures the <p>, which is no longer width-clamped. -->
+                    <p class="text-sm font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name"></p>
                     <p x-show="showServiceMeta" class="text-xs text-gray-400 mt-0.5" x-text="failureLabel(service)"></p>
                   </div>
 
@@ -1430,7 +1437,7 @@
                 <div class="flex items-start">
                   <div class="w-36 shrink-0 pr-2">
                     <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
-                    <p class="text-xs font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name" :title="service.name"></p>
+                    <p class="text-xs font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
                     <p x-show="showServiceMeta" class="text-[10px] text-gray-400 truncate leading-tight" x-text="failureLabel(service)"></p>
                   </div>
 
@@ -1586,7 +1593,7 @@
                 <div class="flex items-center">
                   <div class="w-40 shrink-0 pr-2">
                     <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
-                    <p class="text-xs font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name" :title="service.name"></p>
+                    <p class="text-xs font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
                     <p x-show="showServiceMeta" class="text-[10px] text-gray-400 leading-tight" x-text="failureLabel(service)"></p>
                   </div>
 
@@ -1718,7 +1725,16 @@
           </div>
 
           <div class="px-6 pt-2 pb-1">
-            <div class="flex items-center">
+            <!-- NFR-09 #7 — env-header alignment with deployment-row columns.
+                 The inner flex container carries `padding-left: 13px` so its
+                 content starts at the same x as each row's content. Each row
+                 below has `bg-white rounded-md border px-3 py-1.5` chrome —
+                 a 1 px border + 12 px left padding pushes the row's `w-44`
+                 label spacer and its leaf cells 13 px right of the
+                 un-chromed header. Adding the same 13 px inset to the
+                 header's inner flex container restores header.cell.left ==
+                 row.box.left for every env (independent of expand state). -->
+            <div class="flex items-center" style="padding-left: 13px">
               <div class="w-44 shrink-0"></div>
               <div class="flex items-center overflow-x-auto">
                 <template x-for="(env, idx) in environments" :key="env.id">
@@ -1791,7 +1807,7 @@
                     </button>
                     <div class="min-w-0 flex-1">
                       <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
-                      <p class="text-xs font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name" :title="service.name"></p>
+                      <p class="text-xs font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
                       <p x-show="showServiceMeta" class="text-[10px] text-gray-400 leading-tight truncate" x-text="failureLabel(service)"></p>
                     </div>
                   </div>
@@ -2069,7 +2085,7 @@
                     </div>
                   </template>
                   <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
-                  <p class="text-sm font-semibold text-gray-800 whitespace-normal break-words" x-text="service.name"></p>
+                  <p class="text-sm font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name"></p>
                   <template x-if="showServiceMeta || (view === 'focus' && expanded[service.id])">
                     <div>
                       <p class="text-[11px] text-gray-400 leading-tight" x-text="failureLabel(service)"></p>
@@ -2497,7 +2513,7 @@
                      `flex-1 min-w-0` lets the <p> take remaining flex space and wrap
                      vertically; the wf-count badge keeps its intrinsic width
                      (`shrink-0`) so it stays right of the wrapping name. -->
-                <p class="text-sm font-semibold text-gray-800 whitespace-normal break-words flex-1 min-w-0" x-text="service.name" :title="service.name"></p>
+                <p class="text-sm font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
                 <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight ml-1 shrink-0"
                       x-text="pathsFor(service.id).length + ' wf' + (pathsFor(service.id).length === 1 ? '' : 's')"></span>
               </div>

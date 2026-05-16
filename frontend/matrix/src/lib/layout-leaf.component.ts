@@ -51,6 +51,7 @@ import { StageBoxComponent } from './stage-box.component';
           [env]="env()"
           [slot]="slot()"
           [forceAllAttrs]="forceAllAttrs()"
+          [widthAuto]="true"
           (opened)="opened.emit($event)"
         ></dd-stage-box>
       }
@@ -161,9 +162,12 @@ import { StageBoxComponent } from './stage-box.component';
       }
       @default {
         <!-- Compact + Focus-collapsed: shared layout (Focus collapsed degrades
-             to Compact dimensions, per the mockup). -->
+             to Compact dimensions, per the mockup). Width is dictated by the
+             parent layout via the --leaf-width CSS variable so all three
+             layouts x all four views share one width source-of-truth. -->
         <div
-          class="w-[160px] rounded-md border overflow-hidden relative transition-shadow"
+          class="rounded-md border overflow-hidden relative transition-shadow"
+          style="width: var(--leaf-width, 160px)"
           [class]="boxClass()"
           [attr.data-testid]="'stage-box-' + service().id + '-' + env().id"
           [attr.data-state]="dataState()"
