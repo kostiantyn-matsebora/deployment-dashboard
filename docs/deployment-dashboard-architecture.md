@@ -482,6 +482,7 @@ View selection and per-view attribute selection are pure client-side UI state �
 | `dashboard.attrs.focus` | JSON array (`string[]`) | `["status","version","run","ago","ref"]` | ≤ 5 |
 | `dashboard.layout` | one of `'matrix'`, `'swim-lane'`, `'workflow-rows'` (string) | `"matrix"` | n/a |
 | `dashboard.correlationAttribute` | one of `'version'`, `'ref'`, `'sha'`, `'actor'`, `'run'`, `'ago'`, or absent (string \| missing) | `"sha"` | n/a |
+| `dashboard.theme` | one of `'light'`, `'dark'`, `'auto'` (string) | `"auto"` | n/a |
 
 Load-time hardening rules:
 - Wrap every `JSON.parse` in `try / catch`. Any throw → fall back to the view's default attribute set.
@@ -489,7 +490,7 @@ Load-time hardening rules:
 - Filter the array to known attribute keys only (`status`, `version`, `run`, `ago`, `actor`, `ref`, `sha`); unknown keys are silently dropped.
 - If the filtered array exceeds the view's cap → truncate to the cap.
 - An empty array (`[]`) is a legitimate user choice — render the slot body empty, leaving only the always-on elements. Do not auto-restore defaults in this case.
-- For `dashboard.layout` and `dashboard.view`: if the persisted string is not in the allowed set, fall back to the default (`matrix` and `detailed` respectively). No throw — `localStorage.getItem` returns a string or `null`.
+- For `dashboard.layout`, `dashboard.view`, and `dashboard.theme`: if the persisted string is not in the allowed set, fall back to the default (`matrix`, `detailed`, and `auto` respectively). No throw — `localStorage.getItem` returns a string or `null`.
 - For `dashboard.correlationAttribute`: if the persisted string is not in the allowed set, treat as absent — the SPA then omits the `correlationAttribute` query parameter, falling back to the server-side default. Absence is the canonical "follow the system default" state and is not an error.
 
 Filters (search by service name, failures-only toggle) and the stats bar are cross-cutting and apply identically across all four views and all three layouts.
@@ -511,6 +512,12 @@ Layout is **orthogonal** to view (FR-12): the chosen view's attribute picker, de
 **Glance exception under FR-13:**
 
 The Glance view's "env-tag-inside-pill" rendering (NFR-09 Glance exception) applies in all three layouts. In Matrix layout the pills are inline along the row. In Swim-lane and Workflow-rows, the same pill rendering is used at each node in the DAG, with the env label inside the coloured pill rather than to its left. The mockup (`docs/deployment-dashboard.html`) is the visual contract for this; the responsiveness invariant in NFR-09 is the geometric guarantee.
+
+**Theme axis (presentation-only):** Orthogonal to View and Layout, the SPA exposes a Theme control (gear icon → popover; values `light` / `dark` / `auto`, default `auto`). Theme controls palette only — no data shape, no wire field, no effect on the 6-box-state contract or NFR-09 geometric invariants. The mockup (`docs/deployment-dashboard.html`) is the visual contract; persistence is `dashboard.theme` in the `localStorage` table above.
+
+- **Single-writer invariant.** After the FOIT-safe inline bootstrap in the dashboard `index.html` paints the first frame, exactly one Angular service (the `ThemeService` in `frontend/shared/`) is the sole writer of the `<html data-theme>` and `<html data-theme-pref>` attributes. No feature library, no component, and no other service may mutate either attribute. Consumers that need to react to palette MUST read the `effective` / `preference` signals exposed by that service. The mockup analogue is the Alpine root's `applyEffectiveTheme()` method.
+- **Corruption normalisation.** A persisted `dashboard.theme` value that is not one of `{light, dark, auto}` resolves to the default `auto` for the current session. The SPA MUST NOT silently rewrite `localStorage` on a read-only load — the corrupt value remains until the next user-driven preference change overwrites it. Debuggability over correctness: a corrupt value is observable for incident review.
+- **Mockup ↔ implementation naming parity.** Identifier shapes need not be byte-identical between the mockup's Alpine root and the Angular implementation — the mockup is a prototype, the Angular code is the canonical implementation. Drift is allowed where the implementation idiom differs (e.g. mockup `setThemePref(id)` ↔ Angular `ThemeService.setPreference(id)`). Wire-shape names (JSON fields, query parameters, `localStorage` keys) and user-visible labels MUST remain identical; method names, internal helper names, and signal names MAY differ to suit each runtime's conventions.
 
 **Module architecture — modular monolith Angular workspace:**
 

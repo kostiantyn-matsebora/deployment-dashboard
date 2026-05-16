@@ -9,6 +9,7 @@ import {
   CorrelationPrefsService,
   FocusOnLastEventPrefsService,
   LayoutPrefsService,
+  ThemeService,
   ViewPrefsService
 } from '@dd/shared';
 import { AppComponent } from './app/app.component';
@@ -30,6 +31,12 @@ bootstrapApplication(AppComponent, {
     // initial request omits the query parameter.
     provideEnvironmentInitializer(() => inject(CorrelationPrefsService)),
     // Mockup header toggle — load the persisted state before SSE wires up.
-    provideEnvironmentInitializer(() => inject(FocusOnLastEventPrefsService))
+    provideEnvironmentInitializer(() => inject(FocusOnLastEventPrefsService)),
+    // Theme axis — eagerly construct so the live MQL listener attaches
+    // and the single-writer effect on `documentElement.dataset.theme`
+    // starts before the first user interaction. The FOIT-safe inline
+    // <head> script in index.html paints the first frame; this service
+    // takes over thereafter.
+    provideEnvironmentInitializer(() => inject(ThemeService))
   ]
 }).catch(err => console.error(err));

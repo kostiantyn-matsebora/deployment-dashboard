@@ -5,7 +5,11 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DeploymentMatrixStore, type CorrelationAttribute } from '@dd/shared';
+import {
+  DeploymentMatrixStore,
+  ThemeSwitcherComponent,
+  type CorrelationAttribute
+} from '@dd/shared';
 import {
   AttributePickerComponent,
   LayoutSwitcherComponent,
@@ -22,7 +26,8 @@ import {
     ViewSwitcherComponent,
     LayoutSwitcherComponent,
     AttributePickerComponent,
-    TopologyPickerComponent
+    TopologyPickerComponent,
+    ThemeSwitcherComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -93,6 +98,7 @@ import {
           <dd-topology-picker
             (pickChanged)="correlationPickChanged.emit($event)"
           ></dd-topology-picker>
+          <dd-theme-switcher></dd-theme-switcher>
 
           <span class="text-xs text-gray-400 border-l border-gray-200 pl-4" data-testid="live-indicator">
             Live · updated just now

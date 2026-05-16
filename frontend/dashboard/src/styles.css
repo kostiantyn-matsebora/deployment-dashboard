@@ -318,3 +318,209 @@
   0%, 100% { border-color: rgba(251, 146, 60, 0.5); }
   50%      { border-color: rgba(234, 88, 12, 1); }
 }
+
+/* ============================================================
+   Theme axis — gear icon + popover affordance (header).
+   Mirrors docs/deployment-dashboard.html lines 680-741 verbatim.
+   The component (`dd-theme-switcher`) is rendered alongside the
+   View / Layout segmented controls in the header.
+   ============================================================ */
+.theme-gear-btn {
+  width: 32px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--theme-control-bg, #ffffff);
+  color: var(--theme-control-fg, #6b7280);
+  border: 1px solid var(--theme-control-bd, #e5e7eb);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.theme-gear-btn:hover {
+  background: var(--theme-control-hover-bg, #f9fafb);
+  color: var(--theme-control-hover-fg, #111827);
+}
+.theme-gear-btn.open {
+  background: var(--theme-control-active-bg, #eef2ff);
+  color: var(--theme-control-active-fg, #4338ca);
+  border-color: var(--theme-control-active-bd, #c7d2fe);
+}
+.theme-popover {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+  background: var(--theme-popover-bg, #ffffff);
+  border: 1px solid var(--theme-popover-bd, #e5e7eb);
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-width: 220px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
+}
+.theme-popover h4 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--theme-popover-muted-fg, #9ca3af);
+  margin-bottom: 6px; font-weight: 600;
+}
+.theme-popover label {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 4px; border-radius: 4px;
+  cursor: pointer; font-size: 13px;
+  color: var(--theme-popover-fg, #111827);
+}
+.theme-popover label:hover { background: var(--theme-popover-hover-bg, #f3f4f6); }
+.theme-popover input[type="radio"] {
+  accent-color: var(--theme-popover-accent, #4f46e5);
+}
+.theme-popover .theme-popover-foot {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--theme-popover-bd, #e5e7eb);
+  font-size: 11px;
+  color: var(--theme-popover-muted-fg, #9ca3af);
+}
+.theme-popover .theme-popover-foot .v {
+  color: var(--theme-popover-fg, #374151);
+  font-weight: 500;
+}
+
+/* ============================================================
+   Dark palette — Dim (warm-tinted, GitHub-style).
+   Mirrors docs/deployment-dashboard.html lines 743-900 verbatim.
+   CSS-only overlay — remaps Tailwind utility-class backgrounds,
+   borders, and text colours when [data-theme="dark"] is set on
+   <html>. NO Tailwind class is renamed; NO leaf-renderer DOM
+   changes; NO geometric invariant (NFR-09) is touched. The
+   6-box-state contract (status colour, prev-failed badge,
+   dashed-divider last-successful split) renders correctly under
+   both palettes — status hues are pushed to ~300-band on dark
+   surfaces so each remains perceptually distinct and reaches
+   ~4.5:1 contrast against the dark surface.
+   ============================================================ */
+[data-theme="dark"] {
+  /* Theme switcher control tokens */
+  --theme-control-bg: #161b22;
+  --theme-control-fg: #7d8590;
+  --theme-control-bd: #30363d;
+  --theme-control-hover-bg: #1c232b;
+  --theme-control-hover-fg: #e6edf3;
+  --theme-control-active-bg: #1c2233;
+  --theme-control-active-fg: #a5b4fc;
+  --theme-control-active-bd: #3a4a6b;
+  --theme-popover-bg: #161b22;
+  --theme-popover-bd: #30363d;
+  --theme-popover-fg: #e6edf3;
+  --theme-popover-muted-fg: #7d8590;
+  --theme-popover-hover-bg: #1c232b;
+  --theme-popover-accent: #a5b4fc;
+}
+
+/* Body surface */
+[data-theme="dark"] body.bg-gray-50 { background-color: #0d1117 !important; }
+
+/* Surfaces — header, stats bar, card containers */
+[data-theme="dark"] .bg-white { background-color: #161b22 !important; }
+[data-theme="dark"] .bg-gray-50 { background-color: #1c232b !important; }
+[data-theme="dark"] .bg-gray-100 { background-color: #21262d !important; }
+[data-theme="dark"] .bg-gray-200 { background-color: #30363d !important; }
+
+/* Default neutral text — Tailwind grays remapped to Dim text scale */
+[data-theme="dark"] .text-gray-900 { color: #e6edf3 !important; }
+[data-theme="dark"] .text-gray-800 { color: #e6edf3 !important; }
+[data-theme="dark"] .text-gray-700 { color: #c9d1d9 !important; }
+[data-theme="dark"] .text-gray-600 { color: #c9d1d9 !important; }
+[data-theme="dark"] .text-gray-500 { color: #9aa4ae !important; }
+[data-theme="dark"] .text-gray-400 { color: #7d8590 !important; }
+[data-theme="dark"] .text-gray-300 { color: #484f58 !important; }
+
+/* Default neutral borders */
+[data-theme="dark"] .border-gray-100 { border-color: #21262d !important; }
+[data-theme="dark"] .border-gray-200 { border-color: #30363d !important; }
+[data-theme="dark"] .border-gray-300 { border-color: #484f58 !important; }
+
+/* Inline-color literals inside styles.css (dashed connector grey + spinner border) */
+[data-theme="dark"] .arrow-line { background: #484f58 !important; }
+[data-theme="dark"] .arrow-line::after { border-left-color: #484f58 !important; }
+[data-theme="dark"] .arrow-line.arrow-line-dashed { background: transparent !important; border-top-color: #484f58 !important; }
+[data-theme="dark"] .pill-empty { background: #1c232b !important; border-color: #30363d !important; color: #484f58 !important; }
+[data-theme="dark"] .node-empty { background: #1c232b !important; border-color: #30363d !important; color: #484f58 !important; }
+[data-theme="dark"] .lane-row { background: #161b22 !important; border-color: #30363d !important; }
+[data-theme="dark"] .svc-block { background: #161b22 !important; border-color: #30363d !important; }
+[data-theme="dark"] .svc-block-meta { border-right-color: #21262d !important; }
+[data-theme="dark"] .lane-label { border-right-color: #21262d !important; }
+[data-theme="dark"] .edge { stroke: #484f58 !important; }
+[data-theme="dark"] .row-expanded { background: linear-gradient(0deg, #1c232b, #161b22) !important; }
+[data-theme="dark"] .env-tag { color: #7d8590 !important; }
+[data-theme="dark"] .pill .env-tag { color: #c9d1d9 !important; }
+[data-theme="dark"] .chev { color: #7d8590 !important; }
+[data-theme="dark"] .chev.disabled { color: #484f58 !important; }
+[data-theme="dark"] .pin-active { color: #fcd34d !important; }
+
+/* Success — Tailwind green-* classes remapped to dark green band */
+[data-theme="dark"] .bg-green-50  { background-color: #0d2818 !important; }
+[data-theme="dark"] .bg-green-100 { background-color: #14532d !important; }
+[data-theme="dark"] .bg-green-400 { background-color: #4ade80 !important; }
+[data-theme="dark"] .bg-green-500 { background-color: #22c55e !important; }
+[data-theme="dark"] .border-green-200 { border-color: #166534 !important; }
+[data-theme="dark"] .border-green-300 { border-color: #166534 !important; }
+[data-theme="dark"] .border-green-400 { border-color: #15803d !important; }
+[data-theme="dark"] .text-green-600 { color: #86efac !important; }
+[data-theme="dark"] .text-green-700 { color: #86efac !important; }
+[data-theme="dark"] .text-green-800 { color: #bbf7d0 !important; }
+
+/* Failure — Tailwind red-* classes remapped */
+[data-theme="dark"] .bg-red-50  { background-color: #2a0e0e !important; }
+[data-theme="dark"] .bg-red-100 { background-color: #7f1d1d !important; }
+[data-theme="dark"] .bg-red-500 { background-color: #ef4444 !important; }
+[data-theme="dark"] .border-red-200 { border-color: #991b1b !important; }
+[data-theme="dark"] .border-red-300 { border-color: #991b1b !important; }
+[data-theme="dark"] .border-red-400 { border-color: #b91c1c !important; }
+[data-theme="dark"] .text-red-500 { color: #fca5a5 !important; }
+[data-theme="dark"] .text-red-600 { color: #fca5a5 !important; }
+[data-theme="dark"] .text-red-700 { color: #fca5a5 !important; }
+[data-theme="dark"] .text-red-800 { color: #fecaca !important; }
+
+/* Running / in-progress — Tailwind orange-* classes remapped */
+[data-theme="dark"] .bg-orange-50  { background-color: #2a1a0a !important; }
+[data-theme="dark"] .bg-orange-100 { background-color: #7c2d12 !important; }
+[data-theme="dark"] .bg-orange-400 { background-color: #fb923c !important; }
+[data-theme="dark"] .border-orange-300 { border-color: #9a3412 !important; }
+[data-theme="dark"] .border-orange-400 { border-color: #c2410c !important; }
+[data-theme="dark"] .text-orange-700 { color: #fdba74 !important; }
+[data-theme="dark"] .text-orange-800 { color: #fed7aa !important; }
+
+/* Amber — prev-failed badge + Focus pin + workflow-rows default-row backdrop */
+[data-theme="dark"] .bg-amber-50 { background-color: #2a1f0a !important; }
+[data-theme="dark"] .border-amber-200 { border-color: #92400e !important; }
+[data-theme="dark"] .text-amber-600 { color: #fcd34d !important; }
+[data-theme="dark"] .text-amber-700 { color: #fcd34d !important; }
+[data-theme="dark"] .wf-row .default-tag { background: #2a1f0a !important; border-color: #92400e !important; color: #fcd34d !important; }
+
+/* Indigo — checkbox / simulate / correlation-attr-picker accents */
+[data-theme="dark"] .bg-indigo-50  { background-color: #1c2233 !important; }
+[data-theme="dark"] .bg-indigo-100 { background-color: #312e81 !important; }
+[data-theme="dark"] .border-indigo-200 { border-color: #3a4a6b !important; }
+[data-theme="dark"] .text-indigo-500 { color: #a5b4fc !important; }
+[data-theme="dark"] .text-indigo-700 { color: #a5b4fc !important; }
+
+/* Cyan — workflow-rows wf-count badge */
+[data-theme="dark"] .bg-cyan-50  { background-color: #0e2a33 !important; }
+[data-theme="dark"] .border-cyan-200 { border-color: #155e75 !important; }
+[data-theme="dark"] .text-cyan-700 { color: #67e8f9 !important; }
+
+/* Blue — View switcher active bg + run-number links + search focus ring + checkbox accent */
+[data-theme="dark"] .bg-blue-600 { background-color: #1f6feb !important; }
+[data-theme="dark"] .text-blue-500 { color: #58a6ff !important; }
+[data-theme="dark"] .text-blue-600 { color: #58a6ff !important; }
+
+/* Purple — Layout switcher active bg */
+[data-theme="dark"] .bg-purple-600 { background-color: #8957e5 !important; }
+
+/* Drawer / popovers — inherit .bg-white / .border-gray-200 above. */
+
+/* Form controls — Tailwind border-gray-200 is fine; the browser-default
+   background needs darkening so inputs aren't white islands. */
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="search"] {
+  background: #0d1117 !important;
+  color: #e6edf3 !important;
+}
+[data-theme="dark"] input[type="text"]::placeholder,
+[data-theme="dark"] input[type="search"]::placeholder { color: #7d8590 !important; }
+[data-theme="dark"] input[type="checkbox"] { accent-color: #58a6ff; }

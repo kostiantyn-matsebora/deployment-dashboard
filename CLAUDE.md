@@ -192,6 +192,57 @@ Task spans two agents (e.g. wire contract touches backend + frontend) → dispat
 - **Doc-only changes** (rename, clarification, ADR) → `solution-architect` only (SAD-family) or `frontend-engineer` only (mockup-only HTML/CSS/JS tweak with no SAD implication).
 - **Infrastructure changes affecting application config** (new env var, new secret, new endpoint URL) → coordinate `devops-engineer` and `backend-engineer`; backend first to confirm the app reads the new value, devops second.
 
+## Task lifecycle — phased pipeline with maximum parallelism
+
+**Guidance — binding, not flavour.** Operate the lifecycle as a real software-engineering team operates: apply established best practices (separation of concerns, contract-driven parallelism, testing as a first-class deliverable, fail-fast on contract drift, no idle agents). Phases are named and ordered; agents within a phase run in parallel; phases overlap wherever a contract surface decouples them.
+
+### Phases
+
+| # | Phase | Produced by | Contract surface that gates the next phase |
+|---|---|---|---|
+| 1 | Analysis | discovering agent (often `solution-architect`) | problem statement + scope boundary |
+| 2 | Design & architecture — system design, API design, visual design, high-level implementation plan | `solution-architect` (system + SAD ratification), `backend-engineer` (HTTP/JSON API contract), `frontend-engineer` (visual via mockup + SPA-visible API surface), all engineers (impl plan) | fixed wire shape + fixed mockup behaviour + fixed WBS |
+| 3 | Design review — user review of the proposed solution | user (reviews phase-2 artefacts: SAD edits, mockup, API contract, impl plan) | explicit user approval (or remarks routed back to phase 2) |
+| 4 | Implementation | `backend-engineer`, `frontend-engineer`, `devops-engineer` | working code against the approved contracts |
+| 5 | Testing | `qa-engineer` | test plan + executable suite against the same approved contracts |
+| 6 | Bug fixing (iterative until clean) | engineer that owns the failing surface | green oracle |
+| 7 | SA review — requirements + architecture compliance | `solution-architect` | sign-off note in PR / final report |
+| 8 | User approval | user | `☒` on the TODO line |
+
+Notes on phase 2:
+
+- **API design ownership.** The engineer who owns the surface authors the contract (`backend-engineer` for HTTP/JSON, `frontend-engineer` for the SPA-visible side); `solution-architect` ratifies the contract into the SAD before phase 3 opens.
+- **Contract-surface column unchanged.** "Fixed wire shape" already covers the API contract; growing the column would duplicate, not clarify.
+
+Notes on phase 3 (design-review gate):
+
+- **Synchronous gate.** Implementation does NOT start until the user signs off OR explicitly delegates the call.
+- **Loop on remarks.** Remarks (not approval) route back to phase 2 with the remarks as fresh input; the phase 2 ↔ phase 3 loop iterates until approval or until the user redirects.
+- **Explicit prompt.** The orchestrator MUST ask via `AskUserQuestion` (or equivalent), presenting the phase-2 artefacts (SAD diff, mockup link, API contract, WBS) for review.
+- **Distinct from phase 8.** Phase 8 closes the TODO line after delivery; this earlier gate approves the design before any engineering effort is spent.
+- **Distinct from the TODO-workflow checkpoint.** That checkpoint ("Elaborate / Start implementing / Something else") sits *before* phase 1 starts; the design-review gate sits at the design ↔ implementation boundary.
+
+### Parallelism rules
+
+- **Within a phase — every independent agent dispatched in ONE message.** Independent = no source-tree input/output dependency. Habitual serialization is the failure mode.
+- **Across phases — overlap on contract, not on code.** The next phase starts the moment its contract surface is fixed, not when the prior phase's code lands.
+- **Implementation gated on design review.** Implementation (phase 4) starts when the phase-2 contract surface is fixed AND the phase-3 design-review gate has passed. No engineer codes against an unapproved design.
+
+Three concrete overlap patterns:
+
+- **Test authoring overlaps implementation.** Once the wire shape / mockup behaviour is fixed (phase 2 output), `qa-engineer` authors specs and fixtures **in parallel with** `backend-engineer` / `frontend-engineer` coding. Both reference the contract, not each other's source. Decoupling surface: the fixed contract from phase 2.
+- **Bug fix overlaps continued testing.** When QA reports a defect, the owning engineer fixes immediately while QA continues exercising **other** scenarios. The fix loop does not freeze the test run. Decoupling surface: the test plan partitions scenarios; one failing scenario blocks only itself.
+- **Doc update overlaps implementation.** `solution-architect` hands engineers the necessary context (decision wording, FR/NFR delta, wire-shape change) and engineers proceed; SA updates SAD / `CLAUDE.md` / `ci-cd-integration.md` / ADRs in parallel. Engineers do NOT wait for the doc commit. Decoupling surface: the verbal/written contract context delivered upfront; the doc commit is a paper trail, not a gate.
+
+### Dispatch pattern — orchestrator rules
+
+- **N independent agents in one phase → ONE message with N `Agent` tool calls.** Never serialize independent dispatches across multiple messages.
+- **Cross-phase overlap (e.g. qa authoring tests while frontend implements) → ONE message with all overlapping agents.** Each dispatch prompt names the shared contract surface they reference (SAD §X, mockup behaviour Y, wire shape Z) so neither agent waits on the other's code.
+
+### Relation to the cross-domain-bugs cycle
+
+The four-phase model in "Cross-domain bugs — integration + compliance cycle" below is the specific instantiation of this lifecycle for bugs that cut across two or more domains. Its Phases 1–4 map onto lifecycle phases 2 (contract change), 4 (domain implementations), 5–6 (integration + bug fixing), and 7 (compliance review) — the design-review gate (lifecycle phase 3) still applies when the bug requires user-visible behaviour change. The general lifecycle here is the frame; the four-phase cycle is the worked pattern. Both apply — this section governs the overall flow; the cycle governs cross-domain bug coordination.
+
 ## Engineering principles — apply across all agents
 
 ### Configuration vs. data — declarative over imperative

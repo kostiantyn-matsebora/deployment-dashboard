@@ -1,4 +1,12 @@
 /** @type {import('tailwindcss').Config} */
+// Theme axis strategy — CSS-OVERLAY ONLY (no `dark:` utility variants).
+// The dark palette lives as a single `[data-theme="dark"]` block in
+// `dashboard/src/styles.css` that remaps Tailwind utility classes
+// (`bg-white`, `text-gray-900`, …) to their Dim equivalents. This mirrors
+// the mockup verbatim (docs/deployment-dashboard.html §"Theme axis") and
+// keeps leaf-renderer DOM + class strings byte-identical between palettes.
+// Consequently, no `darkMode` entry is needed here — Tailwind's `dark:`
+// variant is intentionally NOT used anywhere in templates.
 module.exports = {
   content: [
     './dashboard/src/**/*.{html,ts}',

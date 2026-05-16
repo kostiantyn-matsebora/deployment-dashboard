@@ -15,4 +15,6 @@ export * from './lib/view-prefs.service';
 export * from './lib/layout-prefs.service';
 export * from './lib/correlation-prefs.service';
 export * from './lib/focus-on-last-event-prefs.service';
+export * from './lib/theme.service';
+export * from './lib/theme-switcher.component';
 export * from './lib/local-storage';

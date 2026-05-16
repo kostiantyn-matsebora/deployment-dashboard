@@ -163,6 +163,11 @@ export const STORAGE_KEYS = {
    * never PATCHes /api/config/topology.
    */
   correlationAttribute: 'dashboard.correlationAttribute',
+  /**
+   * SAD §7 "Visual layout" localStorage table — the user's theme preference.
+   * One of `light` / `dark` / `auto` (`auto` follows OS prefers-color-scheme).
+   */
+  theme: 'dashboard.theme',
   attrsPrefix: 'dashboard.attrs.',
   attrsFor(viewId: ViewId): string {
     return `dashboard.attrs.${viewId}`;
@@ -173,6 +178,7 @@ export const STORAGE_KEYS = {
 export const STORAGE_KEY_LAYOUT = STORAGE_KEYS.layout;
 export const STORAGE_KEY_FOCUS_ON_LAST_EVENT = STORAGE_KEYS.focusOnLastEvent;
 export const STORAGE_KEY_CORRELATION_ATTRIBUTE = STORAGE_KEYS.correlationAttribute;
+export const STORAGE_KEY_THEME = STORAGE_KEYS.theme;
 
 /**
  * Allowed correlation-attribute values, per SAD §"Configuration — Read API
@@ -188,6 +194,45 @@ export const VALID_CORRELATION_ATTRIBUTES: readonly CorrelationAttribute[] =
 export function isCorrelationAttribute(v: unknown): v is CorrelationAttribute {
   return typeof v === 'string'
     && (VALID_CORRELATION_ATTRIBUTES as readonly string[]).includes(v);
+}
+
+// ============================================================================
+// Theme axis (palette swap — orthogonal to view + layout). SAD §7 "Visual
+// layout" + docs/ui-theme-options.md. The user-facing preference enum is
+// `light | dark | auto`; the *effective* palette is `light | dark` (auto
+// resolves against prefers-color-scheme at runtime). Theme is a pure
+// palette concern — never controls layout, density, attribute selection,
+// or the 6-box-state semantics.
+// ============================================================================
+
+/** User-facing theme preference — what the popover radios bind to. */
+export type ThemePreference = 'light' | 'dark' | 'auto';
+
+/** Effective palette after `auto` is resolved against the OS preference. */
+export type EffectiveTheme = 'light' | 'dark';
+
+export interface ThemeDescriptor {
+  readonly id: ThemePreference;
+  readonly label: string;
+  /** Short subtitle rendered to the right of the radio label in the popover. */
+  readonly hint: string;
+}
+
+/** Mirrors `THEMES` in the canonical mockup (docs/deployment-dashboard.html line 2722). */
+export const THEMES: readonly ThemeDescriptor[] = [
+  { id: 'light', label: 'Light', hint: '' },
+  { id: 'dark',  label: 'Dark',  hint: 'Dim' },
+  { id: 'auto',  label: 'Auto',  hint: 'follow OS' }
+];
+
+export const VALID_THEME_PREFERENCES: readonly ThemePreference[] = THEMES.map(t => t.id);
+
+/** Default preference for first-time visitors — mirrors the mockup default. */
+export const DEFAULT_THEME_PREFERENCE: ThemePreference = 'auto';
+
+/** Runtime type guard for ThemePreference. Used by the persistence layer. */
+export function isThemePreference(v: unknown): v is ThemePreference {
+  return typeof v === 'string' && (VALID_THEME_PREFERENCES as readonly string[]).includes(v);
 }
 
 /** Default view for first-time visitors. */
