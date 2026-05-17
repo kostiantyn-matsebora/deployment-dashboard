@@ -1,10 +1,14 @@
-# All 12 (view, layout) combinations render without console errors
+# All 8 (view, layout) combinations render without console errors
 
 **Intent:** every combination of the four views (Detailed / Compact /
-Glance / Focus) and the three layouts (Matrix / Swim-lane /
-Workflow-rows) renders the matrix without throwing any browser
-console errors. This is the "no regressions" oracle for FR-13's
-orthogonality claim.
+Glance / Focus) and the **two MVP layouts** (Swim-lane / Workflow-rows)
+renders the matrix without throwing any browser console errors. This is
+the "no regressions" oracle for FR-13's orthogonality claim.
+
+> **MVP scope:** the Matrix layout has been removed from MVP and
+> deferred to Phase 2.0. Active MVP layout axis = `['swim-lane',
+> 'workflow-rows']`. When Matrix is re-added, restore it to the
+> `layout` axis below and bump the combination count back to 12.
 
 ## Citations
 
@@ -25,7 +29,8 @@ orthogonality claim.
 ## Steps
 
 For every `view` in `['detailed', 'compact', 'glance', 'focus']`
-and every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
+and every `layout` in `['swim-lane', 'workflow-rows']` (Matrix
+deferred to Phase 2.0):
 
 1. **Given** the SPA is loaded with a fresh `localStorage`,
 2. **And** Playwright is recording all `console.error` events on
@@ -43,7 +48,8 @@ and every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
 
 ## Expected results
 
-- 12 individual subtests, one per (view, layout) combination.
+- 8 individual subtests, one per (view, layout) combination (4 views
+  x 2 MVP layouts). 12 returns once Matrix is re-added in Phase 2.0.
 - Each subtest passes if and only if the matrix root carries the
   correct `data-*` markers AND no console errors fired during
   rendering.
@@ -57,8 +63,12 @@ and every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
 - Swim-lane connector geometry (covered by `swim-lane-connectors.md`).
 - Workflow-rows expansion behaviour (covered by
   `workflow-rows-expand-row.md`).
+- The Matrix layout — removed from MVP, deferred to Phase 2.0
+  (`deferred-phase-2.0/matrix-*.md`).
 
 ## Coverage
 
-- FR-13: all 12 (view, layout) combinations supported.
+- FR-13: all (view, layout) combinations of the MVP layout axis
+  supported. MVP scope = 4 views x 2 layouts = 8 combinations;
+  Matrix is deferred to Phase 2.0.
 - NFR-09: layout invariant applies to every combination.

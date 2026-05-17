@@ -3,13 +3,19 @@
 // Owner: qa-engineer (.claude/agents/qa-engineer.md).
 //
 // Loads docs/ui/deployment-dashboard.html via file:// in a real Chromium
-// browser and runs eleven invariants against the rendered DOM:
+// browser and runs ten ACTIVE invariants against the rendered DOM:
 //   - I0 .. I6  : connector / geometry / clipping (visual numeric)
 //   - I7 / I8   : picker catalogue + null-render
-//   - I9        : Focus distinct from Compact (Path A — all layouts)
+//   - I9        : Focus distinct from Compact (Path A — all MVP layouts)
 //   - I10       : Service-name no-clip universal
 //   - I11       : Matrix Focus env-header alignment under expand
-// Iterates the cross-product of 4 views × 3 layouts = 12 combinations
+//                 DEFERRED to Phase 2.0 (Matrix layout removed from MVP).
+//                 The I11 block in this spec stays gated on
+//                 `i11.layoutScope.includes(layout)`; since matrix is
+//                 no longer in `harness.config.json#layouts` the gate
+//                 never opens. Matrix-only config knobs live under
+//                 `harness.config.json#deferredPhase20`.
+// Iterates the cross-product of 4 views × 2 MVP layouts = 8 combinations
 // declared in harness.config.json. Per-combination results (pass/fail +
 // offending element details) accumulate into __screenshots__/_report.json
 // which run-tests.ps1 prints as a clean per-combination pass/fail table.

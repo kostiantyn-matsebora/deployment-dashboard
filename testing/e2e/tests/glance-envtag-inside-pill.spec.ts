@@ -1,13 +1,18 @@
 // Implements testing/e2e/scenarios/glance-envtag-inside-pill.md
 //
-// Glance view (in every layout): each PAIRED env-tag is fully
+// Glance view (in every MVP layout): each PAIRED env-tag is fully
 // contained within its paired stage box and is not horizontally
 // clipped. This is the SAD NFR-09 Glance exception, identical to
 // the mockup harness Invariant 1 exception.
+//
+// MVP scope: Matrix layout is deferred to Phase 2.0; the active
+// LAYOUTS axis is therefore ['swim-lane', 'workflow-rows']. Re-add
+// 'matrix' here when Phase 2.0 opens. See
+// testing/e2e/scenarios/deferred-phase-2.0/.
 
 import { test, expect } from '@playwright/test';
 
-const LAYOUTS = ['matrix', 'swim-lane', 'workflow-rows'] as const;
+const LAYOUTS = ['swim-lane', 'workflow-rows'] as const;
 
 // Sub-pixel tolerance - mirrors testing/mockup-visual/harness.config.json
 // tolerances.envTagSubpixelPx. Kept as a literal here because the SPA

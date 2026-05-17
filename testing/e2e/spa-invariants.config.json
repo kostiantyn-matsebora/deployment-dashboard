@@ -30,8 +30,10 @@
     "serviceRow":     "[data-service-row]"
   },
 
+  "$comment_layouts": "MVP layout axis = swim-lane + workflow-rows. The Matrix layout was removed from MVP and deferred to Phase 2.0; re-add 'matrix' here when Phase 2.0 opens. See testing/e2e/scenarios/deferred-phase-2.0/.",
+
   "views":   ["detailed", "compact", "glance", "focus"],
-  "layouts": ["matrix", "swim-lane", "workflow-rows"],
+  "layouts": ["swim-lane", "workflow-rows"],
 
   "invariants": [
     { "id": "I1-no-overlap-envtag-vs-box",          "label": "No overlap: env-tag vs deployment box" },

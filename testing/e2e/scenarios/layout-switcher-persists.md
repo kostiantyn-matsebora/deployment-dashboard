@@ -1,9 +1,15 @@
 # Layout switcher selects the active SPA layout and persists across reload
 
-**Intent:** the three-layout segmented control in the header lets the
-user pick Matrix / Swim-lane / Workflow-rows; the chosen layout is
-persisted to `localStorage` under `dashboard.layout` and survives a
-full page reload. Layout selection is orthogonal to view (FR-12).
+**Intent:** the layout segmented control in the header lets the
+user pick **Swim-lane / Workflow-rows** (the MVP layout axis; Matrix is
+deferred to Phase 2.0); the chosen layout is persisted to `localStorage`
+under `dashboard.layout` and survives a full page reload. Layout
+selection is orthogonal to view (FR-12).
+
+> **MVP scope:** the Matrix layout has been removed from the MVP layout
+> axis and deferred to Phase 2.0. The MVP default first-visit layout is
+> **Swim-lane**. Re-add Matrix (and restore it as the default) when
+> Phase 2.0 opens.
 
 ## Citations
 
@@ -34,33 +40,32 @@ full page reload. Layout selection is orthogonal to view (FR-12).
    `localStorage`),
 2. **Then** the layout switcher (`[data-testid="layout-switcher"]`)
    is visible,
-3. **And** the active layout is `matrix` — i.e.
-   `layout-option-matrix` carries `data-active="true"` and the
-   matrix root carries `data-layout="matrix"`,
+3. **And** the active layout is `swim-lane` (the MVP default —
+   Matrix is deferred to Phase 2.0) — i.e.
+   `layout-option-swim-lane` carries `data-active="true"` and the
+   matrix root carries `data-layout="swim-lane"`,
 4. **And** `localStorage.getItem('dashboard.layout')` is either
-   absent or equals `"matrix"`.
+   absent or equals `"swim-lane"`.
 5. **When** the test clicks
-   `[data-testid="layout-option-swim-lane"]`,
+   `[data-testid="layout-option-workflow-rows"]`,
 6. **Then** `data-active="true"` moves to
-   `layout-option-swim-lane`,
+   `layout-option-workflow-rows`,
 7. **And** `[data-testid="pipeline-matrix"]` (the matrix root) now
-   carries `data-layout="swim-lane"`,
+   carries `data-layout="workflow-rows"`,
 8. **And** `localStorage.getItem('dashboard.layout')` equals
-   `"swim-lane"`.
+   `"workflow-rows"`.
 9. **When** the test reloads the page,
-10. **Then** `layout-option-swim-lane` is still the active option,
-11. **And** `data-layout="swim-lane"` is still applied.
-12. **Repeat** steps 5–11 for `layout-option-workflow-rows`
-    (verifying `data-layout="workflow-rows"` and persisted value
-    `"workflow-rows"`).
-13. **Repeat** steps 5–11 returning to `layout-option-matrix`
-    (verifying `data-layout="matrix"` and persisted value
-    `"matrix"`).
+10. **Then** `layout-option-workflow-rows` is still the active option,
+11. **And** `data-layout="workflow-rows"` is still applied.
+12. **Repeat** steps 5–11 returning to `layout-option-swim-lane`
+    (verifying `data-layout="swim-lane"` and persisted value
+    `"swim-lane"`).
 
 ## Expected results
 
-- A first-time visitor lands on the **Matrix** layout by default
-  (matches the SAD's stated default).
+- A first-time visitor lands on the **Swim-lane** layout by default
+  (MVP default; the SAD's stated default is Matrix and reverts when
+  Phase 2.0 reintroduces it).
 - Clicking any other layout option swaps the `data-active` marker
   and the matrix `data-layout` attribute in lock-step.
 - The selection is written to `localStorage["dashboard.layout"]`
@@ -80,14 +85,15 @@ full page reload. Layout selection is orthogonal to view (FR-12).
   invariants to the SPA).
 - Connector rendering in Swim-lane / Workflow-rows (covered by
   the layout-specific scenarios).
+- The Matrix layout option — removed from the MVP layout axis and
+  deferred to Phase 2.0 (`deferred-phase-2.0/matrix-*.md`).
 
 ## Coverage
 
-- FR-13: three named layouts with `localStorage` persistence of the
-  active layout.
+- FR-13: MVP layout axis (Swim-lane, Workflow-rows) with
+  `localStorage` persistence of the active layout. Matrix is
+  deferred to Phase 2.0.
 - `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Layout axis
-  (FR-13)" — the table of named layouts and the
-  Matrix-as-default-first-visit rule.
+  (FR-13)" — the table of named layouts and the persisted-value set.
 - `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Client-side
-  persistence (`localStorage`)" — `dashboard.layout` key with the
-  documented value set.
+  persistence (`localStorage`)" — `dashboard.layout` key.

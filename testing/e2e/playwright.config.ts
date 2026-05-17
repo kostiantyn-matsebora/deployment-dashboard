@@ -29,6 +29,11 @@ if (baseURL === undefined || baseURL.trim() === '') {
 
 export default defineConfig({
   testDir: './tests',
+  // Specs under `tests/deferred-phase-2.0/` cover layouts/features parked
+  // for a future phase (e.g. the Matrix layout, removed from MVP). They
+  // remain in-tree (history-preserving git mv from `tests/`) so they can
+  // be reactivated by simply lifting this ignore once the phase opens.
+  testIgnore: ['deferred-phase-2.0/**'],
   fullyParallel: false,            // SSE + shared DB → keep deterministic
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

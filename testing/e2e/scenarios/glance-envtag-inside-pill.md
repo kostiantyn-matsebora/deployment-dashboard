@@ -1,6 +1,7 @@
 # Glance view renders the env tag INSIDE its paired deployment pill
 
-**Intent:** in the Glance view (across all three layouts), the env
+**Intent:** in the Glance view (across the MVP layout axis —
+Swim-lane + Workflow-rows; Matrix is deferred to Phase 2.0), the env
 label is rendered inside the deployment rectangle / pill. This is
 the single allowed exception to the "env-tag and box do not overlap"
 geometric invariant (NFR-09 Glance exception), mirrored from the
@@ -28,7 +29,8 @@ mockup harness's Invariant 1 exception.
 
 ## Steps
 
-For every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
+For every `layout` in `['swim-lane', 'workflow-rows']` (MVP layout
+axis; Matrix deferred to Phase 2.0):
 
 1. **Given** the SPA is loaded with a fresh `localStorage`,
 2. **When** the test selects view = Glance and the named layout,
@@ -45,7 +47,7 @@ For every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
 
 ## Expected results
 
-- Per-layout assertion that every paired env-tag is contained in
+- Per-(MVP-)layout assertion that every paired env-tag is contained in
   its paired stage box for the Glance view.
 - The env label remains readable (not clipped horizontally).
 - Containment is checked against the paired box only — a

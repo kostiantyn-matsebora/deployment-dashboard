@@ -1,6 +1,7 @@
 # CR-0003 — Tree-shaped deployment topology and three-layout axis (Matrix / Swim-lane / Workflow-rows)
 
-- **Status:** accepted
+- **Status:** accepted (partially superseded)
+- **Superseded by:** [CR-0007](./CR-0007-defer-matrix-layout-to-phase-2.md) — Matrix-as-MVP-layout portion only. The topology data model, the layout-axis concept, the Swim-lane and Workflow-rows layouts, the topology API and SSE semantics, and ADR-0001 (derivation algorithm) all remain in force as defined here. Matrix layout option and `Matrix` as the default first-paint layout are deferred to Phase 2.0 per CR-0007; for the MVP window the authoritative FR-13 / §7 "Layout axis" text is the verbatim block in CR-0007. The Matrix-specific provisions in this CR (layout-axis table row for Matrix, Focus per-layout granularity for Matrix, Glance exception note for Matrix, NFR-09 "env-header column alignment under expand" sibling invariant) become re-applicable when Matrix is reintroduced in Phase 2.0.
 - **Trigger:** `TODO` line 5 — "UX: Usually deployment workflow for a service looks more like a tree, for instance dev could be deployed to qa-1 and qa-2, qa-2 can be deployed on uat 2 and qa-1 can be deployed on uat-1 etc.".
 - **Change:**
   1. The deployment workflow for a service is a **DAG of environment edges** (not a single linear chain). Real workflows fork (`dev → qa-1`, `dev → qa-2`) and merge / promote along distinct paths (`qa-1 → uat-1`, `qa-2 → uat-2`).

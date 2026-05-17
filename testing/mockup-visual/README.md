@@ -1,10 +1,18 @@
 # Mockup Visual Harness
 
 Mockup-only Playwright harness. Loads `docs/ui/deployment-dashboard.html`
-directly via `file://` in a real Chromium browser and asserts **eleven**
-invariants (six geometric + two picker-related + one Focus-vs-Compact
-distinctness oracle + service-name no-clip + Matrix Focus env-header
-alignment) for each of the 12 (view × layout) combinations.
+directly via `file://` in a real Chromium browser and asserts **ten**
+active invariants (six geometric + two picker-related + one
+Focus-vs-Compact distinctness oracle + service-name no-clip) for each
+of the **8 MVP (view × layout) combinations** (4 views × 2 layouts).
+
+> **MVP scope:** the Matrix layout has been removed from MVP and
+> deferred to Phase 2.0. The matrix-only invariant **I11** (Matrix
+> Focus env-header alignment) and the matrix-specific knobs are
+> preserved verbatim under `harness.config.json#deferredPhase20`,
+> ready for one-step reactivation when Phase 2.0 opens. Matrix-only
+> e2e scenarios + Playwright specs live under
+> `testing/e2e/{scenarios,tests}/deferred-phase-2.0/`.
 
 This harness exists because mental dry-runs about the mockup's visual
 correctness have repeatedly failed. It is the **oracle** the team
@@ -28,7 +36,7 @@ Optional flags:
 
 ## What it tests
 
-For each of `{detailed, compact, glance, focus} x {matrix, swim-lane, workflow-rows}`:
+For each of `{detailed, compact, glance, focus} x {swim-lane, workflow-rows}` (MVP layout axis; Matrix deferred to Phase 2.0):
 
 | Invariant | Assertion |
 |-----------|-----------|
@@ -41,8 +49,8 @@ For each of `{detailed, compact, glance, focus} x {matrix, swim-lane, workflow-r
 | I7 | Display picker exposes exactly seven `<input type=checkbox>` elements (one per FR-02 attribute) and the counter denominator matches the SAD §7 cap for the view (Detailed 7, Compact 5, Glance 1, Focus 5). |
 | I8 | After programmatically selecting `ref` then `sha` via the Alpine store, no stage box's text content contains the literal token `null` / `undefined` (SAD §7 "Null-render invariant for nullable attributes"). |
 | I9 | Focus view exposes `[data-testid^="row-chevron-"]` and `[data-testid^="row-pin-"]` one-per-service in the row gutter (never nested inside a stage-box); Compact view exposes neither. Path A — fires on ALL THREE layouts; service count is layout-agnostic via DISTINCT `data-service-row` attribute values (so workflow-rows path-rows sharing a service id never over-count). Asserts distinct service ids in the chevron / pin testid suffixes — defends against duplicate-per-path regression in workflow-rows. Regression-preventing oracle — `docs/ui/compact-options.md` "Focus view specifics > Layout scope". |
-| I10 | Service-name element renders WITHOUT horizontal clipping (`scrollWidth <= clientWidth + 1`) in every (view × layout) combination. Per-layout selector declared in `harness.config.json#i10.perLayout`. Catches the user-reported workflow-rows truncate regression. |
-| I11 | Matrix Focus: env-header cells align with deployment-cell `left`/`right` edges (within 1 px) in BOTH a collapsed AND an expanded row, exercised by programmatically expanding the first service via the Alpine root. Scope: `layout=matrix` AND `view=focus` only — `harness.config.json#i11.layoutScope`/`viewScope`. |
+| I10 | Service-name element renders WITHOUT horizontal clipping (`scrollWidth <= clientWidth + 1`) in every MVP (view × layout) combination. Per-layout selector declared in `harness.config.json#i10.perLayout`. Catches the user-reported workflow-rows truncate regression. |
+| ~~I11~~ | **Deferred to Phase 2.0** (Matrix layout removed from MVP). Spec body still gates on `i11.layoutScope.includes(layout)`; with matrix excluded from `layouts`, the assertion is inert. Config preserved verbatim under `harness.config.json#deferredPhase20.i11`. |
 
 All knobs (combination matrix, viewport, tolerances, selectors) live in
 `harness.config.json` — per CLAUDE.md "Configuration vs. data".

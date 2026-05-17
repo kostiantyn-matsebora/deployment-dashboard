@@ -6,10 +6,11 @@
 // This spec asserts on the structural contract — row-gutter
 // affordances — so a future regression of the same shape fails LOUDLY.
 //
-// Path A: the chevron + pin are present in ALL THREE layouts when
+// Path A: the chevron + pin are present in every MVP layout when
 // View=Focus (per docs/ui/compact-options.md "Focus view specifics —
-// Layout scope"). Granularity is service-grain in every layout:
-//   - matrix:        one chevron + one pin per service-row
+// Layout scope"). The MVP layout axis is swim-lane + workflow-rows;
+// Matrix is deferred to Phase 2.0. Granularity is service-grain in
+// every layout:
 //   - swim-lane:     one chevron + one pin per service-lane
 //   - workflow-rows: one chevron + one pin per service-header
 //                    (NOT per path-row — service-grain only)
@@ -25,11 +26,16 @@
 //       row-chevron-{id}, row-pin-{id},
 //       row-expanded-{id} / row-collapsed-{id},
 //       data-expanded, data-pinned, collapse-all.
+//
+// Phase 2.0 reactivation: add 'matrix' back to FOCUS_LAYOUTS, restore
+// matrix to the visibleServiceCount switch, re-add the matrix-canonical
+// data-expanded / data-pinned assertions in tests C / D / E, and bring
+// the matrix → swim-lane → workflow-rows chain back into test E.
 
 import { test, expect, type Page } from '@playwright/test';
 
-// The three layouts where Focus's chevron + pin must appear and behave.
-const FOCUS_LAYOUTS = ['matrix', 'swim-lane', 'workflow-rows'] as const;
+// The MVP layouts where Focus's chevron + pin must appear and behave.
+const FOCUS_LAYOUTS = ['swim-lane', 'workflow-rows'] as const;
 type Layout = (typeof FOCUS_LAYOUTS)[number];
 
 // Service IDs the seeded corpus is known to provide. Per
@@ -75,9 +81,9 @@ async function switchLayout(page: Page, layout: Layout): Promise<void> {
 //
 // Under non-Focus views the per-layout legacy testids remain the
 // canonical anchor:
-//   - matrix:        one [data-service-row] per service.
 //   - swim-lane:     one [data-testid^="swim-lane-row-"] per service.
 //   - workflow-rows: one [data-testid^="workflow-rows-"] per service-header.
+//   - (Matrix in Phase 2.0: one [data-service-row] per service.)
 async function visibleServiceCount(page: Page, layout: Layout, view: 'focus' | 'non-focus' = 'focus'): Promise<number> {
   if (view === 'focus') {
     // Count distinct ids across row-collapsed-* + row-expanded-*. A
@@ -95,8 +101,6 @@ async function visibleServiceCount(page: Page, layout: Layout, view: 'focus' | '
     });
   }
   switch (layout) {
-    case 'matrix':
-      return page.locator('[data-service-row]').count();
     case 'swim-lane':
       return page.locator('[data-testid^="swim-lane-row-"]').count();
     case 'workflow-rows':
@@ -118,11 +122,9 @@ test.describe('Focus view — distinguishable from Compact', () => {
       // Wait for the layout swap to settle by checking at least one
       // service-anchor element is present under the new view.
       const anchorSelector =
-        layout === 'matrix'
-          ? '[data-service-row]'
-          : layout === 'swim-lane'
-            ? '[data-testid^="swim-lane-row-"]'
-            : '[data-testid^="workflow-rows-"]';
+        layout === 'swim-lane'
+          ? '[data-testid^="swim-lane-row-"]'
+          : '[data-testid^="workflow-rows-"]';
       await expect(page.locator(anchorSelector).first()).toBeVisible();
 
       await expect(
@@ -232,32 +234,24 @@ test.describe('Focus view — distinguishable from Compact', () => {
     // Switching Layout while a service is pinned keeps the pin; the
     // affordance and its expansion semantics adapt to the new layout's
     // granularity but the pinned set itself does not reset.
-    await switchLayout(page, 'matrix');
+    //
+    // MVP scope: swim-lane → workflow-rows. When Matrix returns in
+    // Phase 2.0, prepend a matrix start with the canonical
+    // data-pinned / data-expanded attribute assertions on
+    // [data-service-row].
+    await switchLayout(page, 'swim-lane');
     await switchView(page, 'focus');
 
-    // Pin in matrix.
+    // Pin in swim-lane.
     await page.getByTestId(`row-pin-${SVC_NO_FAILURE}`).click();
     await expect(page.getByTestId(`row-pin-${SVC_NO_FAILURE}`)).toBeVisible();
-    const matrixRow = page.locator(`[data-service-row="${SVC_NO_FAILURE}"]`);
-    await expect(matrixRow).toHaveAttribute('data-pinned', 'true');
-    await expect(matrixRow).toHaveAttribute('data-expanded', 'true');
-
-    // Switch to swim-lane → the same service must still be pinned + expanded.
-    await switchLayout(page, 'swim-lane');
-    // Pin testid is layout-agnostic — it must still be present and the
-    // SAME service must still be pinned.
-    const swimPin = page.getByTestId(`row-pin-${SVC_NO_FAILURE}`);
-    await expect(
-      swimPin,
-      'Pin must survive a Layout switch — the affordance must still be present in swim-lane Focus.',
-    ).toBeVisible();
     // The expanded testid for the pinned service must be present in swim-lane.
     await expect(
       page.getByTestId(`row-expanded-${SVC_NO_FAILURE}`).first(),
-      'After Layout switch matrix → swim-lane the pinned service must still be expanded.',
+      'Pinning a collapsed row implies expansion (compact-options.md). The expanded testid must appear in swim-lane.',
     ).toBeVisible();
 
-    // Also exercise matrix → workflow-rows.
+    // Switch to workflow-rows → the same service must still be pinned + expanded.
     await switchLayout(page, 'workflow-rows');
     await expect(
       page.getByTestId(`row-pin-${SVC_NO_FAILURE}`),
@@ -270,6 +264,10 @@ test.describe('Focus view — distinguishable from Compact', () => {
   });
 
   test('C. Pin survives a "Failures only" filter round-trip and re-renders expanded', async ({ page }) => {
+    // MVP default layout is swim-lane (Matrix deferred to Phase 2.0).
+    // Pin a row, hide it via filter, restore filter — pinned state
+    // must survive the round-trip in the MVP default layout.
+    await switchLayout(page, 'swim-lane');
     await switchView(page, 'focus');
 
     // Pin a row that gets filtered out by "Failures only" so the
@@ -309,6 +307,8 @@ test.describe('Focus view — distinguishable from Compact', () => {
   });
 
   test('D. collapseAll collapses unpinned rows but leaves pinned rows expanded', async ({ page }) => {
+    // MVP default layout is swim-lane (Matrix deferred to Phase 2.0).
+    await switchLayout(page, 'swim-lane');
     await switchView(page, 'focus');
 
     // Pin service-a (becomes expanded as a side-effect of pin).

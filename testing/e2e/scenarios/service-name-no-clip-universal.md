@@ -7,8 +7,10 @@ configurations, making the row indistinguishable from another whose
 name shares the first N characters. The frontend is fixing the issue
 structurally (column sizing + drop of `.truncate` where the column
 auto-sizes). This scenario codifies the contract so any future
-regression of the same shape fails LOUDLY against ALL 24 combinations
-(4 views × 3 layouts × 2 themes).
+regression of the same shape fails LOUDLY against all 16 MVP
+combinations (4 views × **2 MVP layouts** × 2 themes; Matrix is
+deferred to Phase 2.0 — when it returns the combination count goes
+back to 24).
 
 ## Citations
 
@@ -17,7 +19,7 @@ regression of the same shape fails LOUDLY against ALL 24 combinations
   the Tailwind `.truncate` utility as defensive armour, but the
   enclosing column must be wide enough that the text never actually
   clips. The `:title="service.name"` attribute is present on the
-  matrix Compact + Focus + Glance layouts, but a non-zero overflow
+  Compact + Focus + Glance views, but a non-zero overflow
   still represents a visual defect — the user reads the row, not the
   hover tooltip.
 - `docs/ui/compact-options.md` — service-name column sizing per view.
@@ -39,7 +41,8 @@ regression of the same shape fails LOUDLY against ALL 24 combinations
 ## Steps
 
 For every combination in `{detailed, compact, glance, focus} ×
-{matrix, swim-lane, workflow-rows} × {light, dark}`:
+{swim-lane, workflow-rows} × {light, dark}` (MVP layout axis;
+Matrix deferred to Phase 2.0):
 
 1. **Given** the SPA on Layout=`{layout}`, View=`{view}`,
    Theme=`{theme}`, and a service with a 32-character name injected
@@ -47,12 +50,13 @@ For every combination in `{detailed, compact, glance, focus} ×
    in-memory only; not persisted to the backend),
 2. **When** the test queries the service-name element for that
    service in the active layout's DOM site:
-   - Matrix: the `p.truncate` rendering `x-text="service.name"`
-     inside the per-service row's left-column gutter.
    - Swim-lane: the `.lane-label p.truncate` rendering
      `x-text="service.name"`.
    - Workflow-rows: the `.svc-block-meta-row p.truncate` rendering
      `x-text="service.name"`.
+   - (Matrix in Phase 2.0: the `p.truncate` rendering
+     `x-text="service.name"` inside the per-service row's
+     left-column gutter.)
 3. **Then** the element satisfies `scrollWidth <= clientWidth + 1`
    (1-px sub-pixel tolerance — identical to the I2 env-tag
    tolerance), proving the text is not horizontally clipped.
@@ -61,7 +65,7 @@ For every combination in `{detailed, compact, glance, focus} ×
 
 | # | Observable |
 |---|---|
-| 1 | For all 24 combinations, the long-name service-name element has `scrollWidth <= clientWidth + 1`. |
+| 1 | For all 16 MVP combinations (4 views × 2 layouts × 2 themes), the long-name service-name element has `scrollWidth <= clientWidth + 1`. 24 returns when Matrix is re-added in Phase 2.0. |
 | 2 | The first regression of this defect (column too narrow + truncate active) fails with a clear "Service name is clipped" message naming the layout, view, theme, and the overflow amount in pixels. |
 
 ## Out of scope

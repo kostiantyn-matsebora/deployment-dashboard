@@ -31,7 +31,8 @@ New CRs MUST use the universal heading regardless of direction. This keeps the S
 |---|---|---|
 | [CR-0001](./CR-0001-generic-project-agnostic.md) | Project-agnostic naming and examples | accepted |
 | [CR-0002](./CR-0002-four-named-views-and-attribute-picker.md) | Four named views (Detailed / Compact / Glance / Focus) and per-view attribute picker | accepted |
-| [CR-0003](./CR-0003-tree-topology-and-layout-axis.md) | Tree-shaped deployment topology and three-layout axis (Matrix / Swim-lane / Workflow-rows) | accepted |
+| [CR-0003](./CR-0003-tree-topology-and-layout-axis.md) | Tree-shaped deployment topology and three-layout axis (Matrix / Swim-lane / Workflow-rows) | accepted (partially superseded by CR-0007) |
 | [CR-0004](./CR-0004-ref-and-sha-optional-fields.md) | Optional `ref` and `sha` fields on deployment payload | accepted |
 | [CR-0005](./CR-0005-ref-sha-display-and-topology.md) | `ref` / `sha` exposed as Display picker options and Topology correlation options | accepted |
 | [CR-0006](./CR-0006-light-dark-auto-theme.md) | Light / Dark / Auto theme axis | accepted |
+| [CR-0007](./CR-0007-defer-matrix-layout-to-phase-2.md) | Defer Matrix layout from MVP to Phase 2.0 (layout axis reduced to Swim-lane + Workflow-rows; default flips to Swim-lane) | accepted |

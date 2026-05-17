@@ -1,18 +1,24 @@
 // Implements testing/e2e/scenarios/layout-switcher-persists.md
 //
 // Validates FR-13 + SAD §7 "Layout axis" + §7 "Client-side
-// persistence": the three-layout segmented control sets the active
+// persistence": the layout segmented control sets the active
 // `data-layout` on the matrix root, writes `dashboard.layout` to
 // localStorage, and the selection survives a full page reload. Layout
 // is orthogonal to view (FR-12); switching layout never mutates
 // `dashboard.view`.
+//
+// MVP scope: the Matrix layout is deferred to Phase 2.0; MVP layouts
+// are Swim-lane + Workflow-rows; the MVP first-visit default is
+// Swim-lane. Re-add 'matrix' to LayoutId / ALL_LAYOUTS and restore
+// the default-on-first-visit test back to Matrix when Phase 2.0 opens.
+// See testing/e2e/scenarios/deferred-phase-2.0/.
 
 import { test, expect, type Page } from '@playwright/test';
 
-type LayoutId = 'matrix' | 'swim-lane' | 'workflow-rows';
+type LayoutId = 'swim-lane' | 'workflow-rows';
 
-const NON_DEFAULT_LAYOUTS: LayoutId[] = ['swim-lane', 'workflow-rows'];
-const ALL_LAYOUTS: LayoutId[] = ['matrix', 'swim-lane', 'workflow-rows'];
+const NON_DEFAULT_LAYOUTS: LayoutId[] = ['workflow-rows'];
+const ALL_LAYOUTS: LayoutId[] = ['swim-lane', 'workflow-rows'];
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -34,18 +40,19 @@ async function readPersistedView(page: Page): Promise<string | null> {
   return page.evaluate(() => localStorage.getItem('dashboard.view'));
 }
 
-test('First-time visitor lands on Matrix layout', async ({ page }) => {
-  await expectActiveLayout(page, 'matrix');
+test('First-time visitor lands on Swim-lane layout (MVP default; Matrix deferred to Phase 2.0)', async ({ page }) => {
+  await expectActiveLayout(page, 'swim-lane');
 
   // Default may be either an absent key (defaults apply) or the
-  // literal "matrix" per SAD §7 hardening rules.
+  // literal "swim-lane" per SAD §7 hardening rules. Phase 2.0 returns
+  // this to "matrix".
   const persisted = await readPersistedLayout(page);
-  expect(persisted === null || persisted === 'matrix').toBeTruthy();
+  expect(persisted === null || persisted === 'swim-lane').toBeTruthy();
 });
 
 for (const layout of NON_DEFAULT_LAYOUTS) {
   test(`Switching to ${layout} persists across reload`, async ({ page }) => {
-    await expectActiveLayout(page, 'matrix');
+    await expectActiveLayout(page, 'swim-lane');
 
     await page.getByTestId(`layout-option-${layout}`).click();
     await expectActiveLayout(page, layout);

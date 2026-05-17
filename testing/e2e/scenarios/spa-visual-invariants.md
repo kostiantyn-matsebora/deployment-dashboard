@@ -42,7 +42,8 @@ env-tag-inside-pill containment.
 ## Steps
 
 For every `view` in `['detailed', 'compact', 'glance', 'focus']`
-and every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
+and every `layout` in `['swim-lane', 'workflow-rows']` (MVP layout
+axis; Matrix deferred to Phase 2.0):
 
 1. **Given** the SPA is loaded with cleared `localStorage`,
 2. **When** the test selects the given view and the given layout,
@@ -58,8 +59,9 @@ and every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
 
 ## Expected results
 
-- 12 subtests run; every one passes against a SPA that matches the
-  mockup contract.
+- 8 subtests run (4 views x 2 MVP layouts); every one passes against
+  a SPA that matches the mockup contract. 12 returns once Matrix is
+  re-added in Phase 2.0.
 - Subtest failures isolate the violating invariant ID, the offending
   element's `data-testid`, and the pixel delta — direct mapping to
   the mockup harness's report format.
@@ -76,7 +78,9 @@ and every `layout` in `['matrix', 'swim-lane', 'workflow-rows']`:
 
 ## Coverage
 
-- NFR-09: UX-RESPONSIVENESS INVARIANT across all (view, layout)
+- NFR-09: UX-RESPONSIVENESS INVARIANT across all MVP (view, layout)
   combinations.
 - SAD §7 "Mockup ↔ Angular SPA bridge" — SPA matches mockup contract.
-- FR-12, FR-13: all 12 combinations supported.
+- FR-12, FR-13: 8 MVP combinations (4 views x 2 layouts) supported;
+  12 returns when Matrix is re-added in Phase 2.0
+  (`deferred-phase-2.0/matrix-*.md`).

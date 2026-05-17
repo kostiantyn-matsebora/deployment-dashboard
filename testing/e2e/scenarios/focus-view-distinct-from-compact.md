@@ -10,14 +10,15 @@ button has shipped in the past and the existing oracles all stayed
 green, so this scenario is written specifically to **catch that class
 of regression** by asserting on the row-gutter affordances directly.
 
-**Path A — all three layouts.** Per `docs/ui/compact-options.md`
+**Path A — all MVP layouts.** Per `docs/ui/compact-options.md`
 "Focus view specifics > Layout scope", the chevron + pin appear in
-**all three layouts** when View=Focus. Granularity is service-grain in
-every layout:
+**every MVP layout** when View=Focus. The MVP layout axis is
+Swim-lane + Workflow-rows (Matrix is deferred to Phase 2.0; restore it
+to the granularity table below when the phase opens). Granularity is
+service-grain in every layout:
 
 | Layout | Granularity | Expected affordance count when View=Focus |
 |---|---|---|
-| Matrix | per service-row | one chevron + one pin per service-row |
 | Swim-lane | per service-lane | one chevron + one pin per service-lane |
 | Workflow-rows | per service-header | one chevron + one pin per service-header (NOT per path-row) |
 
@@ -76,7 +77,7 @@ granularity, but the pinned set itself does not reset.
 
 ## Steps
 
-### A. Chevron-presence oracle (regression-preventing core assertion) — runs against EACH of `{matrix, swim-lane, workflow-rows}`
+### A. Chevron-presence oracle (regression-preventing core assertion) — runs against EACH of `{swim-lane, workflow-rows}` (MVP layout axis; Matrix deferred to Phase 2.0)
 
 1. **Given** the SPA on the Detailed view (first paint, cleared
    `localStorage`),
@@ -93,11 +94,12 @@ granularity, but the pinned set itself does not reset.
    `[data-testid="view-option-focus"]`,
 6. **Then** the count of `[data-testid^="row-chevron-"]` equals the
    count of visible *services* under the active layout:
-   - Matrix: `[data-service-row]` count.
    - Swim-lane: `[data-testid^="swim-lane-row-"]` count.
    - Workflow-rows: `[data-testid^="workflow-rows-"]` count (NOT
      `[data-service-row]` — that selector also matches each `.wf-row`
      path-row and over-counts).
+   (Matrix granularity — `[data-service-row]` count — returns when
+   the layout is re-added in Phase 2.0.)
 7. **And** the count of `[data-testid^="row-pin-"]` equals the same
    number,
 8. **And** the set of service ids carried in the chevron / pin
@@ -109,7 +111,7 @@ granularity, but the pinned set itself does not reset.
    `[data-testid^="stage-box-"]`. (Inline placement is
    out-of-contract per `compact-options.md`.)
 
-### B. Chevron expand / collapse toggle — runs against EACH of `{matrix, swim-lane, workflow-rows}`
+### B. Chevron expand / collapse toggle — runs against EACH of `{swim-lane, workflow-rows}` (MVP layout axis; Matrix deferred to Phase 2.0)
 
 1. **Given** the SPA on Layout=`{layout}` and View=Focus, no services
    expanded,
@@ -123,12 +125,12 @@ granularity, but the pinned set itself does not reset.
 6. **Then** the service reverts to
    `[data-testid="row-collapsed-service-a"]`.
 
-Note: `data-expanded="true"` / `="false"` is asserted in the Matrix
-variant because that attribute is canonical on the matrix
-`[data-service-row]`. In workflow-rows, expansion is per
-service-header (the `.wf-row` path-rows are rendered/unrendered by
-the expansion state), so the canonical observable is the testid flip
-between `row-collapsed-{svc}` and `row-expanded-{svc}`.
+Note: the canonical observable in every MVP layout is the testid flip
+between `row-collapsed-{svc}` and `row-expanded-{svc}`. In workflow-rows,
+expansion is per service-header (the `.wf-row` path-rows are
+rendered/unrendered by the expansion state). When Matrix returns in
+Phase 2.0 a `data-expanded="true" / "false"` attribute assertion on
+`[data-service-row]` is the layout-canonical observable to re-add.
 
 ### C. Pin preserves expansion across filter changes
 
@@ -154,22 +156,23 @@ between `row-collapsed-{svc}` and `row-expanded-{svc}`.
 
 ### E. Pin survives a Layout switch (pin state is layout-agnostic)
 
-1. **Given** the SPA on Layout=Matrix and View=Focus,
+1. **Given** the SPA on Layout=Swim-lane and View=Focus,
 2. **When** the test clicks `[data-testid="row-pin-service-a"]`,
-3. **Then** the matrix row carries `data-pinned="true"` and
-   `data-expanded="true"`.
-4. **When** the test switches Layout to Swim-lane via
-   `[data-testid="layout-option-swim-lane"]`,
+3. **Then** `[data-testid="row-expanded-service-a"]` is present
+   (pinning a collapsed row implies expansion per
+   `compact-options.md`).
+4. **When** the test switches Layout to Workflow-rows via
+   `[data-testid="layout-option-workflow-rows"]`,
 5. **Then** `[data-testid="row-pin-service-a"]` is still rendered
    (the affordance is layout-agnostic) **and**
    `[data-testid="row-expanded-service-a"]` is present (the service
    came back already expanded under the new layout's granularity).
-6. **When** the test switches Layout to Workflow-rows,
-7. **Then** the same assertion holds — the pin survived a second
-   Layout switch.
 
 This codifies the "Pin survives layout switch" rule in
-`docs/ui/compact-options.md` "Focus view specifics".
+`docs/ui/compact-options.md` "Focus view specifics". When Matrix
+returns in Phase 2.0, extend this with a matrix → swim-lane → workflow-rows
+chain and re-add the matrix-canonical `data-pinned="true"` /
+`data-expanded="true"` assertions on `[data-service-row="service-a"]`.
 
 ### D. `collapseAll` honours pinned rows
 
@@ -191,16 +194,16 @@ This codifies the "Pin survives layout switch" rule in
 
 | # | Observable |
 |---|---|
-| A1 | Each layout, Compact view: `[data-testid^="row-chevron-"]` count == 0. |
-| A2 | Each layout, Compact view: `[data-testid^="row-pin-"]` count == 0. |
-| A3 | Each layout, Focus view: chevron count == visible service count > 0 (matrix uses `[data-service-row]`; swim-lane uses `[data-testid^="swim-lane-row-"]`; workflow-rows uses `[data-testid^="workflow-rows-"]`). |
-| A4 | Each layout, Focus view: pin count == visible service count > 0. |
-| A5 | Each layout, Focus view: chevron / pin service-id suffixes are DISTINCT (no duplicate-per-path in workflow-rows). |
-| A6 | Each layout, Focus view: chevron and pin are NOT nested inside a `stage-box-*` element. |
-| B  | Each layout: clicking the chevron flips the service's `data-testid` between `row-collapsed-{id}` and `row-expanded-{id}` (in matrix the row's `data-expanded` attribute also flips). |
+| A1 | Each MVP layout, Compact view: `[data-testid^="row-chevron-"]` count == 0. |
+| A2 | Each MVP layout, Compact view: `[data-testid^="row-pin-"]` count == 0. |
+| A3 | Each MVP layout, Focus view: chevron count == visible service count > 0 (swim-lane uses `[data-testid^="swim-lane-row-"]`; workflow-rows uses `[data-testid^="workflow-rows-"]`). |
+| A4 | Each MVP layout, Focus view: pin count == visible service count > 0. |
+| A5 | Each MVP layout, Focus view: chevron / pin service-id suffixes are DISTINCT (no duplicate-per-path in workflow-rows). |
+| A6 | Each MVP layout, Focus view: chevron and pin are NOT nested inside a `stage-box-*` element. |
+| B  | Each MVP layout: clicking the chevron flips the service's `data-testid` between `row-collapsed-{id}` and `row-expanded-{id}`. |
 | C  | After pin + "Failures only" toggle round-trip, the pinned row's `data-expanded` is still `"true"` and `data-pinned` is still `"true"`. |
 | D  | `collapseAll` collapses unpinned rows but leaves pinned rows expanded. |
-| E  | After pin (matrix) + Layout switch matrix → swim-lane → workflow-rows, the pin testid for the pinned service is still rendered AND `row-expanded-{svc}` is still present in the new layout. |
+| E  | After pin (swim-lane) + Layout switch swim-lane → workflow-rows, the pin testid for the pinned service is still rendered AND `row-expanded-{svc}` is still present in the new layout. |
 
 If a future change removed the chevron from Focus rows, assertion
 **A3** (`chevron count == visible service-row count`) would fail at
@@ -227,6 +230,10 @@ hidden.
   Compact-collapsed. Implementing as a brittle pixel-width assertion
   was considered and rejected — the chevron-count oracle above is a
   cheaper and far stricter regression catcher.
+- The Matrix layout — removed from the MVP layout axis and deferred to
+  Phase 2.0 (`deferred-phase-2.0/matrix-*.md`). Re-add matrix to the
+  Path A table, to assertions A3 / B's `data-expanded` note, and to
+  assertion E's chain when Phase 2.0 opens.
 - Persistence of `expanded` / `pinned` across reload — the doc
   explicitly says these are session-only; a separate "reset on
   reload" scenario could be added later, but it's not the regression

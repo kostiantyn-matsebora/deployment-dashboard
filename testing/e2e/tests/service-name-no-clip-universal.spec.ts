@@ -2,8 +2,10 @@
 //
 // User-reported defect: in Workflow-rows under some configurations
 // the service name clipped with text-overflow:ellipsis. This oracle
-// catches a future regression of the same shape across every View x
-// Layout x Theme combination (4 x 3 x 2 = 24).
+// catches a future regression of the same shape across every MVP
+// View x Layout x Theme combination (4 x 2 x 2 = 16). The Matrix
+// layout is deferred to Phase 2.0; when it returns the combination
+// count goes back to 24. See testing/e2e/scenarios/deferred-phase-2.0/.
 //
 // Strategy:
 //   1. Inject a deliberately long service name (32 chars) into the
@@ -31,7 +33,9 @@ import { test, expect, request as playwrightRequest, type Page } from '@playwrig
 import { API_KEY, WRITE_BASE_URL, buildDeploymentPayload } from './support/env';
 
 const VIEWS = ['detailed', 'compact', 'glance', 'focus'] as const;
-const LAYOUTS = ['matrix', 'swim-lane', 'workflow-rows'] as const;
+// MVP layout axis: swim-lane + workflow-rows. Matrix is deferred to
+// Phase 2.0; re-add 'matrix' here when the phase opens.
+const LAYOUTS = ['swim-lane', 'workflow-rows'] as const;
 const THEMES = ['light', 'dark'] as const;
 
 type View = (typeof VIEWS)[number];

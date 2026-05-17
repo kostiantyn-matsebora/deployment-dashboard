@@ -33,8 +33,10 @@
     "serviceRow":     "[data-service-row]"
   },
 
+  "$comment_layouts": "MVP layout axis = swim-lane + workflow-rows. The Matrix layout was removed from MVP and deferred to Phase 2.0; its config knobs are preserved verbatim under 'deferredPhase20' below. To reactivate Matrix, lift 'matrix' back into 'layouts', re-add the I11 invariant entry to 'invariants', and merge 'deferredPhase20.i11' back as the top-level 'i11'. The Matrix-specific scenarios + Playwright specs live under testing/e2e/{scenarios,tests}/deferred-phase-2.0/.",
+
   "views":   ["detailed", "compact", "glance", "focus"],
-  "layouts": ["matrix", "swim-lane", "workflow-rows"],
+  "layouts": ["swim-lane", "workflow-rows"],
 
   "invariants": [
     { "id": "I0-connector-orphan-no-target",        "label": "Connector resolves to a target box (no silent skips)" },
@@ -47,18 +49,16 @@
     { "id": "I7-picker-exposes-seven-attribute-checkboxes", "label": "Display picker exposes seven FR-02 attribute checkboxes (subject to per-view cap)" },
     { "id": "I8-no-null-literal-when-ref-sha-selected",     "label": "No DOM text equals 'null' when ref/sha is selected and underlying value is null (SAD §7 null-render invariant)" },
     { "id": "I9-focus-distinct-from-compact",               "label": "Focus view exposes row-gutter chevron + pin per service (granularity per layout); Compact view exposes neither (regression-preventing oracle)" },
-    { "id": "I10-service-name-no-clip",                     "label": "Service name renders without horizontal clipping (no ellipsis truncation) across every View x Layout x Theme combination" },
-    { "id": "I11-matrix-focus-env-header-alignment",        "label": "Matrix Focus: env-header columns align with deployment columns in both collapsed and expanded rows (--leaf-width-expanded honoured)" }
+    { "id": "I10-service-name-no-clip",                     "label": "Service name renders without horizontal clipping (no ellipsis truncation) across every View x Layout x Theme combination" }
   ],
 
-  "$comment_I9": "Path A — Focus row-gutter affordances apply to ALL THREE layouts (per compact-options.md 'Focus view specifics > Layout scope'). Granularity is per-service in every layout: matrix per service-row, swim-lane per service-lane, workflow-rows per service-header (NOT per path-row). Frontend's commitment: testids `row-chevron-{svcId}` / `row-pin-{svcId}` and the `[data-service-row]` marker are layout-agnostic. A prior regression rendered Focus indistinguishable from Compact because the affordances were too understated; the existing oracles missed it. I9 fires only on the two views where the assertion is meaningful (focus / compact) — the per-view 'expected' is declared below, not hard-coded in the spec. No layoutScope: I9 now fires on every layout.",
+  "$comment_I9": "Path A — Focus row-gutter affordances apply to every MVP layout (per compact-options.md 'Focus view specifics > Layout scope'). MVP layout axis = swim-lane + workflow-rows (Matrix is deferred to Phase 2.0 — see deferredPhase20 below). Granularity is per-service in every layout: swim-lane per service-lane, workflow-rows per service-header (NOT per path-row). Frontend's commitment: testids `row-chevron-{svcId}` / `row-pin-{svcId}` and the `[data-service-row]` marker are layout-agnostic. A prior regression rendered Focus indistinguishable from Compact because the affordances were too understated; the existing oracles missed it. I9 fires only on the two views where the assertion is meaningful (focus / compact) — the per-view 'expected' is declared below, not hard-coded in the spec.",
   "i9": {
     "selectorChevron": "[data-testid^='row-chevron-']",
     "selectorPin":     "[data-testid^='row-pin-']",
     "selectorRow":     "[data-service-row]",
     "selectorServiceScope": {
-      "$comment": "Per layout, what counts as ONE service unit for the chevron/pin granularity assertion. All 3 layouts carry data-service-row on their per-service anchor. Workflow-rows ALSO carries data-service-row on each .wf-row path-row (so the raw count over-counts services), so we always count DISTINCT data-service-row attribute values — that is layout-agnostic AND immune to the testid-flip frontend does in Focus view (swim-lane-row-{id} / workflow-rows-{id} flip to row-collapsed-{id} / row-expanded-{id} when view=focus).",
-      "matrix":         { "selector": "[data-service-row]", "mode": "distinct-attr", "attr": "data-service-row" },
+      "$comment": "Per layout, what counts as ONE service unit for the chevron/pin granularity assertion. Both MVP layouts carry data-service-row on their per-service anchor. Workflow-rows ALSO carries data-service-row on each .wf-row path-row (so the raw count over-counts services), so we always count DISTINCT data-service-row attribute values — that is layout-agnostic AND immune to the testid-flip frontend does in Focus view (swim-lane-row-{id} / workflow-rows-{id} flip to row-collapsed-{id} / row-expanded-{id} when view=focus).",
       "swim-lane":      { "selector": "[data-service-row]", "mode": "distinct-attr", "attr": "data-service-row" },
       "workflow-rows":  { "selector": "[data-service-row]", "mode": "distinct-attr", "attr": "data-service-row" }
     },
@@ -68,26 +68,38 @@
     }
   },
 
-  "$comment_I10": "Service name no-clip: a user-reported defect (workflow-rows under some configurations) where the service-name element clipped with text-overflow:ellipsis. Frontend is fixing structurally (drop the .truncate utility in favour of whitespace-normal break-words); this oracle catches a future regression of the same shape across all 12 View x Layout combinations (theme is exercised by the e2e companion). The selector per layout points at the <p> rendering service.name; the assertion is scrollWidth <= clientWidth + envTagSubpixelPx tolerance (the same 1px sub-pixel allowance I2 uses for env-tags). selectorMode='alpine-xtext' tells the evaluator to scan p elements whose Alpine x-text directive equals 'service.name' (mockup) — this is robust to whether the element also has a .truncate class or not. REQUESTED: a data-testid='service-name-{svcId}' hook so this oracle does not depend on internal directives.",
+  "$comment_I10": "Service name no-clip: a user-reported defect (workflow-rows under some configurations) where the service-name element clipped with text-overflow:ellipsis. Frontend is fixing structurally (drop the .truncate utility in favour of whitespace-normal break-words); this oracle catches a future regression of the same shape across every MVP View x Layout combination (theme is exercised by the e2e companion). The selector per layout points at the <p> rendering service.name; the assertion is scrollWidth <= clientWidth + envTagSubpixelPx tolerance (the same 1px sub-pixel allowance I2 uses for env-tags). selectorMode='alpine-xtext' tells the evaluator to scan p elements whose Alpine x-text directive equals 'service.name' (mockup) — this is robust to whether the element also has a .truncate class or not. REQUESTED: a data-testid='service-name-{svcId}' hook so this oracle does not depend on internal directives.",
   "i10": {
     "perLayout": {
-      "matrix":        { "scope": "[data-service-row]",                 "xText": "service.name" },
       "swim-lane":     { "scope": ".lane-label",                        "xText": "service.name" },
       "workflow-rows": { "scope": ".svc-block-meta-row",                "xText": "service.name" }
     }
   },
 
-  "$comment_I11": "Matrix Focus env-header alignment: user reported that in Matrix x Focus, when a row expands to --leaf-width-expanded (200px), the env-header columns above no longer align with the widened deployment columns in the expanded row. Frontend is fixing structurally (the env-header must also widen to --leaf-width-expanded when ANY row is expanded — OR a per-row local env-header strategy). This oracle asserts the contract: for every env in the env-header row, its bounding rect's left/right match the corresponding deployment cell's left/right edges in at least one collapsed row AND one expanded row, within tolerance. Scope: layout=matrix AND view=focus only (the only combination where expand is meaningful).",
-  "i11": {
-    "layoutScope": ["matrix"],
-    "viewScope":   ["focus"],
-    "headerSelector":     ".px-6.pt-2.pb-1 .text-center[style*='width: var(--leaf-width)']",
-    "headerCellSelector": ".text-center[style*='width: var(--leaf-width)']",
-    "expandedRowSelector":  "[data-service-row][data-expanded='true']",
-    "collapsedRowSelector": "[data-service-row][data-expanded='false']",
-    "stageBoxInRowSelector": "[data-testid^='stage-box-']",
-    "tolerancePx": 1,
-    "$note": "The expansion is triggered by the harness via the Alpine root (toggleExpand) — no UI click required. We pick the first env in the env-header row and require its left/right to align with the corresponding stage-box in BOTH a collapsed row AND an expanded row. If the env-header is rendered once at --leaf-width but the expanded row's cell is at --leaf-width-expanded, the assertion fails."
+  "$comment_deferredPhase20": "Matrix layout removed from MVP, deferred to Phase 2.0. This block preserves the matrix-only harness knobs verbatim so reactivation is a copy-paste: lift `i11` back to the top level as the active config, re-add the I11 entry to `invariants`, re-add 'matrix' to `layouts`, re-add matrix entries to `i9.selectorServiceScope` and `i10.perLayout`. The matrix-only Playwright specs live under testing/e2e/{scenarios,tests}/deferred-phase-2.0/. The harness spec (mockup-invariants.spec.ts) gates I11 execution on `i11.layoutScope.includes(layout)` already, so removing matrix from `layouts` is sufficient to stop I11 from firing — but keeping the I11 entry out of the active `invariants` list keeps the harness report's invariant catalogue honest about what's currently asserted.",
+  "deferredPhase20": {
+    "layouts": ["matrix"],
+    "invariants": [
+      { "id": "I11-matrix-focus-env-header-alignment", "label": "Matrix Focus: env-header columns align with deployment columns in both collapsed and expanded rows (--leaf-width-expanded honoured)" }
+    ],
+    "i9_selectorServiceScope": {
+      "matrix":        { "selector": "[data-service-row]", "mode": "distinct-attr", "attr": "data-service-row" }
+    },
+    "i10_perLayout": {
+      "matrix":        { "scope": "[data-service-row]",    "xText": "service.name" }
+    },
+    "i11": {
+      "$comment": "Matrix Focus env-header alignment: user reported that in Matrix x Focus, when a row expands to --leaf-width-expanded (200px), the env-header columns above no longer align with the widened deployment columns in the expanded row. Frontend is fixing structurally (the env-header must also widen to --leaf-width-expanded when ANY row is expanded — OR a per-row local env-header strategy). This oracle asserts the contract: for every env in the env-header row, its bounding rect's left/right match the corresponding deployment cell's left/right edges in at least one collapsed row AND one expanded row, within tolerance. Scope: layout=matrix AND view=focus only (the only combination where expand is meaningful).",
+      "layoutScope": ["matrix"],
+      "viewScope":   ["focus"],
+      "headerSelector":     ".px-6.pt-2.pb-1 .text-center[style*='width: var(--leaf-width)']",
+      "headerCellSelector": ".text-center[style*='width: var(--leaf-width)']",
+      "expandedRowSelector":  "[data-service-row][data-expanded='true']",
+      "collapsedRowSelector": "[data-service-row][data-expanded='false']",
+      "stageBoxInRowSelector": "[data-testid^='stage-box-']",
+      "tolerancePx": 1,
+      "$note": "The expansion is triggered by the harness via the Alpine root (toggleExpand) — no UI click required. We pick the first env in the env-header row and require its left/right to align with the corresponding stage-box in BOTH a collapsed row AND an expanded row. If the env-header is rendered once at --leaf-width but the expanded row's cell is at --leaf-width-expanded, the assertion fails."
+    }
   },
 
   "$comment_FR02_attrs": "FR-02 attribute keys + per-view caps used by I7. Caps from SAD §7 'Layout views (FR-12)': Detailed 7, Compact 5, Glance 1, Focus 5. Defaults are NOT asserted here (covered by the e2e attribute-picker-cap-enforcement.spec.ts against the SPA); only the cap and the catalogue completeness are.",

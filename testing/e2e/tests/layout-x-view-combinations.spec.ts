@@ -1,16 +1,20 @@
 // Implements testing/e2e/scenarios/layout-x-view-combinations.md
 //
-// Iterates the 12 (view, layout) combinations and asserts that each
+// Iterates the 8 MVP (view, layout) combinations and asserts that each
 // one renders cleanly: matrix mounts, data-view/data-layout markers
 // agree with the selection, at least one stage box is present, and
 // no console errors fired during rendering. The combination matrix
 // is declarative below — adding a new view or layout means adding
 // to those constants, not editing the test body.
+//
+// MVP scope: Matrix layout is deferred to Phase 2.0; the active LAYOUTS
+// axis is therefore ['swim-lane', 'workflow-rows']. Re-add 'matrix'
+// here when Phase 2.0 opens. See testing/e2e/scenarios/deferred-phase-2.0/.
 
 import { test, expect, type ConsoleMessage } from '@playwright/test';
 
 const VIEWS = ['detailed', 'compact', 'glance', 'focus'] as const;
-const LAYOUTS = ['matrix', 'swim-lane', 'workflow-rows'] as const;
+const LAYOUTS = ['swim-lane', 'workflow-rows'] as const;
 
 // Known-harmless console errors to filter out. Keep this list narrow
 // and document why each entry is excluded; never paper over real bugs.
