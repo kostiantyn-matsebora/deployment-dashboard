@@ -1,6 +1,6 @@
 // Theme switcher — gear icon + popover with Light / Dark / Auto radios.
 //
-// Contract under test (mirrors the mockup in docs/deployment-dashboard.html
+// Contract under test (mirrors the mockup in docs/ui/deployment-dashboard.html
 // lines 1108–1145):
 //   - Container: `[data-testid="theme-switcher"]`
 //   - Gear:      `[data-testid="theme-gear"]` with `aria-expanded`

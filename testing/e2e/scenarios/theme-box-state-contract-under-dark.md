@@ -9,7 +9,7 @@ invariant.
 
 ## Citations
 
-- `docs/ui-theme-options.md` "6-box-state contract — palette mapping"
+- `docs/ui/theme-options.md` "6-box-state contract — palette mapping"
   + "Box-state contract — always on" sections — "Theme is purely a
   palette swap. The 6 box states … render in every view AND every
   layout AND every theme."
@@ -81,12 +81,12 @@ invariant.
   `spa-visual-invariants.spec.ts` (the harness is palette-agnostic;
   this scenario notes that no separate run-under-dark variant is
   needed because geometric invariants are independent of palette
-  per `docs/ui-theme-options.md` "NFR-09 (UX-RESPONSIVENESS)
+  per `docs/ui/theme-options.md` "NFR-09 (UX-RESPONSIVENESS)
   unaffected").
 
 ## Coverage
 
-- `docs/ui-theme-options.md` "6-box-state contract — palette
+- `docs/ui/theme-options.md` "6-box-state contract — palette
   mapping" + "Box-state contract — always on".
 - `docs/deployment-dashboard-architecture.md` §4 FR-01 / FR-02 /
   FR-03 — palette-invariant.

@@ -9,7 +9,7 @@ namespace Dashboard.Shared.Tests.Queries;
 
 /// <summary>
 /// Contract tests for the matrix derivation logic. These cover every one
-/// of the six box states defined in <c>docs/deployment-dashboard.html</c>
+/// of the six box states defined in <c>docs/ui/deployment-dashboard.html</c>
 /// SERVICES block — they are the wire-contract proof.
 /// </summary>
 public sealed class MatrixQueryTests

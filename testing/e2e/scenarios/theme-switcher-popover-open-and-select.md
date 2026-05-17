@@ -8,11 +8,11 @@ switchers.
 
 ## Citations
 
-- `docs/deployment-dashboard.html` lines 1108–1145 — the
+- `docs/ui/deployment-dashboard.html` lines 1108–1145 — the
   `data-testid="theme-switcher"` container, gear button
   (`data-testid="theme-gear"`) with `aria-expanded`, and the three
   radio options (`data-testid="theme-option-{light|dark|auto}"`).
-- `docs/ui-theme-options.md` "Switcher affordance — gear icon +
+- `docs/ui/theme-options.md` "Switcher affordance — gear icon +
   popover" + "Three orthogonal axes" table.
 - `docs/cr/CR-0006-light-dark-auto-theme.md` "Theme axis
   (presentation-only)" subsection.
@@ -79,8 +79,8 @@ switchers.
 
 ## Coverage
 
-- `docs/deployment-dashboard.html` lines 1108–1145 — theme switcher
+- `docs/ui/deployment-dashboard.html` lines 1108–1145 — theme switcher
   affordance contract (`data-testid`s + `aria-expanded`).
-- `docs/ui-theme-options.md` "Switcher affordance — gear icon +
+- `docs/ui/theme-options.md` "Switcher affordance — gear icon +
   popover" section.
 - `docs/cr/CR-0006-light-dark-auto-theme.md` Theme axis subsection.

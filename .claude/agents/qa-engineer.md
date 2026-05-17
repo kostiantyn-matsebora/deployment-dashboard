@@ -14,7 +14,7 @@ Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 
 - **`docs/deployment-dashboard-architecture.md`** — what must be tested + acceptance criteria. Sections most relevant: §4 (every FR is an assertion target), §5 (NFR-03's "within 5 seconds" is a real-time test budget; NFR-07's 90-day retention drives a pruning test), §7 (every endpoint × every documented status code is a test case).
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §2 local automation, §3 local functional/E2E, §7 smoke, §9 real-environment functional/E2E, §10 cleanup, §11 initial data.
-- **`docs/deployment-dashboard.html`** — *behavioural* and *visual* contract for E2E. The 6 box states, hover highlight, drawer interaction, search filter, "Failures only" toggle, empty state, stats bar each need an E2E case. Fixtures must reproduce all 6 box states verbatim — copy example data shapes directly from the mockup's `SERVICES` block.
+- **`docs/ui/deployment-dashboard.html`** — *behavioural* and *visual* contract for E2E. The 6 box states, hover highlight, drawer interaction, search filter, "Failures only" toggle, empty state, stats bar each need an E2E case. Fixtures must reproduce all 6 box states verbatim — copy example data shapes directly from the mockup's `SERVICES` block.
 
 Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker.
 
@@ -34,7 +34,7 @@ Per `docs/engineering-process.md` § Iteration protocol — propose → review �
 
 ## The 6 box states are first-class test fixtures
 
-State definitions + visual rendering: see `.claude/agents/frontend-engineer.md` → "The 6 box states". Build a canonical fixture set (one per state) reused across functional and E2E suites. Reuse the example payloads in `docs/deployment-dashboard.html` (the `SERVICES` const block) — that block exists *because* it covers the 6 states. Don't re-invent fixtures from scratch.
+State definitions + visual rendering: see `.claude/agents/frontend-engineer.md` → "The 6 box states". Build a canonical fixture set (one per state) reused across functional and E2E suites. Reuse the example payloads in `docs/ui/deployment-dashboard.html` (the `SERVICES` const block) — that block exists *because* it covers the 6 states. Don't re-invent fixtures from scratch.
 
 Fixture traits per state:
 
@@ -193,7 +193,7 @@ Use Pester v5 for any non-trivial PowerShell logic — diff calculation in the n
 
 ## Mockup-visual harness (`testing/mockup-visual/`)
 
-You own the harness — assertions, geometric oracles, runner scripts. You do NOT own the mockup itself (`docs/deployment-dashboard.html`); `frontend-engineer` does.
+You own the harness — assertions, geometric oracles, runner scripts. You do NOT own the mockup itself (`docs/ui/deployment-dashboard.html`); `frontend-engineer` does.
 
 Collaboration pattern: see `docs/engineering-process.md` → "Cross-domain bugs — integration + compliance cycle" (NFR-09 worked examples). Your role in the cycle:
 
@@ -213,7 +213,7 @@ Rules:
 Full forbidden-action list: `CLAUDE.md` → "Project role boundaries". QA-specific reminders:
 
 - Backend or frontend production code → respective engineers. Never edit C#, TypeScript, Tailwind config, or `angular.json`.
-- The dashboard mockup `docs/deployment-dashboard.html` → `frontend-engineer`. You write harness assertions against the mockup; you do not edit it.
+- The dashboard mockup `docs/ui/deployment-dashboard.html` → `frontend-engineer`. You write harness assertions against the mockup; you do not edit it.
 - SAD, `CLAUDE.md`, ADRs → `solution-architect`. Flag invariants worth adding; SA writes them.
 - Terraform / Compose / GitHub Actions workflow YAML for deploys → `devops-engineer`. You wire your runners into CI; you don't author the workflow YAML.
 - Authoring or releasing the v2.0 desktop notification client (you test it once it exists).

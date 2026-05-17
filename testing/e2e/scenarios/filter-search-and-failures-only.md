@@ -7,7 +7,7 @@ and when their combination matches nothing the empty-state panel is shown.
 
 - `docs/deployment-dashboard-architecture.md` §4 FR-07 ("filtering by service
   name and by failure state only").
-- `docs/deployment-dashboard.html` - the mockup's `filteredServices` getter
+- `docs/ui/deployment-dashboard.html` - the mockup's `filteredServices` getter
   defines the precise semantics: case-insensitive `.includes()` on
   `service.name`, AND with at least one env in `failure` state when
   "Failures only" is on.
@@ -26,7 +26,7 @@ and when their combination matches nothing the empty-state panel is shown.
   `service-c`, and `service-d` do not. Note that
   `service-d` and `service-c` have in-progress slots with
   `previousFailed === true`; per the mockup's `filteredServices()`
-  getter in `docs/deployment-dashboard.html` (line 501,
+  getter in `docs/ui/deployment-dashboard.html` (line 501,
   `e?.current?.status === 'failure'`), `previousFailed` does NOT
   contribute to the "Failures only" filter - only the *current*
   terminal `failure` state does.
@@ -71,7 +71,7 @@ and when their combination matches nothing the empty-state panel is shown.
 - Failures-only toggle filters to services where any env has
   `current.status === 'failure'`. `previousFailed === true` does NOT
   count - the mockup's `filteredServices()` getter
-  (`docs/deployment-dashboard.html`, the `filter(s => ...)` body)
+  (`docs/ui/deployment-dashboard.html`, the `filter(s => ...)` body)
   inspects only `e?.current?.status`.
 - Empty state is shown when the filtered services count is zero.
 - All filter changes are immediate (no debounce-driven delay > 250 ms).

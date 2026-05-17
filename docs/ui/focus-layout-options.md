@@ -1,6 +1,6 @@
 # UI Focus expand/collapse across layouts — design note
 
-The canonical mockup `docs/deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. The chosen design for Focus's chevron + pin drill-down extends the affordance from Matrix (the original shipped surface) to **Swim-lane** and **Workflow-rows** using **Option A — wider + taller (matrix-parity)**. The two per-option HTML files (`deployment-dashboard-focus-a-wider.html`, `deployment-dashboard-focus-b-taller.html`) have been merged into the canonical and deleted.
+The canonical mockup `./deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. The chosen design for Focus's chevron + pin drill-down extends the affordance from Matrix (the original shipped surface) to **Swim-lane** and **Workflow-rows** using **Option A — wider + taller (matrix-parity)**. The two per-option HTML files (`deployment-dashboard-focus-a-wider.html`, `deployment-dashboard-focus-b-taller.html`) have been merged into the canonical and deleted.
 
 User confirmations captured at merge time:
 
@@ -44,7 +44,7 @@ The Glance-view exception (env-tag inside the pill) is untouched — Focus and G
 
 ## Persistence
 
-No new persistence keys. Both `state.expanded[id]` and `state.pinned[id]` are session-only Alpine state (per [`ui-compact-options.md` § Session-only state](./ui-compact-options.md#session-only-state-not-persisted)). A fresh page load starts every service collapsed and unpinned in every layout. The chevron + pin in swim-lane and workflow-rows write to the same store and share the same `toggleExpand` / `togglePin` / `collapseAll` actions used by Matrix Focus.
+No new persistence keys. Both `state.expanded[id]` and `state.pinned[id]` are session-only Alpine state (per [`compact-options.md` § Session-only state](./compact-options.md#session-only-state-not-persisted)). A fresh page load starts every service collapsed and unpinned in every layout. The chevron + pin in swim-lane and workflow-rows write to the same store and share the same `toggleExpand` / `togglePin` / `collapseAll` actions used by Matrix Focus.
 
 **Cross-layout pin semantics — pinned by service, not by layout.** A user who pins `service-a` in matrix Focus then switches to swim-lane keeps `service-a` rendered expanded in the swim-lane layout. The pin state lives on the service id, not on the `(service, layout)` pair. This is consistent with the spirit of the matrix Focus rule "pin survives filter exclusion" — the user's intent is "keep this service drilled in", and layout switches preserve that intent.
 
@@ -77,7 +77,7 @@ Focus drill-in is an expand/pin overlay — no data shape, no semantic change. E
 
 ## SAD updates implied
 
-- `ui-compact-options.md § Focus view specifics → "Layout scope"` — the paragraph "Matrix only" struck and replaced with the three-layout granularity table above. Owner: `solution-architect`.
+- `compact-options.md § Focus view specifics → "Layout scope"` — the paragraph "Matrix only" struck and replaced with the three-layout granularity table above. Owner: `solution-architect`.
 - A note in the same section codifying cross-layout pin semantics ("pin lives on `service.id`, not `(service, layout)`"). Owner: `solution-architect`.
 - CR-0002 (Focus view) — mention the new sibling invariants #6 (service-name no-clip) and #7 (env-header alignment under expand). Owner: `solution-architect`.
 

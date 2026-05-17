@@ -4,7 +4,7 @@
 // `localStorage` keys live here only — never inline in component code.
 //
 // Source of truth: docs/deployment-dashboard-architecture.md §7 "Visual
-// layout" + docs/ui-compact-options.md.
+// layout" + docs/ui/compact-options.md.
 
 /** The four user-selectable matrix layout views. */
 export type ViewId = 'detailed' | 'compact' | 'glance' | 'focus';
@@ -24,7 +24,7 @@ export type AttrKey = 'status' | 'version' | 'run' | 'ago' | 'actor' | 'ref' | '
  * Overall arrangement of services × envs. Orthogonal to ViewId — the View axis
  * controls the *leaf renderer* (per-box density / attributes); the Layout axis
  * controls the *outer arrangement* (services × envs grid vs lanes vs paths).
- * See docs/ui-tree-topology-options.md.
+ * See docs/ui/tree-topology-options.md.
  */
 export type LayoutId = 'matrix' | 'swim-lane' | 'workflow-rows';
 
@@ -198,7 +198,7 @@ export function isCorrelationAttribute(v: unknown): v is CorrelationAttribute {
 
 // ============================================================================
 // Theme axis (palette swap — orthogonal to view + layout). SAD §7 "Visual
-// layout" + docs/ui-theme-options.md. The user-facing preference enum is
+// layout" + docs/ui/theme-options.md. The user-facing preference enum is
 // `light | dark | auto`; the *effective* palette is `light | dark` (auto
 // resolves against prefers-color-scheme at runtime). Theme is a pure
 // palette concern — never controls layout, density, attribute selection,
@@ -218,7 +218,7 @@ export interface ThemeDescriptor {
   readonly hint: string;
 }
 
-/** Mirrors `THEMES` in the canonical mockup (docs/deployment-dashboard.html line 2722). */
+/** Mirrors `THEMES` in the canonical mockup (docs/ui/deployment-dashboard.html line 2722). */
 export const THEMES: readonly ThemeDescriptor[] = [
   { id: 'light', label: 'Light', hint: '' },
   { id: 'dark',  label: 'Dark',  hint: 'Dim' },

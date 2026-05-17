@@ -8,10 +8,10 @@ runs synchronously before Angular bootstraps and sets `data-theme` /
 
 ## Citations
 
-- `docs/deployment-dashboard.html` head comment block (lines 175–198)
+- `docs/ui/deployment-dashboard.html` head comment block (lines 175–198)
   — FOIT-safe theme bootstrap and the `data-theme` / `data-theme-pref`
   dataset hooks.
-- `docs/ui-theme-options.md` "Auto resolution" §1 ("Initial paint —
+- `docs/ui/theme-options.md` "Auto resolution" §1 ("Initial paint —
   inline `<script>` block at the top of `<head>` … sets `data-theme`
   on `<html>` immediately. No flash.").
 - `docs/cr/CR-0006-light-dark-auto-theme.md` — new `dashboard.theme`
@@ -70,8 +70,8 @@ runs synchronously before Angular bootstraps and sets `data-theme` /
 
 ## Coverage
 
-- `docs/deployment-dashboard.html` head FOIT-safe bootstrap block.
-- `docs/ui-theme-options.md` "Auto resolution" §1 (initial paint).
+- `docs/ui/deployment-dashboard.html` head FOIT-safe bootstrap block.
+- `docs/ui/theme-options.md` "Auto resolution" §1 (initial paint).
 - `docs/cr/CR-0006-light-dark-auto-theme.md` — `dashboard.theme`
   localStorage row.
 - `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md` —

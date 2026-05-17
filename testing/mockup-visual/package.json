@@ -2,7 +2,7 @@
   "name": "deployment-dashboard-mockup-visual",
   "private": true,
   "version": "0.0.0",
-  "description": "Mockup-only Playwright harness — loads docs/deployment-dashboard.html in a real browser and asserts geometric visual invariants (no overlap, connectors reach targets, etc.). Owner: qa-engineer.",
+  "description": "Mockup-only Playwright harness — loads docs/ui/deployment-dashboard.html in a real browser and asserts geometric visual invariants (no overlap, connectors reach targets, etc.). Owner: qa-engineer.",
   "scripts": {
     "test": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json"

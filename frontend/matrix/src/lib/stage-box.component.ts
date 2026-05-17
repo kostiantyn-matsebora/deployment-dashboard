@@ -2,7 +2,7 @@
 // Renders all 6 box states from the mockup. Used directly by the Detailed
 // row and by the Focus row when its service is expanded.
 //
-// Visual contract is in docs/deployment-dashboard.html — copy class strings
+// Visual contract is in docs/ui/deployment-dashboard.html — copy class strings
 // literally where they make sense; do not re-invent the palette.
 //
 // Attribute picker (FR-12) — the body conditionally renders status badge /

@@ -8,7 +8,7 @@ Authoritative files — every agent reads them:
 |---|---|---|
 | `docs/deployment-dashboard-architecture.md` (SAD) | Requirements, constraints, components, data model, API contract, decisions, WBS | `solution-architect` |
 | `docs/WBS.md` | Operational work plan (MVP / CI-CD Integration / v2.0 phases + per-phase items) | `solution-architect` |
-| `docs/deployment-dashboard.html` (mockup) | Visual + behavioural contract for the SPA | `frontend-engineer` (authoring); `solution-architect` (governance review, no edits) |
+| `docs/ui/deployment-dashboard.html` (mockup) | Visual + behavioural contract for the SPA | `frontend-engineer` (authoring); `solution-architect` (governance review, no edits) |
 | `docs/cr/CR-*.md` (after SAD finalization) | Requirements change records | `solution-architect` |
 | `docs/adr/ADR-*.md` (after SAD finalization) | Architecture change records | `solution-architect` |
 
@@ -63,6 +63,7 @@ deployment-dashboard/
 ├── dev_env/                # Local Compose + start.ps1 / stop.ps1
 ├── testing/                # All test code outside per-project units
 ├── docs/                   # Authoritative specs
+│   └── ui/                 # Mockup + UI design-option docs
 ├── .github/                # GitHub Actions workflows + composite actions
 ├── .claude/                # Agent definitions + Claude Code settings
 └── CLAUDE.md
@@ -90,7 +91,7 @@ deployment-dashboard/
 
 ### `frontend/`
 
-*Authoritative architecture: SAD §7 "Dashboard Frontend (MVP)" + the canonical mockup `docs/deployment-dashboard.html`. This section adds only repo-layout invariants.*
+*Authoritative architecture: SAD §7 "Dashboard Frontend (MVP)" + the canonical mockup `docs/ui/deployment-dashboard.html`. This section adds only repo-layout invariants.*
 
 - Angular source owned by `frontend-engineer`; `dashboard/Dockerfile` + `dashboard/nginx.conf` owned by `devops-engineer`.
 - Dependency rules:
@@ -152,7 +153,7 @@ Six subagents in `.claude/agents/`. Route work per the table — do not do agent
 |---|---|
 | `solution-architect` | SAD edits; mockup governance review (no edits); `docs/ci-cd-integration.md`; `CLAUDE.md` rules / routing / repo-structure; ADRs and architectural artefacts under `docs/`; coherence audits between SAD and mockup; tie-breaker resolution. |
 | `backend-engineer` | ASP.NET Core Minimal APIs (Write + Read surfaces + the `api/` host); EF Core 10 entities, `DbContext`, migrations; PostgreSQL schema, indexes, matrix/history SQL, `LISTEN/NOTIFY`, pruning job; API-key middleware, SSE endpoint, `Last-Event-ID` reconnect; matrix derivation (`lastSuccessful`, `previousFailed`), wire-format JSON contract. |
-| `frontend-engineer` | Mockup (`docs/deployment-dashboard.html`) — HTML/CSS/JS/Alpine.js/SVG/embedded fixture edits; Angular 20 standalone components, zoneless change detection; NgRx Signal Store, derived signals, slot-update dispatch; Tailwind layout, 6 box states, hover highlight, history drawer, filters, stats bar; browser-native `EventSource` client and reconnect logic. |
+| `frontend-engineer` | Mockup (`docs/ui/deployment-dashboard.html`) — HTML/CSS/JS/Alpine.js/SVG/embedded fixture edits; Angular 20 standalone components, zoneless change detection; NgRx Signal Store, derived signals, slot-update dispatch; Tailwind layout, 6 box states, hover highlight, history drawer, filters, stats bar; browser-native `EventSource` client and reconnect logic. |
 | `qa-engineer` | Functional / API tests against running stack; Playwright e2e + scenario specs; `seed.ps1`, `cleanup.ps1`, `test-notify.ps1`, `init-data.ps1`; smoke suite (post-deploy validation); Pester tests for non-trivial PowerShell or composite-action logic; mockup-visual harness assertions. |
 | `devops-engineer` | Dockerfiles, `docker-compose.*.yml`, scaled compose; Terraform (ACR, ACA, Postgres Flexible B1ms, Key Vault, networking); GitHub Actions CI + release workflows, ACA revision updates; composite `notify` action under `.github/actions/notify/`; secret provisioning, cost tracking against ≤ $30/month cap. |
 | `ai-engineer` | AI-asset and documentation optimization for LLM context economy: compaction, file splitting / lazy-loading topology, cross-referencing, vocabulary normalization, prompt-structure tightening across `.claude/agents/*.md`, `CLAUDE.md`, `docs/*.md`, READMEs, ADRs, skills. |
@@ -167,7 +168,7 @@ Project-specific forbidden role-crossings (the principle is in [`docs/engineerin
 |---|---|
 | `solution-architect` | Mockup HTML/CSS/JS/Alpine.js/SVG; backend C# (controllers, EF entities, migrations, middleware); Angular code (components, services, store, templates); Terraform, Dockerfiles, `docker-compose.*.yml`, `.github/` CI workflows. |
 | `frontend-engineer` | Backend C# code (including SQL queries inside Read API endpoints); Terraform, Dockerfiles, `.github/` CI workflows. |
-| `backend-engineer` | Angular code, Tailwind, `docs/deployment-dashboard.html` (mockup); Terraform, Dockerfiles, `.github/` CI workflows. |
+| `backend-engineer` | Angular code, Tailwind, `docs/ui/deployment-dashboard.html` (mockup); Terraform, Dockerfiles, `.github/` CI workflows. |
 | `devops-engineer` | `.csproj`, NuGet config, any C# source to dodge a build issue; Angular code or Tailwind config. |
 | `qa-engineer` | Mockup HTML, backend production C#, frontend production TypeScript. QA owns test code, fixtures, scenarios, runner scripts — never production surfaces. |
 | `ai-engineer` | Production code (`backend/`, `frontend/`, `gateway/`, `infrastructure/`, `.github/`, `testing/`); mockup HTML/CSS/JS; configuration files (`appsettings.json`, `*.tfvars`, `docker-compose.*.yml`); CI workflows. Must NOT add / remove / reword any rule, routing entry, invariant, FR/NFR, or governance decision (semantic content is `solution-architect`'s). Must NOT delete a doc without SA approval. Must NOT split a file without updating every dependent cross-reference in the same pass. |

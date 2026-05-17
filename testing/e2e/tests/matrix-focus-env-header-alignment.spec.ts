@@ -16,7 +16,7 @@
 //
 // Citations:
 //   - testing/e2e/scenarios/matrix-focus-env-header-alignment.md
-//   - docs/ui-compact-options.md "Focus view specifics"
+//   - docs/ui/compact-options.md "Focus view specifics"
 
 import { test, expect, type Page } from '@playwright/test';
 

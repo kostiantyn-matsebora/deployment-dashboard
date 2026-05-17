@@ -17,7 +17,7 @@ reload.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
   "Client-side persistence (`localStorage`)" — key `dashboard.view`,
   value one of `'detailed' / 'compact' / 'glance' / 'focus'`.
-- `docs/ui-compact-options.md` — switcher behaviour + localStorage key
+- `docs/ui/compact-options.md` — switcher behaviour + localStorage key
   shapes.
 
 ## Preconditions

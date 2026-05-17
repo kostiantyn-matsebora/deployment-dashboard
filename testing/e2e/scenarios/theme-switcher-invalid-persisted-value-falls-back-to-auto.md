@@ -7,9 +7,9 @@ palette from `prefers-color-scheme`.
 
 ## Citations
 
-- `docs/ui-theme-options.md` "Persistence" table — "Unknown enum
+- `docs/ui/theme-options.md` "Persistence" table — "Unknown enum
   value → 'auto'."
-- `docs/deployment-dashboard.html` lines 187–198 — the FOIT-safe
+- `docs/ui/deployment-dashboard.html` lines 187–198 — the FOIT-safe
   bootstrap script validates the persisted value against the literal
   set `'light' / 'dark' / 'auto'` and falls back to `'auto'` on any
   other value (including unparseable garbage).
@@ -64,9 +64,9 @@ palette from `prefers-color-scheme`.
 
 ## Coverage
 
-- `docs/ui-theme-options.md` "Persistence" table — "Unknown enum
+- `docs/ui/theme-options.md` "Persistence" table — "Unknown enum
   value → 'auto'.".
-- `docs/deployment-dashboard.html` head bootstrap validation logic.
+- `docs/ui/deployment-dashboard.html` head bootstrap validation logic.
 - `docs/cr/CR-0006-light-dark-auto-theme.md` — `dashboard.theme`
   localStorage row.
 - `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md` —

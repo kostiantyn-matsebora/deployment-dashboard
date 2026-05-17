@@ -6,7 +6,7 @@
 // value back to localStorage.
 //
 // SAD §7 "Client-side persistence (localStorage)" defines the wire shape;
-// docs/ui-compact-options.md describes the fallback rules. Keys + defaults
+// docs/ui/compact-options.md describes the fallback rules. Keys + defaults
 // live in `view-config.ts` — never inline here.
 
 import { effect, inject, Injectable, untracked } from '@angular/core';

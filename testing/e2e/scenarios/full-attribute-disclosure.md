@@ -30,7 +30,7 @@ string `"null"`.
   invariant for nullable attributes" — when `ref` / `sha` is
   null/absent, the attribute slot renders empty, NOT the literal
   `"null"`.
-- `docs/ui-compact-options.md` "Always-on (NOT configurable)" — the
+- `docs/ui/compact-options.md` "Always-on (NOT configurable)" — the
   drawer is always full-fidelity; "dt (absolute timestamp ...) is
   drawer-only".
 

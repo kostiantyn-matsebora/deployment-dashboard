@@ -1,7 +1,7 @@
 // Theme axis — `dashboard.theme` persistence + live OS-preference
 // resolution + single-writer DOM mutation.
 //
-// SAD §7 "Visual layout" localStorage table + docs/ui-theme-options.md.
+// SAD §7 "Visual layout" localStorage table + docs/ui/theme-options.md.
 //
 // Self-contained service — theme is a pure presentation concern with no
 // data-contract implications, so unlike `LayoutPrefsService` /
@@ -74,7 +74,7 @@ export class ThemeService {
   constructor() {
     // SINGLE-WRITER to <html data-theme> + <html data-theme-pref>.
     // Mirrors the mockup's `applyEffectiveTheme()` method
-    // (docs/deployment-dashboard.html lines 3512-3517). `untracked` so we
+    // (docs/ui/deployment-dashboard.html lines 3512-3517). `untracked` so we
     // never accidentally depend on a signal we're about to mutate.
     effect(() => {
       const eff = this.effective();

@@ -4,7 +4,7 @@
 // `toggleAttr` action — defence in depth). Always-on helper text + the
 // Focus-specific note come from view-config.ts.
 //
-// Visual treatment mirrors the mockup (docs/deployment-dashboard.html
+// Visual treatment mirrors the mockup (docs/ui/deployment-dashboard.html
 // lines 154–202).
 
 import {

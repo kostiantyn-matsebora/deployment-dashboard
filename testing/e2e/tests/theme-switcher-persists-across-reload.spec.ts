@@ -20,7 +20,7 @@ async function readDataset(page: Page): Promise<{ theme: string | null; pref: st
 }
 
 async function selectTheme(page: Page, pref: ThemePref): Promise<void> {
-  // Per the mockup contract (`docs/deployment-dashboard.html` line
+  // Per the mockup contract (`docs/ui/deployment-dashboard.html` line
   // 1182 `x-show="themePopoverOpen"` + `setThemePref` keeps the
   // popover open after a pick), the popover only closes via
   // @click.outside / Escape. Clicking the gear when the popover is

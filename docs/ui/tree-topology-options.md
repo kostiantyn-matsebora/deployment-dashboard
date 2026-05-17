@@ -1,6 +1,6 @@
 # UI tree topology — design note
 
-The canonical mockup `docs/deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. Topology rendering ships as a **second user-selectable axis** alongside the existing view switcher: a **Layout** segmented control with three options. The two earlier per-option HTML files (`deployment-dashboard-tree-swim-lane.html`, `deployment-dashboard-tree-workflow-rows.html`) have been merged into the canonical and deleted.
+The canonical mockup `./deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. Topology rendering ships as a **second user-selectable axis** alongside the existing view switcher: a **Layout** segmented control with three options. The two earlier per-option HTML files (`deployment-dashboard-tree-swim-lane.html`, `deployment-dashboard-tree-workflow-rows.html`) have been merged into the canonical and deleted.
 
 ## Two orthogonal axes
 
@@ -21,7 +21,7 @@ Every (view × layout) combination renders correctly. View controls the *leaf re
 
 ## Persistence
 
-`localStorage` keys for view, layout, attrs, and focus-on-last-event are canonical in [CR-0002](./cr/CR-0002-four-named-views-and-attribute-picker.md) and [CR-0003](./cr/CR-0003-tree-topology-and-layout-axis.md). This doc adds nothing new for those keys. The `dashboard.layout` enum landed here: `'matrix' | 'swim-lane' | 'workflow-rows'`, default `'matrix'`.
+`localStorage` keys for view, layout, attrs, and focus-on-last-event are canonical in [CR-0002](../cr/CR-0002-four-named-views-and-attribute-picker.md) and [CR-0003](../cr/CR-0003-tree-topology-and-layout-axis.md). This doc adds nothing new for those keys. The `dashboard.layout` enum landed here: `'matrix' | 'swim-lane' | 'workflow-rows'`, default `'matrix'`.
 
 ## Box-state contract — always on
 
@@ -40,7 +40,7 @@ Layout is orthogonal to data shape and box-state semantics. All FRs and NFRs (FR
 
 ## Status
 
-This document is a design note, not a contract. The canonical mockup is the contract. The accepted scope (tree topology, three-layout axis, derivation algorithm) is recorded in [CR-0003](./cr/CR-0003-tree-topology-and-layout-axis.md) and [ADR-0001](./adr/ADR-0001-topology-derivation-five-pass.md).
+This document is a design note, not a contract. The canonical mockup is the contract. The accepted scope (tree topology, three-layout axis, derivation algorithm) is recorded in [CR-0003](../cr/CR-0003-tree-topology-and-layout-axis.md) and [ADR-0001](../adr/ADR-0001-topology-derivation-five-pass.md).
 
 ## Open questions for the user
 

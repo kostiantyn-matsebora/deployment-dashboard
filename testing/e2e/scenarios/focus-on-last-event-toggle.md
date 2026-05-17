@@ -9,7 +9,7 @@ already on-screen pulse to draw the eye.
 
 ## Citations
 
-- Mockup `docs/deployment-dashboard.html` header section — the
+- Mockup `docs/ui/deployment-dashboard.html` header section — the
   "Focus on last event" checkbox between "Failures only" and the
   "Simulate event" button.
 - SAD §5 NFR-03 "Live updates within 5 s of a successful ingest"

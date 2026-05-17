@@ -24,7 +24,7 @@ of the SPA.
   attributes' existence + nullability contract — FR-02 amended via
   `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`; FR-05
   amended via `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).
-- `docs/deployment-dashboard.html` head comment "Null-render
+- `docs/ui/deployment-dashboard.html` head comment "Null-render
   invariant" — the mockup-side encoding of the same rule (the SPA is
   asserted against, the mockup is the contract for the SAD-level
   invariant compliance).

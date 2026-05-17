@@ -15,7 +15,7 @@ namespace Dashboard.Functional.Tests;
 ///
 /// <para>Implements WBS MVP §3.2.2. The seed corpus (loaded by
 /// <see cref="SeedFixture"/>) maps directly to the six box states from
-/// <c>docs/deployment-dashboard.html</c>; each state has an explicit
+/// <c>docs/ui/deployment-dashboard.html</c>; each state has an explicit
 /// assertion below.</para>
 /// </summary>
 [Collection(nameof(SeedCollection))]

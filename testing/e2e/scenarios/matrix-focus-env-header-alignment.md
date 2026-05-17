@@ -15,9 +15,9 @@ LOUDLY.
 
 ## Citations
 
-- `docs/ui-compact-options.md` "Focus view specifics" — `--leaf-width-expanded`
+- `docs/ui/compact-options.md` "Focus view specifics" — `--leaf-width-expanded`
   semantics.
-- `docs/deployment-dashboard.html` — matrix Focus layout uses
+- `docs/ui/deployment-dashboard.html` — matrix Focus layout uses
   `:style="--leaf-width: ${leafWidthForView}; --leaf-width-expanded: 200px"`
   and binds each box's width conditionally on `expanded[service.id]`.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 +
@@ -74,7 +74,7 @@ LOUDLY.
 
 ## Coverage
 
-- `docs/ui-compact-options.md` "Focus view specifics" —
+- `docs/ui/compact-options.md` "Focus view specifics" —
   `--leaf-width-expanded` semantics.
 - Defect history: user-reported matrix Focus expand-header
   misalignment.

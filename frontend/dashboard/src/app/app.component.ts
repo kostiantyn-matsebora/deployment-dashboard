@@ -48,7 +48,7 @@ import { WorkflowRowsLayoutComponent } from './workflow-rows-layout.component';
 /** SAD §"SSE topology semantics" — the coalescing window for follow-up GETs. */
 const REFRESH_COALESCE_MS = 250;
 
-/** Mockup `.swap-pulse` keyframe duration (docs/deployment-dashboard.html line 204). */
+/** Mockup `.swap-pulse` keyframe duration (docs/ui/deployment-dashboard.html line 204). */
 const PULSE_MS = 900;
 
 @Component({
@@ -207,7 +207,7 @@ export class AppComponent implements OnInit {
   }
 
   /**
-   * Mockup applyFocusOrInPlace port (docs/deployment-dashboard.html
+   * Mockup applyFocusOrInPlace port (docs/ui/deployment-dashboard.html
    * lines 2386–2407). When `focusOnLastEvent === true`, scroll the
    * affected element into view and apply the 900 ms `swap-pulse` class;
    * when `false`, only pulse if the element is already in the viewport.

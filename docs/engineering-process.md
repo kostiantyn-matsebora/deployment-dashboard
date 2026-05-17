@@ -268,11 +268,11 @@ If the integrator cannot run a browser (e.g. headless), state so explicitly. Do 
 | Phase | Dispatch | Agent(s) | Work |
 |---|---|---|---|
 | 1 | sequential | `solution-architect` | Amend SAD NFR-09 with the Glance exception sentence. |
-| 2 | **parallel — one message** | `qa-engineer` **and** `frontend-engineer` | qa: add `viewExceptions.glance` flag to `testing/mockup-visual/harness.config.json` + branch the spec. frontend: implement inside-pill render in the Glance template + mirror NFR-09 into the mockup head comment in `docs/deployment-dashboard.html`. |
+| 2 | **parallel — one message** | `qa-engineer` **and** `frontend-engineer` | qa: add `viewExceptions.glance` flag to `testing/mockup-visual/harness.config.json` + branch the spec. frontend: implement inside-pill render in the Glance template + mirror NFR-09 into the mockup head comment in `docs/ui/deployment-dashboard.html`. |
 | 3 | sequential | `frontend-engineer` | Run the harness; expect 12/12. |
 | 4 | sequential | `solution-architect` | Compliance review against amended NFR-09; sign-off without edits. |
 
-**Anti-pattern:** dispatching `qa-engineer` and `frontend-engineer` serially in Phase 2. Their deliverables touch different source trees (`testing/mockup-visual/` vs `docs/deployment-dashboard.html`) and both reference only the Phase 1 SAD wording — no input/output dependency. Serializing doubles wall-clock time for no benefit.
+**Anti-pattern:** dispatching `qa-engineer` and `frontend-engineer` serially in Phase 2. Their deliverables touch different source trees (`testing/mockup-visual/` vs `docs/ui/deployment-dashboard.html`) and both reference only the Phase 1 SAD wording — no input/output dependency. Serializing doubles wall-clock time for no benefit.
 
 **Prior worked example — QAHOTFIX-overlap (UX-RESPONSIVENESS / NFR-09):** the bug was CSS comment-nesting + grid template + Alpine.js wiring — a frontend bug.
 
@@ -303,7 +303,7 @@ Main thread orchestrates the hand-off — when an agent flags a root cause outsi
 
 **Doc updates always route through the doc's owner.**
 - SAD / `CLAUDE.md` / `docs/ci-cd-integration.md` / ADRs → `solution-architect`.
-- Mockup (`docs/deployment-dashboard.html`) → `frontend-engineer` for HTML/CSS/JS/SVG edits; `solution-architect` for governance review only.
+- Mockup (`docs/ui/deployment-dashboard.html`) → `frontend-engineer` for HTML/CSS/JS/SVG edits; `solution-architect` for governance review only.
 
 When any engineer flags a needed change, the next dispatch is the owning agent with the flagged change. Engineers outside the owning domain never edit these files directly.
 

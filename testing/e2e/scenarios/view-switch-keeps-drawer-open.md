@@ -16,7 +16,7 @@ present under the new layout.
   "Full-attribute disclosure rule" — "the side-panel history drawer
   ... always display every deployment attribute available to the
   user, regardless of the matrix attribute picker".
-- `docs/ui-compact-options.md` "Drawer behaviour on view change" —
+- `docs/ui/compact-options.md` "Drawer behaviour on view change" —
   "The drawer **stays open** when the user switches views, provided
   the previously-clicked `(service, env)` still exists in the new
   layout (which it always does)".
@@ -81,4 +81,4 @@ present under the new layout.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
   "Full-attribute disclosure rule" — drawer is independent of the
   matrix layout.
-- `docs/ui-compact-options.md` "Drawer behaviour on view change".
+- `docs/ui/compact-options.md` "Drawer behaviour on view change".

@@ -7,7 +7,7 @@
 import { test, expect } from '@playwright/test';
 
 const SEEDED_SERVICES = ['service-a', 'service-b', 'service-c', 'service-d'] as const;
-// Per docs/deployment-dashboard.html `filteredServices` getter, the
+// Per docs/ui/deployment-dashboard.html `filteredServices` getter, the
 // "Failures only" toggle keeps a service iff some env has
 // `current.status === 'failure'`. `previousFailed === true` on an
 // in-progress slot does NOT count. In the seeded corpus only

@@ -17,7 +17,7 @@ Focus = 5.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` "Layout
   views (FR-12)" — `Max attributes` column per view: Detailed 7,
   Compact 5, Glance 1, Focus 5.
-- `docs/ui-compact-options.md` — "Cap enforcement: when
+- `docs/ui/compact-options.md` — "Cap enforcement: when
   `selectedAttrCount >= activeView.maxAttrs`, unchecked boxes render
   disabled ... Toggling an existing selection off frees a slot."
 
@@ -115,4 +115,4 @@ Focus = 5.
 - FR-12: per-view cap enforcement on the attribute picker.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` "Layout
   views (FR-12)" — `Max attributes` column (7 / 5 / 1 / 5).
-- `docs/ui-compact-options.md` "Cap enforcement" rule.
+- `docs/ui/compact-options.md` "Cap enforcement" rule.

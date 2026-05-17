@@ -1,5 +1,5 @@
 // Theme switcher — gear icon button + popover with Light / Dark / Auto
-// radios. Mirrors docs/deployment-dashboard.html lines 1099-1145 (the
+// radios. Mirrors docs/ui/deployment-dashboard.html lines 1099-1145 (the
 // `data-testid="theme-switcher"` block).
 //
 // Lives in `shared/` because palette is a cross-cutting concern and the
@@ -106,7 +106,7 @@ export class ThemeSwitcherComponent {
    * `ThemeService` keeps `osDark` current), regardless of whether the
    * user has overridden the palette with Light/Dark. Mirrors the
    * mockup's `osDark ? 'dark' : 'light'` ternary
-   * (docs/deployment-dashboard.html line 1142).
+   * (docs/ui/deployment-dashboard.html line 1142).
    */
   readonly osLabel = computed<'light' | 'dark'>(() =>
     this.theme.osDark() ? 'dark' : 'light'

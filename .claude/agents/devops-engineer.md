@@ -14,7 +14,7 @@ Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 
 - **`docs/deployment-dashboard-architecture.md`** — binding constraints. Sections most relevant: §5 (NFR-01 Azure-only, NFR-02 ≤ $30/mo, NFR-04 internal-only, NFR-05 stateless, NFR-06 Terraform-defined, NFR-07 retention), §6 (Constraints — stack, platform agnosticism), §7 ("Infrastructure" — Dockerfile, Compose, Azure deployment diagram, component → SKU → cost table).
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §4–§8 (infrastructure, component deployment, deploy infrastructure, smoke, deploy components).
-- **`docs/deployment-dashboard.html`** — confirms the *outcome* you're shipping. When validating a deploy, the SPA must load and behave per the mockup.
+- **`docs/ui/deployment-dashboard.html`** — confirms the *outcome* you're shipping. When validating a deploy, the SPA must load and behave per the mockup.
 
 Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker.
 

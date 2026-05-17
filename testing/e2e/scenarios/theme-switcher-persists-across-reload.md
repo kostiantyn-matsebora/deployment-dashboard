@@ -5,14 +5,14 @@
 
 ## Citations
 
-- `docs/ui-theme-options.md` "Persistence" table — key
+- `docs/ui/theme-options.md` "Persistence" table — key
   `dashboard.theme`, default `'auto'`, valid values `light / dark /
   auto`.
 - `docs/cr/CR-0006-light-dark-auto-theme.md` — `dashboard.theme` row
   in the localStorage persistence table (persistence semantics +
   load-time hardening detailed in
   `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md`).
-- `docs/deployment-dashboard.html` head bootstrap block (lines
+- `docs/ui/deployment-dashboard.html` head bootstrap block (lines
   187–198) — reads `localStorage.getItem('dashboard.theme')` on first
   paint.
 
@@ -57,7 +57,7 @@
 
 ## Coverage
 
-- `docs/ui-theme-options.md` "Persistence" table.
+- `docs/ui/theme-options.md` "Persistence" table.
 - `docs/cr/CR-0006-light-dark-auto-theme.md` — `dashboard.theme`
   localStorage row.
 - `docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md` —

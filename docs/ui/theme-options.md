@@ -1,6 +1,6 @@
 # UI theme — design note
 
-The canonical mockup `docs/deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. **Theme** ships as a **third orthogonal axis** alongside the existing View and Layout switchers: a header control with three values — `light / dark / auto`. The chosen design is the **Dim** palette (warm GitHub-style `#0d1117` body / `#161b22` cards), selected from three competing options (Slate / OLED / Dim), wired as the `dark` enum value behind a **gear icon + popover** affordance. The three earlier per-option HTML files (`deployment-dashboard-theme-slate.html`, `deployment-dashboard-theme-oled.html`, `deployment-dashboard-theme-dim.html`) have been merged into the canonical and deleted.
+The canonical mockup `./deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. **Theme** ships as a **third orthogonal axis** alongside the existing View and Layout switchers: a header control with three values — `light / dark / auto`. The chosen design is the **Dim** palette (warm GitHub-style `#0d1117` body / `#161b22` cards), selected from three competing options (Slate / OLED / Dim), wired as the `dark` enum value behind a **gear icon + popover** affordance. The three earlier per-option HTML files (`deployment-dashboard-theme-slate.html`, `deployment-dashboard-theme-oled.html`, `deployment-dashboard-theme-dim.html`) have been merged into the canonical and deleted.
 
 ## Three orthogonal axes
 
@@ -24,7 +24,7 @@ Every (view × layout × theme) combination renders correctly. Theme controls **
 
 ## Persistence
 
-Theme uses `dashboard.theme` ∈ `{light, dark, auto}`, default `'auto'`. The requirement is recorded in [CR-0006](./cr/CR-0006-light-dark-auto-theme.md); the persistence + FOIT-safe bootstrap architecture is recorded in [ADR-0003](./adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md).
+Theme uses `dashboard.theme` ∈ `{light, dark, auto}`, default `'auto'`. The requirement is recorded in [CR-0006](../cr/CR-0006-light-dark-auto-theme.md); the persistence + FOIT-safe bootstrap architecture is recorded in [ADR-0003](../adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md).
 
 This-cycle extension: the effective theme on first paint is computed synchronously **before** Alpine.js initialises to avoid a flash of incorrect theme (FOIT). See "Auto resolution" below.
 

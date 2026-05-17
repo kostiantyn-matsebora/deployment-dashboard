@@ -8,7 +8,7 @@ namespace Dashboard.Shared.Tests.Json;
 
 /// <summary>
 /// Wire-format guards. These pin the JSON keys the SPA reads
-/// (<c>docs/deployment-dashboard.html</c>) so any accidental rename in the
+/// (<c>docs/ui/deployment-dashboard.html</c>) so any accidental rename in the
 /// DTOs breaks the build, not the frontend in production.
 /// </summary>
 public sealed class WireContractTests

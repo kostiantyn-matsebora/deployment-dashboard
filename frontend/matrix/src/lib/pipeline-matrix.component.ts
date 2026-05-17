@@ -4,7 +4,7 @@
 // the empty state.
 //
 // View-specific dimensions for the header come from the mockup
-// (docs/deployment-dashboard.html).
+// (docs/ui/deployment-dashboard.html).
 //
 // NFR-09 sibling invariant #7 — env-header column alignment under Matrix
 // Focus expand. The Focus view wraps its env-header + rows in a SINGLE
@@ -12,7 +12,7 @@
 // service in the matrix is Focus-expanded the wrapper switches to
 // `--leaf-width: 200px`; env-header cells and every row's stage-box read
 // the same variable, so column widths track in lock-step. The mockup's
-// "Option b" wiring (docs/deployment-dashboard.html lines 1681-1741).
+// "Option b" wiring (docs/ui/deployment-dashboard.html lines 1681-1741).
 
 import { ChangeDetectionStrategy, Component, computed, inject, output } from '@angular/core';
 import { CommonModule } from '@angular/common';

@@ -15,7 +15,7 @@ namespace Dashboard.Shared.Dto;
 /// </code>
 /// Note that <c>lastSuccessful</c> and <c>previousFailed</c> are
 /// intentionally camelCase in the wire form — the mockup
-/// (<c>docs/deployment-dashboard.html</c>) reads them as
+/// (<c>docs/ui/deployment-dashboard.html</c>) reads them as
 /// <c>lastSuccessful</c> / <c>previousFailed</c> directly.
 /// </summary>
 public sealed record MatrixSlot

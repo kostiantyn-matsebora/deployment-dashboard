@@ -1,5 +1,5 @@
 // Glance-view row — one row per service, one coloured pill per environment.
-// Mirrors the mockup's "Glance view" template (docs/deployment-dashboard.html
+// Mirrors the mockup's "Glance view" template (docs/ui/deployment-dashboard.html
 // lines 477–574). FR-12 cap is 1 attribute, but the pill always renders the
 // status colour treatment + ✓/✗ icon + ⚠ badge regardless (always-on).
 

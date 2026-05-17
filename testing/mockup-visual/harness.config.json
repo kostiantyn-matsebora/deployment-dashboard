@@ -1,7 +1,7 @@
 {
   "$comment": "Declarative configuration for the mockup-visual harness. Per CLAUDE.md 'Configuration vs. data' — no URLs, viewport sizes, tolerances, or combination matrices live as literals inside the spec or runner. Edit this file to add/remove combinations or tune tolerances.",
 
-  "mockupRelativePath": "../../docs/deployment-dashboard.html",
+  "mockupRelativePath": "../../docs/ui/deployment-dashboard.html",
   "screenshotsDir": "./__screenshots__",
   "reportPath": "./__screenshots__/_report.json",
 
@@ -51,7 +51,7 @@
     { "id": "I11-matrix-focus-env-header-alignment",        "label": "Matrix Focus: env-header columns align with deployment columns in both collapsed and expanded rows (--leaf-width-expanded honoured)" }
   ],
 
-  "$comment_I9": "Path A — Focus row-gutter affordances apply to ALL THREE layouts (per ui-compact-options.md 'Focus view specifics > Layout scope'). Granularity is per-service in every layout: matrix per service-row, swim-lane per service-lane, workflow-rows per service-header (NOT per path-row). Frontend's commitment: testids `row-chevron-{svcId}` / `row-pin-{svcId}` and the `[data-service-row]` marker are layout-agnostic. A prior regression rendered Focus indistinguishable from Compact because the affordances were too understated; the existing oracles missed it. I9 fires only on the two views where the assertion is meaningful (focus / compact) — the per-view 'expected' is declared below, not hard-coded in the spec. No layoutScope: I9 now fires on every layout.",
+  "$comment_I9": "Path A — Focus row-gutter affordances apply to ALL THREE layouts (per compact-options.md 'Focus view specifics > Layout scope'). Granularity is per-service in every layout: matrix per service-row, swim-lane per service-lane, workflow-rows per service-header (NOT per path-row). Frontend's commitment: testids `row-chevron-{svcId}` / `row-pin-{svcId}` and the `[data-service-row]` marker are layout-agnostic. A prior regression rendered Focus indistinguishable from Compact because the affordances were too understated; the existing oracles missed it. I9 fires only on the two views where the assertion is meaningful (focus / compact) — the per-view 'expected' is declared below, not hard-coded in the spec. No layoutScope: I9 now fires on every layout.",
   "i9": {
     "selectorChevron": "[data-testid^='row-chevron-']",
     "selectorPin":     "[data-testid^='row-pin-']",

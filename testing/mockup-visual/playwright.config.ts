@@ -3,7 +3,7 @@
 // Owner: qa-engineer (.claude/agents/qa-engineer.md).
 //
 // This harness is INDEPENDENT of the running stack. It loads
-// docs/deployment-dashboard.html directly via file:// in a real Chromium
+// docs/ui/deployment-dashboard.html directly via file:// in a real Chromium
 // browser and asserts geometric invariants (no overlap, connectors reach
 // their targets, env labels not clipped, etc.). It does NOT depend on
 // dev_env/start.ps1.

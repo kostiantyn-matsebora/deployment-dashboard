@@ -18,7 +18,7 @@ stored value; the full value remains in the history drawer."
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
   "Full-attribute disclosure rule" — drawer always shows the full
   value.
-- `docs/deployment-dashboard.html` head comment "SHA TRUNCATION RULE"
+- `docs/ui/deployment-dashboard.html` head comment "SHA TRUNCATION RULE"
   — conventional short-sha is 7 chars; ellipsis when the underlying
   value is longer.
 

@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Runs the mockup-only Playwright visual-invariants harness against
-    docs/deployment-dashboard.html. Zero-setup: no dev_env stack required.
+    docs/ui/deployment-dashboard.html. Zero-setup: no dev_env stack required.
 
 .DESCRIPTION
     Loads the mockup HTML directly via file:// in a real Chromium browser
@@ -14,7 +14,7 @@
         pwsh -NoProfile -File testing/mockup-visual/run-tests.ps1
 
     With no arguments the runner:
-      1. Verifies docs/deployment-dashboard.html exists (the harness is
+      1. Verifies docs/ui/deployment-dashboard.html exists (the harness is
          pure mockup-load — no Read API / Write API / Postgres needed).
       2. Installs Playwright npm deps + Chromium binary silently on
          first invocation (idempotent thereafter).

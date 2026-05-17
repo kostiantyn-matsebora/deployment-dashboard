@@ -4,7 +4,7 @@
 - **Trigger:** `TODO` line 4 — "UX: analyze how to make UI more compact, usually its much more services than environments (at least 10 services), propose options by making new mockups".
 - **Change:** The dashboard exposes **four named layout views** — `Detailed`, `Compact`, `Glance`, `Focus` — selectable from a header segmented control, plus a per-view **attribute picker** that lets the user choose which of the FR-02 attributes appear on the matrix grid (subject to a per-view cap). View selection and per-view attribute selection persist client-side in `localStorage`. The original SAD shipped a single matrix view; this CR makes view selection a first-class UX axis.
 - **Impact:**
-  - **New FR-12** introduced (see "FR-12 — added" below). Cites `docs/ui-compact-options.md` as the design rationale.
+  - **New FR-12** introduced (see "FR-12 — added" below). Cites `docs/ui/compact-options.md` as the design rationale.
   - **FR-02** amended (verbatim text below): the per-slot attribute set is described as user-configurable (subject to a picker), with explicit carve-outs for the history drawer and Focus expanded rows (the full-attribute disclosure rule).
   - **FR-03** amended: clarifies that the last-successful split section is "always-on and not affected by the attribute picker".
   - **FR-07** amended: filters "apply across every layout view defined in §7 'Visual layout'".
@@ -18,8 +18,8 @@
   - SAD §4 FR-12 (new), FR-02 (amended), FR-03 (amended), FR-07 (amended).
   - SAD §7 "Visual layout" subsection (new).
   - SAD §7 "6 box states (unchanged contract)" — confirms invariance under view switch.
-  - `docs/ui-compact-options.md` — full design rationale, per-view density targets, switcher/picker behaviour, cross-cutting behaviours.
-  - Mockup `docs/deployment-dashboard.html` — canonical visual + interactive contract.
+  - `docs/ui/compact-options.md` — full design rationale, per-view density targets, switcher/picker behaviour, cross-cutting behaviours.
+  - Mockup `docs/ui/deployment-dashboard.html` — canonical visual + interactive contract.
 
 ## SAD-level content owned by this CR — verbatim
 
@@ -41,7 +41,7 @@
 
 ### §7 "Visual layout" — new subsection in the SAD (verbatim)
 
-> The canonical visual + interactive contract lives in `docs/deployment-dashboard.html`. The decision record for the four-views design — defaults, caps, switcher behaviour, persistence rules — lives in `docs/ui-compact-options.md`. This section describes only the contract that other tiers must honour.
+> The canonical visual + interactive contract lives in `docs/ui/deployment-dashboard.html`. The decision record for the four-views design — defaults, caps, switcher behaviour, persistence rules — lives in `docs/ui/compact-options.md`. This section describes only the contract that other tiers must honour.
 >
 > **Layout views (FR-12):**
 >

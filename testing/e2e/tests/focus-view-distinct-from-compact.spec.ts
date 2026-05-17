@@ -7,7 +7,7 @@
 // affordances — so a future regression of the same shape fails LOUDLY.
 //
 // Path A: the chevron + pin are present in ALL THREE layouts when
-// View=Focus (per docs/ui-compact-options.md "Focus view specifics —
+// View=Focus (per docs/ui/compact-options.md "Focus view specifics —
 // Layout scope"). Granularity is service-grain in every layout:
 //   - matrix:        one chevron + one pin per service-row
 //   - swim-lane:     one chevron + one pin per service-lane
@@ -16,12 +16,12 @@
 // Pin state is layout-agnostic and survives a Layout switch.
 //
 // Citations:
-//   - docs/ui-compact-options.md "Focus view specifics" — chevron and
+//   - docs/ui/compact-options.md "Focus view specifics" — chevron and
 //     pin lifecycle, row-gutter placement, filter resilience, layout
 //     scope, pin-survives-layout-switch.
 //   - docs/deployment-dashboard-architecture.md §4 FR-12 — four named
 //     layout views (Focus must remain distinguishable).
-//   - docs/deployment-dashboard.html — testid catalogue:
+//   - docs/ui/deployment-dashboard.html — testid catalogue:
 //       row-chevron-{id}, row-pin-{id},
 //       row-expanded-{id} / row-collapsed-{id},
 //       data-expanded, data-pinned, collapse-all.
@@ -176,7 +176,7 @@ test.describe('Focus view — distinguishable from Compact', () => {
 
       // --- Row-gutter placement: chevron + pin must NOT be nested
       // inside any stage-box (inline placement is out-of-contract per
-      // docs/ui-compact-options.md "Focus view specifics"). ---
+      // docs/ui/compact-options.md "Focus view specifics"). ---
       const insideBoxOffenders = await page.evaluate(() => {
         const violators: string[] = [];
         const chevs = Array.from(document.querySelectorAll('[data-testid^="row-chevron-"]'));
@@ -227,7 +227,7 @@ test.describe('Focus view — distinguishable from Compact', () => {
   }
 
   test('E. Pin survives a Layout switch (pin state is layout-agnostic)', async ({ page }) => {
-    // Per docs/ui-compact-options.md "Focus view specifics — Pin
+    // Per docs/ui/compact-options.md "Focus view specifics — Pin
     // survives layout switch": state.pinned[id] is layout-agnostic.
     // Switching Layout while a service is pinned keeps the pin; the
     // affordance and its expansion semantics adapt to the new layout's
@@ -298,7 +298,7 @@ test.describe('Focus view — distinguishable from Compact', () => {
     await expect(rowAfter).toBeVisible();
     await expect(
       rowAfter,
-      'Pin must survive the filter sweep — docs/ui-compact-options.md "Focus view specifics" prescribes "pin is preserved; when the row re-matches the active filter set, it re-renders expanded".',
+      'Pin must survive the filter sweep — docs/ui/compact-options.md "Focus view specifics" prescribes "pin is preserved; when the row re-matches the active filter set, it re-renders expanded".',
     ).toHaveAttribute('data-pinned', 'true');
     await expect(
       rowAfter,

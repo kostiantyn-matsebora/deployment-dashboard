@@ -19,7 +19,7 @@
 
     Reads the canonical fixture corpus from
     testing/fixtures/seed-data.json (derived from the 'SERVICES' const
-    block in docs/deployment-dashboard.html) and POSTs each event to
+    block in docs/ui/deployment-dashboard.html) and POSTs each event to
     {writeBaseUrl}/api/deployments using the wire contract documented
     in SAD §7 'API Contract' and 'Components -> CI/CD Notify Step':
 

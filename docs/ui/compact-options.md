@@ -1,12 +1,12 @@
 # UI density + attribute display — specification
 
-The dashboard ships **four user-selectable views**, switchable at runtime, with a per-view configurable attribute picker. Canonical reference fixture: [`deployment-dashboard.html`](./deployment-dashboard.html). The requirement is recorded in [CR-0002](./cr/CR-0002-four-named-views-and-attribute-picker.md); this document is the design rationale that CR cites.
+The dashboard ships **four user-selectable views**, switchable at runtime, with a per-view configurable attribute picker. Canonical reference fixture: [`deployment-dashboard.html`](./deployment-dashboard.html). The requirement is recorded in [CR-0002](../cr/CR-0002-four-named-views-and-attribute-picker.md); this document is the design rationale that CR cites.
 
 ---
 
 ## Views
 
-Canonical per-view defaults + caps live in [CR-0002 — "Layout views (FR-12)"](./cr/CR-0002-four-named-views-and-attribute-picker.md). This-cycle extension (rationale only):
+Canonical per-view defaults + caps live in [CR-0002 — "Layout views (FR-12)"](../cr/CR-0002-four-named-views-and-attribute-picker.md). This-cycle extension (rationale only):
 
 - **Density targets** (services per 1080p viewport): Detailed ~6, Compact ~15, Glance ~25+, Focus ~15 collapsed / Detailed-size when expanded.
 - **Compact specifics.** ~120 px boxes, ~36 px rows; same visual language as Detailed; matrix shape unchanged.
@@ -46,11 +46,11 @@ The Focus view's chevron + pin controls have a fixed placement and lifecycle. Th
 
 ## Attribute vocabulary (per matrix slot)
 
-Canonical 7-attribute table (keys, picker labels, source fields, null-render invariant for `ref`/`sha`) lives in [CR-0002 → "Attribute vocabulary"](./cr/CR-0002-four-named-views-and-attribute-picker.md) and [CR-0005](./cr/CR-0005-ref-sha-display-and-topology.md). This doc adds no new attribute semantics.
+Canonical 7-attribute table (keys, picker labels, source fields, null-render invariant for `ref`/`sha`) lives in [CR-0002 → "Attribute vocabulary"](../cr/CR-0002-four-named-views-and-attribute-picker.md) and [CR-0005](../cr/CR-0005-ref-sha-display-and-topology.md). This doc adds no new attribute semantics.
 
 ### Always-on (NOT configurable)
 
-Always-on elements are codified in [CR-0002 → "Always-on elements (not affected by the picker)"](./cr/CR-0002-four-named-views-and-attribute-picker.md):
+Always-on elements are codified in [CR-0002 → "Always-on elements (not affected by the picker)"](../cr/CR-0002-four-named-views-and-attribute-picker.md):
 
 - Box background colour (green / red / orange + in-progress pulse) — status colour is the primary at-a-glance signal; it's a visual treatment of `current.status`, not an attribute.
 - `⚠ prev. failed` badge — FR-03 "running + previously-failed" state.
@@ -83,7 +83,7 @@ Always-on elements are codified in [CR-0002 → "Always-on elements (not affecte
 
 ## localStorage shape
 
-Canonical key shapes, examples, and load-time hardening rules (corruption → defaults; unknown attrs filtered; cap truncation; empty-array preserved) live in [CR-0002 → "Client-side persistence (`localStorage`)" + "Load-time hardening rules"](./cr/CR-0002-four-named-views-and-attribute-picker.md). Per-view caps (Detailed ≤ 7, Compact ≤ 5, Glance ≤ 1, Focus ≤ 5) are codified in CR-0002's "Layout views (FR-12)" table. Additional keys (`dashboard.layout`, `dashboard.correlationAttribute`, `dashboard.theme`) live in CR-0003 and CR-0006.
+Canonical key shapes, examples, and load-time hardening rules (corruption → defaults; unknown attrs filtered; cap truncation; empty-array preserved) live in [CR-0002 → "Client-side persistence (`localStorage`)" + "Load-time hardening rules"](../cr/CR-0002-four-named-views-and-attribute-picker.md). Per-view caps (Detailed ≤ 7, Compact ≤ 5, Glance ≤ 1, Focus ≤ 5) are codified in CR-0002's "Layout views (FR-12)" table. Additional keys (`dashboard.layout`, `dashboard.correlationAttribute`, `dashboard.theme`) live in CR-0003 and CR-0006.
 
 ### Session-only state (NOT persisted)
 
@@ -131,7 +131,7 @@ The drawer **stays open** when the user switches views, provided the previously-
 This document is the contract; the actual code lands in separate dispatches.
 
 ### Solution architect
-- [CR-0002](./cr/CR-0002-four-named-views-and-attribute-picker.md) cites this document as the rationale; no further SAD or CR edit required unless the four-view shape changes.
+- [CR-0002](../cr/CR-0002-four-named-views-and-attribute-picker.md) cites this document as the rationale; no further SAD or CR edit required unless the four-view shape changes.
 
 ### Frontend engineer (`frontend/`)
 - **View switcher component** in `frontend/matrix/` (or `frontend/shared/` if more than the matrix needs the same control later).

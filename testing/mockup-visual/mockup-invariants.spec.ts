@@ -2,7 +2,7 @@
 //
 // Owner: qa-engineer (.claude/agents/qa-engineer.md).
 //
-// Loads docs/deployment-dashboard.html via file:// in a real Chromium
+// Loads docs/ui/deployment-dashboard.html via file:// in a real Chromium
 // browser and runs eleven invariants against the rendered DOM:
 //   - I0 .. I6  : connector / geometry / clipping (visual numeric)
 //   - I7 / I8   : picker catalogue + null-render
@@ -34,7 +34,7 @@
 //   connectors.
 //
 // Citations (per CLAUDE.md routing):
-//   - docs/deployment-dashboard.html — the visual / behavioural contract.
+//   - docs/ui/deployment-dashboard.html — the visual / behavioural contract.
 //     The lengthy comment block at the top of the mockup names the 6
 //     invariants verbatim; this spec is their executable form.
 //   - .claude/agents/qa-engineer.md — "mockup-driven E2E catalogue" +
@@ -227,7 +227,7 @@ function evaluateInvariantsScript(view: string, layout: string): string {
   // unconstrained — no entry in perView means "no I9 assertion fires
   // for this view".
   //
-  // Path A: I9 fires on ALL THREE layouts (per ui-compact-options.md
+  // Path A: I9 fires on ALL THREE layouts (per compact-options.md
   // 'Focus view specifics > Layout scope'). Service-grain is layout-
   // specific: matrix counts [data-service-row] elements; swim-lane
   // counts [data-testid^='swim-lane-row-']; workflow-rows counts
@@ -960,7 +960,7 @@ function evaluateInvariantsScript(view: string, layout: string): string {
 
       // Row-gutter placement guard: chevron / pin must NOT be nested
       // inside a stage-box (inline placement is out-of-contract per
-      // docs/ui-compact-options.md "Focus view specifics"). Only meaningful
+      // docs/ui/compact-options.md "Focus view specifics"). Only meaningful
       // when the controls are expected to exist at all.
       if (I9_PER_VIEW.chevronPerRow || I9_PER_VIEW.pinPerRow) {
         const offenders = [];
@@ -971,7 +971,7 @@ function evaluateInvariantsScript(view: string, layout: string): string {
         }
         if (offenders.length > 0) {
           push('I9-focus-distinct-from-compact',
-            \`Layout '\${LAYOUT_ID}' x View '\${VIEW_ID}' renders \${offenders.length} chevron/pin button(s) INSIDE a stage-box, but docs/ui-compact-options.md "Focus view specifics" prescribes row-gutter placement only. Offenders: \${offenders.join(', ')}.\`,
+            \`Layout '\${LAYOUT_ID}' x View '\${VIEW_ID}' renders \${offenders.length} chevron/pin button(s) INSIDE a stage-box, but docs/ui/compact-options.md "Focus view specifics" prescribes row-gutter placement only. Offenders: \${offenders.join(', ')}.\`,
             { view: VIEW_ID, layout: LAYOUT_ID, offenders });
         }
       }

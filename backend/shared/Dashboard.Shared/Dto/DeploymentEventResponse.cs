@@ -7,7 +7,7 @@ namespace Dashboard.Shared.Dto;
 /// Response body for <c>POST /api/deployments</c> (201 Created) and for
 /// the matrix/history endpoints. Wire format is snake_case via
 /// <see cref="JsonPropertyName"/>; the receiving DTOs in the frontend
-/// match exactly (see <c>docs/deployment-dashboard.html</c>).
+/// match exactly (see <c>docs/ui/deployment-dashboard.html</c>).
 /// </summary>
 public sealed record DeploymentEventResponse
 {

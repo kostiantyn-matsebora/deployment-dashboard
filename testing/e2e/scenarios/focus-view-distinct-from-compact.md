@@ -10,7 +10,7 @@ button has shipped in the past and the existing oracles all stayed
 green, so this scenario is written specifically to **catch that class
 of regression** by asserting on the row-gutter affordances directly.
 
-**Path A — all three layouts.** Per `docs/ui-compact-options.md`
+**Path A — all three layouts.** Per `docs/ui/compact-options.md`
 "Focus view specifics > Layout scope", the chevron + pin appear in
 **all three layouts** when View=Focus. Granularity is service-grain in
 every layout:
@@ -33,23 +33,23 @@ granularity, but the pinned set itself does not reset.
 
 ## Citations
 
-- `docs/ui-compact-options.md` "Focus view specifics" — the chevron +
+- `docs/ui/compact-options.md` "Focus view specifics" — the chevron +
   pin lifecycle table:
   - Chevron and pin live **in the row gutter** (leftmost edge of the
     row, before the service name).
   - Both are framed `w-5 h-5` buttons with a tinted resting surface.
   - **Inline placement (next to the service name or inside a leaf) is
     out of contract.**
-- `docs/ui-compact-options.md` "Focus view specifics" — pin lifecycle:
+- `docs/ui/compact-options.md` "Focus view specifics" — pin lifecycle:
   pin state lives in `state.pinned[id]` and is **unaffected by filters**.
   If a pinned row is hidden by search or "Failures only", the pin is
   preserved; when the row re-matches the active filter set, it
   re-renders expanded.
-- `docs/ui-compact-options.md` "Session-only state (NOT persisted)" —
+- `docs/ui/compact-options.md` "Session-only state (NOT persisted)" —
   Focus row `expanded` and `pinned` reset on page reload.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 —
   the four named layout views, one of which is Focus.
-- `docs/deployment-dashboard.html` — canonical mockup. The `focus-row`
+- `docs/ui/deployment-dashboard.html` — canonical mockup. The `focus-row`
   template carries `data-testid="row-chevron-{id}"` and
   `data-testid="row-pin-{id}"`; the row itself flips its `data-testid`
   between `row-collapsed-{id}` and `row-expanded-{id}` depending on
@@ -107,7 +107,7 @@ granularity, but the pinned set itself does not reset.
 9. **And** for every visible service the chevron and pin are
    *direct descendants of the row gutter* — not nested inside any
    `[data-testid^="stage-box-"]`. (Inline placement is
-   out-of-contract per `ui-compact-options.md`.)
+   out-of-contract per `compact-options.md`.)
 
 ### B. Chevron expand / collapse toggle — runs against EACH of `{matrix, swim-lane, workflow-rows}`
 
@@ -140,7 +140,7 @@ between `row-collapsed-{svc}` and `row-expanded-{svc}`.
 3. **Then** the `service-a` row carries
    `data-pinned="true"` and `data-expanded="true"` (pinning a
    collapsed row implies expansion per
-   `ui-compact-options.md`).
+   `compact-options.md`).
 4. **When** the test toggles
    `[data-testid="failures-only-toggle"]` to ON,
 5. **Then** the `service-a` row is filtered out (the failures-only
@@ -169,7 +169,7 @@ between `row-collapsed-{svc}` and `row-expanded-{svc}`.
    Layout switch.
 
 This codifies the "Pin survives layout switch" rule in
-`docs/ui-compact-options.md` "Focus view specifics".
+`docs/ui/compact-options.md` "Focus view specifics".
 
 ### D. `collapseAll` honours pinned rows
 
@@ -221,7 +221,7 @@ hidden.
   colour, hover state). The
   `testing/mockup-visual/mockup-invariants.spec.ts` harness covers
   the geometric invariants; the per-view visual contract for these
-  controls lives in `ui-compact-options.md` and is a frontend craft
+  controls lives in `compact-options.md` and is a frontend craft
   concern.
 - Per-row leaf width difference between Focus-expanded and
   Compact-collapsed. Implementing as a brittle pixel-width assertion
@@ -238,9 +238,9 @@ hidden.
 
 ## Coverage
 
-- `docs/ui-compact-options.md` "Focus view specifics" — chevron and
+- `docs/ui/compact-options.md` "Focus view specifics" — chevron and
   pin row-gutter placement, lifecycle, and filter resilience.
-- `docs/ui-compact-options.md` "Session-only state (NOT persisted)"
+- `docs/ui/compact-options.md` "Session-only state (NOT persisted)"
   — `expanded[id]` / `pinned[id]` lifecycle.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12 —
   the four named layout views (the Focus row must remain a

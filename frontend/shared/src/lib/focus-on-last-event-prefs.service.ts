@@ -1,6 +1,6 @@
 // `dashboard.focusOnLastEvent` persistence.
 //
-// Mockup header toggle (docs/deployment-dashboard.html lines 605–610) +
+// Mockup header toggle (docs/ui/deployment-dashboard.html lines 605–610) +
 // SAD §7 "Visual layout" localStorage table. Persists the boolean state
 // across reloads; default is ON (matches the mockup checkbox default).
 //

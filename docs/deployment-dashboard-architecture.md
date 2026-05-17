@@ -60,7 +60,7 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 | NFR-06 | All infrastructure shall be defined as code using Terraform. |
 | NFR-07 | Deployment history shall be retained for a minimum of 90 days per slot. |
 | NFR-08 | The dashboard shall load in a browser with no build step — no bundler or compilation required. |
-| NFR-09 | **UX-RESPONSIVENESS INVARIANT.** The dashboard layout shall reflow correctly under any combination of: service count (1..N), environment count per service (1..N), env-name length (1..32 chars), version-string length (1..50 chars), and viewport width (≥ 1024 px). Under no combination may visual elements overlap such that information is clipped, occluded, or rendered illegible. This includes env labels, deployment boxes, version strings, status badges, connector lines, arrowheads, and fork trunks. Enforced by construction: env-tag + box pairs use CSS Grid (`auto` env-tag column, fixed leaf-width box column); connector geometry is anchored to live `getBoundingClientRect()` measurements re-evaluated via a `ResizeObserver` and a window-resize listener. The invariant is mirrored verbatim at the top of `docs/deployment-dashboard.html` (the mockup is the visual contract). |
+| NFR-09 | **UX-RESPONSIVENESS INVARIANT.** The dashboard layout shall reflow correctly under any combination of: service count (1..N), environment count per service (1..N), env-name length (1..32 chars), version-string length (1..50 chars), and viewport width (≥ 1024 px). Under no combination may visual elements overlap such that information is clipped, occluded, or rendered illegible. This includes env labels, deployment boxes, version strings, status badges, connector lines, arrowheads, and fork trunks. Enforced by construction: env-tag + box pairs use CSS Grid (`auto` env-tag column, fixed leaf-width box column); connector geometry is anchored to live `getBoundingClientRect()` measurements re-evaluated via a `ResizeObserver` and a window-resize listener. The invariant is mirrored verbatim at the top of `docs/ui/deployment-dashboard.html` (the mockup is the visual contract). |
 
 ---
 
@@ -317,7 +317,7 @@ Angular 20 SPA in its own nginx container; reached only via the App Gateway. Att
 
 **Visual layout:**
 
-The canonical visual + interactive contract lives in `docs/deployment-dashboard.html`. This section describes only the contract that other tiers must honour.
+The canonical visual + interactive contract lives in `docs/ui/deployment-dashboard.html`. This section describes only the contract that other tiers must honour.
 
 **6 box states:**
 

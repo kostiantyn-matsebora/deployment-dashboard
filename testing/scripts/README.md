@@ -84,7 +84,7 @@ exercises every box state described in SAD §7 "Web Dashboard (MVP) —
 Visual layout". The fixture corpus lives at
 [`testing/fixtures/seed-data.json`](../fixtures/seed-data.json) and is
 derived from the `SERVICES` const block inside
-[`docs/deployment-dashboard.html`](../../docs/deployment-dashboard.html).
+[`docs/ui/deployment-dashboard.html`](../../docs/ui/deployment-dashboard.html).
 
 ### The six box states produced
 
@@ -226,7 +226,7 @@ operation against a real Postgres client, never wired into the runners.
 The slot list and example versions in
 [`testing/fixtures/seed-data.json`](../fixtures/seed-data.json) are
 adapted from the inline `SERVICES` const inside
-[`docs/deployment-dashboard.html`](../../docs/deployment-dashboard.html).
+[`docs/ui/deployment-dashboard.html`](../../docs/ui/deployment-dashboard.html).
 That block exists precisely to demonstrate the six box states, so we
 reuse it verbatim rather than inventing parallel fixtures.
 

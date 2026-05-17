@@ -1,7 +1,7 @@
 // FR-13 — Layout switcher segmented control. Sits in the header next to
 // the view switcher. Three options: Matrix / Swim-lane / Workflow rows.
 //
-// Visual treatment mirrors the canonical mockup (docs/deployment-dashboard.html
+// Visual treatment mirrors the canonical mockup (docs/ui/deployment-dashboard.html
 // lines 650–665) — same shape as the view switcher, distinct purple-600
 // active fill so the two segmented controls are visually distinguishable.
 // Labels + intents come from view-config.ts (declarative configuration only).

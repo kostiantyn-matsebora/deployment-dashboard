@@ -7,7 +7,7 @@ behaviour from the mockup.
 
 ## Citations
 
-- `docs/deployment-dashboard.html` - the `getBoxClass` helper and the
+- `docs/ui/deployment-dashboard.html` - the `getBoxClass` helper and the
   `HIGHLIGHT = 'ring-2 ring-offset-1 ring-amber-400 '` prefix added by the
   mockup. Frontend mirrors this in
   `frontend/matrix/src/lib/box-styles.ts` (visual contract per

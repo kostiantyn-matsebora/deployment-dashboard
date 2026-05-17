@@ -24,7 +24,7 @@ through the same key the other five attributes do.
   case." The example values include `ref` and `sha` keys (e.g.
   `["status","version","run","ago","actor","ref","sha"]` for
   Detailed).
-- `docs/ui-compact-options.md` — "Empty selection is a legitimate
+- `docs/ui/compact-options.md` — "Empty selection is a legitimate
   state".
 
 ## Preconditions
@@ -109,5 +109,5 @@ through the same key the other five attributes do.
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
   "Client-side persistence (`localStorage`)" — key shapes
   `dashboard.attrs.<view>` and the empty-array rule.
-- `docs/ui-compact-options.md` "Empty selection is a legitimate
+- `docs/ui/compact-options.md` "Empty selection is a legitimate
   state".

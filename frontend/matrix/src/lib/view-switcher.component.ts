@@ -1,5 +1,5 @@
 // View switcher — segmented control with the four FR-12 layout views.
-// Visual treatment mirrors the canonical mockup (docs/deployment-dashboard.html
+// Visual treatment mirrors the canonical mockup (docs/ui/deployment-dashboard.html
 // lines 138–152). Labels + descriptions come from view-config.ts, never
 // inline — per the declarative-configuration rule.
 

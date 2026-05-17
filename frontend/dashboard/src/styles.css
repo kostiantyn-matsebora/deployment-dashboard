@@ -5,7 +5,7 @@
 
 /*
  * The only global CSS allowed beyond Tailwind utilities — these match the
- * mockup's <style> block (docs/deployment-dashboard.html lines 9–577).
+ * mockup's <style> block (docs/ui/deployment-dashboard.html lines 9–577).
  *
  * Sections:
  *   - keyframes + matrix-layout helpers (.stage-box, .arrow-line, .spinner,
@@ -22,7 +22,7 @@
 }
 
 /* ============== Injected-event pulse ==============
-   Mirrors docs/deployment-dashboard.html lines 195–204. Applied by the
+   Mirrors docs/ui/deployment-dashboard.html lines 195–204. Applied by the
    app component on every incoming SSE slot-update event when
    `dashboard.focusOnLastEvent` is on (or when the affected element is
    already in view). The ring is rendered with `box-shadow` so it sits
@@ -54,7 +54,7 @@
      `line.right + 6 == target.box.left` — so the arrow tip lands exactly
      on the target box's left edge. With `right: -1px` (the previous value)
      the tip was 5 px short, which is the "lines hang in mid-air" symptom.
-     Mirrors `docs/deployment-dashboard.html` lines 121–134. */
+     Mirrors `docs/ui/deployment-dashboard.html` lines 121–134. */
   .arrow-line::after {
     content: '';
     position: absolute;
@@ -339,7 +339,7 @@
 
 /* ============================================================
    Theme axis — gear icon + popover affordance (header).
-   Mirrors docs/deployment-dashboard.html lines 680-741 verbatim.
+   Mirrors docs/ui/deployment-dashboard.html lines 680-741 verbatim.
    The component (`dd-theme-switcher`) is rendered alongside the
    View / Layout segmented controls in the header.
    ============================================================ */
@@ -400,7 +400,7 @@
 
 /* ============================================================
    Dark palette — Dim (warm-tinted, GitHub-style).
-   Mirrors docs/deployment-dashboard.html lines 743-900 verbatim.
+   Mirrors docs/ui/deployment-dashboard.html lines 743-900 verbatim.
    CSS-only overlay — remaps Tailwind utility-class backgrounds,
    borders, and text colours when [data-theme="dark"] is set on
    <html>. NO Tailwind class is renamed; NO leaf-renderer DOM

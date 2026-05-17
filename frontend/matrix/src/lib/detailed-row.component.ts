@@ -1,6 +1,6 @@
 // Detailed-view row — canonical layout: 11rem service label column,
 // 10rem stage boxes with arrow connectors. Mirrors the mockup's "Detailed
-// view" template (docs/deployment-dashboard.html lines 236–350).
+// view" template (docs/ui/deployment-dashboard.html lines 236–350).
 
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';

@@ -38,4 +38,4 @@
   - SAD §7 "Visual layout → Theme axis (presentation-only)" — single-writer invariant, corruption normalisation, mockup-vs-implementation parity (added by CR-0006).
   - SAD §5 NFR-09 — sibling invariant covers all three axes (View × Layout × Theme).
   - SAD §8 (Security Considerations) — internal-only, no user-identity model; supports the "no server-side per-user state" decision.
-  - `docs/ui-theme-options.md` — palette choice (Dim), status-colour mappings, gear-popover affordance design.
+  - `docs/ui/theme-options.md` — palette choice (Dim), status-colour mappings, gear-popover affordance design.

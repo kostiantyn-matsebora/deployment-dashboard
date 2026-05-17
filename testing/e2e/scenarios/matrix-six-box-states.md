@@ -12,7 +12,7 @@ the visual catalogue in the mockup.
   FR-03 (current + last-successful split when running or failed).
 - `docs/deployment-dashboard-architecture.md` §7 "Web Dashboard (MVP) -
   Visual layout" - the six-state table.
-- `docs/deployment-dashboard.html` - the inline `SERVICES` const block which
+- `docs/ui/deployment-dashboard.html` - the inline `SERVICES` const block which
   is the canonical visual catalogue these states are drawn from.
 - `testing/fixtures/seed-data.json` - the same six states encoded as POSTable
   events; this scenario consumes them via `testing/scripts/seed.ps1`.

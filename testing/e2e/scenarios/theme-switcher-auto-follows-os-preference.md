@@ -8,11 +8,11 @@ effective palette — the user's explicit choice wins.
 
 ## Citations
 
-- `docs/ui-theme-options.md` "Auto resolution" §2 ("Live OS-level
+- `docs/ui/theme-options.md` "Auto resolution" §2 ("Live OS-level
   changes — the Alpine component registers a `change` listener on the
   `MediaQueryList` … no reload required.") + "The user's choice of
   `light` or `dark` overrides the OS preference; only `auto` listens."
-- `docs/deployment-dashboard.html` lines 3450–3461 — `change` event
+- `docs/ui/deployment-dashboard.html` lines 3450–3461 — `change` event
   handler registered on
   `window.matchMedia('(prefers-color-scheme: dark)')`, only re-resolves
   when `themePref === 'auto'`.
@@ -84,8 +84,8 @@ effective palette — the user's explicit choice wins.
 
 ## Coverage
 
-- `docs/ui-theme-options.md` "Auto resolution" §2 + "The user's
+- `docs/ui/theme-options.md` "Auto resolution" §2 + "The user's
   choice of `light` or `dark` overrides the OS preference; only
   `auto` listens.".
-- `docs/deployment-dashboard.html` MQL change listener (lines
+- `docs/ui/deployment-dashboard.html` MQL change listener (lines
   3450–3461).

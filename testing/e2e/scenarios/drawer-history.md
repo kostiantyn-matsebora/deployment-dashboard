@@ -15,7 +15,7 @@ and the descending-by-time deployment-history list lazy-fetched from
   events, `?limit=50` default.
 - `docs/deployment-dashboard-architecture.md` §7 "Matrix response shape per
   slot" - `current` and `lastSuccessful` shape.
-- `docs/deployment-dashboard.html` - the right-hand drawer with current /
+- `docs/ui/deployment-dashboard.html` - the right-hand drawer with current /
   last-successful / history list panels.
 - `frontend/drawer/src/lib/history-drawer.component.ts` - the
   `data-testid="history-drawer"`, `drawer-current`,

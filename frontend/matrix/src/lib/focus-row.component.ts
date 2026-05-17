@@ -1,6 +1,6 @@
 // Focus-view row — collapsed = compact-row dimensions + chevron + pin;
 // expanded = Detailed-size stage box. Mirrors the mockup's "Focus view"
-// template (docs/deployment-dashboard.html lines 1681-1979).
+// template (docs/ui/deployment-dashboard.html lines 1681-1979).
 //
 // FR-12: collapsed rows respect the active-attrs picker (cap 4); expanded
 // rows always show all seven attributes per the "Full-attribute disclosure
@@ -30,7 +30,7 @@
 //
 // Layout-agnostic testids — `row-chevron-{id}`, `row-pin-{id}`,
 // `row-expanded-{id}` / `row-collapsed-{id}`, `data-expanded`, `data-pinned`
-// (per docs/ui-compact-options.md "Focus view specifics"). The legacy
+// (per docs/ui/compact-options.md "Focus view specifics"). The legacy
 // `focus-row-expand-{id}` and `focus-pin-{id}` testids are kept as
 // invisible sr-only aliases so older e2e specs and unit tests continue to
 // resolve.

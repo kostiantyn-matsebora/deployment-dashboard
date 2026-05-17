@@ -1,5 +1,5 @@
 // Compact-view row — ~120px boxes, ~36px row height. Mirrors the mockup's
-// "Compact view" template (docs/deployment-dashboard.html lines 352–475).
+// "Compact view" template (docs/ui/deployment-dashboard.html lines 352–475).
 //
 // FR-12 — the slot body respects the picker's `activeAttrs`. Always-on
 // elements (background colour, ⚠ badge, last-successful split) ignore

@@ -16,7 +16,7 @@
 //
 // Citations:
 //   - testing/e2e/scenarios/service-name-no-clip-universal.md
-//   - docs/ui-compact-options.md "Focus view specifics"
+//   - docs/ui/compact-options.md "Focus view specifics"
 //   - docs/deployment-dashboard-architecture.md §4 FR-12
 //
 // Drift note: as of the focus-across-layouts cycle the SPA emits a
