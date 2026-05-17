@@ -54,5 +54,12 @@ testing/e2e/blob-report/
 **/*.tfplan
 **/crash.log
 
+# ---- Claude Code runtime (never commit) ---------------------------------
+# Background-agent worktrees, local settings, scheduler lock — all runtime
+# scratch under .claude/.
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
 # ---- Misc ----------------------------------------------------------------
 *.log
