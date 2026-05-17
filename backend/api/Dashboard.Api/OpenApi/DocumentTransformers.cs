@@ -39,14 +39,21 @@ internal sealed class DashboardInfoDocumentTransformer(IConfiguration configurat
         document.Info.Title = ApiTitle;
         document.Info.Version = ApiVersion;
         document.Info.Description =
-            "Push-based deployment matrix for an internal-only, single-org pipeline view.\n\n" +
-            "* **Write surface** — `POST /api/deployments`, `PATCH /api/config/topology`. " +
-            "Both protected by the `X-Api-Key` header (SAD §8).\n" +
-            "* **Read surface** — matrix / single-slot / history / discovery / SSE / health / " +
-            "`GET /api/config/topology`. Unauthenticated (FR-10, SAD §8).\n\n" +
-            "Real-time updates flow over `GET /api/stream` as Server-Sent Events; payload shape " +
-            "matches `SlotUpdatePayload`. Schema documentation is generated from the C# DTOs " +
-            "annotated with `<summary>` XML comments.";
+            "Push-based deployment matrix for an internal pipeline view. CI/CD pipelines POST " +
+            "deployment events as they happen; dashboards, bots, and other consumers GET the " +
+            "matrix or subscribe to the live stream.\n\n" +
+            "**Two surfaces:**\n" +
+            "* **Write** — `POST /api/deployments` (ingest) and `PATCH /api/config/topology` " +
+            "(admin). Both require the `X-Api-Key` header.\n" +
+            "* **Read** — full matrix, single-slot, per-slot history, environment / service " +
+            "discovery, `GET /api/config/topology`, the `/api/stream` SSE feed, and `/health`. " +
+            "All unauthenticated.\n\n" +
+            "**Real-time:** subscribe to `GET /api/stream` with any SSE client to receive " +
+            "`slot-update` events as deployments are ingested. Reconnect with `Last-Event-ID` " +
+            "for best-effort replay.\n\n" +
+            "**Wire format:** request and response bodies use snake_case JSON. Timestamps are " +
+            "UTC ISO-8601 with a trailing `Z`. Error responses follow RFC 7807 (problem " +
+            "documents).";
 
         // Declarative-config: server list comes from IConfiguration, never
         // hardcoded URLs in source. Falls back to the dev gateway URL only
@@ -117,9 +124,10 @@ internal sealed class WriteSurfaceSecurityDocumentTransformer : IOpenApiDocument
             In = ParameterLocation.Header,
             Name = HeaderName,
             Description =
-                $"Static API key for the Write surface. Sent in the {HeaderName} header. " +
-                "Required for POST /api/deployments and PATCH /api/config/topology only " +
-                "(SAD §8).",
+                $"Static API key. Send the configured shared secret in the {HeaderName} " +
+                "request header. Required for the two Write endpoints — POST /api/deployments " +
+                "and PATCH /api/config/topology. All Read endpoints are unauthenticated and " +
+                "ignore this header.",
         };
 
         if (document.Paths is null) return Task.CompletedTask;

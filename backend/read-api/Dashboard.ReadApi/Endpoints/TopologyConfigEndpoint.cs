@@ -33,9 +33,12 @@ public static class TopologyConfigEndpoint
         .WithTags("Read")
         .WithSummary("Active topology / correlation configuration")
         .WithDescription(
-            "Unauthenticated mirror of the active topology config so the SPA's " +
-            "correlation-attribute picker can label the 'system default' entry. The " +
-            "matching PATCH endpoint lives on the Write surface (X-Api-Key required).")
-        .Produces<TopologyConfigDto>(StatusCodes.Status200OK);
+            "Returns the currently-active topology configuration — the global default " +
+            "correlation attribute and any per-service overrides. Clients can read this " +
+            "to label their UI (e.g. show which attribute is the 'system default') or to " +
+            "decide whether to send a per-request `?correlationAttribute=` hint. " +
+            "Unauthenticated. To change the configuration, use PATCH /api/config/topology " +
+            "(requires the X-Api-Key header).")
+        .Produces<TopologyConfigDto>(StatusCodes.Status200OK, contentType: "application/json");
     }
 }

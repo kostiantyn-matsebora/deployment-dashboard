@@ -88,11 +88,24 @@ public static class StreamEndpoint
         .WithTags("Read")
         .WithSummary("Server-Sent Events stream of slot updates")
         .WithDescription(
-            "Long-lived text/event-stream connection that emits one 'slot-update' event " +
-            "per persisted deployment (NFR-03). Honours Last-Event-ID (header OR " +
-            "?last-event-id query param) for best-effort replay from the in-process ring " +
-            "buffer. Heartbeat comment every 15s keeps reverse proxies from closing the " +
-            "connection. Payload schema: see Dashboard.Shared.Dto.SlotUpdatePayload.")
+            "Long-lived `text/event-stream` connection that emits one event every time a " +
+            "deployment is ingested. Clients should consume this with a standard SSE " +
+            "library (browsers: `EventSource`).\n\n" +
+            "**Events emitted:**\n" +
+            "* `event: slot-update` — fired after every successful ingest. The `data:` " +
+            "line is a JSON object matching the `SlotUpdatePayload` schema " +
+            "(`service`, `environment`, `state`). The `id:` line is a monotonic numeric " +
+            "id that clients can persist for reconnect.\n" +
+            "* heartbeat comment line — emitted every 15 seconds with no payload, to " +
+            "keep idle proxies from closing the connection. Standard SSE libraries " +
+            "ignore comment lines.\n\n" +
+            "**Reconnect / resume:** on reconnect, send the last id you saw via either " +
+            "the standard `Last-Event-ID` request header or a `?last-event-id=` query " +
+            "parameter (browsers' built-in `EventSource` does this automatically). The " +
+            "server replays anything still in its in-memory ring buffer with id greater " +
+            "than the value supplied. The ring buffer is best-effort — for guaranteed " +
+            "catch-up after a long disconnect, refetch GET /api/deployments. " +
+            "Unauthenticated.")
         .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
     }
 }

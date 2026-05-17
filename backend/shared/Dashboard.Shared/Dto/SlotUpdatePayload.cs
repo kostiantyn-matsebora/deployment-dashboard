@@ -3,8 +3,10 @@ using System.Text.Json.Serialization;
 namespace Dashboard.Shared.Dto;
 
 /// <summary>
-/// Wire shape for the SSE <c>slot-update</c> event's <c>data:</c> payload
-/// (SAD §7 "SSE <c>slot-update</c> data payload"):
+/// Payload of the <c>slot-update</c> Server-Sent Event emitted on
+/// <c>GET /api/stream</c> after a deployment is ingested.
+///
+/// <para>Shape:</para>
 /// <code>
 /// {
 ///   "service":     "service-a",
@@ -13,17 +15,16 @@ namespace Dashboard.Shared.Dto;
 /// }
 /// </code>
 ///
-/// <para>The inner <see cref="State"/> mirrors the REST per-slot response
-/// from <c>GET /api/deployments</c> exactly.</para>
+/// <para>The inner <see cref="State"/> object mirrors the per-slot block from
+/// <c>GET /api/deployments/{service}/{environment}</c> exactly, so SSE
+/// consumers can apply the update to their local matrix copy without an
+/// extra round-trip.</para>
 ///
-/// <para><strong>Topology is intentionally absent from the SSE wire.</strong>
-/// Per SAD §7 "SSE topology semantics — single source of truth" and
-/// Decision §10 #8: the SSE event carries the slot update only; the SPA
-/// refreshes per-service topology by issuing
-/// <c>GET /api/deployments?correlationAttribute=&lt;user-preference&gt;</c>
-/// after each event. With per-user picker preferences (Decision §10 #7) a
-/// single broadcast payload cannot satisfy every viewer; the matrix GET is
-/// the single source of truth for topology.</para>
+/// <para><strong>Topology is intentionally NOT included in the SSE payload.</strong>
+/// Correlation-attribute preferences are per-user, so a single broadcast
+/// payload cannot satisfy every viewer. Clients that need the refreshed
+/// per-service topology after a slot update should re-issue
+/// <c>GET /api/deployments?correlationAttribute=&lt;preference&gt;</c>.</para>
 /// </summary>
 public sealed record SlotUpdatePayload
 {
@@ -36,7 +37,7 @@ public sealed record SlotUpdatePayload
     public string Environment { get; init; } = string.Empty;
 
     /// <summary>
-    /// Updated slot state — identical shape to the per-slot block emitted by
+    /// Updated slot state — identical in shape to the response from
     /// <c>GET /api/deployments/{service}/{environment}</c>.
     /// </summary>
     [JsonPropertyName("state")]

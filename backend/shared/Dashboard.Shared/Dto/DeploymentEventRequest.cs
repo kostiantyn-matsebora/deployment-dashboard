@@ -4,36 +4,25 @@ using System.Text.Json.Serialization;
 namespace Dashboard.Shared.Dto;
 
 /// <summary>
-/// Request body for <c>POST /api/deployments</c> (SAD §7 API Contract +
-/// CI/CD Integration; length caps + non-whitespace rules per CR-0008).
-/// Data Annotations drive payload validation — the endpoint runs
-/// <see cref="Validation.DataAnnotationsValidator.Validate"/> and returns
-/// <c>422 Unprocessable Entity</c> with an RFC 7807 <c>ValidationProblemDetails</c>
-/// body when a rule fails.
+/// Request body for <c>POST /api/deployments</c> — the push-based ingest call
+/// that your CI/CD pipeline makes after a deployment completes (or starts).
 ///
-/// <para><see cref="Status"/> is checked against the allowed set in
-/// <see cref="Domain.DeploymentStatus.All"/> by <see cref="AllowedStatusAttribute"/>
-/// below so invalid values produce 422 rather than 500.</para>
+/// <para>All required string fields reject null, empty, and whitespace-only
+/// values; an invalid payload returns <c>422 Unprocessable Entity</c> with an
+/// RFC 7807 problem document listing the offending fields.</para>
 ///
-/// <para>Required string fields use <c>[Required(AllowEmptyStrings = false)]</c>
-/// (rejects null and empty) plus <see cref="NotWhitespaceAttribute"/> (rejects
-/// whitespace-only). Optional string fields (<see cref="Ref"/>,
-/// <see cref="Sha"/>) are nullable: absent and <c>null</c> are equivalent;
-/// when present, the value must be non-whitespace-empty and within the
-/// per-field <c>maxLength</c> cap (CR-0008 § "Universal rules").</para>
-///
-/// <para><see cref="DeploymentId"/> and <see cref="ParentDeployments"/> are
-/// the topology contract from SAD §5 / §7 "POST /api/deployments request
-/// body". Cross-service / cycle / duplicate failures are handled outside
-/// Data Annotations (they need DB lookups) — see <c>MapDeployments</c> in
-/// the Write API.</para>
+/// <para>Optional fields (<see cref="Ref"/>, <see cref="Sha"/>) treat
+/// "omitted" and "explicit <c>null</c>" as equivalent on the wire; when
+/// present, they must be non-empty and within their length cap.</para>
 /// </summary>
 public sealed record DeploymentEventRequest
 {
     /// <summary>
-    /// CI/CD-side identifier (run id, build number, guid). Required;
-    /// missing, empty, or whitespace-only triggers <c>422 Unprocessable Entity</c>
-    /// (CR-0008 validation table row 1).
+    /// Stable identifier for this deployment event, chosen by the caller — a
+    /// CI run id, build number, GUID, or any opaque string that is unique
+    /// within the <see cref="Service"/>. Used to wire up explicit parent /
+    /// child relationships via <see cref="ParentDeployments"/>. Required;
+    /// 1–200 characters.
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -42,22 +31,27 @@ public sealed record DeploymentEventRequest
     public string DeploymentId { get; init; } = string.Empty;
 
     /// <summary>
-    /// Zero or more <c>deployment_id</c> values of parent deployments in the
-    /// same <see cref="Service"/>. Omit or send <c>[]</c> to fall back to the
-    /// correlation pass (SAD §5 "Topology Derivation"). Per CR-0008 each
-    /// element must be non-whitespace-empty AND ≤ 200 chars; per-element
-    /// violations land in the <c>parentDeployments</c> error key as messages
-    /// of the form <c>"parentDeployments[i]: ..."</c>. Cross-service / cycle
-    /// checks are deferred to the endpoint handler.
+    /// Zero or more <c>deployment_id</c> values naming the parents of this
+    /// deployment within the same <see cref="Service"/>. Use this when your
+    /// pipeline knows the lineage explicitly (e.g. "this prod deploy promoted
+    /// build X from staging"). When omitted or empty, the dashboard derives
+    /// lineage on the read side from a configurable correlation attribute.
+    ///
+    /// <para>Each element must be non-empty and at most 200 characters.
+    /// References to deployments in a different service are rejected with
+    /// <c>400 Bad Request</c>. References that would create a cycle through
+    /// already-ingested deployments are rejected with <c>400 Bad Request</c>.
+    /// References to a deployment that has not yet been ingested are accepted
+    /// and resolved later if and when the parent arrives.</para>
     /// </summary>
     [ParentDeploymentsElements]
     [JsonPropertyName("parent_deployments")]
     public IReadOnlyList<string>? ParentDeployments { get; init; }
 
     /// <summary>
-    /// Logical service identifier — the matrix's row key (SAD §7). Stable per
-    /// pipeline; e.g. <c>"checkout-api"</c>. Required; ≤ 200 chars;
-    /// whitespace-only rejected with 422.
+    /// Logical service identifier — the matrix row this event belongs to.
+    /// Examples: <c>"checkout-api"</c>, <c>"order-worker"</c>. Required;
+    /// 1–200 characters. Pick something stable per pipeline.
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -66,10 +60,10 @@ public sealed record DeploymentEventRequest
     public string Service { get; init; } = string.Empty;
 
     /// <summary>
-    /// Target environment — the matrix's column key (SAD §7); e.g.
-    /// <c>"dev"</c>, <c>"qa-1"</c>, <c>"prod"</c>. Required; ≤ 200 chars;
-    /// whitespace-only rejected with 422. Discovery surfaces it through
-    /// <c>GET /api/environments</c> automatically on first ingest.
+    /// Target environment — the matrix column this event belongs to.
+    /// Examples: <c>"dev"</c>, <c>"qa-1"</c>, <c>"prod"</c>. Required;
+    /// 1–200 characters. New environment names appear in the dashboard
+    /// automatically on first ingest — no pre-registration step.
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -78,9 +72,9 @@ public sealed record DeploymentEventRequest
     public string Environment { get; init; } = string.Empty;
 
     /// <summary>
-    /// Version string shown on the matrix tile (SAD §7 + mockup). Any opaque
-    /// string the pipeline picks — semver, build number, image tag. Required;
-    /// ≤ 200 chars; whitespace-only rejected with 422.
+    /// Version label shown on the matrix tile — any opaque string the
+    /// pipeline picks (semver, build number, image tag, …). Required;
+    /// 1–200 characters.
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -90,8 +84,7 @@ public sealed record DeploymentEventRequest
 
     /// <summary>
     /// Lifecycle status — one of <c>"in-progress"</c>, <c>"success"</c>,
-    /// <c>"failure"</c> (SAD §7 + <see cref="Domain.DeploymentStatus.All"/>).
-    /// Any other value triggers <c>422 Unprocessable Entity</c>.
+    /// <c>"failure"</c>. Any other value returns <c>422 Unprocessable Entity</c>.
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [AllowedStatus]
@@ -99,9 +92,9 @@ public sealed record DeploymentEventRequest
     public string Status { get; init; } = string.Empty;
 
     /// <summary>
-    /// Absolute URL to the CI/CD run that produced this event (SAD §7); the
-    /// SPA renders it as the "View run" link. Required; ≤ 2048 chars; must
-    /// be a syntactically valid URL.
+    /// Absolute URL to the CI/CD run that produced this event — the dashboard
+    /// renders it as the "View run" link on the tile. Required; must be a
+    /// syntactically valid URL; at most 2048 characters.
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -111,16 +104,16 @@ public sealed record DeploymentEventRequest
     public string RunUrl { get; init; } = string.Empty;
 
     /// <summary>
-    /// Monotonic CI/CD run number for the pipeline (SAD §7); shown on the
-    /// tile as "#123". Must be non-negative.
+    /// Monotonic CI/CD run number — shown on the tile as <c>"#123"</c>.
+    /// Must be zero or positive.
     /// </summary>
     [Range(0, long.MaxValue)]
     [JsonPropertyName("run_number")]
     public long RunNumber { get; init; }
 
     /// <summary>
-    /// Who triggered the deployment — username, bot id, or "system" (SAD §7).
-    /// Required; ≤ 200 chars; whitespace-only rejected with 422.
+    /// Who triggered the deployment — a username, bot id, or <c>"system"</c>
+    /// for scheduled / automated triggers. Required; 1–200 characters.
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -129,12 +122,10 @@ public sealed record DeploymentEventRequest
     public string Actor { get; init; } = string.Empty;
 
     /// <summary>
-    /// Optional source identifier — branch name, PR number, tag, or any
-    /// human-readable git ref (SAD §7 POST body row <c>ref</c> + FR-05).
-    /// Independently optional from <see cref="Sha"/>. Absent and <c>null</c>
-    /// are equivalent on the wire. When present, must be non-whitespace-empty
-    /// AND ≤ 200 chars (CR-0008 — closes CR-0004 § Decision 10). No
-    /// format / regex check.
+    /// Optional source identifier — a branch name, PR number, tag, or any
+    /// human-readable git ref. Independent of <see cref="Sha"/>. Omit, send
+    /// <c>null</c>, or send a non-empty string up to 200 characters. No
+    /// format check.
     /// </summary>
     [StringLength(200)]
     [OptionalNotWhitespace]
@@ -142,11 +133,10 @@ public sealed record DeploymentEventRequest
     public string? Ref { get; init; }
 
     /// <summary>
-    /// Optional commit SHA associated with this deployment (SAD §7 POST body
-    /// row <c>sha</c> + FR-05). Independently optional from <see cref="Ref"/>.
-    /// Absent and <c>null</c> are equivalent on the wire. When present, must
-    /// be non-whitespace-empty AND ≤ 64 chars (CR-0008 — covers SHA-256 hex;
-    /// SHA-1 hex and short SHAs fit comfortably). No hex / format check.
+    /// Optional commit SHA associated with this deployment. Independent of
+    /// <see cref="Ref"/>. Omit, send <c>null</c>, or send a non-empty string
+    /// up to 64 characters (room for SHA-256 hex). No hex / format check —
+    /// any opaque identifier is accepted.
     /// </summary>
     [StringLength(64)]
     [OptionalNotWhitespace]
@@ -155,10 +145,7 @@ public sealed record DeploymentEventRequest
 }
 
 /// <summary>
-/// Validates that <c>status</c> is one of the values defined in
-/// <see cref="Domain.DeploymentStatus"/>. Custom attribute is used rather
-/// than an enum so the wire form stays the literal kebab-case string
-/// ("in-progress") that the SAD specifies.
+/// Validates that <c>status</c> is one of the allowed lifecycle values.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class AllowedStatusAttribute : ValidationAttribute
@@ -173,16 +160,11 @@ public sealed class AllowedStatusAttribute : ValidationAttribute
 }
 
 /// <summary>
-/// Rejects strings that are whitespace-only (e.g. <c>"   "</c>). Pairs with
-/// <c>[Required(AllowEmptyStrings = false)]</c> on required string fields so
-/// all three forms (null, empty, whitespace-only) reliably produce 422
-/// (CR-0008 § "Universal rules").
-///
-/// <para>For nullable fields (<see cref="DeploymentEventRequest.Ref"/> and
-/// <see cref="DeploymentEventRequest.Sha"/>) use
-/// <see cref="OptionalNotWhitespaceAttribute"/> instead — it skips the check
-/// when the value is null (absent / explicit-null are equivalent per
-/// CR-0008).</para>
+/// Rejects strings that are whitespace-only. Pairs with
+/// <c>[Required(AllowEmptyStrings = false)]</c> on required string fields
+/// so null, empty, and whitespace-only all surface as <c>422</c>. For
+/// optional nullable fields, use <see cref="OptionalNotWhitespaceAttribute"/>
+/// instead — it skips the check when the value is null.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class NotWhitespaceAttribute : ValidationAttribute
@@ -205,11 +187,10 @@ public sealed class NotWhitespaceAttribute : ValidationAttribute
 
 /// <summary>
 /// Optional-string variant of <see cref="NotWhitespaceAttribute"/>: null
-/// (absent or explicit-null on the wire) passes, but an empty string or
-/// whitespace-only string is rejected. Used on <see cref="DeploymentEventRequest.Ref"/>
-/// and <see cref="DeploymentEventRequest.Sha"/> per CR-0008 § "Universal rules":
-/// "Optional string fields: null and absent are equivalent; an empty string
-/// is rejected with 422".
+/// (omitted or explicit-null on the wire) passes, but an empty or
+/// whitespace-only string is rejected. Used on the optional
+/// <see cref="DeploymentEventRequest.Ref"/> and
+/// <see cref="DeploymentEventRequest.Sha"/> fields.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class OptionalNotWhitespaceAttribute : ValidationAttribute
@@ -221,7 +202,7 @@ public sealed class OptionalNotWhitespaceAttribute : ValidationAttribute
 
     public override bool IsValid(object? value)
     {
-        if (value is null) return true; // absent / explicit null are valid
+        if (value is null) return true; // omitted / explicit null are valid
         if (value is not string s) return true;
         return !string.IsNullOrWhiteSpace(s);
     }
@@ -229,20 +210,15 @@ public sealed class OptionalNotWhitespaceAttribute : ValidationAttribute
 
 /// <summary>
 /// Per-element validation for <see cref="DeploymentEventRequest.ParentDeployments"/>:
-/// every element must be non-whitespace-empty AND ≤ 200 chars (CR-0008 row
-/// <c>parent_deployments[i]</c>). Per-element messages are surfaced as
-/// "parentDeployments[i]: ..." entries under the <c>parentDeployments</c>
-/// error key in <c>ValidationProblemDetails</c>.
-///
-/// <para>Returns a <see cref="ValidationResult"/> whose
-/// <see cref="ValidationResult.ErrorMessage"/> contains all per-element
-/// violations newline-joined; <see cref="Validation.DataAnnotationsValidator"/>
-/// splits that back into per-message entries downstream.</para>
+/// every element must be non-empty (after trimming) and at most 200
+/// characters. Per-element violations are surfaced as
+/// <c>"parentDeployments[i]: ..."</c> entries under the
+/// <c>parentDeployments</c> key in the validation problem response.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class ParentDeploymentsElementsAttribute : ValidationAttribute
 {
-    /// <summary>Per-element length cap (CR-0008).</summary>
+    /// <summary>Per-element length cap.</summary>
     public const int ElementMaxLength = 200;
 
     protected override ValidationResult? IsValid(object? value, ValidationContext context)

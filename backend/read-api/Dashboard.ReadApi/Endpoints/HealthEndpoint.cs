@@ -23,12 +23,14 @@ public static class HealthEndpoint
         })
         .WithName("GetHealth")
         .WithTags("Read")
-        .WithSummary("Liveness probe with DB round-trip")
+        .WithSummary("Liveness probe for uptime monitoring")
         .WithDescription(
-            "Returns {\"status\":\"ok\"} when the API can reach Postgres. A failed " +
-            "round-trip surfaces as 500 — the signal orchestrators react to. " +
-            "Unauthenticated (SAD §7).")
-        .Produces(StatusCodes.Status200OK)
+            "Cheap liveness check suitable for uptime monitors and orchestrator health " +
+            "probes. Performs a trivial round-trip to the database and returns " +
+            "`{\"status\":\"ok\"}` on success. A failed round-trip surfaces as 500 — that's " +
+            "the signal monitors should react to. Unauthenticated; no caching headers; " +
+            "safe to poll at any reasonable interval.")
+        .Produces(StatusCodes.Status200OK, contentType: "application/json")
         .ProducesProblem(StatusCodes.Status500InternalServerError);
     }
 }

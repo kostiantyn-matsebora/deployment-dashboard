@@ -4,8 +4,10 @@ using Dashboard.Shared.Domain;
 namespace Dashboard.Shared.Dto;
 
 /// <summary>
-/// One slot in the matrix response. Wire shape matches the JSON example in
-/// SAD §7 "Matrix response shape per service":
+/// One slot in the deployment matrix — the state of a single
+/// <c>(service, environment)</c> pair.
+///
+/// <para>Shape:</para>
 /// <code>
 /// {
 ///   "current":        { ... },
@@ -13,48 +15,53 @@ namespace Dashboard.Shared.Dto;
 ///   "previousFailed": false
 /// }
 /// </code>
-/// Note that <c>lastSuccessful</c> and <c>previousFailed</c> are
-/// intentionally camelCase in the wire form — the mockup
-/// (<c>docs/ui/deployment-dashboard.html</c>) reads them as
-/// <c>lastSuccessful</c> / <c>previousFailed</c> directly.
+///
+/// <para>Note: <c>lastSuccessful</c> and <c>previousFailed</c> are
+/// intentionally camelCase on the wire (the rest of the payload uses
+/// snake_case).</para>
 /// </summary>
 public sealed record MatrixSlot
 {
     /// <summary>
-    /// Latest deployment event for this <c>(service, environment)</c> slot
-    /// regardless of status — failures replace the previous entry per SAD §7
-    /// Decision 3.
+    /// Latest deployment event for this slot regardless of status — a failure
+    /// replaces the previous entry, an in-progress replaces a success, etc.
+    /// Always present once the slot has any history.
     /// </summary>
     [JsonPropertyName("current")]
     public CurrentDeployment Current { get; init; } = default!;
 
     /// <summary>
-    /// Most recent <c>success</c> event for the slot, or <c>null</c> when
-    /// <see cref="Current"/> is itself a success (no fallback needed) or when
-    /// no success has ever been recorded for this slot.
+    /// Most recent <c>success</c> event for this slot, or <c>null</c> when
+    /// <see cref="Current"/> is itself a success (no fallback needed) or
+    /// when no success has ever been recorded for this slot. Lets clients
+    /// show "currently failing, last good was vX" without an extra request.
     /// </summary>
     [JsonPropertyName("lastSuccessful")]
     public LastSuccessfulDeployment? LastSuccessful { get; init; }
 
     /// <summary>
-    /// <c>true</c> iff <see cref="Current"/> is <c>in-progress</c> AND the
-    /// most recent terminal event before it was a failure — so the SPA paints
-    /// the "in-progress over a failure" box state from the mockup.
+    /// <c>true</c> when <see cref="Current"/> is <c>in-progress</c> AND the
+    /// most recent terminal event before it was a failure — i.e. the slot is
+    /// retrying after a failed run. Useful for distinguishing "first attempt
+    /// in flight" from "retry of a known-broken deploy" in the UI.
     /// </summary>
     [JsonPropertyName("previousFailed")]
     public bool PreviousFailed { get; init; }
 }
 
-/// <summary>"current" sub-object — full event detail including status.</summary>
+/// <summary>
+/// The <c>current</c> sub-object inside a <see cref="MatrixSlot"/> — full
+/// event detail for the latest deployment in the slot, including status.
+/// </summary>
 public sealed record CurrentDeployment
 {
-    /// <summary>CI/CD-side identifier of the latest event in this slot.</summary>
+    /// <summary>Caller-supplied deployment identifier of the latest event in this slot.</summary>
     [JsonPropertyName("deployment_id")] public string DeploymentId { get; init; } = string.Empty;
 
-    /// <summary>Version string shown on the tile.</summary>
+    /// <summary>Version label shown on the tile.</summary>
     [JsonPropertyName("version")] public string Version { get; init; } = string.Empty;
 
-    /// <summary>Lifecycle status of the current event — drives the box state.</summary>
+    /// <summary>Lifecycle status of the current event — drives the tile colour / badge.</summary>
     [JsonPropertyName("status")] public string Status { get; init; } = string.Empty;
 
     /// <summary>Absolute URL to the CI/CD run that produced the current event.</summary>
@@ -70,24 +77,24 @@ public sealed record CurrentDeployment
     [JsonPropertyName("deployed_at")] public DateTime DeployedAt { get; init; }
 
     /// <summary>
-    /// Surfaced on the wire per SAD §7 "Matrix response shape — per service"
-    /// ("<c>current.deployment_id</c> and <c>current.parent_deployments</c>
-    /// are surfaced on the wire so the SPA can render explicit parent links").
+    /// Explicit parents of the current event within the same service.
+    /// Surfaced inline so clients can render lineage / "promoted from" links
+    /// without a second round-trip. Empty when none were supplied.
     /// </summary>
     [JsonPropertyName("parent_deployments")]
     public IReadOnlyList<string> ParentDeployments { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// Optional source identifier verbatim from the stored row (SAD §7 +
-    /// FR-05). Always emitted; <c>null</c> when the column is null. Matches
-    /// the SAD JSON example at §7 "Matrix response shape" exactly.
+    /// Optional source identifier (branch / tag / PR / opaque ref) verbatim
+    /// from the ingest request. Always present in the response; the value is
+    /// <c>null</c> when none was supplied.
     /// </summary>
     [JsonPropertyName("ref")]
     public string? Ref { get; init; }
 
     /// <summary>
-    /// Optional commit SHA verbatim from the stored row (SAD §7 + FR-05).
-    /// Same emission rule as <see cref="Ref"/>.
+    /// Optional commit SHA verbatim from the ingest request. Always present
+    /// in the response; the value is <c>null</c> when none was supplied.
     /// </summary>
     [JsonPropertyName("sha")]
     public string? Sha { get; init; }
@@ -117,18 +124,16 @@ public sealed record CurrentDeployment
 }
 
 /// <summary>
-/// "lastSuccessful" sub-object — same shape as current minus the status
-/// field, which is always implicitly "success" for this slot. Per SAD §7
-/// "Matrix response shape" field rules, this object also carries
-/// <c>deployment_id</c> and <c>parent_deployments</c> for symmetry with
-/// <see cref="CurrentDeployment"/>.
+/// The <c>lastSuccessful</c> sub-object inside a <see cref="MatrixSlot"/> —
+/// same fields as <see cref="CurrentDeployment"/> minus <c>status</c>
+/// (always implicitly <c>"success"</c> for this slot).
 /// </summary>
 public sealed record LastSuccessfulDeployment
 {
-    /// <summary>CI/CD-side identifier of the last successful event in this slot.</summary>
+    /// <summary>Caller-supplied deployment identifier of the last successful event in this slot.</summary>
     [JsonPropertyName("deployment_id")] public string DeploymentId { get; init; } = string.Empty;
 
-    /// <summary>Version string of the last successful event.</summary>
+    /// <summary>Version label of the last successful event.</summary>
     [JsonPropertyName("version")] public string Version { get; init; } = string.Empty;
 
     /// <summary>Absolute URL to the run that produced the last success.</summary>
@@ -143,20 +148,25 @@ public sealed record LastSuccessfulDeployment
     /// <summary>UTC timestamp at which the last success was persisted.</summary>
     [JsonPropertyName("deployed_at")] public DateTime DeployedAt { get; init; }
 
+    /// <summary>
+    /// Explicit parents of the last successful event within the same service.
+    /// Empty when none were supplied.
+    /// </summary>
     [JsonPropertyName("parent_deployments")]
     public IReadOnlyList<string> ParentDeployments { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// Optional source identifier verbatim from the stored row (SAD §7 +
-    /// FR-05). Always emitted; <c>null</c> when the column is null. Matches
-    /// the SAD JSON example at §7 "Matrix response shape" exactly.
+    /// Optional source identifier verbatim from the original ingest request.
+    /// Always present in the response; the value is <c>null</c> when none
+    /// was supplied.
     /// </summary>
     [JsonPropertyName("ref")]
     public string? Ref { get; init; }
 
     /// <summary>
-    /// Optional commit SHA verbatim from the stored row (SAD §7 + FR-05).
-    /// Same emission rule as <see cref="Ref"/>.
+    /// Optional commit SHA verbatim from the original ingest request. Always
+    /// present in the response; the value is <c>null</c> when none was
+    /// supplied.
     /// </summary>
     [JsonPropertyName("sha")]
     public string? Sha { get; init; }

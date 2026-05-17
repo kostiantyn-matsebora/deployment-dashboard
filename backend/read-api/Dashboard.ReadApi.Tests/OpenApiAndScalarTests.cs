@@ -93,11 +93,11 @@ public sealed class OpenApiAndScalarTests : IClassFixture<TestApplicationFactory
         Assert.False(string.IsNullOrWhiteSpace(info.GetProperty("version").GetString()));
 
         // Description is curated in DashboardInfoDocumentTransformer; assert
-        // it mentions both surfaces by their canonical SAD names so a future
+        // it mentions both surfaces and the auth header so a future
         // accidental wipe of the description fails this test loudly.
         var description = info.GetProperty("description").GetString() ?? string.Empty;
-        Assert.Contains("Write surface", description, StringComparison.Ordinal);
-        Assert.Contains("Read surface", description, StringComparison.Ordinal);
+        Assert.Contains("Write", description, StringComparison.Ordinal);
+        Assert.Contains("Read", description, StringComparison.Ordinal);
         Assert.Contains("X-Api-Key", description, StringComparison.Ordinal);
     }
 

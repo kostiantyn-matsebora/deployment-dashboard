@@ -3,9 +3,11 @@ using System.Text.Json.Serialization;
 namespace Dashboard.Shared.Dto;
 
 /// <summary>
-/// Wire shape for <c>GET /api/config/topology</c> and the body returned by
-/// <c>PATCH /api/config/topology</c> (SAD §7 "PATCH /api/config/topology"
-/// + "Configuration — Read API topology"):
+/// Active topology / correlation configuration. Returned by
+/// <c>GET /api/config/topology</c> and by <c>PATCH /api/config/topology</c>
+/// (the PATCH response is the merged, post-update state).
+///
+/// <para>Shape:</para>
 /// <code>
 /// {
 ///   "correlationAttribute": "version",
@@ -13,31 +15,26 @@ namespace Dashboard.Shared.Dto;
 /// }
 /// </code>
 ///
-/// <para>The keys are camelCase per the SAD's JSON example (the snake_case
-/// global policy is overridden field-by-field with
-/// <see cref="JsonPropertyName"/>).</para>
-///
-/// <para><c>AllowUserOverride</c> was removed in the Phase-1 SAD revision:
-/// the SPA is read-only against the API and never invokes <c>PATCH</c>, so
-/// the SPA-disable toggle has no remaining purpose. The picker is a pure
-/// client-side preference (<c>localStorage</c>) that travels to the server
-/// as a <c>correlationAttribute</c> query parameter on read endpoints.</para>
+/// <para>The dashboard uses this configuration when no explicit
+/// <c>parent_deployments</c> were supplied for a deployment, to derive
+/// "this version flowed from env A to env B"-style edges from the chosen
+/// attribute. Field names on the wire are camelCase.</para>
 /// </summary>
 public sealed record TopologyConfigDto
 {
     /// <summary>
-    /// Active global default for the correlation-fallback attribute (SAD §5).
-    /// One of <c>version</c>, <c>ref</c>, <c>sha</c>, <c>actor</c>, <c>run</c>,
-    /// <c>ago</c>. The Read API uses this when a service has no per-service
-    /// override AND the request did not pass <c>?correlationAttribute=…</c>.
+    /// Global default for the correlation-fallback attribute. One of
+    /// <c>version</c>, <c>ref</c>, <c>sha</c>, <c>actor</c>, <c>run</c>,
+    /// <c>ago</c>. Used when a service has no per-service override AND the
+    /// request did not pass an explicit <c>?correlationAttribute=…</c>.
     /// </summary>
     [JsonPropertyName("correlationAttribute")]
     public string CorrelationAttribute { get; init; } = "version";
 
     /// <summary>
-    /// Active per-service overrides. Highest-precedence source — beats both
-    /// the request-scoped <c>?correlationAttribute=</c> query parameter and
-    /// the global <see cref="CorrelationAttribute"/> default (SAD §7).
+    /// Per-service overrides. Highest-precedence source — wins over both the
+    /// request-scoped <c>?correlationAttribute=</c> query parameter and the
+    /// global <see cref="CorrelationAttribute"/> default.
     /// </summary>
     [JsonPropertyName("perServiceOverrides")]
     public IReadOnlyDictionary<string, string> PerServiceOverrides { get; init; } =
@@ -45,32 +42,31 @@ public sealed record TopologyConfigDto
 }
 
 /// <summary>
-/// PATCH body for <c>PATCH /api/config/topology</c> (SAD §7). PATCH
-/// semantics: unset fields stay unchanged; <c>null</c> values inside
-/// <see cref="PerServiceOverrides"/> remove that service's override.
+/// Request body for <c>PATCH /api/config/topology</c>.
 ///
-/// <para><see cref="PerServiceOverrides"/> uses nullable values explicitly
-/// so deserialisation distinguishes "remove this override" (<c>null</c>)
-/// from "leave unchanged" (key omitted). Keys not present in the request
-/// are left untouched.</para>
+/// <para>PATCH semantics: any field omitted from the request is left
+/// unchanged. Inside <see cref="PerServiceOverrides"/>, a <c>null</c> value
+/// removes that service's override; a string value sets / replaces it; a
+/// key not present in the map leaves the existing override untouched.</para>
 /// </summary>
 public sealed record TopologyConfigPatch
 {
     /// <summary>
-    /// New global default for the correlation-fallback attribute (SAD §5
-    /// Topology Derivation). Allowed: <c>version</c>, <c>ref</c>, <c>sha</c>,
-    /// <c>actor</c>, <c>run</c>, <c>ago</c>. <c>id</c> is rejected with
-    /// <c>400 Bad Request</c>. Omit to leave the current value unchanged.
+    /// New global default for the correlation-fallback attribute. Allowed
+    /// values: <c>version</c>, <c>ref</c>, <c>sha</c>, <c>actor</c>,
+    /// <c>run</c>, <c>ago</c>. The value <c>id</c> is rejected with
+    /// <c>400 Bad Request</c>. Omit the field to leave the current default
+    /// unchanged.
     /// </summary>
     [JsonPropertyName("correlationAttribute")]
     public string? CorrelationAttribute { get; init; }
 
     /// <summary>
-    /// Per-service overrides for the correlation attribute. PATCH semantics:
-    /// each key in the map either sets that service's override (string value)
-    /// or removes it (<c>null</c> value). Keys NOT in the map are left
-    /// untouched (the dictionary is a delta, not a replacement). Omit the
-    /// whole field to leave every existing override in place.
+    /// Per-service-override delta. Each entry either sets that service's
+    /// override (string value) or removes it (<c>null</c> value). Keys NOT
+    /// present in the map are left untouched — the map is a delta, not a
+    /// replacement. Omit the whole field to leave every existing override
+    /// in place.
     /// </summary>
     [JsonPropertyName("perServiceOverrides")]
     public IReadOnlyDictionary<string, string?>? PerServiceOverrides { get; init; }

@@ -30,10 +30,11 @@ public static class DiscoveryEndpoints
         .WithTags("Read")
         .WithSummary("Distinct environments ever ingested")
         .WithDescription(
-            "Returns the sorted list of environment names derived from stored data " +
-            "(FR-09). A new environment appears the first time a deployment event for " +
-            "it is ingested — there is no static list to maintain.")
-        .Produces<string[]>(StatusCodes.Status200OK);
+            "Returns the sorted, deduplicated list of environment names derived from " +
+            "stored deployment events. A new environment appears in the list the first " +
+            "time any deployment for it is ingested — there is no separate registration " +
+            "step. Unauthenticated.")
+        .Produces<string[]>(StatusCodes.Status200OK, contentType: "application/json");
 
         app.MapGet("/api/services", async (DashboardDbContext db, CancellationToken ct) =>
         {
@@ -49,8 +50,9 @@ public static class DiscoveryEndpoints
         .WithTags("Read")
         .WithSummary("Distinct services ever ingested")
         .WithDescription(
-            "Returns the sorted list of service names derived from stored data (FR-09). " +
-            "Same auto-discovery rule as GET /api/environments.")
-        .Produces<string[]>(StatusCodes.Status200OK);
+            "Returns the sorted, deduplicated list of service names derived from stored " +
+            "deployment events. Same auto-discovery rule as GET /api/environments — a new " +
+            "service appears on first ingest. Unauthenticated.")
+        .Produces<string[]>(StatusCodes.Status200OK, contentType: "application/json");
     }
 }
