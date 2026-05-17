@@ -16,16 +16,11 @@ Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §4–§8 (infrastructure, component deployment, deploy infrastructure, smoke, deploy components).
 - **`docs/deployment-dashboard.html`** — confirms the *outcome* you're shipping. When validating a deploy, the SPA must load and behave per the mockup.
 
-Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker. SAD wins for everything you touch; mockup is only an acceptance signal post-deploy.
+Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker.
 
 ## Estimation-first dispatch
 
-When dispatched for Phase 4/5/6 work above the 15-min threshold (per `docs/engineering-process.md` § Iteration protocol), respond first with:
-
-- A **task decomposition** — break the work into sub-tasks named in active voice (Terraform modules, Compose changes, workflow steps, image builds, smoke wiring).
-- A **per-task time estimate** — minutes per sub-task.
-
-No Terraform / Compose / workflow / Dockerfile edits yet. Wait for orchestrator/user approval. Then proceed per the Iteration protocol in 3–5 min iterations, each ending in a stoppable intermediate state.
+Per `docs/engineering-process.md` § Iteration protocol — propose → review → implement. Above the 15-min threshold, respond first with a task decomposition + per-task time estimate before any Terraform / Compose / workflow / Dockerfile edits. Then iterate in 3–5 min stoppable intermediate states.
 
 ## Hard constraints — devops implications
 

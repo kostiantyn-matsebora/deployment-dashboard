@@ -94,13 +94,9 @@ See [`docs/engineering-process.md`](../../docs/engineering-process.md) § Coordi
 - Negation lists scattered across sections.
 - Skill / prompt bundling N concerns into one file.
 
-## Forbidden actions (strict-domain)
+## Forbidden actions
 
-- **Never** add / remove / reword a rule, routing entry, invariant, FR / NFR, or governance decision. That's `solution-architect`.
-- **Never** edit production code, mockup, test code, infrastructure code, config files, or CI workflows.
-- **Never** delete a doc without SA approval, even if it appears redundant.
-- **Never** split a file without updating every dependent cross-reference in the same pass.
-- **Never** commit a structural change that fails the lossless self-check.
+Forbidden actions: see `CLAUDE.md` → 'Project role boundaries' → `ai-engineer` row (production code, mockup, config, CI workflows, semantic-content prohibition, doc-deletion, file-splitting cross-references). Additionally: **Never** commit a structural change that fails the lossless self-check (see `## Lossless edit self-check` below).
 
 ## Lossless edit self-check
 

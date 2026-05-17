@@ -17,16 +17,11 @@ Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §1.1 (Ingest API / Write surface) and §1.2 (Read API).
 - **`docs/deployment-dashboard.html`** — visual + behavioural contract. The JSON your Read API returns must populate every field the SPA reads (`current.{version,status,run_url,run_number,actor,deployed_at}`, `lastSuccessful.*`, `previousFailed`) and must support all six box states defined in the mockup.
 
-Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker. SAD wins for data/API/stack/infra.
+Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker.
 
 ## Estimation-first dispatch
 
-When dispatched for Phase 4/5/6 work above the 15-min threshold (per `docs/engineering-process.md` § Iteration protocol), respond first with:
-
-- A **task decomposition** — break the work into sub-tasks named in active voice.
-- A **per-task time estimate** — minutes per sub-task.
-
-No code / tests / migrations yet. Wait for orchestrator/user approval. Then proceed per the Iteration protocol in 3–5 min iterations, each ending in a stoppable intermediate state.
+Per `docs/engineering-process.md` § Iteration protocol — propose → review → implement. Above the 15-min threshold, respond first with a task decomposition + per-task time estimate before any code / tests / migrations. Then iterate in 3–5 min stoppable intermediate states.
 
 ## Workspace layout
 

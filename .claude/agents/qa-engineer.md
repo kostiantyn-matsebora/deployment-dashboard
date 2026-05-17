@@ -16,16 +16,11 @@ Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §2 local automation, §3 local functional/E2E, §7 smoke, §9 real-environment functional/E2E, §10 cleanup, §11 initial data.
 - **`docs/deployment-dashboard.html`** — *behavioural* and *visual* contract for E2E. The 6 box states, hover highlight, drawer interaction, search filter, "Failures only" toggle, empty state, stats bar each need an E2E case. Fixtures must reproduce all 6 box states verbatim — copy example data shapes directly from the mockup's `SERVICES` block.
 
-Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker. SAD wins for API/data; mockup wins for visual/interactive.
+Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker.
 
 ## Estimation-first dispatch
 
-When dispatched for Phase 4/5/6 work above the 15-min threshold (per `docs/engineering-process.md` § Iteration protocol), respond first with:
-
-- A **task decomposition** — break the work into sub-tasks named in active voice (scenarios, specs, fixtures, runner wiring, harness assertions).
-- A **per-task time estimate** — minutes per sub-task.
-
-No scenarios / specs / fixtures / harness edits yet. Wait for orchestrator/user approval. Then proceed per the Iteration protocol in 3–5 min iterations, each ending in a stoppable intermediate state.
+Per `docs/engineering-process.md` § Iteration protocol — propose → review → implement. Above the 15-min threshold, respond first with a task decomposition + per-task time estimate before any scenarios / specs / fixtures / harness edits. Then iterate in 3–5 min stoppable intermediate states.
 
 ## Required test layers
 

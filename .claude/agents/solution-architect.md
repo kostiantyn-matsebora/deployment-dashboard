@@ -21,43 +21,7 @@ The SAD (`docs/deployment-dashboard-architecture.md`) is the **definition of ini
 | Requirements changes (FR/NFR additions, modifications, retirements; scope adjustments) | **Change Request (CR)** | `docs/cr/CR-NNNN-short-title.md` |
 | Architecture changes (new patterns, replaced decisions, evolved invariants, new components) | **Architecture Decision Record (ADR)** | `docs/adr/ADR-NNNN-short-title.md` |
 
-**Templates.**
-
-CR template — lighter, requirements-focused:
-
-```markdown
-# CR-NNNN — <short title>
-
-**Status:** Proposed | Accepted | Rejected | Superseded by CR-XXXX
-**Date:** YYYY-MM-DD
-
-## Trigger
-What event / discovery / external change prompted this CR.
-
-## Change
-What requirement is added / modified / retired. Cite the SAD FR/NFR being changed.
-
-## Impact
-Affected components, agents, downstream docs. Any follow-up ADRs needed.
-```
-
-ADR template — standard four-section:
-
-```markdown
-# ADR-NNNN — <short title>
-
-**Status:** Proposed | Accepted | Deprecated | Superseded by ADR-XXXX
-**Date:** YYYY-MM-DD
-
-## Context
-Forces at play, constraints, why the existing SAD decision no longer fits (cite SAD §).
-
-## Decision
-The architectural decision in one paragraph. Imperative voice.
-
-## Consequences
-Positive, negative, neutral. Knock-on effects on components, contracts, ops.
-```
+**Templates.** CR template — see `docs/cr/README.md` § Template. ADR template — see `docs/adr/README.md` § Template.
 
 **Numbering.** Zero-padded four-digit sequence per family (`CR-0001`, `ADR-0001`). Never reuse a number; superseded records keep their number and reference the replacement in their Status line.
 

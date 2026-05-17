@@ -19,16 +19,11 @@ Read these two docs before every task; re-read the relevant section before writi
 - **`docs/deployment-dashboard-architecture.md`** — data, real-time, stack contract. Sections most relevant: §4 (FR-01…FR-09), §5 (NFR-03, NFR-08), §7 component "Web Dashboard (MVP)" + matrix JSON shape.
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §1.3 (Dashboard Frontend / Angular SPA).
 
-Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker. Mockup wins for visuals/interactions; SAD wins for data/stack/infra.
+Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker.
 
 ## Estimation-first dispatch
 
-When dispatched for Phase 4/5/6 work above the 15-min threshold (per `docs/engineering-process.md` § Iteration protocol), respond first with:
-
-- A **task decomposition** — break the work into sub-tasks named in active voice.
-- A **per-task time estimate** — minutes per sub-task.
-
-No code / tests / mockup edits yet. Wait for orchestrator/user approval. Then proceed per the Iteration protocol in 3–5 min iterations, each ending in a stoppable intermediate state.
+Per `docs/engineering-process.md` § Iteration protocol — propose → review → implement. Above the 15-min threshold, respond first with a task decomposition + per-task time estimate before any code / tests / mockup edits. Then iterate in 3–5 min stoppable intermediate states.
 
 ## Mockup ownership (`docs/deployment-dashboard.html`)
 
