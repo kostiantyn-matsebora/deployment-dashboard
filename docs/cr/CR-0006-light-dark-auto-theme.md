@@ -12,7 +12,7 @@
 - **Impact:**
   - **§7 Visual layout → Theme axis (presentation-only)** — new subsection (verbatim text captured below).
   - **§7 Visual layout → Client-side persistence (`localStorage`)** — new key `dashboard.theme` (allowed values `'light'`, `'dark'`, `'auto'`; default `'auto'`).
-  - **§7 Visual layout → Load-time hardening rules** — new rule: `dashboard.theme` corruption normalisation (verbatim text below).
+  - **§7 Visual layout → Load-time hardening rules** — new `dashboard.theme` parse-time fallback rule for out-of-set persisted values (verbatim text below).
   - **NFR-09 (UX-RESPONSIVENESS INVARIANT)** — extended to include the theme axis ("every View × Layout × Theme combination") in the sibling-invariant text (see CR-0003 for the amended invariant covering layout; this CR contributes the Theme dimension to the same enumeration).
   - **Mockup** (`docs/deployment-dashboard.html`) — header gear icon + popover; `[data-theme="dark"]` CSS overlay; FOIT-safe inline bootstrap; Alpine root carries `themePref / effectiveTheme / osDark / themePopoverOpen` state + a `MediaQueryList` listener (canonical visual contract).
 - **References:**
