@@ -1,10 +1,6 @@
 # Architecture Decision Records
 
-Records of architecture decisions after the initial SAD was frozen.
-
-The SAD (`docs/deployment-dashboard-architecture.md`) defines the **initial architecture only**. Every subsequent architectural decision (component shape, packaging choice, algorithm choice, persistence strategy, wire-contract addition, etc.) lands here as a numbered ADR. ADRs are append-only — once accepted they are never edited in place; a superseding ADR is added instead.
-
-An ADR records the **decision** and its **consequences**. The triggering requirement change (if any) lives in a paired CR under `docs/cr/`.
+Records of architecture decisions (Architecture Decision Records — component shape, packaging, algorithm, persistence, wire-contract addition) after the initial SAD was frozen. Append-only — superseded entries are never edited in place. The triggering requirement change (if any) lives in a paired CR under `docs/cr/`. See CLAUDE.md → "Source of truth" for the SAD-freeze rule.
 
 ## Template
 

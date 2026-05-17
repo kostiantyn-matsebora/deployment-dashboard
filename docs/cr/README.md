@@ -1,10 +1,6 @@
 # Change Requests
 
-Records of requirements changes after the initial SAD was frozen.
-
-The SAD (`docs/deployment-dashboard-architecture.md`) defines the **initial architecture only**. Every subsequent change to the documented requirements (new FRs, modified FRs, new NFRs, modified NFRs, scope adjustments, contract additions) lands here as a numbered Change Request. CRs are append-only — once accepted they are never edited in place; a superseding CR is added instead.
-
-A CR records WHAT changed in the requirements and WHY. Architecture decisions triggered by a CR are captured in a paired ADR under `docs/adr/`.
+Records of requirements changes (Change Requests — FR/NFR additions, modifications, scope adjustments, contract additions) after the initial SAD was frozen. Append-only — superseded entries are never edited in place. Architecture consequences of a CR are captured in a paired ADR under `docs/adr/`. See CLAUDE.md → "Source of truth" for the SAD-freeze rule.
 
 ## Template
 
