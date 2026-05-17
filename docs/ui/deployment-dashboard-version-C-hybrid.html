@@ -8,12 +8,34 @@
   <!-- ============================================================
        OPTION C — HYBRID FINAL (Phase 2 TODO Item 1 mockup)
        Final batch-7 surface — content-sized columns with responsive spacing.
+
+       REVERT-AND-CENTER (current iteration):
+         - Reverted matrix CSS classes and view templates back to the
+           0b0705d baseline (per-row flex cells inside per-view
+           `overflow-x-auto` wrappers). The intermediate subgrid /
+           ::before card-chrome rewrite is gone.
+         - Kept the Glance pill canvas fix from 83b73af: `.pill` uses
+           `min-width: var(--leaf-width)` + `width: max-content` +
+           `max-width: 480px` so the background canvas grows with the
+           version, never letting the text overflow the pill.
+         - Added a single `.matrix-center` wrapper inside every matrix
+           view's `overflow-x-auto` (Detailed, Compact, Glance, Focus).
+           `width: max-content` + `margin-inline: auto` centers content
+           when the viewport is wider than the matrix's natural width;
+           when content exceeds the viewport, scroll takes over and
+           auto-margin collapses (no-op). Connector geometry is
+           translation-invariant — `recomputeConnectorTops` measures
+           `targetRect.left - colRect.left` so the shared margin offset
+           cancels out by construction.
+         - Kept all 0b0705d-baseline keepers: swim-lane and workflow-rows
+           leaf `max-content` + `clamp()` gaps, dark-mode overlay rules,
+           drawer chrome / wrap-anywhere version row, and the per-view
+           `--leaf-width` floors.
+
        What changes vs canonical:
-         - matrix grid columns shift from fixed --leaf-width to
-           `auto repeat(N, max-content)` so each box grows to fit its
-           content (versions, ago, actor, ref/sha); a single
-           `overflow-x: auto` wrapper scrolls the whole matrix as one
-           unit so env-header and service rows stay aligned by lockstep
+         - matrix per-row flex cells with per-cell `min-width: --leaf-width`
+           + `width: max-content`; a single per-view `overflow-x: auto`
+           wrapper scrolls env-header and service rows in lockstep
            (NFR-09 #7);
          - swim-lane and workflow-rows leaf widths flip to `max-content`
            on .node / .pill / .wf-stage; container gaps use
@@ -33,8 +55,7 @@
        1440 px viewport the matrix fits without scroll; at the
        payments-edge stress fixture (~50-char versions) the matrix
        scrolls horizontally rather than truncate or overlap.
-       Glance pill width is intentionally unchanged (single-attr
-       display already fits the canonical 150 px).
+       Glance pill canvas now grows with content (see above).
        ============================================================ -->
 
   <!-- ============================================================
@@ -477,71 +498,20 @@
        already fits canonical 150 px) — it uses --leaf-width as a hard
        width, not min-width. */
 
-    /* ============== Matrix table-grid (Hybrid C FINAL) ==============
-       Single parent CSS Grid spans header + all service rows so each
-       column claims max-content across header[N] and every row's cell[N].
-       Columns: label (176 px) + interleaved env-cell / arrow-gap pairs.
-       Each row card uses `grid-template-columns: subgrid; grid-column:
-       1 / -1` so the card chrome (background, border, padding) wraps the
-       row visually while its descendants align to the parent grid's
-       columns. Env-header row also subgrids so headers track the same
-       per-column widths.
-
-       Subgrid support: Chromium 117+, Firefox 71+, Safari 16+. The
-       canonical mockup is browser-tested on these targets.
-
-       Each env-cell column = `max-content` with a per-view --leaf-width
-       MIN floor enforced via the cell's own `min-width: var(--leaf-width)`.
-       Each arrow column = a per-view gap width (40 px Detailed, 14 px
-       Compact/Glance/Focus). */
-    .matrix-grid {
-      display: grid;
-      grid-auto-rows: min-content;
-      row-gap: 12px;
-      align-items: stretch;
-    }
-    .matrix-row {
-      display: grid;
-      grid-template-columns: subgrid;
-      grid-column: 1 / -1;
-      align-items: start;
-      position: relative;
-    }
-    .matrix-row-header {
-      align-items: center;
-    }
-    /* Row card chrome painted via ::before so it spans the FULL grid row
-       (subgrid items only paint within their tracks; padding on the row
-       itself doesn't reach past the leftmost / rightmost track). The
-       ::before sits underneath the row's content (z-index: -1 relative
-       to the row stacking context) and covers the entire row's grid
-       column range visually. */
-    .matrix-row-card {
-      padding: 12px 16px;
-      column-gap: 0;
-      isolation: isolate;
-    }
-    .matrix-row-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      z-index: -1;
-      pointer-events: none;
-    }
-    [data-theme="dark"] .matrix-row-card::before {
-      background: #161b22;
-      border-color: #30363d;
-    }
-    .matrix-cell {
-      min-width: 0;
-    }
-    .matrix-cell-box {
-      min-width: var(--leaf-width, 200px);
-      box-sizing: border-box;
-      align-self: start;
+    /* ============== Matrix horizontal centering (Hybrid C FINAL) ==============
+       The matrix content (env-header row + service rows) hugs its
+       content via the per-row `flex` containers. When the viewport is
+       wider than the content's natural width we center the block within
+       the `overflow-x-auto` scroll container; when content is wider, the
+       scroll container takes over and `margin: auto` is a no-op (because
+       the inner block exceeds the parent). `width: max-content` makes
+       the inner block size to its content; `margin-inline: auto` does
+       the horizontal centering. Applies to all 4 matrix views
+       (Detailed, Compact, Glance, Focus). */
+    .matrix-center {
+      width: max-content;
+      max-width: 100%;
+      margin-inline: auto;
     }
 
     /* ============== Option C — full-width version block ==============
@@ -1446,60 +1416,61 @@
            hard-coded w-[200px] literal so Matrix/Swim-lane/Workflow-rows
            render at the same width for this view. -->
       <template x-if="view === 'detailed'">
-        <!-- Hybrid C FINAL — single CSS Grid spans env-header + every service
-             row via `display: grid; grid-template-columns: subgrid` on each
-             row. Columns: 176 px label, then alternating env-cell (max-content,
-             floor --leaf-width) and arrow-cell (40 px). Each column's width
-             = max of its header + all cells in that column → headers align
-             with the widest row cell in their column by construction. -->
-        <div :style="`--leaf-width: ${leafWidthForView}; transition: margin-right 0.2s ease`" class="overflow-x-auto" :class="drawerOpen ? 'mr-[26rem]' : ''">
-          <div class="matrix-grid px-6 pt-4 pb-8"
-               :style="`grid-template-columns: 176px ${environments.map((_, i) => i < environments.length - 1 ? 'max-content 40px' : 'max-content').join(' ')}`">
-
-            <!-- env-header row -->
-            <div class="matrix-row matrix-row-header">
-              <div></div>
-              <template x-for="(env, idx) in environments" :key="env.id">
-                <template x-if="true">
-                  <div class="contents">
-                    <div class="text-center matrix-cell">
-                      <span class="text-xs font-semibold uppercase tracking-widest text-gray-400" x-text="env.label"></span>
-                    </div>
-                    <div x-show="idx < environments.length - 1"></div>
-                  </div>
+        <!-- Hybrid C FINAL — real HTML <table>. Native column sizing aligns
+             env-header <th> cells with body <td> cells across every column;
+             per-cell backgrounds + first/last-cell radii give each row a
+             card look across its full width. matrixHeaderCells() /
+             matrixBodyCells() emit a flat alternating [env, arrow, env, ...]
+             stream so Alpine x-for can emit one <th>/<td> per item. -->
+        <div :style="`--leaf-width: ${leafWidthForView}; transition: margin-right 0.2s ease`" class="overflow-x-auto px-6 pt-4 pb-8" :class="drawerOpen ? 'mr-[26rem]' : ''">
+         <div class="matrix-center">
+          <table class="matrix-table gap-detailed">
+            <thead>
+              <tr class="matrix-header-row">
+                <th class="matrix-label-cell"></th>
+                <template x-for="cell in matrixHeaderCells()" :key="cell.key">
+                  <th :class="cell.type === 'env' ? 'matrix-env-cell' : 'matrix-arrow-cell'"
+                      :style="cell.type === 'arrow' ? 'width: 40px' : ''">
+                    <template x-if="cell.type === 'env'">
+                      <span class="text-xs font-semibold uppercase tracking-widest text-gray-400" x-text="cell.label"></span>
+                    </template>
+                  </th>
                 </template>
-              </template>
-            </div>
-
-            <template x-for="service in filteredServices" :key="service.id">
-              <div class="matrix-row matrix-row-card"
-                   :data-service-row="service.id"
-                   x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
-                <div class="pr-4 self-start">
-                  <!-- NFR-09 #6 — service name renders single-line at intrinsic width. -->
-                  <p class="text-sm font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name"></p>
-                  <p x-show="showServiceMeta" class="text-xs text-gray-400 mt-0.5" x-text="failureLabel(service)"></p>
-                </div>
-
-                <template x-for="(env, idx) in environments" :key="env.id">
-                  <template x-if="true">
-                    <div class="contents">
-                      <div
-                        class="rounded-lg border-2 overflow-visible relative transition-shadow matrix-cell-box"
-                        :class="getBoxClass(service, env.id)"
-                        :data-testid="`stage-box-${service.id}-${env.id}`"
-                        @click="service.envs[env.id] && openDrawer(service, env.id)"
-                        @mouseenter="service.envs[env.id] && (highlightedVersion = service.envs[env.id].current.version)"
-                        @mouseleave="highlightedVersion = null"
-                        :title="getTooltip(service, env.id)"
-                      >
-                          <template x-if="!service.envs[env.id]">
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="service in filteredServices" :key="service.id">
+                <tr class="matrix-body-row"
+                    :data-service-row="service.id"
+                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
+                  <td class="matrix-label-cell">
+                    <p class="text-sm font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name"></p>
+                    <p x-show="showServiceMeta" class="text-xs text-gray-400 mt-0.5" x-text="failureLabel(service)"></p>
+                  </td>
+                  <template x-for="cell in matrixBodyCells(service)" :key="cell.key">
+                    <td :class="cell.type === 'env' ? 'matrix-env-cell' : 'matrix-arrow-cell'"
+                        :style="cell.type === 'arrow' ? 'width: 40px' : ''"
+                        :data-arrow-target="cell.type === 'arrow' ? `stage-box-${service.id}-${cell.targetEnvId}` : null">
+                      <template x-if="cell.type === 'arrow'">
+                        <div class="arrow-line arrow-w-detailed" :class="!isConnected(service.id, cell.fromEnvId, cell.targetEnvId) ? 'arrow-line-dashed' : ''"></div>
+                      </template>
+                      <template x-if="cell.type === 'env'">
+                        <div
+                          class="rounded-lg border-2 overflow-visible relative transition-shadow matrix-cell-box"
+                          :class="getBoxClass(service, cell.envId)"
+                          :data-testid="`stage-box-${service.id}-${cell.envId}`"
+                          @click="service.envs[cell.envId] && openDrawer(service, cell.envId)"
+                          @mouseenter="service.envs[cell.envId] && (highlightedVersion = service.envs[cell.envId].current.version)"
+                          @mouseleave="highlightedVersion = null"
+                          :title="getTooltip(service, cell.envId)"
+                        >
+                          <template x-if="!service.envs[cell.envId]">
                             <div class="h-16 flex items-center justify-center">
                               <span class="text-gray-300 text-xl">—</span>
                             </div>
                           </template>
 
-                          <template x-if="service.envs[env.id]">
+                          <template x-if="service.envs[cell.envId]">
                             <div>
                               <div class="p-2.5">
                                 <div class="flex items-center justify-between mb-1.5"
@@ -1507,87 +1478,74 @@
                                   <span
                                     x-show="showAttr('status')"
                                     class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold"
-                                    :class="statusBadgeClass(service.envs[env.id].current.status)"
+                                    :class="statusBadgeClass(service.envs[cell.envId].current.status)"
                                   >
-                                    <span x-show="service.envs[env.id].current.status === 'in-progress'" class="spinner spinner-lg"></span>
-                                    <span x-show="service.envs[env.id].current.status !== 'in-progress'" x-text="service.envs[env.id].current.status === 'success' ? '✓' : '✗'"></span>
-                                    <span x-text="statusText(service.envs[env.id].current.status)"></span>
+                                    <span x-show="service.envs[cell.envId].current.status === 'in-progress'" class="spinner spinner-lg"></span>
+                                    <span x-show="service.envs[cell.envId].current.status !== 'in-progress'" x-text="service.envs[cell.envId].current.status === 'success' ? '✓' : '✗'"></span>
+                                    <span x-text="statusText(service.envs[cell.envId].current.status)"></span>
                                   </span>
-                                  <a :href="service.envs[env.id].current.url"
+                                  <a :href="service.envs[cell.envId].current.url"
                                      x-show="showAttr('run')"
                                      class="text-xs text-blue-500 hover:underline font-mono ml-auto"
-                                     x-text="service.envs[env.id].current.run" @click.stop></a>
+                                     x-text="service.envs[cell.envId].current.run" @click.stop></a>
                                 </div>
-                                <!-- Hybrid C FINAL — version on its own row, natural
-                                     font size, white-space: nowrap. The box grows
-                                     (width: max-content) to fit; tooltip + drawer
-                                     carry the full value redundantly. -->
                                 <p x-show="showAttr('version')"
                                    class="version-block version-block-detailed leading-tight"
-                                   :title="service.envs[env.id].current.version"
-                                   x-text="service.envs[env.id].current.version"></p>
+                                   :title="service.envs[cell.envId].current.version"
+                                   x-text="service.envs[cell.envId].current.version"></p>
                                 <p x-show="showAttr('ago')"
                                    class="text-xs text-gray-400 mt-1 leading-tight"
-                                   x-text="service.envs[env.id].current.ago"></p>
+                                   x-text="service.envs[cell.envId].current.ago"></p>
                                 <p x-show="showAttr('actor')"
                                    class="text-xs text-gray-400 truncate leading-tight"
-                                   x-text="service.envs[env.id].current.actor"></p>
-                                <!-- ref / sha — null-render invariant (SAD §7): the
-                                     `x-show` predicate is `showAttr(...) && hasAttr(field)`,
-                                     so when the underlying value is null/undefined/''
-                                     the surrounding <p> renders nothing at all. The
-                                     `x-text` binds directly to the field (or to
-                                     shortSha for sha), never to a coerced string. -->
-                                <p x-show="showAttr('ref') && hasAttr(service.envs[env.id].current.ref)"
+                                   x-text="service.envs[cell.envId].current.actor"></p>
+                                <p x-show="showAttr('ref') && hasAttr(service.envs[cell.envId].current.ref)"
                                    class="text-xs text-gray-500 truncate leading-tight"
-                                   :title="service.envs[env.id].current.ref"
-                                   x-text="service.envs[env.id].current.ref"></p>
-                                <p x-show="showAttr('sha') && hasAttr(service.envs[env.id].current.sha)"
+                                   :title="service.envs[cell.envId].current.ref"
+                                   x-text="service.envs[cell.envId].current.ref"></p>
+                                <p x-show="showAttr('sha') && hasAttr(service.envs[cell.envId].current.sha)"
                                    class="text-xs text-gray-500 font-mono truncate leading-tight"
-                                   :title="service.envs[env.id].current.sha"
-                                   x-text="shortSha(service.envs[env.id].current.sha)"></p>
+                                   :title="service.envs[cell.envId].current.sha"
+                                   x-text="shortSha(service.envs[cell.envId].current.sha)"></p>
                                 <div
-                                  x-show="service.envs[env.id].current.status === 'in-progress' && service.envs[env.id].previousFailed"
+                                  x-show="service.envs[cell.envId].current.status === 'in-progress' && service.envs[cell.envId].previousFailed"
                                   class="mt-1.5 inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
                                 >⚠ prev. failed</div>
                               </div>
-                              <template x-if="service.envs[env.id].lastSuccessful">
+                              <template x-if="service.envs[cell.envId].lastSuccessful">
                                 <div class="border-t border-dashed border-gray-200 px-2.5 py-2 bg-white">
                                   <div class="flex items-center gap-1.5">
                                     <span class="text-green-600 text-xs font-bold leading-none shrink-0">✓</span>
-                                    <span class="text-xs font-mono font-semibold text-gray-600 whitespace-nowrap" :title="service.envs[env.id].lastSuccessful.version" x-text="service.envs[env.id].lastSuccessful.version"></span>
+                                    <span class="text-xs font-mono font-semibold text-gray-600 whitespace-nowrap" :title="service.envs[cell.envId].lastSuccessful.version" x-text="service.envs[cell.envId].lastSuccessful.version"></span>
                                   </div>
-                                  <p class="text-xs text-gray-400 mt-0.5 leading-tight" x-text="service.envs[env.id].lastSuccessful.ago"></p>
-                                  <p x-show="showAttr('ref') && hasAttr(service.envs[env.id].lastSuccessful.ref)"
+                                  <p class="text-xs text-gray-400 mt-0.5 leading-tight" x-text="service.envs[cell.envId].lastSuccessful.ago"></p>
+                                  <p x-show="showAttr('ref') && hasAttr(service.envs[cell.envId].lastSuccessful.ref)"
                                      class="text-xs text-gray-500 truncate leading-tight"
-                                     :title="service.envs[env.id].lastSuccessful.ref"
-                                     x-text="service.envs[env.id].lastSuccessful.ref"></p>
-                                  <p x-show="showAttr('sha') && hasAttr(service.envs[env.id].lastSuccessful.sha)"
+                                     :title="service.envs[cell.envId].lastSuccessful.ref"
+                                     x-text="service.envs[cell.envId].lastSuccessful.ref"></p>
+                                  <p x-show="showAttr('sha') && hasAttr(service.envs[cell.envId].lastSuccessful.sha)"
                                      class="text-xs text-gray-500 font-mono truncate leading-tight"
-                                     :title="service.envs[env.id].lastSuccessful.sha"
-                                     x-text="shortSha(service.envs[env.id].lastSuccessful.sha)"></p>
+                                     :title="service.envs[cell.envId].lastSuccessful.sha"
+                                     x-text="shortSha(service.envs[cell.envId].lastSuccessful.sha)"></p>
                                 </div>
                               </template>
                             </div>
                           </template>
                         </div>
-
-                      <div x-show="idx < environments.length - 1"
-                           class="arrow-col self-stretch flex items-center"
-                           :data-arrow-target="`stage-box-${service.id}-${environments[idx + 1]?.id}`">
-                        <div class="arrow-line arrow-w-detailed w-full" :class="!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : ''"></div>
-                      </div>
-                    </div>
+                      </template>
+                    </td>
                   </template>
-                </template>
-              </div>
-            </template>
-
-            <div x-show="filteredServices.length === 0" x-cloak class="text-center py-16 text-gray-400" style="grid-column: 1 / -1">
-              <p class="text-lg font-medium">No services match your filters</p>
-              <p class="text-sm mt-1">Try clearing the search or disabling "Failures only"</p>
-            </div>
-          </div>
+                </tr>
+              </template>
+              <tr x-show="filteredServices.length === 0" x-cloak>
+                <td :colspan="1 + Math.max(0, environments.length * 2 - 1)" class="text-center py-16 text-gray-400">
+                  <p class="text-lg font-medium">No services match your filters</p>
+                  <p class="text-sm mt-1">Try clearing the search or disabling "Failures only"</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+         </div>
         </div>
       </template>
 
@@ -1595,47 +1553,48 @@
       <!-- Same --leaf-width pattern as Detailed. -->
       <template x-if="view === 'compact'">
         <div :style="`--leaf-width: ${leafWidthForView}; transition: margin-right 0.2s ease`" class="overflow-x-auto" :class="drawerOpen ? 'mr-[26rem]' : ''">
-          <div class="matrix-grid px-6 pt-2 pb-6"
-               :style="`grid-template-columns: 144px ${environments.map((_, i) => i < environments.length - 1 ? 'max-content 14px' : 'max-content').join(' ')}; row-gap: 4px`">
-
-            <!-- env-header row -->
-            <div class="matrix-row matrix-row-header">
-              <div></div>
-              <template x-for="(env, idx) in environments" :key="env.id">
-                <template x-if="true">
-                  <div class="contents">
-                    <div class="text-center matrix-cell">
+         <div class="matrix-center">
+          <div class="px-6 pt-2 pb-1">
+            <div class="flex items-center">
+              <div class="w-36 shrink-0"></div>
+              <div class="flex items-center">
+                <template x-for="(env, idx) in environments" :key="env.id">
+                  <div class="flex items-center">
+                    <div class="text-center" style="min-width: var(--leaf-width); width: max-content; max-width: 480px">
                       <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-400" x-text="env.label"></span>
                     </div>
-                    <div x-show="idx < environments.length - 1"></div>
+                    <div x-show="idx < environments.length - 1" class="w-3.5"></div>
                   </div>
                 </template>
-              </template>
+              </div>
             </div>
+          </div>
 
+          <main class="px-6 pb-6 space-y-1">
             <template x-for="service in filteredServices" :key="service.id">
-              <div class="matrix-row matrix-row-card"
-                   style="padding: 6px 12px"
+              <div class="bg-white rounded-md border border-gray-200 px-3 py-1.5"
                    :data-service-row="service.id"
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
-                <div class="pr-2 self-start">
-                  <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
-                  <p class="text-xs font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
-                  <p x-show="showServiceMeta" class="text-[10px] text-gray-400 truncate leading-tight" x-text="failureLabel(service)"></p>
-                </div>
+                <div class="flex items-start">
+                  <div class="w-36 shrink-0 pr-2">
+                    <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
+                    <p class="text-xs font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
+                    <p x-show="showServiceMeta" class="text-[10px] text-gray-400 truncate leading-tight" x-text="failureLabel(service)"></p>
+                  </div>
 
-                <template x-for="(env, idx) in environments" :key="env.id">
-                  <template x-if="true">
-                    <div class="contents">
-                      <div
-                        class="rounded-md border overflow-visible relative transition-shadow matrix-cell-box"
-                        :class="getBoxClass(service, env.id)"
-                        :data-testid="`stage-box-${service.id}-${env.id}`"
-                        @click="service.envs[env.id] && openDrawer(service, env.id)"
-                        @mouseenter="service.envs[env.id] && (highlightedVersion = service.envs[env.id].current.version)"
-                        @mouseleave="highlightedVersion = null"
-                        :title="getTooltip(service, env.id)"
-                      >
+                  <div class="flex items-start">
+                    <template x-for="(env, idx) in environments" :key="env.id">
+                      <div class="flex items-start">
+                        <div
+                          class="rounded-md border overflow-visible relative transition-shadow"
+                          style="min-width: var(--leaf-width); width: max-content; max-width: 480px"
+                          :class="getBoxClass(service, env.id)"
+                          :data-testid="`stage-box-${service.id}-${env.id}`"
+                          @click="service.envs[env.id] && openDrawer(service, env.id)"
+                          @mouseenter="service.envs[env.id] && (highlightedVersion = service.envs[env.id].current.version)"
+                          @mouseleave="highlightedVersion = null"
+                          :title="getTooltip(service, env.id)"
+                        >
                           <template x-if="!service.envs[env.id]">
                             <div class="h-8 flex items-center justify-center">
                               <span class="text-gray-300 text-xs">—</span>
@@ -1725,22 +1684,24 @@
                           </template>
                         </div>
 
-                      <div x-show="idx < environments.length - 1"
-                           class="arrow-col self-stretch flex items-center"
-                           :data-arrow-target="`stage-box-${service.id}-${environments[idx + 1]?.id}`">
-                        <div class="arrow-line arrow-w-compact w-full" :class="!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : ''"></div>
+                        <div x-show="idx < environments.length - 1"
+                             class="arrow-col w-3.5"
+                             :data-arrow-target="`stage-box-${service.id}-${environments[idx + 1]?.id}`">
+                          <div class="arrow-line arrow-w-compact" :class="!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : ''"></div>
+                        </div>
                       </div>
-                    </div>
-                  </template>
-                </template>
+                    </template>
+                  </div>
+                </div>
               </div>
             </template>
 
-            <div x-show="filteredServices.length === 0" x-cloak class="text-center py-16 text-gray-400" style="grid-column: 1 / -1">
+            <div x-show="filteredServices.length === 0" x-cloak class="text-center py-16 text-gray-400">
               <p class="text-lg font-medium">No services match your filters</p>
               <p class="text-sm mt-1">Try clearing the search or disabling "Failures only"</p>
             </div>
-          </div>
+          </main>
+         </div>
         </div>
       </template>
 
@@ -1754,39 +1715,39 @@
            (see "Connector-y rule" / `--target-line-width`). -->
       <template x-if="view === 'glance'">
         <div :style="`--leaf-width: ${leafWidthForView}; transition: margin-right 0.2s ease`" class="overflow-x-auto" :class="drawerOpen ? 'mr-[26rem]' : ''">
-          <div class="matrix-grid px-6 pt-2 pb-6"
-               :style="`grid-template-columns: 160px ${environments.map((_, i) => i < environments.length - 1 ? 'max-content 14px' : 'max-content').join(' ')}; row-gap: 2px`">
-
-            <!-- env-header row -->
-            <div class="matrix-row matrix-row-header">
-              <div></div>
-              <template x-for="(env, idx) in environments" :key="env.id">
-                <template x-if="true">
-                  <div class="contents">
-                    <div class="text-center matrix-cell">
+         <div class="matrix-center">
+          <div class="px-6 pt-2 pb-1">
+            <div class="flex items-center">
+              <div class="w-40 shrink-0"></div>
+              <div class="flex items-center">
+                <template x-for="(env, idx) in environments" :key="env.id">
+                  <div class="flex items-center">
+                    <div class="text-center" style="width: var(--leaf-width)">
                       <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-400" x-text="env.label"></span>
                     </div>
-                    <div x-show="idx < environments.length - 1"></div>
+                    <div x-show="idx < environments.length - 1" class="w-3.5"></div>
                   </div>
                 </template>
-              </template>
+              </div>
             </div>
+          </div>
 
+          <main class="px-6 pb-6 space-y-0.5">
             <template x-for="service in filteredServices" :key="service.id">
-              <div class="matrix-row matrix-row-card hover:border-gray-300"
-                   style="padding: 4px 12px; align-items: center"
+              <div class="bg-white rounded-md border border-gray-200 px-3 py-1 hover:border-gray-300"
                    :data-service-row="service.id"
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
-                <div class="pr-2 self-center">
-                  <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
-                  <p class="text-xs font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
-                  <p x-show="showServiceMeta" class="text-[10px] text-gray-400 leading-tight" x-text="failureLabel(service)"></p>
-                </div>
+                <div class="flex items-center">
+                  <div class="w-40 shrink-0 pr-2">
+                    <!-- NFR-09 #6 — service name never clipped. See Matrix Detailed leaf. -->
+                    <p class="text-xs font-semibold text-gray-800 whitespace-nowrap" style="width: max-content" x-text="service.name" :title="service.name"></p>
+                    <p x-show="showServiceMeta" class="text-[10px] text-gray-400 leading-tight" x-text="failureLabel(service)"></p>
+                  </div>
 
-                <template x-for="(env, idx) in environments" :key="env.id">
-                  <template x-if="true">
-                    <div class="contents">
-                      <!-- Glance-view exception (SAD NFR-09 + head-comment
+                  <div class="flex items-center">
+                    <template x-for="(env, idx) in environments" :key="env.id">
+                      <div class="flex items-center">
+                        <!-- Glance-view exception (SAD NFR-09 + head-comment
                              Invariant 3): the .leaf-pair wraps the pill in a
                              single-column grid (column 1 == --leaf-width, no
                              separate env-tag column) and the env-tag renders
@@ -1850,22 +1811,25 @@
                           </template>
                         </div>
 
-                      <div x-show="idx < environments.length - 1"
-                           class="arrow-col self-stretch flex items-center"
-                           :data-arrow-target="`stage-box-${service.id}-${environments[idx + 1]?.id}`">
-                        <div class="arrow-line arrow-w-focus w-full" :class="!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : ''"></div>
+                        <template x-if="idx < environments.length - 1">
+                          <div class="arrow-col w-3.5"
+                               :data-arrow-target="`stage-box-${service.id}-${environments[idx + 1]?.id}`">
+                            <div class="arrow-line arrow-w-focus" :class="!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : ''"></div>
+                          </div>
+                        </template>
                       </div>
-                    </div>
-                  </template>
-                </template>
+                    </template>
+                  </div>
+                </div>
               </div>
             </template>
 
-            <div x-show="filteredServices.length === 0" x-cloak class="text-center py-16 text-gray-400" style="grid-column: 1 / -1">
+            <div x-show="filteredServices.length === 0" x-cloak class="text-center py-16 text-gray-400">
               <p class="text-lg font-medium">No services match your filters</p>
               <p class="text-sm mt-1">Try clearing the search or disabling "Failures only"</p>
             </div>
-          </div>
+          </main>
+         </div>
         </div>
       </template>
 
@@ -1886,6 +1850,7 @@
            uniform leaf-width. -->
       <template x-if="view === 'focus'">
         <div :style="`--leaf-width: ${hasExpanded ? '200px' : leafWidthForView}; --leaf-width-expanded: 200px; --focus-arrow-gap: ${hasExpanded ? '2.5rem' : '0.875rem'}; transition: margin-right 0.2s ease`" class="overflow-x-auto" :class="drawerOpen ? 'mr-[26rem]' : ''">
+         <div class="matrix-center">
           <!-- Focus toolbar — discoverability hint is ALWAYS visible so the
                view's defining affordance (chevron drill-in) is apparent on
                first paint, before any row has been expanded. Without the
@@ -1908,37 +1873,61 @@
             <button @click="collapseAll()" x-show="hasExpanded" x-cloak data-testid="collapse-all" class="ml-auto text-gray-600 hover:text-gray-900 underline">Collapse all</button>
           </div>
 
-          <div class="matrix-grid px-6 pt-2 pb-6"
-               :style="`grid-template-columns: 176px ${environments.map((_, i) => i < environments.length - 1 ? 'max-content var(--focus-arrow-gap)' : 'max-content').join(' ')}; row-gap: 4px`">
-
-            <!-- env-header row — NFR-09 #7 — subgrid keeps header columns
-                 aligned with deployment-row cells. -->
-            <div class="matrix-row matrix-row-header" style="padding-left: 13px">
-              <div></div>
-              <template x-for="(env, idx) in environments" :key="env.id">
-                <template x-if="true">
-                  <div class="contents">
-                    <div class="text-center matrix-cell">
+          <div class="px-6 pt-2 pb-1">
+            <!-- NFR-09 #7 — env-header alignment with deployment-row columns.
+                 The inner flex container carries `padding-left: 13px` so its
+                 content starts at the same x as each row's content. Each row
+                 below has `bg-white rounded-md border px-3 py-1.5` chrome —
+                 a 1 px border + 12 px left padding pushes the row's `w-44`
+                 label spacer and its leaf cells 13 px right of the
+                 un-chromed header. Adding the same 13 px inset to the
+                 header's inner flex container restores header.cell.left ==
+                 row.box.left for every env (independent of expand state). -->
+            <div class="flex items-center" style="padding-left: 13px">
+              <div class="w-44 shrink-0"></div>
+              <div class="flex items-center">
+                <template x-for="(env, idx) in environments" :key="env.id">
+                  <div class="flex items-center">
+                    <!-- NFR-09 #7 — header cell width reads the SAME --leaf-width
+                         the rows below read (as min-width). When any service
+                         expands, the container-level --leaf-width flips to 200 px
+                         and every header cell + every row cell widens in lockstep. -->
+                    <div class="text-center" style="min-width: var(--leaf-width); width: max-content; max-width: 480px">
                       <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-400" x-text="env.label"></span>
                     </div>
-                    <div x-show="idx < environments.length - 1"></div>
+                    <!-- Header arrow-gap mirrors the per-row arrow-gap so the
+                         next env-header column anchors at the same x as the
+                         next env's deployment column. -->
+                    <div x-show="idx < environments.length - 1" style="width: var(--focus-arrow-gap)"></div>
                   </div>
                 </template>
-              </template>
+              </div>
             </div>
+          </div>
 
+          <main class="px-6 pb-6 space-y-1">
             <template x-for="service in filteredServices" :key="service.id">
-              <div class="matrix-row matrix-row-card focus-row"
-                   style="padding: 6px 12px"
+              <div class="bg-white rounded-md border px-3 py-1.5 focus-row"
                    :class="expanded[service.id] ? 'row-expanded border-blue-200' : 'border-gray-200'"
                    :data-service-row="service.id"
                    :data-expanded="expanded[service.id] ? 'true' : 'false'"
                    :data-pinned="pinned[service.id] ? 'true' : 'false'"
                    :data-testid="expanded[service.id] ? `row-expanded-${service.id}` : `row-collapsed-${service.id}`"
                    x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeConnectorTops(service.id))))">
+                <div class="flex items-start">
                   <!-- Service-name column. The chevron + pin buttons are
-                       Focus's defining affordance. -->
-                  <div class="pr-2 flex items-start gap-1 self-start">
+                       Focus's defining affordance — they MUST read at a
+                       glance, otherwise Focus collapses visually into
+                       Compact (the two views have the same leaf-width
+                       and the same collapsed leaf content). Sizing /
+                       colour choices: chevron rendered in a tinted
+                       button surface (blue-50 / blue-100 when expanded)
+                       so it reads as an obvious affordance against the
+                       Compact baseline; pin matches the chevron's frame
+                       and turns amber when active. Both are kept inline
+                       with the service name so the row's first visual
+                       scan-target is "this row can be expanded". -->
+                  <div class="w-44 shrink-0 pr-2 flex items-start gap-1">
                     <button
                       @click="toggleExpand(service.id)"
                       class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded border transition-colors"
@@ -1972,14 +1961,19 @@
                     </div>
                   </div>
 
-                  <template x-for="(env, idx) in environments" :key="env.id">
-                    <template x-if="true">
-                      <div class="contents">
-                        <!-- NFR-09 #7 — every box is a grid cell whose column
-                             width grows to max-content; the env-header subgrid
-                             tracks the same column widths automatically. -->
+                  <div class="flex items-start">
+                    <template x-for="(env, idx) in environments" :key="env.id">
+                      <div class="flex items-start">
+                        <!-- NFR-09 #7 — every box reads the SAME shared
+                             --leaf-width as the env header (as min-width).
+                             When any service is expanded the container flips
+                             --leaf-width to 200 px and every row's box widens
+                             past the floor; the `expanded[service.id]` flag
+                             selects the leaf BODY (Compact vs. Detailed) and
+                             the heavier border style. -->
                         <div
-                          class="rounded-md border overflow-visible relative transition-shadow matrix-cell-box"
+                          class="rounded-md border overflow-visible relative transition-shadow"
+                          style="min-width: var(--leaf-width); width: max-content; max-width: 480px"
                           :class="(expanded[service.id] ? 'border-2 rounded-lg ' : '') + getBoxClass(service, env.id)"
                           :data-testid="`stage-box-${service.id}-${env.id}`"
                           @click="service.envs[env.id] && openDrawer(service, env.id)"
@@ -2122,25 +2116,34 @@
                           </template>
                         </div>
 
-                        <!-- NFR-09 #7 — arrow column is a grid track of width
-                             --focus-arrow-gap; env-header subgrid reads the
-                             same column so headers track in lockstep. -->
+                        <!-- NFR-09 #7 — per-row arrow-gap mirrors the
+                             container-level --focus-arrow-gap, which the
+                             page-level env header also reads. The two
+                             stay in lock-step so the next env column's
+                             header anchors at the same x as the next env's
+                             deployment column. The `expanded` flag still
+                             swaps the arrow-line CSS-width fallback class
+                             (arrow-w-detailed when any row is expanded,
+                             arrow-w-focus when none is). -->
                         <div x-show="idx < environments.length - 1"
-                             class="arrow-col self-stretch flex items-center"
+                             class="arrow-col"
+                             style="width: var(--focus-arrow-gap)"
                              :data-arrow-target="`stage-box-${service.id}-${environments[idx + 1]?.id}`">
-                          <div class="arrow-line w-full" :class="(hasExpanded ? 'arrow-w-detailed ' : 'arrow-w-focus ') + (!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : '')"></div>
+                          <div class="arrow-line" :class="(hasExpanded ? 'arrow-w-detailed ' : 'arrow-w-focus ') + (!isConnected(service.id, env.id, environments[idx + 1]?.id) ? 'arrow-line-dashed' : '')"></div>
                         </div>
                       </div>
                     </template>
-                  </template>
+                  </div>
+                </div>
               </div>
             </template>
 
-            <div x-show="filteredServices.length === 0" x-cloak class="text-center py-16 text-gray-400" style="grid-column: 1 / -1">
+            <div x-show="filteredServices.length === 0" x-cloak class="text-center py-16 text-gray-400">
               <p class="text-lg font-medium">No services match your filters</p>
               <p class="text-sm mt-1">Try clearing the search or disabling "Failures only"</p>
             </div>
-          </div>
+          </main>
+         </div>
         </div>
       </template>
     </div>
@@ -4351,6 +4354,19 @@
             // harnesses (testing/mockup-visual/) as a settle signal.
             this._recomputeSeq = (this._recomputeSeq || 0) + 1;
             row.setAttribute('data-recomputed', String(this._recomputeSeq));
+            // Debug trace (Hybrid C FINAL revert): enable by setting
+            // window.__DEBUG_CONNECTORS = true in the console. Logs row id
+            // + computed line widths so the matrix-center horizontal
+            // centering can be verified to NOT shift connector geometry
+            // (margins shift colRect.left and targetRect.left by the
+            // same amount, so lineWidth = targetRect.left - colRect.left - 6
+            // is invariant under translation).
+            if (typeof window !== 'undefined' && window.__DEBUG_CONNECTORS) {
+              const widths = Array.from(row.querySelectorAll('[data-arrow-target]'))
+                .map(c => c.style.getPropertyValue('--target-line-width'));
+              // eslint-disable-next-line no-console
+              console.debug('[recomputeConnectorTops]', serviceId, widths);
+            }
           });
         },
 
