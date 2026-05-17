@@ -234,14 +234,16 @@ public sealed class DeploymentsEndpointTests : IClassFixture<TestApplicationFact
     }
 
     [Fact]
-    public async Task Post_Deployments_RefAndSha_PersistedVerbatim_NoTrimNoTruncate()
+    public async Task Post_Deployments_RefAndSha_PersistedVerbatim_NoTrimming()
     {
-        // SAD §10 Decision 10: NO validation, NO trimming, NO length
-        // truncation. We assert the persisted values are byte-identical to
-        // what the wire delivered, including surrounding whitespace.
+        // CR-0008 (closes CR-0004 § Decision 10): caps now exist (ref: 200,
+        // sha: 64) but persistence is still verbatim WITHIN those caps — no
+        // trimming, no truncation, no format check. Surrounding whitespace
+        // is preserved because the value (with whitespace) is still
+        // non-whitespace-empty and within cap.
         var deploymentId = $"gh-verbatim-{Interlocked.Increment(ref _idSeed)}";
-        var paddedRef = "  feature/login-revamp  ";
-        var longSha   = new string('a', 300); // intentionally longer than any future cap
+        var paddedRef = "  feature/login-revamp  ";        // 24 chars, ≤ 200 cap
+        var maxLengthSha = new string('a', 64);             // exactly at cap
         var raw = $$"""
         {
           "deployment_id":   "{{deploymentId}}",
@@ -253,7 +255,7 @@ public sealed class DeploymentsEndpointTests : IClassFixture<TestApplicationFact
           "run_number":      1247,
           "actor":           "john.doe",
           "ref":             "{{paddedRef}}",
-          "sha":             "{{longSha}}"
+          "sha":             "{{maxLengthSha}}"
         }
         """;
 
@@ -268,7 +270,98 @@ public sealed class DeploymentsEndpointTests : IClassFixture<TestApplicationFact
         var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
         var stored = db.Deployments.Single(d => d.DeploymentId == deploymentId);
         Assert.Equal(paddedRef, stored.Ref);
-        Assert.Equal(longSha, stored.Sha);
+        Assert.Equal(maxLengthSha, stored.Sha);
+    }
+
+    [Fact]
+    public async Task Post_Deployments_ShaOverCap_Returns422_WithProblemDetails()
+    {
+        // CR-0008 § Standardised error response + Decision 2: sha cap is 64.
+        // Wire violation must return 422 with ValidationProblemDetails;
+        // `errors` map keyed by camelCase JSON field name (`sha`).
+        var deploymentId = $"gh-sha-over-cap-{Interlocked.Increment(ref _idSeed)}";
+        var raw = $$"""
+        {
+          "deployment_id":   "{{deploymentId}}",
+          "service":         "web-portal",
+          "environment":     "dev",
+          "version":         "v2.3.1",
+          "status":          "success",
+          "run_url":         "https://github.com/org/repo/actions/runs/1247",
+          "run_number":      1247,
+          "actor":           "john.doe",
+          "sha":             "{{new string('a', 65)}}"
+        }
+        """;
+
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = new StringContent(raw, Encoding.UTF8, "application/json"),
+        };
+        var resp = await _client.SendAsync(WithApiKey(req));
+
+        Assert.Equal((HttpStatusCode)422, resp.StatusCode);
+        Assert.Equal("application/problem+json",
+            resp.Content.Headers.ContentType?.MediaType);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(422, body.GetProperty("status").GetInt32());
+        var errors = body.GetProperty("errors");
+        Assert.True(errors.TryGetProperty("sha", out _),
+            $"expected camelCase 'sha' error key, got: {string.Join(",", errors.EnumerateObject().Select(p => p.Name))}");
+    }
+
+    [Fact]
+    public async Task Post_Deployments_ParentDeploymentsBadElement_Returns422_WithIndexedMessages()
+    {
+        // CR-0008 row `parent_deployments[i]`: per-element messages land in
+        // the `parentDeployments` error key with the element index in the
+        // message (per Decision: "parentDeployments[0]" / "[2]" form).
+        var deploymentId = $"gh-bad-parents-{Interlocked.Increment(ref _idSeed)}";
+        var tooLong = new string('p', 201);
+        var raw = $$"""
+        {
+          "deployment_id":   "{{deploymentId}}",
+          "service":         "web-portal",
+          "environment":     "dev",
+          "version":         "v2.3.1",
+          "status":          "success",
+          "run_url":         "https://github.com/org/repo/actions/runs/1247",
+          "run_number":      1247,
+          "actor":           "john.doe",
+          "parent_deployments": ["ok-parent", "{{tooLong}}"]
+        }
+        """;
+
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = new StringContent(raw, Encoding.UTF8, "application/json"),
+        };
+        var resp = await _client.SendAsync(WithApiKey(req));
+
+        Assert.Equal((HttpStatusCode)422, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        var errors = body.GetProperty("errors");
+        Assert.True(errors.TryGetProperty("parentDeployments", out var pdErrors));
+        var messages = pdErrors.EnumerateArray().Select(e => e.GetString()).ToList();
+        Assert.Contains(messages, m => m is not null && m.Contains("[1]") && m.Contains("200"));
+    }
+
+    [Fact]
+    public async Task Post_Deployments_MissingApiKey_Returns401_WithProblemJsonBody()
+    {
+        // CR-0008 Decision 6: 401 body is also application/problem+json. The
+        // existing `error` slug is preserved as an extension entry.
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = JsonContent.Create(ValidPayload(), options: DashboardJson.Options),
+        };
+        var resp = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+        Assert.Equal("application/problem+json",
+            resp.Content.Headers.ContentType?.MediaType);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(401, body.GetProperty("status").GetInt32());
     }
 
     [Fact]

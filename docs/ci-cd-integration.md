@@ -93,7 +93,8 @@ surfaces them on read responses.
 | `version` | 200 |
 | `actor` | 200 |
 | `run_url` | 2048 |
-| `ref`, `sha` | none at this stage (deferred — CR-0004 § Decision 10) |
+| `ref` | 200 (CR-0008) |
+| `sha` | 64 (CR-0008) |
 
 - `deployment_id` - CI/CD-side identifier (run id, build number, guid).
   Required (CR-0003). Non-empty. Unique within `service`; duplicate
@@ -122,12 +123,10 @@ surfaces them on read responses.
 - `actor` - whoever or whatever triggered the run.
 - `ref` *(optional)* - branch name, PR number, tag, or any
   human-readable git ref. Free-form string. Omit, send `null`, or
-  send a string. No length cap or format check at this stage
-  (deferred — CR-0004 § Decision 10).
+  send a string. Length cap 200 chars (CR-0008). No format check.
 - `sha` *(optional)* - commit SHA associated with this deployment.
-  Free-form string at this stage (no hex check, no length cap).
-  Omit, send `null`, or send a string. Deferred — CR-0004 §
-  Decision 10.
+  Free-form string. Omit, send `null`, or send a string. Length cap
+  64 chars (CR-0008). No hex check, no format check.
 
 Backward compatibility: `deployment_id` is **required** (CR-0003).
 Pipelines that previously sent the original seven-field shape MUST be

@@ -70,9 +70,23 @@ public sealed class ApiKeyMiddleware : IEndpointFilter
 
     private static async Task<object?> WriteUnauthorized(HttpContext ctx, string message)
     {
+        // CR-0008: all 4xx responses (including 401) return
+        // application/problem+json (RFC 7807). The previous "{ error: ... }"
+        // shape was non-standard; the `error` slug is preserved as an
+        // extension entry so any downstream pattern-match still has a stable
+        // hook.
         ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        ctx.Response.ContentType = "application/json";
-        await ctx.Response.WriteAsync(JsonSerializer.Serialize(new { error = message }));
+        ctx.Response.ContentType = "application/problem+json";
+        var body = new
+        {
+            type = "https://tools.ietf.org/html/rfc9110#section-15.5.2",
+            title = "Unauthorized",
+            status = StatusCodes.Status401Unauthorized,
+            detail = message,
+            instance = ctx.Request.Path.Value ?? string.Empty,
+            error = "unauthorized",
+        };
+        await ctx.Response.WriteAsync(JsonSerializer.Serialize(body));
         return Results.Empty;
     }
 

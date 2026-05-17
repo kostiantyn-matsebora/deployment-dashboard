@@ -1,6 +1,7 @@
 # CR-0008 — Standardised API validation, ProblemDetails errors, OpenAPI spec, and Scalar UI
 
-- **Status:** proposed (pending user review per Phase 3)
+- **Status:** accepted
+- **Decided on:** 2026-05-17
 - **Trigger:** root `TODO` Item 11 — *"Define more strict and standardized API, mandatory/optional fields, field types, length, etc, and implement validation of incoming data in backend, return proper error messages if data is not valid. ... Generate openapi spec and also add swagger or scalar to API app."*
 - **Change:** scope narrowed by the user to **length-only validation, standardised error responses, and built-in OpenAPI + Scalar UI** — no format validation (no regex on `version`, `service`, `environment`, `sha`, `ref`, etc.), no new third-party validation libraries.
   - **3a — Validation contract (length-only).** All ingest fields validated for length and required-ness using `System.ComponentModel.DataAnnotations` (`[Required]`, `[StringLength]`) on the request DTO. Required string fields are validated as **non-null AND non-whitespace-empty** (use `[Required(AllowEmptyStrings = false)]` plus a custom guard for whitespace-only strings, or an equivalent Minimal API validation hook — choice of mechanism is implementation detail and owned by `backend-engineer`). Optional string fields are nullable; when present, `maxLength` is enforced. **No format / regex / character-set / pattern validation at this stage.** FluentValidation, AutoMapper, MediatR, and other banned libraries (see `CLAUDE.md` → "Do not introduce") are explicitly out of scope.
@@ -135,9 +136,11 @@ The following rows in `docs/ci-cd-integration.md` are superseded by the table ab
 | 123-126 | "Free-form string. Omit, send `null`, or send a string. No length cap or format check at this stage (deferred — CR-0004 § Decision 10)." | "Free-form string. Omit, send `null`, or send a string. Length cap 200 chars (CR-0008). No format check." |
 | 127-130 | "Free-form string at this stage (no hex check, no length cap). Omit, send `null`, or send a string. Deferred — CR-0004 § Decision 10." | "Free-form string. Omit, send `null`, or send a string. Length cap 64 chars (CR-0008). No hex check, no format check." |
 
-## Open decisions (for the user to confirm in Phase 3)
+## Decisions locked (Phase 3 user review)
 
-| # | Question | Recommended default | Alternatives |
+User confirmed all six decisions at the recommended default on 2026-05-17.
+
+| # | Question | Locked decision | Alternatives considered |
 |---|---|---|---|
 | 1 | `ref` cap value | **200** (consistent with the other string caps) | 256 (some VCSs allow longer branch names; rarely seen in practice) |
 | 2 | `sha` cap value | **64** (covers SHA-256 hex; SHA-1 / short SHAs fit easily) | 100 (looser, accommodates non-hex CI identifiers labelled "sha"); 40 (strict SHA-1 hex only — likely too tight given SHA-256 adoption) |

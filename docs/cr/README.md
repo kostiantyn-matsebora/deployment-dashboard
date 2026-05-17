@@ -36,4 +36,4 @@ New CRs MUST use the universal heading regardless of direction. This keeps the S
 | [CR-0005](./CR-0005-ref-sha-display-and-topology.md) | `ref` / `sha` exposed as Display picker options and Topology correlation options | accepted |
 | [CR-0006](./CR-0006-light-dark-auto-theme.md) | Light / Dark / Auto theme axis | accepted |
 | [CR-0007](./CR-0007-defer-matrix-layout-to-phase-2.md) | Defer Matrix layout from MVP to Phase 2.0 (layout axis reduced to Swim-lane + Workflow-rows; default flips to Swim-lane) | accepted |
-| [CR-0008](./CR-0008-api-validation-and-openapi-scalar.md) | Standardised API validation (length-only), ProblemDetails errors, OpenAPI spec, and Scalar UI | proposed |
+| [CR-0008](./CR-0008-api-validation-and-openapi-scalar.md) | Standardised API validation (length-only), ProblemDetails errors, OpenAPI spec, and Scalar UI | accepted |

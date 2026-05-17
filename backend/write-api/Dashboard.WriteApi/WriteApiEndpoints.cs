@@ -94,12 +94,14 @@ public static class WriteApiEndpoints
 
                 if (crossService.Count > 0)
                 {
-                    return Results.BadRequest(new
-                    {
-                        error = "cross_service_parent_reference",
-                        message = "parent_deployments references must point to deployments in the same service.",
-                        offending = crossService,
-                    });
+                    // CR-0008: 400 body is RFC 7807 ProblemDetails; the
+                    // `error` slug stays in extensions so existing functional
+                    // tests pattern-matching on it keep passing.
+                    return ProblemResults.BadRequest(
+                        title: "Cross-service parent reference",
+                        detail: "parent_deployments references must point to deployments in the same service.",
+                        errorSlug: "cross_service_parent_reference",
+                        extra: new Dictionary<string, object?> { ["offending"] = crossService });
                 }
 
                 // (5) cycle — would the new deployment, given the already-
@@ -108,11 +110,10 @@ public static class WriteApiEndpoints
                 // construction (we walk via the resolved rows only).
                 if (await WouldFormCycleAsync(db, request, parents, ct))
                 {
-                    return Results.BadRequest(new
-                    {
-                        error = "topology_cycle",
-                        message = "parent_deployments would form a cycle through already-ingested deployments.",
-                    });
+                    return ProblemResults.BadRequest(
+                        title: "Topology cycle",
+                        detail: "parent_deployments would form a cycle through already-ingested deployments.",
+                        errorSlug: "topology_cycle");
                 }
             }
 
@@ -127,13 +128,15 @@ public static class WriteApiEndpoints
 
             if (existingDuplicate is not null)
             {
-                return Results.Conflict(new
-                {
-                    error = "duplicate_deployment_id",
-                    message = $"A deployment with id '{request.DeploymentId}' already exists for service '{request.Service}'.",
-                    existing_id = existingDuplicate.Id,
-                    deployment_id = existingDuplicate.DeploymentId,
-                });
+                return ProblemResults.Conflict(
+                    title: "Duplicate deployment_id",
+                    detail: $"A deployment with id '{request.DeploymentId}' already exists for service '{request.Service}'.",
+                    errorSlug: "duplicate_deployment_id",
+                    extra: new Dictionary<string, object?>
+                    {
+                        ["existing_id"] = existingDuplicate.Id,
+                        ["deployment_id"] = existingDuplicate.DeploymentId,
+                    });
             }
 
             var entity = new DeploymentEntity
@@ -164,12 +167,12 @@ public static class WriteApiEndpoints
             catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
             {
                 // Race: another writer beat us between the pre-check and the
-                // insert. Return 409 to preserve the contract.
-                return Results.Conflict(new
-                {
-                    error = "duplicate_deployment_id",
-                    message = $"A deployment with id '{request.DeploymentId}' already exists for service '{request.Service}'.",
-                });
+                // insert. Return 409 to preserve the contract (CR-0008 body
+                // is ProblemDetails like the pre-check branch above).
+                return ProblemResults.Conflict(
+                    title: "Duplicate deployment_id",
+                    detail: $"A deployment with id '{request.DeploymentId}' already exists for service '{request.Service}'.",
+                    errorSlug: "duplicate_deployment_id");
             }
 
             var response = DeploymentEventResponse.FromEntity(entity);
@@ -200,13 +203,14 @@ public static class WriteApiEndpoints
             catch (InvalidTopologyAttributeException ex)
             {
                 // SAD §7 PATCH body table: "Rejected with 400 if not in this
-                // set or if `id` is supplied".
-                return Results.BadRequest(new
-                {
-                    error = "invalid_correlation_attribute",
-                    message = ex.Message,
-                    attribute = ex.Attribute,
-                });
+                // set or if `id` is supplied". CR-0008: body shape is
+                // RFC 7807 ProblemDetails; existing `error` slug + `attribute`
+                // extra preserved on extensions.
+                return ProblemResults.BadRequest(
+                    title: "Invalid correlation attribute",
+                    detail: ex.Message,
+                    errorSlug: "invalid_correlation_attribute",
+                    extra: new Dictionary<string, object?> { ["attribute"] = ex.Attribute });
             }
         });
     }

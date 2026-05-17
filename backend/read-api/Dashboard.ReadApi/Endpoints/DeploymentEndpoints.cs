@@ -2,6 +2,7 @@ using Dashboard.Shared.Dto;
 using Dashboard.Shared.Persistence;
 using Dashboard.Shared.Queries;
 using Dashboard.Shared.Topology;
+using Dashboard.Shared.Validation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -78,7 +79,12 @@ public static class DeploymentEndpoints
             var (slot, _) = await MatrixQuery.BuildSlotAsync(
                 db, service, environment, topologyBuilder, attribute, ct);
 
-            return slot is null ? Results.NotFound() : Results.Ok(slot);
+            // CR-0008: 4xx body is RFC 7807 ProblemDetails (Read API too).
+            return slot is null
+                ? ProblemResults.NotFound(
+                    title: "Slot not found",
+                    detail: $"No deployment history exists for service '{service}' and environment '{environment}'.")
+                : Results.Ok(slot);
         });
 
         app.MapGet("/api/deployments/{service}/{environment}/history",
@@ -97,7 +103,12 @@ public static class DeploymentEndpoints
                 .Take(n)
                 .ToListAsync(ct);
 
-            if (events.Count == 0) return Results.NotFound();
+            if (events.Count == 0)
+            {
+                return ProblemResults.NotFound(
+                    title: "History not found",
+                    detail: $"No deployment history exists for service '{service}' and environment '{environment}'.");
+            }
 
             var dto = events.Select(DeploymentEventResponse.FromEntity).ToArray();
             return Results.Ok(dto);
@@ -143,17 +154,15 @@ public static class DeploymentEndpoints
             // "Allowed values: version, ref, sha, actor, run, ago. `id` is
             // disallowed. Invalid value → 400 Bad Request."
             requestOverride = null;
-            problem = Results.Problem(
+            // CR-0008: ProblemDetails body with the existing `error` /
+            // `attribute` extras preserved so functional tests pattern-
+            // matching on them keep passing.
+            problem = ProblemResults.BadRequest(
                 title: "Invalid correlationAttribute query parameter",
                 detail: $"Correlation attribute '{value}' is not allowed. " +
                         $"Allowed: {string.Join(", ", CorrelationAttribute.Allowed)}.",
-                statusCode: StatusCodes.Status400BadRequest,
-                type: "https://tools.ietf.org/html/rfc7231#section-6.5.1",
-                extensions: new Dictionary<string, object?>
-                {
-                    ["error"] = "invalid_correlation_attribute",
-                    ["attribute"] = value,
-                });
+                errorSlug: "invalid_correlation_attribute",
+                extra: new Dictionary<string, object?> { ["attribute"] = value });
             return false;
         }
 
