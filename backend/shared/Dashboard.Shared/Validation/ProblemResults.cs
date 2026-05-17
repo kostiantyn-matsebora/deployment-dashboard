@@ -83,13 +83,26 @@ public static class ProblemResults
 
     /// <summary>
     /// 404 Not Found — used by Read API for unknown service/environment
-    /// slots and missing history. No <c>errors</c> map; <c>title</c> + <c>detail</c>
-    /// carry the explanation per RFC 7807 § 3.1.
+    /// slots and missing history. <paramref name="errorSlug"/> goes into
+    /// <c>extensions["error"]</c> for parity with 400/409 so any client
+    /// pattern-matching on the legacy slug keeps working (CR-0008 § 3c).
     /// </summary>
-    public static IResult NotFound(string title, string detail) =>
-        Results.Problem(
+    public static IResult NotFound(
+        string title,
+        string detail,
+        string errorSlug,
+        IDictionary<string, object?>? extra = null)
+    {
+        var extensions = new Dictionary<string, object?> { ["error"] = errorSlug };
+        if (extra is not null)
+        {
+            foreach (var kv in extra) extensions[kv.Key] = kv.Value;
+        }
+        return Results.Problem(
             title: title,
             detail: detail,
             statusCode: StatusCodes.Status404NotFound,
-            type: Rfc7231NotFoundType);
+            type: Rfc7231NotFoundType,
+            extensions: extensions);
+    }
 }

@@ -83,7 +83,8 @@ public static class DeploymentEndpoints
             return slot is null
                 ? ProblemResults.NotFound(
                     title: "Slot not found",
-                    detail: $"No deployment history exists for service '{service}' and environment '{environment}'.")
+                    detail: $"No deployment history exists for service '{service}' and environment '{environment}'.",
+                    errorSlug: "slot_not_found")
                 : Results.Ok(slot);
         });
 
@@ -107,7 +108,8 @@ public static class DeploymentEndpoints
             {
                 return ProblemResults.NotFound(
                     title: "History not found",
-                    detail: $"No deployment history exists for service '{service}' and environment '{environment}'.");
+                    detail: $"No deployment history exists for service '{service}' and environment '{environment}'.",
+                    errorSlug: "history_not_found");
             }
 
             var dto = events.Select(DeploymentEventResponse.FromEntity).ToArray();
