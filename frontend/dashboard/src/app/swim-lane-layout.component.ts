@@ -110,8 +110,18 @@ interface EdgePath {
               <span class="sr-only" [attr.data-testid]="'swim-lane-row-' + service.id"></span>
             }
             <div class="flex items-start gap-3">
-              <!-- Service label column — same 176 px footprint as Matrix. -->
-              <div class="w-44 shrink-0 pr-2 self-stretch flex flex-col justify-center min-w-0 lane-label">
+              <!-- Service label column — AUTOSIZES to its content (NFR-09 #6
+                   strengthened). Minimum 11rem (176 px) preserves the typical-
+                   length-name visual reservation so short names align with the
+                   canonical mockup's Matrix-like footprint; max-content removes
+                   the ceiling so long names + workflow-count badges grow the
+                   column rather than overflowing into the first depth-bucket
+                   column. The leaf grid's depth columns recompute via the
+                   existing afterEveryRender / ResizeObserver chain. -->
+              <div
+                class="shrink-0 pr-2 self-stretch flex flex-col justify-center lane-label"
+                style="width: max-content; min-width: 11rem; max-width: max-content"
+              >
                 @if (store.view() === 'focus') {
                   <div class="flex items-center gap-1 mb-1">
                     <button
@@ -162,9 +172,11 @@ interface EdgePath {
                 }
                 <!-- NFR-09 #6 — single-line at intrinsic width. The <p>
                      auto-sizes via whitespace-nowrap + inline
-                     width:max-content. The .lane-label cell stays at
-                     its 176 px grid width; long names overflow visually
-                     without clipping (scrollWidth equals clientWidth). -->
+                     width:max-content. The .lane-label cell ALSO autosizes
+                     to its content (min 11rem, max max-content) so long
+                     names extend the column rather than visually overflowing
+                     into the first depth-bucket column. scrollWidth equals
+                     clientWidth by construction. -->
                 <p
                   class="text-sm font-semibold text-gray-800 whitespace-nowrap"
                   style="width: max-content"

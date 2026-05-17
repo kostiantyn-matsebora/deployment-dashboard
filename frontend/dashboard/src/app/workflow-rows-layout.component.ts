@@ -186,12 +186,13 @@ import {
                 </svg>
               </button>
               <!-- NFR-09 #6 — single-line at intrinsic width. whitespace-nowrap
-                   + inline width:max-content content-size the <p> so
-                   scrollWidth equals clientWidth by construction. The
-                   .svc-block-meta-row flex container preserves the
-                   chevron/pin layout; long names overflow the 176 px
-                   .svc-block meta column visually without clipping. The
-                   former flex-1 min-w-0 (which forced flex shrinking and
+                   + inline width:max-content content-size the p so
+                   scrollWidth equals clientWidth by construction. The parent
+                   .svc-block grid column AUTOSIZES via
+                   minmax(176px, max-content) (see styles.css .svc-block) —
+                   long names + workflow-count badge push the column wider
+                   rather than overflowing into the first env-stage column.
+                   The former flex-1 min-w-0 (which forced flex shrinking and
                    activated truncate-like overflow:hidden on ancestors) is
                    dropped — content-driven width is the source of truth. -->
               <p

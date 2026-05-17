@@ -94,22 +94,28 @@
           the source.
 
        6. Service name renders on a single line at its intrinsic
-          width — no truncation, no ellipsis, no wrap. The
-          service-name <p> renders with `whitespace-nowrap` +
-          inline `style="width: max-content"` (no `truncate`,
+          width — no truncation, no ellipsis, no wrap, and no
+          overflow into adjacent columns. The service-name <p>
+          renders with `whitespace-nowrap` + inline
+          `style="width: max-content"` (no `truncate`,
           no `overflow:hidden`, no `text-overflow:ellipsis`, no
           `break-words`); the <p> auto-sizes to its own content
           so `scrollWidth == clientWidth` holds by construction
           (CSS Grid `auto` track precedent applied at the
-          <p>-element level). The column containers
-          (matrix `w-44/w-40/w-36`, swim-lane `.lane-label`
-          176 px, workflow-rows `.svc-block` 176 px) remain as
-          a visual reservation for the typical-length name; long
-          names extend visually past that reservation rather
-          than being chopped with `…`. Enforced by construction:
-          no service-name render site applies a clip-producing
-          CSS rule, and the <p>'s width is content-driven via
-          `width: max-content`.
+          <p>-element level). The column CONTAINERS also
+          autosize to the longest service-name + any trailing
+          badge (workflow-count in workflow-rows): swim-lane
+          `.lane-grid` first track + workflow-rows `.svc-block`
+          first track are both `minmax(176px, max-content)` —
+          176 px is a typical-name visual-reservation FLOOR, NOT
+          a clamp. Long names (e.g. `topo-ref-correlated`,
+          `topo-sha-correlated`) widen the column rather than
+          visually overflowing into the first env-stage column.
+          Enforced by construction: no service-name render site
+          applies a clip-producing CSS rule, the <p>'s width is
+          content-driven via `width: max-content`, and the host
+          column is `minmax(176px, max-content)` (no fixed
+          pixel width).
 
        7. Env-header columns stay aligned with the deployment-row
           columns under any combination of expanded / collapsed
@@ -459,9 +465,14 @@
        this lets a long-version box widen the column rather than be
        truncated. Column gap reflows from 8 px on narrow viewports
        to the canonical 28 px on wide ones via clamp(). */
+    /* NFR-09 #6 — leftmost (lane-label) column AUTOSIZES to its
+       content. `minmax(176px, max-content)` preserves the typical
+       short-name visual reservation as a floor; long names + any
+       trailing badge push the column wider rather than overflowing
+       into the first depth-bucket column. */
     .lane-grid {
       display: grid;
-      grid-template-columns: 176px repeat(var(--depth-count), max-content);
+      grid-template-columns: minmax(176px, max-content) repeat(var(--depth-count), max-content);
       column-gap: clamp(8px, 1.5vw, 28px);
       row-gap: 8px;
       align-items: stretch;
@@ -641,13 +652,18 @@
        column holds the stack of .wf-row's. Reduces per-service vertical
        footprint to Matrix-like density (~80–100 px per linear service
        in Glance). */
+    /* NFR-09 #6 — leftmost (.svc-block-meta) column AUTOSIZES to its
+       content. `minmax(176px, max-content)` keeps the typical short-
+       name visual reservation as a floor while long names + the
+       workflow-count badge push the column wider rather than
+       overflowing into the right-hand workflow stack. */
     .svc-block {
       background: white;
       border: 1px solid #e5e7eb;
       border-radius: 10px;
       padding: 6px 12px;
       display: grid;
-      grid-template-columns: 176px 1fr;
+      grid-template-columns: minmax(176px, max-content) 1fr;
       column-gap: 12px;
       align-items: stretch;
     }
@@ -1361,7 +1377,7 @@
                  :data-pinned="view === 'focus' && pinned[service.id] ? 'true' : 'false'"
                  :data-testid="view === 'focus' ? (expanded[service.id] ? `row-expanded-${service.id}` : `row-collapsed-${service.id}`) : `swim-lane-row-${service.id}`"
                  x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeEdges(service.id))))">
-              <div class="grid items-stretch" :style="`grid-template-columns: 176px repeat(${depthLabels.length}, 1fr); column-gap: 28px`">
+              <div class="grid items-stretch" :style="`grid-template-columns: minmax(176px, max-content) repeat(${depthLabels.length}, 1fr); column-gap: 28px`">
 
                 <!-- Service label -->
                 <div class="lane-label">

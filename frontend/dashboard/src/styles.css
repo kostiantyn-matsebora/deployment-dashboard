@@ -222,13 +222,20 @@
   }
 
   /* ============== Workflow-rows view ============== */
+  /* NFR-09 #6 — service-name column AUTOSIZES to its content. The
+     left meta column uses `minmax(176px, max-content)` instead of a
+     hard 176px so long names (e.g. `topo-ref-correlated` + `2 wfs`
+     badge) push the column wider rather than overflowing into the
+     adjacent first-env stage column. The 176px floor preserves the
+     typical-length-name visual reservation; max-content removes the
+     ceiling. Mirrors canonical mockup .svc-block rule. */
   .svc-block {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
     padding: 6px 12px;
     display: grid;
-    grid-template-columns: 176px 1fr;
+    grid-template-columns: minmax(176px, max-content) 1fr;
     column-gap: 12px;
     align-items: stretch;
   }
