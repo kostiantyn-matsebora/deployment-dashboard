@@ -83,6 +83,18 @@ surfaces them on read responses.
 }
 ```
 
+**Length caps (validation, applied at ingest):**
+
+| Field | Cap (chars) |
+|---|---|
+| `deployment_id` | 200 |
+| `service` | 200 |
+| `environment` | 200 |
+| `version` | 200 |
+| `actor` | 200 |
+| `run_url` | 2048 |
+| `ref`, `sha` | none at this stage (deferred — CR-0004 § Decision 10) |
+
 - `deployment_id` - CI/CD-side identifier (run id, build number, guid).
   Required (CR-0003). Non-empty. Unique within `service`; duplicate
   `(service, deployment_id)` → `409 Conflict`. Length cap 200.
@@ -98,18 +110,16 @@ surfaces them on read responses.
   dangling (CR-0003 § Decisions 9).
 - `service` - free-form identifier; lists are derived dynamically from
   stored events (FR-09, SAD §7 "API Contract" - `GET /api/services`).
-  Length cap 200.
 - `environment` - free-form identifier; same dynamic discovery via
-  `GET /api/environments`. Length cap 200.
+  `GET /api/environments`.
 - `version` - any string. Semver, git SHA, build number - the
-  dashboard does not parse it. Length cap 200.
+  dashboard does not parse it.
 - `status` - one of `success`, `failure`, `in-progress`.
 - `run_url` - link to the originating CI run; rendered as a clickable
-  link on the matrix box (FR-02). Must validate as a URL; length
-  cap 2048.
+  link on the matrix box (FR-02). Must validate as a URL.
 - `run_number` - non-negative integer; serialised as a JSON number,
   **not** a string.
-- `actor` - whoever or whatever triggered the run. Length cap 200.
+- `actor` - whoever or whatever triggered the run.
 - `ref` *(optional)* - branch name, PR number, tag, or any
   human-readable git ref. Free-form string. Omit, send `null`, or
   send a string. No length cap or format check at this stage

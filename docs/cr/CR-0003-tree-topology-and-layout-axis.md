@@ -30,7 +30,7 @@
   - `docs/ui-tree-topology-options.md` — UX design rationale for the layout axis (per-service tree, swim-lane, workflow-rows).
   - Mockup `docs/deployment-dashboard.html` — canonical visual contract for all three layouts.
 
-## Removed SAD content (verbatim) — captured here
+## SAD-level content owned by this CR — verbatim
 
 ### FR-13 — added
 

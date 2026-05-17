@@ -24,7 +24,7 @@
   - **ADR-0003 — Theme persistence in `localStorage` with FOIT-safe inline bootstrap** (paired).
   - `docs/ui-theme-options.md` — design rationale (Dim palette, gear popover, status-colour mappings).
 
-## Removed SAD content (verbatim) — captured here
+## SAD-level content owned by this CR — verbatim
 
 ### §7 "Theme axis (presentation-only)" — verbatim
 

@@ -76,7 +76,14 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 
 ## 7. Target Architecture
 
-Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platform-agnosticism requirement, the backend is deployed as two containerised ASP.NET Core services on Azure Container Apps — **Write API** (`POST /api/deployments`, API-key-gated) and **Read API** (matrix / history / discovery / SSE / health, unauthenticated) — each as a separate container app. Real-time fan-out uses **SSE + PostgreSQL `LISTEN/NOTIFY`** — Azure Container Apps imposes no HTTP timeout on long-lived SSE connections, making a separate real-time service unnecessary.
+Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platform-agnosticism requirement, the backend is deployed as a **single containerised ASP.NET Core application** on Azure Container Apps. The application hosts two endpoint-group surfaces — **Write** (`POST /api/deployments`, API-key-gated) and **Read** (matrix / history / discovery / SSE / health, unauthenticated) — composed from separate library projects inside one host process. Real-time fan-out uses **SSE + PostgreSQL `LISTEN/NOTIFY`** — Azure Container Apps imposes no HTTP timeout on long-lived SSE connections, making a separate real-time service unnecessary.
+
+> **Architecture invariants — [ADR-0002 (modular-monolith consolidation)](adr/ADR-0002-modular-monolith-consolidation.md):**
+> 1. **One API container.** `backend/api/` is the sole ASP.NET Core executable and the only backend Dockerfile.
+> 2. **Two endpoint-group library surfaces.** `backend/write-api/` and `backend/read-api/` are library projects composed into the host; the library boundary is preserved.
+> 3. **Future re-split is host-project + gateway-config only.** The gateway's path+method routing matrix discriminates Write vs Read today even though both upstreams resolve to `api:8080`, so re-splitting is a config-only change with no library code touched.
+>
+> See ADR-0002 → "Future split — trigger conditions".
 
 ---
 
@@ -103,28 +110,25 @@ Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platf
               ┌─────────────────────────────────────────────────┐
               │            App Gateway (nginx)                  │
               │              ▲ ONLY PUBLIC SURFACE              │
-              │  routes by path + method:                       │
-              │   GET  /                  → Dashboard           │
-              │   POST /api/deployments   → Write API           │
-              │   GET  /api/*             → Read API            │
-              │   GET  /api/stream  (SSE) → Read API            │
-              │   GET  /health            → Read API            │
-              └────┬───────────────┬───────────────┬────────────┘
-                   │               │               │
-                   ▼               ▼               ▼
-        ┌──────────────────┐  ┌────────────┐  ┌────────────────────┐
-        │  Dashboard       │  │ Write API  │  │  Read API          │
-        │  Frontend        │  │ (.NET 10)  │  │  (.NET 10)         │
-        │  (nginx +        │  │ POST →     │  │  matrix/history/   │
-        │   Angular static)│  │ INSERT+    │  │  discovery /       │
-        │   internal-only  │  │ NOTIFY     │  │  SSE / LISTEN      │
-        │                  │  │ API-key    │  │  unauthenticated   │
-        │                  │  │ gated      │  │  internal-only     │
-        │                  │  │ internal   │  │                    │
-        └──────────────────┘  └─────┬──────┘  └────────┬───────────┘
-                                    │                  │
-                                    └────────┬─────────┘
-                                             ▼
+              │                                                 │
+              │  routes per §7 Components → App Gateway         │
+              │                          → Routing matrix       │
+              └────┬───────────────────────────┬────────────────┘
+                   │                           │
+                   ▼                           ▼
+        ┌──────────────────┐    ┌──────────────────────────────────┐
+        │  Dashboard       │    │  API (.NET 10)                   │
+        │  Frontend        │    │  single host, two endpoint       │
+        │  (nginx +        │    │  groups composed from libraries: │
+        │   Angular static)│    │   • Write — POST → INSERT+NOTIFY │
+        │   internal-only  │    │     API-key gated                │
+        │                  │    │   • Read — matrix/history/       │
+        │                  │    │     discovery/SSE/LISTEN         │
+        │                  │    │     unauthenticated              │
+        │                  │    │  internal-only                   │
+        └──────────────────┘    └──────────────┬───────────────────┘
+                                               │
+                                               ▼
                                   ┌───────────────────────┐
                                   │      PostgreSQL       │
                                   │  LISTEN/NOTIFY        │
@@ -200,17 +204,16 @@ The diagram below shows the logical components.
 | Component | Description | Technologies |
 |---|---|---|
 | **CI/CD Notify Step** | A step (or script) added to any existing CI/CD pipeline. Sends a deployment event to the ingest API via an HTTP POST. Works with any CI/CD tool that can run a shell command or script (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, CircleCI, etc.). | Shell / `curl` (any CI/CD tool); optional GitHub Actions composite action (`action.yml`) |
-| **App Gateway** | Single public-facing reverse proxy that fronts every component. Routes by path and HTTP method: `GET /` → Dashboard Frontend; `POST /api/deployments` → Write API; all other `GET /api/*` and `GET /api/stream` → Read API. Eliminates CORS (single origin), minimises the public surface (NFR-04), and is the only container exposed to host / public ingress. SSE pass-through tuned (`proxy_buffering off`, `proxy_read_timeout 1h`). | nginx (alpine) |
-| **Write API** | Accepts deployment events from CI/CD pipelines, validates payload, persists the event, notifies connected SSE clients via PostgreSQL `NOTIFY`. API-key-gated (FR-10). Stateless — any number of instances can run in parallel. **Internal-only — reachable only via the App Gateway.** | C#, ASP.NET Core Minimal API, EF Core 10, Npgsql |
-| **Read API** | Serves the current deployment matrix (latest per slot), per-slot history, environment/service discovery, SSE stream, and health. Unauthenticated. Stateless — reads are satisfied from the store; events brokered via PostgreSQL `LISTEN`. **Internal-only — reachable only via the App Gateway.** | C#, ASP.NET Core Minimal API, EF Core 10, Npgsql |
+| **App Gateway** | Single public-facing reverse proxy that fronts every component. Routes by path + HTTP method (see Routing matrix in §7 → App Gateway). Both surfaces resolve to a single `api:8080` upstream today ([ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md)); the path+method matrix is preserved so a future re-split is gateway-config-only. Eliminates CORS (single origin), minimises the public surface (NFR-04), and is the only container exposed to host / public ingress. SSE pass-through tuned (`proxy_buffering off`, `proxy_read_timeout 1h`). | nginx (alpine) |
+| **API (write + read surfaces)** | Single ASP.NET Core host (`backend/api/`) composing two endpoint-group library surfaces. **Write surface** — `POST /api/deployments`: accepts deployment events from CI/CD pipelines, validates payload, persists the event, notifies connected SSE clients via PostgreSQL `NOTIFY`. API-key-gated (FR-10). **Read surface** — serves the current deployment matrix (latest per slot), per-slot history, environment/service discovery, SSE stream, and health. Unauthenticated. Stateless — reads are satisfied from the store; events brokered via PostgreSQL `LISTEN`. Any number of instances can run in parallel. **Internal-only — reachable only via the App Gateway.** | C#, ASP.NET Core Minimal API, EF Core 10, Npgsql |
 | **Deployment Store** | Durable append-only store for all deployment events. Source of truth for the matrix query, history queries, and `lastSuccessful` / `previousFailed` derivation. | PostgreSQL (production and local dev); SQLite in-memory for unit tests only |
-| **Real-time Hub** | Each Read API instance `LISTEN`s on the PostgreSQL `deployments` channel and forwards events to its own connected SSE clients. No separate broker service is required. | PostgreSQL `LISTEN/NOTIFY`, ASP.NET Core SSE (`text/event-stream`) |
+| **Real-time Hub** | Each API instance `LISTEN`s on the PostgreSQL `deployments` channel (via the read surface's SSE handler) and forwards events to its own connected SSE clients. No separate broker service is required. | PostgreSQL `LISTEN/NOTIFY`, ASP.NET Core SSE (`text/event-stream`) |
 | **Dashboard Frontend** | Browser-based pipeline matrix view. Renders the services × environments grid, history drawer, version highlight, and live SSE updates. Built with `ng build` and served as static files from its own nginx container; **internal-only**, reached via the App Gateway. | Angular 20 (standalone components, zoneless change detection), NgRx Signal Store, Tailwind CSS, browser-native `EventSource`; nginx (alpine) runtime |
-| **Notification Client** | Standalone desktop tray application. Polls the Read API (via the App Gateway) at a configurable interval, diffs against locally cached state, and fires OS notifications for changed slots. | .NET 10, WinForms (Windows) or MAUI (cross-platform); self-contained binary |
+| **Notification Client** | Standalone desktop tray application. Polls the API's read surface (via the App Gateway) at a configurable interval, diffs against locally cached state, and fires OS notifications for changed slots. | .NET 10, WinForms (Windows) or MAUI (cross-platform); self-contained binary |
 
 #### CI/CD Notify Step
 
-A small step (or script) added to any existing deployment pipeline. Responsible for pushing deployment state into the dashboard. Works with any CI/CD tool that can make an HTTP POST — no CI/CD-specific SDK is required.
+A pipeline step that pushes deployment state to the API (see Summary row for context).
 
 **Integration options (choose one per pipeline):**
 
@@ -234,9 +237,9 @@ A small step (or script) added to any existing deployment pipeline. Responsible 
 }
 ```
 
-#### Dashboard Backend — Write and Read APIs
+#### Dashboard Backend — Write and Read surfaces
 
-The backend ships as **two stateless ASP.NET Core web services** — Write API and Read API — each in its own container. Any number of instances of either service can run behind a load balancer; all mutable state lives in the database.
+The backend ships as **one stateless ASP.NET Core container hosting two endpoint-group surfaces** — Write and Read — composed from separate library projects. Any number of instances of the container can run behind a load balancer; all mutable state lives in the database. The surfaces remain separable: the library boundary preserves the option to re-split into two container apps as a host-project + gateway-config change (no library code touched). See [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md) → "Future split — trigger conditions".
 
 | Attribute | Value |
 |---|---|
@@ -244,25 +247,28 @@ The backend ships as **two stateless ASP.NET Core web services** — Write API a
 | Framework | ASP.NET Core Minimal API |
 | ORM | EF Core 10 + Npgsql |
 | Storage | PostgreSQL (production and local dev); SQLite in-memory (unit tests only) |
-| Scalability | Horizontal — stateless; multiple instances behind a load balancer; each surface scales independently |
-| Container | Two Docker images — one per surface |
-| Port | 8080 (each container) |
+| Scalability | Horizontal — stateless; multiple instances behind a load balancer; the host scales as a whole today (surfaces co-located, independently scalable only after a future split) |
+| Container | One Docker image — single host project under `backend/api/`; surface libraries under `backend/write-api/` and `backend/read-api/` |
+| Port | 8080 |
 
 **Statelessness constraints (required for horizontal scaling):**
-- No in-memory cache of deployment state between requests — every read hits the database
-- No in-process SSE fan-out across instances — SSE events are brokered via PostgreSQL `LISTEN`/`NOTIFY`; each Read API instance subscribes to the channel independently and forwards events to its own connected clients
-- No sticky sessions — the load balancer may route any request to any instance; SSE connections are long-lived but reconnect transparently via `Last-Event-ID`
+
+| Concern | How the API host satisfies it |
+|---|---|
+| Caching | No in-memory cache of deployment state between requests — every read hits the database. |
+| Real-time fan-out | No in-process fan-out across instances — events brokered via PostgreSQL `LISTEN/NOTIFY`. Each API instance independently `LISTEN`s on the `deployments` channel and forwards events to its own connected SSE clients. |
+| Session affinity | No sticky sessions — load balancer may route any request to any instance. SSE connections are long-lived but reconnect transparently via `Last-Event-ID`. |
 
 **Responsibilities:**
-- Write API — accept and persist deployment events via `POST /api/deployments` (API-key-gated); NOTIFY the PostgreSQL `deployments` channel on every successful ingest
-- Read API — serve the current deployment matrix (`GET /api/deployments`) and per-slot history (unauthenticated)
-- Read API — stream real-time slot-update events via SSE (`GET /api/stream`) using PostgreSQL `LISTEN`
+- Write surface — accept and persist deployment events via `POST /api/deployments` (API-key-gated); NOTIFY the PostgreSQL `deployments` channel on every successful ingest
+- Read surface — serve the current deployment matrix (`GET /api/deployments`) and per-slot history (unauthenticated)
+- Read surface — stream real-time slot-update events via SSE (`GET /api/stream`) using PostgreSQL `LISTEN`
 
-**Out of scope for the backend:** serving static SPA assets. The Angular build is shipped in its own **Dashboard Frontend** container (nginx), not in either API container. The backend serves JSON only.
+**Out of scope for the backend:** serving static SPA assets. The Angular build is shipped in its own **Dashboard Frontend** container (nginx), not in the API container. The backend serves JSON only.
 
 #### App Gateway
 
-A single nginx reverse-proxy container that fronts every other component. It is the **only** container exposed to the host (local dev) or to public ingress (Azure). The back-end components — Write API, Read API, and Dashboard Frontend — sit behind it on the internal Docker / ACA network.
+The single public-facing reverse proxy fronting every component (see Summary above for one-liner).
 
 | Attribute | Value |
 |---|---|
@@ -275,15 +281,17 @@ A single nginx reverse-proxy container that fronts every other component. It is 
 
 **Routing matrix:**
 
+Both surfaces resolve to a single `api:8080` upstream today (per [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md)). The matrix continues to discriminate on path + method so that a future re-split is a gateway-config-only change — the `POST /api/deployments` row simply points at a new write upstream while every other row stays the same.
+
 | Method + Path | Upstream | Surface |
 |---|---|---|
-| `POST /api/deployments` | `write-api:8080/api/deployments` | Write — API-key gated. |
-| `GET /api/deployments` | `read-api:8080/api/deployments` | Read. |
-| `GET /api/deployments/{service}/{environment}` | `read-api:8080/...` | Read. |
-| `GET /api/deployments/{service}/{environment}/history` | `read-api:8080/...` | Read. |
-| `GET /api/environments`, `GET /api/services` | `read-api:8080/...` | Read. |
-| `GET /api/stream` | `read-api:8080/api/stream` — SSE pass-through (`proxy_buffering off`, `proxy_cache off`, `proxy_read_timeout 1h`, `X-Accel-Buffering: no`) | Read. |
-| `GET /health` | `read-api:8080/health` | Read. |
+| `POST /api/deployments` | `api:8080/api/deployments` | Write — API-key gated. |
+| `GET /api/deployments` | `api:8080/api/deployments` | Read. |
+| `GET /api/deployments/{service}/{environment}` | `api:8080/...` | Read. |
+| `GET /api/deployments/{service}/{environment}/history` | `api:8080/...` | Read. |
+| `GET /api/environments`, `GET /api/services` | `api:8080/...` | Read. |
+| `GET /api/stream` | `api:8080/api/stream` — SSE pass-through (`proxy_buffering off`, `proxy_cache off`, `proxy_read_timeout 1h`, `X-Accel-Buffering: no`) | Read. |
+| `GET /health` | `api:8080/health` | Read. |
 | `GET /` and every other path | `dashboard:80/` (SPA shell + Angular bundle, with HTML5 history fallback to `index.html`) | n/a. |
 
 **Why a gateway (vs. CORS + multiple origins):**
@@ -294,7 +302,7 @@ A single nginx reverse-proxy container that fronts every other component. It is 
 
 #### Dashboard Frontend (MVP)
 
-An Angular 20 single-page application packaged in its own nginx container. The container does NOT terminate public traffic — it is reached only via the App Gateway, and serves the static SPA assets it was built with.
+Angular 20 SPA in its own nginx container; reached only via the App Gateway. Attributes below.
 
 | Attribute | Value |
 |---|---|
@@ -541,7 +549,7 @@ Field rules:
 }
 ```
 
-The Read API derives `state` for the affected slot on every NOTIFY using the same logic as the matrix endpoint, so the per-slot wire shape is identical between REST and SSE.
+The API's read surface derives `state` for the affected slot on every NOTIFY using the same logic as the matrix endpoint, so the per-slot wire shape is identical between REST and SSE.
 
 ---
 
@@ -549,18 +557,17 @@ The Read API derives `state` for the affected slot on every NOTIFY using the sam
 
 #### Local Development
 
-**Containers — four images, four Dockerfiles**
+**Containers — three images, three Dockerfiles**
 
-Each component has its own multi-stage Dockerfile. The API containers serve JSON only — they do **not** bundle the SPA. The SPA is shipped in its own nginx container, and all back-end containers sit behind the App Gateway.
+Each component has its own multi-stage Dockerfile. The API container serves JSON only — it does **not** bundle the SPA. The SPA is shipped in its own nginx container, and all back-end containers sit behind the App Gateway. `backend/api/Dockerfile` is the only API Dockerfile, and `backend/write-api/` + `backend/read-api/` are library projects with no Dockerfile of their own.
 
 | Image | Source path | Notes |
 |---|---|---|
-| `deployment-dashboard/write-api` | `backend/write-api/` | SDK build → aspnet:10.0 runtime; EXPOSE 8080; API-key middleware applied. |
-| `deployment-dashboard/read-api` | `backend/read-api/` | SDK build → aspnet:10.0 runtime; EXPOSE 8080; unauthenticated; SSE handler. |
+| `deployment-dashboard/api` | `backend/api/` | SDK build → aspnet:10.0 runtime; EXPOSE 8080. Single host composing Write + Read endpoint groups; API-key middleware scoped to the write group only (`MapGroup("/api").RequireApiKey()`), read group unauthenticated. SSE handler in the read group. |
 | `deployment-dashboard/dashboard` | `frontend/dashboard/` | `node:22-alpine` runs `ng build dashboard` → copies output into `nginx:alpine` and serves it on port 80 with HTML5 history fallback to `index.html`. |
 | `deployment-dashboard/gateway` | `gateway/` | `nginx:alpine`; `nginx.conf` declares the routing matrix and SSE pass-through tuning. EXPOSE 80. **The only image with public ingress.** |
 
-Conventional connection-string variables: each API container reads `ConnectionStrings__DefaultConnection`. The Write API reads `API_TOKEN` (the key required on `X-Api-Key`); the Read API reads `HISTORY_RETENTION_DAYS`.
+Conventional environment variables on the API container: `ConnectionStrings__DefaultConnection`; `API_TOKEN` (the key required on `X-Api-Key` for write-group endpoints); `HISTORY_RETENTION_DAYS` (consumed by the pruning job).
 
 **Docker Compose — Local Development**
 
@@ -569,27 +576,18 @@ services:
   gateway:
     build: { context: ../gateway }
     ports: ["8080:80"]                 # ONLY host-published service
-    depends_on: [dashboard, write-api, read-api]
+    depends_on: [dashboard, api]
 
   dashboard:
     build: { context: ../frontend, dockerfile: dashboard/Dockerfile }
     expose: ["80"]                     # internal only — no host port
 
-  write-api:
-    build: { context: ../backend, dockerfile: write-api/Dockerfile }
-    expose: ["8080"]                   # internal only
+  api:
+    build: { context: ../backend, dockerfile: api/Dockerfile }
+    expose: ["8080"]                   # internal only — Write + Read surfaces co-hosted
     environment:
       ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      API_TOKEN: "local-dev-token-not-for-production"     # required for X-Api-Key
-    depends_on:
-      db: { condition: service_healthy }
-      migrations: { condition: service_completed_successfully }
-
-  read-api:
-    build: { context: ../backend, dockerfile: read-api/Dockerfile }
-    expose: ["8080"]                   # internal only
-    environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      API_TOKEN: "local-dev-token-not-for-production"     # required for X-Api-Key on write-group endpoints
       HISTORY_RETENTION_DAYS: "365"                       # consumed by the pruning job
     depends_on:
       db: { condition: service_healthy }
@@ -664,12 +662,7 @@ All instances are stateless and share the same PostgreSQL database. SSE fan-out 
 | Azure App Service (container) | Persistent option if always-on is preferred |
 | Self-hosted runner host | Run alongside the GitHub Actions runner |
 
-**GitHub Actions secrets required**
-
-| Secret | Value |
-|---|---|
-| `DEPLOYMENT_DASHBOARD_URL` | Base URL of the dashboard (e.g. `https://dashboard.internal.company.com`) |
-| `DEPLOYMENT_DASHBOARD_TOKEN` | API key for write access |
+**GitHub Actions secrets** — see §7 "CI/CD Integration → Secrets required" (above) for the canonical table.
 
 #### Azure Deployment
 
@@ -681,8 +674,7 @@ All instances are stateless and share the same PostgreSQL database. SSE fan-out 
 │  ┌─── Azure Container Registry ───────────────────────────────────────┐   │
 │  │  deployment-dashboard/gateway:latest                                │   │
 │  │  deployment-dashboard/dashboard:latest                              │   │
-│  │  deployment-dashboard/write-api:latest                              │   │
-│  │  deployment-dashboard/read-api:latest                               │   │
+│  │  deployment-dashboard/api:latest                                    │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                    ↑ pull images                                            │
 │  ┌─── Azure Container Apps Environment ────────────────────────────────┐   │
@@ -690,27 +682,26 @@ All instances are stateless and share the same PostgreSQL database. SSE fan-out 
 │  │  ┌──────────────────────┐                                            │   │
 │  │  │  App Gateway          │  ◄── ONLY public ingress (NFR-04)         │   │
 │  │  │  nginx:alpine         │                                           │   │
-│  │  │                       │  routes:                                  │   │
-│  │  │                       │    GET /                  → dashboard     │   │
-│  │  │                       │    POST /api/deployments  → write-api     │   │
-│  │  │                       │    GET  /api/*            → read-api      │   │
-│  │  │                       │    GET  /api/stream (SSE) → read-api      │   │
-│  │  │                       │    GET  /health           → read-api      │   │
-│  │  └──┬───────────┬────────┴───────────────┬─────────────────────┘   │
-│  │     │           │                        │                            │   │
-│  │     ▼           ▼                        ▼                            │   │
-│  │  ┌────────┐  ┌──────────────┐  ┌──────────────────────────────┐   │   │
-│  │  │ Dashb. │  │  Write API   │  │  Read API                     │   │   │
-│  │  │ nginx +│  │  ASP.NET 10  │  │  ASP.NET 10                   │   │   │
-│  │  │ Angular│  │  POST ingest │  │  matrix / history /           │   │   │
-│  │  │ static │  │  NOTIFY,     │  │  discovery / SSE / health     │   │   │
-│  │  │ intern.│  │  API-key     │  │  LISTEN; unauthenticated      │   │   │
-│  │  │        │  │  gated       │  │  internal                     │   │   │
-│  │  └────────┘  └──────┬───────┘  └────────────┬──────────────────┘   │   │
-│  │                     │                       │                          │   │
-│  └─────────────────────┼───────────────────────┼──────────────────────────┘   │
-│                  writes + NOTIFY        queries + LISTEN                      │
-│                        ↓                       ↓                              │
+│  │  │                       │                                           │   │
+│  │  │                       │  routes per §7 Components → App Gateway   │   │
+│  │  │                       │                          → Routing matrix │   │
+│  │  │                       │                                           │   │
+│  │  └──┬─────────────────────────────┬─────────────────────────────┘   │
+│  │     │                             │                                    │   │
+│  │     ▼                             ▼                                    │   │
+│  │  ┌────────┐    ┌──────────────────────────────────────────────┐    │   │
+│  │  │ Dashb. │    │  API (single host, two endpoint groups)       │    │   │
+│  │  │ nginx +│    │  ASP.NET 10 — backend/api/                    │    │   │
+│  │  │ Angular│    │   • Write — POST ingest + NOTIFY, API-key     │    │   │
+│  │  │ static │    │     gated (scoped to write group only)        │    │   │
+│  │  │ intern.│    │   • Read — matrix / history / discovery /     │    │   │
+│  │  │        │    │     SSE / health, LISTEN; unauthenticated     │    │   │
+│  │  │        │    │  internal                                     │    │   │
+│  │  └────────┘    └──────────────────────┬───────────────────────┘    │   │
+│  │                                       │                                │   │
+│  └───────────────────────────────────────┼────────────────────────────────┘   │
+│                            writes + NOTIFY / queries + LISTEN                 │
+│                                          ↓                                    │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  Azure Database for PostgreSQL Flexible Server  (Burstable B1ms)    │   │
 │  │  LISTEN/NOTIFY channel: "deployments"                               │   │
@@ -727,14 +718,14 @@ All instances are stateless and share the same PostgreSQL database. SSE fan-out 
 
 **Component Mapping**
 
-All four container apps share a **single** Azure Container Apps Environment on the **Consumption** plan, which is scale-to-zero by default — adding more small apps does not add fixed overhead. Total compute cost is dominated by vCPU-seconds × memory-seconds × request count, not by container count. The gateway and the dashboard containers in particular are static-only and idle the vast majority of the time, so their marginal cost on Consumption is close to zero.
+All three container apps share a **single** Azure Container Apps Environment on the **Consumption** plan, which is scale-to-zero by default — adding more small apps does not add fixed overhead. Total compute cost is dominated by vCPU-seconds × memory-seconds × request count, not by container count. The gateway and the dashboard containers in particular are static-only and idle the vast majority of the time, so their marginal cost on Consumption is close to zero.
 
 | Logical component | Azure resource | SKU | Est. monthly cost |
 |---|---|---|---|
-| App Gateway + Dashboard + Write API + Read API (4 apps, 1 environment) | Azure Container Apps Environment + 4 Container Apps | Consumption (scale-to-zero) | ~$3–7 combined |
+| App Gateway + Dashboard + API (3 apps, 1 environment — consolidated from 4 per [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md), trimming per-app fixed overhead) | Azure Container Apps Environment + 3 Container Apps | Consumption (scale-to-zero) | ~$2–5 combined |
 | Container Images | Azure Container Registry | Basic | ~$5 |
 | Deployment Store | Azure Database for PostgreSQL Flexible Server | Burstable B1ms | ~$13–15 |
-| **Total** | | | **~$21–27/month** |
+| **Total** | | | **~$20–25/month** |
 
 **Trade-off Analysis: SSE vs SignalR**
 
@@ -776,7 +767,7 @@ The original design considered **Azure SignalR Service with the Functions Signal
 | Storage | PostgreSQL |
 | Frontend | Angular 20 SPA — pipeline matrix, status badges, history drawer, version highlight, live SSE updates |
 | Ingest | HTTP call (`curl` or equivalent) from any CI/CD pipeline (GitHub Actions, Azure DevOps, Jenkins, etc.) |
-| Container | Four Docker images — Write API, Read API, Dashboard Frontend (Angular SPA), App Gateway |
+| Container | Three Docker images — API (single host composing Write + Read endpoint groups), Dashboard Frontend (Angular SPA), App Gateway |
 | Config | `ConnectionStrings__DefaultConnection`, `API_TOKEN`, `HISTORY_RETENTION_DAYS` (default 365) |
 
 **Definition of Done:**  
@@ -819,3 +810,4 @@ A developer installs the tray binary, configures the dashboard URL, and receives
 | 4 | Single repo or multi-repo? | Not applicable — the system is push-based; it does not query or know about repositories. Any workflow can push to it. |
 | 5 | Which environments trigger notifications? | Configurable; defaults to **all environments** discovered dynamically from `GET /api/environments`; can be restricted via `filter_environments` in the client config |
 | 6 | Push vs pull data model? | **Push** — the system exposes an ingest API; it does not query GitHub or any CI/CD tool. Callers are responsible for sending a correctly shaped payload. How deployments are triggered, structured, or named in the source is irrelevant to the system. |
+| 7–11 | Topology correlation scope; SSE topology delivery; dangling parent_deployments; ref/sha validation strictness; single vs split backend container | **Moved out of the initial SAD.** Decisions 7–9 → `docs/cr/CR-0003`. Decision 10 → `docs/cr/CR-0004`. Decision 11 → `docs/adr/ADR-0002`. See those documents for the verbatim decision text. |

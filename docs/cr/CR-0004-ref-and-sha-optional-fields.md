@@ -25,7 +25,7 @@
   - SAD §7 API Contract → POST body, matrix response shape, SSE payload.
   - **CR-0005** — `ref` / `sha` exposed as Display picker options and Topology correlation options (consumer-facing companion of this CR).
 
-## Removed SAD content (verbatim) — captured here
+## SAD-level content owned by this CR — verbatim
 
 ### FR-05 — amended (verbatim post-amendment text)
 

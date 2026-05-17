@@ -21,7 +21,7 @@
   - `docs/ui-compact-options.md` — full design rationale, per-view density targets, switcher/picker behaviour, cross-cutting behaviours.
   - Mockup `docs/deployment-dashboard.html` — canonical visual + interactive contract.
 
-## Removed SAD content (verbatim) — captured here
+## SAD-level content owned by this CR — verbatim
 
 ### FR-12 — added
 
@@ -78,22 +78,7 @@
 > - **`⚠ prev. failed` badge** — rendered when `previousFailed === true` (FR-03).
 > - **Last-successful split section** — dashed divider plus the last-successful version and elapsed time — rendered when `lastSuccessful` is non-null (FR-03). The attribute picker controls the top (current) section only; the bottom section is always shown when present.
 >
-> **6 box states (unchanged contract):**
->
-> Each box still resolves to one of six states based on the slot's wire shape. Per-view rendering may shrink or recolour the box, but the state determination logic is identical across views.
->
-> | State | Condition | Box appearance |
-> |---|---|---|
-> | **Success** | Last deployment succeeded | Full green box — version + actor + time |
-> | **Running + Last Successful** | Deploying now; previous terminal was success | Top: orange spinner + version; bottom: last successful version |
-> | **Running + Failed + Last Successful** | Deploying now; previous terminal was failure; an older success exists | Top: orange spinner + ⚠ prev. failed badge; bottom: last successful version |
-> | **Failed + Last Successful** | Last deployment failed; an older success exists | Top: red failed + version; bottom: last successful version |
-> | **Running** | Deploying now; no prior successful deployment | Full orange spinning box — version only |
-> | **Running + Failed** | Deploying now; previous terminal was failure; no successful history | Top: orange spinner + ⚠ prev. failed badge; no bottom section |
->
-> The box is split into two sections by a dashed divider when a last-successful state differs from the current state. This makes it immediately visible what is running *now* versus what last worked.
->
-> Boxes share a version highlight on hover — hovering a version amber-highlights all boxes (and Glance pills) across environments where the same version is deployed, making it easy to trace promotion progress. Hover highlight applies in every view.
+> **6 box states (unchanged contract):** see "§7 6 box states (unchanged contract) — verbatim addition" section below for the two clarifications this CR contributes to SAD §7 "6 box states".
 >
 > **Full-attribute disclosure rule:**
 >
@@ -121,4 +106,20 @@
 >
 > Filters (search by service name, failures-only toggle) and the stats bar are cross-cutting and apply identically across all four views.
 
-(Note: the `dashboard.layout`, `dashboard.correlationAttribute`, and `dashboard.theme` rows of the `localStorage` table were added by later CRs and live in the corresponding CR documents — `CR-0003` and `CR-0006` — together with their own load-time hardening rules.)
+### §7 "6 box states (unchanged contract)" — verbatim addition
+
+The 6-box-states table itself is unchanged; see SAD §7 "6 box states" for the canonical rows. This CR contributes two clarifications to that section:
+
+> Each box still resolves to one of six states based on the slot's wire shape. Per-view rendering may shrink or recolour the box, but the state determination logic is identical across views.
+
+> Boxes share a version highlight on hover — hovering a version amber-highlights all boxes (and Glance pills) across environments where the same version is deployed, making it easy to trace promotion progress. Hover highlight applies in every view.
+
+### Later additions to the localStorage table
+
+These rows of the `localStorage` table were added by later CRs and live in those CR documents — together with their own load-time hardening rules.
+
+| Key | Added by |
+|---|---|
+| `dashboard.layout` | CR-0003 |
+| `dashboard.correlationAttribute` | CR-0003 |
+| `dashboard.theme` | CR-0006 |
