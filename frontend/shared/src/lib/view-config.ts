@@ -3,7 +3,7 @@
 // only" rule: view names, defaults, caps, attribute keys + labels, and the
 // `localStorage` keys live here only — never inline in component code.
 //
-// Source of truth: docs/deployment-dashboard-architecture.md §7 "Visual
+// Source of truth: docs/architecture.md §7 "Visual
 // layout" + docs/ui/compact-options.md.
 
 /** The four user-selectable matrix layout views. */

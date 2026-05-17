@@ -6,10 +6,10 @@ event for the rejected attempt.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-10 ("the ingest API
+- `docs/architecture.md` §4 FR-10 ("the ingest API
   shall authenticate every write request with an API key; requests with
   a missing or invalid key shall be rejected with HTTP 401").
-- `docs/deployment-dashboard-architecture.md` §7 "REST constraints
+- `docs/architecture.md` §7 "REST constraints
   observed" - `401 on missing/invalid API key`.
 - `backend/shared/Dashboard.Shared/Security/ApiKeyMiddleware.cs` -
   validates `X-Api-Key`, returns 401 with JSON body

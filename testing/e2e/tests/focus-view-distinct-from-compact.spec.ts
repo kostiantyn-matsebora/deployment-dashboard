@@ -19,7 +19,7 @@
 //   - docs/ui/compact-options.md "Focus view specifics" — chevron and
 //     pin lifecycle, row-gutter placement, filter resilience, layout
 //     scope, pin-survives-layout-switch.
-//   - docs/deployment-dashboard-architecture.md §4 FR-12 — four named
+//   - docs/architecture.md §4 FR-12 — four named
 //     layout views (Focus must remain distinguishable).
 //   - docs/ui/deployment-dashboard.html — testid catalogue:
 //       row-chevron-{id}, row-pin-{id},

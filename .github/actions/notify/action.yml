@@ -2,7 +2,7 @@
 # Deployment Dashboard - notify composite action
 #
 # Implements WBS MVP §1.4.2 / CI/CD Integration §1.2 of
-# docs/deployment-dashboard-architecture.md (§7 "CI/CD Integration").
+# docs/architecture.md (§7 "CI/CD Integration").
 #
 # Sends a single POST /api/deployments event to the Deployment Dashboard
 # from a GitHub Actions workflow. Portable across ubuntu-latest,

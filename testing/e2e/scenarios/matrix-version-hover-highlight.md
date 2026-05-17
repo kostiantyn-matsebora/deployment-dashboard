@@ -13,7 +13,7 @@ behaviour from the mockup.
   `frontend/matrix/src/lib/box-styles.ts` (visual contract per
   `CLAUDE.md` source-of-truth rule: mockup wins for visual / interactive
   behaviour).
-- `docs/deployment-dashboard-architecture.md` §7 "Web Dashboard (MVP) -
+- `docs/architecture.md` §7 "Web Dashboard (MVP) -
   Visual layout" - "Boxes share a version highlight on hover".
 - `frontend/shared/src/lib/highlight-version.directive.ts` - the directive
   driving `mouseenter`/`mouseleave` into the store's `highlightedVersion`

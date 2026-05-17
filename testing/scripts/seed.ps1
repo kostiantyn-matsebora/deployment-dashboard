@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Implements WBS MVP §2.4 (and the seed step of §3.1) of
-    docs/deployment-dashboard-architecture.md.
+    docs/architecture.md.
 
     Configuration is declarative. The script reads its target's
     `writeBaseUrl` and `apiKey` from a JSON config file under
@@ -154,7 +154,7 @@
 .NOTES
     File:   testing/scripts/seed.ps1
     Owner:  qa-engineer (.claude/agents/qa-engineer.md)
-    WBS:    MVP §2.4, §3.1 in docs/deployment-dashboard-architecture.md
+    WBS:    MVP §2.4, §3.1 in docs/architecture.md
 #>
 [CmdletBinding()]
 param(

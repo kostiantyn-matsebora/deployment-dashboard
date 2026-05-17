@@ -20,7 +20,7 @@ of the SPA.
   vocabulary" — `ref` / `sha` rows ("Nullable on the wire (FR-05);
   when null/absent the picker slot renders empty per the null-render
   invariant below").
-- `docs/deployment-dashboard-architecture.md` §4 FR-02 + FR-05 (the
+- `docs/architecture.md` §4 FR-02 + FR-05 (the
   attributes' existence + nullability contract — FR-02 amended via
   `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`; FR-05
   amended via `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).

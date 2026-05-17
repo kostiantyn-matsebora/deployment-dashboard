@@ -16,7 +16,7 @@ You own **two production surfaces**:
 Read these two docs before every task; re-read the relevant section before writing code (per `CLAUDE.md` → "Source of truth"):
 
 - **`docs/ui/deployment-dashboard.html`** — the visual and interaction contract. *Primary* spec for layout, colours, 6 box states, hover, drawer, stats bar, empty state, "Failures only" toggle, search filter. Angular implementation must be visually and behaviourally indistinguishable from this.
-- **`docs/deployment-dashboard-architecture.md`** — data, real-time, stack contract. Sections most relevant: §4 (FR-01…FR-09), §5 (NFR-03, NFR-08), §7 component "Web Dashboard (MVP)" + matrix JSON shape.
+- **`docs/architecture.md`** — data, real-time, stack contract. Sections most relevant: §4 (FR-01…FR-09), §5 (NFR-03, NFR-08), §7 component "Web Dashboard (MVP)" + matrix JSON shape.
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §1.3 (Dashboard Frontend / Angular SPA).
 
 Conflict resolution: per `CLAUDE.md` → "Source of truth" tie-breaker.

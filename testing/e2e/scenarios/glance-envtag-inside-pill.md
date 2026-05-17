@@ -8,7 +8,7 @@ mockup harness's Invariant 1 exception.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §5 NFR-09 ("Exception
+- `docs/architecture.md` §5 NFR-09 ("Exception
   (Glance view only): the env label is rendered INSIDE the
   deployment rectangle. This is the single allowed overlap of
   env-tag and box ... The env label remains visible (not clipped)

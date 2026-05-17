@@ -12,7 +12,7 @@ You own the **server-side implementation**: a stateless ASP.NET Core 10 modular-
 
 Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 
-- **`docs/deployment-dashboard-architecture.md`** — FRs, NFRs, component design, data model, API contract, decisions for the **initial architecture**. Sections most relevant: §4 (FRs), §5 (NFRs), §6 (Constraints), §7 (data model, API contract, statelessness rules), §10 (decisions).
+- **`docs/architecture.md`** — FRs, NFRs, component design, data model, API contract, decisions for the **initial architecture**. Sections most relevant: §4 (FRs), §5 (NFRs), §6 (Constraints), §7 (data model, API contract, statelessness rules), §10 (decisions).
 - **`docs/cr/`** and **`docs/adr/`** — Change Requests and Architecture Decision Records that extend or amend the initial SAD. Backend-relevant items today: **CR-0003** (tree topology — `deployment_id`, `parent_deployments`, `topology.edges`, `correlationAttribute`); **CR-0004** (optional `ref` / `sha` on payload); **ADR-0001** (five-pass topology derivation algorithm on the read side); **ADR-0002** (modular monolith — single API container, two libraries, write-only API-key middleware).
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §1.1 (Ingest API / Write surface) and §1.2 (Read API).
 - **`docs/ui/deployment-dashboard.html`** — visual + behavioural contract. The JSON your Read API returns must populate every field the SPA reads (`current.{version,status,run_url,run_number,actor,deployed_at}`, `lastSuccessful.*`, `previousFailed`) and must support all six box states defined in the mockup.

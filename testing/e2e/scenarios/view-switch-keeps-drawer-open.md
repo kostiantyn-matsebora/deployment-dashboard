@@ -8,7 +8,7 @@ present under the new layout.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-04 ("clicking a
+- `docs/architecture.md` §4 FR-04 ("clicking a
   slot shall open a side panel showing ... deployment history").
 - `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` FR-12
   (four views, view switching).

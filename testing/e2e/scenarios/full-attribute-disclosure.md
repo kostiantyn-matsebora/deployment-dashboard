@@ -14,7 +14,7 @@ string `"null"`.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-02 (seven-attribute
+- `docs/architecture.md` §4 FR-02 (seven-attribute
   set: `status`, `version`, `run`, `ago`, `actor`, `ref`, `sha` —
   amended via `docs/cr/CR-0002-four-named-views-and-attribute-picker.md`
   and `docs/cr/CR-0004-ref-and-sha-optional-fields.md`).

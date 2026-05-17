@@ -18,7 +18,7 @@
     "              so cleanup by actor marker still purges them.",
     "",
     "Derived from docs/ui/deployment-dashboard.html and",
-    "docs/deployment-dashboard-architecture.md §4 (FR-13), §5 (Data Model + Topology",
+    "docs/architecture.md §4 (FR-13), §5 (Data Model + Topology",
     "Derivation), §7 (API Contract - POST validation, Matrix response shape).",
     "",
     "deployment_id values are CI/CD-side identifiers (SAD §5 deployments table). They are",

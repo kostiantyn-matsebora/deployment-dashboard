@@ -7,10 +7,10 @@ the visual catalogue in the mockup.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-01 (matrix renders),
+- `docs/architecture.md` §4 FR-01 (matrix renders),
   FR-02 (slot shows version + status + actor + time + run link),
   FR-03 (current + last-successful split when running or failed).
-- `docs/deployment-dashboard-architecture.md` §7 "Web Dashboard (MVP) -
+- `docs/architecture.md` §7 "Web Dashboard (MVP) -
   Visual layout" - the six-state table.
 - `docs/ui/deployment-dashboard.html` - the inline `SERVICES` const block which
   is the canonical visual catalogue these states are drawn from.

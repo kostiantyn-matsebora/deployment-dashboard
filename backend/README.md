@@ -1,7 +1,7 @@
 # Deployment Dashboard — Backend
 
 ASP.NET Core 10 implementation of the two stateless services that back the
-Deployment Dashboard. See `docs/deployment-dashboard-architecture.md` (the
+Deployment Dashboard. See `docs/architecture.md` (the
 authoritative spec) for the full picture; this README only covers how to
 build and run the projects in this folder.
 

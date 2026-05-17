@@ -3,7 +3,7 @@
   <!--
     Functional / API test suite for the running Deployment Dashboard stack.
 
-    Implements WBS MVP §3.2 of docs/deployment-dashboard-architecture.md.
+    Implements WBS MVP §3.2 of docs/architecture.md.
 
     Unlike the per-project unit tests under backend/, these tests run
     against a real Docker Compose stack and never spin up an in-process

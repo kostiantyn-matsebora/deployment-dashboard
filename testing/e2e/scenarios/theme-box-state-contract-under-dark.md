@@ -13,7 +13,7 @@ invariant.
   + "Box-state contract — always on" sections — "Theme is purely a
   palette swap. The 6 box states … render in every view AND every
   layout AND every theme."
-- `docs/deployment-dashboard-architecture.md` §4 FR-01 / FR-02 / FR-03
+- `docs/architecture.md` §4 FR-01 / FR-02 / FR-03
   — matrix renders, slot exposes its attributes, current +
   last-successful split when running or failed.
 - `docs/cr/CR-0006-light-dark-auto-theme.md` Theme axis subsection —
@@ -88,7 +88,7 @@ invariant.
 
 - `docs/ui/theme-options.md` "6-box-state contract — palette
   mapping" + "Box-state contract — always on".
-- `docs/deployment-dashboard-architecture.md` §4 FR-01 / FR-02 /
+- `docs/architecture.md` §4 FR-01 / FR-02 /
   FR-03 — palette-invariant.
 - `docs/cr/CR-0006-light-dark-auto-theme.md` Theme axis subsection —
   "no semantic change".

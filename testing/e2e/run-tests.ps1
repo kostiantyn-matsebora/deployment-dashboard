@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     Thin wrapper around `npx playwright test`. Implements WBS MVP §3.3
-    of docs/deployment-dashboard-architecture.md and the
+    of docs/architecture.md and the
     "Zero-setup rule for test runners" section of
     .claude/agents/qa-engineer.md.
 
@@ -78,7 +78,7 @@
 .NOTES
     File:   testing/e2e/run-tests.ps1
     Owner:  qa-engineer (.claude/agents/qa-engineer.md)
-    WBS:    MVP §3.3 in docs/deployment-dashboard-architecture.md
+    WBS:    MVP §3.3 in docs/architecture.md
 #>
 [CmdletBinding()]
 param(

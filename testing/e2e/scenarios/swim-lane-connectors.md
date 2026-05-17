@@ -15,7 +15,7 @@ as documented in NFR-09 (constructed via
   of children). Uses `topology.edges` from the matrix response.
   When a service has no edges, it renders as a single root chain
   (one node per env, ordered by `deployed_at` of `current`).").
-- `docs/deployment-dashboard-architecture.md` §5 NFR-09 — connector
+- `docs/architecture.md` §5 NFR-09 — connector
   geometry anchored to `getBoundingClientRect()`.
 - `docs/adr/ADR-0001-topology-derivation-five-pass.md` "Topology
   Derivation" — five passes producing the edges array.

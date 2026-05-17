@@ -5,7 +5,7 @@ and when their combination matches nothing the empty-state panel is shown.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-07 ("filtering by service
+- `docs/architecture.md` §4 FR-07 ("filtering by service
   name and by failure state only").
 - `docs/ui/deployment-dashboard.html` - the mockup's `filteredServices` getter
   defines the precise semantics: case-insensitive `.includes()` on

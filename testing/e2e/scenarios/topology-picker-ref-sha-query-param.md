@@ -19,7 +19,7 @@ request is ever issued by the SPA (per
   allowed values include `ref` and `sha` (per
   `docs/cr/CR-0005-ref-sha-display-and-topology.md` "Attribute
   vocabulary" admitting `ref`/`sha` as correlation attributes).
-- `docs/deployment-dashboard-architecture.md` §5 NFR-04 (SPA is
+- `docs/architecture.md` §5 NFR-04 (SPA is
   read-only against the API; no auth secrets in the browser).
 - `docs/cr/CR-0003-tree-topology-and-layout-axis.md` Decision #7
   (per-user picker = `localStorage`-only; no PATCH from the SPA).

@@ -12,7 +12,7 @@ ref/sha-specific line is absent (covered separately by
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-02 (the
+- `docs/architecture.md` §4 FR-02 (the
   seven-attribute set: `status`, `version`, `run`, `ago`, `actor`,
   `ref`, `sha` — amended via
   `docs/cr/CR-0002-four-named-views-and-attribute-picker.md` and

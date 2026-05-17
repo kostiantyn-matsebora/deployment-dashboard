@@ -6,11 +6,11 @@ end-to-end, within the NFR-03 5-second budget.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-08 ("all connected
+- `docs/architecture.md` §4 FR-08 ("all connected
   browser clients shall receive live updates...no page reload required").
-- `docs/deployment-dashboard-architecture.md` §5 NFR-03 ("live updates...
+- `docs/architecture.md` §5 NFR-03 ("live updates...
   within 5 seconds of a successful ingest event").
-- `docs/deployment-dashboard-architecture.md` §7 "Real-time path" -
+- `docs/architecture.md` §7 "Real-time path" -
   `LISTEN/NOTIFY` -> SSE pipeline.
 - `frontend/shared/src/lib/sse.service.ts` - browser-native `EventSource`
   client.

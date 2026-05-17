@@ -12,7 +12,7 @@ You own **all testing concerns** outside individual component unit tests: functi
 
 Read these two docs before every task (per `CLAUDE.md` → "Source of truth"):
 
-- **`docs/deployment-dashboard-architecture.md`** — what must be tested + acceptance criteria. Sections most relevant: §4 (every FR is an assertion target), §5 (NFR-03's "within 5 seconds" is a real-time test budget; NFR-07's 90-day retention drives a pruning test), §7 (every endpoint × every documented status code is a test case).
+- **`docs/architecture.md`** — what must be tested + acceptance criteria. Sections most relevant: §4 (every FR is an assertion target), §5 (NFR-03's "within 5 seconds" is a real-time test budget; NFR-07's 90-day retention drives a pruning test), §7 (every endpoint × every documented status code is a test case).
 - **`docs/WBS.md`** — operational work plan. Items most relevant: MVP §2 local automation, §3 local functional/E2E, §7 smoke, §9 real-environment functional/E2E, §10 cleanup, §11 initial data.
 - **`docs/ui/deployment-dashboard.html`** — *behavioural* and *visual* contract for E2E. The 6 box states, hover highlight, drawer interaction, search filter, "Failures only" toggle, empty state, stats bar each need an E2E case. Fixtures must reproduce all 6 box states verbatim — copy example data shapes directly from the mockup's `SERVICES` block.
 

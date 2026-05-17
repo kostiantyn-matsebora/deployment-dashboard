@@ -8,10 +8,10 @@ endpoints and in the matrix header.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-09 ("the system shall
+- `docs/architecture.md` §4 FR-09 ("the system shall
   support any set of services and environments without hardcoded values;
   the service and environment lists shall be derived from stored data").
-- `docs/deployment-dashboard-architecture.md` §7 "API Contract" -
+- `docs/architecture.md` §7 "API Contract" -
   `GET /api/environments`, `GET /api/services`.
 - `backend/read-api/Dashboard.ReadApi/Endpoints/DiscoveryEndpoints.cs` -
   the `Distinct().OrderBy()` query backing both endpoints.

@@ -69,7 +69,7 @@ E2E (Playwright) tests live in `testing/e2e/` and are owned by qa-engineer.
 ## Visual contract
 
 `docs/ui/deployment-dashboard.html` is authoritative for layout, palette,
-transitions, and the 6 box-state rules. `docs/deployment-dashboard-architecture.md`
+transitions, and the 6 box-state rules. `docs/architecture.md`
 is authoritative for data shapes (snake_case wire, camelCase internal) and the
 SSE/REST endpoints (`GET /api/stream`, `GET /api/deployments`, `GET
 /api/deployments/{s}/{e}/history`, `GET /api/environments`, `GET /api/services`).

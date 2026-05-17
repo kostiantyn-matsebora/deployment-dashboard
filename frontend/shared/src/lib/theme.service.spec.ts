@@ -18,7 +18,7 @@
 //   - docs/ui/theme-options.md — persistence table + auto resolution
 //   - docs/ui/deployment-dashboard.html lines 187–198 (FOIT bootstrap)
 //     and 3440–3461 (MQL change listener)
-//   - docs/deployment-dashboard-architecture.md §7 — Theme axis +
+//   - docs/architecture.md §7 — Theme axis +
 //     `dashboard.theme` localStorage row
 //
 // Authored in parallel with frontend implementation per the

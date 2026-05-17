@@ -1,5 +1,5 @@
 // Wire-format models — these mirror the JSON shape returned by the Read API
-// (see docs/deployment-dashboard-architecture.md §7 "Matrix response shape").
+// (see docs/architecture.md §7 "Matrix response shape").
 // The API returns snake_case; we adapt at the boundary in the API client and
 // expose camelCase to the rest of the SPA.
 //

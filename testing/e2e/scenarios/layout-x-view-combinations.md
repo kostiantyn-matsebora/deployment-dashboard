@@ -12,7 +12,7 @@ orthogonality claim.
   4 x 3 = 12 (view, layout) combinations are supported").
 - `docs/cr/CR-0003-tree-topology-and-layout-axis.md` "Layout axis
   (FR-13)" — orthogonality and Glance-pill exception.
-- `docs/deployment-dashboard-architecture.md` §5 NFR-09 — the
+- `docs/architecture.md` §5 NFR-09 — the
   UX-RESPONSIVENESS INVARIANT applies under every (view, layout)
   combination.
 

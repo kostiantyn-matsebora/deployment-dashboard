@@ -6,7 +6,7 @@ Authoritative files — every agent reads them:
 
 | File | Role | Edited by |
 |---|---|---|
-| `docs/deployment-dashboard-architecture.md` (SAD) | Requirements, constraints, components, data model, API contract, decisions, WBS | `solution-architect` |
+| `docs/architecture.md` (SAD) | Requirements, constraints, components, data model, API contract, decisions, WBS | `solution-architect` |
 | `docs/WBS.md` | Operational work plan (MVP / CI-CD Integration / v2.0 phases + per-phase items) | `solution-architect` |
 | `docs/ui/deployment-dashboard.html` (mockup) | Visual + behavioural contract for the SPA | `frontend-engineer` (authoring); `solution-architect` (governance review, no edits) |
 | `docs/cr/CR-*.md` (after SAD finalization) | Requirements change records | `solution-architect` |

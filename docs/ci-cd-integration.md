@@ -1,7 +1,7 @@
 # CI/CD Integration Guide - Deployment Dashboard
 
 This is the operational companion to
-[`deployment-dashboard-architecture.md`](deployment-dashboard-architecture.md)
+[`architecture.md`](architecture.md)
 §7 "CI/CD Integration". The architecture doc is the source of truth -
 this guide only repeats payload and snippet detail to make integration
 copy-pasteable.

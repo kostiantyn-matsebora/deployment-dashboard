@@ -10,7 +10,7 @@ and deterministic exit-code surface** described below so the Pester
 suite can attach to a fixed interface.
 
 Implements WBS MVP §1.4.3 / "CI/CD Integration" §1.4 of
-[`docs/deployment-dashboard-architecture.md`](../../../../docs/deployment-dashboard-architecture.md).
+[`docs/architecture.md`](../../../../docs/architecture.md).
 
 ## What this action commits to
 

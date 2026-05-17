@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     Thin wrapper around `dotnet test`. Implements WBS MVP §3.2 of
-    docs/deployment-dashboard-architecture.md and the
+    docs/architecture.md and the
     "Zero-setup rule for test runners" section of
     .claude/agents/qa-engineer.md.
 
@@ -66,7 +66,7 @@
 .NOTES
     File:   testing/functional/run-tests.ps1
     Owner:  qa-engineer (.claude/agents/qa-engineer.md)
-    WBS:    MVP §3.2 in docs/deployment-dashboard-architecture.md
+    WBS:    MVP §3.2 in docs/architecture.md
 #>
 [CmdletBinding()]
 param(

@@ -5,7 +5,7 @@ event to the Deployment Dashboard ingest API
 (`POST /api/deployments`).
 
 Implements WBS MVP §1.4.2 and "CI/CD Integration" §1.2 of
-[`docs/deployment-dashboard-architecture.md`](../../../docs/deployment-dashboard-architecture.md)
+[`docs/architecture.md`](../../../docs/architecture.md)
 (§7 "CI/CD Integration" - GitHub Actions composite action example).
 
 For the full per-tool integration guide (Azure DevOps, Jenkins, GitLab

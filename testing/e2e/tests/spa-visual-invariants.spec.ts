@@ -8,9 +8,9 @@
 // literals in this file - they're in the JSON config.
 //
 // Citations:
-// - docs/deployment-dashboard-architecture.md §5 NFR-09 (the six
+// - docs/architecture.md §5 NFR-09 (the six
 //   invariants and the Glance-only exception).
-// - docs/deployment-dashboard-architecture.md §7 "Mockup <-> Angular
+// - docs/architecture.md §7 "Mockup <-> Angular
 //   SPA bridge" - the SPA must pass the same six invariants the
 //   mockup harness already validates.
 // - testing/mockup-visual/mockup-invariants.spec.ts - source of truth

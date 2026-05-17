@@ -9,9 +9,9 @@ env-tag-inside-pill containment.
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §5 NFR-09 — the full
+- `docs/architecture.md` §5 NFR-09 — the full
   invariant text and the Glance-only exception.
-- `docs/deployment-dashboard-architecture.md` §7 "Mockup ↔ Angular
+- `docs/architecture.md` §7 "Mockup ↔ Angular
   SPA bridge" ("an equivalent Playwright suite under `testing/e2e/`
   validates the SPA against the same six invariants. Drift between
   the mockup and the SPA is a defect.").

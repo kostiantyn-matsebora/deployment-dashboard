@@ -12,7 +12,7 @@ the path containing the latest event for that service.
   promotes the topology to a first-class visual element. Uses
   `topology.edges` source. Empty-topology services render as a
   single root chain (same fallback as Swim-lane).").
-- `docs/deployment-dashboard-architecture.md` §5 NFR-09 — connectors
+- `docs/architecture.md` §5 NFR-09 — connectors
   anchored to live measurements; layout reflow under all attribute
   combinations.
 - Fixture: `testing/fixtures/seed-data.json` →

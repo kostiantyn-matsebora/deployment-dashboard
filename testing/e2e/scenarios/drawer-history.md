@@ -8,12 +8,12 @@ and the descending-by-time deployment-history list lazy-fetched from
 
 ## Citations
 
-- `docs/deployment-dashboard-architecture.md` §4 FR-04 ("full deployment
+- `docs/architecture.md` §4 FR-04 ("full deployment
   history per slot...history drawer").
-- `docs/deployment-dashboard-architecture.md` §7 "API Contract" -
+- `docs/architecture.md` §7 "API Contract" -
   `GET /api/deployments/{service}/{environment}/history` returns last N
   events, `?limit=50` default.
-- `docs/deployment-dashboard-architecture.md` §7 "Matrix response shape per
+- `docs/architecture.md` §7 "Matrix response shape per
   slot" - `current` and `lastSuccessful` shape.
 - `docs/ui/deployment-dashboard.html` - the right-hand drawer with current /
   last-successful / history list panels.

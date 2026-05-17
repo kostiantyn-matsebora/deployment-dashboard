@@ -3,7 +3,7 @@
 PowerShell scripts that drive the Deployment Dashboard ingest API for
 test purposes. Implements WBS MVP §2 ("Automate Local Deployment") and
 §3.1 ("Seed local database with representative test data") in
-[`docs/deployment-dashboard-architecture.md`](../../docs/deployment-dashboard-architecture.md).
+[`docs/architecture.md`](../../docs/architecture.md).
 
 Owner: `qa-engineer` (see [`.claude/agents/qa-engineer.md`](../../.claude/agents/qa-engineer.md)).
 
