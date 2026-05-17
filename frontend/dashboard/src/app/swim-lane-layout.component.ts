@@ -33,6 +33,7 @@ import {
 import { CommonModule } from '@angular/common';
 import {
   DeploymentMatrixStore,
+  SvcNameColumnWidthDirective,
   type EnvironmentDescriptor,
   type ServiceDescriptor,
   type SlotState,
@@ -49,7 +50,7 @@ interface EdgePath {
 @Component({
   selector: 'dd-swim-lane-layout',
   standalone: true,
-  imports: [CommonModule, LayoutLeafComponent],
+  imports: [CommonModule, LayoutLeafComponent, SvcNameColumnWidthDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (store.view() === 'focus') {
@@ -80,6 +81,7 @@ interface EdgePath {
 
     <main
       #root
+      ddSvcNameColumnWidth
       class="px-6 pt-4 pb-8"
       [class.mr-\\[26rem\\]]="store.drawerOpen()"
       style="transition: margin-right 0.2s ease"
@@ -110,17 +112,19 @@ interface EdgePath {
               <span class="sr-only" [attr.data-testid]="'swim-lane-row-' + service.id"></span>
             }
             <div class="flex items-start gap-3">
-              <!-- Service label column — AUTOSIZES to its content (NFR-09 #6
-                   strengthened). Minimum 11rem (176 px) preserves the typical-
-                   length-name visual reservation so short names align with the
-                   canonical mockup's Matrix-like footprint; max-content removes
-                   the ceiling so long names + workflow-count badges grow the
-                   column rather than overflowing into the first depth-bucket
-                   column. The leaf grid's depth columns recompute via the
-                   existing afterEveryRender / ResizeObserver chain. -->
+              <!-- Service label column - width UNIFIED across every lane
+                   in this layout via the --svc-name-col-width CSS custom
+                   property written by SvcNameColumnWidthDirective on the
+                   parent main element (NFR-09 #6 uniform-column-width
+                   strengthening). Deployment columns therefore start at
+                   the same x for every service. The CSS fallback
+                   minmax(11rem, max-content) covers the initial paint
+                   before the directive measures + writes, and the 11rem
+                   (176 px) floor is preserved both there and inside the
+                   directive via Math.max with 176 as floor. -->
               <div
                 class="shrink-0 pr-2 self-stretch flex flex-col justify-center lane-label"
-                style="width: max-content; min-width: 11rem; max-width: max-content"
+                style="width: var(--svc-name-col-width, max-content); min-width: 11rem"
               >
                 @if (store.view() === 'focus') {
                   <div class="flex items-center gap-1 mb-1">

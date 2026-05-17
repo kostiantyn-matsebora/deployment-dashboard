@@ -32,6 +32,7 @@ import {
 import { CommonModule } from '@angular/common';
 import {
   DeploymentMatrixStore,
+  SvcNameColumnWidthDirective,
   type EnvironmentDescriptor,
   type ServiceDescriptor,
   type SlotState,
@@ -47,7 +48,7 @@ import {
 @Component({
   selector: 'dd-workflow-rows-layout',
   standalone: true,
-  imports: [CommonModule, LayoutLeafComponent],
+  imports: [CommonModule, LayoutLeafComponent, SvcNameColumnWidthDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (store.view() === 'focus') {
@@ -89,6 +90,7 @@ import {
 
     <main
       #root
+      ddSvcNameColumnWidth
       class="px-6 py-2 space-y-3"
       [class.mr-\\[26rem\\]]="store.drawerOpen()"
       style="transition: margin-right 0.2s ease"

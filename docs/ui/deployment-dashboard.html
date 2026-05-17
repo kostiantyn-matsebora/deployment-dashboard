@@ -466,13 +466,19 @@
        truncated. Column gap reflows from 8 px on narrow viewports
        to the canonical 28 px on wide ones via clamp(). */
     /* NFR-09 #6 — leftmost (lane-label) column AUTOSIZES to its
-       content. `minmax(176px, max-content)` preserves the typical
-       short-name visual reservation as a floor; long names + any
-       trailing badge push the column wider rather than overflowing
-       into the first depth-bucket column. */
+       content. The width is unified across ALL rows in the layout
+       via a single CSS custom property `--svc-name-col-width` set
+       on the per-layout container by `recomputeSvcNameColumnWidth()`
+       (JS measures every service-name cell and writes max-content).
+       The CSS fallback `minmax(176px, max-content)` is used for the
+       initial paint BEFORE JS runs, and as a structural safety net
+       if measurement ever fails. Once JS lands, every row's column
+       1 uses the same measured width — deployment columns therefore
+       start at the same horizontal X for every service. The 176-px
+       floor is preserved by `Math.max(176, ...measured)` in JS. */
     .lane-grid {
       display: grid;
-      grid-template-columns: minmax(176px, max-content) repeat(var(--depth-count), max-content);
+      grid-template-columns: var(--svc-name-col-width, minmax(176px, max-content)) repeat(var(--depth-count), max-content);
       column-gap: clamp(8px, 1.5vw, 28px);
       row-gap: 8px;
       align-items: stretch;
@@ -653,17 +659,19 @@
        footprint to Matrix-like density (~80–100 px per linear service
        in Glance). */
     /* NFR-09 #6 — leftmost (.svc-block-meta) column AUTOSIZES to its
-       content. `minmax(176px, max-content)` keeps the typical short-
-       name visual reservation as a floor while long names + the
-       workflow-count badge push the column wider rather than
-       overflowing into the right-hand workflow stack. */
+       content AND is unified across all service blocks in the layout
+       via the `--svc-name-col-width` custom property (see lane-grid
+       comment above). The CSS fallback `minmax(176px, max-content)`
+       covers the initial paint before JS runs and the safety-net
+       case. Every .svc-block in the same layout shares the measured
+       max so deployment columns start at the same x for every row. */
     .svc-block {
       background: white;
       border: 1px solid #e5e7eb;
       border-radius: 10px;
       padding: 6px 12px;
       display: grid;
-      grid-template-columns: minmax(176px, max-content) 1fr;
+      grid-template-columns: var(--svc-name-col-width, minmax(176px, max-content)) 1fr;
       column-gap: 12px;
       align-items: stretch;
     }
@@ -1356,7 +1364,7 @@
       </div>
 
       <main class="px-6 pt-4 pb-8" :class="drawerOpen ? 'mr-[26rem]' : ''" style="transition: margin-right 0.2s ease">
-        <div class="lane-grid" :style="`--depth-count: ${depthLabels.length}; --leaf-width: ${leafWidthForView}; --leaf-width-expanded: 200px`">
+        <div class="lane-grid" data-svc-name-col-host :style="`--depth-count: ${depthLabels.length}; --leaf-width: ${leafWidthForView}; --leaf-width-expanded: 200px`">
           <template x-for="service in filteredServices" :key="service.id">
             <!-- Option A — when this lane is Focus-expanded, override
                  --leaf-width on the lane row itself so every leaf-pair
@@ -1377,7 +1385,7 @@
                  :data-pinned="view === 'focus' && pinned[service.id] ? 'true' : 'false'"
                  :data-testid="view === 'focus' ? (expanded[service.id] ? `row-expanded-${service.id}` : `row-collapsed-${service.id}`) : `swim-lane-row-${service.id}`"
                  x-init="$nextTick(() => $nextTick(() => requestAnimationFrame(() => recomputeEdges(service.id))))">
-              <div class="grid items-stretch" :style="`grid-template-columns: minmax(176px, max-content) repeat(${depthLabels.length}, 1fr); column-gap: 28px`">
+              <div class="grid items-stretch" :style="`grid-template-columns: var(--svc-name-col-width, minmax(176px, max-content)) repeat(${depthLabels.length}, 1fr); column-gap: 28px`">
 
                 <!-- Service label -->
                 <div class="lane-label">
@@ -1763,7 +1771,7 @@
            Combined with .svc-block's tightened 2-px top/bottom padding,
            the inter-service rhythm at 1080 px height fits ≥6 blocks in
            Glance and ≥5 in Compact. -->
-      <main class="px-6 py-2 space-y-3" :class="drawerOpen ? 'mr-[26rem]' : ''" style="transition: margin-right 0.2s ease">
+      <main class="px-6 py-2 space-y-3" data-svc-name-col-host :class="drawerOpen ? 'mr-[26rem]' : ''" style="transition: margin-right 0.2s ease">
 
         <template x-for="service in filteredServices" :key="service.id">
           <!-- Option A — when this service is Focus-expanded, override
@@ -3081,7 +3089,17 @@
           // Helper — re-run the connector / edge recompute for the
           // active layout. Matrix and workflow-rows write per-connector
           // `--target-half`; swim-lane re-emits the SVG paths.
+          // ALSO unifies the service-name column width across all rows
+          // in the active per-layout container so deployment columns
+          // start at the same x for every service (NFR-09 #6 uniform-
+          // column-width strengthening). The column-width recompute MUST
+          // run FIRST — widening column 1 shifts every leaf box right,
+          // which means the SVG path anchors / connector --target-line-
+          // width measurements must be taken AFTER the column has settled
+          // to its final width, otherwise SVG paths point at stale x
+          // coordinates and connectors hang in mid-air.
           const reflow = () => {
+            this.recomputeSvcNameColumnWidth();
             if (this.layout === 'swim-lane') {
               this.services.forEach(s => this.recomputeEdges(s.id));
             } else {
@@ -3560,6 +3578,71 @@
         // total cost is bounded.
         recomputeAllConnectorTops() {
           this.services.forEach(s => this.recomputeConnectorTops(s.id));
+        },
+
+        // Unify the service-name column width across every row in each
+        // per-layout container (`[data-svc-name-col-host]`). Walks every
+        // service-name cell (`.lane-label` for swim-lane,
+        // `.svc-block-meta-row` for workflow-rows), takes the max intrinsic
+        // width, and writes it onto the host as `--svc-name-col-width`.
+        //
+        // The 176-px floor is preserved by `Math.max(176, ...)`; the CSS
+        // fallback (`minmax(176px, max-content)`) covers the initial paint
+        // before this fires and the safety-net case (no cells / measurement
+        // returns 0). Variable lives on the per-layout container — NOT on
+        // `:root` — so independent layouts on the same page can have
+        // independent widths and so that switching layouts doesn't leak
+        // stale widths across layout boundaries.
+        recomputeSvcNameColumnWidth() {
+          const hosts = document.querySelectorAll('[data-svc-name-col-host]');
+          hosts.forEach(host => {
+            // Two cell shapes — pick whichever exists in this host.
+            // `.lane-label` is the swim-lane service-name cell; for
+            // workflow-rows the cell is `.svc-block-meta-row` (the first
+            // row inside .svc-block-meta which carries the name <p>).
+            const isSwimLane = host.classList.contains('lane-grid');
+            const cells = isSwimLane
+              ? host.querySelectorAll('.lane-label')
+              : host.querySelectorAll('.svc-block .svc-block-meta > .svc-block-meta-row:first-child');
+            if (cells.length === 0) {
+              host.style.removeProperty('--svc-name-col-width');
+              return;
+            }
+            // Measure each cell's intrinsic content width. The <p>s inside
+            // already use `width: max-content`, so scrollWidth equals the
+            // content width by construction. Use `scrollWidth` over
+            // `getBoundingClientRect().width` because the current column
+            // width may already be larger than the content (e.g. unified
+            // from a prior pass) — scrollWidth still reflects the cell's
+            // own content size including padding contribution where the
+            // cell is the layout box. To get a fair pre-layout content
+            // width we measure the WIDEST CHILD that carries the name,
+            // adding the cell's horizontal padding back in.
+            let maxContent = 0;
+            cells.forEach(cell => {
+              // Sum widths of every direct visible child to approximate
+              // the cell's intrinsic min-content + content width. The
+              // service-name <p> + any sibling badges (workflow-count for
+              // workflow-rows; the focus chevron+pin for swim-lane Focus)
+              // all need to fit inside the column.
+              const cs = window.getComputedStyle(cell);
+              const padX = parseFloat(cs.paddingLeft || '0') + parseFloat(cs.paddingRight || '0');
+              const gap = parseFloat(cs.columnGap || cs.gap || '0') || 0;
+              const children = Array.from(cell.children).filter(c => {
+                const ccs = window.getComputedStyle(c);
+                return ccs.display !== 'none' && ccs.visibility !== 'hidden';
+              });
+              let row = 0;
+              children.forEach(c => { row += c.scrollWidth; });
+              if (children.length > 1 && gap > 0) row += gap * (children.length - 1);
+              const contentWidth = row + padX;
+              if (contentWidth > maxContent) maxContent = contentWidth;
+            });
+            // 176-px floor (typical-name visual reservation); ceil to
+            // whole px to avoid sub-pixel column reflow on font load.
+            const finalPx = Math.ceil(Math.max(176, maxContent));
+            host.style.setProperty('--svc-name-col-width', `${finalPx}px`);
+          });
         },
 
         // ---------- Drawer ----------
