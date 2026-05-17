@@ -58,15 +58,18 @@ public static class DeploymentEndpoints
         .WithTags("Read")
         .WithSummary("Full service x environment matrix")
         .WithDescription(
-            "Returns the entire deployment matrix as a JSON object keyed by service name. " +
-            "Each entry carries the per-environment slot state (current / lastSuccessful / " +
-            "previousFailed) plus the derived topology edges for that service.\n\n" +
-            "The optional `correlationAttribute` query parameter is a per-request hint for " +
-            "the topology builder's correlation-fallback pass (used for services that did " +
-            "not push explicit parent_deployments at ingest time). Allowed values: " +
-            "`version`, `ref`, `sha`, `actor`, `run`, `ago`. Precedence: per-service " +
-            "override beats the query parameter, which beats the server default. An " +
-            "out-of-range value returns 400 Bad Request. Unauthenticated.")
+            "**Returns** the entire deployment matrix as a JSON object keyed by service name. " +
+            "Each entry carries the per-environment slot state (`current` / `lastSuccessful` / " +
+            "`previousFailed`) plus the derived topology edges for that service.\n\n" +
+            "**Authentication.** None required.\n\n" +
+            "**Query parameters:**\n" +
+            "- `correlationAttribute` *(optional)* — per-request hint for the topology builder's " +
+            "correlation-fallback pass (used for services that did not push explicit " +
+            "`parent_deployments` at ingest time). Allowed values: `version`, `ref`, `sha`, " +
+            "`actor`, `run`, `ago`.\n\n" +
+            "**Precedence:** per-service override > `correlationAttribute` query param > server default.\n\n" +
+            "**Errors:**\n" +
+            "- `400 Bad Request` — `correlationAttribute` not in the allowed set.")
         .Produces<IDictionary<string, ServiceMatrix>>(StatusCodes.Status200OK, contentType: "application/json")
         .ProducesProblem(StatusCodes.Status400BadRequest);
 
@@ -107,13 +110,16 @@ public static class DeploymentEndpoints
         .WithTags("Read")
         .WithSummary("Single-slot view for a (service, environment) pair")
         .WithDescription(
-            "Returns the same per-slot block (current / lastSuccessful / previousFailed) " +
-            "that the full matrix endpoint would emit for this pair — useful for clients " +
-            "that only care about one tile.\n\n" +
-            "The optional `correlationAttribute` query parameter is accepted for " +
-            "consistency with the matrix endpoint but ignored here (this endpoint does " +
-            "not return topology). An out-of-range value still returns 400 Bad Request. " +
-            "404 Not Found when the slot has no deployment history. Unauthenticated.")
+            "**Returns** the same per-slot block (`current` / `lastSuccessful` / `previousFailed`) " +
+            "that the full matrix endpoint would emit for this pair — useful for clients that " +
+            "only care about one tile.\n\n" +
+            "**Authentication.** None required.\n\n" +
+            "**Query parameters:**\n" +
+            "- `correlationAttribute` *(optional)* — accepted for consistency with the matrix " +
+            "endpoint but ignored here (this endpoint does not return topology).\n\n" +
+            "**Errors:**\n" +
+            "- `400 Bad Request` — `correlationAttribute` not in the allowed set.\n" +
+            "- `404 Not Found` — the slot has no deployment history.")
         .Produces<MatrixSlot>(StatusCodes.Status200OK, contentType: "application/json")
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status404NotFound);
@@ -149,12 +155,15 @@ public static class DeploymentEndpoints
         .WithTags("Read")
         .WithSummary("Reverse-chronological deployment history for a slot")
         .WithDescription(
-            "Returns the deployment-event history for one (service, environment) pair, " +
-            "newest first. The optional `limit` query parameter controls the page size — " +
-            "default 50, hard cap 1000 (values above the cap are silently clamped). " +
-            "Events are ordered by `deployed_at` descending, with `id` descending as the " +
-            "tie-breaker. Returns 404 Not Found when the slot has never been deployed to. " +
-            "Unauthenticated.")
+            "**Returns** the deployment-event history for one (service, environment) pair, " +
+            "newest first.\n\n" +
+            "**Authentication.** None required.\n\n" +
+            "**Query parameters:**\n" +
+            "- `limit` *(optional)* — page size. Default `50`, hard cap `1000` (values above " +
+            "the cap are silently clamped).\n\n" +
+            "**Ordering:** by `deployed_at` descending, with `id` descending as the tie-breaker.\n\n" +
+            "**Errors:**\n" +
+            "- `404 Not Found` — the slot has never been deployed to.")
         .Produces<DeploymentEventResponse[]>(StatusCodes.Status200OK, contentType: "application/json")
         .ProducesProblem(StatusCodes.Status404NotFound);
     }

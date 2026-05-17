@@ -9,7 +9,7 @@ namespace Dashboard.Shared.Dto;
 /// <para>The top-level matrix response is a dictionary keyed by service name:
 /// <c>{ "service-a": ServiceMatrix, "service-b": ServiceMatrix, ... }</c>.</para>
 ///
-/// <para>Shape:</para>
+/// <para><b>Shape:</b></para>
 /// <code>
 /// {
 ///   "envs":     { "dev": MatrixSlot, "qa": MatrixSlot, ... },
@@ -30,11 +30,14 @@ public sealed record ServiceMatrix
         new Dictionary<string, MatrixSlot>(StringComparer.Ordinal);
 
     /// <summary>
-    /// Per-service environment DAG. Edges come first from explicit
-    /// <c>parent_deployments</c> references at ingest time, then from a
-    /// correlation-fallback pass (e.g. "same version deployed across envs")
-    /// for services that do not push explicit parents. Always present;
-    /// <c>edges</c> may be empty.
+    /// Per-service environment DAG. Always present; <c>edges</c> may be empty.
+    ///
+    /// <para><b>Edge sources, in priority order:</b></para>
+    /// <list type="number">
+    ///   <item>Explicit <c>parent_deployments</c> references at ingest time.</item>
+    ///   <item>Correlation-fallback pass (e.g. "same version deployed across envs")
+    ///   for services that do not push explicit parents.</item>
+    /// </list>
     /// </summary>
     [JsonPropertyName("topology")]
     public TopologySnapshot Topology { get; init; } = new();

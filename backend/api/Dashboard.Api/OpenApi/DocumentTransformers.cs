@@ -39,21 +39,22 @@ internal sealed class DashboardInfoDocumentTransformer(IConfiguration configurat
         document.Info.Title = ApiTitle;
         document.Info.Version = ApiVersion;
         document.Info.Description =
-            "Push-based deployment matrix for an internal pipeline view. CI/CD pipelines POST " +
-            "deployment events as they happen; dashboards, bots, and other consumers GET the " +
+            "Push-based deployment matrix for an internal pipeline view. CI/CD pipelines `POST` " +
+            "deployment events as they happen; dashboards, bots, and other consumers `GET` the " +
             "matrix or subscribe to the live stream.\n\n" +
-            "**Two surfaces:**\n" +
-            "* **Write** — `POST /api/deployments` (ingest) and `PATCH /api/config/topology` " +
+            "## Two surfaces\n\n" +
+            "- **Write** — `POST /api/deployments` (ingest) and `PATCH /api/config/topology` " +
             "(admin). Both require the `X-Api-Key` header.\n" +
-            "* **Read** — full matrix, single-slot, per-slot history, environment / service " +
+            "- **Read** — full matrix, single-slot, per-slot history, environment / service " +
             "discovery, `GET /api/config/topology`, the `/api/stream` SSE feed, and `/health`. " +
             "All unauthenticated.\n\n" +
-            "**Real-time:** subscribe to `GET /api/stream` with any SSE client to receive " +
-            "`slot-update` events as deployments are ingested. Reconnect with `Last-Event-ID` " +
-            "for best-effort replay.\n\n" +
-            "**Wire format:** request and response bodies use snake_case JSON. Timestamps are " +
-            "UTC ISO-8601 with a trailing `Z`. Error responses follow RFC 7807 (problem " +
-            "documents).";
+            "## Real-time\n\n" +
+            "Subscribe to `GET /api/stream` with any SSE client to receive `slot-update` events " +
+            "as deployments are ingested. Reconnect with `Last-Event-ID` for best-effort replay.\n\n" +
+            "## Wire format\n\n" +
+            "- Request and response bodies use `snake_case` JSON.\n" +
+            "- Timestamps are UTC ISO-8601 with a trailing `Z`.\n" +
+            "- Error responses follow RFC 7807 (problem documents).";
 
         // Declarative-config: server list comes from IConfiguration, never
         // hardcoded URLs in source. Falls back to the dev gateway URL only
@@ -124,10 +125,12 @@ internal sealed class WriteSurfaceSecurityDocumentTransformer : IOpenApiDocument
             In = ParameterLocation.Header,
             Name = HeaderName,
             Description =
-                $"Static API key. Send the configured shared secret in the {HeaderName} " +
-                "request header. Required for the two Write endpoints — POST /api/deployments " +
-                "and PATCH /api/config/topology. All Read endpoints are unauthenticated and " +
-                "ignore this header.",
+                $"Static API key. Send the configured shared secret in the `{HeaderName}` " +
+                "request header.\n\n" +
+                "**Required for the two Write endpoints:**\n" +
+                "- `POST /api/deployments`\n" +
+                "- `PATCH /api/config/topology`\n\n" +
+                "All Read endpoints are unauthenticated and ignore this header.",
         };
 
         if (document.Paths is null) return Task.CompletedTask;

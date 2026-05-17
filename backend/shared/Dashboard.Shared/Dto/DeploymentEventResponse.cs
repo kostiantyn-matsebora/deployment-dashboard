@@ -4,9 +4,15 @@ using Dashboard.Shared.Domain;
 namespace Dashboard.Shared.Dto;
 
 /// <summary>
-/// Canonical deployment-event shape. Returned by <c>POST /api/deployments</c>
-/// (as the <c>201 Created</c> body) and by the per-slot history endpoint.
-/// All field names on the wire are snake_case.
+/// Canonical deployment-event shape.
+///
+/// <para><b>Returned by:</b></para>
+/// <list type="bullet">
+///   <item><c>POST /api/deployments</c> — as the <c>201 Created</c> body.</item>
+///   <item><c>GET /api/deployments/{service}/{environment}/history</c> — one entry per event.</item>
+/// </list>
+///
+/// <para>All field names on the wire are <c>snake_case</c>.</para>
 /// </summary>
 public sealed record DeploymentEventResponse
 {
@@ -38,8 +44,7 @@ public sealed record DeploymentEventResponse
     public string Version { get; init; } = string.Empty;
 
     /// <summary>
-    /// Lifecycle status — one of <c>"in-progress"</c>, <c>"success"</c>,
-    /// <c>"failure"</c>.
+    /// Lifecycle status. One of <c>in-progress</c>, <c>success</c>, <c>failure</c>.
     /// </summary>
     [JsonPropertyName("status")]
     public string Status { get; init; } = string.Empty;
@@ -52,7 +57,7 @@ public sealed record DeploymentEventResponse
     [JsonPropertyName("run_number")]
     public long RunNumber { get; init; }
 
-    /// <summary>Who triggered the deployment — username, bot id, or "system".</summary>
+    /// <summary>Who triggered the deployment — username, bot id, or <c>system</c>.</summary>
     [JsonPropertyName("actor")]
     public string Actor { get; init; } = string.Empty;
 
@@ -71,17 +76,16 @@ public sealed record DeploymentEventResponse
     public IReadOnlyList<string> ParentDeployments { get; init; } = Array.Empty<string>();
 
     /// <summary>
-    /// Optional source identifier (branch / tag / PR / opaque ref) echoed
-    /// back from the ingest request. Always present in the response; the
-    /// value is <c>null</c> when none was supplied.
+    /// Source identifier (branch / tag / PR / opaque ref) echoed back from
+    /// the ingest request. Always present in the response; the value is
+    /// <c>null</c> when none was supplied.
     /// </summary>
     [JsonPropertyName("ref")]
     public string? Ref { get; init; }
 
     /// <summary>
-    /// Optional commit SHA echoed back from the ingest request. Always
-    /// present in the response; the value is <c>null</c> when none was
-    /// supplied.
+    /// Commit SHA echoed back from the ingest request. Always present in the
+    /// response; the value is <c>null</c> when none was supplied.
     /// </summary>
     [JsonPropertyName("sha")]
     public string? Sha { get; init; }

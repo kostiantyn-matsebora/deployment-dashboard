@@ -7,13 +7,25 @@ namespace Dashboard.Shared.Dto;
 /// Request body for <c>POST /api/deployments</c> — the push-based ingest call
 /// that your CI/CD pipeline makes after a deployment completes (or starts).
 ///
-/// <para>All required string fields reject null, empty, and whitespace-only
-/// values; an invalid payload returns <c>422 Unprocessable Entity</c> with an
-/// RFC 7807 problem document listing the offending fields.</para>
+/// <para><b>Required fields:</b> <c>service</c>, <c>environment</c>,
+/// <c>version</c>, <c>status</c>, <c>run_number</c>, <c>actor</c>,
+/// <c>run_url</c>, <c>deployment_id</c>.</para>
 ///
-/// <para>Optional fields (<see cref="Ref"/>, <see cref="Sha"/>) treat
-/// "omitted" and "explicit <c>null</c>" as equivalent on the wire; when
-/// present, they must be non-empty and within their length cap.</para>
+/// <para><b>Optional fields:</b> <c>ref</c>, <c>sha</c>,
+/// <c>parent_deployments</c>.</para>
+///
+/// <para><b>Validation:</b></para>
+/// <list type="bullet">
+///   <item>All required string fields reject null, empty, and whitespace-only values.</item>
+///   <item>All string fields have length caps (see per-field docs).</item>
+///   <item><c>status</c> must be one of the allowed lifecycle values.</item>
+///   <item>Optional fields (<see cref="Ref"/>, <see cref="Sha"/>) treat
+///   "omitted" and "explicit <c>null</c>" as equivalent on the wire; when
+///   present, they must be non-empty and within their length cap.</item>
+/// </list>
+///
+/// <para>Failures return <c>422 Unprocessable Entity</c> with an RFC 7807
+/// problem document listing the offending fields.</para>
 /// </summary>
 public sealed record DeploymentEventRequest
 {
@@ -21,8 +33,9 @@ public sealed record DeploymentEventRequest
     /// Stable identifier for this deployment event, chosen by the caller — a
     /// CI run id, build number, GUID, or any opaque string that is unique
     /// within the <see cref="Service"/>. Used to wire up explicit parent /
-    /// child relationships via <see cref="ParentDeployments"/>. Required;
-    /// 1–200 characters.
+    /// child relationships via <see cref="ParentDeployments"/>.
+    ///
+    /// <para><b>Required.</b> 1–200 characters.</para>
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -37,12 +50,14 @@ public sealed record DeploymentEventRequest
     /// build X from staging"). When omitted or empty, the dashboard derives
     /// lineage on the read side from a configurable correlation attribute.
     ///
-    /// <para>Each element must be non-empty and at most 200 characters.
-    /// References to deployments in a different service are rejected with
-    /// <c>400 Bad Request</c>. References that would create a cycle through
-    /// already-ingested deployments are rejected with <c>400 Bad Request</c>.
-    /// References to a deployment that has not yet been ingested are accepted
-    /// and resolved later if and when the parent arrives.</para>
+    /// <para><b>Optional.</b> Each element must be non-empty and at most 200 characters.</para>
+    ///
+    /// <para><b>Rules:</b></para>
+    /// <list type="bullet">
+    ///   <item>References to deployments in a different service are rejected with <c>400 Bad Request</c>.</item>
+    ///   <item>References that would create a cycle through already-ingested deployments are rejected with <c>400 Bad Request</c>.</item>
+    ///   <item>References to a deployment that has not yet been ingested are accepted and resolved later if and when the parent arrives.</item>
+    /// </list>
     /// </summary>
     [ParentDeploymentsElements]
     [JsonPropertyName("parent_deployments")]
@@ -50,8 +65,11 @@ public sealed record DeploymentEventRequest
 
     /// <summary>
     /// Logical service identifier — the matrix row this event belongs to.
-    /// Examples: <c>"checkout-api"</c>, <c>"order-worker"</c>. Required;
-    /// 1–200 characters. Pick something stable per pipeline.
+    /// Pick something stable per pipeline.
+    ///
+    /// <para><b>Required.</b> 1–200 characters.</para>
+    ///
+    /// <para><b>Examples:</b> <c>checkout-api</c>, <c>order-worker</c>.</para>
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -60,10 +78,13 @@ public sealed record DeploymentEventRequest
     public string Service { get; init; } = string.Empty;
 
     /// <summary>
-    /// Target environment — the matrix column this event belongs to.
-    /// Examples: <c>"dev"</c>, <c>"qa-1"</c>, <c>"prod"</c>. Required;
-    /// 1–200 characters. New environment names appear in the dashboard
-    /// automatically on first ingest — no pre-registration step.
+    /// Target environment — the matrix column this event belongs to. New
+    /// environment names appear in the dashboard automatically on first
+    /// ingest — no pre-registration step.
+    ///
+    /// <para><b>Required.</b> 1–200 characters.</para>
+    ///
+    /// <para><b>Examples:</b> <c>dev</c>, <c>qa-1</c>, <c>prod</c>.</para>
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -73,8 +94,9 @@ public sealed record DeploymentEventRequest
 
     /// <summary>
     /// Version label shown on the matrix tile — any opaque string the
-    /// pipeline picks (semver, build number, image tag, …). Required;
-    /// 1–200 characters.
+    /// pipeline picks (semver, build number, image tag, ...).
+    ///
+    /// <para><b>Required.</b> 1–200 characters.</para>
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -83,8 +105,11 @@ public sealed record DeploymentEventRequest
     public string Version { get; init; } = string.Empty;
 
     /// <summary>
-    /// Lifecycle status — one of <c>"in-progress"</c>, <c>"success"</c>,
-    /// <c>"failure"</c>. Any other value returns <c>422 Unprocessable Entity</c>.
+    /// Lifecycle status.
+    ///
+    /// <para><b>Required.</b> Allowed values: <c>in-progress</c>,
+    /// <c>success</c>, <c>failure</c>. Any other value returns
+    /// <c>422 Unprocessable Entity</c>.</para>
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [AllowedStatus]
@@ -93,8 +118,10 @@ public sealed record DeploymentEventRequest
 
     /// <summary>
     /// Absolute URL to the CI/CD run that produced this event — the dashboard
-    /// renders it as the "View run" link on the tile. Required; must be a
-    /// syntactically valid URL; at most 2048 characters.
+    /// renders it as the "View run" link on the tile.
+    ///
+    /// <para><b>Required.</b> Must be a syntactically valid URL, at most 2048
+    /// characters.</para>
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -104,16 +131,19 @@ public sealed record DeploymentEventRequest
     public string RunUrl { get; init; } = string.Empty;
 
     /// <summary>
-    /// Monotonic CI/CD run number — shown on the tile as <c>"#123"</c>.
-    /// Must be zero or positive.
+    /// Monotonic CI/CD run number — shown on the tile as <c>#123</c>.
+    ///
+    /// <para><b>Required.</b> Must be zero or positive.</para>
     /// </summary>
     [Range(0, long.MaxValue)]
     [JsonPropertyName("run_number")]
     public long RunNumber { get; init; }
 
     /// <summary>
-    /// Who triggered the deployment — a username, bot id, or <c>"system"</c>
-    /// for scheduled / automated triggers. Required; 1–200 characters.
+    /// Who triggered the deployment — a username, bot id, or <c>system</c>
+    /// for scheduled / automated triggers.
+    ///
+    /// <para><b>Required.</b> 1–200 characters.</para>
     /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
@@ -122,10 +152,11 @@ public sealed record DeploymentEventRequest
     public string Actor { get; init; } = string.Empty;
 
     /// <summary>
-    /// Optional source identifier — a branch name, PR number, tag, or any
-    /// human-readable git ref. Independent of <see cref="Sha"/>. Omit, send
-    /// <c>null</c>, or send a non-empty string up to 200 characters. No
-    /// format check.
+    /// Source identifier — a branch name, PR number, tag, or any
+    /// human-readable git ref. Independent of <see cref="Sha"/>.
+    ///
+    /// <para><b>Optional.</b> Omit, send <c>null</c>, or send a non-empty
+    /// string up to 200 characters. No format check.</para>
     /// </summary>
     [StringLength(200)]
     [OptionalNotWhitespace]
@@ -133,10 +164,12 @@ public sealed record DeploymentEventRequest
     public string? Ref { get; init; }
 
     /// <summary>
-    /// Optional commit SHA associated with this deployment. Independent of
-    /// <see cref="Ref"/>. Omit, send <c>null</c>, or send a non-empty string
-    /// up to 64 characters (room for SHA-256 hex). No hex / format check —
-    /// any opaque identifier is accepted.
+    /// Commit SHA associated with this deployment. Independent of
+    /// <see cref="Ref"/>.
+    ///
+    /// <para><b>Optional.</b> Omit, send <c>null</c>, or send a non-empty
+    /// string up to 64 characters (room for SHA-256 hex). No hex / format
+    /// check — any opaque identifier is accepted.</para>
     /// </summary>
     [StringLength(64)]
     [OptionalNotWhitespace]

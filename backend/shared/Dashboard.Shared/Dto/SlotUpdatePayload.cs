@@ -6,7 +6,7 @@ namespace Dashboard.Shared.Dto;
 /// Payload of the <c>slot-update</c> Server-Sent Event emitted on
 /// <c>GET /api/stream</c> after a deployment is ingested.
 ///
-/// <para>Shape:</para>
+/// <para><b>Shape:</b></para>
 /// <code>
 /// {
 ///   "service":     "service-a",
@@ -20,7 +20,7 @@ namespace Dashboard.Shared.Dto;
 /// consumers can apply the update to their local matrix copy without an
 /// extra round-trip.</para>
 ///
-/// <para><strong>Topology is intentionally NOT included in the SSE payload.</strong>
+/// <para><b>Topology is intentionally NOT included in the SSE payload.</b>
 /// Correlation-attribute preferences are per-user, so a single broadcast
 /// payload cannot satisfy every viewer. Clients that need the refreshed
 /// per-service topology after a slot update should re-issue

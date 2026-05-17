@@ -190,18 +190,18 @@ public static class WriteApiEndpoints
         .WithSummary("Ingest a deployment event")
         .WithDescription(
             "Push a deployment event from your CI/CD pipeline. The event is persisted and " +
-            "immediately broadcast to every connected SSE subscriber on /api/stream. " +
-            "Returns the canonical, server-stamped event row (including the assigned id " +
-            "and deployed_at). Requires the X-Api-Key header.\n\n" +
-            "Failure modes:\n" +
-            "* **422 Unprocessable Entity** — payload-shape validation failure (missing " +
-            "required field, out-of-range status, invalid URL, oversized string, …). The " +
-            "response is an RFC 7807 ValidationProblemDetails listing the offending fields.\n" +
-            "* **400 Bad Request** — parent_deployments references point to a different " +
-            "service, or would create a cycle through already-ingested deployments.\n" +
-            "* **409 Conflict** — a deployment with the same (service, deployment_id) " +
-            "already exists.\n" +
-            "* **401 Unauthorized** — the X-Api-Key header is missing or wrong.")
+            "immediately broadcast to every connected SSE subscriber on `/api/stream`.\n\n" +
+            "**Returns** the canonical, server-stamped event row (including the assigned `id` " +
+            "and `deployed_at`).\n\n" +
+            "**Authentication.** Requires the `X-Api-Key` header.\n\n" +
+            "**Errors:**\n" +
+            "- `422 Unprocessable Entity` — payload-shape validation failure (missing required " +
+            "field, out-of-range `status`, invalid URL, oversized string, ...). The response is " +
+            "an RFC 7807 `ValidationProblemDetails` listing the offending fields.\n" +
+            "- `400 Bad Request` — `parent_deployments` references point to a different service, " +
+            "or would create a cycle through already-ingested deployments.\n" +
+            "- `409 Conflict` — a deployment with the same `(service, deployment_id)` already exists.\n" +
+            "- `401 Unauthorized` — the `X-Api-Key` header is missing or wrong.")
         .Accepts<DeploymentEventRequest>("application/json")
         .Produces<DeploymentEventResponse>(StatusCodes.Status201Created, contentType: "application/json")
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
@@ -242,12 +242,18 @@ public static class WriteApiEndpoints
         .WithSummary("Update the topology / correlation configuration")
         .WithDescription(
             "Partial update of the server-wide topology config — the default correlation " +
-            "attribute and the per-service overrides used by the read-side topology " +
-            "derivation. PATCH semantics: omitted fields stay unchanged; a null value inside " +
-            "perServiceOverrides removes that service's override; keys not present in the " +
-            "map are left untouched. The response body is the merged, post-update config.\n\n" +
-            "Requires the X-Api-Key header. An out-of-range correlationAttribute (or the " +
-            "explicitly-disallowed value `id`) returns 400 Bad Request.")
+            "attribute and the per-service overrides used by the read-side topology derivation.\n\n" +
+            "**Returns** the merged, post-update config.\n\n" +
+            "**Authentication.** Requires the `X-Api-Key` header.\n\n" +
+            "**PATCH semantics:**\n" +
+            "- Omitted fields stay unchanged.\n" +
+            "- Inside `perServiceOverrides`, a `null` value removes that service's override.\n" +
+            "- Keys not present in `perServiceOverrides` are left untouched (the map is a delta, " +
+            "not a replacement).\n\n" +
+            "**Errors:**\n" +
+            "- `400 Bad Request` — `correlationAttribute` out of range, or the explicitly " +
+            "disallowed value `id` was supplied.\n" +
+            "- `401 Unauthorized` — the `X-Api-Key` header is missing or wrong.")
         .Accepts<TopologyConfigPatch>("application/json")
         .Produces<TopologyConfigDto>(StatusCodes.Status200OK, contentType: "application/json")
         .ProducesProblem(StatusCodes.Status400BadRequest)

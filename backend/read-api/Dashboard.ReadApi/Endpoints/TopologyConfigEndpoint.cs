@@ -33,12 +33,14 @@ public static class TopologyConfigEndpoint
         .WithTags("Read")
         .WithSummary("Active topology / correlation configuration")
         .WithDescription(
-            "Returns the currently-active topology configuration — the global default " +
-            "correlation attribute and any per-service overrides. Clients can read this " +
-            "to label their UI (e.g. show which attribute is the 'system default') or to " +
-            "decide whether to send a per-request `?correlationAttribute=` hint. " +
-            "Unauthenticated. To change the configuration, use PATCH /api/config/topology " +
-            "(requires the X-Api-Key header).")
+            "**Returns** the currently-active topology configuration — the global default " +
+            "correlation attribute and any per-service overrides.\n\n" +
+            "**Authentication.** None required.\n\n" +
+            "**Usage:** clients can read this to label their UI (e.g. show which attribute is " +
+            "the 'system default') or to decide whether to send a per-request " +
+            "`?correlationAttribute=` hint.\n\n" +
+            "**To change the configuration:** use `PATCH /api/config/topology` (requires the " +
+            "`X-Api-Key` header).")
         .Produces<TopologyConfigDto>(StatusCodes.Status200OK, contentType: "application/json");
     }
 }

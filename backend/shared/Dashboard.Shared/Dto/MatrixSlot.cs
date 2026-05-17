@@ -7,7 +7,7 @@ namespace Dashboard.Shared.Dto;
 /// One slot in the deployment matrix — the state of a single
 /// <c>(service, environment)</c> pair.
 ///
-/// <para>Shape:</para>
+/// <para><b>Shape:</b></para>
 /// <code>
 /// {
 ///   "current":        { ... },
@@ -16,9 +16,9 @@ namespace Dashboard.Shared.Dto;
 /// }
 /// </code>
 ///
-/// <para>Note: <c>lastSuccessful</c> and <c>previousFailed</c> are
-/// intentionally camelCase on the wire (the rest of the payload uses
-/// snake_case).</para>
+/// <para><b>Wire-format note:</b> <c>lastSuccessful</c> and
+/// <c>previousFailed</c> are intentionally <c>camelCase</c> on the wire
+/// (the rest of the payload uses <c>snake_case</c>).</para>
 /// </summary>
 public sealed record MatrixSlot
 {
@@ -31,19 +31,25 @@ public sealed record MatrixSlot
     public CurrentDeployment Current { get; init; } = default!;
 
     /// <summary>
-    /// Most recent <c>success</c> event for this slot, or <c>null</c> when
-    /// <see cref="Current"/> is itself a success (no fallback needed) or
-    /// when no success has ever been recorded for this slot. Lets clients
-    /// show "currently failing, last good was vX" without an extra request.
+    /// Most recent <c>success</c> event for this slot. Lets clients show
+    /// "currently failing, last good was vX" without an extra request.
+    ///
+    /// <para><b><c>null</c> when:</b></para>
+    /// <list type="bullet">
+    ///   <item><see cref="Current"/> is itself a <c>success</c> (no fallback needed).</item>
+    ///   <item>No <c>success</c> has ever been recorded for this slot.</item>
+    /// </list>
     /// </summary>
     [JsonPropertyName("lastSuccessful")]
     public LastSuccessfulDeployment? LastSuccessful { get; init; }
 
     /// <summary>
-    /// <c>true</c> when <see cref="Current"/> is <c>in-progress</c> AND the
-    /// most recent terminal event before it was a failure — i.e. the slot is
-    /// retrying after a failed run. Useful for distinguishing "first attempt
-    /// in flight" from "retry of a known-broken deploy" in the UI.
+    /// <c>true</c> when <see cref="Current"/> is <c>in-progress</c>
+    /// <b>and</b> the most recent terminal event before it was a
+    /// <c>failure</c> — i.e. the slot is retrying after a failed run.
+    ///
+    /// <para>Useful for distinguishing "first attempt in flight" from
+    /// "retry of a known-broken deploy" in the UI.</para>
     /// </summary>
     [JsonPropertyName("previousFailed")]
     public bool PreviousFailed { get; init; }
