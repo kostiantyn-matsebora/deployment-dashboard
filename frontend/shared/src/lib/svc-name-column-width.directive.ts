@@ -14,16 +14,24 @@
 // independent layouts on the same page can have independent widths and so
 // that switching layouts doesn't leak stale widths across boundaries.
 //
-// Re-measurement triggers (the same shape every other geometric recompute
-// in this codebase uses):
-//   - `afterEveryRender` (DOM-write phase) — covers all Angular-driven
-//     mutations (data load, filter, view / layout switch, focus expand /
-//     collapse, drawer open / close).
+// Re-measurement triggers:
+//   - `afterNextRender` — one-shot initial measure after the first paint.
+//   - `MutationObserver` on the host subtree (childList) — covers all
+//     Angular-driven row mount/unmount (filter, search, layout switch,
+//     SSE data change). Cheaper than `afterEveryRender` and avoids the
+//     zoneless NG0103 hazard.
 //   - `ResizeObserver` on the host AND every measured cell — covers
-//     non-Angular triggers (font load, browser zoom, viewport resize,
-//     content reflow inside the cell).
+//     non-DOM-mutation triggers (font load, browser zoom, viewport
+//     resize, content reflow inside an existing cell).
 //   - window `resize` listener — belt-and-braces against viewport-driven
 //     reflow that the ResizeObserver path may miss on some platforms.
+//
+// Measurement is done by deep-cloning each cell into an off-screen
+// `width: max-content` sandbox and reading `getBoundingClientRect().
+// width`. Summing children's widths in-place doesn't work because
+// `.lane-label` is flex-COLUMN (sums vertical-stack widths) and child
+// `scrollWidth` reflects current laid-out width, not intrinsic. The
+// clone approach delegates intrinsic-size math to the browser.
 
 import {
   DestroyRef,
@@ -45,36 +53,63 @@ export class SvcNameColumnWidthDirective {
   private readonly destroyRef = inject(DestroyRef);
 
   private resizeObserver: ResizeObserver | null = null;
+  private mutationObserver: MutationObserver | null = null;
   private readonly observedCells = new WeakSet<Element>();
-  private readonly resizeHandler = (): void => this.recompute();
+  private readonly resizeHandler = (): void => this.scheduleRecompute();
   /** Last written px value — short-circuit identical writes. */
   private lastPx = -1;
-  /** rAF coalesce flag for ResizeObserver-driven recomputes. */
-  private roScheduled = false;
+  /** rAF coalesce flag for all async recompute triggers. */
+  private scheduled = false;
+
+  private scheduleRecompute(): void {
+    if (this.scheduled) return;
+    this.scheduled = true;
+    queueMicrotask(() => requestAnimationFrame(() => {
+      this.scheduled = false;
+      this.recompute();
+    }));
+  }
 
   constructor() {
-    // One-shot initial measure after the first paint. Subsequent updates
-    // are driven entirely by the `ResizeObserver` attached inside
-    // `recompute()` (host + per-cell observation), which catches both
-    // Angular-driven mutations (new cells, content edits — they resize the
-    // host) and non-Angular triggers (font load, browser zoom, viewport).
-    // We deliberately do NOT use `afterEveryRender` here: it would re-fire
+    // One-shot initial measure after the first paint. All subsequent
+    // updates are driven by three non-Angular observers:
+    //
+    //   - `MutationObserver` on the host (subtree childList) — fires
+    //     when rows mount / unmount (filter, search, layout switch,
+    //     SSE-driven data change). This is the main source of
+    //     re-measurement; new rows mean new content widths.
+    //   - `ResizeObserver` on host + each measured cell — covers
+    //     non-DOM-mutation triggers (font load, browser zoom,
+    //     viewport resize, content reflow inside an existing cell).
+    //   - `window` resize listener — belt-and-braces against viewport
+    //     resizes the ResizeObserver path may miss on some platforms.
+    //
+    // We deliberately do NOT use `afterEveryRender`: it would re-fire
     // during every CD pass alongside the layout components' own
     // signal-writing afterRender hooks, and stacking the two trips
     // Angular's zoneless NG0103 infinite-render guard even though no
     // single hook is itself unstable.
     afterNextRender({
-      mixedReadWrite: () => this.recompute()
+      mixedReadWrite: () => {
+        this.recompute();
+        this.attachMutationObserver();
+      }
     });
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', this.resizeHandler);
     }
     this.destroyRef.onDestroy(() => {
+      this.mutationObserver?.disconnect();
+      this.mutationObserver = null;
       this.resizeObserver?.disconnect();
       this.resizeObserver = null;
       if (typeof window !== 'undefined') {
         window.removeEventListener('resize', this.resizeHandler);
       }
+      if (this.sandboxEl && this.sandboxEl.isConnected) {
+        this.sandboxEl.remove();
+      }
+      this.sandboxEl = null;
     });
   }
 
@@ -135,31 +170,68 @@ export class SvcNameColumnWidthDirective {
   }
 
   /**
-   * Measure the cell's intrinsic content width. The service-name <p>s
-   * already use `width: max-content` per NFR-09 #6, so scrollWidth on the
-   * children reflects the unclipped content width. We sum every direct
-   * visible child + the cell's column-gap + horizontal padding so the
-   * computed value matches the box the grid would reserve to fit ALL
-   * content without truncation. Hidden children (display:none /
-   * visibility:hidden) are skipped — Focus-only chevron/pin shouldn't
-   * inflate the column when Focus isn't active.
+   * Measure the cell's intrinsic (max-content) width — the width the cell
+   * would take if its column was unconstrained. This is the value we
+   * actually need to unify across rows: any lesser value would leave at
+   * least one row's content clipped or overflowing the cell border.
+   *
+   * Why not just sum children's `scrollWidth` + padding + gap?
+   *   - `.lane-label` is flex-COLUMN. Children stack vertically; summing
+   *     their widths is meaningless (massively overestimates — every
+   *     vertical-stack row's width adds up). The chevron+pin row, the
+   *     name <p>, the failure label and the topology hint would all be
+   *     summed instead of max'd, producing values 3-5x reality.
+   *   - `.svc-block-meta-row` is flex-ROW but children like the `wfs`
+   *     badge use Tailwind utility classes that don't pre-size them; a
+   *     child's `scrollWidth` reflects its current laid-out width which
+   *     equals its content width only when nothing has shrunk it. The
+   *     name <p> uses `width: max-content` (intrinsic), but the badge
+   *     and chevron are governed by flex sizing.
+   *
+   * Approach — let the browser do the math: clone the cell into an
+   * off-screen sandbox sized at `max-content`, measure
+   * `getBoundingClientRect().width` of the clone, throw it away. The
+   * clone preserves every computed style (Tailwind utilities included)
+   * because we deep-clone the live element; the sandbox just removes the
+   * column-width constraint that the live grid imposes.
    */
   private measureCell(cell: HTMLElement): number {
-    const cs = window.getComputedStyle(cell);
-    const padX =
-      parseFloat(cs.paddingLeft || '0') +
-      parseFloat(cs.paddingRight || '0');
-    const gap = parseFloat(cs.columnGap || cs.gap || '0') || 0;
-    const children = Array.from(cell.children).filter(c => {
-      const ccs = window.getComputedStyle(c);
-      return ccs.display !== 'none' && ccs.visibility !== 'hidden';
-    });
-    let row = 0;
-    for (const c of children) {
-      row += (c as HTMLElement).scrollWidth;
-    }
-    if (children.length > 1 && gap > 0) row += gap * (children.length - 1);
-    return row + padX;
+    const sandbox = this.sandbox();
+    if (!sandbox) return 0;
+    const clone = cell.cloneNode(true) as HTMLElement;
+    // Strip any width-constraining inline styles inherited from the
+    // live cell so the clone is free to grow to max-content. The grid-
+    // imposed track width on the live element doesn't carry across the
+    // clone (different parent), but a stray inline `width:` would.
+    clone.style.width = 'max-content';
+    clone.style.minWidth = '0';
+    clone.style.maxWidth = 'none';
+    sandbox.appendChild(clone);
+    const w = clone.getBoundingClientRect().width;
+    sandbox.removeChild(clone);
+    return w;
+  }
+
+  /**
+   * Lazily-created off-screen measurement sandbox. Sits at the
+   * document.body root (so it inherits the same font / Tailwind context
+   * as live cells) but is positioned out of view and ignored by layout.
+   * `width: max-content` inside flexes out to whatever the cloned cell
+   * intrinsically needs.
+   */
+  private sandboxEl: HTMLDivElement | null = null;
+  private sandbox(): HTMLDivElement | null {
+    if (typeof document === 'undefined') return null;
+    if (this.sandboxEl && this.sandboxEl.isConnected) return this.sandboxEl;
+    const el = document.createElement('div');
+    el.style.cssText =
+      'position:fixed;left:-99999px;top:0;visibility:hidden;' +
+      'pointer-events:none;width:max-content;contain:layout style;';
+    el.setAttribute('aria-hidden', 'true');
+    el.setAttribute('data-svc-name-col-sandbox', '');
+    document.body.appendChild(el);
+    this.sandboxEl = el;
+    return el;
   }
 
   /**
@@ -178,14 +250,7 @@ export class SvcNameColumnWidthDirective {
   private attachObserver(host: HTMLElement, cells: readonly HTMLElement[]): void {
     if (typeof ResizeObserver === 'undefined') return;
     if (!this.resizeObserver) {
-      this.resizeObserver = new ResizeObserver(() => {
-        if (this.roScheduled) return;
-        this.roScheduled = true;
-        queueMicrotask(() => requestAnimationFrame(() => {
-          this.roScheduled = false;
-          this.recompute();
-        }));
-      });
+      this.resizeObserver = new ResizeObserver(() => this.scheduleRecompute());
       this.resizeObserver.observe(host);
       this.observedCells.add(host);
     }
@@ -194,5 +259,20 @@ export class SvcNameColumnWidthDirective {
       this.resizeObserver.observe(c);
       this.observedCells.add(c);
     }
+  }
+
+  /**
+   * Watch the host's subtree for childList mutations — fires when rows
+   * mount / unmount (filter, search, layout switch, SSE data change).
+   * Schedules a single coalesced recompute via the shared rAF queue.
+   * Attached once, post-first-render, and torn down with the directive.
+   */
+  private attachMutationObserver(): void {
+    if (typeof MutationObserver === 'undefined') return;
+    if (this.mutationObserver) return;
+    const host = this.hostRef.nativeElement;
+    if (!host) return;
+    this.mutationObserver = new MutationObserver(() => this.scheduleRecompute());
+    this.mutationObserver.observe(host, { childList: true, subtree: true });
   }
 }

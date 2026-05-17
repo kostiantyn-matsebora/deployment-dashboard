@@ -3595,6 +3595,29 @@
         // stale widths across layout boundaries.
         recomputeSvcNameColumnWidth() {
           const hosts = document.querySelectorAll('[data-svc-name-col-host]');
+          // Lazily-created off-screen sandbox for clone-based intrinsic-
+          // width measurement. Live cells live inside a CSS Grid track
+          // whose width we are trying to compute; reading their own
+          // dimensions yields the CURRENT track width (chicken-and-egg).
+          // Summing children's scrollWidth + gap + padding ALSO fails
+          // because `.lane-label` is flex-COLUMN — summing vertically-
+          // stacked rows' widths inflates by 3-5x reality, which then
+          // pushes the depth columns off-screen on Detailed/Focus and
+          // triggers infinite horizontal scroll. The clone approach
+          // delegates the intrinsic-size math to the browser: place a
+          // deep-clone inside a `width: max-content` sandbox and read
+          // `getBoundingClientRect().width` — that IS the max-content
+          // size for every flex direction by definition.
+          let sandbox = document.querySelector('[data-svc-name-col-sandbox]');
+          if (!sandbox) {
+            sandbox = document.createElement('div');
+            sandbox.setAttribute('data-svc-name-col-sandbox', '');
+            sandbox.setAttribute('aria-hidden', 'true');
+            sandbox.style.cssText =
+              'position:fixed;left:-99999px;top:0;visibility:hidden;' +
+              'pointer-events:none;width:max-content;contain:layout style;';
+            document.body.appendChild(sandbox);
+          }
           hosts.forEach(host => {
             // Two cell shapes — pick whichever exists in this host.
             // `.lane-label` is the swim-lane service-name cell; for
@@ -3608,35 +3631,21 @@
               host.style.removeProperty('--svc-name-col-width');
               return;
             }
-            // Measure each cell's intrinsic content width. The <p>s inside
-            // already use `width: max-content`, so scrollWidth equals the
-            // content width by construction. Use `scrollWidth` over
-            // `getBoundingClientRect().width` because the current column
-            // width may already be larger than the content (e.g. unified
-            // from a prior pass) — scrollWidth still reflects the cell's
-            // own content size including padding contribution where the
-            // cell is the layout box. To get a fair pre-layout content
-            // width we measure the WIDEST CHILD that carries the name,
-            // adding the cell's horizontal padding back in.
             let maxContent = 0;
             cells.forEach(cell => {
-              // Sum widths of every direct visible child to approximate
-              // the cell's intrinsic min-content + content width. The
-              // service-name <p> + any sibling badges (workflow-count for
-              // workflow-rows; the focus chevron+pin for swim-lane Focus)
-              // all need to fit inside the column.
-              const cs = window.getComputedStyle(cell);
-              const padX = parseFloat(cs.paddingLeft || '0') + parseFloat(cs.paddingRight || '0');
-              const gap = parseFloat(cs.columnGap || cs.gap || '0') || 0;
-              const children = Array.from(cell.children).filter(c => {
-                const ccs = window.getComputedStyle(c);
-                return ccs.display !== 'none' && ccs.visibility !== 'hidden';
-              });
-              let row = 0;
-              children.forEach(c => { row += c.scrollWidth; });
-              if (children.length > 1 && gap > 0) row += gap * (children.length - 1);
-              const contentWidth = row + padX;
-              if (contentWidth > maxContent) maxContent = contentWidth;
+              // Deep-clone preserves every computed style (Tailwind
+              // utility classes + inline styles included). The inline
+              // overrides strip any width constraint inherited from the
+              // live cell so the clone is free to grow to its true
+              // intrinsic max-content width.
+              const clone = cell.cloneNode(true);
+              clone.style.width = 'max-content';
+              clone.style.minWidth = '0';
+              clone.style.maxWidth = 'none';
+              sandbox.appendChild(clone);
+              const w = clone.getBoundingClientRect().width;
+              sandbox.removeChild(clone);
+              if (w > maxContent) maxContent = w;
             });
             // 176-px floor (typical-name visual reservation); ceil to
             // whole px to avoid sub-pixel column reflow on font load.
