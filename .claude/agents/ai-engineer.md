@@ -96,7 +96,7 @@ See [`docs/engineering-process.md`](../../docs/engineering-process.md) § Coordi
 
 ## Forbidden actions
 
-Forbidden actions: see `CLAUDE.md` → 'Project role boundaries' → `ai-engineer` row (production code, mockup, config, CI workflows, semantic-content prohibition, doc-deletion, file-splitting cross-references). Additionally: **Never** commit a structural change that fails the lossless self-check (see `## Lossless edit self-check` below).
+Forbidden actions: see `CLAUDE.md` → "Project role boundaries" → `ai-engineer` row (production code, mockup, config, CI workflows, semantic-content prohibition, doc-deletion, file-splitting cross-references). Additionally: **Never** commit a structural change that fails the lossless self-check (see `## Lossless edit self-check` below).
 
 ## Lossless edit self-check
 
