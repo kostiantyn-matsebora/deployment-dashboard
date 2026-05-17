@@ -338,17 +338,17 @@ describe('DeploymentMatrixStore', () => {
   // ---- FR-13: layout + topology -------------------------------------------
 
   describe('FR-13 — layout and topology', () => {
-    it('defaults to the Matrix layout on first visit', () => {
+    it('defaults to the Swim-lane layout on first visit (Matrix deferred to Phase 2.0)', () => {
       const store = setup();
-      expect(store.layout()).toBe('matrix');
+      expect(store.layout()).toBe('swim-lane');
     });
 
     it('setLayout switches the layout and is a no-op when already active', () => {
       const store = setup();
-      store.setLayout('swim-lane');
-      expect(store.layout()).toBe('swim-lane');
+      store.setLayout('workflow-rows');
+      expect(store.layout()).toBe('workflow-rows');
       const ref = store.layout();
-      store.setLayout('swim-lane');
+      store.setLayout('workflow-rows');
       expect(store.layout()).toBe(ref);
     });
 

@@ -12,8 +12,12 @@ import {
   ATTRIBUTES,
   CAPS,
   DEFAULT_ATTRS,
+  DEFAULT_LAYOUT,
+  LAYOUTS,
   VALID_ATTR_KEYS,
+  VALID_LAYOUT_IDS,
   isAttrKey,
+  isLayoutId,
   type AttrKey
 } from './view-config';
 
@@ -72,5 +76,23 @@ describe('view-config — FR-12 per-view caps', () => {
         expect(VALID_ATTR_KEYS).toContain(k);
       }
     }
+  });
+});
+
+describe('view-config — FR-13 layout axis (Matrix deferred to Phase 2.0)', () => {
+  it('exposes exactly Swim-lane + Workflow-rows (Matrix dropped)', () => {
+    expect(LAYOUTS.map(l => l.id)).toEqual(['swim-lane', 'workflow-rows']);
+    expect(VALID_LAYOUT_IDS).toEqual(['swim-lane', 'workflow-rows']);
+  });
+
+  it('defaults to Swim-lane on first visit', () => {
+    expect(DEFAULT_LAYOUT).toBe('swim-lane');
+  });
+
+  it('isLayoutId rejects the legacy "matrix" value so persisted values migrate', () => {
+    expect(isLayoutId('matrix')).toBeFalse();
+    expect(isLayoutId('swim-lane')).toBeTrue();
+    expect(isLayoutId('workflow-rows')).toBeTrue();
+    expect(isLayoutId('galaxy-graph')).toBeFalse();
   });
 });

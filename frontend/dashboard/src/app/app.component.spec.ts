@@ -40,12 +40,15 @@ describe('AppComponent', () => {
     });
   });
 
-  it('boots and renders the header + default Matrix layout body', () => {
+  it('boots and renders the header + default Swim-lane layout body', () => {
+    // Matrix deferred to Phase 2.0 — MVP defaults to Swim-lane (mockup
+    // `docs/ui/deployment-dashboard.html` line 2841).
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('dd-header')).not.toBeNull();
-    expect(host.querySelector('dd-pipeline-matrix')).not.toBeNull();
+    expect(host.querySelector('dd-swim-lane-layout')).not.toBeNull();
+    expect(host.querySelector('dd-pipeline-matrix')).toBeNull();
     expect(host.querySelector('[data-testid="live-indicator"]')?.textContent).toContain('Live');
     // FR-13 — the layout switcher renders in the header.
     expect(host.querySelector('[data-testid="layout-switcher"]')).not.toBeNull();

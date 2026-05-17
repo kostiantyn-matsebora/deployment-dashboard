@@ -2,9 +2,11 @@
 // REST API (with a fixture fallback so the dev experience works even before
 // the backend is up), and hosts header + stats bar + per-layout body + drawer.
 //
-// FR-13 — the body is one of three layout components (Matrix / Swim-lane /
-// Workflow-rows). The layout switcher lives in the header next to the view
-// switcher. Layout selection persists in `localStorage` via `LayoutPrefsService`.
+// FR-13 — the body is one of two layout components (Swim-lane / Workflow-rows).
+// Matrix is deferred to Phase 2.0 (mirrors the canonical mockup
+// `docs/ui/deployment-dashboard.html` lines 1311, 2360-2367). The layout
+// switcher lives in the header next to the view switcher. Layout selection
+// persists in `localStorage` via `LayoutPrefsService`.
 //
 // SAD §7 "SSE topology semantics" + §10 Decision #8 — slot updates over
 // SSE; topology is refreshed via `GET /api/deployments?correlationAttribute=…`
@@ -39,7 +41,7 @@ import {
   type ServiceDescriptor,
   type SlotUpdatePayload
 } from '@dd/shared';
-import { PipelineMatrixComponent, StatsBarComponent } from '@dd/matrix';
+import { StatsBarComponent } from '@dd/matrix';
 import { HistoryDrawerComponent } from '@dd/drawer';
 import { DashboardHeaderComponent } from './dashboard-header.component';
 import { SwimLaneLayoutComponent } from './swim-lane-layout.component';
@@ -58,7 +60,6 @@ const PULSE_MS = 900;
     CommonModule,
     DashboardHeaderComponent,
     StatsBarComponent,
-    PipelineMatrixComponent,
     SwimLaneLayoutComponent,
     WorkflowRowsLayoutComponent,
     HistoryDrawerComponent
@@ -68,9 +69,6 @@ const PULSE_MS = 900;
     <dd-header (correlationPickChanged)="onCorrelationPickChanged($event)"></dd-header>
     <dd-stats-bar></dd-stats-bar>
     @switch (store.layout()) {
-      @case ('matrix') {
-        <dd-pipeline-matrix (openSlot)="onOpenSlot($event)"></dd-pipeline-matrix>
-      }
       @case ('swim-lane') {
         <dd-swim-lane-layout (openSlot)="onOpenSlot($event)"></dd-swim-lane-layout>
       }

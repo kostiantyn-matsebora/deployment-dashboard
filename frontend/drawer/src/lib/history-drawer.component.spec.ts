@@ -87,6 +87,30 @@ describe('HistoryDrawerComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="drawer-last-successful"]')).not.toBeNull();
   });
 
+  // Hybrid C FINAL — the current-version element is its own <p> on a full-
+  // width row beneath the status badge / run-link row, not nested inside the
+  // badge's flex container. Mirrors canonical mockup lines 2223-2235.
+  // Long versions wrap via `overflow-wrap: anywhere`; the testid scopes the
+  // version VALUE only (no badge text leaks into textContent).
+  it('renders the current version as a standalone <p> below the status row', () => {
+    const fixture = TestBed.createComponent(HistoryDrawerComponent);
+    const svc = FIXTURE_SERVICES.find(s => s.id === 'service-a')!;
+    const env = FIXTURE_ENVIRONMENTS.find(e => e.id === 'dev')!;
+    store.openDrawer(svc, env);
+    fixture.detectChanges();
+    const versionEl = fixture.nativeElement.querySelector(
+      '[data-testid="drawer-current-version"]'
+    ) as HTMLElement | null;
+    expect(versionEl).not.toBeNull();
+    expect(versionEl!.tagName).toBe('P');
+    expect(versionEl!.classList.contains('drawer-version-row')).toBeTrue();
+    // The testid carries the version VALUE only — no "running…" / status text leaks in.
+    expect(versionEl!.textContent?.trim()).toBe('v2.3.2');
+    // Style hook for the overflow-wrap rule that prevents long versions from
+    // overlapping the badge — verified by the inline-style attribute.
+    expect(versionEl!.getAttribute('style')).toContain('overflow-wrap');
+  });
+
   // SAD §7 "Null-render invariant for nullable attributes" — when ref / sha
   // are null/absent on the current slot, the drawer renders the testid
   // anchor with empty text content (the testid is always present per the

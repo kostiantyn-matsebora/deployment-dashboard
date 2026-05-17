@@ -63,35 +63,43 @@ import {
               [class.bg-orange-50]="s.current.status === 'in-progress'"
               data-testid="drawer-current"
             >
-              <div class="flex items-center justify-between mb-1">
-                <div class="flex items-center gap-2">
-                  <span
-                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
-                    [class.bg-green-100]="s.current.status === 'success'"
-                    [class.text-green-700]="s.current.status === 'success'"
-                    [class.bg-red-100]="s.current.status === 'failure'"
-                    [class.text-red-700]="s.current.status === 'failure'"
-                    [class.bg-orange-100]="s.current.status === 'in-progress'"
-                    [class.text-orange-700]="s.current.status === 'in-progress'"
-                    data-testid="drawer-current-status"
-                  >
-                    @if (s.current.status === 'in-progress') {
-                      <span class="spinner"></span><span>running…</span>
-                    } @else if (s.current.status === 'success') {
-                      <span>✓</span><span>success</span>
-                    } @else {
-                      <span>✗</span><span>failed</span>
-                    }
-                  </span>
-                  <span class="text-lg font-bold text-gray-900 font-mono"
-                        data-testid="drawer-current-version"
-                  >{{ s.current.version }}</span>
-                </div>
+              <!-- Hybrid C FINAL — CURRENT DEPLOYMENT layout: row 1 is the
+                   status badge + run-link (compact, fixed-height); row 2 is
+                   the version on its own full-width line with
+                   overflow-wrap: anywhere so 50-char versions never
+                   overlap the badge. Drawer is the full-fidelity disclosure
+                   surface — version renders at natural font size with no
+                   scale shrink (SAD section 7). Mirrors canonical mockup
+                   docs/ui/deployment-dashboard.html lines 2223-2235. -->
+              <div class="flex items-center justify-between mb-1.5">
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
+                  [class.bg-green-100]="s.current.status === 'success'"
+                  [class.text-green-700]="s.current.status === 'success'"
+                  [class.bg-red-100]="s.current.status === 'failure'"
+                  [class.text-red-700]="s.current.status === 'failure'"
+                  [class.bg-orange-100]="s.current.status === 'in-progress'"
+                  [class.text-orange-700]="s.current.status === 'in-progress'"
+                  data-testid="drawer-current-status"
+                >
+                  @if (s.current.status === 'in-progress') {
+                    <span class="spinner"></span><span>running…</span>
+                  } @else if (s.current.status === 'success') {
+                    <span>✓</span><span>success</span>
+                  } @else {
+                    <span>✗</span><span>failed</span>
+                  }
+                </span>
                 <a [href]="s.current.runUrl"
                    class="text-sm text-blue-600 hover:underline font-mono font-medium"
                    data-testid="drawer-current-run"
                 >#{{ s.current.runNumber }}</a>
               </div>
+              <p
+                class="drawer-version-row text-lg font-bold text-gray-900 font-mono leading-tight mb-1"
+                style="overflow-wrap: anywhere; word-break: break-word"
+                data-testid="drawer-current-version"
+              >{{ s.current.version }}</p>
               <p class="text-xs text-gray-500" data-testid="drawer-current-ago">{{ relDt(s.current.deployedAt) }}</p>
               <p class="text-xs text-gray-600" data-testid="drawer-current-deployed-at">{{ formatDt(s.current.deployedAt) }}</p>
               <p class="text-xs text-gray-500 mt-0.5" data-testid="drawer-current-actor">{{ s.current.actor }}</p>
@@ -135,15 +143,20 @@ import {
               <div class="mt-3" data-testid="drawer-last-successful">
                 <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Last successful</p>
                 <div class="rounded-lg border border-green-200 bg-green-50 p-3">
-                  <div class="flex items-center justify-between mb-1">
-                    <div class="flex items-center gap-2">
-                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">✓ success</span>
-                      <span class="text-base font-bold text-gray-900 font-mono">{{ s.lastSuccessful.version }}</span>
-                    </div>
+                  <!-- Mirrors CURRENT DEPLOYMENT layout: badge + run on row 1,
+                       full-width version on row 2 (drawer-version-row).
+                       Mirrors canonical mockup
+                       docs/ui/deployment-dashboard.html lines 2268-2273. -->
+                  <div class="flex items-center justify-between mb-1.5">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">✓ success</span>
                     <a [href]="s.lastSuccessful.runUrl"
                        class="text-sm text-blue-600 hover:underline font-mono font-medium"
                     >#{{ s.lastSuccessful.runNumber }}</a>
                   </div>
+                  <p
+                    class="drawer-version-row text-base font-bold text-gray-900 font-mono leading-tight mb-1"
+                    style="overflow-wrap: anywhere; word-break: break-word"
+                  >{{ s.lastSuccessful.version }}</p>
                   <p class="text-xs text-gray-500" data-testid="drawer-last-successful-ago">{{ relDt(s.lastSuccessful.deployedAt) }}</p>
                   <p class="text-xs text-gray-600">{{ formatDt(s.lastSuccessful.deployedAt) }}</p>
                   <p class="text-xs text-gray-500 mt-0.5">{{ s.lastSuccessful.actor }}</p>
@@ -203,10 +216,14 @@ import {
                     }
                   </span>
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="font-semibold text-gray-800 text-sm font-mono">{{ entry.version }}</span>
+                    <!-- History entry — long versions wrap via break-all so
+                         the run link stays visible on the right. Mirrors
+                         canonical mockup
+                         docs/ui/deployment-dashboard.html lines 2309-2312. -->
+                    <div class="flex items-start justify-between gap-2">
+                      <span class="font-semibold text-gray-800 text-sm font-mono min-w-0 break-all">{{ entry.version }}</span>
                       <a [href]="entry.runUrl"
-                         class="text-xs text-blue-600 hover:underline font-mono shrink-0"
+                         class="text-xs text-blue-600 hover:underline font-mono shrink-0 mt-0.5"
                       >#{{ entry.runNumber }}</a>
                     </div>
                     <p class="text-xs text-gray-500 mt-0.5">{{ formatDt(entry.deployedAt) }}</p>

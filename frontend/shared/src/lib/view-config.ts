@@ -25,8 +25,14 @@ export type AttrKey = 'status' | 'version' | 'run' | 'ago' | 'actor' | 'ref' | '
  * controls the *leaf renderer* (per-box density / attributes); the Layout axis
  * controls the *outer arrangement* (services × envs grid vs lanes vs paths).
  * See docs/ui/tree-topology-options.md.
+ *
+ * Matrix is deferred to Phase 2.0 (rolled back from MVP) — mirrors the
+ * canonical mockup (`docs/ui/deployment-dashboard.html` line 2360-2367).
+ * MVP ships with Swim-lane (default) + Workflow-rows only. Any persisted
+ * 'matrix' value falls through `isLayoutId` and the default 'swim-lane' is
+ * returned — no explicit migration needed.
  */
-export type LayoutId = 'matrix' | 'swim-lane' | 'workflow-rows';
+export type LayoutId = 'swim-lane' | 'workflow-rows';
 
 /** Static descriptor for a layout view (label, description, defaults, cap). */
 export interface ViewDescriptor {
@@ -125,13 +131,13 @@ export const CAPS: Readonly<Record<ViewId, number>> =
 export const DEFAULT_ATTRS: Readonly<Record<ViewId, readonly AttrKey[]>> =
   VIEWS.reduce((acc, v) => ({ ...acc, [v.id]: v.defaults }), {} as Record<ViewId, readonly AttrKey[]>);
 
-/** Layouts in canonical display order (matches the segmented control). */
+/**
+ * Layouts in canonical display order (matches the segmented control).
+ *
+ * Matrix deferred to Phase 2.0 — see `LayoutId` comment + canonical mockup
+ * (`docs/ui/deployment-dashboard.html` lines 2360-2367, 1311).
+ */
 export const LAYOUTS: readonly LayoutDescriptor[] = [
-  {
-    id: 'matrix',
-    label: 'Matrix',
-    intent: 'Services × environments grid — original canonical arrangement'
-  },
   {
     id: 'swim-lane',
     label: 'Swim-lane',
@@ -238,8 +244,12 @@ export function isThemePreference(v: unknown): v is ThemePreference {
 /** Default view for first-time visitors. */
 export const DEFAULT_VIEW: ViewId = 'detailed';
 
-/** Default layout for first-time visitors (mockup chooses 'matrix' to preserve the canonical first paint). */
-export const DEFAULT_LAYOUT: LayoutId = 'matrix';
+/**
+ * Default layout for first-time visitors. Matrix was the canonical first
+ * paint but is deferred to Phase 2.0 — MVP defaults to Swim-lane (mockup
+ * `docs/ui/deployment-dashboard.html` line 2841 `loadLayout` default).
+ */
+export const DEFAULT_LAYOUT: LayoutId = 'swim-lane';
 
 /** Default for the "Focus on last event" toggle — on, matches the mockup. */
 export const DEFAULT_FOCUS_ON_LAST_EVENT = true;

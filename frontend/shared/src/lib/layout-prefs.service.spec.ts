@@ -26,18 +26,25 @@ function makeService(): { store: DeploymentMatrixStoreType; svc: LayoutPrefsServ
 describe('LayoutPrefsService — load helper', () => {
   beforeEach(() => localStorage.clear());
 
-  it('loadLayout returns the default Matrix layout when nothing is stored', () => {
-    expect(loadLayout()).toBe('matrix');
+  it('loadLayout returns the default Swim-lane layout when nothing is stored', () => {
+    // Matrix deferred to Phase 2.0 — MVP defaults to Swim-lane (mockup
+    // `docs/ui/deployment-dashboard.html` line 2841).
+    expect(loadLayout()).toBe('swim-lane');
   });
 
   it('loadLayout returns the stored layout when it is one of the known ids', () => {
-    localStorage.setItem(STORAGE_KEY_LAYOUT, 'swim-lane');
-    expect(loadLayout()).toBe('swim-lane');
+    localStorage.setItem(STORAGE_KEY_LAYOUT, 'workflow-rows');
+    expect(loadLayout()).toBe('workflow-rows');
   });
 
   it('loadLayout falls back to default on an unknown id', () => {
     localStorage.setItem(STORAGE_KEY_LAYOUT, 'galaxy-graph');
-    expect(loadLayout()).toBe('matrix');
+    expect(loadLayout()).toBe('swim-lane');
+  });
+
+  it('loadLayout migrates a persisted "matrix" value to the default (Matrix deferred to Phase 2.0)', () => {
+    localStorage.setItem(STORAGE_KEY_LAYOUT, 'matrix');
+    expect(loadLayout()).toBe('swim-lane');
   });
 
   it('loadLayout handles unparseable garbage gracefully', () => {
@@ -45,7 +52,7 @@ describe('LayoutPrefsService — load helper', () => {
     // still needs to reject non-allowed values. Smoke test for the
     // corruption-safe path.
     localStorage.setItem(STORAGE_KEY_LAYOUT, '{not-an-id}');
-    expect(loadLayout()).toBe('matrix');
+    expect(loadLayout()).toBe('swim-lane');
   });
 });
 
@@ -70,6 +77,6 @@ describe('LayoutPrefsService — wiring', () => {
     localStorage.setItem(STORAGE_KEY_LAYOUT, 'not-a-layout');
     expect(() => makeService()).not.toThrow();
     const store = TestBed.inject(DeploymentMatrixStore);
-    expect(store.layout()).toBe('matrix');
+    expect(store.layout()).toBe('swim-lane');
   });
 });

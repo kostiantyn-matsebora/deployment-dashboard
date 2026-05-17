@@ -177,8 +177,15 @@ interface EdgePath {
                 }
               </div>
 
-              <!-- Depth columns + leaf pairs. -->
-              <div class="flex-1 min-w-0 flex items-stretch gap-7" [attr.data-depth-columns]="bucketsFor(service).length">
+              <!-- Depth columns + leaf pairs. Column gap reflows from 8 px
+                   on narrow viewports to canonical 28 px on wide ones — mirrors
+                   canonical mockup .lane-grid rule
+                   (docs/ui/deployment-dashboard.html line 465). -->
+              <div
+                class="flex-1 min-w-0 flex items-stretch"
+                style="column-gap: clamp(8px, 1.5vw, 28px); gap: clamp(8px, 1.5vw, 28px)"
+                [attr.data-depth-columns]="bucketsFor(service).length"
+              >
                 @for (bucket of bucketsFor(service); track $index; let depthIdx = $index) {
                   <div class="depth-slot flex flex-col gap-2 min-w-0">
                     @if (bucket.length === 0) {

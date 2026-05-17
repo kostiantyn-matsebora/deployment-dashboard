@@ -79,12 +79,21 @@
     animation: pulse-border 1.8s ease-in-out infinite;
   }
 
-  /* Glance-view pill (FR-12 / mockup lines 47–82). */
+  /* Glance-view pill (FR-12 / canonical mockup
+     `docs/ui/deployment-dashboard.html` lines 333-346). Hybrid C FINAL —
+     min-width is the per-view floor (`--leaf-width`, 150 px canonical);
+     `width: max-content` lets the pill canvas grow to fit long versions
+     so background + border extend to the full painted width (version
+     never overflows the pill). `max-width: 480px` caps the growth so
+     freakishly long strings don't push the row's depth column out. */
   .pill {
     display: inline-flex;
     flex-direction: column;
     align-items: stretch;
-    min-width: 110px;
+    min-width: var(--leaf-width, 150px);
+    width: max-content;
+    max-width: 480px;
+    box-sizing: border-box;
     border-radius: 6px;
     border: 1px solid;
     overflow: hidden;
@@ -93,7 +102,8 @@
   }
   .pill:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
   .pill-empty {
-    min-width: 110px;
+    min-width: var(--leaf-width, 150px);
+    box-sizing: border-box;
     height: 26px;
     border: 1px dashed #e5e7eb;
     background: #f9fafb;
@@ -286,9 +296,12 @@
 
   /* Workflow-rows connector column. NFR-09 (b): the arrow line attaches
      to the target box's mid-y and stops at target.left - 6 (one arrowhead
-     width). */
+     width). Width reflows from 14 px on narrow viewports to canonical 32 px
+     on wide ones — `recomputeConnectorTops` re-measures rects, so the
+     reflowed gap reflows the line geometrically. Mirrors canonical mockup
+     `docs/ui/deployment-dashboard.html` line 768. */
   .arrow-gap {
-    width: 32px;
+    width: clamp(14px, 1.5vw, 32px);
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -534,6 +547,12 @@
 [data-theme="dark"] .bg-purple-600 { background-color: #8957e5 !important; }
 
 /* Drawer / popovers — inherit .bg-white / .border-gray-200 above. */
+
+/* Drawer version row — explicitly pin the dark primary text token so
+   `text-gray-900` remap is reinforced even if Tailwind layer ordering
+   shifts. Mirrors canonical mockup
+   `docs/ui/deployment-dashboard.html` line 1003. */
+[data-theme="dark"] .drawer-version-row { color: #e6edf3 !important; }
 
 /* Form controls — Tailwind border-gray-200 is fine; the browser-default
    background needs darkening so inputs aren't white islands. */
