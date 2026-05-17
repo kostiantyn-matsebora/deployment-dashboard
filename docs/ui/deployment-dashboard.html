@@ -326,11 +326,17 @@
        dimensions are byte-identical in Matrix, Swim-lane, and
        Workflow-rows. Width is driven by the unified --leaf-width
        custom property (see "Per-view leaf width" below). */
+    /* Hybrid C FINAL — pill grows to fit content. min-width is the per-view
+       floor (canonical 150 px); width: max-content grows for long versions.
+       The canvas (background + border) extends to the full painted width
+       so the version stays inside the pill, never overflowing it. */
     .pill {
       display: inline-flex;
       flex-direction: column;
       align-items: stretch;
-      width: var(--leaf-width, 150px);
+      min-width: var(--leaf-width, 150px);
+      width: max-content;
+      max-width: 480px;
       box-sizing: border-box;
       border-radius: 6px;
       border: 1px solid;
@@ -339,7 +345,7 @@
       transition: box-shadow 0.15s ease, border-color 0.15s ease;
     }
     .pill-empty {
-      width: var(--leaf-width, 150px);
+      min-width: var(--leaf-width, 150px);
       box-sizing: border-box;
       height: 26px;
       border: 1px dashed #e5e7eb;
@@ -397,23 +403,66 @@
 
     /* ============== Per-view leaf width — single source of truth ==============
        ONE CSS custom property — `--leaf-width` — is bound on every layout
-       root (matrix box wrapper, swim-lane .lane-grid, workflow-rows .wf-row)
-       and read by every leaf container (matrix box div, .pill, .pill-empty,
-       .node, .node-empty, .wf-stage). The cell's width is a property of
-       the view, not the layout, so all three layouts render the same view
-       at the same width.
-         Detailed = 200px   Compact = 160px   Glance = 150px   Focus = 160px
-       (see LEAF_WIDTH_BY_VIEW in the script — single source of truth.) */
+       root and read by every leaf container that still needs a minimum
+       reservation (Glance pill, swim-lane .node, workflow-rows .wf-stage).
+       In Hybrid C FINAL the value is used as a `min-width` so each box
+       grows to fit its content (version / ago / actor / ref / sha) while
+       still respecting a per-view floor. The cell's content-driven width
+       means a long version makes its own box wider; an empty / short box
+       stays at the floor.
+
+       Per-view floors (LEAF_WIDTH_BY_VIEW in the script):
+         Detailed 200 px   Compact 160 px   Glance 150 px   Focus 160 px
+       Focus-expanded still flips to 200 px via `--leaf-width-expanded`.
+       Glance pill is intentionally fixed-width (single-attr display
+       already fits canonical 150 px) — it uses --leaf-width as a hard
+       width, not min-width. */
+
+    /* ============== Option C — full-width version block ==============
+       Version owns its own row inside the box. Renders at natural
+       font size with `white-space: nowrap` so it stays on one line;
+       the box's `width: max-content` lets the box grow to fit the
+       version's natural pixel width. Tooltip + drawer carry the full
+       value redundantly. */
+    .version-block {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.15;
+      hyphens: none;
+      white-space: nowrap;
+    }
+    .version-block-detailed { font-size: 14px; }
+    .version-block-compact  { font-size: 11px; }
+    .version-block-focus    { font-size: 11px; }
+    /* Status row in Option C: status badge no longer competes with
+       version for horizontal space — version is below. Status + run
+       remain in their own flex row, justified between. */
+    .status-row-b {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      min-width: 0;
+    }
 
     /* ============== Swim-lane grid ============== */
     /* Service info lives in the leftmost grid column (176 px) on the
        same row as the depth slots — matches the Matrix-layout
        "w-44 shrink-0 pr-4" service-label cell so per-service vertical
        footprint stays close to Matrix density. */
+    /* Hybrid C FINAL — depth-slot columns size to their CONTENT, not
+       a 1fr fraction. Combined with min-width on every leaf wrapper
+       this lets a long-version box widen the column rather than be
+       truncated. Column gap reflows from 8 px on narrow viewports
+       to the canonical 28 px on wide ones via clamp(). */
     .lane-grid {
       display: grid;
-      grid-template-columns: 176px repeat(var(--depth-count), 1fr);
-      column-gap: 28px;
+      grid-template-columns: 176px repeat(var(--depth-count), max-content);
+      column-gap: clamp(8px, 1.5vw, 28px);
       row-gap: 8px;
       align-items: stretch;
     }
@@ -482,9 +531,13 @@
        Cells in the same row of the same grid cannot overlap — the
        UX-RESPONSIVENESS INVARIANT guarantees this for any env-name
        length, version-string length, viewport width, or view. */
+    /* Hybrid C FINAL — column 2 sizes to its content (max-content) but
+       respects --leaf-width as a min via the .node / .pill min-width
+       rules. Cells still cannot overlap (grid invariant); long versions
+       widen the column rather than be clipped. */
     .leaf-pair {
       display: grid;
-      grid-template-columns: auto var(--leaf-width, 160px);
+      grid-template-columns: auto max-content;
       column-gap: 6px;
       align-items: start;
     }
@@ -496,7 +549,7 @@
        inside .pill-current as its first child and is styled by
        the `.pill .env-tag` rule below. */
     .leaf-pair-glance {
-      grid-template-columns: var(--leaf-width, 150px);
+      grid-template-columns: max-content;
       align-items: center;
       column-gap: 0;
     }
@@ -548,10 +601,17 @@
        Tailwind classes inside the leaf template, so the inner DOM stays
        byte-identical to the matrix layout. For Glance, the .pill is
        rendered directly (no .node wrapper) — the .pill is the leaf. */
+    /* Hybrid C FINAL — content-sized leaf: min-width keeps the per-view
+       floor (visual baseline); intrinsic width grows for long content.
+       The wrapper's `overflow: visible` lets the box paint past --leaf-width
+       when needed; the parent .leaf-pair grid column (max-content) reserves
+       the painted width so neighbours never overlap. */
     .node {
-      width: var(--leaf-width, 160px);
+      min-width: var(--leaf-width, 160px);
+      width: max-content;
+      max-width: 480px;
       box-sizing: border-box;
-      overflow: hidden;
+      overflow: visible;
       cursor: pointer;
       transition: box-shadow 0.15s ease;
       background: white;
@@ -659,10 +719,16 @@
        inside the leaf template — the inner DOM is byte-identical to the
        matrix layout. For Glance, the .pill is rendered directly (no
        .wf-stage wrapper). */
+    /* Hybrid C FINAL — content-sized stage box. min-width floors at the
+       per-view canonical; width: max-content grows for long versions /
+       extra attribute rows. flex-shrink: 0 stops the row from squishing
+       it back below content width. */
     .wf-stage {
-      width: var(--leaf-width, 160px);
+      min-width: var(--leaf-width, 160px);
+      width: max-content;
+      max-width: 480px;
       box-sizing: border-box;
-      overflow: hidden;
+      overflow: visible;
       background: white;
       cursor: pointer;
       transition: box-shadow 0.15s ease;
@@ -694,8 +760,12 @@
        any env-tag is ≤ 1 px (well inside the 3-px I5 tolerance) even
        in Glance where the env-tag is vertically centred against the
        pill. */
+    /* Hybrid C FINAL — arrow-gap width reflows from 14 px on narrow
+       viewports to canonical 32 px on wide ones. The arrow-line --target-line-width
+       computation already keys off measured rects, so reflowing the gap
+       reflows the line geometrically (NFR-09 invariants preserved). */
     .arrow-gap {
-      width: 32px;
+      width: clamp(14px, 1.5vw, 32px);
       display: flex;
       flex-direction: column;
       align-items: flex-start;
@@ -922,6 +992,17 @@
        no further rules required. The popover class defined in the canonical
        style block uses inline `background: white` — override that too. */
     [data-theme="dark"] .popover { background: #161b22 !important; border-color: #30363d !important; color: #e6edf3 !important; }
+
+    /* Hybrid C FINAL — dark-mode overlay for the version block. The
+       block-level rule above hard-codes `color: #111827` (light primary
+       text); remap to the Dim primary text token (#e6edf3) so versions
+       stay legible against the dark surface. The drawer-version-row
+       rule pins the same colour for the restructured CURRENT DEPLOYMENT
+       and Last successful row inside the drawer. */
+    [data-theme="dark"] .version-block { color: #e6edf3 !important; }
+    [data-theme="dark"] .drawer-version-row { color: #e6edf3 !important; }
+    /* Workflow-rows .wf-stage and swim-lane .node already pick up
+       background remaps from the .bg-white rule. */
 
     /* Form controls — inputs use Tailwind `border-gray-200` etc. but the
        browser-default background needs darkening. */
@@ -1403,8 +1484,10 @@
                                      class="text-xs text-blue-500 hover:underline font-mono ml-auto"
                                      x-text="service.envs[envId].current.run" @click.stop></a>
                                 </div>
+                                <!-- Hybrid C FINAL — natural version, nowrap, box grows to fit. -->
                                 <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('version')"
-                                   class="text-sm font-bold text-gray-900 font-mono leading-tight"
+                                   class="version-block version-block-detailed leading-tight"
+                                   :title="service.envs[envId].current.version"
                                    x-text="service.envs[envId].current.version"></p>
                                 <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('ago')"
                                    class="text-xs text-gray-400 mt-1 leading-tight"
@@ -1431,8 +1514,8 @@
                               <template x-if="service.envs[envId].lastSuccessful">
                                 <div class="border-t border-dashed border-gray-200 px-2.5 py-2 bg-white">
                                   <div class="flex items-center gap-1.5">
-                                    <span class="text-green-600 text-xs font-bold leading-none">✓</span>
-                                    <span class="text-xs font-mono font-semibold text-gray-600" x-text="service.envs[envId].lastSuccessful.version"></span>
+                                    <span class="text-green-600 text-xs font-bold leading-none shrink-0">✓</span>
+                                    <span class="text-xs font-mono font-semibold text-gray-600 whitespace-nowrap" :title="service.envs[envId].lastSuccessful.version" x-text="service.envs[envId].lastSuccessful.version"></span>
                                   </div>
                                   <p class="text-xs text-gray-400 mt-0.5 leading-tight" x-text="service.envs[envId].lastSuccessful.ago"></p>
                                   <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('ref')) && hasAttr(service.envs[envId].lastSuccessful.ref)"
@@ -1467,8 +1550,11 @@
                           >
                             <div>
                               <div class="px-1.5 py-1">
-                                <div class="flex items-center justify-between gap-1"
-                                     x-show="showAttr('status') || showAttr('version')">
+                                <!-- Option C (Hybrid) — B-derived: status alone in
+                                     its row; version promoted to own block-level
+                                     row below. -->
+                                <div class="status-row-b"
+                                     x-show="showAttr('status')">
                                   <span
                                     x-show="showAttr('status')"
                                     class="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-semibold leading-tight"
@@ -1477,13 +1563,13 @@
                                     <span x-show="service.envs[envId].current.status === 'in-progress'" class="spinner spinner-sm"></span>
                                     <span x-show="service.envs[envId].current.status !== 'in-progress'" x-text="service.envs[envId].current.status === 'success' ? '✓' : '✗'"></span>
                                   </span>
-                                  <span
-                                    x-show="showAttr('version')"
-                                    class="text-[11px] font-bold text-gray-900 font-mono leading-tight truncate flex-1 text-right"
-                                    x-text="service.envs[envId].current.version"
-                                    :title="service.envs[envId].current.version"
-                                  ></span>
                                 </div>
+                                <p
+                                  x-show="showAttr('version')"
+                                  class="version-block version-block-compact mt-0.5"
+                                  :title="service.envs[envId].current.version"
+                                  x-text="service.envs[envId].current.version"
+                                ></p>
                                 <div class="flex items-center justify-between gap-1 mt-0.5"
                                      x-show="showAttr('ago') || showAttr('run')">
                                   <span
@@ -1525,8 +1611,8 @@
                               <template x-if="service.envs[envId].lastSuccessful">
                                 <div class="border-t border-dashed border-gray-200 px-1.5 py-0.5 bg-white">
                                   <div class="flex items-center justify-between gap-1">
-                                    <span class="text-green-600 text-[10px] font-bold leading-none">✓</span>
-                                    <span class="text-[10px] font-mono font-semibold text-gray-600 truncate" x-text="service.envs[envId].lastSuccessful.version" :title="service.envs[envId].lastSuccessful.version"></span>
+                                    <span class="text-green-600 text-[10px] font-bold leading-none shrink-0">✓</span>
+                                    <span class="text-[10px] font-mono font-semibold text-gray-600 whitespace-nowrap" :title="service.envs[envId].lastSuccessful.version" x-text="service.envs[envId].lastSuccessful.version"></span>
                                     <span class="text-[9px] text-gray-400 leading-tight shrink-0" x-text="service.envs[envId].lastSuccessful.ago"></span>
                                   </div>
                                   <p x-show="showAttr('ref') && hasAttr(service.envs[envId].lastSuccessful.ref)"
@@ -1573,7 +1659,7 @@
                               <span x-show="service.envs[envId].current.status === 'failure'" class="text-red-600 text-[10px] font-bold leading-none">✗</span>
 
                               <span x-show="showAttr('status')" class="text-[10px] font-semibold leading-none truncate flex-1" x-text="statusText(service.envs[envId].current.status)"></span>
-                              <span x-show="showAttr('version')" class="text-[10px] font-mono font-bold truncate flex-1" x-text="service.envs[envId].current.version"></span>
+                              <span x-show="showAttr('version')" class="text-[10px] font-mono font-bold whitespace-nowrap" :title="service.envs[envId].current.version" x-text="service.envs[envId].current.version"></span>
                               <span x-show="showAttr('run')" class="text-[10px] font-mono text-blue-600 truncate flex-1" x-text="service.envs[envId].current.run"></span>
                               <span x-show="showAttr('ago')" class="text-[10px] text-gray-600 truncate flex-1" x-text="service.envs[envId].current.ago"></span>
                               <span x-show="showAttr('actor')" class="text-[10px] text-gray-600 truncate flex-1" x-text="service.envs[envId].current.actor"></span>
@@ -1867,8 +1953,10 @@
                                      class="text-xs text-blue-500 hover:underline font-mono ml-auto"
                                      x-text="service.envs[envId].current.run" @click.stop></a>
                                 </div>
+                                <!-- Hybrid C FINAL — natural version, nowrap, box grows to fit. -->
                                 <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('version')"
-                                   class="text-sm font-bold text-gray-900 font-mono leading-tight"
+                                   class="version-block version-block-detailed leading-tight"
+                                   :title="service.envs[envId].current.version"
                                    x-text="service.envs[envId].current.version"></p>
                                 <p x-show="(view === 'focus' && expanded[service.id]) || showAttr('ago')"
                                    class="text-xs text-gray-400 mt-1 leading-tight"
@@ -1895,8 +1983,8 @@
                               <template x-if="service.envs[envId].lastSuccessful">
                                 <div class="border-t border-dashed border-gray-200 px-2.5 py-2 bg-white">
                                   <div class="flex items-center gap-1.5">
-                                    <span class="text-green-600 text-xs font-bold leading-none">✓</span>
-                                    <span class="text-xs font-mono font-semibold text-gray-600" x-text="service.envs[envId].lastSuccessful.version"></span>
+                                    <span class="text-green-600 text-xs font-bold leading-none shrink-0">✓</span>
+                                    <span class="text-xs font-mono font-semibold text-gray-600 whitespace-nowrap" :title="service.envs[envId].lastSuccessful.version" x-text="service.envs[envId].lastSuccessful.version"></span>
                                   </div>
                                   <p class="text-xs text-gray-400 mt-0.5 leading-tight" x-text="service.envs[envId].lastSuccessful.ago"></p>
                                   <p x-show="((view === 'focus' && expanded[service.id]) || showAttr('ref')) && hasAttr(service.envs[envId].lastSuccessful.ref)"
@@ -1933,8 +2021,11 @@
                           >
                             <div>
                               <div class="px-1.5 py-1">
-                                <div class="flex items-center justify-between gap-1"
-                                     x-show="showAttr('status') || showAttr('version')">
+                                <!-- Option C (Hybrid) — B-derived: status alone in
+                                     its row; version promoted to own block-level
+                                     row below. -->
+                                <div class="status-row-b"
+                                     x-show="showAttr('status')">
                                   <span
                                     x-show="showAttr('status')"
                                     class="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-semibold leading-tight"
@@ -1943,13 +2034,13 @@
                                     <span x-show="service.envs[envId].current.status === 'in-progress'" class="spinner spinner-sm"></span>
                                     <span x-show="service.envs[envId].current.status !== 'in-progress'" x-text="service.envs[envId].current.status === 'success' ? '✓' : '✗'"></span>
                                   </span>
-                                  <span
-                                    x-show="showAttr('version')"
-                                    class="text-[11px] font-bold text-gray-900 font-mono leading-tight truncate flex-1 text-right"
-                                    x-text="service.envs[envId].current.version"
-                                    :title="service.envs[envId].current.version"
-                                  ></span>
                                 </div>
+                                <p
+                                  x-show="showAttr('version')"
+                                  class="version-block version-block-compact mt-0.5"
+                                  :title="service.envs[envId].current.version"
+                                  x-text="service.envs[envId].current.version"
+                                ></p>
                                 <div class="flex items-center justify-between gap-1 mt-0.5"
                                      x-show="showAttr('ago') || showAttr('run')">
                                   <span
@@ -1991,8 +2082,8 @@
                               <template x-if="service.envs[envId].lastSuccessful">
                                 <div class="border-t border-dashed border-gray-200 px-1.5 py-0.5 bg-white">
                                   <div class="flex items-center justify-between gap-1">
-                                    <span class="text-green-600 text-[10px] font-bold leading-none">✓</span>
-                                    <span class="text-[10px] font-mono font-semibold text-gray-600 truncate" x-text="service.envs[envId].lastSuccessful.version" :title="service.envs[envId].lastSuccessful.version"></span>
+                                    <span class="text-green-600 text-[10px] font-bold leading-none shrink-0">✓</span>
+                                    <span class="text-[10px] font-mono font-semibold text-gray-600 whitespace-nowrap" :title="service.envs[envId].lastSuccessful.version" x-text="service.envs[envId].lastSuccessful.version"></span>
                                     <span class="text-[9px] text-gray-400 leading-tight shrink-0" x-text="service.envs[envId].lastSuccessful.ago"></span>
                                   </div>
                                   <p x-show="showAttr('ref') && hasAttr(service.envs[envId].lastSuccessful.ref)"
@@ -2037,7 +2128,7 @@
                               <span x-show="service.envs[envId].current.status === 'failure'" class="text-red-600 text-[10px] font-bold leading-none">✗</span>
 
                               <span x-show="showAttr('status')" class="text-[10px] font-semibold leading-none truncate flex-1" x-text="statusText(service.envs[envId].current.status)"></span>
-                              <span x-show="showAttr('version')" class="text-[10px] font-mono font-bold truncate flex-1" x-text="service.envs[envId].current.version"></span>
+                              <span x-show="showAttr('version')" class="text-[10px] font-mono font-bold whitespace-nowrap" :title="service.envs[envId].current.version" x-text="service.envs[envId].current.version"></span>
                               <span x-show="showAttr('run')" class="text-[10px] font-mono text-blue-600 truncate flex-1" x-text="service.envs[envId].current.run"></span>
                               <span x-show="showAttr('ago')" class="text-[10px] text-gray-600 truncate flex-1" x-text="service.envs[envId].current.ago"></span>
                               <span x-show="showAttr('actor')" class="text-[10px] text-gray-600 truncate flex-1" x-text="service.envs[envId].current.actor"></span>
@@ -2123,20 +2214,25 @@
           'in-progress-box border-orange-300 bg-orange-50': drawerService?.envs[drawerEnvId]?.current?.status === 'in-progress',
         }"
       >
-        <div class="flex items-center justify-between mb-1">
-          <div class="flex items-center gap-2">
-            <span
-              class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
-              :class="statusBadgeClass(drawerService?.envs[drawerEnvId]?.current?.status)"
-            >
-              <span x-show="drawerService?.envs[drawerEnvId]?.current?.status === 'in-progress'" class="spinner spinner-lg"></span>
-              <span x-show="drawerService?.envs[drawerEnvId]?.current?.status !== 'in-progress'" x-text="drawerService?.envs[drawerEnvId]?.current?.status === 'success' ? '✓' : '✗'"></span>
-              <span x-text="statusText(drawerService?.envs[drawerEnvId]?.current?.status)"></span>
-            </span>
-            <span class="text-lg font-bold text-gray-900 font-mono" x-text="drawerService?.envs[drawerEnvId]?.current?.version"></span>
-          </div>
+        <!-- Hybrid C FINAL — CURRENT DEPLOYMENT layout: row 1 is the
+             status badge + run-link (compact, fixed-height); row 2 is the
+             version on its own full-width line with overflow-wrap: anywhere
+             so 50-char versions never overlap the badge. Drawer is the
+             full-fidelity disclosure surface — version renders at natural
+             font size with no scale shrink (SAD §7). -->
+        <div class="flex items-center justify-between mb-1.5">
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
+            :class="statusBadgeClass(drawerService?.envs[drawerEnvId]?.current?.status)"
+          >
+            <span x-show="drawerService?.envs[drawerEnvId]?.current?.status === 'in-progress'" class="spinner spinner-lg"></span>
+            <span x-show="drawerService?.envs[drawerEnvId]?.current?.status !== 'in-progress'" x-text="drawerService?.envs[drawerEnvId]?.current?.status === 'success' ? '✓' : '✗'"></span>
+            <span x-text="statusText(drawerService?.envs[drawerEnvId]?.current?.status)"></span>
+          </span>
           <a :href="drawerService?.envs[drawerEnvId]?.current?.url" class="text-sm text-blue-600 hover:underline font-mono font-medium" x-text="drawerService?.envs[drawerEnvId]?.current?.run"></a>
         </div>
+        <p class="drawer-version-row text-lg font-bold text-gray-900 font-mono leading-tight mb-1" style="overflow-wrap: anywhere; word-break: break-word"
+           x-text="drawerService?.envs[drawerEnvId]?.current?.version"></p>
         <p class="text-xs text-gray-500" x-text="drawerService?.envs[drawerEnvId]?.current?.ago"></p>
         <p class="text-xs text-gray-600" x-text="drawerService?.envs[drawerEnvId]?.current?.dt"></p>
         <p class="text-xs text-gray-500 mt-0.5" x-text="drawerService?.envs[drawerEnvId]?.current?.actor"></p>
@@ -2167,13 +2263,14 @@
       <div x-show="drawerService?.envs[drawerEnvId]?.lastSuccessful" class="mt-3">
         <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-1.5">Last successful</p>
         <div class="rounded-lg border border-green-200 bg-green-50 p-3">
-          <div class="flex items-center justify-between mb-1">
-            <div class="flex items-center gap-2">
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">✓ success</span>
-              <span class="text-base font-bold text-gray-900 font-mono" x-text="drawerService?.envs[drawerEnvId]?.lastSuccessful?.version"></span>
-            </div>
+          <!-- Hybrid C FINAL — mirrors CURRENT DEPLOYMENT: badge + run on
+               row 1, full-width version on row 2. -->
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-700">✓ success</span>
             <a :href="drawerService?.envs[drawerEnvId]?.lastSuccessful?.url" class="text-sm text-blue-600 hover:underline font-mono font-medium" x-text="drawerService?.envs[drawerEnvId]?.lastSuccessful?.run"></a>
           </div>
+          <p class="drawer-version-row text-base font-bold text-gray-900 font-mono leading-tight mb-1" style="overflow-wrap: anywhere; word-break: break-word"
+             x-text="drawerService?.envs[drawerEnvId]?.lastSuccessful?.version"></p>
           <p class="text-xs text-gray-500" x-text="drawerService?.envs[drawerEnvId]?.lastSuccessful?.ago"></p>
           <p class="text-xs text-gray-600" x-text="drawerService?.envs[drawerEnvId]?.lastSuccessful?.dt"></p>
           <p class="text-xs text-gray-500 mt-0.5" x-text="drawerService?.envs[drawerEnvId]?.lastSuccessful?.actor"></p>
@@ -2209,9 +2306,9 @@
               <span x-show="entry.status !== 'in-progress'" x-text="entry.status === 'success' ? '✓' : '✗'"></span>
             </span>
             <div class="flex-1 min-w-0">
-              <div class="flex items-center justify-between gap-2">
-                <span class="font-semibold text-gray-800 text-sm font-mono" x-text="entry.version"></span>
-                <a :href="entry.url" class="text-xs text-blue-600 hover:underline font-mono shrink-0" x-text="entry.run"></a>
+              <div class="flex items-start justify-between gap-2">
+                <span class="font-semibold text-gray-800 text-sm font-mono min-w-0 break-all" x-text="entry.version"></span>
+                <a :href="entry.url" class="text-xs text-blue-600 hover:underline font-mono shrink-0 mt-0.5" x-text="entry.run"></a>
               </div>
               <p class="text-xs text-gray-500 mt-0.5" x-text="entry.dt"></p>
               <p class="text-xs text-gray-400" x-text="entry.actor"></p>
@@ -2297,14 +2394,13 @@
         { key: 'ago',     label: 'Elapsed time',    description: 'Match by deploy timestamp bucket.' },
       ];
 
-      // Per-view leaf width — SINGLE source of truth.
-      // The cell's width is a property of the *view*, not the layout.
-      // Bound via the --leaf-width CSS custom property on every layout
-      // root (matrix per-view container, swim-lane .lane-grid,
-      // workflow-rows .wf-row) and consumed by every leaf container
-      // (matrix box div, .pill, .pill-empty, .node, .node-empty,
-      // .wf-stage). Changing a value here updates all three layouts
-      // in lock-step — no other knobs.
+      // Per-view leaf width — single source of truth.
+      // Hybrid C FINAL: --leaf-width is now a MINIMUM (floor) consumed by
+      // .node / .wf-stage as `min-width`; the leaf's intrinsic
+      // (max-content) width grows past the floor when content demands it.
+      // Glance still consumes it as a fixed width (the pill is
+      // single-attr-display and already fits canonical 150 px). Changing
+      // a value here updates all three layouts in lock-step.
       const LEAF_WIDTH_BY_VIEW = {
         detailed: '200px',
         compact:  '160px',
@@ -2370,6 +2466,13 @@
         'service-j': { dev: null, qa: 'dev', uat: 'qa', prod: 'uat' },
         'service-k': { dev: null, qa: 'dev', 'uat-1': 'qa', 'uat-2': 'qa' },
         'service-l': { dev: null, qa: 'dev', qahotfix: 'dev', uat: 'qa', prod: 'uat' },
+        // Stress-row: spans the full env union (dev, qa, qa-1, qa-2,
+        // qahotfix, uat, uat-1, uat-2, prod) so the matrix renders one
+        // row across every column. Sole purpose is version-string-length
+        // stress (~50 chars in both current + lastSuccessful sites);
+        // status mix is intentionally boring to avoid stealing the
+        // 6-state demo from service-a..l.
+        'payments-edge': { dev: null, qa: 'dev', 'qa-1': 'dev', 'qa-2': 'dev', qahotfix: 'dev', uat: ['qa', 'qa-1', 'qa-2'], 'uat-1': 'qa-1', 'uat-2': 'qa-2', prod: 'uat' },
       };
 
       const SERVICES = [
@@ -2470,6 +2573,29 @@
             qahotfix: slot('success', 'v9.0.8', '1d ago', '#1237', 'liam.s'),
             uat: slot('running-with-last', 'v9.1.0', 'now', '#1261', 'liam.s', 'v9.0.9', '2d ago'),
             prod: slot('success', 'v9.0.8', '4d ago', '#1223', 'liam.s'),
+          } },
+        // ------------------------------------------------------------
+        // payments-edge — version-width stress row.
+        // Renders across the entire env union; each version string is
+        // intentionally ~50 chars (build-meta + SHA + branch suffix) to
+        // exercise the long-version wrap/ellipsis behaviour each layout
+        // option ships. lastSuccessful is populated on a handful of
+        // cells so the bottom split section is also stressed.
+        // ------------------------------------------------------------
+        { id: 'payments-edge', name: 'payments-edge',
+          envs: {
+            dev:      slot('success', 'v2.0.5-rc.1+sha.a1b2c3d4e5f6.feature.long-branch-name', '3h ago', '#1263', 'mona.q'),
+            qa:       slot('success', 'v2.0.5-rc.1+sha.a1b2c3d4e5f6.feature.long-branch-name', '6h ago', '#1264', 'mona.q'),
+            'qa-1':   slot('failed-with-last', 'v2.0.5-rc.2+sha.b2c3d4e5f6a1.feature.long-branch-name', '2h ago', '#1265', 'mona.q',
+                           'v2.0.4-rc.9+sha.c3d4e5f6a1b2.feature.long-branch-name', '1d ago'),
+            'qa-2':   slot('success', 'v2.0.5-rc.1+sha.a1b2c3d4e5f6.feature.long-branch-name', '5h ago', '#1266', 'mona.q'),
+            qahotfix: slot('success', 'v2.0.4-rc.9+sha.c3d4e5f6a1b2.feature.long-branch-name', '1d ago', '#1267', 'mona.q'),
+            uat:      slot('success', 'v2.0.4-rc.9+sha.c3d4e5f6a1b2.feature.long-branch-name', '2d ago', '#1268', 'mona.q'),
+            'uat-1':  slot('success', 'v2.0.4-rc.9+sha.c3d4e5f6a1b2.feature.long-branch-name', '2d ago', '#1269', 'mona.q'),
+            'uat-2':  slot('failed-with-last', 'v2.0.5-rc.0+sha.d4e5f6a1b2c3.feature.long-branch-name', '4h ago', '#1270', 'mona.q',
+                           'v2.0.4-rc.9+sha.c3d4e5f6a1b2.feature.long-branch-name', '2d ago'),
+            prod:     slot('failed-with-last', 'v2.0.4-rc.9+sha.c3d4e5f6a1b2.feature.long-branch-name', '6h ago', '#1271', 'mona.q',
+                           'v2.0.3-rc.8+sha.e5f6a1b2c3d4.feature.long-branch-name', '5d ago'),
           } },
       ];
 
@@ -2854,7 +2980,14 @@
         get selectedAttrs() { return this.attrs[this.view] ?? []; },
         get selectedAttrCount() { return this.selectedAttrs.length; },
         get capReached() { return this.selectedAttrCount >= this.activeView.maxAttrs; },
-        get leafWidthForView() { return LEAF_WIDTH_BY_VIEW[this.view] || '160px'; },
+        // Hybrid C FINAL — flat per-view px. Consumed by every
+        // `:style="--leaf-width: ${leafWidthForView}"` site as the
+        // CSS custom property bound on the layout root. The leaf
+        // wrapper uses it as min-width (.node, .wf-stage) or fixed
+        // width (Glance .pill).
+        get leafWidthForView() {
+          return LEAF_WIDTH_BY_VIEW[this.view] || '160px';
+        },
 
         // ---------- Service grey-meta visibility ----------
         // Eight-cell rule (view × layout). Matrix was the third layout
@@ -3390,6 +3523,19 @@
             // harnesses (testing/mockup-visual/) as a settle signal.
             this._recomputeSeq = (this._recomputeSeq || 0) + 1;
             row.setAttribute('data-recomputed', String(this._recomputeSeq));
+            // Debug trace (Hybrid C FINAL revert): enable by setting
+            // window.__DEBUG_CONNECTORS = true in the console. Logs row id
+            // + computed line widths so the matrix-center horizontal
+            // centering can be verified to NOT shift connector geometry
+            // (margins shift colRect.left and targetRect.left by the
+            // same amount, so lineWidth = targetRect.left - colRect.left - 6
+            // is invariant under translation).
+            if (typeof window !== 'undefined' && window.__DEBUG_CONNECTORS) {
+              const widths = Array.from(row.querySelectorAll('[data-arrow-target]'))
+                .map(c => c.style.getPropertyValue('--target-line-width'));
+              // eslint-disable-next-line no-console
+              console.debug('[recomputeConnectorTops]', serviceId, widths);
+            }
           });
         },
 
