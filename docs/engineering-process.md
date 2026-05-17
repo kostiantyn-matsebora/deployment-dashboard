@@ -56,10 +56,21 @@ Each phase below: **Goal · Actions · Artefacts · Criteria of acceptance.**
 - **Acceptance.** Compiles / builds clean. Per-project unit tests pass. No new lint or type errors. Presentable to Phase 5.
 
 ### Phase 5 — Testing
-- **Goal.** Verify implementation against contracts via executable suites + manual browser smoke against the running solution.
+- **Goal.** Verify implementation against contracts via executable suites + manual browser smoke against the running solution. **Targeted by default; full regression opt-in only.**
 - **Actions.** `qa-engineer` authors and runs functional / API / e2e (Playwright) / mockup-visual / Pester / smoke. Tests reference contracts, not implementation internals. Oracles must be TIGHT per **Test oracles can be wrong** below. Manual browser smoke runs against the running solution (`dev_env/start.ps1` or `ng serve dashboard`), NOT against design artefacts. Runs under `### Iteration protocol — propose → review → implement` with estimation-first dispatch and stoppable intermediate states (see `### Stoppable intermediate states`).
-- **Artefacts.** Test code under `testing/` (`functional/`, `e2e/`, `mockup-visual/`, `pester/`, `fixtures/`, `scripts/`) + per-project unit specs alongside source. Manual-smoke report.
-- **Acceptance.** Suite executes; oracle pass/fail accurately reflects correctness. Manual-smoke report recorded (with explicit caveat if smoke could not be run — e.g. headless). Failures route to Phase 6.
+- **Scope — targeted by default.** Phase 5 covers ONLY the surfaces touched by Phase 4. Concretely:
+  - New / changed per-project unit specs alongside the modified source.
+  - New / changed functional / API tests for the modified endpoints, fields, or wire shapes.
+  - The e2e specs whose scenarios cover the changed surfaces — NOT the full Playwright suite.
+  - The mockup-visual harness ONLY if the mockup or a contract it asserts was touched.
+  - Manual browser smoke ONLY for new / changed user-facing flows.
+- **Full regression — opt-in only.** Runs only when the user explicitly requests it ("run full regression", "run all tests", or equivalent). Phase 5 never silently escalates from targeted to full; the orchestrator does not infer the request from context. Failed targeted runs route to Phase 6, not to full regression.
+- **SA periodic reminder (optional).** `solution-architect` MAY (not must) remind the user that a full regression run is overdue at sensible boundaries — end of a TODO item, after a stretch of multi-task work, before a release-relevant commit. The reminder MUST include both warnings:
+  - **Time warning** — typical full-regression wall-clock (cite actual durations from `testing/e2e/` and `testing/mockup-visual/` when known; otherwise "minutes-to-tens-of-minutes").
+  - **Token cost warning** — full regression spawns parallel agents and re-reads scenario docs, fixtures, and harness configs; the user pays for that context.
+  The reminder is a nudge, never a gate; the user decides.
+- **Artefacts.** Test code under `testing/` (`functional/`, `e2e/`, `mockup-visual/`, `pester/`, `fixtures/`, `scripts/`) + per-project unit specs alongside source. Manual-smoke report (for changed user-facing flows only).
+- **Acceptance.** Targeted suite executes; oracle pass/fail accurately reflects correctness for the changed surfaces. Manual-smoke report recorded for any changed user-facing flow (with explicit caveat if smoke could not be run — e.g. headless). Failures route to Phase 6.
 
 ### Phase 6 — Bug fixing
 - **Goal.** Resolve defects found in Phase 5 (or manual smoke) until all oracles are green with no regressions.
