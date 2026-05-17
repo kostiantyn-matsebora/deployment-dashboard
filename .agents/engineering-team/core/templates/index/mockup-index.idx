@@ -1,0 +1,12 @@
+# class: mockup
+# schema: section | invariant | location | source
+# source: docs/mockup.html
+# recipe: builtin:mockup
+
+login-form | required: email,password | docs/mockup.html:142 | @docs/mockup.html#login-form
+status-box | renders 3 states: healthy,degraded,down | docs/mockup.html:287 | @docs/mockup.html#status-box
+
+# Recipe: per documented mockup section → section name, invariant (rules / required fields / state set), location (file:line), source anchor.
+# Invariant cell: comma-list of required fields OR state set OR rule statement.
+# Lossless rule: every documented section in the mockup has a row here.
+# UI-state example payloads go to ui-states.yaml (nested); only the state set is captured here.

@@ -1,0 +1,16 @@
+# class: architecture
+# schema: kind | name | role | source
+# source: docs/architecture.md
+# recipe: builtin:architecture
+
+section | Overview | top-level orientation + scope | @docs/architecture.md#overview
+section | API contract | enumerates endpoints + auth | @docs/architecture.md#api
+component | gateway | edge auth, request routing, rate limiting | @docs/architecture.md#gateway
+component | service-tier | business logic, owns DB transactions | @docs/architecture.md#services
+component | store | PostgreSQL primary + read replicas | @docs/architecture.md#store
+
+# Recipe: top-level structure of the architecture doc.
+#   kind=section → top-level heading + one-line purpose.
+#   kind=component → service/tier/store/client named in the source + one-line responsibility.
+# FR/NFR tables, API matrix, UI states, glossary live in their own index files (architecture-fr.idx, api-matrix.yaml, ui-states.yaml, constraints.yaml, glossary.idx).
+# Lossless rule: every top-level section + every named component has a row here.

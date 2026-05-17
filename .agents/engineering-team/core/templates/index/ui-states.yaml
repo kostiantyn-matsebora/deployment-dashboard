@@ -1,0 +1,21 @@
+# local/index/ui-states.yaml — extracted enumeration of documented UI states.
+# Source recorded in local/index/manifest.yaml.
+# Recipe: builtin:architecture (state set from architecture doc) + builtin:mockup (visual + payload from mockup).
+# Owner: ai-engineer.
+# Consumed by: frontend-engineer (implementation), qa-engineer (fixture corpus), solution-architect (invariant governance).
+
+# Lossless rule: every documented UI state in the source has an entry here.
+
+states:
+  - name: <e.g. status-box.healthy>
+    summary: <one-line state description>
+    wire-shape:
+      example: <inline-JSON-fragment or 'see fixture-ref'>
+      fields: [<field-1>, <field-2>]
+    visual:
+      mockup-section: <mockup file path#anchor>
+      assertion-ref: <e.g. data-testid="status-healthy"; or screenshot-baseline path>
+    fixture-ref: <path to canonical fixture file, if any>
+    source-anchor: <architecture-doc#anchor>
+
+  # Repeat per state.

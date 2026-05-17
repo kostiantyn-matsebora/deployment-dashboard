@@ -1,0 +1,56 @@
+# local/index/conventions.yaml — extracted coding & process conventions.
+# Category: code. Recipe: builtin:conventions.
+# Sources: .editorconfig, ESLint config, Prettier config, Black/Ruff config,
+#          dotnet-format settings, golangci-lint config, husky hooks, commitlint,
+#          .gitignore patterns, .gitattributes.
+# Owner: ai-engineer. Consumed by: all engineers (style + lint + commit conventions).
+# Lossless rule: every declared rule that would change adopter-authored output
+#                (formatter, lint severity, commit-style, branch-naming) has an entry.
+
+# Formatter (.editorconfig + per-tool formatter configs):
+formatter:
+  indent:
+    style: <space | tab>
+    size: <2 | 4 | tab>
+  line-endings: <lf | crlf | native>
+  max-line-length: <e.g. 100 | 120 | none>
+  trim-trailing-whitespace: <true | false>
+  insert-final-newline: <true | false>
+  source-anchors: [<e.g. .editorconfig, frontend/.prettierrc>]
+
+# Linters (per-language). One entry per active linter.
+linters:
+  - tool: <e.g. eslint>
+    severity-default: <warn | error>
+    custom-rules:
+      - rule: <e.g. no-explicit-any>
+        severity: <off | warn | error>
+        source-anchor: <file:line>
+    source-anchor: <e.g. frontend/eslint.config.mjs>
+
+  - tool: <e.g. ruff>
+    severity-default: <...>
+    custom-rules: [<...>]
+    source-anchor: <e.g. pyproject.toml:tool.ruff>
+
+# Naming & branch conventions:
+naming:
+  branch-pattern: <e.g. (issue|todo|task)-[0-9]+- or feature/* | bugfix/* | release/*>
+  commit-message: <e.g. conventional-commits | imperative-50char-summary | none>
+  source-anchor: <e.g. .github/CONTRIBUTING.md | commitlint.config.js>
+
+# Pre-commit / husky:
+pre-commit-hooks:
+  - hook: <e.g. pre-commit>
+    runs: [<command>, ...]
+    source-anchor: <e.g. .husky/pre-commit>
+
+# Ignored paths (.gitignore highlights — not the full file):
+ignored:
+  - pattern: <e.g. node_modules/>
+    reason: <e.g. dependency directory>
+
+# Notes on extraction scope:
+# - Active declared rules: in scope.
+# - Default-from-tool rules that aren't customized: out of scope (roles know tool defaults).
+# - Comments in config files explaining "why": out of scope; reference by source-anchor.

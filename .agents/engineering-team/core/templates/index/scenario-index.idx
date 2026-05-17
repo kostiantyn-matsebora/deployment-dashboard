@@ -1,0 +1,11 @@
+# class: scenario
+# schema: id | feature | fr-cited | mockup-anchor | fixture | source
+# source-glob: docs/scenarios/*.md
+# recipe: builtin:scenario
+
+SC-0001 | login-happy | FR-04 | @docs/mockup.html#login-form | @docs/scenarios/fixtures/login-ok.json | @docs/scenarios/login-happy.md
+SC-0002 | login-locked | FR-04,FR-09 | @docs/mockup.html#login-locked | - | @docs/scenarios/login-locked.md
+
+# Recipe: per scenario file → id, feature label, FR/NFR cited (comma-list), mockup section anchor, fixture path (or '-'), source path.
+# Lossless rule: every scenario file in the source dir/glob has a row here.
+# Fixture cell: '-' if scenario has no canonical fixture file.

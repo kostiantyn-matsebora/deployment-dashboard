@@ -1,0 +1,11 @@
+# class: glossary
+# schema: term | definition | source
+# source: docs/architecture.md
+# recipe: builtin:glossary
+
+deployment | A versioned artifact bundle rolled out to one or more environments | @docs/architecture.md#glossary
+rollout | The act of progressing a deployment through environments in defined order | @docs/architecture.md#glossary
+
+# Recipe: per domain term → term, one-line definition, source anchor.
+# Lossless rule: every domain term defined in the source (architecture-doc glossary or README definition list) has a row here.
+# Use this when role disambiguation is non-trivial — skip purely technical jargon already well-known to LLMs.

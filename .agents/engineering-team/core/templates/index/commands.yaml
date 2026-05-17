@@ -1,0 +1,57 @@
+# local/index/commands.yaml — extracted build / test / lint / deploy command map.
+# Category: code. Recipe: builtin:commands.
+# Sources: Makefile, package.json § scripts, justfile, pyproject.toml § tool.poe,
+#          local/framework.config.yaml § test-runners, .github/workflows/* (CI steps).
+# Owner: ai-engineer. Consumed by: qa-engineer, devops-engineer, all engineers.
+# Lossless rule: every script-style entry point named in the sources has a row here.
+
+# Nested by category. Each command carries the actual invocation + working dir + source-anchor.
+commands:
+  build:
+    - name: <e.g. server-build>
+      cmd: <e.g. dotnet build Api.sln>
+      wd: <e.g. backend/>
+      tool: <e.g. dotnet | npm | make | poetry | cargo | go>
+      source-anchor: <e.g. backend/Api.sln | package.json:scripts.build>
+
+  test:
+    - name: <e.g. functional>
+      cmd: <e.g. pwsh -NoProfile -File run-tests.ps1>
+      wd: <e.g. testing/functional/>
+      tool: <e.g. xunit | pytest | jest | vitest | go-test>
+      scope: <unit | integration | functional | e2e | smoke | script-suite>
+      source-anchor: <e.g. local/framework.config.yaml:test-runners.functional>
+
+  lint:
+    - name: <e.g. eslint-frontend>
+      cmd: <e.g. pnpm run lint>
+      wd: <e.g. frontend/>
+      tool: <eslint | prettier | black | ruff | dotnet-format | golangci-lint>
+      source-anchor: <e.g. frontend/package.json:scripts.lint>
+
+  format:
+    - name: <e.g. prettier-write>
+      cmd: <e.g. pnpm exec prettier --write .>
+      wd: <e.g. frontend/>
+      tool: <prettier | black | dotnet-format>
+      source-anchor: <e.g. frontend/package.json:scripts.format>
+
+  deploy:
+    - name: <e.g. deploy-staging>
+      cmd: <e.g. terraform apply -var-file=staging.tfvars>
+      wd: <e.g. infrastructure/>
+      tool: <terraform | pulumi | helm>
+      env: <staging | production>
+      source-anchor: <e.g. .github/workflows/deploy-staging.yml>
+
+  dev:
+    - name: <e.g. local-up>
+      cmd: <e.g. pwsh -NoProfile -File start.ps1>
+      wd: <e.g. dev_env/>
+      purpose: <e.g. bring up Docker Compose local stack + poll /health>
+      source-anchor: <e.g. local/framework.config.yaml:local-dev-startup-command>
+
+# Notes on extraction scope:
+# - Named entry points (npm scripts, make targets, just recipes): in scope.
+# - Ad-hoc one-liners scattered in README prose: out of scope.
+# - CI step `run:` bodies: in scope only when they invoke a project-defined named command (not for arbitrary inline shell).

@@ -1,0 +1,11 @@
+# class: adr
+# schema: id | title | status | summary | source
+# source-glob: docs/adr/*.md
+# recipe: builtin:adr
+
+ADR-0001 | <title> | <proposed|accepted|superseded|rejected> | <one-line decision> | @docs/adr/0001.md
+ADR-0002 | <title> | accepted | <one-line decision> | @docs/adr/0002.md
+
+# Recipe: per ADR file → id, title, status, one-line decision summary, file path. Body NOT copied.
+# Reusable shape — adopter-declared classes (rfc, design-decision, any-decision-record) may reuse this template via manifest.yaml.
+# Lossless rule: every ADR file in the source dir has a row here.

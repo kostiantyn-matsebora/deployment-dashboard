@@ -1,0 +1,57 @@
+# local/index/topology.yaml — extracted infrastructure topology.
+# Category: code. Recipe: builtin:container-orchestration (+ builtin:iac for TF/Pulumi).
+# Sources: docker-compose*.yml, k8s/**/*.yaml, helm/**/*.yaml, terraform/**/*.tf,
+#          pulumi/**/*.{ts,py,go}, infrastructure/**/*.bicep.
+# Owner: ai-engineer. Consumed by: devops-engineer, sre, backend-engineer (for service inventory).
+# Lossless rule: every declared service + every published port + every depends_on edge has an entry here.
+
+services:
+  - name: <e.g. gateway>
+    image: <e.g. nginx:1.27-alpine | local-build:./gateway>
+    role: <e.g. edge / api / worker / store / cache / queue>
+    ports:
+      - host: <e.g. 8080>
+        container: <e.g. 80>
+        protocol: <tcp | udp>
+    depends-on: [<service-name>, ...]
+    replicas: <integer or 'autoscale: min..max'>
+    resources:
+      cpu: <e.g. 250m / 1>
+      memory: <e.g. 256Mi / 2Gi>
+    env-vars:
+      - name: <KEY>
+        source: <literal | secret-ref | config-ref | env>
+    source-anchor: <e.g. dev_env/docker-compose.yml:42 | infrastructure/api.tf:18>
+    tier: <local-dev | staging | production>
+
+  # Repeat per declared service.
+
+# Cross-cutting:
+networks:
+  - name: <e.g. default | internal>
+    services: [<service-name>, ...]
+    source-anchor: <file:line>
+
+volumes:
+  - name: <e.g. db-data>
+    mounted-by: [<service-name>, ...]
+    persistence: <named-volume | host-path | tmpfs>
+    source-anchor: <file:line>
+
+ingress:
+  scheme: <e.g. single-public-gateway | per-service-route>
+  external-host: <e.g. dashboard.example.com>
+  source-anchor: <file:line>
+
+# IaC summary (when builtin:iac is the recipe):
+iac:
+  tool: <Terraform / Pulumi / Bicep / CloudFormation>
+  cloud: <Azure / AWS / GCP / on-prem>
+  state-backend: <e.g. azurerm / s3+dynamodb / gcs>
+  resource-groups: [<name>, ...]
+  source-anchor: <root module path>
+
+# Notes on extraction scope:
+# - Services + ports + depends_on: in scope (queryable inventory).
+# - Service container init / command / healthcheck: in scope if declarative; out of scope if inline scripts.
+# - Cloud-IaC resource bodies: NOT copied; reference by anchor. Roles read the source TF/Pulumi file when authoring.

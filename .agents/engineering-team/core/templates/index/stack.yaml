@@ -1,0 +1,69 @@
+# local/index/stack.yaml — extracted tech-stack inventory.
+# Category: code. Recipe: builtin:package-manifest.
+# Sources: package.json, *.csproj, pyproject.toml, Cargo.toml, go.mod, pom.xml,
+#          *.gemspec, Dockerfile, lockfiles (package-lock.json, yarn.lock,
+#          poetry.lock, Cargo.lock, go.sum, ...).
+# Owner: ai-engineer. Consumed by: all engineers (per-tier slice).
+# Lossless rule: every declared direct dependency + every runtime version + every
+#                Dockerfile FROM image has an entry here.
+
+# Nested by tier; absent tiers omitted.
+tiers:
+  server:
+    language: <e.g. C# 13 / TypeScript 5.4 / Python 3.13 / Go 1.23>
+    runtime: <e.g. .NET 10 / Node.js 22 / CPython 3.13 / Go 1.23>
+    framework: <e.g. ASP.NET Core 10 / Express 4 / FastAPI 0.115 / Spring Boot 3.4>
+    orm: <e.g. EF Core 10 / Prisma 6 / SQLAlchemy 2.0>
+    data-store: <e.g. PostgreSQL 16 / MongoDB 7 / DynamoDB>
+    runtime-image: <e.g. mcr.microsoft.com/dotnet/aspnet:10-alpine>
+    source-anchors:
+      - <e.g. backend/Api.csproj>
+      - <e.g. backend/Dockerfile>
+    direct-deps:
+      - name: <package>
+        version: <pinned-or-range>
+        source-anchor: <file path>
+
+  client:
+    language: <e.g. TypeScript 5.4>
+    framework: <e.g. Angular 20 / React 18 / Vue 3 / Svelte 5>
+    state: <e.g. NgRx Signal Store / Redux Toolkit / Pinia / Zustand>
+    styling: <e.g. Tailwind 4 / CSS Modules / Sass / Styled Components>
+    runtime-image: <e.g. nginx:1.27-alpine>
+    source-anchors:
+      - <e.g. frontend/package.json>
+      - <e.g. frontend/Dockerfile>
+    direct-deps:
+      - name: <package>
+        version: <pinned-or-range>
+        source-anchor: <file path>
+
+  mobile:
+    platform: <iOS | Android | both | cross-platform>
+    framework: <SwiftUI / Compose / React Native / Flutter>
+    source-anchors: [<paths>]
+    direct-deps: [<...>]
+
+  ml:
+    framework: <PyTorch / JAX / TF / scikit-learn>
+    registry: <MLflow / W&B / Neptune>
+    source-anchors: [<paths>]
+    direct-deps: [<...>]
+
+  data:
+    warehouse: <BigQuery / Snowflake / Redshift / DuckDB>
+    orchestrator: <Airflow / Dagster / Prefect / Argo>
+    transformation: <dbt / SQLMesh / Spark / Flink>
+    source-anchors: [<paths>]
+    direct-deps: [<...>]
+
+# Cross-tier:
+container-runtime: <Docker / Podman / none>
+package-manager:
+  server: <npm | pnpm | yarn | dotnet | poetry | uv | cargo | go-mod>
+  client: <...>
+
+# Notes on what to include vs leave for raw source:
+# - Direct deps + versions: in scope (queryable inventory).
+# - Transitive deps from lockfiles: out of scope (too noisy). Roles read lockfile directly when a transitive matters.
+# - Build-only dev deps: in scope but flagged `dev: true` on each entry.

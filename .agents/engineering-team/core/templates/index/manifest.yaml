@@ -1,0 +1,55 @@
+# local/index/manifest.yaml — written by ai-engineer during discovery / re-extraction.
+# Tracks every detected doc class: source(s), SHA-256, derived index files, extraction recipe id.
+# See core/index-protocol.md § Manifest shape.
+# Lossless rule: every doc class detected during discovery has an entry here.
+
+indexed:
+  # ── Built-in single-source class. multi index-files derived from one source doc. ──
+  - class: architecture
+    template: multi
+    recipe: builtin:architecture
+    source: <path/to/architecture-doc>
+    sha256: <sha256-hex>
+    indexed-on: <YYYY-MM-DD>
+    index-files:
+      - architecture.idx
+      - architecture-fr.idx
+      - api-matrix.yaml
+      - ui-states.yaml
+      - constraints.yaml
+      - glossary.idx
+
+  # ── Built-in globbed class (multiple files, per-file SHA-256). ──
+  - class: scenario
+    template: scenario-index.idx
+    recipe: builtin:scenario
+    source-glob: <docs/scenarios/*.md>
+    file-count: <N>
+    sha256-by-file:
+      <path/to/scenario-1.md>: <sha256-hex>
+      <path/to/scenario-2.md>: <sha256-hex>
+    indexed-on: <YYYY-MM-DD>
+    index-files: [scenario-index.idx]
+
+  # ── Adopter-declared class reusing a built-in template shape. ──
+  # Adopter pre-declared in local/framework.config.yaml § index.classes; PM honors before auto-detection.
+  # - class: rfc
+  #   template: adr-index.idx
+  #   recipe: builtin:adr
+  #   source-glob: docs/rfcs/*.md
+  #   file-count: <N>
+  #   sha256-by-file: { <file>: <sha256-hex>, ... }
+  #   indexed-on: <YYYY-MM-DD>
+  #   index-files: [rfc-index.idx]
+
+  # ── Novel class — ai-engineer authored. Recipe recorded inline. ──
+  # - class: runbook
+  #   template: novel
+  #   recipe: |
+  #     Per file: extract title, alert id, severity, first-action step, escalation contact.
+  #     Body NOT copied. Sample-and-check 5 random items after extraction.
+  #   source-glob: ops/runbooks/*.md
+  #   file-count: <N>
+  #   sha256-by-file: { <file>: <sha256-hex>, ... }
+  #   indexed-on: <YYYY-MM-DD>
+  #   index-files: [runbook-index.idx]
