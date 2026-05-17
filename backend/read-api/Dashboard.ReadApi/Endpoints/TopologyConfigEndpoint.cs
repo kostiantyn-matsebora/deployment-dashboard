@@ -1,3 +1,4 @@
+using Dashboard.Shared.Dto;
 using Dashboard.Shared.Topology;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -27,6 +28,14 @@ public static class TopologyConfigEndpoint
     {
         app.MapGet("/api/config/topology",
             async (TopologyConfigStore store, CancellationToken ct) =>
-                Results.Ok(await store.GetAsync(ct)));
+                Results.Ok(await store.GetAsync(ct)))
+        .WithName("GetTopologyConfig")
+        .WithTags("Read")
+        .WithSummary("Active topology / correlation configuration")
+        .WithDescription(
+            "Unauthenticated mirror of the active topology config so the SPA's " +
+            "correlation-attribute picker can label the 'system default' entry. The " +
+            "matching PATCH endpoint lives on the Write surface (X-Api-Key required).")
+        .Produces<TopologyConfigDto>(StatusCodes.Status200OK);
     }
 }

@@ -20,12 +20,27 @@ namespace Dashboard.Shared.Dto;
 /// </summary>
 public sealed record MatrixSlot
 {
+    /// <summary>
+    /// Latest deployment event for this <c>(service, environment)</c> slot
+    /// regardless of status — failures replace the previous entry per SAD §7
+    /// Decision 3.
+    /// </summary>
     [JsonPropertyName("current")]
     public CurrentDeployment Current { get; init; } = default!;
 
+    /// <summary>
+    /// Most recent <c>success</c> event for the slot, or <c>null</c> when
+    /// <see cref="Current"/> is itself a success (no fallback needed) or when
+    /// no success has ever been recorded for this slot.
+    /// </summary>
     [JsonPropertyName("lastSuccessful")]
     public LastSuccessfulDeployment? LastSuccessful { get; init; }
 
+    /// <summary>
+    /// <c>true</c> iff <see cref="Current"/> is <c>in-progress</c> AND the
+    /// most recent terminal event before it was a failure — so the SPA paints
+    /// the "in-progress over a failure" box state from the mockup.
+    /// </summary>
     [JsonPropertyName("previousFailed")]
     public bool PreviousFailed { get; init; }
 }
@@ -33,12 +48,25 @@ public sealed record MatrixSlot
 /// <summary>"current" sub-object — full event detail including status.</summary>
 public sealed record CurrentDeployment
 {
+    /// <summary>CI/CD-side identifier of the latest event in this slot.</summary>
     [JsonPropertyName("deployment_id")] public string DeploymentId { get; init; } = string.Empty;
+
+    /// <summary>Version string shown on the tile.</summary>
     [JsonPropertyName("version")] public string Version { get; init; } = string.Empty;
+
+    /// <summary>Lifecycle status of the current event — drives the box state.</summary>
     [JsonPropertyName("status")] public string Status { get; init; } = string.Empty;
+
+    /// <summary>Absolute URL to the CI/CD run that produced the current event.</summary>
     [JsonPropertyName("run_url")] public string RunUrl { get; init; } = string.Empty;
+
+    /// <summary>CI/CD run number of the current event.</summary>
     [JsonPropertyName("run_number")] public long RunNumber { get; init; }
+
+    /// <summary>Who triggered the current event.</summary>
     [JsonPropertyName("actor")] public string Actor { get; init; } = string.Empty;
+
+    /// <summary>UTC timestamp at which the current event was persisted.</summary>
     [JsonPropertyName("deployed_at")] public DateTime DeployedAt { get; init; }
 
     /// <summary>
@@ -97,11 +125,22 @@ public sealed record CurrentDeployment
 /// </summary>
 public sealed record LastSuccessfulDeployment
 {
+    /// <summary>CI/CD-side identifier of the last successful event in this slot.</summary>
     [JsonPropertyName("deployment_id")] public string DeploymentId { get; init; } = string.Empty;
+
+    /// <summary>Version string of the last successful event.</summary>
     [JsonPropertyName("version")] public string Version { get; init; } = string.Empty;
+
+    /// <summary>Absolute URL to the run that produced the last success.</summary>
     [JsonPropertyName("run_url")] public string RunUrl { get; init; } = string.Empty;
+
+    /// <summary>Run number of the last success.</summary>
     [JsonPropertyName("run_number")] public long RunNumber { get; init; }
+
+    /// <summary>Who triggered the last success.</summary>
     [JsonPropertyName("actor")] public string Actor { get; init; } = string.Empty;
+
+    /// <summary>UTC timestamp at which the last success was persisted.</summary>
     [JsonPropertyName("deployed_at")] public DateTime DeployedAt { get; init; }
 
     [JsonPropertyName("parent_deployments")]

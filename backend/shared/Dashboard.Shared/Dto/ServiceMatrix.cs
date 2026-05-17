@@ -17,10 +17,21 @@ namespace Dashboard.Shared.Dto;
 /// </summary>
 public sealed record ServiceMatrix
 {
+    /// <summary>
+    /// Map of <c>environment-name → MatrixSlot</c>. Only slots that have ever
+    /// received a deployment for this service appear; environments with no
+    /// history are absent rather than represented by a null slot.
+    /// </summary>
     [JsonPropertyName("envs")]
     public IReadOnlyDictionary<string, MatrixSlot> Envs { get; init; } =
         new Dictionary<string, MatrixSlot>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Per-service env DAG (SAD §5 "Topology Derivation"). Edges are derived
+    /// from explicit <c>parent_deployments</c> first, then from a correlation
+    /// fallback pass keyed by the resolved <c>correlationAttribute</c>.
+    /// Always present; <c>edges</c> may be empty.
+    /// </summary>
     [JsonPropertyName("topology")]
     public TopologySnapshot Topology { get; init; } = new();
 }

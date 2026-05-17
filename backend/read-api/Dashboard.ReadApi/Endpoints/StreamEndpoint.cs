@@ -83,6 +83,16 @@ public static class StreamEndpoint
                 }
             }
             catch (OperationCanceledException) { /* client disconnected */ }
-        });
+        })
+        .WithName("StreamSlotUpdates")
+        .WithTags("Read")
+        .WithSummary("Server-Sent Events stream of slot updates")
+        .WithDescription(
+            "Long-lived text/event-stream connection that emits one 'slot-update' event " +
+            "per persisted deployment (NFR-03). Honours Last-Event-ID (header OR " +
+            "?last-event-id query param) for best-effort replay from the in-process ring " +
+            "buffer. Heartbeat comment every 15s keeps reverse proxies from closing the " +
+            "connection. Payload schema: see Dashboard.Shared.Dto.SlotUpdatePayload.")
+        .Produces(StatusCodes.Status200OK, contentType: "text/event-stream");
     }
 }

@@ -9,6 +9,12 @@
          behind the App Gateway. Disabling static web assets prevents the SDK
          from emitting a manifest that references a non-existent wwwroot. -->
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
+    <!-- CR-0008 OpenAPI semantic enrichment: generate XML doc files so the
+         Microsoft.AspNetCore.OpenApi pipeline can lift /// <summary> blocks
+         onto operations and DTO schemas. 1591 suppressed because not every
+         internal helper needs a /// block — only public surface ships. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

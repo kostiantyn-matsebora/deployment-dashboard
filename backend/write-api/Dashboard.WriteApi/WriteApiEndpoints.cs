@@ -7,6 +7,7 @@ using Dashboard.Shared.Topology;
 using Dashboard.Shared.Validation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
@@ -183,7 +184,22 @@ public static class WriteApiEndpoints
             await notifier.PublishAsync(response, ct);
 
             return Results.Created($"/api/deployments/{entity.Service}/{entity.Environment}", response);
-        });
+        })
+        .WithName("IngestDeployment")
+        .WithTags("Write")
+        .WithSummary("Ingest a deployment event")
+        .WithDescription(
+            "Push-based ingest from CI/CD. Persists the event, dispatches a PostgreSQL " +
+            "NOTIFY for SSE fan-out (NFR-03), and returns the canonical event row. Requires " +
+            "the X-Api-Key header (SAD §8). Validation failures surface as 422 " +
+            "(ValidationProblemDetails); cross-service parent / cycle as 400 " +
+            "(ProblemDetails); duplicate (service, deployment_id) as 409 (ProblemDetails).")
+        .Accepts<DeploymentEventRequest>("application/json")
+        .Produces<DeploymentEventResponse>(StatusCodes.Status201Created)
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status409Conflict);
     }
 
     private static void MapTopologyConfigPatch(IEndpointRouteBuilder builder)
@@ -212,7 +228,19 @@ public static class WriteApiEndpoints
                     errorSlug: "invalid_correlation_attribute",
                     extra: new Dictionary<string, object?> { ["attribute"] = ex.Attribute });
             }
-        });
+        })
+        .WithName("PatchTopologyConfig")
+        .WithTags("Write")
+        .WithSummary("Mutate the active topology / correlation configuration")
+        .WithDescription(
+            "PATCH-semantics update of the server-wide topology config (SAD §7). " +
+            "Unspecified fields stay unchanged; a null value inside perServiceOverrides " +
+            "removes that service's override. Requires X-Api-Key (SAD §8 + WBS 1.2.7). " +
+            "An out-of-set correlationAttribute is rejected with 400 (ProblemDetails).")
+        .Accepts<TopologyConfigPatch>("application/json")
+        .Produces<TopologyConfigDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
     }
 
     /// <summary>

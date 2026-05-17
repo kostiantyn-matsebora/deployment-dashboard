@@ -5,6 +5,7 @@ using Dashboard.Shared.Topology;
 using Dashboard.Shared.Validation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,7 +53,19 @@ public static class DeploymentEndpoints
                 service => configStore.ResolveAttributeForServiceAsync(service, requestOverride, ct),
                 ct);
             return Results.Ok(matrix);
-        });
+        })
+        .WithName("GetMatrix")
+        .WithTags("Read")
+        .WithSummary("Full service x environment matrix")
+        .WithDescription(
+            "Returns the entire matrix as a map of service to ServiceMatrix. Each " +
+            "ServiceMatrix carries per-environment MatrixSlot blocks plus the derived " +
+            "topology edges (SAD §5 / §7). The optional correlationAttribute query " +
+            "parameter is a per-request hint that participates in the precedence rule " +
+            "PerServiceOverrides[svc] > query-param > server default. Invalid value " +
+            "surfaces as 400 (ProblemDetails); unauthenticated read.")
+        .Produces<IDictionary<string, ServiceMatrix>>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest);
 
         app.MapGet("/api/deployments/{service}/{environment}",
             async (string service,
@@ -86,7 +99,18 @@ public static class DeploymentEndpoints
                     detail: $"No deployment history exists for service '{service}' and environment '{environment}'.",
                     errorSlug: "slot_not_found")
                 : Results.Ok(slot);
-        });
+        })
+        .WithName("GetSlot")
+        .WithTags("Read")
+        .WithSummary("Single-slot view for a (service, environment) pair")
+        .WithDescription(
+            "Returns the same MatrixSlot block that GET /api/deployments would produce " +
+            "for this slot. The correlationAttribute query parameter is validated for " +
+            "shape consistency across endpoints but ignored — this endpoint does not " +
+            "return topology (SAD §7). 404 (ProblemDetails) when the slot has no history.")
+        .Produces<MatrixSlot>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status404NotFound);
 
         app.MapGet("/api/deployments/{service}/{environment}/history",
             async (string service, string environment, int? limit, DashboardDbContext db, CancellationToken ct) =>
@@ -114,7 +138,16 @@ public static class DeploymentEndpoints
 
             var dto = events.Select(DeploymentEventResponse.FromEntity).ToArray();
             return Results.Ok(dto);
-        });
+        })
+        .WithName("GetSlotHistory")
+        .WithTags("Read")
+        .WithSummary("Reverse-chronological deployment history for a slot")
+        .WithDescription(
+            "Returns up to `limit` events (default 50, hard cap 1000) ordered by " +
+            "deployed_at DESC, id DESC. 404 (ProblemDetails) when the slot has never " +
+            "been deployed to.")
+        .Produces<DeploymentEventResponse[]>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound);
     }
 
     /// <summary>

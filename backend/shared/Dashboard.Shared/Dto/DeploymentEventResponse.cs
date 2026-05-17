@@ -11,33 +11,57 @@ namespace Dashboard.Shared.Dto;
 /// </summary>
 public sealed record DeploymentEventResponse
 {
+    /// <summary>
+    /// Server-assigned auto-increment row id. Used as the SSE event id and as
+    /// the secondary order key for history requests when two events share a
+    /// <c>deployed_at</c> timestamp.
+    /// </summary>
     [JsonPropertyName("id")]
     public long Id { get; init; }
 
+    /// <summary>
+    /// CI/CD-side deployment identifier — verbatim from the request payload.
+    /// Used by the SPA to render explicit parent links in the history drawer.
+    /// </summary>
     [JsonPropertyName("deployment_id")]
     public string DeploymentId { get; init; } = string.Empty;
 
+    /// <summary>Logical service identifier — the matrix's row key.</summary>
     [JsonPropertyName("service")]
     public string Service { get; init; } = string.Empty;
 
+    /// <summary>Target environment — the matrix's column key.</summary>
     [JsonPropertyName("environment")]
     public string Environment { get; init; } = string.Empty;
 
+    /// <summary>Version string shown on the matrix tile.</summary>
     [JsonPropertyName("version")]
     public string Version { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Lifecycle status — one of <c>"in-progress"</c>, <c>"success"</c>,
+    /// <c>"failure"</c>.
+    /// </summary>
     [JsonPropertyName("status")]
     public string Status { get; init; } = string.Empty;
 
+    /// <summary>Absolute URL to the CI/CD run that produced this event.</summary>
     [JsonPropertyName("run_url")]
     public string RunUrl { get; init; } = string.Empty;
 
+    /// <summary>Monotonic CI/CD run number.</summary>
     [JsonPropertyName("run_number")]
     public long RunNumber { get; init; }
 
+    /// <summary>Who triggered the deployment — username, bot id, or "system".</summary>
     [JsonPropertyName("actor")]
     public string Actor { get; init; } = string.Empty;
 
+    /// <summary>
+    /// UTC timestamp at which the row was persisted. Always serialised with a
+    /// trailing <c>Z</c> so the SPA's <c>Date</c> parsing is timezone-stable
+    /// regardless of the underlying DB provider.
+    /// </summary>
     [JsonPropertyName("deployed_at")]
     public DateTime DeployedAt { get; init; }
 

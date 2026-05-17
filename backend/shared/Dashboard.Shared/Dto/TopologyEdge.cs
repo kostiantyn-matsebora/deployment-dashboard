@@ -17,15 +17,26 @@ namespace Dashboard.Shared.Dto;
 /// </summary>
 public sealed record TopologyEdge
 {
+    /// <summary>Edge derived from an explicit <c>parent_deployments</c> reference.</summary>
     public const string SourceExplicit = "explicit";
+
+    /// <summary>Edge derived from the correlation-attribute fallback pass.</summary>
     public const string SourceCorrelated = "correlated";
 
+    /// <summary>Parent environment in the DAG.</summary>
     [JsonPropertyName("from")]
     public string From { get; init; } = string.Empty;
 
+    /// <summary>Child environment in the DAG.</summary>
     [JsonPropertyName("to")]
     public string To { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Origin of this edge — <c>"explicit"</c> when materialised from a
+    /// <c>parent_deployments</c> reference, <c>"correlated"</c> when emitted
+    /// by the correlation fallback pass. Explicit wins on <c>(from, to)</c>
+    /// collisions (SAD §5).
+    /// </summary>
     [JsonPropertyName("source")]
     public string Source { get; init; } = SourceExplicit;
 }
@@ -37,6 +48,7 @@ public sealed record TopologyEdge
 /// </summary>
 public sealed record TopologySnapshot
 {
+    /// <summary>Directed edges in the per-service env DAG. Possibly empty.</summary>
     [JsonPropertyName("edges")]
     public IReadOnlyList<TopologyEdge> Edges { get; init; } = Array.Empty<TopologyEdge>();
 }

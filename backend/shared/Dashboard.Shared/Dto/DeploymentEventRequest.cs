@@ -54,29 +54,55 @@ public sealed record DeploymentEventRequest
     [JsonPropertyName("parent_deployments")]
     public IReadOnlyList<string>? ParentDeployments { get; init; }
 
+    /// <summary>
+    /// Logical service identifier — the matrix's row key (SAD §7). Stable per
+    /// pipeline; e.g. <c>"checkout-api"</c>. Required; ≤ 200 chars;
+    /// whitespace-only rejected with 422.
+    /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
     [StringLength(200, MinimumLength = 1)]
     [JsonPropertyName("service")]
     public string Service { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Target environment — the matrix's column key (SAD §7); e.g.
+    /// <c>"dev"</c>, <c>"qa-1"</c>, <c>"prod"</c>. Required; ≤ 200 chars;
+    /// whitespace-only rejected with 422. Discovery surfaces it through
+    /// <c>GET /api/environments</c> automatically on first ingest.
+    /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
     [StringLength(200, MinimumLength = 1)]
     [JsonPropertyName("environment")]
     public string Environment { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Version string shown on the matrix tile (SAD §7 + mockup). Any opaque
+    /// string the pipeline picks — semver, build number, image tag. Required;
+    /// ≤ 200 chars; whitespace-only rejected with 422.
+    /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
     [StringLength(200, MinimumLength = 1)]
     [JsonPropertyName("version")]
     public string Version { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Lifecycle status — one of <c>"in-progress"</c>, <c>"success"</c>,
+    /// <c>"failure"</c> (SAD §7 + <see cref="Domain.DeploymentStatus.All"/>).
+    /// Any other value triggers <c>422 Unprocessable Entity</c>.
+    /// </summary>
     [Required(AllowEmptyStrings = false)]
     [AllowedStatus]
     [JsonPropertyName("status")]
     public string Status { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Absolute URL to the CI/CD run that produced this event (SAD §7); the
+    /// SPA renders it as the "View run" link. Required; ≤ 2048 chars; must
+    /// be a syntactically valid URL.
+    /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
     [StringLength(2048, MinimumLength = 1)]
@@ -84,10 +110,18 @@ public sealed record DeploymentEventRequest
     [JsonPropertyName("run_url")]
     public string RunUrl { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Monotonic CI/CD run number for the pipeline (SAD §7); shown on the
+    /// tile as "#123". Must be non-negative.
+    /// </summary>
     [Range(0, long.MaxValue)]
     [JsonPropertyName("run_number")]
     public long RunNumber { get; init; }
 
+    /// <summary>
+    /// Who triggered the deployment — username, bot id, or "system" (SAD §7).
+    /// Required; ≤ 200 chars; whitespace-only rejected with 422.
+    /// </summary>
     [Required(AllowEmptyStrings = false)]
     [NotWhitespace]
     [StringLength(200, MinimumLength = 1)]

@@ -27,12 +27,18 @@ namespace Dashboard.Shared.Dto;
 /// </summary>
 public sealed record SlotUpdatePayload
 {
+    /// <summary>Service whose slot changed.</summary>
     [JsonPropertyName("service")]
     public string Service { get; init; } = string.Empty;
 
+    /// <summary>Environment whose slot changed.</summary>
     [JsonPropertyName("environment")]
     public string Environment { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Updated slot state — identical shape to the per-slot block emitted by
+    /// <c>GET /api/deployments/{service}/{environment}</c>.
+    /// </summary>
     [JsonPropertyName("state")]
     public MatrixSlot State { get; init; } = default!;
 }

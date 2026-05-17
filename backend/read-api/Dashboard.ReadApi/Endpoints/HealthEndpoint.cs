@@ -20,6 +20,15 @@ public static class HealthEndpoint
             // signal we want orchestrators to react to.
             await db.Database.ExecuteSqlRawAsync("SELECT 1", ct);
             return Results.Ok(new { status = "ok" });
-        });
+        })
+        .WithName("GetHealth")
+        .WithTags("Read")
+        .WithSummary("Liveness probe with DB round-trip")
+        .WithDescription(
+            "Returns {\"status\":\"ok\"} when the API can reach Postgres. A failed " +
+            "round-trip surfaces as 500 — the signal orchestrators react to. " +
+            "Unauthenticated (SAD §7).")
+        .Produces(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status500InternalServerError);
     }
 }

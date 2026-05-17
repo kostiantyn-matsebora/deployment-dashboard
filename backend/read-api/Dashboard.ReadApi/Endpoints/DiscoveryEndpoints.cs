@@ -25,7 +25,15 @@ public static class DiscoveryEndpoints
                 .OrderBy(e => e)
                 .ToListAsync(ct);
             return Results.Ok(envs);
-        });
+        })
+        .WithName("GetEnvironments")
+        .WithTags("Read")
+        .WithSummary("Distinct environments ever ingested")
+        .WithDescription(
+            "Returns the sorted list of environment names derived from stored data " +
+            "(FR-09). A new environment appears the first time a deployment event for " +
+            "it is ingested — there is no static list to maintain.")
+        .Produces<string[]>(StatusCodes.Status200OK);
 
         app.MapGet("/api/services", async (DashboardDbContext db, CancellationToken ct) =>
         {
@@ -36,6 +44,13 @@ public static class DiscoveryEndpoints
                 .OrderBy(s => s)
                 .ToListAsync(ct);
             return Results.Ok(services);
-        });
+        })
+        .WithName("GetServices")
+        .WithTags("Read")
+        .WithSummary("Distinct services ever ingested")
+        .WithDescription(
+            "Returns the sorted list of service names derived from stored data (FR-09). " +
+            "Same auto-discovery rule as GET /api/environments.")
+        .Produces<string[]>(StatusCodes.Status200OK);
     }
 }

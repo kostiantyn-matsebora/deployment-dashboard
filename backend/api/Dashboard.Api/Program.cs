@@ -1,3 +1,4 @@
+using Dashboard.Api.OpenApi;
 using Dashboard.ReadApi;
 using Dashboard.Shared.Json;
 using Dashboard.Shared.Persistence;
@@ -75,7 +76,19 @@ public sealed class Program
         // — corresponds to the SAD's single public API version. No
         // Swashbuckle, no NSwag, no hand-maintained spec file. The
         // generated document is served at /openapi/v1.json below.
-        builder.Services.AddOpenApi("v1");
+        //
+        // Document transformers (registered as singletons by AddOpenApi):
+        //   * DashboardInfoDocumentTransformer    — sets info{} + servers[]
+        //     (servers list comes from IConfiguration "OpenApi:Servers" per
+        //     the declarative-configuration rule).
+        //   * WriteSurfaceSecurityDocumentTransformer — declares the
+        //     X-Api-Key scheme and attaches it to every operation tagged
+        //     "Write" (SAD §8 — Read endpoints stay open).
+        builder.Services.AddOpenApi("v1", options =>
+        {
+            options.AddDocumentTransformer<DashboardInfoDocumentTransformer>();
+            options.AddDocumentTransformer<WriteSurfaceSecurityDocumentTransformer>();
+        });
 
         var app = builder.Build();
 

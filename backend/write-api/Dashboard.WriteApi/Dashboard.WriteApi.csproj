@@ -5,6 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Dashboard.WriteApi</RootNamespace>
+    <!-- CR-0008 OpenAPI semantic enrichment: XML docs emitted next to the
+         assembly so the OpenAPI generator can lift /// comments off endpoint
+         delegates and helper types. 1591 suppressed so the build doesn't
+         flood with "missing comment" warnings on internal helpers. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <!--

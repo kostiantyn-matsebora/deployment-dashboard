@@ -5,6 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Dashboard.Shared</RootNamespace>
+    <!-- CR-0008 OpenAPI semantic enrichment: DTOs in Dto/ live here and feed
+         the generated OpenAPI schemas; emit XML doc so /// summary blocks
+         become `description` on every schema property. 1591 suppressed so
+         the build doesn't flood with "missing comment" warnings on internal
+         helpers. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <!--
