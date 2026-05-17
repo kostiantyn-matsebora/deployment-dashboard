@@ -505,16 +505,35 @@
       grid-template-columns: subgrid;
       grid-column: 1 / -1;
       align-items: start;
+      position: relative;
     }
     .matrix-row-header {
       align-items: center;
     }
+    /* Row card chrome painted via ::before so it spans the FULL grid row
+       (subgrid items only paint within their tracks; padding on the row
+       itself doesn't reach past the leftmost / rightmost track). The
+       ::before sits underneath the row's content (z-index: -1 relative
+       to the row stacking context) and covers the entire row's grid
+       column range visually. */
     .matrix-row-card {
+      padding: 12px 16px;
+      column-gap: 0;
+      isolation: isolate;
+    }
+    .matrix-row-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
       background: white;
       border: 1px solid #e5e7eb;
       border-radius: 8px;
-      padding: 12px 16px;
-      column-gap: 0;
+      z-index: -1;
+      pointer-events: none;
+    }
+    [data-theme="dark"] .matrix-row-card::before {
+      background: #161b22;
+      border-color: #30363d;
     }
     .matrix-cell {
       min-width: 0;
