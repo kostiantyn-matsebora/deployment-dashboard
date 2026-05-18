@@ -8,11 +8,11 @@ current | The slot's most recent deployment event (any status) | @docs/architect
 lastSuccessful | Most recent successful deployment for a slot; null when current.status==success or no prior success | @docs/architecture.md#api-contract
 previousFailed | true when current.status==in-progress and the most recent terminal deployment was a failure | @docs/architecture.md#api-contract
 matrix | services x environments grid; one row per service; latest deployment per slot | @docs/architecture.md#7-target-architecture
-Write surface | Endpoint group library exposing POST /api/deployments; X-Api-Key gated | @docs/architecture.md#dashboard-backend--write-and-read-surfaces
+Write surface | Endpoint group library exposing POST /api/deployments + fetcher-state endpoints; X-Api-Key gated | @docs/architecture.md#dashboard-backend--write-and-read-surfaces
 Read surface | Endpoint group library exposing matrix, history, discovery, SSE, health; unauthenticated | @docs/architecture.md#dashboard-backend--write-and-read-surfaces
 App Gateway | nginx reverse proxy; sole public ingress; path+method routing matrix; SSE pass-through tuned | @docs/architecture.md#app-gateway
 Real-time Hub | API-instance-level LISTEN on Postgres deployments channel; per-instance SSE fan-out | @docs/architecture.md#components
-deployments table | Append-only Postgres table; source of truth for matrix + history + lastSuccessful/previousFailed derivation | @docs/architecture.md#data-model
+deployments table | Append-only Postgres table; source of truth for matrix + history + lastSuccessful/previousFailed derivation; gains nullable progress_reporter column per CR-0009 | @docs/architecture.md#data-model
 LISTEN/NOTIFY | Postgres pub/sub mechanism powering cross-instance SSE fan-out without sticky sessions | @docs/architecture.md#7-target-architecture
 SSE | text/event-stream HTTP-1.1 protocol; browser-native EventSource; supports Last-Event-ID | @docs/architecture.md#api-contract
 HISTORY_RETENTION_DAYS | Env-var; default 365; daily pruning job deletes rows older than threshold | @docs/architecture.md#data-model
@@ -30,3 +30,11 @@ sha | CR-0004 optional payload field; git commit sha | @docs/cr/CR-0004-ref-and-
 NFR-09 reflow invariant | Layout must reflow under any (services x envs x name-len x version-len x viewport) combo without overlap; CSS Grid + ResizeObserver enforcement | @docs/architecture.md#5-non-functional-requirements
 ProblemDetails | RFC-7807 error response format adopted across all endpoints (CR-0008) | @docs/cr/CR-0008-api-validation-and-openapi-scalar.md
 Scalar | OpenAPI documentation UI replacing Swagger UI (CR-0008) | @docs/cr/CR-0008-api-validation-and-openapi-scalar.md
+X-Progress-Reporter | CR-0009 universal pusher-attribution request header; ≤ 64 chars non-whitespace; optional on POST /api/deployments, required on GET/PUT /api/fetcher/state/{source-id}; persisted on event row; ValidationProblemDetails errors-map key uses wire-literal name | @docs/architecture.md#api-contract
+progress_reporter | CR-0009 nullable VARCHAR(64) column on events/deployments table; persists X-Progress-Reporter header value; surfaced on DeploymentEventResponse + CurrentDeployment + LastSuccessfulDeployment Read DTOs | @docs/architecture.md#dashboardfetcher-optional-pull-mode-adapter
+Dashboard.Fetcher | CR-0009 optional out-of-process pull-mode adapter; .NET Worker; polls CI/CD API on interval; pushes via POST /api/deployments with X-Progress-Reporter; backend behaves identically whether deployed or not | @docs/architecture.md#dashboardfetcher-optional-pull-mode-adapter
+Dashboard.Fetcher.Host | CR-0009 host project at backend/fetcher-host/; ASP.NET Core Worker (Microsoft.NET.Sdk.Worker); composition root + env-var config | @docs/architecture.md#dashboardfetcher-optional-pull-mode-adapter
+fetcher_state | CR-0009 new table; PK (progress_reporter, source_id); cursor VARCHAR(4096) NOT NULL; updated_at TIMESTAMPTZ NOT NULL; backend-held cursor per ADR-0004 Decision 1 | @docs/architecture.md#api-contract
+ICiCdAdapter | ADR-0004 Decision 4 plug-in interface; AdapterId + FetchPageAsync(sourceId, opaqueCursor, pageSize, ct) -> (events, newCursor, hasMore); one impl per CI/CD tool | @docs/architecture.md#dashboardfetcher-optional-pull-mode-adapter
+INITIAL_FETCH_LIMIT | CR-0009 env-var; first-fetch cap when no cursor exists; default 50, ceiling 500 | @docs/architecture.md#dashboardfetcher-optional-pull-mode-adapter
+source-id | CR-0009 per-fetcher logical scope (e.g. owner/repo); path parameter on fetcher-state endpoints; cursor keyed by (progress_reporter, source_id) | @docs/architecture.md#api-contract
