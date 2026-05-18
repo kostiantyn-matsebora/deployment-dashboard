@@ -1,0 +1,106 @@
+# engineering-team — framework.config.yaml
+# Path: local/framework.config.yaml
+# Authored by: project-manager (initial discovery, 2026-05-18)
+# Purpose: map abstract concepts -> concrete project file paths.
+
+# --- Source of truth ---
+architecture-doc: docs/architecture.md
+mockup: docs/ui/deployment-dashboard.html
+# api-contract: omitted — API contract lives inside architecture.md §7.
+work-breakdown-doc: docs/WBS.md
+ci-cd-integration-doc: docs/ci-cd-integration.md
+
+# --- Change governance ---
+adr-directory: docs/adr/
+cr-directory: docs/cr/
+# diagrams-directory: omitted — diagrams embedded as ASCII art inside docs/architecture.md.
+
+# --- Task & workflow ---
+todo: TODO
+nested-todos-glob: null
+project-instruction-file: CLAUDE.md
+
+# --- Repository structure ---
+server-tier-path: backend/
+client-tier-path: frontend/
+infrastructure-path: infrastructure/   # planned per WBS §4 / NFR-06 — directory does not yet exist
+local-dev-path: dev_env/
+testing-path: testing/
+ci-workflows-path: .github/workflows/   # planned — directory does not yet exist; .github/actions/notify/ is present
+gateway-path: gateway/                  # nginx reverse proxy (single public ingress)
+
+# --- Stack identity ---
+stack:
+  server-language: C# / .NET 10
+  server-framework: ASP.NET Core Minimal API (modular monolith — ADR-0002)
+  client-framework: Angular 20 standalone + NgRx Signal Store + Tailwind CSS
+  data-store: PostgreSQL 16 (SQLite in-memory for unit tests)
+  real-time-mechanism: SSE over PostgreSQL LISTEN/NOTIFY
+  iac-tool: Terraform azurerm ≥ 4.x (planned per NFR-06)
+  ci-tool: GitHub Actions (planned — composite action present, workflows pending)
+  container-runtime: Docker (Docker Compose v2 for local; Azure Container Apps for prod)
+
+# --- Hard constraints ---
+constraints:
+  hosting-cloud: Azure
+  cost-cap-usd-per-month: 30
+  retention-days-minimum: 90
+  internal-only: true
+  stateless-backend: true
+
+# --- Tooling commands ---
+local-dev-startup-command: pwsh -NoProfile -File dev_env/start.ps1
+local-dev-stop-command: pwsh -NoProfile -File dev_env/stop.ps1
+
+test-runners:
+  functional: testing/functional/run-tests.ps1
+  e2e: testing/e2e/run-tests.ps1
+  mockup-visual: testing/mockup-visual/run-tests.ps1
+  unit-backend: dotnet test backend/Dashboard.sln
+  unit-frontend: npm test --prefix frontend -- --watch=false --browsers=ChromeHeadlessNoSandbox
+  # smoke / script-suite: not yet present (referenced in template but not authored)
+
+# --- Project-doc index (D13) ---
+# Adopter-declared index classes (extends built-in heuristics; takes precedence).
+# Built-in classes (architecture, adr, cr, mockup, constraints, glossary) are
+# detected automatically and need no entry here.
+index:
+  dir: local/index
+  classes:
+    - name: ui-options
+      category: doc
+      source-glob: docs/ui/*.md
+      template: novel
+      consumed-by: [frontend-engineer, solution-architect]
+    - name: wbs
+      category: doc
+      source: docs/WBS.md
+      template: novel
+      consumed-by: [project-manager, solution-architect]
+    - name: ci-cd-integration
+      category: doc
+      source: docs/ci-cd-integration.md
+      template: novel
+      consumed-by: [devops-engineer, backend-engineer]
+    - name: ci-pipelines
+      category: doc
+      source: docs/ci-cd-pipelines.md
+      template: novel
+      consumed-by: [devops-engineer, backend-engineer]
+
+# --- Delivery modes (D17) ---
+# Framework default applies until adopter pins a preference:
+#   - issue/TODO-sourced tasks default to Mode 1 (branch + PR)
+#   - freeform user instructions default to Mode 2 (wt only)
+# delivery:
+#   default-mode: branch
+
+# --- GitHub integration (D14) ---
+# repo            — adopter project; PM defaults to `git remote get-url origin`.
+# framework-repo  — upstream engineering-team; lets adopters file framework-targeted bugs/features.
+github:
+  repo: kostiantyn-matsebora/deployment-dashboard
+  framework-repo: kostiantyn-matsebora/engineering-team
+  ready-label: engineering-team:ready
+  in-progress-label: engineering-team:in-progress
+  blocked-label: engineering-team:blocked

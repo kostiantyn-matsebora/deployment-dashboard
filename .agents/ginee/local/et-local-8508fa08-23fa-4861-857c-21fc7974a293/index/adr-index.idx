@@ -1,0 +1,9 @@
+# class: adr
+# schema: id | title | status | summary | source
+# source-glob: docs/adr/*.md
+# recipe: builtin:adr
+
+ADR-0001 | Per-service topology derivation — five-pass algorithm on the read side | accepted | Topology derived read-side per request via five-pass algorithm (bucket-by-env, explicit-first, correlation-fallback, merge, dangling); no stored topology rows | @docs/adr/ADR-0001-topology-derivation-five-pass.md
+ADR-0002 | Modular monolith — single API container hosting two library surfaces | accepted | One ASP.NET host (backend/api/) composes write-api/ + read-api/ libraries + shared/; single Dockerfile; X-Api-Key on Write group only; future split is host+gateway-config change | @docs/adr/ADR-0002-modular-monolith-consolidation.md
+ADR-0003 | Theme persistence in localStorage with FOIT-safe inline bootstrap | accepted | Theme preference in localStorage.dashboard.theme; FOIT-safe inline-script bootstrap before SPA boot sets <html data-theme>; single writer post-bootstrap (ThemeService in frontend/shared/) | @docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md
+ADR-0004 | Opaque per-progress_reporter cursor; backend-held; out-of-process fetcher; plug-in adapter shape | accepted (paired with CR-0009) | 4 decisions: (1) cursor lives on backend not fetcher container via GET/PUT /api/fetcher/state/{source-id}; (2) cursor is opaque per-progress_reporter blob VARCHAR(4096) keyed by (progress_reporter, source_id) - backend never parses; (3) fetcher runs in separate container (Dashboard.Fetcher.Host) not in-process BackgroundService (NFR-05 preservation + opt-in + failure isolation + credential isolation; minReplicas=maxReplicas=1 when enabled); (4) ICiCdAdapter plug-in shape with AdapterId + FetchPageAsync(sourceId, opaqueCursor, pageSize, ct) -> (events, newCursor, hasMore); host owns scheduler/retry/back-off/Write-API dispatch | @docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md
