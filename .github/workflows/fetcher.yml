@@ -1,0 +1,58 @@
+# Fetcher component CI — builds the optional pull-mode worker
+# (Dashboard.Fetcher.Host per CR-0009), runs only Dashboard.Fetcher.Tests,
+# and pushes the image to GHCR on main / tag pushes.
+#
+# Owner: devops-engineer.
+# Contract: docs/cr/CR-0010-component-ci-pipeline.md (fetcher.yml row in § Impact);
+#           absorbs WBS §1.5.8's previously-standalone fetcher image-build item.
+# Path filter covers fetcher (library) + fetcher-host (worker) + shared.
+# No EF migration artefact — the fetcher has no schema authorship; it only
+# consumes the write-API contract over HTTP.
+name: fetcher
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'backend/fetcher/**'
+      - 'backend/fetcher-host/**'
+      - 'backend/shared/**'
+      - 'backend/Dashboard.sln'
+      - 'backend/.dockerignore'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/fetcher.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/fetcher/**'
+      - 'backend/fetcher-host/**'
+      - 'backend/shared/**'
+      - 'backend/Dashboard.sln'
+      - 'backend/.dockerignore'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/fetcher.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-and-push-image.yml
+    with:
+      image-name: dashboard-fetcher
+      build-kind: dotnet
+      dockerfile-path: backend/fetcher-host/Dockerfile
+      context-path: backend
+      run-dotnet-tests: true
+      # Symmetric inverse of api.yml: only the fetcher suite runs here.
+      test-filter: 'FullyQualifiedName~Dashboard.Fetcher.Tests'
+      emit-migration-artefact: false
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets: inherit

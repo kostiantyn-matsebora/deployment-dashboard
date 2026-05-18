@@ -114,13 +114,13 @@ public sealed class Program
             foreach (var item in doc.RootElement.EnumerateArray())
             {
                 if (!item.TryGetProperty("owner", out var ownerProp) || ownerProp.ValueKind != JsonValueKind.String ||
-                    !item.TryGetProperty("repo", out var repoProp)  || repoProp.ValueKind  != JsonValueKind.String)
+                    !item.TryGetProperty("repo", out var repoProp) || repoProp.ValueKind != JsonValueKind.String)
                 {
                     throw new InvalidOperationException(
                         "Every GHA_REPOSITORIES entry must have string 'owner' and 'repo' properties");
                 }
                 var owner = ownerProp.GetString();
-                var repo  = repoProp.GetString();
+                var repo = repoProp.GetString();
                 if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
                 {
                     throw new InvalidOperationException("GHA_REPOSITORIES entries must have non-empty owner and repo");

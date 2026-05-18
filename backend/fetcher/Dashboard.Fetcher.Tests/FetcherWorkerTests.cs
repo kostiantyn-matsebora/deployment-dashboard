@@ -41,7 +41,7 @@ public sealed class FetcherWorkerTests
         handler.WhenStatus(req => req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.EndsWith("/api/deployments"),
             HttpStatusCode.Created);
         // PUT cursor — expected exactly once with the adapter's new cursor.
-        handler.WhenStatus(req => req.Method == HttpMethod.Put  && req.RequestUri!.AbsolutePath.Contains("/api/fetcher/state/"),
+        handler.WhenStatus(req => req.Method == HttpMethod.Put && req.RequestUri!.AbsolutePath.Contains("/api/fetcher/state/"),
             HttpStatusCode.OK);
 
         var adapter = new StubCiCdAdapter();

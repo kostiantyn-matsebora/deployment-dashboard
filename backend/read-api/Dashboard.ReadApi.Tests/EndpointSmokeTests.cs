@@ -44,7 +44,10 @@ public sealed class EndpointSmokeTests : IClassFixture<TestApplicationFactory>
         => new()
         {
             DeploymentId = $"smoke-{Interlocked.Increment(ref _nextId)}",
-            Service = s, Environment = e, Version = v, Status = status,
+            Service = s,
+            Environment = e,
+            Version = v,
+            Status = status,
             RunUrl = $"https://example.com/r/{run}",
             RunNumber = run,
             Actor = "tester",
@@ -58,7 +61,7 @@ public sealed class EndpointSmokeTests : IClassFixture<TestApplicationFactory>
     {
         await SeedAsync(
             Evt("web-portal", "dev", "v2.3.2", DeploymentStatus.InProgress, new DateTime(2026, 5, 14, 14, 34, 0), 1251),
-            Evt("web-portal", "dev", "v2.3.1", DeploymentStatus.Success,    new DateTime(2026, 5, 14, 12, 30, 0), 1247));
+            Evt("web-portal", "dev", "v2.3.1", DeploymentStatus.Success, new DateTime(2026, 5, 14, 12, 30, 0), 1247));
 
         var resp = await _client.GetAsync("/api/deployments");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
@@ -109,8 +112,8 @@ public sealed class EndpointSmokeTests : IClassFixture<TestApplicationFactory>
     {
         await SeedAsync(
             Evt("a", "prod", "1", DeploymentStatus.Success, DateTime.UtcNow, 1),
-            Evt("a", "dev",  "1", DeploymentStatus.Success, DateTime.UtcNow.AddSeconds(1), 2),
-            Evt("b", "dev",  "1", DeploymentStatus.Success, DateTime.UtcNow.AddSeconds(2), 3));
+            Evt("a", "dev", "1", DeploymentStatus.Success, DateTime.UtcNow.AddSeconds(1), 2),
+            Evt("b", "dev", "1", DeploymentStatus.Success, DateTime.UtcNow.AddSeconds(2), 3));
 
         var resp = await _client.GetAsync("/api/environments");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
@@ -125,7 +128,7 @@ public sealed class EndpointSmokeTests : IClassFixture<TestApplicationFactory>
     {
         await SeedAsync(
             Evt("auth-service", "dev", "1", DeploymentStatus.Success, DateTime.UtcNow, 1),
-            Evt("web-portal",   "dev", "1", DeploymentStatus.Success, DateTime.UtcNow.AddSeconds(1), 2));
+            Evt("web-portal", "dev", "1", DeploymentStatus.Success, DateTime.UtcNow.AddSeconds(1), 2));
 
         var resp = await _client.GetAsync("/api/services");
         var services = await resp.Content.ReadFromJsonAsync<string[]>();

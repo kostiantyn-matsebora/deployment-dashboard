@@ -81,7 +81,7 @@ public sealed class CorrelationAttributeQueryParamTests
         var client = factory.CreateClient();
         await SeedAsync(factory,
             D("svc-a", "dev", "v1", new DateTime(2026, 5, 14, 10, 0, 0), actor: "ada"),
-            D("svc-a", "qa",  "v2", new DateTime(2026, 5, 14, 11, 0, 0), actor: "ada"));
+            D("svc-a", "qa", "v2", new DateTime(2026, 5, 14, 11, 0, 0), actor: "ada"));
 
         // Without override: no edges (versions differ).
         var defaultResp = await client.GetAsync("/api/deployments");
@@ -175,7 +175,7 @@ public sealed class CorrelationAttributeQueryParamTests
         var client = factory.CreateClient();
         await SeedAsync(factory,
             D("svc-a", "dev", "v1", new DateTime(2026, 5, 14, 10, 0, 0), actor: "ada"),
-            D("svc-a", "qa",  "v2", new DateTime(2026, 5, 14, 11, 0, 0), actor: "ada"));
+            D("svc-a", "qa", "v2", new DateTime(2026, 5, 14, 11, 0, 0), actor: "ada"));
 
         var patch = new HttpRequestMessage(HttpMethod.Patch, "/api/config/topology")
         {
@@ -213,7 +213,7 @@ public sealed class CorrelationAttributeQueryParamTests
         var client = factory.CreateClient();
         await SeedAsync(factory,
             D("svc-a", "dev", "v9", new DateTime(2026, 5, 14, 10, 0, 0)),
-            D("svc-a", "qa",  "v9", new DateTime(2026, 5, 14, 11, 0, 0)));
+            D("svc-a", "qa", "v9", new DateTime(2026, 5, 14, 11, 0, 0)));
 
         var resp = await client.GetAsync("/api/deployments");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);

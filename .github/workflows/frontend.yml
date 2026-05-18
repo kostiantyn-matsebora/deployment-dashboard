@@ -1,0 +1,45 @@
+# Frontend component CI — builds the Angular 20 SPA into the nginx:alpine
+# image (frontend/dashboard/Dockerfile), runs Karma unit tests across all four
+# projects with code coverage (D4 — depends on QA's karma.conf.js +
+# angular.json karmaConfig wiring landing in parallel), runs the Playwright
+# mockup-visual harness, and pushes the image to GHCR on main / tag pushes.
+#
+# Owner: devops-engineer.
+# Contract: docs/cr/CR-0010-component-ci-pipeline.md (frontend.yml row in § Impact).
+# D3 lock: NO `ng lint` step in MVP-CI — frontend lint becomes a follow-up.
+name: frontend
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-and-push-image.yml
+    with:
+      image-name: dashboard-frontend
+      build-kind: static
+      dockerfile-path: frontend/dashboard/Dockerfile
+      context-path: frontend
+      run-ng-tests: true
+      run-mockup-visual: true
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets: inherit

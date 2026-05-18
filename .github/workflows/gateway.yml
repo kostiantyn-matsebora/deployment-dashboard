@@ -1,0 +1,41 @@
+# Gateway component CI — builds the nginx reverse-proxy image
+# (gateway/Dockerfile). No tests: the gateway is config-only (nginx + a
+# replacement nginx.conf), so build + push is the entire pipeline.
+#
+# Owner: devops-engineer.
+# Contract: docs/cr/CR-0010-component-ci-pipeline.md (gateway.yml row in § Impact;
+#           Q6 — "Image build only — no test step; gateway is config-only").
+name: gateway
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'gateway/**'
+      - '.github/workflows/gateway.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'gateway/**'
+      - '.github/workflows/gateway.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-and-push-image.yml
+    with:
+      image-name: dashboard-gateway
+      build-kind: static
+      dockerfile-path: gateway/Dockerfile
+      context-path: gateway
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets: inherit

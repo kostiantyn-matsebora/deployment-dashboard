@@ -239,7 +239,7 @@ public sealed class MatrixQueryTests
         var db = harness.Context;
 
         db.Deployments.Add(Evt("svc", "dev", "v2", DeploymentStatus.InProgress, new DateTime(2026, 5, 14, 14, 0, 0)));
-        db.Deployments.Add(Evt("svc", "dev", "v1", DeploymentStatus.Success,    new DateTime(2026, 5, 13, 14, 0, 0)));
+        db.Deployments.Add(Evt("svc", "dev", "v1", DeploymentStatus.Success, new DateTime(2026, 5, 13, 14, 0, 0)));
         await db.SaveChangesAsync();
 
         var matrix = await MatrixQuery.BuildAsync(db, NewTopologyBuilder(), AlwaysVersion);
@@ -261,10 +261,10 @@ public sealed class MatrixQueryTests
         var db = harness.Context;
 
         db.Deployments.Add(Evt("svc", "dev", "v3", DeploymentStatus.InProgress, new DateTime(2026, 5, 14, 15, 0, 0)));
-        db.Deployments.Add(Evt("svc", "dev", "v2", DeploymentStatus.Failure,    new DateTime(2026, 5, 14, 14, 0, 0)));
-        db.Deployments.Add(Evt("svc", "dev", "v1", DeploymentStatus.Success,    new DateTime(2026, 5, 13, 14, 0, 0)));
+        db.Deployments.Add(Evt("svc", "dev", "v2", DeploymentStatus.Failure, new DateTime(2026, 5, 14, 14, 0, 0)));
+        db.Deployments.Add(Evt("svc", "dev", "v1", DeploymentStatus.Success, new DateTime(2026, 5, 13, 14, 0, 0)));
         // Unrelated slot — must not leak into the per-slot result.
-        db.Deployments.Add(Evt("svc", "qa",  "vq", DeploymentStatus.Success,    new DateTime(2026, 5, 13, 14, 0, 0)));
+        db.Deployments.Add(Evt("svc", "qa", "vq", DeploymentStatus.Success, new DateTime(2026, 5, 13, 14, 0, 0)));
         await db.SaveChangesAsync();
 
         var (slot, _) = await MatrixQuery.BuildSlotAsync(
