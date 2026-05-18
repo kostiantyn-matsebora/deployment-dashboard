@@ -1,0 +1,24 @@
+# class: ci-cd-integration
+# schema: section | title | kind | summary | source
+# source: docs/ci-cd-integration.md
+# recipe: novel
+
+intro | Why this works for every CI/CD tool | rationale | No CI-tool SDKs; sole integration point is POST /api/deployments; FR-06 codifies single-step adoption | @docs/ci-cd-integration.md#why-this-works-for-every-cicd-tool
+wire-endpoint | Endpoint URL | contract | POST {DEPLOYMENT_DASHBOARD_URL}/api/deployments | @docs/ci-cd-integration.md#wire-contract-canonical
+wire-auth | Authentication header | contract | X-Api-Key header; 401 on missing/invalid (FR-10) | @docs/ci-cd-integration.md#wire-contract-canonical
+wire-useragent | User-Agent header | recommendation | deployment-dashboard-notify/1.0 (+<tool>) for audit logs | @docs/ci-cd-integration.md#wire-contract-canonical
+wire-payload-required | Minimum payload (8 required fields) | contract | deployment_id, service, environment, version, status, run_url, run_number, actor | @docs/ci-cd-integration.md#wire-contract-canonical
+wire-payload-optional | Optional payload extensions | contract | parent_deployments + ref + sha (independently omittable per CR-0003 + CR-0004) | @docs/ci-cd-integration.md#wire-contract-canonical
+wire-length-caps | Field length caps (validation at ingest) | contract | deployment_id/service/environment/version/actor/ref: 200; run_url: 2048; sha: 64 (per CR-0008) | @docs/ci-cd-integration.md#wire-contract-canonical
+wire-status-codes | Failure responses | contract | 400 cross-service-parent/cycle; 401 missing-key; 409 duplicate (service,deployment_id); 422 missing-required/invalid-status/quoted-run_number | @docs/ci-cd-integration.md#wire-contract-canonical
+wire-idempotency | Idempotency model | contract | Append-only with deduplication key; CI/CD owns deployment_id; retry with same id -> 409; retry with new id -> new event | @docs/ci-cd-integration.md#wire-contract-canonical
+secrets | Required secrets | contract | DEPLOYMENT_DASHBOARD_URL (no trailing slash) + DEPLOYMENT_DASHBOARD_TOKEN | @docs/ci-cd-integration.md#secrets
+snippet-generic-shell | Generic shell snippet | snippet | curl -sf POST + Content-Type + X-Api-Key + User-Agent; $TOOL_PREFIX-prefixed deployment_id | @docs/ci-cd-integration.md#generic-shell-snippet-works-in-any-cicd-tool
+snippet-github-actions | GitHub Actions | snippet | Inline curl step; composite-action wrapper (.github/actions/notify/) preferred for input-validate + token-mask + cross-runner-OS | @docs/ci-cd-integration.md#github-actions
+snippet-azure-devops | Azure DevOps | snippet | PowerShell task with Invoke-RestMethod; secrets via variable group or pipeline-secret | @docs/ci-cd-integration.md#azure-devops
+snippet-jenkins | Jenkins | snippet | Declarative pipeline with post-success/post-failure notifyDashboard(); Credentials Binding plugin for secrets | @docs/ci-cd-integration.md#jenkins
+snippet-gitlab-ci | GitLab CI | snippet | .gitlab-ci.yml YAML anchor (notify-dashboard) + notify:success/notify:failure jobs in .post stage | @docs/ci-cd-integration.md#gitlab-ci
+snippet-other-tools | Other tools (CircleCI / Bitbucket / TeamCity / ...) | snippet | Use generic shell + map built-in variables | @docs/ci-cd-integration.md#other-tools-circleci-bitbucket-pipelines-teamcity-
+inprogress-pattern | In-progress + terminal pattern | how-to | Fire status=in-progress at deploy start; fire success/failure at deploy end; dashboard derives lastSuccessful + previousFailed | @docs/ci-cd-integration.md#in-progress--terminal-pattern
+troubleshooting | Troubleshooting guide | how-to | 401/422/404/timeout/silent-failure remedies | @docs/ci-cd-integration.md#troubleshooting
+cross-references | Cross-references | links | SAD §1/2/4/7/8 + WBS MVP §1.4 + CI-CD Integration §1 | @docs/ci-cd-integration.md#cross-references

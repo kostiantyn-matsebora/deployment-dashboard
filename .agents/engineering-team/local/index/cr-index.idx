@@ -1,0 +1,13 @@
+# class: cr
+# schema: id | title | status | targets | summary | source
+# source-glob: docs/cr/*.md
+# recipe: builtin:cr
+
+CR-0001 | Project-agnostic naming and examples | accepted | FR-09 | No project-specific service/env/CI-tool names anywhere; generic placeholders only; multi-CI-tool framing | @docs/cr/CR-0001-generic-project-agnostic.md
+CR-0002 | Four named views (Detailed/Compact/Glance/Focus) + per-view attribute picker | accepted | FR-12,FR-02,FR-03,FR-07 | Four named views from header segmented control + per-view attribute picker; localStorage-persisted; full-attribute disclosure on history drawer + Focus-expanded rows | @docs/cr/CR-0002-four-named-views-and-attribute-picker.md
+CR-0003 | Tree topology + three-layout axis (Matrix/Swim-lane/Workflow-rows) | accepted (Matrix-as-MVP-layout superseded by CR-0007) | FR-13,NFR-09 | DAG-of-env-edges per service; deployment_id required + parent_deployments optional; correlationAttribute picker; topology.edges on wire; SSE carries slot updates only | @docs/cr/CR-0003-tree-topology-and-layout-axis.md
+CR-0004 | Optional ref + sha fields on deployment payload | accepted | FR-05 | Two new nullable string fields (ref, sha) on POST /api/deployments; surfaced on read wire; backward compatible with seven-field payload | @docs/cr/CR-0004-ref-and-sha-optional-fields.md
+CR-0005 | ref/sha exposed as Display picker + Topology correlation options | accepted | FR-12,FR-13 | ref+sha become attribute-picker options on every view (per-view caps unchanged) and allowed values for correlationAttribute picker | @docs/cr/CR-0005-ref-sha-display-and-topology.md
+CR-0006 | Light/Dark/Auto theme axis | accepted | NFR-09,new theme axis | Header gear popover; localStorage.dashboard.theme; default auto follows OS prefers-color-scheme; orthogonal to View+Layout; palette-only change; single-writer ThemeService post-bootstrap | @docs/cr/CR-0006-light-dark-auto-theme.md
+CR-0007 | Defer Matrix layout from MVP to Phase 2.0 | accepted | FR-13 | FR-13 reduced to Swim-lane + Workflow-rows for MVP; default flips to Swim-lane; Matrix-layout templates removed; wire shape unchanged; Matrix returns in Phase 2.0 | @docs/cr/CR-0007-defer-matrix-layout-to-phase-2.md
+CR-0008 | Standardised API validation + ProblemDetails + OpenAPI + Scalar UI | accepted | FR-05,new validation+OpenAPI axes | Length-only validation via DataAnnotations on DTO; RFC-7807 ValidationProblemDetails on all 4xx; OpenAPI 3.x at /openapi/v1.json (Microsoft.AspNetCore.OpenApi); Scalar at /scalar (Scalar.AspNetCore) | @docs/cr/CR-0008-api-validation-and-openapi-scalar.md

@@ -1,0 +1,54 @@
+# class: conventions
+# source-glob: frontend/tsconfig.base.json + frontend/tsconfig.json + frontend/tailwind.config.js + frontend/postcss.config.js + frontend/angular.json + .gitignore + .dockerignore
+# recipe: builtin:conventions
+
+formatter:
+  status: 'No .editorconfig, ESLint, Prettier, or dotnet-format config present. Tool defaults apply.'
+
+linter:
+  cmd: 'npm run lint -> ng lint'
+  source: '@frontend/package.json:12'
+
+ts-strictness:
+  source: '@frontend/tsconfig.base.json'
+  customized:
+    - strict: true
+    - noImplicitOverride / noPropertyAccessFromIndexSignature / noImplicitReturns / noFallthroughCasesInSwitch
+    - isolatedModules + experimentalDecorators
+    - target ES2022 / module ES2022 / moduleResolution bundler
+
+angular-strictness:
+  source: '@frontend/tsconfig.base.json (angularCompilerOptions)'
+  customized: [strictInjectionParameters, strictInputAccessModifiers, strictTemplates]
+
+build-conventions:
+  source: '@frontend/angular.json'
+  app: dashboard (sole application; libraries: shared, matrix, drawer)
+  bundle-budgets: { initial: { warn: 2mb, err: 4mb }, anyComponentStyle: { warn: 8kb, err: 16kb } }
+  schematics: { style: css, changeDetection: OnPush, standalone: true, prefix: dd }
+
+workspace-aliases:
+  source: '@frontend/tsconfig.base.json:21-25'
+  paths: { '@dd/shared': 'shared/src/public-api.ts', '@dd/matrix': 'matrix/src/public-api.ts', '@dd/drawer': 'drawer/src/public-api.ts' }
+  rule: 'dashboard imports @dd/matrix + @dd/drawer; matrix/drawer import @dd/shared only; shared imports nothing.'
+  cross-ref: '@.agents/engineering-team/local/bindings.md (Per-tier dependency rules)'
+
+styling:
+  source: '@frontend/tailwind.config.js'
+  dark-mode: NOT-SET (palette via [data-theme=dark] CSS overlay per ADR-0003; no `dark:` utility variants)
+  content-globs: '{dashboard,matrix,drawer,shared}/src/**/*.{html,ts}'
+  customisations: [fontFamily.sans, keyframes.pulse-border, animation.pulse-border]
+  postcss-chain: '@frontend/postcss.config.js -> [tailwindcss, autoprefixer]'
+
+backend-build:
+  source: '@backend/api/Dashboard.Api/Dashboard.Api.csproj + @backend/shared/Dashboard.Shared/Dashboard.Shared.csproj'
+  customized: [Nullable=enable, ImplicitUsings=enable, GenerateDocumentationFile=true (CR-0008), NoWarn=1591, StaticWebAssetsEnabled=false on host]
+
+ignored:
+  gitignore: '@.gitignore — bin/, obj/, node_modules/, dist/, .angular/, playwright-report/, test-results/'
+  dockerignore: '@.dockerignore — **/bin, **/obj, **/node_modules, **/dist, .git, **/test-results'
+
+hooks-naming:
+  pre-commit: NONE (no .husky/, no commitlint)
+  branch-pattern: 'no enforced convention'
+  commit-style: 'no enforced convention'

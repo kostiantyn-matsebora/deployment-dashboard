@@ -1,0 +1,28 @@
+# class: architecture
+# schema: kind | id | name | summary | source
+# source: docs/architecture.md
+# recipe: builtin:architecture
+
+section | 1 | Problem Statement | Real-time services x environments view for any CI/CD tool | @docs/architecture.md#1-problem-statement
+section | 2 | Goals | Real-time matrix; per-slot history; zero pipeline changes; SSE fan-out; dynamic services/envs | @docs/architecture.md#2-goals
+section | 3 | Non-Goals | No triggering deploys; no CI/CD-engine; no multi-org; no RBAC | @docs/architecture.md#3-non-goals
+section | 4 | Functional Requirements | FR-01..FR-11 table | @docs/architecture.md#4-functional-requirements
+section | 5 | Non-Functional Requirements | NFR-01..NFR-09 table | @docs/architecture.md#5-non-functional-requirements
+section | 6 | Constraints | Azure-only; <=$30/mo; internal-only; .NET 10 + Angular 20; OCI containers (no Functions) | @docs/architecture.md#6-constraints
+section | 7 | Target Architecture | Single ASP.NET host with Write+Read endpoint-group libraries; SSE+LISTEN/NOTIFY; gateway | @docs/architecture.md#7-target-architecture
+section | 7.system | System Design | High-level overview + C4 component diagram | @docs/architecture.md#system-design
+section | 7.components | Components | Notify step / App Gateway / API (Write+Read) / Store / Real-time Hub / Frontend / Notification client | @docs/architecture.md#components
+section | 7.cicd | CI/CD Integration | One POST /api/deployments; tool-agnostic; canonical snippets in ci-cd-integration.md | @docs/architecture.md#cicd-integration
+section | 7.data | Data Model | deployments table; retention via HISTORY_RETENTION_DAYS; matrix-query SQL | @docs/architecture.md#data-model
+section | 7.api | API Contract | REST endpoints table + POST body + matrix response shape + SSE slot-update | @docs/architecture.md#api-contract
+section | 7.infra | Infrastructure | Local dev (3 Dockerfiles + compose); scaled compose; Azure Container Apps + Postgres Flexible | @docs/architecture.md#infrastructure
+section | 8 | Security Considerations | Internal-only; X-Api-Key on write only; secrets via env/Key Vault; auth delegated to sidecar | @docs/architecture.md#8-security-considerations
+section | 9 | Phasing | MVP web dashboard; CI/CD integration; v2.0 notification client | @docs/architecture.md#9-phasing
+section | 10 | Decisions | 11 decisions; 7-11 moved out to CRs/ADRs | @docs/architecture.md#10-decisions
+component | C1 | CI/CD Notify Step | One-step HTTP POST in any pipeline; optional GHA composite action | @docs/architecture.md#cicd-notify-step
+component | C2 | App Gateway | nginx:alpine reverse proxy; sole public ingress; path+method routing matrix; SSE pass-through tuned | @docs/architecture.md#app-gateway
+component | C3 | API (Write+Read surfaces) | Single ASP.NET Core host composing write-api + read-api library groups; X-Api-Key on Write only | @docs/architecture.md#dashboard-backend--write-and-read-surfaces
+component | C4 | Deployment Store | Postgres 16 (prod) / SQLite in-memory (unit tests); append-only deployments table | @docs/architecture.md#components
+component | C5 | Real-time Hub | Each API instance LISTENs deployments channel and fans out to its own SSE clients | @docs/architecture.md#components
+component | C6 | Dashboard Frontend | Angular 20 standalone+zoneless+NgRx Signal Store+Tailwind; nginx:alpine static | @docs/architecture.md#dashboard-frontend-mvp
+component | C7 | Notification Client (v2.0) | .NET 10 tray app; polls GET /api/deployments; OS notifications | @docs/architecture.md#notification-client-v20

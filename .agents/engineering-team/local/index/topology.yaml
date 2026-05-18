@@ -1,0 +1,89 @@
+# class: topology
+# source-glob: dev_env/docker-compose.local.yml + dev_env/docker-compose.scaled.yml + gateway/nginx.conf
+# recipe: builtin:container-orchestration
+
+orchestrators:
+  - tool: docker-compose
+    file: '@dev_env/docker-compose.local.yml'
+    name: deployment-dashboard
+    role: Local-dev stack (zero-setup; no .env files)
+  - tool: docker-compose
+    file: '@dev_env/docker-compose.scaled.yml'
+    name: deployment-dashboard-scaled
+    role: NFR-05 validation (api replicas:3; gateway round-robins)
+
+services-local:
+  - name: db
+    image: postgres:16-alpine
+    tier: data-store
+    role: PostgreSQL primary; LISTEN/NOTIFY channel; dev-only host port 5432
+    source-anchor: '@dev_env/docker-compose.local.yml:36-53'
+  - name: migrations
+    image: 'mcr.microsoft.com/dotnet/sdk:10.0'
+    tier: data-store
+    role: One-shot dotnet ef database update; depends_on db service_healthy; restart no
+    source-anchor: '@dev_env/docker-compose.local.yml:58-108'
+  - name: api
+    image: 'deployment-dashboard/api:dev'
+    tier: server
+    role: Single host composing Write+Read endpoint groups; internal-only; expose 8080
+    source-anchor: '@dev_env/docker-compose.local.yml:115-134'
+  - name: dashboard
+    image: 'deployment-dashboard/dashboard:dev'
+    tier: client
+    role: Static SPA on nginx:alpine; internal-only; expose 80
+    source-anchor: '@dev_env/docker-compose.local.yml:136-144'
+  - name: gateway
+    image: 'deployment-dashboard/gateway:dev'
+    tier: gateway
+    role: Sole public ingress; host-published 8080:80
+    source-anchor: '@dev_env/docker-compose.local.yml:146-158'
+  - name: pgadmin
+    image: 'dpage/pgadmin4:latest'
+    tier: data-tooling
+    role: Dev-only convenience UI; host port 5050
+    source-anchor: '@dev_env/docker-compose.local.yml:160-171'
+
+services-scaled-deltas:
+  - service: api
+    replicas: 3
+    note: NFR-05 statelessness validation; SSE fan-out via PG LISTEN/NOTIFY across all replicas
+    source-anchor: '@dev_env/docker-compose.scaled.yml:94-114'
+  - omitted: pgadmin (and host-port 5432 on db) — scaled stack drops dev-tooling
+    source-anchor: '@dev_env/docker-compose.scaled.yml'
+
+gateway-routing-matrix:
+  source: '@gateway/nginx.conf'
+  upstreams: api:8080, dashboard:80
+  rules:
+    - 'POST /api/deployments → api:8080 (Write)'
+    - 'GET /api/stream → api:8080 (SSE pass-through; proxy_buffering off, proxy_read_timeout 1h)'
+    - 'GET /api/* + /health → api:8080 (Read)'
+    - 'GET /openapi/* → api:8080 (CR-0008 OpenAPI JSON; unauth)'
+    - 'GET /scalar(/*) → api:8080 (CR-0008 Scalar UI; unauth)'
+    - 'GET / + everything else → dashboard:80 (SPA shell + HTML5 fallback)'
+    - 'GET /__gateway_health → 200 (self-healthcheck; no upstream dependency)'
+
+network-topology: |
+  Single bridged Docker network. Only gateway has a host-published port
+  (8080) in the production-shape scaled stack; dev stack adds 5432 (psql)
+  + 5050 (pgAdmin) as convenience. All container-to-container traffic is
+  internal-only. Future re-split (per ADR-0002) is a gateway-config-only
+  change (POST /api/deployments → write-upstream).
+
+volumes:
+  count: 3 (local: pg-data, dotnet-tools, nuget-cache) / 3 (scaled: *-scaled variants)
+  source-anchor: '@dev_env/docker-compose.local.yml:173-176'
+
+iac:
+  status: planned (Terraform azurerm >= 4.x per NFR-06 + WBS §4); infrastructure/ directory does not yet exist
+  azure-resources-planned:
+    - Azure Container Registry (Basic SKU)
+    - Azure Container Apps Environment (Consumption plan, single env)
+    - 3 Azure Container Apps (API + Dashboard Frontend + App Gateway) — only Gateway gets public ingress
+    - Azure Database for PostgreSQL Flexible Server (Burstable B1ms)
+    - Azure Key Vault (API_TOKEN + ConnectionStrings__DefaultConnection)
+  source-doc: '@docs/architecture.md#azure-deployment'
+
+k8s: not-applicable (Azure Container Apps target; not raw Kubernetes per NFR-01)
+helm: not-applicable
