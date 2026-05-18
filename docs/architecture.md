@@ -26,7 +26,7 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 ## 3. Non-Goals
 
 - Triggering or managing deployments (the system is read-only / notification-only)
-- Acting as a CI/CD engine — the system only tracks deployment state pushed to it; it does not query any CI/CD tool
+- Acting as a CI/CD engine — the **backend** only tracks deployment state pushed to it; it does not query any CI/CD tool. An **optional, separately-deployed `Dashboard.Fetcher` component** (per [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md); see §7 "Dashboard.Fetcher (optional pull-mode adapter)") MAY translate pull → push by polling a CI/CD tool's API and posting events to `POST /api/deployments` like any other pusher; the backend's tool-agnostic contract is preserved because the fetcher reuses the same push endpoint and the same `X-Api-Key`. The backend is never extended with CI/CD-specific SDKs.
 - Multi-organisation or multi-repository aggregation (out of scope for MVP)
 - Role-based access control (the dashboard is internal read-only tooling)
 
@@ -152,6 +152,32 @@ Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platf
                           └────────────────────────────┘
 ```
 
+**Optional pull-mode ingest edge** — added by [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md). When push-mode integration is not available, an opt-in `Dashboard.Fetcher` container polls a CI/CD tool's API and pushes events through the same gateway like any other pusher:
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Optional — when push-mode integration is not available              │
+│                                                                      │
+│  ┌────────────────────┐      poll CI/CD API on interval             │
+│  │  CI/CD Tool API     │ ◄─────────────────────────────────────┐    │
+│  │  (e.g. GitHub)      │                                       │    │
+│  └────────────────────┘                                       │    │
+│                                                               │    │
+│           ┌───────────────────────────────────────────────────┘    │
+│           ▼                                                        │
+│  ┌────────────────────────────────┐                                │
+│  │  Dashboard.Fetcher.Host         │                               │
+│  │  (separate container, opt-in)   │                               │
+│  │                                 │                               │
+│  │   • Polls CI/CD API             │                               │
+│  │   • POSTs /api/deployments      │ ── same X-Api-Key ──────► gw  │
+│  │     with X-Progress-Reporter:   │                               │
+│  │     dashboard-fetcher/<adapter> │                               │
+│  │   • GET/PUT /api/fetcher/state  │ ── for opaque cursor ──► gw   │
+│  └────────────────────────────────┘                                │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
 #### C4 Component Diagram
 
 The diagram below shows the logical components.
@@ -210,6 +236,7 @@ The diagram below shows the logical components.
 | **Real-time Hub** | Each API instance `LISTEN`s on the PostgreSQL `deployments` channel (via the read surface's SSE handler) and forwards events to its own connected SSE clients. No separate broker service is required. | PostgreSQL `LISTEN/NOTIFY`, ASP.NET Core SSE (`text/event-stream`) |
 | **Dashboard Frontend** | Browser-based pipeline matrix view. Renders the services × environments grid, history drawer, version highlight, and live SSE updates. Built with `ng build` and served as static files from its own nginx container; **internal-only**, reached via the App Gateway. | Angular 20 (standalone components, zoneless change detection), NgRx Signal Store, Tailwind CSS, browser-native `EventSource`; nginx (alpine) runtime |
 | **Notification Client** | Standalone desktop tray application. Polls the API's read surface (via the App Gateway) at a configurable interval, diffs against locally cached state, and fires OS notifications for changed slots. | .NET 10, WinForms (Windows) or MAUI (cross-platform); self-contained binary |
+| **Dashboard.Fetcher (optional, MVP: GitHub Actions adapter)** — *added by [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md)* | Out-of-process pull-mode adapter. Polls a CI/CD tool's API on a configurable interval (default 30 s), translates pulled events into the `POST /api/deployments` wire shape, and pushes them to the backend like any other CI/CD pusher — using the same `X-Api-Key` and setting `X-Progress-Reporter` to `dashboard-fetcher/<adapter-id>`. Stores its opaque cursor on the backend via `GET`/`PUT /api/fetcher/state/{source-id}` so restart-safety does not depend on local container storage (NFR-05). Plug-in adapter shape per [ADR-0004](adr/ADR-0004-opaque-per-progress-reporter-cursor.md) Decision 4: each CI/CD tool is one `ICiCdAdapter` implementation; host owns scheduler + retry + rate-limit back-off + Write-API client. **Opt-in deployment** — the backend functions identically whether or not the fetcher is running. | C# / .NET 10 (`Microsoft.NET.Sdk.Worker`), Polly (retry), HttpClient, `Dashboard.Shared` (DTO reuse) |
 
 #### CI/CD Notify Step
 
@@ -370,6 +397,27 @@ Built as a .NET 10 self-contained binary, consistent with the stack constraint.
 
 The `filter_environments` list is optional. When omitted or set to `[]`, the client fetches the distinct environment list from `GET /api/environments` and notifies on all of them. This means no configuration is required on first run — the client self-discovers the environment list from whatever data exists in the dashboard.
 
+#### Dashboard.Fetcher (optional pull-mode adapter)
+
+*Added by [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md); plug-in shape + cursor model anchored in [ADR-0004](adr/ADR-0004-opaque-per-progress-reporter-cursor.md).*
+
+Out-of-process component that translates pull → push for environments where a CI/CD pipeline cannot directly invoke `POST /api/deployments` (no network reachability, no scripting hook, tool-managed deploys without notify-step support, etc.). The component is **opt-in**: backend operation is unchanged whether the fetcher is deployed or not. MVP ships the GitHub Actions adapter only.
+
+| Attribute | Value |
+|---|---|
+| Library project | `backend/fetcher/Dashboard.Fetcher/` — `ICiCdAdapter` interface + per-tool adapter implementations + scheduler + Polly retry + Write API client |
+| Host project | `backend/fetcher-host/Dashboard.Fetcher.Host/` — ASP.NET Core Worker (`Microsoft.NET.Sdk.Worker`); composition root; env-var configuration |
+| Container image | `dashboard-fetcher` (multi-stage Dockerfile under `backend/fetcher-host/Dockerfile`; mirrors `backend/api/Dockerfile` posture) |
+| Deployment | Separate container, never co-hosted with the API. Local dev: opt-in `docker compose --profile fetcher up`. Azure: ACR image is built and published; ACA wiring deferred (out of MVP scope per CR-0009 § 3d). |
+| Auth to backend | Same `X-Api-Key` any other pusher uses. No multi-token middleware. |
+| Event attribution | Always sets `X-Progress-Reporter: dashboard-fetcher/<adapter-id>` on every `POST /api/deployments` and on every `GET`/`PUT /api/fetcher/state/{source-id}`. |
+| State / restart-safety | Opaque cursor blob persisted on the backend via `GET`/`PUT /api/fetcher/state/{source-id}` (keyed by `(progress_reporter, source-id)`). The fetcher container holds no durable state. NFR-05 preserved — running multiple fetcher replicas is undefined behaviour for MVP and is **not** supported (would cause N× CI/CD API calls); ACA deployment is configured as `minReplicas: 1, maxReplicas: 1` when the fetcher is enabled. |
+| Plug-in shape | `interface ICiCdAdapter { string AdapterId { get; } Task<FetchPage> FetchPageAsync(string sourceId, string? opaqueCursor, int pageSize, CancellationToken ct); }` returning `(events, newCursor, hasMore)`. The host owns scheduler, retry, rate-limit back-off, Write-API dispatch. Backend remains adapter-agnostic. See [ADR-0004](adr/ADR-0004-opaque-per-progress-reporter-cursor.md) Decision 4. |
+| MVP adapter | GitHub Actions — `GET /repos/{owner}/{repo}/deployments` + `GET /repos/{owner}/{repo}/deployments/{id}/statuses`; cursor = highest seen `deployment.id`; first-fetch cap `INITIAL_FETCH_LIMIT` (default 50, ceiling 500). PAT auth (env-var); GitHub App auth deferred. |
+| Failure isolation | Fetcher crashes / restarts do not affect API availability; reverse also true. Network failures back off per Polly policy; the backend stays cold to any pull-mode failure mode. |
+
+**Why a separate process, not an in-process `BackgroundService`?** See [ADR-0004](adr/ADR-0004-opaque-per-progress-reporter-cursor.md) Decision 3 — running N pollers inside N API replicas would multiply CI/CD API call volume; opt-in deployment is cleaner as a separate image; credential isolation (CI/CD PATs never enter the API host).
+
 ---
 
 ### CI/CD Integration
@@ -470,13 +518,15 @@ The API follows REST principles: resource-oriented URIs, standard HTTP methods, 
 
 | Method | Path | Success | Description |
 |---|---|---|---|
-| `POST` | `/api/deployments` | `201 Created` | **Write — CI/CD only.** Auth-gated by `X-Api-Key`. Record a new deployment event; body returns the created resource. Not invoked by the SPA. |
+| `POST` | `/api/deployments` | `201 Created` | **Write — CI/CD only.** Auth-gated by `X-Api-Key`. Record a new deployment event; body returns the created resource. Not invoked by the SPA. Accepts optional request header `X-Progress-Reporter` (≤ 64 chars, non-whitespace) — per [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md); when present, persisted on the event row and surfaced on Read responses. |
 | `GET` | `/api/deployments` | `200 OK` | Return current matrix (latest entry per service+environment). No auth. |
 | `GET` | `/api/deployments/{service}/{environment}` | `200 / 404` | Return the current state for one slot. No auth. |
 | `GET` | `/api/deployments/{service}/{environment}/history` | `200 / 404` | Return last N events for a slot (`?limit=50` default). No auth. |
 | `GET` | `/api/environments` | `200 OK` | Return distinct environment list derived from stored data. No auth. |
 | `GET` | `/api/services` | `200 OK` | Return distinct service list derived from stored data. No auth. |
 | `GET` | `/api/stream` | `200 text/event-stream` | SSE stream; supports `Last-Event-ID` for reconnection. Emits slot-update events. No auth. |
+| `GET` | `/api/fetcher/state/{source-id}` | `200 / 404` | **Write group — pull-mode adapter only** (added by [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md)). Auth-gated by `X-Api-Key`. **Requires** request header `X-Progress-Reporter` (≤ 64, non-whitespace) — identifies which pusher's cursor to read. Returns the opaque cursor blob for `(progress_reporter, source-id)`, or `404 Not Found` if no state exists yet. Response body: `{ "cursor": "<string>", "updated_at": "<iso-8601 UTC>" }`. |
+| `PUT` | `/api/fetcher/state/{source-id}` | `200 / 422` | **Write group — pull-mode adapter only** (added by [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md)). Auth-gated by `X-Api-Key`. **Requires** request header `X-Progress-Reporter` (≤ 64, non-whitespace). Upserts the opaque cursor for `(progress_reporter, source-id)`. Body: `{ "cursor": "<string, ≤ 4096>" }`. `422` on missing / over-cap cursor or missing / over-cap header. Returns the canonical response shape of the GET. |
 | `GET` | `/health` | `200 OK` | Liveness probe (`{"status": "ok"}`). No auth. |
 | `GET` | `/` | `200 OK` | Serve dashboard HTML. No auth. |
 
@@ -780,6 +830,7 @@ A developer can open the dashboard URL and see every service's current version p
 | Inline HTTP step | Shell/script snippet documented and tested for each CI/CD tool in use (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, etc.) |
 | GitHub Actions composite action | Optional reusable `action.yml` for GitHub Actions users — define once, reference in every workflow |
 | Webhook receiver | Optional lightweight endpoint to translate CI/CD webhook payloads (e.g. GitHub `deployment_status`) to the dashboard schema |
+| **Pull-mode fetcher (optional, [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md))** | `Dashboard.Fetcher` library + `Dashboard.Fetcher.Host` Worker + GitHub Actions adapter + Dockerfile + opt-in `docker-compose.local.yml --profile fetcher` entry + `X-Progress-Reporter` header on `POST /api/deployments` (also additively available to every other pusher) + `GET`/`PUT /api/fetcher/state/{source-id}` cursor endpoints + ACR image publish. ACA + Terraform wiring deferred — see CR-0009 § 3d. |
 | Secrets | `DEPLOYMENT_DASHBOARD_URL` and `DEPLOYMENT_DASHBOARD_TOKEN` configured in each pipeline's secret store |
 
 **Definition of Done:**  
@@ -809,5 +860,5 @@ A developer installs the tray binary, configures the dashboard URL, and receives
 | 3 | Should failures update the current matrix? | **Yes** — the matrix always shows the last deployment regardless of status; the status badge communicates the outcome |
 | 4 | Single repo or multi-repo? | Not applicable — the system is push-based; it does not query or know about repositories. Any workflow can push to it. |
 | 5 | Which environments trigger notifications? | Configurable; defaults to **all environments** discovered dynamically from `GET /api/environments`; can be restricted via `filter_environments` in the client config |
-| 6 | Push vs pull data model? | **Push** — the system exposes an ingest API; it does not query GitHub or any CI/CD tool. Callers are responsible for sending a correctly shaped payload. How deployments are triggered, structured, or named in the source is irrelevant to the system. |
+| 6 | Push vs pull data model? | **Push-by-default with optional pull-mode adapter** (per [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md)). The backend itself remains push-only — it exposes `POST /api/deployments` and never queries any CI/CD tool's API. Callers are responsible for sending a correctly shaped payload. For environments where the CI/CD pipeline cannot invoke the ingest endpoint directly, an **optional, out-of-process `Dashboard.Fetcher` component** (separate container, opt-in deployment) MAY poll the CI/CD tool's API and push events to the same ingest endpoint like any other pusher — using the same `X-Api-Key` and setting `X-Progress-Reporter: dashboard-fetcher/<adapter-id>` for attribution. The backend's tool-agnostic contract is preserved because the fetcher reuses the push endpoint and the universal pusher-attribution header; no CI/CD-specific SDK is ever added to the backend. See SAD §7 "Dashboard.Fetcher (optional pull-mode adapter)" + [ADR-0004](adr/ADR-0004-opaque-per-progress-reporter-cursor.md) (cursor + adapter shape decisions). |
 | 7–11 | Topology correlation scope; SSE topology delivery; dangling parent_deployments; ref/sha validation strictness; single vs split backend container | **Moved out of the initial SAD.** Decisions 7–9 → `docs/cr/CR-0003`. Decision 10 → `docs/cr/CR-0004`. Decision 11 → `docs/adr/ADR-0002`. See those documents for the verbatim decision text. |

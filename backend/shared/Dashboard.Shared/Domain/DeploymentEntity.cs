@@ -86,4 +86,16 @@ public sealed class DeploymentEntity
     /// </summary>
     [Column("parent_deployments")]
     public List<string> ParentDeployments { get; set; } = new();
+
+    /// <summary>
+    /// Optional pusher-attribution token (CR-0009 + ADR-0004). Verbatim copy
+    /// of the <c>X-Progress-Reporter</c> request header that accompanied the
+    /// <c>POST /api/deployments</c> call, or <c>null</c> when the header was
+    /// omitted. Cap 64 characters (enforced by the validation pipeline on the
+    /// header binding; persisted here without further coercion). Surfaced on
+    /// every Read DTO that already exposes per-event attributes (history +
+    /// matrix <c>current</c> / <c>lastSuccessful</c> + SSE <c>slot-update</c>).
+    /// </summary>
+    [Column("progress_reporter")]
+    public string? ProgressReporter { get; set; }
 }

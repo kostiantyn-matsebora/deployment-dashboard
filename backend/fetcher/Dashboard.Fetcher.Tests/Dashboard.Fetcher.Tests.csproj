@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    QA Wave 3 (WBS 1.5.10): xUnit coverage for the pull-mode fetcher
+    library (Dashboard.Fetcher) — adapter + worker + cursor surfaces.
+    Pattern mirrors Dashboard.WriteApi.Tests for package alignment. No
+    WebApplicationFactory needed: every test here exercises in-process
+    HttpClient pipelines via a recording DelegatingHandler test double.
+  -->
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dashboard.Fetcher\Dashboard.Fetcher.csproj" />
+    <ProjectReference Include="..\..\shared\Dashboard.Shared\Dashboard.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

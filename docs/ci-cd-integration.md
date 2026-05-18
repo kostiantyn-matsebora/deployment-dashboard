@@ -482,6 +482,178 @@ shape). No client-side coordination is required.
 | Connection timeout / DNS               | Pipeline runner cannot reach the dashboard's internal network             | Per NFR-04, the dashboard is internal-only; run the notify step from a runner inside the same network, or via VPN. |
 | Matrix box never updates               | Notify step ran but failed silently                                       | Switch to the composite action (validates + masks) or replace `curl -s` with `curl -sf` so failures surface. |
 
+## Event attribution — `X-Progress-Reporter` header
+
+*Added by [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md). Length-validation + ProblemDetails contract reused verbatim from [CR-0008](cr/CR-0008-api-validation-and-openapi-scalar.md).*
+
+Every `POST /api/deployments` MAY include an optional request header
+`X-Progress-Reporter` that identifies which pusher produced the event.
+The header is **not authentication** (that is still `X-Api-Key`); it is
+a free-form attribution string, persisted on the event row and surfaced
+on every Read response that exposes per-event attributes.
+
+| Aspect | Value |
+|---|---|
+| Header name | `X-Progress-Reporter` |
+| Cap | 64 chars, non-whitespace-empty when present |
+| Validation | Same length-only + non-whitespace rule as the body fields (CR-0008). 422 with `ValidationProblemDetails` on violation. |
+| Persistence | Stored verbatim in the new nullable `progress_reporter` column on the events table. |
+| Read surface | Echoed back on `DeploymentEventResponse` (history endpoint + POST 201 echo), `CurrentDeployment` (matrix `current` + slot endpoint + SSE `slot-update.state.current`), and `LastSuccessfulDeployment` (matrix `lastSuccessful` + SSE `slot-update.state.lastSuccessful`). Always present in the JSON; value `null` when the column is NULL. |
+| Backward compatibility | Strictly additive. Pushers that don't set the header continue to work; their events land with `progress_reporter = NULL`. |
+
+**Why set it?** Three operator use-cases:
+
+1. **Filtering / search.** Dashboard logs and queries can scope to one source (`X-Progress-Reporter = 'ci-pipeline/gha-composite'`) — useful when N pushers post to the same `(service, environment)` slot.
+2. **Debugging.** When two pushers race for the same slot, the persisted attribution narrows the investigation immediately.
+3. **Attribution.** Mixed-source environments (push from CI/CD + push from the optional `Dashboard.Fetcher` + push from a manual `curl` fix-up) become legible at a glance.
+
+### Recommended namespacing — `<source-component>/<adapter-or-context>`
+
+The header is free-form (cap 64, non-whitespace). To keep operator
+queries debuggable across many pushers, we recommend a slash-namespaced
+convention. This is **convention, not enforcement** — the backend
+accepts any non-whitespace string ≤ 64 chars.
+
+| Caller | Recommended `X-Progress-Reporter` value |
+|---|---|
+| `Dashboard.Fetcher` GitHub Actions adapter | `dashboard-fetcher/github-actions` |
+| GHA composite action (`.github/actions/notify`) | `ci-pipeline/gha-composite` |
+| Inline `curl` from a generic CI/CD pipeline | `ci-pipeline/<tool-slug>` (e.g. `ci-pipeline/jenkins`, `ci-pipeline/azure-devops`) |
+| Manual operator `curl` (backfill / fix-up) | `manual/<operator-name>` (e.g. `manual/john.doe`) |
+| Future webhook receiver | `webhook-receiver/<source>` (e.g. `webhook-receiver/github-deployment-status`) |
+
+### Example — inline `curl` with attribution
+
+```sh
+curl -sf -X POST "$DEPLOYMENT_DASHBOARD_URL/api/deployments" \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: $DEPLOYMENT_DASHBOARD_TOKEN" \
+  -H "X-Progress-Reporter: ci-pipeline/gha-composite" \
+  -H "User-Agent: deployment-dashboard-notify/1.0 (+github-actions)" \
+  -d '{ "deployment_id": "gh-12345", "service": "service-a", ... }'
+```
+
+## Pull-mode alternative (optional)
+
+*Added by [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md); plug-in shape + cursor model anchored in [ADR-0004](adr/ADR-0004-opaque-per-progress-reporter-cursor.md). Component overview: SAD §7 "Dashboard.Fetcher (optional pull-mode adapter)" + Components Summary row C8.*
+
+When push-mode integration is not available — the CI/CD pipeline cannot
+reach the dashboard's internal network, the tool offers no scripting
+hook, or deploys are tool-managed without a notify-step extension point
+— an optional, separately-deployed component `Dashboard.Fetcher` can
+translate pull → push: it polls the CI/CD tool's API on an interval,
+translates pulled events into the standard `POST /api/deployments` wire
+shape, and pushes them to the same backend any push-mode caller would
+use, with the same `X-Api-Key`. **MVP ships the GitHub Actions adapter
+only.**
+
+The fetcher is **opt-in**: the backend behaves identically whether or
+not it is deployed. When deployed, it always sets
+`X-Progress-Reporter` to `dashboard-fetcher/<adapter-id>` (e.g.
+`dashboard-fetcher/github-actions`) so its events are distinguishable
+from any push-mode events for the same `(service, environment)` slot
+in dashboard logs and per-event attribute output.
+
+### When to use pull-mode
+
+- The CI/CD runner has no outbound network access to the dashboard's
+  internal-only endpoint (NFR-04).
+- The CI/CD tool offers no inline-script step or composite-action
+  surface — only a fixed deployment pipeline definition.
+- The CI/CD tool is managed by a team that won't accept a notify step
+  change to their pipelines.
+- You want a single, centrally-operated component to backfill / catch
+  up events that a transient pipeline failure missed.
+
+For every other case, **push-mode is simpler** — one inline step per
+pipeline, no extra component to deploy or operate.
+
+### Required env vars (GitHub Actions adapter, MVP)
+
+The fetcher container reads its config from env vars only (no `.env`
+files per project bindings). All required:
+
+| Env var | Description |
+|---|---|
+| `DEPLOYMENT_DASHBOARD_URL` | Base URL of the dashboard (same value pipelines use). |
+| `DEPLOYMENT_DASHBOARD_TOKEN` | The `X-Api-Key` value (same key any pusher uses; no separate fetcher token). |
+| `GHA_TOKEN` | GitHub PAT with `repo:deployments` (read) scope. GitHub App auth is deferred — see CR-0009 § 3d. |
+| `GHA_SOURCE_ID` | `owner/repo` pair the fetcher polls. The same string becomes the `{source-id}` path parameter on `GET`/`PUT /api/fetcher/state/{source-id}`. |
+| `POLL_INTERVAL_SECONDS` | Default `30`. |
+| `INITIAL_FETCH_LIMIT` | First-fetch cap when no cursor exists yet. Default `50`, ceiling `500`. |
+
+### Cursor model
+
+The fetcher's restart-cursor lives on the **backend**, not on the
+fetcher container. After each successful poll cycle the fetcher writes
+its updated opaque cursor to
+`PUT /api/fetcher/state/{source-id}` with header
+`X-Progress-Reporter: dashboard-fetcher/<adapter-id>`. On startup (or
+after a crash / image refresh) it reads the cursor back from
+`GET /api/fetcher/state/{source-id}` and resumes where it left off. The
+backend treats the cursor as an opaque length-capped string (≤ 4 KB)
+and never parses it — each adapter owns its cursor shape. See
+[ADR-0004](adr/ADR-0004-opaque-per-progress-reporter-cursor.md)
+Decision 2 for the rationale.
+
+### First-fetch behaviour
+
+When `GET /api/fetcher/state/{source-id}` returns `404` (no cursor
+exists yet), the fetcher fetches at most `INITIAL_FETCH_LIMIT` events
+in its first round and writes the cursor. Subsequent polls follow the
+adapter's natural pagination.
+
+### Failure / retry posture
+
+- Transient HTTP 5xx / network timeouts on the CI/CD API and on the
+  Write API → exponential back-off with jitter, via
+  `Microsoft.Extensions.Http.Resilience` (`AddStandardResilienceHandler`,
+  built on Polly v8 internally — see ADR-0004 Decision 4 for the
+  family equivalence).
+- **`409 Conflict` from `POST /api/deployments` is treated as success**
+  by the fetcher (ADR-0004 Decision 4 — host responsibilities). A 409
+  means the `(service, deployment_id)` row already exists from a
+  previous partial-page round, so the cursor can safely advance past
+  it. This preserves at-least-once semantics under retry / page-replay
+  without making the fetcher track which events it has already pushed.
+- Rate-limit signals (e.g. GitHub's `X-RateLimit-Remaining: 0` +
+  `X-RateLimit-Reset`) → host pauses to the reset window, then
+  resumes.
+- Crash / restart → no event loss for cursor-advanced events; the next
+  poll re-fetches from the persisted cursor.
+- 401 from the backend (rotated `DEPLOYMENT_DASHBOARD_TOKEN`) → the
+  fetcher loops at its back-off interval until the token is repaired.
+- The backend is **never** affected by fetcher failure modes; the
+  fetcher reaches it like any other pusher.
+
+### Resilience-handler tuning invariant
+
+`Microsoft.Extensions.Http.Resilience` enforces a build-time
+`OptionsValidationException` if
+`CircuitBreaker.SamplingDuration < 2 × AttemptTimeout.Timeout` on any
+configured handler. Violating the invariant crash-loops the fetcher
+container on startup with no fallback. The shipping configuration pins
+`SamplingDuration = 60 s` on both HttpClients (Write-API client and
+GitHub-API client) — comfortably ≥ 2× the highest `AttemptTimeout`
+(20 s on the GHA client) so a future tightening of `AttemptTimeout`
+under ~30 s is non-breaking. Any later edit that raises
+`AttemptTimeout` above 30 s MUST raise `SamplingDuration` to at least
+`2 × new AttemptTimeout`.
+
+### Local-dev opt-in
+
+```sh
+docker compose --profile fetcher up
+```
+
+The fetcher service is defined in `dev_env/docker-compose.local.yml`
+under the `fetcher` profile; it stays inert by default so the standard
+stack (`docker compose up`) continues to work as today. The local-dev
+profile reuses the existing literal `API_TOKEN`
+(`local-dev-token-not-for-production`) for `DEPLOYMENT_DASHBOARD_TOKEN`
+and targets `gateway:80` for `DEPLOYMENT_DASHBOARD_URL`; `GHA_TOKEN` is
+read from shell env (`${GHA_TOKEN:-...}`).
+
 ## Cross-references
 
 - SAD §1 / §2 - why a push-based, tool-agnostic ingest model.

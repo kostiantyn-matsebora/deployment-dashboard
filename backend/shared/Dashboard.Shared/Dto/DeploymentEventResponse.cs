@@ -90,6 +90,15 @@ public sealed record DeploymentEventResponse
     [JsonPropertyName("sha")]
     public string? Sha { get; init; }
 
+    /// <summary>
+    /// Pusher-attribution token (CR-0009) — verbatim copy of the
+    /// <c>X-Progress-Reporter</c> request header from the original
+    /// <c>POST /api/deployments</c> call. Always present in the response;
+    /// the value is <c>null</c> when the header was omitted on ingest.
+    /// </summary>
+    [JsonPropertyName("progress_reporter")]
+    public string? ProgressReporter { get; init; }
+
     public static DeploymentEventResponse FromEntity(DeploymentEntity e) => new()
     {
         Id = e.Id,
@@ -112,5 +121,6 @@ public sealed record DeploymentEventResponse
             : Array.Empty<string>(),
         Ref = e.Ref,
         Sha = e.Sha,
+        ProgressReporter = e.ProgressReporter,
     };
 }

@@ -2,15 +2,18 @@
 
 Implements MVP §2 of `docs/WBS.md`.
 
-## Topology — App Gateway in front, four app containers behind
+## Topology — App Gateway in front, two app containers behind
 
 Per SAD §7 "App Gateway", the local stack mirrors the Azure topology:
 
 - **`gateway`** — `nginx:alpine`, host port `8080`. **The only entry point.**
   Routes by path + method to the appropriate backend.
 - **`dashboard`** — `nginx:alpine` serving the Angular SPA bundle. Internal-only.
-- **`write-api`** — ASP.NET Core Minimal API, POST ingest + NOTIFY. Internal-only.
-- **`read-api`** — ASP.NET Core Minimal API, matrix / history / discovery / SSE / health. Internal-only.
+- **`api`** — ASP.NET Core Minimal API hosting both Write and Read surfaces as
+  composed library projects (per ADR-0002 / §10 Decision 11): POST ingest +
+  NOTIFY, matrix / history / discovery / SSE / health. Internal-only. The
+  gateway routes path + method onto the same `api` upstream so a future
+  re-split is a gateway-config-only change.
 - **`db`** — PostgreSQL 16. Host port `5432` is published for dev convenience only (psql / EF tooling).
 - **`pgadmin`** — host port `5050` for dev convenience.
 - **`migrations`** — one-shot SDK container; runs `dotnet ef database update` then exits.
@@ -33,7 +36,7 @@ Environments.
 - Docker Desktop 24+ with Docker Compose v2 (verified with 29.1.4).
 - PowerShell 7+ (the scripts require it).
 - Ports `5432`, `5050`, `8080` free. (`8080` is the only app port — the
-  gateway covers Dashboard + Write API + Read API behind it.)
+  gateway covers Dashboard + API behind it.)
 - ~3 GB free disk for image layers.
 
 ## First run
@@ -67,15 +70,48 @@ Re-running `start.ps1` while the stack is already up is a no-op:
 pwsh -NoProfile -File dev_env/start.ps1 -Scaled
 ```
 
-Uses `docker-compose.scaled.yml`: same gateway in front, but **3 Read
-API replicas + 2 Write API replicas** behind it. Docker DNS resolves
-the upstream names to multiple replica IPs and nginx round-robins
-across them — the gateway IS the load balancer. The dashboard remains
-on the same URL: `http://localhost:8080/`.
+Uses `docker-compose.scaled.yml`: same gateway in front, but **3 API
+replicas** behind it (Write + Read surfaces composed in one host per
+ADR-0002). Docker DNS resolves the `api` upstream to multiple replica
+IPs and nginx round-robins across them — the gateway IS the load
+balancer. The dashboard remains on the same URL: `http://localhost:8080/`.
 
-This is how we validate the backend is stateless — SSE clients must
-reconnect cleanly across replicas via `Last-Event-ID`. Not the default
-local-dev experience.
+This is how we validate the backend is stateless — any replica accepts
+an ingest POST and broadcasts via PG `LISTEN/NOTIFY`, every replica
+sees the notification and fans out to its own SSE subscribers; SSE
+clients must reconnect cleanly across replicas via `Last-Event-ID`.
+Not the default local-dev experience.
+
+## Optional services — pull-mode fetcher
+
+Per CR-0009 / WBS §1.5, an opt-in pull-mode fetcher worker can be brought
+up alongside the default stack. It polls CI/CD-tool APIs (MVP: GitHub
+Actions) and POSTs deployments to the existing `POST /api/deployments`
+endpoint, identifying itself via `X-Progress-Reporter:
+dashboard-fetcher/github-actions`. Strict NFR-04: no inbound listener, no
+host port, no healthcheck in MVP.
+
+To run the default stack **plus** the fetcher:
+
+```powershell
+docker compose --profile fetcher -f dev_env/docker-compose.local.yml up
+```
+
+The fetcher reuses the existing `API_TOKEN`
+(`local-dev-token-not-for-production`) for writing — same key the seed
+scripts trust — so there is no extra token to manage for local dev.
+
+For real GHA validation, export your PAT before bringing the stack up:
+
+```powershell
+$env:GHA_TOKEN = "<your-pat>"
+docker compose --profile fetcher -f dev_env/docker-compose.local.yml up
+```
+
+Without `GHA_TOKEN` set the fetcher boots with a placeholder and calls to
+the GitHub API will fail authentication — the rest of the stack is
+unaffected. The fetcher service is fully omitted from `docker compose up`
+when the `fetcher` profile is not activated.
 
 ## Stopping
 
@@ -131,9 +167,9 @@ ports are bound — only `:8080`, `:5432`, and `:5050`.)
 **Health check times out**
 `start.ps1` dumps `docker compose logs --tail=50` automatically.
 Most common causes: migrations failed — look at `dashboard-migrations`
-logs; or the gateway came up before the Read API was ready — the
-gateway healthcheck will recover on retry. Bump `-HealthTimeoutSeconds
-120` on the first cold-build run.
+logs; or the gateway came up before the API was ready — the gateway
+healthcheck will recover on retry. Bump `-HealthTimeoutSeconds 120`
+on the first cold-build run.
 
 **Scaled stack: SSE drops after a few seconds**
 Confirm `gateway/nginx.conf` is being baked into the gateway image
@@ -144,7 +180,7 @@ the `/api/stream` location.
 
 | File | Purpose |
 |---|---|
-| `docker-compose.local.yml` | Default local stack — gateway + dashboard + write-api + read-api + db + pgadmin + migrations. |
-| `docker-compose.scaled.yml` | Same shape with 3 Read API + 2 Write API replicas behind the gateway. NFR-05 validation. |
+| `docker-compose.local.yml` | Default local stack — gateway + dashboard + api + db + pgadmin + migrations. |
+| `docker-compose.scaled.yml` | Same shape with 3 API replicas behind the gateway. NFR-05 validation. |
 | `start.ps1` | Thin wrapper: compose up → poll `http://localhost:8080/health` (via the gateway) → print URLs. `-Scaled`, `-HealthTimeoutSeconds`. |
 | `stop.ps1` | Tear down both compose variants. `-Volumes` to wipe DB data. |
