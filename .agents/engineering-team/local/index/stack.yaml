@@ -1,0 +1,108 @@
+# class: stack
+# source-glob: backend/Dashboard.sln + backend/**/*.csproj + frontend/{package.json,dashboard|matrix|drawer|shared/package.json} + testing/{e2e,mockup-visual}/package.json + Dockerfiles
+# recipe: builtin:package-manifest
+
+tiers:
+  server:
+    language: C# / .NET 10 (net10.0)
+    runtime: ASP.NET Core 10 (mcr.microsoft.com/dotnet/aspnet:10.0)
+    framework: ASP.NET Core Minimal API (modular monolith — ADR-0002)
+    primary-libs:
+      - Microsoft.AspNetCore.OpenApi 10.0.7 (CR-0008)
+      - Scalar.AspNetCore 2.14.14 (CR-0008)
+      - Microsoft.EntityFrameworkCore 10.0.0 + Design + Relational + Sqlite
+      - Npgsql.EntityFrameworkCore.PostgreSQL 10.0.0
+    structure:
+      - 'backend/api/Dashboard.Api (host project — Microsoft.NET.Sdk.Web; references write-api + read-api + shared)'
+      - 'backend/write-api/Dashboard.WriteApi (library — endpoint group)'
+      - 'backend/read-api/Dashboard.ReadApi (library — endpoint group)'
+      - 'backend/shared/Dashboard.Shared (library — DbContext + entities + migrations + middleware + NOTIFY/LISTEN + SSE writer)'
+      - 'backend/{write-api,read-api,shared}/Dashboard.*.Tests (xUnit unit tests; SQLite in-memory)'
+    dockerfile: '@backend/api/Dockerfile (FROM mcr.microsoft.com/dotnet/sdk:10.0 build → aspnet:10.0 runtime; EXPOSE 8080)'
+    solution: '@backend/Dashboard.sln'
+    manifests:
+      - '@backend/api/Dashboard.Api/Dashboard.Api.csproj'
+      - '@backend/write-api/Dashboard.WriteApi/Dashboard.WriteApi.csproj'
+      - '@backend/write-api/Dashboard.WriteApi.Tests/Dashboard.WriteApi.Tests.csproj'
+      - '@backend/read-api/Dashboard.ReadApi/Dashboard.ReadApi.csproj'
+      - '@backend/read-api/Dashboard.ReadApi.Tests/Dashboard.ReadApi.Tests.csproj'
+      - '@backend/shared/Dashboard.Shared/Dashboard.Shared.csproj'
+      - '@backend/shared/Dashboard.Shared.Tests/Dashboard.Shared.Tests.csproj'
+    dep-count: 2 (Dashboard.Api) + 5 (Dashboard.Shared); host references libraries via ProjectReference (3)
+    notes: |
+      OpenApi + Scalar packages live on the host project (CR-0008).
+      EF Core stack lives on Dashboard.Shared (DbContext + migrations).
+      No FluentValidation / AutoMapper / MediatR (banned per CLAUDE.md).
+      GenerateDocumentationFile=true on host + shared to feed OpenAPI semantic enrichment.
+
+  client:
+    language: TypeScript ~5.8 (strict)
+    framework: Angular 20 (standalone components, zoneless change detection)
+    state-lib: '@ngrx/signals ^20.0.0'
+    styling: Tailwind CSS ^3.4 (no darkMode — single [data-theme=dark] CSS overlay; see ADR-0003)
+    structure:
+      - 'frontend/dashboard (application shell; main.ts; styles.css; proxy.conf.json)'
+      - 'frontend/matrix (library @dd/matrix — pipeline matrix + views + picker)'
+      - 'frontend/drawer (library @dd/drawer — history drawer)'
+      - 'frontend/shared (library @dd/shared — Signal Store + API client + SSE service + models + fixtures)'
+    dockerfile: '@frontend/dashboard/Dockerfile (FROM node:22-alpine build → nginx:alpine runtime; EXPOSE 80)'
+    manifests:
+      - '@frontend/package.json (workspace root; build/test/lint/start scripts)'
+      - '@frontend/dashboard/ng-package.json + tsconfig.app.json + tsconfig.spec.json'
+      - '@frontend/matrix/package.json (peerDeps: @angular/{common,core} + @dd/shared)'
+      - '@frontend/drawer/package.json (peerDeps: @angular/{common,core} + @dd/shared)'
+      - '@frontend/shared/package.json (peerDeps: @angular/{common,core} + @ngrx/signals)'
+      - '@frontend/angular.json (workspace: 1 app dashboard + 3 libraries shared/matrix/drawer)'
+    dep-count-frontend-root: 9 deps + 14 devDeps (@angular/* + @ngrx/signals + tslib + zone.js + Karma/Jasmine + ng-packagr + autoprefixer + postcss + tailwindcss + typescript)
+    notes: |
+      Workspace-level deps in /frontend/package.json. Nested libraries declare peer-deps only.
+      Tailwind content globs: dashboard/src + matrix/src + drawer/src + shared/src (**/*.{html,ts}).
+      Path aliases: @dd/{shared,matrix,drawer} → */src/public-api.ts (no deep imports).
+      No darkMode mode set; theme handled via [data-theme=dark] CSS overlay (mockup parity).
+
+  gateway:
+    image: nginx:alpine
+    role: Sole public ingress; path+method routing matrix; SSE pass-through
+    config: '@gateway/nginx.conf (full http{} block; SSE-friendly: proxy_buffering off, proxy_read_timeout 1h)'
+    dockerfile: '@gateway/Dockerfile (FROM nginx:alpine; EXPOSE 80; self-healthcheck on /__gateway_health)'
+
+  testing:
+    e2e:
+      language: TypeScript 5.6.3
+      tool: '@playwright/test 1.49.1'
+      package: '@testing/e2e/package.json'
+      runner: '@testing/e2e/run-tests.ps1'
+    mockup-visual:
+      tool: '@playwright/test 1.49.1'
+      package: '@testing/mockup-visual/package.json'
+      runner: '@testing/mockup-visual/run-tests.ps1'
+    functional:
+      language: C# (xUnit)
+      runner: '@testing/functional/run-tests.ps1'
+      projects: '@testing/functional/Dashboard.Functional.Tests/'
+    scripts:
+      seed: '@testing/scripts/seed.ps1'
+      cleanup: '(planned per WBS §10 — cleanup.ps1 not yet present)'
+
+excluded-paths:
+  - 'node_modules/**'
+  - 'dist/**'
+  - 'bin/**, obj/** (backend build output)'
+
+cross-cutting:
+  port-contract:
+    api-container: 8080 (ASPNETCORE_URLS=http://+:8080)
+    dashboard-container: 80 (internal; nginx static)
+    gateway: 80 internal / 8080 host-published (dev)
+  banned-libs:
+    - Serverless / Functions / Lambda
+    - FluentValidation / AutoMapper / MediatR
+    - CORS configuration
+    - Swashbuckle / NSwag (replaced by Microsoft.AspNetCore.OpenApi + Scalar per CR-0008)
+    source: '@.agents/engineering-team/local/bindings.md (Do not introduce table)'
+  stack-version-floors:
+    dotnet: 10.0
+    angular: 20.0
+    postgres: 16 (alpine)
+    node: 22 (alpine, build only)
+    nginx: alpine

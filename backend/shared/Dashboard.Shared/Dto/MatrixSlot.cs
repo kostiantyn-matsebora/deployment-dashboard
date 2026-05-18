@@ -105,6 +105,14 @@ public sealed record CurrentDeployment
     [JsonPropertyName("sha")]
     public string? Sha { get; init; }
 
+    /// <summary>
+    /// Pusher-attribution token (CR-0009) — verbatim copy of the
+    /// <c>X-Progress-Reporter</c> request header from the ingest call.
+    /// Always present; <c>null</c> when the header was omitted at push.
+    /// </summary>
+    [JsonPropertyName("progress_reporter")]
+    public string? ProgressReporter { get; init; }
+
     public static CurrentDeployment FromEntity(DeploymentEntity e) => new()
     {
         DeploymentId = e.DeploymentId,
@@ -119,6 +127,7 @@ public sealed record CurrentDeployment
             : Array.Empty<string>(),
         Ref = e.Ref,
         Sha = e.Sha,
+        ProgressReporter = e.ProgressReporter,
     };
 
     private static DateTime AsUtc(DateTime value) => value.Kind switch
@@ -177,6 +186,14 @@ public sealed record LastSuccessfulDeployment
     [JsonPropertyName("sha")]
     public string? Sha { get; init; }
 
+    /// <summary>
+    /// Pusher-attribution token (CR-0009) — verbatim copy of the
+    /// <c>X-Progress-Reporter</c> request header from the original ingest
+    /// call. Always present; <c>null</c> when the header was omitted at push.
+    /// </summary>
+    [JsonPropertyName("progress_reporter")]
+    public string? ProgressReporter { get; init; }
+
     public static LastSuccessfulDeployment FromEntity(DeploymentEntity e) => new()
     {
         DeploymentId = e.DeploymentId,
@@ -195,5 +212,6 @@ public sealed record LastSuccessfulDeployment
             : Array.Empty<string>(),
         Ref = e.Ref,
         Sha = e.Sha,
+        ProgressReporter = e.ProgressReporter,
     };
 }

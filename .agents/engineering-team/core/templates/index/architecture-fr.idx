@@ -1,0 +1,12 @@
+# class: architecture-fr
+# schema: id | title | summary | source
+# source: docs/architecture.md
+# recipe: builtin:architecture
+
+FR-01 | <title> | <one-line statement of the requirement> | @docs/architecture.md#fr-01
+FR-02 | <title> | <one-line statement of the requirement> | @docs/architecture.md#fr-02
+
+# Recipe: every Functional Requirement in the source architecture doc gets one row.
+# Body NOT copied — summary is one line. Roles read source-doc section only when verbatim wording is needed.
+# Lossless rule: every FR named in the source has an entry.
+# NFR table → constraints.yaml (categorized) instead of a flat list, because NFRs carry budgets + per-role-impact.

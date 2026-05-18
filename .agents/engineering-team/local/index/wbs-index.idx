@@ -1,0 +1,60 @@
+# class: wbs
+# schema: track | phase | item-id | title | owner | source
+# source: docs/WBS.md
+# recipe: novel
+
+MVP | 1.0 | 1.0 | Backend host (backend/api/) composition root | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.1 | 1.1.1 | DeploymentEvent record with Data Annotations + deployment_id required + parent_deployments optional | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.1 | 1.1.2 | EF Core DeploymentEntity + DbContext + deployments migration | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.1 | 1.1.3 | 201/409/400 status codes for ingest | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.1 | 1.1.4 | API-key middleware on Write group only | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.1 | 1.1.5 | NOTIFY deployments channel after insert | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.1 | 1.1.6 | Topology cycle-check helper at ingest | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.2 | 1.2.1 | GET /api/deployments + correlationAttribute precedence | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.2 | 1.2.2 | GET history endpoint (404 on missing) | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.2 | 1.2.3 | GET /api/environments + /api/services discovery | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.2 | 1.2.4 | GET /api/stream SSE + LISTEN per client; slot-update-only payload | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.2 | 1.2.5 | GET /health DB connectivity check | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.2 | 1.2.6 | Topology derivation service (ADR-0001 five-pass) | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.2 | 1.2.7 | GET + PATCH /api/config/topology (PATCH on Write group; not SPA) | backend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.1 | Angular workspace standalone+zoneless+Tailwind | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.2 | DeploymentMatrixStore (NgRx Signal Store) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.3 | Pipeline matrix component (6 states) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.4 | Box component (status/version/ago/actor/run/prev-failed) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.5 | History drawer (current + history + deployment_id + parent_deployments) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.6 | Version hover directive (amber highlight across envs) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.7 | SSE service + EventSource + topology-refresh coalescing | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.8 | Search + failures-only toggle + stats bar | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.9 | View switcher segmented control (CR-0002) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.10 | Attribute picker dropdown with per-view cap | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.11 | Per-view row components (detailed/compact/glance/focus) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.12 | Signal Store slice {view,attrs,layout,correlationAttribute} | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.13 | localStorage persistence service (7 keys; corruption-safe) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.14 | Layout switcher (FR-13) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.15 | Layout renderers + connector geometry via getBoundingClientRect + ResizeObserver | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.16 | Glance pill with embedded env tag (NFR-09 exception) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.3 | 1.3.17 | Topology correlation-attribute picker (localStorage only; never PATCH from SPA) | frontend-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.4 | 1.4.1 | Generic inline-HTTP curl snippet per CI/CD tool | devops-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.4 | 1.4.2 | GHA composite action (action.yml) | devops-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.4 | 1.4.3 | Pester tests for non-trivial composite/webhook script logic | qa-engineer | @docs/WBS.md#1-implement-solution
+MVP | 2 | 2.1 | docker-compose.yml (api+dashboard+gateway+postgres+pgadmin+migrations) | devops-engineer | @docs/WBS.md#2-automate-local-deployment-docker-compose--powershell
+MVP | 2 | 2.2 | start.ps1 (up + health wait + print URL) | devops-engineer | @docs/WBS.md#2-automate-local-deployment-docker-compose--powershell
+MVP | 2 | 2.3 | stop.ps1 (tear down + volumes) | devops-engineer | @docs/WBS.md#2-automate-local-deployment-docker-compose--powershell
+MVP | 2 | 2.4 | seed.ps1 (POST prefilled events via ingest) | qa-engineer | @docs/WBS.md#2-automate-local-deployment-docker-compose--powershell
+MVP | 2 | 2.5 | .env.local template (NOTE: superseded; dev_env has no .env files) | devops-engineer | @docs/WBS.md#2-automate-local-deployment-docker-compose--powershell
+MVP | 3 | 3.1 | Seed test data covering all 6 box states + topology chains | qa-engineer | @docs/WBS.md#3-functional-and-e2e-tests--local-environment-api--prefilled-test-data
+MVP | 3.2 | 3.2.1-6 | Functional/API tests across all endpoints + topology + correlationAttribute | qa-engineer | @docs/WBS.md#3-functional-and-e2e-tests--local-environment-api--prefilled-test-data
+MVP | 3.3 | 3.3.1-6 | E2E (Playwright) + matrix-render + history-drawer + real-time + 12 layout x view combinations + glance pill + topology rendering | qa-engineer | @docs/WBS.md#3-functional-and-e2e-tests--local-environment-api--prefilled-test-data
+MVP | 4 | 4.1-7 | Terraform infrastructure (RG + Postgres B1ms + ACR + ACA env + 3 container apps + Key Vault + workspaces) | devops-engineer | @docs/WBS.md#4-implement-infrastructure-terraform
+MVP | 5 | 5.1-4 | Deployment automation (GHA build/push + frontend bundle into dashboard image + EF migration step + ACA revision update) | devops-engineer | @docs/WBS.md#5-implement-component-deployment-terraform
+MVP | 6 | 6.1-3 | Deploy infrastructure (terraform apply + verify + Key Vault populated) | devops-engineer | @docs/WBS.md#6-deploy-infrastructure
+MVP | 7 | 7.1-4 | Smoke test (health + SSE + SPA load + DB schema) | qa-engineer | @docs/WBS.md#7-smoke-test-infrastructure
+MVP | 8 | 8.1-2 | Deploy components (API image via CI + DB migration idempotent) | devops-engineer | @docs/WBS.md#8-deploy-components
+MVP | 9 | 9.1-3 | Tests in real environment (seed real + functional + E2E + SSE) | qa-engineer | @docs/WBS.md#9-functional-and-e2e-tests--real-environment-api--prefilled-test-data
+MVP | 10 | 10.1-2 | Clean up test data (cleanup.ps1 + verify empty matrix) | qa-engineer | @docs/WBS.md#10-clean-up-test-data
+MVP | 11 | 11.1-3 | Fill out initial data in DB (per-service per-env baseline) | project-manager | @docs/WBS.md#11-fill-out-initial-data-in-database
+CI-CD | 1 | 1.1-5 | Per-tool snippets + GHA composite + webhook receiver + Pester + secrets docs | devops-engineer | @docs/WBS.md#cicd-integration
+CI-CD | 2 | 2.1-2 | test-notify.ps1 + verify local dashboard updates | devops-engineer | @docs/WBS.md#cicd-integration
+CI-CD | 3-11 | various | CI/CD-flavoured 11-phase shape (mostly small deltas; see source) | devops-engineer | @docs/WBS.md#cicd-integration
+v2.0 | 1 | 1.1-5 | Notification client polling loop + OS notifications + click-through + config + self-contained build | backend-engineer | @docs/WBS.md#v20--notification-client
+v2.0 | 2-11 | various | 11-phase shape for v2.0 standalone binary release | backend-engineer | @docs/WBS.md#v20--notification-client

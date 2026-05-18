@@ -55,6 +55,11 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("text[]")
                         .HasColumnName("parent_deployments");
 
+                    b.Property<string>("ProgressReporter")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("progress_reporter");
+
                     b.Property<string>("Ref")
                         .HasColumnType("text")
                         .HasColumnName("ref");
@@ -97,6 +102,33 @@ namespace Dashboard.Shared.Migrations
                         .HasDatabaseName("ux_deployments_service_deployment_id");
 
                     b.ToTable("deployments", (string)null);
+                });
+
+            modelBuilder.Entity("Dashboard.Shared.Domain.FetcherStateEntity", b =>
+                {
+                    b.Property<string>("ProgressReporter")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("progress_reporter");
+
+                    b.Property<string>("SourceId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("Cursor")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("cursor");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("ProgressReporter", "SourceId");
+
+                    b.ToTable("fetcher_state", (string)null);
                 });
 
             modelBuilder.Entity("Dashboard.Shared.Persistence.TopologyConfigRow", b =>

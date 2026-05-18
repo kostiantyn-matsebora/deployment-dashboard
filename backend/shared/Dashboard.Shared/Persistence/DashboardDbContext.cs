@@ -22,6 +22,13 @@ public sealed class DashboardDbContext : DbContext
 
     public DbSet<DeploymentEntity> Deployments => Set<DeploymentEntity>();
 
+    /// <summary>
+    /// Opaque per-<c>progress_reporter</c> cursor table (CR-0009 + ADR-0004).
+    /// Keyed by the composite (<c>progress_reporter</c>, <c>source_id</c>) —
+    /// see <see cref="FetcherStateEntity"/>.
+    /// </summary>
+    public DbSet<FetcherStateEntity> FetcherStates => Set<FetcherStateEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var deployment = modelBuilder.Entity<DeploymentEntity>();
@@ -56,6 +63,15 @@ public sealed class DashboardDbContext : DbContext
         deployment.Property(e => e.Sha)
                   .HasColumnName("sha")
                   .HasColumnType("text")
+                  .IsRequired(false);
+
+        // CR-0009: optional pusher-attribution token captured from the
+        // X-Progress-Reporter request header. Cap matches the header
+        // validation (64 chars); nullable on the wire and in storage so
+        // existing pre-CR-0009 rows materialise as NULL with no backfill.
+        deployment.Property(e => e.ProgressReporter)
+                  .HasColumnName("progress_reporter")
+                  .HasMaxLength(64)
                   .IsRequired(false);
 
         var parentDeployments = deployment.Property(e => e.ParentDeployments).IsRequired();
@@ -119,6 +135,49 @@ public sealed class DashboardDbContext : DbContext
                 b.Property(e => e.PerServiceOverridesJson)
                     .HasColumnName("per_service_overrides")
                     .HasColumnType("jsonb")
+                    .IsRequired();
+            }
+        });
+
+        // CR-0009 + ADR-0004: opaque per-progress_reporter cursor table.
+        // Composite key (progress_reporter, source_id); the cursor blob is
+        // never parsed by the backend (length-capped string only); updated_at
+        // is server-stamped on every upsert.
+        modelBuilder.Entity<FetcherStateEntity>(b =>
+        {
+            b.ToTable("fetcher_state");
+
+            b.HasKey(e => new { e.ProgressReporter, e.SourceId });
+
+            b.Property(e => e.ProgressReporter)
+                .HasColumnName("progress_reporter")
+                .HasMaxLength(64)
+                .IsRequired();
+
+            b.Property(e => e.SourceId)
+                .HasColumnName("source_id")
+                .HasMaxLength(200)
+                .IsRequired();
+
+            b.Property(e => e.Cursor)
+                .HasColumnName("cursor")
+                .HasMaxLength(4096)
+                .IsRequired();
+
+            // Stored as `timestamp with time zone` on Postgres (matches the
+            // existing deployed_at convention) and TEXT-ISO on SQLite.
+            if (Database.IsSqlite())
+            {
+                b.Property(e => e.UpdatedAt)
+                    .HasColumnName("updated_at")
+                    .HasColumnType("TEXT")
+                    .IsRequired();
+            }
+            else
+            {
+                b.Property(e => e.UpdatedAt)
+                    .HasColumnName("updated_at")
+                    .HasColumnType("timestamp with time zone")
                     .IsRequired();
             }
         });

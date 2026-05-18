@@ -1,0 +1,38 @@
+# local/index/runtime-facts.yaml — extracted runtime configuration facts.
+# Category: code. Recipe: builtin:runtime-facts.
+# Sources: .env.example, env-file schemas, declared env-vars in docker-compose /
+#          k8s manifests, appsettings.*.json with placeholders, configuration
+#          classes flagged as runtime-bound.
+# Owner: ai-engineer. Consumed by: backend-engineer, devops-engineer, security-engineer
+#                                  (when present — secret-handling review).
+# Lossless rule: every declared env-var the application reads has an entry here,
+#                with secret-classification + default + tier.
+
+env-vars:
+  - name: <e.g. DATABASE_URL>
+    required: <true | false>
+    default: <literal default | 'no-default'>
+    secret: <true | false>          # true → never logged, never echoed
+    tier: <local-dev | staging | production | all>
+    consumed-by: [<service-name>, ...]   # services from topology.yaml
+    source-anchor: <e.g. .env.example:3 | backend/appsettings.Development.json:5>
+    notes: <e.g. format = postgres://user:pass@host:port/db>
+
+  # Repeat per declared env-var.
+
+# Cross-cutting:
+secrets-store:
+  local-dev: <e.g. hardcoded fake values inline in docker-compose>
+  cloud: <e.g. Azure Key Vault / AWS Secrets Manager / Vault>
+  source-anchor: <e.g. infrastructure/key-vault.tf | local/bindings.md>
+
+config-validation:
+  approach: <e.g. startup fail-fast on missing required vars | runtime defaults>
+  validator: <e.g. Microsoft.Extensions.Options validation | Zod schema | pydantic-settings>
+  source-anchor: <file>
+
+# Notes on extraction scope:
+# - .env.example entries: in scope (canonical schema).
+# - Real .env / appsettings.Production.json: NEVER read or copied. Values are secrets.
+# - Compose / k8s declared env: in scope; literal values redacted if they look like secrets.
+# - Application-code-read env-vars (e.g. process.env.X in source): in scope; cross-referenced with declaration.

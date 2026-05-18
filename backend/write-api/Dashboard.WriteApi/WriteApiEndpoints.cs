@@ -32,6 +32,19 @@ namespace Dashboard.WriteApi;
 public static class WriteApiEndpoints
 {
     /// <summary>
+    /// Header name for the universal pusher-attribution token (CR-0009 +
+    /// ADR-0004). Optional on <c>POST /api/deployments</c>; required on the
+    /// fetcher-state endpoints below.
+    /// </summary>
+    public const string ProgressReporterHeaderName = "X-Progress-Reporter";
+
+    /// <summary>Cap applied to the <see cref="ProgressReporterHeaderName"/> value (CR-0008 + CR-0009).</summary>
+    public const int ProgressReporterMaxLength = 64;
+
+    /// <summary>Cap applied to <c>source-id</c> path segment on the fetcher-state endpoints (CR-0009).</summary>
+    public const int FetcherSourceIdMaxLength = 200;
+
+    /// <summary>
     /// Registers every Write-surface endpoint on the supplied
     /// <paramref name="builder"/>. Apply <c>RequireApiKey()</c> on the
     /// builder before calling this method — SAD §8 demands the auth
@@ -41,6 +54,7 @@ public static class WriteApiEndpoints
     {
         MapDeployments(builder);
         MapTopologyConfigPatch(builder);
+        MapFetcherState(builder);
         return builder;
     }
 
@@ -48,6 +62,7 @@ public static class WriteApiEndpoints
     {
         builder.MapPost("/api/deployments", async (
             DeploymentEventRequest request,
+            [FromHeader(Name = ProgressReporterHeaderName)] string? progressReporterHeader,
             DashboardDbContext db,
             DeploymentNotifier notifier,
             CancellationToken ct) =>
@@ -56,6 +71,7 @@ public static class WriteApiEndpoints
             // (handled in this fixed order so a payload-shape failure does
             // not require a DB round-trip):
             //
+            //   0. Invalid X-Progress-Reporter (CR-0009 — optional)  -> 422
             //   1. Missing or empty deployment_id         -> 422
             //   2. Any other Data Annotations failure     -> 422
             //   3. parent_deployments[i] cross-service    -> 400
@@ -63,6 +79,15 @@ public static class WriteApiEndpoints
             //   5. parent_deployments[i] forms a cycle    -> 400
             //   6. Dangling reference (parent not yet
             //      ingested)                              -> accepted (201)
+
+            // (0) Optional X-Progress-Reporter header — CR-0009 + CR-0008
+            // ValidationProblemDetails shape. When omitted, persists as
+            // null. When present, must be non-whitespace and ≤ 64 chars.
+            if (!TryValidateProgressReporterHeader(
+                    progressReporterHeader, required: false, out var progressReporter, out var headerProblem))
+            {
+                return headerProblem!;
+            }
 
             // (1) + (2) — Data Annotations cover deployment_id required +
             // every other rule on the payload shape.
@@ -158,6 +183,10 @@ public static class WriteApiEndpoints
                 // null in storage.
                 Ref = request.Ref,
                 Sha = request.Sha,
+                // CR-0009: X-Progress-Reporter — verbatim header value, or
+                // null when the caller omitted the header. Validation
+                // already ran above; nothing more to do here.
+                ProgressReporter = progressReporter,
             };
 
             db.Deployments.Add(entity);
@@ -194,10 +223,19 @@ public static class WriteApiEndpoints
             "**Returns** the canonical, server-stamped event row (including the assigned `id` " +
             "and `deployed_at`).\n\n" +
             "**Authentication.** Requires the `X-Api-Key` header.\n\n" +
+            "**Optional headers (CR-0009):**\n" +
+            "- `X-Progress-Reporter` — pusher-attribution token (≤ 64 chars, non-whitespace). " +
+            "When present, persisted on the event row and echoed back on every Read surface " +
+            "that exposes per-event attributes (history + matrix `current` / `lastSuccessful` + " +
+            "SSE `slot-update.state`). Free-form; recommended namespacing form " +
+            "`<source-component>/<adapter-or-context>` (e.g. `dashboard-fetcher/github-actions`, " +
+            "`ci-pipeline/gha-composite`, `manual/<operator>`) — see " +
+            "`docs/ci-cd-integration.md`.\n\n" +
             "**Errors:**\n" +
             "- `422 Unprocessable Entity` — payload-shape validation failure (missing required " +
-            "field, out-of-range `status`, invalid URL, oversized string, ...). The response is " +
-            "an RFC 7807 `ValidationProblemDetails` listing the offending fields.\n" +
+            "field, out-of-range `status`, invalid URL, oversized string, or `X-Progress-Reporter` " +
+            "> 64 chars / whitespace-only). The response is an RFC 7807 `ValidationProblemDetails` " +
+            "listing the offending fields.\n" +
             "- `400 Bad Request` — `parent_deployments` references point to a different service, " +
             "or would create a cycle through already-ingested deployments.\n" +
             "- `409 Conflict` — a deployment with the same `(service, deployment_id)` already exists.\n" +
@@ -208,6 +246,263 @@ public static class WriteApiEndpoints
         .ProducesProblem(StatusCodes.Status400BadRequest)
         .ProducesProblem(StatusCodes.Status401Unauthorized)
         .ProducesProblem(StatusCodes.Status409Conflict);
+    }
+
+    /// <summary>
+    /// CR-0009 + ADR-0004: opaque per-<c>progress_reporter</c> cursor surface
+    /// on the existing Write endpoint group. The same <c>X-Api-Key</c>
+    /// middleware that protects <c>POST /api/deployments</c> protects these
+    /// two endpoints; no new auth surface, no new error contract (CR-0008
+    /// <c>ProblemDetails</c> shape reused verbatim).
+    ///
+    /// <para>The <c>X-Progress-Reporter</c> request header is <strong>required</strong>
+    /// here (it identifies which pusher's cursor to read / write) — contrast
+    /// with <c>POST /api/deployments</c>, where it is optional.</para>
+    /// </summary>
+    private static void MapFetcherState(IEndpointRouteBuilder builder)
+    {
+        // GET /api/fetcher/state/{source-id} — return the persisted cursor row
+        // for (progress_reporter, source_id) or 404 if none exists yet.
+        builder.MapGet("/api/fetcher/state/{**sourceId}", async (
+            string sourceId,
+            [FromHeader(Name = ProgressReporterHeaderName)] string? progressReporterHeader,
+            DashboardDbContext db,
+            CancellationToken ct) =>
+        {
+            if (!TryValidateProgressReporterHeader(
+                    progressReporterHeader, required: true, out var progressReporter, out var headerProblem))
+            {
+                return headerProblem!;
+            }
+
+            if (!TryValidateSourceIdPathSegment(sourceId, out var sourceIdProblem))
+            {
+                return sourceIdProblem!;
+            }
+
+            var entity = await db.FetcherStates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    s => s.ProgressReporter == progressReporter && s.SourceId == sourceId, ct);
+
+            if (entity is null)
+            {
+                // 404 = "no state yet — apply INITIAL_FETCH_LIMIT on first
+                // fetch". Adapter-owned semantics; backend just reports
+                // absence. CR-0008 ProblemDetails shape.
+                return ProblemResults.NotFound(
+                    title: "Fetcher state not found",
+                    detail: $"No fetcher state exists for progress_reporter '{progressReporter}' and source_id '{sourceId}'.",
+                    errorSlug: "fetcher_state_not_found");
+            }
+
+            return Results.Ok(FetcherStateResponse.FromEntity(entity));
+        })
+        .WithName("GetFetcherState")
+        .WithTags("Write")
+        .WithSummary("Read the opaque cursor blob for (progress_reporter, source_id)")
+        .WithDescription(
+            "Returns the persisted opaque cursor for the given `(progress_reporter, source_id)` " +
+            "pair (CR-0009 + ADR-0004). Each fetcher adapter owns its own cursor shape; the " +
+            "backend never parses the blob.\n\n" +
+            "**Authentication.** Requires the `X-Api-Key` header (same key as " +
+            "`POST /api/deployments`).\n\n" +
+            "**Required headers (CR-0009):**\n" +
+            "- `X-Progress-Reporter` — identifies which pusher's cursor to read " +
+            "(≤ 64 chars, non-whitespace).\n\n" +
+            "**Errors:**\n" +
+            "- `404 Not Found` — no row for the pair; fetcher should treat this as " +
+            "\"first fetch\" and apply `INITIAL_FETCH_LIMIT`.\n" +
+            "- `422 Unprocessable Entity` — `X-Progress-Reporter` missing / whitespace / > 64, " +
+            "or `source-id` whitespace / > 200.\n" +
+            "- `401 Unauthorized` — `X-Api-Key` missing or wrong.")
+        .Produces<FetcherStateResponse>(StatusCodes.Status200OK, contentType: "application/json")
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
+        .ProducesProblem(StatusCodes.Status401Unauthorized)
+        .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // PUT /api/fetcher/state/{source-id} — upsert opaque cursor + echo
+        // the stored row so the caller can verify what landed in one
+        // round-trip (per CR-0009 § 1.5.4: "No 204 — let the caller verify
+        // what was persisted").
+        builder.MapPut("/api/fetcher/state/{**sourceId}", async (
+            string sourceId,
+            FetcherStateRequest body,
+            [FromHeader(Name = ProgressReporterHeaderName)] string? progressReporterHeader,
+            DashboardDbContext db,
+            CancellationToken ct) =>
+        {
+            if (!TryValidateProgressReporterHeader(
+                    progressReporterHeader, required: true, out var progressReporter, out var headerProblem))
+            {
+                return headerProblem!;
+            }
+
+            if (!TryValidateSourceIdPathSegment(sourceId, out var sourceIdProblem))
+            {
+                return sourceIdProblem!;
+            }
+
+            // Body-level validation (cursor: 1–4096, non-whitespace) — runs the
+            // same DataAnnotations pipeline / 422 shape every other Write
+            // endpoint uses.
+            var (isValid, errors) = DataAnnotationsValidator.Validate(body);
+            if (!isValid)
+            {
+                return Results.ValidationProblem(
+                    errors, statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+
+            var existing = await db.FetcherStates
+                .FirstOrDefaultAsync(
+                    s => s.ProgressReporter == progressReporter && s.SourceId == sourceId, ct);
+
+            var now = DateTime.UtcNow;
+            if (existing is null)
+            {
+                existing = new FetcherStateEntity
+                {
+                    ProgressReporter = progressReporter!,
+                    SourceId = sourceId,
+                    Cursor = body.Cursor,
+                    UpdatedAt = now,
+                };
+                db.FetcherStates.Add(existing);
+            }
+            else
+            {
+                existing.Cursor = body.Cursor;
+                existing.UpdatedAt = now;
+            }
+
+            await db.SaveChangesAsync(ct);
+
+            return Results.Ok(FetcherStateResponse.FromEntity(existing));
+        })
+        .WithName("PutFetcherState")
+        .WithTags("Write")
+        .WithSummary("Upsert the opaque cursor blob for (progress_reporter, source_id)")
+        .WithDescription(
+            "Upserts the opaque cursor for the given `(progress_reporter, source_id)` pair " +
+            "(CR-0009 + ADR-0004). The backend treats the cursor as a length-capped opaque " +
+            "string — it never parses, validates, or interprets the blob content beyond length. " +
+            "Returns the canonical response shape of the GET (with the server-stamped " +
+            "`updated_at`) so the caller can verify the persisted row in one round-trip.\n\n" +
+            "**Authentication.** Requires the `X-Api-Key` header.\n\n" +
+            "**Required headers (CR-0009):**\n" +
+            "- `X-Progress-Reporter` — identifies which pusher's cursor to upsert.\n\n" +
+            "**Errors:**\n" +
+            "- `422 Unprocessable Entity` — `X-Progress-Reporter` missing / whitespace / > 64; " +
+            "`source-id` whitespace / > 200; or `cursor` missing / whitespace / > 4096.\n" +
+            "- `401 Unauthorized` — `X-Api-Key` missing or wrong.")
+        .Accepts<FetcherStateRequest>("application/json")
+        .Produces<FetcherStateResponse>(StatusCodes.Status200OK, contentType: "application/json")
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
+    }
+
+    /// <summary>
+    /// Shared validator for the <c>X-Progress-Reporter</c> request header
+    /// (CR-0008 + CR-0009). Mirrors the DataAnnotations-style rules applied
+    /// elsewhere — required (when <paramref name="required"/>), non-whitespace,
+    /// length-capped at <see cref="ProgressReporterMaxLength"/>. Violations
+    /// surface as <c>422 Unprocessable Entity</c> with a
+    /// <c>ValidationProblemDetails</c> body keyed by the header name
+    /// (lowercase, hyphen-preserved — matches the on-the-wire form so SPA /
+    /// SDK consumers can pattern-match).
+    /// </summary>
+    private static bool TryValidateProgressReporterHeader(
+        string? headerValue,
+        bool required,
+        out string? validated,
+        out IResult? problem)
+    {
+        validated = null;
+        problem = null;
+
+        // Distinguish "omitted" (null on the binding) from "present-but-empty"
+        // (an empty header in the request, which the binder also surfaces as
+        // null/empty). Treat all of {null, "", whitespace} as "omitted" when
+        // the header is optional — matches HTTP semantics where an empty
+        // header is functionally absent.
+        if (string.IsNullOrWhiteSpace(headerValue))
+        {
+            if (required)
+            {
+                problem = Results.ValidationProblem(
+                    new Dictionary<string, string[]>
+                    {
+                        [ProgressReporterHeaderName] = new[]
+                        {
+                            $"The {ProgressReporterHeaderName} request header is required.",
+                        },
+                    },
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+                return false;
+            }
+            return true; // optional + absent → null persisted
+        }
+
+        if (headerValue.Length > ProgressReporterMaxLength)
+        {
+            problem = Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    [ProgressReporterHeaderName] = new[]
+                    {
+                        $"The {ProgressReporterHeaderName} request header must be at most {ProgressReporterMaxLength} characters.",
+                    },
+                },
+                statusCode: StatusCodes.Status422UnprocessableEntity);
+            return false;
+        }
+
+        validated = headerValue;
+        return true;
+    }
+
+    /// <summary>
+    /// Shared validator for the <c>source-id</c> path segment on the
+    /// fetcher-state endpoints (CR-0009). Routing already guarantees the
+    /// segment is present (otherwise the route doesn't match), but ASP.NET
+    /// can match an empty-string segment when an inner slash-handler bypass
+    /// is used, so we re-check for whitespace + cap length to be defensive.
+    /// </summary>
+    private static bool TryValidateSourceIdPathSegment(
+        string sourceId,
+        out IResult? problem)
+    {
+        problem = null;
+
+        if (string.IsNullOrWhiteSpace(sourceId))
+        {
+            problem = Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["source-id"] = new[]
+                    {
+                        "The source-id path segment must not be empty or whitespace-only.",
+                    },
+                },
+                statusCode: StatusCodes.Status422UnprocessableEntity);
+            return false;
+        }
+
+        if (sourceId.Length > FetcherSourceIdMaxLength)
+        {
+            problem = Results.ValidationProblem(
+                new Dictionary<string, string[]>
+                {
+                    ["source-id"] = new[]
+                    {
+                        $"The source-id path segment must be at most {FetcherSourceIdMaxLength} characters.",
+                    },
+                },
+                statusCode: StatusCodes.Status422UnprocessableEntity);
+            return false;
+        }
+
+        return true;
     }
 
     private static void MapTopologyConfigPatch(IEndpointRouteBuilder builder)

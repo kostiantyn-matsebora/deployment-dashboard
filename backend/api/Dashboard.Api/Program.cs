@@ -84,10 +84,19 @@ public sealed class Program
         //   * WriteSurfaceSecurityDocumentTransformer — declares the
         //     X-Api-Key scheme and attaches it to every operation tagged
         //     "Write" (SAD §8 — Read endpoints stay open).
+        //
+        // Operation transformers:
+        //   * ProgressReporterHeaderOperationTransformer — CR-0009 + CR-0008
+        //     gap-fix. ASP.NET doesn't run DataAnnotations on [FromHeader]
+        //     string bindings, so neither maxLength=64 nor required-on-
+        //     state-endpoints make it into the auto-generated metadata
+        //     even though the runtime validator enforces both. This
+        //     transformer injects them post-generation.
         builder.Services.AddOpenApi("v1", options =>
         {
             options.AddDocumentTransformer<DashboardInfoDocumentTransformer>();
             options.AddDocumentTransformer<WriteSurfaceSecurityDocumentTransformer>();
+            options.AddOperationTransformer<ProgressReporterHeaderOperationTransformer>();
         });
 
         var app = builder.Build();

@@ -1,0 +1,10 @@
+# class: ui-options
+# schema: id | title | ux-axis | paired-cr-adr | summary | source
+# source-glob: docs/ui/*.md
+# recipe: novel
+
+compact-options | UI density + attribute display — specification | View (Detailed/Compact/Glance/Focus) + per-view attribute picker | CR-0002 | Design rationale for the four named views + attribute picker; density targets per view; per-view specifics; Focus chevron+pin contract; full localStorage shape | @docs/ui/compact-options.md
+focus-layout-options | Focus expand/collapse across layouts | View=Focus chevron+pin overlay across the three layouts | CR-0003,CR-0007 | Chosen design: Option A (wider+taller / matrix-parity); per-layout granularity (Matrix per-row / Swim-lane per-lane / Workflow-rows per-block); pin survives layout switch | @docs/ui/focus-layout-options.md
+theme-options | UI theme — design note | Theme axis (light/dark/auto) | CR-0006,ADR-0003 | Selected design: Dim palette (GitHub-style #0d1117 / #161b22) + gear-icon popover; smallest header footprint; default auto follows OS prefers-color-scheme; FOIT-safe bootstrap before Alpine boot | @docs/ui/theme-options.md
+tree-topology-options | UI tree topology — design note | Layout axis (Matrix/Swim-lane/Workflow-rows) | CR-0003,CR-0007 | Rationale for the layout axis; per-option arrangement (Matrix grid / Swim-lane horizontal lanes by depth / Workflow-rows per root-to-leaf path); topology data model; box-state contract preserved across all layouts | @docs/ui/tree-topology-options.md
+version-display-options | Version display options — design note | Version-string rendering within the leaf | TODO Item 1 (Phase 2 mockup cycle) | Selected design: Option C hybrid (fluid clamp(min,viewport,max) on --leaf-width + stacking fallback to second line); cap 200px; A and B alternatives deleted | @docs/ui/version-display-options.md

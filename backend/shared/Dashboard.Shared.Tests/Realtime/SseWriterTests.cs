@@ -149,4 +149,57 @@ public sealed class SseWriterTests
     {
         Assert.Equal(expected, SseWriter.ParseLastEventId(raw));
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // CR-0009 + ADR-0004 — progress_reporter on the SSE wire
+    //
+    // The Read API surfaces the new optional attribute everywhere it already
+    // surfaces per-event fields (history + matrix current / lastSuccessful +
+    // SSE slot-update.state). The shape test below ensures the SSE wire
+    // explicitly carries the field — both when populated and when null
+    // (always-emit convention, matching the ref / sha precedent).
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void FormatFrame_PayloadIncludesProgressReporter_WhenSet()
+    {
+        var payload = new SlotUpdatePayload
+        {
+            Service = "auth-service",
+            Environment = "prod",
+            State = new MatrixSlot
+            {
+                Current = new CurrentDeployment
+                {
+                    DeploymentId = "gh-run-9001",
+                    Version = "v1.0.0",
+                    Status = DeploymentStatus.Success,
+                    RunUrl = "https://example.com/runs/9001",
+                    RunNumber = 9001,
+                    Actor = "system",
+                    DeployedAt = new DateTime(2026, 5, 18, 10, 0, 0, DateTimeKind.Utc),
+                    ProgressReporter = "dashboard-fetcher/github-actions",
+                },
+                LastSuccessful = null,
+                PreviousFailed = false,
+            },
+        };
+
+        var bytes = SseWriter.FormatFrame(new SlotUpdate(1, payload));
+        var text = Encoding.UTF8.GetString(bytes);
+
+        Assert.Contains("\"progress_reporter\":\"dashboard-fetcher/github-actions\"", text);
+    }
+
+    [Fact]
+    public void FormatFrame_PayloadAlwaysIncludesProgressReporterKey_NullWhenUnset()
+    {
+        // SamplePayload doesn't set ProgressReporter — the resulting JSON must
+        // still include the key as `null` (the always-emit convention used by
+        // ref / sha). SPA consumers pattern-match on the key's presence.
+        var bytes = SseWriter.FormatFrame(new SlotUpdate(2, SamplePayload()));
+        var text = Encoding.UTF8.GetString(bytes);
+
+        Assert.Contains("\"progress_reporter\":null", text);
+    }
 }

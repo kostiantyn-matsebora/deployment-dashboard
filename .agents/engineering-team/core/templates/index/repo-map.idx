@@ -1,0 +1,19 @@
+# class: repo-map
+# schema: path | purpose | owner-role | category
+# source: repo walk + per-directory READMEs
+# recipe: builtin:repo-structure
+
+backend/ | stateless API tier + DB migrations | backend-engineer | top-level
+frontend/ | Angular SPA + design tokens | frontend-engineer | top-level
+infrastructure/ | Terraform modules for Azure resources | devops-engineer | top-level
+dev_env/ | Docker Compose local-dev stack | devops-engineer | top-level
+testing/ | Functional / E2E / smoke / pester | qa-engineer | top-level
+docs/ | Architecture doc + ADRs + mockup | solution-architect | top-level
+.github/workflows/ | CI pipelines | devops-engineer | nested
+
+# Recipe: per top-level directory + significant nested subtree → one row with
+#   path, one-line purpose (from README or inferred), owning cardinal (from
+#   local/bindings.md or detected stack), category (top-level | nested).
+# Lossless rule: every top-level directory in the repo has a row; nested
+#   subtrees only when they carry distinct ownership / purpose from their parent.
+# Out of scope: every file. The index is a directory map, not a file inventory.

@@ -1,0 +1,11 @@
+# class: cr
+# schema: id | title | status | targets | source
+# source-glob: docs/cr/*.md
+# recipe: builtin:cr
+
+CR-0001 | <title> | <draft|approved|merged|rejected> | FR-12 | @docs/cr/0001.md
+CR-0002 | <title> | approved | FR-03,NFR-07 | @docs/cr/0002.md
+
+# Recipe: per CR file → id, title, status, target FR/NFR (comma-list), file path. Body NOT copied.
+# Targets cell uses comma-separated list when CR touches multiple FRs/NFRs.
+# Lossless rule: every CR file in the source dir has a row here.

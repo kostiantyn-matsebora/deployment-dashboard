@@ -1,0 +1,29 @@
+---
+name: ginee-file-framework-feature
+description: File a feature request against the engineering-team framework upstream repo (NOT the adopter's own project) via the framework's D14 workflow. Use when the user asks to 'file a framework feature', 'request a framework feature', 'propose a change to engineering-team itself'. Drafts a structured issue using core/templates/issues/framework-feature-request.md and targets github.framework-repo.
+---
+
+# File framework-feature — upstream
+
+Run the file-an-issue workflow per `.agents/engineering-team/core/github-integration.md § Outbound — file an issue` with target = framework upstream, template = framework-feature-request.
+
+## Activation
+
+- User asks to "file a framework feature" / "request a framework feature" / "propose a change to engineering-team" / "improve the framework".
+- User proposes new framework capability, role addition, process change, or adapter enhancement.
+
+## Procedure
+
+1. Load `.agents/engineering-team/core/github-integration.md` and `.agents/engineering-team/core/templates/issues/framework-feature-request.md`.
+2. Resolve target repo from `local/framework.config.yaml § github.framework-repo`. Fail fast with clear message if unset.
+3. Draft the body from the framework-feature-request template. Populate `## Summary`, `## Motivation`, `## Affected framework surface`, `## Proposed behavior`, `## Locked-decision impact` (new D-decision? amends existing?), `## Backward compatibility` (breaks `local/*`? migration note needed?), `## Acceptance criteria`, `## Out of scope`, `## References`.
+4. When the user asked for ideas / alternatives → present 2–3 candidate design solutions in `## Proposed behavior` with tradeoff bullets each. Do NOT pre-decide the recommended approach — let framework owners pick during Phase 2.
+5. **Surface the draft for user approval.**
+6. On approval, create the issue against `github.framework-repo` with `ready-label` + the `framework` label. Tool priority: gh CLI → GitHub MCP → HTTPS.
+7. Report URL + number.
+
+## Forbidden
+
+- Never silently create — surface the draft.
+- Never fall back to the primary repo when `github.framework-repo` is unset — fail with a clear message.
+- Never pre-recommend one design when the user asked for ideas.

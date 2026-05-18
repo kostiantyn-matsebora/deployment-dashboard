@@ -1,0 +1,27 @@
+# local/index/api-matrix.yaml — extracted API endpoint matrix.
+# Source recorded in local/index/manifest.yaml.
+# Recipe: builtin:architecture (extracted from architecture-doc §API) or builtin:openapi (from OpenAPI spec).
+# Owner: ai-engineer.
+# Consumed by: backend-engineer, frontend-engineer, qa-engineer, mobile-engineer, devops-engineer.
+
+# Lossless rule: every endpoint × method × status combination named in the source has an entry here.
+
+endpoints:
+  - path: <e.g. /api/deployments>
+    method: <GET | POST | PUT | PATCH | DELETE>
+    summary: <one-line endpoint purpose>
+    statuses: [<200>, <400>, <401>, <403>, <404>, <409>, <500>]
+    wire-shape-ref: <source-anchor or fixture-file path>
+    fixture-ref: <docs/scenarios/fixtures/<file>.json — or 'none'>
+    source-anchor: <file#anchor>
+
+  # Repeat per endpoint.
+
+# Optional cross-cutting:
+auth:
+  scheme: <e.g. Bearer JWT | OAuth2 | mTLS>
+  source-anchor: <file#anchor>
+
+rate-limits:
+  default: <e.g. 100 rps>
+  source-anchor: <file#anchor>

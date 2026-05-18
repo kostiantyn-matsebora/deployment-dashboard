@@ -1,0 +1,57 @@
+# local/index/constraints.yaml — NFR roll-up by category.
+# Recipe: builtin:architecture (NFR table from architecture-doc + project-instruction file).
+# Owner: ai-engineer.
+# Consumed by: solution-architect (governance), devops-engineer (infra), backend-engineer (perf),
+#              qa-engineer (test oracles), security-engineer (security extras), sre (reliability extras).
+
+# Lossless rule: every NFR named in the source has an entry under the matching category.
+# Entries may summarize but MUST cite source-anchor.
+
+constraints:
+  latency:
+    - id: NFR-01
+      budget: <e.g. p95 < 200ms for /api/* read endpoints>
+      source-anchor: <docs/architecture.md#nfr-01>
+      per-role-impact:
+        - backend-engineer: response-time budget per handler
+        - devops-engineer: cache + autoscale policy
+
+  cost:
+    - id: NFR-02
+      budget: <e.g. ≤ $X/mo for compute + storage>
+      source-anchor: <docs/architecture.md#nfr-02>
+      per-role-impact:
+        - devops-engineer: instance class + retention policy
+
+  retention:
+    - id: NFR-03
+      budget: <e.g. logs ≥ 90d, metrics ≥ 13mo>
+      source-anchor: <docs/architecture.md#nfr-03>
+      per-role-impact:
+        - devops-engineer: storage tier selection
+
+  availability:
+    - id: NFR-04
+      budget: <e.g. 99.9% monthly>
+      source-anchor: <docs/architecture.md#nfr-04>
+      per-role-impact:
+        - sre: error-budget burn alerts
+        - devops-engineer: redundancy + failover
+
+  statelessness:
+    - id: NFR-05
+      budget: <e.g. all service-tier pods stateless; session in store>
+      source-anchor: <docs/architecture.md#nfr-05>
+      per-role-impact:
+        - backend-engineer: no local file/session state
+
+  security:
+    - id: NFR-06
+      budget: <e.g. all tokens TTL ≤ 1h; secrets in vault>
+      source-anchor: <docs/architecture.md#nfr-06>
+      per-role-impact:
+        - security-engineer: token-store policy
+        - backend-engineer: token validation per request
+
+# Categories beyond the above (compliance, accessibility, i18n, observability, ...) added as needed.
+# Adopter-specific category names allowed — record the same shape: id + budget + source-anchor + per-role-impact.

@@ -170,6 +170,59 @@ services:
     depends_on:
       - db
 
+  # Optional pull-mode fetcher worker (CR-0009 / WBS §1.5).
+  # Opt-in via Compose v2 profile: `docker compose --profile fetcher up`.
+  # Stays out of the default stack so the zero-setup baseline is unchanged.
+  #
+  # Strict NFR-04 (per CR-0009 § 3a "Topology" and architecture.md §7):
+  #   - NO `ports:` — fetcher has no inbound listener.
+  #   - NO `healthcheck:` — no HTTP surface to probe in MVP.
+  # Outbound only: polls CI/CD-tool APIs (MVP: GitHub Actions), POSTs to
+  # the gateway as a normal write-API client. Reuses the existing
+  # API_TOKEN literal verbatim — no new dev-token — so seed scripts and
+  # the fetcher trust the same key.
+  #
+  # `DASHBOARD_WRITE_API_URL: http://gateway` — the gateway listens on
+  # container port 80 (see `gateway` service above; the `8080:80` mapping
+  # is the host-side port, internal Docker DNS resolves `gateway` to :80).
+  # The fetcher therefore talks to the same single ingress the browser
+  # uses, going through the same `POST /api/deployments` route the
+  # external CI/CD callers use (FR-06 wire-format compatibility).
+  #
+  # `PROGRESS_REPORTER: dashboard-fetcher/github-actions` — slash-namespaced
+  # per CR-0009 § 3e + trade-off resolution (ii). Vendor segment is
+  # `dashboard-fetcher`, source-system segment is `github-actions`.
+  #
+  # `GHA_TOKEN` — falls back to a placeholder so the stack boots without
+  # the env-var being exported. Real GHA validation requires the developer
+  # to `export GHA_TOKEN=<their PAT>` before `docker compose --profile fetcher up`.
+  fetcher:
+    profiles: ["fetcher"]
+    build:
+      context: ../backend
+      dockerfile: fetcher-host/Dockerfile
+    image: deployment-dashboard/fetcher:dev
+    container_name: dashboard-fetcher
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DASHBOARD_WRITE_API_URL: "http://gateway"
+      DASHBOARD_WRITE_API_KEY: "local-dev-token-not-for-production"
+      PROGRESS_REPORTER: "dashboard-fetcher/github-actions"
+      FETCHER_POLL_INTERVAL_SECONDS: "30"
+      INITIAL_FETCH_LIMIT: "50"
+      FETCHER_ADAPTERS: "github-actions"
+      GHA_TOKEN: "${GHA_TOKEN:-local-dev-gha-token-placeholder}"
+      GHA_REPOSITORIES: '[{"owner":"example-org","repo":"example-repo"}]'
+      GHA_API_BASE_URL: "https://api.github.com"
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    depends_on:
+      gateway:
+        condition: service_started
+    # No `ports:` — fetcher has no inbound listener (NFR-04 strict).
+    # No `healthcheck:` — no HTTP surface to probe in MVP.
+
 volumes:
   pg-data:
   dotnet-tools:
