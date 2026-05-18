@@ -20,6 +20,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.14.14" />
+    <!-- Required by `dotnet ef migrations script` in CI (CR-0010 § 3l). EF
+         tooling refuses without this on the startup project even though the
+         migration assembly lives in Dashboard.Shared. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

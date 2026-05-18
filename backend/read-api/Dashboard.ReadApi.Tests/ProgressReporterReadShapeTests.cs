@@ -40,7 +40,10 @@ public sealed class ProgressReporterReadShapeTests : IClassFixture<TestApplicati
         => new()
         {
             DeploymentId = $"pr-shape-{Interlocked.Increment(ref _nextId)}",
-            Service = s, Environment = e, Version = v, Status = status,
+            Service = s,
+            Environment = e,
+            Version = v,
+            Status = status,
             RunUrl = "https://example.com/r/1",
             RunNumber = 1,
             Actor = "tester",

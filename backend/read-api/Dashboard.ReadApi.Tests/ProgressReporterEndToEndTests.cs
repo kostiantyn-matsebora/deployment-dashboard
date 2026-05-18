@@ -44,7 +44,10 @@ public sealed class ProgressReporterEndToEndTests : IClassFixture<TestApplicatio
         => new()
         {
             DeploymentId = $"pr-e2e-{Interlocked.Increment(ref _nextId)}",
-            Service = s, Environment = e, Version = v, Status = status,
+            Service = s,
+            Environment = e,
+            Version = v,
+            Status = status,
             RunUrl = "https://example.com/r/1",
             RunNumber = 1,
             Actor = "tester",

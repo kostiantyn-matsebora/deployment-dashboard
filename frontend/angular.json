@@ -66,6 +66,7 @@
           "options": {
             "polyfills": [],
             "tsConfig": "dashboard/tsconfig.spec.json",
+            "karmaConfig": "karma.conf.js",
             "assets": [],
             "styles": ["dashboard/src/styles.css"],
             "scripts": []
@@ -86,7 +87,8 @@
           "builder": "@angular/build:karma",
           "options": {
             "polyfills": [],
-            "tsConfig": "shared/tsconfig.spec.json"
+            "tsConfig": "shared/tsconfig.spec.json",
+            "karmaConfig": "karma.conf.js"
           }
         }
       }
@@ -104,7 +106,8 @@
           "builder": "@angular/build:karma",
           "options": {
             "polyfills": [],
-            "tsConfig": "matrix/tsconfig.spec.json"
+            "tsConfig": "matrix/tsconfig.spec.json",
+            "karmaConfig": "karma.conf.js"
           }
         }
       }
@@ -122,7 +125,8 @@
           "builder": "@angular/build:karma",
           "options": {
             "polyfills": [],
-            "tsConfig": "drawer/tsconfig.spec.json"
+            "tsConfig": "drawer/tsconfig.spec.json",
+            "karmaConfig": "karma.conf.js"
           }
         }
       }

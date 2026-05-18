@@ -68,7 +68,7 @@ public sealed class MatrixShapeTests : IClassFixture<TestApplicationFactory>
         {
             var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
             db.Deployments.Add(D("dev", "v1", new DateTime(2026, 5, 14, 10, 0, 0), deploymentId: "p"));
-            db.Deployments.Add(D("qa",  "v1", new DateTime(2026, 5, 14, 11, 0, 0),
+            db.Deployments.Add(D("qa", "v1", new DateTime(2026, 5, 14, 11, 0, 0),
                 deploymentId: "q", parents: new[] { "p" }));
             await db.SaveChangesAsync();
         }

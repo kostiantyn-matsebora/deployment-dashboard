@@ -72,9 +72,9 @@ public sealed class GitHubActionsAdapterTests
         Assert.Equal(DeploymentStatus.Success, page.Events[0].Status);
         // sha truncated to first 7 chars when present (matches adapter convention)
         Assert.Equal("bbbbbbb", page.Events[0].Version);
-        Assert.Equal("dev",  page.Events[0].Environment);
+        Assert.Equal("dev", page.Events[0].Environment);
         Assert.Equal("prod", page.Events[1].Environment);
-        Assert.Equal("bob",   page.Events[0].Actor);
+        Assert.Equal("bob", page.Events[0].Actor);
         Assert.Equal("alice", page.Events[1].Actor);
     }
 

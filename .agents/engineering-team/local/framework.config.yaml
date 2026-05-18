@@ -82,6 +82,11 @@ index:
       source: docs/ci-cd-integration.md
       template: novel
       consumed-by: [devops-engineer, backend-engineer]
+    - name: ci-pipelines
+      category: doc
+      source: docs/ci-cd-pipelines.md
+      template: novel
+      consumed-by: [devops-engineer, backend-engineer]
 
 # --- Delivery modes (D17) ---
 # Framework default applies until adopter pins a preference:

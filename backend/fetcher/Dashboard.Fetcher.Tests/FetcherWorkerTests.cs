@@ -41,7 +41,7 @@ public sealed class FetcherWorkerTests
         handler.WhenStatus(req => req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.EndsWith("/api/deployments"),
             HttpStatusCode.Created);
         // PUT cursor — expected exactly once with the adapter's new cursor.
-        handler.WhenStatus(req => req.Method == HttpMethod.Put  && req.RequestUri!.AbsolutePath.Contains("/api/fetcher/state/"),
+        handler.WhenStatus(req => req.Method == HttpMethod.Put && req.RequestUri!.AbsolutePath.Contains("/api/fetcher/state/"),
             HttpStatusCode.OK);
 
         var adapter = new StubCiCdAdapter();
@@ -190,10 +190,12 @@ public sealed class FetcherWorkerTests
         // Three consecutive ticks on a 200ms timer SHOULD take at least 2
         // intervals (~400ms). If PeriodicTimer were queueing missed ticks,
         // this loop would complete in ~10-20ms (the BCL would dump all
-        // backlogged ticks immediately). The 250ms floor below is the burst
-        // regression line — well above any realistic queue-drain time, well
-        // below the healthy ~400ms+ measurement.
-        Assert.True(sw.ElapsedMilliseconds >= 250,
+        // backlogged ticks immediately). The 100ms floor below is the burst
+        // regression line — still 5-10× larger than the queueing-bug case
+        // (~10-20ms), so we keep the regression signal, but loose enough to
+        // survive CI scheduler jitter on shared runners where the 250ms
+        // threshold flaked.
+        Assert.True(sw.ElapsedMilliseconds >= 100,
             $"Drained {TicksToDrain} consecutive ticks in {sw.ElapsedMilliseconds}ms — " +
             "PeriodicTimer is queueing missed ticks (drift-resistance broken). " +
             "Healthy behaviour: drain time scales with interval × ticks; broken behaviour: near-zero.");

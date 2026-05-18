@@ -95,10 +95,10 @@ public sealed class DataAnnotationsValidatorTests
         var req = camelCaseField switch
         {
             "deploymentId" => Valid() with { DeploymentId = tooLong },
-            "service"      => Valid() with { Service = tooLong },
-            "environment"  => Valid() with { Environment = tooLong },
-            "version"      => Valid() with { Version = tooLong },
-            "actor"        => Valid() with { Actor = tooLong },
+            "service" => Valid() with { Service = tooLong },
+            "environment" => Valid() with { Environment = tooLong },
+            "version" => Valid() with { Version = tooLong },
+            "actor" => Valid() with { Actor = tooLong },
             _ => throw new InvalidOperationException(),
         };
         var (ok, errors) = DataAnnotationsValidator.Validate(req);

@@ -61,5 +61,11 @@ testing/e2e/blob-report/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
 
+# ---- dotnet format / analyzer scratch -----------------------------------
+# `dotnet format --report` writes this at repo root when invoked manually
+# (e.g. during the Wave 4a baseline). CI uses `--verify-no-changes` (no
+# report file), so this guard only matters for local invocations.
+format-report.json
+
 # ---- Misc ----------------------------------------------------------------
 *.log
