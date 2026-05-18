@@ -31,7 +31,7 @@ workspace-aliases:
   source: '@frontend/tsconfig.base.json:21-25'
   paths: { '@dd/shared': 'shared/src/public-api.ts', '@dd/matrix': 'matrix/src/public-api.ts', '@dd/drawer': 'drawer/src/public-api.ts' }
   rule: 'dashboard imports @dd/matrix + @dd/drawer; matrix/drawer import @dd/shared only; shared imports nothing.'
-  cross-ref: '@.agents/engineering-team/local/bindings.md (Per-tier dependency rules)'
+  cross-ref: '@.agents/ginee/local/bindings.md (Per-tier dependency rules)'
 
 styling:
   source: '@frontend/tailwind.config.js'

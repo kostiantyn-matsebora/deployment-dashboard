@@ -85,12 +85,20 @@ The framework's own `core/process.md` and role kernels use `@<role>` notation as
 
 ## Updates
 
-On new framework release:
+**Recommended — re-run the installer**: `.\install.ps1 -UpdateOnly -Adapter claude` (or `./install.sh --update-only --adapter claude`). It performs all the steps below automatically, including the pointer-block sync in step 5.
+
+Manual equivalent:
 
 1. Re-fetch `.agents/ginee/core/` + `.agents/ginee/adapters/` + `.agents/ginee/extras/` (your `local/` survives).
 2. Re-copy `.agents/ginee/adapters/_shared/agents/*.md` to `.claude/agents/` (pointers may have been refined).
 3. Re-copy `.agents/ginee/core/skills/ginee-*` to `.claude/skills/` (skill bodies / descriptions may have been refined). Skip if you used symlinks in step 2 above.
 4. Read `.agents/ginee/core/MIGRATIONS/` for breaking-change notes.
+5. **Re-sync the pointer block in `CLAUDE.md`** — pointer blocks evolve across releases. Find the existing block (between `## Engineering team framework` and the next `---`) and replace its body with the current `.agents/ginee/adapters/claude/CLAUDE-pointer.md` content. The installer's `-UpdateOnly` path does this automatically; manual one-liner equivalents in `core/MIGRATIONS/engineering-team-renamed-ginee.md § Action required #2`.
+6. **For pre-D11 (pre-2026-05-18) upgrades** — run the rename migration script once:
+   - `.\.agents\ginee\core\scripts\migrate-engineering-team-to-ginee.ps1` (or `.sh`).
+   - Rewrites legacy `engineering-team` references under `local/*`.
+   - Idempotent; safe to run on already-migrated installs.
+   - Full notes: `.agents/ginee/core/MIGRATIONS/engineering-team-renamed-ginee.md`.
 
 ## Uninstall
 

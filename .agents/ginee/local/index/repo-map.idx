@@ -28,9 +28,9 @@ testing/config/ | Test runner configs (e.g. local.json) | qa-engineer | testing
 testing/fixtures/ | Shared test data (seed-data.json) | qa-engineer | testing
 .github/ | GitHub-side config — actions/notify/ composite present; workflows/ planned per WBS but not yet present | devops-engineer | ci
 .github/actions/notify/ | Composite action for the CI/CD notify step (per WBS §1.4.2) | devops-engineer | ci
-.agents/ | engineering-team framework install (vendor-neutral) | project-manager | tooling
-.agents/engineering-team/ | Framework root (core/ + adapters/ + local/ + extras/) | project-manager | tooling
+.agents/ | ginee framework install (vendor-neutral) | project-manager | tooling
+.agents/ginee/ | Framework root (core/ + adapters/ + local/ + extras/) | project-manager | tooling
 .claude/ | Claude Code adapter — installed skills + agents | project-manager | tooling
-CLAUDE.md | Project-instruction file — engineering-team pointer block | project-manager | governance
+CLAUDE.md | Project-instruction file — ginee pointer block | project-manager | governance
 TODO | Repo-root TODO list (MVP backlog + Phase 2.0) | project-manager | governance
 excluded | node_modules / dist / bin / obj / playwright-report / test-results / __screenshots__ — not extracted | - | excluded

@@ -53,13 +53,13 @@ test:
     cmd: 'dotnet test backend/Dashboard.sln'
     scope: backend xUnit (SQLite in-memory)
     tool: xUnit
-    source-anchor: '@.agents/engineering-team/local/framework.config.yaml:59 (unit-backend)'
+    source-anchor: '@.agents/ginee/local/framework.config.yaml:59 (unit-backend)'
   - name: frontend-unit
     cmd: 'npm test --prefix frontend -- --watch=false --browsers=ChromeHeadlessNoSandbox'
     delegates-to: 'ng test dashboard'
     scope: frontend Karma/Jasmine
     tool: Karma + Jasmine
-    source-anchor: '@.agents/engineering-team/local/framework.config.yaml:60 + @frontend/package.json:11'
+    source-anchor: '@.agents/ginee/local/framework.config.yaml:60 + @frontend/package.json:11'
   - name: functional
     cmd: 'pwsh -NoProfile -File testing/functional/run-tests.ps1'
     delegates-to: 'dotnet test testing/functional/Dashboard.Functional.Tests'

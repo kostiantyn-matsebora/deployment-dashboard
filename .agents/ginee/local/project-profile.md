@@ -71,7 +71,7 @@ deployment-dashboard/
 ├── dev_env/         Docker Compose stacks + PowerShell start/stop scripts
 ├── docs/            architecture.md, WBS.md, ci-cd-integration.md, adr/, cr/, ui/ (mockup + option docs)
 ├── testing/         functional (xUnit), e2e (Playwright), mockup-visual (Playwright), scripts (Pester + seed), fixtures
-├── .agents/         engineering-team framework install (vendor-neutral)
+├── .agents/         ginee framework install (vendor-neutral)
 ├── .claude/         Claude Code adapter (skills + agents)
 ├── .github/         actions/notify/ (composite action) — no workflows/ yet
 ├── CLAUDE.md        Project-instruction file (always-loaded)

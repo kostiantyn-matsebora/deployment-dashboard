@@ -99,7 +99,7 @@ cross-cutting:
     - FluentValidation / AutoMapper / MediatR
     - CORS configuration
     - Swashbuckle / NSwag (replaced by Microsoft.AspNetCore.OpenApi + Scalar per CR-0008)
-    source: '@.agents/engineering-team/local/bindings.md (Do not introduce table)'
+    source: '@.agents/ginee/local/bindings.md (Do not introduce table)'
   stack-version-floors:
     dotnet: 10.0
     angular: 20.0

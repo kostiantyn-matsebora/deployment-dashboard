@@ -1,4 +1,4 @@
-# engineering-team — framework.config.yaml
+# ginee — framework.config.yaml
 # Path: local/framework.config.yaml
 # Authored by: project-manager (initial discovery, 2026-05-18)
 # Purpose: map abstract concepts -> concrete project file paths.
@@ -97,10 +97,10 @@ index:
 
 # --- GitHub integration (D14) ---
 # repo            — adopter project; PM defaults to `git remote get-url origin`.
-# framework-repo  — upstream engineering-team; lets adopters file framework-targeted bugs/features.
+# framework-repo  — upstream ginee; lets adopters file framework-targeted bugs/features.
 github:
   repo: kostiantyn-matsebora/deployment-dashboard
-  framework-repo: kostiantyn-matsebora/engineering-team
+  framework-repo: kostiantyn-matsebora/ginee
   ready-label: ginee:ready
   in-progress-label: ginee:in-progress
   blocked-label: ginee:blocked
