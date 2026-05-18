@@ -14,7 +14,7 @@
 | `docs/WBS.md` | Operational work-breakdown — per-phase items, MVP / Phase 2.0 split | `solution-architect` |
 | `docs/ci-cd-integration.md` | Operational companion to SAD §7 — payload + snippet detail (inbound: adopter pipelines push TO us) | `solution-architect` (semantics) + `devops-engineer` (operational examples) |
 | `docs/ci-cd-pipelines.md` | Operational pipeline doc — our component workflows (outbound: our pipelines build our images), per CR-0010 | `devops-engineer` |
-| `CLAUDE.md` | Project-instruction file — engineering-team framework pointer | `project-manager` (during discovery / rediscovery) |
+| `CLAUDE.md` | Project-instruction file — ginee framework pointer | `project-manager` (during discovery / rediscovery) |
 
 **Tie-breakers.**
 
@@ -46,7 +46,7 @@ deployment-dashboard/
 ├── testing/             functional/ (xUnit), e2e/ (Playwright), mockup-visual/ (Playwright), scripts/, fixtures/, config/
 ├── .github/actions/     notify/ composite action
 ├── .github/workflows/   api.yml + fetcher.yml + frontend.yml + gateway.yml + _build-and-push-image.yml (reusable) — CR-0010
-├── .agents/engineering-team/  framework install
+├── .agents/ginee/  framework install
 ├── CLAUDE.md
 └── TODO
 ```
@@ -113,7 +113,7 @@ Violation → **stop, propose a doc update first** (CR + ADR pair if it changes 
 | Role | Concerns |
 |---|---|
 | `project-manager` | Discovery / rediscovery; dispatch routing; parallel / serial decisions; TODO check-ins; lifecycle gate enforcement; post-acceptance doc-optimization trigger; GitHub issue operations. |
-| `solution-architect` | `docs/architecture.md`; mockup governance review (no edits); `docs/ci-cd-integration.md`; `docs/WBS.md`; ADRs / CRs in `docs/adr/` + `docs/cr/`; UI option docs in `docs/ui/*.md`; `CLAUDE.md` engineering-team pointer block; coherence audits; tie-breaker resolution. |
+| `solution-architect` | `docs/architecture.md`; mockup governance review (no edits); `docs/ci-cd-integration.md`; `docs/WBS.md`; ADRs / CRs in `docs/adr/` + `docs/cr/`; UI option docs in `docs/ui/*.md`; `CLAUDE.md` ginee pointer block; coherence audits; tie-breaker resolution. |
 | `frontend-engineer` (alias `client-engineer`) | `frontend/` (Angular workspace — dashboard / matrix / drawer / shared); `docs/ui/deployment-dashboard.html` (mockup HTML/CSS/JS/SVG/fixtures); Signal Store; Tailwind styling; client-side fetch / SSE; per-option mockup proposals under `docs/ui/`. |
 | `backend-engineer` (alias `service-engineer`) | `backend/api/` host (`Program.cs`, composition root); `backend/write-api/` + `backend/read-api/` endpoint-group libraries; `backend/shared/` (DbContext, entities, migrations, API-key middleware, NOTIFY/LISTEN, SSE writer); wire-format JSON contract. |
 | `devops-engineer` (alias `platform-engineer`) | `dev_env/` (compose + ps1 scripts); `gateway/` (nginx config + Dockerfile); per-tier Dockerfiles (`backend/api/Dockerfile`, `frontend/dashboard/Dockerfile`, `gateway/Dockerfile`); `.github/actions/notify/`; `.github/workflows/` once it lands; `infrastructure/` (Terraform) once it lands; reverse-proxy config; secret provisioning; cost tracking. |

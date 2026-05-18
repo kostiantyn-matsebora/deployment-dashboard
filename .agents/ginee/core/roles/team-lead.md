@@ -56,6 +56,8 @@ You:
 
   Examples: `team-lead.details.md § Auto-flag staleness`.
 
+- **Session-start framework-name check** — first response of a new session: `grep -r engineering-team local/` and grep the adopter project-instruction file (`CLAUDE.md` / `AGENTS.md` / `INSTRUCTIONS.md`); on any hit, surface a one-line warning and offer `core/scripts/migrate-engineering-team-to-ginee.{sh,ps1}`. Once per session. Never auto-rewrite. Background + recipe: `core/MIGRATIONS/engineering-team-renamed-ginee.md`.
+
 - **Index dispatch — re-extract on drift** — when the staleness check flags drift and the user picks `@ai-engineer reindex <source>` (or targeted re-extraction is otherwise warranted):
   - Dispatch `ai-engineer` with the changed source(s) and the recorded recipe id from `manifest.yaml`.
   - `ai-engineer` re-extracts, updates affected `local/index/*` files + manifest, runs sample-and-check.

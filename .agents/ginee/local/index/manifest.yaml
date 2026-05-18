@@ -272,7 +272,7 @@ indexed:
       testing/e2e/run-tests.ps1: e94f50b35b2d52bcdd702e476cedf7cc7e0eacf003e39efb840b061bcc64486c
       testing/mockup-visual/run-tests.ps1: 2adbb8558d347c156d9a759e8d0a6cb6828eba33bd90b5352b50c4db037213e3
       testing/scripts/seed.ps1: 88efd8b2bac25b05cb6f69b8d0bdf674dc16908b34921f65fb6407b9e1840b27
-      .agents/engineering-team/local/framework.config.yaml: '(maintained by project-manager — see manifest entry for the file independently)'
+      .agents/ginee/local/framework.config.yaml: '(maintained by project-manager — see manifest entry for the file independently)'
     indexed-on: 2026-05-18
     index-files: [commands.yaml]
     source-bytes: 56929
