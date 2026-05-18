@@ -10,17 +10,19 @@ You own the **server-side implementation** — the stateless service tier(s), pe
 
 ## Source of truth
 
-Index-first per `core/index-protocol.md` (`local/index/`):
+Index-first per `core/index-protocol.md` (`local/index/`); two-tier loading per `core/index-protocol.md § Role consumption pattern`:
 
-| Read first | What it gives you |
-|---|---|
-| `local/index/api-matrix.yaml` | Endpoint × method × status with wire-shape-ref + fixture-ref. Drives every handler signature and serializer config. |
-| `local/index/architecture.idx` | Top-level sections + component map — locate data-model + service-tier anchors. |
-| `local/index/architecture-fr.idx` | FR table — server-facing FR IDs to cite in code. |
-| `local/index/constraints.yaml` | NFRs (latency, statelessness, retention, security) with per-role-impact bullets. |
-| `local/index/stack.yaml` (server tier) | Server language + runtime + framework + ORM + DB + direct deps. Drives migration-compat checks and dep-bumping. |
-| `local/index/runtime-facts.yaml` | Declared env-vars consumed by server services + secrets-store + config-validation approach. |
-| `local/index/commands.yaml` (build / test) | Server build + unit-test invocations to run locally. |
+| Read | What it gives you | Load when |
+|---|---|---|
+| `local/index/architecture-fr.idx` | FR table — server-facing FR IDs to cite in code. | **always** |
+| `local/index/constraints.yaml` | NFRs (latency, statelessness, retention, security) with per-role-impact bullets. | **always** |
+| `local/index/architecture.idx` | Top-level sections + component map — locate data-model + service-tier anchors. | **always** |
+| `local/index/api-matrix.yaml` | Endpoint × method × status with wire-shape-ref + fixture-ref. Drives every handler signature and serializer config. | wire / endpoint / serializer touch |
+| `local/index/stack.yaml` (server tier) | Server language + runtime + framework + ORM + DB + dep summary. Drives migration-compat checks and dep-bumping. | dep bump / new dep / version-sensitive change |
+| `local/index/runtime-facts.yaml` | Declared env-vars consumed by server services + secrets-store + config-validation approach. | env-var / secrets / config-validation work |
+| `local/index/commands.yaml` (build / test) | Server build + unit-test invocations to run locally. | build / test / local-dev startup |
+
+Report loaded set in first response (per `§ Role consumption pattern § Reporting`).
 
 Full source-doc section ONLY when:
 - Authoring a handler against a documented wire-format edge case (read the spec at the cited anchor).
@@ -31,7 +33,7 @@ Also read every task:
 | Topic | Reference |
 |---|---|
 | Reading order, conflict resolution, declarative-config rule | `core/process.md` § Reading order + § Configuration vs. data |
-| Tie-breaker (architecture doc wins for data/API/stack/infra) | `local/bindings.md` → "Source of truth" |
+| Tie-breaker (architecture doc wins for data/API/stack/infra) | `local/bindings.md` → "Source-of-truth ownership" |
 | Stack, repo structure, "Do not introduce" list, network topology specifics | `local/bindings.md` |
 | Domain elaboration (workspace layout, statelessness, real-time path, derivation, retention, declarative-config backend specifics) | `core/roles/backend-engineer.details.md` |
 

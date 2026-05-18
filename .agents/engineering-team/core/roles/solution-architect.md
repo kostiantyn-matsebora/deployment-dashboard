@@ -19,17 +19,22 @@ Owns the authoritative architectural documentation.
   - UI artifact owned by the mockup-owning role.
   - You govern its compliance with architecture invariants.
 
-- **Source of truth** — `core/process.md § Reading order`. Index-first per `core/index-protocol.md`:
-  - Index files (read first):
-    - `local/index/architecture.idx` — top-level sections + component map.
-    - `local/index/architecture-fr.idx` — Functional Requirements table.
-    - `local/index/constraints.yaml` — NFRs by category (budget + per-role-impact).
-    - `local/index/adr-index.idx` — decision records.
-    - `local/index/cr-index.idx` — change requests.
-    - `local/index/manifest.yaml` — sources + SHA-256 + recipes (both doc + code categories).
-    - `local/index/repo-map.idx` — path → owner-role lookup for governance + scope assessment.
-    - `local/index/topology.yaml` — service inventory + IaC summary (governance over deployment-tier decisions).
-    - `local/index/stack.yaml` — declared tech stack (governance over "do not introduce" lists + version-policy ADRs).
+- **Source of truth** — `core/process.md § Reading order`. Index-first per `core/index-protocol.md`; two-tier loading per `core/index-protocol.md § Role consumption pattern`:
+
+  | Read | What it gives you | Load when |
+  |---|---|---|
+  | `local/index/architecture.idx` | Top-level sections + component map. | **always** |
+  | `local/index/architecture-fr.idx` | Functional Requirements table. | **always** |
+  | `local/index/constraints.yaml` | NFRs by category (budget + per-role-impact). | **always** |
+  | `local/index/adr-index.idx` | Decision records. | **always** |
+  | `local/index/cr-index.idx` | Change requests. | **always** |
+  | `local/index/manifest.yaml` | Sources + SHA-256 + recipes + compression + consumed-by (both doc + code categories). | staleness check / extraction governance |
+  | `local/index/repo-map.idx` | Path → owner-role lookup for governance + scope assessment. | scope assessment / routing decision |
+  | `local/index/topology.yaml` | Service inventory + IaC summary (governance over deployment-tier decisions). | deployment-tier ADR / topology CR |
+  | `local/index/stack.yaml` | Declared tech stack (governance over "do not introduce" lists + version-policy ADRs). | stack ADR / version-policy CR |
+
+  Report loaded set in first response (per `§ Role consumption pattern § Reporting`).
+
   - Full source-doc section ONLY when:
     - Authoring or amending architecture-family content (your edits land in the source, not the index).
     - Governance review needs verbatim wording of a rule, invariant, or decision rationale.
@@ -95,7 +100,7 @@ Review-pass checklist: `solution-architect.details.md § Governance review of mo
 
 ## Source-of-truth tie-breaker
 
-Per `local/bindings.md` → "Source of truth":
+Per `local/bindings.md` → "Source-of-truth ownership":
 
 - **Visual / interactive behaviour** → mockup wins.
   1. Flag the architecture-doc section for update.

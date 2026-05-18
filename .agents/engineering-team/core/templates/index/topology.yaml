@@ -1,57 +1,46 @@
-# local/index/topology.yaml — extracted infrastructure topology.
+# local/index/topology.yaml — extracted service-inventory + topology shape.
 # Category: code. Recipe: builtin:container-orchestration (+ builtin:iac for TF/Pulumi).
 # Sources: docker-compose*.yml, k8s/**/*.yaml, helm/**/*.yaml, terraform/**/*.tf,
 #          pulumi/**/*.{ts,py,go}, infrastructure/**/*.bicep.
 # Owner: ai-engineer. Consumed by: devops-engineer, sre, backend-engineer (for service inventory).
-# Lossless rule: every declared service + every published port + every depends_on edge has an entry here.
+# Lossless rule (existence): every declared service has an inventory entry here
+#                            (name + image + tier + role + source-anchor).
+#                            Ports / depends_on / replicas / resources / env-vars
+#                            stay in source — read the anchor when authoring.
+# Compression target: ≤ 0.15 (15% of source compose/Helm/k8s/IaC combined).
+# Per-service metadata is OUT OF SCOPE — compose / Helm / k8s YAML IS already
+# machine-parseable; re-encoding as YAML wastes tokens. See
+# core/index-protocol.md § Compression floor.
 
 services:
   - name: <e.g. gateway>
     image: <e.g. nginx:1.27-alpine | local-build:./gateway>
-    role: <e.g. edge / api / worker / store / cache / queue>
-    ports:
-      - host: <e.g. 8080>
-        container: <e.g. 80>
-        protocol: <tcp | udp>
-    depends-on: [<service-name>, ...]
-    replicas: <integer or 'autoscale: min..max'>
-    resources:
-      cpu: <e.g. 250m / 1>
-      memory: <e.g. 256Mi / 2Gi>
-    env-vars:
-      - name: <KEY>
-        source: <literal | secret-ref | config-ref | env>
-    source-anchor: <e.g. dev_env/docker-compose.yml:42 | infrastructure/api.tf:18>
     tier: <local-dev | staging | production>
+    role: <e.g. edge / api / worker / store / cache / queue>
+    source-anchor: <e.g. dev_env/docker-compose.yml:42 | infrastructure/api.tf:18>
 
-  # Repeat per declared service.
+  # Repeat per declared service. One row per service, no nested metadata.
 
-# Cross-cutting:
-networks:
-  - name: <e.g. default | internal>
-    services: [<service-name>, ...]
-    source-anchor: <file:line>
+# Cross-cutting topology shape (one-liners + counts + anchors):
+network-topology: <one-line summary, e.g. "single bridged network; internal-only except gateway">
+gateway:
+  ingress-scheme: <e.g. single-public-gateway | per-service-route>
+  external-host: <e.g. dashboard.example.com>
+  host-port: <e.g. 80>
+  source-anchor: <file:line>
 
 volumes:
-  - name: <e.g. db-data>
-    mounted-by: [<service-name>, ...]
-    persistence: <named-volume | host-path | tmpfs>
-    source-anchor: <file:line>
-
-ingress:
-  scheme: <e.g. single-public-gateway | per-service-route>
-  external-host: <e.g. dashboard.example.com>
-  source-anchor: <file:line>
+  count: <integer>
+  source-anchor: <file:line — top of compose volumes block or k8s PV manifest>
 
 # IaC summary (when builtin:iac is the recipe):
 iac:
   tool: <Terraform / Pulumi / Bicep / CloudFormation>
   cloud: <Azure / AWS / GCP / on-prem>
   state-backend: <e.g. azurerm / s3+dynamodb / gcs>
-  resource-groups: [<name>, ...]
-  source-anchor: <root module path>
+  module-count: <integer>
+  source-root: <e.g. terraform/ | infrastructure/>
 
-# Notes on extraction scope:
-# - Services + ports + depends_on: in scope (queryable inventory).
-# - Service container init / command / healthcheck: in scope if declarative; out of scope if inline scripts.
-# - Cloud-IaC resource bodies: NOT copied; reference by anchor. Roles read the source TF/Pulumi file when authoring.
+# Roles needing per-service ports / depends_on / replicas / resources / env-vars
+# read the cited compose / k8s / Helm source via the anchor. Per-env-var detail
+# lives in runtime-facts.yaml (avoid duplication).

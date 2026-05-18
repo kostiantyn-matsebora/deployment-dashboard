@@ -10,18 +10,20 @@ You own the **client-facing implementation** — the user-visible application an
 
 ## Source of truth
 
-Index-first per `core/index-protocol.md` (`local/index/`):
+Index-first per `core/index-protocol.md` (`local/index/`); two-tier loading per `core/index-protocol.md § Role consumption pattern`:
 
-| Read first | What it gives you |
-|---|---|
-| `local/index/ui-states.yaml` | Documented UI states (name + wire-shape + visual + fixture-ref + source-anchor). Drive every `data-testid` and component spec from here. |
-| `local/index/mockup-index.idx` | Mockup section anchors + per-section invariants + `file:line` refs. |
-| `local/index/api-matrix.yaml` | Endpoint × method × status with wire-shape-ref + fixture-ref. Drives client fetch/subscription shapes. |
-| `local/index/architecture-fr.idx` | FR table — client-facing FR IDs to cite in code. |
-| `local/index/constraints.yaml` | NFRs (latency, security, accessibility) with per-role-impact bullets. |
-| `local/index/stack.yaml` (client tier) | Client framework + state lib + styling + direct deps. Drives version-compat for any new dep. |
-| `local/index/conventions.yaml` | Formatter (indent/line-length) + active lint rules + commit-message convention. |
-| `local/index/commands.yaml` (build / test / lint) | Client build + unit-test + lint invocations. |
+| Read | What it gives you | Load when |
+|---|---|---|
+| `local/index/architecture-fr.idx` | FR table — client-facing FR IDs to cite in code. | **always** |
+| `local/index/constraints.yaml` | NFRs (latency, security, accessibility) with per-role-impact bullets. | **always** |
+| `local/index/ui-states.yaml` | Documented UI states (name + wire-shape + visual + fixture-ref + source-anchor). Drive every `data-testid` and component spec from here. | **always** |
+| `local/index/conventions.yaml` | Formatter (indent/line-length) + active lint rules + commit-message convention. | **always** |
+| `local/index/mockup-index.idx` | Mockup section anchors + per-section invariants + `file:line` refs. | mockup / UI-implementation touch |
+| `local/index/api-matrix.yaml` | Endpoint × method × status with wire-shape-ref + fixture-ref. Drives client fetch/subscription shapes. | wire / fetch / subscription touch |
+| `local/index/stack.yaml` (client tier) | Client framework + state lib + styling + dep summary. Drives version-compat for any new dep. | dep bump / new dep / version-sensitive change |
+| `local/index/commands.yaml` (build / test / lint) | Client build + unit-test + lint invocations. | build / test / lint run |
+
+Report loaded set in first response (per `§ Role consumption pattern § Reporting`).
 
 Full source-doc section ONLY when:
 - Implementing a mockup section (read the exact markup/CSS at the cited anchor).
@@ -33,7 +35,7 @@ Also read every task:
 | Topic | Reference |
 |---|---|
 | Reading order, conflict resolution, declarative-config rule | `core/process.md` § Reading order + § Configuration vs. data |
-| Tie-breaker (mockup wins for visuals/interactions; architecture doc wins for data/stack/infra) | `local/bindings.md` → "Source of truth" |
+| Tie-breaker (mockup wins for visuals/interactions; architecture doc wins for data/stack/infra) | `local/bindings.md` → "Source-of-truth ownership" |
 | Stack, repo structure, "Do not introduce" list, network topology specifics | `local/bindings.md` |
 | Domain elaboration (workspace layout, same-origin code, realtime client pattern, styling rules, build-step rule, declarative-config client specifics) | `core/roles/frontend-engineer.details.md` |
 

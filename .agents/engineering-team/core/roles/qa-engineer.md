@@ -10,17 +10,19 @@ You own **all testing concerns** outside individual component unit tests: functi
 
 ## Source of truth
 
-Index-first per `core/index-protocol.md` (`local/index/`):
+Index-first per `core/index-protocol.md` (`local/index/`); two-tier loading per `core/index-protocol.md § Role consumption pattern`:
 
-| Read first | What it gives you |
-|---|---|
-| `local/index/scenario-index.idx` | Existing scenario inventory (id + feature + FR cited + mockup anchor + fixture + source). Locate coverage gaps without reading every file. |
-| `local/index/ui-states.yaml` | Documented UI states — first-class test fixtures + assertion targets. |
-| `local/index/api-matrix.yaml` | Endpoint × method × status — every documented status code is a test case. |
-| `local/index/architecture-fr.idx` | FR table — drives the "one scenario per user-visible FR" minimum. |
-| `local/index/constraints.yaml` | NFRs with budgets — drives latency/availability assertions. |
-| `local/index/commands.yaml` (test scope) | Test-runner entry points per scope (unit / functional / e2e / smoke / script-suite). Authoritative invocation list. |
-| `local/index/conventions.yaml` | Lint/style for test-code authoring; commit-message convention for fixture commits. |
+| Read | What it gives you | Load when |
+|---|---|---|
+| `local/index/scenario-index.idx` | Existing scenario inventory (id + feature + FR cited + mockup anchor + fixture + source). Locate coverage gaps without reading every file. | **always** |
+| `local/index/architecture-fr.idx` | FR table — drives the "one scenario per user-visible FR" minimum. | **always** |
+| `local/index/constraints.yaml` | NFRs with budgets — drives latency/availability assertions. | **always** |
+| `local/index/commands.yaml` (test scope) | Test-runner entry points per scope (unit / functional / e2e / smoke / script-suite). Authoritative invocation list. | **always** |
+| `local/index/conventions.yaml` | Lint/style for test-code authoring; commit-message convention for fixture commits. | **always** |
+| `local/index/ui-states.yaml` | Documented UI states — first-class test fixtures + assertion targets. | UI / e2e / mockup-harness work |
+| `local/index/api-matrix.yaml` | Endpoint × method × status — every documented status code is a test case. | API / functional-test work |
+
+Report loaded set in first response (per `§ Role consumption pattern § Reporting`).
 
 Full source-doc section ONLY when:
 - Authoring a new scenario file (you create the source content).
@@ -32,7 +34,7 @@ Also read every task:
 | Topic | Reference |
 |---|---|
 | Reading order, conflict resolution | `core/process.md` § Reading order |
-| Tie-breaker (architecture doc wins for API/data; mockup wins for visual/interactive) | `local/bindings.md` → "Source of truth" |
+| Tie-breaker (architecture doc wins for API/data; mockup wins for visual/interactive) | `local/bindings.md` → "Source-of-truth ownership" |
 | Stack, runners, seed/cleanup paths, scenario directory layout | `local/bindings.md` |
 | Domain elaboration (zero-setup runner rules, test-data scripts, smoke checklist, NFR automation patterns, mockup-visual harness collaboration) | `core/roles/qa-engineer.details.md` |
 

@@ -27,13 +27,26 @@ aliases: [<generic-alias-1>, <generic-alias-2>]
 
 ## Source of truth
 
-<!-- Read before every task (per core/process.md § Reading order). -->
+<!--
+  Index-first per core/index-protocol.md § Role consumption pattern.
+  Use the two-tier table for any role consuming index files: `always` for
+  foundational reads; trigger phrase for scope-loaded files. Drop the bullet
+  list when the table covers the role's reads.
+-->
+
+| Read | What it gives you | Load when |
+|---|---|---|
+| `local/index/<file>` | `<one-line — what signal the role gets>` | **always** |
+| `local/index/<file>` | `<one-line>` | `<trigger phrase, e.g. wire/endpoint touch>` |
+
+Report loaded set in first response (per `core/index-protocol.md § Role consumption pattern § Reporting`).
+
+For roles that don't consume index files (governance-only / fully ad-hoc roles), use a flat list instead:
 
 - `<doc 1 — path in local/framework.config.yaml or absolute>` — `<one-line why>`
 - `<doc 2>` — `<one-line why>`
-- `<mockup, when relevant>` — `<one-line why>`
 
-**Conflict resolution.** Per `core/process.md` § Coordination protocol AND `local/bindings.md` → "Source of truth" tie-breaker.
+**Conflict resolution.** Per `core/process.md` § Coordination protocol AND `local/bindings.md` → "Source-of-truth ownership" tie-breaker.
 
 ## Estimation-first dispatch
 

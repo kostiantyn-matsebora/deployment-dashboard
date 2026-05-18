@@ -21,7 +21,9 @@
 
 # Project Bindings — `<project name>`
 
-## Source of truth (read before any work)
+## Source-of-truth ownership
+
+**Default reads:** `local/index/*` per `core/index-protocol.md`. The table below is a **governance map** — who edits each source + where the verbatim text lives when an index entry points to "see source." NOT a per-dispatch read list; pulling raw doc paths into every dispatch defeats the load-on-demand contract.
 
 | File | Role | Edited by |
 |---|---|---|
@@ -133,6 +135,64 @@ Task spans two roles → dispatch in parallel per `core/process.md` § Dispatch 
 | `qa-engineer` | `<mockup path>`; production server / client code. Owns test code, fixtures, scenarios, runners only. |
 | `ai-engineer` | Rules / invariants / routing / requirements (semantics → `solution-architect`); production code; test code; IaC; CI workflows. |
 | `project-manager` | Everything except `local/*` written during discovery. Never edits production surfaces. |
+
+## Project-specific index citations
+
+<!--
+  Scope:
+  - Per-project; wires novel-class index files to cardinal role baselines
+    without editing upstream `core/roles/*.md` kernels (those are
+    framework-owned and replaced on upgrade).
+  - Read by `project-manager` at dispatch time + `ai-engineer` at
+    dormant-index audit time (per `core/index-protocol.md § Consumer coupling`
+    + `§ Dormant-index audit`).
+  Rule:
+  - Every entry in `local/index/*` that is NOT cited by a cardinal role's
+    `## Source of truth` table MUST be listed here with at least one
+    consuming role; otherwise the class is dormant and surfaces in the
+    discovery report.
+  Effect:
+  - Listed class's `consumed-by` is updated in `manifest.yaml`.
+  - Listed role's baseline reads extend to include the index file(s)
+    on every dispatch.
+  Cardinal-role overrides allowed:
+  - This table can ALSO promote a built-in class to additional cardinal
+    roles beyond the kernel default (e.g. project where backend-engineer
+    consumes mockup-index.idx for API + UI co-design).
+-->
+
+| Index file (or class) | Consumed by | Why this project needs it |
+|---|---|---|
+| `local/index/<class>-index.<ext>` | `<cardinal-role>` | `<one-line — what signal the role reads from it>` |
+
+Empty table → no novel-class citations declared. Discovery will surface any unwired novel class extracted by `ai-engineer` as dormant.
+
+## Per-role load-trigger overrides
+
+<!--
+  Scope:
+  - Per-project; raises or lowers a role's per-file load tier vs the
+    cardinal kernel default (per `core/index-protocol.md § Role consumption
+    pattern § Adopter overrides`).
+  Rule:
+  - One row per (role, index-file) override.
+  - `Override` column: `always` to promote a scope-load file to always-load
+    for this role on this project, OR a trigger phrase to demote always-load
+    to scope-load.
+  - Read by `project-manager` at dispatch time + the dispatched specialist
+    on its first reasoning step.
+  When to use:
+  - Project where backend tasks routinely touch infra (topology.yaml goes
+    always for backend).
+  - Project where conventions.yaml is huge and trivial fixes shouldn't load
+    it (demote to a `style/lint touch` trigger).
+-->
+
+| Role | Index file | Override | Why |
+|---|---|---|---|
+| `<role>` | `local/index/<file>` | `<always | trigger-phrase>` | `<one-line — what about this project changes the default>` |
+
+Empty table → use cardinal kernel defaults.
 
 ## Out of scope (do not implement)
 

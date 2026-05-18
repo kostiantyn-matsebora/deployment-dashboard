@@ -1,11 +1,16 @@
-# local/index/stack.yaml — extracted tech-stack inventory.
+# local/index/stack.yaml — extracted tech-stack inventory (summary-only).
 # Category: code. Recipe: builtin:package-manifest.
 # Sources: package.json, *.csproj, pyproject.toml, Cargo.toml, go.mod, pom.xml,
 #          *.gemspec, Dockerfile, lockfiles (package-lock.json, yarn.lock,
 #          poetry.lock, Cargo.lock, go.sum, ...).
 # Owner: ai-engineer. Consumed by: all engineers (per-tier slice).
-# Lossless rule: every declared direct dependency + every runtime version + every
-#                Dockerfile FROM image has an entry here.
+# Lossless rule (existence): every tier present in the project has a summary
+#                            entry here. Source anchors point at the manifest
+#                            so roles can read full deps when bumping/auditing.
+# Compression target: ≤ 0.15 (15% of source manifests combined).
+# Per-dep listing is OUT OF SCOPE — manifest IS already a machine-parseable
+# inventory; re-encoding it as YAML wastes tokens. See
+# core/index-protocol.md § Compression floor.
 
 # Nested by tier; absent tiers omitted.
 tiers:
@@ -16,54 +21,53 @@ tiers:
     orm: <e.g. EF Core 10 / Prisma 6 / SQLAlchemy 2.0>
     data-store: <e.g. PostgreSQL 16 / MongoDB 7 / DynamoDB>
     runtime-image: <e.g. mcr.microsoft.com/dotnet/aspnet:10-alpine>
+    package-manager: <npm | pnpm | yarn | dotnet | poetry | uv | cargo | go-mod>
+    dep-count: <integer — direct production deps>
+    dev-dep-count: <integer — build/test/lint deps>
     source-anchors:
-      - <e.g. backend/Api.csproj>
-      - <e.g. backend/Dockerfile>
-    direct-deps:
-      - name: <package>
-        version: <pinned-or-range>
-        source-anchor: <file path>
+      manifest: <e.g. backend/Api.csproj>
+      lockfile: <e.g. backend/packages.lock.json>
+      dockerfile: <e.g. backend/Dockerfile>
 
   client:
     language: <e.g. TypeScript 5.4>
     framework: <e.g. Angular 20 / React 18 / Vue 3 / Svelte 5>
-    state: <e.g. NgRx Signal Store / Redux Toolkit / Pinia / Zustand>
+    state-lib: <e.g. NgRx Signal Store / Redux Toolkit / Pinia / Zustand>
     styling: <e.g. Tailwind 4 / CSS Modules / Sass / Styled Components>
     runtime-image: <e.g. nginx:1.27-alpine>
+    package-manager: <npm | pnpm | yarn>
+    dep-count: <integer>
+    dev-dep-count: <integer>
     source-anchors:
-      - <e.g. frontend/package.json>
-      - <e.g. frontend/Dockerfile>
-    direct-deps:
-      - name: <package>
-        version: <pinned-or-range>
-        source-anchor: <file path>
+      manifest: <e.g. frontend/package.json>
+      lockfile: <e.g. frontend/package-lock.json>
+      dockerfile: <e.g. frontend/Dockerfile>
 
   mobile:
     platform: <iOS | Android | both | cross-platform>
     framework: <SwiftUI / Compose / React Native / Flutter>
-    source-anchors: [<paths>]
-    direct-deps: [<...>]
+    dep-count: <integer>
+    source-anchors:
+      manifest: <path>
 
   ml:
     framework: <PyTorch / JAX / TF / scikit-learn>
     registry: <MLflow / W&B / Neptune>
-    source-anchors: [<paths>]
-    direct-deps: [<...>]
+    dep-count: <integer>
+    source-anchors:
+      manifest: <path>
 
   data:
     warehouse: <BigQuery / Snowflake / Redshift / DuckDB>
     orchestrator: <Airflow / Dagster / Prefect / Argo>
     transformation: <dbt / SQLMesh / Spark / Flink>
-    source-anchors: [<paths>]
-    direct-deps: [<...>]
+    dep-count: <integer>
+    source-anchors:
+      manifest: <path>
 
 # Cross-tier:
 container-runtime: <Docker / Podman / none>
-package-manager:
-  server: <npm | pnpm | yarn | dotnet | poetry | uv | cargo | go-mod>
-  client: <...>
 
-# Notes on what to include vs leave for raw source:
-# - Direct deps + versions: in scope (queryable inventory).
-# - Transitive deps from lockfiles: out of scope (too noisy). Roles read lockfile directly when a transitive matters.
-# - Build-only dev deps: in scope but flagged `dev: true` on each entry.
+# When a role needs a specific dep version / transitive resolution / build-flag,
+# they read the cited manifest + lockfile directly. The index records existence,
+# not detail.

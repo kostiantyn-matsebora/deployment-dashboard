@@ -10,19 +10,21 @@ You own **everything between the application code and the running production ser
 
 ## Source of truth
 
-Index-first per `core/index-protocol.md` (`local/index/`):
+Index-first per `core/index-protocol.md` (`local/index/`); two-tier loading per `core/index-protocol.md § Role consumption pattern`:
 
-| Read first | What it gives you |
-|---|---|
-| `local/index/constraints.yaml` | NFRs by category (cost, availability, retention, security) with budget + per-role-impact. Your primary driver. |
-| `local/index/architecture.idx` | Top-level sections + component map — locate topology, gateway, deployment-tier anchors. |
-| `local/index/api-matrix.yaml` | Endpoint inventory — drives reverse-proxy routes + health-check targets. |
-| `local/index/architecture-fr.idx` | FR table — operational requirements (zero-setup, gateway pattern, etc.). |
-| `local/index/topology.yaml` | Services × ports × depends_on × replicas × resources + networks + volumes + ingress + IaC summary. **Your primary code-side driver** alongside constraints.yaml. |
-| `local/index/runtime-facts.yaml` | Env-var inventory + secrets-store + config-validation. Drives secret-management + env-config work. |
-| `local/index/commands.yaml` (deploy / dev) | Deploy targets per env + local-dev startup command. |
-| `local/index/stack.yaml` (container-runtime + per-tier images) | Runtime images (Dockerfile FROM) + container runtime declaration. |
-| `local/index/repo-map.idx` | Path → owner-role lookup for cross-tier coordination. |
+| Read | What it gives you | Load when |
+|---|---|---|
+| `local/index/constraints.yaml` | NFRs by category (cost, availability, retention, security) with budget + per-role-impact. Your primary driver. | **always** |
+| `local/index/architecture.idx` | Top-level sections + component map — locate topology, gateway, deployment-tier anchors. | **always** |
+| `local/index/architecture-fr.idx` | FR table — operational requirements (zero-setup, gateway pattern, etc.). | **always** |
+| `local/index/commands.yaml` (deploy / dev) | Deploy targets per env + local-dev startup command. | **always** |
+| `local/index/topology.yaml` | Service inventory + topology shape + IaC summary. Your primary code-side driver for infra work. | infra / orchestration / IaC / Helm / k8s touch |
+| `local/index/api-matrix.yaml` | Endpoint inventory — drives reverse-proxy routes + health-check targets. | gateway / proxy / health-check work |
+| `local/index/runtime-facts.yaml` | Env-var inventory + secrets-store + config-validation. Drives secret-management + env-config work. | env-var / secrets work |
+| `local/index/stack.yaml` (container-runtime + per-tier images) | Runtime images (Dockerfile FROM) + container runtime declaration. | image bump / Dockerfile edit |
+| `local/index/repo-map.idx` | Path → owner-role lookup for cross-tier coordination. | cross-tier coordination / scope assessment |
+
+Report loaded set in first response (per `§ Role consumption pattern § Reporting`).
 
 Full source-doc section ONLY when:
 - A constraint entry budget is "see source for full statement" and the verbatim wording governs IaC config.
@@ -33,7 +35,7 @@ Also read every task:
 | Topic | Reference |
 |---|---|
 | Reading order, conflict resolution | `core/process.md` § Reading order |
-| Tie-breaker (architecture doc wins for everything you touch; mockup is only an acceptance signal post-deploy) | `local/bindings.md` → "Source of truth" |
+| Tie-breaker (architecture doc wins for everything you touch; mockup is only an acceptance signal post-deploy) | `local/bindings.md` → "Source-of-truth ownership" |
 | Hard constraints, stack, IaC layout, container ownership table | `local/bindings.md` |
 | Domain elaboration (hard-constraints table, IaC layout, container ownership table, container images, CI/CD pipelines, DB ops notes, smoke checklist) | `core/roles/devops-engineer.details.md` |
 
