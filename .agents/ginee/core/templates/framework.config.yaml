@@ -1,0 +1,160 @@
+# ginee — framework.config.yaml template
+# Header:
+#   - Path: local/framework.config.yaml.
+#   - Authored by: team-lead (during discovery).
+# Purpose:
+#   - Map abstract concepts → concrete project file paths.
+#   - Reference, never copy (D5/G5).
+# Usage:
+#   - Replace example values.
+#   - Leave commented-out concepts when not present.
+#   - Do NOT invent paths.
+
+# --- Source of truth ---
+architecture-doc: docs/architecture.md
+# SAD — System Architecture Document.
+#   - Requirements.
+#   - Constraints.
+#   - Components.
+#   - Data model.
+#   - API.
+#   - Decisions.
+#   - Owner: solution-architect.
+mockup: docs/mockup.html
+# Mockup.
+#   - Visual + behavioural client contract.
+#   - Owner: frontend-engineer.
+#   - Reviewed by: solution-architect.
+#   - Comment out if none.
+# api-contract: docs/api.md
+#   - Standalone API contract.
+#   - Omit when API lives inside the SAD.
+work-breakdown-doc: docs/WBS.md
+# WBS — Operational work-breakdown.
+#   - Per-phase items.
+#   - Milestones.
+# ci-cd-integration-doc: docs/ci-cd-integration.md
+#   - Operational companion to the SAD.
+
+# --- Change governance ---
+adr-directory: docs/adr/
+# ADRs — Architecture Decision Records.
+cr-directory: docs/cr/
+# CRs — Change Requests.
+diagrams-directory: docs/diagrams/
+# Diagrams.
+#   - C4.
+#   - Sequence.
+#   - Deployment.
+
+# --- Task & workflow ---
+todo: TODO
+# Repo-root TODO file.
+#   - User-curated open items.
+nested-todos-glob: "**/TODO"
+# Nested per-component TODOs.
+#   - Glob.
+#   - null if unused.
+# Always-loaded project-instruction file — path varies per adapter:
+#   - claude → CLAUDE.md
+#   - copilot → .github/copilot-instructions.md
+#   - cursor → .cursor/rules/*.mdc
+#   - codex → AGENTS.md
+#   - generic → INSTRUCTIONS.md
+project-instruction-file: CLAUDE.md
+
+# --- Repository structure ---
+# Used by team-lead to attribute paths to roles.
+server-tier-path: backend/
+client-tier-path: frontend/
+infrastructure-path: infrastructure/
+local-dev-path: dev_env/
+testing-path: testing/
+ci-workflows-path: .github/workflows/
+
+# --- Stack identity ---
+# Declarative summary.
+#   - Full detail in local/project-profile.md.
+stack:
+  server-language: <e.g. C# / TypeScript / Python / Go>
+  server-framework: <e.g. ASP.NET Core / Express / FastAPI / Spring Boot>
+  client-framework: <e.g. Angular / React / Vue / Svelte>
+  data-store: <e.g. PostgreSQL / MongoDB / DynamoDB>
+  real-time-mechanism: <SSE / WebSocket / change-stream / push>
+  iac-tool: <Terraform / Pulumi / Bicep / none>
+  ci-tool: <GitHub Actions / GitLab CI / Azure Pipelines / Jenkins / none>
+  container-runtime: <Docker / Podman / none>
+
+# --- Hard constraints ---
+# Mirror of local/bindings.md → "Hard constraints".
+constraints:
+  hosting-cloud: <e.g. Azure / AWS / GCP / none>
+  cost-cap-usd-per-month: <number or null>
+  retention-days-minimum: <number or null>
+  internal-only: <true | false>
+  stateless-backend: <true | false>
+
+# --- Tooling commands ---
+local-dev-startup-command: pwsh -NoProfile -File dev_env/start.ps1
+# Surfaced by team-lead when asking for manual smoke.
+
+# Test-runner entry points.
+#   - Per core/roles/qa-engineer.md § Zero-setup rule for test runners.
+test-runners:
+  functional: testing/functional/run-tests.ps1
+  e2e: testing/e2e/run-tests.ps1
+  smoke: testing/smoke/run-smoke.ps1
+  script-suite: testing/pester/run-pester.ps1
+
+# --- Project-doc index (D13) ---
+# Adopter-declared index classes — pre-declare doc classes that the index
+# layer should handle. Takes precedence over auto-detection. Full spec:
+# core/index-protocol.md § Extension.
+# Uncomment + adjust for your project's adopter-specific doc types.
+# index:
+#   dir: local/index
+#   classes:
+#     - name: rfc
+#       source-glob: docs/rfcs/*.md
+#       template: adr-index.idx           # reuse ADR template shape
+#     - name: runbook
+#       source-glob: ops/runbooks/*.md
+#       template: novel                   # ai-engineer authors a new template
+
+# --- Delivery modes (D17) ---
+# Adopter-wide default for how PM lands task results. Per-task prefix
+# (branch: / wt: / commit:) or Phase-3 user answer overrides. Full
+# spec: core/delivery-modes.md.
+#
+# default-mode values:
+#   branch   — Mode 1: feature branch + PR (recommended for multi-dev
+#              repos; default for issue/TODO-sourced tasks if this key
+#              is unset).
+#   wt       — Mode 2: working-tree only; no commits.
+#   commit   — Mode 3: commit-no-push on current branch.
+#
+# Commented out by default → framework defaults apply (branch for
+# issue/TODO-sourced; wt for freeform).
+# delivery:
+#   default-mode: branch
+
+# --- GitHub integration (D14) ---
+# Lets team-lead pick up GitHub issues as a task source alongside
+# TODO files + direct instructions, file new issues from user requests,
+# and promote discussions to issues. Full spec: core/github-integration.md.
+#
+# Two repos:
+#   repo            — primary (this adopter project). Defaults to `git remote get-url origin`.
+#   framework-repo  — upstream ginee framework. Lets adopters file feedback
+#                     against the framework with `@team-lead file framework-bug`
+#                     / `file framework-feature` / `pick up framework#<N>`.
+#                     Set during install (curl/tarball script populates it from the
+#                     install source); override for forks.
+#                     Leave unset to disable framework-targeted operations entirely.
+# Labels are configurable; PM creates missing ones on first use (default color).
+github:
+  # repo: <owner>/<repo>
+  # framework-repo: <owner>/ginee
+  ready-label: ginee:ready
+  in-progress-label: ginee:in-progress
+  blocked-label: ginee:blocked
