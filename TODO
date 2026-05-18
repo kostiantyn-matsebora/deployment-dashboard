@@ -18,6 +18,12 @@ MVP (Minimum Viable Product) for the first version of the solution:
 Phase 2.0
 ☐ UX: Find a way to group/colorize/correlate deployments based on different attributes available for deployment (default as version), propose options by making new mockups, one of the options should be similar to github actions grouping of jobs by workflow, but in our case it will be grouping of deployments by this attribute
 ☐ UX: Add back Matrix layout (deferred from MVP — services × environments grid). MVP layout axis ships with Swim-lane + Workflow-rows only; Matrix re-added later. Re-introduces the third layout option alongside the existing two; default layout decision revisited at that time.
+☐ CI/CD: Dogfooding hook — invoke `.github/actions/notify/` composite from the component CI push job so the dashboard records its own image-push events as deployment-style events (deferred from CR-0010 D1; needs a small CR to clarify whether image push counts as a "deployment").
+☐ CI/CD: Frontend lint gate — introduce `@angular-eslint` (config + ruleset + autofix pass) and re-enable the lint blocking gate in `frontend.yml` (deferred from CR-0010 D3 — `ng lint` target currently does not exist).
+☐ CI/CD: Integration / e2e CI workflow — new `integration.yml` that brings up `docker compose --profile fetcher`, seeds, runs `testing/functional/` + `testing/e2e/` Playwright suites, tears down (deferred from CR-0010 Q12; requires full stack orchestration).
+☐ CI/CD: GHCR → ACR cutover — once Terraform §4 provisions ACR, swap `registry:` input on `_build-and-push-image.yml` from `ghcr.io` to `<acr-name>.azurecr.io` + swap login action; update `docs/ci-cd-pipelines.md` ops guide accordingly (deferred from CR-0010 § 3d).
+☐ CI/CD: Repo-settings branch-protection — require status checks `api` / `fetcher` / `frontend` / `gateway` to pass before merging to `main` (deferred from CR-0010 Open trade-off (ii); gated on a calendar week of green runs).
+☐ CI/CD: Trivy / SBOM image scanning — extend `_build-and-push-image.yml` with a scan + SBOM attestation step after `Build and push` (not in CR-0010; security-hardening).
 
 
   

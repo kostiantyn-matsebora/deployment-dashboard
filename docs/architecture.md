@@ -825,6 +825,10 @@ A developer can open the dashboard URL and see every service's current version p
 
 ### CI/CD Integration
 
+Two distinct tracks: **inbound** integration (how third-party CI/CD pipelines push events into the dashboard's ingest API) and **outbound** component CI (how the dashboard's own four container images are built, tested, and published). The two tracks share nothing operationally; they are documented together because both touch SAD §7's CI/CD surface.
+
+**Inbound — third-party pipelines push to the dashboard.**
+
 | Item | Scope |
 |---|---|
 | Inline HTTP step | Shell/script snippet documented and tested for each CI/CD tool in use (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, etc.) |
@@ -833,8 +837,23 @@ A developer can open the dashboard URL and see every service's current version p
 | **Pull-mode fetcher (optional, [CR-0009](cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md))** | `Dashboard.Fetcher` library + `Dashboard.Fetcher.Host` Worker + GitHub Actions adapter + Dockerfile + opt-in `docker-compose.local.yml --profile fetcher` entry + `X-Progress-Reporter` header on `POST /api/deployments` (also additively available to every other pusher) + `GET`/`PUT /api/fetcher/state/{source-id}` cursor endpoints + ACR image publish. ACA + Terraform wiring deferred — see CR-0009 § 3d. |
 | Secrets | `DEPLOYMENT_DASHBOARD_URL` and `DEPLOYMENT_DASHBOARD_TOKEN` configured in each pipeline's secret store |
 
-**Definition of Done:**  
+**Definition of Done — inbound:**  
 Every active deployment pipeline sends a notify event to the ingest API on deploy. The matrix reflects real deployment data within 30 seconds of a deployment completing.
+
+**Outbound — the dashboard's own four images are built + published.** Locked by [CR-0010](cr/CR-0010-component-ci-pipeline.md); operational guide [`docs/ci-cd-pipelines.md`](./ci-cd-pipelines.md). One reusable workflow + four thin callers; container images only (no NuGet, no npm); GHCR today, ACR-cutover one-input swap when WBS §4 lands.
+
+| Workflow | Triggers | Outputs |
+|---|---|---|
+| `.github/workflows/api.yml` | `push: branches[main] / tags[v*]`, `pull_request: branches[main]`, `workflow_dispatch` | image `ghcr.io/<owner>/dashboard-api:<tags>`; backend coverage artefact (cobertura + trx); EF migration SQL artefact (`ef-migrations-script-<sha>`, 90-day retention) |
+| `.github/workflows/fetcher.yml` | (same trigger set) | image `ghcr.io/<owner>/dashboard-fetcher:<tags>`; backend coverage artefact (fetcher tests only) |
+| `.github/workflows/frontend.yml` | (same trigger set) | image `ghcr.io/<owner>/dashboard-frontend:<tags>`; frontend coverage artefact (cobertura per project ×4); mockup-visual report (+ traces on failure) |
+| `.github/workflows/gateway.yml` | (same trigger set) | image `ghcr.io/<owner>/dashboard-gateway:<tags>` (build only — gateway is config-only nginx, no tests) |
+| `.github/workflows/_build-and-push-image.yml` | reusable (`workflow_call`) — `build-kind: dotnet \| static` | invoked by the four callers above; never invoked directly |
+
+Tag rules per CR-0010 § 3e: `sha-<7>` always, `latest` on default-branch push, `pr-<N>-sha-<7>` on PR (built not pushed), `vX.Y.Z` + `vX.Y` on tag push. PR runs build + test only — no push.
+
+**Definition of Done — outbound:**  
+A push to `main` produces four green workflow runs that publish four images to GHCR with deterministic tags; PR runs gate merge on build + test; the EF migration SQL is captured as a workflow artefact on every `api.yml` run for downstream CD consumption.
 
 ### v2.0 — Notification Client
 

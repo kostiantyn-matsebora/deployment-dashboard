@@ -12,7 +12,8 @@
 | `docs/cr/` | Change Requests (CR-0001..CR-0008) — SAD-level content owned by each CR after SAD freeze | `solution-architect` |
 | `docs/ui/*.md` | UI option docs (compact / focus-layout / theme / tree-topology / version-display) — mockup-supporting design records | `solution-architect` (semantics) + `frontend-engineer` (proposes option mockups) |
 | `docs/WBS.md` | Operational work-breakdown — per-phase items, MVP / Phase 2.0 split | `solution-architect` |
-| `docs/ci-cd-integration.md` | Operational companion to SAD §7 — payload + snippet detail | `solution-architect` (semantics) + `devops-engineer` (operational examples) |
+| `docs/ci-cd-integration.md` | Operational companion to SAD §7 — payload + snippet detail (inbound: adopter pipelines push TO us) | `solution-architect` (semantics) + `devops-engineer` (operational examples) |
+| `docs/ci-cd-pipelines.md` | Operational pipeline doc — our component workflows (outbound: our pipelines build our images), per CR-0010 | `devops-engineer` |
 | `CLAUDE.md` | Project-instruction file — engineering-team framework pointer | `project-manager` (during discovery / rediscovery) |
 
 **Tie-breakers.**
@@ -43,7 +44,8 @@ deployment-dashboard/
 ├── dev_env/             docker-compose.local.yml, docker-compose.scaled.yml, start.ps1, stop.ps1
 ├── docs/                architecture.md, WBS.md, ci-cd-integration.md, adr/, cr/, ui/ (mockup + options)
 ├── testing/             functional/ (xUnit), e2e/ (Playwright), mockup-visual/ (Playwright), scripts/, fixtures/, config/
-├── .github/actions/     notify/ composite action (workflows/ does NOT yet exist)
+├── .github/actions/     notify/ composite action
+├── .github/workflows/   api.yml + fetcher.yml + frontend.yml + gateway.yml + _build-and-push-image.yml (reusable) — CR-0010
 ├── .agents/engineering-team/  framework install
 ├── CLAUDE.md
 └── TODO
@@ -76,7 +78,7 @@ deployment-dashboard/
 | Container runtime | OCI containers, app port 8080 |
 | Hosting | Azure Container Apps + ACR + Azure Postgres Flexible + Key Vault (NFR-01, NFR-02) |
 | IaC | Terraform `azurerm` ≥ 4.x (NFR-06) — planned per WBS §4, not yet present |
-| CI/CD | GitHub Actions — planned (`.github/actions/notify/` composite present; workflows pending) |
+| CI/CD | GitHub Actions — component CI live per CR-0010 (`_build-and-push-image.yml` reusable + `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml` callers); `.github/actions/notify/` composite present (not invoked by component CI yet — deferred dogfooding TODO) |
 
 ## Do not introduce
 
@@ -139,8 +141,9 @@ Task spans two roles → dispatch in parallel per `core/process.md` § Dispatch 
 | `local/index/ui-options-index.idx` | `frontend-engineer`, `solution-architect` | `docs/ui/*.md` are mockup-supporting design records (compact / focus-layout / theme / tree-topology / version-display options) that drive per-option mockup proposals; both roles need quick lookup of which option doc covers which UX axis without loading the SAD. |
 | `local/index/wbs-index.idx` | `project-manager`, `solution-architect` | `docs/WBS.md` is the operational backlog; PM consults it during pickup routing + phase-gate decisions, SA when proposing CRs that touch scope. |
 | `local/index/ci-cd-integration-index.idx` | `devops-engineer`, `backend-engineer` | `docs/ci-cd-integration.md` is the operational companion to SAD §7 — devops authors / maintains the snippets, backend ensures the wire contract stays in sync. |
+| `local/index/ci-pipelines-index.idx` | `devops-engineer`, `backend-engineer` | `docs/ci-cd-pipelines.md` is the operational doc for our component CI workflows (per CR-0010) — devops authors / maintains the workflow YAML + ops guide; backend consults it when tooling pins (`.config/dotnet-tools.json`, EF Design refs) need bumping. |
 
-(All three are novel classes; `ai-engineer` will author inline recipes per `core/index-protocol.md § Consumer coupling`. If a class proves to have no consumer after extraction it surfaces in the dormant-index audit.)
+(All four are novel classes; `ai-engineer` will author inline recipes per `core/index-protocol.md § Consumer coupling`. If a class proves to have no consumer after extraction it surfaces in the dormant-index audit.)
 
 ## Per-role load-trigger overrides
 

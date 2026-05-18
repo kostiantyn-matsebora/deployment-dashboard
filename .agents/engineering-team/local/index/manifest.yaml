@@ -160,6 +160,29 @@ indexed:
     compression-target: 0.25
     consumed-by: [devops-engineer, backend-engineer]
 
+  - class: ci-pipelines
+    category: doc
+    template: novel
+    recipe: |
+      Per docs/ci-cd-pipelines.md section: extract section-id, title, kind
+      (rationale / topology / reference / contract / how-to / troubleshooting /
+      future), one-line summary, source anchor. §7 (EF migration) subsections
+      are surfaced as first-class rows (artefact / idempotent-contract /
+      generation-only / download-howto) so downstream consumers can cite the
+      idempotent-script contract without reading the full doc — mirrors the
+      wire-* row decomposition in ci-cd-integration-index.idx.
+    source: docs/ci-cd-pipelines.md
+    sha256: 71f93c9ac34f359094b98bb0046d875a6425693b0f294d1d4001068b51af5974
+    indexed-on: 2026-05-18
+    index-files: [ci-pipelines-index.idx]
+    source-bytes: 12740
+    index-bytes: 4387
+    compression: 0.344
+    compression-target: 0.25
+    compression-floor: 0.5
+    compression-status: 'over-target, under-floor — flagged. Source is dense ops reference (12 sections + EF-migration subsection decomposition); further compression would drop contract anchors (tag-scheme, concurrency, EF-idempotent) the consumer roles depend on.'
+    consumed-by: [devops-engineer, backend-engineer]
+
   # ============================================================
   # CODE / CONFIG CATEGORY (D15)
   # ============================================================

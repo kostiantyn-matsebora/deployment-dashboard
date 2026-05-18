@@ -1,6 +1,6 @@
 # CR-0010 — Component CI pipeline (GitHub Actions — build, test, package)
 
-- **Status:** proposed
+- **Status:** accepted (Phase 7 doc-amend pass — reflects as-built contract on PR #2 head `39641b5`)
 - **Decided on:** 2026-05-18
 - **Trigger:** user direct-instruction freeform task — *"introduce CI/CD pipeline for components, to build, test and package"*. Picks up deferred work from [CR-0009](./CR-0009-pull-mode-fetcher-and-progress-reporter.md) § 3d (ACR + Terraform wiring deferred) and `docs/WBS.md` §1.5.8 (fetcher image build deferred to a general component CI track). Today's repo has `.github/actions/notify/` (composite action) but no `.github/workflows/` — every Dockerfile (`backend/api/Dockerfile`, `backend/fetcher-host/Dockerfile`, `frontend/dashboard/Dockerfile`, `gateway/Dockerfile`) is built manually or by `dev_env/start.ps1`; no automated test runs on PRs; no image is published anywhere; the dashboard does not eat its own dogfood (the `notify` composite is documented for callers but never invoked from this repo's own pipelines).
 
@@ -12,7 +12,7 @@
     - `frontend.yml` — owns `frontend/**`
     - `gateway.yml` — owns `gateway/**`
 
-    Each thin workflow declares `on:` triggers + path filters + `concurrency:` + permissions, then immediately `uses:` a reusable workflow under `.github/workflows/_build-*.yml` for the actual mechanics. Whether the reusable surface is **one workflow** (`_build-dotnet-image.yml` with an `image-base` input that flips between `aspnet` and `nginx:alpine`) or **two** (`_build-dotnet-image.yml` for the .NET tier + `_build-static-image.yml` for the nginx-based gateway and frontend) is left for `devops-engineer` to settle in Phase 2 — see Open trade-off (i). Justification: per-component triggers stay readable + path-filtered (a PR touching only `frontend/` does not re-run the .NET unit suite); image-build mechanics live in one place so a change to (say) BuildKit cache config is one PR not four.
+    Each thin workflow declares `on:` triggers + path filters + `concurrency:` + permissions, then immediately `uses:` a single reusable workflow at `.github/workflows/_build-and-push-image.yml` for the actual mechanics. **As-built (Phase 4 Wave 4b — DevOps Option A landed):** one reusable workflow parameterised by `build-kind: dotnet|static` (instead of the two-workflow option originally surfaced in Open trade-off (i)). The `dotnet` path runs SDK setup → NuGet cache → `dotnet format --verify-no-changes` → `dotnet test` (optional) → EF migration script artefact (optional, `api.yml` only); the `static` path runs Node setup → `npm ci` (optional) → `ng test` (optional, `frontend.yml` only) → mockup-visual (optional, `frontend.yml` only). Justification: per-component triggers stay readable + path-filtered (a PR touching only `frontend/` does not re-run the .NET unit suite); image-build mechanics live in one place so a change to (say) BuildKit cache config is one PR not four.
 
   - **3b — Triggers (Q2).** Identical across all four thin workflows:
 
@@ -64,7 +64,7 @@
 
     | Tier | Cache mechanism |
     |---|---|
-    | NuGet | `actions/setup-dotnet@v4` built-in (`cache: true` + `cache-dependency-path: backend/**/packages.lock.json` if lock files exist; otherwise the action's hash-of-csproj fallback) |
+    | NuGet | `actions/cache@v4` keyed on `hashFiles('backend/**/*.csproj')` against `~/.nuget/packages` (the `actions/setup-dotnet@v4` built-in cache requires `packages.lock.json` files which this repo does not currently maintain; the `actions/cache@v4` fallback keyed on the csproj hash is the as-built choice and gives the same hit-rate at the cost of one extra `uses:` step) |
     | npm | `actions/setup-node@v4` built-in (`cache: 'npm'` + `cache-dependency-path: frontend/package-lock.json`) |
     | Docker layers | BuildKit `cache-type: gha` (`type=gha,mode=max` on both source and destination — uses the GitHub Actions cache backend; works equally for GHCR and a future ACR swap) |
 
@@ -90,22 +90,29 @@
 
     Effect: a fresh push to a PR cancels the still-running CI for the previous commit of the same PR; main-branch runs do not cancel each other across distinct commits because their `github.ref` differs from the in-flight PR ref. Tag pushes also serialise per-tag (cancel-on-rerun is a benign no-op because tag pushes are normally one-shot).
 
-  - **3j — Permissions (Q10).** Least-privilege baseline:
+  - **3j — Permissions (Q10).** Least-privilege baseline. **Amended in Phase 5 (as-built):** callers SHALL declare the **minimum explicit scopes required by the reusable's per-job permissions block**; the originally-proposed `permissions: read-all` is insufficient when the reusable escalates per-job to write scopes (GHA rejects a called workflow whose per-job permissions exceed the caller's grant).
+
+    Caller (every thin workflow — `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml`) top-level permissions block:
 
     ```yaml
-    permissions: read-all   # workflow top level
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     ```
 
-    Per-job overrides only where needed:
+    Per-job overrides on the reusable's `build` job:
 
-    | Job | Added permissions | Why |
+    | Job | Permissions | Why |
     |---|---|---|
-    | Image push (GHCR) | `packages: write` + `id-token: write` (the latter so the reusable workflow can use OIDC if we later swap to ACR or another OIDC-capable registry without re-templating) | GHCR push via `GITHUB_TOKEN` |
-    | Build / test only | none (`read-all` is sufficient) | reads checkout + caches |
+    | Image push (GHCR) | `contents: read` + `packages: write` + `id-token: write` (the latter so the reusable workflow can use OIDC if we later swap to ACR or another OIDC-capable registry without re-templating) | GHCR push via `GITHUB_TOKEN`; per-job permissions are evaluated against the caller's grant |
+    | Build / test only | inherited from the reusable's job-level block (writes are a no-op when `push: false`) | reads checkout + caches |
+
+    **Reusable workflow top-level `permissions:` (new in Phase 5).** The reusable workflow `_build-and-push-image.yml` MUST NOT declare a top-level `permissions:` block of any kind — and explicitly MUST NOT declare `permissions: read-all`. GHA treats the reusable's top-level permissions as a *request from the caller*: `read-all` expands to a long list of read scopes (`actions`, `artifact-metadata`, `checks`, `code-quality`, `deployments`, `discussions`, `issues`, `models`, `pages`, `pull-requests`, `repository-projects`, `statuses`, `security`, `vulnerability-alerts`, etc.) that the caller is unlikely to grant. Only the **per-job** `permissions:` block on the `build` job is evaluated against the caller's grant, and that block is the only one that matters.
 
   - **3k — CI scope (Q11) — no deploy.** **CI only.** No `azure/container-apps-deploy-action`. No `az containerapp update`. No deploy step of any kind. Building and pushing an image is the workflow's last action. CD (revision-update + smoke + rollback) lands as a **future TODO / CR** once Terraform §4 (ACA + ACR) is provisioned. This explicitly splits WBS §5.1 ("GitHub Actions workflow — Docker build, push to ACR, update Container App revision on merge to main") into two halves: the **build + push** half is CR-0010 (with GHCR substituting for ACR per 3d); the **update Container App revision** half is deferred.
 
-  - **3l — EF migration validation (Q13).** The `api.yml` workflow runs `dotnet ef migrations script --idempotent --output migrations.sql --project backend/shared/Dashboard.Shared --startup-project backend/api/Dashboard.Api` after the build step, then uploads `migrations.sql` as a workflow artefact named `ef-migrations-script-<sha>`. The job **does not execute** the script — it only validates that EF can generate it (catches missing migration files, conflicting model snapshots, design-time DbContext failures before they hit a deploy). Estimated ~30 LOC in the reusable workflow. Idempotent flag ensures the artefact is safe to apply against any historical schema state — useful for the future CD step (3k) and for ops review.
+  - **3l — EF migration validation (Q13).** The `api.yml` workflow runs `dotnet ef migrations script --idempotent --output migration.sql --project backend/shared/Dashboard.Shared/Dashboard.Shared.csproj --startup-project backend/api/Dashboard.Api/Dashboard.Api.csproj` after the build step, then uploads `migration.sql` as a workflow artefact named `ef-migrations-script-<sha>`. **The inner filename is `migration.sql` (singular) as-built** — operational only; the externally-visible artefact name `ef-migrations-script-<sha>` is the contract surface and is unchanged. The job **does not execute** the script — it only validates that EF can generate it (catches missing migration files, conflicting model snapshots, design-time DbContext failures before they hit a deploy). Estimated ~30 LOC in the reusable workflow. Idempotent flag ensures the artefact is safe to apply against any historical schema state — useful for the future CD step (3k) and for ops review.
 
     Caveat: if `Dashboard.Api`'s composition root requires runtime env vars to bind `IOptions` before the design-time `DbContext` is constructable, the `migrations script` invocation will fail in CI. Mitigation (if it surfaces): mock or stub the env-bind step for migration-script generation only — see Open trade-off (iii).
 
@@ -127,9 +134,7 @@
 
 - **Impact.** All deliverables below; each item names its owning role and the phase in which it lands.
 
-  - **NEW `.github/workflows/_build-dotnet-image.yml`** (reusable workflow). Inputs: `image-name`, `dockerfile-path`, `context-path`, `solution-path`, `registry` (default `ghcr.io`), `push` (default `false`), `run-ef-migrations-script` (default `false` — only `api.yml` flips this on). Owns: restore / build / format-check / test / image-build / cache / EF-migrations-script artefact / GHCR push / notify-dogfood. **Owner:** `devops-engineer` (Phase 4 deliverable). Authored against the contract CR-0010 freezes.
-
-  - **NEW `.github/workflows/_build-static-image.yml`** (reusable workflow, **provisional** — see Open trade-off (i)). If retained: inputs `image-name`, `dockerfile-path`, `context-path`, `registry`, `push`. Owns: image-build / cache / GHCR push / notify-dogfood for the nginx-based images (gateway, optionally frontend). **Owner:** `devops-engineer` (Phase 4 deliverable, contingent on (i)).
+  - **NEW `.github/workflows/_build-and-push-image.yml`** (single reusable workflow — Option A; resolves Open trade-off (i)). Inputs: `image-name`, `build-kind` (`dotnet` | `static`), `dockerfile-path`, `context-path`, `test-filter` (string, default empty), `run-dotnet-tests` (bool, default false), `run-ng-tests` (bool, default false), `run-mockup-visual` (bool, default false), `emit-migration-artefact` (bool, default false — only `api.yml` flips this on), `registry` (default `ghcr.io`), `push` (default `false`). Outputs: `image-digest`, `pushed-tags`. Owns: checkout / language setup (dotnet OR node, conditional on `build-kind`) / NuGet cache / `dotnet-tools.json` restore / `dotnet format` gate / `npm ci` / unit tests / mockup-visual / coverage upload / EF migration SQL artefact / mockup-visual report + traces / Buildx / registry login / docker metadata (tag rules per § 3e) / build + push. **Owner:** `devops-engineer` (Phase 4 deliverable; Phase 5 amendments per § 3j). Note: dogfooding notify hook (§ 3m) was **dropped** in Wave 4b — see follow-up TODOs.
 
   - **NEW `.github/workflows/api.yml`** — thin caller. Path filter: `backend/**`, `.github/workflows/api.yml`, `.github/workflows/_build-*.yml`. **Owner:** `devops-engineer`.
   - **NEW `.github/workflows/fetcher.yml`** — thin caller. Path filter: `backend/fetcher/**`, `backend/fetcher-host/**`, `.github/workflows/fetcher.yml`, `.github/workflows/_build-*.yml`. **Owner:** `devops-engineer`.
@@ -147,20 +152,21 @@
 
     **NOT** an extension of `docs/ci-cd-integration.md` — that doc is the **inbound** companion to SAD §7 (how external CI/CD tools push events to the dashboard). `docs/ci-cd-pipelines.md` is the **outbound** companion (how the dashboard's own components are built and shipped). Different concern, different audience, different role-ownership shape on the registry / image surface — keep them separate. (User-approved doc split.)
 
-  - **Amends `docs/architecture.md` §9 (Phasing) — CI/CD Integration table.** The current rows ("Inline HTTP step", "GitHub Actions composite action", "Webhook receiver", "Pull-mode fetcher (optional, CR-0009)", "Secrets") are **inbound** integration; CR-0010 adds the **outbound** component-CI track. Replace the implicit "CI/CD Integration — planned" framing with a concrete component CI inventory row (or new sub-table) listing the four thin workflows + the reusable workflow(s) + the GHCR image set. **Phase 7 SA edit** (this CR locks the decision; the SAD edit is the Phase 7 cleanup).
+  - **NEW Phase 5/6 amendments to existing project files (as-built; recorded here for traceability — these are not Phase 7 SA edits, they shipped earlier in the lifecycle).**
+
+    - **`backend/api/Dashboard.Api/Dashboard.Api.csproj`** — adds `Microsoft.EntityFrameworkCore.Design` PackageReference with `PrivateAssets=all`. Required by the `dotnet ef migrations script` invocation per § 3l (the EF tooling resolves the design-time `DbContext` from the startup project's references). `PrivateAssets=all` keeps the design-time package off the runtime closure — tests, image build, and runtime are unaffected. **Owner:** `backend-engineer` (Phase 4).
+    - **`backend/fetcher/Dashboard.Fetcher.Tests/FetcherWorkerTests.cs`** — `PeriodicTimer_LongTickDoesNotCauseBackToBackBurstOfTicks` flake-threshold tuned from 250 ms → 100 ms for CI scheduler jitter. Still 5–10× larger than the queueing-bug regression case (~10–20 ms), preserves the regression signal. Lineage: WBS §1.5.10 (scheduler-drift xUnit tests added by CR-0009). **Owner:** `qa-engineer` (Phase 6).
+    - **`.config/dotnet-tools.json`** — NEW; pins `dotnet-ef` to the .NET 10 release line. Consumed by `_build-and-push-image.yml` step 4 (`dotnet tool restore`) and step 10 (`dotnet ef migrations script`). **Owner:** `devops-engineer` (Phase 4).
+    - **`frontend/karma.conf.js`** — NEW; emits cobertura + lcov, declares `ChromeHeadlessNoSandbox` custom launcher. Consumed by `_build-and-push-image.yml` step 7b (`ng test`) + step 9b (coverage artefact upload — `frontend/coverage/**/cobertura.xml`). **Owner:** `qa-engineer` (Phase 4).
+    - **`frontend/angular.json`** — `karmaConfig` wired across all four projects to point at the new shared `karma.conf.js`. **Owner:** `qa-engineer` (Phase 4).
+    - **`dotnet format` baseline applied to 10 backend files** — one-shot Phase 4 cleanup so the `dotnet format --verify-no-changes` gate (§ 3h) passes from day one. **Owner:** `backend-engineer` (Phase 4).
+
+  - **Amends `docs/architecture.md` §9 (Phasing) — CI/CD Integration table.** The current rows ("Inline HTTP step", "GitHub Actions composite action", "Webhook receiver", "Pull-mode fetcher (optional, CR-0009)", "Secrets") are **inbound** integration; CR-0010 adds the **outbound** component-CI track. Replace the implicit "CI/CD Integration — planned" framing with a concrete component CI inventory row (or new sub-table) listing the four thin workflows + the reusable workflow + the GHCR image set. **Phase 7 SA edit** (this CR locks the decision; the SAD edit is the Phase 7 cleanup).
 
   - **Amends `docs/WBS.md`:**
     - **§1.5.8** — current text "`backend/fetcher-host/Dockerfile` — multi-stage build mirroring `backend/api/Dockerfile` posture (SDK build → aspnet runtime). Image: `dashboard-fetcher`. Owner: `devops-engineer`." Marks **"image build absorbed into CR-0010 / §1.6 component CI track — Dockerfile itself remains a 1.5.8 deliverable, but the build + push + tag are owned by `fetcher.yml`"**. Cross-link to §1.6 + CR-0010.
     - **§5.1** — current text "GitHub Actions workflow — Docker build, push to ACR, update Container App revision on merge to main". Mark **split**: the **build + push** half is delivered by CR-0010 (with GHCR substituting for ACR per 3d; GHCR → ACR swap when §4 lands); the **update Container App revision** half remains deferred to Terraform §4 + a future CD CR (3k). Cross-link to §1.6 + CR-0010.
-    - **NEW §1.6 "Component CI" track** — phases 1–8 mapped to CR-0010 deliverables. Sketch:
-      - 1.6.1 CR-0010 amends SAD §9 + WBS (§1.5.8, §5.1, this §1.6) + adds doc-row to `bindings.md`. **Owner:** `solution-architect`.
-      - 1.6.2 `_build-dotnet-image.yml` (+ `_build-static-image.yml` if (i) lands as two). **Owner:** `devops-engineer`.
-      - 1.6.3 `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml` thin callers. **Owner:** `devops-engineer`.
-      - 1.6.4 `docs/ci-cd-pipelines.md` operational doc. **Owner:** `devops-engineer`.
-      - 1.6.5 `DEPLOYMENT_DASHBOARD_URL` + `DEPLOYMENT_DASHBOARD_TOKEN` repo-secret configuration for the dogfooding notify hook (3m). **Owner:** `devops-engineer` (note: this is repo settings — surfacing the action item, not a code change).
-      - 1.6.6 EF migrations idempotent-script artefact validation (3l). **Owner:** `devops-engineer` (workflow plumbing) co-owned with `backend-engineer` if the env-bind caveat (Open trade-off (iii)) surfaces.
-      - 1.6.7 Smoke verification — first green run on `main`, first green PR run with no push, first green tag run with image visible in GHCR + dashboard slot lit by the dogfood call (3m). **Owner:** `qa-engineer` (validates the contract, no test code).
-      - 1.6.8 Repo-settings follow-up — enable branch protection requiring the new workflows green before PR merge (see Open trade-off (ii)). **Owner:** `devops-engineer` (repo-settings; gated on a week of green runs).
+    - **NEW §1.6 "Component CI" track** — as-built items in WBS §1.6 mirror the §1.5 structure (1.6.1 through 1.6.9). The canonical list lives in `docs/WBS.md` §1.6; the row mapping below is a CR-side cross-reference, not the source of truth.
 
     **Phase 7 SA edit** (CR-0010 locks the items; the WBS rows land in Phase 7).
 
@@ -174,9 +180,9 @@
 
   - **No FR or NFR amendments.** CR-0010 adds operational tooling — no functional requirement changes, no NFR changes. NFR-02 (cost) is **upheld** (GHCR is free at this scale). NFR-06 (Terraform IaC) is **upheld** (GHCR requires no infra; no Portal clicks). NFR-04 (internal-only) is unaffected (the new workflows do not change the runtime surface area). The fetcher's `minReplicas: 1, maxReplicas: 1` constraint from CR-0009 SAD §7 is preserved (CR-0010 only builds + pushes the image; deploy is out of scope per 3k).
 
-- **Open trade-offs — surfaced for DevOps's Phase 2 proposal to resolve.**
+- **Open trade-offs — resolved in Phase 2/4 unless noted.**
 
-  - **(i) One reusable workflow or two?** Option A: one `_build-dotnet-image.yml` parameterised by `image-base` (defaults to `mcr.microsoft.com/dotnet/aspnet:10.0`; gateway + frontend pass `nginx:alpine`). Option B: two — `_build-dotnet-image.yml` for the .NET tier + `_build-static-image.yml` for the nginx tier. **Recommendation: leave to DevOps Phase 2 proposal.** Heuristic: if the build mechanics diverge meaningfully (e.g. nginx images need npm prep and have no `dotnet test` step, so a single workflow ends up with `if: inputs.image-base == 'aspnet'` branches everywhere), go **two**. If the divergence is one or two inputs, go **one**. CR-0010 locks neither — it locks the existence of the reusable workflow(s) and the input contract (`registry` + `push` + image identity + cache config), not the file count.
+  - **(i) One reusable workflow or two? — RESOLVED Phase 2 (DevOps trade-off proposal — Option A, user-approved).** One reusable workflow `_build-and-push-image.yml` parameterised by `build-kind: dotnet|static`. The `if: inputs.build-kind == 'dotnet' | 'static'` branches are well-localised (language setup, NuGet cache, dotnet-tools restore, format gate, dotnet test, EF script — all on `dotnet`; node setup, npm ci, ng test — all on `static`; Buildx + login + metadata + build/push shared). Single-workflow win: BuildKit cache config, tag rules, registry login posture all live in one place.
 
   - **(ii) Branch-protection enforcement.** Should the new workflows be **required** for PR merge to `main` (GitHub repo settings → Branch protection rules → Require status checks to pass before merging)? **Recommendation: yes, once they're proven green for a calendar week of normal-volume PR activity.** Not a CR-0010 deliverable (no code change — it's a repo-settings flip). Flagged as a **Phase 8 acceptance follow-up** (see WBS §1.6.8 above). Defer the decision until the workflows have actual signal — gating PRs on a flaky workflow is worse than no gate.
 
