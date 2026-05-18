@@ -95,8 +95,10 @@ on:
         description: 'Newline-separated list of tags pushed (empty when push=false).'
         value: ${{ jobs.build.outputs.pushed-tags }}
 
-# Baseline: read-all. The push job opts in to packages: write + id-token: write.
-permissions: read-all
+# No top-level `permissions:` — for reusable workflows it becomes a "request
+# from the caller" and expands `read-all` to all read scopes, which the caller
+# doesn't grant (caller grants only contents/packages/id-token). Per-job
+# permissions below are what actually run.
 
 jobs:
   build:
