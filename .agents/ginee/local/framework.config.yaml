@@ -101,6 +101,6 @@ index:
 github:
   repo: kostiantyn-matsebora/deployment-dashboard
   framework-repo: kostiantyn-matsebora/engineering-team
-  ready-label: engineering-team:ready
-  in-progress-label: engineering-team:in-progress
-  blocked-label: engineering-team:blocked
+  ready-label: ginee:ready
+  in-progress-label: ginee:in-progress
+  blocked-label: ginee:blocked

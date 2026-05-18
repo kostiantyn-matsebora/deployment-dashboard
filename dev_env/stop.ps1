@@ -8,6 +8,10 @@
     Runs `docker compose down` for both the default local compose file
     (`docker-compose.local.yml`) and, if present, the scaled compose
     file (`docker-compose.scaled.yml`). Safe to run when nothing is up.
+    `docker compose down` removes services from any Compose profile that
+    was activated at bring-up time (including the `fetcher` profile from
+    `start.ps1 -Fetcher` and the scaled variant from `start.ps1 -Scaled`),
+    so no extra flag is needed here.
 
     No env-file involvement: all configuration is inline in the compose
     files, so there is nothing to interpolate on teardown.

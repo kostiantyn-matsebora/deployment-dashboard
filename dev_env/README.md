@@ -91,27 +91,62 @@ endpoint, identifying itself via `X-Progress-Reporter:
 dashboard-fetcher/github-actions`. Strict NFR-04: no inbound listener, no
 host port, no healthcheck in MVP.
 
-To run the default stack **plus** the fetcher:
+### Recommended — `start.ps1 -Fetcher`
 
 ```powershell
-docker compose --profile fetcher -f dev_env/docker-compose.local.yml up
+$env:GHA_TOKEN = "<your-pat>"
+pwsh -NoProfile -File dev_env/start.ps1 -Fetcher
 ```
+
+Activates the `fetcher` Compose profile alongside the default stack and
+keeps the `start.ps1` health-poll + URL panel. The URL panel adds one
+line confirming the fetcher is active. `-Fetcher` is composable with
+`-Scaled` (`start.ps1 -Scaled -Fetcher`); both flags together activate
+the profile against the scaled compose file.
+
+**`GHA_TOKEN` precondition.** When `-Fetcher` is set, `start.ps1`
+requires `$env:GHA_TOKEN` to be a non-empty string and exits non-zero
+**before** any `docker compose up` if it is not. The error names the
+fix:
+
+```
+ERROR: -Fetcher requires $env:GHA_TOKEN to be set.
+Set $env:GHA_TOKEN = '<PAT>' or re-run with -AllowMissingGhaToken to use the placeholder.
+```
+
+**`-AllowMissingGhaToken` escape hatch.** For pure-boot smoke or
+fetcher-code work that does not need real GitHub API access:
+
+```powershell
+pwsh -NoProfile -File dev_env/start.ps1 -Fetcher -AllowMissingGhaToken
+```
+
+Skips the precondition and prints a yellow notice — the fetcher boots
+with the placeholder token from
+`dev_env/docker-compose.local.yml:215` and GitHub API calls will 401.
+The rest of the stack is unaffected.
 
 The fetcher reuses the existing `API_TOKEN`
 (`local-dev-token-not-for-production`) for writing — same key the seed
 scripts trust — so there is no extra token to manage for local dev.
 
-For real GHA validation, export your PAT before bringing the stack up:
+### Escape hatch — raw `docker compose` invocation
+
+The Compose v2 profile can also be activated directly, bypassing the
+`start.ps1` wrapper (no health-poll, no URL panel, no precondition
+check):
 
 ```powershell
 $env:GHA_TOKEN = "<your-pat>"
 docker compose --profile fetcher -f dev_env/docker-compose.local.yml up
 ```
 
-Without `GHA_TOKEN` set the fetcher boots with a placeholder and calls to
-the GitHub API will fail authentication — the rest of the stack is
-unaffected. The fetcher service is fully omitted from `docker compose up`
-when the `fetcher` profile is not activated.
+Without `GHA_TOKEN` set this path boots silently with the placeholder
+and calls to the GitHub API will fail authentication — exactly the
+silent-401 footgun the `start.ps1 -Fetcher` precondition was added to
+catch. Prefer the wrapper unless you have a specific reason. The
+fetcher service is fully omitted from `docker compose up` when the
+`fetcher` profile is not activated.
 
 ## Stopping
 
