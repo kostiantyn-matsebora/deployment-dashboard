@@ -37,7 +37,7 @@ function docker {
 '@
 
     function New-TempTestDir {
-        $dir = Join-Path $env:TEMP "stop-tests-$(New-Guid)"
+        $dir = Join-Path ([System.IO.Path]::GetTempPath()) "stop-tests-$(New-Guid)"
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         return (Resolve-Path $dir).Path
     }

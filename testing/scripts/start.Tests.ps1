@@ -76,7 +76,7 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
 '@
 
     function New-TempTestDir {
-        $dir = Join-Path $env:TEMP "start-tests-$(New-Guid)"
+        $dir = Join-Path ([System.IO.Path]::GetTempPath()) "start-tests-$(New-Guid)"
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         return (Resolve-Path $dir).Path
     }
