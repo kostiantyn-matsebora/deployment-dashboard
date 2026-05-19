@@ -6,12 +6,17 @@
 # contributor flow is dev_env/start.ps1, which depends on a cloned repo.
 #
 # Bash sibling of install.ps1 -- CLI parity, identical step order:
-#   1.  GHA_TOKEN precondition (issue #5 verbatim, ANSI-coloured on tty).
+#   1.  GHA_TOKEN precondition (issue #5 verbatim, ANSI-coloured on tty). Fires
+#       only when --fetcher is set and --demo is NOT set. --demo permits a
+#       zero-PAT install that boots the fetcher in anonymous mode against a
+#       public-repo default.
 #   2.  gh CLI precondition: gh on PATH, authenticated for github.com, and the
 #       active token carries the read:packages scope. Exits 1 before any side
 #       effect when any check fails.
 #   3.  Install dir.
 #   4.  Secret handling (API_TOKEN + POSTGRES_PASSWORD; refuses the dev-literals).
+#       When --demo is set, also bakes in the public-repo demo defaults
+#       (GHA_REPOSITORIES + FETCHER_POLL_INTERVAL_SECONDS, and GHA_TOKEN iff set).
 #   5+6. Download docker-compose.release.yml + migration.sql via `gh release
 #       download` (repo is private; anonymous HTTPS fetch 404s).
 #   7.  docker login ghcr.io using `gh auth token` (GHCR images are private).
@@ -38,7 +43,7 @@ set -euo pipefail
 # ---- Defaults ----
 VERSION='latest'
 FETCHER=false
-ALLOW_MISSING_GHA_TOKEN=false
+DEMO=false
 SKIP_MIGRATIONS=false
 PORT=8080
 HEALTH_TIMEOUT_SECONDS=60
@@ -60,7 +65,12 @@ Install + start a released Deployment Dashboard stack from GHCR-hosted images.
 Options:
   -v, --version <tag>                  Release tag (default: latest).
   -f, --fetcher                        Activate the fetcher Compose profile.
-      --allow-missing-gha-token        Permit -f when GHA_TOKEN is unset.
+                                       Requires \$GHA_TOKEN unless --demo is set.
+      --demo                           Zero-PAT demo install (implies --fetcher).
+                                       Bakes in PostHog/posthog public-repo
+                                       default + 60s poll. If \$GHA_TOKEN is
+                                       unset, fetcher runs anonymous (60 req/h);
+                                       if set, threaded through (5000 req/h).
       --skip-migrations                Bring stack up without applying migrations.
   -p, --port <int>                     Host port for the gateway (default: 8080).
       --health-timeout-seconds <int>   /health poll timeout (default: 60).
@@ -71,6 +81,7 @@ Examples:
   ./install.sh
   ./install.sh --version v1.2.3
   ./install.sh --fetcher
+  ./install.sh --demo
   ./install.sh --port 9090 --install-dir /opt/dashboard
 EOF
 }
@@ -80,7 +91,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         -v|--version) VERSION="$2"; shift 2 ;;
         -f|--fetcher) FETCHER=true; shift ;;
-        --allow-missing-gha-token) ALLOW_MISSING_GHA_TOKEN=true; shift ;;
+        --demo) DEMO=true; shift ;;
         --skip-migrations) SKIP_MIGRATIONS=true; shift ;;
         -p|--port) PORT="$2"; shift 2 ;;
         --health-timeout-seconds) HEALTH_TIMEOUT_SECONDS="$2"; shift 2 ;;
@@ -90,16 +101,25 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# --demo implies --fetcher. Canonicalise before the precondition block so the
+# downstream branches (token check, compose --profile fetcher) see the
+# canonicalised state.
+if [ "$DEMO" = true ]; then FETCHER=true; fi
+
 # ---- 1. GHA_TOKEN precondition (issue #5 parity) ----
+# Contract:
+#   --fetcher (no --demo) + token set    -> proceed, write token to dashboard.env (authed, 5000/h)
+#   --fetcher (no --demo) + token unset  -> red error, exit 1
+#   --demo                + token set    -> proceed, write token (authed, 5000/h)
+#   --demo                + token unset  -> proceed, OMIT GHA_TOKEN= line; fetcher
+#                                            picks up compose's placeholder default
+#                                            and switches to anonymous mode (60/h)
 if [ "$FETCHER" = true ]; then
     TOKEN_SET=true
     if [ -z "${GHA_TOKEN:-}" ]; then TOKEN_SET=false; fi
-    if [ "$TOKEN_SET" = false ] && [ "$ALLOW_MISSING_GHA_TOKEN" = false ]; then
-        echo "${RED}ERROR: --fetcher requires \$GHA_TOKEN to be set. Set GHA_TOKEN=<PAT> or re-run with --allow-missing-gha-token to use the placeholder.${NC}" >&2
+    if [ "$TOKEN_SET" = false ] && [ "$DEMO" = false ]; then
+        echo "${RED}ERROR: --fetcher requires \$GHA_TOKEN to be set. Set GHA_TOKEN=<PAT> or re-run with --demo for a zero-PAT demo install (anonymous-mode fetcher, 60 req/h).${NC}" >&2
         exit 1
-    fi
-    if [ "$TOKEN_SET" = false ]; then
-        echo "${YELLOW}GHA_TOKEN not set - fetcher will boot with placeholder; GitHub API calls will 401.${NC}"
     fi
 fi
 
@@ -201,6 +221,25 @@ DASHBOARD_VERSION=$VERSION
 DASHBOARD_PORT=$PORT
 ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboard;Password=$PG_PASSWORD
 EOF
+
+# Demo mode: bake in a public-repo default so a fresh install renders deployments
+# with zero caller configuration. GHA_TOKEN is appended IFF set in the parent env;
+# when unset, the fetcher container picks up the compose-level placeholder and
+# detects it to switch into anonymous-mode (60 req/h). PostHog is a high-deploy-
+# activity public repo; PR-ephemeral noise is accepted -- env-filter is a separate
+# forthcoming feature.
+if [ "$DEMO" = true ]; then
+    cat >> "$ENV_FILE" <<EOF
+
+# Demo-mode defaults (written by install.sh --demo)
+GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]
+FETCHER_POLL_INTERVAL_SECONDS=60
+EOF
+    if [ -n "${GHA_TOKEN:-}" ]; then
+        printf 'GHA_TOKEN=%s\n' "$GHA_TOKEN" >> "$ENV_FILE"
+    fi
+fi
+
 echo "${CYAN}==> Wrote $ENV_FILE${NC}"
 
 # ---- 5 + 6. Download release assets via gh ----
@@ -293,6 +332,13 @@ echo "  API_TOKEN:           $API_TOKEN (saved to $ENV_FILE)"
 echo "  Postgres (dev):      localhost:5432 (user: dashboard / password in $ENV_FILE)"
 if [ "$FETCHER" = true ]; then
     echo "  Fetcher:             profile 'fetcher' active - POSTs to gateway as dashboard-fetcher/github-actions"
+fi
+if [ "$DEMO" = true ]; then
+    if [ -z "${GHA_TOKEN:-}" ]; then
+        echo "${CYAN}  Demo mode:           PostHog/posthog, 60s poll, anonymous GitHub API (60 req/h)${NC}"
+    else
+        echo "${CYAN}  Demo mode:           PostHog/posthog, 60s poll, authed GitHub API (5000 req/h)${NC}"
+    fi
 fi
 if [ "$SKIP_MIGRATIONS" = true ]; then
     echo "${YELLOW}  Migrations skipped - API likely failing. Re-run without --skip-migrations to apply.${NC}"

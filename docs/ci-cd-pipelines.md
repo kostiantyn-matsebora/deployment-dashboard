@@ -233,7 +233,7 @@ ADR-0005).
 | Asset | Source | Purpose |
 |---|---|---|
 | `docker-compose.release.yml` | `install/` | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/deployment-dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. Uploaded flat (basename) as the release asset `docker-compose.release.yml`. |
-| `install.ps1` | `install/` | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` / `-AllowMissingGhaToken` precondition verbatim. Uploaded flat as `install.ps1`. |
+| `install.ps1` | `install/` | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` precondition (bare `-Fetcher` without `$env:GHA_TOKEN` red-errors and exits 1); the zero-PAT escape is `-Demo`, which implies `-Fetcher` and routes the fetcher through the anonymous-mode transport documented in `docs/ci-cd-integration.md` § Anonymous-mode transport. Uploaded flat as `install.ps1`. |
 | `install.sh` | `install/` | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. Uploaded flat as `install.sh`. |
 | `uninstall.ps1` | `install/` | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. Uploaded flat as `uninstall.ps1`. |
 | `uninstall.sh` | `install/` | Linux / macOS equivalent of `uninstall.ps1`. Uploaded flat as `uninstall.sh`. |
@@ -343,7 +343,7 @@ section above the contributor-oriented one."
 |---|---|
 | Migration actuation decision | [ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md) |
 | Triggering requirement | GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) |
-| `-Fetcher` / `-AllowMissingGhaToken` precondition the installer inherits | GitHub issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) + `dev_env/start.ps1:28-37` |
+| `-Fetcher` / `-Demo` precondition matrix the installer enforces | GitHub issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) + `install/install.ps1` § 1 (`GHA_TOKEN` precondition); anonymous-mode transport: `docs/ci-cd-integration.md` § Anonymous-mode transport |
 | `migration.sql` generation step | § 7 of this doc |
 | Tag scheme (`v1.2.3` + `v1.2` + `sha-<7>` + `latest`) | § 4 of this doc |
 | `API_TOKEN` install-time generation | `docs/architecture.md § 8` footnote |

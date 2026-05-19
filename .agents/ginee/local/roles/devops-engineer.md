@@ -133,6 +133,24 @@ behalf — that opens a browser flow that fails non-interactively (CI runners,
 SSH'd hosts). The installer reports the missing scope and the user runs
 `gh auth refresh` themselves.
 
+### Rule — anonymous-vs-authed fetcher mode is split across two layers
+
+Two `GHA_TOKEN`-related decisions live in two different files and **must
+not be conflated**. The split is intentional and load-bearing — either
+side can be edited without breaking the other.
+
+| Layer | File | What it gates | Failure mode if conflated |
+|---|---|---|---|
+| **Install script gates user intent** | `install/install.{ps1,sh}` | Whether the operator is *allowed* to boot the fetcher without a real PAT. Bare `-Fetcher` / `--fetcher` without `$env:GHA_TOKEN` exits 1; `-Demo` / `--demo` is the only flag that permits a PAT-less boot. | If the script tried to also inspect transport behaviour ("is the running fetcher actually anonymous?"), it would need to read fetcher state at install time — a layering violation. |
+| **Fetcher gates transport** | `backend/fetcher/Dashboard.Fetcher/DependencyInjection/ServiceCollectionExtensions.cs` (`ConfigureGitHubAuthorization`) | Whether the outgoing HTTP request carries an `Authorization` header. Real PAT → `Bearer <token>` (5000 req/h authed). Empty / whitespace / `local-dev-gha-token-placeholder` → no header at all (60 req/h anonymous). | If the fetcher tried to also gate on the install flag, it would couple runtime transport to install-time configuration, and the placeholder-in-compose-default contract would have to leak into the fetcher's options shape. |
+
+The compose-default placeholder literal `local-dev-gha-token-placeholder`
+in `install/docker-compose.release.yml` is the **contract anchor**
+between the two layers: install side may omit the `GHA_TOKEN=` line in
+`dashboard.env` (so compose falls back to the placeholder); fetcher side
+recognises the placeholder as "no auth — go anonymous." Do not change
+this literal in only one of the two files.
+
 ### Rule — `.gitattributes` is the EOL safety net
 
 The repo has no `.gitattributes` and relies on each contributor's local `core.autocrlf` setting. The bats test files were explicitly fixed to LF during the issue #7 cycle (per the qa-engineer's Phase 5 report); PowerShell files happen to tolerate CRLF on Linux but it's fragile — here-strings with the closing `"@` / `'@` at column 0 can break under certain CRLF + parser combinations.

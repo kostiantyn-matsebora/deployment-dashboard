@@ -8,7 +8,9 @@
     bind-mounts the source tree for hot-reload / migration generation.
 
     What this script does, in order:
-      1.  `GHA_TOKEN` precondition (issue #5 verbatim) -- fires only when `-Fetcher`.
+      1.  `GHA_TOKEN` precondition (issue #5 verbatim) -- fires only when `-Fetcher`
+          is set and `-Demo` is NOT set. `-Demo` permits a zero-PAT install that
+          boots the fetcher in anonymous mode against a public-repo default.
       2.  `gh` CLI precondition -- gh present on PATH, authenticated for github.com,
           and the active token carries the `read:packages` scope. All three failure
           modes exit 1 BEFORE any side effect (no install dir, no asset writes, no
@@ -16,6 +18,8 @@
       3.  Ensures the install directory exists.
       4.  Generates / preserves `API_TOKEN` + `POSTGRES_PASSWORD` random secrets;
           persists them to `<InstallDir>/dashboard.env`. Refuses the dev-literal.
+          When `-Demo` is set, also bakes in the public-repo demo defaults
+          (GHA_REPOSITORIES + FETCHER_POLL_INTERVAL_SECONDS, and GHA_TOKEN iff set).
       5+6. Downloads `docker-compose.release.yml` and (unless `-SkipMigrations`)
           `migration.sql` via `gh release download` -- the repo + GHCR images are
           private, so anonymous HTTPS asset fetch 404s.
@@ -47,13 +51,17 @@
     GHCR image refs to the same tag.
 .PARAMETER Fetcher
     Activate the optional `fetcher` Compose profile (CR-0009 pull-mode fetcher). When
-    set, requires `$env:GHA_TOKEN` to be non-empty unless `-AllowMissingGhaToken` is
-    also supplied. Verbatim copy of `dev_env/start.ps1`'s precondition pattern.
-.PARAMETER AllowMissingGhaToken
-    Permit `-Fetcher` to proceed when `$env:GHA_TOKEN` is unset / empty. The fetcher
-    boots with the placeholder token from `docker-compose.release.yml`; GitHub API
-    calls will 401. Use for boot-smoke / fetcher-code work that does not need real
-    GH API access.
+    set (and `-Demo` is NOT also set), requires `$env:GHA_TOKEN` to be non-empty;
+    otherwise the script red-errors and exits 1 before any side effect.
+.PARAMETER Demo
+    Zero-PAT demo install. Implies `-Fetcher`. Bakes in a public-repo default
+    (`GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]`) and a 60-second
+    poll interval so a fresh install renders deployments without the caller
+    needing to configure anything. If `$env:GHA_TOKEN` is set, it is threaded
+    through to `dashboard.env` (5000 req/h authed). If unset, no `GHA_TOKEN=`
+    line is written and the fetcher container falls back to the compose-level
+    placeholder, which the fetcher detects and switches to anonymous-mode
+    GitHub API calls (60 req/h).
 .PARAMETER SkipMigrations
     Bring the stack up without applying schema migrations (no `--profile migrate`).
     Yellow notice in the URL panel; the API will fail to start cleanly against an
@@ -75,6 +83,8 @@
 .EXAMPLE
     pwsh -NoProfile -File install.ps1 -Fetcher
 .EXAMPLE
+    pwsh -NoProfile -File install.ps1 -Demo
+.EXAMPLE
     pwsh -NoProfile -File install.ps1 -Port 9090 -InstallDir 'C:\dashboards\demo'
 #>
 #Requires -Version 7.0
@@ -82,7 +92,7 @@
 param(
     [string]$Version = 'latest',
     [switch]$Fetcher,
-    [switch]$AllowMissingGhaToken,
+    [switch]$Demo,
     [switch]$SkipMigrations,
     [int]$Port = 8080,
     [int]$HealthTimeoutSeconds = 60,
@@ -90,15 +100,24 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# -Demo implies -Fetcher. Set this before the precondition block so the
+# downstream branches (token check, compose --profile fetcher) see the
+# canonicalised state.
+if ($Demo) { $Fetcher = $true }
+
 # ---- 1. GHA_TOKEN precondition (issue #5 verbatim) ----
+# Contract:
+#   -Fetcher (no -Demo) + token set    -> proceed, write token to dashboard.env (authed, 5000/h)
+#   -Fetcher (no -Demo) + token unset  -> red error, exit 1
+#   -Demo               + token set    -> proceed, write token (authed, 5000/h)
+#   -Demo               + token unset  -> proceed, OMIT GHA_TOKEN= line; fetcher
+#                                         picks up compose's placeholder default
+#                                         and switches to anonymous mode (60/h)
 if ($Fetcher) {
     $tokenSet = -not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)
-    if (-not $tokenSet -and -not $AllowMissingGhaToken) {
-        Write-Host "ERROR: -Fetcher requires `$env:GHA_TOKEN to be set. Set `$env:GHA_TOKEN = '<PAT>' or re-run with -AllowMissingGhaToken to use the placeholder." -ForegroundColor Red
+    if (-not $tokenSet -and -not $Demo) {
+        Write-Host "ERROR: -Fetcher requires `$env:GHA_TOKEN to be set. Set `$env:GHA_TOKEN = '<PAT>' or re-run with -Demo for a zero-PAT demo install (anonymous-mode fetcher, 60 req/h)." -ForegroundColor Red
         exit 1
-    }
-    if (-not $tokenSet) {
-        Write-Host "GHA_TOKEN not set - fetcher will boot with placeholder; GitHub API calls will 401." -ForegroundColor Yellow
     }
 }
 
@@ -214,6 +233,26 @@ DASHBOARD_VERSION=$Version
 DASHBOARD_PORT=$Port
 ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboard;Password=$pgPassword
 "@
+
+# Demo mode: bake in a public-repo default so a fresh install renders deployments
+# with zero caller configuration. GHA_TOKEN is appended IFF set in the parent env;
+# when unset, the fetcher container picks up the compose-level placeholder and
+# detects it to switch into anonymous-mode (60 req/h). PostHog is a high-deploy-
+# activity public repo; PR-ephemeral noise is accepted -- env-filter is a separate
+# forthcoming feature.
+if ($Demo) {
+    $demoLines = @(
+        '',
+        '# Demo-mode defaults (written by install.ps1 -Demo)',
+        'GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]',
+        'FETCHER_POLL_INTERVAL_SECONDS=60'
+    )
+    if (-not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)) {
+        $demoLines += "GHA_TOKEN=$env:GHA_TOKEN"
+    }
+    $envFileContent = $envFileContent + "`n" + ($demoLines -join "`n")
+}
+
 Set-Content -Path $envFile -Value $envFileContent -Encoding utf8 -NoNewline
 Write-Host "==> Wrote $envFile" -ForegroundColor Cyan
 
@@ -305,6 +344,13 @@ Write-Host "  API_TOKEN:           $apiToken (saved to $envFile)"
 Write-Host "  Postgres (dev):      localhost:5432 (user: dashboard / password in $envFile)"
 if ($Fetcher) {
     Write-Host "  Fetcher:             profile 'fetcher' active - POSTs to gateway as dashboard-fetcher/github-actions"
+}
+if ($Demo) {
+    if ([string]::IsNullOrWhiteSpace($env:GHA_TOKEN)) {
+        Write-Host "  Demo mode:           PostHog/posthog, 60s poll, anonymous GitHub API (60 req/h)" -ForegroundColor Cyan
+    } else {
+        Write-Host "  Demo mode:           PostHog/posthog, 60s poll, authed GitHub API (5000 req/h)" -ForegroundColor Cyan
+    }
 }
 if ($SkipMigrations) {
     Write-Host "  Migrations skipped - API likely failing. Re-run without -SkipMigrations to apply." -ForegroundColor Yellow

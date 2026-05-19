@@ -135,9 +135,11 @@ services:
   # (NOT the local-dev literal) -- the fetcher's POSTs go through the same single
   # ingress the browser uses, so the keys MUST match.
   #
-  # `GHA_TOKEN` falls back to a placeholder when unset; the installer's pre-`compose`
-  # precondition prevents real installs from reaching this fall-back unless
-  # `-AllowMissingGhaToken` / `--allow-missing-gha-token` is supplied (issue #5).
+  # `GHA_TOKEN` falls back to a placeholder when unset; the fetcher detects the
+  # placeholder (or empty) and switches to anonymous-mode GitHub API calls
+  # (omits the Authorization header, 60 req/h limit). The installer's normal
+  # `-Fetcher` path requires a real GHA_TOKEN; `-Demo` permits the fall-back
+  # explicitly for zero-PAT public-repo demo installs.
   fetcher:
     profiles: ["fetcher"]
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-fetcher:${DASHBOARD_VERSION:-latest}

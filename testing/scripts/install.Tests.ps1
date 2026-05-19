@@ -306,12 +306,18 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
         if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp }
     }
 
-    It 'exits 1 with red error when -Fetcher is set without GHA_TOKEN and without -AllowMissingGhaToken' {
+    It 'exits 1 with red error when -Fetcher is set without GHA_TOKEN (no -Demo)' {
+        # Post-Demo contract: when -Fetcher is set without -Demo and without
+        # $env:GHA_TOKEN, the script red-errors and exits 1 before any side
+        # effect. The error literal must steer users toward both alternatives
+        # (set the PAT, or switch to -Demo for the zero-PAT path).
         $r = Invoke-Install -TmpDir $tmp -Args @('-Fetcher','-InstallDir',$tmp)
         $r.ExitCode | Should -Be 1
         $combined = "$($r.Stdout)`n$($r.Stderr)"
-        $combined | Should -Match 'AllowMissingGhaToken'
         $combined | Should -Match 'ERROR'
+        $combined | Should -Match 'GHA_TOKEN'
+        $combined | Should -Match '-Demo'
+        $combined | Should -Match '60 req/h'
     }
 
     It 'exits BEFORE any docker compose / Invoke-WebRequest / gh release call (no install-dir artefacts)' {
@@ -325,14 +331,6 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
         }).Count | Should -Be 0
         Test-Path (Join-Path $tmp 'dashboard.env')                 | Should -BeFalse
         Test-Path (Join-Path $tmp 'docker-compose.release.yml')    | Should -BeFalse
-    }
-
-    It '-Fetcher + -AllowMissingGhaToken: yellow notice + proceeds past precondition' {
-        $r = Invoke-Install -TmpDir $tmp -Args @('-Fetcher','-AllowMissingGhaToken','-InstallDir',$tmp,'-Version','v9.9.9-test')
-        # We expect script to proceed past the precondition; downloads + compose are shimmed.
-        $r.ExitCode | Should -Be 0
-        "$($r.Stdout)" | Should -Match 'GHA_TOKEN not set'
-        "$($r.Stdout)" | Should -Match 'placeholder'
     }
 
     It '-Fetcher with GHA_TOKEN set: no GHA_TOKEN advisory line is emitted' {
@@ -358,6 +356,70 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
         } finally {
             if (Test-Path $tmp2) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp2 }
         }
+    }
+}
+
+Describe 'install.ps1 -- -Demo mode' {
+    # -Demo (zero-PAT demo install) implies -Fetcher, bakes in a public-repo
+    # default (PostHog/posthog @ 60s poll), and threads $env:GHA_TOKEN through
+    # to dashboard.env IFF set. When unset, the GHA_TOKEN= line is OMITTED so
+    # the compose-level placeholder triggers the fetcher's anonymous-mode
+    # fallback (60 req/h). Contract source: install/install.ps1 § 1 + § 4 demo
+    # block.
+    BeforeEach {
+        $script:tmp = New-TempTestDir
+    }
+    AfterEach {
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp }
+    }
+
+    It '-Demo implies -Fetcher (--profile fetcher present in docker compose up args)' {
+        # No explicit -Fetcher; just -Demo. The script must canonicalise
+        # $Fetcher = $true and emit --profile fetcher in the up call.
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
+        $up | Should -Not -BeNullOrEmpty
+        $upArgs = [object[]]$up.args
+        $upArgs | Should -Contain 'fetcher'
+    }
+
+    It '-Demo without $env:GHA_TOKEN: writes demo defaults; OMITS GHA_TOKEN line (anonymous-mode trigger)' {
+        # Critical contract assertion -- the ABSENCE of GHA_TOKEN= is what
+        # makes the fetcher container fall back to compose's placeholder and
+        # switch to anonymous-mode GitHub API calls (60 req/h).
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        Test-Path $r.EnvFile | Should -BeTrue
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match 'GHA_REPOSITORIES=.*PostHog.*posthog'
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
+    }
+
+    It '-Demo with $env:GHA_TOKEN set: threads token through to dashboard.env (authed mode)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo') `
+                            -EnvOverrides @{ GHA_TOKEN = 'ghp_demo_pat' }
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match 'GHA_REPOSITORIES=.*PostHog.*posthog'
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_demo_pat$'
+    }
+
+    It '-Demo + -Fetcher together: still works (idempotent flag combo)' {
+        # -Demo implies -Fetcher; supplying both explicitly must not break
+        # parsing or duplicate state. Sanity check on the canonicalisation.
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo','-Fetcher')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match 'GHA_REPOSITORIES=.*PostHog.*posthog'
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
+        $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
+        $upArgs = [object[]]$up.args
+        $upArgs | Should -Contain 'fetcher'
     }
 }
 

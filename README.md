@@ -141,14 +141,50 @@ export GHA_TOKEN='<your-github-pat>'
 bash install.sh --fetcher
 ```
 
-To boot the fetcher without a real GitHub PAT (e.g. local smoke), pass
-`-AllowMissingGhaToken` / `--allow-missing-gha-token`. The fetcher boots with
-the placeholder token; GitHub API calls will 401.
-
 Note: the `GHA_TOKEN` (fetcher → GitHub Actions API PAT) is a separate
 secret from the `gh` CLI's stored token (installer → GitHub Releases + GHCR
-auth). Both must be set when running the fetcher path; one is not a
-substitute for the other.
+auth). Both must be set when running the `-Fetcher` path; one is not a
+substitute for the other. For a zero-PAT walkthrough, use `-Demo` /
+`--demo` (next section) — it boots the fetcher against a public repo in
+GitHub's anonymous-mode rate bucket.
+
+### Try it without setup -- demo mode
+
+`-Demo` (PowerShell) / `--demo` (bash) implies `-Fetcher` and bakes in a
+public-repo default (`GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]`)
+plus a 60-second poll interval, so a fresh install renders deployment
+activity end-to-end with no caller-side configuration. `$env:GHA_TOKEN`
+governs the fetcher's rate budget but is **not required**:
+
+| `$env:GHA_TOKEN` | `Authorization` header | GitHub API rate limit |
+|---|---|---|
+| set            | `Bearer <token>` | 5000 req/h (authed)   |
+| unset          | omitted          | 60 req/h (anonymous)  |
+
+```powershell
+gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
+pwsh -NoProfile -File install.ps1 -Demo
+```
+
+```bash
+gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
+./install.sh --demo
+```
+
+PostHog/posthog is a high-deployment-activity public repo chosen for
+visible matrix output on first render. Its action runs include some
+PR-ephemeral environments, so the matrix will show some historical
+`posthog-NNNN-*` env columns alongside the steady-state ones. A per-repo
+environment filter for the fetcher is tracked separately (separate
+forthcoming issue: per-repo environment filter for the fetcher) and is
+not part of this install path.
+
+Under the hood, the fetcher's GitHub-API adapter omits the
+`Authorization` header entirely when `GHA_TOKEN` is empty or equals the
+compose-default placeholder literal `local-dev-gha-token-placeholder`;
+that's the runtime transport contract that makes the zero-PAT path work
+end-to-end. See `docs/ci-cd-integration.md` § Anonymous-mode transport
+for the wire detail.
 
 ### Pin a version
 

@@ -577,10 +577,54 @@ files per project bindings). All required:
 |---|---|
 | `DEPLOYMENT_DASHBOARD_URL` | Base URL of the dashboard (same value pipelines use). |
 | `DEPLOYMENT_DASHBOARD_TOKEN` | The `X-Api-Key` value (same key any pusher uses; no separate fetcher token). |
-| `GHA_TOKEN` | GitHub PAT with `repo:deployments` (read) scope. GitHub App auth is deferred — see CR-0009 § 3d. |
+| `GHA_TOKEN` | GitHub PAT with `repo:deployments` (read) scope. GitHub App auth is deferred — see CR-0009 § 3d. Anonymous-mode operation against public repos is supported when this env var is empty or holds the compose-default placeholder — see "Anonymous-mode transport (zero-PAT installs)" below. |
 | `GHA_SOURCE_ID` | `owner/repo` pair the fetcher polls. The same string becomes the `{source-id}` path parameter on `GET`/`PUT /api/fetcher/state/{source-id}`. |
 | `POLL_INTERVAL_SECONDS` | Default `30`. |
 | `INITIAL_FETCH_LIMIT` | First-fetch cap when no cursor exists yet. Default `50`, ceiling `500`. |
+
+### Anonymous-mode transport (zero-PAT installs)
+
+The fetcher's GitHub-API adapter sends the `Authorization: Bearer <token>`
+header only when `GHA_TOKEN` carries a real PAT. When the env var is
+**empty / whitespace / unset**, OR holds the compose-default placeholder
+literal `local-dev-gha-token-placeholder` (baked into
+`install/docker-compose.release.yml`), the adapter **omits the
+`Authorization` header entirely** and the request lands in GitHub's
+anonymous bucket against public repos.
+
+| `GHA_TOKEN` value | `Authorization` header | Rate limit |
+|---|---|---|
+| real PAT | `Bearer <token>` | 5000 req/h (authed) |
+| empty / unset | omitted | 60 req/h (anonymous) |
+| `local-dev-gha-token-placeholder` (compose default) | omitted | 60 req/h (anonymous) |
+
+The compose-default placeholder is treated as "no auth — go anonymous"
+rather than passed through verbatim because sending `Bearer
+local-dev-gha-token-placeholder` would 401, defeating the whole zero-PAT
+path.
+
+The single chokepoint for this decision is
+`Dashboard.Fetcher.DependencyInjection.ServiceCollectionExtensions.ConfigureGitHubAuthorization`;
+both the runtime adapter wire-up and the unit tests go through it. The
+contract anchor for the placeholder literal is `install/docker-compose.release.yml`.
+
+This anonymous-mode transport is what makes the README's `-Demo` /
+`--demo` install path work end-to-end without a GitHub PAT: the
+installer omits the `GHA_TOKEN=` line from `dashboard.env` when the
+operator has not exported one; the fetcher container then sees the
+compose-level placeholder and switches to anonymous calls against the
+demo default repo. Operators with a real PAT continue to get the
+5000 req/h authed budget on the same code path.
+
+The two-layer split is intentional and load-bearing:
+- **Install script gates user intent** — only `-Demo` permits a fetcher
+  boot without a real PAT; bare `-Fetcher` without `$env:GHA_TOKEN` red-errors
+  and exits 1.
+- **Fetcher gates transport** — the adapter independently decides "real
+  PAT or anonymous" by inspecting the value it actually received, never
+  the install-time flag.
+
+Either side can change without breaking the other.
 
 ### Cursor model
 

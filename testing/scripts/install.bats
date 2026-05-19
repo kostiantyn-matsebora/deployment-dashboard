@@ -238,24 +238,23 @@ log_not_contains() {
 
 # ---- GHA_TOKEN precondition matrix ----
 
-@test "--fetcher without GHA_TOKEN exits 1 with red error before any docker / gh-release call" {
+@test "--fetcher without GHA_TOKEN (no --demo) exits 1 with red error before any docker / gh-release call" {
+    # Post-Demo contract: --fetcher without $GHA_TOKEN and without --demo
+    # red-errors and exits 1 before any side effect. The error literal must
+    # mention GHA_TOKEN, --demo (the zero-PAT escape hatch), ERROR, and the
+    # "60 req/h" anonymous-mode rate hint.
     run_install --fetcher --install-dir "$INSTALL_DIR"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"--allow-missing-gha-token"* ]]
     [[ "$output" == *"ERROR"* ]]
+    [[ "$output" == *"GHA_TOKEN"* ]]
+    [[ "$output" == *"--demo"* ]]
+    [[ "$output" == *"60 req/h"* ]]
     # Strongest precondition signal -- no docker + no gh-release was invoked.
     log_not_contains 'docker compose'
     log_not_contains 'docker login'
     log_not_contains 'gh release download'
     [ ! -f "$INSTALL_DIR/dashboard.env" ]
     [ ! -f "$INSTALL_DIR/docker-compose.release.yml" ]
-}
-
-@test "--fetcher --allow-missing-gha-token prints yellow notice and proceeds" {
-    run_install --fetcher --allow-missing-gha-token --version v9.9.9-test --install-dir "$INSTALL_DIR"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"GHA_TOKEN not set"* ]]
-    [[ "$output" == *"placeholder"* ]]
 }
 
 @test "--fetcher with GHA_TOKEN set: no GHA_TOKEN advisory" {
@@ -269,6 +268,59 @@ log_not_contains() {
     run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     [[ "$output" != *"GHA_TOKEN"* ]]
+}
+
+# ---- --demo mode ----
+# --demo (zero-PAT demo install) implies --fetcher, bakes in a public-repo
+# default (PostHog/posthog @ 60s poll), and threads $GHA_TOKEN through to
+# dashboard.env IFF set. When unset, the GHA_TOKEN= line is OMITTED so the
+# compose-level placeholder triggers the fetcher's anonymous-mode fallback
+# (60 req/h). Contract source: install/install.sh § 1 + § 4 demo block.
+
+@test "--demo implies --fetcher (--profile fetcher present in docker compose up args)" {
+    # No explicit --fetcher; just --demo. The script must canonicalise
+    # FETCHER=true and emit --profile fetcher in the up call.
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
+    [ -n "$up_line" ]
+    [[ "$up_line" == *"--profile fetcher"* ]]
+}
+
+@test "--demo without \$GHA_TOKEN: writes demo defaults; OMITS GHA_TOKEN line (anonymous-mode trigger)" {
+    # Critical contract assertion -- the ABSENCE of GHA_TOKEN= is what makes
+    # the fetcher container fall back to compose's placeholder and switch to
+    # anonymous-mode GitHub API calls (60 req/h).
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    f="$INSTALL_DIR/dashboard.env"
+    [ -f "$f" ]
+    grep -qE 'GHA_REPOSITORIES=.*PostHog.*posthog' "$f"
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
+    ! grep -qE '^GHA_TOKEN=' "$f"
+}
+
+@test "--demo with \$GHA_TOKEN set: threads token through to dashboard.env (authed mode)" {
+    export GHA_TOKEN='ghp_demo_pat'
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    f="$INSTALL_DIR/dashboard.env"
+    grep -qE 'GHA_REPOSITORIES=.*PostHog.*posthog' "$f"
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
+    grep -qE '^GHA_TOKEN=ghp_demo_pat$' "$f"
+}
+
+@test "--demo + --fetcher together: still works (idempotent flag combo)" {
+    # --demo implies --fetcher; supplying both explicitly must not break
+    # parsing or duplicate state. Sanity check on the canonicalisation.
+    run_install --demo --fetcher --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    f="$INSTALL_DIR/dashboard.env"
+    grep -qE 'GHA_REPOSITORIES=.*PostHog.*posthog' "$f"
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
+    ! grep -qE '^GHA_TOKEN=' "$f"
+    up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
+    [[ "$up_line" == *"--profile fetcher"* ]]
 }
 
 # ---- gh CLI precondition matrix ----
