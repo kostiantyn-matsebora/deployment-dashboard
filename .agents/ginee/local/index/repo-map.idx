@@ -4,7 +4,7 @@
 # recipe: builtin:repo-structure
 
 backend/ | .NET 10 — co-located Write + Read API services (host api/ + write-api/ + read-api/ + shared/ libraries + Dashboard.sln); microservices architecture per ADR-0006, co-location mechanics per ADR-0002 | backend-engineer | source
-backend/api/ | Host project Dashboard.Api — composition root + sole Dockerfile + single ACA container target (Write + Read services co-located in dashboard-api per ADR-0006) | backend-engineer | source
+backend/api/ | Host project Dashboard.Api — composition root + sole Dockerfile + single ACA container target (Write + Read services co-located in deployment-dashboard-api per ADR-0006) | backend-engineer | source
 backend/write-api/ | Write endpoint group library Dashboard.WriteApi (+ Tests) — POST /api/deployments; NOTIFY dispatch | backend-engineer | source
 backend/read-api/ | Read endpoint group library Dashboard.ReadApi (+ Tests) — matrix, history, discovery, SSE, /health | backend-engineer | source
 backend/shared/ | Shared library Dashboard.Shared (+ Tests) — DbContext, entities, migrations, API-key middleware, NOTIFY/LISTEN, SSE writer, DTOs | backend-engineer | source

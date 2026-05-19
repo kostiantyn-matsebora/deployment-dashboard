@@ -44,7 +44,7 @@ MVP | 1.5 | 1.5.4 | GET/PUT /api/fetcher/state/{source-id} endpoints on Write gr
 MVP | 1.5 | 1.5.5 | Read API DTO surface - add nullable progress_reporter to DeploymentEventResponse + CurrentDeployment + LastSuccessfulDeployment | backend-engineer | @docs/WBS.md#1-implement-solution
 MVP | 1.5 | 1.5.6 | backend/fetcher/Dashboard.Fetcher/ library - ICiCdAdapter + GitHubActionsAdapter + scheduler + Polly retry + rate-limit back-off | backend-engineer | @docs/WBS.md#1-implement-solution
 MVP | 1.5 | 1.5.7 | backend/fetcher-host/Dashboard.Fetcher.Host/ ASP.NET Worker; env-var config; Write API client reusing Dashboard.Shared DTOs | backend-engineer | @docs/WBS.md#1-implement-solution
-MVP | 1.5 | 1.5.8 | backend/fetcher-host/Dockerfile (image=dashboard-fetcher); image build+push+tag absorbed into §1.6 fetcher.yml per CR-0010 | devops-engineer | @docs/WBS.md#1-implement-solution
+MVP | 1.5 | 1.5.8 | backend/fetcher-host/Dockerfile (image=deployment-dashboard-fetcher); image build+push+tag absorbed into §1.6 fetcher.yml per CR-0010 | devops-engineer | @docs/WBS.md#1-implement-solution
 MVP | 1.5 | 1.5.9 | dev_env/docker-compose.local.yml opt-in --profile fetcher entry (reuses local-dev API_TOKEN; GHA_TOKEN env-fallback; default-off) | devops-engineer | @docs/WBS.md#1-implement-solution
 MVP | 1.5 | 1.5.10 | xUnit unit+functional regression for cursor endpoints + X-Progress-Reporter cap-64 boundary + GHA adapter happy/rate-limit/empty-page + scheduler drift | qa-engineer | @docs/WBS.md#1-implement-solution
 MVP | 1.6 | 1.6.1 | CR-0010 + SAD §9 outbound table + WBS §1.5.8 split + WBS §5.1 split + WBS §1.6 (this) + ci-cd-pipelines.md operational companion + bindings.md ownership row | solution-architect+devops-engineer | @docs/WBS.md#1-implement-solution
