@@ -190,18 +190,18 @@ deliberate, tag-pinned event, not a continuous-publish event.
 
 ### Assets published
 
-Every `vX.Y.Z` release object carries the five assets below. The set is fixed
+Every `vX.Y.Z` release object carries the six assets below. The set is fixed
 — the installer refuses to proceed when any required asset is missing for the
 resolved tag (defensive failure: indicates an incomplete release publish, per
 ADR-0005).
 
 | Asset | Source | Purpose |
 |---|---|---|
-| `docker-compose.release.yml` | repo root (or `/release/` — `devops-engineer` to lock at Phase 2) | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. |
-| `install.ps1` | repo root (or `/release/`) | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` / `-AllowMissingGhaToken` precondition verbatim. |
-| `install.sh` | repo root (or `/release/`) | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. |
-| `uninstall.ps1` | repo root (or `/release/`) | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. |
-| `uninstall.sh` | repo root (or `/release/`) | Linux / macOS equivalent of `uninstall.ps1`. |
+| `docker-compose.release.yml` | repo root | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. |
+| `install.ps1` | repo root | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` / `-AllowMissingGhaToken` precondition verbatim. |
+| `install.sh` | repo root | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. |
+| `uninstall.ps1` | repo root | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. |
+| `uninstall.sh` | repo root | Linux / macOS equivalent of `uninstall.ps1`. |
 | `migration.sql` | downloaded from the same-commit `api.yml` artefact (`ef-migrations-script-<sha>`), OR re-generated inline by the release job using `dotnet ef migrations script --idempotent` (per § 7) | Tag-pinned idempotent migration script. The installer downloads this asset and applies it via a one-shot `postgres:16-alpine` container before the `api` service starts (per ADR-0005 Decision 1–5). |
 
 The `migration.sql` asset is the load-bearing surface for release-install

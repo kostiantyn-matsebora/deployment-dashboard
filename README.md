@@ -89,7 +89,7 @@ pwsh -NoProfile -File install.ps1 -Version v1.2.3
 Re-running the installer with a newer tag against the same `-InstallDir` /
 `--install-dir` upgrades in place. The `migration.sql` script is idempotent
 (per EF Core's `--idempotent` contract -- see
-`docs/ci-cd-pipelines.md` S 7); re-applying against an already-migrated DB is a
+`docs/ci-cd-pipelines.md` § 7); re-applying against an already-migrated DB is a
 no-op.
 
 ### Custom port
@@ -141,6 +141,14 @@ export ConnectionStrings__DefaultConnection="Host=db;Database=dashboard;Username
 docker compose -f docker-compose.release.yml --profile migrate up -d --wait
 ```
 
+If your shell rejects `__` in identifier names (BusyBox `sh`, certain minimal
+images), prefix the env-var to the command instead of `export`-ing it:
+
+```bash
+env ConnectionStrings__DefaultConnection="Host=db;Database=dashboard;Username=dashboard;Password=$POSTGRES_PASSWORD" \
+  docker compose -f docker-compose.release.yml --profile migrate up -d --wait
+```
+
 #### Option D -- `docker compose -f <https-url>`
 
 ```bash
@@ -160,7 +168,7 @@ docker compose -f https://github.com/kostiantyn-matsebora/deployment-dashboard/r
    random value before running, and you MUST NOT reuse the dev literal
    `local-dev-token-not-for-production` -- the API middleware accepts any
    value, but reusing the dev literal in a release install defeats the
-   defence-in-depth split (per `docs/architecture.md` S 8).
+   defence-in-depth split (per `docs/architecture.md` § 8).
 3. **Migration actuation is BYPASSED unless you remember `--profile migrate`.**
    Without it, the `api` service starts against an unmigrated DB and fails.
    Re-add the profile or run `psql -f migration.sql` against the `db`
@@ -217,5 +225,5 @@ UI mockup live under `docs/`:
 
 For the release-install design specifically, see
 [ADR-0005](docs/adr/ADR-0005-release-install-migration-actuation.md) (migration
-actuation) and `docs/ci-cd-pipelines.md` S 10 (release pipeline + asset URL
+actuation) and `docs/ci-cd-pipelines.md` § 10 (release pipeline + asset URL
 pattern).
