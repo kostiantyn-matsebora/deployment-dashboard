@@ -1,3 +1,8 @@
+[![Built with ginee](https://img.shields.io/badge/built%20with-ginee-7c3aed?style=flat-square)](https://github.com/kostiantyn-matsebora/ginee) [![AI-implemented end-to-end](https://img.shields.io/badge/AI--implemented-end%20to%20end-10b981?style=flat-square)](https://github.com/kostiantyn-matsebora/ginee)
+
+> [!NOTE]
+> **Built end-to-end by AI** — every commit, ADR, CR, test, and CI workflow in this repo was authored by AI specialists routed through [`ginee`](https://github.com/kostiantyn-matsebora/ginee), a multi-agent engineering process for small autonomous teams.
+
 # Deployment Dashboard
 
 A real-time **services x environments** deployment matrix sourced from any CI/CD
