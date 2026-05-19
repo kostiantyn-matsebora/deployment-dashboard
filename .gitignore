@@ -45,6 +45,9 @@ testing/e2e/blob-report/
 **/.nyc_output/
 **/junit*.xml
 **/test-results*.xml
+**/testResults.xml
+**/pester-results.xml
+**/bats-results.tap
 
 # ---- Terraform (state must never live in the repo, per devops-engineer
 #       spec — state lives in Azure Storage) -------------------------------
