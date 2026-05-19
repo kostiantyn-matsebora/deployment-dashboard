@@ -96,7 +96,7 @@ Per CR-0010 § 3h, with Wave 4b decision locks applied:
 | Mockup-visual | **blocking** | `pwsh -NoProfile -File testing/mockup-visual/run-tests.ps1` | Frontend only. Runs `@playwright/test 1.49.1` against `docs/ui/deployment-dashboard.html` via file:// — zero stack needed. |
 | Backend coverage | **non-blocking artefact** | `--collect:"XPlat Code Coverage"` | Cobertura uploaded as `coverage-backend-<image>-<run>-<attempt>`. No threshold today. |
 | Frontend coverage | **non-blocking artefact** | `--code-coverage` | Cobertura uploaded as `coverage-frontend-<image>-<run>-<attempt>`. No threshold today. |
-| Frontend lint | **not gated in MVP-CI** | — | D3 lock: deferred. Listed in § 12. |
+| Frontend lint | **not gated in MVP-CI** | — | D3 lock: deferred. Listed in § 13. |
 
 ## 6. Caching
 
@@ -165,7 +165,142 @@ themselves — the tag scheme is event-driven.
 To roll back to an earlier tag in the registry: pull the image by its
 `vX.Y.Z` tag; the digest is immutable per tag.
 
-## 10. GHCR → ACR cutover (Q4 deferred)
+## 10. Release pipeline — `v*` tag → release assets
+
+A separate workflow (`.github/workflows/release.yml`) fires on `v*` tag push and
+publishes the assets the one-liner installer (per GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) and
+[ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md)) consumes. The four component workflows (§ 2) handle
+image-building on the same tag push; `release.yml` runs alongside them and
+attaches release-side artefacts to the GitHub Release object.
+
+This section is **outbound** in the same sense § 1 defines — it describes how
+this repo publishes the release-install surface. The inbound consumer view —
+how an adopter brings up a released stack — lives in the per-release README
+the installer prints + the issue-#7 install documentation.
+
+### Trigger
+
+| Event | What fires |
+|---|---|
+| `push` of tag `v*` (e.g. `v1.2.3`) | `release.yml` — creates GitHub Release, attaches assets |
+
+`release.yml` does not run on `push: main`, on PRs, or via `workflow_dispatch`
+from a non-tag ref. Tag push is the sole trigger — release publishing is a
+deliberate, tag-pinned event, not a continuous-publish event.
+
+### Assets published
+
+Every `vX.Y.Z` release object carries the five assets below. The set is fixed
+— the installer refuses to proceed when any required asset is missing for the
+resolved tag (defensive failure: indicates an incomplete release publish, per
+ADR-0005).
+
+| Asset | Source | Purpose |
+|---|---|---|
+| `docker-compose.release.yml` | repo root (or `/release/` — `devops-engineer` to lock at Phase 2) | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. |
+| `install.ps1` | repo root (or `/release/`) | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` / `-AllowMissingGhaToken` precondition verbatim. |
+| `install.sh` | repo root (or `/release/`) | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. |
+| `uninstall.ps1` | repo root (or `/release/`) | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. |
+| `uninstall.sh` | repo root (or `/release/`) | Linux / macOS equivalent of `uninstall.ps1`. |
+| `migration.sql` | downloaded from the same-commit `api.yml` artefact (`ef-migrations-script-<sha>`), OR re-generated inline by the release job using `dotnet ef migrations script --idempotent` (per § 7) | Tag-pinned idempotent migration script. The installer downloads this asset and applies it via a one-shot `postgres:16-alpine` container before the `api` service starts (per ADR-0005 Decision 1–5). |
+
+The `migration.sql` asset is the load-bearing surface for release-install
+migration actuation. See § 7 for the idempotent-script contract — it is the
+same artefact, promoted from a 90-day workflow artefact to a tag-pinned
+release asset.
+
+### Canonical asset URL
+
+Adopters fetch assets via the GitHub Release asset URL:
+
+```
+https://github.com/<owner>/<repo>/releases/download/<tag>/<asset-name>
+```
+
+Example (tag `v1.2.3`):
+
+```
+https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/install.ps1
+https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/docker-compose.release.yml
+https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/migration.sql
+```
+
+**This is the canonical URL pattern. Adopters use it; the installer scripts
+use it; the README documents it.** Two reasons over the raw-content
+alternative below:
+
+1. **GitHub Releases are durable, immutable per-tag objects.** A release asset
+   bound to `v1.2.3` cannot be replaced without an explicit re-publish event;
+   the SHA-256 the user pulls today is the SHA-256 they pull next month.
+2. **Adopters expect releases for versioned downloads.** A "Releases" tab is
+   the discovery surface for any tagged artefact; raw-content URLs are an
+   internal-to-the-repo convention.
+
+#### Fallback — raw GitHub at the tag
+
+The alternative pattern works for adopters whose security posture blocks
+GitHub Release downloads but allows raw-content fetches:
+
+```
+https://raw.githubusercontent.com/<owner>/<repo>/<tag>/<asset-path>
+```
+
+The two URLs resolve to the same content when `release.yml` commits the
+templated assets to the tag's tree (which it does, so the `docker-compose.release.yml`
++ installer scripts are tag-checkout-friendly). The raw-content URL is
+**fallback only**: do not document it as the primary install path; do not
+hard-code it into installer scripts.
+
+The `migration.sql` asset is **not** mirrored to the raw-content path —
+because the artefact is generated by the workflow (not committed to the
+repo), the raw-content URL would 404. Adopters blocked from release-asset
+downloads cannot use the release-install path for migration actuation; they
+must fall back to manual `psql -f` (per ADR-0005 Consequences → "Options B
+and D regress on migration actuation").
+
+### Migration actuation
+
+The release-install path actuates schema migrations via a one-shot
+`migrations` service declared in `docker-compose.release.yml` under the
+`migrate` Compose profile, per [ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md):
+
+| Step | What runs |
+|---|---|
+| 1. Installer downloads `migration.sql` from the release asset URL into `<InstallDir>/migration.sql`. | Asset fetch step in `install.ps1` / `install.sh`. |
+| 2. Installer brings up the stack with the `migrate` profile active: `docker compose --profile migrate -f docker-compose.release.yml up -d --wait`. | One-shot `migrations` service (`postgres:16-alpine`) runs `psql -h db -U $POSTGRES_USER -d $POSTGRES_DB -v ON_ERROR_STOP=1 -f /migration.sql` after `db: service_healthy`. |
+| 3. `api` service waits for `migrations: service_completed_successfully` before starting. | Mirrors `dev_env/docker-compose.local.yml:130-134` verbatim. |
+
+The installer applies migrations by **default**. `-SkipMigrations` (PowerShell)
+/ `--skip-migrations` (bash) brings the stack up without the `migrate`
+profile; the API will fail to start cleanly against an unmigrated DB and the
+URL panel surfaces a yellow notice. Default-on / opt-out-by-flag is the
+correct polarity (per ADR-0005 Decision 3).
+
+The idempotent-script contract (§ 7 → "Idempotent contract") guarantees that
+re-applying `migration.sql` against an already-migrated DB is a no-op for
+every applied migration, which is what makes upgrade (`v1.0.0` → `v1.2.0`)
+safe without manual version tracking.
+
+### Release notes
+
+`release.yml` populates the GitHub Release body from `CHANGELOG.md` (when
+present) plus an auto-generated "Install / upgrade" section pointing at the
+canonical asset URLs above. The body is the user-facing install surface
+documented in issue #7's acceptance criterion "Quick start (release install)
+section above the contributor-oriented one."
+
+### Cross-references
+
+| Surface | Pointer |
+|---|---|
+| Migration actuation decision | [ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md) |
+| Triggering requirement | GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) |
+| `-Fetcher` / `-AllowMissingGhaToken` precondition the installer inherits | GitHub issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) + `dev_env/start.ps1:28-37` |
+| `migration.sql` generation step | § 7 of this doc |
+| Tag scheme (`v1.2.3` + `v1.2` + `sha-<7>` + `latest`) | § 4 of this doc |
+| `API_TOKEN` install-time generation | `docs/architecture.md § 8` footnote |
+
+## 11. GHCR → ACR cutover (Q4 deferred)
 
 The reusable workflow's `registry` input defaults to `ghcr.io`. When
 Terraform §4 lands and provisions ACR, the swap is **one input value +
@@ -180,7 +315,7 @@ one login step**:
 Once ACR is live, the future CD CR adds the ACA revision update step
 downstream of the build job.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -192,14 +327,14 @@ downstream of the build job.
 | Backend `dotnet ef migrations script` fails with `Unable to bind connection` | The design-time factory was unable to resolve the placeholder connection string. | Verify `ConnectionStrings__DefaultConnection` env-var on the **Generate EF migration script** step matches the format the factory expects (`Host=ci;Port=5432;Database=ci;Username=ci;Password=ci`). |
 | `ng test` exits with `No provider for Browser` or sandbox errors | Karma launcher is `ChromeHeadless` (raw) instead of `ChromeHeadlessNoSandbox`. | The workflows use `ChromeHeadlessNoSandbox`; verify QA's `karma.conf.js` declares this launcher with `--no-sandbox` flags (sandbox is unavailable inside the GHA runner container). |
 
-## 12. Future work
+## 13. Future work
 
 | Item | Defer reason | Tracking |
 |---|---|---|
 | Dogfooding notify hook | D1 lock — kept Q11 clean (no deploy in MVP-CI). The dashboard will call its own `.github/actions/notify/` from these workflows once the dogfooding CR lands. | New CR — to be filed. |
 | Frontend lint gate (`ng lint`) | D3 lock — Angular CLI ships no ESLint config by default; introducing `@angular-eslint` is a non-trivial setup outside the MVP-CI scope. | TODO: "Introduce `@angular-eslint` + add `ng lint` gate to `frontend.yml`". |
 | Integration smoke / e2e (Q12) | `testing/functional/` (xUnit functional API tests) + `testing/e2e/` (Playwright vs SPA + API + gateway) need the compose stack — too heavy for per-PR CI. | New `integration.yml` workflow; runs on schedule or label trigger. |
-| GHCR → ACR cutover (Q4) | ACR provisioning needs Terraform §4 first (per NFR-06; no Portal clicks). | Tracked in § 10 + Terraform §4. |
+| GHCR → ACR cutover (Q4) | ACR provisioning needs Terraform §4 first (per NFR-06; no Portal clicks). | Tracked in § 11 + Terraform §4. |
 | CD — ACA revision update | Q11 lock: CI only in MVP. Needs Terraform §4 (ACA + image-pull identity). | WBS §5.1 (the half deferred when CR-0010 split that row). |
 | Trivy / SBOM | Out of scope for MVP-CI; add as a non-blocking gate first. | New CR — to be filed when security posture is reviewed. |
 | Branch protection requiring CI green | Wait one calendar week of normal-volume PRs for signal stability (CR-0010 Open trade-off (ii)). | WBS §1.6.8. |
