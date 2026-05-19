@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for ../../install.sh -- bash sibling of install.ps1 (issue #7).
+# Tests for ../../install/install.sh -- bash sibling of install/install.ps1 (issue #7).
 #
 # Strategy: PATH-shadowing stubs. We prepend a per-test stub directory to PATH
 # so calls to `curl`, `docker`, `openssl`, `xxd`, `od`, `grep`, `sed`, `head`
@@ -10,7 +10,7 @@
 
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
-    SCRIPT="$REPO_ROOT/install.sh"
+    SCRIPT="$REPO_ROOT/install/install.sh"
     INSTALL_DIR="$BATS_TEST_TMPDIR/dashboard"
     STUB_DIR="$BATS_TEST_TMPDIR/stub"
     STUB_LOG="$BATS_TEST_TMPDIR/stub.log"

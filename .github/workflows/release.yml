@@ -88,9 +88,9 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            docker-compose.release.yml
-            install.ps1
-            install.sh
-            uninstall.ps1
-            uninstall.sh
+            install/docker-compose.release.yml
+            install/install.ps1
+            install/install.sh
+            install/uninstall.ps1
+            install/uninstall.sh
             migration.sql

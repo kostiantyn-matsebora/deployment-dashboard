@@ -10,7 +10,7 @@ This directory contains two distinct families of artefacts:
    [§ seed.ps1](#seedps1) below.
 2. **Installer test suites** (`*.Tests.ps1` for Pester, `*.bats` for
    bats-core) that gate the user-facing release-install + dev-env
-   scripts (`install.{ps1,sh}`, `uninstall.{ps1,sh}`,
+   scripts (`install/install.{ps1,sh}`, `install/uninstall.{ps1,sh}`,
    `dev_env/start.ps1`, `dev_env/stop.ps1`). See
    [§ Installer test suites](#installer-test-suites) below.
 
@@ -23,12 +23,12 @@ suites that match the CI runner invocations:
 
 | Script | Test file | Runner |
 |---|---|---|
-| `install.ps1` | `install.Tests.ps1` | Pester 5 |
-| `uninstall.ps1` | `uninstall.Tests.ps1` | Pester 5 |
+| `install/install.ps1` | `install.Tests.ps1` | Pester 5 |
+| `install/uninstall.ps1` | `uninstall.Tests.ps1` | Pester 5 |
 | `dev_env/start.ps1` | `start.Tests.ps1` | Pester 5 |
 | `dev_env/stop.ps1` | `stop.Tests.ps1` | Pester 5 |
-| `install.sh` | `install.bats` | bats-core |
-| `uninstall.sh` | `uninstall.bats` | bats-core |
+| `install/install.sh` | `install.bats` | bats-core |
+| `install/uninstall.sh` | `uninstall.bats` | bats-core |
 
 ### Prerequisites
 
@@ -62,8 +62,8 @@ The suites do NOT require a Docker daemon and never reach the network.
 Both patterns are read-only against the installer scripts -- the
 originals are never modified, in line with the role boundaries in
 [`.agents/ginee/local/bindings.md`](../../.agents/ginee/local/bindings.md)
-(`qa-engineer` must NOT edit `install.{ps1,sh}` /
-`uninstall.{ps1,sh}` / `dev_env/*.ps1`; report bugs, don't fix).
+(`qa-engineer` must NOT edit `install/install.{ps1,sh}` /
+`install/uninstall.{ps1,sh}` / `dev_env/*.ps1`; report bugs, don't fix).
 
 ### Coverage matrix
 

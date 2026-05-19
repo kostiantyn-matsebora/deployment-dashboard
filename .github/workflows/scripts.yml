@@ -44,10 +44,10 @@ on:
     branches: [main]
     tags: ['v*']
     paths:
-      - 'install.ps1'
-      - 'install.sh'
-      - 'uninstall.ps1'
-      - 'uninstall.sh'
+      - 'install/install.ps1'
+      - 'install/install.sh'
+      - 'install/uninstall.ps1'
+      - 'install/uninstall.sh'
       - 'dev_env/start.ps1'
       - 'dev_env/stop.ps1'
       - 'testing/scripts/**'
@@ -55,10 +55,10 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'install.ps1'
-      - 'install.sh'
-      - 'uninstall.ps1'
-      - 'uninstall.sh'
+      - 'install/install.ps1'
+      - 'install/install.sh'
+      - 'install/uninstall.ps1'
+      - 'install/uninstall.sh'
       - 'dev_env/start.ps1'
       - 'dev_env/stop.ps1'
       - 'testing/scripts/**'

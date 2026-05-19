@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for ../../uninstall.sh -- bash sibling of uninstall.ps1.
+# Tests for ../../install/uninstall.sh -- bash sibling of install/uninstall.ps1.
 #
 # Strategy mirrors install.bats: PATH-shadowing `docker` stub captures
 # every compose call to $STUB_LOG; the script's args + exit code are
@@ -7,7 +7,7 @@
 
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
-    SCRIPT="$REPO_ROOT/uninstall.sh"
+    SCRIPT="$REPO_ROOT/install/uninstall.sh"
     INSTALL_DIR="$BATS_TEST_TMPDIR/dashboard"
     STUB_DIR="$BATS_TEST_TMPDIR/stub"
     STUB_LOG="$BATS_TEST_TMPDIR/stub.log"

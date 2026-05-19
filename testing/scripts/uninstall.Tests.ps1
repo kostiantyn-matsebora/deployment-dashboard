@@ -1,4 +1,4 @@
-# Tests for ../../uninstall.ps1 -- companion to install.ps1.
+# Tests for ../../install/uninstall.ps1 -- companion to install.ps1.
 #
 # Strategy mirrors install.Tests.ps1: subprocess invocation of a shimmed copy
 # of uninstall.ps1 in a per-test tmpdir. The shim overrides `docker` so we can
@@ -9,15 +9,15 @@
 
 BeforeDiscovery {
     $script:RepoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
-    $script:OriginalScript = Join-Path $RepoRoot 'uninstall.ps1'
+    $script:OriginalScript = Join-Path $RepoRoot 'install/uninstall.ps1'
     if (-not (Test-Path $OriginalScript)) {
-        throw "uninstall.ps1 not found at $OriginalScript"
+        throw "install/uninstall.ps1 not found at $OriginalScript"
     }
 }
 
 BeforeAll {
     $script:RepoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
-    $script:OriginalScript = Join-Path $RepoRoot 'uninstall.ps1'
+    $script:OriginalScript = Join-Path $RepoRoot 'install/uninstall.ps1'
     $script:OriginalContent = Get-Content -LiteralPath $OriginalScript -Raw
 
     $script:ShimHeader = @'
@@ -45,7 +45,7 @@ function docker {
         param([string]$TmpDir)
         $shimmed = Join-Path $TmpDir 'uninstall.shimmed.ps1'
         $match = [regex]::Match($script:OriginalContent, '(?ms)^\)\s*$')
-        if (-not $match.Success) { throw 'Could not locate param block end in uninstall.ps1' }
+        if (-not $match.Success) { throw 'Could not locate param block end in install/uninstall.ps1' }
         $insertAt = $match.Index + $match.Length
         $injected = $script:OriginalContent.Substring(0, $insertAt) + "`n" + $script:ShimHeader + "`n" + $script:OriginalContent.Substring($insertAt)
         Set-Content -LiteralPath $shimmed -Value $injected -Encoding utf8

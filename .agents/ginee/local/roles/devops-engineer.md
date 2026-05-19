@@ -13,7 +13,7 @@ Load this **alongside** the cardinal charter (`.agents/ginee/core/roles/devops-e
 This project ships PowerShell scripts that run on **both** Windows developer hosts AND Linux CI runners (`ubuntu-latest` per `.github/workflows/scripts.yml`). The runtime is **PowerShell 7+ (pwsh)** on both. The Pester test suite under `testing/scripts/*.Tests.ps1` invokes each script as a subprocess and asserts on its side-effects, so any cross-OS divergence in the script's own behaviour is visible as a CI failure on `ubuntu-latest`.
 
 Affected files (today):
-- `install.ps1`, `uninstall.ps1` (release-install entrypoints).
+- `install/install.ps1`, `install/uninstall.ps1` (release-install entrypoints).
 - `dev_env/start.ps1`, `dev_env/stop.ps1` (local-dev wrappers).
 - `testing/scripts/*.Tests.ps1` (Pester test code — qa-owned, but driven by the same cross-OS requirement).
 

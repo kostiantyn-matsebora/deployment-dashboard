@@ -1,4 +1,4 @@
-# Tests for ../../install.ps1 -- release-install primary entrypoint (issue #7).
+# Tests for ../../install/install.ps1 -- release-install primary entrypoint (issue #7).
 #
 # Strategy: subprocess invocation against a shimmed copy of install.ps1 in a
 # per-test tmpdir. The shim prepends function-form overrides of `docker` and
@@ -22,15 +22,15 @@
 
 BeforeDiscovery {
     $script:RepoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
-    $script:OriginalScript = Join-Path $RepoRoot 'install.ps1'
+    $script:OriginalScript = Join-Path $RepoRoot 'install/install.ps1'
     if (-not (Test-Path $OriginalScript)) {
-        throw "install.ps1 not found at $OriginalScript"
+        throw "install/install.ps1 not found at $OriginalScript"
     }
 }
 
 BeforeAll {
     $script:RepoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
-    $script:OriginalScript = Join-Path $RepoRoot 'install.ps1'
+    $script:OriginalScript = Join-Path $RepoRoot 'install/install.ps1'
     $script:OriginalContent = Get-Content -LiteralPath $OriginalScript -Raw
 
     # Shim header -- prepended to a copy of install.ps1 in the per-test tmp.
@@ -135,7 +135,7 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
         $paramEndPattern = '(?ms)^\)\s*$'
         $match = [regex]::Match($content, $paramEndPattern)
         if (-not $match.Success) {
-            throw "Could not locate end of param block in install.ps1"
+            throw "Could not locate end of param block in install/install.ps1"
         }
         $insertAt = $match.Index + $match.Length
         $injected = $content.Substring(0, $insertAt) + "`n" + $script:ShimHeader + "`n" + $content.Substring($insertAt)
