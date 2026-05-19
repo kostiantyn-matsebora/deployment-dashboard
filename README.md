@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.svg" width="120" height="120" alt="Deployment Dashboard logo — 3×3 matrix of services × environments with an animated in-progress pulse" />
+</p>
+
 [![Built with ginee](https://img.shields.io/badge/built%20with-ginee-7c3aed?style=flat-square)](https://github.com/kostiantyn-matsebora/ginee) [![AI-implemented end-to-end](https://img.shields.io/badge/AI--implemented-end%20to%20end-10b981?style=flat-square)](https://github.com/kostiantyn-matsebora/ginee)
 
 > [!NOTE]
