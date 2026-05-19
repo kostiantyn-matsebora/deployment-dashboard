@@ -74,10 +74,10 @@ indexed:
       docs/cr/CR-0006-light-dark-auto-theme.md: 8eff79593a20d41cef065127c5ba9711a1df46c2eb64cd6c7cc0041e9035599a
       docs/cr/CR-0007-defer-matrix-layout-to-phase-2.md: 87aee459bb1fee736090fa4ee79870541a7f21b91b68a93e98862dc214add5d5
       docs/cr/CR-0008-api-validation-and-openapi-scalar.md: a35d1b17ee8a37c4902ff311a617d542429dfdb9a1865f384a8e69e815aa51d6
-      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: ae2cb5ab2e9691941baea00a61af78a27f3e88e11dd5617e6d2454306fa0076a
-      docs/cr/CR-0010-component-ci-pipeline.md: b9c31c0661979a4a4b4661ce1b90f175c6fd889fe930c05a4302c64969c14b02
+      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: 98c0b10aa942a368a3f946b654e5083c32d04d62a13822739369f88dee3f19c7
+      docs/cr/CR-0010-component-ci-pipeline.md: 88635db8281ff7c6a1585cd911fc560a92276b7e0788c25b37a36d35695e4a6e
       docs/cr/README.md: e2002dd99ae064b613bbeb5e3d9eae299544c22c232039a123aeecc97893abd8
-    indexed-on: 2026-05-18
+    indexed-on: 2026-05-19
     index-files: [cr-index.idx]
     source-bytes: 153779             # 3201+12373+30052+8721+4007+5775+9110+18314+31258+27932+3036
     index-bytes: 5073
@@ -85,6 +85,7 @@ indexed:
     compression-target: 0.15
     consumed-by: [solution-architect]
     # Re-extraction 2026-05-18: CR-0009 (optional pull-mode fetcher + X-Progress-Reporter header) + CR-0010 (component CI pipeline) added.
+    # SHA refresh 2026-05-19: CR-0009 References block reframed to cite ADR-0006 (microservices framing) while retaining ADR-0002 (co-location mechanics); CR-0010 § 3a topology row + References block reframed identically. No new CR records; cr-index.idx remains semantically valid (titles/statuses/decision lines unchanged).
 
   - class: mockup
     category: doc
@@ -137,15 +138,15 @@ indexed:
       stays in WBS. Drives PM pickup routing (track + phase-gate decisions)
       and SA scope-impact assessment when proposing CRs that touch scope.
     source: docs/WBS.md
-    sha256: d959c9ed4eaa0f5400d586ee58ba9d038f1b60e22b7c46cddcba2d25e2ae213d
-    indexed-on: 2026-05-18
+    sha256: 367f0d38fad5a0726c5041161c04b52e7109ac621f42ac560dfdbf10afaf23ca
+    indexed-on: 2026-05-19
     index-files: [wbs-index.idx]
     source-bytes: 30464
     index-bytes: 12386
     compression: 0.407
     compression-target: 0.25
     compression-floor: 0.5
-    compression-status: 'over-target, under-floor — flagged. WBS is dense list-of-items; further compression would drop FR/owner cross-refs. Re-extraction 2026-05-18: §1.5 (10 items, CR-0009 fetcher + X-Progress-Reporter) added; §1.6 (9 items, CR-0010 component CI) added; §5.1 split into build+push (delivered by §1.6) + ACA-revision-update (deferred) halves; §5.2..§5.4 expanded as separate rows.'
+    compression-status: 'over-target, under-floor — flagged. WBS is dense list-of-items; further compression would drop FR/owner cross-refs. Re-extraction 2026-05-18: §1.5 (10 items, CR-0009 fetcher + X-Progress-Reporter) added; §1.6 (9 items, CR-0010 component CI) added; §5.1 split into build+push (delivered by §1.6) + ACA-revision-update (deferred) halves; §5.2..§5.4 expanded as separate rows. SHA refresh 2026-05-19: §1.0 + §4.5 framing reframed to cite ADR-0006 (microservices architecture) while retaining ADR-0002 (co-location mechanics + future-split trigger conditions). No new items / FR / owner additions; wbs-index.idx remains semantically valid.'
     consumed-by: [project-manager, solution-architect]
 
   - class: ci-cd-integration
