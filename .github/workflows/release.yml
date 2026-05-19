@@ -60,6 +60,14 @@ jobs:
       - name: Restore .NET tools
         run: dotnet tool restore
 
+      # `dotnet ef migrations script` reads project.assets.json from the design-time
+      # restore graph; without a prior `dotnet restore` it errors with NETSDK1004
+      # ("Assets file ... not found"). The reusable workflow (_build-and-push-image.yml)
+      # gets the restore implicitly via its `dotnet test` step; this workflow has no
+      # test step so we restore explicitly.
+      - name: Restore NuGet packages
+        run: dotnet restore backend/Dashboard.sln
+
       # Re-generate migration.sql inline -- mirrors _build-and-push-image.yml step 10.
       # Placeholder ConnectionStrings__DefaultConnection: the design-time factory
       # only resolves the provider, never connects.
