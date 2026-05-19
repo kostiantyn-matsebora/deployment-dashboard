@@ -127,7 +127,7 @@ fi
 # The repo + GHCR component images are private. Anonymous HTTPS asset fetch 404s,
 # anonymous docker pulls 401. All three failure modes MUST exit 1 BEFORE we
 # create the install dir, write any asset, or invoke docker.
-if ! command -v gh >/dev/null 2>&1; then
+if ! command -v gh >/dev/null 2>&1 || ! gh --version >/dev/null 2>&1; then
     echo "${RED}ERROR: gh CLI not found on PATH. The repo and GHCR images are private, so the installer needs gh to fetch release assets and authenticate to ghcr.io.${NC}" >&2
     echo "${RED}       Install it from https://cli.github.com/ and then run:${NC}" >&2
     echo "${RED}         gh auth login --hostname github.com${NC}" >&2
