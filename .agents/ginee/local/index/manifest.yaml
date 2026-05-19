@@ -12,7 +12,7 @@ indexed:
     template: multi
     recipe: builtin:architecture
     source: docs/architecture.md
-    sha256: 5d8adf9256044bb85941f610af30c55554bb8df1e0f6ec0296c6ca57cc843823
+    sha256: ed5e6f3e0190c6f92cb1e2fead622b1408f241b26bbeb505cbccaf44358fe472
     indexed-on: 2026-05-19
     index-files:
       - architecture.idx
@@ -46,9 +46,9 @@ indexed:
       docs/adr/ADR-0001-topology-derivation-five-pass.md: 376fe410669dbee4006729b37c3872dc0e19491746bae7ccd9b9fe7f96d7fc80
       docs/adr/ADR-0002-modular-monolith-consolidation.md: 32b1b79474d0589fe7e8ecdaa354eaa96b8218e19ec90bd9738c92fad8ae0790
       docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md: 5a86e60f4603f31d03097c9a8b8b29b2512f845ebb44605fbef290aa9edc9be4
-      docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md: 0a00077b8e53aeb6d738a3d2c926517e15b22996690c1852f6ae16d715610cce
-      docs/adr/ADR-0005-release-install-migration-actuation.md: 896b05bacb52d57dfe214da5957cb0cac3ece9288fdfc5e9454a2da3ac2ed0a5
-      docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md: 0e0c4c27183ee1fec209bcecdd9f9a4b77cc4202bee7829be60b9a7f49f57550
+      docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md: d384856632a4be0396121e1dab9085b98355ac512bc4d0b987af178761363ae8
+      docs/adr/ADR-0005-release-install-migration-actuation.md: f2eb7cdcae80aa8f8ef39967d1b1330aedaf4d56fbae11432729aa424ea1bbbe
+      docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md: abcfa856ee2d519e8a59dae5cd778d2a4298fbe7d880a0a5723b66db9c121831
       docs/adr/README.md: b6240eedb3f8e7ed9fad0e0fd5808a593e0ff5b937ed5e83273226a64a387bf8
     indexed-on: 2026-05-19
     index-files: [adr-index.idx]
@@ -74,8 +74,8 @@ indexed:
       docs/cr/CR-0006-light-dark-auto-theme.md: 8eff79593a20d41cef065127c5ba9711a1df46c2eb64cd6c7cc0041e9035599a
       docs/cr/CR-0007-defer-matrix-layout-to-phase-2.md: 87aee459bb1fee736090fa4ee79870541a7f21b91b68a93e98862dc214add5d5
       docs/cr/CR-0008-api-validation-and-openapi-scalar.md: a35d1b17ee8a37c4902ff311a617d542429dfdb9a1865f384a8e69e815aa51d6
-      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: 98c0b10aa942a368a3f946b654e5083c32d04d62a13822739369f88dee3f19c7
-      docs/cr/CR-0010-component-ci-pipeline.md: 88635db8281ff7c6a1585cd911fc560a92276b7e0788c25b37a36d35695e4a6e
+      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: ed42d862028a6536f0570605ccb51e295d65c3cf3cfa441304a9298b5045d7e5
+      docs/cr/CR-0010-component-ci-pipeline.md: fa7f56de048606960439289e6bc8980f14a8984b03add3def2995b70783325bb
       docs/cr/README.md: e2002dd99ae064b613bbeb5e3d9eae299544c22c232039a123aeecc97893abd8
     indexed-on: 2026-05-19
     index-files: [cr-index.idx]
@@ -138,7 +138,7 @@ indexed:
       stays in WBS. Drives PM pickup routing (track + phase-gate decisions)
       and SA scope-impact assessment when proposing CRs that touch scope.
     source: docs/WBS.md
-    sha256: 367f0d38fad5a0726c5041161c04b52e7109ac621f42ac560dfdbf10afaf23ca
+    sha256: e40ff7ff2d7d732a57f324e1c35e5112c18518de60a3bbde2255dfbd94261e2d
     indexed-on: 2026-05-19
     index-files: [wbs-index.idx]
     source-bytes: 30464
@@ -186,7 +186,7 @@ indexed:
       idempotent-script contract without reading the full doc — mirrors the
       wire-* row decomposition in ci-cd-integration-index.idx.
     source: docs/ci-cd-pipelines.md
-    sha256: 71f93c9ac34f359094b98bb0046d875a6425693b0f294d1d4001068b51af5974
+    sha256: 576bec5bfb0e343e754417b3e65d27620b78761f3c431cff82af48f0ca5714ff
     indexed-on: 2026-05-18
     index-files: [ci-pipelines-index.idx]
     source-bytes: 12740
