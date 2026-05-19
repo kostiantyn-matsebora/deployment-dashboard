@@ -21,16 +21,11 @@
 #     a per-PR gate — keeping the matrix at one dimension keeps PR feedback
 #     under a minute.
 #
-# QA contract surface (testing/scripts/, owned by qa-engineer):
-#   install.Tests.ps1     -> install.ps1
-#   uninstall.Tests.ps1   -> uninstall.ps1
-#   start.Tests.ps1       -> dev_env/start.ps1
-#   stop.Tests.ps1        -> dev_env/stop.ps1
-#   install.bats          -> install.sh
-#   uninstall.bats        -> uninstall.sh
-# Tests use subprocess invocation + PATH shadowing for stubs; they do NOT
-# require Docker on the runner — they assert on script exit codes + stdout /
-# stderr + filesystem side-effects.
+# QA contract surface (testing/scripts/, owned by qa-engineer): see the
+# "Installer test suites" table + "Test strategy" section in
+# testing/scripts/README.md for the test-file -> script mapping and the
+# stubbing pattern. Tests use subprocess invocation + PATH shadowing; they
+# do NOT require Docker on the runner.
 #
 # Decision locks for this file:
 #   D1  Blocking gate — both jobs must pass for merge eligibility. No
@@ -78,10 +73,8 @@ permissions:
   contents: read
 
 jobs:
-  # Pester job — exercises the four PS1 scripts via Invoke-Pester. Tests use
-  # subprocess invocation (Start-Process pwsh) and PATH shadowing so docker /
-  # docker-compose can be stubbed in-test without requiring a real container
-  # runtime on the runner.
+  # Pester job — exercises the four PS1 scripts via Invoke-Pester. See header
+  # for the stubbing pattern.
   pester:
     name: pester
     runs-on: ubuntu-latest
@@ -90,7 +83,7 @@ jobs:
         uses: actions/checkout@v4
 
       # PowerShell 7 is pre-installed on GHA ubuntu-latest. We pin Pester 5+
-      # because the test config block in step 3 uses the v5 fluent API
+      # because the "Run Pester tests" step below uses the v5 fluent API
       # (New-PesterConfiguration); v4 ignores it silently and reports zero
       # tests, which would be a false green.
       - name: Install Pester 5
@@ -135,7 +128,7 @@ jobs:
           retention-days: 14
 
   # bats job — exercises install.sh + uninstall.sh. Same stubbing pattern as
-  # Pester: PATH shadowing for docker / curl / etc.
+  # the Pester job.
   bats:
     name: bats
     runs-on: ubuntu-latest

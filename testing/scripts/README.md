@@ -67,35 +67,41 @@ originals are never modified, in line with the role boundaries in
 
 ### Coverage matrix
 
-Each test file targets these axes (varies by script, see the file
-header for the specific list):
+Each row is a contract axis; each column is a test file. `yes` =
+covered; `n/a` = axis does not apply to that script (e.g. `stop.ps1`
+does not touch secrets, so secret-handling axes are n/a). Use this
+table to find which file(s) to extend when a contract changes.
 
-- Param defaults + persistence.
-- `GHA_TOKEN` precondition (4 cases per issue #5 -- must exit BEFORE
-  any `docker compose` / network call when `-Fetcher` is set without a
-  token AND without `-AllowMissingGhaToken`).
-- `API_TOKEN` defence-in-depth (dev-literal refusal + env override +
-  reuse).
-- `POSTGRES_PASSWORD` defence-in-depth (same shape).
-- Release URL shape (`/releases/latest/download/` vs
-  `/releases/download/<tag>/`).
-- Env-file output shape (every required key with correct values).
-- Compose args (`--profile migrate` / `--profile fetcher` /
-  `--env-file`).
-- Error paths (asset 404; `docker compose pull` failure; health-poll
-  timeout).
+| Axis | `install.Tests.ps1` | `uninstall.Tests.ps1` | `start.Tests.ps1` | `stop.Tests.ps1` | `install.bats` | `uninstall.bats` |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Param defaults + persistence | yes | yes | yes | yes | yes | yes |
+| `GHA_TOKEN` precondition (4 cases, issue #5) [1] | yes | n/a | yes | n/a | yes | n/a |
+| `API_TOKEN` defence-in-depth [2] | yes | n/a | n/a | n/a | yes | n/a |
+| `POSTGRES_PASSWORD` defence-in-depth [2] | yes | n/a | n/a | n/a | yes | n/a |
+| Release URL shape (`latest` vs pinned tag) [3] | yes | n/a | n/a | n/a | yes | n/a |
+| Env-file output shape [4] | yes | n/a | n/a | n/a | yes | n/a |
+| Compose args (profiles + `--env-file`) [5] | yes | yes | yes | yes | yes | yes |
+| Error paths [6] | yes | yes | yes | yes | yes | yes |
+| **Test count (as of authoring)** | **24** | **11** | **10** | **7** | **23** | **12** |
 
-### Test counts (as of authoring)
+Total: 87 tests.
 
-| Suite | Tests |
-|---|---|
-| `install.Tests.ps1` | 24 |
-| `uninstall.Tests.ps1` | 11 |
-| `start.Tests.ps1` | 10 |
-| `stop.Tests.ps1` | 7 |
-| `install.bats` | 23 |
-| `uninstall.bats` | 12 |
-| **Total** | **87** |
+Notes:
+
+1. Must exit BEFORE any `docker compose` / network call when
+   `-Fetcher` / `--fetcher` is set without a token AND without
+   `-AllowMissingGhaToken` / `--allow-missing-gha-token`. `uninstall`
+   and `stop` are teardown-only and never read `GHA_TOKEN`.
+2. Dev-literal refusal + env override + reuse of valid pre-existing
+   value. `uninstall` / `start` / `stop` never generate or rotate
+   secrets.
+3. `/releases/latest/download/` vs `/releases/download/<tag>/`.
+   Install-only — no other script downloads assets.
+4. Every required key written with correct values. Install-only — it's
+   the script that produces `dashboard.env`.
+5. `--profile migrate` / `--profile fetcher` / `--env-file`.
+6. Asset 404; `docker compose pull` / `up` / `down` failure; health-poll
+   timeout; missing-compose-file paths (stop only).
 
 ## Test data scripts
 
