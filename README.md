@@ -49,7 +49,7 @@ fetches and image pulls flow through the GitHub CLI's authenticated session.
 | Docker (Engine + Compose v2) | Runs the four release images + the one-shot migrations container. |
 | **`gh` CLI on `PATH`** | Replaces anonymous `irm` / `curl` -- the release asset URL pattern 404s without auth headers. |
 | **`gh auth status --hostname github.com` returns 0** | Installer's first action is to verify the auth session; missing / expired auth fails fast with a friendly error. |
-| **`gh` token carries the `read:packages` scope** | Required by the `gh auth token` → `docker login ghcr.io` pipeline -- the default `gh auth login` scope set does NOT include `read:packages`. |
+| **`gh` token carries `read:packages`, `write:packages`, or `admin:packages`** | Required by the `gh auth token` → `docker login ghcr.io` pipeline. GitHub's OAuth scopes are hierarchical -- `write:packages` includes `read:packages` (and `admin:packages` includes both), so any of the three is accepted. The default `gh auth login` scope set does NOT include any of them -- refresh with `--scopes read:packages` to grant the minimum. |
 
 Install + authenticate `gh`:
 
@@ -200,7 +200,7 @@ locked-down hosts), one minimal path exists. It **regresses** on issue #5's
 to perform the GHCR docker login manually; the user takes on the
 secret-handling + auth discipline.
 
-The `gh` CLI prereq (installed + authenticated + `read:packages` scope per
+The `gh` CLI prereq (installed + authenticated + any of `read:packages` / `write:packages` / `admin:packages` per
 the Prerequisites table above) still applies. Without `gh`, the escape hatch
 cannot fetch the release assets and cannot authenticate `docker login` to
 pull the private GHCR images.
@@ -255,7 +255,7 @@ Use Option B instead: `gh release download` the compose file locally, then
 #### Regression warnings for Option B
 
 1. **`gh` CLI is now a hard dependency for the escape hatch too.** Without
-   `gh` (installed / authenticated / `read:packages` scope), this option
+   `gh` (installed / authenticated / any of `read:packages` / `write:packages` / `admin:packages`), this option
    cannot fetch the release assets and cannot `docker login` to GHCR.
    Anonymous `curl -fsSL -O <release-asset-url>` and anonymous `docker
    compose pull` both 404 against the private repo + private GHCR.

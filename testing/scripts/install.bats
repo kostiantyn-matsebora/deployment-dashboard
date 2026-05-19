@@ -105,7 +105,9 @@ STUB
     # Knobs (env vars set by the test):
     #   DD_GH_MISSING       -- if 'true', `gh --version` exits 1
     #   DD_GH_NOT_AUTHED    -- if 'true', `gh auth status` exits 1
-    #   DD_GH_NO_SCOPE      -- if 'true', `--show-token` scope list omits read:packages
+    #   DD_GH_NO_SCOPE      -- if 'true', `--show-token` scope list omits all of read/write/admin:packages
+    #   DD_GH_SCOPE_LITERAL -- if set, overrides the default 'read:packages' scope in the
+    #                          stub output (use to assert write:packages / admin:packages pass too)
     #   DD_GH_DOWNLOAD_FAIL -- if set to substring, `gh release download` exits 1 when --pattern matches
     cat > "$STUB_DIR/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -124,10 +126,16 @@ case "${1:-}" in
                     exit 1
                 fi
                 # Emit a scope-list line when --show-token is present.
+                # GitHub's OAuth scope model is hierarchical: write:packages includes
+                # read:packages, admin:packages includes both. DD_GH_SCOPE_LITERAL lets a
+                # test substitute the granted scope (e.g. write:packages alone) to assert
+                # the install script accepts the union read|write|admin:packages.
                 for a in "$@"; do
                     if [ "$a" = "--show-token" ]; then
                         if [ "${DD_GH_NO_SCOPE:-}" = "true" ]; then
                             echo "Token scopes: repo, workflow, gist"
+                        elif [ -n "${DD_GH_SCOPE_LITERAL:-}" ]; then
+                            echo "Token scopes: repo, ${DD_GH_SCOPE_LITERAL}, workflow"
                         else
                             echo "Token scopes: repo, read:packages, workflow"
                         fi
@@ -299,6 +307,23 @@ log_not_contains() {
     log_not_contains 'gh release download'
     [ ! -f "$INSTALL_DIR/dashboard.env" ]
     [ ! -f "$INSTALL_DIR/docker-compose.release.yml" ]
+}
+
+@test "gh token has write:packages (no explicit read:packages) -- precondition passes (regression guard: scope hierarchy)" {
+    # `gh auth status --show-token` only lists the highest granted scope --
+    # write:packages includes read:packages, so the redundant read:packages is
+    # not separately listed. The script must accept any of read|write|admin:packages,
+    # otherwise tokens granted via `gh auth refresh --scopes write:packages` get
+    # rejected even though they can pull from GHCR.
+    export DD_GH_SCOPE_LITERAL='write:packages'
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+}
+
+@test "gh token has admin:packages -- precondition passes (regression guard: same hierarchy reason)" {
+    export DD_GH_SCOPE_LITERAL='admin:packages'
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
 }
 
 @test "happy path -- docker login ghcr.io runs BEFORE docker compose pull (ordering invariant)" {

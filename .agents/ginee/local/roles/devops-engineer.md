@@ -62,7 +62,7 @@ verify three things:
 |---|---|---|
 | `gh` is on `PATH` | `gh --version` | `'gh' CLI not found on PATH. Install via 'winget install GitHub.cli' (Windows) / 'brew install gh' (macOS) / 'apt install gh' or 'dnf install gh' (Linux), then re-run.` |
 | `gh` is authenticated for `github.com` | `gh auth status --hostname github.com` (exit 0) | `gh is not authenticated for github.com. Run 'gh auth login' and retry.` |
-| `gh` token carries `read:packages` scope | parse `gh auth status --hostname github.com` output for the scope list (the cmd surfaces it under `Token scopes:`) | `gh token is missing the 'read:packages' scope (required for GHCR docker login). Run 'gh auth refresh --hostname github.com --scopes read:packages' and retry.` |
+| `gh` token carries GHCR read access — any of `read:packages`, `write:packages`, or `admin:packages` | parse `gh auth status --hostname github.com --show-token` output for the scope list (under `Token scopes:`) and regex-match `(read\|write\|admin):packages`. The scope model is hierarchical (`write` ⊃ `read`; `admin` ⊃ both), and `gh` only emits the highest granted scope — matching only `read:packages` rejects valid `write:packages`-granted tokens. | `gh token for github.com lacks GHCR read access. Need one of: 'read:packages', 'write:packages', or 'admin:packages'. Run 'gh auth refresh --hostname github.com --scopes read:packages' and retry.` |
 
 All three fail fast; none of the three fall back to "try without". The user
 gets a friendly, actionable error before any docker work starts.
@@ -112,13 +112,21 @@ fi
 `command -v` is the POSIX-portable "is it on PATH" check; `which` is BSD/GNU-
 divergent and not safe across the macOS + Debian + Alpine matrix.
 
-### Rule — `read:packages` is not in the gh default scope set
+### Rule — `read:packages` is not in the gh default scope set, and scopes are hierarchical
 
 A vanilla `gh auth login` produces a token with the default scope set
-(`repo`, `read:org`, `gist`, `workflow`); **`read:packages` is not in that
-list**. The installer's probe (above) must check for `read:packages`
-specifically and emit the friendly `gh auth refresh ... --scopes read:packages`
-instruction when missing.
+(`repo`, `read:org`, `gist`, `workflow`); **none of `read:packages` /
+`write:packages` / `admin:packages` is in that list**. The installer's
+probe (above) must match any of the three on `gh auth status --show-token`
+output — GitHub's OAuth scopes are hierarchical: `write:packages` includes
+`read:packages` and `admin:packages` includes both, and `gh auth status`
+only lists the highest granted scope. A regex narrowed to `read:packages`
+literally rejects valid `write:packages`-granted tokens (which
+*can* pull from GHCR). Use `(read|write|admin):packages` instead.
+
+The friendly recovery command in the error message still suggests
+`gh auth refresh ... --scopes read:packages` (the minimum grant);
+users with higher-tier scopes don't need to act.
 
 Do NOT have the installer try to silently `gh auth refresh` on the user's
 behalf — that opens a browser flow that fails non-interactively (CI runners,

@@ -203,10 +203,15 @@ permissions to publish the release object + push tagged images. The gh-CLI
 prereq applies to the installer scripts (run on the adopter's host), not to
 the publishing pipeline.
 
-**Required `gh` scope on the adopter side:** `read:packages`. The default
-`gh auth login` scope set does not include it; the README install
+**Required `gh` scope on the adopter side:** any of `read:packages`,
+`write:packages`, or `admin:packages`. GitHub's OAuth scopes are
+hierarchical (`write:packages` ⊃ `read:packages`; `admin:packages` ⊃ both),
+and `gh auth status --show-token` only lists the highest granted scope.
+The installer's precondition matches the union to avoid rejecting tokens
+that can pull from GHCR but only show the higher-tier scope. The default
+`gh auth login` scope set does not include any of them; the README install
 instructions surface a `gh auth refresh --hostname github.com --scopes
-read:packages` step before the bootstrap one-liner.
+read:packages` step before the bootstrap one-liner (the minimum grant).
 
 ### Trigger
 

@@ -47,7 +47,9 @@ BeforeAll {
     #   DD_IWR_HEALTH_OK      -- if 'true', the /health IWR returns a 200 stub object
     #   DD_GH_MISSING         -- if 'true', `gh --version` exits 1 (gh not on PATH)
     #   DD_GH_NOT_AUTHED      -- if 'true', `gh auth status ...` exits 1
-    #   DD_GH_NO_SCOPE        -- if 'true', `gh auth status --show-token` omits read:packages
+    #   DD_GH_NO_SCOPE        -- if 'true', `gh auth status --show-token` omits all of read/write/admin:packages
+    #   DD_GH_SCOPE_LITERAL   -- if set, overrides the default 'read:packages' scope in the
+    #                            stub output (use to assert write:packages / admin:packages pass too)
     #   DD_GH_DOWNLOAD_FAIL   -- if set to a substring, `gh release download` exits 1
     #                            when the requested asset matches the substring
     #
@@ -142,11 +144,16 @@ function gh {
             $global:LASTEXITCODE = 1
             return
         }
-        # When --show-token is present, emit a fake scope list line. Include read:packages
-        # unless DD_GH_NO_SCOPE='true'.
+        # When --show-token is present, emit a fake scope list line. By default
+        # include read:packages; DD_GH_NO_SCOPE='true' omits all of read/write/admin:packages;
+        # DD_GH_SCOPE_LITERAL overrides the granted scope explicitly (used to assert
+        # write:packages / admin:packages alone also pass the precondition since
+        # GitHub's OAuth scope model is hierarchical).
         if ($argv -contains '--show-token') {
             if ($env:DD_GH_NO_SCOPE -eq 'true') {
                 Write-Output 'Token scopes: repo, workflow, gist'
+            } elseif (-not [string]::IsNullOrEmpty($env:DD_GH_SCOPE_LITERAL)) {
+                Write-Output "Token scopes: repo, $($env:DD_GH_SCOPE_LITERAL), workflow"
             } else {
                 Write-Output 'Token scopes: repo, read:packages, workflow'
             }
@@ -246,7 +253,7 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
         $envKeys = @(
             'GHA_TOKEN','DASHBOARD_API_TOKEN','DD_SCRIPT_LOG',
             'DD_PULL_EXIT','DD_UP_EXIT','DD_LOGIN_EXIT','DD_IWR_HEALTH_OK',
-            'DD_GH_MISSING','DD_GH_NOT_AUTHED','DD_GH_NO_SCOPE','DD_GH_DOWNLOAD_FAIL'
+            'DD_GH_MISSING','DD_GH_NOT_AUTHED','DD_GH_NO_SCOPE','DD_GH_SCOPE_LITERAL','DD_GH_DOWNLOAD_FAIL'
         )
         foreach ($k in $envKeys) { $envBackup[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
         try {
@@ -403,6 +410,26 @@ Describe 'install.ps1 -- gh CLI precondition' {
         }).Count | Should -Be 0
         Test-Path (Join-Path $tmp 'dashboard.env')              | Should -BeFalse
         Test-Path (Join-Path $tmp 'docker-compose.release.yml') | Should -BeFalse
+    }
+
+    It 'gh token has write:packages (no explicit read:packages) -- precondition passes (regression guard: GitHub OAuth scope hierarchy)' {
+        # `gh auth status --show-token` only lists the *highest* granted scope --
+        # write:packages includes read:packages, so the redundant read:packages
+        # is not separately listed. The script must accept any of
+        # read|write|admin:packages, otherwise tokens granted via
+        # `gh auth refresh --scopes write:packages` get rejected even though
+        # they can pull from GHCR.
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_GH_SCOPE_LITERAL = 'write:packages' }
+        $r.ExitCode | Should -Be 0
+    }
+
+    It 'gh token has admin:packages -- precondition passes (regression guard: same hierarchy reason)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_GH_SCOPE_LITERAL = 'admin:packages' }
+        $r.ExitCode | Should -Be 0
     }
 
     It 'happy path -- docker login ghcr.io runs BEFORE docker compose pull (ordering invariant)' {

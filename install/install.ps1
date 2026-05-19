@@ -134,11 +134,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Scope check: `gh auth status --show-token` prints "Token scopes: 'a', 'b', ..."
-# on stderr. Capture both streams + match `read:packages` literally; the colon
-# means we can't blindly word-split, so SimpleMatch is fine.
+# on stderr. Capture both streams + match the *:packages hierarchy. GitHub's
+# OAuth scope model is hierarchical -- write:packages includes read:packages,
+# and admin:packages includes both -- and `gh auth status` only lists the
+# highest granted scope, never the redundant subset. A regex on the union
+# accepts any token that can pull from GHCR.
 $ghScopeOutput = (& gh auth status --hostname github.com --show-token 2>&1 | Out-String)
-if ($ghScopeOutput -notmatch 'read:packages') {
-    Write-Host "ERROR: gh token for github.com lacks the 'read:packages' scope, which is required to pull private GHCR images. Run:" -ForegroundColor Red
+if ($ghScopeOutput -notmatch '(read|write|admin):packages') {
+    Write-Host "ERROR: gh token for github.com lacks GHCR read access. Need one of: 'read:packages', 'write:packages', or 'admin:packages'. Run:" -ForegroundColor Red
     Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
     exit 1
 }
