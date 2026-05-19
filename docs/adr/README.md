@@ -19,3 +19,5 @@ Records of architecture decisions (Architecture Decision Records — component s
 | [ADR-0001](./ADR-0001-topology-derivation-five-pass.md) | Per-service topology derivation — five-pass algorithm on the read side | accepted |
 | [ADR-0002](./ADR-0002-modular-monolith-consolidation.md) | Modular monolith — single API container hosting two library surfaces | accepted |
 | [ADR-0003](./ADR-0003-theme-persistence-and-foit-safe-bootstrap.md) | Theme persistence in `localStorage` with FOIT-safe inline bootstrap | accepted |
+| [ADR-0004](./ADR-0004-opaque-per-progress-reporter-cursor.md) | Opaque per-`progress_reporter` cursor; backend-held; out-of-process fetcher; plug-in adapter shape | accepted |
+| [ADR-0005](./ADR-0005-release-install-migration-actuation.md) | Release-install migration actuation via tag-pinned `migration.sql` release asset | accepted |

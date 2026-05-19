@@ -111,7 +111,7 @@ deployment-dashboard/
 
 | Role file | Description (from front-matter) |
 |---|---|
-| (none) | — |
+| `local/roles/devops-engineer.md` | Project-local extension to the cardinal `devops-engineer` charter. Captures deployment-dashboard-specific craft notes — cross-OS PowerShell rules, CI-defect history, and gotcha patterns that benefit this project's devops dispatches but don't belong on the framework-upstream side. |
 
 ## Specialist suggestions (from `extras/roles/`)
 

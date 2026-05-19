@@ -1,11 +1,114 @@
-# Test data scripts
+# Test data scripts + installer test suites
+
+This directory contains two distinct families of artefacts:
+
+1. **Test data scripts** (`seed.ps1`, ...) that drive the Deployment
+   Dashboard ingest API for fixture seeding / cleanup. Implements WBS
+   MVP §2 ("Automate Local Deployment") and §3.1 ("Seed local database
+   with representative test data") in
+   [`docs/architecture.md`](../../docs/architecture.md). See
+   [§ seed.ps1](#seedps1) below.
+2. **Installer test suites** (`*.Tests.ps1` for Pester, `*.bats` for
+   bats-core) that gate the user-facing release-install + dev-env
+   scripts (`install.{ps1,sh}`, `uninstall.{ps1,sh}`,
+   `dev_env/start.ps1`, `dev_env/stop.ps1`). See
+   [§ Installer test suites](#installer-test-suites) below.
+
+Owner: `qa-engineer` (see [`.claude/agents/qa-engineer.md`](../../.claude/agents/qa-engineer.md)).
+
+## Installer test suites
+
+The 6 user-facing release / dev-env scripts are gated by automated
+suites that match the CI runner invocations:
+
+| Script | Test file | Runner |
+|---|---|---|
+| `install.ps1` | `install.Tests.ps1` | Pester 5 |
+| `uninstall.ps1` | `uninstall.Tests.ps1` | Pester 5 |
+| `dev_env/start.ps1` | `start.Tests.ps1` | Pester 5 |
+| `dev_env/stop.ps1` | `stop.Tests.ps1` | Pester 5 |
+| `install.sh` | `install.bats` | bats-core |
+| `uninstall.sh` | `uninstall.bats` | bats-core |
+
+### Prerequisites
+
+- **PowerShell 7+ (`pwsh`)** for the Pester suites. Already required
+  by the rest of the testing surface.
+- **Pester 5.x** (`Install-Module -Name Pester -MinimumVersion 5.0.0 -Force`).
+- **bats-core 1.7+** for the bash suites. On Ubuntu / Debian runners:
+  `sudo apt-get install -y bats`. On macOS: `brew install bats-core`.
+
+### Local runner invocations
+
+```powershell
+# All Pester suites (CI equivalent).
+Invoke-Pester ./testing/scripts/*.Tests.ps1 -CI -Output Detailed
+```
+
+```bash
+# All bats suites (CI equivalent).
+bats ./testing/scripts/*.bats
+```
+
+### Test strategy
+
+The suites do NOT require a Docker daemon and never reach the network.
+
+| Pattern | Where |
+|---|---|
+| **Shimmed subprocess** -- prepend a stub `docker` / `Invoke-WebRequest` function block after the script's `param(...)` block; write the shimmed copy to a per-test tmpdir; invoke via `pwsh -NoProfile -File <shim>`. | `.Tests.ps1` (Pester) |
+| **PATH shadowing** -- prepend a per-test `$STUB_DIR` to `PATH` containing fake `curl`, `docker`, `openssl`, `sleep` executables that capture invocations to `$STUB_LOG`. | `.bats` (bash) |
+
+Both patterns are read-only against the installer scripts -- the
+originals are never modified, in line with the role boundaries in
+[`.agents/ginee/local/bindings.md`](../../.agents/ginee/local/bindings.md)
+(`qa-engineer` must NOT edit `install.{ps1,sh}` /
+`uninstall.{ps1,sh}` / `dev_env/*.ps1`; report bugs, don't fix).
+
+### Coverage matrix
+
+Each row is a contract axis; each column is a test file. `yes` =
+covered; `n/a` = axis does not apply to that script (e.g. `stop.ps1`
+does not touch secrets, so secret-handling axes are n/a). Use this
+table to find which file(s) to extend when a contract changes.
+
+| Axis | `install.Tests.ps1` | `uninstall.Tests.ps1` | `start.Tests.ps1` | `stop.Tests.ps1` | `install.bats` | `uninstall.bats` |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Param defaults + persistence | yes | yes | yes | yes | yes | yes |
+| `GHA_TOKEN` precondition (4 cases, issue #5) [1] | yes | n/a | yes | n/a | yes | n/a |
+| `API_TOKEN` defence-in-depth [2] | yes | n/a | n/a | n/a | yes | n/a |
+| `POSTGRES_PASSWORD` defence-in-depth [2] | yes | n/a | n/a | n/a | yes | n/a |
+| Release URL shape (`latest` vs pinned tag) [3] | yes | n/a | n/a | n/a | yes | n/a |
+| Env-file output shape [4] | yes | n/a | n/a | n/a | yes | n/a |
+| Compose args (profiles + `--env-file`) [5] | yes | yes | yes | yes | yes | yes |
+| Error paths [6] | yes | yes | yes | yes | yes | yes |
+| **Test count (as of authoring)** | **24** | **11** | **10** | **7** | **23** | **12** |
+
+Total: 87 tests.
+
+Notes:
+
+1. Must exit BEFORE any `docker compose` / network call when
+   `-Fetcher` / `--fetcher` is set without a token AND without
+   `-AllowMissingGhaToken` / `--allow-missing-gha-token`. `uninstall`
+   and `stop` are teardown-only and never read `GHA_TOKEN`.
+2. Dev-literal refusal + env override + reuse of valid pre-existing
+   value. `uninstall` / `start` / `stop` never generate or rotate
+   secrets.
+3. `/releases/latest/download/` vs `/releases/download/<tag>/`.
+   Install-only — no other script downloads assets.
+4. Every required key written with correct values. Install-only — it's
+   the script that produces `dashboard.env`.
+5. `--profile migrate` / `--profile fetcher` / `--env-file`.
+6. Asset 404; `docker compose pull` / `up` / `down` failure; health-poll
+   timeout; missing-compose-file paths (stop only).
+
+## Test data scripts
 
 PowerShell scripts that drive the Deployment Dashboard ingest API for
 test purposes. Implements WBS MVP §2 ("Automate Local Deployment") and
 §3.1 ("Seed local database with representative test data") in
 [`docs/architecture.md`](../../docs/architecture.md).
-
-Owner: `qa-engineer` (see [`.claude/agents/qa-engineer.md`](../../.claude/agents/qa-engineer.md)).
 
 ## Configuration model
 
