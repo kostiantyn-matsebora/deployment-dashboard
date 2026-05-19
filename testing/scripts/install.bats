@@ -291,32 +291,38 @@ log_not_contains() {
     # Critical contract assertion -- the ABSENCE of GHA_TOKEN= is what makes
     # the fetcher container fall back to compose's placeholder and switch to
     # anonymous-mode GitHub API calls (60 req/h).
+    # The demo GHA_REPOSITORIES JSON literal carries TWO public repos --
+    # PostHog/posthog AND grafana/grafana (order matters: PostHog first) --
+    # so the demo dashboard renders a multi-repo matrix out of the box.
     run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     f="$INSTALL_DIR/dashboard.env"
     [ -f "$f" ]
-    grep -qE 'GHA_REPOSITORIES=.*PostHog.*posthog' "$f"
+    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$f"
     grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
     ! grep -qE '^GHA_TOKEN=' "$f"
 }
 
 @test "--demo with \$GHA_TOKEN set: threads token through to dashboard.env (authed mode)" {
+    # Same multi-repo demo contract (PostHog/posthog + grafana/grafana) --
+    # threading a real PAT must not mutate the repository list.
     export GHA_TOKEN='ghp_demo_pat'
     run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     f="$INSTALL_DIR/dashboard.env"
-    grep -qE 'GHA_REPOSITORIES=.*PostHog.*posthog' "$f"
+    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$f"
     grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
     grep -qE '^GHA_TOKEN=ghp_demo_pat$' "$f"
 }
 
 @test "--demo + --fetcher together: still works (idempotent flag combo)" {
     # --demo implies --fetcher; supplying both explicitly must not break
-    # parsing or duplicate state. Sanity check on the canonicalisation.
+    # parsing or duplicate state. Sanity check on the canonicalisation --
+    # demo repo list (PostHog/posthog + grafana/grafana) is unchanged.
     run_install --demo --fetcher --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     f="$INSTALL_DIR/dashboard.env"
-    grep -qE 'GHA_REPOSITORIES=.*PostHog.*posthog' "$f"
+    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$f"
     grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
     ! grep -qE '^GHA_TOKEN=' "$f"
     up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"

@@ -232,7 +232,7 @@ if [ "$DEMO" = true ]; then
     cat >> "$ENV_FILE" <<EOF
 
 # Demo-mode defaults (written by install.sh --demo)
-GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]
+GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]
 FETCHER_POLL_INTERVAL_SECONDS=60
 EOF
     if [ -n "${GHA_TOKEN:-}" ]; then

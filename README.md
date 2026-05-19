@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="docs/assets/logo.svg" width="120" height="120" alt="Deployment Dashboard logo — 3×3 matrix of services × environments with an animated in-progress pulse" />
-</p>
-
-[![Built with ginee](https://img.shields.io/badge/built%20with-ginee-7c3aed?style=flat-square)](https://github.com/kostiantyn-matsebora/ginee) [![AI-implemented end-to-end](https://img.shields.io/badge/AI--implemented-end%20to%20end-10b981?style=flat-square)](https://github.com/kostiantyn-matsebora/ginee)
+[![Built with ginee](https://img.shields.io/badge/built%20with-ginee-7c3aed?style=flat-square)](https://kostiantyn-matsebora.github.io/ginee/) [![AI-implemented end-to-end](https://img.shields.io/badge/AI--implemented-end%20to%20end-10b981?style=flat-square)](https://github.com/kostiantyn-matsebora/ginee)
 
 > [!NOTE]
 > **Built end-to-end by AI** — every commit, ADR, CR, test, and CI workflow in this repo was authored by AI specialists routed through [`ginee`](https://github.com/kostiantyn-matsebora/ginee), a multi-agent engineering process for small autonomous teams.
@@ -151,9 +147,11 @@ GitHub's anonymous-mode rate bucket.
 ### Try it without setup -- demo mode
 
 `-Demo` (PowerShell) / `--demo` (bash) implies `-Fetcher` and bakes in a
-public-repo default (`GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]`)
+public-repo default (`GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]`)
 plus a 60-second poll interval, so a fresh install renders deployment
-activity end-to-end with no caller-side configuration. `$env:GHA_TOKEN`
+activity end-to-end with no caller-side configuration. Two repos are
+seeded (rather than one) to give a richer multi-service matrix on first
+render. `$env:GHA_TOKEN`
 governs the fetcher's rate budget but is **not required**:
 
 | `$env:GHA_TOKEN` | `Authorization` header | GitHub API rate limit |
@@ -171,10 +169,11 @@ gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern i
 ./install.sh --demo
 ```
 
-PostHog/posthog is a high-deployment-activity public repo chosen for
-visible matrix output on first render. Its action runs include some
-PR-ephemeral environments, so the matrix will show some historical
-`posthog-NNNN-*` env columns alongside the steady-state ones. A per-repo
+PostHog/posthog and grafana/grafana are high-deployment-activity public
+repos chosen for visible matrix output on first render. Both surface
+PR-ephemeral environments in their action runs, so the matrix will show
+some historical `posthog-NNNN-*` (PostHog) and `storybook-pr-preview-NNNNN`
+(Grafana) env columns alongside the steady-state ones. A per-repo
 environment filter for the fetcher is tracked separately (separate
 forthcoming issue: per-repo environment filter for the fetcher) and is
 not part of this install path.

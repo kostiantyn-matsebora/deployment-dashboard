@@ -244,7 +244,7 @@ if ($Demo) {
     $demoLines = @(
         '',
         '# Demo-mode defaults (written by install.ps1 -Demo)',
-        'GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]',
+        'GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]',
         'FETCHER_POLL_INTERVAL_SECONDS=60'
     )
     if (-not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)) {

@@ -388,33 +388,39 @@ Describe 'install.ps1 -- -Demo mode' {
         # Critical contract assertion -- the ABSENCE of GHA_TOKEN= is what
         # makes the fetcher container fall back to compose's placeholder and
         # switch to anonymous-mode GitHub API calls (60 req/h).
+        # The demo GHA_REPOSITORIES JSON literal carries TWO public repos --
+        # PostHog/posthog AND grafana/grafana (order matters: PostHog first) --
+        # so the demo dashboard renders a multi-repo matrix out of the box.
         $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
         $r.ExitCode | Should -Be 0
         Test-Path $r.EnvFile | Should -BeTrue
         $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match 'GHA_REPOSITORIES=.*PostHog.*posthog'
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
         $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
         $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
     }
 
     It '-Demo with $env:GHA_TOKEN set: threads token through to dashboard.env (authed mode)' {
+        # Same multi-repo demo contract (PostHog/posthog + grafana/grafana) --
+        # threading a real PAT must not mutate the repository list.
         $r = Invoke-Install -TmpDir $tmp `
                             -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo') `
                             -EnvOverrides @{ GHA_TOKEN = 'ghp_demo_pat' }
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match 'GHA_REPOSITORIES=.*PostHog.*posthog'
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
         $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
         $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_demo_pat$'
     }
 
     It '-Demo + -Fetcher together: still works (idempotent flag combo)' {
         # -Demo implies -Fetcher; supplying both explicitly must not break
-        # parsing or duplicate state. Sanity check on the canonicalisation.
+        # parsing or duplicate state. Sanity check on the canonicalisation --
+        # demo repo list (PostHog/posthog + grafana/grafana) is unchanged.
         $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo','-Fetcher')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match 'GHA_REPOSITORIES=.*PostHog.*posthog'
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
         $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
         $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
         $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
