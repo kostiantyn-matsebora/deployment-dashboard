@@ -3,8 +3,8 @@
 # source: repo walk + per-top-level README scan
 # recipe: builtin:repo-structure
 
-backend/ | .NET 10 modular monolith — host (api/) + write-api/ + read-api/ + shared/ libraries + Dashboard.sln; ADR-0002 | backend-engineer | source
-backend/api/ | Host project Dashboard.Api — composition root + sole Dockerfile + single ACA container target | backend-engineer | source
+backend/ | .NET 10 — co-located Write + Read API services (host api/ + write-api/ + read-api/ + shared/ libraries + Dashboard.sln); microservices architecture per ADR-0006, co-location mechanics per ADR-0002 | backend-engineer | source
+backend/api/ | Host project Dashboard.Api — composition root + sole Dockerfile + single ACA container target (Write + Read services co-located in dashboard-api per ADR-0006) | backend-engineer | source
 backend/write-api/ | Write endpoint group library Dashboard.WriteApi (+ Tests) — POST /api/deployments; NOTIFY dispatch | backend-engineer | source
 backend/read-api/ | Read endpoint group library Dashboard.ReadApi (+ Tests) — matrix, history, discovery, SSE, /health | backend-engineer | source
 backend/shared/ | Shared library Dashboard.Shared (+ Tests) — DbContext, entities, migrations, API-key middleware, NOTIFY/LISTEN, SSE writer, DTOs | backend-engineer | source
@@ -16,8 +16,8 @@ frontend/shared/ | @dd/shared library — Signal Store + API client + SSE servic
 gateway/ | nginx reverse proxy — single public ingress on :8080; routing matrix; SSE pass-through tuning | devops-engineer | infra-edge
 dev_env/ | Docker Compose local + scaled stacks + PowerShell start/stop scripts | devops-engineer | local-dev
 docs/ | Architecture spec, mockup, ADRs, CRs, UI option docs, WBS, CI/CD integration companion | solution-architect | governance
-docs/adr/ | Architecture Decision Records (ADR-0001, ADR-0002, ADR-0003) + README | solution-architect | governance
-docs/cr/ | Change Requests (CR-0001..CR-0008) + README | solution-architect | governance
+docs/adr/ | Architecture Decision Records (ADR-0001 topology / ADR-0002 co-location mechanics — superseded on framing by ADR-0006 / ADR-0003 theme persistence / ADR-0004 opaque-cursor + fetcher non-co-location / ADR-0005 release-install migration / ADR-0006 microservices architecture + container co-location) + README | solution-architect | governance
+docs/cr/ | Change Requests (CR-0001..CR-0010) + README | solution-architect | governance
 docs/ui/ | Mockup (deployment-dashboard.html) + 5 UI option docs (compact / focus-layout / theme / tree-topology / version-display) | frontend-engineer (mockup), solution-architect (option docs semantics) | governance
 testing/ | xUnit functional + Playwright e2e + Playwright mockup-visual + PowerShell scripts + fixtures + config | qa-engineer | testing
 testing/functional/ | xUnit functional API tests (run-tests.ps1 + Dashboard.Functional.Tests/) | qa-engineer | testing

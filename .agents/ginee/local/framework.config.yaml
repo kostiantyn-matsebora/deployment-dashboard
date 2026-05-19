@@ -32,7 +32,7 @@ gateway-path: gateway/                  # nginx reverse proxy (single public ing
 # --- Stack identity ---
 stack:
   server-language: C# / .NET 10
-  server-framework: ASP.NET Core Minimal API (modular monolith — ADR-0002)
+  server-framework: ASP.NET Core Minimal API (co-located Write + Read API services — microservices architecture per ADR-0006, co-location mechanics per ADR-0002)
   client-framework: Angular 20 standalone + NgRx Signal Store + Tailwind CSS
   data-store: PostgreSQL 16 (SQLite in-memory for unit tests)
   real-time-mechanism: SSE over PostgreSQL LISTEN/NOTIFY

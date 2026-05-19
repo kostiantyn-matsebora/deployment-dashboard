@@ -12,8 +12,8 @@ indexed:
     template: multi
     recipe: builtin:architecture
     source: docs/architecture.md
-    sha256: 3722c7ad769ca6107b8d2defacc00dcbcd4659434b47bc140d075a6bc6c72b65
-    indexed-on: 2026-05-18
+    sha256: 5d8adf9256044bb85941f610af30c55554bb8df1e0f6ec0296c6ca57cc843823
+    indexed-on: 2026-05-19
     index-files:
       - architecture.idx
       - architecture-fr.idx
@@ -21,12 +21,12 @@ indexed:
       - ui-states.yaml
       - constraints.yaml
       - glossary.idx
-    source-bytes: 69902
+    source-bytes: 73615
     index-bytes: 27189            # 5004 + 2835 + 7205 + 2761 + 3373 + 6011
     compression: 0.389
     compression-target: 0.15      # prose-heavy
     compression-floor: 0.5
-    compression-status: 'over-target, under-floor — flagged (lossless rule forbids dropping existence-entries). Re-extraction 2026-05-18: §9 Phasing CI/CD restructured into inbound (CR-0009 fetcher row added) + outbound (CR-0010 component-CI track) tracks; §7 gained Dashboard.Fetcher sub-section + 2 cursor endpoints; §3 Non-Goal #2 + §10 Decision 6 amended for optional pull-mode adapter. architecture.idx + api-matrix.yaml + glossary.idx updated; architecture-fr.idx / constraints.yaml / ui-states.yaml unchanged (no FR/NFR/state additions in source).'
+    compression-status: 'over-target, under-floor — flagged (lossless rule forbids dropping existence-entries). Re-extraction 2026-05-18: §9 Phasing CI/CD restructured into inbound (CR-0009 fetcher row added) + outbound (CR-0010 component-CI track) tracks; §7 gained Dashboard.Fetcher sub-section + 2 cursor endpoints; §3 Non-Goal #2 + §10 Decision 6 amended for optional pull-mode adapter. architecture.idx + api-matrix.yaml + glossary.idx updated; architecture-fr.idx / constraints.yaml / ui-states.yaml unchanged (no FR/NFR/state additions in source). SHA refresh 2026-05-19: §7 invariants block reframed to cite ADR-0006 (microservices architecture; container co-location is a packaging choice); §7 backend / app-gateway / cost-table cross-refs updated. No FR/NFR/api/ui-state additions; existing six index files remain semantically valid; only source-sha + source-bytes drift.'
     consumed-by: [solution-architect, backend-engineer, frontend-engineer, devops-engineer, qa-engineer]
     # Per-file consumer breakdown (from cardinal kernel Source-of-truth tables):
     #   architecture.idx        -> [solution-architect, backend-engineer, devops-engineer]
@@ -41,21 +41,23 @@ indexed:
     template: adr-index.idx
     recipe: builtin:adr
     source-glob: docs/adr/*.md
-    file-count: 4                  # ADR-0001..ADR-0004 (README.md tracked in the file listing below but not extracted as an ADR record)
+    file-count: 6                  # ADR-0001..ADR-0006 (README.md tracked in the file listing below but not extracted as an ADR record)
     sha256-by-file:
       docs/adr/ADR-0001-topology-derivation-five-pass.md: 376fe410669dbee4006729b37c3872dc0e19491746bae7ccd9b9fe7f96d7fc80
-      docs/adr/ADR-0002-modular-monolith-consolidation.md: 86d7a83bb3e9a52189d6cdf2464f1129a52d9df370a5ec08b4683a4dc7abd54e
+      docs/adr/ADR-0002-modular-monolith-consolidation.md: 32b1b79474d0589fe7e8ecdaa354eaa96b8218e19ec90bd9738c92fad8ae0790
       docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md: 5a86e60f4603f31d03097c9a8b8b29b2512f845ebb44605fbef290aa9edc9be4
-      docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md: df3dcecf158339412a0bdaab30a3ebe22a2367b6f1905663d2c95f472fefd4cc
-      docs/adr/README.md: eb5234508678b8679392f62ae4738c156f7ba69eaaa76a002b20500e85eb1ec6
-    indexed-on: 2026-05-18
+      docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md: 0a00077b8e53aeb6d738a3d2c926517e15b22996690c1852f6ae16d715610cce
+      docs/adr/ADR-0005-release-install-migration-actuation.md: 896b05bacb52d57dfe214da5957cb0cac3ece9288fdfc5e9454a2da3ac2ed0a5
+      docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md: 0e0c4c27183ee1fec209bcecdd9f9a4b77cc4202bee7829be60b9a7f49f57550
+      docs/adr/README.md: b6240eedb3f8e7ed9fad0e0fd5808a593e0ff5b937ed5e83273226a64a387bf8
+    indexed-on: 2026-05-19
     index-files: [adr-index.idx]
-    source-bytes: 40074             # 7424 + 9938 + 6551 + 14967 + 1194 (README)
-    index-bytes: 1931
-    compression: 0.048
+    source-bytes: 67304             # 7424 + 10756 + 6551 + 15648 + 12588 + 12468 + 1869 (README)
+    index-bytes: 3311
+    compression: 0.049
     compression-target: 0.15
     consumed-by: [solution-architect]
-    # Re-extraction 2026-05-18: ADR-0004 added (paired with CR-0009; 4 decisions on cursor location/shape/process/adapter).
+    # Re-extraction 2026-05-19: ADR-0005 (release-install migration actuation, accepted) + ADR-0006 (microservices architecture with container co-location, accepted — supersedes ADR-0002 on framing only; ADR-0002 retains co-location mechanics) added. ADR-0002 status updated to superseded. ADR-0004 cross-refs to ADR-0002 reframed to cite ADR-0006 for the framing while retaining ADR-0002 for the co-location mechanics.
 
   - class: cr
     category: doc

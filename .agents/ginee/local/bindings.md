@@ -8,7 +8,7 @@
 |---|---|---|
 | `docs/architecture.md` | Requirements (FR/NFR), constraints, components, data model, API, §7 invariants, §10 decisions | `solution-architect` |
 | `docs/ui/deployment-dashboard.html` | Visual + behavioural client contract (palette, six box states, NFR-09 reflow invariant) | mockup owner (`frontend-engineer`); `solution-architect` reviews, no edits |
-| `docs/adr/` | Architecture Decision Records (ADR-0001 topology / ADR-0002 monolith consolidation / ADR-0003 theme persistence + FOIT bootstrap) | `solution-architect` |
+| `docs/adr/` | Architecture Decision Records (ADR-0001 topology / ADR-0002 co-location mechanics — **superseded on framing by ADR-0006** / ADR-0003 theme persistence + FOIT bootstrap / ADR-0004 opaque-cursor + fetcher non-co-location / ADR-0005 release-install migration / ADR-0006 microservices architecture + container co-location) | `solution-architect` |
 | `docs/cr/` | Change Requests (CR-0001..CR-0008) — SAD-level content owned by each CR after SAD freeze | `solution-architect` |
 | `docs/ui/*.md` | UI option docs (compact / focus-layout / theme / tree-topology / version-display) — mockup-supporting design records | `solution-architect` (semantics) + `frontend-engineer` (proposes option mockups) |
 | `docs/WBS.md` | Operational work-breakdown — per-phase items, MVP / Phase 2.0 split | `solution-architect` |
@@ -29,7 +29,7 @@
 
 ```
 deployment-dashboard/
-├── backend/             .NET 10 modular monolith (ADR-0002)
+├── backend/             .NET 10 — co-located Write + Read API services (microservices architecture per ADR-0006; co-location mechanics per ADR-0002)
 │   ├── api/             host (Dashboard.Api) — single Dockerfile, single ACA container target
 │   ├── write-api/       Write endpoint group library (Dashboard.WriteApi) + tests
 │   ├── read-api/        Read endpoint group library (Dashboard.ReadApi) + tests
@@ -58,7 +58,7 @@ deployment-dashboard/
 - Only `dashboard/` imports from `@dd/matrix` and `@dd/drawer`.
 - Each library exposes a single `public-api.ts`; no deep imports.
 
-**Per-tier dependency rules (backend, ADR-0002):**
+**Per-tier dependency rules (backend — co-located Write + Read API services per ADR-0006; co-location mechanics + project-reference graph per ADR-0002):**
 
 - `backend/api/` (host) is the sole executable and the only backend Dockerfile.
 - `backend/write-api/` + `backend/read-api/` are library projects; they expose extension methods composed by the host.

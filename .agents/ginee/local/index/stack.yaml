@@ -6,7 +6,7 @@ tiers:
   server:
     language: C# / .NET 10 (net10.0)
     runtime: ASP.NET Core 10 (mcr.microsoft.com/dotnet/aspnet:10.0)
-    framework: ASP.NET Core Minimal API (modular monolith — ADR-0002)
+    framework: ASP.NET Core Minimal API (co-located Write + Read API services — microservices architecture per ADR-0006, co-location mechanics per ADR-0002)
     primary-libs:
       - Microsoft.AspNetCore.OpenApi 10.0.7 (CR-0008)
       - Scalar.AspNetCore 2.14.14 (CR-0008)

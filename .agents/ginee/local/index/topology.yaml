@@ -68,8 +68,10 @@ network-topology: |
   Single bridged Docker network. Only gateway has a host-published port
   (8080) in the production-shape scaled stack; dev stack adds 5432 (psql)
   + 5050 (pgAdmin) as convenience. All container-to-container traffic is
-  internal-only. Future re-split (per ADR-0002) is a gateway-config-only
-  change (POST /api/deployments → write-upstream).
+  internal-only. Write + Read API services are co-located in dashboard-api
+  today (microservices architecture per ADR-0006; co-location mechanics per
+  ADR-0002). Future move from co-location to per-service images is a
+  gateway-config-only change (POST /api/deployments → write-upstream).
 
 volumes:
   count: 3 (local: pg-data, dotnet-tools, nuget-cache) / 3 (scaled: *-scaled variants)
