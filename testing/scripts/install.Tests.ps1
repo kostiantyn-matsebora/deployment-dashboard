@@ -1,21 +1,23 @@
 # Tests for ../../install/install.ps1 -- release-install primary entrypoint (issue #7).
 #
 # Strategy: subprocess invocation against a shimmed copy of install.ps1 in a
-# per-test tmpdir. The shim prepends function-form overrides of `docker` and
-# `Invoke-WebRequest` that capture their args to a per-invocation log file
-# (`$env:DD_SCRIPT_LOG`) and return canned exit codes / fake bytes. The original
-# install.ps1 is never modified -- see local/bindings.md (qa-engineer must NOT
-# edit installer scripts; report bugs, don't fix).
+# per-test tmpdir. The shim prepends function-form overrides of `docker`,
+# `Invoke-WebRequest` and `gh` that capture their args to a per-invocation log
+# file (`$env:DD_SCRIPT_LOG`) and return canned exit codes / fake bytes. The
+# original install.ps1 is never modified -- see local/bindings.md (qa-engineer
+# must NOT edit installer scripts; report bugs, don't fix).
 #
-# Coverage matrix is dictated by the qa-engineer dispatch prompt for issue #7:
+# Coverage matrix is dictated by the qa-engineer dispatch prompt for issue #7
+# (post-gh-CLI contract):
 #   - Param defaults + persistence
-#   - GHA_TOKEN precondition (4 cases, must fire before any docker / IWR call)
+#   - GHA_TOKEN precondition (-Fetcher path)
+#   - gh CLI precondition (gh missing / unauthed / missing read:packages scope)
 #   - API_TOKEN defence-in-depth (literal refusal + env override + reuse)
 #   - POSTGRES_PASSWORD defence-in-depth (same shape)
-#   - URL shape branching (latest vs pinned tag)
+#   - gh release download tag branching (latest vs pinned tag)
 #   - Env-file output shape
 #   - Compose args (--profile migrate / --profile fetcher / --env-file)
-#   - Error paths (download 404; compose pull failure)
+#   - Error paths (gh asset download failure; docker login failure; compose pull failure)
 
 #Requires -Version 7.0
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
@@ -34,17 +36,23 @@ BeforeAll {
     $script:OriginalContent = Get-Content -LiteralPath $OriginalScript -Raw
 
     # Shim header -- prepended to a copy of install.ps1 in the per-test tmp.
-    # Overrides docker + Invoke-WebRequest as functions in the script's own scope,
-    # so the script's calls dispatch to them rather than the real cmdlets.
+    # Overrides docker, Invoke-WebRequest, and gh as functions in the script's own
+    # scope, so the script's calls dispatch to them rather than the real binaries.
     # Each call appends one JSON line to $env:DD_SCRIPT_LOG.
     #
     # Exit-code behaviour is controlled via env vars set by the test:
-    #   DD_PULL_EXIT    -- exit code for `docker compose ... pull`     (default 0)
-    #   DD_UP_EXIT      -- exit code for `docker compose ... up ...`   (default 0)
-    #   DD_IWR_FAIL     -- if set to a URL substring, IWR throws on URLs matching
-    #   DD_IWR_HEALTH_OK -- if 'true', the /health IWR returns a 200 stub object
+    #   DD_PULL_EXIT          -- exit code for `docker compose ... pull`     (default 0)
+    #   DD_UP_EXIT            -- exit code for `docker compose ... up ...`   (default 0)
+    #   DD_LOGIN_EXIT         -- exit code for `docker login ...`            (default 0)
+    #   DD_IWR_HEALTH_OK      -- if 'true', the /health IWR returns a 200 stub object
+    #   DD_GH_MISSING         -- if 'true', `gh --version` exits 1 (gh not on PATH)
+    #   DD_GH_NOT_AUTHED      -- if 'true', `gh auth status ...` exits 1
+    #   DD_GH_NO_SCOPE        -- if 'true', `gh auth status --show-token` omits read:packages
+    #   DD_GH_DOWNLOAD_FAIL   -- if set to a substring, `gh release download` exits 1
+    #                            when the requested asset matches the substring
     #
-    # Default: pull + up succeed, asset downloads write empty files, /health succeeds.
+    # Default: gh precondition passes, downloads succeed, docker login succeeds,
+    # pull + up succeed, /health succeeds.
     $script:ShimHeader = @'
 $script:__DDLog = $env:DD_SCRIPT_LOG
 if (-not $__DDLog) { throw 'DD_SCRIPT_LOG not set; tests should set it before invocation.' }
@@ -56,6 +64,16 @@ function __dd-log {
 function docker {
     $argv = @($args)
     __dd-log 'docker' @{ args = $argv }
+    # `docker login ...` -- install.ps1 pipes the gh token in (`$ghToken | & docker login ...`).
+    # When `docker` is a function override (not a native binary), the upstream
+    # pipeline value arrives via $input and is silently discarded if unread --
+    # no drain needed. (Reading [Console]::In.ReadToEnd() would HANG because
+    # that reads the PS process's actual stdin handle, which is connected to
+    # the parent process and never sees EOF.)
+    if ($argv[0] -eq 'login') {
+        $global:LASTEXITCODE = if ($env:DD_LOGIN_EXIT) { [int]$env:DD_LOGIN_EXIT } else { 0 }
+        return
+    }
     # subcommand discriminator is argv[0] but `docker compose ...` makes argv[0] = 'compose'
     if ($argv[0] -eq 'compose') {
         # walk argv to find pull/up/logs/down (skipping flags + their values).
@@ -88,31 +106,92 @@ function docker {
     $global:LASTEXITCODE = 0
 }
 function Invoke-WebRequest {
+    # Only the /health poll routes through IWR post-gh-CLI; asset fetch is via `gh release download`.
     [CmdletBinding()]
     param(
         [Parameter(ValueFromRemainingArguments=$true)]
         $Rest,
         [string]$Uri,
-        [string]$OutFile,
         [switch]$UseBasicParsing,
         [int]$TimeoutSec
     )
-    __dd-log 'iwr' @{ uri = $Uri; outFile = $OutFile }
-    if ($env:DD_IWR_FAIL -and $Uri -like "*$($env:DD_IWR_FAIL)*") {
-        throw "stub IWR forced failure for $Uri"
-    }
+    __dd-log 'iwr' @{ uri = $Uri }
     if ($Uri -like '*/health') {
         if ($env:DD_IWR_HEALTH_OK -eq 'true') {
             return [pscustomobject]@{ StatusCode = 200; Content = 'OK' }
         }
         throw "stub IWR /health unreachable"
     }
-    if ($OutFile) {
-        # Write a tiny placeholder so Test-Path on the destination passes.
-        New-Item -ItemType File -Path $OutFile -Force | Out-Null
-        Set-Content -LiteralPath $OutFile -Value "# stub asset for $Uri" -Encoding utf8
-    }
     return [pscustomobject]@{ StatusCode = 200 }
+}
+function gh {
+    $argv = @($args)
+    __dd-log 'gh' @{ args = $argv }
+    if ($argv[0] -eq '--version') {
+        if ($env:DD_GH_MISSING -eq 'true') {
+            $global:LASTEXITCODE = 1
+            return
+        }
+        Write-Output 'gh version 2.0.0 (stub)'
+        $global:LASTEXITCODE = 0
+        return
+    }
+    if ($argv[0] -eq 'auth' -and $argv[1] -eq 'status') {
+        if ($env:DD_GH_NOT_AUTHED -eq 'true') {
+            Write-Output 'You are not logged into any GitHub hosts. Run gh auth login to authenticate.'
+            $global:LASTEXITCODE = 1
+            return
+        }
+        # When --show-token is present, emit a fake scope list line. Include read:packages
+        # unless DD_GH_NO_SCOPE='true'.
+        if ($argv -contains '--show-token') {
+            if ($env:DD_GH_NO_SCOPE -eq 'true') {
+                Write-Output 'Token scopes: repo, workflow, gist'
+            } else {
+                Write-Output 'Token scopes: repo, read:packages, workflow'
+            }
+        }
+        Write-Output 'Logged in to github.com as testuser (stub)'
+        $global:LASTEXITCODE = 0
+        return
+    }
+    if ($argv[0] -eq 'auth' -and $argv[1] -eq 'token') {
+        Write-Output 'gho_stub_token_for_tests'
+        $global:LASTEXITCODE = 0
+        return
+    }
+    if ($argv[0] -eq 'api') {
+        # `gh api user --jq .login` -- emit a stub login.
+        Write-Output 'testuser'
+        $global:LASTEXITCODE = 0
+        return
+    }
+    if ($argv[0] -eq 'release' -and $argv[1] -eq 'download') {
+        # Walk argv for --pattern <asset> and --output <dest>.
+        $asset = $null
+        $dest  = $null
+        for ($i = 2; $i -lt $argv.Count; $i++) {
+            if ($argv[$i] -eq '--pattern' -and ($i + 1) -lt $argv.Count) {
+                $asset = $argv[$i + 1]
+            }
+            if ($argv[$i] -eq '--output' -and ($i + 1) -lt $argv.Count) {
+                $dest = $argv[$i + 1]
+            }
+        }
+        if ($env:DD_GH_DOWNLOAD_FAIL -and $asset -and ($asset -like "*$($env:DD_GH_DOWNLOAD_FAIL)*")) {
+            Write-Error "stub gh release download forced failure for $asset"
+            $global:LASTEXITCODE = 1
+            return
+        }
+        if ($dest) {
+            New-Item -ItemType File -Path $dest -Force | Out-Null
+            Set-Content -LiteralPath $dest -Value "# stub asset for $asset" -Encoding utf8
+        }
+        $global:LASTEXITCODE = 0
+        return
+    }
+    # Default: succeed for any unhandled subcommand.
+    $global:LASTEXITCODE = 0
 }
 # Make Start-Sleep a no-op so the health-poll loop ticks fast.
 function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
@@ -164,7 +243,11 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
         $stderrPath = Join-Path $TmpDir 'stderr.txt'
 
         $envBackup = @{}
-        $envKeys = @('GHA_TOKEN','DASHBOARD_API_TOKEN','DD_SCRIPT_LOG','DD_PULL_EXIT','DD_UP_EXIT','DD_IWR_FAIL','DD_IWR_HEALTH_OK')
+        $envKeys = @(
+            'GHA_TOKEN','DASHBOARD_API_TOKEN','DD_SCRIPT_LOG',
+            'DD_PULL_EXIT','DD_UP_EXIT','DD_LOGIN_EXIT','DD_IWR_HEALTH_OK',
+            'DD_GH_MISSING','DD_GH_NOT_AUTHED','DD_GH_NO_SCOPE','DD_GH_DOWNLOAD_FAIL'
+        )
         foreach ($k in $envKeys) { $envBackup[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
         try {
             # Clear all baseline test-affecting env vars.
@@ -224,12 +307,15 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
         $combined | Should -Match 'ERROR'
     }
 
-    It 'exits BEFORE any docker compose / Invoke-WebRequest call (no install-dir artefacts)' {
+    It 'exits BEFORE any docker compose / Invoke-WebRequest / gh release call (no install-dir artefacts)' {
         $r = Invoke-Install -TmpDir $tmp -Args @('-Fetcher','-InstallDir',$tmp)
         $r.ExitCode | Should -Be 1
-        # Strongest assertion -- no docker + no iwr events were logged.
+        # Strongest assertion -- no docker + no gh-release + no iwr events were logged.
         ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
         ($r.Events | Where-Object event -eq 'iwr').Count    | Should -Be 0
+        ($r.Events | Where-Object {
+            $_.event -eq 'gh' -and ([object[]]$_.args)[0] -eq 'release'
+        }).Count | Should -Be 0
         Test-Path (Join-Path $tmp 'dashboard.env')                 | Should -BeFalse
         Test-Path (Join-Path $tmp 'docker-compose.release.yml')    | Should -BeFalse
     }
@@ -265,6 +351,78 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
         } finally {
             if (Test-Path $tmp2) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp2 }
         }
+    }
+}
+
+Describe 'install.ps1 -- gh CLI precondition' {
+    BeforeEach {
+        $script:tmp = New-TempTestDir
+    }
+    AfterEach {
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp }
+    }
+
+    It 'gh missing on PATH -- exits 1, output mentions "gh CLI not found", no side effects' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_GH_MISSING = 'true' }
+        $r.ExitCode | Should -Be 1
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'gh CLI not found'
+        # Strongest precondition signal -- no docker + no gh-release + no env-file artefacts.
+        ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
+        ($r.Events | Where-Object {
+            $_.event -eq 'gh' -and ([object[]]$_.args)[0] -eq 'release'
+        }).Count | Should -Be 0
+        Test-Path (Join-Path $tmp 'dashboard.env')              | Should -BeFalse
+        Test-Path (Join-Path $tmp 'docker-compose.release.yml') | Should -BeFalse
+    }
+
+    It 'gh not authenticated -- exits 1, output mentions "not authenticated", no side effects' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_GH_NOT_AUTHED = 'true' }
+        $r.ExitCode | Should -Be 1
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'not authenticated'
+        ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
+        ($r.Events | Where-Object {
+            $_.event -eq 'gh' -and ([object[]]$_.args)[0] -eq 'release'
+        }).Count | Should -Be 0
+        Test-Path (Join-Path $tmp 'dashboard.env')              | Should -BeFalse
+        Test-Path (Join-Path $tmp 'docker-compose.release.yml') | Should -BeFalse
+    }
+
+    It 'gh token lacks read:packages -- exits 1, output mentions "read:packages", no side effects' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_GH_NO_SCOPE = 'true' }
+        $r.ExitCode | Should -Be 1
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'read:packages'
+        ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
+        ($r.Events | Where-Object {
+            $_.event -eq 'gh' -and ([object[]]$_.args)[0] -eq 'release'
+        }).Count | Should -Be 0
+        Test-Path (Join-Path $tmp 'dashboard.env')              | Should -BeFalse
+        Test-Path (Join-Path $tmp 'docker-compose.release.yml') | Should -BeFalse
+    }
+
+    It 'happy path -- docker login ghcr.io runs BEFORE docker compose pull (ordering invariant)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $dockerEvents = @($r.Events | Where-Object event -eq 'docker')
+        $loginIdx = -1
+        $pullIdx  = -1
+        for ($i = 0; $i -lt $dockerEvents.Count; $i++) {
+            $a = [object[]]$dockerEvents[$i].args
+            if ($loginIdx -lt 0 -and $a.Count -ge 2 -and $a[0] -eq 'login' -and ($a -contains 'ghcr.io')) {
+                $loginIdx = $i
+            }
+            if ($pullIdx -lt 0 -and $a.Count -ge 2 -and $a[0] -eq 'compose' -and ($a -contains 'pull')) {
+                $pullIdx = $i
+            }
+        }
+        $loginIdx | Should -BeGreaterThan -1
+        $pullIdx  | Should -BeGreaterThan -1
+        $loginIdx | Should -BeLessThan $pullIdx
     }
 }
 
@@ -360,25 +518,62 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
     }
 }
 
-Describe 'install.ps1 -- release URL shape branching (post-Phase-6 fix)' {
+Describe 'install.ps1 -- gh release download tag branching' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
 
-    It '-Version latest -> uses /releases/latest/download/ asset URL prefix' {
+    It '-Version latest -> gh release download invoked WITHOUT a positional tag (argv[2] is a flag)' {
         $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','latest')
         $r.ExitCode | Should -Be 0
-        $assetCalls = $r.Events | Where-Object { $_.event -eq 'iwr' -and $_.uri -like '*docker-compose.release.yml*' }
+        $assetCalls = @($r.Events | Where-Object {
+            $_.event -eq 'gh' -and
+            ([object[]]$_.args)[0] -eq 'release' -and
+            ([object[]]$_.args)[1] -eq 'download' -and
+            (([object[]]$_.args) -contains '--pattern')
+        })
         $assetCalls.Count | Should -BeGreaterThan 0
-        $assetCalls[0].uri | Should -BeLike 'https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/latest/download/*'
-        $assetCalls[0].uri | Should -Not -BeLike '*releases/download/latest/*'
+        $composeCall = $assetCalls | Where-Object {
+            $a = [object[]]$_.args
+            $patternIdx = [Array]::IndexOf($a, '--pattern')
+            $patternIdx -ge 0 -and ($patternIdx + 1) -lt $a.Count -and $a[$patternIdx + 1] -eq 'docker-compose.release.yml'
+        } | Select-Object -First 1
+        $composeCall | Should -Not -BeNullOrEmpty
+        $argv = [object[]]$composeCall.args
+        # argv[2] must be a flag (--repo / --pattern / ...), NOT a positional tag.
+        $argv[2] | Should -Match '^--'
+        # --repo + repo literal present.
+        $repoIdx = [Array]::IndexOf($argv, '--repo')
+        $repoIdx | Should -BeGreaterThan -1
+        $argv[$repoIdx + 1] | Should -Be 'kostiantyn-matsebora/deployment-dashboard'
+        # --pattern docker-compose.release.yml present.
+        $patternIdx = [Array]::IndexOf($argv, '--pattern')
+        $patternIdx | Should -BeGreaterThan -1
+        $argv[$patternIdx + 1] | Should -Be 'docker-compose.release.yml'
+        # --clobber present.
+        $argv | Should -Contain '--clobber'
     }
 
-    It '-Version v1.2.3 -> uses /releases/download/v1.2.3/ asset URL prefix' {
+    It '-Version v1.2.3 -> gh release download invoked WITH the literal tag at argv[2]' {
         $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v1.2.3')
         $r.ExitCode | Should -Be 0
-        $assetCalls = $r.Events | Where-Object { $_.event -eq 'iwr' -and $_.uri -like '*docker-compose.release.yml*' }
-        $assetCalls.Count | Should -BeGreaterThan 0
-        $assetCalls[0].uri | Should -BeLike 'https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/*'
+        $assetCalls = @($r.Events | Where-Object {
+            $_.event -eq 'gh' -and
+            ([object[]]$_.args)[0] -eq 'release' -and
+            ([object[]]$_.args)[1] -eq 'download'
+        })
+        $composeCall = $assetCalls | Where-Object {
+            $a = [object[]]$_.args
+            $patternIdx = [Array]::IndexOf($a, '--pattern')
+            $patternIdx -ge 0 -and ($patternIdx + 1) -lt $a.Count -and $a[$patternIdx + 1] -eq 'docker-compose.release.yml'
+        } | Select-Object -First 1
+        $composeCall | Should -Not -BeNullOrEmpty
+        $argv = [object[]]$composeCall.args
+        # argv[2] must be the literal tag, not a flag.
+        $argv[2] | Should -Be 'v1.2.3'
+        # --pattern docker-compose.release.yml still present.
+        $patternIdx = [Array]::IndexOf($argv, '--pattern')
+        $patternIdx | Should -BeGreaterThan -1
+        $argv[$patternIdx + 1] | Should -Be 'docker-compose.release.yml'
     }
 }
 
@@ -470,14 +665,26 @@ Describe 'install.ps1 -- error paths' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
 
-    It 'asset download failure (Invoke-WebRequest throws) -- script exits 1 with red error mentioning the asset + version' {
+    It 'gh release download failure -- script exits 1 with red error mentioning the asset + version' {
         $r = Invoke-Install -TmpDir $tmp `
                             -Args @('-InstallDir',$tmp,'-Version','v0.0.0-doesnotexist') `
-                            -EnvOverrides @{ DD_IWR_FAIL = 'docker-compose.release.yml' }
+                            -EnvOverrides @{ DD_GH_DOWNLOAD_FAIL = 'docker-compose.release.yml' }
         $r.ExitCode | Should -Be 1
         $combined = "$($r.Stdout)`n$($r.Stderr)"
         $combined | Should -Match 'docker-compose.release.yml'
         $combined | Should -Match 'v0\.0\.0-doesnotexist'
+    }
+
+    It 'docker login ghcr.io failure (non-zero exit) -- script exits 1 and NEVER calls docker compose pull' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_LOGIN_EXIT = '1' }
+        $r.ExitCode | Should -Be 1
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'docker login ghcr\.io failed'
+        # Critically -- compose pull was never reached.
+        ($r.Events | Where-Object {
+            $_.event -eq 'docker' -and ([object[]]$_.args)[0] -eq 'compose' -and (([object[]]$_.args) -contains 'pull')
+        }).Count | Should -Be 0
     }
 
     It 'docker compose pull failure (non-zero exit) -- script throws / exits non-zero' {

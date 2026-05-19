@@ -39,6 +39,92 @@ When authoring or reviewing a new test:
 3. For subprocess invocation, prefer `Start-Process pwsh -NoProfile -File <script>` over `& pwsh.exe ...` — `pwsh.exe` is Windows-only.
 4. When asserting on file outputs, use `-LiteralPath` rather than `-Path` to avoid wildcard surprises on either OS.
 
+## Cross-OS gh CLI use
+
+The release installer (`install/install.{ps1,sh}`) takes a hard dependency on
+the **GitHub CLI (`gh`)** running on the adopter's host. The release repo +
+GHCR images are both private; `gh` is the auth transport for both surfaces
+(asset download via `gh release download`; GHCR docker login via `gh auth
+token | docker login`). This applies on Windows + macOS + Linux uniformly —
+no per-OS divergence in the script's auth model.
+
+Affected files:
+- `install/install.ps1`, `install/install.sh` (release-install entrypoints — embed the gh prereq probe + the gh-mediated asset fetch + the gh-mediated GHCR login).
+- `dev_env/start.ps1`, `dev_env/stop.ps1` (local-dev — NOT affected; the contributor flow builds images from source, no GHCR pull, no release-asset fetch).
+- `testing/scripts/*.Tests.ps1` (Pester — affected only insofar as the test suite needs a `gh` shim / mock when running offline).
+
+### Rule — gh is a hard prereq; probe early, fail fast
+
+The installer's first action — before any `docker compose` invocation — must
+verify three things:
+
+| Check | Command | Fail message |
+|---|---|---|
+| `gh` is on `PATH` | `gh --version` | `'gh' CLI not found on PATH. Install via 'winget install GitHub.cli' (Windows) / 'brew install gh' (macOS) / 'apt install gh' or 'dnf install gh' (Linux), then re-run.` |
+| `gh` is authenticated for `github.com` | `gh auth status --hostname github.com` (exit 0) | `gh is not authenticated for github.com. Run 'gh auth login' and retry.` |
+| `gh` token carries `read:packages` scope | parse `gh auth status --hostname github.com` output for the scope list (the cmd surfaces it under `Token scopes:`) | `gh token is missing the 'read:packages' scope (required for GHCR docker login). Run 'gh auth refresh --hostname github.com --scopes read:packages' and retry.` |
+
+All three fail fast; none of the three fall back to "try without". The user
+gets a friendly, actionable error before any docker work starts.
+
+### Rule — wrap `gh --version` (and any "is gh installed" probe) in try/catch under PowerShell
+
+PowerShell's `$ErrorActionPreference = 'Stop'` (which `install.ps1` sets at
+the top per the cardinal devops charter) turns
+`System.Management.Automation.CommandNotFoundException` into a script-terminating
+error. That means a bare `gh --version` invocation, when `gh` is missing,
+**terminates the script before the friendly error path can fire** — the user
+sees the raw stack trace instead of "install gh via winget …".
+
+The portable shape:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+
+$ghAvailable = $false
+try {
+    $null = & gh --version 2>&1
+    $ghAvailable = $LASTEXITCODE -eq 0
+} catch [System.Management.Automation.CommandNotFoundException] {
+    $ghAvailable = $false
+}
+
+if (-not $ghAvailable) {
+    Write-Error "'gh' CLI not found on PATH. Install via 'winget install GitHub.cli' (Windows) / 'brew install gh' (macOS) / 'apt install gh' or 'dnf install gh' (Linux), then re-run."
+    exit 1
+}
+```
+
+The same wrap applies to any subsequent gh invocation that might race a
+session-state change (`gh auth status` after a manual `gh auth logout` mid-run):
+let the cmd's exit code drive the friendly error, not the terminating
+exception.
+
+In bash (`install.sh`), the equivalent shape is:
+
+```bash
+if ! command -v gh >/dev/null 2>&1; then
+    echo "Error: 'gh' CLI not found on PATH. Install via 'brew install gh' (macOS) / 'apt install gh' (Debian/Ubuntu) / 'dnf install gh' (Fedora/RHEL)." >&2
+    exit 1
+fi
+```
+
+`command -v` is the POSIX-portable "is it on PATH" check; `which` is BSD/GNU-
+divergent and not safe across the macOS + Debian + Alpine matrix.
+
+### Rule — `read:packages` is not in the gh default scope set
+
+A vanilla `gh auth login` produces a token with the default scope set
+(`repo`, `read:org`, `gist`, `workflow`); **`read:packages` is not in that
+list**. The installer's probe (above) must check for `read:packages`
+specifically and emit the friendly `gh auth refresh ... --scopes read:packages`
+instruction when missing.
+
+Do NOT have the installer try to silently `gh auth refresh` on the user's
+behalf — that opens a browser flow that fails non-interactively (CI runners,
+SSH'd hosts). The installer reports the missing scope and the user runs
+`gh auth refresh` themselves.
+
 ### Rule — `.gitattributes` is the EOL safety net
 
 The repo has no `.gitattributes` and relies on each contributor's local `core.autocrlf` setting. The bats test files were explicitly fixed to LF during the issue #7 cycle (per the qa-engineer's Phase 5 report); PowerShell files happen to tolerate CRLF on Linux but it's fragile — here-strings with the closing `"@` / `'@` at column 0 can break under certain CRLF + parser combinations.

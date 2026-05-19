@@ -9,27 +9,41 @@
 
     What this script does, in order:
       1.  `GHA_TOKEN` precondition (issue #5 verbatim) -- fires only when `-Fetcher`.
-      2.  Ensures the install directory exists.
-      3.  Generates / preserves `API_TOKEN` + `POSTGRES_PASSWORD` random secrets;
+      2.  `gh` CLI precondition -- gh present on PATH, authenticated for github.com,
+          and the active token carries the `read:packages` scope. All three failure
+          modes exit 1 BEFORE any side effect (no install dir, no asset writes, no
+          docker calls).
+      3.  Ensures the install directory exists.
+      4.  Generates / preserves `API_TOKEN` + `POSTGRES_PASSWORD` random secrets;
           persists them to `<InstallDir>/dashboard.env`. Refuses the dev-literal.
-      4.  Downloads `docker-compose.release.yml` from the tag-pinned release URL.
-      5.  Downloads `migration.sql` from the same release (unless `-SkipMigrations`).
-      6.  `docker compose pull` -- pulls the four GHCR-hosted component images.
-      7.  `docker compose up -d --wait` with the `migrate` profile (and `fetcher`
+      5+6. Downloads `docker-compose.release.yml` and (unless `-SkipMigrations`)
+          `migration.sql` via `gh release download` -- the repo + GHCR images are
+          private, so anonymous HTTPS asset fetch 404s.
+      7.  `docker login ghcr.io` using `gh auth token` -- required because the
+          component images are private GHCR packages and anonymous pulls 401.
+      8.  `docker compose pull` -- pulls the four GHCR-hosted component images.
+      9.  `docker compose up -d --wait` with the `migrate` profile (and `fetcher`
           when requested). `--wait` makes the one-shot `migrations` service's
           `service_completed_successfully` reflect in the compose exit code.
-      8.  Polls the gateway-fronted `/health` for up to `-HealthTimeoutSeconds`.
-      9.  Prints the URL panel + the generated `API_TOKEN` + a sample `curl`.
+      10. Polls the gateway-fronted `/health` for up to `-HealthTimeoutSeconds`.
+      11. Prints the URL panel + the generated `API_TOKEN` + a sample `curl`.
 
     Per ADR-0005: migrations apply via a one-shot `postgres:16-alpine` container
     running `psql -f /migration.sql`. The script is idempotent (re-applying against
     an already-migrated DB is a no-op per the EF Core `--idempotent` contract).
 
+    Prerequisite -- gh CLI:
+      The repo and GHCR component images are private. Install the GitHub CLI from
+      https://cli.github.com/, then:
+          gh auth login --hostname github.com
+          gh auth refresh --hostname github.com --scopes read:packages
+      The installer fails fast (exit 1) if gh is missing, not logged in to
+      github.com, or the active token lacks `read:packages`.
+
 .PARAMETER Version
-    Release tag to install (e.g. `v1.2.3`) or `latest`. The installer downloads the
-    tag-pinned release assets from
-    `https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/<tag>/<asset>`
-    and writes `DASHBOARD_VERSION=<tag>` into the env-file so the compose file resolves
+    Release tag to install (e.g. `v1.2.3`) or `latest`. The installer fetches the
+    tag-pinned release assets via `gh release download` (the repo is private) and
+    writes `DASHBOARD_VERSION=<tag>` into the env-file so the compose file resolves
     GHCR image refs to the same tag.
 .PARAMETER Fetcher
     Activate the optional `fetcher` Compose profile (CR-0009 pull-mode fetcher). When
@@ -88,14 +102,55 @@ if ($Fetcher) {
     }
 }
 
-# ---- 2. Install dir ----
+# ---- 2. gh CLI precondition ----
+# The repo + GHCR component images are private. Anonymous HTTPS asset fetch 404s,
+# anonymous docker pulls 401. All three failure modes below MUST exit 1 BEFORE we
+# create the install dir, write any asset, or invoke docker.
+#
+# Note: $ErrorActionPreference = 'Stop' turns a missing-command into a TERMINATING
+# exception, which would crash before our friendly red-error fires. Wrap the
+# version probe in try/catch so we can surface the install-the-CLI hint.
+$ghAvailable = $false
+try {
+    & gh --version *> $null
+    $ghAvailable = ($LASTEXITCODE -eq 0)
+} catch {
+    $ghAvailable = $false
+}
+if (-not $ghAvailable) {
+    Write-Host "ERROR: gh CLI not found on PATH. The repo and GHCR images are private, so the installer needs gh to fetch release assets and authenticate to ghcr.io." -ForegroundColor Red
+    Write-Host "       Install it from https://cli.github.com/ and then run:" -ForegroundColor Red
+    Write-Host "         gh auth login --hostname github.com" -ForegroundColor Red
+    Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
+    exit 1
+}
+
+& gh auth status --hostname github.com *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: gh is not authenticated for github.com. Run:" -ForegroundColor Red
+    Write-Host "         gh auth login --hostname github.com" -ForegroundColor Red
+    Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
+    exit 1
+}
+
+# Scope check: `gh auth status --show-token` prints "Token scopes: 'a', 'b', ..."
+# on stderr. Capture both streams + match `read:packages` literally; the colon
+# means we can't blindly word-split, so SimpleMatch is fine.
+$ghScopeOutput = (& gh auth status --hostname github.com --show-token 2>&1 | Out-String)
+if ($ghScopeOutput -notmatch 'read:packages') {
+    Write-Host "ERROR: gh token for github.com lacks the 'read:packages' scope, which is required to pull private GHCR images. Run:" -ForegroundColor Red
+    Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
+    exit 1
+}
+
+# ---- 3. Install dir ----
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir | Out-Null
 }
 $InstallDir = (Resolve-Path $InstallDir).Path
 Write-Host "==> Install directory: $InstallDir" -ForegroundColor Cyan
 
-# ---- 3. Secret handling (API_TOKEN + POSTGRES_PASSWORD) ----
+# ---- 4. Secret handling (API_TOKEN + POSTGRES_PASSWORD) ----
 # Defence-in-depth: refuse the local-dev literals. If a pre-existing dashboard.env
 # carries them, regenerate. This applies to:
 #   - API_TOKEN   == 'local-dev-token-not-for-production'
@@ -159,27 +214,24 @@ ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboa
 Set-Content -Path $envFile -Value $envFileContent -Encoding utf8 -NoNewline
 Write-Host "==> Wrote $envFile" -ForegroundColor Cyan
 
-# ---- 4 + 5. Download release assets ----
-# GitHub's canonical URL shapes differ between floating "latest" and pinned tags:
-#   - latest:    https://github.com/<repo>/releases/latest/download/<asset>
-#   - pinned vX: https://github.com/<repo>/releases/download/<vX>/<asset>
-# Using the pinned shape with the literal string "latest" 404s.
+# ---- 5 + 6. Download release assets via gh ----
+# The repo is private -- anonymous HTTPS asset fetch 404s. `gh release download`
+# uses the auth context vetted by step 2. The two URL shapes (`latest` vs pinned
+# tag) collapse into a single CLI: omit the positional tag for `latest`, supply it
+# otherwise. `--clobber` keeps re-install idempotent against a stale install dir.
 $repo = 'kostiantyn-matsebora/deployment-dashboard'
-$releaseBase = if ($Version -eq 'latest') {
-    "https://github.com/$repo/releases/latest/download"
-} else {
-    "https://github.com/$repo/releases/download/$Version"
-}
 
 function Invoke-AssetDownload {
     param([string]$AssetName, [string]$DestPath)
-    $url = "$releaseBase/$AssetName"
-    Write-Host "==> Downloading $url" -ForegroundColor Cyan
-    try {
-        Invoke-WebRequest -Uri $url -UseBasicParsing -OutFile $DestPath
-    } catch {
-        Write-Host "ERROR: failed to download $AssetName from $url -- $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "       Confirm that release '$Version' exists and advertises a '$AssetName' asset." -ForegroundColor Red
+    Write-Host "==> gh release download ($Version) $AssetName -> $DestPath" -ForegroundColor Cyan
+    if ($Version -eq 'latest') {
+        & gh release download --repo $repo --pattern $AssetName --output $DestPath --clobber
+    } else {
+        & gh release download $Version --repo $repo --pattern $AssetName --output $DestPath --clobber
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: failed to download $AssetName from release '$Version' via gh release download (exit $LASTEXITCODE)." -ForegroundColor Red
+        Write-Host "       Confirm that release '$Version' exists and advertises a '$AssetName' asset, and that the active gh account can read this repo." -ForegroundColor Red
         exit 1
     }
 }
@@ -192,13 +244,32 @@ if (-not $SkipMigrations) {
     Invoke-AssetDownload -AssetName 'migration.sql' -DestPath $migrationFile
 }
 
-# ---- 6. Pull images ----
+# ---- 7. GHCR docker login ----
+# The four component images live in private GHCR packages. We mint an ephemeral
+# docker-login session using the same gh token we just validated. `--password-stdin`
+# keeps the token off the process-args list; the username field is informational
+# for ghcr (a valid GH login or the `oauth2` sentinel both work).
+$ghLogin = (& gh api user --jq .login 2>$null)
+if ([string]::IsNullOrWhiteSpace($ghLogin)) { $ghLogin = 'oauth2' }
+$ghToken = & gh auth token
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ghToken)) {
+    Write-Host "ERROR: docker login ghcr.io failed -- could not obtain a token from gh auth token (exit $LASTEXITCODE)." -ForegroundColor Red
+    exit 1
+}
+Write-Host "==> docker login ghcr.io --username $ghLogin --password-stdin" -ForegroundColor Cyan
+$ghToken | & docker login ghcr.io --username $ghLogin --password-stdin
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: docker login ghcr.io failed (exit $LASTEXITCODE). Verify the gh account has 'read:packages' and access to the deployment-dashboard packages." -ForegroundColor Red
+    exit 1
+}
+
+# ---- 8. Pull images ----
 $composeBase = @('-f', $composeFile, '--env-file', $envFile)
 Write-Host "==> docker compose $($composeBase -join ' ') pull" -ForegroundColor Cyan
 & docker compose @composeBase pull
 if ($LASTEXITCODE -ne 0) { throw "docker compose pull failed with exit code $LASTEXITCODE" }
 
-# ---- 7. Bring up ----
+# ---- 9. Bring up ----
 $composeArgs = @() + $composeBase
 if (-not $SkipMigrations) { $composeArgs += @('--profile', 'migrate') }
 if ($Fetcher) { $composeArgs += @('--profile', 'fetcher') }
@@ -210,7 +281,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "docker compose up failed with exit code $LASTEXITCODE"
 }
 
-# ---- 8. Health-poll ----
+# ---- 10. Health-poll ----
 $healthUrl = "http://localhost:$Port/health"
 Write-Host "==> Waiting up to $HealthTimeoutSeconds s for $healthUrl" -ForegroundColor Cyan
 $deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)
@@ -224,7 +295,7 @@ if (-not $ok) {
     throw "Gateway-fronted /health did not return 200 at $healthUrl within $HealthTimeoutSeconds s."
 }
 
-# ---- 9. URL panel ----
+# ---- 11. URL panel ----
 Write-Host ""
 Write-Host "  Dashboard / Gateway: http://localhost:$Port/"
 Write-Host "  API_TOKEN:           $apiToken (saved to $envFile)"

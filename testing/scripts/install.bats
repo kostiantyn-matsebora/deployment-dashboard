@@ -2,11 +2,15 @@
 # Tests for ../../install/install.sh -- bash sibling of install/install.ps1 (issue #7).
 #
 # Strategy: PATH-shadowing stubs. We prepend a per-test stub directory to PATH
-# so calls to `curl`, `docker`, `openssl`, `xxd`, `od`, `grep`, `sed`, `head`
-# resolve to our fakes. Each stub appends one line to $STUB_LOG with its
-# invocation, then returns the canned exit code controlled by env vars.
+# so calls to `curl`, `docker`, `gh`, `openssl`, `sleep` resolve to our fakes.
+# Each stub appends one line to $STUB_LOG with its invocation, then returns the
+# canned exit code controlled by env vars.
 #
-# Coverage matrix mirrors install.Tests.ps1 -- see that file for the rationale.
+# Coverage matrix mirrors install.Tests.ps1 (post-gh-CLI contract) -- see that
+# file for the rationale.
+#   - Asset fetch goes via `gh release download` (private repo).
+#   - GHCR pulls require `docker login ghcr.io` with `gh auth token` piped in.
+#   - curl is only used for the /health poll.
 
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
@@ -23,15 +27,14 @@ setup() {
 
     export STUB_LOG
 
-    # --- curl stub. Honours DD_CURL_FAIL substring; otherwise writes a tiny
-    # placeholder to the destination so subsequent `-f` Test-Path-equivalents pass.
+    # --- curl stub. Only the /health poll uses curl post-gh-CLI; asset fetch
+    # routes through `gh release download`. Honours DD_HEALTH_OK for the
+    # /health branch.
     cat > "$STUB_DIR/curl" <<'STUB'
 #!/usr/bin/env bash
-# Log one line per invocation, args joined with single spaces so grep -E
-# can match the whole call against a single regex without %q-induced
-# multi-line splits.
 echo "curl $*" >> "$STUB_LOG"
-# Walk args. install.sh uses: curl -fsSL -o "$dest" "$url"
+# Walk args. install.sh uses: curl -fsSL -o "$dest" "$url" for non-asset calls,
+# or curl -fsS ".../health" for the health poll.
 dest=""
 url=""
 while [ $# -gt 0 ]; do
@@ -43,9 +46,6 @@ while [ $# -gt 0 ]; do
         *) shift ;;
     esac
 done
-if [ -n "${DD_CURL_FAIL:-}" ] && [[ "$url" == *"$DD_CURL_FAIL"* ]]; then
-    exit 22  # 404-style failure
-fi
 if [[ "$url" == *"/health" ]]; then
     if [ "${DD_HEALTH_OK:-true}" = "true" ]; then
         exit 0
@@ -62,10 +62,16 @@ STUB
     chmod +x "$STUB_DIR/curl"
 
     # --- docker stub.
+    #   `docker login ...`           -> drain stdin (gh token piped in); exit $DD_LOGIN_EXIT (default 0).
+    #   `docker compose pull|up|...` -> exit per DD_PULL_EXIT / DD_UP_EXIT.
     cat > "$STUB_DIR/docker" <<'STUB'
 #!/usr/bin/env bash
 echo "docker $*" >> "$STUB_LOG"
-# We only need to react to subcommands `compose pull|up|logs`.
+if [ "${1:-}" = "login" ]; then
+    # Drain piped stdin (gh auth token is piped in) so the producer side gets EPIPE-free EOF.
+    cat > /dev/null 2>&1 || true
+    exit "${DD_LOGIN_EXIT:-0}"
+fi
 if [ "${1:-}" = "compose" ]; then
     shift
     sub=""
@@ -88,6 +94,90 @@ fi
 exit 0
 STUB
     chmod +x "$STUB_DIR/docker"
+
+    # --- gh stub. Models the gh-CLI surface install.sh consumes:
+    #   gh --version
+    #   gh auth status --hostname github.com [--show-token]
+    #   gh auth token
+    #   gh api user --jq .login
+    #   gh release download [tag] --repo <repo> --pattern <asset> --output <dest> --clobber
+    #
+    # Knobs (env vars set by the test):
+    #   DD_GH_MISSING       -- if 'true', `gh --version` exits 1
+    #   DD_GH_NOT_AUTHED    -- if 'true', `gh auth status` exits 1
+    #   DD_GH_NO_SCOPE      -- if 'true', `--show-token` scope list omits read:packages
+    #   DD_GH_DOWNLOAD_FAIL -- if set to substring, `gh release download` exits 1 when --pattern matches
+    cat > "$STUB_DIR/gh" <<'STUB'
+#!/usr/bin/env bash
+echo "gh $*" >> "$STUB_LOG"
+case "${1:-}" in
+    --version)
+        if [ "${DD_GH_MISSING:-}" = "true" ]; then exit 1; fi
+        echo "gh version 2.0.0 (stub)"
+        exit 0
+        ;;
+    auth)
+        case "${2:-}" in
+            status)
+                if [ "${DD_GH_NOT_AUTHED:-}" = "true" ]; then
+                    echo "You are not logged into any GitHub hosts."
+                    exit 1
+                fi
+                # Emit a scope-list line when --show-token is present.
+                for a in "$@"; do
+                    if [ "$a" = "--show-token" ]; then
+                        if [ "${DD_GH_NO_SCOPE:-}" = "true" ]; then
+                            echo "Token scopes: repo, workflow, gist"
+                        else
+                            echo "Token scopes: repo, read:packages, workflow"
+                        fi
+                        break
+                    fi
+                done
+                echo "Logged in to github.com as testuser (stub)"
+                exit 0
+                ;;
+            token)
+                echo "gho_stub_token_for_tests"
+                exit 0
+                ;;
+        esac
+        exit 0
+        ;;
+    api)
+        # `gh api user --jq .login` -- emit a stub login.
+        echo "testuser"
+        exit 0
+        ;;
+    release)
+        if [ "${2:-}" = "download" ]; then
+            asset=""
+            dest=""
+            i=3
+            shift 2  # drop `release download`
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --pattern) asset="$2"; shift 2 ;;
+                    --output)  dest="$2";  shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+            if [ -n "${DD_GH_DOWNLOAD_FAIL:-}" ] && [[ "$asset" == *"$DD_GH_DOWNLOAD_FAIL"* ]]; then
+                echo "stub gh release download forced failure for $asset" >&2
+                exit 1
+            fi
+            if [ -n "$dest" ]; then
+                mkdir -p "$(dirname "$dest")"
+                printf '# stub asset for %s\n' "$asset" > "$dest"
+            fi
+            exit 0
+        fi
+        exit 0
+        ;;
+esac
+exit 0
+STUB
+    chmod +x "$STUB_DIR/gh"
 
     # --- openssl stub (only `openssl rand -hex N` is used by install.sh).
     cat > "$STUB_DIR/openssl" <<'STUB'
@@ -140,14 +230,15 @@ log_not_contains() {
 
 # ---- GHA_TOKEN precondition matrix ----
 
-@test "--fetcher without GHA_TOKEN exits 1 with red error before any docker / curl call" {
+@test "--fetcher without GHA_TOKEN exits 1 with red error before any docker / gh-release call" {
     run_install --fetcher --install-dir "$INSTALL_DIR"
     [ "$status" -eq 1 ]
     [[ "$output" == *"--allow-missing-gha-token"* ]]
     [[ "$output" == *"ERROR"* ]]
-    # Strongest precondition signal -- no docker + no curl was invoked.
+    # Strongest precondition signal -- no docker + no gh-release was invoked.
     log_not_contains 'docker compose'
-    log_not_contains 'curl '
+    log_not_contains 'docker login'
+    log_not_contains 'gh release download'
     [ ! -f "$INSTALL_DIR/dashboard.env" ]
     [ ! -f "$INSTALL_DIR/docker-compose.release.yml" ]
 }
@@ -170,6 +261,55 @@ log_not_contains() {
     run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     [[ "$output" != *"GHA_TOKEN"* ]]
+}
+
+# ---- gh CLI precondition matrix ----
+
+@test "gh missing on PATH -- exits 1 with 'gh CLI not found' and no side effects" {
+    export DD_GH_MISSING=true
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"gh CLI not found"* ]]
+    log_not_contains 'docker compose'
+    log_not_contains 'docker login'
+    log_not_contains 'gh release download'
+    [ ! -f "$INSTALL_DIR/dashboard.env" ]
+    [ ! -f "$INSTALL_DIR/docker-compose.release.yml" ]
+}
+
+@test "gh not authenticated -- exits 1 with 'not authenticated' and no side effects" {
+    export DD_GH_NOT_AUTHED=true
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"not authenticated"* ]]
+    log_not_contains 'docker compose'
+    log_not_contains 'docker login'
+    log_not_contains 'gh release download'
+    [ ! -f "$INSTALL_DIR/dashboard.env" ]
+    [ ! -f "$INSTALL_DIR/docker-compose.release.yml" ]
+}
+
+@test "gh token lacks read:packages scope -- exits 1 with 'read:packages' and no side effects" {
+    export DD_GH_NO_SCOPE=true
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"read:packages"* ]]
+    log_not_contains 'docker compose'
+    log_not_contains 'docker login'
+    log_not_contains 'gh release download'
+    [ ! -f "$INSTALL_DIR/dashboard.env" ]
+    [ ! -f "$INSTALL_DIR/docker-compose.release.yml" ]
+}
+
+@test "happy path -- docker login ghcr.io runs BEFORE docker compose pull (ordering invariant)" {
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    # Compare line numbers in the stub log: docker login must precede compose pull.
+    login_line=$(grep -nE '^docker login.*ghcr\.io' "$STUB_LOG" | head -n1 | cut -d: -f1)
+    pull_line=$(grep -nE '^docker.*compose.*pull' "$STUB_LOG" | head -n1 | cut -d: -f1)
+    [ -n "$login_line" ]
+    [ -n "$pull_line" ]
+    [ "$login_line" -lt "$pull_line" ]
 }
 
 # ---- API_TOKEN secret handling ----
@@ -258,19 +398,33 @@ EOF
     [[ "$output" == *"Reusing POSTGRES_PASSWORD"* ]]
 }
 
-# ---- URL shape branching ----
+# ---- gh release download tag branching ----
 
-@test "--version latest -- uses /releases/latest/download/ URL prefix" {
+@test "--version latest -- gh release download invoked WITHOUT a positional tag" {
     run_install --version latest --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
-    grep -qF 'https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/latest/download/docker-compose.release.yml' "$STUB_LOG"
-    ! grep -qF 'releases/download/latest/' "$STUB_LOG"
+    # The asset call carries --pattern docker-compose.release.yml + --repo + --clobber.
+    line="$(grep -E '^gh release download' "$STUB_LOG" | grep -F 'docker-compose.release.yml' | head -n1)"
+    [ -n "$line" ]
+    [[ "$line" == *"--repo kostiantyn-matsebora/deployment-dashboard"* ]]
+    [[ "$line" == *"--pattern docker-compose.release.yml"* ]]
+    [[ "$line" == *"--clobber"* ]]
+    # No positional tag -- the third whitespace-separated token after `gh release download`
+    # must start with `--` (a flag), not be a bare tag string.
+    # Tokens: gh release download <argv[2]> ...
+    tok=$(echo "$line" | awk '{print $4}')
+    [[ "$tok" == --* ]]
 }
 
-@test "--version v1.2.3 -- uses /releases/download/v1.2.3/ URL prefix" {
+@test "--version v1.2.3 -- gh release download invoked WITH the literal tag at argv[2]" {
     run_install --version v1.2.3 --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
-    grep -qF 'https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/docker-compose.release.yml' "$STUB_LOG"
+    line="$(grep -E '^gh release download' "$STUB_LOG" | grep -F 'docker-compose.release.yml' | head -n1)"
+    [ -n "$line" ]
+    [[ "$line" == *"--pattern docker-compose.release.yml"* ]]
+    # Tokens: gh release download v1.2.3 ...
+    tok=$(echo "$line" | awk '{print $4}')
+    [ "$tok" = "v1.2.3" ]
 }
 
 # ---- Env-file shape ----
@@ -339,12 +493,22 @@ EOF
 
 # ---- Error paths ----
 
-@test "asset download failure -- exits 1 with red error mentioning asset + version" {
-    export DD_CURL_FAIL='docker-compose.release.yml'
+@test "gh release download failure -- exits 1 with red error mentioning asset + version" {
+    export DD_GH_DOWNLOAD_FAIL='docker-compose.release.yml'
     run_install --version v0.0.0-doesnotexist --install-dir "$INSTALL_DIR"
     [ "$status" -eq 1 ]
     [[ "$output" == *"docker-compose.release.yml"* ]]
     [[ "$output" == *"v0.0.0-doesnotexist"* ]]
+}
+
+@test "docker login ghcr.io failure -- exits 1 with 'docker login ghcr.io failed' and NEVER calls docker compose pull" {
+    export DD_LOGIN_EXIT=1
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"docker login ghcr.io failed"* ]]
+    # Critically -- compose pull was never reached.
+    log_not_contains 'compose pull'
+    ! grep -qE '^docker.*compose.*pull' "$STUB_LOG"
 }
 
 @test "docker compose pull failure (non-zero exit) -- script exits non-zero" {

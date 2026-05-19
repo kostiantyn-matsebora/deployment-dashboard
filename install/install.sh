@@ -7,17 +7,29 @@
 #
 # Bash sibling of install.ps1 -- CLI parity, identical step order:
 #   1.  GHA_TOKEN precondition (issue #5 verbatim, ANSI-coloured on tty).
-#   2.  Install dir.
-#   3.  Secret handling (API_TOKEN + POSTGRES_PASSWORD; refuses the dev-literals).
-#   4.  Download docker-compose.release.yml from the tag-pinned release URL.
-#   5.  Download migration.sql (unless --skip-migrations).
-#   6.  docker compose pull.
-#   7.  docker compose up -d --wait (with --profile migrate and/or --profile fetcher).
-#   8.  Health-poll http://localhost:$PORT/health.
-#   9.  URL panel.
+#   2.  gh CLI precondition: gh on PATH, authenticated for github.com, and the
+#       active token carries the read:packages scope. Exits 1 before any side
+#       effect when any check fails.
+#   3.  Install dir.
+#   4.  Secret handling (API_TOKEN + POSTGRES_PASSWORD; refuses the dev-literals).
+#   5+6. Download docker-compose.release.yml + migration.sql via `gh release
+#       download` (repo is private; anonymous HTTPS fetch 404s).
+#   7.  docker login ghcr.io using `gh auth token` (GHCR images are private).
+#   8.  docker compose pull.
+#   9.  docker compose up -d --wait (with --profile migrate and/or --profile fetcher).
+#   10. Health-poll http://localhost:$PORT/health.
+#   11. URL panel.
 #
 # Per ADR-0005: migrations apply via a one-shot postgres:16-alpine container
 # running `psql -f /migration.sql`. The script is idempotent.
+#
+# Prerequisite -- gh CLI:
+#   The repo and GHCR component images are private. Install the GitHub CLI
+#   (https://cli.github.com/) and then:
+#       gh auth login --hostname github.com
+#       gh auth refresh --hostname github.com --scopes read:packages
+#   The installer fails fast (exit 1) if gh is missing, not logged in to
+#   github.com, or the active token lacks read:packages.
 #
 # Soft prereq: openssl for `openssl rand -hex`. Falls back to /dev/urandom + xxd.
 
@@ -91,12 +103,40 @@ if [ "$FETCHER" = true ]; then
     fi
 fi
 
-# ---- 2. Install dir ----
+# ---- 2. gh CLI precondition ----
+# The repo + GHCR component images are private. Anonymous HTTPS asset fetch 404s,
+# anonymous docker pulls 401. All three failure modes MUST exit 1 BEFORE we
+# create the install dir, write any asset, or invoke docker.
+if ! command -v gh >/dev/null 2>&1; then
+    echo "${RED}ERROR: gh CLI not found on PATH. The repo and GHCR images are private, so the installer needs gh to fetch release assets and authenticate to ghcr.io.${NC}" >&2
+    echo "${RED}       Install it from https://cli.github.com/ and then run:${NC}" >&2
+    echo "${RED}         gh auth login --hostname github.com${NC}" >&2
+    echo "${RED}         gh auth refresh --hostname github.com --scopes read:packages${NC}" >&2
+    exit 1
+fi
+
+if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+    echo "${RED}ERROR: gh is not authenticated for github.com. Run:${NC}" >&2
+    echo "${RED}         gh auth login --hostname github.com${NC}" >&2
+    echo "${RED}         gh auth refresh --hostname github.com --scopes read:packages${NC}" >&2
+    exit 1
+fi
+
+# `gh auth status --show-token` writes "Token scopes: 'a', 'b', ..." on stderr.
+# Capture both streams + match read:packages literally.
+GH_SCOPE_OUTPUT="$(gh auth status --hostname github.com --show-token 2>&1 || true)"
+if ! printf '%s' "$GH_SCOPE_OUTPUT" | grep -q 'read:packages'; then
+    echo "${RED}ERROR: gh token for github.com lacks the 'read:packages' scope, which is required to pull private GHCR images. Run:${NC}" >&2
+    echo "${RED}         gh auth refresh --hostname github.com --scopes read:packages${NC}" >&2
+    exit 1
+fi
+
+# ---- 3. Install dir ----
 mkdir -p "$INSTALL_DIR"
 INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd)"
 echo "${CYAN}==> Install directory: $INSTALL_DIR${NC}"
 
-# ---- 3. Secret handling ----
+# ---- 4. Secret handling ----
 ENV_FILE="$INSTALL_DIR/dashboard.env"
 LOCAL_DEV_API_LITERAL='local-dev-token-not-for-production'
 LOCAL_DEV_PW_LITERAL='local-dev-password'
@@ -159,26 +199,29 @@ ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboa
 EOF
 echo "${CYAN}==> Wrote $ENV_FILE${NC}"
 
-# ---- 4 + 5. Download release assets ----
-# GitHub's canonical URL shapes differ between floating "latest" and pinned tags:
-#   - latest:    https://github.com/<repo>/releases/latest/download/<asset>
-#   - pinned vX: https://github.com/<repo>/releases/download/<vX>/<asset>
-# Using the pinned shape with the literal string "latest" 404s.
+# ---- 5 + 6. Download release assets via gh ----
+# The repo is private -- anonymous HTTPS asset fetch 404s. `gh release download`
+# uses the auth context vetted by step 2. The two URL shapes (`latest` vs pinned
+# tag) collapse into a single CLI: omit the positional tag for `latest`, supply
+# it otherwise. `--clobber` keeps re-install idempotent against a stale install
+# dir.
 REPO='kostiantyn-matsebora/deployment-dashboard'
-if [ "$VERSION" = "latest" ]; then
-    RELEASE_BASE="https://github.com/$REPO/releases/latest/download"
-else
-    RELEASE_BASE="https://github.com/$REPO/releases/download/$VERSION"
-fi
 
 download_asset() {
     local asset="$1" dest="$2"
-    local url="$RELEASE_BASE/$asset"
-    echo "${CYAN}==> Downloading $url${NC}"
-    if ! curl -fsSL -o "$dest" "$url"; then
-        echo "${RED}ERROR: failed to download $asset from $url${NC}" >&2
-        echo "${RED}       Confirm that release '$VERSION' exists and advertises a '$asset' asset.${NC}" >&2
-        exit 1
+    echo "${CYAN}==> gh release download ($VERSION) $asset -> $dest${NC}"
+    if [ "$VERSION" = "latest" ]; then
+        if ! gh release download --repo "$REPO" --pattern "$asset" --output "$dest" --clobber; then
+            echo "${RED}ERROR: failed to download $asset from release '$VERSION' via gh release download.${NC}" >&2
+            echo "${RED}       Confirm that release '$VERSION' exists and advertises a '$asset' asset, and that the active gh account can read this repo.${NC}" >&2
+            exit 1
+        fi
+    else
+        if ! gh release download "$VERSION" --repo "$REPO" --pattern "$asset" --output "$dest" --clobber; then
+            echo "${RED}ERROR: failed to download $asset from release '$VERSION' via gh release download.${NC}" >&2
+            echo "${RED}       Confirm that release '$VERSION' exists and advertises a '$asset' asset, and that the active gh account can read this repo.${NC}" >&2
+            exit 1
+        fi
     fi
 }
 
@@ -190,11 +233,29 @@ if [ "$SKIP_MIGRATIONS" = false ]; then
     download_asset 'migration.sql' "$MIGRATION_FILE"
 fi
 
-# ---- 6. Pull images ----
+# ---- 7. GHCR docker login ----
+# The four component images live in private GHCR packages. Mint an ephemeral
+# docker-login session using the same gh token we just validated.
+# --password-stdin keeps the token off the process-args list; the username field
+# is informational for ghcr (a valid GH login or the `oauth2` sentinel both work).
+GH_LOGIN="$(gh api user --jq .login 2>/dev/null || true)"
+if [ -z "${GH_LOGIN}" ]; then GH_LOGIN='oauth2'; fi
+if ! GH_TOKEN_VALUE="$(gh auth token 2>/dev/null)" || [ -z "${GH_TOKEN_VALUE}" ]; then
+    echo "${RED}ERROR: docker login ghcr.io failed -- could not obtain a token from gh auth token.${NC}" >&2
+    exit 1
+fi
+echo "${CYAN}==> docker login ghcr.io --username $GH_LOGIN --password-stdin${NC}"
+if ! printf '%s' "$GH_TOKEN_VALUE" | docker login ghcr.io --username "$GH_LOGIN" --password-stdin; then
+    echo "${RED}ERROR: docker login ghcr.io failed. Verify the gh account has 'read:packages' and access to the deployment-dashboard packages.${NC}" >&2
+    exit 1
+fi
+unset GH_TOKEN_VALUE
+
+# ---- 8. Pull images ----
 echo "${CYAN}==> docker compose -f $COMPOSE_FILE --env-file $ENV_FILE pull${NC}"
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 
-# ---- 7. Bring up ----
+# ---- 9. Bring up ----
 COMPOSE_ARGS=(-f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 if [ "$SKIP_MIGRATIONS" = false ]; then COMPOSE_ARGS+=(--profile migrate); fi
 if [ "$FETCHER" = true ]; then COMPOSE_ARGS+=(--profile fetcher); fi
@@ -206,7 +267,7 @@ if ! docker compose "${COMPOSE_ARGS[@]}" up -d --wait; then
     exit 1
 fi
 
-# ---- 8. Health-poll ----
+# ---- 10. Health-poll ----
 HEALTH_URL="http://localhost:$PORT/health"
 echo "${CYAN}==> Waiting up to ${HEALTH_TIMEOUT_SECONDS}s for $HEALTH_URL${NC}"
 DEADLINE=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
@@ -221,7 +282,7 @@ if [ "$OK" = false ]; then
     exit 1
 fi
 
-# ---- 9. URL panel ----
+# ---- 11. URL panel ----
 echo ""
 echo "  Dashboard / Gateway: http://localhost:$PORT/"
 echo "  API_TOKEN:           $API_TOKEN (saved to $ENV_FILE)"
