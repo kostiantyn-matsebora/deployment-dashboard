@@ -37,7 +37,7 @@ on:
   workflow_call:
     inputs:
       image-name:
-        description: 'GHCR image name (e.g. dashboard-api). Tags appended per Q5 rules.'
+        description: 'GHCR image name (e.g. deployment-dashboard-api). Tags appended per Q5 rules.'
         required: true
         type: string
       build-kind:

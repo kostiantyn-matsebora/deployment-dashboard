@@ -38,7 +38,7 @@ jobs:
   build:
     uses: ./.github/workflows/_build-and-push-image.yml
     with:
-      image-name: dashboard-frontend
+      image-name: deployment-dashboard-frontend
       build-kind: static
       dockerfile-path: frontend/dashboard/Dockerfile
       context-path: frontend
