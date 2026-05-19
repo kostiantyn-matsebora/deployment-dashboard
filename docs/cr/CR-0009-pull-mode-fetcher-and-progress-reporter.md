@@ -18,7 +18,7 @@
   - **3d — MVP scope.**
     - **IN:** GitHub Actions adapter only (`/repos/{owner}/{repo}/deployments` + `/repos/{owner}/{repo}/deployments/{id}/statuses`; cursor = highest seen `deployment.id`); cursor endpoints (`GET`/`PUT /api/fetcher/state/{source-id}`); fetcher host (ASP.NET Core Worker on `Microsoft.NET.Sdk.Worker`); Dockerfile; opt-in `docker-compose.local.yml --profile fetcher` entry; ACR image build; `X-Progress-Reporter` on `POST /api/deployments` plus persistence to the new `progress_reporter` column plus surfacing on the existing event-attribute Read responses; first-fetch cap (`INITIAL_FETCH_LIMIT` default 50, ceiling 500).
     - **OUT:** Other CI/CD adapters (ADO / Jenkins / GitLab / CircleCI); Azure Container Apps + Terraform wiring for the fetcher (deferred); GitHub App auth (PAT-only for MVP); Key Vault wiring for the fetcher (env-var-only for MVP); Control API integration (TODO line 12 — when it lands, the fetcher will future-integrate; MVP fetcher is autonomous).
-  - **3e — Naming.** Library project `Dashboard.Fetcher`; host project `Dashboard.Fetcher.Host`; container image `dashboard-fetcher`. Both projects live under a new `backend/fetcher/` and `backend/fetcher-host/` directory tree; Dockerfile under `backend/fetcher-host/`.
+  - **3e — Naming.** Library project `Dashboard.Fetcher`; host project `Dashboard.Fetcher.Host`; container image `deployment-dashboard-fetcher`. Both projects live under a new `backend/fetcher/` and `backend/fetcher-host/` directory tree; Dockerfile under `backend/fetcher-host/`.
 
 - **Impact.**
   - **Amends [CR-0008](./CR-0008-api-validation-and-openapi-scalar.md) — verbatim.** The Validation rule table (CR-0008 § "SAD-level content owned by this CR — verbatim") is extended with a new row covering the request **header** `X-Progress-Reporter`. Header-vs-body is captured in the row's "Type" cell so the implementer wires the same DataAnnotations-style validation on the header binding. The CR-0008 ProblemDetails contract is reused as-is — no second error shape. Verbatim addition:
@@ -90,7 +90,7 @@
     > |---|---|
     > | Library project | `backend/fetcher/Dashboard.Fetcher/` — `ICiCdAdapter` interface + per-tool adapter implementations + scheduler + Polly retry + Write API client |
     > | Host project | `backend/fetcher-host/Dashboard.Fetcher.Host/` — ASP.NET Core Worker (`Microsoft.NET.Sdk.Worker`); composition root; env-var configuration |
-    > | Container image | `dashboard-fetcher` (multi-stage Dockerfile under `backend/fetcher-host/Dockerfile`; mirrors `backend/api/Dockerfile` posture) |
+    > | Container image | `deployment-dashboard-fetcher` (multi-stage Dockerfile under `backend/fetcher-host/Dockerfile`; mirrors `backend/api/Dockerfile` posture) |
     > | Deployment | Separate container, never co-hosted with the API. Local dev: opt-in `docker compose --profile fetcher up`. Azure: ACR image is built and published; ACA wiring deferred (out of MVP scope per CR-0009 § 3d). |
     > | Auth to backend | Same `X-Api-Key` any other pusher uses. No multi-token middleware. |
     > | Event attribution | Always sets `X-Progress-Reporter: dashboard-fetcher/<adapter-id>` on every `POST /api/deployments` and on every `GET`/`PUT /api/fetcher/state/{source-id}`. |
@@ -178,6 +178,6 @@ The prevailing convention is **"every event-attribute surface that exposes `ref`
 - [CR-0004](./CR-0004-ref-and-sha-optional-fields.md) — precedent for optional-attribute-surfaced-on-all-event-DTOs.
 - [CR-0008](./CR-0008-api-validation-and-openapi-scalar.md) — length-validation + ProblemDetails contract reused verbatim for the new header.
 - **ADR-0004 (paired)** — opaque per-progress-reporter cursor; backend-held; out-of-process fetcher; plug-in adapter shape.
-- [ADR-0006](../adr/ADR-0006-microservices-architecture-with-container-co-location.md) (supersedes [ADR-0002](../adr/ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics) — microservices architecture with the Write + Read API services co-located in `dashboard-api`. The Fetcher is its own microservice in its own image (`dashboard-fetcher`); it is **not** absorbed into the co-located API host. The new fetcher-state endpoints land in the existing Write endpoint group (same API-key middleware), not in a new host.
+- [ADR-0006](../adr/ADR-0006-microservices-architecture-with-container-co-location.md) (supersedes [ADR-0002](../adr/ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics) — microservices architecture with the Write + Read API services co-located in `deployment-dashboard-api`. The Fetcher is its own microservice in its own image (`deployment-dashboard-fetcher`); it is **not** absorbed into the co-located API host. The new fetcher-state endpoints land in the existing Write endpoint group (same API-key middleware), not in a new host.
 - SAD §3 Non-Goals; SAD §7 Components Summary / API Contract / Components sub-sections; SAD §9 Phasing; SAD §10 Decision 6.
 - `docs/ci-cd-integration.md` — new H2 sections for the universal header + the optional pull-mode alternative.

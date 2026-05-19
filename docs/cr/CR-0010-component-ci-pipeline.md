@@ -7,7 +7,7 @@
 - **Change.** Introduce a **hybrid GitHub Actions topology**: per-component thin workflow files driven by path filters, invoking one (or two) shared reusable workflow(s) that centralise the build / test / image / push mechanics. CI only — build + test + package — no deploy. Container images only — no NuGet, no npm. Decisions broken out below; each cites the Phase 3 question it answers.
 
   - **3a — Topology (Q1).** **Hybrid.** Per-component thin workflows under `.github/workflows/`:
-    - `api.yml` — owns `backend/**` (the co-located Write + Read API services per [ADR-0006](../adr/ADR-0006-microservices-architecture-with-container-co-location.md) — `Dashboard.Api` host + `Dashboard.WriteApi` + `Dashboard.ReadApi` + `Dashboard.Shared` libraries all build under `backend/Dashboard.sln` into one image, `dashboard-api`)
+    - `api.yml` — owns `backend/**` (the co-located Write + Read API services per [ADR-0006](../adr/ADR-0006-microservices-architecture-with-container-co-location.md) — `Dashboard.Api` host + `Dashboard.WriteApi` + `Dashboard.ReadApi` + `Dashboard.Shared` libraries all build under `backend/Dashboard.sln` into one image, `deployment-dashboard-api`)
     - `fetcher.yml` — owns `backend/fetcher/**` + `backend/fetcher-host/**` (replaces WBS §1.5.8's standalone "build the fetcher image" item)
     - `frontend.yml` — owns `frontend/**`
     - `gateway.yml` — owns `gateway/**`
@@ -120,7 +120,7 @@
 
     | `notify` input | CR-0010 value |
     |---|---|
-    | `service` | the component name — `dashboard-api`, `dashboard-fetcher`, `dashboard-frontend`, `dashboard-gateway` (one POST per component, from each thin workflow) |
+    | `service` | the component name — `deployment-dashboard-api`, `deployment-dashboard-fetcher`, `deployment-dashboard-frontend`, `deployment-dashboard-gateway` (one POST per component, from each thin workflow) |
     | `environment` | `ci-build` (a synthetic env representing "freshly built image, not yet deployed") |
     | `version` | the image tag per 3e — `v1.2.3` on a tag push, `main-sha-<7>` on a main push |
     | `status` | `success` (the push job only invokes notify on its own success path) |
@@ -164,7 +164,7 @@
   - **Amends `docs/architecture.md` §9 (Phasing) — CI/CD Integration table.** The current rows ("Inline HTTP step", "GitHub Actions composite action", "Webhook receiver", "Pull-mode fetcher (optional, CR-0009)", "Secrets") are **inbound** integration; CR-0010 adds the **outbound** component-CI track. Replace the implicit "CI/CD Integration — planned" framing with a concrete component CI inventory row (or new sub-table) listing the four thin workflows + the reusable workflow + the GHCR image set. **Phase 7 SA edit** (this CR locks the decision; the SAD edit is the Phase 7 cleanup).
 
   - **Amends `docs/WBS.md`:**
-    - **§1.5.8** — current text "`backend/fetcher-host/Dockerfile` — multi-stage build mirroring `backend/api/Dockerfile` posture (SDK build → aspnet runtime). Image: `dashboard-fetcher`. Owner: `devops-engineer`." Marks **"image build absorbed into CR-0010 / §1.6 component CI track — Dockerfile itself remains a 1.5.8 deliverable, but the build + push + tag are owned by `fetcher.yml`"**. Cross-link to §1.6 + CR-0010.
+    - **§1.5.8** — current text "`backend/fetcher-host/Dockerfile` — multi-stage build mirroring `backend/api/Dockerfile` posture (SDK build → aspnet runtime). Image: `deployment-dashboard-fetcher`. Owner: `devops-engineer`." Marks **"image build absorbed into CR-0010 / §1.6 component CI track — Dockerfile itself remains a 1.5.8 deliverable, but the build + push + tag are owned by `fetcher.yml`"**. Cross-link to §1.6 + CR-0010.
     - **§5.1** — current text "GitHub Actions workflow — Docker build, push to ACR, update Container App revision on merge to main". Mark **split**: the **build + push** half is delivered by CR-0010 (with GHCR substituting for ACR per 3d; GHCR → ACR swap when §4 lands); the **update Container App revision** half remains deferred to Terraform §4 + a future CD CR (3k). Cross-link to §1.6 + CR-0010.
     - **NEW §1.6 "Component CI" track** — as-built items in WBS §1.6 mirror the §1.5 structure (1.6.1 through 1.6.9). The canonical list lives in `docs/WBS.md` §1.6; the row mapping below is a CR-side cross-reference, not the source of truth.
 
