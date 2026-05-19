@@ -1,0 +1,88 @@
+# Release pipeline -- attach installer assets to a GitHub Release on `v*` tag push.
+#
+# Owner: devops-engineer.
+# Contract: GitHub issue #7 + ADR-0005 + docs/ci-cd-pipelines.md S 10.
+#
+# Sibling to api.yml / fetcher.yml / frontend.yml / gateway.yml -- on the same tag
+# push those four workflows build + push GHCR images; this workflow runs in parallel
+# and creates / updates the GitHub Release object, attaching:
+#
+#   - docker-compose.release.yml   (repo-tracked, ships unmodified)
+#   - install.ps1 / install.sh
+#   - uninstall.ps1 / uninstall.sh
+#   - migration.sql                (re-generated inline via `dotnet ef migrations script --idempotent`)
+#
+# Per ADR-0005 Decision 5, the migration.sql contract is the EF Core `--idempotent`
+# script; re-applying against an already-migrated DB is a no-op. The reusable
+# workflow's `emit-migration-artefact: true` path produces the same artefact for
+# CI consumers; here we re-generate rather than cross-fetching to avoid coupling
+# release.yml to the api.yml run-id.
+#
+# Compose-file resolution at install time:
+#   - docker-compose.release.yml uses `${DASHBOARD_VERSION:-latest}` (resolved by
+#     the installer at install-time via `--env-file`).
+#   - The compose file ships UNMODIFIED -- no publish-time template render.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write   # create + update release; upload assets
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-release:
+    name: publish-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: NuGet cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore .NET tools
+        run: dotnet tool restore
+
+      # Re-generate migration.sql inline -- mirrors _build-and-push-image.yml step 10.
+      # Placeholder ConnectionStrings__DefaultConnection: the design-time factory
+      # only resolves the provider, never connects.
+      - name: Generate EF migration script
+        env:
+          ConnectionStrings__DefaultConnection: 'Host=ci;Port=5432;Database=ci;Username=ci;Password=ci'
+        run: |
+          dotnet ef migrations script \
+            --idempotent \
+            --project backend/shared/Dashboard.Shared/Dashboard.Shared.csproj \
+            --startup-project backend/api/Dashboard.Api/Dashboard.Api.csproj \
+            --output migration.sql
+
+      - name: Create release + upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            docker-compose.release.yml
+            install.ps1
+            install.sh
+            uninstall.ps1
+            uninstall.sh
+            migration.sql
