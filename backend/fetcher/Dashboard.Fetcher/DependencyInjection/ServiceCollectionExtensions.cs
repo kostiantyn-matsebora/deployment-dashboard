@@ -24,6 +24,49 @@ public static class ServiceCollectionExtensions
     /// <summary>Default base URL for the public github.com REST API.</summary>
     public const string DefaultGitHubApiBaseUrl = "https://api.github.com/";
 
+    /// <summary>
+    /// Compose-default placeholder for <c>GHA_TOKEN</c> — the literal value
+    /// baked into <c>install/docker-compose.release.yml</c> when the operator
+    /// has not supplied a real PAT (demo mode, public-repo probing). Mirrored
+    /// here as the contract anchor: the installer ships this placeholder,
+    /// the adapter recognises it as "no auth — go anonymous."
+    /// </summary>
+    public const string AnonymousTokenPlaceholder = "local-dev-gha-token-placeholder";
+
+    /// <summary>
+    /// True when <paramref name="token"/> is null / empty / whitespace, OR
+    /// equals the <see cref="AnonymousTokenPlaceholder"/>. In both cases the
+    /// HTTP transport MUST omit the <c>Authorization</c> header entirely so
+    /// requests hit GitHub's 60-req/h anonymous bucket against public repos
+    /// (sending an empty / placeholder <c>Bearer</c> header would 401).
+    /// </summary>
+    public static bool IsAnonymousToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return true;
+        return string.Equals(token, AnonymousTokenPlaceholder, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Apply GitHub-API authorization to <paramref name="http"/> per
+    /// anonymous-mode rules: real PAT → <c>Authorization: Bearer &lt;token&gt;</c>;
+    /// anonymous (null / empty / whitespace / placeholder) → no header at all.
+    /// Single chokepoint for both <see cref="AddGitHubActionsAdapter"/> and
+    /// the adapter unit tests.
+    /// </summary>
+    public static void ConfigureGitHubAuthorization(HttpClient http, string? token)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+        if (IsAnonymousToken(token))
+        {
+            // Explicitly clear in case a previously-cached client carried one.
+            http.DefaultRequestHeaders.Authorization = null;
+            return;
+        }
+
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+    }
+
     public static IServiceCollection AddCiCdFetcher(
         this IServiceCollection services,
         FetcherOptions options)
@@ -100,11 +143,10 @@ public static class ServiceCollectionExtensions
             http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             http.DefaultRequestHeaders.UserAgent.ParseAdd("dashboard-fetcher/0.1");
             http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                http.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            }
+            // Anonymous-mode aware — placeholder / empty token → no
+            // Authorization header so public-repo demo / probe paths hit
+            // GitHub's 60/h anonymous bucket instead of 401.
+            ConfigureGitHubAuthorization(http, token);
         })
         .AddStandardResilienceHandler(o =>
         {

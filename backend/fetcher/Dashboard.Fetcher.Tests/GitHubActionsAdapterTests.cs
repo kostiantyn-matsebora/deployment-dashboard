@@ -1,5 +1,6 @@
 using System.Net;
 using Dashboard.Fetcher.Adapters.GitHubActions;
+using Dashboard.Fetcher.DependencyInjection;
 using Dashboard.Fetcher.Tests.Support;
 using Dashboard.Shared.Domain;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -310,6 +311,122 @@ public sealed class GitHubActionsAdapterTests
 
         Assert.Empty(page.Events);
         Assert.Equal("0", page.NewCursor);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Anonymous-mode authorization — placeholder / empty / null / whitespace
+    // tokens MUST omit the Authorization header; real PAT MUST send Bearer.
+    // Verifies the ConfigureGitHubAuthorization chokepoint in
+    // ServiceCollectionExtensions, applied per-client at HttpClient build.
+    // ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// IHttpClientFactory shim that mirrors the production composition root:
+    /// builds an HttpClient over the stub handler with base URL + UA + Accept
+    /// + X-GitHub-Api-Version + token-aware Authorization. Production wires
+    /// the same config via <see cref="ServiceCollectionExtensions.AddCiCdFetcher"/>;
+    /// here we apply <see cref="ServiceCollectionExtensions.ConfigureGitHubAuthorization"/>
+    /// directly so the test exercises the chokepoint without spinning up DI.
+    /// </summary>
+    private sealed class AuthConfiguringFactory : IHttpClientFactory
+    {
+        private readonly StubHttpHandler _handler;
+        private readonly string? _token;
+
+        public AuthConfiguringFactory(StubHttpHandler handler, string? token)
+        {
+            _handler = handler;
+            _token = token;
+        }
+
+        public HttpClient CreateClient(string name)
+        {
+            var http = new HttpClient(_handler, disposeHandler: false)
+            {
+                BaseAddress = new Uri(BaseUrl),
+            };
+            http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("dashboard-fetcher/0.1");
+            http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+            ServiceCollectionExtensions.ConfigureGitHubAuthorization(http, _token);
+            return http;
+        }
+    }
+
+    private static (GitHubActionsAdapter adapter, StubHttpHandler handler) BuildWithToken(string? token)
+    {
+        var handler = new StubHttpHandler();
+        var factory = new AuthConfiguringFactory(handler, token);
+        var adapter = new GitHubActionsAdapter(factory, NullLogger<GitHubActionsAdapter>.Instance);
+        return (adapter, handler);
+    }
+
+    private static void SeedSingleDeploymentWithSuccessStatus(StubHttpHandler handler)
+    {
+        const string listJson = """
+        [
+          {"id": 7, "sha": "deadbee", "ref": "main", "environment": "prod",
+           "created_at": "2026-05-18T10:00:00Z", "creator": {"login": "alice"}}
+        ]
+        """;
+        handler.WhenJson(IsDeploymentsList, HttpStatusCode.OK, listJson);
+        handler.WhenJson(IsDeploymentStatus, HttpStatusCode.OK,
+            "[{\"state\":\"success\",\"log_url\":null,\"target_url\":null,\"created_at\":\"2026-05-18T10:01:00Z\"}]");
+    }
+
+    [Fact]
+    public async Task FetchPage_AuthedMode_RealToken_SendsBearerOnListAndStatus()
+    {
+        const string token = "ghp_xxxxx";
+        var (adapter, handler) = BuildWithToken(token);
+        SeedSingleDeploymentWithSuccessStatus(handler);
+
+        var page = await adapter.FetchPageAsync("acme/svc", cursor: null, pageSize: 50, CancellationToken.None);
+
+        Assert.Single(page.Events);
+        // Two requests: list + status. Both MUST carry Authorization: Bearer <token>.
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, req =>
+        {
+            Assert.True(req.Headers.TryGetValue("Authorization", out var auth),
+                $"Authed mode must send Authorization on {req.Method} {req.Uri}");
+            Assert.Equal($"Bearer {token}", auth);
+        });
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task FetchPage_AnonymousMode_EmptyOrNullOrWhitespaceToken_OmitsAuthorization(string? token)
+    {
+        var (adapter, handler) = BuildWithToken(token);
+        SeedSingleDeploymentWithSuccessStatus(handler);
+
+        var page = await adapter.FetchPageAsync("acme/svc", cursor: null, pageSize: 50, CancellationToken.None);
+
+        Assert.Single(page.Events);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, req =>
+            Assert.False(req.Headers.ContainsKey("Authorization"),
+                $"Anonymous mode (token={token ?? "null"}) must NOT send Authorization on {req.Method} {req.Uri}"));
+    }
+
+    [Fact]
+    public async Task FetchPage_AnonymousMode_PlaceholderToken_OmitsAuthorization()
+    {
+        // Compose-default placeholder per install/docker-compose.release.yml —
+        // adapter MUST treat as anonymous and omit Authorization entirely.
+        var (adapter, handler) = BuildWithToken(ServiceCollectionExtensions.AnonymousTokenPlaceholder);
+        SeedSingleDeploymentWithSuccessStatus(handler);
+
+        var page = await adapter.FetchPageAsync("PostHog/posthog", cursor: null, pageSize: 50, CancellationToken.None);
+
+        Assert.Single(page.Events);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, req =>
+            Assert.False(req.Headers.ContainsKey("Authorization"),
+                $"Placeholder token must NOT send Authorization on {req.Method} {req.Uri}"));
     }
 
     [Fact]

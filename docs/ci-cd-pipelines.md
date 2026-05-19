@@ -178,6 +178,41 @@ this repo publishes the release-install surface. The inbound consumer view —
 how an adopter brings up a released stack — lives in the per-release README
 the installer prints + the issue-#7 install documentation.
 
+### Asset visibility + fetch auth
+
+The release repo (`kostiantyn-matsebora/deployment-dashboard`) and the GHCR
+image registry are both **private**. Anonymous fetches against either
+surface return `404`; everything the installer touches has to flow through
+an authenticated GitHub identity.
+
+The transport-layer choice for that auth is the **GitHub CLI (`gh`)**, run on
+the adopter's host. The release-install surface gets a fresh `gh`-mediated
+identity on every invocation; no long-lived tokens on disk; no PAT in
+`docker-compose.release.yml` env-vars.
+
+| Step | Surface | Auth mechanism |
+|---|---|---|
+| Fetch `install.ps1` / `install.sh` (the bootstrap one-liner) | GitHub Releases API | `gh release download` (adopter's gh session) |
+| Fetch `docker-compose.release.yml` + `migration.sql` (asset downloads in step 1 of Migration actuation, below) | GitHub Releases API | `gh release download` inside `install.ps1` / `install.sh` |
+| Pull pinned GHCR images (`docker compose pull` inside the installer) | GHCR (`ghcr.io`) | `gh auth token \| docker login ghcr.io --username <gh-login> --password-stdin`, run by the installer before `docker compose pull` |
+| `release.yml` workflow's own job (publishing the assets) | GitHub Releases API + GHCR | Workflow's default `GITHUB_TOKEN` -- unchanged; the gh-CLI change is on the **adopter** side only |
+
+The `release.yml` workflow's auth model has not changed: it still uses the
+runner-supplied `GITHUB_TOKEN` with `contents: write` + `packages: write`
+permissions to publish the release object + push tagged images. The gh-CLI
+prereq applies to the installer scripts (run on the adopter's host), not to
+the publishing pipeline.
+
+**Required `gh` scope on the adopter side:** any of `read:packages`,
+`write:packages`, or `admin:packages`. GitHub's OAuth scopes are
+hierarchical (`write:packages` ⊃ `read:packages`; `admin:packages` ⊃ both),
+and `gh auth status --show-token` only lists the highest granted scope.
+The installer's precondition matches the union to avoid rejecting tokens
+that can pull from GHCR but only show the higher-tier scope. The default
+`gh auth login` scope set does not include any of them; the README install
+instructions surface a `gh auth refresh --hostname github.com --scopes
+read:packages` step before the bootstrap one-liner (the minimum grant).
+
 ### Trigger
 
 | Event | What fires |
@@ -197,11 +232,11 @@ ADR-0005).
 
 | Asset | Source | Purpose |
 |---|---|---|
-| `docker-compose.release.yml` | repo root | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/deployment-dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. |
-| `install.ps1` | repo root | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` / `-AllowMissingGhaToken` precondition verbatim. |
-| `install.sh` | repo root | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. |
-| `uninstall.ps1` | repo root | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. |
-| `uninstall.sh` | repo root | Linux / macOS equivalent of `uninstall.ps1`. |
+| `docker-compose.release.yml` | `install/` | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/deployment-dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. Uploaded flat (basename) as the release asset `docker-compose.release.yml`. |
+| `install.ps1` | `install/` | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` precondition (bare `-Fetcher` without `$env:GHA_TOKEN` red-errors and exits 1); the zero-PAT escape is `-Demo`, which implies `-Fetcher` and routes the fetcher through the anonymous-mode transport documented in `docs/ci-cd-integration.md` § Anonymous-mode transport. Uploaded flat as `install.ps1`. |
+| `install.sh` | `install/` | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. Uploaded flat as `install.sh`. |
+| `uninstall.ps1` | `install/` | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. Uploaded flat as `uninstall.ps1`. |
+| `uninstall.sh` | `install/` | Linux / macOS equivalent of `uninstall.ps1`. Uploaded flat as `uninstall.sh`. |
 | `migration.sql` | downloaded from the same-commit `api.yml` artefact (`ef-migrations-script-<sha>`), OR re-generated inline by the release job using `dotnet ef migrations script --idempotent` (per § 7) | Tag-pinned idempotent migration script. The installer downloads this asset and applies it via a one-shot `postgres:16-alpine` container before the `api` service starts (per ADR-0005 Decision 1–5). |
 
 The `migration.sql` asset is the load-bearing surface for release-install
@@ -236,10 +271,18 @@ alternative below:
    the discovery surface for any tagged artefact; raw-content URLs are an
    internal-to-the-repo convention.
 
+**The URL pattern requires authenticated fetch.** Because the repo is private
+(§ Asset visibility + fetch auth above), the `releases/download/<tag>/<asset-name>`
+URL returns `404` to any anonymous client. The pattern still applies — but
+adopters reach it via `gh release download <tag> --repo <owner>/<repo>
+--pattern <asset-name>`, not via `curl -fsSL` / `irm`. The installer scripts
+use `gh release download` internally; the README's bootstrap one-liner
+uses `gh release download` to fetch `install.ps1` / `install.sh` itself.
+
 #### Fallback — raw GitHub at the tag
 
-The alternative pattern works for adopters whose security posture blocks
-GitHub Release downloads but allows raw-content fetches:
+The alternative pattern resolves the asset off the tag's tree rather than the
+Release object:
 
 ```
 https://raw.githubusercontent.com/<owner>/<repo>/<tag>/<asset-path>
@@ -250,6 +293,11 @@ templated assets to the tag's tree (which it does, so the `docker-compose.releas
 + installer scripts are tag-checkout-friendly). The raw-content URL is
 **fallback only**: do not document it as the primary install path; do not
 hard-code it into installer scripts.
+
+The raw-content URL is **also private-repo-gated** — it 404s anonymously
+against this repo. `gh api repos/<owner>/<repo>/contents/<asset-path>?ref=<tag>`
+is the gh-mediated equivalent; raw-content is therefore no longer a "works
+without gh" escape hatch in this codebase.
 
 The `migration.sql` asset is **not** mirrored to the raw-content path —
 because the artefact is generated by the workflow (not committed to the
@@ -295,7 +343,7 @@ section above the contributor-oriented one."
 |---|---|
 | Migration actuation decision | [ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md) |
 | Triggering requirement | GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) |
-| `-Fetcher` / `-AllowMissingGhaToken` precondition the installer inherits | GitHub issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) + `dev_env/start.ps1:28-37` |
+| `-Fetcher` / `-Demo` precondition matrix the installer enforces | GitHub issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) + `install/install.ps1` § 1 (`GHA_TOKEN` precondition); anonymous-mode transport: `docs/ci-cd-integration.md` § Anonymous-mode transport |
 | `migration.sql` generation step | § 7 of this doc |
 | Tag scheme (`v1.2.3` + `v1.2` + `sha-<7>` + `latest`) | § 4 of this doc |
 | `API_TOKEN` install-time generation | `docs/architecture.md § 8` footnote |
