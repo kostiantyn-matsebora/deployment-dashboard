@@ -76,14 +76,13 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 
 ## 7. Target Architecture
 
-Given the Azure-only hosting constraint, the ≤ $30/month budget, and the platform-agnosticism requirement, the backend is deployed as a **single containerised ASP.NET Core application** on Azure Container Apps. The application hosts two endpoint-group surfaces — **Write** (`POST /api/deployments`, API-key-gated) and **Read** (matrix / history / discovery / SSE / health, unauthenticated) — composed from separate library projects inside one host process. Real-time fan-out uses **SSE + PostgreSQL `LISTEN/NOTIFY`** — Azure Container Apps imposes no HTTP timeout on long-lived SSE connections, making a separate real-time service unnecessary.
+The project is a **microservices architecture** — Write API, Read API, Fetcher (optional), Frontend SPA, and App Gateway are distinct services with distinct concerns, decomposed at the project + boundary level. Per the ≤ $30/month budget and small-team operational envelope, the Write and Read API services are **co-located in a single container image** (`dashboard-api`) on Azure Container Apps; the Fetcher, Frontend SPA, and App Gateway each ship as their own image. **Co-location is a packaging choice, not the architecture itself.** The `dashboard-api` host composes the Write surface (`POST /api/deployments`, API-key-gated) and the Read surface (matrix / history / discovery / SSE / health, unauthenticated) from separate library projects inside one host process. Real-time fan-out uses **SSE + PostgreSQL `LISTEN/NOTIFY`** — Azure Container Apps imposes no HTTP timeout on long-lived SSE connections, making a separate real-time service unnecessary.
 
-> **Architecture invariants — [ADR-0002 (modular-monolith consolidation)](adr/ADR-0002-modular-monolith-consolidation.md):**
-> 1. **One API container.** `backend/api/` is the sole ASP.NET Core executable and the only backend Dockerfile.
-> 2. **Two endpoint-group library surfaces.** `backend/write-api/` and `backend/read-api/` are library projects composed into the host; the library boundary is preserved.
-> 3. **Future re-split is host-project + gateway-config only.** The gateway's path+method routing matrix discriminates Write vs Read today even though both upstreams resolve to `api:8080`, so re-splitting is a config-only change with no library code touched.
->
-> See ADR-0002 → "Future split — trigger conditions".
+> **Architecture invariants — [ADR-0006 (microservices architecture with container co-location)](adr/ADR-0006-microservices-architecture-with-container-co-location.md), reframing the [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md) co-location mechanics:**
+> 1. **Microservices architecture.** Write API, Read API, Fetcher, Frontend SPA, and App Gateway are distinct services with distinct concerns. Decomposition at the project + boundary level.
+> 2. **Container co-location of Write + Read.** `backend/api/` is the sole ASP.NET Core executable and the only backend Dockerfile; both Write and Read library surfaces compose into the `dashboard-api` image. Co-location is a packaging choice, not the architecture itself.
+> 3. **Two endpoint-group library surfaces.** `backend/write-api/` and `backend/read-api/` are library projects composed into the host; the per-service library boundary is preserved.
+> 4. **Future re-split is host-project + gateway-config only.** The gateway's path+method routing matrix discriminates Write vs Read today even though both upstreams resolve to `api:8080`, so moving Write + Read from co-location to per-service deployment is a config-only change with no library code touched. Trigger conditions live in [ADR-0002 → "Future split — trigger conditions"](adr/ADR-0002-modular-monolith-consolidation.md) (mechanics-of-record); the framing was reset by ADR-0006.
 
 ---
 
@@ -230,7 +229,7 @@ The diagram below shows the logical components.
 | Component | Description | Technologies |
 |---|---|---|
 | **CI/CD Notify Step** | A step (or script) added to any existing CI/CD pipeline. Sends a deployment event to the ingest API via an HTTP POST. Works with any CI/CD tool that can run a shell command or script (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, CircleCI, etc.). | Shell / `curl` (any CI/CD tool); optional GitHub Actions composite action (`action.yml`) |
-| **App Gateway** | Single public-facing reverse proxy that fronts every component. Routes by path + HTTP method (see Routing matrix in §7 → App Gateway). Both surfaces resolve to a single `api:8080` upstream today ([ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md)); the path+method matrix is preserved so a future re-split is gateway-config-only. Eliminates CORS (single origin), minimises the public surface (NFR-04), and is the only container exposed to host / public ingress. SSE pass-through tuned (`proxy_buffering off`, `proxy_read_timeout 1h`). | nginx (alpine) |
+| **App Gateway** | Single public-facing reverse proxy that fronts every component. Routes by path + HTTP method (see Routing matrix in §7 → App Gateway). Write and Read API services are co-located in one `dashboard-api` image, so both surfaces resolve to a single `api:8080` upstream today (co-location per [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md), framing per [ADR-0006](adr/ADR-0006-microservices-architecture-with-container-co-location.md)); the path+method matrix is preserved so a future re-split into per-service images is gateway-config-only. Eliminates CORS (single origin), minimises the public surface (NFR-04), and is the only container exposed to host / public ingress. SSE pass-through tuned (`proxy_buffering off`, `proxy_read_timeout 1h`). | nginx (alpine) |
 | **API (write + read surfaces)** | Single ASP.NET Core host (`backend/api/`) composing two endpoint-group library surfaces. **Write surface** — `POST /api/deployments`: accepts deployment events from CI/CD pipelines, validates payload, persists the event, notifies connected SSE clients via PostgreSQL `NOTIFY`. API-key-gated (FR-10). **Read surface** — serves the current deployment matrix (latest per slot), per-slot history, environment/service discovery, SSE stream, and health. Unauthenticated. Stateless — reads are satisfied from the store; events brokered via PostgreSQL `LISTEN`. Any number of instances can run in parallel. **Internal-only — reachable only via the App Gateway.** | C#, ASP.NET Core Minimal API, EF Core 10, Npgsql |
 | **Deployment Store** | Durable append-only store for all deployment events. Source of truth for the matrix query, history queries, and `lastSuccessful` / `previousFailed` derivation. | PostgreSQL (production and local dev); SQLite in-memory for unit tests only |
 | **Real-time Hub** | Each API instance `LISTEN`s on the PostgreSQL `deployments` channel (via the read surface's SSE handler) and forwards events to its own connected SSE clients. No separate broker service is required. | PostgreSQL `LISTEN/NOTIFY`, ASP.NET Core SSE (`text/event-stream`) |
@@ -264,9 +263,9 @@ A pipeline step that pushes deployment state to the API (see Summary row for con
 }
 ```
 
-#### Dashboard Backend — Write and Read surfaces
+#### Dashboard Backend — Write and Read API services (co-located)
 
-The backend ships as **one stateless ASP.NET Core container hosting two endpoint-group surfaces** — Write and Read — composed from separate library projects. Any number of instances of the container can run behind a load balancer; all mutable state lives in the database. The surfaces remain separable: the library boundary preserves the option to re-split into two container apps as a host-project + gateway-config change (no library code touched). See [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md) → "Future split — trigger conditions".
+Write and Read are **distinct microservices** with distinct concerns, **co-located** in one stateless ASP.NET Core container (`dashboard-api`) for operational simplicity within NFR-02 — composed from separate library projects. The architecture is microservices; the co-location is a packaging choice (per [ADR-0006](adr/ADR-0006-microservices-architecture-with-container-co-location.md)). Any number of instances of the container can run behind a load balancer; all mutable state lives in the database. The per-service boundary remains separable: the library partition preserves the option to move Write + Read from co-location to per-service deployment as a host-project + gateway-config change (no library code touched). See [ADR-0002 → "Future split — trigger conditions"](adr/ADR-0002-modular-monolith-consolidation.md) (mechanics-of-record; superseded only in framing, not in mechanics).
 
 | Attribute | Value |
 |---|---|
@@ -308,7 +307,7 @@ The single public-facing reverse proxy fronting every component (see Summary abo
 
 **Routing matrix:**
 
-Both surfaces resolve to a single `api:8080` upstream today (per [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md)). The matrix continues to discriminate on path + method so that a future re-split is a gateway-config-only change — the `POST /api/deployments` row simply points at a new write upstream while every other row stays the same.
+Both Write and Read API services are co-located in `dashboard-api` today, so both surfaces resolve to a single `api:8080` upstream (co-location mechanics per [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md); architectural framing per [ADR-0006](adr/ADR-0006-microservices-architecture-with-container-co-location.md)). The matrix continues to discriminate on path + method so that moving Write + Read to per-service images is a gateway-config-only change — the `POST /api/deployments` row simply points at a new write upstream while every other row stays the same.
 
 | Method + Path | Upstream | Surface |
 |---|---|---|
@@ -772,7 +771,7 @@ All three container apps share a **single** Azure Container Apps Environment on 
 
 | Logical component | Azure resource | SKU | Est. monthly cost |
 |---|---|---|---|
-| App Gateway + Dashboard + API (3 apps, 1 environment — consolidated from 4 per [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md), trimming per-app fixed overhead) | Azure Container Apps Environment + 3 Container Apps | Consumption (scale-to-zero) | ~$2–5 combined |
+| App Gateway + Dashboard + API (3 apps, 1 environment — Write + Read API services co-located in `dashboard-api`, packaging choice per [ADR-0006](adr/ADR-0006-microservices-architecture-with-container-co-location.md) / co-location mechanics-of-record in [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md), trimming per-app fixed overhead) | Azure Container Apps Environment + 3 Container Apps | Consumption (scale-to-zero) | ~$2–5 combined |
 | Container Images | Azure Container Registry | Basic | ~$5 |
 | Deployment Store | Azure Database for PostgreSQL Flexible Server | Burstable B1ms | ~$13–15 |
 | **Total** | | | **~$20–25/month** |

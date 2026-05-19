@@ -7,7 +7,7 @@
 - **Change.** Introduce a **hybrid GitHub Actions topology**: per-component thin workflow files driven by path filters, invoking one (or two) shared reusable workflow(s) that centralise the build / test / image / push mechanics. CI only — build + test + package — no deploy. Container images only — no NuGet, no npm. Decisions broken out below; each cites the Phase 3 question it answers.
 
   - **3a — Topology (Q1).** **Hybrid.** Per-component thin workflows under `.github/workflows/`:
-    - `api.yml` — owns `backend/**` (the modular monolith — `Dashboard.Api` host + `Dashboard.WriteApi` + `Dashboard.ReadApi` + `Dashboard.Shared` libraries all build under `backend/Dashboard.sln`)
+    - `api.yml` — owns `backend/**` (the co-located Write + Read API services per [ADR-0006](../adr/ADR-0006-microservices-architecture-with-container-co-location.md) — `Dashboard.Api` host + `Dashboard.WriteApi` + `Dashboard.ReadApi` + `Dashboard.Shared` libraries all build under `backend/Dashboard.sln` into one image, `dashboard-api`)
     - `fetcher.yml` — owns `backend/fetcher/**` + `backend/fetcher-host/**` (replaces WBS §1.5.8's standalone "build the fetcher image" item)
     - `frontend.yml` — owns `frontend/**`
     - `gateway.yml` — owns `gateway/**`
@@ -192,7 +192,7 @@
   - User Phase 1 freeform task — *"introduce CI/CD pipeline for components, to build, test and package"*.
   - [CR-0008](./CR-0008-api-validation-and-openapi-scalar.md) — validation + DataAnnotations pattern (precedent if CR-0010 ever validates runtime config; not used today, retained for symmetry with future CD work).
   - [CR-0009](./CR-0009-pull-mode-fetcher-and-progress-reporter.md) § 3d — deferred ACR / Terraform framing for the fetcher image; CR-0010 absorbs the build + publish half (GHCR substitute), defers the ACA-revision half.
-  - [ADR-0002](../adr/ADR-0002-modular-monolith-consolidation.md) — modular monolith; explains why `backend/Dashboard.sln` builds as one container target (`api.yml` is one workflow, not three).
+  - [ADR-0006](../adr/ADR-0006-microservices-architecture-with-container-co-location.md) (supersedes [ADR-0002](../adr/ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics) — microservices architecture with Write + Read API services co-located in one image; explains why `backend/Dashboard.sln` builds as one container target (`api.yml` is one workflow, not three).
   - `docs/WBS.md` §1.4 (CI/CD Integration phase — composite action + secrets, the inbound surface), §1.5.8 (fetcher Dockerfile — image build absorbed into CR-0010), §5.1 (the row being split — build+push half → CR-0010, ACA-revision half → future CD CR + Terraform §4).
   - `docs/architecture.md` §3 NFR-06 (IaC posture — rationale for the GHCR-not-ACR deviation in 3d), §5 NFR-02 (cost cap — rationale for GHCR), §9 (Phasing — receives the new component-CI track row).
   - `.github/actions/notify/action.yml` — composite action invoked by the dogfooding hook (3m); CR-0010 makes this repo the first consumer of its own integration surface.

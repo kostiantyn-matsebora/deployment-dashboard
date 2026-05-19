@@ -1,4 +1,6 @@
-# API component CI — builds the modular monolith host (Dashboard.Api),
+# API component CI — builds the co-located Write + Read API host
+# (Dashboard.Api — Write and Read services share one image per ADR-0006;
+# microservices architecture, container co-location is a packaging choice),
 # runs all backend unit tests EXCEPT Dashboard.Fetcher.Tests (those live with
 # the fetcher workflow), generates the EF migration SQL artefact, and pushes
 # the image to GHCR on main / tag pushes.
@@ -6,7 +8,8 @@
 # Owner: devops-engineer.
 # Contract: docs/cr/CR-0010-component-ci-pipeline.md (api.yml row in § Impact).
 # Path filter covers the host + both endpoint-group libraries + shared
-# (the monolith — one host, one image, one container target per ADR-0002).
+# (one host, one image, one container target — co-location mechanics per
+# ADR-0002; architectural framing per ADR-0006).
 name: api
 
 on:

@@ -178,6 +178,6 @@ The prevailing convention is **"every event-attribute surface that exposes `ref`
 - [CR-0004](./CR-0004-ref-and-sha-optional-fields.md) — precedent for optional-attribute-surfaced-on-all-event-DTOs.
 - [CR-0008](./CR-0008-api-validation-and-openapi-scalar.md) — length-validation + ProblemDetails contract reused verbatim for the new header.
 - **ADR-0004 (paired)** — opaque per-progress-reporter cursor; backend-held; out-of-process fetcher; plug-in adapter shape.
-- [ADR-0002](../adr/ADR-0002-modular-monolith-consolidation.md) — modular monolith; the fetcher is **not** absorbed into the monolith. The new fetcher-state endpoints land in the existing Write endpoint group (same API-key middleware), not in a new host.
+- [ADR-0006](../adr/ADR-0006-microservices-architecture-with-container-co-location.md) (supersedes [ADR-0002](../adr/ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics) — microservices architecture with the Write + Read API services co-located in `dashboard-api`. The Fetcher is its own microservice in its own image (`dashboard-fetcher`); it is **not** absorbed into the co-located API host. The new fetcher-state endpoints land in the existing Write endpoint group (same API-key middleware), not in a new host.
 - SAD §3 Non-Goals; SAD §7 Components Summary / API Contract / Components sub-sections; SAD §9 Phasing; SAD §10 Decision 6.
 - `docs/ci-cd-integration.md` — new H2 sections for the universal header + the optional pull-mode alternative.

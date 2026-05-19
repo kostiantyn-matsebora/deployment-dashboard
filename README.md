@@ -206,13 +206,17 @@ as `API_TOKEN`.
 
 ## Architecture
 
-The system is a modular monolith (per
-[ADR-0002](docs/adr/ADR-0002-modular-monolith-consolidation.md)) with four
-container images: `dashboard-api` (Write + Read endpoint groups co-hosted),
-`dashboard-fetcher` (optional pull-mode worker), `dashboard-frontend` (Angular
-20 SPA on nginx), and `dashboard-gateway` (nginx routing / SSE pass-through /
-the only host-published service). The full topology, ADRs, change records, and
-UI mockup live under `docs/`:
+The system is a **microservices architecture** with **container co-location** of
+the Write + Read API services (framing per
+[ADR-0006](docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md);
+co-location mechanics per
+[ADR-0002](docs/adr/ADR-0002-modular-monolith-consolidation.md)). Four container
+images: `dashboard-api` (Write + Read services co-located — packaging choice,
+not the architecture itself), `dashboard-fetcher` (optional pull-mode worker
+microservice), `dashboard-frontend` (Angular 20 SPA on nginx), and
+`dashboard-gateway` (nginx routing / SSE pass-through / the only host-published
+service). The full topology, ADRs, change records, and UI mockup live under
+`docs/`:
 
 | Surface | Pointer |
 |---|---|
