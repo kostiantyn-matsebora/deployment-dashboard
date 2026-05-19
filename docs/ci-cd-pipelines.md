@@ -1,8 +1,8 @@
 # CI/CD Pipelines — Deployment Dashboard
 
 Operational companion to `docs/architecture.md` §9 (Phasing) → component-CI
-track. **Outbound** view: how this repo's own components (`dashboard-api`,
-`dashboard-fetcher`, `dashboard-frontend`, `dashboard-gateway`) are built,
+track. **Outbound** view: how this repo's own components (`deployment-dashboard-api`,
+`deployment-dashboard-fetcher`, `deployment-dashboard-frontend`, `deployment-dashboard-gateway`) are built,
 tested, and shipped on every PR / push / tag.
 
 Implements CR-0010 (`docs/cr/CR-0010-component-ci-pipeline.md`). MVP-CI:
@@ -29,10 +29,10 @@ its own images," you are in the right place.
 ```
 .github/workflows/
 ├── _build-and-push-image.yml    reusable — build, test, push (1 file, 4 callers)
-├── api.yml                       caller — dashboard-api    (paths: backend/{api,write-api,read-api,shared}/**)
-├── fetcher.yml                   caller — dashboard-fetcher (paths: backend/{fetcher,fetcher-host,shared}/**)
-├── frontend.yml                  caller — dashboard-frontend (paths: frontend/**)
-└── gateway.yml                   caller — dashboard-gateway  (paths: gateway/**)
+├── api.yml                       caller — deployment-dashboard-api    (paths: backend/{api,write-api,read-api,shared}/**)
+├── fetcher.yml                   caller — deployment-dashboard-fetcher (paths: backend/{fetcher,fetcher-host,shared}/**)
+├── frontend.yml                  caller — deployment-dashboard-frontend (paths: frontend/**)
+└── gateway.yml                   caller — deployment-dashboard-gateway  (paths: gateway/**)
 ```
 
 The reusable workflow's `build-kind` input (`dotnet` | `static`) selects the
@@ -43,10 +43,10 @@ PR runs only `frontend` jobs.
 
 | Caller | Image (GHCR) | Dockerfile | Build context |
 |---|---|---|---|
-| `api.yml` | `ghcr.io/<owner>/dashboard-api` | `backend/api/Dockerfile` | `backend/` |
-| `fetcher.yml` | `ghcr.io/<owner>/dashboard-fetcher` | `backend/fetcher-host/Dockerfile` | `backend/` |
-| `frontend.yml` | `ghcr.io/<owner>/dashboard-frontend` | `frontend/dashboard/Dockerfile` | `frontend/` |
-| `gateway.yml` | `ghcr.io/<owner>/dashboard-gateway` | `gateway/Dockerfile` | `gateway/` |
+| `api.yml` | `ghcr.io/<owner>/deployment-dashboard-api` | `backend/api/Dockerfile` | `backend/` |
+| `fetcher.yml` | `ghcr.io/<owner>/deployment-dashboard-fetcher` | `backend/fetcher-host/Dockerfile` | `backend/` |
+| `frontend.yml` | `ghcr.io/<owner>/deployment-dashboard-frontend` | `frontend/dashboard/Dockerfile` | `frontend/` |
+| `gateway.yml` | `ghcr.io/<owner>/deployment-dashboard-gateway` | `gateway/Dockerfile` | `gateway/` |
 
 ## 3. Triggers
 
@@ -197,7 +197,7 @@ ADR-0005).
 
 | Asset | Source | Purpose |
 |---|---|---|
-| `docker-compose.release.yml` | repo root | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. |
+| `docker-compose.release.yml` | repo root | The image-only Compose file the installer brings up. Image refs are templated with `${DASHBOARD_VERSION}` at publish time so the asset for tag `v1.2.3` already pins `ghcr.io/<owner>/deployment-dashboard-{api,fetcher,frontend,gateway}:v1.2.3`. |
 | `install.ps1` | repo root | The PowerShell installer (Option A per issue #7). Mirrors `dev_env/start.ps1`'s health-poll + URL-panel UX. Inherits issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)'s `-Fetcher` / `-AllowMissingGhaToken` precondition verbatim. |
 | `install.sh` | repo root | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. |
 | `uninstall.ps1` | repo root | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. |

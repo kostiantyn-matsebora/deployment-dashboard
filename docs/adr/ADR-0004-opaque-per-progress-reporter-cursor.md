@@ -12,7 +12,7 @@
   - **NFR-05 (stateless backend across replicas).** The backend must remain replica-fungible: any API instance can serve any request, no sticky sessions, no instance-local state. This constrains where the cursor lives **and** how many fetcher instances may run.
   - **NFR-04 (internal-only).** The fetcher reaches out to a public CI/CD API; the backend stays inside the internal network. The fetcher's credential surface (CI/CD PAT) must not bleed into the API host's credential surface (`X-Api-Key`).
   - **NFR-02 (≤ $30/month).** One additional Consumption-plan ACA app when the fetcher is enabled — acceptable. Opt-in deployment means adopters who don't deploy the fetcher pay nothing extra.
-  - **[ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) — microservices architecture with container co-location** (supersedes [ADR-0002](./ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics). The Write and Read API services are co-located in one container (`dashboard-api`). ADR-0004 must explain why the Fetcher microservice is **not** co-located into the same container.
+  - **[ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) — microservices architecture with container co-location** (supersedes [ADR-0002](./ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics). The Write and Read API services are co-located in one container (`deployment-dashboard-api`). ADR-0004 must explain why the Fetcher microservice is **not** co-located into the same container.
   - **[CR-0009](../cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md) 3a — universal `X-Progress-Reporter` header.** Whatever discriminator the cursor table uses must be the **same** concept the adapter uses on its push events — one concept across attribution and state, not two.
 
 - **Decision.**
@@ -48,7 +48,7 @@
 
   ### Decision 3 — Fetcher runs in a **separate container**, not as an in-process `BackgroundService`
 
-  The fetcher is shipped as a separate ASP.NET Core Worker (`Microsoft.NET.Sdk.Worker`) in `backend/fetcher-host/Dashboard.Fetcher.Host/`, built into a separate container image (`dashboard-fetcher`). It is **not** co-located into the `dashboard-api` host with the Write + Read services (see [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) for the microservices framing; co-location mechanics for Write + Read live in [ADR-0002](./ADR-0002-modular-monolith-consolidation.md)).
+  The fetcher is shipped as a separate ASP.NET Core Worker (`Microsoft.NET.Sdk.Worker`) in `backend/fetcher-host/Dashboard.Fetcher.Host/`, built into a separate container image (`deployment-dashboard-fetcher`). It is **not** co-located into the `deployment-dashboard-api` host with the Write + Read services (see [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) for the microservices framing; co-location mechanics for Write + Read live in [ADR-0002](./ADR-0002-modular-monolith-consolidation.md)).
 
   **Rationale.**
 
@@ -110,7 +110,7 @@
 - **References:**
   - [CR-0009](../cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md) — the paired requirement (introduces the fetcher, the new header, and the cursor endpoints).
   - [CR-0008](../cr/CR-0008-api-validation-and-openapi-scalar.md) — `ProblemDetails` + length-validation pattern reused verbatim for the new `X-Progress-Reporter` header and the new cursor endpoints.
-  - [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) — microservices architecture + co-location framing (supersedes [ADR-0002](./ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics for Write + Read); this ADR documents the explicit non-co-location of the Fetcher microservice into the `dashboard-api` host (Decision 3 above).
+  - [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) — microservices architecture + co-location framing (supersedes [ADR-0002](./ADR-0002-modular-monolith-consolidation.md) on framing; ADR-0002 retains the co-location mechanics for Write + Read); this ADR documents the explicit non-co-location of the Fetcher microservice into the `deployment-dashboard-api` host (Decision 3 above).
   - SAD §7 "Dashboard.Fetcher (optional pull-mode adapter)" — per-component attribute card (added by CR-0009).
   - SAD §10 Decision 6 — *"Push-by-default with optional pull-mode adapter"* (amended by CR-0009).
   - `backend/shared/Dashboard.Shared/Dto/DeploymentEventResponse.cs`, `MatrixSlot.cs`, `SlotUpdatePayload.cs` — Read-surface DTOs that the new `progress_reporter` field extends (per CR-0009 Open trade-off (iii) recommendation).

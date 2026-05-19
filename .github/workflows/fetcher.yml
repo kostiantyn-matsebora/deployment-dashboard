@@ -49,7 +49,7 @@ jobs:
   build:
     uses: ./.github/workflows/_build-and-push-image.yml
     with:
-      image-name: dashboard-fetcher
+      image-name: deployment-dashboard-fetcher
       build-kind: dotnet
       dockerfile-path: backend/fetcher-host/Dockerfile
       context-path: backend

@@ -53,7 +53,7 @@ jobs:
   build:
     uses: ./.github/workflows/_build-and-push-image.yml
     with:
-      image-name: dashboard-api
+      image-name: deployment-dashboard-api
       build-kind: dotnet
       dockerfile-path: backend/api/Dockerfile
       context-path: backend

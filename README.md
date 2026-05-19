@@ -32,7 +32,7 @@ See `docs/architecture.md` for the full Solution Architecture Document.
 A clean machine with Docker installed can be running the dashboard in one
 command -- no `git clone`, no source tree, no .NET SDK required. The installer
 fetches release assets from GitHub, pulls the four pinned images from GHCR
-(`ghcr.io/kostiantyn-matsebora/dashboard-{api,fetcher,frontend,gateway}`), brings
+(`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}`), brings
 up the stack with `docker compose`, applies idempotent schema migrations via a
 one-shot `postgres:16-alpine` container, polls `/health`, and prints the URL
 panel + the generated `API_TOKEN`.
@@ -223,10 +223,10 @@ the Write + Read API services (framing per
 [ADR-0006](docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md);
 co-location mechanics per
 [ADR-0002](docs/adr/ADR-0002-modular-monolith-consolidation.md)). Four container
-images: `dashboard-api` (Write + Read services co-located — packaging choice,
-not the architecture itself), `dashboard-fetcher` (optional pull-mode worker
-microservice), `dashboard-frontend` (Angular 20 SPA on nginx), and
-`dashboard-gateway` (nginx routing / SSE pass-through / the only host-published
+images: `deployment-dashboard-api` (Write + Read services co-located — packaging choice,
+not the architecture itself), `deployment-dashboard-fetcher` (optional pull-mode worker
+microservice), `deployment-dashboard-frontend` (Angular 20 SPA on nginx), and
+`deployment-dashboard-gateway` (nginx routing / SSE pass-through / the only host-published
 service). The full topology, ADRs, change records, and UI mockup live under
 `docs/`:
 

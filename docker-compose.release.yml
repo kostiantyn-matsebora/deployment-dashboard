@@ -14,7 +14,7 @@
 #   - Profile-gated `migrations` service     -- enabled by default through the installer's `--profile migrate`.
 #   - Profile-gated `fetcher`    service     -- enabled by the installer's `-Fetcher` switch.
 #
-# Image refs use `ghcr.io/kostiantyn-matsebora/dashboard-{api,fetcher,frontend,gateway}:${DASHBOARD_VERSION:-latest}`.
+# Image refs use `ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}:${DASHBOARD_VERSION:-latest}`.
 # The installer writes `DASHBOARD_VERSION` into `<InstallDir>/dashboard.env` so the same compose file
 # resolves to the requested tag on every host.
 #
@@ -81,7 +81,7 @@ services:
   # Internal-only (`expose:` no host port) -- the gateway routes path + method
   # onto the same `api` upstream per NFR-04.
   api:
-    image: ghcr.io/kostiantyn-matsebora/dashboard-api:${DASHBOARD_VERSION:-latest}
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:${DASHBOARD_VERSION:-latest}
     container_name: dashboard-api
     restart: unless-stopped
     environment:
@@ -104,14 +104,14 @@ services:
         required: false
 
   dashboard:
-    image: ghcr.io/kostiantyn-matsebora/dashboard-frontend:${DASHBOARD_VERSION:-latest}
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-frontend:${DASHBOARD_VERSION:-latest}
     container_name: dashboard-frontend
     restart: unless-stopped
     expose:
       - "80"                              # internal-only -- gateway routes GET / + SPA shell here
 
   gateway:
-    image: ghcr.io/kostiantyn-matsebora/dashboard-gateway:${DASHBOARD_VERSION:-latest}
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:${DASHBOARD_VERSION:-latest}
     container_name: dashboard-gateway
     restart: unless-stopped
     ports:
@@ -140,7 +140,7 @@ services:
   # `-AllowMissingGhaToken` / `--allow-missing-gha-token` is supplied (issue #5).
   fetcher:
     profiles: ["fetcher"]
-    image: ghcr.io/kostiantyn-matsebora/dashboard-fetcher:${DASHBOARD_VERSION:-latest}
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-fetcher:${DASHBOARD_VERSION:-latest}
     container_name: dashboard-fetcher
     restart: unless-stopped
     environment:
