@@ -37,8 +37,8 @@ Real-time deployment dashboard. Renders a services × environments matrix source
 | Architecture doc | `docs/architecture.md` | present |
 | Mockup | `docs/ui/deployment-dashboard.html` | present |
 | API contract | inside `docs/architecture.md` §7 (no standalone file) | present |
-| ADR directory | `docs/adr/` (ADR-0001, ADR-0002, ADR-0003 + README) | present |
-| CR directory | `docs/cr/` (CR-0001..CR-0008 + README) | present |
+| ADR directory | `docs/adr/` (ADR-0001, ADR-0002 [superseded by ADR-0006 on framing — mechanics-of-record], ADR-0003, ADR-0004, ADR-0005, ADR-0006 + README) | present |
+| CR directory | `docs/cr/` (CR-0001..CR-0010 + README) | present |
 | Diagrams directory | (none — diagrams embedded as ASCII art in `docs/architecture.md`) | absent |
 | UI options directory | `docs/ui/` (compact / focus-layout / theme / tree-topology / version-display option docs) | present |
 | Operational companion | `docs/ci-cd-integration.md` | present |
@@ -65,7 +65,7 @@ Source-doc summaries land in `local/index/` (one file per detected doc class —
 
 ```
 deployment-dashboard/
-├── backend/         .NET 10 modular monolith — Dashboard.sln + api/ host + write-api/, read-api/, shared/ libraries
+├── backend/         .NET 10 — co-located Write + Read API services (Dashboard.sln + api/ host + write-api/, read-api/, shared/ libraries; microservices architecture per ADR-0006, co-location mechanics per ADR-0002)
 ├── frontend/        Angular 20 workspace — dashboard/ (shell), matrix/, drawer/, shared/
 ├── gateway/         nginx reverse proxy — single public ingress (port 8080)
 ├── dev_env/         Docker Compose stacks + PowerShell start/stop scripts
@@ -145,4 +145,4 @@ Other awesome-copilot matches (.NET / Angular / API Architect / AI Team Dev / AI
 | Root `README.md` lands | repo root |
 | New top-level directory not listed above | repo root |
 | New tier-1 doc class under `docs/` (e.g. runbooks, threat-model, scenarios) | `docs/` |
-| Backend layout changes — `backend/api/` consolidation per ADR-0002 fully removes legacy `write-api/` + `read-api/` top-level dirs | `backend/` |
+| Backend layout changes — `backend/api/` co-location of Write + Read services (per ADR-0006 framing, ADR-0002 mechanics) fully removes legacy top-level dirs, or a future move from co-location to per-service images lands | `backend/` |

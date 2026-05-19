@@ -9,11 +9,14 @@ Per SAD §7 "App Gateway", the local stack mirrors the Azure topology:
 - **`gateway`** — `nginx:alpine`, host port `8080`. **The only entry point.**
   Routes by path + method to the appropriate backend.
 - **`dashboard`** — `nginx:alpine` serving the Angular SPA bundle. Internal-only.
-- **`api`** — ASP.NET Core Minimal API hosting both Write and Read surfaces as
-  composed library projects (per ADR-0002 / §10 Decision 11): POST ingest +
-  NOTIFY, matrix / history / discovery / SSE / health. Internal-only. The
-  gateway routes path + method onto the same `api` upstream so a future
-  re-split is a gateway-config-only change.
+- **`api`** — ASP.NET Core Minimal API hosting the **co-located Write and Read
+  API services** as composed library projects (microservices architecture per
+  [ADR-0006](../docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md);
+  co-location mechanics per ADR-0002 / §10 Decision 11): POST ingest + NOTIFY,
+  matrix / history / discovery / SSE / health. Internal-only. The gateway
+  routes path + method onto the same `api` upstream so a future move from
+  co-location to per-service images is a gateway-config-only change (mechanics
+  per ADR-0002).
 - **`db`** — PostgreSQL 16. Host port `5432` is published for dev convenience only (psql / EF tooling).
 - **`pgadmin`** — host port `5050` for dev convenience.
 - **`migrations`** — one-shot SDK container; runs `dotnet ef database update` then exits.
@@ -71,10 +74,12 @@ pwsh -NoProfile -File dev_env/start.ps1 -Scaled
 ```
 
 Uses `docker-compose.scaled.yml`: same gateway in front, but **3 API
-replicas** behind it (Write + Read surfaces composed in one host per
-ADR-0002). Docker DNS resolves the `api` upstream to multiple replica
-IPs and nginx round-robins across them — the gateway IS the load
-balancer. The dashboard remains on the same URL: `http://localhost:8080/`.
+replicas** behind it (Write + Read services co-located in one image per
+[ADR-0006](../docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md);
+co-location mechanics per ADR-0002). Docker DNS resolves the `api` upstream
+to multiple replica IPs and nginx round-robins across them — the gateway IS
+the load balancer. The dashboard remains on the same URL:
+`http://localhost:8080/`.
 
 This is how we validate the backend is stateless — any replica accepts
 an ingest POST and broadcasts via PG `LISTEN/NOTIFY`, every replica

@@ -8,7 +8,7 @@ Operational work plan for the deployment dashboard. Tracks the phased item list 
 
 ### 1. Implement Solution
 
-- 1.0 Backend host (`backend/api/`) — composition root that wires up Write and Read surface libraries; `Program.cs`, single Dockerfile, single ACA container app target; references `backend/write-api/`, `backend/read-api/`, `backend/shared/`. API-key middleware is applied **only** to the Write endpoint group (see SAD §8 "Security Considerations" and [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md)). See ADR-0002 for rationale and future-split mechanics.
+- 1.0 Backend host (`backend/api/`) — composition root that wires up the **co-located Write and Read API services** (per [ADR-0006](adr/ADR-0006-microservices-architecture-with-container-co-location.md) — microservices architecture, container co-location is a packaging choice); `Program.cs`, single Dockerfile, single ACA container app target; references `backend/write-api/`, `backend/read-api/`, `backend/shared/`. API-key middleware is applied **only** to the Write endpoint group (see SAD §8 "Security Considerations" and [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md) for the co-location mechanics and future-split trigger conditions).
 - 1.1 Ingest API (Write surface — ASP.NET Core Minimal API library at `backend/write-api/`; composed into the API host)
   - 1.1.1 `DeploymentEvent` record with Data Annotations validation (`422` on invalid payload); fields include `deployment_id` (required) and `parent_deployments` (optional)
   - 1.1.2 EF Core `DeploymentEntity` and `DbContext` in `backend/shared/`; `deployments` table migration with `deployment_id` column + unique index on `(service, deployment_id)` and `parent_deployments` column (PostgreSQL `text[]`; SQLite JSON-encoded array). Migrations live in `shared/` and serve both surfaces.
@@ -100,7 +100,7 @@ Operational work plan for the deployment dashboard. Tracks the phased item list 
 - 4.2 Azure PostgreSQL Flexible Server (B1ms, private access)
 - 4.3 Azure Container Registry (Basic SKU)
 - 4.4 Azure Container Apps Environment
-- 4.5 Azure Container Apps — three container app definitions: API (Write + Read surfaces), Dashboard Frontend, App Gateway. A future split adds a second backend container app per [ADR-0002](adr/ADR-0002-modular-monolith-consolidation.md).
+- 4.5 Azure Container Apps — three container app definitions: API (Write + Read services co-located in `dashboard-api` per [ADR-0006](adr/ADR-0006-microservices-architecture-with-container-co-location.md)), Dashboard Frontend, App Gateway. A future move from co-location to per-service images adds a second backend container app — host-project + gateway-config-only change per [ADR-0002 → "Future split — trigger conditions"](adr/ADR-0002-modular-monolith-consolidation.md) (mechanics-of-record).
 - 4.6 Azure Key Vault — store `API_TOKEN`, `ConnectionStrings__DefaultConnection`
 - 4.7 Workspace-based environments (`dev`, `prod`) with per-environment variable files
 
