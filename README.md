@@ -3,6 +3,9 @@
 > [!NOTE]
 > **Built end-to-end by AI** — every commit, ADR, CR, test, and CI workflow in this repo was authored by AI specialists routed through [`ginee`](https://github.com/kostiantyn-matsebora/ginee), a multi-agent engineering process for small autonomous teams.
 
+> [!WARNING]
+> **Work in progress — not production-ready.** Pre-1.0 active development; APIs, wire contracts, infrastructure topology, and configuration surfaces may change without notice. Suitable for evaluation, demos, and internal testbed use only.
+
 # Deployment Dashboard
 
 A real-time **services x environments** deployment matrix sourced from any CI/CD
