@@ -10,6 +10,8 @@ search_enabled: true
 color_scheme: light
 
 aux_links:
+  "Get Started":
+    - /deployment-dashboard/getting-started
   "GitHub Repo":
     - https://github.com/kostiantyn-matsebora/deployment-dashboard
 aux_links_new_tab: true

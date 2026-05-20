@@ -34,6 +34,9 @@ See [`dev_env/README.md`](dev_env/README.md) for the contributor stack details (
 
 | Surface | Path |
 |---|---|
+| Get Started (60-second demo) | [`docs/getting-started.md`](docs/getting-started.md) |
+| Install (full reference) | [`docs/install.md`](docs/install.md) |
+| Features (user-visible surfaces) | [`docs/features.md`](docs/features.md) |
 | Solution Architecture Document (SAD) | [`docs/architecture.md`](docs/architecture.md) |
 | Architecture Decision Records | [`docs/adr/`](docs/adr/) |
 | Change Requests | [`docs/cr/`](docs/cr/) |
