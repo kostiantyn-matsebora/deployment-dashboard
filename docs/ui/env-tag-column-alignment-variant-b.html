@@ -40,7 +40,7 @@
        Doc-level structure (mockup-page chrome).
        ============================================================ */
     .doc-header {
-      max-width: 1100px;
+      max-width: 1400px;
       margin: 0 auto 28px;
     }
     .doc-header h1 {
@@ -64,7 +64,7 @@
     }
 
     .section {
-      max-width: 1100px;
+      max-width: 1400px;
       margin: 0 auto 36px;
       padding: 0;
     }
@@ -101,7 +101,7 @@
     }
 
     .section-divider {
-      max-width: 1100px;
+      max-width: 1400px;
       margin: 32px auto;
       border: 0;
       border-top: 1px dashed #30363d;
@@ -207,6 +207,7 @@
       display: flex;
       flex-direction: column;
       min-width: 0;
+      overflow-x: auto;
     }
     .wf-row {
       position: relative;
@@ -376,13 +377,19 @@
        directive on .svc-block based on the widest env-tag across
        the entire block. Here it is hardcoded for the fixture:
          max across ALL positions and ALL rows
-           = PYPI-HOGQL-PARSER-RS  ≈ 132px
+           = max(PYPI-HOGQL-PARSER-RS pos-0  ≈ 158 px,
+                 PREVIEW-VERIFY-LATEST pos-1 ≈ 168 px,
+                 PYPI-MIRROR-WORLDWIDE pos-2 ≈ 144 px)
+           = 168 px → 170 px (rounded up for safety)
        Used by every .leaf-pair in the service block — including
-       position 1 (PROD-EU), even though PROD-EU itself only needs
-       ~50px of column-1 space.
+       narrow-content positions (STAGING, PROD-CA, PROD-EU, PYPI-CDN,
+       PROD-CA, etc.), which pay the widest-label cost even though
+       their own intrinsic width is much smaller (~50-60 px).
+       Position 2 alone pays a +24 px / row vs Variant A's tight
+       position-2 column (146 px).
        ============================================================ */
     .svc-block-fixed {
-      --env-tag-col-width: 132px;
+      --env-tag-col-width: 170px;
     }
 
     /* Visual debug overlay — faint dotted line at the column-2 (box)
@@ -401,8 +408,10 @@
       pointer-events: none;
       z-index: 0;
     }
-    .svc-block.with-guide.guide-buggy .wf-row::before { left: 140px; }
-    .svc-block.with-guide.guide-fixed .wf-row::before { left: 138px; }
+    .svc-block.with-guide.guide-buggy .wf-row::before { left: 164px; }
+    /* AFTER block — guide at the shared env-tag column width
+       (170 px + 6 px column-gap = 176 px). */
+    .svc-block.with-guide.guide-fixed .wf-row::before { left: 176px; }
   </style>
 </head>
 <body>
@@ -426,6 +435,16 @@
       <code>styles.css:182-187</code> styles it as an independent grid
       with <code>grid-template-columns: auto var(--leaf-width)</code>.
     </p>
+    <p>
+      <strong>Fixture.</strong> Five rows, each three deployments deep,
+      with deliberately varied env-name lengths so position-0,
+      position-1 AND position-2 columns each have a row where one env
+      name is short and another is long. The horizontal cost of the
+      shared-max width is visible at every position: narrow labels
+      (<code>STAGING</code>, <code>PROD-CA</code>, <code>PROD-EU</code>,
+      <code>PYPI-CDN</code>) all inflate their column-1 to the
+      widest-anywhere width.
+    </p>
   </header>
 
   <!-- ============================================================
@@ -440,8 +459,9 @@
     <p class="section-note">
       Adjacent rows in the same service have different X positions for
       their nth deployment cell. The dotted blue guide marks where the
-      longest-label row's box starts; shorter rows pull their boxes
-      leftward into ragged columns.
+      longest-label row's position-0 box starts; shorter rows pull
+      their boxes leftward into ragged columns, and the drift compounds
+      at positions 1 and 2.
     </p>
 
     <section class="svc-block with-guide guide-buggy">
@@ -455,7 +475,7 @@
       </div>
       <div class="svc-block-rows">
 
-        <!-- DEV row -->
+        <!-- Row 1 — DEV -> STAGING -> PROD-CA -->
         <div class="wf-row">
           <div class="leaf-pair-buggy" data-env="dev">
             <span class="env-tag">DEV</span>
@@ -474,9 +494,37 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-staging"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="staging">
+            <span class="env-tag">STAGING</span>
+            <div class="wf-stage success" data-testid="stage-buggy-staging">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4760118822</a>
+                </div>
+                <p class="version-line">1d67bf2</p>
+                <p class="ago-line">2 minutes ago</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-prod-ca"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="prod-ca">
+            <span class="env-tag">PROD-CA</span>
+            <div class="wf-stage success" data-testid="stage-buggy-prod-ca">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4759992101</a>
+                </div>
+                <p class="version-line">a712c44</p>
+                <p class="ago-line">17 minutes ago</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- PREVIEW-PR-45696 row -->
+        <!-- Row 2 — PREVIEW-PR-45696 -> PREVIEW-VERIFY-LATEST -> PREVIEW-FINAL -->
         <div class="wf-row">
           <div class="leaf-pair-buggy" data-env="preview-pr-45696">
             <span class="env-tag">PREVIEW-PR-45696</span>
@@ -491,9 +539,37 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-preview-verify-latest"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="preview-verify-latest">
+            <span class="env-tag">PREVIEW-VERIFY-LATEST</span>
+            <div class="wf-stage success" data-testid="stage-buggy-preview-verify-latest">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4750118203</a>
+                </div>
+                <p class="version-line">a70a4ac</p>
+                <p class="ago-line">10 hours ago</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-preview-final"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="preview-final">
+            <span class="env-tag">PREVIEW-FINAL</span>
+            <div class="wf-stage failed" data-testid="stage-buggy-preview-final">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge failed">✗ failed</span>
+                  <a class="run-link" href="#">#4749990155</a>
+                </div>
+                <p class="version-line">a70a4ac</p>
+                <p class="ago-line">11 hours ago</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- PROD-US row, with PROD-EU at position 1 -->
+        <!-- Row 3 — PROD-US -> PROD-EU -> PROD-APAC-SINGAPORE -->
         <div class="wf-row">
           <div class="leaf-pair-buggy" data-env="prod-us">
             <span class="env-tag">PROD-US</span>
@@ -530,10 +606,24 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-prod-apac-singapore"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="prod-apac-singapore">
+            <span class="env-tag">PROD-APAC-SINGAPORE</span>
+            <div class="wf-stage success" data-testid="stage-buggy-prod-apac-singapore">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4759001782</a>
+                </div>
+                <p class="version-line">1d67bf2</p>
+                <p class="ago-line">42 minutes ago</p>
+              </div>
+            </div>
+          </div>
           <div class="default-badge">DEFAULT</div>
         </div>
 
-        <!-- PYPI-HOGQL-PARSER row -->
+        <!-- Row 4 — PYPI-HOGQL-PARSER -> PYPI-CDN -> PYPI-MIRROR-WORLDWIDE -->
         <div class="wf-row">
           <div class="leaf-pair-buggy" data-env="pypi-hogql-parser">
             <span class="env-tag">PYPI-HOGQL-PARSER</span>
@@ -548,9 +638,37 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-pypi-cdn"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="pypi-cdn">
+            <span class="env-tag">PYPI-CDN</span>
+            <div class="wf-stage in-progress" data-testid="stage-buggy-pypi-cdn">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge in-progress">⟳ in-progress</span>
+                  <a class="run-link" href="#">#4759803111</a>
+                </div>
+                <p class="version-line">37860ed</p>
+                <p class="ago-line">just now</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-pypi-mirror-worldwide"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="pypi-mirror-worldwide">
+            <span class="env-tag">PYPI-MIRROR-WORLDWIDE</span>
+            <div class="wf-stage success" data-testid="stage-buggy-pypi-mirror-worldwide">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4759601820</a>
+                </div>
+                <p class="version-line">29c1aa0</p>
+                <p class="ago-line">7 minutes ago</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- PYPI-HOGQL-PARSER-RS row (longest label) -->
+        <!-- Row 5 — PYPI-HOGQL-PARSER-RS -> PYPI-CDN-RS -> PYPI-MIRROR-RS -->
         <div class="wf-row">
           <div class="leaf-pair-buggy" data-env="pypi-hogql-parser-rs">
             <span class="env-tag">PYPI-HOGQL-PARSER-RS</span>
@@ -565,6 +683,34 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-pypi-cdn-rs"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="pypi-cdn-rs">
+            <span class="env-tag">PYPI-CDN-RS</span>
+            <div class="wf-stage success" data-testid="stage-buggy-pypi-cdn-rs">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4758801993</a>
+                </div>
+                <p class="version-line">2b4da1c</p>
+                <p class="ago-line">1 hour ago</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-pypi-mirror-rs"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-buggy" data-env="pypi-mirror-rs">
+            <span class="env-tag">PYPI-MIRROR-RS</span>
+            <div class="wf-stage in-progress" data-testid="stage-buggy-pypi-mirror-rs">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge in-progress">⟳ in-progress</span>
+                  <a class="run-link" href="#">#4758802441</a>
+                </div>
+                <p class="version-line">2b4da1c</p>
+                <p class="ago-line">1 hour ago</p>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -576,8 +722,9 @@
   <!-- ============================================================
        AFTER — Variant B. Single shared env-tag column width;
        nth cell aligns with nth cell across every row in the block.
-       Position 1 (PROD-EU) reserves the same column-1 width as
-       position 0, even though its own content is narrower.
+       Every position (0, 1, AND 2) reserves the widest env-tag
+       width found anywhere in the block, regardless of what that
+       position's own widest label is.
        ============================================================ -->
   <section class="section">
     <div class="section-header">
@@ -586,12 +733,13 @@
     </div>
     <p class="section-note">
       A single <code>--env-tag-col-width</code> applied to every
-      <code>.leaf-pair</code> in the service block; equals the
-      widest env-tag anywhere in the block
-      (<code>PYPI-HOGQL-PARSER-RS</code>). Every row's nth cell
-      starts at the same X; the position-1 column (<code>PROD-EU</code>)
-      sits visibly farther right than Variant A's narrow position-1
-      column, because it inherits the position-0 width too.
+      <code>.leaf-pair</code> in the service block; equals the widest
+      env-tag anywhere in the block. Every row's nth cell starts at
+      the same X. Compared to Variant A, the narrow-label positions
+      (<code>STAGING</code>, <code>PROD-EU</code>, <code>PYPI-CDN</code>,
+      <code>PROD-CA</code>) all inflate to the widest-anywhere width
+      — visible as extra whitespace before every box on every row,
+      and a visibly wider service block overall.
     </p>
 
     <section class="svc-block svc-block-fixed with-guide guide-fixed">
@@ -605,6 +753,7 @@
       </div>
       <div class="svc-block-rows">
 
+        <!-- Row 1 — DEV -> STAGING -> PROD-CA -->
         <div class="wf-row">
           <div class="leaf-pair-fixed" data-env="dev">
             <span class="env-tag">DEV</span>
@@ -623,8 +772,37 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-staging"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="staging">
+            <span class="env-tag">STAGING</span>
+            <div class="wf-stage success" data-testid="stage-fixed-staging">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4760118822</a>
+                </div>
+                <p class="version-line">1d67bf2</p>
+                <p class="ago-line">2 minutes ago</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-prod-ca"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="prod-ca">
+            <span class="env-tag">PROD-CA</span>
+            <div class="wf-stage success" data-testid="stage-fixed-prod-ca">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4759992101</a>
+                </div>
+                <p class="version-line">a712c44</p>
+                <p class="ago-line">17 minutes ago</p>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- Row 2 — PREVIEW-PR-45696 -> PREVIEW-VERIFY-LATEST -> PREVIEW-FINAL -->
         <div class="wf-row">
           <div class="leaf-pair-fixed" data-env="preview-pr-45696">
             <span class="env-tag">PREVIEW-PR-45696</span>
@@ -639,8 +817,37 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-preview-verify-latest"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="preview-verify-latest">
+            <span class="env-tag">PREVIEW-VERIFY-LATEST</span>
+            <div class="wf-stage success" data-testid="stage-fixed-preview-verify-latest">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4750118203</a>
+                </div>
+                <p class="version-line">a70a4ac</p>
+                <p class="ago-line">10 hours ago</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-preview-final"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="preview-final">
+            <span class="env-tag">PREVIEW-FINAL</span>
+            <div class="wf-stage failed" data-testid="stage-fixed-preview-final">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge failed">✗ failed</span>
+                  <a class="run-link" href="#">#4749990155</a>
+                </div>
+                <p class="version-line">a70a4ac</p>
+                <p class="ago-line">11 hours ago</p>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- Row 3 — PROD-US -> PROD-EU -> PROD-APAC-SINGAPORE -->
         <div class="wf-row">
           <div class="leaf-pair-fixed" data-env="prod-us">
             <span class="env-tag">PROD-US</span>
@@ -677,9 +884,24 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-prod-apac-singapore"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="prod-apac-singapore">
+            <span class="env-tag">PROD-APAC-SINGAPORE</span>
+            <div class="wf-stage success" data-testid="stage-fixed-prod-apac-singapore">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4759001782</a>
+                </div>
+                <p class="version-line">1d67bf2</p>
+                <p class="ago-line">42 minutes ago</p>
+              </div>
+            </div>
+          </div>
           <div class="default-badge">DEFAULT</div>
         </div>
 
+        <!-- Row 4 — PYPI-HOGQL-PARSER -> PYPI-CDN -> PYPI-MIRROR-WORLDWIDE -->
         <div class="wf-row">
           <div class="leaf-pair-fixed" data-env="pypi-hogql-parser">
             <span class="env-tag">PYPI-HOGQL-PARSER</span>
@@ -694,8 +916,37 @@
               </div>
             </div>
           </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-pypi-cdn"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="pypi-cdn">
+            <span class="env-tag">PYPI-CDN</span>
+            <div class="wf-stage in-progress" data-testid="stage-fixed-pypi-cdn">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge in-progress">⟳ in-progress</span>
+                  <a class="run-link" href="#">#4759803111</a>
+                </div>
+                <p class="version-line">37860ed</p>
+                <p class="ago-line">just now</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-pypi-mirror-worldwide"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="pypi-mirror-worldwide">
+            <span class="env-tag">PYPI-MIRROR-WORLDWIDE</span>
+            <div class="wf-stage success" data-testid="stage-fixed-pypi-mirror-worldwide">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4759601820</a>
+                </div>
+                <p class="version-line">29c1aa0</p>
+                <p class="ago-line">7 minutes ago</p>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- Row 5 — PYPI-HOGQL-PARSER-RS -> PYPI-CDN-RS -> PYPI-MIRROR-RS -->
         <div class="wf-row">
           <div class="leaf-pair-fixed" data-env="pypi-hogql-parser-rs">
             <span class="env-tag">PYPI-HOGQL-PARSER-RS</span>
@@ -707,6 +958,34 @@
                 </div>
                 <p class="version-line">2b4da1c</p>
                 <p class="ago-line">just now</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-pypi-cdn-rs"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="pypi-cdn-rs">
+            <span class="env-tag">PYPI-CDN-RS</span>
+            <div class="wf-stage success" data-testid="stage-fixed-pypi-cdn-rs">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge success">✓ success</span>
+                  <a class="run-link" href="#">#4758801993</a>
+                </div>
+                <p class="version-line">2b4da1c</p>
+                <p class="ago-line">1 hour ago</p>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-pypi-mirror-rs"><div class="arrow-line"></div></div>
+          <div class="leaf-pair-fixed" data-env="pypi-mirror-rs">
+            <span class="env-tag">PYPI-MIRROR-RS</span>
+            <div class="wf-stage in-progress" data-testid="stage-fixed-pypi-mirror-rs">
+              <div class="wf-stage-inner">
+                <div class="status-row">
+                  <span class="status-badge in-progress">⟳ in-progress</span>
+                  <a class="run-link" href="#">#4758802441</a>
+                </div>
+                <p class="version-line">2b4da1c</p>
+                <p class="ago-line">1 hour ago</p>
               </div>
             </div>
           </div>

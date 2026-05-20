@@ -66,12 +66,26 @@ position) — a single, well-scoped piece of code that the existing
 
 Variant B is simpler (one number per block, no position bookkeeping)
 but every position pays the cost of the longest env-tag anywhere in
-the block. For services like `posthog` (`PYPI-HOGQL-PARSER-RS` at
-position 0 alongside a `PROD-EU` at position 1), Variant B inflates
-column-1 at position 1 from ~50 px to ~132 px on every row that
-reaches position 1 — a visible loss of horizontal density that
-recurs whenever a service has a long label early in the path and
-short labels later.
+the block. The two variant HTMLs use the same five-row, three-deep
+`posthog` fixture (`DEV`/`STAGING`/`PROD-CA`,
+`PREVIEW-PR-45696`/`PREVIEW-VERIFY-LATEST`/`PREVIEW-FINAL`,
+`PROD-US`/`PROD-EU`/`PROD-APAC-SINGAPORE`,
+`PYPI-HOGQL-PARSER`/`PYPI-CDN`/`PYPI-MIRROR-WORLDWIDE`,
+`PYPI-HOGQL-PARSER-RS`/`PYPI-CDN-RS`/`PYPI-MIRROR-RS`) with
+deliberately varied lengths at each path position. In that fixture:
+
+- Variant A reserves 160 / 170 / 146 px at positions 0 / 1 / 2 —
+  each column is the minimum width its own widest label needs.
+- Variant B reserves a uniform 170 px at every position — the widest
+  label anywhere in the block.
+
+The position-2 column is where the trade-off is most obvious:
+Variant A's 146 px is tight to `PYPI-MIRROR-WORLDWIDE` (the only
+position where no row reaches the block's overall maximum), while
+Variant B inflates that same column to 170 px on every row that
+reaches position 2, paying ~24 extra px per row in the rightmost
+column for no in-position gain. The pattern recurs whenever a
+service has a long label early in the path and short labels later.
 
 Defer the final pick to the user; both variants satisfy the
 invariant and either is acceptable for SPA implementation.
