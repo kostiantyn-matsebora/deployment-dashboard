@@ -65,14 +65,14 @@ architecture-beta
     service ci(cloud)[CI CD tool] in external
 
     group dashboard(cloud)[Deployment Dashboard]
-    service fetcher(server)[Fetcher] in dashboard
-    service write(server)[Write API] in dashboard
-    service read(server)[Read API] in dashboard
+    service fetcher(disk)[Fetcher] in dashboard
+    service write(disk)[Write API] in dashboard
     service db(database)[PostgreSQL] in dashboard
+    service read(disk)[Read API] in dashboard
     service spa(internet)[Browser SPA] in dashboard
 
-    ci:R --> L:write
     ci:B --> T:fetcher
+    ci:B --> T:write
     fetcher:R --> L:write
     write:B --> T:db
     db:R --> L:read
