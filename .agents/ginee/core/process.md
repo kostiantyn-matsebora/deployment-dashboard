@@ -360,6 +360,21 @@ Default short tasks do not load these specs.
 
 Default tasks not sourced from a GitHub issue (TODO files, direct instructions) do not load this file.
 
+### Triage scoring — value × complexity priority
+
+- `ginee-triage` ranks ready work by `score = value / complexity` (default WSJF formula; `H=3, M=2, L=1`).
+- Two label namespaces (ATAM convention): `value:high|medium|low` + `complexity:high|medium|low`; TODO equivalent `☐ [v:H c:L] …`.
+- On pickup: `team-lead` asks user (H/M/L) for missing `value`; dispatches `solution-architect` for missing `complexity`.
+- Full spec (axes, formula, label provisioning, auto-estimate hook, TODO parser, sort contract, adopter overrides): **`core/triage-scoring.md`**.
+
+**Load triggers:**
+
+- `team-lead` runs `triage` and needs the sort contract.
+- `team-lead` picks up an issue and needs to evaluate / record scoring labels.
+- `ginee-triage` / `ginee-pick-up` skills sort or auto-estimate.
+
+Default freeform tasks and untagged TODOs do not load this file.
+
 ### Delivery modes — branch+PR / working-tree / commit-no-push
 
 - Every task resolves to one of three modes: **Mode 1** (feature branch + PR) / **Mode 2** (working-tree only) / **Mode 3** (commit-no-push).
@@ -448,6 +463,7 @@ Phase 1–8 applies to any task. A task originates from one of four sources:
 - Glyphs:
   - `☐` = open.
   - `☒` = completed.
+- Optional priority marker `[v:H c:L]` between glyph and description (H / M / L, case-insensitive); ranked by `ginee-triage` per `core/triage-scoring.md`.
 
 **GitHub issue rules.**
 
@@ -455,6 +471,7 @@ Phase 1–8 applies to any task. A task originates from one of four sources:
 - Pickup is always explicit (`@team-lead pick up #<N>` / `triage`). Never auto-picked on session start.
 - Issue body is reporter-owned; PM may add comments + swap framework labels but does not edit the body.
 - PR descriptions for issue-sourced tasks include `Closes #<N>` so GitHub auto-closes the issue on merge.
+- Priority signals via `value:high|medium|low` + `complexity:high|medium|low` labels (ATAM convention); ranked by `ginee-triage` per `core/triage-scoring.md`.
 
 ### Post-task check-in
 

@@ -6,6 +6,16 @@ labels: [ginee:ready]
 ---
 
 <!--
+  Priority signal (optional but recommended) — add `value:high|medium|low`
+  + `complexity:high|medium|low` labels (ATAM utility-tree convention) so
+  `ginee-triage` ranks this against other ready work.
+  `value` = user / business impact. `complexity` = implementation cost
+  (team-lead will dispatch solution-architect to auto-estimate if missing).
+  Full rules: `.agents/ginee/core/triage-scoring.md`.
+-->
+
+
+<!--
   Sections below are parsed by team-lead on pickup.
   Keep headings (## Summary / ## Motivation / etc.) intact — do not rename.
   Drop a section only when truly inapplicable; leave the heading + write "(none)".

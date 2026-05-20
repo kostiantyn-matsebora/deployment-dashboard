@@ -28,23 +28,34 @@ Optional positional arg narrows scope:
 - **Issues (framework upstream):** same against `github.framework-repo`. Fail fast with clear message if unset and user requested `framework` scope; silently skip when running default "all sources" scope.
 - **TODOs:** grep `☐` across the repo-root TODO file (per `framework.config.yaml § todo`) + nested TODO files (per `framework.config.yaml § nested-todos-glob`). Capture file path + line + content.
 
-### Step 2 — surface as one merged table
+### Step 2 — parse scoring labels + markers
 
-Columns: Source / Ref / Title / Age (or first-seen for TODOs) / Notes.
+Per `.agents/ginee/core/triage-scoring.md`:
+
+- **Issues:** parse `value:high|medium|low` + `complexity:high|medium|low` from the `labels` array.
+- **TODOs:** parse `[v:H c:L]` inline marker (H/M/L, case-insensitive) between glyph and description; partial markers (`[v:H]` only / `[c:L]` only) handled; missing marker = unscored.
+- Map labels to numeric: `high = 3, medium = 2, low = 1`.
+- Compute `score` per `triage.scoring-formula` from `local/framework.config.yaml` (default `value-over-complexity` → `value / complexity`; `value-only` → `value`; `value-minus-complexity` → `value - complexity`).
+- Edge cases: only `value` → impute `complexity = L = 1`; only `complexity` / neither → score 0 (unscored).
+
+### Step 3 — surface as one merged table
+
+Columns: Source / Ref / Title / `v` / `c` / Score / Age.
 
 Sources:
 - `issue:primary` — `#<N>` ref.
 - `issue:framework` — `#<N>` ref.
 - `todo` — `<path>:<line>` ref.
 
-### Step 3 — propose pickup order
+Render scores to 2 decimals. Unscored cells = `—`.
 
-Rank by:
-1. Age (older first; modulo urgent items with explicit priority labels or wording).
-2. Apparent scope (bug-fixes typically shorter than feature work).
-3. Cross-references with active work (avoid context-switch thrash; group related items).
+### Step 4 — sort + group
 
-### Step 4 — close with explicit pickup instruction
+- Primary sort: `Score DESC, Age DESC` (older first within tie).
+- Group unscored items at the bottom under a one-line header: *"Unscored — leverage unknown; ask reporter or auto-estimate on pickup."*
+- Worked example + sort contract: `triage-scoring.md § Examples`.
+
+### Step 5 — close with explicit pickup instruction
 
 End the response with: *"Pick one with `pick up <ref>` (issue, TODO line, or freeform)."* Never auto-invoke `ginee-pick-up`.
 
