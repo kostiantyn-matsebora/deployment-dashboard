@@ -59,19 +59,12 @@ Need a real install (your own CI/CD events, custom port, pinned version)? See **
 
 ## How it works
 
-```
-  CI/CD tool                                    Browser
-  ─────────────┐                                ─────────
-  pipeline step│ POST /api/deployments          SPA
-               ▼                                ▲
-        ┌──────────────┐    LISTEN/NOTIFY    ┌──────────┐
-        │  Write API   │ ────────────────▶  │ Read API │
-        └──────┬───────┘                    └────┬─────┘
-               │                                 │ SSE
-               ▼                                 ▼
-        ┌──────────────────────────────────────────┐
-        │             PostgreSQL                   │
-        └──────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    CI[CI/CD pipeline step] -->|POST /api/deployments| Write[Write API]
+    Write -->|insert + NOTIFY| DB[(PostgreSQL)]
+    DB -->|LISTEN| Read[Read API]
+    Read -->|SSE| SPA[Browser SPA]
 ```
 
 The backend never talks to a CI/CD tool directly. Integrators add a one-line POST to a pipeline step (or run the optional fetcher worker for pull-mode sources). Database NOTIFY drives an SSE stream that the SPA consumes — no polling on the wire.
