@@ -1,3 +1,9 @@
+---
+title: "ADR-0002: Modular Monolith Consolidation"
+parent: ADRs
+nav_order: 2
+---
+
 # ADR-0002 — Modular monolith — single API container hosting two library surfaces
 
 - **Status:** **superseded by [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) (2026-05-19).** ADR-0006 reframes the architectural claim — the system is a **microservices architecture** with **container co-location** of the Write + Read API services, not a "modular monolith." The decision recorded below (co-locate Write + Read in one container image; preserve the future-split affordance via a host-project + gateway-config-only change) **survives unchanged** as the mechanics-of-record; only the framing around it was misleading. Body preserved as historical record so older PRs / commits / cross-refs continue to resolve. New documents should cite ADR-0006 for the architectural framing and ADR-0002 for the co-location mechanics and future-split trigger conditions.

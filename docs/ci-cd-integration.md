@@ -1,3 +1,8 @@
+---
+title: "CI/CD Integration (inbound)"
+nav_order: 10
+---
+
 # CI/CD Integration Guide - Deployment Dashboard
 
 This is the operational companion to

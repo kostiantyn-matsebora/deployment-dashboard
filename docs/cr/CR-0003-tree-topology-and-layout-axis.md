@@ -1,3 +1,9 @@
+---
+title: "CR-0003: Tree Topology & Layout Axis"
+parent: CRs
+nav_order: 3
+---
+
 # CR-0003 — Tree-shaped deployment topology and three-layout axis (Matrix / Swim-lane / Workflow-rows)
 
 - **Status:** accepted (partially superseded)

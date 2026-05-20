@@ -1,3 +1,9 @@
+---
+title: CRs
+nav_order: 7
+has_children: true
+---
+
 # Change Requests
 
 Records of requirements changes (Change Requests — FR/NFR additions, modifications, scope adjustments, contract additions) after the initial SAD was frozen. Append-only — superseded entries are never edited in place. Architecture consequences of a CR are captured in a paired ADR under `docs/adr/`. See CLAUDE.md → "Source of truth" for the SAD-freeze rule.

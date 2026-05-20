@@ -1,3 +1,9 @@
+---
+title: "ADR-0005: Release-Install Migration Actuation"
+parent: ADRs
+nav_order: 5
+---
+
 # ADR-0005 — Release-install migration actuation via tag-pinned `migration.sql` release asset
 
 - **Status:** accepted (paired with GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) — *"One-liner install — run a released version without cloning the repo"*)

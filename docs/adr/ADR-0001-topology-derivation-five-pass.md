@@ -1,3 +1,9 @@
+---
+title: "ADR-0001: Topology Derivation Five-Pass"
+parent: ADRs
+nav_order: 1
+---
+
 # ADR-0001 — Per-service topology derivation — five-pass algorithm on the read side
 
 - **Status:** accepted

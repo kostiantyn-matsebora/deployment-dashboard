@@ -1,3 +1,9 @@
+---
+title: Tree-Topology Options
+parent: "UI Options"
+nav_order: 4
+---
+
 # UI tree topology — design note
 
 The canonical mockup `./deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. Topology rendering ships as a **second user-selectable axis** alongside the existing view switcher: a **Layout** segmented control with three options. The two earlier per-option HTML files (`deployment-dashboard-tree-swim-lane.html`, `deployment-dashboard-tree-workflow-rows.html`) have been merged into the canonical and deleted.

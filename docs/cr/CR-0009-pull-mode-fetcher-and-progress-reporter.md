@@ -1,3 +1,9 @@
+---
+title: "CR-0009: Pull-Mode Fetcher & Progress Reporter"
+parent: CRs
+nav_order: 9
+---
+
 # CR-0009 — Optional pull-mode fetcher (`Dashboard.Fetcher`) and universal `X-Progress-Reporter` event-attribution header
 
 - **Status:** proposed

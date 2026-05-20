@@ -1,3 +1,9 @@
+---
+title: Compact Options
+parent: "UI Options"
+nav_order: 1
+---
+
 # UI density + attribute display — specification
 
 The dashboard ships **four user-selectable views**, switchable at runtime, with a per-view configurable attribute picker. Canonical reference fixture: [`deployment-dashboard.html`](./deployment-dashboard.html). The requirement is recorded in [CR-0002](../cr/CR-0002-four-named-views-and-attribute-picker.md); this document is the design rationale that CR cites.

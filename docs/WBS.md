@@ -1,3 +1,8 @@
+---
+title: Work Breakdown
+nav_order: 9
+---
+
 # Work Breakdown Structure
 
 Operational work plan for the deployment dashboard. Tracks the phased item list for the MVP web dashboard, the CI/CD integration pattern, and the v2.0 notification client. Each phase corresponds to a step in the engineering lifecycle; per-phase items are the discrete pieces of work the owning agent picks up.

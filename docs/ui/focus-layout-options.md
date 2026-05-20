@@ -1,3 +1,9 @@
+---
+title: Focus-Layout Options
+parent: "UI Options"
+nav_order: 2
+---
+
 # UI Focus expand/collapse across layouts — design note
 
 The canonical mockup `./deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. The chosen design for Focus's chevron + pin drill-down extends the affordance from Matrix (the original shipped surface) to **Swim-lane** and **Workflow-rows** using **Option A — wider + taller (matrix-parity)**. The two per-option HTML files (`deployment-dashboard-focus-a-wider.html`, `deployment-dashboard-focus-b-taller.html`) have been merged into the canonical and deleted.

@@ -1,3 +1,8 @@
+---
+title: "CI/CD Pipelines (outbound)"
+nav_order: 11
+---
+
 # CI/CD Pipelines — Deployment Dashboard
 
 Operational companion to `docs/architecture.md` §9 (Phasing) → component-CI

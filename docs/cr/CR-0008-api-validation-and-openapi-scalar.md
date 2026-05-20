@@ -1,3 +1,9 @@
+---
+title: "CR-0008: API Validation & OpenAPI/Scalar"
+parent: CRs
+nav_order: 8
+---
+
 # CR-0008 — Standardised API validation, ProblemDetails errors, OpenAPI spec, and Scalar UI
 
 - **Status:** accepted

@@ -1,3 +1,9 @@
+---
+title: "ADR-0007: Vendor Adapters Emit Parent Deployments"
+parent: ADRs
+nav_order: 7
+---
+
 # ADR-0007 — Vendor adapters convert vendor correlation signals into `parent_deployments` edges; read-side five-pass remains backstop
 
 - **Status:** accepted (2026-05-20) — paired with feature issue [#19](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/19) and amends [CR-0009](../cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md) §3d's endpoint-list verbatim.

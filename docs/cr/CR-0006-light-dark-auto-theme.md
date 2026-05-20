@@ -1,3 +1,9 @@
+---
+title: "CR-0006: Light/Dark/Auto Theme"
+parent: CRs
+nav_order: 6
+---
+
 # CR-0006 — Light / Dark / Auto theme axis
 
 - **Status:** accepted

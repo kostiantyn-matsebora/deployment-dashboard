@@ -1,3 +1,9 @@
+---
+title: "CR-0007: Defer Matrix Layout to Phase 2"
+parent: CRs
+nav_order: 7
+---
+
 # CR-0007 — Defer Matrix layout from MVP to Phase 2.0
 
 - **Status:** accepted

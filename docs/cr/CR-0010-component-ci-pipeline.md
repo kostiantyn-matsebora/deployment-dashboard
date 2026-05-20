@@ -1,3 +1,9 @@
+---
+title: "CR-0010: Component CI Pipeline"
+parent: CRs
+nav_order: 10
+---
+
 # CR-0010 — Component CI pipeline (GitHub Actions — build, test, package)
 
 - **Status:** accepted (Phase 7 doc-amend pass — reflects as-built contract on PR #2 head `39641b5`)
