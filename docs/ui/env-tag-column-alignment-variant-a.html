@@ -327,16 +327,36 @@
 
     /* ============================================================
        Arrow column between cells of the same row.
+
+       Mirrors the canonical mockup's workflow-rows connector
+       (docs/ui/deployment-dashboard.html § "Workflow-rows connector
+       column"): the arrow line is left-anchored to the source
+       leaf-pair's right edge and extends to the target box's left
+       edge minus 6 px, so line.right + 6 px == target.box.left
+       (the arrowhead tip lands exactly on the target box).
+
+       Two CSS custom properties drive the geometry, written by the
+       inline post-layout script below:
+         --target-half        — half the target box's height (px). The
+                                line's margin-top centres it on the
+                                target box vertically, independent of
+                                source/target row heights.
+         --target-line-width  — distance from arrow-gap.left to
+                                target.box.left minus 6 px.
        ============================================================ */
     .arrow-gap {
       width: 28px;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-start;
       flex-shrink: 0;
+      align-self: stretch;
+      overflow: visible;
     }
     .arrow-line {
-      width: 100%;
+      width: var(--target-line-width, calc(100% - 6px));
+      margin-top: var(--target-half, 0);
       height: 1.5px;
       background: #484f58;
       position: relative;
@@ -344,7 +364,7 @@
     .arrow-line::after {
       content: "";
       position: absolute;
-      right: -1px;
+      right: -6px;
       top: 50%;
       transform: translateY(-50%);
       border-left: 6px solid #484f58;
@@ -501,10 +521,10 @@
               </div>
             </div>
           </div>
-          <div class="arrow-gap"><div class="arrow-line"></div></div>
+          <div class="arrow-gap" data-arrow-target="stage-buggy-prod-eu"><div class="arrow-line"></div></div>
           <div class="leaf-pair-buggy" data-env="prod-eu">
             <span class="env-tag">PROD-EU</span>
-            <div class="wf-stage in-progress">
+            <div class="wf-stage in-progress" data-testid="stage-buggy-prod-eu">
               <div class="wf-stage-inner">
                 <div class="status-row">
                   <span class="status-badge in-progress">⟳ in-progress</span>
@@ -646,10 +666,10 @@
               </div>
             </div>
           </div>
-          <div class="arrow-gap"><div class="arrow-line"></div></div>
+          <div class="arrow-gap" data-arrow-target="stage-fixed-prod-eu"><div class="arrow-line"></div></div>
           <div class="leaf-pair-fixed" data-env="prod-eu">
             <span class="env-tag">PROD-EU</span>
-            <div class="wf-stage in-progress">
+            <div class="wf-stage in-progress" data-testid="stage-fixed-prod-eu">
               <div class="wf-stage-inner">
                 <div class="status-row">
                   <span class="status-badge in-progress">⟳ in-progress</span>
@@ -702,6 +722,49 @@
       </div>
     </section>
   </section>
+
+  <!-- ============================================================
+       Post-layout connector geometry.
+
+       Static-HTML port of the canonical mockup's
+       `recomputeConnectorTops()` (docs/ui/deployment-dashboard.html).
+       Walks every `.arrow-gap[data-arrow-target]`, looks up the
+       target `.wf-stage[data-testid=…]`, and writes the two CSS
+       custom properties (`--target-half`, `--target-line-width`)
+       that anchor the arrow line on the target box's vertical
+       centre and extend it so the arrowhead tip lands exactly on
+       the target box's left edge.
+
+       Runs on initial load and on resize (env-tag column widths
+       drive layout, so a window resize can shift box X positions).
+       ============================================================ -->
+  <script>
+    (function () {
+      function recomputeConnectors() {
+        document.querySelectorAll('.arrow-gap[data-arrow-target]').forEach(function (gap) {
+          var targetId = gap.getAttribute('data-arrow-target');
+          var target = targetId ? document.querySelector('[data-testid="' + targetId + '"]') : null;
+          if (!target) {
+            gap.style.setProperty('--target-half', '0px');
+            gap.style.setProperty('--target-line-width', '0px');
+            return;
+          }
+          var half = Math.round(target.offsetHeight / 2);
+          var gapRect = gap.getBoundingClientRect();
+          var targetRect = target.getBoundingClientRect();
+          var lineWidth = Math.max(0, targetRect.left - gapRect.left - 6);
+          gap.style.setProperty('--target-half', half + 'px');
+          gap.style.setProperty('--target-line-width', lineWidth + 'px');
+        });
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', recomputeConnectors);
+      } else {
+        recomputeConnectors();
+      }
+      window.addEventListener('resize', recomputeConnectors);
+    })();
+  </script>
 
 </body>
 </html>
