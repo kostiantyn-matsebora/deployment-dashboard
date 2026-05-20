@@ -61,20 +61,27 @@ Need a real install (your own CI/CD events, custom port, pinned version)? See **
 
 ```mermaid
 flowchart TB
-    subgraph clients [" "]
-        direction LR
-        CI[CI/CD pipeline step]
-        Fetcher[Fetcher<br/>optional pull-mode worker]
-        SPA[Browser SPA]
-    end
-    subgraph services [" "]
-        direction LR
-        Write[Write API]
-        Read[Read API]
-    end
-    DB[(PostgreSQL)]
+    CI[CI/CD tool]:::external
 
-    CI -->|POST /api/deployments| Write
+    subgraph dashboard ["Deployment Dashboard"]
+        direction TB
+        subgraph endpoints [" "]
+            direction LR
+            Fetcher[Fetcher<br/>optional pull-mode worker]
+            SPA[Browser SPA]
+        end
+        subgraph apis [" "]
+            direction LR
+            Write[Write API]
+            Read[Read API]
+        end
+        DB[(PostgreSQL)]
+    end
+
+    classDef external fill:#fff7e6,stroke:#fa8c16,stroke-width:1px,stroke-dasharray: 5 5,color:#000
+
+    CI -->|pipeline step<br/>POST /api/deployments| Write
+    CI -->|polled by Fetcher| Fetcher
     Fetcher -->|POST /api/deployments| Write
     Write -->|insert + NOTIFY| DB
     DB -->|LISTEN + query| Read
