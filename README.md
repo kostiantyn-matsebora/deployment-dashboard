@@ -60,33 +60,33 @@ Need a real install (your own CI/CD events, custom port, pinned version)? See **
 ## How it works
 
 ```mermaid
-flowchart TB
-    CI[CI/CD tool]:::external
+architecture-beta
+    group external(cloud)[External]
+    service ci(cloud)[CI CD tool] in external
 
-    subgraph dashboard ["Deployment Dashboard"]
-        direction TB
-        subgraph endpoints [" "]
-            direction LR
-            Fetcher[Fetcher<br/>optional pull-mode worker]
-            SPA[Browser SPA]
-        end
-        subgraph apis [" "]
-            direction LR
-            Write[Write API]
-            Read[Read API]
-        end
-        DB[(PostgreSQL)]
-    end
+    group dashboard(cloud)[Deployment Dashboard]
+    service fetcher(server)[Fetcher] in dashboard
+    service write(server)[Write API] in dashboard
+    service read(server)[Read API] in dashboard
+    service db(database)[PostgreSQL] in dashboard
+    service spa(internet)[Browser SPA] in dashboard
 
-    classDef external fill:#fff7e6,stroke:#fa8c16,stroke-width:1px,stroke-dasharray: 5 5,color:#000
-
-    CI -->|pipeline step<br/>POST /api/deployments| Write
-    CI -->|polled by Fetcher| Fetcher
-    Fetcher -->|POST /api/deployments| Write
-    Write -->|insert + NOTIFY| DB
-    DB -->|LISTEN + query| Read
-    Read -->|SSE| SPA
+    ci:R --> L:write
+    ci:B --> T:fetcher
+    fetcher:R --> L:write
+    write:B --> T:db
+    db:R --> L:read
+    read:R --> L:spa
 ```
+
+| Edge | Meaning |
+|---|---|
+| `CI/CD tool → Write API` | Pipeline step POSTs `/api/deployments` (push path) |
+| `CI/CD tool → Fetcher` | Fetcher polls the CI/CD tool's API (pull path; optional worker) |
+| `Fetcher → Write API` | Fetcher POSTs `/api/deployments` for each polled deployment |
+| `Write API → PostgreSQL` | Insert deployment row + Postgres `NOTIFY` |
+| `PostgreSQL → Read API` | `LISTEN` for change events + query history |
+| `Read API → Browser SPA` | Server-Sent Events (SSE) stream |
 
 The backend never talks to a CI/CD tool directly. Integrators add a one-line POST to a pipeline step (or run the optional fetcher worker for pull-mode sources). Database NOTIFY drives an SSE stream that the SPA consumes — no polling on the wire.
 
