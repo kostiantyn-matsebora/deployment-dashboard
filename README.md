@@ -60,11 +60,23 @@ Need a real install (your own CI/CD events, custom port, pinned version)? See **
 ## How it works
 
 ```mermaid
-flowchart LR
-    CI[CI/CD pipeline step] -->|POST /api/deployments| Write[Write API]
-    Write -->|insert + NOTIFY| DB[(PostgreSQL)]
-    DB -->|LISTEN| Read[Read API]
-    Read -->|SSE| SPA[Browser SPA]
+flowchart TB
+    subgraph clients [" "]
+        direction LR
+        CI[CI/CD pipeline step]
+        SPA[Browser SPA]
+    end
+    subgraph services [" "]
+        direction LR
+        Write[Write API]
+        Read[Read API]
+    end
+    DB[(PostgreSQL)]
+
+    CI -->|POST /api/deployments| Write
+    Write -->|insert + NOTIFY| DB
+    DB -->|LISTEN + query| Read
+    Read -->|SSE| SPA
 ```
 
 The backend never talks to a CI/CD tool directly. Integrators add a one-line POST to a pipeline step (or run the optional fetcher worker for pull-mode sources). Database NOTIFY drives an SSE stream that the SPA consumes — no polling on the wire.
