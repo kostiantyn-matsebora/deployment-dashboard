@@ -1,9 +1,5 @@
 <!-- TODO: drop a screenshot of the dashboard here (capture from docs/ui/deployment-dashboard.html) -->
 
-<p align="center">
-  <img src="docs/assets/logo.svg" alt="Deployment Dashboard logo" width="96" height="96">
-</p>
-
 <h1 align="center">Deployment Dashboard</h1>
 
 <p align="center">
@@ -16,6 +12,9 @@
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
   <img alt="Status: pre-1.0" src="https://img.shields.io/badge/status-pre--1.0-orange?style=flat-square">
 </p>
+
+> [!NOTE]
+> Every line of this repo — code, ADRs, CRs, tests, CI — was authored by AI specialists routed through the [`ginee`](https://github.com/kostiantyn-matsebora/ginee) multi-agent framework.
 
 One screen, every service, every environment, every deployment — live. Built for engineers and teams running multi-service deployments who want a single glance answer to *"what version of service X is running in environment Y right now, and did the last deploy succeed?"* Tool-agnostic by design: any CI/CD tool that can POST an HTTP event can feed the matrix. Read-only / notification-only — it tracks deployments, it never triggers them.
 
@@ -78,12 +77,6 @@ Need a real install (your own CI/CD events, custom port, pinned version)? See **
 The backend never talks to a CI/CD tool directly. Integrators add a one-line POST to a pipeline step (or run the optional fetcher worker for pull-mode sources). Database NOTIFY drives an SSE stream that the SPA consumes — no polling on the wire.
 
 Full topology + decisions: [`docs/architecture.md`](docs/architecture.md).
-
----
-
-## Built end-to-end by AI
-
-Every commit, ADR, CR, test, and CI workflow in this repo was authored by AI specialists routed through [`ginee`](https://github.com/kostiantyn-matsebora/ginee) — a multi-agent engineering process for small autonomous teams. The repo is also its own showcase: the architecture, governance docs (ADRs / CRs / WBS), and pipelines all reflect how a small AI team self-organises around a real product.
 
 ---
 
