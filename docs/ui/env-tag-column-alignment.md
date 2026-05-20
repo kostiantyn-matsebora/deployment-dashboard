@@ -90,6 +90,28 @@ service has a long label early in the path and short labels later.
 Defer the final pick to the user; both variants satisfy the
 invariant and either is acceptable for SPA implementation.
 
+## Env-tag horizontal anchoring — `text-align: left`
+
+Both variants apply one delta vs the canonical mockup's `.env-tag`
+rule: **`text-align: left`** instead of `text-align: right`. Reason:
+
+| Anchoring | `prev-box-right → env-text-left` | `env-text-right → next-box-left` | Visible result |
+|---|---|---|---|
+| `text-align: right` (canonical default) | varies per row by `col-width − text-width` (2 px - 124 px in this fixture) | fixed 6 px (column-gap) | env-text snug to its box; large variable gap between previous box and next env-text — reads as ragged whitespace |
+| `text-align: left` (variants A + B) | fixed ≈ 24 px (arrow-gap clamp at 1600 px + 6 px column-gap, minus 6 px column-gap that lands inside the arrow channel) | varies per row by `col-width − text-width` | env-text snug to the arrow tip; the variable slack moves to the right of the text (between text and its own box), which reads as part of the box's left padding rather than an inter-box gap |
+
+The directive's column-reservation (the Variant A or B fix) computes
+the same per-position or shared-max width either way; the text-align
+swap only chooses **which side of the text** the slack lands on.
+
+Measured at 1600 × 1200 viewport, after the swap, the
+`prev-box-right → next-env-text-left` distance is uniformly 20.9 -
+24.0 px across all 20 transitions (5 rows × 2 transitions × 2
+variants). The 3.1 px residual swing is intrinsic box-content
+rounding from `.wf-stage { width: max-content }` — rows whose
+in-progress stage carries a `.last-success-row` are 3.1 px wider —
+and matches canonical mockup behaviour.
+
 ## NFR-09 preservation (both variants)
 
 - **(a)** `.leaf-pair` cells remain in CSS Grid; column-1 and column-2
