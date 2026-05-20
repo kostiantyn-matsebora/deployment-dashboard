@@ -49,17 +49,18 @@ indexed:
       docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md: d384856632a4be0396121e1dab9085b98355ac512bc4d0b987af178761363ae8
       docs/adr/ADR-0005-release-install-migration-actuation.md: f2eb7cdcae80aa8f8ef39967d1b1330aedaf4d56fbae11432729aa424ea1bbbe
       docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md: abcfa856ee2d519e8a59dae5cd778d2a4298fbe7d880a0a5723b66db9c121831
-      docs/adr/ADR-0007-vendor-adapters-emit-parent-deployments.md: b50c8ced8c678245971ff8cbea3f634de9cba31c336ee2e86d99cddc57307870
+      docs/adr/ADR-0007-vendor-adapters-emit-parent-deployments.md: 3f50e034f83936d81ed148e99612efefacc7395673b25a59ba7526f2c3aa4b1c
       docs/adr/README.md: e04cc91d580542da41e3db5c07f2d73e11242ff65f819bdfbcaa60dde53a3c15
     indexed-on: 2026-05-20
     index-files: [adr-index.idx]
-    source-bytes: 87970             # 7424 + 10756 + 6551 + 15692 + 12599 + 12633 + 20168 (ADR-0007) + 2147 (README)
+    source-bytes: 89772             # 7424 + 10756 + 6551 + 15692 + 12599 + 12633 + 21970 (ADR-0007) + 2147 (README)
     index-bytes: 4898
-    compression: 0.056
+    compression: 0.055
     compression-target: 0.15
     consumed-by: [solution-architect]
     # Re-extraction 2026-05-19: ADR-0005 (release-install migration actuation, accepted) + ADR-0006 (microservices architecture with container co-location, accepted — supersedes ADR-0002 on framing only; ADR-0002 retains co-location mechanics) added. ADR-0002 status updated to superseded. ADR-0004 cross-refs to ADR-0002 reframed to cite ADR-0006 for the framing while retaining ADR-0002 for the co-location mechanics.
     # Re-extraction 2026-05-20: ADR-0007 (vendor adapters convert vendor correlation signals into parent_deployments edges; read-side five-pass remains backstop, accepted — paired with issue #19; amends CR-0009 §3d endpoint list in parallel) added. README index row appended. ADR-0001 / ADR-0004 / ADR-0006 cross-refs untouched in source; their SHAs unchanged.
+    # SHA refresh 2026-05-20 (Phase 7 doc-amend): ADR-0007 § Decision rule 1 worked-example table gained an "Endpoints required for the intra-run `needs:` signal (GHA)" sub-table listing the three GHA endpoints (run metadata for path+head_sha; jobs map; YAML at the run revision); § Consequences endpoint-budget bullet + NFR-02 sub-bullet + CR-0009 cross-ref updated from two endpoints to three; new endpoint role (run metadata returns path + head_sha so YAML is fetched at exact run revision) explained. adr-index.idx ADR-0007 row summary extended to list all three endpoints + revision-pinning rationale. No new ADR records; no schema changes; index file remains semantically valid.
 
   - class: cr
     category: doc
@@ -76,19 +77,20 @@ indexed:
       docs/cr/CR-0006-light-dark-auto-theme.md: 8eff79593a20d41cef065127c5ba9711a1df46c2eb64cd6c7cc0041e9035599a
       docs/cr/CR-0007-defer-matrix-layout-to-phase-2.md: 87aee459bb1fee736090fa4ee79870541a7f21b91b68a93e98862dc214add5d5
       docs/cr/CR-0008-api-validation-and-openapi-scalar.md: a35d1b17ee8a37c4902ff311a617d542429dfdb9a1865f384a8e69e815aa51d6
-      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: 10770a7b2feb0f7260a6d2073e6c91dcd9d5767d9314f9ac7bd742f4292c5fe7
+      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: 4357c13a24bd99d6c4f7a63adeecddc51eeb5aa632a6996b19087aafd022e5b7
       docs/cr/CR-0010-component-ci-pipeline.md: fa7f56de048606960439289e6bc8980f14a8984b03add3def2995b70783325bb
       docs/cr/README.md: e2002dd99ae064b613bbeb5e3d9eae299544c22c232039a123aeecc97893abd8
     indexed-on: 2026-05-20
     index-files: [cr-index.idx]
-    source-bytes: 157161             # 3201+12373+30052+8721+4007+5775+9110+18314+34215+28357+3036
+    source-bytes: 158027             # 3201+12373+30052+8721+4007+5775+9110+18314+35081+28357+3036
     index-bytes: 5766
-    compression: 0.037
+    compression: 0.036
     compression-target: 0.15
     consumed-by: [solution-architect]
     # Re-extraction 2026-05-18: CR-0009 (optional pull-mode fetcher + X-Progress-Reporter header) + CR-0010 (component CI pipeline) added.
     # SHA refresh 2026-05-19: CR-0009 References block reframed to cite ADR-0006 (microservices framing) while retaining ADR-0002 (co-location mechanics); CR-0010 § 3a topology row + References block reframed identically. No new CR records; cr-index.idx remains semantically valid (titles/statuses/decision lines unchanged).
     # SHA refresh 2026-05-20: CR-0009 §3d endpoint list amended (paired with ADR-0007 + issue #19) — adds GET /repos/{o}/{r}/actions/runs/{run_id}/jobs + GET /repos/{o}/{r}/contents/.github/workflows/{file} so GHA adapter can emit needs:-derived intra-run + per-env-predecessor parent_deployments edges; both endpoints cacheable per cycle; silent-degrade with INFO log on failure; timing inference between parallel jobs rejected. Amendments / References blocks extended; status unchanged. CR-0009 cr-index.idx row summary extended; CR-0010 row unchanged (CR-0010 SHA/size drift in source-bytes recalc is from prior in-place reformatting, not a record change).
+    # SHA refresh 2026-05-20 (Phase 7 doc-amend): CR-0009 §3d IN-list expanded from two GHA endpoints to three — adds GET /repos/{o}/{r}/actions/runs/{run_id} (run metadata for workflow path + head_sha) as a prerequisite to /jobs + /contents; the contents endpoint is reparameterised to /repos/{o}/{r}/contents/.github/workflows/{path}?ref={head_sha} so the YAML is fetched at the exact commit revision the run executed against (vs. as it is now on the default branch). Amendments block 2026-05-20 entry rephrased to enumerate three endpoints with revision-pinning rationale. cr-index.idx CR-0009 row summary extended accordingly; CR-0010 unchanged.
 
   - class: mockup
     category: doc
