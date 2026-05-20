@@ -64,6 +64,7 @@ flowchart TB
     subgraph clients [" "]
         direction LR
         CI[CI/CD pipeline step]
+        Fetcher[Fetcher<br/>optional pull-mode worker]
         SPA[Browser SPA]
     end
     subgraph services [" "]
@@ -74,6 +75,7 @@ flowchart TB
     DB[(PostgreSQL)]
 
     CI -->|POST /api/deployments| Write
+    Fetcher -->|POST /api/deployments| Write
     Write -->|insert + NOTIFY| DB
     DB -->|LISTEN + query| Read
     Read -->|SSE| SPA
