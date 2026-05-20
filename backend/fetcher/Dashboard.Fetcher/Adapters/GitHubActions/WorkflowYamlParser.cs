@@ -81,17 +81,17 @@ internal static class WorkflowYamlParser
             case YamlScalarNode scalar when !string.IsNullOrEmpty(scalar.Value):
                 return new[] { scalar.Value };
             case YamlSequenceNode sequence:
-            {
-                var parents = new List<string>(sequence.Children.Count);
-                foreach (var item in sequence.Children)
                 {
-                    if (item is YamlScalarNode s && !string.IsNullOrEmpty(s.Value))
+                    var parents = new List<string>(sequence.Children.Count);
+                    foreach (var item in sequence.Children)
                     {
-                        parents.Add(s.Value);
+                        if (item is YamlScalarNode s && !string.IsNullOrEmpty(s.Value))
+                        {
+                            parents.Add(s.Value);
+                        }
                     }
+                    return parents;
                 }
-                return parents;
-            }
             default:
                 return Array.Empty<string>();
         }
