@@ -60,33 +60,26 @@ Need a real install (your own CI/CD events, custom port, pinned version)? See **
 ## How it works
 
 ```mermaid
-architecture-beta
-    group external(cloud)[External]
-    service ci(cloud)[CI CD tool] in external
+C4Component
+    title Component diagram — Deployment Dashboard
 
-    group dashboard(cloud)[Deployment Dashboard]
-    service fetcher(logos:docker-icon)[Fetcher] in dashboard
-    service write(logos:docker-icon)[Write API] in dashboard
-    service db(logos:postgresql)[PostgreSQL] in dashboard
-    service read(logos:docker-icon)[Read API] in dashboard
-    service spa(logos:angular-icon)[Browser SPA] in dashboard
+    System_Ext(ci, "CI/CD tool", "GitHub Actions, Azure DevOps, Jenkins, GitLab CI, ...")
 
-    ci:B --> T:fetcher
-    ci:B --> T:write
-    fetcher:R --> L:write
-    write:B --> T:db
-    db:R --> L:read
-    read:R --> L:spa
+    Container_Boundary(dashboard, "Deployment Dashboard") {
+        Component(fetcher, "Fetcher", ".NET 10 worker", "Optional pull-mode worker — polls CI/CD APIs")
+        Component(write, "Write API", "ASP.NET Core Minimal API", "Accepts deployment events")
+        Component(read, "Read API", "ASP.NET Core Minimal API", "Serves matrix data + SSE stream")
+        ComponentDb(db, "PostgreSQL", "PostgreSQL 16", "Deployments + LISTEN/NOTIFY")
+        Component(spa, "Browser SPA", "Angular 20", "Renders the matrix")
+    }
+
+    Rel(ci, write, "Pipeline step POSTs", "POST /api/deployments")
+    Rel(ci, fetcher, "Polled by")
+    Rel(fetcher, write, "POSTs", "POST /api/deployments")
+    Rel(write, db, "Insert + NOTIFY")
+    Rel(db, read, "LISTEN + query")
+    Rel(read, spa, "Server-Sent Events")
 ```
-
-| Edge | Meaning |
-|---|---|
-| `CI/CD tool → Write API` | Pipeline step POSTs `/api/deployments` (push path) |
-| `CI/CD tool → Fetcher` | Fetcher polls the CI/CD tool's API (pull path; optional worker) |
-| `Fetcher → Write API` | Fetcher POSTs `/api/deployments` for each polled deployment |
-| `Write API → PostgreSQL` | Insert deployment row + Postgres `NOTIFY` |
-| `PostgreSQL → Read API` | `LISTEN` for change events + query history |
-| `Read API → Browser SPA` | Server-Sent Events (SSE) stream |
 
 The backend never talks to a CI/CD tool directly. Integrators add a one-line POST to a pipeline step (or run the optional fetcher worker for pull-mode sources). Database NOTIFY drives an SSE stream that the SPA consumes — no polling on the wire.
 
