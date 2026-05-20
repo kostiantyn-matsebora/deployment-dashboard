@@ -45,20 +45,34 @@ Detail: [features.html](features.html).
 
 ## How it works
 
+```mermaid
+architecture-beta
+    group external(cloud)[External]
+    service ci(cloud)[CI CD tool] in external
+
+    group dashboard(cloud)[Deployment Dashboard]
+    service fetcher(logos:docker-icon)[Fetcher] in dashboard
+    service write(logos:docker-icon)[Write API] in dashboard
+    service db(logos:postgresql)[PostgreSQL] in dashboard
+    service read(logos:docker-icon)[Read API] in dashboard
+    service spa(logos:angular-icon)[Browser SPA] in dashboard
+
+    ci:B --> T:fetcher
+    ci:B --> T:write
+    fetcher:R --> L:write
+    write:B --> T:db
+    db:R --> L:read
+    read:R --> L:spa
 ```
-  CI/CD tool                                    Browser
-  ─────────────┐                                ─────────
-  pipeline step│ POST /api/deployments          SPA
-               ▼                                ▲
-        ┌──────────────┐    LISTEN/NOTIFY    ┌──────────┐
-        │  Write API   │ ────────────────▶  │ Read API │
-        └──────┬───────┘                    └────┬─────┘
-               │                                 │ SSE
-               ▼                                 ▼
-        ┌──────────────────────────────────────────┐
-        │             PostgreSQL                   │
-        └──────────────────────────────────────────┘
-```
+
+| Edge | Meaning |
+|---|---|
+| `CI/CD tool → Write API` | Pipeline step POSTs `/api/deployments` (push path) |
+| `CI/CD tool → Fetcher` | Fetcher polls the CI/CD tool's API (pull path; optional worker) |
+| `Fetcher → Write API` | Fetcher POSTs `/api/deployments` for each polled deployment |
+| `Write API → PostgreSQL` | Insert deployment row + Postgres `NOTIFY` |
+| `PostgreSQL → Read API` | `LISTEN` for change events + query history |
+| `Read API → Browser SPA` | Server-Sent Events (SSE) stream |
 
 Full topology + decisions: [architecture.html](architecture.html).
 

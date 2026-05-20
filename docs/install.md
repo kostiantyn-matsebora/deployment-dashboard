@@ -10,13 +10,16 @@ Full install reference for the Deployment Dashboard. For a 60-second taste, the 
 
 A clean machine with Docker + the GitHub CLI (`gh`) installed can be running the
 dashboard in two commands — no `git clone`, no source tree, no .NET SDK
-required. The installer fetches release assets from GitHub via `gh release
-download`, authenticates to GHCR via `gh auth token | docker login`, pulls the
-four pinned private images from GHCR
-(`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}`),
-brings up the stack with `docker compose`, applies idempotent schema migrations
-via a one-shot `postgres:16-alpine` container, polls `/health`, and prints the
-URL panel + the generated `API_TOKEN`.
+required. The installer:
+
+1. fetches release assets from GitHub via `gh release download`,
+2. authenticates to GHCR via `gh auth token | docker login`,
+3. pulls the four pinned private images from GHCR
+   (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}`),
+4. brings up the stack with `docker compose`,
+5. applies idempotent schema migrations via a one-shot `postgres:16-alpine` container,
+6. polls `/health`,
+7. and prints the URL panel + the generated `API_TOKEN`.
 
 ## Prerequisites
 
@@ -28,7 +31,9 @@ fetches and image pulls flow through the GitHub CLI's authenticated session.
 | Docker (Engine + Compose v2) | Runs the four release images + the one-shot migrations container. |
 | **`gh` CLI on `PATH`** | Replaces anonymous `irm` / `curl` — the release asset URL pattern 404s without auth headers. |
 | **`gh auth status --hostname github.com` returns 0** | Installer's first action is to verify the auth session; missing / expired auth fails fast with a friendly error. |
-| **`gh` token carries `read:packages`, `write:packages`, or `admin:packages`** | Required by the `gh auth token` → `docker login ghcr.io` pipeline. GitHub's OAuth scopes are hierarchical — `write:packages` includes `read:packages` (and `admin:packages` includes both), so any of the three is accepted. The default `gh auth login` scope set does NOT include any of them — refresh with `--scopes read:packages` to grant the minimum. |
+| **`gh` token carries `read:packages`, `write:packages`, or `admin:packages`** | Required by the `gh auth token` → `docker login ghcr.io` pipeline. `read:packages` minimum (or `write:packages` / `admin:packages` — scopes are hierarchical). Default `gh auth login` does not include these — see note below. |
+
+**Token scope note.** GitHub's OAuth scopes are hierarchical — `write:packages` includes `read:packages` (and `admin:packages` includes both), so any of the three is accepted. The default `gh auth login` scope set does NOT include any of them — refresh with `--scopes read:packages` to grant the minimum.
 
 Install + authenticate `gh`:
 
@@ -104,9 +109,7 @@ generated `API_TOKEN` once — it is also persisted to
 
 The fetcher is a CR-0009 pull-mode worker that translates GitHub Actions runs
 into `POST /api/deployments` events. Opt in with `-Fetcher` (PowerShell) /
-`--fetcher` (bash) on the second step. The `GHA_TOKEN` precondition (per
-[issue #5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5))
-must hold before any `docker compose` invocation runs:
+`--fetcher` (bash) on the second step; the `GHA_TOKEN` precondition must hold before any `docker compose` invocation runs (per [issue #5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)):
 
 ```powershell
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
@@ -120,12 +123,14 @@ export GHA_TOKEN='<your-github-pat>'
 bash install.sh --fetcher
 ```
 
-Note: the `GHA_TOKEN` (fetcher → GitHub Actions API PAT) is a separate
-secret from the `gh` CLI's stored token (installer → GitHub Releases + GHCR
-auth). Both must be set when running the `-Fetcher` path; one is not a
-substitute for the other. For a zero-PAT walkthrough, use `-Demo` /
-`--demo` (next section) — it boots the fetcher against a public repo in
-GitHub's anonymous-mode rate bucket.
+Note: the `GHA_TOKEN` and the `gh` CLI's stored token are two distinct secrets; one is not a substitute for the other, and both must be set when running the `-Fetcher` path.
+
+| Token | Purpose | Used by | Required when |
+|---|---|---|---|
+| `GHA_TOKEN` | GitHub Actions API PAT | fetcher worker | running the `-Fetcher` path |
+| `gh` CLI stored token | GitHub Releases + GHCR auth | installer | running the `-Fetcher` path |
+
+For a zero-PAT walkthrough, use `-Demo` / `--demo` (next section) — it boots the fetcher against a public repo in GitHub's anonymous-mode rate bucket.
 
 ## Try it without setup — demo mode
 
@@ -156,10 +161,9 @@ PostHog/posthog and grafana/grafana are high-deployment-activity public
 repos chosen for visible matrix output on first render. Both surface
 PR-ephemeral environments in their action runs, so the matrix will show
 some historical `posthog-NNNN-*` (PostHog) and `storybook-pr-preview-NNNNN`
-(Grafana) env columns alongside the steady-state ones. A per-repo
-environment filter for the fetcher is tracked separately (separate
-forthcoming issue: per-repo environment filter for the fetcher) and is
-not part of this install path.
+(Grafana) env columns alongside the steady-state ones.
+
+**Note.** A per-repo environment filter for the fetcher is tracked separately and is not part of this install path.
 
 Under the hood, the fetcher's GitHub-API adapter omits the
 `Authorization` header entirely when `GHA_TOKEN` is empty or equals the
@@ -272,28 +276,19 @@ Use Option B instead: `gh release download` the compose file locally, then
 
 ### Regression warnings for Option B
 
-1. **`gh` CLI is now a hard dependency for the escape hatch too.** Without
-   `gh` (installed / authenticated / any of `read:packages` / `write:packages` / `admin:packages`), this option
-   cannot fetch the release assets and cannot `docker login` to GHCR.
-   Anonymous `curl -fsSL -O <release-asset-url>` and anonymous `docker
-   compose pull` both 404 against the private repo + private GHCR.
-2. **`GHA_TOKEN` precondition is BYPASSED.** When the `fetcher` profile is
-   active, the fetcher boots with the placeholder token from
-   `docker-compose.release.yml`; `401 Unauthorized` from GitHub API surfaces
-   only in fetcher logs. Set `$GHA_TOKEN` manually before running. This is
-   the GitHub Actions API PAT used by the fetcher worker, distinct from the
-   `gh` CLI's session token.
-3. **`API_TOKEN` is NOT generated.** You MUST set `$API_TOKEN` to a strong
-   random value before running, and you MUST NOT reuse the dev literal
-   `local-dev-token-not-for-production` — the API middleware accepts any
-   value, but reusing the dev literal in a release install defeats the
-   defence-in-depth split (per [`docs/architecture.md`](architecture.html) § 8).
-4. **Migration actuation is BYPASSED unless you remember `--profile migrate`.**
-   Without it, the `api` service starts against an unmigrated DB and fails.
-   Re-add the profile or run `psql -f migration.sql` against the `db`
-   container manually (per
-   [ADR-0005](adr/ADR-0005-release-install-migration-actuation.html)
-   Consequences).
+1. **`gh` CLI hard dependency.** `gh` CLI is now a hard dependency for the escape hatch too.
+   - Without `gh` (installed / authenticated / any of `read:packages` / `write:packages` / `admin:packages`), this option cannot fetch the release assets and cannot `docker login` to GHCR.
+   - Anonymous `curl -fsSL -O <release-asset-url>` and anonymous `docker compose pull` both 404 against the private repo + private GHCR.
+2. **`GHA_TOKEN` precondition bypassed.** `GHA_TOKEN` precondition is BYPASSED.
+   - When the `fetcher` profile is active, the fetcher boots with the placeholder token from `docker-compose.release.yml`; `401 Unauthorized` from GitHub API surfaces only in fetcher logs.
+   - Set `$GHA_TOKEN` manually before running.
+   - This is the GitHub Actions API PAT used by the fetcher worker, distinct from the `gh` CLI's session token.
+3. **`API_TOKEN` not generated.** `API_TOKEN` is NOT generated.
+   - You MUST set `$API_TOKEN` to a strong random value before running.
+   - You MUST NOT reuse the dev literal `local-dev-token-not-for-production` — the API middleware accepts any value, but reusing the dev literal in a release install defeats the defence-in-depth split (per [`docs/architecture.md`](architecture.html) § 8).
+4. **Migration actuation bypassed.** Migration actuation is BYPASSED unless you remember `--profile migrate`.
+   - Without it, the `api` service starts against an unmigrated DB and fails.
+   - Re-add the profile or run `psql -f migration.sql` against the `db` container manually (per [ADR-0005](adr/ADR-0005-release-install-migration-actuation.html) Consequences).
 
 The primary install path (`install.ps1` / `install.sh`) handles all four —
 prefer it where local policy permits.

@@ -37,3 +37,8 @@ plugins:
 markdown: kramdown
 kramdown:
   input: GFM
+
+# Just the Docs native mermaid support — enables rendering of
+# ```mermaid``` code fences in docs/index.md and elsewhere.
+mermaid:
+  version: "10.9.1"
