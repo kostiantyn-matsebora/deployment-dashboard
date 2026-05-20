@@ -1,3 +1,9 @@
+---
+title: "ADR-0004: Opaque Per-Progress-Reporter Cursor"
+parent: ADRs
+nav_order: 4
+---
+
 # ADR-0004 — Opaque per-`progress_reporter` cursor; backend-held; out-of-process fetcher; plug-in adapter shape
 
 - **Status:** accepted (paired with [CR-0009](../cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md))

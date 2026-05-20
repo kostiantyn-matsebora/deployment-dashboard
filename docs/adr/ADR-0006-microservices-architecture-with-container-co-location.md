@@ -1,3 +1,9 @@
+---
+title: "ADR-0006: Microservices Architecture with Container Co-Location"
+parent: ADRs
+nav_order: 6
+---
+
 # ADR-0006 — Microservices architecture with container co-location of Write + Read API services
 
 - **Status:** accepted (2026-05-19) — supersedes [ADR-0002](./ADR-0002-modular-monolith-consolidation.md).

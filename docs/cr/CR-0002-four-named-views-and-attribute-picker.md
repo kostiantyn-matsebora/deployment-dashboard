@@ -1,3 +1,9 @@
+---
+title: "CR-0002: Four Named Views & Attribute Picker"
+parent: CRs
+nav_order: 2
+---
+
 # CR-0002 — Four named views (Detailed / Compact / Glance / Focus) and per-view attribute picker
 
 - **Status:** accepted

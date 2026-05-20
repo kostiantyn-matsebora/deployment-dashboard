@@ -1,3 +1,9 @@
+---
+title: Theme Options
+parent: "UI Options"
+nav_order: 3
+---
+
 # UI theme — design note
 
 The canonical mockup `./deployment-dashboard.html` is the single source of truth for the dashboard's visual + interactive contract. **Theme** ships as a **third orthogonal axis** alongside the existing View and Layout switchers: a header control with three values — `light / dark / auto`. The chosen design is the **Dim** palette (warm GitHub-style `#0d1117` body / `#161b22` cards), selected from three competing options (Slate / OLED / Dim), wired as the `dark` enum value behind a **gear icon + popover** affordance. The three earlier per-option HTML files (`deployment-dashboard-theme-slate.html`, `deployment-dashboard-theme-oled.html`, `deployment-dashboard-theme-dim.html`) have been merged into the canonical and deleted.

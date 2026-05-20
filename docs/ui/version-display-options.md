@@ -1,3 +1,9 @@
+---
+title: Version-Display Options
+parent: "UI Options"
+nav_order: 5
+---
+
 # Version display options — design note
 
 Phase 2 mockup exploring how to give the `version` attribute the room it needs without breaking the canonical's geometric or behavioural contracts.

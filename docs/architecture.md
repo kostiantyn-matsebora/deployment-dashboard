@@ -1,3 +1,8 @@
+---
+title: Architecture (SAD)
+nav_order: 2
+---
+
 # Solution Architecture — Deployment Dashboard
 
 **Version:** 1.0  

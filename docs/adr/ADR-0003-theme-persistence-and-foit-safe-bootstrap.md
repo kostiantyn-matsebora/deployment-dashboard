@@ -1,3 +1,9 @@
+---
+title: "ADR-0003: Theme Persistence & FOIT-Safe Bootstrap"
+parent: ADRs
+nav_order: 3
+---
+
 # ADR-0003 — Theme persistence in `localStorage` with FOIT-safe inline bootstrap
 
 - **Status:** accepted

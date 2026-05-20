@@ -1,3 +1,9 @@
+---
+title: "CR-0001: Generic / Project-Agnostic"
+parent: CRs
+nav_order: 1
+---
+
 # CR-0001 — Project-agnostic naming and examples
 
 - **Status:** accepted

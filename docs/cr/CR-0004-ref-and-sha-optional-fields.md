@@ -1,3 +1,9 @@
+---
+title: "CR-0004: Ref & SHA Optional Fields"
+parent: CRs
+nav_order: 4
+---
+
 # CR-0004 — Optional `ref` and `sha` fields on deployment payload
 
 - **Status:** accepted

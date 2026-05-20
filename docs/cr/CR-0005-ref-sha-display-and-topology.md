@@ -1,3 +1,9 @@
+---
+title: "CR-0005: Ref/SHA Display & Topology"
+parent: CRs
+nav_order: 5
+---
+
 # CR-0005 — `ref` / `sha` exposed as Display picker options and Topology correlation options
 
 - **Status:** accepted

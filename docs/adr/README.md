@@ -1,3 +1,9 @@
+---
+title: ADRs
+nav_order: 3
+has_children: true
+---
+
 # Architecture Decision Records
 
 Records of architecture decisions (Architecture Decision Records — component shape, packaging, algorithm, persistence, wire-contract addition) after the initial SAD was frozen. Append-only — superseded entries are never edited in place. The triggering requirement change (if any) lives in a paired CR under `docs/cr/`. See CLAUDE.md → "Source of truth" for the SAD-freeze rule.
