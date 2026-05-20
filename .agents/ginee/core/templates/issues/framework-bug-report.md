@@ -6,6 +6,14 @@ labels: [ginee:ready, framework]
 ---
 
 <!--
+  Priority signal (optional but recommended) — add `value:high|medium|low`
+  + `complexity:high|medium|low` labels (ATAM utility-tree convention) so
+  `ginee-triage` ranks this against other ready framework work.
+  Full rules: `.agents/ginee/core/triage-scoring.md`.
+-->
+
+
+<!--
   Filed against the ginee framework upstream repo (per
   local/framework.config.yaml § github.framework-repo) via:
     @team-lead file framework-bug <title>

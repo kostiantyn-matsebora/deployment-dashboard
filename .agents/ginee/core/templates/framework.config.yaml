@@ -199,6 +199,19 @@ automatic-mode:
 # delivery:
 #   default-mode: branch
 
+# --- Triage scoring (D23) ---
+# Ranks ready work in `ginee-triage` by a derived score from
+# `value:high|medium|low` + `complexity:high|medium|low` labels (issues) /
+# `☐ [v:H c:L] …` markers (TODOs). ATAM utility-tree convention; H=3, M=2, L=1.
+# Spec: core/triage-scoring.md. Migration: core/MIGRATIONS/D23-triage-scoring.md.
+# All keys optional — defaults shown.
+triage:
+  # Score formula:
+  #   value-over-complexity (default)  →  value / complexity  (WSJF-style)
+  #   value-only                       →  value
+  #   value-minus-complexity           →  value - complexity
+  scoring-formula: value-over-complexity
+
 # --- GitHub integration (D14) ---
 # Lets team-lead pick up GitHub issues as a task source alongside
 # TODO files + direct instructions, file new issues from user requests,

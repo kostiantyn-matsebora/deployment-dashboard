@@ -29,14 +29,18 @@ User asks "pick up X" / "work on X" / "start on X" / "begin X" where X is one of
 
 1. Fetch + parse the issue.
 2. Validate `OPEN` state + `ready-label`.
-3. Swap labels: `ready-label` → `in-progress-label`.
-4. Run Phase 1–8.
-5. Post structured comments at major transitions (Phase 3 design review / Phase 7 SA review / Phase 8 acceptance / stoppable intermediate).
-6. Close on Phase 8 acceptance with final summary comment + PR/commit links.
+3. **Scoring labels + sticky comment** per `.agents/ginee/core/triage-scoring.md § Score comment + audit trail`:
+   - Missing `value:*` → ask user (H / M / L); add `value:high|medium|low` label; post `<!-- ginee:value-prompt -->` audit comment.
+   - Missing `complexity:*` → dispatch `solution-architect` for H / M / L estimate; post `<!-- ginee:complexity-estimate by=solution-architect value=H at=<ISO> -->` audit comment + add `complexity:high|medium|low` label.
+   - Post / update the sticky `<!-- ginee:score v=1 -->` comment (one per issue; find via marker; never duplicate). `Reasoning` column populated only for ginee-set rows.
+4. Swap labels: `ready-label` → `in-progress-label`.
+5. Run Phase 1–8.
+6. Post structured comments at major transitions (Phase 3 design review / Phase 7 SA review / Phase 8 acceptance / stoppable intermediate).
+7. Close on Phase 8 acceptance with final summary comment + PR/commit links.
 
 **TODO line** — per `.agents/ginee/core/process.md § Task model § TODO file rules`:
 
-1. Read the TODO line at the cited path + line.
+1. Read the TODO line at the cited path + line; parse optional `[v:N c:M]` marker per `.agents/ginee/core/triage-scoring.md`.
 2. Confirm with the user this is the intended task.
 3. Run Phase 1–8.
 4. On Phase 8 acceptance, flip `☐` → `☒` on the source line.

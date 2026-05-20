@@ -84,6 +84,8 @@ Defaults declared under `local/framework.config.yaml § github`:
 | `ready-label` | `ginee:ready` | Pickup candidate (`☐` equivalent). |
 | `in-progress-label` | `ginee:in-progress` | PM has dispatched; phases 1–7 in flight. |
 | `blocked-label` | `ginee:blocked` | Stoppable intermediate state; waiting on user / external. |
+| `value:high|medium|low` | n/a (fixed namespace) | Triage scoring — user/business impact (ATAM importance). Reporter-defined. Per `core/triage-scoring.md`. |
+| `complexity:high|medium|low` | n/a (fixed namespace) | Triage scoring — implementation cost (ATAM difficulty). Reporter or `solution-architect` (auto-estimate on pickup). |
 
 PM creates any missing label on first use via `gh label create <name>` (default color). "Done" is implicit — issue closed.
 
@@ -123,12 +125,16 @@ Trigger: `@team-lead pick up #<N>` — always targets the primary repo (= the wo
    - State must be `OPEN`.
    - Labels include `ready-label` — if absent, PM offers to add it before pickup.
 3. Parse the structured body per the template sections. Map `affected area` → routing per `local/bindings.md`.
-4. Swap labels:
+4. **Scoring labels** per `core/triage-scoring.md`:
+   - Missing `value:*` → ask user (H / M / L); add `value:high|medium|low` label; post `<!-- ginee:value-prompt -->` audit comment.
+   - Missing `complexity:*` → dispatch `solution-architect` for H / M / L estimate; post `<!-- ginee:complexity-estimate -->` audit comment + add `complexity:high|medium|low` label.
+   - Post / update the sticky `<!-- ginee:score v=1 -->` comment per `core/triage-scoring.md § Score comment + audit trail` (find via marker; update in place; never duplicate).
+5. Swap labels:
    ```
    gh issue edit <N> --remove-label <ready-label> --add-label <in-progress-label>
    ```
-5. Run Phase 1 analysis treating the parsed issue body as the task description. Standard Phase 1–8 dispatch from here.
-6. **Comment cadence** — PM posts a structured comment at each major transition:
+6. Run Phase 1 analysis treating the parsed issue body as the task description. Standard Phase 1–8 dispatch from here.
+7. **Comment cadence** — PM posts a structured comment at each major transition:
 
    | Trigger | Comment shape |
    |---|---|
@@ -138,7 +144,7 @@ Trigger: `@team-lead pick up #<N>` — always targets the primary repo (= the wo
    | Stoppable intermediate state (user paused) | Current phase + done/in-progress/not-started lists |
 
    Comments are structured summaries, not chatty. One per transition.
-7. On Phase 8 acceptance, PM closes the issue:
+8. On Phase 8 acceptance, PM closes the issue:
    ```
    gh issue close <N> --repo <repo> --comment "<final summary + PR links>"
    ```
@@ -151,12 +157,10 @@ Trigger: `@team-lead triage` (→ primary) or `@team-lead triage framework` (→
    ```
    gh issue list --repo <target-repo> --label <ready-label> --state open --json number,title,labels,createdAt
    ```
-2. Surface as a table — number / title / age / labels.
-3. Propose a pickup order based on:
-   - Age (older first, modulo new urgent items).
-   - Apparent scope (bug-fixes typically shorter than feature work).
-   - Cross-references with active TODO work (avoid context-switch thrash).
-4. User picks one (or several). PM runs the pickup flow for each.
+2. Parse `value:high|medium|low` / `complexity:high|medium|low` labels per `core/triage-scoring.md`; compute score (default `value / complexity` with `H=3, M=2, L=1`).
+3. Surface as a table — number / title / `v` / `c` / score / age / labels.
+4. Sort by `Score DESC, Age DESC`. Unscored items grouped at the bottom.
+5. User picks one (or several). PM runs the pickup flow for each.
 
 Triage **never picks**. It only enumerates and proposes.
 
