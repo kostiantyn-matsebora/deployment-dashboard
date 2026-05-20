@@ -114,26 +114,12 @@
        docs/ui/deployment-dashboard.html so the mockup reads
        identically. Dark-theme overrides applied inline.
        ============================================================ */
-    /* Env-tag — copied from canonical mockup with one delta for the
-       Variant A/B fix: text-align is LEFT, not RIGHT. With per-position
-       column reservation, right-aligning the text pushes the slack to
-       the LEFT of the text (between the previous box's arrow-gap and
-       the env-text), and the visible slack varies per row by how much
-       shorter the row's env-name is than the column's reserved width
-       (verified empirically: 2-123 px before-text gap, 6 px after-text
-       gap). Left-aligning inverts the rhythm: the env-text sits snug
-       to the column's left edge (= snug to the arrow channel), so
-       prev-box-right -> env-text-left is constant across all rows
-       at the same position (= arrow-gap width + 6 px column-gap on
-       the leaf-pair, modulo box-content rounding). Slack absorbs
-       between text-right and box-left instead, where the user has
-       explicitly stated it is acceptable. */
     .env-tag {
       align-self: start;
       padding-top: 6px;
       padding-right: 0;
       padding-left: 0;
-      text-align: left;
+      text-align: right;
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.08em;
@@ -359,12 +345,8 @@
          --target-line-width  — distance from arrow-gap.left to
                                 target.box.left minus 6 px.
        ============================================================ */
-    /* Arrow-gap width — matches the canonical mockup's reflowable
-       `clamp(14px, 1.5vw, 32px)` so the variant renders at the same
-       arrow-channel width as production at any viewport (24 px at
-       1600 px, 14 px on narrow viewports, 32 px on wide ones). */
     .arrow-gap {
-      width: clamp(14px, 1.5vw, 32px);
+      width: 28px;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
