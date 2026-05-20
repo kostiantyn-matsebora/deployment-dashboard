@@ -5,6 +5,7 @@ using Dashboard.Fetcher.Tests.Support;
 using Dashboard.Shared.Domain;
 using Dashboard.Shared.Dto;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Dashboard.Fetcher.Tests;
 
@@ -139,66 +140,77 @@ public sealed class FetcherWorkerTests
     //
     // Pure unit-test of PeriodicTimer semantics: a long awaited tick should
     // not cause a "catch-up burst" of immediate firings when the timer
-    // resumes. We assert against the BCL primitive that FetcherWorker uses
-    // rather than spinning up the worker on a 1s interval and waiting
-    // (avoids a multi-second sleep in the suite). This is the cheapest
-    // possible confirmation that the underlying primitive does what
-    // ExecuteAsync depends on; manual operator-side verification is the
-    // fallback if behaviour ever diverges across .NET versions.
+    // resumes. Issue #25: this used to assert against wall-clock elapsed
+    // via Task.Delay + Stopwatch and flaked deterministically on
+    // shared-tenant ubuntu-latest GHA runners. It now drives the timer
+    // through FakeTimeProvider so the assertion is on logical ticks, not
+    // jitter-prone wall-clock samples.
     // ──────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Drift-resistance contract: after a fetch that overruns the interval,
-    /// PeriodicTimer must NOT queue up the missed ticks and dump them as
-    /// rapid back-to-back signals on subsequent WaitForNextTickAsync calls.
+    /// Drift-resistance contract (issue #25): after a fetch that overruns the
+    /// interval, <see cref="PeriodicTimer"/> must NOT queue up the missed
+    /// ticks and dump them as rapid back-to-back signals on subsequent
+    /// <c>WaitForNextTickAsync</c> calls.
     ///
-    /// <para>What we measure: the wall-clock time to drain N consecutive
-    /// ticks after a long simulated fetch. If the BCL were queueing missed
-    /// ticks, draining N consecutive ticks would take roughly zero time;
-    /// a healthy PeriodicTimer takes ~N intervals to drain N ticks because
-    /// each call waits for the next interval boundary.</para>
+    /// <para>How we assert this deterministically: a
+    /// <see cref="FakeTimeProvider"/> drives the timer. After burning the
+    /// first tick we <see cref="FakeTimeProvider.Advance"/> the clock by
+    /// several intervals in one step (simulating a long fetch overrun),
+    /// then call <c>WaitForNextTickAsync</c> repeatedly without advancing
+    /// the clock further. Healthy semantics: AT MOST ONE tick is delivered
+    /// immediately after the overrun (the single "catch-up" tick);
+    /// subsequent calls remain pending until the clock advances past the
+    /// next interval boundary. Regressed/queueing semantics: every backed-up
+    /// tick fires immediately and the second <c>WaitForNextTickAsync</c>
+    /// returns without any further <c>Advance</c>.</para>
     ///
-    /// <para>The exact constants are jitter-tolerant: a regression where
-    /// PeriodicTimer queued the missed ticks would surface as a near-zero
-    /// total drain time (~10-20ms across 3 ticks). A healthy implementation
-    /// takes at least 2 intervals (~400ms) across 3 ticks because at most
-    /// one tick is "ready immediately" after the long await, and each
-    /// subsequent tick waits a full interval.</para>
+    /// <para>No wall-clock samples; no <c>Task.Delay</c>; jitter-immune.</para>
     /// </summary>
     [Fact]
     public async Task PeriodicTimer_LongTickDoesNotCauseBackToBackBurstOfTicks()
     {
-        const int IntervalMs = 200;
-        const int LongFetchMs = 700;            // ~3 intervals of overrun
-        const int TicksToDrain = 3;
+        var interval = TimeSpan.FromMilliseconds(200);
+        var longFetch = TimeSpan.FromMilliseconds(700); // ~3 intervals of overrun
+        var fakeTime = new FakeTimeProvider(DateTimeOffset.UtcNow);
 
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(IntervalMs));
+        using var timer = new PeriodicTimer(interval, fakeTime);
 
-        Assert.True(await timer.WaitForNextTickAsync());           // burn the first tick
+        // Burn the first tick: advance one interval, await completion.
+        var firstTick = timer.WaitForNextTickAsync();
+        fakeTime.Advance(interval);
+        Assert.True(await firstTick);
 
-        // Simulate a long fetch — multiple tick boundaries pass while we sleep.
-        await Task.Delay(LongFetchMs);
+        // Simulate a long fetch: advance the clock past several interval
+        // boundaries in one step. PeriodicTimer must collapse this to a
+        // single "owed" tick — not three queued back-to-back ticks.
+        fakeTime.Advance(longFetch);
 
-        // Drain N consecutive ticks and measure total wall-clock time.
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        for (var i = 0; i < TicksToDrain; i++)
-        {
-            Assert.True(await timer.WaitForNextTickAsync());
-        }
-        sw.Stop();
+        // First post-overrun WaitForNextTickAsync: returns the one owed
+        // catch-up tick immediately (clock is already past the boundary).
+        Assert.True(await timer.WaitForNextTickAsync());
 
-        // Three consecutive ticks on a 200ms timer SHOULD take at least 2
-        // intervals (~400ms). If PeriodicTimer were queueing missed ticks,
-        // this loop would complete in ~10-20ms (the BCL would dump all
-        // backlogged ticks immediately). The 100ms floor below is the burst
-        // regression line — still 5-10× larger than the queueing-bug case
-        // (~10-20ms), so we keep the regression signal, but loose enough to
-        // survive CI scheduler jitter on shared runners where the 250ms
-        // threshold flaked.
-        Assert.True(sw.ElapsedMilliseconds >= 100,
-            $"Drained {TicksToDrain} consecutive ticks in {sw.ElapsedMilliseconds}ms — " +
-            "PeriodicTimer is queueing missed ticks (drift-resistance broken). " +
-            "Healthy behaviour: drain time scales with interval × ticks; broken behaviour: near-zero.");
+        // Second post-overrun WaitForNextTickAsync: drift-resistance
+        // contract — this must NOT return without further clock advance.
+        // If PeriodicTimer were queueing missed ticks, the ValueTask would
+        // already be completed (the bug we're guarding against). We probe
+        // the pending state by Task.WhenAny against a yielded marker.
+        var pendingTick = timer.WaitForNextTickAsync().AsTask();
+        Assert.False(pendingTick.IsCompleted,
+            "PeriodicTimer queued a back-to-back catch-up tick after the long fetch overrun. " +
+            "Drift-resistance contract requires at most ONE owed tick per overrun.");
+
+        // Confirm normal forward-progress still works: a single interval
+        // advance must complete the pending tick.
+        fakeTime.Advance(interval);
+        Assert.True(await pendingTick);
+
+        // And one more cycle for good measure — each tick requires its own
+        // full interval, no residual catch-up state.
+        var thirdTick = timer.WaitForNextTickAsync().AsTask();
+        Assert.False(thirdTick.IsCompleted);
+        fakeTime.Advance(interval);
+        Assert.True(await thirdTick);
     }
 
     // ──────────────────────────────────────────────────────────────────────

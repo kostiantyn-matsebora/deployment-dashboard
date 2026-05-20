@@ -39,6 +39,7 @@ public sealed class FetcherWorker : BackgroundService
     private readonly FetcherOptions _options;
     private readonly IReadOnlyDictionary<string, ICiCdAdapter> _adaptersById;
     private readonly FetcherStateClient _stateClient;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<FetcherWorker> _logger;
 
     public FetcherWorker(
@@ -46,10 +47,27 @@ public sealed class FetcherWorker : BackgroundService
         IEnumerable<ICiCdAdapter> adapters,
         FetcherStateClient stateClient,
         ILogger<FetcherWorker> logger)
+        : this(options, adapters, stateClient, TimeProvider.System, logger)
+    {
+    }
+
+    /// <summary>
+    /// Test-friendly overload: injects an explicit <see cref="TimeProvider"/>
+    /// so unit tests can drive tick scheduling deterministically through a
+    /// <c>FakeTimeProvider</c>. The DI registration uses the parameter-less
+    /// overload above (defaulting to <see cref="TimeProvider.System"/>).
+    /// </summary>
+    public FetcherWorker(
+        FetcherOptions options,
+        IEnumerable<ICiCdAdapter> adapters,
+        FetcherStateClient stateClient,
+        TimeProvider timeProvider,
+        ILogger<FetcherWorker> logger)
     {
         _options = options;
         _adaptersById = adapters.ToDictionary(a => a.AdapterId, StringComparer.Ordinal);
         _stateClient = stateClient;
+        _timeProvider = timeProvider;
         _logger = logger;
     }
 
@@ -61,7 +79,7 @@ public sealed class FetcherWorker : BackgroundService
             interval.TotalSeconds,
             string.Join(",", _adaptersById.Keys));
 
-        using var timer = new PeriodicTimer(interval);
+        using var timer = new PeriodicTimer(interval, _timeProvider);
 
         // Run the first cycle immediately at startup, then on each tick.
         do
