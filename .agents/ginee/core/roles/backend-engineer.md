@@ -91,6 +91,25 @@ When the architecture doc describes derived views (computed columns, aggregates,
 - Functional / API tests against the real database are owned by `qa-engineer`.
   - You provide deterministic logic.
 
+## Coverage obligation — every change you ship (D19)
+
+- **Threshold.** Every changed / added backend file ≥ `local/framework.config.yaml § unit-backend.coverage-threshold` line coverage on the **changed + added** line set (framework default `90`). Tests **executed + pass** via `unit-backend.runner` before reporting the iteration complete.
+- **Functionality-first authoring order** — coverage on getters / DI wiring while business logic stays shallow violates the rule:
+  1. Behavioural paths (handlers, derivation, business logic).
+  2. Documented error / status-code branches.
+  3. Edge / boundary conditions.
+  4. Wiring / DI / config plumbing — last, smoke-only.
+- **Exemptions** — applies to executable behaviour only:
+  - DTOs / records / pure data types (only auto-properties / no methods).
+  - Generated code.
+  - Configuration / option-binding classes (integration tests cover those).
+- **SA waiver** — per-task, **documented in the PR description**; never silent, never retroactive. Grounds:
+  - Mechanical change (rename / formatting / type-only).
+  - Infrastructure-adjacent (DI registration / config binding).
+  - Baseline-matching (project below threshold; engineer matching not lowering).
+- **No tooling configured?** Surface as a discovery gap to `team-lead`. Adopter wires the stack tool (per-stack table in `backend-engineer.details.md § Coverage tooling`); rule never silently lowers the bar.
+- **Failed run or sub-threshold = stoppable intermediate state** per `core/iteration-protocol.md`. Same-task fix; not a follow-up ticket.
+
 ## When proposing changes
 
 - Lead with impact on the wire contract or DB schema.

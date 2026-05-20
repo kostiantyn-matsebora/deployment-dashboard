@@ -105,6 +105,49 @@ test-runners:
   e2e: testing/e2e/run-tests.ps1
   smoke: testing/smoke/run-smoke.ps1
   script-suite: testing/pester/run-pester.ps1
+  # script-suite above = QA-owned scripts only (seed / cleanup / smoke / scenario harness).
+  # DevOps-owned scripts have their own keys below — see § DevOps script quality.
+
+# --- DevOps script quality (D18) ---
+# Lint + unit-test + coverage obligation for every devops-owned script change
+# (PowerShell + bash). Spec: core/roles/devops-engineer.md § Script-quality
+# obligation. Full migration: core/MIGRATIONS/D18-devops-script-quality.md.
+devops-scripts:
+  # Path containing devops-owned unit tests (Pester *.Tests.ps1 / *.bats).
+  #   - NOT QA's testing/ tree.
+  #   - Typically sibling tests/ next to each script root (e.g. dev_env/tests/,
+  #     .github/actions/<name>/tests/).
+  tests-path: tests/
+  # Coverage threshold (line coverage on the changed + added line set).
+  #   - Framework default: 90.
+  #   - Adopter may raise (stricter) or lower (catch-up periods); any
+  #     deviation visible in PR.
+  coverage-threshold: 90
+  # bash coverage tool (Pester is native via Invoke-Pester -CodeCoverage).
+  #   - bashcov | kcov | null (skip when no bash scripts under devops).
+  coverage-tool-bash: bashcov
+  # Optional grace window — declare an adopter-wide catch-up period for
+  # raising coverage on existing devops scripts. Format: ISO date or
+  # backfill-tracking issue reference (e.g. "issue-42").
+  # coverage-grace: 2026-09-01
+
+# --- Backend unit-test coverage (D19) ---
+# Coverage obligation for every backend source change. Spec:
+# core/roles/backend-engineer.md § Coverage obligation.
+# Migration: core/MIGRATIONS/D19-backend-coverage-floor.md.
+unit-backend:
+  # Backend unit-test runner invocation with coverage enabled.
+  #   - .NET: dotnet test --collect:"XPlat Code Coverage"
+  #   - Node: npm test -- --coverage
+  #   - Python: pytest --cov=<pkg>
+  #   - Go: go test -cover ./...
+  #   - leave null when project has no backend tier yet.
+  runner: dotnet test --collect:"XPlat Code Coverage"
+  # Line coverage threshold on the changed + added line set.
+  #   - Framework default: 90.
+  #   - Adopter may raise (stricter) or lower (catch-up); deviation
+  #     visible in local config + reviewable in PR.
+  coverage-threshold: 90
 
 # --- Project-doc index (D13) ---
 # Adopter-declared index classes — pre-declare doc classes that the index
@@ -120,6 +163,24 @@ test-runners:
 #     - name: runbook
 #       source-glob: ops/runbooks/*.md
 #       template: novel                   # ai-engineer authors a new template
+
+# --- Automatic mode — post-PR CI watch (D20) ---
+# Behaviour after `gh pr create` in Mode 1 + auto mode. Spec:
+# core/ci-watch.md. Migration: core/MIGRATIONS/D20-ci-watch.md.
+#
+# All keys optional — defaults shown. Apply only when auto mode is
+# active AND the resolved delivery mode is Mode 1; otherwise ignored.
+automatic-mode:
+  ci-watch: enabled                       # enabled | disabled — set disabled to preserve pre-D20 behaviour
+  ci-watch-policy: poll                   # poll | async | hybrid
+  ci-watch-poll-seconds: 20               # interval for poll / hybrid sync phase
+  ci-watch-timeout-minutes: 15            # max wall-clock per watch cycle before handback
+  ci-watch-sync-probe-minutes: 3          # hybrid only: synchronous probe before falling through to async
+  ci-watch-max-fix-cycles: 3              # cap on iterate-fix-recheck loops
+  ci-required-checks: strict              # strict | branch-protection-aware
+  ci-auto-retry-flakes: true              # rerun-failed once per cycle on flake-pattern match
+  # ci-flake-patterns:                    # adopter-extensible; merged with framework defaults
+  #   - "<additional regex>"
 
 # --- Delivery modes (D17) ---
 # Adopter-wide default for how PM lands task results. Per-task prefix

@@ -109,8 +109,8 @@ Violation → **stop, propose a doc update first**.
 | `solution-architect` | `<architecture-doc path>`; mockup governance review (no edits); `<CI/CD integration guide>`; project-instruction file rules / routing / repo-structure; ADRs / CRs; coherence audits; tie-breaker resolution. |
 | `frontend-engineer` (alias `client-engineer`) | `<client tier paths>`; `<mockup path>` (HTML/CSS/JS/SVG/fixtures); state; styling; client-side fetch / realtime. |
 | `backend-engineer` (alias `service-engineer`) | `<server tier paths>`; ORM entities / migrations; schema, indexes; realtime hub; auth middleware; wire-format JSON contract. |
-| `devops-engineer` (alias `platform-engineer`) | `<infra path>`; Dockerfiles; compose / orchestration; IaC; CI workflows; reverse-proxy config; secret provisioning; cost tracking. |
-| `qa-engineer` (alias `quality-engineer`) | `<testing path>`; scenario specs; e2e / functional / smoke; harness assertions; fixtures; seed / cleanup scripts. |
+| `devops-engineer` (alias `platform-engineer`) | `<infra path>`; Dockerfiles; compose / orchestration; IaC; CI workflows; reverse-proxy config; secret provisioning; cost tracking; **unit tests + lint + coverage for devops-owned scripts** under `<devops-scripts.tests-path>` per D18. |
+| `qa-engineer` (alias `quality-engineer`) | `<testing path>`; scenario specs; e2e / functional / smoke; harness assertions; fixtures; seed / cleanup scripts; **script-suite tests for QA-owned scripts only** (devops scripts → `devops-engineer` per D18). |
 | `ai-engineer` | Optimization passes on AI assets + docs; structure / topology / token economy; lossless restructures. Between-phase only. |
 | `<local custom role>` | `<owned paths/concerns>` |
 
@@ -131,8 +131,8 @@ Task spans two roles → dispatch in parallel per `core/process.md` § Dispatch 
 | `solution-architect` | `<mockup path>`; `<server source>`; `<client source>`; IaC, Dockerfiles, compose, CI workflows. |
 | `frontend-engineer` | `<server source>` (incl. SQL in read-API endpoints); IaC, Dockerfiles, CI workflows. |
 | `backend-engineer` | `<client source>`; `<mockup path>`; IaC, Dockerfiles, CI workflows. |
-| `devops-engineer` | Application-tier manifests / lockfiles; application source; client config. |
-| `qa-engineer` | `<mockup path>`; production server / client code. Owns test code, fixtures, scenarios, runners only. |
+| `devops-engineer` | Application-tier manifests / lockfiles; application source; client config. May NOT skip script-quality obligation (lint + tests + coverage at `<devops-scripts.coverage-threshold>`) on any devops-owned script change per D18. |
+| `qa-engineer` | `<mockup path>`; production server / client code; **lint / unit tests / coverage for devops-owned scripts** (those belong to `devops-engineer` per D18). Owns application + functional test code, fixtures, scenarios, runners, QA-owned script-suite only. |
 | `ai-engineer` | Rules / invariants / routing / requirements (semantics → `solution-architect`); production code; test code; IaC; CI workflows. |
 | `team-lead` | Everything except `local/*` written during discovery. Never edits production surfaces. |
 

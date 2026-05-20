@@ -173,6 +173,26 @@ Rules:
   - Hand off.
   - Keep the local workaround labelled.
 
+## Script-quality obligation — every script you touch
+
+When you author or modify any PowerShell / bash script under a devops-owned path (per `local/bindings.md`), three deliverables ship **in the same task** (D18):
+
+| Deliverable | PowerShell | bash | Gate |
+|---|---|---|---|
+| Lint | `PSScriptAnalyzer` | `shellcheck` | Zero error-level findings on changed/added scripts. Lint config (`PSScriptAnalyzerSettings.psd1` / `.shellcheckrc`) lives next to the scripts. |
+| Unit tests | `Pester` (`*.Tests.ps1`) | `bats-core` (`*.bats`) | Every changed/added function or top-level branch covered. |
+| Coverage | `Invoke-Pester -CodeCoverage` | `bashcov` or `kcov` (adopter picks) | Line coverage on the **changed + added** line set ≥ `local/framework.config.yaml § devops-scripts.coverage-threshold` (framework default `90`). |
+
+Rules:
+
+- **Failed lint / failing tests / sub-threshold coverage = stoppable intermediate state.** Same-task fix per `core/iteration-protocol.md`; never a follow-up ticket.
+- **Test path** declared in `local/framework.config.yaml § devops-scripts.tests-path`; under the devops tree, NOT QA's `testing/` tree.
+- **Scope is `changed + added` lines** — untouched legacy scripts not retroactively gated. Optional `devops-scripts.coverage-grace: <until-date | issue-N>` for an adopter-declared catch-up window.
+- **Data-only files exempt** (e.g. `*.psd1` config-data manifests, generated files, fixture JSON) — the gate applies to scripts with executable behaviour, not configuration data.
+- **CI runs the same gate** at PR validation per `devops-engineer.details.md § CI/CD pipelines` — local + CI invoke the same runners with the same threshold.
+- **QA retains ownership** of seed / cleanup / smoke / scenario-harness glue under the QA tree (`testing/scripts/`). Boundary moves only for files in the devops-owned tree per `local/bindings.md`.
+- **No tooling configured?** Surface as a discovery gap to `team-lead`; never silently lower the bar. Adopter wires the runners (typically a one-shot backfill task) before the next devops change.
+
 ## When proposing changes
 
 - Lead with both:
@@ -197,9 +217,8 @@ Full list: `local/bindings.md` → "Project role boundaries". Role-specific:
 - **Client UI code, styling, the mockup** → `frontend-engineer`.
   - The client SPA's Dockerfile and serving-tier nginx config are yours.
   - Everything else in the client tier is theirs.
-- **Test suites, fixtures, seed / cleanup scripts, scenario specs, mockup-visual harness** → `qa-engineer`.
-  - You wire them into CI.
-  - You don't author them.
+- **Application + functional test suites, fixtures, seed / cleanup scripts, scenario specs, mockup-visual harness** → `qa-engineer`. You wire them into CI; you don't author them.
+- **Lint + unit tests + coverage for your own scripts** — see `## Script-quality obligation` below. PSScriptAnalyzer / shellcheck + Pester / bats authorship for devops-owned scripts is **yours**, not QA's. QA retains script-suite ownership for files under their tree (seed / cleanup / smoke / scenario-harness glue).
 - **Architecture doc, project-instruction file, ADRs, CRs** → `solution-architect`.
   - Flag cost / topology / secret changes.
   - SA writes them.

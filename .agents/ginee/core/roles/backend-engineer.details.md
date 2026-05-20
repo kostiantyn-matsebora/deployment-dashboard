@@ -64,6 +64,33 @@ Read `local/bindings.md` → "Network topology" for project specifics. Common pa
   - No CORS headers if the project is single-origin via gateway.
 - Adjust per project: if the project hosts the SPA inside the service, the architecture doc says so and the rules above do not apply.
 
+## Coverage tooling — per-stack invocation (D19)
+
+Per `backend-engineer.md § Coverage obligation`. The framework does not mandate a specific tool; pick the stack-native one and wire it into `local/framework.config.yaml § unit-backend.runner`:
+
+| Stack | Tool | Invocation example |
+|---|---|---|
+| .NET | `coverlet` (built-in to `dotnet test`) | `dotnet test --collect:"XPlat Code Coverage"` + `reportgenerator` |
+| Node / TS | `jest --coverage` / `vitest --coverage` | `npm test -- --coverage` |
+| Python | `pytest-cov` | `pytest --cov=<pkg> --cov-report=term --cov-fail-under=90` |
+| Go | native `go test -cover` | `go test -cover -coverprofile=cover.out ./...` |
+| Java | `jacoco` | Gradle / Maven plugin per project |
+| Ruby | `simplecov` | `require 'simplecov'; SimpleCov.start` |
+| Rust | `cargo-llvm-cov` | `cargo llvm-cov --fail-under-lines 90` |
+
+**Coverage on changed + added lines** (not whole-repo):
+
+- Most tools report per-file/per-line. Use the PR-diff intersection — many CI providers (Codecov, Coveralls) ship a "patch coverage" view that does this directly.
+- Locally, run the runner with coverage enabled and inspect the output for changed files (`git diff --name-only origin/main...HEAD`).
+- A 1-line change either hits 100% (covered) or 0% (not) — no special handling needed; the rule degrades naturally.
+
+**No-tooling fallback flow:**
+
+1. Engineer detects no coverage tool wired (no `unit-backend.runner` declared, or runner exists but reports no coverage).
+2. Stop the iteration; surface to `team-lead` as a discovery gap.
+3. `team-lead` files a one-shot backfill task: wire the tool + add `coverage-threshold` to `local/framework.config.yaml` + verify CI invokes the same runner.
+4. Once the backfill lands, the engineer resumes the original task under the now-enforceable threshold.
+
 ## Real-time path (when the project has one)
 
 Generic shape (adapt to the project's specific mechanism):

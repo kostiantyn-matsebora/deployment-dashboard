@@ -139,6 +139,7 @@ On detecting `auto:` prefix or PM-proposed-then-user-accepted activation:
    - Track budget.
    - Never push silently.
    - Run the delivery handoff (Accept / Feedback / Reject) at completion.
+3. **On Mode 1 + `automatic-mode.ci-watch: enabled`** (D20 default): after `gh pr create` succeeds, load `core/ci-watch.md` and enter the CI-watch loop. Route attributable CI failures back through Phase 6 per its § Iterate-fix-recheck loop; honour the forced-handback triggers; never auto-merge.
 
 ## Testing scope — default change-scoped; full regression opt-in
 

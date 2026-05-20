@@ -40,6 +40,7 @@
 
 - **Manual smoke** *(when user-facing surface touched)* — `<one line per new flow>`
 - **Lossless self-check** *(for `ai-engineer` doc work)* — `<sample of rules / invariants spot-checked + result>`
+- **Doc-style protocol** *(any markdown authored / edited — shape rules in `core/process.md § Documentation style`; enforcement procedure in `core/doc-authoring-protocol.md`)* — `<discovered linter command>: PASS / N findings (see <path>)` OR `no linter configured; self-checked against § Mandatory checks`.
 
 ## Open issues
 

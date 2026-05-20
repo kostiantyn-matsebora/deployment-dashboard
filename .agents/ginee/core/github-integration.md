@@ -188,6 +188,8 @@ When a task is issue-sourced, every resulting PR description includes a `Closes 
 
 Template carries this: `core/templates/pr-description.md § Issue linkage`.
 
+**Post-PR CI watch (D20).** In automatic mode with `automatic-mode.ci-watch: enabled` (default), the orchestrator does not exit at `gh pr create`. It enters the watch loop per `core/ci-watch.md`, posting at most three PR comments per fix cycle (`"CI watch started"` / `"CI fix pushed (cycle N of M)"` / `"CI complete — all green"`), routing attributable failures back through Phase 6, and gating delivery on all-required-green. Interactive mode + `ci-watch: disabled` preserve pre-D20 behaviour (exit at "PR opened").
+
 ## Forbidden actions
 
 - **Never silently create / close / re-open an issue.** Each requires explicit user approval per `core/process.md § Executing actions with care` — issues are externally visible.
