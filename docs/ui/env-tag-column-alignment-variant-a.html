@@ -377,22 +377,45 @@
        Per-position env-tag column widths (the Variant A fix).
        In production these are written by a ResizeObserver-backed
        directive on .svc-block based on the widest env-tag at each
-       position. Here they are hardcoded for the fixture (measured
-       intrinsic widths at the mockup's font / letter-spacing,
-       rounded up to the nearest 2 px):
+       position. Here they are hardcoded for the fixture.
+
+       Each column width is exactly the widest env-tag text width
+       at that position (measured by a Playwright headless run @
+       1600 × 1200, then ceil'd + 1 px for subpixel safety). With
+       `.env-tag { text-align: right }` and the column width hugging
+       the widest text, the slack between text-left and column-left
+       on the widest row at each position is ≤ 1 px, so:
+
+           parent-box-right --> arrow-channel (28px) --> col-left
+                              ≈ col-left ≈ widest-text-left
+
+       i.e. the distance from each parent-box's right edge to the
+       NEXT widest env-tag's text-left edge is uniform across all
+       positions and equal to the arrow channel (~25 px after the
+       flex container's edge math).
+
+       Measurements (Playwright headless, 1600x1200, no zoom, this
+       mockup's font / letter-spacing):
          position 0: max(DEV, PREVIEW-PR-45696, PROD-US,
                          PYPI-HOGQL-PARSER, PYPI-HOGQL-PARSER-RS)
-                   = PYPI-HOGQL-PARSER-RS    ≈ 158 px → 160 px
+                   = PYPI-HOGQL-PARSER-RS    ≈ 129.38 px → 131 px
          position 1: max(STAGING, PREVIEW-VERIFY-LATEST, PROD-EU,
                          PYPI-CDN, PYPI-CDN-RS)
-                   = PREVIEW-VERIFY-LATEST   ≈ 168 px → 170 px
+                   = PREVIEW-VERIFY-LATEST   ≈ 130.75 px → 132 px
          position 2: max(PROD-CA, PREVIEW-FINAL, PROD-APAC-SINGAPORE,
                          PYPI-MIRROR-WORLDWIDE, PYPI-MIRROR-RS)
-                   = PYPI-MIRROR-WORLDWIDE   ≈ 144 px → 146 px
+                   = PYPI-MIRROR-WORLDWIDE   ≈ 143.94 px → 145 px
 
-       Position-2's column is meaningfully narrower than position-1's
-       (146 vs 170) — exactly the cost Variant B would force position-2
-       to pay (170 too), inflating every row's far-right column.
+       Shorter labels at each position (e.g. STAGING ≈ 47 px at
+       position 1) still inflate the column to its position's
+       widest. That widthwise slack lands on the LEFT side of the
+       text (because `text-align: right`), so non-widest rows show
+       extra whitespace before the env-tag. That extra whitespace
+       is INTRINSIC to the right-aligned positional-reservation
+       pattern; the user has accepted that tradeoff (env-tag still
+       sits snug to its own box on the RIGHT, canonical reading).
+       The ONLY thing this fix normalizes is the per-position
+       widest-row distance, which becomes uniform = arrow channel.
 
        Selector note: the row is a flexbox of interleaved
        <div.leaf-pair-fixed> + <div.arrow-gap> + <div.leaf-pair-fixed>
@@ -401,9 +424,9 @@
        siblings therefore land on :nth-of-type(1), (3), (5).
        ============================================================ */
     .svc-block-fixed {
-      --env-tag-col-0-width: 160px;
-      --env-tag-col-1-width: 170px;
-      --env-tag-col-2-width: 146px;
+      --env-tag-col-0-width: 131px;
+      --env-tag-col-1-width: 132px;
+      --env-tag-col-2-width: 145px;
     }
     .svc-block-fixed .wf-row .leaf-pair-fixed:nth-of-type(1) { --env-tag-col-width: var(--env-tag-col-0-width); }
     .svc-block-fixed .wf-row .leaf-pair-fixed:nth-of-type(3) { --env-tag-col-width: var(--env-tag-col-1-width); }
@@ -432,8 +455,8 @@
        as auto + the 6px column-gap). */
     .svc-block.with-guide.guide-buggy .wf-row::before { left: 164px; }
     /* AFTER block — guide at the per-position-0 reserved width
-       (160 px env-col-0 + 6 px column-gap = 166 px). */
-    .svc-block.with-guide.guide-fixed .wf-row::before { left: 166px; }
+       (131 px env-col-0 + 6 px column-gap = 137 px). */
+    .svc-block.with-guide.guide-fixed .wf-row::before { left: 137px; }
   </style>
 </head>
 <body>
@@ -751,14 +774,18 @@
     </div>
     <p class="section-note">
       Position 0 reserves the width of <code>PYPI-HOGQL-PARSER-RS</code>
-      (longest at position 0); position 1 reserves the width of
-      <code>PREVIEW-VERIFY-LATEST</code> (longest at position 1);
-      position 2 reserves the width of <code>PYPI-MIRROR-WORLDWIDE</code>
-      (longest at position 2). Every row's nth box starts at the same X,
-      and each position's column is the minimum width that satisfies
-      the alignment invariant — short labels (<code>STAGING</code>,
-      <code>PROD-CA</code>, <code>PROD-EU</code>) only inflate within
-      their own position, never the others.
+      (longest at position 0, ~131 px); position 1 reserves the width
+      of <code>PREVIEW-VERIFY-LATEST</code> (longest at position 1,
+      ~132 px); position 2 reserves the width of
+      <code>PYPI-MIRROR-WORLDWIDE</code> (longest at position 2,
+      ~145 px). Every row's nth box starts at the same X, and each
+      position's column hugs its own widest label — so the distance
+      from each parent box's right edge to the NEXT row's widest
+      env-tag text-left is uniformly equal to the arrow channel
+      (~25 px) at every position. Short labels (<code>STAGING</code>,
+      <code>PROD-CA</code>, <code>PROD-EU</code>) inflate the
+      LEFT-side slack within their own position (text-align: right
+      pushes whitespace before the label), never the others.
     </p>
 
     <section class="svc-block svc-block-fixed with-guide guide-fixed">

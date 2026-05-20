@@ -375,21 +375,43 @@
        Single shared env-tag column width (the Variant B fix).
        In production this is written by a ResizeObserver-backed
        directive on .svc-block based on the widest env-tag across
-       the entire block. Here it is hardcoded for the fixture:
+       the entire block. Here it is hardcoded for the fixture as
+       the widest env-tag TEXT width anywhere in the block (ceil +
+       1 px for subpixel safety):
          max across ALL positions and ALL rows
-           = max(PYPI-HOGQL-PARSER-RS pos-0  ≈ 158 px,
-                 PREVIEW-VERIFY-LATEST pos-1 ≈ 168 px,
-                 PYPI-MIRROR-WORLDWIDE pos-2 ≈ 144 px)
-           = 168 px → 170 px (rounded up for safety)
+           = max(PYPI-HOGQL-PARSER-RS pos-0  ≈ 129.38 px,
+                 PREVIEW-VERIFY-LATEST pos-1 ≈ 130.75 px,
+                 PYPI-MIRROR-WORLDWIDE pos-2 ≈ 143.94 px)
+           = PYPI-MIRROR-WORLDWIDE (~143.94 px) → 145 px
+
+       Hugging the block-widest text means:
+         * The POSITION whose widest happens to BE the block-widest
+           (position 2 here, PYPI-MIRROR-WORLDWIDE) has slack ≈ 0
+           and its parent-box -> text-left distance equals the
+           arrow channel (~25 px).
+         * Every OTHER position pays asymmetric slack equal to
+           (block-widest minus this position's widest text). That
+           slack lands on the LEFT side of every label at that
+           position (text-align: right). For position 1 here,
+           slack ≈ 145 - 131 = 14 px, so the parent-box -> widest
+           env-text distance is ~25 + ~14 = ~39 px, not the bare
+           arrow channel.
+       This per-position asymmetry is INTRINSIC to Variant B (one
+       shared width by construction cannot simultaneously hug
+       multiple different widest-per-position widths). See the
+       design note (env-tag-column-alignment.md) for the variant
+       tradeoff. Variant A is uniform across positions; Variant B
+       is uniform across BOX-START Xs but pays per-position text-
+       left slack against any position whose widest label is
+       shorter than the block-widest.
+
        Used by every .leaf-pair in the service block — including
        narrow-content positions (STAGING, PROD-CA, PROD-EU, PYPI-CDN,
        PROD-CA, etc.), which pay the widest-label cost even though
        their own intrinsic width is much smaller (~50-60 px).
-       Position 2 alone pays a +24 px / row vs Variant A's tight
-       position-2 column (146 px).
        ============================================================ */
     .svc-block-fixed {
-      --env-tag-col-width: 170px;
+      --env-tag-col-width: 145px;
     }
 
     /* Visual debug overlay — faint dotted line at the column-2 (box)
@@ -410,8 +432,8 @@
     }
     .svc-block.with-guide.guide-buggy .wf-row::before { left: 164px; }
     /* AFTER block — guide at the shared env-tag column width
-       (170 px + 6 px column-gap = 176 px). */
-    .svc-block.with-guide.guide-fixed .wf-row::before { left: 176px; }
+       (145 px + 6 px column-gap = 151 px). */
+    .svc-block.with-guide.guide-fixed .wf-row::before { left: 151px; }
   </style>
 </head>
 <body>

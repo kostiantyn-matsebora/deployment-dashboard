@@ -74,21 +74,65 @@ the block. The two variant HTMLs use the same five-row, three-deep
 `PYPI-HOGQL-PARSER-RS`/`PYPI-CDN-RS`/`PYPI-MIRROR-RS`) with
 deliberately varied lengths at each path position. In that fixture:
 
-- Variant A reserves 160 / 170 / 146 px at positions 0 / 1 / 2 —
-  each column is the minimum width its own widest label needs.
-- Variant B reserves a uniform 170 px at every position — the widest
-  label anywhere in the block.
+- Variant A reserves 131 / 132 / 145 px at positions 0 / 1 / 2 —
+  each column hugs its own widest label's text width.
+- Variant B reserves a uniform 145 px at every position — the
+  widest label anywhere in the block.
 
 The position-2 column is where the trade-off is most obvious:
-Variant A's 146 px is tight to `PYPI-MIRROR-WORLDWIDE` (the only
-position where no row reaches the block's overall maximum), while
-Variant B inflates that same column to 170 px on every row that
-reaches position 2, paying ~24 extra px per row in the rightmost
-column for no in-position gain. The pattern recurs whenever a
-service has a long label early in the path and short labels later.
+Variant A's 132 px at position 1 is tight to `PREVIEW-VERIFY-LATEST`
+while Variant B inflates positions 0 and 1 to 145 px (the block-
+widest's width), paying ~14 extra px per row at those positions for
+no in-position gain. The pattern recurs whenever a service has a
+short widest label at one position and a longer widest label at
+another.
 
 Defer the final pick to the user; both variants satisfy the
 invariant and either is acceptable for SPA implementation.
+
+## Parent-box -> widest-env-tag distance (uniform-arrow-channel)
+
+A secondary invariant followed by both variants: at any position
+N >= 1, the distance from the parent-box right edge (row R's
+deployment box at position N-1) to the WIDEST env-tag's text-left
+edge at position N should equal the arrow channel (the
+`.arrow-gap` width, ~25 px after the flex container's edge math),
+**uniformly across all positions in the variant where the variant's
+contract allows it**.
+
+This is achieved by sizing each column reservation to hug its own
+widest text exactly (ceil + 1 px for subpixel safety), so the
+slack between text-left and column-left on the widest row at each
+position is ~1 px. With `text-align: right` preserved (env-tag
+snug to its own box, canonical reading), the arrow channel becomes
+the only horizontal whitespace between parent-box and
+widest-next-env-text.
+
+**Variant A** satisfies this for every position in the block
+(per-position reservation hugs per-position widest text).
+**Variant B** can only satisfy this for the position whose widest
+text happens to equal the block-widest text; every OTHER position
+pays asymmetric slack equal to `(block-widest minus
+this-position's-widest)`, landing on the LEFT side of the
+right-aligned label. Measurements at 1600 × 1200:
+
+| Variant | Position | Widest row | parent-box-right -> widest-env-text-left |
+|---|---|---|---|
+| A | 1 | PREVIEW-VERIFY-LATEST | ~26 px (= arrow channel) |
+| A | 2 | PYPI-MIRROR-WORLDWIDE | ~26 px (= arrow channel) |
+| B | 1 | PREVIEW-VERIFY-LATEST | ~39 px (= arrow channel + 14 px Variant-B slack) |
+| B | 2 | PYPI-MIRROR-WORLDWIDE | ~26 px (= arrow channel, position is block-widest) |
+
+(Non-widest rows at each position pay the same right-aligned
+column slack as before — that's intrinsic to the
+positional-reservation pattern and accepted as the cost of the
+"env-tag labels its box" reading.)
+
+The canonical mockup `docs/ui/deployment-dashboard.html` does NOT
+yet apply this normalization (its workflow-rows still uses the
+per-row `auto` grid that issue #23 fixes); the chosen variant's
+column-reservation rule should land in the canonical at Phase 4
+together with the SPA fix.
 
 ## NFR-09 preservation (both variants)
 
