@@ -22,3 +22,4 @@ Records of architecture decisions (Architecture Decision Records — component s
 | [ADR-0004](./ADR-0004-opaque-per-progress-reporter-cursor.md) | Opaque per-`progress_reporter` cursor; backend-held; out-of-process fetcher; plug-in adapter shape | accepted |
 | [ADR-0005](./ADR-0005-release-install-migration-actuation.md) | Release-install migration actuation via tag-pinned `migration.sql` release asset | accepted |
 | [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) | Microservices architecture with container co-location of Write + Read API services | accepted (2026-05-19) — supersedes ADR-0002 |
+| [ADR-0007](./ADR-0007-vendor-adapters-emit-parent-deployments.md) | Vendor adapters convert vendor correlation signals into `parent_deployments` edges; read-side five-pass remains backstop | accepted (2026-05-20) — paired with issue #19; amends CR-0009 §3d endpoint list |

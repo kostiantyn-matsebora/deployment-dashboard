@@ -25,6 +25,12 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
+    <!--
+      Issue #19 + ADR-0007: needed by the GHA adapter to parse workflow YAML
+      so per-job `needs:` declarations can be turned into ParentDeployments
+      edges (intra-run DAG). Adapter-internal only — no DTO surface change.
+    -->
+    <PackageReference Include="YamlDotNet" Version="16.2.1" />
   </ItemGroup>
 
   <ItemGroup>

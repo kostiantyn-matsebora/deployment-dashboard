@@ -55,3 +55,73 @@ internal sealed record GitHubDeploymentStatusDto
     [JsonPropertyName("created_at")]
     public DateTimeOffset CreatedAt { get; init; }
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Issue #19 + ADR-0007 + CR-0009 §3d: intra-run `needs:` recovery DTOs.
+// Adapter calls /actions/runs/{id} (for workflow path + head sha),
+// /actions/runs/{id}/jobs (for job ids ↔ job names), and
+// /repos/{o}/{r}/contents/{path}?ref={sha} (for YAML to parse `needs:`).
+// All three are silent-degrade on any failure (no edges, INFO log,
+// cycle does not fail).
+// ──────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Wire-shape DTO for GHA
+/// <c>GET /repos/{owner}/{repo}/actions/runs/{run_id}</c>. The adapter
+/// only consumes the workflow YAML path + head SHA — both are needed to
+/// fetch the workflow contents at the *exact* revision that produced the
+/// run (a YAML edit on <c>main</c> after the run completed must NOT
+/// change the `needs:` we attribute to the run).
+/// </summary>
+internal sealed record GitHubWorkflowRunDto
+{
+    [JsonPropertyName("id")]
+    public long Id { get; init; }
+
+    /// <summary>Repo-relative path to the workflow YAML (e.g. <c>.github/workflows/deploy.yml</c>).</summary>
+    [JsonPropertyName("path")]
+    public string Path { get; init; } = string.Empty;
+
+    /// <summary>Commit SHA the workflow ran against — used as the <c>ref</c> for the contents API call.</summary>
+    [JsonPropertyName("head_sha")]
+    public string HeadSha { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Wire-shape DTO for GHA
+/// <c>GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs</c> — bridges
+/// the deployment's parsed <c>job_id</c> to a stable <c>job_name</c> that
+/// can be matched against the workflow YAML's <c>jobs.&lt;name&gt;.needs:</c>
+/// declaration.
+/// </summary>
+internal sealed record GitHubRunJobsDto
+{
+    [JsonPropertyName("jobs")]
+    public IReadOnlyList<GitHubRunJobDto> Jobs { get; init; } = Array.Empty<GitHubRunJobDto>();
+}
+
+internal sealed record GitHubRunJobDto
+{
+    [JsonPropertyName("id")]
+    public long Id { get; init; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Wire-shape DTO for GHA
+/// <c>GET /repos/{owner}/{repo}/contents/{path}?ref={sha}</c>. The
+/// payload is the workflow YAML, base64-encoded — the adapter decodes it
+/// in memory and hands the text to <see cref="WorkflowYamlParser"/>.
+/// </summary>
+internal sealed record GitHubContentsDto
+{
+    /// <summary>Base64-encoded file content. GHA inserts <c>\n</c> every 60 chars; standard base64 decoders tolerate this.</summary>
+    [JsonPropertyName("content")]
+    public string? Content { get; init; }
+
+    /// <summary>Always <c>"base64"</c> for blobs &lt; 1 MiB; for larger blobs GHA returns the empty string (caller must silent-degrade).</summary>
+    [JsonPropertyName("encoding")]
+    public string? Encoding { get; init; }
+}

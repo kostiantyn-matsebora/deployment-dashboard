@@ -209,11 +209,11 @@ services:
       DASHBOARD_WRITE_API_URL: "http://gateway"
       DASHBOARD_WRITE_API_KEY: "local-dev-token-not-for-production"
       PROGRESS_REPORTER: "dashboard-fetcher/github-actions"
-      FETCHER_POLL_INTERVAL_SECONDS: "30"
+      FETCHER_POLL_INTERVAL_SECONDS: "${FETCHER_POLL_INTERVAL_SECONDS:-30}"
       INITIAL_FETCH_LIMIT: "50"
       FETCHER_ADAPTERS: "github-actions"
       GHA_TOKEN: "${GHA_TOKEN:-local-dev-gha-token-placeholder}"
-      GHA_REPOSITORIES: '[{"owner":"example-org","repo":"example-repo"}]'
+      GHA_REPOSITORIES: '${GHA_REPOSITORIES:-[{"owner":"example-org","repo":"example-repo"}]}'
       GHA_API_BASE_URL: "https://api.github.com"
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
