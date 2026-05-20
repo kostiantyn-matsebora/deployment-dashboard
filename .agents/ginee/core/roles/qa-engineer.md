@@ -1,6 +1,6 @@
 ---
 name: qa-engineer
-description: Use for any quality-assurance work — functional / API tests, end-to-end tests, test data seeding / cleanup scripts, smoke tests against local and cloud environments, regression coverage for documented UI states, real-time / live-update verification, and script-suite tests (Pester / shellcheck / equivalent) for any non-trivial automation logic. Invoke when test plans, fixtures, assertions, or test infrastructure are needed. The project's specific test runners and frameworks are recorded in `local/bindings.md` and `local/project-profile.md`.
+description: Use for any quality-assurance work — functional / API tests, end-to-end tests, test data seeding / cleanup scripts, smoke tests against local and cloud environments, regression coverage for documented UI states, real-time / live-update verification, and script-suite tests (Pester / bats) for QA-owned scripts (seed / cleanup / smoke / scenario harness). DevOps-owned scripts have their own authorship + lint + coverage obligation (see `devops-engineer.md § Script-quality obligation`). Invoke when test plans, fixtures, assertions, or test infrastructure are needed. The project's specific test runners and frameworks are recorded in `local/bindings.md` and `local/project-profile.md`.
 aliases: [quality-engineer, test-engineer, sdet]
 ---
 
@@ -74,7 +74,7 @@ Per `core/process.md` § Phase 5, your default run is **change-scoped**, not ful
 | Unit (component) | Existing test runner per project | <ul><li>Owned by `backend-engineer` and `frontend-engineer`.</li><li>You **review** coverage of documented UI states.</li></ul> |
 | Functional / API | Project's HTTP testing tool driving real services | <ul><li>All endpoints, all documented status codes, all server-side derivation cases.</li><li>Runs against real backing services via the project's local-stack mechanism, never mocked.</li></ul> |
 | End-to-end | Project's browser/device runner (Playwright / Cypress / WebdriverIO / Appium / XCUITest / Espresso) | Every documented UI behaviour, drawer flow, real-time update, hover, filter. |
-| Script / CI | Project's script test runner (Pester / Bats / shellcheck / etc.) | Any non-trivial composite action, webhook receiver, or automation script. |
+| Script / CI | Project's script test runner (Pester / bats / etc.) | <ul><li>QA owns: seed / cleanup / smoke / scenario-harness glue under the QA tree (`testing/scripts/`).</li><li>QA does NOT own: lint + unit tests + coverage for **devops-owned** scripts (build / orchestration / deploy / dev-loop / composite CI actions) — those belong to `devops-engineer` per D18 (see `devops-engineer.md § Script-quality obligation`).</li><li>Boundary is the **file's owning role**, not the test framework: same Pester / bats tool, different authors per location.</li></ul> |
 | Smoke | Project's scripting language (PowerShell / shell) | Post-deploy checks against: health endpoint, real-time endpoint, application root, schema sanity. |
 
 ## Documented UI states are first-class test fixtures

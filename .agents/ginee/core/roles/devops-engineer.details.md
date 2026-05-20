@@ -49,6 +49,7 @@ Files you own beyond the application-tier repo-structure tree (paths per `local/
 | Local-dev compose / orchestration | `dev_env/` (or per-project equivalent). |
 | Scaled-validation compose / orchestration | Multi-replica setup to validate statelessness. |
 | Local startup / teardown scripts | `start`, `stop` scripts (PowerShell / shell). |
+| Script-quality artefacts | <ul><li>Unit tests next to devops-owned scripts: `*.Tests.ps1` (Pester) / `*.bats` (bats-core).</li><li>Lint config beside them: `PSScriptAnalyzerSettings.psd1` (PowerShell) / `.shellcheckrc` (bash).</li><li>Test directory path: `local/framework.config.yaml § devops-scripts.tests-path` (default sibling `tests/` next to each script root).</li><li>Coverage gate: `devops-scripts.coverage-threshold` (default `90`) on changed/added lines.</li></ul> |
 | IaC modules + per-env roots | Per the project's IaC tool. |
 | CI workflows | Release + PR validation. |
 | Composite / reusable CI actions | Per the project's CI tool. |
@@ -75,7 +76,10 @@ Generic shape (adapt to the project's CI tool):
   3. Unit test.
   4. Integration build (no push).
   5. IaC-tool `fmt` + `validate`.
-  6. Script-suite tests (Pester / shellcheck / etc.) for any composite/script logic.
+  6. **Script lint + unit tests + coverage** (per `devops-engineer.md § Script-quality obligation`):
+     - PowerShell — `PSScriptAnalyzer` (error-level fails the build); `Invoke-Pester -CodeCoverage` against `local/framework.config.yaml § devops-scripts.tests-path`; coverage on changed/added lines must meet `devops-scripts.coverage-threshold`.
+     - bash — `shellcheck` (error-level fails the build); `bats` + `devops-scripts.coverage-tool-bash` (`bashcov` or `kcov`); same threshold.
+     - The runners DevOps invokes locally and the runners CI invokes are the same — no parallel CI-only implementation.
 - **Release workflow** (on merge to the project's release branch) — steps:
   1. Build images.
   2. Push to the project's registry.

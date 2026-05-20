@@ -276,6 +276,8 @@ Bindings may NOT override generic process.
 
 ## Documentation style — structure over prose
 
+**Binding, not aspirational** for both framework-self-dev outputs (per `CLAUDE.md § Framework authoring`) and adopter-project outputs authored by any role (per **D22** — full protocol + 6 paired examples + discovery-driven enforcement in `core/doc-authoring-protocol.md`).
+
 Applies to **all** written artefacts:
 
 - Project-instruction files.
@@ -297,6 +299,29 @@ Applies to **all** written artefacts:
   - No "It is important to note that…", "Please ensure…", "In general…".
   - Lead with the verb or noun.
 - **Prose is for narrative exposition only** — explaining *why*. Keep tight.
+- **Framework-self-dev (D21).** Framework-source PRs in the ginee repo are gated by `scripts/context-economy-check.ps1` (Claude Code hook + git hooks + CI workflow). Threshold breach without an `Optimized-By: ai-engineer` trailer fails the gate. Spec: `core/MIGRATIONS/D21-context-economy-gates.md`.
+
+### Default-shape map (D22)
+
+| Doc artefact | Default shape |
+|---|---|
+| Component / service / image / endpoint / env-var inventory | Table |
+| Design properties, invariants, NFRs | Bullet list — one rule per bullet |
+| Sequence / workflow / runbook steps | Numbered list |
+| Term definitions | `**Term.** Gloss.` lines |
+| Trade-off / decision-rationale | Two-column table (option / consequence) |
+| Narrative *why* (rationale only) | Prose — tight, < 4 sentences |
+
+### Mandatory checks before report-as-done (D22)
+
+1. No paragraph contains > 2 rules (sentence terminators: `. ` `! ` `? `).
+2. No table cell holds a multi-sentence sub-paragraph.
+3. No bullet runs > 25 words *unless* it carries nested sub-bullets.
+4. Inventories (services, components, endpoints, env vars) are tables, not prose.
+5. Cross-references cite anchors (`§Name`, `#anchor`); never restate content.
+
+**Enforcement procedure** (lint command, attestation format, no-tool fallback): `core/doc-authoring-protocol.md` — load at Phase 5 / report-as-done.
+**Paired bad-vs-good examples** (6 doc classes): `core/doc-authoring-examples.md` — load on first-time authoring or explicit request.
 
 ## Coordination protocol
 
@@ -308,7 +333,10 @@ Applies to **all** written artefacts:
 
 ### Project-doc index — local/index/
 
-Heavy project docs (architecture, mockup, ADRs, CRs, scenarios, plus any adopter-specific doc class) are extracted to lightweight summaries under `local/index/`. Roles read the index first; originals only when an index entry points to a section needing verbatim consumption. Full spec + extraction recipes + staleness mechanism: **`core/index-protocol.md`**. `.idx` DSL grammar: **`core/index-syntax.md`**.
+- Heavy project docs (architecture, mockup, ADRs, CRs, scenarios, plus any adopter-specific doc class) → lightweight summaries under `local/index/`.
+- Roles read the index first; originals only when an index entry points to a section needing verbatim consumption.
+- Full spec + extraction recipes + staleness mechanism: **`core/index-protocol.md`**.
+- `.idx` DSL grammar: **`core/index-syntax.md`**.
 
 **Load triggers:**
 
@@ -334,7 +362,10 @@ Default tasks not sourced from a GitHub issue (TODO files, direct instructions) 
 
 ### Delivery modes — branch+PR / working-tree / commit-no-push
 
-Every task resolves to one of three delivery modes — **Mode 1 (feature branch + PR)** / **Mode 2 (working-tree only)** / **Mode 3 (commit-no-push)** — picked via per-task prefix (`branch:` / `wt:` / `commit:`), Phase-3 user answer, or `local/framework.config.yaml § delivery.default-mode`. Mode is resolved before Phase 4 and honoured through Phase 8 finalize. Full spec — precedence, per-mode procedure, auto-mode integration, forbidden actions: **`core/delivery-modes.md`**.
+- Every task resolves to one of three modes: **Mode 1** (feature branch + PR) / **Mode 2** (working-tree only) / **Mode 3** (commit-no-push).
+- Picked via per-task prefix (`branch:` / `wt:` / `commit:`), Phase-3 user answer, or `local/framework.config.yaml § delivery.default-mode`.
+- Resolved before Phase 4; honoured through Phase 8 finalize.
+- Full spec (precedence, per-mode procedure, auto-mode integration, forbidden actions): **`core/delivery-modes.md`**.
 
 **Load triggers:**
 

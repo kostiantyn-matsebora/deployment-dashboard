@@ -124,6 +124,21 @@
 - State so explicitly.
 - **Never** claim PASS without doing it.
 
+**Doc-style protocol** *(when PR touches adopter markdown — rules in `core/process.md § Documentation style`; enforcement in `core/doc-authoring-protocol.md`)*
+
+- `<discovered linter command>: PASS / N findings` OR `no linter configured; self-checked against § Mandatory checks`.
+
+## CI status
+
+<!--
+  Optional placeholder for automatic-mode CI-watch (D20 / core/ci-watch.md).
+  team-lead updates this section only on exit-clean ("all required checks green")
+  or final handback ("CI failed — see comment trail"). Never mid-cycle.
+  Drop this section in interactive mode or when `automatic-mode.ci-watch: disabled`.
+-->
+
+- `<all required checks green | failed after N fix cycles — see PR comments>`
+
 ## Open issues / follow-ups
 
 - `<issue>` — `<who/what is blocked>`

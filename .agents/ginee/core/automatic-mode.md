@@ -92,11 +92,12 @@ On any trigger: `team-lead` halts dispatch, presents a short interactive-fallbac
 
   | Action | Effect (branches by resolved mode) |
   |---|---|
-  | **Accept** | Mode 1 → push branch + open PR per `core/templates/pr-description.md` (+ `Closes #<N>` for issue-sourced). Mode 2 → commit per suggested message; push only if user says push. Mode 3 → push current branch. Transition TODO `☐` → `☒` / close issue per task source. |
+  | **Accept** | Mode 1 → push branch + open PR per `core/templates/pr-description.md` (+ `Closes #<N>` for issue-sourced) → **enter CI-watch state per `core/ci-watch.md`** when `automatic-mode.ci-watch: enabled` (D20 default). Mode 2 → commit per suggested message; push only if user says push. Mode 3 → push current branch. Transition TODO `☐` → `☒` / close issue per task source. |
   | **Feedback** | User supplies remarks; loop back to the relevant earlier phase (typically Phase 6); resume auto mode toward a fresh delivery handoff. |
   | **Reject** | Roll back per mode — Mode 1: delete branch + revert; Mode 2: `git checkout -- .`; Mode 3: `git reset --hard HEAD~<N>`. User may re-prompt with adjustments. |
 
 - **Invariant.** Auto mode NEVER pushes or transitions task state without the user's explicit Accept at this gate. Mode 2 also never commits without Accept.
+- **Mode 1 + CI-watch (D20).** After Accept on Mode 1, the orchestrator does NOT exit at "PR opened" by default. Per `core/ci-watch.md`, it enters a synchronous polling state (`automatic-mode.ci-watch-policy: poll`, default) and runs an iterate-fix-recheck loop on attributable CI failures until all required checks are green OR a forced-handback trigger fires. Adopters can switch to `async` / `hybrid` / `disabled` via `local/framework.config.yaml § automatic-mode`. The "single delivery handoff" invariant extends to **"CI green"** for `poll`, or "PR opened + watch scheduled" for `async` / `hybrid`.
 
 ## Orchestrator duties (team-lead)
 
@@ -132,6 +133,7 @@ On any trigger: `team-lead` halts dispatch, presents a short interactive-fallbac
   2. Push only on explicit user instruction.
   3. Transition the TODO `☐` → `☒`.
   4. Run the post-acceptance doc-optimization hook as usual.
+  5. **Mode 1 + `ci-watch: enabled`** (D20): immediately after `gh pr create` succeeds, enter CI-watch state per `core/ci-watch.md`. Do NOT exit the turn (default `poll` policy) until all required checks are green or a forced-handback trigger fires. On attributable failures, loop back through Phase 6 per `core/ci-watch.md § Iterate-fix-recheck loop`.
 - **On Feedback:**
   - Loop back to the appropriate earlier phase (typically Phase 6; occasionally Phase 4 or 2 if the remark is structural).
   - Resume auto mode toward a fresh delivery handoff.
