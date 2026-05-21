@@ -11,6 +11,7 @@ export * from './lib/sse.service';
 export * from './lib/deployment-matrix.store';
 export * from './lib/highlight-version.directive';
 export * from './lib/svc-name-column-width.directive';
+export * from './lib/env-tag-column-width.directive';
 export * from './lib/view-config';
 export * from './lib/view-prefs.service';
 export * from './lib/layout-prefs.service';

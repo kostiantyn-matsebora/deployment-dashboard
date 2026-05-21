@@ -179,12 +179,44 @@
     box-sizing: border-box;
   }
 
+  /* Column-1 width comes from `--env-tag-col-width` — resolved per-position
+     inside each `.svc-block` host by EnvTagColumnWidthDirective (issue #23).
+     Each `.leaf-pair[data-env-position="N"]` picks up
+     `--env-tag-col-N-width` from its host (see per-position rules below)
+     and aliases it onto `--env-tag-col-width`. The CSS fallback `auto`
+     covers the swim-lane / matrix uses of `.leaf-pair` (those layouts
+     already align via `.depth-slot` or the grid header) and the initial
+     paint before the directive's first recompute. */
   .leaf-pair {
     display: grid;
-    grid-template-columns: auto var(--leaf-width, 160px);
+    grid-template-columns: var(--env-tag-col-width, auto) var(--leaf-width, 160px);
     column-gap: 6px;
     align-items: start;
   }
+
+  /* Per-position alias rules — pick the host-level per-position width and
+     surface it as the single `--env-tag-col-width` the grid template above
+     consumes. Up to 16 positions covers any realistic workflow depth
+     (matrix declares ≤ ~6 envs per service; this is generous headroom).
+     A position lacking a host-level width falls through to the `.leaf-pair`
+     CSS fallback (`auto`) without disturbing layout. */
+  .leaf-pair[data-env-position="0"]  { --env-tag-col-width: var(--env-tag-col-0-width); }
+  .leaf-pair[data-env-position="1"]  { --env-tag-col-width: var(--env-tag-col-1-width); }
+  .leaf-pair[data-env-position="2"]  { --env-tag-col-width: var(--env-tag-col-2-width); }
+  .leaf-pair[data-env-position="3"]  { --env-tag-col-width: var(--env-tag-col-3-width); }
+  .leaf-pair[data-env-position="4"]  { --env-tag-col-width: var(--env-tag-col-4-width); }
+  .leaf-pair[data-env-position="5"]  { --env-tag-col-width: var(--env-tag-col-5-width); }
+  .leaf-pair[data-env-position="6"]  { --env-tag-col-width: var(--env-tag-col-6-width); }
+  .leaf-pair[data-env-position="7"]  { --env-tag-col-width: var(--env-tag-col-7-width); }
+  .leaf-pair[data-env-position="8"]  { --env-tag-col-width: var(--env-tag-col-8-width); }
+  .leaf-pair[data-env-position="9"]  { --env-tag-col-width: var(--env-tag-col-9-width); }
+  .leaf-pair[data-env-position="10"] { --env-tag-col-width: var(--env-tag-col-10-width); }
+  .leaf-pair[data-env-position="11"] { --env-tag-col-width: var(--env-tag-col-11-width); }
+  .leaf-pair[data-env-position="12"] { --env-tag-col-width: var(--env-tag-col-12-width); }
+  .leaf-pair[data-env-position="13"] { --env-tag-col-width: var(--env-tag-col-13-width); }
+  .leaf-pair[data-env-position="14"] { --env-tag-col-width: var(--env-tag-col-14-width); }
+  .leaf-pair[data-env-position="15"] { --env-tag-col-width: var(--env-tag-col-15-width); }
+
   /* NFR-09 Glance exception — env-tag renders inside the pill; the .leaf-pair
      collapses to a single column. */
   .leaf-pair-glance {
