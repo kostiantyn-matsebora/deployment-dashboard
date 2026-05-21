@@ -19,7 +19,10 @@ Per SAD §7 "App Gateway", the local stack mirrors the Azure topology:
   per ADR-0002).
 - **`db`** — PostgreSQL 16. Host port `5432` is published for dev convenience only (psql / EF tooling).
 - **`pgadmin`** — host port `5050` for dev convenience.
-- **`migrations`** — one-shot SDK container; runs `dotnet ef database update` then exits.
+
+EF Core migrations apply in-process inside the `api` container on startup
+(per [ADR-0009](../docs/adr/ADR-0009-startup-applied-ef-migrations.md)) —
+there is no separate one-shot runner service.
 
 There is no CORS in the system. The browser only ever sees one origin —
 `http://localhost:8080/` — and the gateway picks the right upstream
@@ -178,21 +181,17 @@ Environments — never from this directory.
 
 ## Migrations
 
-Both compose files run a one-shot `migrations` service that:
+EF Core migrations apply in-process inside the `api` container on
+startup, between `app.Build()` and `app.RunAsync()` — see
+[ADR-0009](../docs/adr/ADR-0009-startup-applied-ef-migrations.md). The
+local stack uses the same path; there is no separate one-shot service
+to actuate and no `dotnet-ef` install step in either compose file.
 
-1. Mounts `backend/` into a `mcr.microsoft.com/dotnet/sdk:10.0` container.
-2. Installs `dotnet-ef` 10.0.0 (cached in a named volume).
-3. Runs `dotnet ef database update --project shared/Dashboard.Shared --startup-project shared/Dashboard.Shared`.
-
-Both APIs `depends_on: migrations: service_completed_successfully`, so
-they only start once the schema is current. The runtime images stay
-SDK-free.
-
-To re-run migrations manually after adding a new EF migration:
-
-```powershell
-docker compose -f dev_env/docker-compose.local.yml up migrations --force-recreate
-```
+EF's `IMigrator.MigrateAsync()` contract is idempotent: re-applying
+against an already-migrated DB is a no-op. To add a new EF migration
+during development, create it from your host (`dotnet ef migrations
+add ...`) and restart the `api` container — the new migration applies
+on the next start.
 
 ## Common issues
 
@@ -206,10 +205,11 @@ ports are bound — only `:8080`, `:5432`, and `:5050`.)
 
 **Health check times out**
 `start.ps1` dumps `docker compose logs --tail=50` automatically.
-Most common causes: migrations failed — look at `dashboard-migrations`
-logs; or the gateway came up before the API was ready — the gateway
-healthcheck will recover on retry. Bump `-HealthTimeoutSeconds 120`
-on the first cold-build run.
+Most common causes: startup-applied migrations failed — look at the
+`dashboard-api` logs for `Microsoft.EntityFrameworkCore` errors; or the
+gateway came up before the API was ready — the gateway healthcheck
+will recover on retry. Bump `-HealthTimeoutSeconds 120` on the first
+cold-build run.
 
 **Scaled stack: SSE drops after a few seconds**
 Confirm `gateway/nginx.conf` is being baked into the gateway image
@@ -220,7 +220,7 @@ the `/api/stream` location.
 
 | File | Purpose |
 |---|---|
-| `docker-compose.local.yml` | Default local stack — gateway + dashboard + api + db + pgadmin + migrations. |
+| `docker-compose.local.yml` | Default local stack — gateway + dashboard + api + db + pgadmin. API self-migrates on start (ADR-0009). |
 | `docker-compose.scaled.yml` | Same shape with 3 API replicas behind the gateway. NFR-05 validation. |
 | `start.ps1` | Thin wrapper: compose up → poll `http://localhost:8080/health` (via the gateway) → print URLs. `-Scaled`, `-HealthTimeoutSeconds`. |
 | `stop.ps1` | Tear down both compose variants. `-Volumes` to wipe DB data. |

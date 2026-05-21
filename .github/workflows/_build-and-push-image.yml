@@ -12,18 +12,17 @@
 #   1.  checkout
 #   2.  language setup (dotnet OR node, conditional on build-kind)
 #   3.  NuGet cache (dotnet only)
-#   4.  .config/dotnet-tools.json restore — for dotnet-ef (dotnet only)
+#   4.  .config/dotnet-tools.json restore — tool-pin sanity check (dotnet only)
 #   5.  dotnet format gate — blocking (dotnet only)
 #   6.  npm ci (static + run-ng-tests only)
 #   7.  Unit tests (conditional)
 #   8.  Mockup-visual Playwright run (conditional)
 #   9.  Coverage artefact upload (when tests ran)
-#   10. EF migration SQL — generated + uploaded (conditional)
-#   11. Mockup-visual report + on-failure trace upload (conditional)
-#   12. Buildx setup
-#   13. Registry login (conditional on inputs.push)
-#   14. Metadata (tag rules) — Q5 verbatim
-#   15. Build + push (cache-from / cache-to via GHA backend)
+#   10. Mockup-visual report + on-failure trace upload (conditional)
+#   11. Buildx setup
+#   12. Registry login (conditional on inputs.push)
+#   13. Metadata (tag rules) — Q5 verbatim
+#   14. Build + push (cache-from / cache-to via GHA backend)
 #
 # Decision locks from Wave 4b that shape this file:
 #   D1  Dogfooding notify hook — DROPPED. We do not call .github/actions/notify/.
@@ -69,11 +68,6 @@ on:
         default: false
       run-mockup-visual:
         description: 'Run the Playwright mockup-visual harness (testing/mockup-visual/run-tests.ps1).'
-        required: false
-        type: boolean
-        default: false
-      emit-migration-artefact:
-        description: 'Generate + upload the EF Core idempotent migration SQL.'
         required: false
         type: boolean
         default: false
@@ -146,8 +140,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # 4. Restore .NET tools (dotnet-ef 10.0.0) from .config/dotnet-tools.json.
-      # Needed by step 10's `dotnet ef migrations script`. Cheap on cache hit.
+      # 4. Restores `.config/dotnet-tools.json` (currently `dotnet-ef` 10.0.0).
+      # Sanity check that the host-authored EF tool pin is consistent across the
+      # team; not directly consumed by any CI step post-ADR-0009. Cheap on cache hit.
       - name: Restore .NET tools
         if: inputs.build-kind == 'dotnet'
         run: dotnet tool restore
@@ -237,30 +232,6 @@ jobs:
           path: frontend/coverage/**/cobertura.xml
           if-no-files-found: warn
           retention-days: 14
-
-      # 10. EF migration script — idempotent SQL artefact for ops review +
-      # downstream CD (CR-0010 § 3l). Generation only — never executed in CI.
-      # ConnectionStrings__DefaultConnection placeholder so the design-time
-      # factory resolves the provider; the script generation never connects.
-      - name: Generate EF migration script
-        if: inputs.build-kind == 'dotnet' && inputs.emit-migration-artefact == true
-        env:
-          ConnectionStrings__DefaultConnection: 'Host=ci;Port=5432;Database=ci;Username=ci;Password=ci'
-        run: |
-          dotnet ef migrations script \
-            --idempotent \
-            --project backend/shared/Dashboard.Shared/Dashboard.Shared.csproj \
-            --startup-project backend/api/Dashboard.Api/Dashboard.Api.csproj \
-            --output migration.sql
-
-      - name: Upload EF migration script
-        if: inputs.build-kind == 'dotnet' && inputs.emit-migration-artefact == true
-        uses: actions/upload-artifact@v4
-        with:
-          name: ef-migrations-script-${{ github.sha }}
-          path: migration.sql
-          if-no-files-found: error
-          retention-days: 90
 
       # 11a. Mockup-visual report — always uploaded when the run executed.
       - name: Upload mockup-visual report

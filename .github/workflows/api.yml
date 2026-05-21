@@ -2,8 +2,7 @@
 # (Dashboard.Api — Write and Read services share one image per ADR-0006;
 # microservices architecture, container co-location is a packaging choice),
 # runs all backend unit tests EXCEPT Dashboard.Fetcher.Tests (those live with
-# the fetcher workflow), generates the EF migration SQL artefact, and pushes
-# the image to GHCR on main / tag pushes.
+# the fetcher workflow), and pushes the image to GHCR on main / tag pushes.
 #
 # Owner: devops-engineer.
 # Contract: docs/cr/CR-0010-component-ci-pipeline.md (api.yml row in § Impact).
@@ -62,6 +61,5 @@ jobs:
       # fetcher suite is owned by fetcher.yml so each component's PR shows
       # only its own test signal.
       test-filter: 'FullyQualifiedName!~Dashboard.Fetcher.Tests'
-      emit-migration-artefact: true
       push: ${{ github.event_name != 'pull_request' }}
     secrets: inherit

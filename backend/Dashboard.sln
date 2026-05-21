@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dashboard.Fetcher.Host", "f
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dashboard.Fetcher.Tests", "fetcher\Dashboard.Fetcher.Tests\Dashboard.Fetcher.Tests.csproj", "{FBAA79D1-C08F-4667-ACE8-91B37EA540B4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dashboard.Api.Tests", "api\Dashboard.Api.Tests\Dashboard.Api.Tests.csproj", "{C563F4D9-07B1-48F8-A111-71AA08A26D22}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -165,6 +167,18 @@ Global
 		{FBAA79D1-C08F-4667-ACE8-91B37EA540B4}.Release|x64.Build.0 = Release|Any CPU
 		{FBAA79D1-C08F-4667-ACE8-91B37EA540B4}.Release|x86.ActiveCfg = Release|Any CPU
 		{FBAA79D1-C08F-4667-ACE8-91B37EA540B4}.Release|x86.Build.0 = Release|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Debug|x64.Build.0 = Debug|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Debug|x86.Build.0 = Debug|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Release|x64.ActiveCfg = Release|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Release|x64.Build.0 = Release|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Release|x86.ActiveCfg = Release|Any CPU
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -180,5 +194,6 @@ Global
 		{FD3D83AB-6C8C-4D72-8DD7-33BC97C6643B} = {1B2EBFA8-7E23-7FD9-3681-49D723E8B0CF}
 		{9AF3DAA3-E133-485A-9715-43B028A22520} = {BC73D38A-E773-35CD-2306-EFA4D9538D27}
 		{FBAA79D1-C08F-4667-ACE8-91B37EA540B4} = {1B2EBFA8-7E23-7FD9-3681-49D723E8B0CF}
+		{C563F4D9-07B1-48F8-A111-71AA08A26D22} = {D82C56D6-B2CD-F611-9E31-04638F7EC30E}
 	EndGlobalSection
 EndGlobal

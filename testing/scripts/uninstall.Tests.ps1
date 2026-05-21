@@ -161,14 +161,18 @@ Describe 'uninstall.ps1 -- docker compose down behaviour' {
         ([object[]]$downCall.args) | Should -Contain '-v'
     }
 
-    It 'docker compose call -- includes both --profile migrate and --profile fetcher' {
+    It 'docker compose call -- includes --profile fetcher but NOT --profile migrate (ADR-0009: API self-applies migrations)' {
+        # Post-#22 contract: the migrate profile no longer exists in the
+        # compose file -- migrations are applied in-process by the api
+        # container on startup. The uninstaller continues to pass
+        # --profile fetcher so any active fetcher service is torn down too.
         $installDir = New-FakeInstall -TmpDir $tmp
         $r = Invoke-Uninstall -TmpDir $tmp -Args @('-InstallDir', $installDir)
         $r.ExitCode | Should -Be 0
         $downCall = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') } | Select-Object -First 1
         $a = [object[]]$downCall.args
-        $a | Should -Contain 'migrate'
         $a | Should -Contain 'fetcher'
+        $a | Should -Not -Contain 'migrate'
     }
 
     It 'docker compose call -- includes --env-file when dashboard.env exists' {

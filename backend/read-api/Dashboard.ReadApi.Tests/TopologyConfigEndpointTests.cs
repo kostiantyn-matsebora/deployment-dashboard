@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -212,10 +213,26 @@ public sealed class TopologyConfigEndpointTests
 /// Dedicated factory variant for topology-config endpoint tests. Identical
 /// to the matrix factory but kept separate so each set of tests can evolve
 /// its DI overrides independently.
+///
+/// <para>Carries the same ADR-0009 accommodations as
+/// <see cref="TestApplicationFactory"/> (PendingModelChangesWarning
+/// suppression + __EFMigrationsHistory pre-seed); see that type's remarks
+/// for the diagnostic write-up.</para>
 /// </summary>
 internal sealed class TopologyApiFactory : WebApplicationFactory<Dashboard.Api.Program>
 {
     private SqliteConnection? _sqlite;
+
+    // Kept in sync with TestApplicationFactory.KnownMigrations + the sister
+    // copies in Dashboard.Api.Tests / Dashboard.WriteApi.Tests; see those
+    // files for the rationale on inlining over a shared helper.
+    private static readonly string[] KnownMigrations =
+    {
+        "20260514154415_CreateDeploymentsTable",
+        "20260515120000_AddTopologyColumnsAndConfig",
+        "20260515160000_AddRefAndShaColumns",
+        "20260518120000_AddProgressReporterAndFetcherState",
+    };
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -247,7 +264,14 @@ internal sealed class TopologyApiFactory : WebApplicationFactory<Dashboard.Api.P
 
             _sqlite = new SqliteConnection("DataSource=:memory:");
             _sqlite.Open();
-            services.AddDbContext<DashboardDbContext>(opt => opt.UseSqlite(_sqlite));
+            services.AddDbContext<DashboardDbContext>(opt => opt
+                .UseSqlite(_sqlite)
+                // Provider-metadata diff (Npgsql snapshot ↔ sqlite test
+                // provider) is a false-positive, not real model drift —
+                // verified via `dotnet ef migrations
+                // has-pending-model-changes`.
+                .ConfigureWarnings(w => w.Ignore(
+                    RelationalEventId.PendingModelChangesWarning)));
 
             // Strip hosted services (LISTEN / pruning) — neither has a real
             // Postgres to talk to.
@@ -259,8 +283,27 @@ internal sealed class TopologyApiFactory : WebApplicationFactory<Dashboard.Api.P
                 }
             }
 
+            // Pre-stage the database state BEFORE the ADR-0009 startup
+            // hook fires: EnsureCreated materialises the model snapshot
+            // into sqlite-compatible DDL, then __EFMigrationsHistory is
+            // seeded so MigrateAsync sees nothing pending and exits as a
+            // no-op.
             using var scope = services.BuildServiceProvider().CreateScope();
-            scope.ServiceProvider.GetRequiredService<DashboardDbContext>().Database.EnsureCreated();
+            var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+            db.Database.EnsureCreated();
+
+            db.Database.ExecuteSqlRaw(
+                "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (" +
+                "  \"MigrationId\" TEXT NOT NULL PRIMARY KEY," +
+                "  \"ProductVersion\" TEXT NOT NULL);");
+
+            foreach (var migrationId in KnownMigrations)
+            {
+                db.Database.ExecuteSqlRaw(
+                    "INSERT OR IGNORE INTO \"__EFMigrationsHistory\" " +
+                    "(\"MigrationId\", \"ProductVersion\") VALUES ({0}, {1});",
+                    migrationId, "10.0.0-test");
+            }
         });
     }
 

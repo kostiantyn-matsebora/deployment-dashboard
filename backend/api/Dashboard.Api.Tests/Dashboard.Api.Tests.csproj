@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ADR-0009 startup-applied-migration tests. The host under test is the
+      unified Dashboard.Api executable; Microsoft.AspNetCore.Mvc.Testing
+      boots it in-process via WebApplicationFactory<Program>. Program is
+      already `public sealed class` so no InternalsVisibleTo is needed.
+
+      Dashboard.Shared.Tests is a test project (not a library) and cannot
+      be ProjectReference'd — its InMemorySqliteContext helper is not
+      reusable here. The test fixture wires sqlite-in-memory directly,
+      mirroring Dashboard.ReadApi.Tests/TestApplicationFactory.cs.
+    -->
+    <ProjectReference Include="..\Dashboard.Api\Dashboard.Api.csproj" />
+    <ProjectReference Include="..\..\shared\Dashboard.Shared\Dashboard.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

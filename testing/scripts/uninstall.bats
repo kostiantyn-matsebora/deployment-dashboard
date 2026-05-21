@@ -91,13 +91,17 @@ seed_install() {
     [[ "$down_line" == *" -v"* ]]
 }
 
-@test "compose down -- includes both --profile migrate and --profile fetcher" {
+@test "compose down -- includes --profile fetcher but NOT --profile migrate (ADR-0009: API self-applies migrations)" {
+    # Post-#22 contract: the migrate profile no longer exists in the
+    # compose file -- migrations are applied in-process by the api
+    # container on startup. The uninstaller continues to pass
+    # --profile fetcher so any active fetcher service is torn down too.
     seed_install
     run bash "$SCRIPT" --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     down_line="$(grep -E '^docker.*compose.*down' "$STUB_LOG" | head -n1)"
-    [[ "$down_line" == *"--profile migrate"* ]]
     [[ "$down_line" == *"--profile fetcher"* ]]
+    [[ "$down_line" != *"--profile migrate"* ]]
 }
 
 @test "compose down -- includes --env-file when dashboard.env exists" {

@@ -535,31 +535,44 @@ EOF
 
 # ---- Compose args (profiles + env-file) ----
 
-@test "default install -- --profile migrate present, --profile fetcher absent in up call" {
+@test "default install -- neither --profile migrate nor --profile fetcher passed (API self-applies migrations per ADR-0009)" {
+    # Post-#22 contract: migrations are applied in-process by the api
+    # container on startup; there is no migrate profile in the compose file
+    # and the installer never passes --profile migrate. Default install
+    # spins up the stack with no --profile flags at all.
     run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     # Extract the `compose ... up ...` line from the stub log.
     up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
     [ -n "$up_line" ]
-    [[ "$up_line" == *"--profile migrate"* ]]
+    [[ "$up_line" != *"--profile migrate"* ]]
     [[ "$up_line" != *"--profile fetcher"* ]]
+    # The `--profile` flag itself should be absent in the default case --
+    # belt-and-suspenders against future profiles silently slipping in.
+    [[ "$up_line" != *"--profile"* ]]
 }
 
-@test "--fetcher (with GHA_TOKEN) -- both --profile migrate and --profile fetcher present" {
+@test "--fetcher (with GHA_TOKEN) -- only --profile fetcher present (no --profile migrate per ADR-0009)" {
     export GHA_TOKEN='ghp_fake'
     run_install --fetcher --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
-    [[ "$up_line" == *"--profile migrate"* ]]
     [[ "$up_line" == *"--profile fetcher"* ]]
+    [[ "$up_line" != *"--profile migrate"* ]]
 }
 
-@test "--skip-migrations -- no --profile migrate, no --profile fetcher" {
+@test "--skip-migrations -- rejected as unknown argument (the flag was retired per ADR-0009 / #22)" {
+    # install.sh no longer accepts --skip-migrations because migrations are
+    # now applied in-process by the api container. The shell arg parser's
+    # default `*)` branch rejects unknown flags with exit code 2 and the
+    # 'unknown argument' literal; the script MUST NOT proceed to any
+    # docker / gh side effect.
     run_install --skip-migrations --version v9.9.9-test --install-dir "$INSTALL_DIR"
-    [ "$status" -eq 0 ]
-    up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
-    [[ "$up_line" != *"--profile migrate"* ]]
-    [[ "$up_line" != *"--profile fetcher"* ]]
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unknown argument"* ]]
+    [[ "$output" == *"--skip-migrations"* ]]
+    log_not_contains 'docker compose'
+    log_not_contains 'gh release download'
 }
 
 @test "--env-file always passed to docker compose pull + up" {

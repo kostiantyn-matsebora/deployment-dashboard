@@ -51,8 +51,9 @@ if (-not (Test-Path $composeFile)) {
 
 $composeArgs = @('-f', $composeFile)
 if (Test-Path $envFile) { $composeArgs += @('--env-file', $envFile) }
-# Include all profiles so any active services (fetcher, migrations) are also torn down.
-$composeArgs += @('--profile', 'migrate', '--profile', 'fetcher')
+# Include all profiles so any active services (fetcher) are also torn down.
+# Migrations apply in-process inside the api container (ADR-0009); no separate profile.
+$composeArgs += @('--profile', 'fetcher')
 
 $downArgs = @('down')
 if ($RemoveData) { $downArgs += '-v' }

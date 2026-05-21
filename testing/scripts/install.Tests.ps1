@@ -16,7 +16,9 @@
 #   - POSTGRES_PASSWORD defence-in-depth (same shape)
 #   - gh release download tag branching (latest vs pinned tag)
 #   - Env-file output shape
-#   - Compose args (--profile migrate / --profile fetcher / --env-file)
+#   - Compose args (--profile fetcher / --env-file) -- per ADR-0009 the API
+#     self-applies migrations on startup; the installer no longer passes
+#     --profile migrate and no longer accepts -SkipMigrations.
 #   - Error paths (gh asset download failure; docker login failure; compose pull failure)
 
 #Requires -Version 7.0
@@ -704,37 +706,44 @@ Describe 'install.ps1 -- compose args (profiles + env-file)' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
 
-    It 'default install -- --profile migrate is present; --profile fetcher is not' {
+    It 'default install -- neither --profile migrate nor --profile fetcher is passed (API self-applies migrations per ADR-0009)' {
+        # Post-#22 contract: migrations are applied in-process by the api
+        # container on startup; there is no migrate profile in the compose
+        # file and the installer never passes --profile migrate. Default
+        # install spins up the stack with no --profile flags at all.
         $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r.ExitCode | Should -Be 0
         $up = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') }
         $up.Count | Should -BeGreaterThan 0
-        $upArgs = ($up | Select-Object -First 1).args
-        # --profile migrate present, --profile fetcher absent
-        $migrateIdx = [Array]::IndexOf([object[]]$upArgs, 'migrate')
-        $migrateIdx | Should -BeGreaterThan -1
-        $fetcherIdx = [Array]::IndexOf([object[]]$upArgs, 'fetcher')
-        $fetcherIdx | Should -Be -1
+        $upArgs = [object[]]($up | Select-Object -First 1).args
+        $upArgs | Should -Not -Contain 'migrate'
+        $upArgs | Should -Not -Contain 'fetcher'
+        # The `--profile` flag itself should be absent in the default case --
+        # belt-and-suspenders against future profiles silently slipping in.
+        $upArgs | Should -Not -Contain '--profile'
     }
 
-    It '-Fetcher -- both --profile migrate and --profile fetcher are present' {
+    It '-Fetcher -- only --profile fetcher is passed (no --profile migrate per ADR-0009)' {
         $r = Invoke-Install -TmpDir $tmp `
                             -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Fetcher') `
                             -EnvOverrides @{ GHA_TOKEN = 'ghp_fake' }
         $r.ExitCode | Should -Be 0
         $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
         $upArgs = [object[]]$up.args
-        $upArgs | Should -Contain 'migrate'
         $upArgs | Should -Contain 'fetcher'
+        $upArgs | Should -Not -Contain 'migrate'
     }
 
-    It '-SkipMigrations -- no --profile migrate; fetcher only if -Fetcher' {
+    It '-SkipMigrations -- rejected as an unknown parameter (the flag was retired per ADR-0009 / #22)' {
+        # The installer no longer accepts -SkipMigrations because migrations
+        # are now applied in-process by the api container. PowerShell's
+        # [CmdletBinding()] surfaces the unknown switch as a non-zero exit
+        # with a "parameter cannot be found" error on stderr; the script
+        # MUST NOT proceed to any docker / gh side effect.
         $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-SkipMigrations')
-        $r.ExitCode | Should -Be 0
-        $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
-        $upArgs = [object[]]$up.args
-        $upArgs | Should -Not -Contain 'migrate'
-        $upArgs | Should -Not -Contain 'fetcher'
+        $r.ExitCode | Should -Not -Be 0
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'SkipMigrations'
+        ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
     }
 
     It '--env-file <InstallDir>/dashboard.env is always passed to docker compose' {
