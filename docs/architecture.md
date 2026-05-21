@@ -647,11 +647,9 @@ services:
       HISTORY_RETENTION_DAYS: "365"                       # consumed by the pruning job
     depends_on:
       db: { condition: service_healthy }
-      migrations: { condition: service_completed_successfully }
-
-  migrations:
-    image: mcr.microsoft.com/dotnet/sdk:10.0
-    # one-shot: dotnet ef database update against db, then exits 0
+    # api applies pending EF migrations on startup (between app.Build() and app.Run())
+    # against ConnectionStrings__DefaultConnection. EF idempotency makes re-apply a no-op.
+    # No external migrations service; no profile gate; no opt-out. See ADR-0009.
 
   db:
     image: postgres:16-alpine
@@ -860,7 +858,7 @@ Every active deployment pipeline sends a notify event to the ingest API on deplo
 
 | Workflow | Triggers | Outputs |
 |---|---|---|
-| `.github/workflows/api.yml` | `push: branches[main] / tags[v*]`, `pull_request: branches[main]`, `workflow_dispatch` | image `ghcr.io/<owner>/deployment-dashboard-api:<tags>`; backend coverage artefact (cobertura + trx); EF migration SQL artefact (`ef-migrations-script-<sha>`, 90-day retention) |
+| `.github/workflows/api.yml` | `push: branches[main] / tags[v*]`, `pull_request: branches[main]`, `workflow_dispatch` | image `ghcr.io/<owner>/deployment-dashboard-api:<tags>`; backend coverage artefact (cobertura + trx). _(EF migration SQL artefact retired per [ADR-0009](./adr/ADR-0009-startup-applied-ef-migrations.md) — API self-migrates on startup.)_ |
 | `.github/workflows/fetcher.yml` | (same trigger set) | image `ghcr.io/<owner>/deployment-dashboard-fetcher:<tags>`; backend coverage artefact (fetcher tests only) |
 | `.github/workflows/frontend.yml` | (same trigger set) | image `ghcr.io/<owner>/deployment-dashboard-frontend:<tags>`; frontend coverage artefact (cobertura per project ×4); mockup-visual report (+ traces on failure) |
 | `.github/workflows/gateway.yml` | (same trigger set) | image `ghcr.io/<owner>/deployment-dashboard-gateway:<tags>` (build only — gateway is config-only nginx, no tests) |
@@ -869,7 +867,7 @@ Every active deployment pipeline sends a notify event to the ingest API on deplo
 Tag rules per CR-0010 § 3e: `sha-<7>` always, `latest` on default-branch push, `pr-<N>-sha-<7>` on PR (built not pushed), `vX.Y.Z` + `vX.Y` on tag push. PR runs build + test only — no push.
 
 **Definition of Done — outbound:**  
-A push to `main` produces four green workflow runs that publish four images to GHCR with deterministic tags; PR runs gate merge on build + test; the EF migration SQL is captured as a workflow artefact on every `api.yml` run for downstream CD consumption.
+A push to `main` produces four green workflow runs that publish four images to GHCR with deterministic tags; PR runs gate merge on build + test. (Schema migrations are applied by the `deployment-dashboard-api` host on startup per [ADR-0009](./adr/ADR-0009-startup-applied-ef-migrations.md) — no longer a CI artefact.)
 
 ### v2.0 — Notification Client
 

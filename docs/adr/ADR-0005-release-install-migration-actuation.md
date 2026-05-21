@@ -6,7 +6,7 @@ nav_order: 5
 
 # ADR-0005 — Release-install migration actuation via tag-pinned `migration.sql` release asset
 
-- **Status:** accepted (paired with GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) — *"One-liner install — run a released version without cloning the repo"*)
+- **Status:** superseded by [ADR-0009](./ADR-0009-startup-applied-ef-migrations.md) (paired with GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) — *"One-liner install — run a released version without cloning the repo"* — original decision retained for historical context; see [ADR-0009](./ADR-0009-startup-applied-ef-migrations.md) for the current migration actuation contract)
 
 - **Context.**
 

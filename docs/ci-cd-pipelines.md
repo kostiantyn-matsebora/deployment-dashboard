@@ -114,32 +114,36 @@ Three caches turned on, all standard (CR-0010 § 3g):
 | Playwright browsers | `actions/cache@v4` | `${{ runner.os }}-playwright-${{ hashFiles('testing/mockup-visual/package.json') }}` (pinned `@playwright/test 1.49.1`) |
 | Docker layers | BuildKit `type=gha,mode=max` | per-image scope (`scope=${{ inputs.image-name }}`) so the four components do not stomp each other |
 
-## 7. EF migration SQL artefact
+## 7. Migrations — applied at API startup
 
-`api.yml` calls the reusable workflow with `emit-migration-artefact: true`.
-That step:
+Schema migrations are no longer a CI artefact. The API host applies them at
+process start, against the database it depends on, before the first request
+is served. See [ADR-0009](./adr/ADR-0009-startup-applied-ef-migrations.md) for
+the decision record.
 
-1. Restores `dotnet-ef` 10.0.0 from `.config/dotnet-tools.json` (`dotnet tool restore`).
-2. Runs `dotnet ef migrations script --idempotent --project backend/shared/Dashboard.Shared/Dashboard.Shared.csproj --startup-project backend/api/Dashboard.Api/Dashboard.Api.csproj --output migration.sql`.
-3. Uploads the result as artefact `ef-migrations-script-<sha>` (90-day retention).
+**Contract.**
 
-**Idempotent contract.** The `--idempotent` flag wraps every DDL statement in
-existence checks (`IF NOT EXISTS` / `IF EXISTS` patterns). The script is
-therefore safe to re-apply against any historical schema state — it no-ops
-when the target object is already in place. This is the contract the future
-CD step will rely on (apply-then-deploy without coordinating with prior
-schema versions).
+| Aspect | Behaviour |
+|---|---|
+| When | Between `app.Build()` and `app.Run()` in `backend/api/Dashboard.Api/Program.cs`. |
+| How | `DbContext.Database.Migrate()` — applies every pending EF Core migration in order. |
+| Re-apply | Idempotent — already-applied migrations are skipped via the EF Core `__EFMigrationsHistory` table. |
+| Failure | Aborts startup with a single `ILogger` error line; process exits non-zero; orchestrator restart-loops back-off normally. |
+| Opt-out | None. The API always migrates on start; there is no env-var chicken-bit. |
 
-**Generation only — never executed in CI.** The job catches missing migration
-files, conflicting model snapshots, and design-time `DbContext` failures
-before they reach a deploy. The CI step uses a placeholder
-`ConnectionStrings__DefaultConnection=Host=ci;...` because the design-time
-factory only needs to resolve the provider — it never connects.
+**No CI artefact.** Neither the component CI (`api.yml` →
+`_build-and-push-image.yml`) nor the release pipeline (`release.yml`)
+generates a `migration.sql` script. The `dotnet-ef` design-time tool is no
+longer invoked in CI; `.config/dotnet-tools.json` is retained because
+contributors authoring new migrations still need it on the host (see
+`docs/CONTRIBUTING.md` if present; otherwise `dotnet tool restore && dotnet ef
+migrations add <Name>` from a clone).
 
-**How to download.** From a successful run:
-1. Open the run in GitHub → Actions tab.
-2. Scroll to **Artifacts** at the bottom of the summary.
-3. Download `ef-migrations-script-<sha>` → unzip → `migration.sql`.
+**Why startup-applied.** ADR-0009 captures the full rationale — the short
+version: a single deployable carries its own schema; release-install and
+local-dev share one actuation mechanism; rollback on failure-to-migrate is
+the orchestrator's normal restart-loop rather than a separate compose
+profile.
 
 ## 8. Manual reruns — `workflow_dispatch`
 
@@ -173,10 +177,10 @@ To roll back to an earlier tag in the registry: pull the image by its
 ## 10. Release pipeline — `v*` tag → release assets
 
 A separate workflow (`.github/workflows/release.yml`) fires on `v*` tag push and
-publishes the assets the one-liner installer (per GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) and
-[ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md)) consumes. The four component workflows (§ 2) handle
-image-building on the same tag push; `release.yml` runs alongside them and
-attaches release-side artefacts to the GitHub Release object.
+publishes the assets the one-liner installer (per GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7))
+consumes. The four component workflows (§ 2) handle image-building on the
+same tag push; `release.yml` runs alongside them and attaches release-side
+artefacts to the GitHub Release object.
 
 This section is **outbound** in the same sense § 1 defines — it describes how
 this repo publishes the release-install surface. The inbound consumer view —
@@ -198,7 +202,7 @@ identity on every invocation; no long-lived tokens on disk; no PAT in
 | Step | Surface | Auth mechanism |
 |---|---|---|
 | Fetch `install.ps1` / `install.sh` (the bootstrap one-liner) | GitHub Releases API | `gh release download` (adopter's gh session) |
-| Fetch `docker-compose.release.yml` + `migration.sql` (asset downloads in step 1 of Migration actuation, below) | GitHub Releases API | `gh release download` inside `install.ps1` / `install.sh` |
+| Fetch `docker-compose.release.yml` (asset download inside the installer) | GitHub Releases API | `gh release download` inside `install.ps1` / `install.sh` |
 | Pull pinned GHCR images (`docker compose pull` inside the installer) | GHCR (`ghcr.io`) | `gh auth token \| docker login ghcr.io --username <gh-login> --password-stdin`, run by the installer before `docker compose pull` |
 | `release.yml` workflow's own job (publishing the assets) | GitHub Releases API + GHCR | Workflow's default `GITHUB_TOKEN` -- unchanged; the gh-CLI change is on the **adopter** side only |
 
@@ -230,10 +234,9 @@ deliberate, tag-pinned event, not a continuous-publish event.
 
 ### Assets published
 
-Every `vX.Y.Z` release object carries the six assets below. The set is fixed
+Every `vX.Y.Z` release object carries the five assets below. The set is fixed
 — the installer refuses to proceed when any required asset is missing for the
-resolved tag (defensive failure: indicates an incomplete release publish, per
-ADR-0005).
+resolved tag (defensive failure: indicates an incomplete release publish).
 
 | Asset | Source | Purpose |
 |---|---|---|
@@ -242,12 +245,11 @@ ADR-0005).
 | `install.sh` | `install/` | The bash installer (Option A per issue #7) — Linux / macOS equivalent of `install.ps1`. Uploaded flat as `install.sh`. |
 | `uninstall.ps1` | `install/` | One-liner tear-down — `docker compose -f docker-compose.release.yml down` + clean-up of the install directory. Uploaded flat as `uninstall.ps1`. |
 | `uninstall.sh` | `install/` | Linux / macOS equivalent of `uninstall.ps1`. Uploaded flat as `uninstall.sh`. |
-| `migration.sql` | downloaded from the same-commit `api.yml` artefact (`ef-migrations-script-<sha>`), OR re-generated inline by the release job using `dotnet ef migrations script --idempotent` (per § 7) | Tag-pinned idempotent migration script. The installer downloads this asset and applies it via a one-shot `postgres:16-alpine` container before the `api` service starts (per ADR-0005 Decision 1–5). |
 
-The `migration.sql` asset is the load-bearing surface for release-install
-migration actuation. See § 7 for the idempotent-script contract — it is the
-same artefact, promoted from a 90-day workflow artefact to a tag-pinned
-release asset.
+Migration actuation is **not** an asset surface — the API self-migrates at
+startup (§ 7 + [ADR-0009](./adr/ADR-0009-startup-applied-ef-migrations.md)).
+Older releases (pre-ADR-0009) shipped a sixth `migration.sql` asset; the
+current installer no longer downloads it.
 
 ### Canonical asset URL
 
@@ -262,7 +264,6 @@ Example (tag `v1.2.3`):
 ```
 https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/install.ps1
 https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/docker-compose.release.yml
-https://github.com/kostiantyn-matsebora/deployment-dashboard/releases/download/v1.2.3/migration.sql
 ```
 
 **This is the canonical URL pattern. Adopters use it; the installer scripts
@@ -304,35 +305,32 @@ against this repo. `gh api repos/<owner>/<repo>/contents/<asset-path>?ref=<tag>`
 is the gh-mediated equivalent; raw-content is therefore no longer a "works
 without gh" escape hatch in this codebase.
 
-The `migration.sql` asset is **not** mirrored to the raw-content path —
-because the artefact is generated by the workflow (not committed to the
-repo), the raw-content URL would 404. Adopters blocked from release-asset
-downloads cannot use the release-install path for migration actuation; they
-must fall back to manual `psql -f` (per ADR-0005 Consequences → "Options B
-and D regress on migration actuation").
-
 ### Migration actuation
 
-The release-install path actuates schema migrations via a one-shot
-`migrations` service declared in `docker-compose.release.yml` under the
-`migrate` Compose profile, per [ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md):
+No install-time actuation. The API container self-migrates against the `db`
+service it depends on, as a normal step of process start (§ 7 +
+[ADR-0009](./adr/ADR-0009-startup-applied-ef-migrations.md)).
 
-| Step | What runs |
+What the installer does **not** do anymore:
+
+- It does **not** download `migration.sql` (the asset is no longer published).
+- It does **not** activate a `--profile migrate` on the compose bring-up
+  (the profile and the `migrations` service no longer exist).
+- It does **not** carry a `-SkipMigrations` / `--skip-migrations` flag
+  (there is no actuation to skip).
+
+What the operator observes on a fresh install or an upgrade:
+
+| Phase | What runs |
 |---|---|
-| 1. Installer downloads `migration.sql` from the release asset URL into `<InstallDir>/migration.sql`. | Asset fetch step in `install.ps1` / `install.sh`. |
-| 2. Installer brings up the stack with the `migrate` profile active: `docker compose --profile migrate -f docker-compose.release.yml up -d --wait`. | One-shot `migrations` service (`postgres:16-alpine`) runs `psql -h db -U $POSTGRES_USER -d $POSTGRES_DB -v ON_ERROR_STOP=1 -f /migration.sql` after `db: service_healthy`. |
-| 3. `api` service waits for `migrations: service_completed_successfully` before starting. | Mirrors `dev_env/docker-compose.local.yml:130-134` verbatim. |
+| `db` starts | `service_healthy` per its `pg_isready` probe. |
+| `api` starts | Resolves pending EF Core migrations, applies them, then begins serving requests. The first request returns 200 only after migrations complete. |
+| Already-migrated DB | EF Core's `__EFMigrationsHistory` table skips re-application; startup time is effectively unaffected. |
+| Migration fails | API logs a single `ILogger` error, exits non-zero; the container's `restart: unless-stopped` policy back-offs naturally. |
 
-The installer applies migrations by **default**. `-SkipMigrations` (PowerShell)
-/ `--skip-migrations` (bash) brings the stack up without the `migrate`
-profile; the API will fail to start cleanly against an unmigrated DB and the
-URL panel surfaces a yellow notice. Default-on / opt-out-by-flag is the
-correct polarity (per ADR-0005 Decision 3).
-
-The idempotent-script contract (§ 7 → "Idempotent contract") guarantees that
-re-applying `migration.sql` against an already-migrated DB is a no-op for
-every applied migration, which is what makes upgrade (`v1.0.0` → `v1.2.0`)
-safe without manual version tracking.
+Upgrade `v1.0.0` → `v1.2.0` is therefore transparent — `docker compose pull
+&& docker compose up -d` is sufficient; the new API image carries the new
+migrations and applies them against the existing DB on its first start.
 
 ### Release notes
 
@@ -346,10 +344,10 @@ section above the contributor-oriented one."
 
 | Surface | Pointer |
 |---|---|
-| Migration actuation decision | [ADR-0005](./adr/ADR-0005-release-install-migration-actuation.md) |
+| Migration actuation decision | [ADR-0009](./adr/ADR-0009-startup-applied-ef-migrations.md) (supersedes ADR-0005 for actuation mechanics) |
 | Triggering requirement | GitHub issue [#7](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/7) |
 | `-Fetcher` / `-Demo` precondition matrix the installer enforces | GitHub issue [#5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) + `install/install.ps1` § 1 (`GHA_TOKEN` precondition); anonymous-mode transport: `docs/ci-cd-integration.md` § Anonymous-mode transport |
-| `migration.sql` generation step | § 7 of this doc |
+| Startup-applied migration contract | § 7 of this doc |
 | Tag scheme (`v1.2.3` + `v1.2` + `sha-<7>` + `latest`) | § 4 of this doc |
 | `API_TOKEN` install-time generation | `docs/architecture.md § 8` footnote |
 
@@ -377,7 +375,6 @@ downstream of the build job.
 | Docker layer cache cold after a `Dockerfile` edit | BuildKit invalidates the cache from the first changed instruction onwards. | Expected; minimise by keeping `COPY *.csproj` before `COPY .` (already the case in `backend/api/Dockerfile` and `backend/fetcher-host/Dockerfile`). |
 | GHCR push fails with `403 Forbidden` on PR-from-fork | `secrets.GITHUB_TOKEN` for a forked PR has no `packages: write` scope by design. | Expected — the caller sets `push: github.event_name != 'pull_request'`, so PRs build but never push. No action; merge the PR via `main` to publish. |
 | Frontend coverage artefact empty | QA's `karma.conf.js` + `angular.json` `karmaConfig` wiring (D4) not yet landed. | Expected during Wave 4b; resolves when the parallel QA changes merge. |
-| Backend `dotnet ef migrations script` fails with `Unable to bind connection` | The design-time factory was unable to resolve the placeholder connection string. | Verify `ConnectionStrings__DefaultConnection` env-var on the **Generate EF migration script** step matches the format the factory expects (`Host=ci;Port=5432;Database=ci;Username=ci;Password=ci`). |
 | `ng test` exits with `No provider for Browser` or sandbox errors | Karma launcher is `ChromeHeadless` (raw) instead of `ChromeHeadlessNoSandbox`. | The workflows use `ChromeHeadlessNoSandbox`; verify QA's `karma.conf.js` declares this launcher with `--no-sandbox` flags (sandbox is unavailable inside the GHA runner container). |
 
 ## 13. Future work
