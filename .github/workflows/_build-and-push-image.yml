@@ -12,7 +12,7 @@
 #   1.  checkout
 #   2.  language setup (dotnet OR node, conditional on build-kind)
 #   3.  NuGet cache (dotnet only)
-#   4.  .config/dotnet-tools.json restore — for dotnet-ef (dotnet only)
+#   4.  .config/dotnet-tools.json restore — tool-pin sanity check (dotnet only)
 #   5.  dotnet format gate — blocking (dotnet only)
 #   6.  npm ci (static + run-ng-tests only)
 #   7.  Unit tests (conditional)
@@ -140,8 +140,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # 4. Restore .NET tools (dotnet-ef 10.0.0) from .config/dotnet-tools.json.
-      # Needed by step 10's `dotnet ef migrations script`. Cheap on cache hit.
+      # 4. Restores `.config/dotnet-tools.json` (currently `dotnet-ef` 10.0.0).
+      # Sanity check that the host-authored EF tool pin is consistent across the
+      # team; not directly consumed by any CI step post-ADR-0009. Cheap on cache hit.
       - name: Restore .NET tools
         if: inputs.build-kind == 'dotnet'
         run: dotnet tool restore
