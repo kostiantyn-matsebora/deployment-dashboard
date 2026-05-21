@@ -154,14 +154,38 @@ mockup-visual suite covers (both variants reflow without overlap by
 construction — column-1 widens, column-2 keeps its `--leaf-width`,
 the row's flex container shrinks the rightmost gap as needed).
 
+## Locked rule — subpixel safety (ceil + 1 px)
+
+The directive / mockup recompute reserves each per-position column as
+`ceil(max-content-width) + 1 px`. The `+1 px` is **load-bearing**, not
+cosmetic:
+
+- `getBoundingClientRect().width` returns a sub-pixel float; truncating
+  to an integer track-width can leave the reservation provably narrower
+  than the rendered text on some DPRs / font-hinting paths, dropping the
+  last glyph into the column-gap (or into Glance's visual edge).
+- `ceil(...) + 1 px` makes the reservation provably wider than the
+  rendered text in every observed combination, so the widest row at each
+  position sits at the uniform arrow-channel distance (~26 px) from its
+  parent box, with `text-align: right` on `.env-tag` preserved.
+
+A future maintainer tempted to drop the `+ 1 px` should expect glyph
+clipping on a subset of DPR + font-stack combinations. Anchored in:
+
+- Mockup `recomputeEnvTagColumnWidths()` —
+  `docs/ui/deployment-dashboard.html` (`finalPx = Math.ceil(maxContent) + 1`).
+- SPA `EnvTagColumnWidthDirective` —
+  `frontend/shared/src/lib/env-tag-column-width.directive.ts`
+  (`SUBPIXEL_SAFETY_PX = 1`).
+
 ## Status
 
-Design note. The two variant HTMLs are mockup artefacts for the
-Phase 2 design-review cycle, not the SPA fix. After the user picks a
-variant, Phase 4 merges that variant into the canonical mockup
-`docs/ui/deployment-dashboard.html` AND into the SPA
-(`frontend/dashboard/src/app/workflow-rows-layout.component.ts` +
-`frontend/dashboard/src/styles.css` + a new
-`EnvTagColumnWidthDirective`). The other variant's HTML may be
-deleted at that point or kept as a reference; this design note is
-preserved as audit trail.
+**Variant A landed (issue #23).** Phase 4 merged Variant A into the
+canonical mockup `docs/ui/deployment-dashboard.html` (commit `477be05`),
+the SPA workflow-rows layout + styles + new
+`EnvTagColumnWidthDirective` in `frontend/shared/` (commit `8d29be5`),
+and the matching mockup-visual + e2e specs in `testing/` (commit
+`2066c15`). The two variant HTMLs
+(`env-tag-column-alignment-variant-a.html`,
+`env-tag-column-alignment-variant-b.html`) are preserved as the
+Phase 2 audit trail and must not be modified.
