@@ -192,7 +192,10 @@ param(
     [switch]$Clean,
 
     [Parameter()]
-    [switch]$CleanOnly
+    [switch]$CleanOnly,
+
+    [Parameter()]
+    [switch]$RateLimit
 )
 
 $ErrorActionPreference = 'Stop'
@@ -661,6 +664,102 @@ function Invoke-SeedPost {
             Start-Sleep -Milliseconds $IntraSlotDelayMs
         }
     }
+}
+
+# ---------------------------------------------------------------------
+# CR-0011 — opt-in rate-limit snapshot seeding.
+#
+# When `-RateLimit` is passed, POST three representative
+# (adapter_id, source_id) snapshots to /api/fetcher/usage covering all
+# three severity bands (green / amber / red) from
+# docs/ui/rate-limit-cluster.md § Fixture additions. This lets a local
+# operator see the dashboard cluster light up immediately without
+# spinning up a real fetcher.
+#
+# The switch is OPT-IN to preserve the existing seed behaviour for
+# users who run seed.ps1 without flags — § "Existing scenarios
+# unchanged when the switch is absent" per the QA Phase 2e plan.
+# ---------------------------------------------------------------------
+if ($RateLimit -and -not $DryRun) {
+    $usageEndpoint = "$WriteBaseUrl/api/fetcher/usage"
+    $usageHeaders = @{
+        'X-Api-Key'           = $ApiKey
+        'X-Progress-Reporter' = 'dashboard-fetcher/seed'
+        'User-Agent'          = $UserAgent
+    }
+    $nowUtc = (Get-Date).ToUniversalTime()
+    $resetAt = $nowUtc.AddMinutes(30).ToString('o')
+    $observedAt = $nowUtc.ToString('o')
+
+    $rateLimitSnapshots = @(
+        [ordered]@{
+            adapter_id         = 'github-actions'
+            source_id          = 'acme/widget-a'
+            upstream_limit     = 5000
+            upstream_remaining = 3600   # 28% — green
+            upstream_reset_at  = $resetAt
+            self_imposed_cap   = 1500
+            upstream_used      = 1400
+            observed_at        = $observedAt
+        },
+        [ordered]@{
+            adapter_id         = 'github-actions'
+            source_id          = 'acme/widget-b'
+            upstream_limit     = 5000
+            upstream_remaining = 1250   # 75% — amber (shares PAT with widget-a)
+            upstream_reset_at  = $resetAt
+            self_imposed_cap   = 1500
+            upstream_used      = 3750
+            observed_at        = $observedAt
+        },
+        [ordered]@{
+            adapter_id         = 'azure-devops'
+            source_id          = 'contoso/payments'
+            upstream_limit     = 5000
+            upstream_remaining = 600    # 88% — red (different adapter, different PAT)
+            upstream_reset_at  = $resetAt
+            self_imposed_cap   = 1500
+            upstream_used      = 4400
+            observed_at        = $observedAt
+        }
+    )
+
+    foreach ($snap in $rateLimitSnapshots) {
+        $bodyJson = $snap | ConvertTo-Json -Compress -Depth 4
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        try {
+            $resp = Invoke-WebRequest -Uri $usageEndpoint -Method POST -Headers $usageHeaders `
+                -Body $bodyJson -ContentType 'application/json' -TimeoutSec $TimeoutSec `
+                -SkipHttpErrorCheck -UseBasicParsing -ErrorAction Stop
+            $sw.Stop()
+            $code = [int]$resp.StatusCode
+            $logRecord = @{
+                section     = 'rate-limit'
+                adapter_id  = $snap.adapter_id
+                source_id   = $snap.source_id
+                upstream_used = $snap.upstream_used
+                status_code = $code
+                latency_ms  = [math]::Round($sw.Elapsed.TotalMilliseconds, 1)
+            }
+            if ($code -ge 200 -and $code -lt 300) {
+                Write-StructuredLog -Event 'seed_usage_ok' -Payload $logRecord
+            } else {
+                $logRecord['error'] = "HTTP $code"
+                Write-StructuredLog -Event 'seed_usage_fail' -Level 'error' -Payload $logRecord
+            }
+        }
+        catch {
+            $sw.Stop()
+            Write-StructuredLog -Event 'seed_usage_fail' -Level 'error' -Payload @{
+                section    = 'rate-limit'
+                adapter_id = $snap.adapter_id
+                source_id  = $snap.source_id
+                error      = $_.Exception.Message
+            }
+        }
+    }
+} elseif ($RateLimit -and $DryRun) {
+    Write-StructuredLog -Event 'seed_usage_skipped_dryrun' -Level 'warn' -Payload @{ reason = 'dry_run' }
 }
 
 $exitCode = 0
