@@ -211,6 +211,12 @@ services:
       PROGRESS_REPORTER: "dashboard-fetcher/github-actions"
       FETCHER_POLL_INTERVAL_SECONDS: "${FETCHER_POLL_INTERVAL_SECONDS:-30}"
       INITIAL_FETCH_LIMIT: "50"
+      # Self-imposed rate-limit cap per CR-0011 § 3a. Both unset locally:
+      # the fetcher applies its default 30% of upstream X-RateLimit-Limit.
+      # Precedence when both are set: absolute wins over percentage.
+      # Uncomment + tune to exercise the cap-reached path against a live PAT.
+      # FETCHER_RATE_LIMIT_ABSOLUTE:   "1500"   # int requests / upstream window; omit → unused
+      # FETCHER_RATE_LIMIT_PERCENTAGE: "30"     # int 1..100 of upstream X-RateLimit-Limit; default 30
       FETCHER_ADAPTERS: "github-actions"
       GHA_TOKEN: "${GHA_TOKEN:-local-dev-gha-token-placeholder}"
       GHA_REPOSITORIES: '${GHA_REPOSITORIES:-[{"owner":"example-org","repo":"example-repo"}]}'
