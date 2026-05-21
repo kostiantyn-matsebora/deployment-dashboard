@@ -39,10 +39,21 @@ nav_order: 10
 
   Mechanics:
 
-  1. **The release file is the canonical service inventory.** Every service (`db`, `api`, `dashboard`, `gateway`, `fetcher`), every env-var contract (substitutions like `${FETCHER_POLL_INTERVAL_SECONDS:-30}`, `${GHA_TOKEN:-…placeholder}`), every profile gate (`fetcher` profile, `container_name`, `depends_on`, healthchecks, the `pg-data` volume), every port mapping (`${DASHBOARD_PORT:-8080}:80`) lives in `install/docker-compose.release.yml`.
-  2. **The override file states only what differs.** For each service that needs a delta: `build:` block + `image:` tag override + `pull_policy: never`. For each env-var that needs a dev literal: a single key under that service's `environment:` block (Compose merges by key — the override wins without re-stating the rest of the env). For a new service (`pgadmin`): a full service entry (Compose appends services not in the base).
-  3. **Cosmetic warnings accepted.** Compose interpolates the release file independently as it reads each `-f` argument. The three secret substitutions the release file expects from `dashboard.env` (`POSTGRES_PASSWORD`, `API_TOKEN`, `ConnectionStrings__DefaultConnection`) interpolate to empty strings when `start.ps1` runs without an env-file, producing one-line `variable XXX not set` warnings on stderr. The override merge then re-sets the keys to the dev literals — functional behaviour correct; only the warnings are visible. Suppressing them would require either an env-file (violates the "no `.env`" invariant) or in-script `$env:VAR =` exports (creates a second source of truth for the dev literals).
-  4. **`start.ps1` + `stop.ps1` pass both `-f` flags on the default path.** `-Scaled` keeps a single `-f` against the standalone scaled compose. The argument order (`-f release.yml -f local.yml`) is fixed by Compose's later-wins merge rule.
+  1. **The release file is the canonical service inventory.**
+     - Every service lives there: `db`, `api`, `dashboard`, `gateway`, `fetcher`.
+     - Every env-var contract lives there: substitutions like `${FETCHER_POLL_INTERVAL_SECONDS:-30}`, `${GHA_TOKEN:-…placeholder}`.
+     - Every profile gate + structural detail lives there: `fetcher` profile, `container_name`, `depends_on`, healthchecks, the `pg-data` volume, port mapping `${DASHBOARD_PORT:-8080}:80`.
+  2. **The override file states only what differs.**
+     - **Service delta** — `build:` block + `image:` tag override + `pull_policy: never`.
+     - **Env-var delta** — a single key under that service's `environment:` block (Compose merges by key; the override wins without re-stating the rest of the env).
+     - **New service** (e.g. `pgadmin`) — a full service entry (Compose appends services not in the base).
+  3. **Cosmetic warnings accepted.**
+     - **Symptom.** Compose interpolates each `-f` file independently. The three secret substitutions the release file expects from `dashboard.env` (`POSTGRES_PASSWORD`, `API_TOKEN`, `ConnectionStrings__DefaultConnection`) interpolate to empty strings when `start.ps1` runs without an env-file, producing one-line `variable XXX not set` warnings on stderr.
+     - **Why functional behaviour stays correct.** The override merge then re-sets the keys to the dev literals — only the warnings are visible.
+     - **Why not suppressed.** Suppressing them would require either an env-file (violates the "no `.env`" invariant) or in-script `$env:VAR =` exports (creates a second source of truth for the dev literals).
+  4. **`start.ps1` + `stop.ps1` pass both `-f` flags on the default path.**
+     - `-Scaled` keeps a single `-f` against the standalone scaled compose.
+     - The argument order (`-f release.yml -f local.yml`) is fixed by Compose's later-wins merge rule.
 
 - **Consequences.**
 
@@ -53,7 +64,7 @@ nav_order: 10
   - **Test-contract update.** `testing/scripts/start.Tests.ps1` + `testing/scripts/stop.Tests.ps1` previously asserted a single `-f` against `docker-compose.local.yml`. Updated to assert both `-f` slots in order (release.yml first, local.yml second) and to seed the new repo-layout fake (dev_env/ + install/ as siblings inside the per-test tmpdir).
   - **`start.ps1 -Scaled` unchanged.** Scaled stack remains a single-file compose; the merge applies only to the default contributor stack.
   - **`fetcher` profile is inherited.** `start.ps1 -Fetcher` continues to add `--profile fetcher` to the compose args; the `fetcher` service definition lives in `install/docker-compose.release.yml` (`profiles: ["fetcher"]`), and the override carries only the `build:` + dev-literal `DASHBOARD_WRITE_API_KEY` deltas.
-  - **One-line stderr noise from variable interpolation.** Documented in the override file's header comment + `dev_env/README.md § Compose-merge override`. Acceptable trade-off vs the alternatives (env-file or in-script `$env:`).
+  - **One-line stderr noise from variable interpolation.** Cosmetic; see § Decision § Mechanics #3 above for symptom + trade-off analysis.
   - **No FR / NFR amendment.** The change records a structural decision about contributor-flow composition, not a user-facing system requirement. Existing FRs all describe SPA / API behaviour — this concern belongs in an ADR. The issue body's *"new: FR-15"* framing is reclassified here.
   - **bash sibling (`start.sh` / `stop.sh`) deferred.** Out of scope per issue #21's own *"Out of scope — Cross-OS shell sugar (PS-vs-bash parity for start/stop)"*. PowerShell 7+ remains the documented contributor-flow prerequisite.
 

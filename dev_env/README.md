@@ -186,7 +186,7 @@ Environments — never from this directory.
 The contributor stack `start.ps1` brings up is `docker compose -f install/docker-compose.release.yml -f dev_env/docker-compose.local.yml up -d --build`. Compose merges the override on top of the base per its standard merge rules (later `-f` files override earlier; service `environment:` blocks merge by key; arrays replace; new services append). The override exists because contributors need three things the release stack does not:
 
 1. **Build from source.** Release pulls GHCR-pinned images; contributors need `build:` blocks so iteration on `backend/` / `frontend/` / `gateway/` source produces fresh local images. `pull_policy: never` prevents `docker compose pull` from attempting to pull the locally-tagged `:dev` images from any registry.
-2. **Dev-literal secrets.** Release reads `POSTGRES_PASSWORD` / `API_TOKEN` / `ConnectionStrings__DefaultConnection` from `dashboard.env` (written by `install.ps1` from random values). The override re-states the same three keys with the obviously-fake dev literals so the zero-`.env`-file invariant survives. Compose may emit one-line `variable XXX not set` warnings as it interpolates the release file — they are cosmetic; the override merge resets the keys.
+2. **Dev-literal secrets.** Release reads `POSTGRES_PASSWORD` / `API_TOKEN` / `ConnectionStrings__DefaultConnection` from `dashboard.env` (written by `install.ps1` from random values). The override re-states the same three keys with the obviously-fake dev literals so the zero-`.env`-file invariant survives. Compose may emit one-line `variable XXX not set` warnings on stderr — cosmetic; see [ADR-0010 § Decision § Mechanics #3](../docs/adr/ADR-0010-dev-env-compose-derives-from-release.md) for the symptom + trade-off analysis.
 3. **pgAdmin convenience.** Dropped from the release stack per issue #7.
 
 Every other release-file detail (env-var substitutions like `${FETCHER_POLL_INTERVAL_SECONDS:-30}`, the `fetcher` profile, `${DASHBOARD_PORT:-8080}` mapping, `${DASHBOARD_VERSION:-latest}` image refs that the override redirects via `image:` overrides) is inherited — so an installer-side feature lands in the contributor flow with no porting.
@@ -232,7 +232,7 @@ the `/api/stream` location.
 
 | File | Purpose |
 |---|---|
-| `docker-compose.local.yml` | Contributor-flow OVERRIDE; layered on `install/docker-compose.release.yml` (issue #21). Carries `build:` blocks, dev-literal secrets, pgAdmin. API self-migrates on start (ADR-0009). See [ADR-0010](../docs/adr/ADR-0010-dev-env-compose-derives-from-release.md). |
+| `docker-compose.local.yml` | Override layered on `install/docker-compose.release.yml` — `build:` blocks + dev-literal secrets + pgAdmin. See [ADR-0010](../docs/adr/ADR-0010-dev-env-compose-derives-from-release.md). |
 | `docker-compose.scaled.yml` | Standalone scaled variant — 3 API replicas behind the gateway. NFR-05 validation. NOT layered on release. |
 | `start.ps1` | Thin wrapper: compose up (`-f release -f local` on the default path) → poll `http://localhost:8080/health` (via the gateway) → print URLs. `-Scaled`, `-Fetcher`, `-Demo`, `-AllowMissingGhaToken`, `-HealthTimeoutSeconds`. |
 | `stop.ps1` | Tear down both compose variants (default path passes both `-f` flags). `-Volumes` to wipe DB data. |
