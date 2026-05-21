@@ -16,7 +16,14 @@ import harnessConfig from './harness.config.json';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: /mockup-invariants\.spec\.ts$/,
+  // Spec files this harness owns. Add new specs here so they're picked
+  // up alongside the canonical mockup-invariants suite. Per CLAUDE.md
+  // "Configuration vs. data" — the inventory is declarative; the spec
+  // filenames are not literals scattered through the runner.
+  testMatch: [
+    /mockup-invariants\.spec\.ts$/,
+    /env-tag-column-alignment\.spec\.ts$/, // issue #23 per-position alignment
+  ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
