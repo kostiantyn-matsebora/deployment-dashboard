@@ -542,8 +542,14 @@
        Used by swim-lane and workflow-rows. Replaces the previous
        flex-row [env-tag][box] which forced a fixed env-tag width to
        avoid env-tag/box overlap. Grid solves it structurally:
-         column 1 (env-tag): `auto`   — sizes to the widest env label
-         column 2 (box):     `var(--leaf-width)` — fixed per view
+         column 1 (env-tag): `var(--env-tag-col-width, auto)`
+                             — per-position width resolved by
+                               recomputeEnvTagColumnWidths() (issue #23,
+                               workflow-rows); `auto` fallback covers
+                               swim-lane (.depth-slot already aligns).
+         column 2 (box):     `max-content`
+                             — sizes to box content; --leaf-width acts
+                               as the floor via .node / .pill min-width.
        Column-gap is the explicit breathing margin between the two.
        Cells in the same row of the same grid cannot overlap — the
        UX-RESPONSIVENESS INVARIANT guarantees this for any env-name
@@ -554,10 +560,34 @@
        widen the column rather than be clipped. */
     .leaf-pair {
       display: grid;
-      grid-template-columns: auto max-content;
+      grid-template-columns: var(--env-tag-col-width, auto) max-content;
       column-gap: 6px;
       align-items: start;
     }
+    /* Issue #23 — per-position env-tag column-width alias rules. Each
+       `.leaf-pair[data-env-position="N"]` aliases the host-level (per
+       `.svc-block`) `--env-tag-col-N-width` onto the single
+       `--env-tag-col-width` the grid template above consumes. The host
+       variables are written by recomputeEnvTagColumnWidths() — see the
+       method comment for the per-position max-content algorithm. 16
+       positions covers any realistic workflow depth. A position lacking
+       a host-level width falls through to the `auto` fallback. */
+    .leaf-pair[data-env-position="0"]  { --env-tag-col-width: var(--env-tag-col-0-width); }
+    .leaf-pair[data-env-position="1"]  { --env-tag-col-width: var(--env-tag-col-1-width); }
+    .leaf-pair[data-env-position="2"]  { --env-tag-col-width: var(--env-tag-col-2-width); }
+    .leaf-pair[data-env-position="3"]  { --env-tag-col-width: var(--env-tag-col-3-width); }
+    .leaf-pair[data-env-position="4"]  { --env-tag-col-width: var(--env-tag-col-4-width); }
+    .leaf-pair[data-env-position="5"]  { --env-tag-col-width: var(--env-tag-col-5-width); }
+    .leaf-pair[data-env-position="6"]  { --env-tag-col-width: var(--env-tag-col-6-width); }
+    .leaf-pair[data-env-position="7"]  { --env-tag-col-width: var(--env-tag-col-7-width); }
+    .leaf-pair[data-env-position="8"]  { --env-tag-col-width: var(--env-tag-col-8-width); }
+    .leaf-pair[data-env-position="9"]  { --env-tag-col-width: var(--env-tag-col-9-width); }
+    .leaf-pair[data-env-position="10"] { --env-tag-col-width: var(--env-tag-col-10-width); }
+    .leaf-pair[data-env-position="11"] { --env-tag-col-width: var(--env-tag-col-11-width); }
+    .leaf-pair[data-env-position="12"] { --env-tag-col-width: var(--env-tag-col-12-width); }
+    .leaf-pair[data-env-position="13"] { --env-tag-col-width: var(--env-tag-col-13-width); }
+    .leaf-pair[data-env-position="14"] { --env-tag-col-width: var(--env-tag-col-14-width); }
+    .leaf-pair[data-env-position="15"] { --env-tag-col-width: var(--env-tag-col-15-width); }
     /* Glance-view exception (SAD NFR-09 + head-comment Invariant 3):
        the env label renders INSIDE the deployment rectangle (the
        pill), so the .leaf-pair collapses to a single column —
@@ -1910,11 +1940,16 @@
                     <div class="flex items-stretch">
 
                       <div class="leaf-pair relative"
-                           :class="view === 'glance' ? 'leaf-pair-glance' : ''">
+                           :class="view === 'glance' ? 'leaf-pair-glance' : ''"
+                           :data-env-position="idx">
                         <!-- Per-env label — left cell of the .leaf-pair CSS
                              Grid (matrix carries the label in the page-level
-                             column header instead). The column auto-sizes to
-                             the widest env-id along this path; the leaf cell
+                             column header instead). Issue #23: column-1 width
+                             is per-PATH-POSITION (not per-cell `auto`),
+                             resolved per .svc-block by
+                             recomputeEnvTagColumnWidths() — every row's nth
+                             cell aligns vertically with every other row's
+                             nth cell within the same service. The leaf cell
                              (column 2) stays at --leaf-width. Cells cannot
                              overlap by construction — UX-RESPONSIVENESS
                              INVARIANT (a).
@@ -3098,8 +3133,19 @@
           // width measurements must be taken AFTER the column has settled
           // to its final width, otherwise SVG paths point at stale x
           // coordinates and connectors hang in mid-air.
+          //
+          // Issue #23: env-tag column widths follow the same ordering
+          // constraint — per-position widths shift every workflow-row's
+          // box X positions, so the env-tag recompute must also land
+          // BEFORE the connector recompute. It runs AFTER the service-
+          // name recompute because the latter widens column 0 of the
+          // service block grid, which in turn affects the .svc-block-rows
+          // available width and therefore the env-tag intrinsic
+          // measurements (none should overflow but the order keeps the
+          // measurement stable).
           const reflow = () => {
             this.recomputeSvcNameColumnWidth();
+            this.recomputeEnvTagColumnWidths();
             if (this.layout === 'swim-lane') {
               this.services.forEach(s => this.recomputeEdges(s.id));
             } else {
@@ -3651,6 +3697,103 @@
             // whole px to avoid sub-pixel column reflow on font load.
             const finalPx = Math.ceil(Math.max(176, maxContent));
             host.style.setProperty('--svc-name-col-width', `${finalPx}px`);
+          });
+        },
+
+        // Issue #23 — workflow-rows env-tag column-width unifier. Within
+        // each `.svc-block`, walk every `.leaf-pair[data-env-position]`,
+        // bucket the env-tags by path-position index, take the max
+        // intrinsic env-tag width at each position, apply ceil+1px for
+        // subpixel safety, and write one `--env-tag-col-N-width` custom
+        // property per position on the block. Per-position alias rules
+        // in the `.leaf-pair[data-env-position="N"]` CSS block (above
+        // .leaf-pair) surface those host-level variables on each cell.
+        //
+        // Effect: every row's nth deployment cell within a service
+        // aligns vertically with every other row's nth cell, regardless
+        // of how long any single env label happens to be (label-text-
+        // length-invariant within the service block). Mirrors the
+        // swim-lane `.depth-slot` mental model but applied positionally
+        // inside a single service's workflow-row stack.
+        //
+        // Scope: per-`.svc-block` ONLY — no cross-service alignment
+        // (cross-service alignment is handled separately via
+        // `--svc-name-col-width` on the per-layout host).
+        //
+        // Same sandbox / clone measurement pattern as
+        // recomputeSvcNameColumnWidth(): live `.env-tag` sits inside a
+        // CSS Grid track whose width we're computing (chicken-and-egg),
+        // so deep-clone into the off-screen `width: max-content` sandbox
+        // and read the clone's bounding rect. Sandbox is shared across
+        // both recomputes — created lazily by whichever runs first.
+        //
+        // Glance view exception: `.leaf-pair-glance` collapses to a
+        // single column with the env-tag rendered INSIDE the pill; such
+        // cells are skipped. If EVERY cell at a position is in Glance,
+        // no variable is written and the CSS `auto` fallback applies.
+        recomputeEnvTagColumnWidths() {
+          const blocks = document.querySelectorAll('.svc-block');
+          if (blocks.length === 0) return;
+          let sandbox = document.querySelector('[data-svc-name-col-sandbox]');
+          if (!sandbox) {
+            sandbox = document.createElement('div');
+            sandbox.setAttribute('data-svc-name-col-sandbox', '');
+            sandbox.setAttribute('aria-hidden', 'true');
+            sandbox.style.cssText =
+              'position:fixed;left:-99999px;top:0;visibility:hidden;' +
+              'pointer-events:none;width:max-content;contain:layout style;';
+            document.body.appendChild(sandbox);
+          }
+          blocks.forEach(block => {
+            // Collect env-tags grouped by their .leaf-pair's data-env-position.
+            const pairs = block.querySelectorAll('.leaf-pair[data-env-position]');
+            const buckets = new Map();
+            pairs.forEach(pair => {
+              if (pair.classList.contains('leaf-pair-glance')) return;
+              const tag = pair.querySelector(':scope > .env-tag');
+              if (!tag) return;
+              const raw = pair.getAttribute('data-env-position');
+              const pos = raw === null ? NaN : Number(raw);
+              if (!Number.isFinite(pos) || pos < 0) return;
+              const bucket = buckets.get(pos) || [];
+              bucket.push(tag);
+              buckets.set(pos, bucket);
+            });
+            // Compute per-position max-content width via the sandbox.
+            const seen = new Set();
+            buckets.forEach((cells, pos) => {
+              seen.add(pos);
+              let maxContent = 0;
+              cells.forEach(cell => {
+                const clone = cell.cloneNode(true);
+                clone.style.width = 'max-content';
+                clone.style.minWidth = '0';
+                clone.style.maxWidth = 'none';
+                sandbox.appendChild(clone);
+                const w = clone.getBoundingClientRect().width;
+                sandbox.removeChild(clone);
+                if (w > maxContent) maxContent = w;
+              });
+              if (maxContent <= 0) return;
+              // ceil + 1 px subpixel-safety — see variant-A.html design
+              // note. Float-truncating the reservation can leave a sub-
+              // pixel sliver shorter than the rendered text on some DPRs;
+              // the +1 px guard makes it provably wider in every
+              // observed combination, so the widest row at each position
+              // sits at the uniform ~arrow-channel distance (~26 px)
+              // from its parent box (with `.env-tag { text-align: right }`
+              // already applied above — preserved).
+              const finalPx = Math.ceil(maxContent) + 1;
+              block.style.setProperty(`--env-tag-col-${pos}-width`, `${finalPx}px`);
+            });
+            // Clear stale positions (path shortened / row removed) so a
+            // previously-written wider column doesn't linger after the
+            // data shrinks. Capped at 16 to match the .leaf-pair alias
+            // rules; anything beyond would have no consumer anyway.
+            for (let i = 0; i < 16; i++) {
+              if (seen.has(i)) continue;
+              block.style.removeProperty(`--env-tag-col-${i}-width`);
+            }
           });
         },
 

@@ -32,6 +32,7 @@ import {
 import { CommonModule } from '@angular/common';
 import {
   DeploymentMatrixStore,
+  EnvTagColumnWidthDirective,
   SvcNameColumnWidthDirective,
   type EnvironmentDescriptor,
   type ServiceDescriptor,
@@ -48,7 +49,7 @@ import {
 @Component({
   selector: 'dd-workflow-rows-layout',
   standalone: true,
-  imports: [CommonModule, LayoutLeafComponent, SvcNameColumnWidthDirective],
+  imports: [CommonModule, LayoutLeafComponent, EnvTagColumnWidthDirective, SvcNameColumnWidthDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (store.view() === 'focus') {
@@ -103,6 +104,7 @@ import {
              the .svc-block so every .wf-row in the stack widens in lock-step.
              Mirrors mockup lines 2427-2428. -->
         <section
+          ddEnvTagColumnWidth
           class="svc-block"
           [class.focus-row]="store.view() === 'focus'"
           [class.row-expanded]="store.view() === 'focus' && isFocusExpanded(service.id)"
@@ -237,6 +239,7 @@ import {
                         class="leaf-pair relative"
                         [class.leaf-pair-glance]="store.view() === 'glance'"
                         [attr.data-env]="envId"
+                        [attr.data-env-position]="idx"
                       >
                         @if (store.view() !== 'glance') {
                           <span class="env-tag">{{ envLabel(envId) }}</span>
