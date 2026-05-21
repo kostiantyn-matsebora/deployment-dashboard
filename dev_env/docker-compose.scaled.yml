@@ -24,6 +24,12 @@
 #
 # Host-published ports:
 #   - 8080 → App Gateway  (dashboard URL — `http://localhost:8080/`)
+#
+# Migrations strategy: the API host applies pending EF Core migrations on
+# start (between app.Build() and app.RunAsync()) -- see ADR-0009. All
+# three replicas execute the same migration path; EF Core's idempotent
+# migration contract makes concurrent re-apply a no-op. No separate
+# runner service.
 
 name: deployment-dashboard-scaled
 
@@ -44,47 +50,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
-
-  migrations:
-    image: mcr.microsoft.com/dotnet/sdk:10.0
-    container_name: dashboard-migrations-scaled
-    working_dir: /
-    environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      DOTNET_NOLOGO: "1"
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-    volumes:
-      - ../backend:/backend:ro
-      - dotnet-tools-scaled:/root/.dotnet/tools
-      - nuget-cache-scaled:/root/.nuget/packages
-    depends_on:
-      db:
-        condition: service_healthy
-    # See note in docker-compose.local.yml: we copy backend/ into /src and
-    # scrub bin/obj so the host's Windows-flavoured NuGet metadata can't
-    # leak into the Linux container.
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        set -e
-        export PATH="$$PATH:/root/.dotnet/tools"
-        if ! command -v dotnet-ef >/dev/null 2>&1; then
-          dotnet tool install --global dotnet-ef --version 10.0.0
-        fi
-        rm -rf /src
-        mkdir -p /src
-        cp -R /backend/. /src/
-        find /src -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
-        cd /src
-        dotnet restore shared/Dashboard.Shared/Dashboard.Shared.csproj
-        # See note in docker-compose.local.yml — use Dashboard.Shared as
-        # both project and startup project; it ships the design-time
-        # factory and references Microsoft.EntityFrameworkCore.Design.
-        dotnet ef database update \
-          --project shared/Dashboard.Shared/Dashboard.Shared.csproj \
-          --startup-project shared/Dashboard.Shared/Dashboard.Shared.csproj
-    restart: "no"
 
   # Single backend container hosting both Write and Read surfaces
   # (SAD §7 "Backend module architecture", §10 Decision 11). Scaled to 3
@@ -110,8 +75,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
 
   dashboard:
     build:
@@ -139,5 +102,3 @@ services:
 
 volumes:
   pg-data-scaled:
-  dotnet-tools-scaled:
-  nuget-cache-scaled:
