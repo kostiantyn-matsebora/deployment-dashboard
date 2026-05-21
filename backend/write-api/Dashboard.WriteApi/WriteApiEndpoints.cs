@@ -1,5 +1,6 @@
 using Dashboard.Shared.Domain;
 using Dashboard.Shared.Dto;
+using Dashboard.Shared.Fetcher;
 using Dashboard.Shared.Persistence;
 using Dashboard.Shared.Realtime;
 using Dashboard.Shared.Security;
@@ -55,6 +56,7 @@ public static class WriteApiEndpoints
         MapDeployments(builder);
         MapTopologyConfigPatch(builder);
         MapFetcherState(builder);
+        MapFetcherUsage(builder);
         return builder;
     }
 
@@ -397,6 +399,78 @@ public static class WriteApiEndpoints
             "- `401 Unauthorized` — `X-Api-Key` missing or wrong.")
         .Accepts<FetcherStateRequest>("application/json")
         .Produces<FetcherStateResponse>(StatusCodes.Status200OK, contentType: "application/json")
+        .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
+        .ProducesProblem(StatusCodes.Status401Unauthorized);
+    }
+
+    /// <summary>
+    /// CR-0011 § 3b: <c>POST /api/fetcher/usage</c> — fetcher pushes its
+    /// observed rate-limit state plus its resolved self-imposed cap on
+    /// every poll tick. Auth-gated by the same <c>X-Api-Key</c>
+    /// middleware that protects <c>POST /api/deployments</c> +
+    /// <c>GET</c>/<c>PUT /api/fetcher/state/{source-id}</c>.
+    /// <c>X-Progress-Reporter</c> is <strong>required</strong> here (matches
+    /// CR-0009's pattern on the fetcher-state endpoints).
+    ///
+    /// <para>Returns <c>200 OK</c> with an empty body on success. The
+    /// response payload is intentionally empty — operators verify the
+    /// cache via <c>GET /api/fetcher/usage</c>. Locked at CR-0011 D3-adjacent
+    /// (issue thread sign-off).</para>
+    /// </summary>
+    private static void MapFetcherUsage(IEndpointRouteBuilder builder)
+    {
+        builder.MapPost("/api/fetcher/usage", (
+            FetcherUsageSnapshotRequest body,
+            [FromHeader(Name = ProgressReporterHeaderName)] string? progressReporterHeader,
+            IFetcherUsageCache cache) =>
+        {
+            // Header validation runs first so a missing / over-cap header
+            // surfaces as 422 without any body inspection (matches the
+            // fetcher-state endpoint pattern).
+            if (!TryValidateProgressReporterHeader(
+                    progressReporterHeader, required: true, out _, out var headerProblem))
+            {
+                return headerProblem!;
+            }
+
+            // Body-level validation (length-only + non-whitespace +
+            // integer-range) — same DataAnnotations pipeline / 422 shape
+            // every other Write endpoint uses (CR-0008 § 3a + § 3c).
+            var (isValid, errors) = DataAnnotationsValidator.Validate(body);
+            if (!isValid)
+            {
+                return Results.ValidationProblem(
+                    errors, statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+
+            cache.Upsert(body);
+            return Results.Ok();
+        })
+        .WithName("PostFetcherUsage")
+        .WithTags("Write")
+        .WithSummary("Push a rate-limit usage snapshot for (adapter_id, source_id)")
+        .WithDescription(
+            "Push the fetcher's current rate-limit observation + self-imposed cap to the backend's " +
+            "in-memory usage cache (CR-0011 § 3b). The fetcher MUST call this on every poll tick — " +
+            "even on no-event ticks and even when the self-imposed cap was reached this tick — so " +
+            "the dashboard's stats-strip cluster stays fresh.\n\n" +
+            "**Authentication.** Requires the `X-Api-Key` header (same key as " +
+            "`POST /api/deployments`).\n\n" +
+            "**Required headers (CR-0009):**\n" +
+            "- `X-Progress-Reporter` — pusher-attribution token (≤ 64 chars, non-whitespace).\n\n" +
+            "**Body shape (CR-0011 § 3b):** snake_case keys; `upstream_used` is the wire field for " +
+            "the observed `(upstream_limit − upstream_remaining)` value (not a fetcher-side " +
+            "counter — see ADR-0008 Decision 1).\n\n" +
+            "**Returns** `200 OK` with an empty body. Operators verify the cached snapshot via " +
+            "`GET /api/fetcher/usage`.\n\n" +
+            "**Errors:**\n" +
+            "- `422 Unprocessable Entity` — `X-Progress-Reporter` missing / whitespace / > 64; or " +
+            "any body field violates its length / range / non-whitespace rule. Errors map is " +
+            "keyed by camelCase JSON name (body fields per CR-0008) or wire-literal header name " +
+            "(`X-Progress-Reporter` per CR-0009 § 3a).\n" +
+            "- `401 Unauthorized` — `X-Api-Key` missing or wrong.")
+        .Accepts<FetcherUsageSnapshotRequest>("application/json")
+        .Produces(StatusCodes.Status200OK)
         .ProducesValidationProblem(StatusCodes.Status422UnprocessableEntity)
         .ProducesProblem(StatusCodes.Status401Unauthorized);
     }

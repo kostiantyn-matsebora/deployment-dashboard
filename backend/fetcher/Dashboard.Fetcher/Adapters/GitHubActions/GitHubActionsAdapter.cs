@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -103,15 +104,17 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
         using var http = _httpFactory.CreateClient(HttpClientName);
         var listUrl = $"repos/{owner}/{repo}/deployments?per_page={perPage}";
 
-        var deployments = await TryListDeploymentsAsync(http, listUrl, sourceId, ct);
+        // CR-0011: pull rate-limit headers from the LIST response — present
+        // on both success and rate-limit-hit paths per GHA REST API.
+        var (deployments, rateLimit) = await TryListDeploymentsAsync(http, listUrl, sourceId, ct);
         if (deployments is null)
         {
-            return new FetchPage(Array.Empty<DeploymentEventRequest>(), cursor ?? string.Empty, HasMore: false);
+            return new FetchPage(Array.Empty<DeploymentEventRequest>(), cursor ?? string.Empty, HasMore: false, rateLimit);
         }
 
         if (deployments.Count == 0)
         {
-            return new FetchPage(Array.Empty<DeploymentEventRequest>(), cursor ?? string.Empty, HasMore: false);
+            return new FetchPage(Array.Empty<DeploymentEventRequest>(), cursor ?? string.Empty, HasMore: false, rateLimit);
         }
 
         // Filter to entries strictly above the watermark; preserve GHA's
@@ -121,7 +124,7 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
         var fresh = deployments.Where(d => d.Id > watermark).OrderBy(d => d.Id).ToList();
         if (fresh.Count == 0)
         {
-            return new FetchPage(Array.Empty<DeploymentEventRequest>(), GitHubActionsCursor.Format(watermark), HasMore: false);
+            return new FetchPage(Array.Empty<DeploymentEventRequest>(), GitHubActionsCursor.Format(watermark), HasMore: false, rateLimit);
         }
 
         var newWatermark = fresh.Max(d => d.Id);
@@ -236,7 +239,7 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
         // hasMore = the page was full → there are likely more events past it;
         // host re-invokes immediately to drain.
         var hasMore = deployments.Count >= perPage;
-        return new FetchPage(events, GitHubActionsCursor.Format(newWatermark), hasMore);
+        return new FetchPage(events, GitHubActionsCursor.Format(newWatermark), hasMore, rateLimit);
     }
 
     /// <summary>
@@ -244,8 +247,16 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
     /// failures via the same "empty no-op page" pattern as the rest of
     /// the adapter (cursor preserved, HasMore=false, host retries next
     /// tick per ADR-0004).
+    ///
+    /// <para>CR-0011: also parses the upstream rate-limit headers from
+    /// the LIST response on BOTH success and rate-limit-hit paths so the
+    /// host can drive its self-imposed cap gate without needing a
+    /// separate observation surface. Parse failures (missing / malformed
+    /// headers) log INFO once and emit <c>null</c> in the second
+    /// position; the host then does not gate that tick (matches the
+    /// pre-CR-0011 baseline).</para>
     /// </summary>
-    private async Task<List<GitHubDeploymentDto>?> TryListDeploymentsAsync(
+    private async Task<(List<GitHubDeploymentDto>? Deployments, RateLimitObservation? RateLimit)> TryListDeploymentsAsync(
         HttpClient http, string listUrl, string sourceId, CancellationToken ct)
     {
         HttpResponseMessage listResp;
@@ -256,8 +267,13 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
         catch (HttpRequestException ex)
         {
             _logger.LogWarning(ex, "GHA list deployments failed for {SourceId}", sourceId);
-            return null;
+            return (null, null);
         }
+
+        // Always attempt to parse the rate-limit observation FIRST so the
+        // host gets the up-to-date budget even on rate-limit-hit / error
+        // paths (CR-0011 § 3a — push runs even on cap-reached ticks).
+        var rateLimit = TryParseRateLimit(listResp, sourceId);
 
         if (IsRateLimited(listResp))
         {
@@ -265,7 +281,7 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
                 "GHA rate-limit on list deployments for {SourceId} (status {Status}); backing off until next tick",
                 sourceId, (int)listResp.StatusCode);
             listResp.Dispose();
-            return null;
+            return (null, rateLimit);
         }
 
         if (!listResp.IsSuccessStatusCode)
@@ -274,23 +290,74 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
                 "GHA list deployments returned {Status} for {SourceId}; not advancing cursor",
                 (int)listResp.StatusCode, sourceId);
             listResp.Dispose();
-            return null;
+            return (null, rateLimit);
         }
 
         try
         {
             var deployments = await listResp.Content.ReadFromJsonAsync<List<GitHubDeploymentDto>>(cancellationToken: ct);
-            return deployments ?? new List<GitHubDeploymentDto>(0);
+            return (deployments ?? new List<GitHubDeploymentDto>(0), rateLimit);
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "GHA list deployments returned unparseable JSON for {SourceId}", sourceId);
-            return null;
+            return (null, rateLimit);
         }
         finally
         {
             listResp.Dispose();
         }
+    }
+
+    /// <summary>
+    /// CR-0011 § 3a — parse <c>X-RateLimit-Limit</c> +
+    /// <c>X-RateLimit-Remaining</c> (ints) + <c>X-RateLimit-Reset</c>
+    /// (epoch seconds → UTC <see cref="DateTime"/>) from any GHA
+    /// response. Returns <c>null</c> when any header is missing or
+    /// malformed; logs at INFO level so the once-per-fetch-cycle
+    /// signal lands in the observability stream without flooding.
+    /// </summary>
+    private RateLimitObservation? TryParseRateLimit(HttpResponseMessage resp, string sourceId)
+    {
+        if (resp is null) return null;
+
+        if (!TryGetIntHeader(resp, "X-RateLimit-Limit", out var limit) ||
+            !TryGetIntHeader(resp, "X-RateLimit-Remaining", out var remaining) ||
+            !TryGetIntHeader(resp, "X-RateLimit-Reset", out var resetEpochSeconds))
+        {
+            _logger.LogInformation(
+                "GHA rate-limit headers missing or malformed on response for {SourceId}; usage push will carry prior observation if available",
+                sourceId);
+            return null;
+        }
+
+        DateTime resetAt;
+        try
+        {
+            resetAt = DateTimeOffset.FromUnixTimeSeconds(resetEpochSeconds).UtcDateTime;
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            _logger.LogInformation(ex,
+                "GHA X-RateLimit-Reset value {Reset} for {SourceId} is outside the valid epoch-seconds range; usage push will carry prior observation",
+                resetEpochSeconds, sourceId);
+            return null;
+        }
+
+        return new RateLimitObservation(
+            UpstreamLimit: limit,
+            UpstreamRemaining: remaining,
+            UpstreamResetAt: resetAt,
+            ObservedAt: DateTime.UtcNow);
+    }
+
+    private static bool TryGetIntHeader(HttpResponseMessage resp, string headerName, out int value)
+    {
+        value = 0;
+        if (!resp.Headers.TryGetValues(headerName, out var values)) return false;
+        var raw = values.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
     }
 
     private async Task<GitHubDeploymentStatusDto?> FetchLatestStatusAsync(

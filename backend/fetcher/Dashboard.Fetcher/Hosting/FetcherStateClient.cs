@@ -41,6 +41,16 @@ public sealed class FetcherStateClient
     }
 
     /// <summary>
+    /// The same <see cref="IHttpClientFactory"/> used to mint
+    /// <see cref="HttpClient"/> instances for every fetcher → backend call
+    /// (CR-0011: <see cref="FetcherUsageClient"/> reuses this factory so
+    /// the usage push shares the auth + resilience stack configured
+    /// once in the composition root). Exposed so the worker can build
+    /// peer clients off the same factory without taking another DI hop.
+    /// </summary>
+    public IHttpClientFactory HttpFactory => _httpFactory;
+
+    /// <summary>
     /// Read the persisted opaque cursor for the given pair. Returns
     /// <c>null</c> when the Write API returns 404 (the adapter then treats
     /// the next fetch as "first fetch — apply INITIAL_FETCH_LIMIT").

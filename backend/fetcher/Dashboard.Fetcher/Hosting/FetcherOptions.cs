@@ -13,12 +13,20 @@ namespace Dashboard.Fetcher.Hosting;
 ///   <item><c>FETCHER_ADAPTERS</c> — MVP fixed to <c>github-actions</c>.</item>
 ///   <item><c>PROGRESS_REPORTER</c> — optional override; default is
 ///   <c>dashboard-fetcher/{AdapterId}</c> per adapter.</item>
+///   <item><c>FETCHER_RATE_LIMIT_ABSOLUTE</c> — optional self-imposed
+///   absolute cap on requests issued per upstream rate-limit window
+///   (CR-0011). When set, overrides
+///   <c>FETCHER_RATE_LIMIT_PERCENTAGE</c>. Must be &gt; 0.</item>
+///   <item><c>FETCHER_RATE_LIMIT_PERCENTAGE</c> — optional self-imposed
+///   percentage of the upstream-reported budget the fetcher is allowed
+///   to consume per window (CR-0011). 1..100; default <c>30</c>.
+///   Ignored when <c>FETCHER_RATE_LIMIT_ABSOLUTE</c> is set.</item>
 /// </list>
 ///
 /// <para>The host validates these at startup and refuses to run with
 /// missing required values so failure is loud and immediate.</para>
 /// </summary>
-public sealed class FetcherOptions
+public sealed record FetcherOptions
 {
     public string WriteApiUrl { get; init; } = string.Empty;
     public string WriteApiKey { get; init; } = string.Empty;
@@ -40,4 +48,24 @@ public sealed class FetcherOptions
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> SourceIdsByAdapter { get; init; }
         = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Optional self-imposed absolute cap on requests issued per upstream
+    /// rate-limit window (CR-0011). Bound from
+    /// <c>FETCHER_RATE_LIMIT_ABSOLUTE</c>. When non-null + positive,
+    /// overrides <see cref="RateLimitPercentage"/> per the precedence rule
+    /// (CR-0011 § 3a — "absolute wins"). Startup validation rejects values
+    /// ≤ 0.
+    /// </summary>
+    public int? RateLimitAbsolute { get; init; }
+
+    /// <summary>
+    /// Optional self-imposed percentage of the upstream-reported budget
+    /// (<c>X-RateLimit-Limit</c>) the fetcher is allowed to consume per
+    /// window (CR-0011). Bound from <c>FETCHER_RATE_LIMIT_PERCENTAGE</c>.
+    /// 1..100; default <c>30</c>. Ignored when
+    /// <see cref="RateLimitAbsolute"/> is set. Startup validation rejects
+    /// values outside the inclusive 1..100 range.
+    /// </summary>
+    public int? RateLimitPercentage { get; init; }
 }

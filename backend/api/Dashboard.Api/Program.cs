@@ -1,11 +1,13 @@
 using Dashboard.Api.OpenApi;
 using Dashboard.ReadApi;
+using Dashboard.Shared.Fetcher;
 using Dashboard.Shared.Json;
 using Dashboard.Shared.Persistence;
 using Dashboard.Shared.Security;
 using Dashboard.WriteApi;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Scalar.AspNetCore;
 
 namespace Dashboard.Api;
@@ -70,6 +72,13 @@ public sealed class Program
         // ---- Surface-library DI -------------------------------------------
         builder.Services.AddWriteApi(builder.Configuration);
         builder.Services.AddReadApi(builder.Configuration);
+
+        // CR-0011 § 3c: in-memory rate-limit usage cache. Singleton so the
+        // Write endpoint (POST /api/fetcher/usage) and the Read endpoint
+        // (GET /api/fetcher/usage) see the same store. No persistence —
+        // re-publish-on-tick recovers the cache after replica restart per
+        // ADR-0008 Decision 2.
+        builder.Services.AddSingleton<IFetcherUsageCache, InMemoryFetcherUsageCache>();
 
         // CR-0008: register the built-in OpenAPI document generator
         // (Microsoft.AspNetCore.OpenApi, .NET 10). One document keyed "v1"

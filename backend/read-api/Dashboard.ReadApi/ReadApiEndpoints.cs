@@ -36,6 +36,7 @@ public static class ReadApiEndpoints
         HealthEndpoint.Map(builder);
         StreamEndpoint.Map(builder);
         TopologyConfigEndpoint.Map(builder);
+        FetcherUsageEndpoint.Map(builder);
         return builder;
     }
 }
