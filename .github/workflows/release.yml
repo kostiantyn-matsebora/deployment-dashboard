@@ -1,7 +1,7 @@
 # Release pipeline -- attach installer assets to a GitHub Release on `v*` tag push.
 #
 # Owner: devops-engineer.
-# Contract: GitHub issue #7 + ADR-0005 + docs/ci-cd-pipelines.md S 10.
+# Contract: GitHub issue #7 + ADR-0009 + docs/ci-cd-pipelines.md S 10.
 #
 # Sibling to api.yml / fetcher.yml / frontend.yml / gateway.yml -- on the same tag
 # push those four workflows build + push GHCR images; this workflow runs in parallel

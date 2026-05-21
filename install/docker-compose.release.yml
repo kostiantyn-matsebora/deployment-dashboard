@@ -2,7 +2,7 @@
 #
 # Contract surfaces:
 #   - GitHub issue #7    -- one-liner install (no git clone) for evaluators / internal adopters.
-#   - ADR-0005           -- release-install migration actuation via tag-pinned `migration.sql` release asset.
+#   - ADR-0009           -- the API container self-applies EF Core migrations on startup; no separate runner / asset.
 #   - docs/ci-cd-pipelines.md S 10 -- Release pipeline (assets + canonical URL pattern).
 #
 # This file is the release counterpart to `dev_env/docker-compose.local.yml`:

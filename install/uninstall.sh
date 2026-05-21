@@ -56,7 +56,9 @@ fi
 
 COMPOSE_ARGS=(-f "$COMPOSE_FILE")
 if [ -f "$ENV_FILE" ]; then COMPOSE_ARGS+=(--env-file "$ENV_FILE"); fi
-COMPOSE_ARGS+=(--profile migrate --profile fetcher)
+# Migrations apply in-process inside the api container (ADR-0009); only the
+# fetcher profile remains gated, so we include it to tear down active fetchers.
+COMPOSE_ARGS+=(--profile fetcher)
 
 DOWN_ARGS=(down)
 if [ "$REMOVE_DATA" = true ]; then DOWN_ARGS+=(-v); fi

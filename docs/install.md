@@ -17,9 +17,8 @@ required. The installer:
 3. pulls the four pinned private images from GHCR
    (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}`),
 4. brings up the stack with `docker compose`,
-5. applies idempotent schema migrations via a one-shot `postgres:16-alpine` container,
-6. polls `/health`,
-7. and prints the URL panel + the generated `API_TOKEN`.
+5. polls `/health` — the `api` container self-applies pending EF Core migrations on startup before reporting healthy (per [ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)),
+6. and prints the URL panel + the generated `API_TOKEN`.
 
 ## Prerequisites
 
@@ -28,7 +27,7 @@ fetches and image pulls flow through the GitHub CLI's authenticated session.
 
 | Prereq | Why |
 |---|---|
-| Docker (Engine + Compose v2) | Runs the four release images + the one-shot migrations container. |
+| Docker (Engine + Compose v2) | Runs the four release images (gateway / api / dashboard / fetcher) plus `postgres:16-alpine`. |
 | **`gh` CLI on `PATH`** | Replaces anonymous `irm` / `curl` — the release asset URL pattern 404s without auth headers. |
 | **`gh auth status --hostname github.com` returns 0** | Installer's first action is to verify the auth session; missing / expired auth fails fast with a friendly error. |
 | **`gh` token carries `read:packages`, `write:packages`, or `admin:packages`** | Required by the `gh auth token` → `docker login ghcr.io` pipeline. `read:packages` minimum (or `write:packages` / `admin:packages` — scopes are hierarchical). Default `gh auth login` does not include these — see note below. |
@@ -185,10 +184,22 @@ bash install.sh --version v1.2.3
 ```
 
 Re-running the installer with a newer tag against the same `-InstallDir` /
-`--install-dir` upgrades in place. The `migration.sql` script is idempotent
-(per EF Core's `--idempotent` contract — see
-[`docs/ci-cd-pipelines.md`](ci-cd-pipelines.html) § 7); re-applying against an already-migrated DB is a
-no-op.
+`--install-dir` upgrades in place. The new `api` image self-applies any
+pending EF Core migrations on startup (per
+[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)); EF's
+`IMigrator.MigrateAsync()` contract is idempotent, so re-applying against
+an already-migrated DB is a no-op.
+
+## Migrations
+
+The `api` container applies pending EF Core migrations on startup,
+between `app.Build()` and `app.RunAsync()` — see
+[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html) for the
+decision and alternatives. No installer step actuates migrations; the
+release no longer ships a `migration.sql` asset and the release compose
+file no longer carries a one-shot runner service. EF's idempotent
+migration contract makes re-apply across upgrades a no-op for
+already-applied migrations.
 
 ## Custom port
 
@@ -218,8 +229,8 @@ pwsh -NoProfile -File uninstall.ps1 -RemoveData -RemoveSecrets    # also delete 
 
 For environments that disallow running the installer script (sandboxed CI,
 locked-down hosts), one minimal path exists. It **regresses** on issue #5's
-`GHA_TOKEN` precondition, on the `API_TOKEN` generation, AND requires the user
-to perform the GHCR docker login manually; the user takes on the
+`GHA_TOKEN` precondition and on the `API_TOKEN` generation, AND requires the
+user to perform the GHCR docker login manually; the user takes on the
 secret-handling + auth discipline.
 
 The `gh` CLI prereq (installed + authenticated + any of `read:packages` / `write:packages` / `admin:packages` per
@@ -230,19 +241,18 @@ pull the private GHCR images.
 ### Option B — raw compose + manual `docker compose`
 
 ```bash
-# Fetch the release assets via gh (anonymous curl 404s against the private repo).
+# Fetch the release compose file via gh (anonymous curl 404s against the private repo).
 gh release download v1.2.3 \
   --repo kostiantyn-matsebora/deployment-dashboard \
   --pattern 'docker-compose.release.yml' \
-  --pattern 'migration.sql' \
   --clobber
 
 # Authenticate docker to GHCR before compose attempts to pull images
 # (the images are private; anonymous pulls 404).
 gh auth token | docker login ghcr.io --username "$(gh api user --jq .login)" --password-stdin
 
-# REQUIRED: set both secrets before invoking, or the install boots with a
-# placeholder token (silent 401s) and an unmigrated DB (broken API).
+# REQUIRED: set secrets before invoking, or the install boots with a
+# placeholder token (silent 401s on the API).
 export API_TOKEN="$(openssl rand -hex 32)"
 export POSTGRES_PASSWORD="$(openssl rand -hex 16)"
 export GHA_TOKEN='<pat-or-omit-if-no-fetcher>'
@@ -250,15 +260,20 @@ export DASHBOARD_VERSION='v1.2.3'
 export DASHBOARD_PORT='8080'
 export ConnectionStrings__DefaultConnection="Host=db;Database=dashboard;Username=dashboard;Password=$POSTGRES_PASSWORD"
 
-docker compose -f docker-compose.release.yml --profile migrate up -d --wait
+docker compose -f docker-compose.release.yml up -d --wait
 ```
+
+The `api` container applies EF Core migrations on startup (per
+[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)); `--wait`
+blocks until the api healthcheck passes, by which point migrations are
+already applied. No `migration.sql` asset, no `--profile migrate` step.
 
 If your shell rejects `__` in identifier names (BusyBox `sh`, certain minimal
 images), prefix the env-var to the command instead of `export`-ing it:
 
 ```bash
 env ConnectionStrings__DefaultConnection="Host=db;Database=dashboard;Username=dashboard;Password=$POSTGRES_PASSWORD" \
-  docker compose -f docker-compose.release.yml --profile migrate up -d --wait
+  docker compose -f docker-compose.release.yml up -d --wait
 ```
 
 ### Option D — `docker compose -f <https-url>` *(no longer supported)*
@@ -286,11 +301,13 @@ Use Option B instead: `gh release download` the compose file locally, then
 3. **`API_TOKEN` not generated.** `API_TOKEN` is NOT generated.
    - You MUST set `$API_TOKEN` to a strong random value before running.
    - You MUST NOT reuse the dev literal `local-dev-token-not-for-production` — the API middleware accepts any value, but reusing the dev literal in a release install defeats the defence-in-depth split (per [`docs/architecture.md`](architecture.html) § 8).
-4. **Migration actuation bypassed.** Migration actuation is BYPASSED unless you remember `--profile migrate`.
-   - Without it, the `api` service starts against an unmigrated DB and fails.
-   - Re-add the profile or run `psql -f migration.sql` against the `db` container manually (per [ADR-0005](adr/ADR-0005-release-install-migration-actuation.html) Consequences).
 
-The primary install path (`install.ps1` / `install.sh`) handles all four —
+Migration actuation is **not** in this list: the `api` container
+self-applies migrations on startup (per
+[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)), so Option
+B requires no manual actuation step.
+
+The primary install path (`install.ps1` / `install.sh`) handles all three —
 prefer it where local policy permits.
 
 ---
@@ -306,10 +323,11 @@ pwsh -NoProfile -File dev_env/start.ps1
 ```
 
 The contributor stack is `dev_env/docker-compose.local.yml` — builds images
-locally, bind-mounts `backend/`, runs migrations via a one-shot SDK container
-calling `dotnet ef database update`. See `dev_env/README.md` for the full
-contributor instructions (including `-Scaled`, `-Fetcher`, and the
-NFR-05 validation harness).
+locally, bind-mounts `backend/`, and lets the `api` container self-apply
+EF Core migrations on startup (per
+[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)). See
+`dev_env/README.md` for the full contributor instructions (including
+`-Scaled`, `-Fetcher`, and the NFR-05 validation harness).
 
 The release-install path and the contributor flow share **no token value** —
 the dev-literal `local-dev-token-not-for-production` is hard-coded in
