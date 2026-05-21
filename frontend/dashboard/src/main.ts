@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import {
   CorrelationPrefsService,
+  FetcherUsageStore,
   FocusOnLastEventPrefsService,
   LayoutPrefsService,
   ThemeService,
@@ -37,6 +38,12 @@ bootstrapApplication(AppComponent, {
     // starts before the first user interaction. The FOIT-safe inline
     // <head> script in index.html paints the first frame; this service
     // takes over thereafter.
-    provideEnvironmentInitializer(() => inject(ThemeService))
+    provideEnvironmentInitializer(() => inject(ThemeService)),
+    // CR-0011 § 3d / D5 — start polling `GET /api/fetcher/usage` so the
+    // rate-limit cluster has data on first paint. The store is
+    // `providedIn: 'root'`; `start()` is idempotent. Polling continues for
+    // the lifetime of the SPA; the store stops itself on root-injector
+    // teardown (test seam).
+    provideEnvironmentInitializer(() => inject(FetcherUsageStore).start())
   ]
 }).catch(err => console.error(err));

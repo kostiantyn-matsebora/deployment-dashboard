@@ -286,3 +286,129 @@ export function adaptTopologyConfig(wire: WireTopologyConfig): TopologyConfig {
     perServiceOverrides: wire.perServiceOverrides ?? {}
   };
 }
+
+// ============================================================
+// Fetcher rate-limit usage (CR-0011 § 3b + § 3d / ADR-0008).
+//
+// Wire shape returned by `GET /api/fetcher/usage`. The SPA polls
+// this endpoint at the cadence configured by
+// `FETCHER_USAGE_POLL_INTERVAL_MS` (MVP hard-codes 60 s per
+// CR-0011 § 3d footnote — locked in Phase 3 design decision D5).
+//
+// Cluster reads:
+//   - `upstream_used = upstream_limit - upstream_remaining`
+//     per ADR-0008 Decision 4 — counts EVERY consumer of the PAT
+//     (operator-facing wording reflects "PAT used", not just
+//     "this fetcher used"). The shape is server-canonical; the
+//     SPA does NOT recompute it from `upstream_remaining` to
+//     avoid divergence.
+//   - `received_at` is server-stamped at POST landing and drives
+//     the stale gate per Phase 3 design decision D6
+//     (`now − received_at > 2 × poll_interval`).
+// ============================================================
+
+export interface FetcherUsageSnapshot {
+  /** e.g. "github-actions" — one fetcher adapter id per CR-0011 § 3b. */
+  adapter_id: string;
+  /** e.g. "acme/widget-a" — per-source identifier within the adapter. */
+  source_id: string;
+  /** Provider-reported window budget (e.g. 5000 for GitHub Actions). */
+  upstream_limit: number;
+  /** Provider-reported remaining count in the current window. */
+  upstream_remaining: number;
+  /** ISO-8601 UTC — when the upstream window next resets. */
+  upstream_reset_at: string;
+  /** Resolved self-imposed cap (absolute or % of upstream_limit). */
+  self_imposed_cap: number;
+  /** `upstream_limit - upstream_remaining` (ADR-0008 Decision 4). */
+  upstream_used: number;
+  /** ISO-8601 UTC — fetcher wall-clock at observation. */
+  observed_at: string;
+  /** ISO-8601 UTC — server wall-clock at POST landing; drives stale gate. */
+  received_at: string;
+}
+
+export interface FetcherUsageResponse {
+  /** Empty array — never 404 — on cold start (no fetcher has pushed yet). */
+  snapshots: readonly FetcherUsageSnapshot[];
+}
+
+// --- derivation helpers ----------------------------------------------------
+
+/**
+ * Severity band per CR-0011 § 3d:
+ *   - red   : ratio  > 0.85
+ *   - amber : ratio in [0.60, 0.85]
+ *   - green : ratio  < 0.60
+ *
+ * Returns the band for ONE snapshot. The cluster's worst-band aggregation
+ * uses {@link fetcherUsageWorstBand}.
+ */
+export type FetcherUsageBand = 'green' | 'amber' | 'red';
+
+export function fetcherUsageRatio(snap: FetcherUsageSnapshot): number {
+  if (snap.upstream_limit <= 0) return 0;
+  return snap.upstream_used / snap.upstream_limit;
+}
+
+export function fetcherUsageBand(snap: FetcherUsageSnapshot): FetcherUsageBand {
+  const r = fetcherUsageRatio(snap);
+  if (r > 0.85) return 'red';
+  if (r >= 0.60) return 'amber';
+  return 'green';
+}
+
+/**
+ * Returns the worst snapshot across the input set per the rule in
+ * `docs/ui/rate-limit-cluster.md § Per-source-id presentation`:
+ *   - "max ratio wins; the colour band reads from the same max"
+ * Returns `null` for an empty input (caller treats this as "cluster hidden").
+ *
+ * Stale filtering is the caller's responsibility — pass the fresh
+ * subset when the rollup must exclude stale rows (the cluster does).
+ */
+export function fetcherUsageWorstSnapshot(
+  snaps: readonly FetcherUsageSnapshot[]
+): FetcherUsageSnapshot | null {
+  if (snaps.length === 0) return null;
+  let worst = snaps[0];
+  let worstRatio = fetcherUsageRatio(worst);
+  for (let i = 1; i < snaps.length; i++) {
+    const r = fetcherUsageRatio(snaps[i]);
+    if (r > worstRatio) {
+      worst = snaps[i];
+      worstRatio = r;
+    }
+  }
+  return worst;
+}
+
+export function fetcherUsageWorstBand(
+  snaps: readonly FetcherUsageSnapshot[]
+): FetcherUsageBand | null {
+  const w = fetcherUsageWorstSnapshot(snaps);
+  return w ? fetcherUsageBand(w) : null;
+}
+
+/**
+ * Stale gate (Phase 3 design decision D6).
+ *
+ * `now - received_at > 2 × pollIntervalMs` → stale. MVP locks
+ * `pollIntervalMs = 60_000` per CR-0011 § 3d footnote; the helper
+ * is parameterised so the store can override in tests.
+ */
+export function isFetcherUsageStale(
+  snap: FetcherUsageSnapshot,
+  nowMs: number,
+  pollIntervalMs: number
+): boolean {
+  const receivedMs = Date.parse(snap.received_at);
+  if (Number.isNaN(receivedMs)) return true;
+  return nowMs - receivedMs > 2 * pollIntervalMs;
+}
+
+/**
+ * MVP poll interval (D5 / CR-0011 § 3d footnote). Public so tests +
+ * the store + the cluster component import a single constant.
+ */
+export const FETCHER_USAGE_POLL_INTERVAL_MS = 60_000;

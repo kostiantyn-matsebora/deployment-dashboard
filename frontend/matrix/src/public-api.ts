@@ -1,6 +1,7 @@
 export * from './lib/pipeline-matrix.component';
 export * from './lib/stage-box.component';
 export * from './lib/stats-bar.component';
+export * from './lib/rate-limit-cluster.component';
 export * from './lib/matrix-header.component';
 export * from './lib/view-switcher.component';
 export * from './lib/layout-switcher.component';
