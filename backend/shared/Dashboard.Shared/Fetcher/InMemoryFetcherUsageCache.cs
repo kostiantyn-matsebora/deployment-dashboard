@@ -32,16 +32,33 @@ public sealed class InMemoryFetcherUsageCache : IFetcherUsageCache
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // The Write handler performs the presence check on
+        // UpstreamResetAt / ObservedAt (DateTime?) BEFORE calling Upsert,
+        // so reaching this line with null is a programming error. Throw
+        // loud rather than persist a degenerate 0001-01-01 default.
+        if (request.UpstreamResetAt is null)
+        {
+            throw new ArgumentException(
+                $"{nameof(FetcherUsageSnapshotRequest)}.{nameof(FetcherUsageSnapshotRequest.UpstreamResetAt)} must be non-null before Upsert (presence check belongs to the handler).",
+                nameof(request));
+        }
+        if (request.ObservedAt is null)
+        {
+            throw new ArgumentException(
+                $"{nameof(FetcherUsageSnapshotRequest)}.{nameof(FetcherUsageSnapshotRequest.ObservedAt)} must be non-null before Upsert (presence check belongs to the handler).",
+                nameof(request));
+        }
+
         var snapshot = new FetcherUsageSnapshotResponse
         {
             AdapterId = request.AdapterId,
             SourceId = request.SourceId,
             UpstreamLimit = request.UpstreamLimit,
             UpstreamRemaining = request.UpstreamRemaining,
-            UpstreamResetAt = ToUtc(request.UpstreamResetAt),
+            UpstreamResetAt = ToUtc(request.UpstreamResetAt.Value),
             SelfImposedCap = request.SelfImposedCap,
             UpstreamUsed = request.UpstreamUsed,
-            ObservedAt = ToUtc(request.ObservedAt),
+            ObservedAt = ToUtc(request.ObservedAt.Value),
             ReceivedAt = _timeProvider.GetUtcNow().UtcDateTime,
         };
 

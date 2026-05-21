@@ -433,6 +433,28 @@ public static class WriteApiEndpoints
                 return headerProblem!;
             }
 
+            // Hand-rolled presence check for the two DateTime? timestamp
+            // fields. System.Text.Json silently defaults a missing
+            // non-nullable DateTime key to 0001-01-01T00:00:00, which would
+            // slip past [Required] — so the DTO types both fields as
+            // DateTime? and we reject null here before DataAnnotations runs
+            // (CR-0011 § 3b — observed_at + upstream_reset_at are required).
+            // Error map keyed by the camelCase JSON name per CR-0008 § 3a.
+            if (body.ObservedAt is null || body.UpstreamResetAt is null)
+            {
+                var missing = new Dictionary<string, string[]>(StringComparer.Ordinal);
+                if (body.ObservedAt is null)
+                {
+                    missing["observedAt"] = new[] { "The observed_at field is required." };
+                }
+                if (body.UpstreamResetAt is null)
+                {
+                    missing["upstreamResetAt"] = new[] { "The upstream_reset_at field is required." };
+                }
+                return Results.ValidationProblem(
+                    missing, statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+
             // Body-level validation (length-only + non-whitespace +
             // integer-range) — same DataAnnotations pipeline / 422 shape
             // every other Write endpoint uses (CR-0008 § 3a + § 3c).

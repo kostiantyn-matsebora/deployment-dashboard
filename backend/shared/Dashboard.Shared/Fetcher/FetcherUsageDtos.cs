@@ -34,8 +34,14 @@ namespace Dashboard.Shared.Fetcher;
 /// ValidationProblemDetails contract. Strings: required + non-whitespace
 /// + length-capped. Integers: bounded ranges that match the wire-field
 /// semantics. <see cref="UpstreamResetAt"/> + <see cref="ObservedAt"/>
-/// are required (DateTime is non-nullable; the JSON binder rejects
-/// missing keys for non-nullable properties before our validator runs).</para>
+/// are typed as <see cref="Nullable{DateTime}"/> so an omitted JSON key
+/// surfaces as <c>null</c> (System.Text.Json never reports a presence
+/// failure on a non-nullable <see cref="DateTime"/> — it silently
+/// substitutes <c>default(DateTime)</c> = <c>0001-01-01T00:00:00</c>,
+/// which would slip past <c>[Required]</c>). The Write handler performs a
+/// hand-rolled presence check before <c>DataAnnotationsValidator</c> runs
+/// (CR-0008 § 3a 422 contract); the resulting error map is keyed by the
+/// camelCase JSON name (<c>upstreamResetAt</c> / <c>observedAt</c>).</para>
 /// </summary>
 public sealed record FetcherUsageSnapshotRequest
 {
@@ -87,10 +93,16 @@ public sealed record FetcherUsageSnapshotRequest
     /// Provider-reported window reset time, UTC. GHA delivers this as
     /// epoch seconds via <c>X-RateLimit-Reset</c>; the adapter converts
     /// to UTC <see cref="DateTime"/> before sending.
+    ///
+    /// <para>Nullable so an omitted JSON key materialises as <c>null</c>
+    /// instead of silently defaulting to <c>0001-01-01T00:00:00</c>; the
+    /// Write handler performs a manual presence check before the
+    /// DataAnnotations pipeline runs and surfaces 422 on null. Downstream
+    /// code (cache, response shape) unwraps to non-nullable
+    /// <see cref="DateTime"/> after the presence check.</para>
     /// </summary>
-    [Required]
     [JsonPropertyName("upstream_reset_at")]
-    public DateTime UpstreamResetAt { get; init; }
+    public DateTime? UpstreamResetAt { get; init; }
 
     /// <summary>
     /// Fetcher-resolved absolute cap for the current window — the output
@@ -115,10 +127,16 @@ public sealed record FetcherUsageSnapshotRequest
     /// Fetcher wall-clock at the moment of observation, UTC. Sent so the
     /// backend / SPA can reason about staleness without depending on
     /// server-side clock-skew correction.
+    ///
+    /// <para>Nullable for the same reason as
+    /// <see cref="UpstreamResetAt"/> — System.Text.Json silently defaults
+    /// a missing non-nullable <see cref="DateTime"/> key to
+    /// <c>0001-01-01T00:00:00</c>, defeating <c>[Required]</c>. The Write
+    /// handler's manual presence check rejects null with 422 before
+    /// DataAnnotations validation runs.</para>
     /// </summary>
-    [Required]
     [JsonPropertyName("observed_at")]
-    public DateTime ObservedAt { get; init; }
+    public DateTime? ObservedAt { get; init; }
 }
 
 /// <summary>
