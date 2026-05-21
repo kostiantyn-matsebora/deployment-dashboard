@@ -7,6 +7,13 @@
 
   "viewport": { "width": 1440, "height": 900 },
 
+  "$comment_viewportMatrix": "CR-0011 / Decision D10 — Invariant 12 (rate-limit cluster) iterates this matrix to exercise the NFR-09 reflow contract at the three viewport breakpoints that bound the cluster's collapse threshold (1024 px = NFR-09 minimum; 1280 px = collapse boundary per docs/ui/rate-limit-cluster.md; 1440 px = current canonical). The matrix is scoped to I12; the rest of the harness keeps using the single 'viewport' above so the existing 8-combination grid (4 views × 2 layouts) does not balloon to 24 cells.",
+  "viewportMatrix": [
+    { "width": 1024, "height": 768 },
+    { "width": 1280, "height": 800 },
+    { "width": 1440, "height": 900 }
+  ],
+
   "settleTimeoutMs": 5000,
   "postSettlePaintFrames": 2,
 
@@ -49,7 +56,8 @@
     { "id": "I7-picker-exposes-seven-attribute-checkboxes", "label": "Display picker exposes seven FR-02 attribute checkboxes (subject to per-view cap)" },
     { "id": "I8-no-null-literal-when-ref-sha-selected",     "label": "No DOM text equals 'null' when ref/sha is selected and underlying value is null (SAD §7 null-render invariant)" },
     { "id": "I9-focus-distinct-from-compact",               "label": "Focus view exposes row-gutter chevron + pin per service (granularity per layout); Compact view exposes neither (regression-preventing oracle)" },
-    { "id": "I10-service-name-no-clip",                     "label": "Service name renders without horizontal clipping (no ellipsis truncation) across every View x Layout x Theme combination" }
+    { "id": "I10-service-name-no-clip",                     "label": "Service name renders without horizontal clipping (no ellipsis truncation) across every View x Layout x Theme combination" },
+    { "id": "I12-rate-limit-cluster",                       "label": "Rate-limit cluster (CR-0011): non-overlap with left cluster (I12.a), severity-band class matches worst-band rule (I12.b), highlight-hint reconciliation = stack vertically (I12.c), collapse at viewport < 1280 px (I12.d), stale affordance fires at now - received_at > 2 x poll_interval (I12.e), aggregated worst-band pill + counter + popover (I12.f)" }
   ],
 
   "$comment_I9": "Path A — Focus row-gutter affordances apply to every MVP layout (per compact-options.md 'Focus view specifics > Layout scope'). MVP layout axis = swim-lane + workflow-rows (Matrix is deferred to Phase 2.0 — see deferredPhase20 below). Granularity is per-service in every layout: swim-lane per service-lane, workflow-rows per service-header (NOT per path-row). Frontend's commitment: testids `row-chevron-{svcId}` / `row-pin-{svcId}` and the `[data-service-row]` marker are layout-agnostic. A prior regression rendered Focus indistinguishable from Compact because the affordances were too understated; the existing oracles missed it. I9 fires only on the two views where the assertion is meaningful (focus / compact) — the per-view 'expected' is declared below, not hard-coded in the spec.",
@@ -100,6 +108,32 @@
       "tolerancePx": 1,
       "$note": "The expansion is triggered by the harness via the Alpine root (toggleExpand) — no UI click required. We pick the first env in the env-header row and require its left/right to align with the corresponding stage-box in BOTH a collapsed row AND an expanded row. If the env-header is rendered once at --leaf-width but the expanded row's cell is at --leaf-width-expanded, the assertion fails."
     }
+  },
+
+  "$comment_rateLimitCluster": "CR-0011 — Invariant 12 (rate-limit cluster non-overlap + severity + reconciliation + collapse + stale). Selectors point at the data-testid hooks the mockup wires per docs/ui/rate-limit-cluster.md. The 24-px gutter mirrors the SA-locked NFR-09 footprint table; the 1280-px collapse boundary matches docs/ui/rate-limit-cluster.md § 'Collapse threshold — measured slack, not viewport'. The severity-band thresholds are CR-0011-level locks (green < 60%, amber 60-85%, red > 85%); the actual class tokens are theme-axis output (CR-0006).",
+  "rateLimitCluster": {
+    "selectors": {
+      "rightCluster":       "[data-testid='rate-limit-cluster']",
+      "leftCluster":        "[data-testid='stats-bar-left']",
+      "pill":               "[data-testid='rate-limit-pill']",
+      "pillCollapsed":      "[data-testid='rate-limit-pill-collapsed']",
+      "counter":            "[data-testid='rate-limit-counter']",
+      "popover":            "[data-testid='rate-limit-popover']",
+      "popoverRow":         "[data-testid^='rate-limit-row-']",
+      "staleAffordance":    "[data-testid='rate-limit-stale']",
+      "highlightHint":      "[data-testid='highlight-hint']"
+    },
+    "gutterPx": 24,
+    "collapseViewportPx": 1280,
+    "severityBands": {
+      "$comment": "Band thresholds as decimal fractions of upstream_used / upstream_limit. Tokens come from docs/ui/rate-limit-cluster.md § Severity-band colour tokens — pill carries one of the three light-mode utility classes plus its dark-mode overlay.",
+      "green": { "max": 0.60, "lightToken": "bg-green-100",  "rationale": "< 60% — healthy" },
+      "amber": { "min": 0.60, "max": 0.85, "lightToken": "bg-amber-100", "rationale": "60–85% — warning" },
+      "red":   { "min": 0.85, "lightToken": "bg-red-100",   "rationale": "> 85% — saturation" },
+      "stale": { "lightToken": "bg-gray-100", "rationale": "now - received_at > 2 × poll_interval" }
+    },
+    "staleThresholdMs": 120000,
+    "$note_staleThreshold": "2 × poll_interval; MVP hard-codes poll_interval=60 s per docs/ui/rate-limit-cluster.md SA-locked constraints table row 3 + CR-0011 § 3d footnote."
   },
 
   "$comment_FR02_attrs": "FR-02 attribute keys + per-view caps used by I7. Caps from SAD §7 'Layout views (FR-12)': Detailed 7, Compact 5, Glance 1, Focus 5. Defaults are NOT asserted here (covered by the e2e attribute-picker-cap-enforcement.spec.ts against the SPA); only the cap and the catalogue completeness are.",

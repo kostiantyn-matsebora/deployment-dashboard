@@ -21,6 +21,12 @@ namespace Dashboard.Fetcher.Host;
 ///   <item><c>FETCHER_ADAPTERS</c> — MVP fixed to <c>github-actions</c>.</item>
 ///   <item><c>PROGRESS_REPORTER</c> — optional override; default computed
 ///   per adapter as <c>dashboard-fetcher/{AdapterId}</c>.</item>
+///   <item><c>FETCHER_RATE_LIMIT_ABSOLUTE</c> — optional self-imposed
+///   absolute cap (CR-0011 § 3a); must be &gt; 0 when set. Takes
+///   precedence over the percentage when both are set.</item>
+///   <item><c>FETCHER_RATE_LIMIT_PERCENTAGE</c> — optional self-imposed
+///   percentage of the upstream-reported budget per window (CR-0011
+///   § 3a); 1..100, default 30.</item>
 ///   <item><c>GHA_TOKEN</c> — required when the GHA adapter is active.</item>
 ///   <item><c>GHA_REPOSITORIES</c> — JSON array
 ///   <c>[{"owner":"o","repo":"r"}, …]</c>; mapped to <c>owner/repo</c>
@@ -65,6 +71,14 @@ public sealed class Program
         var pollInterval = ReadInt("FETCHER_POLL_INTERVAL_SECONDS", defaultValue: 30, min: 5, max: int.MaxValue);
         var initialLimit = ReadInt("INITIAL_FETCH_LIMIT", defaultValue: 50, min: 1, max: 500);
 
+        // CR-0011 § 3a — operator-tunable self-imposed cap. Both env vars
+        // are OPTIONAL: leave them unset and AddCiCdFetcher's resolver
+        // falls back to the default 30% (RateLimitResolver.DefaultPercentage).
+        // Range / sign validation lives in AddCiCdFetcher so a single
+        // contract anchors both the env-bound path AND direct DI callers.
+        var rateLimitAbsolute = ReadOptionalInt("FETCHER_RATE_LIMIT_ABSOLUTE");
+        var rateLimitPercentage = ReadOptionalInt("FETCHER_RATE_LIMIT_PERCENTAGE");
+
         var adaptersRaw = Read("FETCHER_ADAPTERS");
         var adapters = string.IsNullOrWhiteSpace(adaptersRaw)
             ? new[] { "github-actions" }
@@ -94,6 +108,8 @@ public sealed class Program
             AdapterIds = adapters,
             ProgressReporterOverride = Read("PROGRESS_REPORTER"),
             SourceIdsByAdapter = sourceIdsByAdapter,
+            RateLimitAbsolute = rateLimitAbsolute,
+            RateLimitPercentage = rateLimitPercentage,
         };
     }
 
@@ -151,6 +167,24 @@ public sealed class Program
         }
         if (value < min) value = min;
         if (value > max) value = max;
+        return value;
+    }
+
+    /// <summary>
+    /// Read an OPTIONAL integer env var: returns <c>null</c> when the
+    /// variable is unset / blank; throws <see cref="InvalidOperationException"/>
+    /// when the variable IS set but cannot parse. Range / sign checks live
+    /// in <c>AddCiCdFetcher</c> so all callers (env path + direct-DI path)
+    /// share a single validation contract.
+    /// </summary>
+    private static int? ReadOptionalInt(string envVar)
+    {
+        var raw = Read(envVar);
+        if (raw is null) return null;
+        if (!int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value))
+        {
+            throw new InvalidOperationException($"{envVar} must be an integer; got '{raw}'");
+        }
         return value;
     }
 }

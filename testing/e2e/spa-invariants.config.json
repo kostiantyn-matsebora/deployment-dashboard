@@ -41,8 +41,31 @@
     { "id": "I3-connector-reaches-target",          "label": "Connector reaches its target box" },
     { "id": "I4-connector-emerges-from-source",     "label": "Connector emerges from source box edge" },
     { "id": "I5-connector-does-not-cross-envtag",   "label": "Connector does not cross any env-tag rect" },
-    { "id": "I6-box-content-not-clipped",           "label": "Box content stays within parent box" }
+    { "id": "I6-box-content-not-clipped",           "label": "Box content stays within parent box" },
+    { "id": "I12-rate-limit-cluster-no-overlap",    "label": "Rate-limit cluster (CR-0011) right-aligned with >= 24 px gutter from the stats-bar-left cluster; reflow holds across the [1024, 1280, 1440] viewport matrix; collapse at viewport < 1280 px (assertion lives in tests/rate-limit-cluster-reflow.spec.ts — declared here so the catalogue stays honest)" }
   ],
+
+  "$comment_rateLimitCluster": "CR-0011 — selectors + thresholds consumed by the three rate-limit-cluster e2e specs. Mirrors testing/mockup-visual/harness.config.json#rateLimitCluster.",
+  "rateLimitCluster": {
+    "selectors": {
+      "rightCluster":    "[data-testid='rate-limit-cluster']",
+      "leftCluster":     "[data-testid='stats-bar-left']",
+      "pill":            "[data-testid='rate-limit-pill']",
+      "pillCollapsed":   "[data-testid='rate-limit-pill-collapsed']",
+      "counter":         "[data-testid='rate-limit-counter']",
+      "popover":         "[data-testid='rate-limit-popover']",
+      "popoverRow":      "[data-testid^='rate-limit-row-']",
+      "staleAffordance": "[data-testid='rate-limit-stale']"
+    },
+    "gutterPx": 24,
+    "collapseViewportPx": 1280,
+    "viewportMatrix": [
+      { "width": 1024, "height": 768 },
+      { "width": 1280, "height": 800 },
+      { "width": 1440, "height": 900 }
+    ],
+    "staleThresholdMs": 120000
+  },
 
   "viewExceptions": {
     "$comment": "Per-view exceptions to specific invariants, mirroring testing/mockup-visual/harness.config.json#viewExceptions. The Glance exception is the NFR-09 sanctioned overlap of the paired env-tag inside its paired pill.",

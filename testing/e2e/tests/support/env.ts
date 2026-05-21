@@ -87,3 +87,43 @@ export function buildDeploymentPayload(input: {
   }
   return body;
 }
+
+/**
+ * Build a POST /api/fetcher/usage body (CR-0011 § 3b). Centralises the
+ * wire-contract shape so e2e specs don't hand-roll the eight fields per
+ * call.
+ *
+ * Defaults model a healthy single-source GHA push:
+ *   upstream_limit = 5000, upstream_remaining = 4500 (10% used),
+ *   self_imposed_cap = 1500 (30% of upstream_limit per CR-0011 default),
+ *   observed_at = now, upstream_reset_at = now + 30 min.
+ *
+ * Callers override per scenario — e.g. the stale-affordance spec pushes
+ * `observed_at = now - 5 min`; the cluster-renders spec pushes three
+ * snapshots spanning all three severity bands per the mockup fixture in
+ * docs/ui/rate-limit-cluster.md § Fixture additions.
+ */
+export function buildFetcherUsagePayload(input?: {
+  adapter_id?: string;
+  source_id?: string;
+  upstream_limit?: number;
+  upstream_remaining?: number;
+  upstream_reset_at?: string;
+  self_imposed_cap?: number;
+  upstream_used?: number;
+  observed_at?: string;
+}): Record<string, unknown> {
+  const now = new Date();
+  const upstreamLimit = input?.upstream_limit ?? 5000;
+  const upstreamRemaining = input?.upstream_remaining ?? 4500;
+  return {
+    adapter_id:         input?.adapter_id         ?? 'github-actions',
+    source_id:          input?.source_id          ?? `qa-bot/e2e-${runSuffix()}`,
+    upstream_limit:     upstreamLimit,
+    upstream_remaining: upstreamRemaining,
+    upstream_reset_at:  input?.upstream_reset_at  ?? new Date(now.getTime() + 30 * 60_000).toISOString(),
+    self_imposed_cap:   input?.self_imposed_cap   ?? 1500,
+    upstream_used:      input?.upstream_used      ?? (upstreamLimit - upstreamRemaining),
+    observed_at:        input?.observed_at        ?? now.toISOString(),
+  };
+}

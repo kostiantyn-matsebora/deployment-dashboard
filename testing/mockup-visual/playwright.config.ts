@@ -23,6 +23,7 @@ export default defineConfig({
   testMatch: [
     /mockup-invariants\.spec\.ts$/,
     /env-tag-column-alignment\.spec\.ts$/, // issue #23 per-position alignment
+    /mockup-rate-limit-cluster\.spec\.ts$/, // CR-0011 Invariant 12
   ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
