@@ -24,11 +24,9 @@
 # The gateway routes path + method onto the same `api` upstream so a
 # future re-split is a gateway-config-only change.
 #
-# Migrations strategy (decision): a one-shot `migrations` service runs
-# `dotnet ef database update` against the freshly-healthy DB. The API
-# waits via `depends_on: migrations: service_completed_successfully`. This
-# keeps the runtime image SDK-free and migration ordering observable
-# from `docker compose logs migrations`.
+# Migrations strategy: the API host applies pending EF Core migrations on
+# start (between app.Build() and app.RunAsync()) -- see ADR-0009. The
+# local-dev stack reuses that same path; no separate runner service.
 
 name: deployment-dashboard
 
@@ -51,61 +49,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
-
-  # One-shot migration runner. Uses the .NET 10 SDK image, installs the
-  # matching dotnet-ef tool, and runs `database update` against `db`.
-  # Both APIs depend on this finishing successfully before they start.
-  migrations:
-    image: mcr.microsoft.com/dotnet/sdk:10.0
-    container_name: dashboard-migrations
-    working_dir: /
-    environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      DOTNET_NOLOGO: "1"
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-    volumes:
-      - ../backend:/backend:ro
-      - dotnet-tools:/root/.dotnet/tools
-      - nuget-cache:/root/.nuget/packages
-    depends_on:
-      db:
-        condition: service_healthy
-    # `dotnet tool install` is idempotent enough in practice — the
-    # `|| true` lets a re-run skip past "already installed".
-    #
-    # `backend/` is bind-mounted read-only into /backend; we sync it to
-    # /src first and scrub `bin/`/`obj/`. The host's obj/ contains
-    # Windows-only NuGet fallback paths (e.g. `C:\Program Files (x86)\
-    # Microsoft Visual Studio\Shared\NuGetPackages`) baked into
-    # `project.assets.json` from a developer's Visual Studio restore.
-    # Letting those leak into the Linux container fails the in-container
-    # restore with `Unable to find fallback package folder '...'`. The
-    # main API image avoids this via `.dockerignore`; here, where we
-    # bind-mount, we have to scrub explicitly.
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        set -e
-        export PATH="$$PATH:/root/.dotnet/tools"
-        if ! command -v dotnet-ef >/dev/null 2>&1; then
-          dotnet tool install --global dotnet-ef --version 10.0.0
-        fi
-        rm -rf /src
-        mkdir -p /src
-        cp -R /backend/. /src/
-        find /src -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
-        cd /src
-        dotnet restore shared/Dashboard.Shared/Dashboard.Shared.csproj
-        # Use Dashboard.Shared as both project and startup project. The
-        # shared library ships an IDesignTimeDbContextFactory and has the
-        # `Microsoft.EntityFrameworkCore.Design` package referenced
-        # directly — so `dotnet ef` can build the model and connect to
-        # Postgres without dragging in either Web API's Program.cs.
-        dotnet ef database update \
-          --project shared/Dashboard.Shared/Dashboard.Shared.csproj \
-          --startup-project shared/Dashboard.Shared/Dashboard.Shared.csproj
-    restart: "no"
 
   # Single backend container hosting both Write and Read API surfaces
   # (SAD §7 "Backend module architecture", §10 Decision 11). API-key
@@ -130,8 +73,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
 
   dashboard:
     build:
@@ -231,5 +172,3 @@ services:
 
 volumes:
   pg-data:
-  dotnet-tools:
-  nuget-cache:

@@ -17,16 +17,15 @@
 #   4.  Secret handling (API_TOKEN + POSTGRES_PASSWORD; refuses the dev-literals).
 #       When --demo is set, also bakes in the public-repo demo defaults
 #       (GHA_REPOSITORIES + FETCHER_POLL_INTERVAL_SECONDS, and GHA_TOKEN iff set).
-#   5+6. Download docker-compose.release.yml + migration.sql via `gh release
-#       download` (repo is private; anonymous HTTPS fetch 404s).
+#   5+6. Download docker-compose.release.yml via `gh release download` (repo is
+#       private; anonymous HTTPS fetch 404s).
 #   7.  docker login ghcr.io using `gh auth token` (GHCR images are private).
 #   8.  docker compose pull.
-#   9.  docker compose up -d --wait (with --profile migrate and/or --profile fetcher).
+#   9.  docker compose up -d --wait (with --profile fetcher when requested).
 #   10. Health-poll http://localhost:$PORT/health.
 #   11. URL panel.
 #
-# Per ADR-0005: migrations apply via a one-shot postgres:16-alpine container
-# running `psql -f /migration.sql`. The script is idempotent.
+# Per ADR-0009: the API self-migrates on start; the installer does not actuate migrations.
 #
 # Prerequisite -- gh CLI:
 #   The repo and GHCR component images are private. Install the GitHub CLI
@@ -44,7 +43,6 @@ set -euo pipefail
 VERSION='latest'
 FETCHER=false
 DEMO=false
-SKIP_MIGRATIONS=false
 PORT=8080
 HEALTH_TIMEOUT_SECONDS=60
 INSTALL_DIR="$PWD/dashboard-release"
@@ -71,7 +69,6 @@ Options:
                                        default + 60s poll. If \$GHA_TOKEN is
                                        unset, fetcher runs anonymous (60 req/h);
                                        if set, threaded through (5000 req/h).
-      --skip-migrations                Bring stack up without applying migrations.
   -p, --port <int>                     Host port for the gateway (default: 8080).
       --health-timeout-seconds <int>   /health poll timeout (default: 60).
       --install-dir <path>             Install directory (default: ./dashboard-release).
@@ -92,7 +89,6 @@ while [ $# -gt 0 ]; do
         -v|--version) VERSION="$2"; shift 2 ;;
         -f|--fetcher) FETCHER=true; shift ;;
         --demo) DEMO=true; shift ;;
-        --skip-migrations) SKIP_MIGRATIONS=true; shift ;;
         -p|--port) PORT="$2"; shift 2 ;;
         --health-timeout-seconds) HEALTH_TIMEOUT_SECONDS="$2"; shift 2 ;;
         --install-dir) INSTALL_DIR="$2"; shift 2 ;;
@@ -271,11 +267,6 @@ download_asset() {
 COMPOSE_FILE="$INSTALL_DIR/docker-compose.release.yml"
 download_asset 'docker-compose.release.yml' "$COMPOSE_FILE"
 
-if [ "$SKIP_MIGRATIONS" = false ]; then
-    MIGRATION_FILE="$INSTALL_DIR/migration.sql"
-    download_asset 'migration.sql' "$MIGRATION_FILE"
-fi
-
 # ---- 7. GHCR docker login ----
 # The four component images live in private GHCR packages. Mint an ephemeral
 # docker-login session using the same gh token we just validated.
@@ -300,7 +291,6 @@ docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 
 # ---- 9. Bring up ----
 COMPOSE_ARGS=(-f "$COMPOSE_FILE" --env-file "$ENV_FILE")
-if [ "$SKIP_MIGRATIONS" = false ]; then COMPOSE_ARGS+=(--profile migrate); fi
 if [ "$FETCHER" = true ]; then COMPOSE_ARGS+=(--profile fetcher); fi
 
 echo "${CYAN}==> docker compose ${COMPOSE_ARGS[*]} up -d --wait${NC}"
@@ -339,9 +329,6 @@ if [ "$DEMO" = true ]; then
     else
         echo "${CYAN}  Demo mode:           PostHog/posthog, 60s poll, authed GitHub API (5000 req/h)${NC}"
     fi
-fi
-if [ "$SKIP_MIGRATIONS" = true ]; then
-    echo "${YELLOW}  Migrations skipped - API likely failing. Re-run without --skip-migrations to apply.${NC}"
 fi
 echo ""
 echo "  curl -X POST http://localhost:$PORT/api/deployments -H 'Content-Type: application/json' -H 'X-Api-Key: $API_TOKEN' -d '{\"service\":\"adminportal\",\"environment\":\"dev\",\"version\":\"v2.3.1\",\"status\":\"success\",\"run_url\":\"https://example.test/run/1\",\"run_number\":1,\"actor\":\"local\"}'"

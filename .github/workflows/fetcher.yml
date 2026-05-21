@@ -56,6 +56,5 @@ jobs:
       run-dotnet-tests: true
       # Symmetric inverse of api.yml: only the fetcher suite runs here.
       test-filter: 'FullyQualifiedName~Dashboard.Fetcher.Tests'
-      emit-migration-artefact: false
       push: ${{ github.event_name != 'pull_request' }}
     secrets: inherit

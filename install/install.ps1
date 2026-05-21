@@ -20,21 +20,17 @@
           persists them to `<InstallDir>/dashboard.env`. Refuses the dev-literal.
           When `-Demo` is set, also bakes in the public-repo demo defaults
           (GHA_REPOSITORIES + FETCHER_POLL_INTERVAL_SECONDS, and GHA_TOKEN iff set).
-      5+6. Downloads `docker-compose.release.yml` and (unless `-SkipMigrations`)
-          `migration.sql` via `gh release download` -- the repo + GHCR images are
-          private, so anonymous HTTPS asset fetch 404s.
+      5+6. Downloads `docker-compose.release.yml` via `gh release download` -- the
+          repo + GHCR images are private, so anonymous HTTPS asset fetch 404s.
       7.  `docker login ghcr.io` using `gh auth token` -- required because the
           component images are private GHCR packages and anonymous pulls 401.
       8.  `docker compose pull` -- pulls the four GHCR-hosted component images.
-      9.  `docker compose up -d --wait` with the `migrate` profile (and `fetcher`
-          when requested). `--wait` makes the one-shot `migrations` service's
-          `service_completed_successfully` reflect in the compose exit code.
+      9.  `docker compose up -d --wait` (with the `fetcher` profile when requested).
+          `--wait` blocks until each service's healthcheck reports healthy.
       10. Polls the gateway-fronted `/health` for up to `-HealthTimeoutSeconds`.
       11. Prints the URL panel + the generated `API_TOKEN` + a sample `curl`.
 
-    Per ADR-0005: migrations apply via a one-shot `postgres:16-alpine` container
-    running `psql -f /migration.sql`. The script is idempotent (re-applying against
-    an already-migrated DB is a no-op per the EF Core `--idempotent` contract).
+    Per ADR-0009: the API self-migrates on start; the installer does not actuate migrations.
 
     Prerequisite -- gh CLI:
       The repo and GHCR component images are private. Install the GitHub CLI from
@@ -62,10 +58,6 @@
     line is written and the fetcher container falls back to the compose-level
     placeholder, which the fetcher detects and switches to anonymous-mode
     GitHub API calls (60 req/h).
-.PARAMETER SkipMigrations
-    Bring the stack up without applying schema migrations (no `--profile migrate`).
-    Yellow notice in the URL panel; the API will fail to start cleanly against an
-    unmigrated DB. Default-off; opt-out polarity per ADR-0005 Decision 3.
 .PARAMETER Port
     Host port to publish the gateway on. Default 8080. Becomes `DASHBOARD_PORT` in
     the env-file; compose substitutes it into the `gateway` service's `ports:`.
@@ -93,7 +85,6 @@ param(
     [string]$Version = 'latest',
     [switch]$Fetcher,
     [switch]$Demo,
-    [switch]$SkipMigrations,
     [int]$Port = 8080,
     [int]$HealthTimeoutSeconds = 60,
     [string]$InstallDir = (Join-Path $PWD 'dashboard-release')
@@ -281,11 +272,6 @@ function Invoke-AssetDownload {
 $composeFile = Join-Path $InstallDir 'docker-compose.release.yml'
 Invoke-AssetDownload -AssetName 'docker-compose.release.yml' -DestPath $composeFile
 
-if (-not $SkipMigrations) {
-    $migrationFile = Join-Path $InstallDir 'migration.sql'
-    Invoke-AssetDownload -AssetName 'migration.sql' -DestPath $migrationFile
-}
-
 # ---- 7. GHCR docker login ----
 # The four component images live in private GHCR packages. We mint an ephemeral
 # docker-login session using the same gh token we just validated. `--password-stdin`
@@ -313,7 +299,6 @@ if ($LASTEXITCODE -ne 0) { throw "docker compose pull failed with exit code $LAS
 
 # ---- 9. Bring up ----
 $composeArgs = @() + $composeBase
-if (-not $SkipMigrations) { $composeArgs += @('--profile', 'migrate') }
 if ($Fetcher) { $composeArgs += @('--profile', 'fetcher') }
 
 Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait" -ForegroundColor Cyan
@@ -351,9 +336,6 @@ if ($Demo) {
     } else {
         Write-Host "  Demo mode:           PostHog/posthog, 60s poll, authed GitHub API (5000 req/h)" -ForegroundColor Cyan
     }
-}
-if ($SkipMigrations) {
-    Write-Host "  Migrations skipped - API likely failing. Re-run without -SkipMigrations to apply." -ForegroundColor Yellow
 }
 Write-Host ""
 Write-Host "  curl -X POST http://localhost:$Port/api/deployments -H 'Content-Type: application/json' -H 'X-Api-Key: $apiToken' -d '{`"service`":`"adminportal`",`"environment`":`"dev`",`"version`":`"v2.3.1`",`"status`":`"success`",`"run_url`":`"https://example.test/run/1`",`"run_number`":1,`"actor`":`"local`"}'"
