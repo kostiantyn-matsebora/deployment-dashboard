@@ -89,6 +89,8 @@ nav_order: 4
       bool HasMore);                   // host re-invokes FetchPageAsync immediately when true (no scheduler delay), respecting rate-limit back-off
   ```
 
+  **2026-05-21 amendment (CR-0011).** `FetchPage` grows a nullable `RateLimit: RateLimitObservation?` field carrying the upstream-observed `(limit, remaining, reset_at)` triple from the same HTTP response that produced `Events`. The host reads it to drive the leaky-bucket cap gate and the per-tick push to `POST /api/fetcher/usage`. Consumers treat `null` as "this adapter does not observe an upstream rate-limit window" — the host then skips both the gate and the usage push for that tick. Per [ADR-0008](./ADR-0008-leaky-bucket-cap-and-republish-on-tick.md) Decision 1 + [CR-0011](../cr/CR-0011-fetcher-rate-limit-governance.md) § Open trade-off (i) recommendation (Option A — extend `FetchPage`, chosen over a parallel `IRateLimitObserver` capability interface so "what happened this tick" lives in one record).
+
   **Host responsibilities** (owned by `Dashboard.Fetcher.Host`, not the adapter):
   - Scheduler (default 30 s interval; configurable via env var).
   - Retry with exponential back-off + jitter on transient failures (HTTP 5xx, network timeouts). Realised in code via `Microsoft.Extensions.Http.Resilience` (`AddStandardResilienceHandler`), which bundles retry-with-jitter, per-attempt timeout, and circuit-breaker on top of the Polly v8 engine. Treat "Polly" and `Microsoft.Extensions.Http.Resilience` as the same family for the purpose of this decision — the latter is the modern .NET 10 packaging of the former with sensible defaults.

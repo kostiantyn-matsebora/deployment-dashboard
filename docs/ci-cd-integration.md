@@ -587,6 +587,37 @@ files per project bindings). All required:
 | `POLL_INTERVAL_SECONDS` | Default `30`. |
 | `INITIAL_FETCH_LIMIT` | First-fetch cap when no cursor exists yet. Default `50`, ceiling `500`. |
 
+### Self-imposed rate-limit cap (CR-0011)
+
+*Added by [CR-0011](cr/CR-0011-fetcher-rate-limit-governance.md); mechanics anchored in [ADR-0008](adr/ADR-0008-leaky-bucket-cap-and-republish-on-tick.md) Decision 1.*
+
+The fetcher self-throttles against the upstream rate-limit window so a single
+dashboard install does not consume the entire shared PAT budget (starving local
+dev, IDE integrations, or any other tooling on the same token). Two env vars
+govern the cap:
+
+| Env var | Type | Meaning | Default |
+|---|---|---|---|
+| `FETCHER_RATE_LIMIT_ABSOLUTE` | integer | Absolute requests-per-upstream-window cap. | unset |
+| `FETCHER_RATE_LIMIT_PERCENTAGE` | integer 1..100 | Percent of upstream `X-RateLimit-Limit` the fetcher may consume per window. | `30` |
+
+**Precedence.** When both are set, `FETCHER_RATE_LIMIT_ABSOLUTE` wins (explicit
+absolute number overrides percentage). The fetcher emits one INFO startup log
+line stating the active mode and the resolved cap.
+
+**Behaviour on cap-reached.** When observed `(upstream_limit − upstream_remaining)
+≥ self_imposed_cap`, the fetcher stops issuing CI/CD API requests for the
+current upstream window, logs a single INFO line per window (not per request),
+and resumes at the upstream `X-RateLimit-Reset` time **without cursor advance**
+— identical semantics to today's `X-RateLimit-Remaining == 0` back-off path
+(ADR-0004 Decision 4 host responsibilities).
+
+**Operator visibility.** Current usage + cap per `(adapter, source-id)` is
+exposed at `GET /api/fetcher/usage` (no auth, same as every Read endpoint per
+NFR-04) and surfaced on the SPA stats strip as a right-aligned cluster with
+green/amber/red severity bands. See CR-0011 § 3a + ADR-0008 Decision 1 for
+the full mechanics.
+
 ### Anonymous-mode transport (zero-PAT installs)
 
 The fetcher's GitHub-API adapter sends the `Authorization: Bearer <token>`
