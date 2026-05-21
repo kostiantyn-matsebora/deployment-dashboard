@@ -7,7 +7,7 @@ env-vars:
     consumed-by: [api, migrations, write-api, read-api]
     tier: server
     required: true
-    default: '(none — must be provided)'
+    default: '(none - must be provided)'
     secret: true (real prod; dev uses obviously-fake password)
     notes: 'Npgsql connection string. Local dev value: Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password.'
     source-anchor: '@dev_env/docker-compose.local.yml:63 + 125 + @backend/README.md:57'
@@ -15,7 +15,7 @@ env-vars:
     consumed-by: [api, write-api]
     tier: server
     required: true (Write surface)
-    default: '(none — must be provided)'
+    default: '(none - must be provided)'
     secret: true (real prod; dev uses local-dev-token-not-for-production)
     notes: 'Static API key. Every POST /api/deployments must include X-Api-Key matching this value (FR-10). Read surface unaffected.'
     source-anchor: '@dev_env/docker-compose.local.yml:126 + @backend/README.md:58'
@@ -36,12 +36,12 @@ env-vars:
     notes: 'Binds Kestrel to 8080 inside the container (SAD §7). When running outside Docker, set explicitly.'
     source-anchor: '@dev_env/docker-compose.local.yml:124 + @backend/README.md:65'
   - name: ASPNETCORE_ENVIRONMENT
-    consumed-by: [api]
+    consumed-by: [api, fetcher]
     tier: server
     required: false
     default: 'Production (ASP.NET Core default); set to Development in local compose'
     secret: false
-    source-anchor: '@dev_env/docker-compose.local.yml:123'
+    source-anchor: '@dev_env/docker-compose.local.yml:123 + 208'
   - name: POSTGRES_DB
     consumed-by: [db]
     tier: data-store
@@ -71,12 +71,102 @@ env-vars:
     secret: false (dev-only)
     source-anchor: '@dev_env/docker-compose.local.yml:164-167'
   - name: DOTNET_NOLOGO / DOTNET_CLI_TELEMETRY_OPTOUT
-    consumed-by: [migrations]
+    consumed-by: [migrations, fetcher]
     tier: build-tooling
     required: false
     default: '1 / 1 (suppress logo + telemetry in CI logs)'
     secret: false
-    source-anchor: '@dev_env/docker-compose.local.yml:64-65'
+    source-anchor: '@dev_env/docker-compose.local.yml:64-65 + 224-225'
+
+  # ----- Fetcher container env-vars (CR-0009 / CR-0011 / ADR-0008) -----
+  - name: DASHBOARD_WRITE_API_URL
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: true
+    default: 'http://gateway (local dev; resolves to internal Docker DNS gateway:80)'
+    secret: false
+    notes: 'Base URL the fetcher uses to POST /api/deployments + GET/PUT /api/fetcher/state + POST /api/fetcher/usage; goes through the same single ingress as browser + CI/CD pushers (FR-06).'
+    source-anchor: '@dev_env/docker-compose.local.yml:209'
+  - name: DASHBOARD_WRITE_API_KEY
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: true
+    default: 'local-dev-token-not-for-production (local dev; reuses literal API_TOKEN)'
+    secret: true
+    notes: 'X-Api-Key value the fetcher sends; same key the seed script + curl example use locally.'
+    source-anchor: '@dev_env/docker-compose.local.yml:210'
+  - name: PROGRESS_REPORTER
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: true
+    default: 'dashboard-fetcher/github-actions (slash-namespaced per CR-0009 §3e)'
+    secret: false
+    notes: 'X-Progress-Reporter header value the fetcher attaches to every push. Cap 64 chars non-whitespace.'
+    source-anchor: '@dev_env/docker-compose.local.yml:211'
+  - name: FETCHER_POLL_INTERVAL_SECONDS
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: false
+    default: '30 (60 in -Demo mode per start.ps1)'
+    secret: false
+    notes: 'Adapter poll interval; rate-limit cap accounting per CR-0011 / ADR-0008.'
+    source-anchor: '@dev_env/docker-compose.local.yml:212'
+  - name: INITIAL_FETCH_LIMIT
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: false
+    default: '50 (ceiling 500)'
+    secret: false
+    notes: 'First-fetch cap when GET /api/fetcher/state returns 404 (no cursor yet).'
+    source-anchor: '@dev_env/docker-compose.local.yml:213'
+  - name: FETCHER_RATE_LIMIT_ABSOLUTE
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: false
+    default: 'null (unset; FETCHER_RATE_LIMIT_PERCENTAGE active instead)'
+    secret: false
+    notes: 'CR-0011 §3a governance env-var. Integer requests-per-upstream-window cap. When both set, absolute wins over percentage. Behaviour on cap: stop issuing CI/CD calls + resume at X-RateLimit-Reset without cursor advance + single INFO log per window.'
+    source-anchor: '@dev_env/docker-compose.local.yml:218'
+  - name: FETCHER_RATE_LIMIT_PERCENTAGE
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: false
+    default: '30 (1..100 valid range)'
+    secret: false
+    notes: 'CR-0011 §3a governance env-var. Percent of upstream X-RateLimit-Limit the fetcher is allowed to consume per window. Active when FETCHER_RATE_LIMIT_ABSOLUTE is unset.'
+    source-anchor: '@dev_env/docker-compose.local.yml:219'
+  - name: FETCHER_ADAPTERS
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: true (fetcher profile)
+    default: 'github-actions (MVP single adapter)'
+    secret: false
+    notes: 'Comma-separated list of adapter ids the fetcher composes; MVP supports github-actions only.'
+    source-anchor: '@dev_env/docker-compose.local.yml:220'
+  - name: GHA_TOKEN
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: false (placeholder if unset)
+    default: 'local-dev-gha-token-placeholder (anonymous mode active when truly unset upstream of compose)'
+    secret: true (real PAT; placeholder is fake)
+    notes: 'GitHub PAT (scope repo:deployments). When unset and -Demo or -AllowMissingGhaToken passed to start.ps1, fetcher uses anonymous GitHub API (60 req/h) per ci-cd-integration.md § Anonymous-mode transport.'
+    source-anchor: '@dev_env/docker-compose.local.yml:221 + @dev_env/start.ps1:35-46'
+  - name: GHA_REPOSITORIES
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: true (fetcher profile)
+    default: '[{"owner":"example-org","repo":"example-repo"}] (compose placeholder); [{"owner":"PostHog","repo":"posthog"}] (start.ps1 -Demo)'
+    secret: false
+    notes: 'JSON array of (owner, repo) pairs the GHA adapter polls. Each pair pairs with one cursor on the backend via (progress_reporter, source-id) where source-id=owner/repo.'
+    source-anchor: '@dev_env/docker-compose.local.yml:222 + @dev_env/start.ps1:40-42'
+  - name: GHA_API_BASE_URL
+    consumed-by: [fetcher]
+    tier: fetcher
+    required: false
+    default: 'https://api.github.com'
+    secret: false
+    notes: 'GitHub API base URL (override for self-hosted GH Enterprise).'
+    source-anchor: '@dev_env/docker-compose.local.yml:223'
 
 ci-cd-callee-secrets:
   - name: DEPLOYMENT_DASHBOARD_URL
@@ -90,22 +180,24 @@ ci-cd-callee-secrets:
     consumed-by: [external CI/CD pipeline notify step]
     tier: caller
     required: true
-    default: '(per pipeline; sent in X-Api-Key header — must match server API_TOKEN)'
+    default: '(per pipeline; sent in X-Api-Key header - must match server API_TOKEN)'
     secret: true
     source-anchor: '@docs/ci-cd-integration.md#secrets'
 
 cross-cutting:
-  env-schema-source: '(no .env.example exists by design — see dev_env/README.md:22-29; zero-setup, no .env files; all values inline in compose files)'
+  env-schema-source: '(no .env.example exists by design - see dev_env/README.md:22-29; zero-setup, no .env files; all values inline in compose files)'
   secrets-store:
-    local-dev: 'NONE — values inline in dev_env/docker-compose.local.yml (obviously fake)'
-    prod: 'Azure Key Vault (per NFR-06; provisioned via Terraform — planned)'
+    local-dev: 'NONE - values inline in dev_env/docker-compose.local.yml (obviously fake); GHA_TOKEN read from shell $env interpolation in compose'
+    prod: 'Azure Key Vault (per NFR-06; provisioned via Terraform - planned)'
     ci-callers: 'Each CI/CD tool''s native secret store (GHA secrets, ADO variable groups, Jenkins Credentials Binding, GitLab CI variables)'
   config-validation:
     backend: 'ConnectionStrings__DefaultConnection consumed by DesignTimeDbContextFactory; falls back to localhost:5432 when unset (dev-design only)'
-    write-api: 'API_TOKEN required at startup; missing → API-key middleware returns 401 on every write request'
+    write-api: 'API_TOKEN required at startup; missing -> API-key middleware returns 401 on every write request'
     read-api: 'HISTORY_RETENTION_DAYS parsed at startup; values <= 0 disable pruning (per backend/README.md:59)'
+    fetcher: 'FetcherOptions / FetcherRateLimitOptions validation at startup (CR-0011 §3a); INFO log line emitted with resolved cap on boot; OptionsValidationException at build if CircuitBreaker.SamplingDuration < 2x AttemptTimeout (resilience-handler tuning invariant per ci-cd-integration.md)'
 
   rules:
     - 'NEVER add .env / .env.local files in dev_env/ (per bindings.md Do-not-introduce)'
-    - 'Real production secrets only via Azure Key Vault — Terraform + GitHub Actions Environments wire them in'
+    - 'Real production secrets only via Azure Key Vault - Terraform + GitHub Actions Environments wire them in'
     - 'SPA bundle never embeds API_TOKEN (NFR-04; Read surface unauthenticated)'
+    - 'Fetcher container has no inbound port + no healthcheck (NFR-04 strict; outbound-only)'

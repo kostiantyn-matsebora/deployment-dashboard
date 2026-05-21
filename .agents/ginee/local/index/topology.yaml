@@ -43,26 +43,31 @@ services-local:
     tier: data-tooling
     role: Dev-only convenience UI; host port 5050
     source-anchor: '@dev_env/docker-compose.local.yml:160-171'
+  - name: fetcher
+    image: 'deployment-dashboard/fetcher:dev'
+    tier: fetcher
+    role: Optional pull-mode adapter (CR-0009 / WBS §1.5; profile=fetcher; default-off); outbound-only (no ports, no healthcheck per NFR-04 strict); POSTs to gateway as dashboard-fetcher/github-actions; depends_on gateway:service_started
+    source-anchor: '@dev_env/docker-compose.local.yml:199-230 (profiles:[fetcher])'
 
 services-scaled-deltas:
   - service: api
     replicas: 3
     note: NFR-05 statelessness validation; SSE fan-out via PG LISTEN/NOTIFY across all replicas
     source-anchor: '@dev_env/docker-compose.scaled.yml:94-114'
-  - omitted: pgadmin (and host-port 5432 on db) — scaled stack drops dev-tooling
+  - omitted: pgadmin (and host-port 5432 on db) - scaled stack drops dev-tooling
     source-anchor: '@dev_env/docker-compose.scaled.yml'
 
 gateway-routing-matrix:
   source: '@gateway/nginx.conf'
   upstreams: api:8080, dashboard:80
   rules:
-    - 'POST /api/deployments → api:8080 (Write)'
-    - 'GET /api/stream → api:8080 (SSE pass-through; proxy_buffering off, proxy_read_timeout 1h)'
-    - 'GET /api/* + /health → api:8080 (Read)'
-    - 'GET /openapi/* → api:8080 (CR-0008 OpenAPI JSON; unauth)'
-    - 'GET /scalar(/*) → api:8080 (CR-0008 Scalar UI; unauth)'
-    - 'GET / + everything else → dashboard:80 (SPA shell + HTML5 fallback)'
-    - 'GET /__gateway_health → 200 (self-healthcheck; no upstream dependency)'
+    - 'POST /api/deployments -> api:8080 (Write)'
+    - 'GET /api/stream -> api:8080 (SSE pass-through; proxy_buffering off, proxy_read_timeout 1h)'
+    - 'GET /api/* + /health -> api:8080 (Read)'
+    - 'GET /openapi/* -> api:8080 (CR-0008 OpenAPI JSON; unauth)'
+    - 'GET /scalar(/*) -> api:8080 (CR-0008 Scalar UI; unauth)'
+    - 'GET / + everything else -> dashboard:80 (SPA shell + HTML5 fallback)'
+    - 'GET /__gateway_health -> 200 (self-healthcheck; no upstream dependency)'
 
 network-topology: |
   Single bridged Docker network. Only gateway has a host-published port
@@ -72,18 +77,20 @@ network-topology: |
   deployment-dashboard-api image today (microservices architecture per
   ADR-0006; co-location mechanics per ADR-0002). Future move from
   co-location to per-service images is a gateway-config-only change
-  (POST /api/deployments → write-upstream).
+  (POST /api/deployments -> write-upstream). Optional fetcher profile
+  (CR-0009) joins the same internal network when activated; outbound-only
+  so adds no host port and no inbound surface (NFR-04 strict).
 
 volumes:
   count: 3 (local: pg-data, dotnet-tools, nuget-cache) / 3 (scaled: *-scaled variants)
-  source-anchor: '@dev_env/docker-compose.local.yml:173-176'
+  source-anchor: '@dev_env/docker-compose.local.yml:232-235'
 
 iac:
   status: planned (Terraform azurerm >= 4.x per NFR-06 + WBS §4); infrastructure/ directory does not yet exist
   azure-resources-planned:
     - Azure Container Registry (Basic SKU)
     - Azure Container Apps Environment (Consumption plan, single env)
-    - 3 Azure Container Apps (API + Dashboard Frontend + App Gateway) — only Gateway gets public ingress
+    - 3 Azure Container Apps (API + Dashboard Frontend + App Gateway) - only Gateway gets public ingress
     - Azure Database for PostgreSQL Flexible Server (Burstable B1ms)
     - Azure Key Vault (API_TOKEN + ConnectionStrings__DefaultConnection)
   source-doc: '@docs/architecture.md#azure-deployment'
