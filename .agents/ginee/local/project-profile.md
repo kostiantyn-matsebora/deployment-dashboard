@@ -68,7 +68,8 @@ deployment-dashboard/
 ├── backend/         .NET 10 — co-located Write + Read API services (Dashboard.sln + api/ host + write-api/, read-api/, shared/ libraries; microservices architecture per ADR-0006, co-location mechanics per ADR-0002)
 ├── frontend/        Angular 20 workspace — dashboard/ (shell), matrix/, drawer/, shared/
 ├── gateway/         nginx reverse proxy — single public ingress (port 8080)
-├── dev_env/         Docker Compose stacks + PowerShell start/stop scripts
+├── install/         Release-install stack — docker-compose.release.yml (canonical service inventory) + install.ps1/.sh + uninstall.ps1/.sh; dev_env layers on this via `-f` merge per ADR-0010
+├── dev_env/         Docker Compose contributor stacks (docker-compose.local.yml = override on install/release.yml; docker-compose.scaled.yml = standalone NFR-05 variant) + PowerShell start/stop scripts
 ├── docs/            architecture.md, WBS.md, ci-cd-integration.md, adr/, cr/, ui/ (mockup + option docs)
 ├── testing/         functional (xUnit), e2e (Playwright), mockup-visual (Playwright), scripts (Pester + seed), fixtures
 ├── .agents/         ginee framework install (vendor-neutral)

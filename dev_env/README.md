@@ -1,6 +1,8 @@
 # dev_env — local Deployment Dashboard stack
 
-Implements MVP §2 of `docs/WBS.md`.
+Implements MVP §2 of `docs/WBS.md`. The contributor flow is a compose-merge
+override on the release-install stack — see § Compose-merge override below
+for the structure and how to extend it.
 
 ## Topology — App Gateway in front, two app containers behind
 
@@ -169,14 +171,33 @@ Tears down both compose variants if they exist.
 All env vars are defined inline in the compose files under each
 service's `environment:` block:
 
-- `dev_env/docker-compose.local.yml` — default stack.
-- `dev_env/docker-compose.scaled.yml` — scaled NFR-05 variant.
+- `install/docker-compose.release.yml` — canonical service inventory (services / profiles / env-var contract / volumes). Shared between the release-install path and the contributor flow.
+- `dev_env/docker-compose.local.yml` — contributor-flow OVERRIDE; layered on the release compose via `docker compose -f release.yml -f local.yml`. Only carries the deltas: `build:` blocks, `pull_policy: never`, dev-literal substitutions for the three secrets the release file reads from `dashboard.env`, and the `pgadmin` convenience service.
+- `dev_env/docker-compose.scaled.yml` — scaled NFR-05 variant, structurally distinct (different project `name:`, container-name suffixes, 3-replica `api`, no fetcher, no pgadmin). Standalone; NOT layered on release.
 
 The values are obviously fake (`local-dev-password`,
 `local-dev-token-not-for-production`, etc.) and stable. They are not
 secrets and never make it past the developer laptop. Real production
 secrets come from Terraform + Azure Key Vault + GitHub Actions
 Environments — never from this directory.
+
+## Compose-merge override (issue #21)
+
+The contributor stack `start.ps1` brings up is `docker compose -f install/docker-compose.release.yml -f dev_env/docker-compose.local.yml up -d --build`. Compose merges the override on top of the base per its standard merge rules (later `-f` files override earlier; service `environment:` blocks merge by key; arrays replace; new services append). The override exists because contributors need three things the release stack does not:
+
+1. **Build from source.** Release pulls GHCR-pinned images; contributors need `build:` blocks so iteration on `backend/` / `frontend/` / `gateway/` source produces fresh local images. `pull_policy: never` prevents `docker compose pull` from attempting to pull the locally-tagged `:dev` images from any registry.
+2. **Dev-literal secrets.** Release reads `POSTGRES_PASSWORD` / `API_TOKEN` / `ConnectionStrings__DefaultConnection` from `dashboard.env` (written by `install.ps1` from random values). The override re-states the same three keys with the obviously-fake dev literals so the zero-`.env`-file invariant survives. Compose may emit one-line `variable XXX not set` warnings as it interpolates the release file — they are cosmetic; the override merge resets the keys.
+3. **pgAdmin convenience.** Dropped from the release stack per issue #7.
+
+Every other release-file detail (env-var substitutions like `${FETCHER_POLL_INTERVAL_SECONDS:-30}`, the `fetcher` profile, `${DASHBOARD_PORT:-8080}` mapping, `${DASHBOARD_VERSION:-latest}` image refs that the override redirects via `image:` overrides) is inherited — so an installer-side feature lands in the contributor flow with no porting.
+
+**Adding a dev-only service.** Add it as a new top-level service entry in `dev_env/docker-compose.local.yml`. Compose merge appends services that don't exist in the base. Example: `pgadmin` already shows the pattern — full service definition, host-published port, depends_on the inherited `db`.
+
+**Adding a contributor-flow env-var override.** Add the key to the relevant service's `environment:` block in the override file. Service-level `environment:` blocks merge by key — your override wins for that one key without restating the rest of the env block.
+
+**Adding a build context.** Add `build:` + `image:` + `pull_policy: never` to the service in the override. The build context resolves relative to the override file's directory, so `../backend` from `dev_env/docker-compose.local.yml` resolves to the repo's `backend/` tree.
+
+**Why no `dev_env/start.sh` bash sibling?** Out of scope per issue #21 ("Cross-OS shell sugar (PS-vs-bash parity for start/stop) — that's a separate concern"). PowerShell 7+ is the documented contributor-flow prerequisite.
 
 ## Migrations
 
@@ -211,7 +232,7 @@ the `/api/stream` location.
 
 | File | Purpose |
 |---|---|
-| `docker-compose.local.yml` | Default local stack — gateway + dashboard + api + db + pgadmin. API self-migrates on start (ADR-0009). |
-| `docker-compose.scaled.yml` | Same shape with 3 API replicas behind the gateway. NFR-05 validation. |
-| `start.ps1` | Thin wrapper: compose up → poll `http://localhost:8080/health` (via the gateway) → print URLs. `-Scaled`, `-HealthTimeoutSeconds`. |
-| `stop.ps1` | Tear down both compose variants. `-Volumes` to wipe DB data. |
+| `docker-compose.local.yml` | Contributor-flow OVERRIDE; layered on `install/docker-compose.release.yml` (issue #21). Carries `build:` blocks, dev-literal secrets, pgAdmin. API self-migrates on start (ADR-0009). See [ADR-0010](../docs/adr/ADR-0010-dev-env-compose-derives-from-release.md). |
+| `docker-compose.scaled.yml` | Standalone scaled variant — 3 API replicas behind the gateway. NFR-05 validation. NOT layered on release. |
+| `start.ps1` | Thin wrapper: compose up (`-f release -f local` on the default path) → poll `http://localhost:8080/health` (via the gateway) → print URLs. `-Scaled`, `-Fetcher`, `-Demo`, `-AllowMissingGhaToken`, `-HealthTimeoutSeconds`. |
+| `stop.ps1` | Tear down both compose variants (default path passes both `-f` flags). `-Volumes` to wipe DB data. |
