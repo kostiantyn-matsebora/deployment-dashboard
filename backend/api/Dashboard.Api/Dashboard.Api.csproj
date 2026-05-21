@@ -20,9 +20,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.14.14" />
-    <!-- Required by `dotnet ef migrations script` in CI (CR-0010 § 3l). EF
-         tooling refuses without this on the startup project even though the
-         migration assembly lives in Dashboard.Shared. -->
+    <!-- Retained for local-dev migration authoring (`dotnet ef migrations add`
+         from the host). CI no longer runs `dotnet ef migrations script` post-
+         ADR-0009; the package is design-time-only (PrivateAssets=all) so it
+         doesn't ship in the runtime image. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
