@@ -20,9 +20,8 @@ Per SAD §7 "App Gateway", the local stack mirrors the Azure topology:
 - **`db`** — PostgreSQL 16. Host port `5432` is published for dev convenience only (psql / EF tooling).
 - **`pgadmin`** — host port `5050` for dev convenience.
 
-EF Core migrations apply in-process inside the `api` container on startup
-(per [ADR-0009](../docs/adr/ADR-0009-startup-applied-ef-migrations.md)) —
-there is no separate one-shot runner service.
+EF Core migrations apply in-process inside the `api` container on startup —
+no separate one-shot runner service. See § Migrations below.
 
 There is no CORS in the system. The browser only ever sees one origin —
 `http://localhost:8080/` — and the gateway picks the right upstream
@@ -181,17 +180,9 @@ Environments — never from this directory.
 
 ## Migrations
 
-EF Core migrations apply in-process inside the `api` container on
-startup, between `app.Build()` and `app.RunAsync()` — see
-[ADR-0009](../docs/adr/ADR-0009-startup-applied-ef-migrations.md). The
-local stack uses the same path; there is no separate one-shot service
-to actuate and no `dotnet-ef` install step in either compose file.
+Startup-applied EF migrations contract per [`docs/install.md` § Migrations](../docs/install.md#migrations). The local stack uses the same path — no separate one-shot service to actuate and no `dotnet-ef` install step in either compose file.
 
-EF's `IMigrator.MigrateAsync()` contract is idempotent: re-applying
-against an already-migrated DB is a no-op. To add a new EF migration
-during development, create it from your host (`dotnet ef migrations
-add ...`) and restart the `api` container — the new migration applies
-on the next start.
+**Contributor delta — authoring a new migration.** Create it from your host (`dotnet ef migrations add ...`) and restart the `api` container; the new migration applies on the next start (idempotent re-apply per the canonical contract).
 
 ## Common issues
 

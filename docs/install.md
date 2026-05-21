@@ -184,11 +184,8 @@ bash install.sh --version v1.2.3
 ```
 
 Re-running the installer with a newer tag against the same `-InstallDir` /
-`--install-dir` upgrades in place. The new `api` image self-applies any
-pending EF Core migrations on startup (per
-[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)); EF's
-`IMigrator.MigrateAsync()` contract is idempotent, so re-applying against
-an already-migrated DB is a no-op.
+`--install-dir` upgrades in place. Migrations apply automatically on the
+new `api` image's first startup — see § Migrations below.
 
 ## Migrations
 
@@ -263,10 +260,8 @@ export ConnectionStrings__DefaultConnection="Host=db;Database=dashboard;Username
 docker compose -f docker-compose.release.yml up -d --wait
 ```
 
-The `api` container applies EF Core migrations on startup (per
-[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)); `--wait`
-blocks until the api healthcheck passes, by which point migrations are
-already applied. No `migration.sql` asset, no `--profile migrate` step.
+`--wait` blocks until the api healthcheck passes, by which point startup-applied
+migrations are already complete (see § Migrations).
 
 If your shell rejects `__` in identifier names (BusyBox `sh`, certain minimal
 images), prefix the env-var to the command instead of `export`-ing it:
@@ -302,10 +297,8 @@ Use Option B instead: `gh release download` the compose file locally, then
    - You MUST set `$API_TOKEN` to a strong random value before running.
    - You MUST NOT reuse the dev literal `local-dev-token-not-for-production` — the API middleware accepts any value, but reusing the dev literal in a release install defeats the defence-in-depth split (per [`docs/architecture.md`](architecture.html) § 8).
 
-Migration actuation is **not** in this list: the `api` container
-self-applies migrations on startup (per
-[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)), so Option
-B requires no manual actuation step.
+Migration actuation is **not** in this list: Option B requires no manual
+actuation step (see § Migrations).
 
 The primary install path (`install.ps1` / `install.sh`) handles all three —
 prefer it where local policy permits.
@@ -323,11 +316,10 @@ pwsh -NoProfile -File dev_env/start.ps1
 ```
 
 The contributor stack is `dev_env/docker-compose.local.yml` — builds images
-locally, bind-mounts `backend/`, and lets the `api` container self-apply
-EF Core migrations on startup (per
-[ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)). See
-`dev_env/README.md` for the full contributor instructions (including
-`-Scaled`, `-Fetcher`, and the NFR-05 validation harness).
+locally and bind-mounts `backend/`. Migrations apply on `api` startup the same
+way as the release stack (see § Migrations). See `dev_env/README.md` for the
+full contributor instructions (including `-Scaled`, `-Fetcher`, and the NFR-05
+validation harness).
 
 The release-install path and the contributor flow share **no token value** —
 the dev-literal `local-dev-token-not-for-production` is hard-coded in
