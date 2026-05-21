@@ -43,10 +43,16 @@ namespace Dashboard.Api;
 /// (CR-0008 § Scalar UI / Decision 5: internal-only network per NFR-04
 /// makes Scalar safe to expose for ops). The App Gateway forwards both to
 /// <c>api:8080</c> with no auth gating.</para>
+///
+/// <para>ADR-0009: applies pending EF Core migrations on startup
+/// (between <c>app.Build()</c> and <c>app.RunAsync()</c>) against
+/// <c>ConnectionStrings:DefaultConnection</c>. Failure aborts startup
+/// before the HTTP listener binds; no opt-out env-var. Supersedes
+/// ADR-0005's external one-shot migration container.</para>
 /// </summary>
 public sealed class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -138,6 +144,23 @@ public sealed class Program
                    .WithOpenApiRoutePattern("/openapi/v1.json");
         });
 
-        app.Run();
+        // ---- Migrations ---------------------------------------------------
+        // API host applies pending EF migrations BEFORE binding the HTTP
+        // listener. Single DB writer per ADR-0009 (supersedes ADR-0005's
+        // external one-shot migration container). Idempotent re-apply is
+        // safe under replica restart per EF's --idempotent contract.
+        //
+        // Failure aborts startup — the exception propagates out of Main(),
+        // the host process exits non-zero, and the orchestrator's
+        // depends_on `service_started` condition does NOT fire for
+        // downstream services (gateway). Operators see the stack-trace in
+        // `docker compose logs api`.
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+            await db.Database.MigrateAsync();
+        }
+
+        await app.RunAsync();
     }
 }
