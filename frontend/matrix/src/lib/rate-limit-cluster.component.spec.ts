@@ -87,7 +87,7 @@ describe('RateLimitClusterComponent', () => {
     expect(r).not.toBeNull();
     expect(r.getAttribute('data-severity')).toBe('green');
     expect(r.getAttribute('data-stale')).toBe('false');
-    const pill = r.querySelector('[data-testid="rate-limit-cluster-pill"]');
+    const pill = r.querySelector('[data-testid="rate-limit-pill"]');
     expect(pill).not.toBeNull();
     expect(pill?.textContent).toContain('28');
     expect(pill?.textContent).toContain('used');
@@ -105,7 +105,7 @@ describe('RateLimitClusterComponent', () => {
     fixture.detectChanges();
     const r = root(fixture)!;
     expect(r.getAttribute('data-severity')).toBe('amber');
-    const pill = r.querySelector('[data-testid="rate-limit-cluster-pill"]');
+    const pill = r.querySelector('[data-testid="rate-limit-pill"]');
     expect(pill?.textContent).toContain('75');
     expect(pill?.className).toContain('text-amber-700');
   });
@@ -118,7 +118,7 @@ describe('RateLimitClusterComponent', () => {
     fixture.detectChanges();
     const r = root(fixture)!;
     expect(r.getAttribute('data-severity')).toBe('red');
-    const pill = r.querySelector('[data-testid="rate-limit-cluster-pill"]');
+    const pill = r.querySelector('[data-testid="rate-limit-pill"]');
     expect(pill?.textContent).toContain('88');
     expect(pill?.className).toContain('text-red-700');
   });
@@ -135,7 +135,7 @@ describe('RateLimitClusterComponent', () => {
     fixture.detectChanges();
     const r = root(fixture)!;
     expect(r.getAttribute('data-severity')).toBe('red');
-    expect(r.querySelector('[data-testid="rate-limit-cluster-pill"]')?.textContent).toContain('88');
+    expect(r.querySelector('[data-testid="rate-limit-pill"]')?.textContent).toContain('88');
     expect(r.querySelector('[data-testid="rate-limit-counter"]')?.textContent).toContain('3');
   });
 
@@ -152,7 +152,7 @@ describe('RateLimitClusterComponent', () => {
     expect(r.getAttribute('data-severity')).toBe('neutral');
     expect(r.querySelector('[data-testid="rate-limit-stale"]')).not.toBeNull();
     // Fresh pill is NOT rendered when stale.
-    expect(r.querySelector('[data-testid="rate-limit-cluster-pill"]')).toBeNull();
+    expect(r.querySelector('[data-testid="rate-limit-pill"]')).toBeNull();
   });
 
   it('collapse — collapsed signal switches to dot+percent layout (D8)', () => {
@@ -164,11 +164,12 @@ describe('RateLimitClusterComponent', () => {
     fixture.detectChanges();
     const r = root(fixture)!;
     expect(r.getAttribute('data-cluster-collapsed')).toBe('true');
-    // Pill testid still present (so the collapsed trigger has a known anchor),
-    // but no counter and no "used" word.
-    const pill = r.querySelector('[data-testid="rate-limit-cluster-pill"]');
+    // Collapsed variant has its own testid (mirrors the mockup contract);
+    // the full pill is absent and no counter renders.
+    const pill = r.querySelector('[data-testid="rate-limit-pill-collapsed"]');
     expect(pill).not.toBeNull();
     expect(pill?.textContent).not.toContain('used');
+    expect(r.querySelector('[data-testid="rate-limit-pill"]')).toBeNull();
     expect(r.querySelector('[data-testid="rate-limit-counter"]')).toBeNull();
   });
 

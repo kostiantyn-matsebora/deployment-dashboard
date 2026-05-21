@@ -13,9 +13,10 @@
 //
 // QA-engineer data-* requests (Phase 2e):
 //   - `data-testid="stats-bar"` on the outer strip
-//   - `data-testid="stats-strip-left-cluster"` on the left wrapper — drives
-//     the rate-limit cluster's collapse-threshold measurement (D8 / mockup
-//     `recomputeCollapse`).
+//   - `data-testid="stats-bar-left"` on the left wrapper — drives the
+//     rate-limit cluster's collapse-threshold measurement (D8 / mockup
+//     `recomputeCollapse`). Name mirrors the mockup, which is the
+//     source-of-truth per bindings.md "mockup wins for visuals/interactions".
 //   - `data-testid="rate-limit-cluster"` on the cluster root (rendered by
 //     `RateLimitClusterComponent`).
 
@@ -37,7 +38,7 @@ import { RateLimitClusterComponent } from './rate-limit-cluster.component';
            self-center keeps it vertically centred when the right wrapper
            grows to two rows during a version-hover (D7). -->
       <div class="flex items-center gap-6 self-center"
-           data-testid="stats-strip-left-cluster">
+           data-testid="stats-bar-left">
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-gray-500">Services</span>
           <span class="text-sm font-bold text-gray-900"

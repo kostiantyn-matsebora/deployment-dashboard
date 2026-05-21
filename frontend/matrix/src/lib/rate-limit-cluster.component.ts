@@ -98,7 +98,7 @@ const COLLAPSE_GUTTER_PX = 24;
               <div class="flex items-center gap-1.5 px-2 py-0.5 border rounded-full text-xs font-medium"
                    [class]="pillClasses(store.worstBand())"
                    [attr.title]="freshTooltip()"
-                   data-testid="rate-limit-cluster-pill">
+                   data-testid="rate-limit-pill">
                 <span class="w-2 h-2 rounded-full" [class]="dotClasses(store.worstBand())"></span>
                 <span><span>{{ store.worstPercent() }}</span>% used</span>
               </div>
@@ -113,16 +113,18 @@ const COLLAPSE_GUTTER_PX = 24;
             </div>
           }
 
-          <!-- Collapsed layout — dot + percent only; pill text is the trigger. -->
+          <!-- Collapsed layout — dot + percent only; pill text is the
+               trigger. Carries the same band-bg/border/text triplet as
+               the full pill so the severity-band token is exposed for
+               the I12.b oracle (the QA spec accepts this selector as
+               an alias for the full pill). -->
           @if (collapsed() && store.worstSnapshot()) {
             <button type="button"
-                    class="flex items-center gap-1.5 text-xs font-medium hover:underline underline-offset-2"
-                    [class.text-red-700]="store.worstBand() === 'red'"
-                    [class.text-amber-700]="store.worstBand() === 'amber'"
-                    [class.text-green-700]="store.worstBand() === 'green'"
+                    class="flex items-center gap-1.5 px-2 py-0.5 border rounded-full text-xs font-medium hover:underline underline-offset-2"
+                    [class]="pillClasses(store.worstBand())"
                     (click)="togglePopover($event)"
                     [attr.title]="freshTooltip()"
-                    data-testid="rate-limit-cluster-pill">
+                    data-testid="rate-limit-pill-collapsed">
               <span class="w-2 h-2 rounded-full" [class]="dotClasses(store.worstBand())"></span>
               <span><span>{{ store.worstPercent() }}</span>%</span>
             </button>
@@ -340,7 +342,7 @@ export class RateLimitClusterComponent implements OnInit, OnDestroy {
     }
     const strip = document.querySelector<HTMLElement>('[data-testid="stats-bar"]');
     const leftCluster = document.querySelector<HTMLElement>(
-      '[data-testid="stats-strip-left-cluster"]'
+      '[data-testid="stats-bar-left"]'
     );
     if (!strip || !leftCluster) {
       this.collapsed.set(false);

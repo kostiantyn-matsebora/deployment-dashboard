@@ -1450,13 +1450,15 @@
           </div>
         </template>
 
-        <!-- Collapsed layout — dot + percent only. -->
+        <!-- Collapsed layout — dot + percent only. Carries the same
+             band-bg/border/text triplet as the full pill so the
+             severity-band token is exposed for the I12.b oracle (the
+             QA spec accepts this selector as an alias for the full
+             pill — see mockup-rate-limit-cluster.spec.ts § I12.b). -->
         <template x-if="usageClusterCollapsed && !rateLimitAllStale && rateLimitWorstSnapshot">
           <button type="button"
-                  class="flex items-center gap-1.5 text-xs font-medium hover:underline underline-offset-2"
-                  :class="rateLimitWorstBand === 'red'   ? 'text-red-700'   :
-                          rateLimitWorstBand === 'amber' ? 'text-amber-700' :
-                          'text-green-700'"
+                  class="flex items-center gap-1.5 px-2 py-0.5 border rounded-full text-xs font-medium hover:underline underline-offset-2"
+                  :class="rateLimitPillClasses(rateLimitWorstBand)"
                   @click.stop="usagePopoverOpen = !usagePopoverOpen"
                   :title="rateLimitTooltipFor(rateLimitWorstSnapshot)"
                   data-testid="rate-limit-pill-collapsed">
@@ -1493,6 +1495,7 @@
           </div>
           <template x-for="snap in usageSnapshots" :key="snap.adapter_id + '|' + snap.source_id">
             <div class="px-3 py-1.5 flex items-center gap-2 text-xs hover:bg-gray-50"
+                 :data-testid="'rate-limit-row-' + snap.adapter_id + '-' + snap.source_id"
                  :style="`--hover-bg: var(--theme-popover-hover-bg, #f9fafb)`">
               <span class="w-2 h-2 rounded-full shrink-0"
                     :class="rateLimitDotClasses(isUsageStaleHelper(snap) ? 'neutral' : usageBandHelper(snap))"></span>
@@ -3394,9 +3397,14 @@
         // ALL snapshots stale → cluster renders in the stale visual
         // (dimmed + neutral + "—" + italic "stale"). Distinct from
         // "no snapshots" (cluster hidden entirely).
-        get rateLimitAllStale() {
-          return this.usageSnapshots.length > 0 && this.rateLimitFreshSnapshots.length === 0;
-        },
+        //
+        // Maintained as a writable reactive field (not a getter) so the
+        // test contract "set rateLimitAllStale = true and the stale
+        // affordance materialises" works end-to-end. The reactive
+        // recompute lives in bootstrapPersistence (`$watch` on
+        // `usageSnapshots` + `usageNowTick`). A getter cannot accept an
+        // external assignment, which broke the QA Invariant 12.e probe.
+        rateLimitAllStale: false,
         get rateLimitMostRecentReceivedAt() {
           if (this.usageSnapshots.length === 0) return null;
           let mostRecent = this.usageSnapshots[0].received_at;
@@ -3636,8 +3644,12 @@
           //
           // 1) Stale-affordance tick. A 1 s interval bumps usageNowTick;
           //    the getters that read it (rateLimitFreshSnapshots,
-          //    rateLimitAllStale, isUsageStale) re-evaluate. Cheap —
-          //    no DOM read, no rect measurement.
+          //    isUsageStale) re-evaluate. A $watch on usageNowTick +
+          //    usageSnapshots writes the `rateLimitAllStale` reactive
+          //    field; the stale `<template x-if>` re-evaluates from
+          //    that field. We keep the field writable (not a getter)
+          //    so the Invariant 12.e probe can flip it externally to
+          //    verify the wiring. Cheap — no DOM read, no rect measurement.
           //
           // 2) Collapse-threshold observer. Watches the stats-bar
           //    element and writes `usageClusterCollapsed` based on the
@@ -3652,6 +3664,19 @@
           //    mirrors the theme popover dismissal pattern.
           // ============================================================
           this._usageTick = setInterval(() => { this.usageNowTick = Date.now(); }, 1000);
+
+          // Reactive maintenance of `rateLimitAllStale` from its inputs
+          // (snapshots + 1 s clock tick). Runs once at bootstrap so the
+          // initial field value reflects the mock fixture, then on
+          // every input change. External assignments (e.g. the QA
+          // Invariant 12.e probe) survive until the next input change.
+          const recomputeAllStale = () => {
+            this.rateLimitAllStale =
+              this.usageSnapshots.length > 0 && this.rateLimitFreshSnapshots.length === 0;
+          };
+          recomputeAllStale();
+          this.$watch('usageSnapshots', recomputeAllStale, { deep: true });
+          this.$watch('usageNowTick', recomputeAllStale);
 
           const recomputeCollapse = () => {
             const stripEl = document.querySelector('[data-testid="stats-bar"]');
