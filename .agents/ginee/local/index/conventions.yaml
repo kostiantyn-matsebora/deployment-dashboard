@@ -26,6 +26,7 @@ build-conventions:
   app: dashboard (sole application; libraries: shared, matrix, drawer)
   bundle-budgets: { initial: { warn: 2mb, err: 4mb }, anyComponentStyle: { warn: 8kb, err: 16kb } }
   schematics: { style: css, changeDetection: OnPush, standalone: true, prefix: dd }
+  karma-config: shared karma.conf.js wired across all 4 projects via architect.test.options.karmaConfig (CR-0010 §1.6.4 + ChromeHeadlessNoSandbox launcher for GHA runner sandbox; emits cobertura + lcov for CI coverage gate)
 
 workspace-aliases:
   source: '@frontend/tsconfig.base.json:21-25'
@@ -42,11 +43,17 @@ styling:
 
 backend-build:
   source: '@backend/api/Dashboard.Api/Dashboard.Api.csproj + @backend/shared/Dashboard.Shared/Dashboard.Shared.csproj'
-  customized: [Nullable=enable, ImplicitUsings=enable, GenerateDocumentationFile=true (CR-0008), NoWarn=1591, StaticWebAssetsEnabled=false on host]
+  customized:
+    - Nullable=enable
+    - ImplicitUsings=enable
+    - GenerateDocumentationFile=true (CR-0008 OpenAPI semantic enrichment)
+    - 'NoWarn=1591 (not every internal helper needs /// docs)'
+    - StaticWebAssetsEnabled=false on host (API serves JSON only; SPA in own nginx container)
+    - 'Microsoft.EntityFrameworkCore.Design PrivateAssets=all on Dashboard.Api host (CR-0010 §3l - required by dotnet ef migrations script in CI)'
 
 ignored:
-  gitignore: '@.gitignore — bin/, obj/, node_modules/, dist/, .angular/, playwright-report/, test-results/'
-  dockerignore: '@.dockerignore — **/bin, **/obj, **/node_modules, **/dist, .git, **/test-results'
+  gitignore: '@.gitignore - bin/, obj/, node_modules/, dist/, .angular/, playwright-report/, test-results/, .terraform/, *.tfstate, .claude/worktrees/, .claude/scheduled_tasks.lock, .claude/settings.local.json, format-report.json'
+  dockerignore: '@.dockerignore - **/bin, **/obj, **/node_modules, **/dist, .git, **/test-results'
 
 hooks-naming:
   pre-commit: NONE (no .husky/, no commitlint)

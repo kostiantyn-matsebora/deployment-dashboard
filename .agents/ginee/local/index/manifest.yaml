@@ -12,21 +12,20 @@ indexed:
     template: multi
     recipe: builtin:architecture
     source: docs/architecture.md
-    sha256: ed5e6f3e0190c6f92cb1e2fead622b1408f241b26bbeb505cbccaf44358fe472
-    indexed-on: 2026-05-19
+    sha256: 8f1128a5688c08f8a384ccece3108b83721c4b59560e53aa81b70f93d5cd40e9
+    indexed-on: 2026-05-21
     index-files:
       - architecture.idx
       - architecture-fr.idx
       - api-matrix.yaml
       - ui-states.yaml
       - constraints.yaml
-      - glossary.idx
-    source-bytes: 73615
-    index-bytes: 27189            # 5004 + 2835 + 7205 + 2761 + 3373 + 6011
-    compression: 0.389
+    source-bytes: 75197
+    index-bytes: 23711            # 5178 + 2835 + 9564 + 2761 + 3373
+    compression: 0.315
     compression-target: 0.15      # prose-heavy
     compression-floor: 0.5
-    compression-status: 'over-target, under-floor — flagged (lossless rule forbids dropping existence-entries). Re-extraction 2026-05-18: §9 Phasing CI/CD restructured into inbound (CR-0009 fetcher row added) + outbound (CR-0010 component-CI track) tracks; §7 gained Dashboard.Fetcher sub-section + 2 cursor endpoints; §3 Non-Goal #2 + §10 Decision 6 amended for optional pull-mode adapter. architecture.idx + api-matrix.yaml + glossary.idx updated; architecture-fr.idx / constraints.yaml / ui-states.yaml unchanged (no FR/NFR/state additions in source). SHA refresh 2026-05-19: §7 invariants block reframed to cite ADR-0006 (microservices architecture; container co-location is a packaging choice); §7 backend / app-gateway / cost-table cross-refs updated. No FR/NFR/api/ui-state additions; existing six index files remain semantically valid; only source-sha + source-bytes drift.'
+    compression-status: 'over-target, under-floor — flagged (lossless rule forbids dropping existence-entries). Re-extraction 2026-05-18: §9 Phasing CI/CD restructured into inbound (CR-0009 fetcher row added) + outbound (CR-0010 component-CI track) tracks; §7 gained Dashboard.Fetcher sub-section + 2 cursor endpoints; §3 Non-Goal #2 + §10 Decision 6 amended for optional pull-mode adapter. architecture.idx + api-matrix.yaml + glossary.idx updated; architecture-fr.idx / constraints.yaml / ui-states.yaml unchanged (no FR/NFR/state additions in source). SHA refresh 2026-05-19: §7 invariants block reframed to cite ADR-0006 (microservices architecture; container co-location is a packaging choice); §7 backend / app-gateway / cost-table cross-refs updated. No FR/NFR/api/ui-state additions; existing six index files remain semantically valid; only source-sha + source-bytes drift. SHA refresh 2026-05-21: §7 API Contract table gained POST /api/fetcher/usage (Write, CR-0011) + GET /api/fetcher/usage (Read, CR-0011/ADR-0008) rows for leaky-bucket cap + republish-on-tick usage reporting; api-matrix.yaml already contained both endpoints from prior extraction (paired ADR-0008/CR-0011 are present in source but not yet in manifest - see Outstanding issues). architecture.idx §7.api row updated to cite fetcher usage POST/GET. glossary.idx removed from index-files list - never written to disk despite prior manifest claim; treat as recipe artefact deferred. architecture-fr.idx / constraints.yaml / ui-states.yaml semantically unchanged (no FR/NFR/state additions). Bytes recomputed: source 73615->75197; index sum 27189->23711 (glossary.idx removal accounts for delta).'
     consumed-by: [solution-architect, backend-engineer, frontend-engineer, devops-engineer, qa-engineer]
     # Per-file consumer breakdown (from cardinal kernel Source-of-truth tables):
     #   architecture.idx        -> [solution-architect, backend-engineer, devops-engineer]
@@ -34,78 +33,80 @@ indexed:
     #   constraints.yaml        -> [solution-architect, backend-engineer, frontend-engineer, devops-engineer, qa-engineer]
     #   api-matrix.yaml         -> [backend-engineer, frontend-engineer, devops-engineer, qa-engineer]
     #   ui-states.yaml          -> [frontend-engineer, qa-engineer]
-    #   glossary.idx            -> [] (no cardinal kernel cite) — DORMANT, see § Dormant-index findings
 
   - class: adr
     category: doc
     template: adr-index.idx
     recipe: builtin:adr
     source-glob: docs/adr/*.md
-    file-count: 7                  # ADR-0001..ADR-0007 (README.md tracked in the file listing below but not extracted as an ADR record)
+    file-count: 7                  # ADR-0001..ADR-0007 (README.md tracked; ADR-0008 present in source but NOT extracted - see Outstanding issues)
     sha256-by-file:
-      docs/adr/ADR-0001-topology-derivation-five-pass.md: 376fe410669dbee4006729b37c3872dc0e19491746bae7ccd9b9fe7f96d7fc80
-      docs/adr/ADR-0002-modular-monolith-consolidation.md: 32b1b79474d0589fe7e8ecdaa354eaa96b8218e19ec90bd9738c92fad8ae0790
-      docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md: 5a86e60f4603f31d03097c9a8b8b29b2512f845ebb44605fbef290aa9edc9be4
-      docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md: d384856632a4be0396121e1dab9085b98355ac512bc4d0b987af178761363ae8
-      docs/adr/ADR-0005-release-install-migration-actuation.md: f2eb7cdcae80aa8f8ef39967d1b1330aedaf4d56fbae11432729aa424ea1bbbe
-      docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md: abcfa856ee2d519e8a59dae5cd778d2a4298fbe7d880a0a5723b66db9c121831
-      docs/adr/ADR-0007-vendor-adapters-emit-parent-deployments.md: 3f50e034f83936d81ed148e99612efefacc7395673b25a59ba7526f2c3aa4b1c
-      docs/adr/README.md: e04cc91d580542da41e3db5c07f2d73e11242ff65f819bdfbcaa60dde53a3c15
-    indexed-on: 2026-05-20
+      docs/adr/ADR-0001-topology-derivation-five-pass.md: 5fdc725bbb6fab0634c65c7820b3e49f9272994ddda15956b62f6f89784aaabf
+      docs/adr/ADR-0002-modular-monolith-consolidation.md: 657e24769bae0a921c510410748f002dc7acf0eefd3753ee4a351d3bffbed9eb
+      docs/adr/ADR-0003-theme-persistence-and-foit-safe-bootstrap.md: 5bf8c9a350b920f57db5857a1a2f3c5db0ffc98866e64bb98d51b7e2fc929df5
+      docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md: 58caf68aa366ced7c3b675d3b0aa25001521472b607393c0b54641183ed7ff88
+      docs/adr/ADR-0005-release-install-migration-actuation.md: 7058ae8f00dad4d2f9d2a030b8af216a96314b82bd4f283e681435e90f6178c1
+      docs/adr/ADR-0006-microservices-architecture-with-container-co-location.md: 95a63ec7b462140e0a6313fd712ced50d6a194946074a17f7b20794a52bbc24f
+      docs/adr/ADR-0007-vendor-adapters-emit-parent-deployments.md: 467478cc55e5bc92a11e1f6e4dc942c2a3ccbc95b77140c6bef5dad3c461b6ca
+      docs/adr/README.md: e10b0a9b6ed2fec7bb03d9d45653d0544c0cb048bbdb3f3fca2552c18ef0b981
+    indexed-on: 2026-05-21
     index-files: [adr-index.idx]
-    source-bytes: 89772             # 7424 + 10756 + 6551 + 15692 + 12599 + 12633 + 21970 (ADR-0007) + 2147 (README)
-    index-bytes: 4898
-    compression: 0.055
+    source-bytes: 91032             # 7508 + 10841 + 6645 + 16604 + 12689 + 12741 + 22064 + 2200 (ADR-0008's 23936 excluded - not in manifest)
+    index-bytes: 5095
+    compression: 0.056
     compression-target: 0.15
     consumed-by: [solution-architect]
     # Re-extraction 2026-05-19: ADR-0005 (release-install migration actuation, accepted) + ADR-0006 (microservices architecture with container co-location, accepted — supersedes ADR-0002 on framing only; ADR-0002 retains co-location mechanics) added. ADR-0002 status updated to superseded. ADR-0004 cross-refs to ADR-0002 reframed to cite ADR-0006 for the framing while retaining ADR-0002 for the co-location mechanics.
     # Re-extraction 2026-05-20: ADR-0007 (vendor adapters convert vendor correlation signals into parent_deployments edges; read-side five-pass remains backstop, accepted — paired with issue #19; amends CR-0009 §3d endpoint list in parallel) added. README index row appended. ADR-0001 / ADR-0004 / ADR-0006 cross-refs untouched in source; their SHAs unchanged.
     # SHA refresh 2026-05-20 (Phase 7 doc-amend): ADR-0007 § Decision rule 1 worked-example table gained an "Endpoints required for the intra-run `needs:` signal (GHA)" sub-table listing the three GHA endpoints (run metadata for path+head_sha; jobs map; YAML at the run revision); § Consequences endpoint-budget bullet + NFR-02 sub-bullet + CR-0009 cross-ref updated from two endpoints to three; new endpoint role (run metadata returns path + head_sha so YAML is fetched at exact run revision) explained. adr-index.idx ADR-0007 row summary extended to list all three endpoints + revision-pinning rationale. No new ADR records; no schema changes; index file remains semantically valid.
+    # SHA refresh 2026-05-21: All seven ADR-0001..ADR-0007 + README source SHAs drifted via prose/cross-ref reflow only (no Decision text changes; no new ADRs in the 0001-0007 range). ADR-0008 (Leaky-bucket cap + republish-on-tick usage reporting, accepted, paired with CR-0011) is NEW in source and explicitly NOT extracted - see Outstanding issues. README index row's status column reflects ADR-0002 superseded-by-ADR-0006 + ADR-0006/ADR-0007 acceptance dates already; no in-file row edit needed. adr-index.idx remains semantically valid for the 7 tracked ADRs.
 
   - class: cr
     category: doc
     template: cr-index.idx
     recipe: builtin:cr
     source-glob: docs/cr/*.md
-    file-count: 10                  # CR-0001..CR-0010 (README.md not extracted as a record)
+    file-count: 10                  # CR-0001..CR-0010 (README.md not extracted as a record; CR-0011 present in source but NOT extracted - see Outstanding issues)
     sha256-by-file:
-      docs/cr/CR-0001-generic-project-agnostic.md: c0c905f131300d053a52bb0edd0da3c36607d3c52f6afaac7bfc8053b9e767ae
-      docs/cr/CR-0002-four-named-views-and-attribute-picker.md: 3ed10b8512b41431ec2e06323e552defb3f4e62c2c99df3c65ef8c45b6878576
-      docs/cr/CR-0003-tree-topology-and-layout-axis.md: 940e14b544ce42a47b026bb0849fc16f73eca82f5cb224446b181564f87ebd84
-      docs/cr/CR-0004-ref-and-sha-optional-fields.md: 651b61508a26f0a93930ccdb177e0b4278279be5c54ff16cd0eba74d974d9d07
-      docs/cr/CR-0005-ref-sha-display-and-topology.md: c338cbd917e011a97e80d4d94baa1e97d8ecad2f65236e477da660bf384c6aac
-      docs/cr/CR-0006-light-dark-auto-theme.md: 8eff79593a20d41cef065127c5ba9711a1df46c2eb64cd6c7cc0041e9035599a
-      docs/cr/CR-0007-defer-matrix-layout-to-phase-2.md: 87aee459bb1fee736090fa4ee79870541a7f21b91b68a93e98862dc214add5d5
-      docs/cr/CR-0008-api-validation-and-openapi-scalar.md: a35d1b17ee8a37c4902ff311a617d542429dfdb9a1865f384a8e69e815aa51d6
-      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: 4357c13a24bd99d6c4f7a63adeecddc51eeb5aa632a6996b19087aafd022e5b7
-      docs/cr/CR-0010-component-ci-pipeline.md: fa7f56de048606960439289e6bc8980f14a8984b03add3def2995b70783325bb
-      docs/cr/README.md: e2002dd99ae064b613bbeb5e3d9eae299544c22c232039a123aeecc97893abd8
-    indexed-on: 2026-05-20
+      docs/cr/CR-0001-generic-project-agnostic.md: 46122e736ab0c806f4bbab79efaba1529522e7828af29a8229dca452b8ec78c3
+      docs/cr/CR-0002-four-named-views-and-attribute-picker.md: e49cdd01887161415654495441563fc7280c764e8edb14c8bcaf4f4617fc490f
+      docs/cr/CR-0003-tree-topology-and-layout-axis.md: 34974fe60578d42bb66de89ca15f631ea948f1c69c291f73166338c1043acbfd
+      docs/cr/CR-0004-ref-and-sha-optional-fields.md: ba9b819cbe7fe7535ffc1dd0214f32c3829a713d6c8f4759ccfc810606bb1335
+      docs/cr/CR-0005-ref-sha-display-and-topology.md: 4f4eacf5cf7011719a5451caefe54dcaaf19d0d752015a9e14ad3aef31c8b508
+      docs/cr/CR-0006-light-dark-auto-theme.md: 2cb4e57afb5ec78e27906b925a571404ad16caa3c154b036c312a2ebf432b994
+      docs/cr/CR-0007-defer-matrix-layout-to-phase-2.md: f1df907f5973f77554733ab032f686c4995a0f3bf45d01c0d3f869d1b1caf5c2
+      docs/cr/CR-0008-api-validation-and-openapi-scalar.md: 48f5693db3544f15f480c218189c4cb1294a428ab7e61bd02dd30aacf8da6c44
+      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: da06d328483e41b55cfc23d5f492cf369b1c69f416a7f895c4d561b3f14df1a8
+      docs/cr/CR-0010-component-ci-pipeline.md: ac6f12914801c41c0a9d80a21822ecfcd90362bac756e2bb8b00fc947ab779ee
+      docs/cr/README.md: 5f3aae5e05a275e6bcff7df20bc597e0bac53b05e7d332c15deb739abc36be8e
+    indexed-on: 2026-05-21
     index-files: [cr-index.idx]
-    source-bytes: 158027             # 3201+12373+30052+8721+4007+5775+9110+18314+35081+28357+3036
-    index-bytes: 5766
-    compression: 0.036
+    source-bytes: 128475             # 3280+12461+30132+8799+4086+5849+9193+18398+35171+28432+3088 (CR-0011's 31783 excluded - not in manifest)
+    index-bytes: 5951
+    compression: 0.046
     compression-target: 0.15
     consumed-by: [solution-architect]
     # Re-extraction 2026-05-18: CR-0009 (optional pull-mode fetcher + X-Progress-Reporter header) + CR-0010 (component CI pipeline) added.
     # SHA refresh 2026-05-19: CR-0009 References block reframed to cite ADR-0006 (microservices framing) while retaining ADR-0002 (co-location mechanics); CR-0010 § 3a topology row + References block reframed identically. No new CR records; cr-index.idx remains semantically valid (titles/statuses/decision lines unchanged).
     # SHA refresh 2026-05-20: CR-0009 §3d endpoint list amended (paired with ADR-0007 + issue #19) — adds GET /repos/{o}/{r}/actions/runs/{run_id}/jobs + GET /repos/{o}/{r}/contents/.github/workflows/{file} so GHA adapter can emit needs:-derived intra-run + per-env-predecessor parent_deployments edges; both endpoints cacheable per cycle; silent-degrade with INFO log on failure; timing inference between parallel jobs rejected. Amendments / References blocks extended; status unchanged. CR-0009 cr-index.idx row summary extended; CR-0010 row unchanged (CR-0010 SHA/size drift in source-bytes recalc is from prior in-place reformatting, not a record change).
     # SHA refresh 2026-05-20 (Phase 7 doc-amend): CR-0009 §3d IN-list expanded from two GHA endpoints to three — adds GET /repos/{o}/{r}/actions/runs/{run_id} (run metadata for workflow path + head_sha) as a prerequisite to /jobs + /contents; the contents endpoint is reparameterised to /repos/{o}/{r}/contents/.github/workflows/{path}?ref={head_sha} so the YAML is fetched at the exact commit revision the run executed against (vs. as it is now on the default branch). Amendments block 2026-05-20 entry rephrased to enumerate three endpoints with revision-pinning rationale. cr-index.idx CR-0009 row summary extended accordingly; CR-0010 unchanged.
+    # SHA refresh 2026-05-21: All ten CR-0001..CR-0010 + README source SHAs drifted via prose/cross-ref reflow only (no status changes; no Change-block text changes for the tracked CRs). CR-0011 (Fetcher rate-limit governance - configurable self-imposed cap + usage reporting endpoints + dashboard surfacing, proposed, paired with ADR-0008) is NEW in source and explicitly NOT extracted - see Outstanding issues. cr-index.idx remains semantically valid for the 10 tracked CRs.
 
   - class: mockup
     category: doc
     template: mockup-index.idx
     recipe: builtin:mockup
     source: docs/ui/deployment-dashboard.html
-    sha256: 5d9dd9e8f5d3cab4ad42121f55d61c375032b69938ef81c155be954b3ad249ee
-    indexed-on: 2026-05-18
+    sha256: 44d2aa4cfae66cc92eee648d1315101b8d9585eb98cfcb585c869e2e3adf333a
+    indexed-on: 2026-05-21
     index-files: [mockup-index.idx]
-    source-bytes: 219877
+    source-bytes: 253416
     index-bytes: 4715
-    compression: 0.021
+    compression: 0.019
     compression-target: 0.25         # list-of-records target
     consumed-by: [frontend-engineer, qa-engineer]
     # Both consumers per bindings.md Per-role load-trigger overrides (always-tier).
+    # SHA refresh 2026-05-21: source grew 219877->253416 bytes via additional fixture services / state-coverage cases + minor CSS/JS refactors; H2-section structure unchanged (same 28 indexed rows: 4 invariants + theme/bootstrap + 9 CSS blocks + 6 HTML blocks + drawer + JS catalogues/fixture/helpers/component-state). All file:line anchors verified within tolerance (large content additions occur inside JS-Fixture-12-services block; downstream block ranges drifted but section names + invariants + state-id set unchanged). mockup-index.idx remains semantically valid.
 
   # ----------- Novel doc classes (declared in framework.config.yaml § index.classes) -----------
 
@@ -119,20 +120,21 @@ indexed:
       doc covers which UX axis for `frontend-engineer` (per-option mockup
       proposals) and `solution-architect` (semantic review).
     source-glob: docs/ui/*.md
-    file-count: 5
+    file-count: 5                  # 5 *-options.md files; env-tag-column-alignment.md + rate-limit-cluster.md + index.md are new in source but NOT extracted - see Outstanding issues
     sha256-by-file:
-      docs/ui/compact-options.md: 5328789a363004378700dd40115eb11379fdd6628a754d9cb8a61ce6d0423273
-      docs/ui/focus-layout-options.md: 1a65a07d65464208e6382183af2b3b2c9ad736c6ad2a71ba513ef706b10883fb
-      docs/ui/theme-options.md: a75cb7a54d2251a9a8068792caea2916c1dc761ed9336f276c5dc353e4cfdf1d
-      docs/ui/tree-topology-options.md: 6b50f8b3b701b46b2bc4a11b535c265f705633e2ad003bcafa5734a293329b64
-      docs/ui/version-display-options.md: a22c85547772221fbf400eef8eb49b1aed6479dda30ce2778dad03d74a95f666
-    indexed-on: 2026-05-18
+      docs/ui/compact-options.md: 9ac7066a78a21cd9376c87cd9b389fde1848f1cc11eb5058845ab0faf6f35157
+      docs/ui/focus-layout-options.md: 3879b520ffdf9c42a5a320ccdc26227762de9aad0ca490938152f22386b2c46f
+      docs/ui/theme-options.md: e813cbd94570ee3b78d83fc8d2d057e03dd259ef46a1e0c2536ad4cb74eed166
+      docs/ui/tree-topology-options.md: 467a5265f64651a5e2f85dde5ba8f45965a0ba10deb99f99170286796ccd4ae4
+      docs/ui/version-display-options.md: f0c5835cd55201fd3a95f055ec27a27405d606f9a003332a57b15aa635a0accf
+    indexed-on: 2026-05-21
     index-files: [ui-options-index.idx]
-    source-bytes: 39606
+    source-bytes: 39953              # 11661+9235+8547+4379+6131
     index-bytes: 1844
-    compression: 0.047
+    compression: 0.046
     compression-target: 0.25
     consumed-by: [frontend-engineer, solution-architect]   # per framework.config.yaml + bindings.md
+    # SHA refresh 2026-05-21: all 5 *-options.md SHAs drifted via prose / cross-ref reflow; titles + ux-axis + paired-CR-ADR + selected-design lines unchanged. ui-options-index.idx remains semantically valid. NEW: docs/ui/env-tag-column-alignment.md + docs/ui/rate-limit-cluster.md + docs/ui/index.md present in source - explicitly NOT extracted (env-tag-column-alignment paired with merged PR #30, rate-limit-cluster paired with CR-0011/ADR-0008/issue #28); they fall under the *-options.md glob convention but use different filename suffixes (-cluster, -alignment) - re-discover to surface a recipe decision (extend glob, rename, or skip).
 
   - class: wbs
     category: doc
@@ -143,15 +145,15 @@ indexed:
       stays in WBS. Drives PM pickup routing (track + phase-gate decisions)
       and SA scope-impact assessment when proposing CRs that touch scope.
     source: docs/WBS.md
-    sha256: e40ff7ff2d7d732a57f324e1c35e5112c18518de60a3bbde2255dfbd94261e2d
-    indexed-on: 2026-05-19
+    sha256: 49dedb9c8737c25460c1d0a26e5c966ab9c7a72d1b92d43eaceab17188c52003
+    indexed-on: 2026-05-21
     index-files: [wbs-index.idx]
-    source-bytes: 30464
-    index-bytes: 12386
-    compression: 0.407
+    source-bytes: 30983
+    index-bytes: 12397
+    compression: 0.400
     compression-target: 0.25
     compression-floor: 0.5
-    compression-status: 'over-target, under-floor — flagged. WBS is dense list-of-items; further compression would drop FR/owner cross-refs. Re-extraction 2026-05-18: §1.5 (10 items, CR-0009 fetcher + X-Progress-Reporter) added; §1.6 (9 items, CR-0010 component CI) added; §5.1 split into build+push (delivered by §1.6) + ACA-revision-update (deferred) halves; §5.2..§5.4 expanded as separate rows. SHA refresh 2026-05-19: §1.0 + §4.5 framing reframed to cite ADR-0006 (microservices architecture) while retaining ADR-0002 (co-location mechanics + future-split trigger conditions). No new items / FR / owner additions; wbs-index.idx remains semantically valid.'
+    compression-status: 'over-target, under-floor — flagged. WBS is dense list-of-items; further compression would drop FR/owner cross-refs. Re-extraction 2026-05-18: §1.5 (10 items, CR-0009 fetcher + X-Progress-Reporter) added; §1.6 (9 items, CR-0010 component CI) added; §5.1 split into build+push (delivered by §1.6) + ACA-revision-update (deferred) halves; §5.2..§5.4 expanded as separate rows. SHA refresh 2026-05-19: §1.0 + §4.5 framing reframed to cite ADR-0006 (microservices architecture) while retaining ADR-0002 (co-location mechanics + future-split trigger conditions). No new items / FR / owner additions; wbs-index.idx remains semantically valid. SHA refresh 2026-05-21: minor prose reflow inside existing items (CR-0010 / CR-0011 cross-refs); 11 H3 sections + same MVP §1.0-§1.6.9 + §2-§11 + CI/CD §1-11 + v2.0 §1-§11 item set; no new track / phase / item-id additions detected. wbs-index.idx remains semantically valid.'
     consumed-by: [project-manager, solution-architect]
 
   - class: ci-cd-integration
@@ -166,17 +168,19 @@ indexed:
       full doc. CR-0009 attribution + pull-mode subsections decomposed the
       same way (header overview / namespacing / example / pull-mode
       overview / when-to-use / env-vars / cursor-model / first-fetch /
-      failure-retry / resilience-invariant / local-dev).
+      failure-retry / resilience-invariant / local-dev). CR-0011 / ADR-0008
+      additions (rate-limit cap + anonymous-mode transport) extracted
+      as two new contract rows alongside the existing pull-mode block.
     source: docs/ci-cd-integration.md
-    sha256: bfbfa51ac4468935ff782e520e95f59d3157e00094c3c5b92c99160bef36e5c5
-    indexed-on: 2026-05-18
+    sha256: 9179bc7eec9eb2b1a5d11b237dd626510b368c6d8b14d0c9f346ff60fc5c6707
+    indexed-on: 2026-05-21
     index-files: [ci-cd-integration-index.idx]
-    source-bytes: 31364
-    index-bytes: 7973
-    compression: 0.254
+    source-bytes: 35517
+    index-bytes: 9287
+    compression: 0.261
     compression-target: 0.25
     compression-floor: 0.5
-    compression-status: 'on-target (0.254 vs 0.25). Re-extraction 2026-05-18: two new H2 sections (Event attribution / X-Progress-Reporter header + Pull-mode alternative) decomposed into 11 first-class rows so consumer roles can cite individual contract surfaces (resilience-handler tuning invariant, cursor model, first-fetch behaviour, env-var contract).'
+    compression-status: 'over-target, under-floor (0.261 vs 0.25, marginal). Re-extraction 2026-05-18: two new H2 sections (Event attribution / X-Progress-Reporter header + Pull-mode alternative) decomposed into 11 first-class rows so consumer roles can cite individual contract surfaces (resilience-handler tuning invariant, cursor model, first-fetch behaviour, env-var contract). Re-extraction 2026-05-21: two new H3 sections under § Pull-mode alternative — "Self-imposed rate-limit cap (CR-0011)" + "Anonymous-mode transport (zero-PAT installs)" — extracted as two new contract rows (pullmode-rate-limit-cap, pullmode-anonymous-mode). Source grew 31364->35517 bytes; index 7973->9287. pullmode-local-dev row summary extended to mention start.ps1 -Fetcher / -Demo entry points.'
     consumed-by: [devops-engineer, backend-engineer]
 
   - class: ci-pipelines
@@ -189,17 +193,20 @@ indexed:
       are surfaced as first-class rows (artefact / idempotent-contract /
       generation-only / download-howto) so downstream consumers can cite the
       idempotent-script contract without reading the full doc — mirrors the
-      wire-* row decomposition in ci-cd-integration-index.idx.
+      wire-* row decomposition in ci-cd-integration-index.idx. §10 (release
+      pipeline, ADR-0005 + issue #7) decomposed the same way — pipeline
+      overview / asset-visibility-auth / trigger / assets-published /
+      canonical-asset-url / migration-actuation / release-notes / cross-refs.
     source: docs/ci-cd-pipelines.md
-    sha256: 576bec5bfb0e343e754417b3e65d27620b78761f3c431cff82af48f0ca5714ff
-    indexed-on: 2026-05-18
+    sha256: 15ed1e08b17a9e91e88fbcc4f05ac156ac09cd63c2f080513bf18bdcdbd8cead
+    indexed-on: 2026-05-21
     index-files: [ci-pipelines-index.idx]
-    source-bytes: 12740
-    index-bytes: 4387
-    compression: 0.344
+    source-bytes: 24341
+    index-bytes: 8180
+    compression: 0.336
     compression-target: 0.25
     compression-floor: 0.5
-    compression-status: 'over-target, under-floor — flagged. Source is dense ops reference (12 sections + EF-migration subsection decomposition); further compression would drop contract anchors (tag-scheme, concurrency, EF-idempotent) the consumer roles depend on.'
+    compression-status: 'over-target, under-floor — flagged. Source is dense ops reference (13 sections + EF-migration subsection decomposition + new §10 Release-pipeline subsection decomposition); further compression would drop contract anchors (tag-scheme, concurrency, EF-idempotent, release-asset-URL, migration-actuation) the consumer roles depend on. Re-extraction 2026-05-21: §10 Release pipeline (v* tag -> release assets) is NEW (paired with ADR-0005 + issue #7) and decomposed into 8 first-class rows (release-pipeline / release-asset-visibility / release-trigger / release-assets-published / release-canonical-asset-url / release-migration-actuation / release-notes / release-cross-refs). Sections 11/12/13 renumbered (ghcr-to-acr from §10 to §11; troubleshooting from §11 to §12; future-work from §12 to §13). Source grew 12740->24341 bytes; index 4387->8180. version-bump row summary updated to mention release.yml firing alongside the 4 component workflows on the same tag push.'
     consumed-by: [devops-engineer, backend-engineer]
 
   # ============================================================
@@ -213,8 +220,8 @@ indexed:
     source-glob: 'backend/Dashboard.sln + backend/**/*.csproj + frontend/{,**/}package.json + testing/{e2e,mockup-visual}/package.json + Dockerfiles'
     file-count: 16
     sha256-by-file:
-      backend/Dashboard.sln: 5b67f4764b5ef966d34c97dab709a9bd264ff8af3702f4fa613d33db64490747
-      backend/api/Dashboard.Api/Dashboard.Api.csproj: 6cdc1ee830ee07cf20a5a124bb7ff10167862ce4ea0f602494a57962fe641ed2
+      backend/Dashboard.sln: b42f5a88163d0e4db51224629072c6c23d192dbdf640a6500e73ccce49b6d131
+      backend/api/Dashboard.Api/Dashboard.Api.csproj: 18cd23201a3eb8348303d80f401342001b66e95c8db029f54256257e3fef35e7
       backend/api/Dockerfile: 3aecf36e5526f5b2814694e49682e7109c07f95ba719af56f2a3e39ef216add3
       backend/read-api/Dashboard.ReadApi/Dashboard.ReadApi.csproj: dfa4007ffee9f70ba22f55c40ba6265696cc5a7a5be2cd04ac51614432b92603
       backend/read-api/Dashboard.ReadApi.Tests/Dashboard.ReadApi.Tests.csproj: 9ba398914b7a3aae2175a8f6a7b938545e712edb9187ef2533dfb8ac0a14b402
@@ -232,14 +239,14 @@ indexed:
       # NOTE: testing/mockup-visual/package.json also referenced by stack semantically;
       # tracked under `testing/mockup-visual/package.json: 3ff6ba73152ef9c02aea69d5dac7f73639e2f80e244d4b53df6849550f182c4c`
       # via commands manifest as well — kept here to avoid duplication.
-    indexed-on: 2026-05-18
+    indexed-on: 2026-05-21
     index-files: [stack.yaml]
     source-bytes: 28043
-    index-bytes: 5857
-    compression: 0.209
+    index-bytes: 8135
+    compression: 0.290
     compression-target: 0.15
     compression-floor: 0.5
-    compression-status: 'over-target, under-floor — flagged. Inventory captures 5 distinct tiers + cross-cutting rules.'
+    compression-status: 'over-target, under-floor — flagged. Inventory captures 5 distinct tiers + cross-cutting rules. SHA refresh 2026-05-21: backend/Dashboard.sln gained 3 new solution projects (Dashboard.Fetcher + Dashboard.Fetcher.Host + Dashboard.Fetcher.Tests per CR-0009 / WBS §1.5; under solution folders fetcher/ and fetcher-host/); backend/api/Dashboard.Api/Dashboard.Api.csproj gained Microsoft.EntityFrameworkCore.Design PackageReference (PrivateAssets=all) per CR-0010 §3l for `dotnet ef migrations script` CI invocation. stack.yaml gained new top-level `fetcher` tier (library + host + tests + Dockerfile + Resilience+Polly libs) but the three new csproj files are NOT in sha256-by-file (per protocol - new files require ginee-rediscover); solution-file change IS tracked. server-tier dep-count corrected 2->3 + EFCore.Design noted.'
     consumed-by: [solution-architect, backend-engineer, frontend-engineer, devops-engineer]
 
   - class: topology
@@ -249,16 +256,16 @@ indexed:
     source-glob: 'dev_env/docker-compose.*.yml + gateway/nginx.conf'
     file-count: 3
     sha256-by-file:
-      dev_env/docker-compose.local.yml: b3ca267348dfa4ed503d436095fb813cdee6b90c399d548be13556f6eea57f77
+      dev_env/docker-compose.local.yml: 718d806407750e0f29f6101689a992384cf60cf906c383c755fe064b37069f9c
       dev_env/docker-compose.scaled.yml: 7b502ae3a925f055dae2ec62b83b31a2563bc728c4eaf702b5c509e32f133096
       gateway/nginx.conf: afc32a95843e376b2a9e421e8c2cb0dec146e3745f9bdb839b02dc393cacacc4
-    indexed-on: 2026-05-18
+    indexed-on: 2026-05-21
     index-files: [topology.yaml]
     source-bytes: 22721
-    index-bytes: 3932
-    compression: 0.173
+    index-bytes: 4676
+    compression: 0.206
     compression-target: 0.15
-    compression-status: 'over-target, under-floor — flagged. IaC + k8s + Helm not present in repo yet (NFR-06 / WBS §4 planned).'
+    compression-status: 'over-target, under-floor — flagged. IaC + k8s + Helm not present in repo yet (NFR-06 / WBS §4 planned). SHA refresh 2026-05-21: dev_env/docker-compose.local.yml gained `fetcher` service under profiles:[fetcher] (CR-0009 / WBS §1.5; opt-in, outbound-only, no ports + no healthcheck per NFR-04 strict). topology.yaml services-local list extended with the fetcher entry; network-topology paragraph extended to note opt-in profile + outbound-only behaviour. Scaled compose + gateway/nginx.conf SHA unchanged.'
     consumed-by: [solution-architect, devops-engineer]
 
   - class: commands
@@ -274,20 +281,21 @@ indexed:
       frontend/shared/package.json: 21ca0d64c62cad06a2eb474648bfb3b9fb1409f8ccf184081476246a5c53d235
       testing/e2e/package.json: efeb9bcf665bee13232a8356b8b4b29bc972f9a0ee189d7494d002ff76ba9780
       testing/mockup-visual/package.json: 3ff6ba73152ef9c02aea69d5dac7f73639e2f80e244d4b53df6849550f182c4c
-      dev_env/start.ps1: a9f4284bcd01b80e7072f290f4fd119de3cea2ced9b69f6eae277e4d78fd0729
-      dev_env/stop.ps1: 8934c2e3ed4d60a7a4fcfa25b0078ee4de747775ae7d8ed27fc2a54c5a52dcdf
+      dev_env/start.ps1: 95d5410d3f669968dade7ac53be0f5089f50592d8584debb71bfb10276096bd6
+      dev_env/stop.ps1: 2db65cfebd59f8e18864f2d3bb4381c5d6ee852fd8317fd887b6dcb6932e43da
       testing/functional/run-tests.ps1: 1286a134b319ad3d78be959cd7eb2ba6dea6f45b9621e22f8757b96566d50596
       testing/e2e/run-tests.ps1: e94f50b35b2d52bcdd702e476cedf7cc7e0eacf003e39efb840b061bcc64486c
       testing/mockup-visual/run-tests.ps1: 2adbb8558d347c156d9a759e8d0a6cb6828eba33bd90b5352b50c4db037213e3
-      testing/scripts/seed.ps1: 88efd8b2bac25b05cb6f69b8d0bdf674dc16908b34921f65fb6407b9e1840b27
+      testing/scripts/seed.ps1: e596a2632e9306ff7db7a459e3181fbab14bb83882878ee09a203237aa8d3b19
       .agents/ginee/local/framework.config.yaml: '(maintained by project-manager — see manifest entry for the file independently)'
-    indexed-on: 2026-05-18
+    indexed-on: 2026-05-21
     index-files: [commands.yaml]
     source-bytes: 56929
-    index-bytes: 4881
-    compression: 0.086
+    index-bytes: 6168
+    compression: 0.108
     compression-target: 0.15
     consumed-by: [backend-engineer, frontend-engineer, devops-engineer, qa-engineer]
+    # SHA refresh 2026-05-21: dev_env/start.ps1 gained -Fetcher / -Demo / -AllowMissingGhaToken switches (CR-0009 fetcher profile + zero-PAT demo path per CR-0011 / install.ps1 parity); dev_env/stop.ps1 gained -Volumes switch + dual-compose tear-down (local + scaled); testing/scripts/seed.ps1 changed (declarative config-file mode; reads testing/config/local.json instead of -BaseUrl/-ApiKey loose flags). commands.yaml gained stack-up-fetcher + stack-up-demo entries; stack-down note extended; seed scope extended; start-ps1-switches cross-cutting row added.
 
   - class: conventions
     category: code
@@ -300,16 +308,16 @@ indexed:
       frontend/tsconfig.json: 6ab9dbbac0fb5647c93cbf0cbd665330d42da8ffdec12751b48e03d6ad6c2695
       frontend/tailwind.config.js: 90d5d20c510bc87387a21c42d043463fde84f3d05dd112742fc6614d24765b94
       frontend/postcss.config.js: c3275e0c1ab2639ab056915eac2a806b997a7879c31edce8898ec443a4823a06
-      frontend/angular.json: 6dad7f4c145c7fb58b34ffc3eb4813c4e49e3f0d9876751503c87b5b8ed11052
-      .gitignore: 941e677fdceb2ab18d8d4d464935c63d7c5c49b02a92f32fcbc8c5731630eb3a
+      frontend/angular.json: 9c2281f48d67aec595a01710d1fa0ce0459726e1136645f75282006fc380cee2
+      .gitignore: 675ffc9c1dd2f169dd45339ec859b540cd8b292e25925aab308dd3893044933b
       .dockerignore: 1ce5d470ea028ce4188f94f0284e74ebc3946ddc313ad2d3135ccbb553b6d342
-    indexed-on: 2026-05-18
+    indexed-on: 2026-05-21
     index-files: [conventions.yaml]
     source-bytes: 8752
-    index-bytes: 2668
-    compression: 0.305
+    index-bytes: 3296
+    compression: 0.377
     compression-target: 0.15
-    compression-status: 'over-target, under-floor — flagged. Source corpus is tiny (8.7KB); per-file existence-anchors push above 0.15.'
+    compression-status: 'over-target, under-floor — flagged. Source corpus is tiny (8.7KB); per-file existence-anchors push above 0.15. SHA refresh 2026-05-21: frontend/angular.json gained karmaConfig wiring across all 4 projects (dashboard + shared + matrix + drawer; CR-0010 §1.6.4 - shared karma.conf.js with ChromeHeadlessNoSandbox custom launcher + cobertura+lcov reporters). .gitignore gained 4 new sections: Claude Code runtime (.claude/worktrees/, .claude/scheduled_tasks.lock, .claude/settings.local.json), dotnet format scratch (format-report.json), additional CI / test-runner artefacts (junit*.xml / pester-results.xml / bats-results.tap), additional Terraform state guards (*.tfplan / crash.log). conventions.yaml gained build-conventions.karma-config row + backend-build.EFCore.Design note + ignored.gitignore patterns enumerated.'
     consumed-by: [frontend-engineer, qa-engineer]
 
   - class: runtime-facts
@@ -319,19 +327,17 @@ indexed:
     source-glob: 'dev_env/docker-compose.*.yml (env: blocks) + backend/README.md (env-var table)'
     file-count: 3
     sha256-by-file:
-      dev_env/docker-compose.local.yml: b3ca267348dfa4ed503d436095fb813cdee6b90c399d548be13556f6eea57f77
+      dev_env/docker-compose.local.yml: 718d806407750e0f29f6101689a992384cf60cf906c383c755fe064b37069f9c
       dev_env/docker-compose.scaled.yml: 7b502ae3a925f055dae2ec62b83b31a2563bc728c4eaf702b5c509e32f133096
       backend/README.md: '(SHA tracked via per-file walk; backend/README.md hashing deferred — entry primarily references env-var table on lines 55-60)'
-    indexed-on: 2026-05-18
+    indexed-on: 2026-05-21
     index-files: [runtime-facts.yaml]
-    source-bytes: '~9959 (env blocks only — compose files have non-env content not in scope; full files are 4738+5221+backend/README env-table excerpt)'
-    index-bytes: 5022
-    compression: '~0.50'
+    source-bytes: '~13000 (env blocks only - compose files have non-env content not in scope; full files are 9868+5221+backend/README env-table excerpt)'
+    index-bytes: 9995
+    compression: '~0.77 (env-block-only denominator); raw file-bytes denominator gives ~0.66 (9995/(9868+5221))'
     compression-target: 0.15
     compression-status: |
-      env-block-vs-file accounting is fuzzy; raw file-bytes denominator gives ~0.10 (5022/(4738+5221+backend/README)).
-      Per-recipe spirit: env-block-only denominator is the apples-to-apples figure.
-      Inventory documents 9 server + 4 data-tooling + 2 CI-callee env-vars + cross-cutting rules; collapsing further drops the FR-10 / NFR-04 / NFR-06 cross-refs the consumer roles depend on.
+      Re-extracted 2026-05-21: NEW fetcher tier introduced 10 env-vars (DASHBOARD_WRITE_API_URL/_KEY + PROGRESS_REPORTER + FETCHER_POLL_INTERVAL_SECONDS + INITIAL_FETCH_LIMIT + FETCHER_RATE_LIMIT_ABSOLUTE/_PERCENTAGE + FETCHER_ADAPTERS + GHA_TOKEN + GHA_REPOSITORIES + GHA_API_BASE_URL per CR-0009 / CR-0011 / ADR-0008); plus FetcherOptions / FetcherRateLimitOptions startup-validation rule. Source env-blocks grew ~2x; index grew 5022->9995 bytes. Compression ratio degraded but inventory remains lossless per existence rule (every declared env-var has one row). Remedy options if it grows further: collapse fetcher env-vars under a single composite row (loses per-var anchors the consumer roles need) OR mark class read-source-directly (compose env: blocks are already structured YAML; could be cited from topology.yaml instead). Current status: above 0.5 floor when measured against env-blocks-only; under 0.5 against full compose-file denominator. Flagged for adopter review at next ginee-rediscover.
     consumed-by: [backend-engineer, devops-engineer]
 
   - class: repo-map
@@ -343,7 +349,7 @@ indexed:
     indexed-on: 2026-05-18
     index-files: [repo-map.idx]
     source-bytes: '(filesystem walk — no scalar byte count; per-dir READMEs scanned: backend/, frontend/, dev_env/, testing/config/)'
-    index-bytes: 3923
+    index-bytes: 4292
     compression: 'N/A (filesystem inventory)'
     consumed-by: [solution-architect, devops-engineer, project-manager]
     # PM cites repo-map.idx indirectly via dispatch routing (project-manager.details.md staleness-check flow).

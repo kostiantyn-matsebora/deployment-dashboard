@@ -34,10 +34,22 @@ dev:
     delegates-to: 'docker compose -f dev_env/docker-compose.scaled.yml up'
     wd: '<repo-root>'
     tool: powershell + docker-compose
-    source-anchor: '@dev_env/start.ps1:13'
+    source-anchor: '@dev_env/start.ps1:35'
+  - name: stack-up-fetcher
+    cmd: 'pwsh -NoProfile -File dev_env/start.ps1 -Fetcher'
+    delegates-to: 'docker compose --profile fetcher up -d --build (requires $env:GHA_TOKEN OR -AllowMissingGhaToken / -Demo)'
+    wd: '<repo-root>'
+    tool: powershell + docker-compose
+    source-anchor: '@dev_env/start.ps1:35'
+  - name: stack-up-demo
+    cmd: 'pwsh -NoProfile -File dev_env/start.ps1 -Demo'
+    delegates-to: 'docker compose --profile fetcher up; defaults GHA_REPOSITORIES=[{owner:PostHog,repo:posthog}] + FETCHER_POLL_INTERVAL_SECONDS=60; implies -Fetcher + -AllowMissingGhaToken; anonymous-mode GitHub API (60 req/h) when no PAT exported'
+    wd: '<repo-root>'
+    tool: powershell + docker-compose
+    source-anchor: '@dev_env/start.ps1:35-46'
   - name: stack-down
     cmd: 'pwsh -NoProfile -File dev_env/stop.ps1'
-    delegates-to: 'docker compose down -v'
+    delegates-to: 'docker compose down --remove-orphans (both local + scaled; -Volumes opts in to volume removal)'
     wd: '<repo-root>'
     tool: powershell + docker-compose
     source-anchor: '@dev_env/stop.ps1'
@@ -97,7 +109,7 @@ lint:
 data:
   - name: seed
     cmd: 'pwsh -NoProfile -File testing/scripts/seed.ps1'
-    scope: POST prefilled deployment events to running stack via Ingest API
+    scope: POST prefilled deployment events to running stack via Ingest API; reads testing/config/local.json (writeBaseUrl + apiKey); reads testing/fixtures/seed-data.json
     prereq: dev_env/start.ps1 (stack up)
     tool: PowerShell + Invoke-RestMethod
     source-anchor: '@testing/scripts/seed.ps1'
@@ -115,3 +127,4 @@ ci:
 
 notes-no-makefile-or-justfile: Repo uses npm scripts + dotnet CLI + PowerShell .ps1 runners; no Makefile / justfile present.
 ci-runner-prefixes-rule: testing/* runners all require a running stack (dev_env/start.ps1) AND a fixed config under testing/config/local.json; do NOT accept -BaseUrl / -ApiKey loose flags.
+start-ps1-switches: '-Scaled (NFR-05 validation; replicas:3) | -Fetcher (CR-0009 pull-mode; requires $env:GHA_TOKEN OR -AllowMissingGhaToken) | -Demo (zero-PAT; implies -Fetcher + -AllowMissingGhaToken; routes via anonymous-mode GitHub API per ci-cd-integration.md § Anonymous-mode transport) | -AllowMissingGhaToken (placeholder PAT; 401s expected) | -HealthTimeoutSeconds (default 60)'

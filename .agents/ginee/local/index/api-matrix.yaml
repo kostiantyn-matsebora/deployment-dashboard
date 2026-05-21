@@ -1,5 +1,5 @@
 # class: api-matrix
-# source: docs/architecture.md §7 API Contract (+ CR-0003 topology + CR-0008 validation/OpenAPI + CR-0009 fetcher cursor + X-Progress-Reporter)
+# source: docs/architecture.md §7 API Contract (+ CR-0003 topology + CR-0008 validation/OpenAPI + CR-0009 fetcher cursor + X-Progress-Reporter + CR-0011 fetcher usage + ADR-0008 leaky-bucket cap + republish-on-tick)
 # recipe: builtin:architecture
 
 endpoints:
@@ -104,6 +104,28 @@ endpoints:
     notes: Upserts opaque cursor for (progress_reporter, source-id) into fetcher_state table. Cursor is VARCHAR(4096) NOT NULL keyed by (progress_reporter, source_id). Each adapter owns its cursor shape (ADR-0004 Decision 2).
     source: '@docs/architecture.md#api-contract'
 
+  - method: POST
+    path: /api/fetcher/usage
+    surface: Write (pull-mode adapter only, CR-0011)
+    auth: X-Api-Key (required)
+    required-request-headers:
+      - 'X-Progress-Reporter: ≤ 64 chars, non-whitespace - identifies pushing fetcher'
+    success: 200 OK
+    errors: [401 missing/invalid key, 422 missing/over-cap fields]
+    request-shape: '{ "adapter_id", "source_id", "upstream_limit", "upstream_remaining", "upstream_reset_at", "self_imposed_cap", "upstream_used", "observed_at" }'
+    response-shape: 'empty body'
+    notes: 'Fetcher pushes current upstream rate-limit observation + self-imposed cap on every poll tick (republish-on-tick recovers in-memory cache after replica restart). Backend caches latest snapshot per (adapter_id, source_id); no persistence. Paired ADR-0008 (leaky-bucket cap + republish-on-tick); paired CR-0011.'
+    source: '@docs/architecture.md#api-contract'
+
+  - method: GET
+    path: /api/fetcher/usage
+    surface: Read (CR-0011)
+    auth: none
+    success: 200 OK
+    response-shape: '{ "snapshots": [ { adapter_id, source_id, upstream_limit, upstream_remaining, upstream_reset_at, self_imposed_cap, upstream_used, observed_at, received_at } ] }'
+    notes: 'Latest cached snapshot per (adapter_id, source_id). Empty array {"snapshots":[]} when no fetcher has pushed yet - never 404. received_at = server-side POST-landing timestamp (lets clients stale-out cluster after 2 x poll_interval; independent of SSE wire per CR-0003 boundary).'
+    source: '@docs/architecture.md#api-contract'
+
   - method: GET
     path: /health
     surface: Read
@@ -140,8 +162,17 @@ cross-cutting:
     header: X-Progress-Reporter
     cap: 64 chars, non-whitespace
     optional-on: POST /api/deployments
-    required-on: GET/PUT /api/fetcher/state/{source-id}
+    required-on: GET/PUT /api/fetcher/state/{source-id}, POST /api/fetcher/usage
     persistence: nullable progress_reporter VARCHAR(64) column on events/deployments table
     surfaced-on: [DeploymentEventResponse, CurrentDeployment (matrix.current + slot endpoint + SSE state.current), LastSuccessfulDeployment (matrix.lastSuccessful + SSE state.lastSuccessful)]
     convention: '<source-component>/<adapter-or-context> - e.g. dashboard-fetcher/github-actions, ci-pipeline/gha-composite, manual/<operator-name>; free-form permitted'
     source: '@docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md'
+  fetcher-usage:
+    push-endpoint: POST /api/fetcher/usage
+    read-endpoint: GET /api/fetcher/usage
+    cache-shape: in-memory per (adapter_id, source_id); no persistence
+    recovery: republish-on-tick (fetcher repushes every poll tick) restores cache after replica restart
+    client-staleness-rule: 2 x poll_interval since received_at -> treat snapshot as stale
+    sse-boundary: usage snapshots do NOT ride SSE wire (per CR-0003 SSE-carries-slot-updates-only); clients poll GET endpoint
+    paired-with: '@docs/adr/ADR-0008-leaky-bucket-cap-and-republish-on-tick.md (NEW — not in manifest); @docs/cr/CR-0011-fetcher-rate-limit-governance.md (NEW — not in manifest)'
+    source: '@docs/architecture.md#api-contract'

@@ -6,19 +6,20 @@ tiers:
   server:
     language: C# / .NET 10 (net10.0)
     runtime: ASP.NET Core 10 (mcr.microsoft.com/dotnet/aspnet:10.0)
-    framework: ASP.NET Core Minimal API (co-located Write + Read API services — microservices architecture per ADR-0006, co-location mechanics per ADR-0002)
+    framework: ASP.NET Core Minimal API (co-located Write + Read API services - microservices architecture per ADR-0006, co-location mechanics per ADR-0002)
     primary-libs:
       - Microsoft.AspNetCore.OpenApi 10.0.7 (CR-0008)
       - Scalar.AspNetCore 2.14.14 (CR-0008)
       - Microsoft.EntityFrameworkCore 10.0.0 + Design + Relational + Sqlite
+      - Microsoft.EntityFrameworkCore.Design 10.0.0 (PrivateAssets=all; on Dashboard.Api host so `dotnet ef migrations script` works in CI - CR-0010 §3l)
       - Npgsql.EntityFrameworkCore.PostgreSQL 10.0.0
     structure:
-      - 'backend/api/Dashboard.Api (host project — Microsoft.NET.Sdk.Web; references write-api + read-api + shared)'
-      - 'backend/write-api/Dashboard.WriteApi (library — endpoint group)'
-      - 'backend/read-api/Dashboard.ReadApi (library — endpoint group)'
-      - 'backend/shared/Dashboard.Shared (library — DbContext + entities + migrations + middleware + NOTIFY/LISTEN + SSE writer)'
+      - 'backend/api/Dashboard.Api (host project - Microsoft.NET.Sdk.Web; references write-api + read-api + shared)'
+      - 'backend/write-api/Dashboard.WriteApi (library - endpoint group)'
+      - 'backend/read-api/Dashboard.ReadApi (library - endpoint group)'
+      - 'backend/shared/Dashboard.Shared (library - DbContext + entities + migrations + middleware + NOTIFY/LISTEN + SSE writer)'
       - 'backend/{write-api,read-api,shared}/Dashboard.*.Tests (xUnit unit tests; SQLite in-memory)'
-    dockerfile: '@backend/api/Dockerfile (FROM mcr.microsoft.com/dotnet/sdk:10.0 build → aspnet:10.0 runtime; EXPOSE 8080)'
+    dockerfile: '@backend/api/Dockerfile (FROM mcr.microsoft.com/dotnet/sdk:10.0 build -> aspnet:10.0 runtime; EXPOSE 8080)'
     solution: '@backend/Dashboard.sln'
     manifests:
       - '@backend/api/Dashboard.Api/Dashboard.Api.csproj'
@@ -28,36 +29,59 @@ tiers:
       - '@backend/read-api/Dashboard.ReadApi.Tests/Dashboard.ReadApi.Tests.csproj'
       - '@backend/shared/Dashboard.Shared/Dashboard.Shared.csproj'
       - '@backend/shared/Dashboard.Shared.Tests/Dashboard.Shared.Tests.csproj'
-    dep-count: 2 (Dashboard.Api) + 5 (Dashboard.Shared); host references libraries via ProjectReference (3)
+    dep-count: 3 (Dashboard.Api: OpenApi + Scalar + EFCore.Design) + 5 (Dashboard.Shared); host references libraries via ProjectReference (3)
     notes: |
       OpenApi + Scalar packages live on the host project (CR-0008).
-      EF Core stack lives on Dashboard.Shared (DbContext + migrations).
+      EF Core stack lives on Dashboard.Shared (DbContext + migrations); EF Design also on Dashboard.Api host
+      so `dotnet ef migrations script --idempotent` resolves the startup project in CI (CR-0010 §3l).
       No FluentValidation / AutoMapper / MediatR (banned per CLAUDE.md).
       GenerateDocumentationFile=true on host + shared to feed OpenAPI semantic enrichment.
+
+  fetcher:
+    language: C# / .NET 10 (net10.0)
+    runtime: ASP.NET Core 10 Worker (Microsoft.NET.Sdk.Worker)
+    framework: Hosted worker service - optional pull-mode adapter (CR-0009, ADR-0004); minReplicas==maxReplicas==1 when enabled
+    primary-libs:
+      - Microsoft.Extensions.Http.Resilience (Polly v8 internally - retry + circuit-breaker)
+      - HttpClient (typed clients for Write-API + GitHub-API)
+      - Dashboard.Shared (DTO reuse - no DTO duplication)
+    structure:
+      - 'backend/fetcher/Dashboard.Fetcher (library - ICiCdAdapter interface + GitHubActionsAdapter + scheduler + rate-limit cap logic per CR-0011/ADR-0008)'
+      - 'backend/fetcher-host/Dashboard.Fetcher.Host (Worker host - composition root; env-var configuration; Write API client)'
+      - 'backend/fetcher/Dashboard.Fetcher.Tests (xUnit unit + functional)'
+    dockerfile: '@backend/fetcher-host/Dockerfile (FROM mcr.microsoft.com/dotnet/sdk:10.0 build -> aspnet:10.0 runtime; image=deployment-dashboard/fetcher)'
+    manifests:
+      - '@backend/fetcher/Dashboard.Fetcher/Dashboard.Fetcher.csproj (not yet tracked in stack manifest per protocol - present in Dashboard.sln since 2026-05; awaiting next ginee-rediscover)'
+      - '@backend/fetcher-host/Dashboard.Fetcher.Host/Dashboard.Fetcher.Host.csproj (not yet tracked - present in Dashboard.sln)'
+      - '@backend/fetcher/Dashboard.Fetcher.Tests/Dashboard.Fetcher.Tests.csproj (not yet tracked - present in Dashboard.sln)'
+    notes: |
+      Three new solution projects added in 2026-05 (CR-0009 / WBS §1.5). Not in this manifest's
+      sha256-by-file map - re-run @team-lead rediscover to track. Solution file (Dashboard.sln) is
+      the source-of-truth for project presence and IS tracked here.
 
   client:
     language: TypeScript ~5.8 (strict)
     framework: Angular 20 (standalone components, zoneless change detection)
     state-lib: '@ngrx/signals ^20.0.0'
-    styling: Tailwind CSS ^3.4 (no darkMode — single [data-theme=dark] CSS overlay; see ADR-0003)
+    styling: Tailwind CSS ^3.4 (no darkMode - single [data-theme=dark] CSS overlay; see ADR-0003)
     structure:
       - 'frontend/dashboard (application shell; main.ts; styles.css; proxy.conf.json)'
-      - 'frontend/matrix (library @dd/matrix — pipeline matrix + views + picker)'
-      - 'frontend/drawer (library @dd/drawer — history drawer)'
-      - 'frontend/shared (library @dd/shared — Signal Store + API client + SSE service + models + fixtures)'
-    dockerfile: '@frontend/dashboard/Dockerfile (FROM node:22-alpine build → nginx:alpine runtime; EXPOSE 80)'
+      - 'frontend/matrix (library @dd/matrix - pipeline matrix + views + picker)'
+      - 'frontend/drawer (library @dd/drawer - history drawer)'
+      - 'frontend/shared (library @dd/shared - Signal Store + API client + SSE service + models + fixtures)'
+    dockerfile: '@frontend/dashboard/Dockerfile (FROM node:22-alpine build -> nginx:alpine runtime; EXPOSE 80)'
     manifests:
       - '@frontend/package.json (workspace root; build/test/lint/start scripts)'
       - '@frontend/dashboard/ng-package.json + tsconfig.app.json + tsconfig.spec.json'
       - '@frontend/matrix/package.json (peerDeps: @angular/{common,core} + @dd/shared)'
       - '@frontend/drawer/package.json (peerDeps: @angular/{common,core} + @dd/shared)'
       - '@frontend/shared/package.json (peerDeps: @angular/{common,core} + @ngrx/signals)'
-      - '@frontend/angular.json (workspace: 1 app dashboard + 3 libraries shared/matrix/drawer)'
+      - '@frontend/angular.json (workspace: 1 app dashboard + 3 libraries shared/matrix/drawer; karmaConfig wired across all 4 projects per CR-0010 §1.6.4)'
     dep-count-frontend-root: 9 deps + 14 devDeps (@angular/* + @ngrx/signals + tslib + zone.js + Karma/Jasmine + ng-packagr + autoprefixer + postcss + tailwindcss + typescript)
     notes: |
       Workspace-level deps in /frontend/package.json. Nested libraries declare peer-deps only.
       Tailwind content globs: dashboard/src + matrix/src + drawer/src + shared/src (**/*.{html,ts}).
-      Path aliases: @dd/{shared,matrix,drawer} → */src/public-api.ts (no deep imports).
+      Path aliases: @dd/{shared,matrix,drawer} -> */src/public-api.ts (no deep imports).
       No darkMode mode set; theme handled via [data-theme=dark] CSS overlay (mockup parity).
 
   gateway:
@@ -82,7 +106,7 @@ tiers:
       projects: '@testing/functional/Dashboard.Functional.Tests/'
     scripts:
       seed: '@testing/scripts/seed.ps1'
-      cleanup: '(planned per WBS §10 — cleanup.ps1 not yet present)'
+      cleanup: '(planned per WBS §10 - cleanup.ps1 not yet present)'
 
 excluded-paths:
   - 'node_modules/**'
@@ -94,6 +118,7 @@ cross-cutting:
     api-container: 8080 (ASPNETCORE_URLS=http://+:8080)
     dashboard-container: 80 (internal; nginx static)
     gateway: 80 internal / 8080 host-published (dev)
+    fetcher-container: '(no inbound port - outbound only; NFR-04 strict; no healthcheck)'
   banned-libs:
     - Serverless / Functions / Lambda
     - FluentValidation / AutoMapper / MediatR
