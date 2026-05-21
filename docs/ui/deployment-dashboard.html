@@ -225,6 +225,50 @@
        7 chars. Implemented by `shortSha(value)` in the script;
        returns `''` for null/undefined so the null-render
        invariant continues to hold without a special case.
+       ============================================================
+       RATE-LIMIT CLUSTER (CR-0011 § 3d / Issue #28) — NFR-09 mirror
+
+       Stats-bar carries TWO right-aligned occupants on hover:
+         a) Left cluster — Services / Failures / Last deploy /
+            Never-reached-PROD. `data-testid="stats-bar-left"`.
+         b) Right cluster — Fetcher rate-limit usage pill + per-
+            source counter (or collapsed dot + percent under
+            constrained width). `data-testid="rate-limit-cluster"`.
+
+       Reflow rule (consumes NFR-09):
+         - The right cluster's left edge MUST be ≥ left
+           cluster's right edge + 24 px gutter at every
+           viewport ≥ 1024 px and every services-count +
+           adapters-count combination in the fixture.
+         - The cluster auto-collapses to a single dot +
+           percent (~80 px footprint) when the measured slack
+           falls below 360 px OR viewport < 1280 px. Toggled
+           by a ResizeObserver on the stats-bar element +
+           window resize listener wired in
+           bootstrapPersistence — same observer pattern the
+           connector geometry uses (head-comment item c).
+
+       Severity-band colour tokens (light + dark) compose with
+       the Theme axis (CR-0006) — pills use the existing
+       Tailwind utility classes (`bg-{green,amber,red}-100`,
+       `text-{green,amber,red}-700`) already remapped by the
+       single `[data-theme="dark"]` block in <style>. NO new
+       palette tokens introduced.
+
+       `highlight-hint` reconciliation (per
+       docs/ui/rate-limit-cluster.md §
+       highlight-hint reconciliation): the hint stacks
+       VERTICALLY above the cluster — both retain their
+       canonical right-aligned position; the strip grows ~14 px
+       in height during the hover only. Outer flex on the
+       stats-bar uses `items-start` so the strip's intrinsic
+       height tracks the taller of the two right-side rows
+       without affecting the left cluster's vertical position.
+
+       Stale-affordance fires when `now - received_at > 2 ×
+       USAGE_POLL_INTERVAL_MS` (MVP-hard-coded 60 s). All-stale
+       cluster renders dimmed (opacity 0.5) + neutral grey +
+       literal "—" + italic "stale" label.
        ============================================================ -->
 
   <!-- ============================================================
@@ -1013,8 +1057,10 @@
     [data-theme="dark"] .text-orange-800 { color: #fed7aa !important; }
 
     /* Amber — ⚠ prev-failed badge + Focus pin highlight + workflow-rows
-       default-row pill backdrop */
+       default-row pill backdrop + rate-limit amber severity pill (CR-0011 § 3d) */
     [data-theme="dark"] .bg-amber-50 { background-color: #2a1f0a !important; }
+    [data-theme="dark"] .bg-amber-100 { background-color: #2a1f0a !important; }
+    [data-theme="dark"] .bg-amber-500 { background-color: #f59e0b !important; }
     [data-theme="dark"] .border-amber-200 { border-color: #92400e !important; }
     [data-theme="dark"] .text-amber-600 { color: #fcd34d !important; }
     [data-theme="dark"] .text-amber-700 { color: #fcd34d !important; }
@@ -1320,29 +1366,158 @@
   </header>
 
   <!-- ====================== Stats bar ====================== -->
-  <div class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6">
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-500">Services</span>
-      <span class="text-sm font-bold text-gray-900" x-text="filteredServices.length + ' / ' + services.length"></span>
+  <!--
+    The stats bar carries TWO clusters per CR-0011 § 3d:
+      a) Left cluster (data-testid="stats-bar-left") — Services /
+         Failures / Last deploy / Never-reached-PROD.
+      b) Right cluster (data-testid="rate-limit-cluster") — fetcher
+         rate-limit usage; right-aligned via `ml-auto` on the
+         right-side wrapper.
+
+    The right-side wrapper is a flex-COLUMN so the `highlight-hint`
+    (which previously took the `ml-auto` slot on its own) can stack
+    ABOVE the cluster when a version is hovered — chosen
+    reconciliation strategy from docs/ui/rate-limit-cluster.md
+    § highlight-hint reconciliation. The outer flex uses
+    `items-start` so the strip's intrinsic height is the
+    taller of the two columns; the left cluster centres
+    itself within that height via `self-center` on its wrapper.
+
+    NFR-09 reflow invariant — the cluster collapses to a
+    single dot + percent when the measured horizontal slack
+    between left-cluster.right and strip.right drops below
+    360 px OR the viewport is below 1280 px. Toggle is wired
+    in bootstrapPersistence via a ResizeObserver on the strip
+    + a window resize listener (mirror of the connector-
+    geometry observer pattern, head-comment item c).
+  -->
+  <div class="bg-white border-b border-gray-200 px-6 py-3 flex items-start gap-6" data-testid="stats-bar">
+    <div class="flex items-center gap-6 self-center" data-testid="stats-bar-left">
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium text-gray-500">Services</span>
+        <span class="text-sm font-bold text-gray-900" x-text="filteredServices.length + ' / ' + services.length"></span>
+      </div>
+      <div class="w-px h-4 bg-gray-200"></div>
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
+        <span class="text-sm font-medium text-gray-500">Failures</span>
+        <span class="text-sm font-bold" :class="failureCount > 0 ? 'text-red-600' : 'text-gray-900'" x-text="failureCount"></span>
+      </div>
+      <div class="w-px h-4 bg-gray-200"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium text-gray-500">Last deploy</span>
+        <span class="text-sm font-bold text-gray-900">1 hour ago</span>
+      </div>
+      <div class="w-px h-4 bg-gray-200"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium text-gray-500">Never reached PROD</span>
+        <span class="text-sm font-bold text-gray-900" x-text="neverProdCount"></span>
+      </div>
     </div>
-    <div class="w-px h-4 bg-gray-200"></div>
-    <div class="flex items-center gap-2">
-      <span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
-      <span class="text-sm font-medium text-gray-500">Failures</span>
-      <span class="text-sm font-bold" :class="failureCount > 0 ? 'text-red-600' : 'text-gray-900'" x-text="failureCount"></span>
-    </div>
-    <div class="w-px h-4 bg-gray-200"></div>
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-500">Last deploy</span>
-      <span class="text-sm font-bold text-gray-900">1 hour ago</span>
-    </div>
-    <div class="w-px h-4 bg-gray-200"></div>
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-500">Never reached PROD</span>
-      <span class="text-sm font-bold text-gray-900" x-text="neverProdCount"></span>
-    </div>
-    <div class="ml-auto text-xs text-gray-400 italic" x-show="highlightedVersion" x-cloak>
-      Showing all environments with <span class="font-semibold text-amber-600" x-text="highlightedVersion"></span>
+
+    <!-- Right-side wrapper: flex-column, right-aligned via ml-auto.
+         Row 1 (top, conditional) — highlight-hint, italic gray.
+         Row 2 (bottom)          — rate-limit cluster (pill + counter)
+         OR its collapsed form (dot + percent only). -->
+    <div class="ml-auto flex flex-col items-end gap-1" data-testid="rate-limit-cluster">
+      <!-- Row 1 — highlight-hint. Stacks above the cluster. -->
+      <div class="text-xs text-gray-400 italic" x-show="highlightedVersion" x-cloak>
+        Showing all environments with <span class="font-semibold text-amber-600" x-text="highlightedVersion"></span>
+      </div>
+
+      <!-- Row 2 — rate-limit cluster.
+           Hidden when no fetcher has pushed yet (cold start). -->
+      <div class="flex items-center gap-2 relative" x-show="usageSnapshots.length > 0" x-cloak>
+
+        <!-- Full layout — pill + counter. Renders when not collapsed AND not all-stale. -->
+        <template x-if="!usageClusterCollapsed && !rateLimitAllStale && rateLimitWorstSnapshot">
+          <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 px-2 py-0.5 border rounded-full text-xs font-medium"
+                 :class="rateLimitPillClasses(rateLimitWorstBand)"
+                 :title="rateLimitTooltipFor(rateLimitWorstSnapshot)"
+                 data-testid="rate-limit-pill">
+              <span class="w-2 h-2 rounded-full" :class="rateLimitDotClasses(rateLimitWorstBand)"></span>
+              <span><span x-text="rateLimitWorstPercent"></span>% used</span>
+            </div>
+            <button type="button"
+                    class="text-xs text-gray-500 hover:text-gray-700 underline-offset-2 hover:underline"
+                    @click.stop="usagePopoverOpen = !usagePopoverOpen"
+                    :aria-expanded="usagePopoverOpen.toString()"
+                    aria-haspopup="dialog"
+                    data-testid="rate-limit-counter">
+              · <span x-text="usageSnapshots.length"></span> sources
+            </button>
+          </div>
+        </template>
+
+        <!-- Collapsed layout — dot + percent only. -->
+        <template x-if="usageClusterCollapsed && !rateLimitAllStale && rateLimitWorstSnapshot">
+          <button type="button"
+                  class="flex items-center gap-1.5 text-xs font-medium hover:underline underline-offset-2"
+                  :class="rateLimitWorstBand === 'red'   ? 'text-red-700'   :
+                          rateLimitWorstBand === 'amber' ? 'text-amber-700' :
+                          'text-green-700'"
+                  @click.stop="usagePopoverOpen = !usagePopoverOpen"
+                  :title="rateLimitTooltipFor(rateLimitWorstSnapshot)"
+                  data-testid="rate-limit-pill-collapsed">
+            <span class="w-2 h-2 rounded-full" :class="rateLimitDotClasses(rateLimitWorstBand)"></span>
+            <span><span x-text="rateLimitWorstPercent"></span>%</span>
+          </button>
+        </template>
+
+        <!-- Stale layout — dimmed neutral pill, "—" instead of %, italic "stale" label.
+             Fires when EVERY snapshot is stale (no fresh data in 2 × poll_interval). -->
+        <template x-if="rateLimitAllStale">
+          <div class="flex items-center gap-1.5 px-2 py-0.5 border rounded-full text-xs font-medium opacity-50 bg-gray-100 border-gray-200 text-gray-500"
+               :title="rateLimitStaleTooltipFor(rateLimitMostRecentReceivedAt ? { received_at: rateLimitMostRecentReceivedAt } : null)"
+               data-testid="rate-limit-stale">
+            <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+            <span>— <span class="italic">stale</span></span>
+          </div>
+        </template>
+
+        <!-- Per-source popover — opens on counter / collapsed-pill click.
+             Right-anchored; closes on outside-click (wired in
+             bootstrapPersistence) or Escape. -->
+        <div x-show="usagePopoverOpen"
+             x-cloak
+             @keydown.escape.window="usagePopoverOpen = false"
+             class="absolute top-full right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-20"
+             style="background-color: var(--theme-popover-bg, #ffffff); border-color: var(--theme-popover-bd, #e5e7eb); color: var(--theme-popover-fg, #111827);"
+             role="dialog"
+             aria-label="Rate-limit usage by source"
+             data-testid="rate-limit-popover">
+          <div class="px-3 pb-1.5 text-[11px] uppercase tracking-wide"
+               style="color: var(--theme-popover-muted-fg, #6b7280);">
+            Per-source usage
+          </div>
+          <template x-for="snap in usageSnapshots" :key="snap.adapter_id + '|' + snap.source_id">
+            <div class="px-3 py-1.5 flex items-center gap-2 text-xs hover:bg-gray-50"
+                 :style="`--hover-bg: var(--theme-popover-hover-bg, #f9fafb)`">
+              <span class="w-2 h-2 rounded-full shrink-0"
+                    :class="rateLimitDotClasses(isUsageStaleHelper(snap) ? 'neutral' : usageBandHelper(snap))"></span>
+              <div class="flex-1 min-w-0">
+                <div class="font-mono text-[11px] truncate" x-text="snap.adapter_id + ' / ' + snap.source_id"></div>
+                <div style="color: var(--theme-popover-muted-fg, #6b7280);" class="text-[10px]">
+                  cap <span x-text="snap.self_imposed_cap.toLocaleString('en-US')"></span>
+                  · resets <span x-text="formatResetHelper(snap.upstream_reset_at)"></span>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <div class="text-xs font-semibold">
+                  <span x-show="!isUsageStaleHelper(snap)"><span x-text="rateLimitSnapshotPercent(snap)"></span>%</span>
+                  <span x-show="isUsageStaleHelper(snap)" class="italic text-gray-400">stale</span>
+                </div>
+                <div class="text-[10px]" style="color: var(--theme-popover-muted-fg, #6b7280);">
+                  <span x-text="snap.upstream_used.toLocaleString('en-US')"></span>
+                  / <span x-text="snap.upstream_limit.toLocaleString('en-US')"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -2970,6 +3145,100 @@
       const DEPTH_LABELS = computeDepthLabels(SERVICES);
 
       // ============================================================
+      // Fetcher rate-limit cluster (CR-0011 / Issue #28).
+      //
+      // Static fixture of `GET /api/fetcher/usage` snapshots — wire
+      // shape matches CR-0011 § 3b verbatim. Three snapshots span
+      // all three severity bands (green < 60%, amber 60–85%, red > 85%)
+      // to exercise the worst-band aggregation rule from
+      // docs/ui/rate-limit-cluster.md § Per-source-id presentation.
+      //
+      // `received_at` is recent (a few seconds ago) — fresh, not
+      // stale. To exercise the stale path manually, push received_at
+      // back by > 2 × poll_interval (default 120 s) in the browser
+      // console:
+      //   Alpine.evaluate(document.body, 'usageSnapshots[0].received_at = new Date(Date.now() - 200000).toISOString()')
+      //
+      // Two snapshots intentionally share `adapter_id = github-actions`
+      // + the same `self_imposed_cap = 1500` — exercises the ADR-0008
+      // Decision 3 invariant "rows from the same PAT show the same
+      // cap" (visible in the popover).
+      // ============================================================
+      const NOW_ISO  = new Date().toISOString();
+      const RESET_ISO = new Date(Date.now() + 18 * 60 * 1000).toISOString(); // 18 min from now
+      const MOCK_USAGE_SNAPSHOTS = [
+        {
+          adapter_id:         'github-actions',
+          source_id:          'acme/widget-a',
+          upstream_limit:     5000,
+          upstream_remaining: 3600,
+          upstream_reset_at:  RESET_ISO,
+          self_imposed_cap:   1500,
+          upstream_used:      1400,
+          observed_at:        NOW_ISO,
+          received_at:        NOW_ISO
+        },
+        {
+          adapter_id:         'github-actions',
+          source_id:          'acme/widget-b',
+          upstream_limit:     5000,
+          upstream_remaining: 1250,
+          upstream_reset_at:  RESET_ISO,
+          self_imposed_cap:   1500,
+          upstream_used:      3750,
+          observed_at:        NOW_ISO,
+          received_at:        NOW_ISO
+        },
+        {
+          adapter_id:         'azure-devops',
+          source_id:          'contoso/payments',
+          upstream_limit:     5000,
+          upstream_remaining: 600,
+          upstream_reset_at:  RESET_ISO,
+          self_imposed_cap:   2500,
+          upstream_used:      4400,
+          observed_at:        NOW_ISO,
+          received_at:        NOW_ISO
+        }
+      ];
+
+      // MVP-hard-coded poll interval — CR-0011 § 3d footnote. Future:
+      // read from a config endpoint. Stale-affordance fires when
+      // `now - received_at > 2 × USAGE_POLL_INTERVAL_MS`.
+      const USAGE_POLL_INTERVAL_MS = 60 * 1000;
+
+      function usageBandOf(snapshot) {
+        const ratio = snapshot.upstream_used / snapshot.upstream_limit;
+        if (ratio > 0.85)  return 'red';
+        if (ratio >= 0.60) return 'amber';
+        return 'green';
+      }
+      function usageRatioOf(snapshot) {
+        return snapshot.upstream_used / snapshot.upstream_limit;
+      }
+      function isUsageStale(snapshot, nowMs) {
+        const receivedMs = Date.parse(snapshot.received_at);
+        return (nowMs - receivedMs) > (2 * USAGE_POLL_INTERVAL_MS);
+      }
+      function formatRelativeMinutes(iso, nowMs) {
+        const deltaSec = Math.max(0, Math.round((nowMs - Date.parse(iso)) / 1000));
+        if (deltaSec < 60)    return deltaSec + 's ago';
+        const mins = Math.round(deltaSec / 60);
+        if (mins < 60)        return mins + ' min ago';
+        const hrs = Math.round(mins / 60);
+        return hrs + ' h ago';
+      }
+      function formatResetTime(iso) {
+        const d = new Date(iso);
+        const hh = String(d.getUTCHours()).padStart(2, '0');
+        const mm = String(d.getUTCMinutes()).padStart(2, '0');
+        return hh + ':' + mm + ' UTC';
+      }
+      function formatThousands(n) {
+        return n.toLocaleString('en-US');
+      }
+
+      // ============================================================
       // Component state
       // ============================================================
       return {
@@ -3010,6 +3279,23 @@
         search: '',
         showFailuresOnly: false,
         highlightedVersion: null,
+
+        // Fetcher rate-limit usage cluster (CR-0011 § 3d).
+        // `usageSnapshots` mirrors `GET /api/fetcher/usage`'s `snapshots`
+        // array verbatim. `usageNowTick` is bumped by a 1 s interval so
+        // the stale-affordance re-evaluates without a full Alpine
+        // re-render; getters that depend on it (isStale / staleness
+        // label) read it inside the getter body to register the
+        // dependency. `usagePopoverOpen` drives the per-source detail
+        // popover.
+        usageSnapshots: clone(MOCK_USAGE_SNAPSHOTS),
+        usageNowTick:   Date.now(),
+        usagePopoverOpen: false,
+        // `usageClusterCollapsed` is written by a ResizeObserver in
+        // bootstrapPersistence whenever the right-hand slack is below
+        // 360 px OR the viewport is below 1280 px. Read by the cluster
+        // template to switch to collapsed mode (dot + percent only).
+        usageClusterCollapsed: false,
 
         drawerOpen: false,
         drawerService: null,
@@ -3076,6 +3362,86 @@
             n + Object.values(s.envs).filter(e => e?.current?.status === 'failure').length, 0);
         },
         get neverProdCount() { return this.services.filter(s => !s.envs.prod).length; },
+
+        // ---------- Rate-limit cluster derived state (CR-0011 § 3d) ----------
+        // Worst band wins (rate-limit-cluster.md § Per-source-id presentation).
+        // Excludes stale snapshots — a stale row's band is no longer
+        // operationally meaningful and should not colour the rollup.
+        get rateLimitFreshSnapshots() {
+          const now = this.usageNowTick;
+          return this.usageSnapshots.filter(s => !isUsageStale(s, now));
+        },
+        get rateLimitWorstSnapshot() {
+          const fresh = this.rateLimitFreshSnapshots;
+          if (fresh.length === 0) return null;
+          let worst = fresh[0];
+          let worstRatio = usageRatioOf(worst);
+          for (let i = 1; i < fresh.length; i++) {
+            const r = usageRatioOf(fresh[i]);
+            if (r > worstRatio) { worst = fresh[i]; worstRatio = r; }
+          }
+          return worst;
+        },
+        get rateLimitWorstBand() {
+          const w = this.rateLimitWorstSnapshot;
+          return w ? usageBandOf(w) : 'neutral';
+        },
+        get rateLimitWorstPercent() {
+          const w = this.rateLimitWorstSnapshot;
+          if (!w) return null;
+          return Math.round(usageRatioOf(w) * 100);
+        },
+        // ALL snapshots stale → cluster renders in the stale visual
+        // (dimmed + neutral + "—" + italic "stale"). Distinct from
+        // "no snapshots" (cluster hidden entirely).
+        get rateLimitAllStale() {
+          return this.usageSnapshots.length > 0 && this.rateLimitFreshSnapshots.length === 0;
+        },
+        get rateLimitMostRecentReceivedAt() {
+          if (this.usageSnapshots.length === 0) return null;
+          let mostRecent = this.usageSnapshots[0].received_at;
+          for (let i = 1; i < this.usageSnapshots.length; i++) {
+            if (this.usageSnapshots[i].received_at > mostRecent) {
+              mostRecent = this.usageSnapshots[i].received_at;
+            }
+          }
+          return mostRecent;
+        },
+        // Pill class — composes with the existing Tailwind utility
+        // classes already remapped by the dark-mode overlay block.
+        // The neutral / stale colour pair is the gray-100 + gray-500
+        // combination (already remapped). NO new colour tokens.
+        rateLimitPillClasses(band) {
+          if (band === 'red')   return 'bg-red-100 border-red-200 text-red-700';
+          if (band === 'amber') return 'bg-amber-100 border-amber-200 text-amber-700';
+          if (band === 'green') return 'bg-green-100 border-green-200 text-green-700';
+          return 'bg-gray-100 border-gray-200 text-gray-500';
+        },
+        rateLimitDotClasses(band) {
+          if (band === 'red')   return 'bg-red-500';
+          if (band === 'amber') return 'bg-amber-500';
+          if (band === 'green') return 'bg-green-500';
+          return 'bg-gray-400';
+        },
+        rateLimitTooltipFor(snapshot) {
+          if (!snapshot) return '';
+          return formatThousands(snapshot.upstream_used) + ' / ' +
+                 formatThousands(snapshot.upstream_limit) +
+                 ' · resets ' + formatResetTime(snapshot.upstream_reset_at);
+        },
+        rateLimitStaleTooltipFor(snapshot) {
+          if (!snapshot) return '';
+          return 'last seen ' + formatRelativeMinutes(snapshot.received_at, this.usageNowTick);
+        },
+        rateLimitSnapshotPercent(snapshot) {
+          return Math.round(usageRatioOf(snapshot) * 100);
+        },
+        // Template-side helpers that wrap the module-level functions
+        // so Alpine `x-` expressions can reach them via `this`. Each
+        // also threads usageNowTick where staleness depends on now.
+        isUsageStaleHelper(snapshot) { return isUsageStale(snapshot, this.usageNowTick); },
+        usageBandHelper(snapshot)    { return usageBandOf(snapshot); },
+        formatResetHelper(iso)       { return formatResetTime(iso); },
         get totalEnvs() {
           const set = new Set();
           this.services.forEach(s => Object.keys(s.envs).forEach(e => set.add(e)));
@@ -3264,6 +3630,58 @@
           this.$watch('search', () => queueMicrotask(() => requestAnimationFrame(attachObserver)));
           this.$watch('showFailuresOnly', () => queueMicrotask(() => requestAnimationFrame(attachObserver)));
           this.$watch('expandedServices', () => queueMicrotask(() => requestAnimationFrame(attachObserver)));
+
+          // ============================================================
+          // Rate-limit cluster wiring (CR-0011 § 3d).
+          //
+          // 1) Stale-affordance tick. A 1 s interval bumps usageNowTick;
+          //    the getters that read it (rateLimitFreshSnapshots,
+          //    rateLimitAllStale, isUsageStale) re-evaluate. Cheap —
+          //    no DOM read, no rect measurement.
+          //
+          // 2) Collapse-threshold observer. Watches the stats-bar
+          //    element and writes `usageClusterCollapsed` based on the
+          //    horizontal slack between the left and right clusters.
+          //    Matches the same ResizeObserver pattern the connector
+          //    geometry uses (mockup head-comment item c). Cluster
+          //    template reads the boolean to switch to dot+percent
+          //    mode at < 360 px slack OR < 1280 px viewport.
+          //
+          // 3) Outside-click handler for the per-source popover.
+          //    Closes the popover on any click outside its anchor;
+          //    mirrors the theme popover dismissal pattern.
+          // ============================================================
+          this._usageTick = setInterval(() => { this.usageNowTick = Date.now(); }, 1000);
+
+          const recomputeCollapse = () => {
+            const stripEl = document.querySelector('[data-testid="stats-bar"]');
+            const leftEl  = document.querySelector('[data-testid="stats-bar-left"]');
+            const clusterEl = document.querySelector('[data-testid="rate-limit-cluster"]');
+            if (!stripEl || !leftEl || !clusterEl) return;
+            const stripRect = stripEl.getBoundingClientRect();
+            const leftRect  = leftEl.getBoundingClientRect();
+            // Slack = strip right edge − left cluster right edge − 24 px gutter.
+            const slack = stripRect.right - leftRect.right - 24;
+            const viewportTooNarrow = window.innerWidth < 1280;
+            this.usageClusterCollapsed = (slack < 360) || viewportTooNarrow;
+          };
+          // ResizeObserver on the stats-bar reacts to width changes
+          // from viewport resize + left-cluster content changes
+          // (e.g. failure-count digit width flipping from 1 to 3).
+          const stripEl = document.querySelector('[data-testid="stats-bar"]');
+          if (stripEl && typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => recomputeCollapse());
+            ro.observe(stripEl);
+          }
+          window.addEventListener('resize', recomputeCollapse);
+          queueMicrotask(() => requestAnimationFrame(recomputeCollapse));
+
+          // Outside-click closes the per-source popover.
+          document.addEventListener('click', (ev) => {
+            if (!this.usagePopoverOpen) return;
+            const anchor = document.querySelector('[data-testid="rate-limit-cluster"]');
+            if (anchor && !anchor.contains(ev.target)) this.usagePopoverOpen = false;
+          });
         },
 
         // ---------- View / layout / attribute actions ----------
