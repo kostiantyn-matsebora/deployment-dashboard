@@ -3670,9 +3670,21 @@
           // initial field value reflects the mock fixture, then on
           // every input change. External assignments (e.g. the QA
           // Invariant 12.e probe) survive until the next input change.
+          // Edge-triggered: only mutate `rateLimitAllStale` when the
+          // COMPUTED value transitions. Level-triggered writes raced with
+          // the QA I12.e probe (spec sets the field to true, then a 1 s
+          // usageNowTick `$watch` could overwrite back to false inside
+          // the probe's 2 RAF wait window — CI failed at 1024x768 on
+          // commit 008136c). Edge-triggering keeps the probe's manual
+          // flip stable AND preserves the 120 s auto-flip when snapshots
+          // genuinely become stale (`false → true` transition fires).
+          let _lastComputedAllStale = null;
           const recomputeAllStale = () => {
-            this.rateLimitAllStale =
+            const computed =
               this.usageSnapshots.length > 0 && this.rateLimitFreshSnapshots.length === 0;
+            if (computed === _lastComputedAllStale) return;
+            _lastComputedAllStale = computed;
+            this.rateLimitAllStale = computed;
           };
           recomputeAllStale();
           this.$watch('usageSnapshots', recomputeAllStale, { deep: true });
