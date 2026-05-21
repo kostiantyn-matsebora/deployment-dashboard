@@ -18,7 +18,18 @@ test('Rate-limit cluster flips to stale affordance after now - received_at > 120
   // Pin the clock at an anchor BEFORE navigating; the SPA's first
   // Date.now() inside its poll will see this value. Playwright's
   // page.clock.install supersedes the page's wall clock entirely.
-  const anchor = new Date('2026-05-21T13:00:00.000Z').getTime();
+  //
+  // IMPORTANT: the anchor MUST track real wall-clock, not a fixed ISO
+  // literal. The server stamps `received_at` against its real
+  // Date.now() when the POST below lands. If the SPA's virtual clock
+  // started at a literal ISO (e.g. 2026-05-21T13:00Z) while the host's
+  // wall-clock is hours past that point, then `received_at - anchor`
+  // becomes a large positive value and `now (virtual after fastForward)
+  // - received_at` stays negative forever — the stale gate never fires
+  // and the test deadlocks at the poll. Anchoring at real-now keeps
+  // `received_at ≈ anchor` (within ~1 s of HTTP round-trip), so a
+  // 125 s fastForward reliably crosses the 120 s threshold.
+  const anchor = Date.now();
   await page.clock.install({ time: anchor });
 
   // POST a snapshot with observed_at = anchor. The server stamps
@@ -39,7 +50,7 @@ test('Rate-limit cluster flips to stale affordance after now - received_at > 120
       source_id: source,
       upstream_limit: 5000,
       upstream_remaining: 4500, // 10% — green
-      observed_at: new Date(anchor).toISOString(),
+      observed_at: new Date(anchor).toISOString(), // = real-now ≈ server received_at
     }),
   });
   expect(resp.status()).toBe(200);
