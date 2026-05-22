@@ -448,10 +448,17 @@ elif [ "$MODE_REAL_GHA" = true ]; then
 fi
 # MODE_EMPTY -- intentionally no profiles appended.
 
-echo "${CYAN}==> docker compose ${COMPOSE_ARGS[*]} up -d --wait${NC}"
-if ! docker compose "${COMPOSE_ARGS[@]}" up -d --wait; then
+# --force-recreate (issue #53): GHCR `:latest` digest swaps under the same tag are
+# invisible to compose's textual-equality recreate heuristic, so a re-install would
+# silently keep the old containers. Unconditional --force-recreate guarantees the
+# new image is in flight for every release-install service. Trade-off: a re-run
+# with identical digests still recreates (brief restart blip); preferred over
+# Option B's per-service digest diff per the issue reporter's call.
+echo "${CYAN}==> All services will be recreated (--force-recreate ensures GHCR digest changes are picked up).${NC}"
+echo "${CYAN}==> docker compose ${COMPOSE_ARGS[*]} up -d --wait --force-recreate${NC}"
+if ! docker compose "${COMPOSE_ARGS[@]}" up -d --wait --force-recreate; then
     docker compose "${COMPOSE_ARGS[@]}" logs --tail=50 || true
-    echo "${RED}docker compose up failed${NC}" >&2
+    echo "${RED}docker compose up --force-recreate failed${NC}" >&2
     exit 1
 fi
 

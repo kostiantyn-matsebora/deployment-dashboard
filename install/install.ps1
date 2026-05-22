@@ -436,11 +436,18 @@ if ($modeDemo) {
 }
 # $modeEmpty -- intentionally no profiles appended.
 
-Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait" -ForegroundColor Cyan
-& docker compose @composeArgs up -d --wait
+# --force-recreate (issue #53): GHCR `:latest` digest swaps under the same tag are
+# invisible to compose's textual-equality recreate heuristic, so a re-install would
+# silently keep the old containers. Unconditional --force-recreate guarantees the
+# new image is in flight for every release-install service. Trade-off: a re-run
+# with identical digests still recreates (brief restart blip); preferred over
+# Option B's per-service digest diff per the issue reporter's call.
+Write-Host "==> All services will be recreated (--force-recreate ensures GHCR digest changes are picked up)." -ForegroundColor Cyan
+Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait --force-recreate" -ForegroundColor Cyan
+& docker compose @composeArgs up -d --wait --force-recreate
 if ($LASTEXITCODE -ne 0) {
     & docker compose @composeArgs logs --tail=50
-    throw "docker compose up failed with exit code $LASTEXITCODE"
+    throw "docker compose up --force-recreate failed with exit code $LASTEXITCODE"
 }
 
 # ---- 10. Health-poll ----
