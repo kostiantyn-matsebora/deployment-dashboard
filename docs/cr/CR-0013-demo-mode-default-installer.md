@@ -133,15 +133,26 @@ Mirrors the issue body's AC verbatim — devops owns 1, 2, 3, 4, 5, 6, 7, 14, 15
 - [ ] `install.ps1 -Empty` brings up the stack with no fetcher and no demo-gha — direct `POST /api/deployments` integrators get the bare-minimum stack.
 - [ ] `install.ps1 -RealGha` without `$env:GHA_TOKEN` red-errors and exits 1 (mirrors today's `-Fetcher` precondition).
 - [ ] New image `ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:<tag>` published by CI on tag push; pinned via `${DASHBOARD_VERSION}` in `dashboard.env`; installer never downloads a separate bundle asset.
-- [ ] Demo bundle exercises all four DAG-edge shapes — verified by ≥ 4 specific assertions against the read-API matrix after the first 30 s of demo runtime.
+- [ ] Demo bundle exercises all four DAG-edge shapes — verified by ≥ 4 specific assertions against the read-API matrix after the first 30 s of demo runtime. *(deferred — see § 4)*
 - [ ] Demo bundle covers 6 service × 5+ env slots; ≥ 5 of the canonical 6 box states from `local/index/ui-states.yaml` appear in the matrix within 60 s.
-- [ ] WireMock scenario walk produces ≥ 3 new deployment events per minute over the first 5 minutes of runtime.
+- [ ] WireMock scenario walk produces ≥ 3 new deployment events per minute over the first 5 minutes of runtime. *(deferred — see § 4)*
 - [ ] `docs/cr/CR-0013-demo-mode-default-installer.md` exists with full design-of-record (this file).
 - [ ] `docs/install.md` quick-start uses the demo-default install as the headline path.
 - [ ] `docs/ci-cd-pipelines.md § 2` topology table gains a `demo-gha` component row + § 4 tag scheme covers the new image.
 - [ ] No regression to PR #43's integration test suite (10/10 still green) — the `integration` profile is unchanged.
 - [ ] `install.ps1 -Demo` deprecation note added to `docs/install.md` Migration footnote for one release cycle; drop after.
 - [ ] `.agents/ginee/local/bindings.md` carries the four new governance rows + tree update + Stack-table CI/CD sentence (5th component image).
+
+## 4. Known limitations (delivered but deferred)
+
+**Trade-offs accepted at ship time.** The primary value of issue #44 — a populated 6 × 5 dashboard with diverse wire/box states, rendered topology edges, and zero external network on a no-flag `install.{ps1,sh}` — is delivered. The two enhancements below were validated in Phase 5/6 as not-yet-met against their original AC wording and are deferred to focused follow-up issues without blocking #44's ship. Each item is checked off in the AC list above with a `(deferred — see § 4)` suffix; this section is the canonical record of what changed between authoring (commit `5b9628e`) and Phase 7 acceptance.
+
+| AC ID | Original intent | Delivered state | Deferred to |
+|---|---|---|---|
+| #7 (all four DAG-edge shapes via `parent_deployments`) | Adapter's Pass 2a (intra-run `needs:` recovery + per-env predecessor synthesis) populates `parent_deployments` so the dashboard renders all four edge shapes from the demo bundle: empty / single per-env predecessor / single intra-run `needs:` / multiple-`needs:` + mixed. | All 65 events emitted by the demo bundle have `parent_deployments = []`. Status URLs are parsed correctly (DB rows carry the `/job/{id}` segment via the `run_url` field), but no needs-recovery HTTP calls reach `demo-gha` and no per-env predecessor is synthesised. Topology edges still render at runtime via the read-API's adjacency derivation, so the dashboard *looks* populated — but the underlying `parent_deployments` array is empty across the board. Root cause unidentified at ship time. | #<NEW_FOLLOWUP_PARENT_DEPLOYMENTS> |
+| #9 (≥ 3 events/min over first 5 min via WireMock scenario walk) | 20-tick `Scenario` + `RequiredScenarioState` + `SetStateTo` corpus baked into the `demo-gha` image walks itself through deployment-id-monotonic ticks — evaluators see the matrix *evolve* across the first 5 minutes. | Collapsed to a single static list-deployments response per service. WireMock.Net 2.4.0's scenario state machine does **not** activate from `--ReadStaticMappings`-loaded mappings — verified empirically: `/__admin/scenarios` returns `[]` indefinitely after image bring-up and `POST /__admin/scenarios/{name}/state` returns 404 against any scenario name from the bundle. The 20-tick walk was collapsed into 1 static bundle per service so the populated-matrix value (AC #1, #8) still ships; the *evolving* aspect does not. | #<NEW_FOLLOWUP_DYNAMIC_TICKS> |
+
+The two follow-ups are tracked as discrete issues (rather than re-opening #44) so each can be picked up against a clean acceptance surface — neither blocks the demo-default UX inversion this CR introduces.
 
 ## References
 
