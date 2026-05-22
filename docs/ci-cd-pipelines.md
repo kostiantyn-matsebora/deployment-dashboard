@@ -383,7 +383,6 @@ downstream of the build job.
 |---|---|---|
 | Dogfooding notify hook | D1 lock — kept Q11 clean (no deploy in MVP-CI). The dashboard will call its own `.github/actions/notify/` from these workflows once the dogfooding CR lands. | New CR — to be filed. |
 | Frontend lint gate (`ng lint`) | D3 lock — Angular CLI ships no ESLint config by default; introducing `@angular-eslint` is a non-trivial setup outside the MVP-CI scope. | TODO: "Introduce `@angular-eslint` + add `ng lint` gate to `frontend.yml`". |
-| Integration smoke / e2e (Q12) | `testing/functional/` (xUnit functional API tests) + `testing/e2e/` (Playwright vs SPA + API + gateway) need the compose stack — too heavy for per-PR CI. | New `integration.yml` workflow; runs on schedule or label trigger. |
 | GHCR → ACR cutover (Q4) | ACR provisioning needs Terraform §4 first (per NFR-06; no Portal clicks). | Tracked in § 11 + Terraform §4. |
 | CD — ACA revision update | Q11 lock: CI only in MVP. Needs Terraform §4 (ACA + image-pull identity). | WBS §5.1 (the half deferred when CR-0010 split that row). |
 | Trivy / SBOM | Out of scope for MVP-CI; add as a non-blocking gate first. | New CR — to be filed when security posture is reviewed. |

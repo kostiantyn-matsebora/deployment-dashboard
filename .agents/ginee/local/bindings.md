@@ -15,6 +15,11 @@
 | `docs/ci-cd-integration.md` | Operational companion to SAD §7 — payload + snippet detail (inbound: adopter pipelines push TO us) | `solution-architect` (semantics) + `devops-engineer` (operational examples) |
 | `docs/ci-cd-pipelines.md` | Operational pipeline doc — our component workflows (outbound: our pipelines build our images), per CR-0010 | `devops-engineer` |
 | `install/docker-compose.release.yml`, `install/install.ps1` / `install.sh`, `install/uninstall.ps1` / `uninstall.sh` | Release-install stack — canonical service inventory; consumed by `dev_env/` via `-f` merge per ADR-0010 | `devops-engineer` |
+| `docs/integration-tests.md` | Operational integration-test guide — WireMock mapping authoring, scenario activation, mock-gha endpoint coverage matrix vs CR-0009 § 3d, CI invocation, `-Integration` local-dev switch, demo-bundle co-location story | `qa-engineer` (semantics) + `devops-engineer` (compose + workflow examples) + `solution-architect` (governance review, no edits) |
+| `docs/cr/CR-0012-integration-test-substrate.md` | CR-0012 — integration test substrate design-of-record | `solution-architect` |
+| `testing/integration/` | xUnit integration test project — scenarios, runners, admin-API scenario-loader, assertion oracles for FR-06 / NFR-03 / NFR-05 / ADR-0004 cursor contract | `qa-engineer` |
+| `testing/fixtures/gha/` | WireMock-native JSON mappings (per-endpoint × per-scenario) + scenario bundles + demo-mode bundle (`mappings/`, `scenarios/<state-id>/`, `scenarios/_cross-cutting/`, `demo/`) | `qa-engineer` |
+| `.github/workflows/integration.yml` | Integration-test workflow gate — triggers + path filters + compose stack lifecycle + scenario invocation | `devops-engineer` (workflow shape) + `qa-engineer` (suite content via `testing/integration/`) |
 | `CLAUDE.md` | Project-instruction file — ginee framework pointer | `project-manager` (during discovery / rediscovery) |
 
 **Tie-breakers.**
@@ -44,10 +49,10 @@ deployment-dashboard/
 ├── gateway/             nginx reverse proxy + Dockerfile (single public ingress on :8080)
 ├── install/             docker-compose.release.yml + install.ps1/.sh, uninstall.ps1/.sh — release-install canonical compose; dev_env layers on this via `-f` merge per ADR-0010
 ├── dev_env/             docker-compose.local.yml (override), docker-compose.scaled.yml (standalone), start.ps1, stop.ps1
-├── docs/                architecture.md, WBS.md, ci-cd-integration.md, adr/, cr/, ui/ (mockup + options)
-├── testing/             functional/ (xUnit), e2e/ (Playwright), mockup-visual/ (Playwright), scripts/, fixtures/, config/
+├── docs/                architecture.md, WBS.md, ci-cd-integration.md, ci-cd-pipelines.md, integration-tests.md (CR-0012), adr/, cr/, ui/ (mockup + options)
+├── testing/             functional/ (xUnit), integration/ (xUnit cross-stack — CR-0012), e2e/ (Playwright), mockup-visual/ (Playwright), scripts/, fixtures/ (incl. fixtures/gha/ — WireMock mappings + scenarios + demo bundle per CR-0012), config/
 ├── .github/actions/     notify/ composite action
-├── .github/workflows/   api.yml + fetcher.yml + frontend.yml + gateway.yml + _build-and-push-image.yml (reusable) — CR-0010
+├── .github/workflows/   api.yml + fetcher.yml + frontend.yml + gateway.yml + _build-and-push-image.yml (reusable) — CR-0010; integration.yml — CR-0012
 ├── .agents/ginee/  framework install
 ├── CLAUDE.md
 └── TODO
@@ -80,7 +85,7 @@ deployment-dashboard/
 | Container runtime | OCI containers, app port 8080 |
 | Hosting | Azure Container Apps + ACR + Azure Postgres Flexible + Key Vault (NFR-01, NFR-02) |
 | IaC | Terraform `azurerm` ≥ 4.x (NFR-06) — planned per WBS §4, not yet present |
-| CI/CD | GitHub Actions — component CI live per CR-0010 (`_build-and-push-image.yml` reusable + `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml` callers); `.github/actions/notify/` composite present (not invoked by component CI yet — deferred dogfooding TODO) |
+| CI/CD | GitHub Actions — component CI live per CR-0010 (`_build-and-push-image.yml` reusable + `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml` callers); `.github/actions/notify/` composite present (not invoked by component CI yet — deferred dogfooding TODO); cross-stack integration-tests workflow `integration.yml` per CR-0012 — gates the WireMock-driven fetcher → write-path suite under the `integration` compose profile. |
 
 ## Do not introduce
 
