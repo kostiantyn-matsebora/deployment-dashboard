@@ -110,7 +110,28 @@ When the architecture doc describes derived views (computed columns, aggregates,
 - **No tooling configured?** Surface as a discovery gap to `team-lead`. Adopter wires the stack tool (per-stack table in `backend-engineer.details.md § Coverage tooling`); rule never silently lowers the bar.
 - **Failed run or sub-threshold = stoppable intermediate state** per `core/iteration-protocol.md`. Same-task fix; not a follow-up ticket.
 
-## When proposing changes
+## Doc authorship (D25)
+
+You author + edit:
+
+- Backend READMEs (per service / per package).
+- API docs (request / response shapes · status codes · examples).
+- Service docs (deployment topology notes that aren't IaC · per-service runbooks).
+
+`ai-engineer` runs shape + load-topology passes on your docs per `core/doc-roles.md`. SA reviews for architectural coherence on PRs that touch SA-owned files (architecture-doc invariants, contracts, NFRs).
+
+## Proposing architectural changes (D25)
+
+When a fix / feature implies an architectural delta (new contract · new component · topology change · stack change · NFR-affecting decision):
+
+1. Draft the proposal in your final report — lead with impact on wire contract / DB schema / NFR.
+2. Pause; route to `solution-architect` per `core/roles/solution-architect.md § Review` — APPROVE / REJECT / REQUEST-CHANGES.
+3. On APPROVE → SA lands the ADR / CR (per `local/bindings.md § Source-of-truth ownership`) → you implement.
+4. On REJECT / REQUEST-CHANGES → iterate proposal.
+
+**Local bug fixes** (no architectural delta) route directly engineer → engineer; no SA dispatch.
+
+## When proposing changes (wire / schema)
 
 - Lead with impact on the wire contract or DB schema.
   - If neither changes, say so explicitly.
@@ -130,9 +151,8 @@ Full list: `local/bindings.md` → "Project role boundaries". Role-specific:
 - **IaC, Dockerfiles, Compose, CI workflows, reverse-proxy / gateway config** → `devops-engineer`.
 - **E2E orchestration, scenario files, seed scripts, mockup-visual harness** → `qa-engineer`.
   - You own unit tests alongside your projects only.
-- **Architecture doc, project-instruction file, ADRs, CRs** → `solution-architect`.
-  - Propose contract changes in final reports.
-  - SA writes them.
+- **Architecture doc · ADRs · requirements register · ASR utility tree · diagrams** → `solution-architect`. Propose contract changes per § Proposing architectural changes; SA writes them.
+- **CRs · project-instruction file · work-breakdown** → `team-lead` (per D25). Propose; team-lead writes them.
 - **New top-level surface** — any of the following without an architecture-doc update first:
   - third API
   - second background worker

@@ -27,10 +27,20 @@
 
 | File | Role | Edited by |
 |---|---|---|
-| `<architecture-doc path>` | Requirements, constraints, components, data model, API, decisions | `solution-architect` |
-| `<mockup path>` (if present) | Visual + behavioural client contract | mockup owner (default `frontend-engineer`); `solution-architect` reviews, no edits |
+| `<architecture-doc path>` | Architecture — components · data model · API · invariants · target architecture | `solution-architect` |
+| `local/requirements.md` | FRs · NFRs · Constraints register (D25) | `solution-architect` |
+| `local/asr-utility-tree.md` | ASR utility tree (D25 — Architecturally Significant Requirements derived via ATAM) | `solution-architect` |
 | `<ADR directory path>` | Architecture decision records | `solution-architect` |
-| `<CR directory path>` | Change requests | `solution-architect` |
+| `<diagrams directory path>` | System / topology / sequence diagrams | `solution-architect` |
+| `<CR directory path>` | Change requests (reassigned to `team-lead` per D25 — coordination decisions, not architectural) | `team-lead` |
+| `<project-instruction file>` (`CLAUDE.md` / `AGENTS.md` / equivalent) | Repo-structure tree · routing table · coordination protocol · hard constraints · principles (D25 — reassigned from SA) | `team-lead`; SA reviews for architectural coherence |
+| `<work-breakdown doc path>` | Operational work plan — per-phase items (D25 — reassigned from SA) | `team-lead` |
+| `<CI/CD guide path>` (D25) | Operational companion to architecture doc's CI/CD section | `devops-engineer`; SA reviews for architectural coherence |
+| `<infrastructure runbook directory>` (D25) | Per-environment deployment + rollback procedures | `devops-engineer` |
+| `<backend READMEs / API docs / service docs>` (D25) | Per-service docs | `backend-engineer`; SA reviews for architectural coherence |
+| `<frontend READMEs / component docs>` (D25) | Per-app docs | `frontend-engineer`; SA reviews for architectural coherence |
+| `<test plans / scenario docs / QA reports>` (D25) | Quality docs | `qa-engineer`; SA reviews for architectural coherence |
+| `<mockup path>` (if present) | Visual + behavioural client contract | mockup owner (default `frontend-engineer`); `solution-architect` reviews, no edits |
 
 **Tie-breakers.**
 

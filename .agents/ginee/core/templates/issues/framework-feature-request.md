@@ -21,8 +21,20 @@ labels: [ginee:ready, framework]
   Keep headings intact.
 -->
 
+<!--
+  D26 shape rules — apply to EVERY section, including Summary:
+  - File / endpoint / config inventories → table, not comma-separated prose.
+  - Procedures / steps → numbered list.
+  - Multi-rule statements → parent bullet + sub-bullets, one rule per line.
+  - No paragraph with > 2 sentence terminators.
+  - No parenthetical comma-lists inside a sentence — promote to a bulleted list.
+  - Cross-reference; never restate (cite `§Name`, `#anchor`).
+  Full rules: `core/process.md § Mandatory checks before report-as-done`.
+-->
+
 ## Summary
 
+<!-- One short bulleted-list or 1–2 short sentences. Avoid parenthetical inventories. -->
 <1–2 sentences describing the proposed framework capability>
 
 ## Motivation
