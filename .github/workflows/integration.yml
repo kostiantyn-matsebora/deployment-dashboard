@@ -1,0 +1,190 @@
+# Integration tests -- cross-stack runtime verification (CR-0012).
+#
+# Brings up the local docker-compose stack with the `integration` profile
+# active (mock-gha WireMock.Net + fetcher repointed to http://mock-gha:80
+# at a 1 s poll cadence) and runs the testing/integration/ xUnit suite
+# against it. Asserts FR-06 wire shape, NFR-03 5 s latency envelope,
+# NFR-05 stateless-replica behaviour, and the ADR-0004 cursor contract.
+#
+# Owner: devops-engineer (workflow shape) + qa-engineer (run-tests.ps1 + suite).
+# Contract: docs/cr/CR-0012-integration-test-substrate.md.
+# Operational guide: docs/integration-tests.md S 7.
+#
+# Severity -- NON-BLOCKING watching-week, then promoted to blocking.
+#   This workflow lands as a NORMAL job: it is NOT added to branch-protection
+#   required-status-checks for the first calendar week of normal-volume PRs.
+#   Branch-protection promotion is a repo-settings action (not a workflow-config
+#   action) and happens AFTER one calendar week of green runs on real PR
+#   volume -- per CR-0010 Open trade-off (ii), mirrored by CR-0012 acceptance
+#   criterion. Any future maintainer reading this file: this severity posture
+#   is intentional; do not add `required: true` here (that key has no effect
+#   anyway -- the gate lives in repo settings).
+#
+# Compose floor: docker compose >= 2.20 -- required because the integration
+# profile's `depends_on: required: false` (dev_env/docker-compose.local.yml's
+# `fetcher.depends_on.mock-gha`) is a 2.20+ feature. The job's first step is
+# a precondition check that fails fast with a clear error if the runner has
+# an older compose.
+
+name: integration
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'backend/fetcher/**'
+      - 'backend/fetcher-host/**'
+      - 'backend/api/**'
+      - 'backend/write-api/**'
+      - 'backend/read-api/**'
+      - 'backend/shared/**'
+      - 'backend/Dashboard.sln'
+      - 'gateway/**'
+      - 'testing/integration/**'
+      - 'testing/fixtures/gha/**'
+      - 'testing/config/integration.json'
+      - 'install/docker-compose.release.yml'
+      - 'dev_env/docker-compose.local.yml'
+      - 'dev_env/start.ps1'
+      - 'dev_env/stop.ps1'
+      - '.github/workflows/integration.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/fetcher/**'
+      - 'backend/fetcher-host/**'
+      - 'backend/api/**'
+      - 'backend/write-api/**'
+      - 'backend/read-api/**'
+      - 'backend/shared/**'
+      - 'backend/Dashboard.sln'
+      - 'gateway/**'
+      - 'testing/integration/**'
+      - 'testing/fixtures/gha/**'
+      - 'testing/config/integration.json'
+      - 'install/docker-compose.release.yml'
+      - 'dev_env/docker-compose.local.yml'
+      - 'dev_env/start.ps1'
+      - 'dev_env/stop.ps1'
+      - '.github/workflows/integration.yml'
+  workflow_dispatch:
+
+# Concurrency mirrors CR-0010 (api.yml / fetcher.yml / frontend.yml / gateway.yml):
+# a fresh push to a PR cancels the still-running run for the previous commit on
+# the same PR; distinct main-branch commits never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: integration (cross-stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          # Match the component workflows' pin (_build-and-push-image.yml).
+          # Bump in lockstep when the project's .NET version moves.
+          dotnet-version: '10.0.x'
+
+      # Compose floor precondition (CR-0012). Fails fast with a readable
+      # error before any container starts, so the run does not waste time
+      # on a stack that cannot be brought up. Pattern: parse `docker
+      # compose version --short` (returns e.g. `2.24.6`), compare to the
+      # 2.20 floor via `sort -V`.
+      - name: Verify docker compose >= 2.20
+        shell: bash
+        run: |
+          set -euo pipefail
+          required="2.20"
+          actual="$(docker compose version --short || true)"
+          if [ -z "$actual" ]; then
+            echo "ERROR: 'docker compose version --short' produced no output -- compose v2 not installed?" >&2
+            exit 1
+          fi
+          # `sort -V` is GNU coreutils; the lowest version listed first must
+          # be the required floor for the runner's version to satisfy it.
+          lowest="$(printf '%s\n%s\n' "$required" "$actual" | sort -V | head -n1)"
+          if [ "$lowest" != "$required" ]; then
+            echo "ERROR: docker compose $actual < required $required (CR-0012 -- integration profile uses depends_on:required:false, a 2.20+ feature)" >&2
+            exit 1
+          fi
+          echo "docker compose $actual >= $required -- ok"
+
+      # NuGet cache mirrors the component workflows (CR-0010 S 3g cache tier).
+      # Cache key keys off every backend .csproj so a dependency bump invalidates
+      # cleanly. The testing/integration/ csproj is included automatically by
+      # the **/*.csproj glob below.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'testing/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # Stack bring-up via the same script contributors use locally.
+      # `-HealthTimeoutSeconds 180` widens the gateway /health poll window
+      # to account for cold-start image pulls + first-run EF migration apply
+      # on the CI runner; local-dev's 60 s default is too tight for a fresh
+      # runner. The mock-gha image is small (~50 MB) so its pull cost
+      # overlaps the api/postgres pull.
+      - name: Start stack (integration profile)
+        shell: pwsh
+        run: pwsh -NoProfile -File dev_env/start.ps1 -Integration -HealthTimeoutSeconds 180
+
+      # Run the integration suite. The script is owned by qa-engineer
+      # (testing/integration/run-tests.ps1) -- this step is just the invocation.
+      # The runner reads testing/config/integration.json for endpoint URLs
+      # (readBaseUrl=http://localhost:8080, mockGhaAdminBaseUrl=http://localhost:18080).
+      - name: Run integration tests
+        shell: pwsh
+        run: pwsh -NoProfile -File testing/integration/run-tests.ps1
+
+      # On-failure compose log dump -- artefacts for the failure-analysis loop.
+      # The bundle name pattern matches the component workflows' convention
+      # (CR-0010 troubleshooting story) so failure triage is uniform.
+      - name: Collect compose logs on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $logDir = "integration-failure-logs"
+          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+          $releaseCompose = "install/docker-compose.release.yml"
+          $localOverride  = "dev_env/docker-compose.local.yml"
+          & docker compose -f $releaseCompose -f $localOverride --profile fetcher --profile integration logs --no-color --tail=500 > "$logDir/compose-logs.txt" 2>&1
+          & docker compose -f $releaseCompose -f $localOverride --profile fetcher --profile integration ps --all > "$logDir/compose-ps.txt" 2>&1
+          # Best-effort -- on failure, the WireMock admin port may or may not be
+          # reachable. `try/catch` keeps the rest of the bundle uploadable.
+          try {
+              Invoke-WebRequest -Uri "http://localhost:18080/__admin/requests" -UseBasicParsing -TimeoutSec 5 |
+                  Select-Object -ExpandProperty Content > "$logDir/wiremock-requests.json"
+          } catch {
+              "Could not fetch WireMock admin requests: $($_.Exception.Message)" > "$logDir/wiremock-requests.json"
+          }
+
+      - name: Upload failure artefacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: integration-failure-logs/
+          retention-days: 7
+
+      # Always tear down -- including on failure, to keep the runner clean
+      # for subsequent jobs (GHA reuses the runner image but recycles the
+      # workspace; lingering containers from a crashed test would not
+      # survive a runner restart but would burn disk/RAM until then).
+      - name: Tear down stack
+        if: always()
+        shell: pwsh
+        run: pwsh -NoProfile -File dev_env/stop.ps1

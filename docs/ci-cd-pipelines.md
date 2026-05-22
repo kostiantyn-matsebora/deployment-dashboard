@@ -102,6 +102,7 @@ Per CR-0010 § 3h, with Wave 4b decision locks applied:
 | Backend coverage | **non-blocking artefact** | `--collect:"XPlat Code Coverage"` | Cobertura uploaded as `coverage-backend-<image>-<run>-<attempt>`. No threshold today. |
 | Frontend coverage | **non-blocking artefact** | `--code-coverage` | Cobertura uploaded as `coverage-frontend-<image>-<run>-<attempt>`. No threshold today. |
 | Frontend lint | **not gated in MVP-CI** | — | D3 lock: deferred. Listed in § 13. |
+| Integration suite (`integration.yml`) | **watching-week non-blocking → promoted to blocking after green normal-volume calendar week** | `.github/workflows/integration.yml` brings up the stack with the `integration` compose profile and runs `testing/integration/run-tests.ps1` (cross-stack: fetcher → mock-gha → gateway → API → DB → SSE) | Per [CR-0012](./cr/CR-0012-integration-test-substrate.md) + CR-0010 Open trade-off (ii). Branch-protection promotion is a repo-settings change (not a workflow-config change) — see [`docs/integration-tests.md § 7.3`](./integration-tests.md#73-severity-posture--non-blocking-watching-week). |
 
 ## 6. Caching
 

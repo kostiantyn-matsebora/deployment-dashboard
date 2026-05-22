@@ -117,12 +117,61 @@ services:
       FETCHER_ADAPTERS: "github-actions"
       GHA_TOKEN: "${GHA_TOKEN:-local-dev-gha-token-placeholder}"
       GHA_REPOSITORIES: "${GHA_REPOSITORIES:-[{\"owner\":\"example-org\",\"repo\":\"example-repo\"}]}"
-      GHA_API_BASE_URL: "https://api.github.com"
+      # `${GHA_API_BASE_URL:-https://api.github.com}` is the env-var indirection
+      # the integration profile (CR-0012 S 3a) re-points at `http://mock-gha:80`
+      # without touching fetcher source code. Production / contributor flows
+      # resolve to the default GitHub API endpoint.
+      GHA_API_BASE_URL: "${GHA_API_BASE_URL:-https://api.github.com}"
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     depends_on:
       gateway:
         condition: service_started
+
+  # Mock GitHub API (WireMock.Net) -- deterministic upstream for the
+  # `testing/integration/` cross-stack suite (CR-0012). Profile-gated by
+  # `integration`: defined in this canonical inventory so the `dev_env/`
+  # override + `.github/workflows/integration.yml` can layer on top per
+  # ADR-0010 merge-override mechanics, but inert in the default release
+  # bring-up (`docker compose up` without `--profile integration` never
+  # starts the container).
+  #
+  # Strict NFR-04 production posture (per CR-0012 S 3a + Profile-gating
+  # contract):
+  #   - NO `ports:` here -- the release-install stack NEVER publishes the
+  #     admin port to the host. The integration profile's host-mapping of
+  #     port `18080` is added by `dev_env/docker-compose.local.yml` ONLY,
+  #     and consumed by `dotnet test` running on the host. CI runners use
+  #     the same override.
+  #   - WireMock listens on port `80` inside the container by default
+  #     (sheyenrath/wiremock.net:2.4.0 image convention); the fetcher
+  #     reaches it via internal Docker DNS at `http://mock-gha:80` when
+  #     `GHA_API_BASE_URL` is re-pointed there under the integration
+  #     profile.
+  #   - Image pin `sheyenrath/wiremock.net:2.4.0` per CR-0012 -- community
+  #     image, same posture as `postgres:16-alpine` already in this stack.
+  #   - Mappings mount path `/app/__admin/mappings` (NOT `/home/wiremock/...`)
+  #     -- the .NET image lays out admin files under `/app`.
+  #
+  # Fixture mount + env tuning live in `dev_env/docker-compose.local.yml`
+  # (integration profile overrides) so the release-install asset stays
+  # minimal: contract here, deltas there.
+  mock-gha:
+    profiles: ["integration"]
+    image: sheyenrath/wiremock.net:2.4.0
+    container_name: dashboard-mock-gha
+    restart: unless-stopped
+    # WireMock.Net admin API is also the healthcheck surface -- `/__admin/mappings`
+    # returns 200 with the current mapping list once the server is listening.
+    # `wget -q --spider` is the alpine-BusyBox-friendly probe; the
+    # `sheyenrath/wiremock.net:2.4.0` image ships on an Alpine-based .NET
+    # runtime which carries BusyBox wget.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/__admin/mappings || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
 volumes:
   pg-data:
