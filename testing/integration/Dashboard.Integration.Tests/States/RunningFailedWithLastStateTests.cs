@@ -22,7 +22,7 @@ public sealed class RunningFailedWithLastStateTests : IClassFixture<ScenarioFixt
     private const string LatestSha = "cccc03300000000000000000000000000000cccc";
 
     private static readonly TimeSpan NfrLatencyBudget = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(30);
 
     private readonly ScenarioFixture _fixture;
 

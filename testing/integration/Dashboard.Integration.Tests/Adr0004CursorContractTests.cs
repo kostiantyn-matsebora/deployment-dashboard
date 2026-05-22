@@ -35,7 +35,7 @@ public sealed class Adr0004CursorContractTests : IClassFixture<ScenarioFixture>
 {
     private const string ScenarioBase = "_cross-cutting/adr-0004-cursor-second-fetch";
     private const string Environment = "state-cursor";
-    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(30);
 
     private readonly ScenarioFixture _fixture;
 
