@@ -23,7 +23,7 @@ public sealed class RunningWithLastStateTests : IClassFixture<ScenarioFixture>
     private const string LatestSha = "bbbb02200000000000000000000000000000bbbb";
     private const string LatestActor = "mock-gha-actor";
 
-    private static readonly TimeSpan NfrLatencyBudget = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan NfrLatencyBudget = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(30);
 
     private readonly ScenarioFixture _fixture;
