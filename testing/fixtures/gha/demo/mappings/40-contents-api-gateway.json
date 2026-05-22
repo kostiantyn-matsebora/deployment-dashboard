@@ -1,5 +1,5 @@
 {
-  "_comment": "Needs-recovery — workflow YAML for api-gateway. Adapter parses needs: chains from this YAML to wire intra-run edges into ParentDeployments.",
+  "_comment": "Needs-recovery \u00e2\u20ac\u201d workflow YAML for api-gateway. Adapter parses needs: chains from this YAML to wire intra-run edges into ParentDeployments.",
   "Priority": 100,
   "Request": {
     "Methods": [
@@ -9,7 +9,7 @@
       "Matchers": [
         {
           "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/demo-repo/contents/.github/workflows/api-gateway-release.yml"
+          "Pattern": "/repos/demo-org/api-gateway/contents/.github/workflows/api-gateway-release.yml"
         }
       ]
     }

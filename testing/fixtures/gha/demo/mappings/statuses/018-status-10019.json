@@ -1,5 +1,5 @@
 {
-  "_comment": "Status for billing-service/staging dep #10019 = success. Includes /job/ → adapter walks needs-recovery.",
+  "_comment": "Status for billing-service/staging dep #10019 = success. Includes /job/ \u00e2\u2020\u2019 adapter walks needs-recovery.",
   "Priority": 50,
   "Request": {
     "Methods": [
@@ -9,7 +9,7 @@
       "Matchers": [
         {
           "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/demo-repo/deployments/10019/statuses"
+          "Pattern": "/repos/demo-org/billing-service/deployments/10019/statuses"
         }
       ]
     }

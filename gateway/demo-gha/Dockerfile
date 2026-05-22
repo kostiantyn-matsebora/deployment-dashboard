@@ -44,7 +44,19 @@ FROM sheyenrath/wiremock.net:2.4.0
 # governance row on `testing/fixtures/gha/`); the COPY itself is a devops
 # concern -- the seam is the path string
 # `testing/fixtures/gha/demo/` -> `/app/__admin/mappings/`.
-COPY testing/fixtures/gha/demo/ /app/__admin/mappings/
+#
+# WireMock.Net's `ReadStaticMappings` does NOT recurse into sub-directories
+# (verified against `sheyenrath/wiremock.net:2.4.0` runtime); it only loads
+# files directly under the configured mappings folder. Flatten the bundle's
+# `mappings/`, `mappings/statuses/`, and `scenarios/walk/` JSON trees into
+# the single target directory. Filenames stay unique by qa's prefix scheme
+# (numeric prefix + descriptive suffix; verified collision-free).
+# README.md + services.md are NOT copied -- they're source-repo
+# documentation for bundle authors, not runtime artifacts (WireMock.Net
+# would try to deserialize them as JSON and emit one parse error per file).
+COPY testing/fixtures/gha/demo/mappings/*.json            /app/__admin/mappings/
+COPY testing/fixtures/gha/demo/mappings/statuses/*.json   /app/__admin/mappings/
+# (scenario walk removed; demo bundle is fully static — see CR-0013 followup)
 
 # No CMD / ENTRYPOINT override -- the base image already runs WireMock.Net
 # on :80 and scans /app/__admin/mappings/ at startup. The compose-level

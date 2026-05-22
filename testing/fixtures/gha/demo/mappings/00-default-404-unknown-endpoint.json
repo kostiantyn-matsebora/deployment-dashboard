@@ -1,5 +1,5 @@
 {
-  "_comment": "Catch-all 404 for any URL the demo bundle does not cover. Lowest priority — fires only when no other mapping matches.",
+  "_comment": "Catch-all 404 for any URL the demo bundle does not cover. Lowest priority \u00e2\u20ac\u201d fires only when no other mapping matches.",
   "Priority": 999,
   "Request": {
     "Methods": [

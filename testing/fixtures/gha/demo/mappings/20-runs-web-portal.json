@@ -1,5 +1,5 @@
 {
-  "_comment": "Needs-recovery — runs DTO for web-portal. Matches /actions/runs/<run_id> where run_id begins with the service prefix digit '1'. Returned path + head_sha drive the contents mapping below.",
+  "_comment": "Needs-recovery \u00e2\u20ac\u201d runs DTO for web-portal. Matches /actions/runs/<run_id> where run_id begins with the service prefix digit '1'. Returned path + head_sha drive the contents mapping below.",
   "Priority": 100,
   "Request": {
     "Methods": [
@@ -9,7 +9,7 @@
       "Matchers": [
         {
           "Name": "RegexMatcher",
-          "Pattern": "^/repos/demo-org/demo-repo/actions/runs/1[0-9]+$"
+          "Pattern": "^/repos/demo-org/web-portal/actions/runs/1[0-9]+$"
         }
       ]
     }

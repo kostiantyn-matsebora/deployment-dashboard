@@ -1,5 +1,5 @@
 {
-  "_comment": "Status for auth-service/prod dep #10046 = in_progress. No /job/ → adapter skips intra-run recovery.",
+  "_comment": "Status for auth-service/prod dep #10046 = in_progress. No /job/ \u00e2\u2020\u2019 adapter skips intra-run recovery.",
   "Priority": 50,
   "Request": {
     "Methods": [
@@ -9,7 +9,7 @@
       "Matchers": [
         {
           "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/demo-repo/deployments/10046/statuses"
+          "Pattern": "/repos/demo-org/auth-service/deployments/10046/statuses"
         }
       ]
     }

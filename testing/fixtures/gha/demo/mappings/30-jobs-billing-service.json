@@ -1,5 +1,5 @@
 {
-  "_comment": "Needs-recovery — jobs DTO for billing-service. Templated so the 'deploy' job-id matches the status URL's /job/<run_id*10> segment.",
+  "_comment": "Needs-recovery \u00e2\u20ac\u201d jobs DTO for billing-service. Templated so the 'deploy' job-id matches the status URL's /job/<run_id*10> segment.",
   "Priority": 100,
   "Request": {
     "Methods": [
@@ -9,7 +9,7 @@
       "Matchers": [
         {
           "Name": "RegexMatcher",
-          "Pattern": "^/repos/demo-org/demo-repo/actions/runs/4[0-9]+/jobs$"
+          "Pattern": "^/repos/demo-org/billing-service/actions/runs/4[0-9]+/jobs$"
         }
       ]
     }

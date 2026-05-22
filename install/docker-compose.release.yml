@@ -227,6 +227,21 @@ services:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION:-latest}
     container_name: dashboard-demo-gha
     restart: unless-stopped
+    # `--ReadStaticMappings true` is REQUIRED -- WireMock.Net's default
+    # entry-point does NOT load the baked `/app/__admin/mappings/` tree
+    # on startup (admin API ships empty otherwise). Mirrors the `mock-gha`
+    # command override in dev_env/docker-compose.local.yml (CR-0012).
+    # `--Urls http://*:80` pins the bind port to match NFR-04's no-port-
+    # publish posture + the fetcher's `GHA_API_BASE_URL=http://demo-gha:80`.
+    command:
+      - "dotnet"
+      - "wiremock-net.dll"
+      - "--Urls"
+      - "http://*:80"
+      - "--ReadStaticMappings"
+      - "true"
+      - "--WireMockLogger"
+      - "WireMockConsoleLogger"
     healthcheck:
       test: ["CMD-SHELL", "bash -c ': > /dev/tcp/localhost/80' || exit 1"]
       interval: 5s

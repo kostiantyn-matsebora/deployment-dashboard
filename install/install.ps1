@@ -341,7 +341,7 @@ if ($modeDemo) {
     $demoDefaults = [ordered]@{
         'GHA_API_BASE_URL'              = 'http://demo-gha:80'
         'FETCHER_POLL_INTERVAL_SECONDS' = '5'
-        'GHA_REPOSITORIES'              = '[{"owner":"demo-org","repo":"demo-repo"}]'
+        'GHA_REPOSITORIES'              = '[{"owner":"demo-org","repo":"web-portal"},{"owner":"demo-org","repo":"api-gateway"},{"owner":"demo-org","repo":"auth-service"},{"owner":"demo-org","repo":"billing-service"},{"owner":"demo-org","repo":"notification-worker"},{"owner":"demo-org","repo":"analytics-pipeline"}]'
     }
 
     $demoLines = @('', '# Demo-mode defaults (CR-0013; written by install.ps1)')

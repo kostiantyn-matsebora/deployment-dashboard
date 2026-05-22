@@ -1,5 +1,5 @@
 {
-  "_comment": "Status for api-gateway/prod dep #10049 = in_progress. Includes /job/ → adapter walks needs-recovery.",
+  "_comment": "Status for api-gateway/prod dep #10049 = in_progress. Includes /job/ \u00e2\u2020\u2019 adapter walks needs-recovery.",
   "Priority": 50,
   "Request": {
     "Methods": [
@@ -9,7 +9,7 @@
       "Matchers": [
         {
           "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/demo-repo/deployments/10049/statuses"
+          "Pattern": "/repos/demo-org/api-gateway/deployments/10049/statuses"
         }
       ]
     }

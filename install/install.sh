@@ -342,7 +342,7 @@ EOF
 if [ "$MODE_DEMO" = true ]; then
     DEMO_GHA_API_BASE_URL_DEFAULT='http://demo-gha:80'
     DEMO_POLL_DEFAULT='5'
-    DEMO_GHA_REPOS_DEFAULT='[{"owner":"demo-org","repo":"demo-repo"}]'
+    DEMO_GHA_REPOS_DEFAULT='[{"owner":"demo-org","repo":"web-portal"},{"owner":"demo-org","repo":"api-gateway"},{"owner":"demo-org","repo":"auth-service"},{"owner":"demo-org","repo":"billing-service"},{"owner":"demo-org","repo":"notification-worker"},{"owner":"demo-org","repo":"analytics-pipeline"}]'
 
     printf '\n# Demo-mode defaults (CR-0013; written by install.sh)\n' >> "$ENV_FILE"
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "Priority-fallback for /deployments/{id}/statuses — returns an empty status list, which the adapter treats as InProgress per FetchLatestStatusAsync. Specific per-deployment status mappings under statuses/ override this.",
+  "_comment": "Priority-fallback for /deployments/{id}/statuses \u00e2\u20ac\u201d returns an empty status list, which the adapter treats as InProgress per FetchLatestStatusAsync. Specific per-deployment status mappings under statuses/ override this.",
   "Priority": 500,
   "Request": {
     "Methods": [
@@ -9,7 +9,7 @@
       "Matchers": [
         {
           "Name": "RegexMatcher",
-          "Pattern": "^/repos/demo-org/demo-repo/deployments/[0-9]+/statuses$"
+          "Pattern": "^/repos/demo-org/deployments/[0-9]+/statuses$"
         }
       ]
     }
