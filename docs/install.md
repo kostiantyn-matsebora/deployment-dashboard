@@ -1,7 +1,7 @@
 ---
 title: Install
 nav_order: 3
-description: Full install reference — release path, demo mode, contributor flow, escape hatches.
+description: Full install reference — demo-default release path, real-GHA opt-in, empty stack, contributor flow, escape hatches.
 ---
 
 # Install
@@ -10,15 +10,29 @@ Full install reference for the Deployment Dashboard. For a 60-second taste, the 
 
 A clean machine with Docker + the GitHub CLI (`gh`) installed can be running the
 dashboard in two commands — no `git clone`, no source tree, no .NET SDK
-required. The installer:
+required. **As of [CR-0013](cr/CR-0013-demo-mode-default-installer.html), the
+no-flag install boots a self-contained demo stack**: the dashboard renders a
+populated, evolving matrix within 60 seconds with no GitHub PAT, no external
+network calls. The installer:
 
 1. fetches release assets from GitHub via `gh release download`,
 2. authenticates to GHCR via `gh auth token | docker login`,
-3. pulls the four pinned private images from GHCR
-   (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}`),
-4. brings up the stack with `docker compose`,
+3. pulls the pinned private component images from GHCR
+   (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}` —
+   plus `deployment-dashboard-demo-gha` under the default `demo` profile, per
+   [CR-0013](cr/CR-0013-demo-mode-default-installer.html)),
+4. brings up the stack with `docker compose` (default profile: `demo`),
 5. polls `/health` — the `api` container self-applies pending EF Core migrations on startup before reporting healthy (per [ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)),
 6. and prints the URL panel + the generated `API_TOKEN`.
+
+## Flag matrix at a glance
+
+| Invocation | Stack | When to use |
+|---|---|---|
+| `install.ps1` / `install.sh` (no flag) | Demo — `demo-gha` + fetcher pointing at it; 6-service × 5+-env matrix evolves over time | Default. Evaluators / first-look installs. Zero configuration. |
+| `install.ps1 -RealGha` / `install.sh --real-gha` | Real GitHub Actions upstream; requires `$env:GHA_TOKEN` | You want to point the fetcher at your own repos. |
+| `install.ps1 -Empty` / `install.sh --empty` | No fetcher; no demo-gha; bare api/gateway/frontend/db | Direct `POST /api/deployments` integrators / power users. |
+| `install.ps1 -Demo` (back-compat) | Routes to default + logs an info line | Migration aid; will be removed after one release cycle. See § Migration from earlier versions. |
 
 ## Prerequisites
 
@@ -65,12 +79,13 @@ Verify:
 gh auth status --hostname github.com
 ```
 
-## Windows (PowerShell 7+)
+## Quick start — demo default (Windows, PowerShell 7+)
 
 The two-step flow: `gh release download` fetches `install.ps1` into the
-current directory; `pwsh` runs it. The old `iex (irm ...)` one-liner is
-retired — the release asset URL it pulled requires auth headers `irm` does
-not supply.
+current directory; `pwsh` runs it. No flag — boots the demo-default stack per
+[CR-0013](cr/CR-0013-demo-mode-default-installer.html). The dashboard renders
+a populated, evolving 6-service × 5+-env matrix within ~60 seconds, with no
+PAT and no external network calls.
 
 Latest release:
 
@@ -86,7 +101,7 @@ gh release download v1.2.3 --repo kostiantyn-matsebora/deployment-dashboard --pa
 pwsh -NoProfile -File install.ps1 -Version v1.2.3
 ```
 
-## Linux / macOS
+## Quick start — demo default (Linux / macOS)
 
 ```bash
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
@@ -104,72 +119,67 @@ The dashboard is then on `http://localhost:8080/`. The installer prints the
 generated `API_TOKEN` once — it is also persisted to
 `./dashboard-release/dashboard.env` for subsequent CI/CD POSTs.
 
-## With the optional fetcher
+### What you see
 
-The fetcher is a CR-0009 pull-mode worker that translates GitHub Actions runs
-into `POST /api/deployments` events. Opt in with `-Fetcher` (PowerShell) /
-`--fetcher` (bash) on the second step; the `GHA_TOKEN` precondition must hold before any `docker compose` invocation runs (per [issue #5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5)):
+Within ~60 seconds of `/health` returning 200:
+
+| Surface | Behaviour |
+|---|---|
+| Matrix | ≥ 20 populated slots (6 services × 5+ environments); ≥ 5 of the canonical 6 box states from `local/index/ui-states.yaml` appear |
+| DAG | All four `parent_deployments` shapes covered — empty / single per-env / intra-run `needs:` / multi-`needs:` mixed |
+| SSE | New deployment events arrive every 5–10 s; the dashboard evolves visibly for ~10 minutes before the scenario walk loops |
+| Network | Zero outbound calls — the fetcher polls the in-network `demo-gha` container; no GitHub.com traffic |
+
+The demo bundle is content-only — there is no admin UI to inject new events.
+Re-run `install.ps1` to reset the scenario state to tick 1.
+
+## Real GitHub repos — `-RealGha`
+
+For pointing the fetcher at your own GitHub Actions repos (CR-0009 pull-mode worker), opt in with `-RealGha` (PowerShell) / `--real-gha` (bash). The `GHA_TOKEN` precondition must hold before any `docker compose` invocation runs (per [issue #5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) — preserved verbatim under the renamed flag):
 
 ```powershell
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
 $env:GHA_TOKEN = '<your-github-pat>'
-pwsh -NoProfile -File install.ps1 -Fetcher
+pwsh -NoProfile -File install.ps1 -RealGha
 ```
 
 ```bash
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
 export GHA_TOKEN='<your-github-pat>'
-bash install.sh --fetcher
+bash install.sh --real-gha
 ```
 
-Note: the `GHA_TOKEN` and the `gh` CLI's stored token are two distinct secrets; one is not a substitute for the other, and both must be set when running the `-Fetcher` path.
+Note: the `GHA_TOKEN` and the `gh` CLI's stored token are two distinct secrets; one is not a substitute for the other, and both must be set when running the `-RealGha` path.
 
 | Token | Purpose | Used by | Required when |
 |---|---|---|---|
-| `GHA_TOKEN` | GitHub Actions API PAT | fetcher worker | running the `-Fetcher` path |
-| `gh` CLI stored token | GitHub Releases + GHCR auth | installer | running the `-Fetcher` path |
+| `GHA_TOKEN` | GitHub Actions API PAT | fetcher worker | running the `-RealGha` path |
+| `gh` CLI stored token | GitHub Releases + GHCR auth | installer | every install |
 
-For a zero-PAT walkthrough, use `-Demo` / `--demo` (next section) — it boots the fetcher against a public repo in GitHub's anonymous-mode rate bucket.
+`-RealGha` consumes the same fetcher service and the same env-var contract that today's `-Fetcher` does — the rename is install-time UX only, not a backend change. `GHA_REPOSITORIES` defaults to your own value via the existing `dashboard.env` round-trip; pre-CR-0013 behaviour is otherwise unchanged.
 
-## Try it without setup — demo mode
+Under the hood, the fetcher's GitHub-API adapter omits the
+`Authorization` header entirely when `GHA_TOKEN` is empty or equals the
+compose-default placeholder literal `local-dev-gha-token-placeholder`. See
+[`docs/ci-cd-integration.md`](ci-cd-integration.html) § Anonymous-mode transport
+for the wire detail. The demo-default path does not exercise this anonymous-mode
+transport — `demo-gha` ignores the `Authorization` header entirely.
 
-`-Demo` (PowerShell) / `--demo` (bash) implies `-Fetcher` and bakes in a
-public-repo default (`GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]`)
-plus a 60-second poll interval, so a fresh install renders deployment
-activity end-to-end with no caller-side configuration. Two repos are
-seeded (rather than one) to give a richer multi-service matrix on first
-render. `$env:GHA_TOKEN`
-governs the fetcher's rate budget but is **not required**:
+## Empty stack — `-Empty` (direct-POST integrators)
 
-| `$env:GHA_TOKEN` | `Authorization` header | GitHub API rate limit |
-|---|---|---|
-| set            | `Bearer <token>` | 5000 req/h (authed)   |
-| unset          | omitted          | 60 req/h (anonymous)  |
+Power-user escape: bring up the stack with no fetcher and no demo-gha. Useful when an external pipeline POSTs deployment events directly to `/api/deployments` and the in-stack fetcher would be redundant or conflicting.
 
 ```powershell
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
-pwsh -NoProfile -File install.ps1 -Demo
+pwsh -NoProfile -File install.ps1 -Empty
 ```
 
 ```bash
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
-./install.sh --demo
+bash install.sh --empty
 ```
 
-PostHog/posthog and grafana/grafana are high-deployment-activity public
-repos chosen for visible matrix output on first render. Both surface
-PR-ephemeral environments in their action runs, so the matrix will show
-some historical `posthog-NNNN-*` (PostHog) and `storybook-pr-preview-NNNNN`
-(Grafana) env columns alongside the steady-state ones.
-
-**Note.** A per-repo environment filter for the fetcher is tracked separately and is not part of this install path.
-
-Under the hood, the fetcher's GitHub-API adapter omits the
-`Authorization` header entirely when `GHA_TOKEN` is empty or equals the
-compose-default placeholder literal `local-dev-gha-token-placeholder`;
-that's the runtime transport contract that makes the zero-PAT path work
-end-to-end. See [`docs/ci-cd-integration.md`](ci-cd-integration.html) § Anonymous-mode transport
-for the wire detail.
+The resulting stack is `api` + `gateway` + `dashboard` (frontend) + `db` — four services, identical to the pre-CR-0013 no-flag default. The dashboard renders empty on first load; populate it via direct `POST /api/deployments` (see [`docs/ci-cd-integration.md`](ci-cd-integration.html)).
 
 ## Pin a version
 
@@ -302,6 +312,25 @@ actuation step (see § Migrations).
 
 The primary install path (`install.ps1` / `install.sh`) handles all three —
 prefer it where local policy permits.
+
+---
+
+## Migration from earlier versions
+
+[CR-0013](cr/CR-0013-demo-mode-default-installer.html) inverted the
+release-install no-flag default from "empty stack" to "demo stack" and renamed
+two flags. The pre-CR-0013 flag set is preserved on a one-release-cycle
+back-compat alias schedule:
+
+| Pre-CR-0013 flag | CR-0013 replacement | Status |
+|---|---|---|
+| (no flag) | (no flag) | **Behaviour inverted.** Pre-CR-0013 brought up an empty stack; CR-0013 brings up the demo stack. To replicate the old empty-stack default, pass `-Empty` / `--empty`. |
+| `-Fetcher` / `--fetcher` | `-RealGha` / `--real-gha` | Flag renamed. The fetcher service, the env-var contract, and the `$env:GHA_TOKEN` precondition are unchanged. The old flag name routes to the new behaviour for one release cycle. |
+| `-Demo` / `--demo` | (no flag) | Behaviour folded into the default. Passing `-Demo` silently routes to the new demo default + logs one informational "demo is now the default; `-Demo` flag is redundant" line. The PostHog/Grafana public-repo upstream the pre-CR-0013 `-Demo` flag pointed at is no longer used — the new default polls the in-stack `demo-gha` container instead. |
+
+The back-compat aliases (`-Fetcher`, `-Demo`) will be removed in the
+release-after-next. Adopters pinning to a recent tag have one full release
+cycle to switch to `-RealGha` / no-flag.
 
 ---
 

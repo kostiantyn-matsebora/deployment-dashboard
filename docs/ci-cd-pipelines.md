@@ -29,19 +29,20 @@ If you are looking for "how do I report a deploy to the dashboard," read
 `ci-cd-integration.md`. If you are looking for "how does this repo build
 its own images," you are in the right place.
 
-## 2. Topology — four thin callers, one reusable workflow
+## 2. Topology — five thin callers, one reusable workflow
 
 ```
 .github/workflows/
-├── _build-and-push-image.yml    reusable — build, test, push (1 file, 4 callers)
-├── api.yml                       caller — deployment-dashboard-api    (paths: backend/{api,write-api,read-api,shared}/**)
-├── fetcher.yml                   caller — deployment-dashboard-fetcher (paths: backend/{fetcher,fetcher-host,shared}/**)
+├── _build-and-push-image.yml    reusable — build, test, push (1 file, 5 callers)
+├── api.yml                       caller — deployment-dashboard-api      (paths: backend/{api,write-api,read-api,shared}/**)
+├── fetcher.yml                   caller — deployment-dashboard-fetcher  (paths: backend/{fetcher,fetcher-host,shared}/**)
 ├── frontend.yml                  caller — deployment-dashboard-frontend (paths: frontend/**)
-└── gateway.yml                   caller — deployment-dashboard-gateway  (paths: gateway/**)
+├── gateway.yml                   caller — deployment-dashboard-gateway  (paths: gateway/**)
+└── demo-gha.yml                  caller — deployment-dashboard-demo-gha (paths: gateway/demo-gha/**, testing/fixtures/gha/demo/**) — CR-0013, content-only image
 ```
 
 The reusable workflow's `build-kind` input (`dotnet` | `static`) selects the
-build path. The four callers stay path-filtered and minimal — a frontend-only
+build path. The five callers stay path-filtered and minimal — a frontend-only
 PR runs only `frontend` jobs.
 
 ### Component → image → Dockerfile
@@ -52,6 +53,7 @@ PR runs only `frontend` jobs.
 | `fetcher.yml` | `ghcr.io/<owner>/deployment-dashboard-fetcher` | `backend/fetcher-host/Dockerfile` | `backend/` |
 | `frontend.yml` | `ghcr.io/<owner>/deployment-dashboard-frontend` | `frontend/dashboard/Dockerfile` | `frontend/` |
 | `gateway.yml` | `ghcr.io/<owner>/deployment-dashboard-gateway` | `gateway/Dockerfile` | `gateway/` |
+| `demo-gha.yml` (CR-0013) | `ghcr.io/<owner>/deployment-dashboard-demo-gha` | `gateway/demo-gha/Dockerfile` | `.` (repo root — `COPY` reaches into `testing/fixtures/gha/demo/`) |
 
 ## 3. Triggers
 
@@ -89,6 +91,13 @@ metadata action's `enable={{is_default_branch}}` rule + the semver tag).
 Consumers that need reproducibility should pin to `vX.Y.Z` or `sha-<7>`,
 never `latest`.
 
+The `demo-gha` component (CR-0013) uses the identical tag scheme — the
+`docker/metadata-action@v5` invocation in `demo-gha.yml` is registry-agnostic
+in the same way the four sibling callers are. Adopters opting in to the
+demo-default install path inherit pinning via the `${DASHBOARD_VERSION}`
+substitution in `install/docker-compose.release.yml`'s `demo` profile, exactly
+matching the api/fetcher/frontend/gateway round-trip.
+
 ## 5. Quality gates
 
 Per CR-0010 § 3h, with Wave 4b decision locks applied:
@@ -103,6 +112,7 @@ Per CR-0010 § 3h, with Wave 4b decision locks applied:
 | Frontend coverage | **non-blocking artefact** | `--code-coverage` | Cobertura uploaded as `coverage-frontend-<image>-<run>-<attempt>`. No threshold today. |
 | Frontend lint | **not gated in MVP-CI** | — | D3 lock: deferred. Listed in § 13. |
 | Integration suite (`integration.yml`) | **watching-week non-blocking → promoted to blocking after green normal-volume calendar week** | `.github/workflows/integration.yml` brings up the stack with the `integration` compose profile and runs `testing/integration/run-tests.ps1` (cross-stack: fetcher → mock-gha → gateway → API → DB → SSE) | Per [CR-0012](./cr/CR-0012-integration-test-substrate.md) + CR-0010 Open trade-off (ii). Branch-protection promotion is a repo-settings change (not a workflow-config change) — see [`docs/integration-tests.md § 7.3`](./integration-tests.md#73-severity-posture--non-blocking-watching-week). |
+| `demo-gha` content-only image (`demo-gha.yml`) | **build + push only** — no .NET build, no unit tests, no integration suite | The caller workflow's only quality gate is a successful `docker build` of `gateway/demo-gha/Dockerfile` (which `COPY`s `testing/fixtures/gha/demo/`); image content is exercised end-to-end on demo-default install runs and indirectly by the integration suite (shared WireMock.Net mapping conventions per CR-0012 § 4). | Per [CR-0013](./cr/CR-0013-demo-mode-default-installer.md). Content-only image — the caller is thin and may differ from the four sibling callers (`build-kind` may not match the `dotnet` / `static` taxonomy; devops to lock the exact shape during the Phase 4 devops slice). |
 
 ## 6. Caching
 

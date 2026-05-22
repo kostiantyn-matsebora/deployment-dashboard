@@ -47,3 +47,4 @@ New CRs MUST use the universal heading regardless of direction. This keeps the S
 | [CR-0010](./CR-0010-component-ci-pipeline.md) | Component CI pipeline (GitHub Actions — build, test, package) | accepted (amended 2026-05-21 by ADR-0009) |
 | [CR-0011](./CR-0011-fetcher-rate-limit-governance.md) | Fetcher rate-limit governance: configurable self-imposed cap + usage reporting endpoints + dashboard surfacing | proposed |
 | [CR-0012](./CR-0012-integration-test-substrate.md) | Integration test substrate: WireMock.Net mock-gha service + `testing/integration/` suite + demo-bundle co-location | accepted |
+| [CR-0013](./CR-0013-demo-mode-default-installer.md) | Demo-mode default in release-install entrypoint: installer flag inversion + `demo` Compose profile + baked `demo-gha` image + realistic bundle + dynamic-mock scenario walk | accepted |

@@ -47,7 +47,40 @@ When the `integration` compose profile is active, the stack adds one container (
 |---|---|---|
 | `mock-gha` service definition | always present in compose YAML | inert without profile activation |
 | `integration` | bound to `mock-gha` + integration env overrides | starts `mock-gha`; sets `GHA_API_BASE_URL=http://mock-gha:80`; sets `FETCHER_POLL_INTERVAL_SECONDS=1` |
-| `demo` (future) | bound to `mock-gha` + demo env overrides | mounts `testing/fixtures/gha/demo/` instead of per-scenario bundles; consumed by follow-up demo-mode issue |
+| `demo` | bound to `demo-gha` + demo env overrides | starts `demo-gha`; sets `GHA_API_BASE_URL=http://demo-gha:80`; sets `FETCHER_POLL_INTERVAL_SECONDS=5`–`10`; sets `GHA_REPOSITORIES=[{"owner":"demo-org","repo":"demo-repo"}]`. Wired by [CR-0013](./cr/CR-0013-demo-mode-default-installer.md). |
+
+### 3.1 Two profiles, two bundles
+
+After [CR-0013](./cr/CR-0013-demo-mode-default-installer.md) lands, the
+`testing/fixtures/gha/` corpus drives two non-overlapping consumers via two
+distinct Compose profiles + two distinct services + two distinct images.
+
+| Profile | Service | Image | Bundle source | Mount mechanism | Audience |
+|---|---|---|---|---|---|
+| `integration` | `mock-gha` | upstream `sheyenrath/wiremock.net:2.4.0` | `testing/fixtures/gha/mappings/` + `testing/fixtures/gha/scenarios/<state-id>/` | bind-mount (test runner activates scenarios via the admin API) | `testing/integration/` xUnit suite |
+| `demo` | `demo-gha` | first-party `ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION}` | `testing/fixtures/gha/demo/` | **baked into image at build time** (`COPY testing/fixtures/gha/demo/ /app/__admin/mappings/` in `gateway/demo-gha/Dockerfile`) | release-install no-flag default (per CR-0013) |
+
+**The two profiles coexist on the same compose project.** They do not
+compete because:
+
+- The test runner activates `integration` (`-Integration` switch on
+  `dev_env/start.ps1`; `--profile integration` in CI); the installer
+  activates `demo` (no-flag default on `install.ps1` / `install.sh`).
+- Each profile binds a different service (`mock-gha` vs `demo-gha`); the
+  other service stays inert under the active profile.
+- The fetcher's `GHA_API_BASE_URL` resolves to a different DNS name under
+  each profile (`http://mock-gha:80` vs `http://demo-gha:80`); a stack
+  running both profiles simultaneously would point the fetcher at exactly
+  one of them — but no entrypoint activates both at once.
+
+**Why two images instead of one shared `mock-gha`.** Bundle versioning
+tracks image tag. An operator upgrading from `v1.0.0` to `v1.1.0` with a
+shared-mock-gha bind-mount could end up with a fresh image and a stale
+bundle pinned to the old release's tag. Baking the demo bundle into a
+first-party image makes the bundle and the image atomically versioned —
+the demo content released against `v1.1.0` is the demo content that
+container will ever serve. See [CR-0013](./cr/CR-0013-demo-mode-default-installer.md) § Alternatives
+Considered for the rejected shared-mount alternative.
 
 ## 4. WireMock mapping authoring conventions
 

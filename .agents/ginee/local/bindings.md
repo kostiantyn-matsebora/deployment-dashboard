@@ -20,6 +20,9 @@
 | `testing/integration/` | xUnit integration test project — scenarios, runners, admin-API scenario-loader, assertion oracles for FR-06 / NFR-03 / NFR-05 / ADR-0004 cursor contract | `qa-engineer` |
 | `testing/fixtures/gha/` | WireMock-native JSON mappings (per-endpoint × per-scenario) + scenario bundles + demo-mode bundle (`mappings/`, `scenarios/<state-id>/`, `scenarios/_cross-cutting/`, `demo/`) | `qa-engineer` |
 | `.github/workflows/integration.yml` | Integration-test workflow gate — triggers + path filters + compose stack lifecycle + scenario invocation | `devops-engineer` (workflow shape) + `qa-engineer` (suite content via `testing/integration/`) |
+| `docs/cr/CR-0013-demo-mode-default-installer.md` | CR-0013 — demo-mode default in release-install entrypoint design-of-record | `solution-architect` |
+| `gateway/demo-gha/` | Demo-gha Docker image source — `Dockerfile` + `COPY` of qa-owned `testing/fixtures/gha/demo/` content into `/app/__admin/mappings/` per CR-0013. The Dockerfile is a devops concern; the bundle content it copies is qa-owned (governance rows on `testing/fixtures/gha/` above) | `devops-engineer` |
+| `.github/workflows/demo-gha.yml` | Demo-gha component CI workflow caller — 5th component image per CR-0013, content-only (no .NET build, no tests); inherits `_build-and-push-image.yml` reusable shape from CR-0010 | `devops-engineer` |
 | `CLAUDE.md` | Project-instruction file — ginee framework pointer | `project-manager` (during discovery / rediscovery) |
 
 **Tie-breakers.**
@@ -47,12 +50,13 @@ deployment-dashboard/
 │   ├── drawer/          history drawer
 │   └── shared/          Signal Store + API client + SSE service + models + fixtures
 ├── gateway/             nginx reverse proxy + Dockerfile (single public ingress on :8080)
+│   └── demo-gha/        Dockerfile for the first-party demo-gha image (CR-0013) — bakes testing/fixtures/gha/demo/ into a WireMock.Net image; built context = repo root
 ├── install/             docker-compose.release.yml + install.ps1/.sh, uninstall.ps1/.sh — release-install canonical compose; dev_env layers on this via `-f` merge per ADR-0010
 ├── dev_env/             docker-compose.local.yml (override), docker-compose.scaled.yml (standalone), start.ps1, stop.ps1
 ├── docs/                architecture.md, WBS.md, ci-cd-integration.md, ci-cd-pipelines.md, integration-tests.md (CR-0012), adr/, cr/, ui/ (mockup + options)
 ├── testing/             functional/ (xUnit), integration/ (xUnit cross-stack — CR-0012), e2e/ (Playwright), mockup-visual/ (Playwright), scripts/, fixtures/ (incl. fixtures/gha/ — WireMock mappings + scenarios + demo bundle per CR-0012), config/
 ├── .github/actions/     notify/ composite action
-├── .github/workflows/   api.yml + fetcher.yml + frontend.yml + gateway.yml + _build-and-push-image.yml (reusable) — CR-0010; integration.yml — CR-0012
+├── .github/workflows/   api.yml + fetcher.yml + frontend.yml + gateway.yml + _build-and-push-image.yml (reusable) — CR-0010; integration.yml — CR-0012; demo-gha.yml — CR-0013 (5th component image, content-only)
 ├── .agents/ginee/  framework install
 ├── CLAUDE.md
 └── TODO
@@ -85,7 +89,7 @@ deployment-dashboard/
 | Container runtime | OCI containers, app port 8080 |
 | Hosting | Azure Container Apps + ACR + Azure Postgres Flexible + Key Vault (NFR-01, NFR-02) |
 | IaC | Terraform `azurerm` ≥ 4.x (NFR-06) — planned per WBS §4, not yet present |
-| CI/CD | GitHub Actions — component CI live per CR-0010 (`_build-and-push-image.yml` reusable + `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml` callers); `.github/actions/notify/` composite present (not invoked by component CI yet — deferred dogfooding TODO); cross-stack integration-tests workflow `integration.yml` per CR-0012 — gates the WireMock-driven fetcher → write-path suite under the `integration` compose profile. |
+| CI/CD | GitHub Actions — component CI live per CR-0010 (`_build-and-push-image.yml` reusable + `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml` callers); per CR-0013 a fifth caller `demo-gha.yml` builds + pushes the content-only `deployment-dashboard-demo-gha` image (baked `testing/fixtures/gha/demo/` corpus, no .NET build, no tests); `.github/actions/notify/` composite present (not invoked by component CI yet — deferred dogfooding TODO); cross-stack integration-tests workflow `integration.yml` per CR-0012 — gates the WireMock-driven fetcher → write-path suite under the `integration` compose profile. |
 
 ## Do not introduce
 
