@@ -210,8 +210,11 @@ LOCAL_DEV_PW_LITERAL='local-dev-password'
 read_env_value() {
     local path="$1" key="$2"
     if [ ! -f "$path" ]; then return 0; fi
-    # POSIX grep: emit first matching value after the '='. Empty stdout on no match.
-    grep -E "^${key}=" "$path" | head -n 1 | sed -E "s/^${key}=//"
+    # POSIX sed: emit first matching value after the '='. Empty stdout on no match.
+    # Single-stage sed avoids the grep|head|sed pipeline's pipefail trap -- grep
+    # exits 1 on no-match, which under `set -euo pipefail` propagates out of the
+    # $(read_env_value ...) caller and terminates the script.
+    sed -nE "s/^${key}=(.*)$/\1/p" "$path" | head -n 1
 }
 
 new_random_hex() {
