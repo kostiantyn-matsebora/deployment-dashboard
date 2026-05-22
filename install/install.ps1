@@ -3,14 +3,32 @@
     Install + start a released Deployment Dashboard stack on the current host.
     Image-only -- no git clone, no source tree, no .NET SDK required.
 .DESCRIPTION
-    Release-install primary entrypoint (Option A per GitHub issue #7). The companion
-    contributor flow is `dev_env/start.ps1`, which depends on a cloned repo and
-    bind-mounts the source tree for hot-reload / migration generation.
+    Release-install primary entrypoint (Option A per GitHub issue #7).
+    Per CR-0013 the no-flag default is the *demo stack* -- a self-contained
+    stack with the baked `demo-gha` mock GitHub Actions upstream + fetcher
+    pointing at it. Zero-PAT, zero external network, populated dashboard
+    within ~60s. The companion contributor flow is `dev_env/start.ps1`,
+    which depends on a cloned repo and bind-mounts the source tree for
+    hot-reload / migration generation.
+
+    Flag matrix (CR-0013):
+      (no flag)            Demo stack -- demo-gha + fetcher pointing at
+                           http://demo-gha:80; no GHA_TOKEN required.
+      -RealGha             Real GitHub Actions upstream -- requires
+                           $env:GHA_TOKEN. Renamed from `-Fetcher`; semantics
+                           identical to the historical `-Fetcher` flag.
+      -Empty               Bare-minimum stack -- db + api + gateway +
+                           dashboard only; no fetcher, no demo-gha.
+                           Direct-POST integrators only.
+      -Demo                Back-compat alias for the no-flag default.
+                           Silently routes + logs one INFO line. Drop the
+                           flag from your install command after this
+                           release cycle.
 
     What this script does, in order:
-      1.  `GHA_TOKEN` precondition (issue #5 verbatim) -- fires only when `-Fetcher`
-          is set and `-Demo` is NOT set. `-Demo` permits a zero-PAT install that
-          boots the fetcher in anonymous mode against a public-repo default.
+      1.  `GHA_TOKEN` precondition (issue #5 verbatim) -- fires only when
+          `-RealGha` is set. The no-flag / `-Demo` / `-Empty` paths never
+          touch real GitHub and do not require a PAT.
       2.  `gh` CLI precondition -- gh present on PATH, authenticated for github.com,
           and the active token carries the `read:packages` scope. All three failure
           modes exit 1 BEFORE any side effect (no install dir, no asset writes, no
@@ -18,14 +36,21 @@
       3.  Ensures the install directory exists.
       4.  Generates / preserves `API_TOKEN` + `POSTGRES_PASSWORD` random secrets;
           persists them to `<InstallDir>/dashboard.env`. Refuses the dev-literal.
-          When `-Demo` is set, also bakes in the public-repo demo defaults
-          (GHA_REPOSITORIES + FETCHER_POLL_INTERVAL_SECONDS, and GHA_TOKEN iff set).
+          When the demo path is active (default or `-Demo`), also bakes in the
+          demo-profile env-var contract (`GHA_API_BASE_URL=http://demo-gha:80`,
+          `FETCHER_POLL_INTERVAL_SECONDS=5`,
+          `GHA_REPOSITORIES=[{"owner":"demo-org","repo":"demo-repo"}]`).
       5+6. Downloads `docker-compose.release.yml` via `gh release download` -- the
           repo + GHCR images are private, so anonymous HTTPS asset fetch 404s.
       7.  `docker login ghcr.io` using `gh auth token` -- required because the
           component images are private GHCR packages and anonymous pulls 401.
-      8.  `docker compose pull` -- pulls the four GHCR-hosted component images.
-      9.  `docker compose up -d --wait` (with the `fetcher` profile when requested).
+      8.  `docker compose pull` -- pulls the GHCR-hosted component images
+          (api / fetcher / frontend / gateway, plus demo-gha when the demo
+          profile is active).
+      9.  `docker compose up -d --wait` with the resolved profile set:
+            (no flag) / -Demo  -> `--profile demo --profile fetcher`
+            -RealGha           -> `--profile fetcher`
+            -Empty             -> no extra profiles
           `--wait` blocks until each service's healthcheck reports healthy.
       10. Polls the gateway-fronted `/health` for up to `-HealthTimeoutSeconds`.
       11. Prints the URL panel + the generated `API_TOKEN` + a sample `curl`.
@@ -45,8 +70,8 @@
       generated secrets + DB volume. The installer detects the pre-existing
       `dashboard.env`, reuses `API_TOKEN` + `POSTGRES_PASSWORD`, and only
       rewrites `DASHBOARD_VERSION` / `DASHBOARD_PORT`. Demo-mode defaults
-      (GHA_REPOSITORIES, FETCHER_POLL_INTERVAL_SECONDS, GHA_TOKEN) are
-      preserved unless `-ResetDemoDefaults` is passed.
+      (GHA_REPOSITORIES, FETCHER_POLL_INTERVAL_SECONDS, GHA_API_BASE_URL,
+      GHA_TOKEN) are preserved unless `-ResetDemoDefaults` is passed.
 
       If a stray `deployment-dashboard_pg-data` Docker volume is detected but
       no `dashboard.env` exists at `-InstallDir`, the installer red-errors
@@ -59,19 +84,19 @@
     tag-pinned release assets via `gh release download` (the repo is private) and
     writes `DASHBOARD_VERSION=<tag>` into the env-file so the compose file resolves
     GHCR image refs to the same tag.
-.PARAMETER Fetcher
-    Activate the optional `fetcher` Compose profile (CR-0009 pull-mode fetcher). When
-    set (and `-Demo` is NOT also set), requires `$env:GHA_TOKEN` to be non-empty;
-    otherwise the script red-errors and exits 1 before any side effect.
+.PARAMETER RealGha
+    Real GitHub Actions upstream. Activates the `fetcher` Compose profile (only --
+    not `demo`) and requires `$env:GHA_TOKEN` to be non-empty; the script
+    red-errors and exits 1 before any side effect when the token is missing.
+    Renamed from `-Fetcher` per CR-0013; semantics are identical.
+.PARAMETER Empty
+    Bare-minimum stack -- db + api + gateway + dashboard only. No fetcher, no
+    demo-gha, no mock-gha. For direct-POST integrators that thread deployment
+    events into `POST /api/deployments` themselves.
 .PARAMETER Demo
-    Zero-PAT demo install. Implies `-Fetcher`. Bakes in a public-repo default
-    (`GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"}]`) and a 60-second
-    poll interval so a fresh install renders deployments without the caller
-    needing to configure anything. If `$env:GHA_TOKEN` is set, it is threaded
-    through to `dashboard.env` (5000 req/h authed). If unset, no `GHA_TOKEN=`
-    line is written and the fetcher container falls back to the compose-level
-    placeholder, which the fetcher detects and switches to anonymous-mode
-    GitHub API calls (60 req/h).
+    Back-compat alias for the no-flag default. Silently routes to the demo stack
+    bring-up + logs one informational line. Drop the flag from your install
+    command after this release cycle (one-cycle deprecation per CR-0013).
 .PARAMETER Port
     Host port to publish the gateway on. Default 8080. Becomes `DASHBOARD_PORT` in
     the env-file; compose substitutes it into the `gateway` service's `ports:`.
@@ -85,20 +110,26 @@
     upgrade-re-run semantics.
 .PARAMETER ResetDemoDefaults
     Force-overwrite the demo-mode keys (`GHA_REPOSITORIES`,
-    `FETCHER_POLL_INTERVAL_SECONDS`, and `GHA_TOKEN`) even when a prior
-    `dashboard.env` already contains them. Without this switch, an upgrade re-run
-    with `-Demo` preserves whatever the operator customised. `GHA_TOKEN`
-    additionally rotates when `$env:GHA_TOKEN` is set AND differs from the
-    persisted value (caller is explicitly threading a new token through).
+    `FETCHER_POLL_INTERVAL_SECONDS`, `GHA_API_BASE_URL`, `GHA_TOKEN`) even
+    when a prior `dashboard.env` already contains them. Without this switch,
+    an upgrade re-run on the demo path preserves whatever the operator
+    customised. `GHA_TOKEN` additionally rotates when `$env:GHA_TOKEN` is set
+    AND differs from the persisted value (caller is explicitly threading a
+    new token through).
 
 .EXAMPLE
+    # No-flag default per CR-0013: brings up the demo stack with the baked
+    # demo-gha mock GitHub upstream + fetcher pointing at it.
     pwsh -NoProfile -File install.ps1
 .EXAMPLE
     pwsh -NoProfile -File install.ps1 -Version v1.2.3
 .EXAMPLE
-    pwsh -NoProfile -File install.ps1 -Fetcher
+    # Real GitHub upstream -- requires $env:GHA_TOKEN. Renamed from -Fetcher.
+    $env:GHA_TOKEN = '<PAT>'
+    pwsh -NoProfile -File install.ps1 -RealGha
 .EXAMPLE
-    pwsh -NoProfile -File install.ps1 -Demo
+    # Bare-minimum stack for direct-POST integrators.
+    pwsh -NoProfile -File install.ps1 -Empty
 .EXAMPLE
     pwsh -NoProfile -File install.ps1 -Port 9090 -InstallDir 'C:\dashboards\demo'
 .EXAMPLE
@@ -106,13 +137,14 @@
     pwsh -NoProfile -File install.ps1 -Version v0.4.0 -InstallDir 'C:\dashboards\prod'
 .EXAMPLE
     # Demo re-run, force-refresh the demo defaults to the new installer's baked-in values.
-    pwsh -NoProfile -File install.ps1 -Demo -ResetDemoDefaults
+    pwsh -NoProfile -File install.ps1 -ResetDemoDefaults
 #>
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
     [string]$Version = 'latest',
-    [switch]$Fetcher,
+    [switch]$RealGha,
+    [switch]$Empty,
     [switch]$Demo,
     [switch]$ResetDemoDefaults,
     [int]$Port = 8080,
@@ -121,23 +153,39 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-# -Demo implies -Fetcher. Set this before the precondition block so the
-# downstream branches (token check, compose --profile fetcher) see the
-# canonicalised state.
-if ($Demo) { $Fetcher = $true }
+# ---- 0. Resolve the install mode from the flag matrix (CR-0013) ----
+# Mutually exclusive triple: $modeDemo (default), $modeRealGha, $modeEmpty.
+# Exactly one is true after this block. The historical `-Demo` flag becomes
+# a silent alias for the default with a one-line INFO log.
+$conflict = @(@(
+    [bool]$RealGha,
+    [bool]$Empty,
+    [bool]$Demo
+) | Where-Object { $_ })
+if ($conflict.Count -gt 1) {
+    Write-Host "ERROR: -RealGha, -Empty, and -Demo are mutually exclusive. Pick at most one." -ForegroundColor Red
+    exit 1
+}
 
-# ---- 1. GHA_TOKEN precondition (issue #5 verbatim) ----
-# Contract:
-#   -Fetcher (no -Demo) + token set    -> proceed, write token to dashboard.env (authed, 5000/h)
-#   -Fetcher (no -Demo) + token unset  -> red error, exit 1
-#   -Demo               + token set    -> proceed, write token (authed, 5000/h)
-#   -Demo               + token unset  -> proceed, OMIT GHA_TOKEN= line; fetcher
-#                                         picks up compose's placeholder default
-#                                         and switches to anonymous mode (60/h)
-if ($Fetcher) {
+$modeRealGha = [bool]$RealGha
+$modeEmpty   = [bool]$Empty
+# Default = demo. -Demo (back-compat) also lands here.
+$modeDemo    = -not ($modeRealGha -or $modeEmpty)
+
+if ($Demo) {
+    Write-Host "INFO: demo is now the default; -Demo flag is redundant -- drop it from your install command after this release cycle." -ForegroundColor Yellow
+}
+
+# ---- 1. GHA_TOKEN precondition (issue #5 verbatim, scoped to -RealGha) ----
+# Contract (CR-0013):
+#   -RealGha + token set    -> proceed, write token to dashboard.env (authed, 5000/h)
+#   -RealGha + token unset  -> red error, exit 1 (mirrors today's -Fetcher precondition)
+#   default / -Demo         -> demo-gha upstream, no PAT, no GitHub API calls
+#   -Empty                  -> no fetcher at all
+if ($modeRealGha) {
     $tokenSet = -not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)
-    if (-not $tokenSet -and -not $Demo) {
-        Write-Host "ERROR: -Fetcher requires `$env:GHA_TOKEN to be set. Set `$env:GHA_TOKEN = '<PAT>' or re-run with -Demo for a zero-PAT demo install (anonymous-mode fetcher, 60 req/h)." -ForegroundColor Red
+    if (-not $tokenSet) {
+        Write-Host "ERROR: -RealGha requires `$env:GHA_TOKEN to be set. Set `$env:GHA_TOKEN = '<PAT>' or re-run with the no-flag default for a zero-PAT demo install against the baked demo-gha upstream." -ForegroundColor Red
         exit 1
     }
 }
@@ -275,24 +323,28 @@ DASHBOARD_PORT=$Port
 ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboard;Password=$pgPassword
 "@
 
-# Demo mode: bake in a public-repo default so a fresh install renders deployments
-# with zero caller configuration. GHA_TOKEN is appended IFF set in the parent env;
-# when unset, the fetcher container picks up the compose-level placeholder and
-# detects it to switch into anonymous-mode (60 req/h). PostHog is a high-deploy-
-# activity public repo; PR-ephemeral noise is accepted -- env-filter is a separate
-# forthcoming feature.
+# Demo mode (CR-0013): retarget the fetcher at the baked demo-gha mock
+# GitHub upstream so a fresh install renders deployments with zero caller
+# configuration AND zero external GitHub API calls. The fetcher's env-var
+# indirection (GHA_API_BASE_URL substitution in the release compose file)
+# was added by CR-0012 for the integration profile and is reused verbatim
+# here -- the demo profile points the fetcher at `http://demo-gha:80`,
+# the internal Docker DNS name of the profile-gated demo-gha service.
 #
-# Upgrade-flow semantics: when a prior `dashboard.env` already carries any of
-# these keys, preserve the operator's customisation unless `-ResetDemoDefaults`
-# is set. GHA_TOKEN additionally rotates when `$env:GHA_TOKEN` is set AND
-# differs from the persisted value -- caller is explicitly threading a new token.
-if ($Demo) {
+# Upgrade-flow semantics: when a prior `dashboard.env` already carries any
+# of these keys, preserve the operator's customisation unless
+# `-ResetDemoDefaults` is set. `GHA_TOKEN` is intentionally NOT seeded here
+# (the demo upstream never sees an Authorization header) but is preserved
+# on upgrade-re-run so that switching from `-RealGha` to the default and
+# back keeps the operator's PAT.
+if ($modeDemo) {
     $demoDefaults = [ordered]@{
-        'GHA_REPOSITORIES'              = '[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]'
-        'FETCHER_POLL_INTERVAL_SECONDS' = '60'
+        'GHA_API_BASE_URL'              = 'http://demo-gha:80'
+        'FETCHER_POLL_INTERVAL_SECONDS' = '5'
+        'GHA_REPOSITORIES'              = '[{"owner":"demo-org","repo":"demo-repo"}]'
     }
 
-    $demoLines = @('', '# Demo-mode defaults (written by install.ps1 -Demo)')
+    $demoLines = @('', '# Demo-mode defaults (CR-0013; written by install.ps1)')
     foreach ($key in $demoDefaults.Keys) {
         $existing = Read-EnvValue -Path $envFile -Key $key
         if ($ResetDemoDefaults -or [string]::IsNullOrWhiteSpace($existing)) {
@@ -303,23 +355,13 @@ if ($Demo) {
         }
     }
 
-    # GHA_TOKEN: three-way merge.
-    #   -ResetDemoDefaults                              -> write $env:GHA_TOKEN (or omit if unset)
-    #   $env:GHA_TOKEN set AND differs from persisted   -> write $env:GHA_TOKEN (caller intent)
-    #   persisted value present                         -> preserve
-    #   neither persisted nor $env                      -> omit (compose placeholder -> anon mode)
+    # GHA_TOKEN: not seeded for the demo profile (demo-gha is offline-mocked,
+    # no Authorization header sent), but preserved on upgrade-re-run so a
+    # later switch back to -RealGha keeps the operator's PAT.
     $persistedGhaToken = Read-EnvValue -Path $envFile -Key 'GHA_TOKEN'
-    $envGhaTokenSet = -not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)
-    if ($ResetDemoDefaults) {
-        if ($envGhaTokenSet) { $demoLines += "GHA_TOKEN=$env:GHA_TOKEN" }
-    } elseif ($envGhaTokenSet -and $env:GHA_TOKEN -ne $persistedGhaToken) {
-        $demoLines += "GHA_TOKEN=$env:GHA_TOKEN"
-        if (-not [string]::IsNullOrWhiteSpace($persistedGhaToken)) {
-            Write-Host "==> Rotating GHA_TOKEN (`$env:GHA_TOKEN differs from persisted value)" -ForegroundColor Cyan
-        }
-    } elseif (-not [string]::IsNullOrWhiteSpace($persistedGhaToken)) {
+    if (-not $ResetDemoDefaults -and -not [string]::IsNullOrWhiteSpace($persistedGhaToken)) {
         $demoLines += "GHA_TOKEN=$persistedGhaToken"
-        Write-Host "==> Preserving GHA_TOKEN from $envFile (pass -ResetDemoDefaults to overwrite)" -ForegroundColor Cyan
+        Write-Host "==> Preserving GHA_TOKEN from $envFile (pass -ResetDemoDefaults to drop)" -ForegroundColor Cyan
     }
 
     $envFileContent = $envFileContent + "`n" + ($demoLines -join "`n")
@@ -379,8 +421,20 @@ Write-Host "==> docker compose $($composeBase -join ' ') pull" -ForegroundColor 
 if ($LASTEXITCODE -ne 0) { throw "docker compose pull failed with exit code $LASTEXITCODE" }
 
 # ---- 9. Bring up ----
+# Profile resolution per CR-0013 flag matrix:
+#   default / -Demo  -> --profile demo --profile fetcher
+#                       (demo-gha + fetcher-pointing-at-demo-gha)
+#   -RealGha         -> --profile fetcher
+#                       (fetcher-pointing-at-api.github.com; demo-gha inert)
+#   -Empty           -> no extra profiles
+#                       (db + api + gateway + dashboard only)
 $composeArgs = @() + $composeBase
-if ($Fetcher) { $composeArgs += @('--profile', 'fetcher') }
+if ($modeDemo) {
+    $composeArgs += @('--profile', 'demo', '--profile', 'fetcher')
+} elseif ($modeRealGha) {
+    $composeArgs += @('--profile', 'fetcher')
+}
+# $modeEmpty -- intentionally no profiles appended.
 
 Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait" -ForegroundColor Cyan
 & docker compose @composeArgs up -d --wait
@@ -408,15 +462,14 @@ Write-Host ""
 Write-Host "  Dashboard / Gateway: http://localhost:$Port/"
 Write-Host "  API_TOKEN:           $apiToken (saved to $envFile)"
 Write-Host "  Postgres (dev):      localhost:5432 (user: dashboard / password in $envFile)"
-if ($Fetcher) {
-    Write-Host "  Fetcher:             profile 'fetcher' active - POSTs to gateway as dashboard-fetcher/github-actions"
-}
-if ($Demo) {
-    if ([string]::IsNullOrWhiteSpace($env:GHA_TOKEN)) {
-        Write-Host "  Demo mode:           PostHog/posthog, 60s poll, anonymous GitHub API (60 req/h)" -ForegroundColor Cyan
-    } else {
-        Write-Host "  Demo mode:           PostHog/posthog, 60s poll, authed GitHub API (5000 req/h)" -ForegroundColor Cyan
-    }
+if ($modeDemo) {
+    Write-Host "  Mode:                Demo (default) -- demo-gha + fetcher; offline, zero-PAT" -ForegroundColor Cyan
+    Write-Host "  Demo upstream:       http://demo-gha:80 (internal; baked WireMock.Net bundle)" -ForegroundColor Cyan
+    Write-Host "  Poll cadence:        $((Read-EnvValue -Path $envFile -Key 'FETCHER_POLL_INTERVAL_SECONDS')) s" -ForegroundColor Cyan
+} elseif ($modeRealGha) {
+    Write-Host "  Mode:                RealGha -- fetcher pointed at https://api.github.com (authed, 5000 req/h)" -ForegroundColor Cyan
+} elseif ($modeEmpty) {
+    Write-Host "  Mode:                Empty -- no fetcher, no demo-gha. Direct-POST integrators only." -ForegroundColor Cyan
 }
 Write-Host ""
 Write-Host "  curl -X POST http://localhost:$Port/api/deployments -H 'Content-Type: application/json' -H 'X-Api-Key: $apiToken' -d '{`"service`":`"adminportal`",`"environment`":`"dev`",`"version`":`"v2.3.1`",`"status`":`"success`",`"run_url`":`"https://example.test/run/1`",`"run_number`":1,`"actor`":`"local`"}'"

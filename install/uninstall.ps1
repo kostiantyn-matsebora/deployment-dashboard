@@ -51,9 +51,15 @@ if (-not (Test-Path $composeFile)) {
 
 $composeArgs = @('-f', $composeFile)
 if (Test-Path $envFile) { $composeArgs += @('--env-file', $envFile) }
-# Include all profiles so any active services (fetcher) are also torn down.
+# Include every profile-gated service so any active container is also torn
+# down regardless of which install mode brought it up:
+#   fetcher     -- CR-0009 pull-mode worker (no-flag default + -RealGha)
+#   demo        -- CR-0013 demo-gha mock GitHub upstream (no-flag default)
+#   integration -- CR-0012 mock-gha (dev-time test runner; not normally
+#                  reachable from a release-install host, but defensive
+#                  inclusion is cheap and keeps `down` exhaustive).
 # Migrations apply in-process inside the api container (ADR-0009); no separate profile.
-$composeArgs += @('--profile', 'fetcher')
+$composeArgs += @('--profile', 'fetcher', '--profile', 'demo', '--profile', 'integration')
 
 $downArgs = @('down')
 if ($RemoveData) { $downArgs += '-v' }
