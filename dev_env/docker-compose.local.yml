@@ -1,103 +1,84 @@
-# Deployment Dashboard — local development stack.
+# Deployment Dashboard - local-dev compose OVERRIDE (issue #21).
 #
-# Implements WBS MVP §2.1 (per `docs/WBS.md`) and the App Gateway topology from SAD §7:
-# the gateway is the only host-published container; every other app
-# service is `expose:`-only on the internal Docker network. The browser,
-# CI/CD callers, and seed scripts all hit `http://localhost:8080/`.
+# Layered onto `install/docker-compose.release.yml` via Compose's native
+# `-f` chaining. The release file is the canonical service inventory
+# (services / profiles / env-var contract / volumes); this file ONLY
+# carries the contributor-flow deltas:
+#   - `build:` blocks instead of GHCR-pinned image refs.
+#   - `pull_policy: never` so `docker compose pull` cannot try to fetch
+#     the locally-built `:dev` tags from any registry.
+#   - Dev-literal substitutions for the three secrets the release file
+#     reads from `dashboard.env` (POSTGRES_PASSWORD / API_TOKEN /
+#     ConnectionStrings__DefaultConnection).
+#   - `pgadmin` convenience service (release stack drops it per issue #7).
 #
 # Run with: pwsh -NoProfile -File dev_env/start.ps1
+#   (the start.ps1 wrapper expands to:
+#      docker compose -f install/docker-compose.release.yml \
+#                     -f dev_env/docker-compose.local.yml up -d --build)
 #
-# Zero-setup, no .env files: every value below is inline and obviously fake.
-# Real production secrets live in Azure Key Vault and are wired in via
-# Terraform + GitHub Actions Environments — never here.
+# Migrations: the API container self-applies pending EF migrations on
+# startup (ADR-0009). Same path as the release stack -- no separate
+# runner service in either file.
 #
-# Host-published ports:
-#   - 8080  → App Gateway  (THE dashboard URL — `http://localhost:8080/`)
-#   - 5432  → Postgres     (dev-only convenience for psql / EF tooling)
-#   - 5050  → pgAdmin      (dev-only convenience)
-#
-# Internal-only (no host ports):
-#   - dashboard:80, api:8080.
-#
-# Per SAD §7 "Backend module architecture" and §10 Decision 11, the two
-# API surfaces (Write, Read) compose into a single host container `api`.
-# The gateway routes path + method onto the same `api` upstream so a
-# future re-split is a gateway-config-only change.
-#
-# Migrations strategy: the API host applies pending EF Core migrations on
-# start (between app.Build() and app.RunAsync()) -- see ADR-0009. The
-# local-dev stack reuses that same path; no separate runner service.
+# Zero-setup invariant: every dev value below is inline; no .env /
+# .env.local files. Compose may emit "variable POSTGRES_PASSWORD not set"
+# warnings for the three release-file substitutions noted above -- they
+# are cosmetic; this override re-sets the same keys via service-level
+# `environment:` merge so the resolved value is the dev literal.
 
 name: deployment-dashboard
 
 services:
   db:
-    image: postgres:16-alpine
-    container_name: dashboard-db
-    restart: unless-stopped
     environment:
-      POSTGRES_DB: "dashboard"
-      POSTGRES_USER: "dashboard"
       POSTGRES_PASSWORD: "local-dev-password"
-    ports:
-      - "5432:5432"                       # dev-only convenience
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
 
-  # Single backend container hosting both Write and Read API surfaces
-  # (SAD §7 "Backend module architecture", §10 Decision 11). API-key
-  # middleware is applied by the host to the write endpoint group only;
-  # the read endpoints stay unauthenticated. Internal-only — the gateway
-  # routes path + method onto the same `api` upstream.
+  # Co-located Write + Read API host (SAD §7, §10 Decision 11, ADR-0006).
+  # API-key middleware is applied by the host to the write endpoint
+  # group only; the read endpoints stay unauthenticated.
   api:
     build:
       context: ../backend
       dockerfile: api/Dockerfile
     image: deployment-dashboard/api:dev
-    container_name: dashboard-api
-    restart: unless-stopped
+    pull_policy: never
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
-      ASPNETCORE_URLS: "http://+:8080"
       ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
       API_TOKEN: "local-dev-token-not-for-production"
-      HISTORY_RETENTION_DAYS: "365"
-    expose:
-      - "8080"                            # internal-only — gateway routes all /api/* + /health here
-    depends_on:
-      db:
-        condition: service_healthy
 
   dashboard:
     build:
       context: ../frontend
       dockerfile: dashboard/Dockerfile
     image: deployment-dashboard/dashboard:dev
-    container_name: dashboard-frontend
-    restart: unless-stopped
-    expose:
-      - "80"                              # internal-only — gateway routes GET / + SPA shell here
+    pull_policy: never
 
   gateway:
     build:
       context: ../gateway
     image: deployment-dashboard/gateway:dev
-    container_name: dashboard-gateway
-    restart: unless-stopped
-    ports:
-      - "8080:80"                         # ONLY non-dev-convenience host port
-    depends_on:
-      dashboard:
-        condition: service_started
-      api:
-        condition: service_started
+    pull_policy: never
 
+  # Pull-mode fetcher (CR-0009 / CR-0011) -- profile-gated by release;
+  # opt-in via `start.ps1 -Fetcher`. The override only swaps the image
+  # and the write-API key for the dev literal; every other env var
+  # (FETCHER_POLL_INTERVAL_SECONDS, GHA_TOKEN, GHA_REPOSITORIES, ...)
+  # is inherited from the release file with its existing `${VAR:-default}`
+  # substitutions, so `start.ps1 -Demo` keeps working without re-stating
+  # the values here.
+  fetcher:
+    build:
+      context: ../backend
+      dockerfile: fetcher-host/Dockerfile
+    image: deployment-dashboard/fetcher:dev
+    pull_policy: never
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DASHBOARD_WRITE_API_KEY: "local-dev-token-not-for-production"
+
+  # Dev-only convenience -- not present in the release stack.
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: dashboard-pgadmin
@@ -107,68 +88,6 @@ services:
       PGADMIN_DEFAULT_PASSWORD: "admin"
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
-      - "5050:80"                         # dev-only convenience
+      - "5050:80"
     depends_on:
       - db
-
-  # Optional pull-mode fetcher worker (CR-0009 / WBS §1.5).
-  # Opt-in via Compose v2 profile: `docker compose --profile fetcher up`.
-  # Stays out of the default stack so the zero-setup baseline is unchanged.
-  #
-  # Strict NFR-04 (per CR-0009 § 3a "Topology" and architecture.md §7):
-  #   - NO `ports:` — fetcher has no inbound listener.
-  #   - NO `healthcheck:` — no HTTP surface to probe in MVP.
-  # Outbound only: polls CI/CD-tool APIs (MVP: GitHub Actions), POSTs to
-  # the gateway as a normal write-API client. Reuses the existing
-  # API_TOKEN literal verbatim — no new dev-token — so seed scripts and
-  # the fetcher trust the same key.
-  #
-  # `DASHBOARD_WRITE_API_URL: http://gateway` — the gateway listens on
-  # container port 80 (see `gateway` service above; the `8080:80` mapping
-  # is the host-side port, internal Docker DNS resolves `gateway` to :80).
-  # The fetcher therefore talks to the same single ingress the browser
-  # uses, going through the same `POST /api/deployments` route the
-  # external CI/CD callers use (FR-06 wire-format compatibility).
-  #
-  # `PROGRESS_REPORTER: dashboard-fetcher/github-actions` — slash-namespaced
-  # per CR-0009 § 3e + trade-off resolution (ii). Vendor segment is
-  # `dashboard-fetcher`, source-system segment is `github-actions`.
-  #
-  # `GHA_TOKEN` — falls back to a placeholder so the stack boots without
-  # the env-var being exported. Real GHA validation requires the developer
-  # to `export GHA_TOKEN=<their PAT>` before `docker compose --profile fetcher up`.
-  fetcher:
-    profiles: ["fetcher"]
-    build:
-      context: ../backend
-      dockerfile: fetcher-host/Dockerfile
-    image: deployment-dashboard/fetcher:dev
-    container_name: dashboard-fetcher
-    restart: unless-stopped
-    environment:
-      ASPNETCORE_ENVIRONMENT: "Development"
-      DASHBOARD_WRITE_API_URL: "http://gateway"
-      DASHBOARD_WRITE_API_KEY: "local-dev-token-not-for-production"
-      PROGRESS_REPORTER: "dashboard-fetcher/github-actions"
-      FETCHER_POLL_INTERVAL_SECONDS: "${FETCHER_POLL_INTERVAL_SECONDS:-30}"
-      INITIAL_FETCH_LIMIT: "50"
-      # Self-imposed rate-limit cap per CR-0011 § 3a. Both unset locally:
-      # the fetcher applies its default 30% of upstream X-RateLimit-Limit.
-      # Precedence when both are set: absolute wins over percentage.
-      # Uncomment + tune to exercise the cap-reached path against a live PAT.
-      # FETCHER_RATE_LIMIT_ABSOLUTE:   "1500"   # int requests / upstream window; omit → unused
-      # FETCHER_RATE_LIMIT_PERCENTAGE: "30"     # int 1..100 of upstream X-RateLimit-Limit; default 30
-      FETCHER_ADAPTERS: "github-actions"
-      GHA_TOKEN: "${GHA_TOKEN:-local-dev-gha-token-placeholder}"
-      GHA_REPOSITORIES: '${GHA_REPOSITORIES:-[{"owner":"example-org","repo":"example-repo"}]}'
-      GHA_API_BASE_URL: "https://api.github.com"
-      DOTNET_NOLOGO: "1"
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-    depends_on:
-      gateway:
-        condition: service_started
-    # No `ports:` — fetcher has no inbound listener (NFR-04 strict).
-    # No `healthcheck:` — no HTTP surface to probe in MVP.
-
-volumes:
-  pg-data:

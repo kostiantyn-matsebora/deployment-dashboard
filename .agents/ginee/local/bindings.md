@@ -14,6 +14,7 @@
 | `docs/WBS.md` | Operational work-breakdown — per-phase items, MVP / Phase 2.0 split | `solution-architect` |
 | `docs/ci-cd-integration.md` | Operational companion to SAD §7 — payload + snippet detail (inbound: adopter pipelines push TO us) | `solution-architect` (semantics) + `devops-engineer` (operational examples) |
 | `docs/ci-cd-pipelines.md` | Operational pipeline doc — our component workflows (outbound: our pipelines build our images), per CR-0010 | `devops-engineer` |
+| `install/docker-compose.release.yml`, `install/install.ps1` / `install.sh`, `install/uninstall.ps1` / `uninstall.sh` | Release-install stack — canonical service inventory; consumed by `dev_env/` via `-f` merge per ADR-0010 | `devops-engineer` |
 | `CLAUDE.md` | Project-instruction file — ginee framework pointer | `project-manager` (during discovery / rediscovery) |
 
 **Tie-breakers.**
@@ -41,7 +42,8 @@ deployment-dashboard/
 │   ├── drawer/          history drawer
 │   └── shared/          Signal Store + API client + SSE service + models + fixtures
 ├── gateway/             nginx reverse proxy + Dockerfile (single public ingress on :8080)
-├── dev_env/             docker-compose.local.yml, docker-compose.scaled.yml, start.ps1, stop.ps1
+├── install/             docker-compose.release.yml + install.ps1/.sh, uninstall.ps1/.sh — release-install canonical compose; dev_env layers on this via `-f` merge per ADR-0010
+├── dev_env/             docker-compose.local.yml (override), docker-compose.scaled.yml (standalone), start.ps1, stop.ps1
 ├── docs/                architecture.md, WBS.md, ci-cd-integration.md, adr/, cr/, ui/ (mockup + options)
 ├── testing/             functional/ (xUnit), e2e/ (Playwright), mockup-visual/ (Playwright), scripts/, fixtures/, config/
 ├── .github/actions/     notify/ composite action

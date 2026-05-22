@@ -627,54 +627,13 @@ Conventional environment variables on the API container: `ConnectionStrings__Def
 
 **Docker Compose — Local Development**
 
-```yaml
-services:
-  gateway:
-    build: { context: ../gateway }
-    ports: ["8080:80"]                 # ONLY host-published service
-    depends_on: [dashboard, api]
+| File | Purpose | Owner |
+|---|---|---|
+| `install/docker-compose.release.yml` | Canonical service inventory shared by the release-install and contributor flows (services / profiles / env-var contract / volumes). | `devops-engineer` |
+| `dev_env/docker-compose.local.yml` | Contributor-flow OVERRIDE — `build:` blocks, `pull_policy: never`, dev-literal secrets, `pgadmin`. Layered on the release file via `docker compose -f release.yml -f local.yml`. | `devops-engineer` |
+| `dev_env/docker-compose.scaled.yml` | Standalone NFR-05 validation variant (3-replica `api`, no fetcher, no pgadmin). NOT layered on release. | `devops-engineer` |
 
-  dashboard:
-    build: { context: ../frontend, dockerfile: dashboard/Dockerfile }
-    expose: ["80"]                     # internal only — no host port
-
-  api:
-    build: { context: ../backend, dockerfile: api/Dockerfile }
-    expose: ["8080"]                   # internal only — Write + Read surfaces co-hosted
-    environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      API_TOKEN: "local-dev-token-not-for-production"     # required for X-Api-Key on write-group endpoints
-      HISTORY_RETENTION_DAYS: "365"                       # consumed by the pruning job
-    depends_on:
-      db: { condition: service_healthy }
-    # api applies pending EF migrations on startup (between app.Build() and app.Run())
-    # against ConnectionStrings__DefaultConnection. EF idempotency makes re-apply a no-op.
-    # No external migrations service; no profile gate; no opt-out. See ADR-0009.
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: dashboard
-      POSTGRES_USER: dashboard
-      POSTGRES_PASSWORD: local-dev-password
-    volumes: ["pg-data:/var/lib/postgresql/data"]
-    ports: ["5432:5432"]               # dev-only convenience for psql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dashboard"]
-      interval: 5s
-      retries: 5
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    ports: ["5050:80"]                 # dev-only convenience
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    depends_on: [db]
-
-volumes:
-  pg-data:
-```
+Merge mechanics + dev-flow rationale: see [ADR-0010](adr/ADR-0010-dev-env-compose-derives-from-release.md). Per-service env-var contract: see `install/docker-compose.release.yml` (canonical source of truth — do not duplicate inline). Migration actuation: API applies pending EF migrations on startup (between `app.Build()` and `app.Run()`); EF idempotency makes re-apply a no-op; no external migrations service; no profile gate; no opt-out — see [ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.md).
 
 The browser only ever talks to `http://localhost:8080/` — the gateway resolves whether a request is for the SPA or one of the APIs. There is no CORS preflight anywhere in the system. In Azure the same topology applies: only the gateway's ACA app has public ingress.
 

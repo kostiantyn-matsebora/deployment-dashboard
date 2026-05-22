@@ -36,37 +36,50 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$scriptDir      = $PSScriptRoot
-$defaultCompose = Join-Path $scriptDir 'docker-compose.local.yml'
-$scaledCompose  = Join-Path $scriptDir 'docker-compose.scaled.yml'
+$scriptDir = $PSScriptRoot
+# Default contributor stack derives from install/docker-compose.release.yml
+# via Compose's `-f` chaining (issue #21). Both files must be passed to
+# `docker compose down` so the merged service set tears down cleanly. The
+# scaled stack stays standalone (see start.ps1 comment).
+$defaultComposeFiles = @(
+    Join-Path $scriptDir '..' 'install' 'docker-compose.release.yml'
+    Join-Path $scriptDir 'docker-compose.local.yml'
+)
+$scaledComposeFiles = @(
+    Join-Path $scriptDir 'docker-compose.scaled.yml'
+)
 
 function Invoke-Down {
     param(
-        [string]$ComposeFile,
+        [string[]]$ComposeFiles,
         [switch]$RemoveVolumes
     )
-    if (-not (Test-Path -LiteralPath $ComposeFile)) {
-        Write-Host "    [skip] $ComposeFile (not found)" -ForegroundColor Yellow
-        return
+    foreach ($f in $ComposeFiles) {
+        if (-not (Test-Path -LiteralPath $f)) {
+            Write-Host "    [skip] $f (not found)" -ForegroundColor Yellow
+            return
+        }
     }
-    $dargs = @('-f', $ComposeFile, 'down', '--remove-orphans')
+    $dargs = @()
+    foreach ($f in $ComposeFiles) { $dargs += @('-f', $f) }
+    $dargs += @('down', '--remove-orphans')
     if ($RemoveVolumes) { $dargs += '--volumes' }
     Write-Host "    docker compose $($dargs -join ' ')" -ForegroundColor DarkGray
     & docker compose @dargs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "    [warn] docker compose exited with code $LASTEXITCODE (continuing)" -ForegroundColor Yellow
     } else {
-        Write-Host "    [ok] tore down $ComposeFile" -ForegroundColor Green
+        Write-Host "    [ok] tore down $($ComposeFiles -join ' + ')" -ForegroundColor Green
     }
 }
 
 Write-Host ""
 Write-Host "==> Tearing down local compose" -ForegroundColor Cyan
-Invoke-Down -ComposeFile $defaultCompose -RemoveVolumes:$Volumes
+Invoke-Down -ComposeFiles $defaultComposeFiles -RemoveVolumes:$Volumes
 
 Write-Host ""
 Write-Host "==> Tearing down scaled compose (if present)" -ForegroundColor Cyan
-Invoke-Down -ComposeFile $scaledCompose -RemoveVolumes:$Volumes
+Invoke-Down -ComposeFiles $scaledComposeFiles -RemoveVolumes:$Volumes
 
 Write-Host ""
 if ($Volumes) {

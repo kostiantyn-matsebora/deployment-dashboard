@@ -58,8 +58,21 @@ if ($Fetcher) {
         }
     }
 }
-$composeFile = Join-Path $PSScriptRoot ($Scaled ? 'docker-compose.scaled.yml' : 'docker-compose.local.yml')
-$composeArgs = @('-f', $composeFile)
+if ($Scaled) {
+    # Scaled stack (NFR-05 validation) is structurally distinct from the release
+    # stack: different project name, container-name suffixes, 3-replica `api`,
+    # no fetcher, no pgadmin. Kept as a standalone compose file -- NOT layered
+    # on install/docker-compose.release.yml.
+    $composeArgs = @('-f', (Join-Path $PSScriptRoot 'docker-compose.scaled.yml'))
+} else {
+    # Default contributor stack: layer dev_env deltas on the release compose so
+    # installer features (env-var substitution, profile additions, image renames)
+    # propagate automatically (issue #21). Order matters -- later `-f` files
+    # override earlier ones.
+    $releaseCompose = Join-Path $PSScriptRoot '..' 'install' 'docker-compose.release.yml'
+    $localOverride  = Join-Path $PSScriptRoot 'docker-compose.local.yml'
+    $composeArgs = @('-f', $releaseCompose, '-f', $localOverride)
+}
 if ($Fetcher) { $composeArgs += @('--profile', 'fetcher') }
 Write-Host "==> docker compose $($composeArgs -join ' ') up -d --build" -ForegroundColor Cyan
 & docker compose @composeArgs up -d --build
