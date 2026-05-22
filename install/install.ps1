@@ -65,8 +65,35 @@
     How long to wait for the gateway-fronted /health endpoint. Default 60. On
     failure, logs are dumped and the script exits 1.
 .PARAMETER InstallDir
-    Install directory. Created if absent. Defaults to `./dashboard-release` under
-    the current working directory.
+    Install directory. Created if absent. Defaults to `.dashboard-release` under
+    the current user's profile directory (cross-platform: `$HOME` on POSIX,
+    `%USERPROFILE%` on Windows). CWD-independent so that re-running the
+    installer from a different shell still finds a prior install -- mismatched
+    install dirs are the dominant failure mode of the v0.3.0 -> v0.4.0 upgrade
+    flow (fresh dashboard.env vs pre-existing pg-data volume == api unable to
+    auth to the DB).
+.PARAMETER ResetDemoDefaults
+    Force-overwrite the demo-mode keys (`GHA_REPOSITORIES`,
+    `FETCHER_POLL_INTERVAL_SECONDS`, and `GHA_TOKEN`) even when a prior
+    `dashboard.env` already contains them. Without this switch, an upgrade re-run
+    with `-Demo` preserves whatever the operator customised. `GHA_TOKEN`
+    additionally rotates when `$env:GHA_TOKEN` is set AND differs from the
+    persisted value (caller is explicitly threading a new token through).
+
+.DESCRIPTION
+    Upgrade flow (v0.3.0 -> v0.4.0 worked example):
+      Pass `-InstallDir` pointing at the prior install dir to preserve the
+      generated secrets + DB volume. The installer detects the pre-existing
+      `dashboard.env`, reuses `API_TOKEN` + `POSTGRES_PASSWORD`, and only
+      rewrites `DASHBOARD_VERSION` / `DASHBOARD_PORT`. Demo-mode defaults
+      (GHA_REPOSITORIES, FETCHER_POLL_INTERVAL_SECONDS, GHA_TOKEN) are
+      preserved unless `-ResetDemoDefaults` is passed.
+
+      If a stray `deployment-dashboard_pg-data` Docker volume is detected but
+      no `dashboard.env` exists at `-InstallDir`, the installer red-errors
+      and exits 1 BEFORE writing any state -- otherwise a fresh
+      `POSTGRES_PASSWORD` would be generated against a DB seeded by the
+      historical install, locking the api container out.
 
 .EXAMPLE
     pwsh -NoProfile -File install.ps1
@@ -78,6 +105,12 @@
     pwsh -NoProfile -File install.ps1 -Demo
 .EXAMPLE
     pwsh -NoProfile -File install.ps1 -Port 9090 -InstallDir 'C:\dashboards\demo'
+.EXAMPLE
+    # v0.3.0 -> v0.4.0 upgrade: preserve the prior install dir + secrets + DB volume.
+    pwsh -NoProfile -File install.ps1 -Version v0.4.0 -InstallDir 'C:\dashboards\prod'
+.EXAMPLE
+    # Demo re-run, force-refresh the demo defaults to the new installer's baked-in values.
+    pwsh -NoProfile -File install.ps1 -Demo -ResetDemoDefaults
 #>
 #Requires -Version 7.0
 [CmdletBinding()]
@@ -85,9 +118,10 @@ param(
     [string]$Version = 'latest',
     [switch]$Fetcher,
     [switch]$Demo,
+    [switch]$ResetDemoDefaults,
     [int]$Port = 8080,
     [int]$HealthTimeoutSeconds = 60,
-    [string]$InstallDir = (Join-Path $PWD 'dashboard-release')
+    [string]$InstallDir = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dashboard-release')
 )
 $ErrorActionPreference = 'Stop'
 
@@ -169,6 +203,26 @@ Write-Host "==> Install directory: $InstallDir" -ForegroundColor Cyan
 #   - API_TOKEN   == 'local-dev-token-not-for-production'
 #   - POSTGRES_PASSWORD == 'local-dev-password'
 $envFile = Join-Path $InstallDir 'dashboard.env'
+
+# ---- 4a. Volume-detection safety net ----
+# If a previous installer run left a `deployment-dashboard_pg-data` volume but
+# the env-file we'd be writing into does NOT exist, refusing here prevents the
+# silent failure mode where a fresh POSTGRES_PASSWORD gets generated against a
+# DB seeded by the historical install (api container then 28P01s on connect).
+# Run BEFORE any secret read / generation / env-file write.
+& docker volume inspect deployment-dashboard_pg-data *> $null
+$volumeExists = ($LASTEXITCODE -eq 0)
+if ($volumeExists -and -not (Test-Path -LiteralPath $envFile)) {
+    Write-Host "ERROR: Pre-existing Postgres volume detected (deployment-dashboard_pg-data) but no dashboard.env at $envFile." -ForegroundColor Red
+    Write-Host "" -ForegroundColor Red
+    Write-Host "The volume holds DB state seeded by an earlier installer run. Re-using a fresh dashboard.env here would generate a new POSTGRES_PASSWORD that does not match the running cluster -- the api container would fail to connect." -ForegroundColor Red
+    Write-Host "" -ForegroundColor Red
+    Write-Host "Either:" -ForegroundColor Red
+    Write-Host "  - Pass -InstallDir <path-to-prior-install> (the historical default was ./dashboard-release relative to where you first ran the installer)." -ForegroundColor Red
+    Write-Host "  - Run uninstall.ps1 -Volumes (or uninstall.sh --volumes) to drop the pg-data volume and start fresh." -ForegroundColor Red
+    exit 1
+}
+
 $localDevApiLiteral = 'local-dev-token-not-for-production'
 $localDevPwLiteral  = 'local-dev-password'
 
@@ -231,16 +285,47 @@ ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboa
 # detects it to switch into anonymous-mode (60 req/h). PostHog is a high-deploy-
 # activity public repo; PR-ephemeral noise is accepted -- env-filter is a separate
 # forthcoming feature.
+#
+# Upgrade-flow semantics: when a prior `dashboard.env` already carries any of
+# these keys, preserve the operator's customisation unless `-ResetDemoDefaults`
+# is set. GHA_TOKEN additionally rotates when `$env:GHA_TOKEN` is set AND
+# differs from the persisted value -- caller is explicitly threading a new token.
 if ($Demo) {
-    $demoLines = @(
-        '',
-        '# Demo-mode defaults (written by install.ps1 -Demo)',
-        'GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]',
-        'FETCHER_POLL_INTERVAL_SECONDS=60'
-    )
-    if (-not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)) {
-        $demoLines += "GHA_TOKEN=$env:GHA_TOKEN"
+    $demoDefaults = [ordered]@{
+        'GHA_REPOSITORIES'              = '[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]'
+        'FETCHER_POLL_INTERVAL_SECONDS' = '60'
     }
+
+    $demoLines = @('', '# Demo-mode defaults (written by install.ps1 -Demo)')
+    foreach ($key in $demoDefaults.Keys) {
+        $existing = Read-EnvValue -Path $envFile -Key $key
+        if ($ResetDemoDefaults -or [string]::IsNullOrWhiteSpace($existing)) {
+            $demoLines += "$key=$($demoDefaults[$key])"
+        } else {
+            $demoLines += "$key=$existing"
+            Write-Host "==> Preserving $key from $envFile (pass -ResetDemoDefaults to overwrite)" -ForegroundColor Cyan
+        }
+    }
+
+    # GHA_TOKEN: three-way merge.
+    #   -ResetDemoDefaults                              -> write $env:GHA_TOKEN (or omit if unset)
+    #   $env:GHA_TOKEN set AND differs from persisted   -> write $env:GHA_TOKEN (caller intent)
+    #   persisted value present                         -> preserve
+    #   neither persisted nor $env                      -> omit (compose placeholder -> anon mode)
+    $persistedGhaToken = Read-EnvValue -Path $envFile -Key 'GHA_TOKEN'
+    $envGhaTokenSet = -not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)
+    if ($ResetDemoDefaults) {
+        if ($envGhaTokenSet) { $demoLines += "GHA_TOKEN=$env:GHA_TOKEN" }
+    } elseif ($envGhaTokenSet -and $env:GHA_TOKEN -ne $persistedGhaToken) {
+        $demoLines += "GHA_TOKEN=$env:GHA_TOKEN"
+        if (-not [string]::IsNullOrWhiteSpace($persistedGhaToken)) {
+            Write-Host "==> Rotating GHA_TOKEN (`$env:GHA_TOKEN differs from persisted value)" -ForegroundColor Cyan
+        }
+    } elseif (-not [string]::IsNullOrWhiteSpace($persistedGhaToken)) {
+        $demoLines += "GHA_TOKEN=$persistedGhaToken"
+        Write-Host "==> Preserving GHA_TOKEN from $envFile (pass -ResetDemoDefaults to overwrite)" -ForegroundColor Cyan
+    }
+
     $envFileContent = $envFileContent + "`n" + ($demoLines -join "`n")
 }
 

@@ -62,8 +62,9 @@ STUB
     chmod +x "$STUB_DIR/curl"
 
     # --- docker stub.
-    #   `docker login ...`           -> drain stdin (gh token piped in); exit $DD_LOGIN_EXIT (default 0).
-    #   `docker compose pull|up|...` -> exit per DD_PULL_EXIT / DD_UP_EXIT.
+    #   `docker login ...`               -> drain stdin (gh token piped in); exit $DD_LOGIN_EXIT (default 0).
+    #   `docker volume inspect <name>`   -> exit 0 with stub JSON if DD_VOLUME_EXISTS=true, else exit 1 (issue #37 safety net).
+    #   `docker compose pull|up|...`     -> exit per DD_PULL_EXIT / DD_UP_EXIT.
     cat > "$STUB_DIR/docker" <<'STUB'
 #!/usr/bin/env bash
 echo "docker $*" >> "$STUB_LOG"
@@ -71,6 +72,17 @@ if [ "${1:-}" = "login" ]; then
     # Drain piped stdin (gh auth token is piped in) so the producer side gets EPIPE-free EOF.
     cat > /dev/null 2>&1 || true
     exit "${DD_LOGIN_EXIT:-0}"
+fi
+if [ "${1:-}" = "volume" ] && [ "${2:-}" = "inspect" ]; then
+    # Issue #37 volume-detection safety net. Exit 0 (volume present) when
+    # DD_VOLUME_EXISTS=true; exit 1 (absent) with a stderr 'No such volume'
+    # message otherwise. Default = absent.
+    if [ "${DD_VOLUME_EXISTS:-}" = "true" ]; then
+        echo '[{"Name":"deployment-dashboard_pg-data","Driver":"local"}]'
+        exit 0
+    fi
+    echo "Error response from daemon: No such volume: ${3:-}" >&2
+    exit 1
 fi
 if [ "${1:-}" = "compose" ]; then
     shift
@@ -620,4 +632,148 @@ EOF
     [[ "$output" == *"/health did not return 200"* ]]
     # `docker compose ... logs` was invoked on failure.
     grep -qE '^docker.*compose.*logs' "$STUB_LOG"
+}
+
+# ---- Upgrade flow (issue #37) ----
+# Phase 4 contract additions for the v0.3.0 -> v0.4.0 upgrade flow:
+#   1. CWD-independent default --install-dir (= $HOME/.dashboard-release).
+#   2. --demo defaults preservation on re-run (GHA_REPOSITORIES / FETCHER_POLL_INTERVAL_SECONDS / GHA_TOKEN).
+#   3. Volume-detection safety net: `docker volume inspect deployment-dashboard_pg-data` exits 0
+#      AND $ENV_FILE does NOT exist -> red-error + exit 1 BEFORE any side effect.
+#   4. usage() upgrade-flow section + new --reset-demo-defaults flag (smoke-checked via behaviour, not text).
+#
+# Fake-home strategy: set HOME to a per-test tmpdir before invoking install.sh,
+# so the new $HOME/.dashboard-release default lands in $BATS_TEST_TMPDIR rather
+# than polluting the real $HOME.
+
+@test "default --install-dir is \$HOME/.dashboard-release (CWD-independent)" {
+    # Set HOME to a per-test tmpdir; run install.sh from a DIFFERENT CWD; assert
+    # dashboard.env lands at $HOME/.dashboard-release/dashboard.env (NOT under CWD).
+    fake_home="$BATS_TEST_TMPDIR/fakehome"
+    fake_cwd="$BATS_TEST_TMPDIR/fakecwd"
+    mkdir -p "$fake_home" "$fake_cwd"
+    HOME="$fake_home" run bash -c "cd '$fake_cwd' && bash '$SCRIPT' --version v9.9.9-test"
+    [ "$status" -eq 0 ]
+    [ -f "$fake_home/.dashboard-release/dashboard.env" ]
+    # CWD-anchored anti-assertion: nothing landed under the historical default
+    # ($CWD/dashboard-release) inside fake_cwd.
+    [ ! -f "$fake_cwd/dashboard-release/dashboard.env" ]
+    # docker compose --env-file points at the default location.
+    grep -qE "^docker.*compose.*--env-file $fake_home/.dashboard-release/dashboard.env" "$STUB_LOG"
+}
+
+@test "volume present + no env-file -> fail-fast with red error, no side effects" {
+    fake_home="$BATS_TEST_TMPDIR/fakehome"
+    mkdir -p "$fake_home"
+    export DD_VOLUME_EXISTS=true
+    HOME="$fake_home" run bash "$SCRIPT" --version v9.9.9-test
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Pre-existing Postgres volume detected"* ]]
+    [ ! -f "$fake_home/.dashboard-release/dashboard.env" ]
+    log_not_contains 'docker compose'
+    log_not_contains 'gh release download'
+}
+
+@test "volume absent + no env-file -> happy path (guard not triggered)" {
+    export DD_VOLUME_EXISTS=false
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    [ -f "$INSTALL_DIR/dashboard.env" ]
+    [[ "$output" != *"Pre-existing Postgres volume detected"* ]]
+}
+
+@test "volume present + env-file present -> happy path (guard not triggered, secrets reused)" {
+    # Seed a valid env-file so the safety-net precondition is bypassed.
+    apiTok=$(printf 'a%.0s' {1..64})
+    pgPw=$(printf 'c%.0s' {1..32})
+    cat > "$INSTALL_DIR/dashboard.env" <<EOF
+API_TOKEN=$apiTok
+POSTGRES_PASSWORD=$pgPw
+EOF
+    export DD_VOLUME_EXISTS=true
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Reusing API_TOKEN"* ]]
+    [[ "$output" == *"Reusing POSTGRES_PASSWORD"* ]]
+    grep -qE "^API_TOKEN=$apiTok$" "$INSTALL_DIR/dashboard.env"
+    grep -qE "^POSTGRES_PASSWORD=$pgPw$" "$INSTALL_DIR/dashboard.env"
+}
+
+@test "--demo re-run preserves existing GHA_REPOSITORIES" {
+    apiTok=$(printf 'a%.0s' {1..64})
+    pgPw=$(printf 'c%.0s' {1..32})
+    cat > "$INSTALL_DIR/dashboard.env" <<EOF
+API_TOKEN=$apiTok
+POSTGRES_PASSWORD=$pgPw
+GHA_REPOSITORIES=[{"owner":"custom","repo":"thing"}]
+EOF
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^GHA_REPOSITORIES=\[\{"owner":"custom","repo":"thing"\}\]$' "$INSTALL_DIR/dashboard.env"
+    ! grep -qE 'PostHog.*posthog.*grafana.*grafana' "$INSTALL_DIR/dashboard.env"
+    [[ "$output" == *"Preserving GHA_REPOSITORIES"* ]]
+}
+
+@test "--demo re-run preserves existing FETCHER_POLL_INTERVAL_SECONDS" {
+    apiTok=$(printf 'a%.0s' {1..64})
+    pgPw=$(printf 'c%.0s' {1..32})
+    cat > "$INSTALL_DIR/dashboard.env" <<EOF
+API_TOKEN=$apiTok
+POSTGRES_PASSWORD=$pgPw
+FETCHER_POLL_INTERVAL_SECONDS=120
+EOF
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=120$' "$INSTALL_DIR/dashboard.env"
+    ! grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$INSTALL_DIR/dashboard.env"
+    [[ "$output" == *"Preserving FETCHER_POLL_INTERVAL_SECONDS"* ]]
+}
+
+@test "--demo re-run preserves existing GHA_TOKEN when \$GHA_TOKEN unset" {
+    apiTok=$(printf 'a%.0s' {1..64})
+    pgPw=$(printf 'c%.0s' {1..32})
+    cat > "$INSTALL_DIR/dashboard.env" <<EOF
+API_TOKEN=$apiTok
+POSTGRES_PASSWORD=$pgPw
+GHA_TOKEN=ghp_existing
+EOF
+    unset GHA_TOKEN
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^GHA_TOKEN=ghp_existing$' "$INSTALL_DIR/dashboard.env"
+    [[ "$output" == *"Preserving GHA_TOKEN"* ]]
+}
+
+@test "--demo + --reset-demo-defaults re-applies hard-coded defaults" {
+    apiTok=$(printf 'a%.0s' {1..64})
+    pgPw=$(printf 'c%.0s' {1..32})
+    cat > "$INSTALL_DIR/dashboard.env" <<EOF
+API_TOKEN=$apiTok
+POSTGRES_PASSWORD=$pgPw
+GHA_REPOSITORIES=[{"owner":"custom","repo":"thing"}]
+FETCHER_POLL_INTERVAL_SECONDS=120
+EOF
+    run_install --demo --reset-demo-defaults --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$INSTALL_DIR/dashboard.env"
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$INSTALL_DIR/dashboard.env"
+    ! grep -qE 'custom.*thing' "$INSTALL_DIR/dashboard.env"
+    [[ "$output" != *"Preserving GHA_REPOSITORIES"* ]]
+    [[ "$output" != *"Preserving FETCHER_POLL_INTERVAL_SECONDS"* ]]
+}
+
+@test "--demo with new \$GHA_TOKEN overrides preserved GHA_TOKEN (rotation)" {
+    apiTok=$(printf 'a%.0s' {1..64})
+    pgPw=$(printf 'c%.0s' {1..32})
+    cat > "$INSTALL_DIR/dashboard.env" <<EOF
+API_TOKEN=$apiTok
+POSTGRES_PASSWORD=$pgPw
+GHA_TOKEN=ghp_old
+EOF
+    export GHA_TOKEN='ghp_new'
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^GHA_TOKEN=ghp_new$' "$INSTALL_DIR/dashboard.env"
+    ! grep -qE '^GHA_TOKEN=ghp_old$' "$INSTALL_DIR/dashboard.env"
+    [[ "$output" == *"Rotating GHA_TOKEN"* ]]
 }
