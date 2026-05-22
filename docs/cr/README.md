@@ -43,3 +43,7 @@ New CRs MUST use the universal heading regardless of direction. This keeps the S
 | [CR-0006](./CR-0006-light-dark-auto-theme.md) | Light / Dark / Auto theme axis | accepted |
 | [CR-0007](./CR-0007-defer-matrix-layout-to-phase-2.md) | Defer Matrix layout from MVP to Phase 2.0 (layout axis reduced to Swim-lane + Workflow-rows; default flips to Swim-lane) | accepted |
 | [CR-0008](./CR-0008-api-validation-and-openapi-scalar.md) | Standardised API validation (length-only), ProblemDetails errors, OpenAPI spec, and Scalar UI | accepted |
+| [CR-0009](./CR-0009-pull-mode-fetcher-and-progress-reporter.md) | Optional pull-mode fetcher (`Dashboard.Fetcher`) and universal `X-Progress-Reporter` event-attribution header | proposed |
+| [CR-0010](./CR-0010-component-ci-pipeline.md) | Component CI pipeline (GitHub Actions — build, test, package) | accepted (amended 2026-05-21 by ADR-0009) |
+| [CR-0011](./CR-0011-fetcher-rate-limit-governance.md) | Fetcher rate-limit governance: configurable self-imposed cap + usage reporting endpoints + dashboard surfacing | proposed |
+| [CR-0012](./CR-0012-integration-test-substrate.md) | Integration test substrate: WireMock.Net mock-gha service + `testing/integration/` suite + demo-bundle co-location | accepted |

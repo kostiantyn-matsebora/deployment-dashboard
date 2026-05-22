@@ -88,23 +88,23 @@ nav_order: 12
 
 ## Acceptance criteria
 
-- [ ] `mock-gha` service exists in `dev_env/docker-compose.local.yml` + `install/docker-compose.release.yml` gated by the `integration` profile; pinned WireMock.Net image tag.
-- [ ] `mock-gha` admin port is published to the host **only** under the `integration` profile; the `release-install` posture never publishes it (NFR-04).
-- [ ] `FETCHER_POLL_INTERVAL_SECONDS=1` set in the `integration` profile so NFR-03 5 s envelope is exercised meaningfully.
-- [ ] `testing/integration/` xUnit project exists with at least one scenario per canonical box state (six total, state-ids per `local/index/ui-states.yaml`) plus the two `_cross-cutting/` scenarios (NFR-05 replica restart, ADR-0004 cursor contract).
-- [ ] Each scenario asserts: (a) FR-06 wire shape via Read-side echo (`GET /api/deployments/{service}/{environment}/history`); (b) Read API surfaces the event within NFR-03 5 s window; (c) SSE stream emits one slot-update per event.
-- [ ] WireMock mappings under `testing/fixtures/gha/mappings/` cover the five endpoints the `github-actions` adapter calls (per CR-0009 § 3d); coverage matrix re-pasted in `docs/integration-tests.md § 6`.
-- [ ] `.github/workflows/integration.yml` runs the suite on PR + push to `main` with path filters; lands non-blocking, promoted to blocking after one calendar week of green runs.
-- [ ] `.github/workflows/integration.yml` includes a `Verify docker compose >= 2.20` precondition step.
-- [ ] `dev_env/start.ps1` accepts a `-Integration` switch (mirrors the `-Fetcher` precedent from issue #5) that brings the stack up with the `integration` profile active.
-- [ ] `docs/integration-tests.md` ships covering all ten sections per `bindings.md` → `docs/integration-tests.md` row.
-- [ ] `testing/fixtures/gha/demo/README.md` carries verbatim: *"AUTHORED HERE, CONSUMED BY: follow-up demo-mode issue. Not wired into any current entrypoint."*
-- [ ] `docs/integration-tests.md` demo-bundle section header carries the same verbatim disclaimer.
-- [ ] `docs/ci-cd-pipelines.md § 13` row *"Integration smoke / e2e (Q12)"* removed.
-- [ ] `docs/WBS.md § 1.6.9` "integration / e2e CI workflow" line removed.
-- [ ] `testing/config/README.md` documents the new `integration.json` schema (`readBaseUrl` / `writeBaseUrl` / `apiKey` / `mockGhaAdminBaseUrl` / `fetcherSourceIds`).
-- [ ] `.agents/ginee/local/bindings.md` carries the five new governance rows + tree update + Stack-table CI/CD sentence.
-- [ ] No regression to existing test surfaces (unit / functional / e2e / mockup-visual / scripts).
+- [x] `mock-gha` service exists in `dev_env/docker-compose.local.yml` + `install/docker-compose.release.yml` gated by the `integration` profile; pinned WireMock.Net image tag.
+- [x] `mock-gha` admin port is published to the host **only** under the `integration` profile; the `release-install` posture never publishes it (NFR-04).
+- [x] `FETCHER_POLL_INTERVAL_SECONDS=1` set in the `integration` profile so NFR-03 5 s envelope is exercised meaningfully.
+- [x] `testing/integration/` xUnit project exists with at least one scenario per canonical box state (six total, state-ids per `local/index/ui-states.yaml`) plus the two `_cross-cutting/` scenarios (NFR-05 replica restart, ADR-0004 cursor contract).
+- [x] Each scenario asserts: (a) FR-06 wire shape via Read-side echo (`GET /api/deployments/{service}/{environment}/history`); (b) Read API surfaces the event within NFR-03 5 s window; (c) SSE stream emits one slot-update per event.
+- [x] WireMock mappings under `testing/fixtures/gha/mappings/` cover the five endpoints the `github-actions` adapter calls (per CR-0009 § 3d); coverage matrix re-pasted in `docs/integration-tests.md § 6`.
+- [x] `.github/workflows/integration.yml` runs the suite on PR + push to `main` with path filters; lands non-blocking, promoted to blocking after one calendar week of green runs.
+- [x] `.github/workflows/integration.yml` includes a `Verify docker compose >= 2.20` precondition step.
+- [x] `dev_env/start.ps1` accepts a `-Integration` switch (mirrors the `-Fetcher` precedent from issue #5) that brings the stack up with the `integration` profile active.
+- [x] `docs/integration-tests.md` ships covering all ten sections per `bindings.md` → `docs/integration-tests.md` row.
+- [x] `testing/fixtures/gha/demo/README.md` carries verbatim: *"AUTHORED HERE, CONSUMED BY: follow-up demo-mode issue. Not wired into any current entrypoint."*
+- [x] `docs/integration-tests.md` demo-bundle section header carries the same verbatim disclaimer.
+- [x] `docs/ci-cd-pipelines.md § 13` row *"Integration smoke / e2e (Q12)"* removed.
+- [x] `docs/WBS.md § 1.6.9` "integration / e2e CI workflow" line removed.
+- [x] `testing/config/README.md` documents the new `integration.json` schema (`readBaseUrl` / `writeBaseUrl` / `apiKey` / `mockGhaAdminBaseUrl` / `fetcherSourceIds`).
+- [x] `.agents/ginee/local/bindings.md` carries the five new governance rows + tree update + Stack-table CI/CD sentence.
+- [x] No regression to existing test surfaces (unit / functional / e2e / mockup-visual / scripts).
 
 ## Alternatives Considered
 
@@ -126,7 +126,7 @@ Mirrors the alternatives the issue body listed, locked here as the design-of-rec
 - [CR-0010](./CR-0010-component-ci-pipeline.md) Open trade-off (ii) — non-blocking-watching-week → blocking promotion pattern this CR mirrors for `integration.yml`.
 - `docs/integration-tests.md` — operational guide (mapping authoring, admin-API scenario activation, endpoint coverage matrix, CI invocation, `-Integration` switch, demo-bundle disclaimer).
 - `local/index/ui-states.yaml` — canonical six-state inventory (`success` / `running-with-last` / `running-failed-with-last` / `failed-with-last` / `running` / `running-failed`).
-- `dev_env/docker-compose.local.yml:217` — pre-existing `GHA_API_BASE_URL` env-var contract the integration profile re-points at `mock-gha:80`.
+- `install/docker-compose.release.yml:124` — pre-existing `GHA_API_BASE_URL` env-var contract the integration profile re-points at `mock-gha:80` (canonical residence per [ADR-0010](../adr/ADR-0010-release-install-merge-override.md); `dev_env` layers via merge-override).
 - `install/docker-compose.release.yml` — canonical service inventory; the `mock-gha` service definition lives here per ADR-0010 (dev_env layers via `-f` merge).
 - WireMock.Net upstream: https://github.com/WireMock-Net/WireMock.Net
 - WireMock admin API: https://wiremock.org/docs/api/

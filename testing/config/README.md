@@ -12,7 +12,7 @@ or test source — they live here.
 
 ## Schema
 
-A target file is a single JSON object with exactly these three keys:
+A target file is a single JSON object with the keys below:
 
 | Key            | Type   | Notes |
 |----------------|--------|-------|

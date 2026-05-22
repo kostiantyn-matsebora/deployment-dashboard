@@ -79,7 +79,8 @@ Concrete per-mapping conventions (qa-engineer-owned, mirrors [`testing/fixtures/
 - **Response body inlined as `BodyAsJson`** (object or array). Do NOT mix `BodyAsJson` and `BodyAsString` on the same mapping.
 - **Rate-limit headers required on every successful response** — `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. The fetcher's CR-0011 observation path parses these on every 2xx; missing headers leave usage gauges stale.
 - **No hand-coded JSON inside C# test code**. Mapping bodies live under `testing/fixtures/gha/` only; tests reference scenarios by directory name (`fixture.LoadScenarioAsync("<state-id>")`).
-- **Stateful (cursor-evolving) responses use per-tick subdirectories**, not WireMock's `"Scenario"` + `"WhenStateIs"`. Pattern: `scenarios/_cross-cutting/<scenario>/tick-1/`, `tick-2/`, … . Between ticks the runner calls `ResetMappingsAsync` + `LoadScenarioAsync("<scenario>/tick-N")`. See [`Adr0004CursorContractTests`](../testing/integration/Dashboard.Integration.Tests/Adr0004CursorContractTests.cs).
+- **Stateful (cursor-evolving) responses use per-tick subdirectories**, not WireMock's `"Scenario"` + `"WhenStateIs"`.
+- **Pattern:** `scenarios/_cross-cutting/<scenario>/tick-1/`, `tick-2/`, … . Between ticks the runner calls `ResetMappingsAsync` + `LoadScenarioAsync("<scenario>/tick-N")`. See [`Adr0004CursorContractTests`](../testing/integration/Dashboard.Integration.Tests/Adr0004CursorContractTests.cs).
 
 ## 5. Scenario activation via admin API
 
