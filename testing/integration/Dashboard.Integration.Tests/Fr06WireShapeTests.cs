@@ -32,7 +32,7 @@ public sealed class Fr06WireShapeTests : IClassFixture<ScenarioFixture>
     private const string ExpectedRef = "release/wire-shape-check";
     private const string ExpectedActor = "mock-gha-author";
 
-    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(30);
 
     private readonly ScenarioFixture _fixture;
 

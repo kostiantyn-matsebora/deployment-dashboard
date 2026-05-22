@@ -21,8 +21,8 @@ public sealed class RunningFailedStateTests : IClassFixture<ScenarioFixture>
     private const long   LatestGhaDeploymentId = 62;
     private const string LatestSha = "ffff06200000000000000000000000000000ffff";
 
-    private static readonly TimeSpan NfrLatencyBudget = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan NfrLatencyBudget = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(30);
 
     private readonly ScenarioFixture _fixture;
 

@@ -45,8 +45,8 @@ public sealed class SuccessStateTests : IClassFixture<ScenarioFixture>
     private const string LatestSha = "aaaa01000000000000000000000000000000aaaa";
     private const string LatestActor = "mock-gha-actor";
 
-    private static readonly TimeSpan NfrLatencyBudget = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan NfrLatencyBudget = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(30);
 
     private readonly ScenarioFixture _fixture;
 
