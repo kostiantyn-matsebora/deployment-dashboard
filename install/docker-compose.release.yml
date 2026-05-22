@@ -161,13 +161,14 @@ services:
     image: sheyenrath/wiremock.net:2.4.0
     container_name: dashboard-mock-gha
     restart: unless-stopped
-    # WireMock.Net admin API is also the healthcheck surface -- `/__admin/mappings`
-    # returns 200 with the current mapping list once the server is listening.
-    # `wget -q --spider` is the alpine-BusyBox-friendly probe; the
-    # `sheyenrath/wiremock.net:2.4.0` image ships on an Alpine-based .NET
-    # runtime which carries BusyBox wget.
+    # WireMock.Net admin API is the healthcheck surface but the underlying
+    # `sheyenrath/wiremock.net:2.4.0` image is Microsoft `dotnet/aspnet:8.0`
+    # based -- ships neither `wget` nor `curl`. It DOES ship `bash`, so the
+    # probe uses bash's `/dev/tcp` redirection to verify port 80 accepts
+    # TCP connects (sufficient signal: WireMock.Net only binds the port
+    # once startup is complete + admin API is wired).
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/__admin/mappings || exit 1"]
+      test: ["CMD-SHELL", "bash -c ': > /dev/tcp/localhost/80' || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10

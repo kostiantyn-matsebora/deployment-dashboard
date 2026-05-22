@@ -384,8 +384,14 @@ function Invoke-DeploymentsTruncate {
 
     Write-StructuredLog -Event 'seed_clean_start' -Payload @{ container = 'dashboard-db'; target = $WriteBaseUrl }
     # `TRUNCATE ... RESTART IDENTITY CASCADE` matches a freshly-migrated
+    # state. `fetcher_state` is included so the integration-test suite
+    # (testing/integration/) gets a reset cursor between scenarios --
+    # without it, the fetcher's per-(progress_reporter, source_id)
+    # watermark persists across tests and filters out newer scenarios'
+    # deployments. Functional suite is unaffected (no fetcher in that
+    # profile -> no rows in fetcher_state to begin with).
     # schema (resets the sequence on the auto-increment `id` column).
-    $sql = 'TRUNCATE TABLE deployments RESTART IDENTITY CASCADE;'
+    $sql = 'TRUNCATE TABLE deployments, fetcher_state RESTART IDENTITY CASCADE;'
     & docker exec -i 'dashboard-db' psql -U 'dashboard' -d 'dashboard' -v 'ON_ERROR_STOP=1' -c $sql | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "TRUNCATE deployments failed (docker exec exit $LASTEXITCODE). Is the dev stack running (dev_env/start.ps1)?"

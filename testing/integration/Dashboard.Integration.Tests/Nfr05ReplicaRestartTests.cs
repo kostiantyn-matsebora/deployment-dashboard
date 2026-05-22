@@ -116,17 +116,26 @@ public sealed class Nfr05ReplicaRestartTests : IClassFixture<ScenarioFixture>
 
     private static async Task<int> RunDockerComposeRestartAsync(string serviceName, CancellationToken ct)
     {
+        // `docker restart dashboard-<svc>` (NOT `docker compose restart`):
+        // the test process runs outside any compose-file context, so
+        // `docker compose restart` would need explicit `-f` paths + a
+        // working directory that resolves them. The container-name path
+        // sidesteps that and yields the same effect (Compose's
+        // restart is `docker restart` under the hood). Container names
+        // are pinned in install/docker-compose.release.yml + verified
+        // in the Phase 4 commits.
+        var containerName = $"dashboard-{serviceName}";
         var psi = new ProcessStartInfo
         {
             FileName = "docker",
-            Arguments = $"compose --profile integration restart {serviceName}",
+            Arguments = $"restart {containerName}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
         using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to launch 'docker compose restart'.");
+            ?? throw new InvalidOperationException("Failed to launch 'docker restart'.");
         await proc.WaitForExitAsync(ct);
         return proc.ExitCode;
     }
