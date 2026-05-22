@@ -164,6 +164,14 @@ Examples that should flag:
 - Task references a `ml-pipeline/` script but profile lists no ML stack.
 - Task references a new top-level docs directory not in the profile.
 
+## Common failure modes
+
+Regression-grade catalogue. Each row names an observed orchestrator violation + the correct dispatch shape. Self-check against this list before any main-thread action on a specialist-owned surface.
+
+| Pattern | Correct shape |
+|---|---|
+| **"Feels fast → I'll just do it."** Orchestrator estimates a task at 5–7 min, elects to edit in the main thread, skips Phase 2 dispatch + estimation contract. Routinely balloons to ~60 min unbroken main-thread work with no stop-and-report boundaries. | Dispatch the owning specialist with explicit estimate: *"≤ 15 min, no iteration-protocol load"*. The dispatch overhead is ~30 seconds; the safety it buys (correct owner, stop-and-report on overrun per `core/iteration-protocol.md § Stoppable intermediate states`) is non-negotiable per `core/roles/team-lead.md § Forbidden actions`. |
+
 ## Pre-dispatch staleness check (index)
 
 Before dispatching a specialist whose task may consume any indexed source doc, verify the index isn't stale. Full spec: `core/index-protocol.md § Pre-dispatch staleness check`.
@@ -179,12 +187,13 @@ Before dispatching a specialist whose task may consume any indexed source doc, v
    - Globbed class → compare per-file entries under `sha256-by-file:`.
 4. **On any mismatch:**
    - Flag staleness in your first response (which source(s) drifted; which index files are affected).
-   - Offer the user two paths:
+   - Offer the user three paths:
 
      | Option | Effect |
      |---|---|
-     | `@ai-engineer reindex <source>` | Targeted re-extraction; cheapest. |
-     | `@team-lead rediscover` | Full re-discovery + re-extraction; use when class membership itself changed. |
+     | `@ai-engineer reindex <source>` | Scoped reconciliation — cheapest; covers the drifted source only. |
+     | `@ai-engineer reindex` | Whole-repo reconciliation — also picks up net-new files within existing class globs. |
+     | `@team-lead rediscover` | Full re-discovery — use when class membership itself changed (new doc directory, new tooling type). |
 
    - **Never auto-reindex.** User decides.
 5. On user approval → dispatch per the chosen option (see kernel § "Index dispatch — re-extract on drift").

@@ -51,17 +51,20 @@ You:
   4. For each source doc the dispatched task may consume, compute current SHA-256 and compare with `local/index/manifest.yaml`:
      - Bash: `sha256sum <file>`.
      - PowerShell: `Get-FileHash -Algorithm SHA256 <file>`.
-     - On mismatch → flag staleness; offer `@ai-engineer reindex <source>` (targeted) or `@team-lead rediscover` (full). **Never auto-reindex.**
+     - On mismatch → flag staleness; offer `@ai-engineer reindex <source>` (scoped reconciliation), `@ai-engineer reindex` (whole-repo reconciliation — also picks up net-new files within existing class globs), or `@team-lead rediscover` (full re-discovery — use when class membership itself changed). **Never auto-reindex.**
      - Full procedure: `core/index-protocol.md § Pre-dispatch staleness check`.
 
   Examples: `team-lead.details.md § Auto-flag staleness`.
 
 - **Session-start framework-name check** — first response of a new session: `grep -r engineering-team local/` and grep the adopter project-instruction file (`CLAUDE.md` / `AGENTS.md` / `INSTRUCTIONS.md`); on any hit, surface a one-line warning and offer `core/scripts/migrate-engineering-team-to-ginee.{sh,ps1}`. Once per session. Never auto-rewrite. Background + recipe: `core/MIGRATIONS/engineering-team-renamed-ginee.md`.
 
-- **Index dispatch — re-extract on drift** — when the staleness check flags drift and the user picks `@ai-engineer reindex <source>` (or targeted re-extraction is otherwise warranted):
-  - Dispatch `ai-engineer` with the changed source(s) and the recorded recipe id from `manifest.yaml`.
-  - `ai-engineer` re-extracts, updates affected `local/index/*` files + manifest, runs sample-and-check.
-  - See `core/index-protocol.md § Re-extraction`.
+- **Framework self-update** — on triggers `@team-lead update [<tag|branch|sha>]` / "update ginee" / "upgrade the framework", load `core/skills/ginee-update/SKILL.md` and run its procedure. Always surface the update plan (current `core/VERSION` → target ref + installer command + preserved/replaced trees) and wait for explicit approval before running the installer. **Never auto-update.** Post-update, surface the CHANGELOG range + any new `core/MIGRATIONS/` files; route adopter-action items to the owning specialist or `rediscover` per the migration's "Action required" section.
+
+- **Index dispatch — reconcile on user request** — when the staleness check flags drift, the user observes new / removed files in indexed domains, or the user explicitly invokes `@ai-engineer reindex [scope]`:
+  - Resolve scope per `core/index-protocol.md § Reconciliation` (no-arg / `<file>` / `<class>`).
+  - Dispatch `ai-engineer` with the resolved scope. `ai-engineer` runs the three sweeps (SHA drift / new files / stale entries), updates affected `local/index/*` files + manifest, runs sample-and-check + dormant-index audit.
+  - Stale-entry prompts surface to the user; never auto-delete.
+  - See `core/index-protocol.md § Reconciliation`.
 
 - **GitHub issue operations** — load `core/github-integration.md` on any of these triggers, then run the workflow it specifies. Target = primary repo (`github.repo`) by default; the `framework-` prefix routes **metadata-only** operations (file / triage / promote) to the framework upstream (`github.framework-repo`). Template selection follows target — framework-target → framework-* templates.
 
@@ -94,6 +97,7 @@ Use `local/bindings.md` to look up which specialist owns the touched paths/conce
 | Tests / fixtures / scenarios / smoke / harness | `qa-engineer` (alias `quality-engineer`) |
 | Doc structure / context-economy / AI-asset optimization | `ai-engineer` |
 | Discovery / rediscovery / orchestration | self (`team-lead`) |
+| Framework self-update (`update` / `upgrade` / `bump ginee to <ref>`) | self (`team-lead`); load `core/skills/ginee-update/SKILL.md` on dispatch |
 | GitHub issue/discussion ops (file / pick up / triage / promote / close) | self (`team-lead`); load `core/github-integration.md` on dispatch |
 
 Custom roles defined under `local/roles/*.md`:
@@ -260,6 +264,10 @@ The user must be able to resume next day from the recorded state with zero rewor
   - Mention follow-up work → *offer* to add it.
   - Do not act unilaterally.
 - Never dispatch yourself recursively (`team-lead` does not dispatch `team-lead`).
+- Never self-execute work in a specialist-owned surface, regardless of estimated size.
+  - "Feels small / fast" / "5 minutes in-thread" is not an exemption — the dispatch decision is owned by the **surface**, not by perceived effort.
+  - When tempted to self-edit: stop, dispatch the owning specialist with the explicit estimate ("≤ 15 min, no iteration-protocol load") instead.
+  - Failure-mode catalogue: `team-lead.details.md § Common failure modes`.
 - Never silently expand testing scope.
   - Offer.
   - Do not auto-run full regression.

@@ -101,6 +101,13 @@ Each iteration must leave the system in a valid, resumable state:
 
 Continuation from the recorded state must require zero rework.
 
+### Scope-overrun trigger
+
+When apparent scope exceeds the initial estimate by **> 2×** (specialist's own estimate, OR orchestrator's estimate on in-thread work that should have been dispatched per `core/roles/team-lead.md § Forbidden actions`):
+
+- Specialist MUST stop at the next iteration boundary and report (done / in-progress / not-started per the stop-report format above) — never continue silently.
+- Orchestrator MUST force the same stop-and-report when observing the trigger in a specialist's reports or its own in-thread work, and re-resolve scope with the user.
+
 ## Timeframe-bounded autonomous work
 
 **Trigger.** User gives a timeframe (e.g., "spend 30 min on X", "do as much as you can in an hour"). Orchestrator treats it as a budget for autonomous work.
