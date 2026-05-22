@@ -52,6 +52,8 @@ nav_order: 4
 
   **Trade-off.** The backend cannot offer cursor-shape validation; an adapter that writes garbage to its own cursor breaks itself, not other adapters. This is acceptable — adapters are first-party code in this repo; a buggy cursor is a unit-test failure caught at adapter level, not a runtime hazard for the backend.
 
+  **Demo profile (CR-0013 § 3e, issue #46).** Every per-tick `list-deployments` mapping body — after sidecar ID rewriting — carries `deployment.id` values strictly greater than both the persisted fetcher cursor and the static base maximum 10065.
+
   ### Decision 3 — Fetcher runs in a **separate container**, not as an in-process `BackgroundService`
 
   The fetcher is shipped as a separate ASP.NET Core Worker (`Microsoft.NET.Sdk.Worker`) in `backend/fetcher-host/Dashboard.Fetcher.Host/`, built into a separate container image (`deployment-dashboard-fetcher`). It is **not** co-located into the `deployment-dashboard-api` host with the Write + Read services (see [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) for the microservices framing; co-location mechanics for Write + Read live in [ADR-0002](./ADR-0002-modular-monolith-consolidation.md)).

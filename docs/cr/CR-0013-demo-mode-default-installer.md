@@ -89,6 +89,25 @@ nav_order: 13
     | Cursor monotonicity | Deployment ids must monotonically increase across ticks (ADR-0004) | Fetcher's persisted cursor advances on each tick; without monotonic ids the second poll returns nothing |
     | Mapping authoring conventions | Reuse CR-0012 § 4 invariants (filename prefix, PascalCase JSON, `BodyAsJson`, regex via `Matchers` array) | One mapping format across both profiles; mapping authors transfer skill 1:1 between `mappings/` and `demo/` |
 
+    **Amendment (issue #46).** The `Scenario` + `RequiredScenarioState` + `SetStateTo` mechanism above does not activate from `--ReadStaticMappings`-loaded mappings on WireMock.Net 2.4.0 (root cause recorded in § 4 against the original AC #9). The dynamic-events surface is restored via a sidecar replacement mechanism with the following revised inventory:
+
+    | Aspect | Decision |
+    |---|---|
+    | Mechanism | Sidecar container POSTing to `demo-gha`'s WireMock.Net admin API on a fixed interval |
+    | Cycle length | ≈ 2.5 min/cycle (10 ticks × 15 s); loops indefinitely |
+    | New-event cadence | ≥ 3 / min over the first 5 min (AC #9 floor preserved) |
+    | Cursor monotonicity | Sidecar rewrites IDs at apply-time per the invariant below |
+    | Mapping authoring | Cumulative-body PUT; QA-pinned GUIDs |
+    | Sidecar reach | `demo-driver → demo-gha` over Compose network only (NFR-04 preserved) |
+    | Profile gating | `demo` profile only |
+
+    Collision and cursor invariants. The sidecar replaces each touched per-service `list-deployments` mapping via `PUT /__admin/mappings/{pinned-guid}` against a process-local map of service-name → GUID seeded from the static base bundle. ID monotonicity is enforced by sidecar rewriting at apply-time: `effective_id = authored_id + (cycle_index × ID_STRIDE)` where `cycle_index` is derived from elapsed wall-clock since a fixed image-build epoch and `ID_STRIDE` exceeds the maximum authored ID within one cycle.
+
+    Two rules hold across every tick:
+
+    1. Each `PUT` body is the full cumulative array — WireMock.Net 2.4.0 does not merge mapping bodies so the sidecar always ships the complete state for that mapping.
+    2. After rewriting, every `deployment.id` in the body is strictly greater than the persisted fetcher cursor and strictly greater than the static base maximum 10065 — restart safety follows because the wall-clock-derived cycle index only advances.
+
 - **Consequences.**
 
   **Positive.**
@@ -135,7 +154,7 @@ Mirrors the issue body's AC verbatim — devops owns 1, 2, 3, 4, 5, 6, 7, 14, 15
 - [ ] New image `ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:<tag>` published by CI on tag push; pinned via `${DASHBOARD_VERSION}` in `dashboard.env`; installer never downloads a separate bundle asset.
 - [ ] Demo bundle exercises all four DAG-edge shapes — verified by ≥ 4 specific assertions against the read-API matrix after the first 30 s of demo runtime. *(deferred — see § 4)*
 - [ ] Demo bundle covers 6 service × 5+ env slots; ≥ 5 of the canonical 6 box states from `local/index/ui-states.yaml` appear in the matrix within 60 s.
-- [ ] WireMock scenario walk produces ≥ 3 new deployment events per minute over the first 5 minutes of runtime. *(deferred — see § 4)*
+- [ ] WireMock scenario walk produces ≥ 3 new deployment events per minute over the first 5 minutes of runtime. *(resolved by § 3e amendment — sidecar `demo-driver`; issue #46)*
 - [ ] `docs/cr/CR-0013-demo-mode-default-installer.md` exists with full design-of-record (this file).
 - [ ] `docs/install.md` quick-start uses the demo-default install as the headline path.
 - [ ] `docs/ci-cd-pipelines.md § 2` topology table gains a `demo-gha` component row + § 4 tag scheme covers the new image.
@@ -145,14 +164,15 @@ Mirrors the issue body's AC verbatim — devops owns 1, 2, 3, 4, 5, 6, 7, 14, 15
 
 ## 4. Known limitations (delivered but deferred)
 
-**Trade-offs accepted at ship time.** The primary value of issue #44 — a populated 6 × 5 dashboard with diverse wire/box states, rendered topology edges, and zero external network on a no-flag `install.{ps1,sh}` — is delivered. The two enhancements below were validated in Phase 5/6 as not-yet-met against their original AC wording and are deferred to focused follow-up issues without blocking #44's ship. Each item is checked off in the AC list above with a `(deferred — see § 4)` suffix; this section is the canonical record of what changed between authoring (commit `5b9628e`) and Phase 7 acceptance.
+**Trade-offs accepted at ship time.** The primary value of issue #44 — a populated 6 × 5 dashboard with diverse wire/box states, rendered topology edges, and zero external network on a no-flag `install.{ps1,sh}` — is delivered. The enhancement below was validated in Phase 5/6 as not-yet-met against its original AC wording and is deferred to a focused follow-up issue without blocking #44's ship. The item is checked off in the AC list above with a `(deferred — see § 4)` suffix; this section is the canonical record of what changed between authoring (commit `5b9628e`) and Phase 7 acceptance.
+
+**Update (issue #46).** AC #9 (dynamic events) resolved by § 3e amendment — sidecar `demo-driver` replaces the empirically broken `--ReadStaticMappings` scenario walk. Sole remaining deferred row is AC #7 (deferred to #45 / `parent_deployments` DAG-edge coverage).
 
 | AC ID | Original intent | Delivered state | Deferred to |
 |---|---|---|---|
 | #7 (all four DAG-edge shapes via `parent_deployments`) | Adapter's Pass 2a (intra-run `needs:` recovery + per-env predecessor synthesis) populates `parent_deployments` so the dashboard renders all four edge shapes from the demo bundle: empty / single per-env predecessor / single intra-run `needs:` / multiple-`needs:` + mixed. | All 65 events emitted by the demo bundle have `parent_deployments = []`. Status URLs are parsed correctly (DB rows carry the `/job/{id}` segment via the `run_url` field), but no needs-recovery HTTP calls reach `demo-gha` and no per-env predecessor is synthesised. Topology edges still render at runtime via the read-API's adjacency derivation, so the dashboard *looks* populated — but the underlying `parent_deployments` array is empty across the board. Root cause unidentified at ship time. | #45 |
-| #9 (≥ 3 events/min over first 5 min via WireMock scenario walk) | 20-tick `Scenario` + `RequiredScenarioState` + `SetStateTo` corpus baked into the `demo-gha` image walks itself through deployment-id-monotonic ticks — evaluators see the matrix *evolve* across the first 5 minutes. | Collapsed to a single static list-deployments response per service. WireMock.Net 2.4.0's scenario state machine does **not** activate from `--ReadStaticMappings`-loaded mappings — verified empirically: `/__admin/scenarios` returns `[]` indefinitely after image bring-up and `POST /__admin/scenarios/{name}/state` returns 404 against any scenario name from the bundle. The 20-tick walk was collapsed into 1 static bundle per service so the populated-matrix value (AC #1, #8) still ships; the *evolving* aspect does not. | #46 |
 
-The two follow-ups are tracked as discrete issues (rather than re-opening #44) so each can be picked up against a clean acceptance surface — neither blocks the demo-default UX inversion this CR introduces.
+The follow-up is tracked as a discrete issue (rather than re-opening #44) so it can be picked up against a clean acceptance surface — it does not block the demo-default UX inversion this CR introduces.
 
 ## References
 
