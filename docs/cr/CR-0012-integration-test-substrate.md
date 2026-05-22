@@ -23,14 +23,14 @@ nav_order: 12
 
 - **Change.** Four co-introduced design decisions plus one framing decision.
 
-  - **3a — Deterministic-upstream substrate.** A standalone `mock-gha` container running a pinned WireMock.Net Docker image, addressable on the internal Docker network only, gated by an `integration` compose profile. The fetcher reaches it via `GHA_API_BASE_URL=http://mock-gha:8080` — **no fetcher source change** (the env-var contract already exists at `dev_env/docker-compose.local.yml:217`).
+  - **3a — Deterministic-upstream substrate.** A standalone `mock-gha` container running a pinned WireMock.Net Docker image, addressable on the internal Docker network only, gated by an `integration` compose profile. The fetcher reaches it via `GHA_API_BASE_URL=http://mock-gha:80` — **no fetcher source change** (the env-var contract already exists at `dev_env/docker-compose.local.yml:217`).
 
     | Aspect | Decision | Rationale |
     |---|---|---|
     | Image | A community-published WireMock.Net image, tag pinned in `dev_env/docker-compose.local.yml` + `install/docker-compose.release.yml` | First-party wrapper is unwarranted — community image follows the same posture as `postgres:16-alpine` already in the stack |
     | Posture | **No `ports:`** on the service definition outside the `integration` profile (NFR-04); admin port published to host **only** when the `integration` profile is active | Strict NFR-04 in production; admin surface accessible from the test runner during integration runs |
     | Profile | `integration` (compose profile name); future `demo` profile reuses the same service definition with a different mappings mount | One service definition, two consumers (tests + demo) — fixture mount differs |
-    | Wire reach | Internal Docker DNS `mock-gha:8080` for the fetcher; admin API on the runner only via host-mapped port (integration profile only) | NFR-04 production posture preserved; runner-side scenario activation enabled |
+    | Wire reach | Internal Docker DNS `mock-gha:80` for the fetcher; admin API on the runner only via host-mapped port (integration profile only) | NFR-04 production posture preserved; runner-side scenario activation enabled |
 
   - **3b — `testing/integration/` cross-stack runner.** A new xUnit project sibling to `testing/functional/`. Brings up the stack with the `integration` profile, programmatically loads a scenario into `mock-gha` via its admin API (`POST /__admin/mappings/import`), waits for the fetcher to poll, asserts the resulting Read-API state + SSE wire. **`FETCHER_POLL_INTERVAL_SECONDS=1`** in the integration profile so the NFR-03 5 s envelope remains meaningful.
 
@@ -126,7 +126,7 @@ Mirrors the alternatives the issue body listed, locked here as the design-of-rec
 - [CR-0010](./CR-0010-component-ci-pipeline.md) Open trade-off (ii) — non-blocking-watching-week → blocking promotion pattern this CR mirrors for `integration.yml`.
 - `docs/integration-tests.md` — operational guide (mapping authoring, admin-API scenario activation, endpoint coverage matrix, CI invocation, `-Integration` switch, demo-bundle disclaimer).
 - `local/index/ui-states.yaml` — canonical six-state inventory (`success` / `running-with-last` / `running-failed-with-last` / `failed-with-last` / `running` / `running-failed`).
-- `dev_env/docker-compose.local.yml:217` — pre-existing `GHA_API_BASE_URL` env-var contract the integration profile re-points at `mock-gha:8080`.
+- `dev_env/docker-compose.local.yml:217` — pre-existing `GHA_API_BASE_URL` env-var contract the integration profile re-points at `mock-gha:80`.
 - `install/docker-compose.release.yml` — canonical service inventory; the `mock-gha` service definition lives here per ADR-0010 (dev_env layers via `-f` merge).
 - WireMock.Net upstream: https://github.com/WireMock-Net/WireMock.Net
 - WireMock admin API: https://wiremock.org/docs/api/
