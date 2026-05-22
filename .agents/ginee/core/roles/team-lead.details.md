@@ -113,6 +113,16 @@ Steps:
       - Writes `local/index/manifest.yaml` (SHA-256 per source + `category: doc | code`).
       - Runs sample-and-check (5 random items per affected index file).
 
+8c. **D25 re-attribution sweep (rediscover only).** When invoked via `@team-lead rediscover`, after Step 8a rewrites `local/bindings.md`:
+   1. Read the previous ownership table (pre-rediscover) from `local/bindings.md § Source-of-truth ownership`.
+   2. Apply the D25 ownership map per `core/templates/bindings.md` — CRs · project-instruction · work-breakdown → `team-lead`; CI/CD guide · infra runbooks → `devops-engineer`; per-tier READMEs / API docs / test plans → tier engineers.
+   3. Surface the diff to the user; on approval, write the updated table.
+   4. Detect greenfield — if no `<architecture-doc path>` resolved during Step 3 → flag `greenfield: true` in `local/project-profile.md § Architecture artefacts`.
+   5. Add empty optional `§ Architects` section to `local/bindings.md` (single-architect default; adopter populates for multi-architect projects).
+   6. Initialize `local/requirements.md` (from `core/templates/requirements-register.md`) + `local/asr-utility-tree.md` (from `core/templates/asr-utility-tree.md`) if missing; populate from discovered NFR / Constraint sections in the architecture doc when one exists.
+
+   Full background: `core/MIGRATIONS/D25-classical-architect.md`. Skip 8c on first-run discovery (no previous ownership table to migrate).
+
 9. **Report.**
    - Use `core/templates/discovery-report.md` shape.
    - Surface to user.
@@ -210,9 +220,76 @@ Quick triggers → workflows:
 | `@team-lead pick up #<N>` | `core/github-integration.md § Inbound — pick up an issue` |
 | `@team-lead triage` | `core/github-integration.md § Triage — list ready issues` |
 | `@team-lead promote discussion #<N>` | `core/github-integration.md § Promote — discussion → issue` |
+| `@team-lead address-review #<PR>` | `core/github-integration.md § Review-comment ingestion` + dispatch in § Review-comment dispatch (below) |
 | Phase transition on issue-sourced task | `core/github-integration.md § Inbound — pick up an issue` (Comment cadence table) |
 
 Repo discovery — origin inference first, `local/framework.config.yaml § github.repo` overrides. Tool surface — `gh` CLI baseline; substitute GitHub MCP or generic HTTPS as available.
+
+## CR template (D25)
+
+Reassigned from `solution-architect.details.md` per D25. CRs are coordination decisions (requirement / scope changes), not architectural ones. team-lead authors; SA reviews for architectural coherence per `core/doc-roles.md § SA architectural-coherence review`.
+
+```markdown
+# CR-NNNN — <short title>
+
+**Status:** Proposed | Accepted | Rejected | Superseded by CR-XXXX
+**Date:** YYYY-MM-DD
+
+## Trigger
+What event / discovery / external change prompted this CR.
+
+## Change
+What requirement is added / modified / retired. Cite the FR / NFR / Constraint ID from `local/requirements.md` being changed.
+
+## Impact
+Affected components, roles, downstream docs. Any follow-up ADRs needed (route to SA per `core/roles/solution-architect.md § Review`).
+```
+
+**Authoring procedure:**
+
+1. Engineer or user flags a requirement / scope change.
+2. team-lead drafts the CR + populates the template.
+3. SA reviews for architectural coherence (does this implicate ASRs / ADRs / architecture invariants?).
+4. SA APPROVE → CR `Accepted`; SA applies any requirements-register diff + new ADR if needed.
+5. SA REJECT / REQUEST-CHANGES → team-lead iterates the CR.
+
+Numbering: zero-padded four-digit per family (`CR-0001`). Never reused. Superseded records keep their number + reference the replacement.
+
+## Review-comment dispatch
+
+Full procedure: **`core/github-integration.md § Review-comment ingestion`** (ingestion + idempotency + comment shape). Kernel registration: `team-lead.md § GitHub issue operations`. This section covers dispatch-specific concerns only.
+
+### File → role routing
+
+Per `local/bindings.md § Source-of-truth ownership` (adopter-owned governance table). For each unresolved remark:
+
+1. Read `path:line` from `gh api ... /pulls/{N}/comments`.
+2. Look up `path` in the bindings table.
+3. Unique → dispatch owning role.
+4. No match → fallback `team-lead` (re-routable before approval).
+5. Ambiguous (multiple owners cover the path) → pick the surface-closest role (visual ↔ frontend; data ↔ backend; IaC ↔ devops); record rationale on the row.
+
+### Fix-vs-reply specialist contract
+
+| Track | Output | Notes |
+|---|---|---|
+| **fix-track** | Phase-6-shaped patch (diff + test impact + verification note per `core/process.md § Phase 6`) | One patch may bundle ≥ 1 remark when same file/area. |
+| **reply-track** | Reply text + `<!-- ginee:review-reply r=<thread-id> -->` marker | Specialist authors wording (rationale / declined-with-cite / deferred-to-#N); team-lead never paraphrases. |
+
+Mixed-track per specialist allowed — the marker is per-thread, not per-specialist.
+
+### Reconciliation
+
+Team-lead after specialists return:
+
+1. Squash all fix-track patches into one cycle commit on the PR branch; push.
+2. Post all reply-track texts via `gh api ... /comments/{thread-id}/replies` (or PR-review-comment-reply equivalent).
+3. Verify lossless coverage — every plan-table thread maps to a `ginee:review-reply` marker OR a fix-touched thread. Gap → re-dispatch; never silently close.
+4. Post one sticky cycle summary per `core/templates/pr-comment-cadence.md`.
+
+### Auto-mode pause point
+
+Plan-table approval is a **forced-interactive trigger** per `core/automatic-mode.md § Forced-interactive triggers` — push + reply on external PR enters the "destructive / external" set. Build plan → pause → surface → resume on explicit approval → reconcile + sticky. Never auto-approve, regardless of `auto:` or per-remark size.
 
 ## Delivery modes
 

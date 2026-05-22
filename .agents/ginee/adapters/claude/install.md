@@ -66,7 +66,7 @@ Claude Code has no literal `@<agent-name>` chat syntax. Three working invocation
 | **Natural-language subagent dispatch** — describe what you want; Claude routes to the matching subagent in `.claude/agents/` via description match. | Specialist dispatches (`solution-architect`, `backend-engineer`, etc.). |
 | **Explicit Task call** — Claude may use the `Task` tool internally to spawn a subagent in an isolated session. No user-visible invocation; it happens automatically when delegation is warranted. | Long-running parallel work. |
 
-Cheat sheet for the 10 framework workflows (AgentSkills auto-activates from these phrasings):
+Cheat sheet for the 12 framework workflows (AgentSkills auto-activates from these phrasings):
 
 | Phrasing | Activates |
 |---|---|
@@ -81,6 +81,7 @@ Cheat sheet for the 10 framework workflows (AgentSkills auto-activates from thes
 | "Promote discussion #N" / "Promote framework discussion #N" | `ginee-promote-discussion` |
 | "Reindex" / "Reindex `<file>`" / "Reindex `<class>`" / "Reconcile the index" | `ginee-reindex` |
 | "Update ginee" / "Upgrade the framework" / "Bump ginee to `v<X>`" / "Pull the latest ginee" | `ginee-update` |
+| "Address review on PR #N" / "Respond to review on #N" / "Handle review feedback on #N" | `ginee-address-review` |
 
 The framework's own `core/process.md` and role kernels use `@<role>` notation as vendor-neutral shorthand — Claude Code adopters read that as "the orchestrator routes here," not as a literal command.
 

@@ -2,25 +2,7 @@
 
 Companion to `core/roles/solution-architect.md`. Elaborations only; kernel rules are binding.
 
-## CR template
-
-Lighter, requirements-focused:
-
-```markdown
-# CR-NNNN — <short title>
-
-**Status:** Proposed | Accepted | Rejected | Superseded by CR-XXXX
-**Date:** YYYY-MM-DD
-
-## Trigger
-What event / discovery / external change prompted this CR.
-
-## Change
-What requirement is added / modified / retired. Cite the architecture doc FR / NFR being changed.
-
-## Impact
-Affected components, roles, downstream docs. Any follow-up ADRs needed.
-```
+**Note (D25):** CR template moved to `team-lead.details.md § CR template` — CRs are coordination decisions, not architectural ones. SA reviews CRs for architectural coherence per `core/doc-roles.md § SA architectural-coherence review` but does NOT author them.
 
 ## ADR template
 
@@ -42,19 +24,30 @@ The architectural decision in one paragraph. Imperative voice.
 Positive, negative, neutral. Knock-on effects on components, contracts, ops.
 ```
 
-## Change-request flow
+## Architectural-change review flow (D25)
 
-When dispatched on an engineer-proposed change:
+Two routing paths depending on what the engineer is proposing:
 
-1. Read the relevant section(s) in full.
-2. Confirm the change is consistent with the rest of the doc set:
-   - constraints
-   - requirements
-   - decisions
-   - work-breakdown
-3. Make the edit with explicit citations to the FR / NFR / section being amended.
-4. Note downstream implications in your final report so `team-lead` can dispatch follow-ups.
-   - Example: a wire-shape revision affects service + client + qa.
+### Path A — Architectural delta (SA's authority)
+
+Engineer proposes a contract / topology / stack / NFR-affecting change. Procedure:
+
+1. Read the relevant section(s) in full + the engineer's proposal.
+2. Apply § Review verdict — APPROVE / REJECT / REQUEST-CHANGES.
+3. On APPROVE:
+   - Author the ADR (or amend the architecture doc if not yet finalized) with explicit citations to the FR / NFR / ASR being addressed.
+   - List downstream dispatches required (example: *"wire-shape revision affects service + client + qa"*).
+4. SA never edits the engineer's code; engineer implements after APPROVE.
+
+### Path B — Requirements / scope delta (team-lead's authority per D25)
+
+Engineer proposes adding / modifying / retiring an FR / NFR / Constraint. Procedure:
+
+1. Engineer flags it in their final report.
+2. `team-lead` drafts a CR per `team-lead.details.md § CR template` and lands it in `<cr-directory>`.
+3. SA reviews the CR for architectural coherence (does the requirement change have hidden architectural implications? — new ASR? new ADR needed?).
+4. SA APPROVE → CR moves to `Accepted`; SA updates `local/requirements.md` and (if scope warrants) `local/asr-utility-tree.md` + a new ADR.
+5. SA REJECT / REQUEST-CHANGES → team-lead iterates CR.
 
 ## Conflict-resolution examples
 

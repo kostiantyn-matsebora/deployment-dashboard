@@ -76,8 +76,9 @@ Bindings may NOT override generic process.
 
 - **Goal.** Bound scope; identify touched domains.
 - **Reads.** TODO line + relevant architecture sections + mockup + code.
-- **Output.** Phase 2 dispatch plan; surfaced ambiguities.
-- **Acceptance.** Scope bounded enough to plan Phase 2. ≤ 1 unresolved scope question.
+- **`solution-architect` design dip (D25).** On any non-trivial scope, SA elicits the requirements register (FRs / NFRs / constraints in `local/requirements.md`) AND derives the ASR utility tree (`local/asr-utility-tree.md`) per `core/roles/solution-architect.md § Design`. Resolves **greenfield vs delta** mode. Output goes to Phase 2 dispatch.
+- **Output.** Phase 2 dispatch plan + requirements / ASR diff + resolved design mode + surfaced ambiguities.
+- **Acceptance.** Scope bounded enough to plan Phase 2. ≤ 1 unresolved scope question. ASR utility tree captures every quality-attribute-driver the proposed change touches.
 
 ### Phase 2 — Design & architecture
 
@@ -86,17 +87,20 @@ Bindings may NOT override generic process.
 
   | Surface | Owner |
   |---|---|
-  | Architecture doc, API contract ratification | `solution-architect` |
+  | Target architecture (system / infrastructure / security / data / integration) | `solution-architect` per `core/roles/solution-architect.md § Design` |
+  | ADRs + diagrams + requirements / ASR updates | `solution-architect` |
   | Mockup | mockup-owning role |
   | Wire contract | service-owning role |
-  | Work breakdown | each engineer contributes their slice |
+  | Work breakdown | `team-lead` (per D25); each engineer contributes their slice |
+  | Engineer-proposed architectural deltas | originating engineer drafts; `solution-architect` reviews per `§ Review` (APPROVE / REJECT / REQUEST-CHANGES) |
 
-  Parallel where independent.
+  Parallel where independent. **Mode-aware** — greenfield mode authors the architecture doc; delta mode produces ADRs + CRs and never rewrites the doc wholesale.
 - **Acceptance.**
   - Fixed wire shape + mockup behaviour + work breakdown.
   - Visual / contract harness green (where one exists).
   - Cross-references resolved.
   - Artefacts presentable as a coherent whole.
+  - ASRs traceable to ADRs (each ASR is addressed by ≥ 1 ADR OR an existing architecture-doc section).
 
 ### Phase 3 — Design review
 
@@ -117,6 +121,8 @@ Bindings may NOT override generic process.
   - Parallel where independent.
   - Phase 5 overlaps once Phase 3 passes.
   - Runs under `core/iteration-protocol.md`.
+- **`solution-architect` governance dip (D25).** Triggered only when the in-flight PR touches an SA-owned file per `local/bindings.md § Source-of-truth ownership` (NOT every Phase 4 PR). Spot-checks engineer deltas against architecture invariants + ASRs. Drift → PR comment + dispatch back to owning engineer. Per `core/roles/solution-architect.md § Governance`.
+- **`solution-architect` review on in-flight proposals (D25).** If an engineer proposes an architectural change mid-Phase 4 (new contract / topology / stack / NFR-affecting decision), SA reviews per `§ Review` — APPROVE / REJECT / REQUEST-CHANGES. SA never edits the engineer's code.
 - **Acceptance.**
   - Compiles / builds clean.
   - Per-project unit tests pass.
@@ -144,6 +150,7 @@ Bindings may NOT override generic process.
   - Oracles TIGHT per `### Test oracles can be wrong`.
   - Manual smoke against the running solution (project's local-dev startup command), NOT design artefacts.
   - Runs under `core/iteration-protocol.md`.
+- **`solution-architect` governance dip (D25).** Triggered when an NFR-oracle fails or a test surfaces an architectural concern (e.g. latency NFR breached, contract drift visible in failed assertion). SA reviews per `§ Governance`; never edits test code; routes the architectural finding back through Phase 6 or as a new ADR.
 - **Acceptance.**
   - Change-scoped suite green.
   - Oracles reflect correctness for touched surfaces.
@@ -159,6 +166,7 @@ Bindings may NOT override generic process.
   - QA exercises other scenarios in parallel — a fix never freezes the test run.
   - Routes back to the specific Phase 4 surface, not a full Phase 4 rerun.
   - Runs under `core/iteration-protocol.md`.
+- **`solution-architect` review on architectural fixes (D25).** If a proposed fix involves an architectural change (vs. local bug fix), SA reviews per `§ Review`. APPROVE → engineer implements; REJECT / REQUEST-CHANGES → iterate. Local bug fixes route directly engineer → engineer, no SA dispatch.
 - **Acceptance.**
   - Change-scoped oracles green.
   - No regression in touched surfaces.
@@ -168,10 +176,12 @@ Bindings may NOT override generic process.
 ### Phase 7 — SA review
 
 - **Goal.** `solution-architect` confirms compliance with architecture invariants, requirements, mockup behavioural contracts.
+- **Lighter under D25.** Governance already ran continuously across Phase 4 / 5 / 6 (per `core/roles/solution-architect.md § Governance`); Phase 7 is the **final coherence check**, not a first-pass review. Most concerns should already be resolved.
 - **Checks.**
-  - Architecture invariants honoured.
+  - Architecture invariants honoured (cross-check against ASR utility tree).
   - Mockup behavioural contract honoured.
   - Phase 5 manual-smoke section was actually written (empty = REJECT, return to Phase 5).
+  - ASR coverage — every ASR touched by the change is addressed by ≥ 1 ADR or architecture-doc section.
 - **Constraint.** Sign-off only; no code edits.
 - **Iteration.** Runs under `core/iteration-protocol.md` when follow-up architecture-doc edits exceed 15 min.
 - **Acceptance.**
@@ -286,6 +296,8 @@ Applies to **all** written artefacts:
 - Future skills.
 - Architecture doc, mockup, ADRs.
 - Per-component READMEs.
+- **GitHub issue bodies authored via `ginee-file-*` skills** (D26).
+- **Framework-authored GitHub comments** — Phase-transition · sticky `ginee:score` / `ginee:review-cycle` · audit comments · per-thread review-replies (D26).
 
 - **Default to structure** — bullets, numbered lists, tables, headings. Not prose paragraphs.
 - **Steps / actions / instructions** → bullet list. Never a multi-sentence paragraph.
@@ -401,19 +413,19 @@ Default freeform tasks and untagged TODOs do not load this file.
 - **Size is not an exemption.** Estimated effort (in-thread "5-min fix", "tiny tweak") does not override surface ownership. Dispatch the owning specialist; if scope is genuinely ≤ 15 min, dispatch flags it explicitly so the iteration-protocol load is skipped.
 - **Regression-grade failure modes.** Catalogued in `team-lead.details.md § Common failure modes` — orchestrator self-check before any in-thread edit on a specialist-owned surface.
 
-### Doc co-ownership — solution-architect ↔ ai-engineer
+### Doc roles — all-roles authorship + ai-engineer shape (D25)
 
 - **Ownership split:**
-  - `solution-architect` owns documentation **semantics**.
-  - `ai-engineer` owns **shape + load topology**.
+  - Authoring role owns documentation **semantics** per `core/doc-roles.md § Authorship`. Per D25, the authoring role differs by doc class (SA · team-lead · backend-engineer · frontend-engineer · devops-engineer · qa-engineer · mockup-owning role).
+  - `ai-engineer` owns **shape + load topology** across the whole doc set.
   - Neither overrides the other's invariants.
 - **Runs under** `core/iteration-protocol.md` below.
-- **Full definition** (routing table + lossless edit rule + dispatch triggers): `core/doc-co-ownership.md`.
+- **Full definition** (authorship table + routing table + lossless edit rule + SA architectural-coherence review + dispatch triggers): `core/doc-roles.md`.
 - **Load triggers** (when to fetch the full file):
-  - New rule landing.
+  - New role-owned doc landing.
   - Doc grows past size threshold.
   - Cross-reference repair after a split/move.
-  - Structure dispute (SA vs. ai-engineer).
+  - Structure dispute (author vs. ai-engineer).
 
 ### Iteration protocol — propose → review → implement
 
@@ -422,7 +434,7 @@ Generalized loop for non-trivial work. **Full definition** (scope, estimation-fi
 **Load triggers** — orchestrator (or specialist) fetches the file when any holds:
 
 - Phase 4 / 5 / 6 / 7 dispatch with estimated total scope > 15 min.
-- Doc co-ownership pass between `ai-engineer` and `solution-architect`.
+- Doc-roles pass between `ai-engineer` and any authoring role (per `core/doc-roles.md`).
 - User gives a timeframe (e.g., "spend 30 min on X").
 
 Default short tasks ( ≤ 15 min, no timeframe ) do not load this file.

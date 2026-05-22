@@ -143,7 +143,7 @@ Trigger: `@team-lead pick up #<N>` — always targets the primary repo (= the wo
    | Phase 8 acceptance | Summary + PR/commit links + "closing on accept" |
    | Stoppable intermediate state (user paused) | Current phase + done/in-progress/not-started lists |
 
-   Comments are structured summaries, not chatty. One per transition.
+   Comments are structured summaries, not chatty. One per transition. **D26 binding** — every framework-authored comment passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done` (tables for inventories · numbered lists for steps · parent + sub-bullets for multi-rule statements · no parenthetical comma-lists in sentences). Enforcement: `core/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
 8. On Phase 8 acceptance, PM closes the issue:
    ```
    gh issue close <N> --repo <repo> --comment "<final summary + PR links>"
@@ -193,6 +193,113 @@ When a task is issue-sourced, every resulting PR description includes a `Closes 
 Template carries this: `core/templates/pr-description.md § Issue linkage`.
 
 **Post-PR CI watch (D20).** In automatic mode with `automatic-mode.ci-watch: enabled` (default), the orchestrator does not exit at `gh pr create`. It enters the watch loop per `core/ci-watch.md`, posting at most three PR comments per fix cycle (`"CI watch started"` / `"CI fix pushed (cycle N of M)"` / `"CI complete — all green"`), routing attributable failures back through Phase 6, and gating delivery on all-required-green. Interactive mode + `ci-watch: disabled` preserve pre-D20 behaviour (exit at "PR opened").
+
+## Review-comment ingestion
+
+Address external code-review feedback on an open PR. Sits between Phase 7 (internal SA review) and Phase 8 (user acceptance) for PRs exposed to peer maintainers / OSS contributors / the user wearing a reviewer hat. Explicit invocation only — no extension of D20 CI-watch.
+
+| Path | Form |
+|---|---|
+| Skill (AgentSkills clients) | `/ginee-address-review #<N>` |
+| Command (every adapter) | `@team-lead address-review #<N>` |
+
+Both run the same procedure under the same governance — **skill / command parity is mandatory** (D24). Target = primary repo. No `framework-` variant; checked-out branch must be the PR's head ref.
+
+### Procedure
+
+1. **Resolve `<PR>`** per § Repo discovery. Abort if checked-out branch ≠ PR head (*"check out the PR branch first"*). Fetch:
+   ```
+   gh api repos/{o}/{r}/pulls/{N}/comments      # line-anchored
+   gh api repos/{o}/{r}/pulls/{N}/reviews       # approved / changes_requested / commented
+   ```
+2. **Deduplicate + filter** by `thread-id`:
+   - Skip threads marked `resolved`.
+   - Skip threads whose last reply is `<!-- ginee:review-reply r=<thread-id> -->` AND no newer reviewer comment after it (idempotency).
+3. **Build routing records** `{thread-id, file, line, body, hunk, role}`. Route per `local/bindings.md § Source-of-truth ownership`; fallback `team-lead`. Ambiguous match → pick the surface-closest role (visual ↔ frontend; data ↔ backend; IaC ↔ devops); record rationale on the row.
+4. **Surface consolidated plan table** for approval (forced-interactive gate — see below).
+5. **On approval** dispatch specialists in parallel. Each returns one of:
+   - **fix-track:** Phase-6-shaped patch (diff + test impact + verification note per `core/process.md § Phase 6`). May bundle ≥ 1 remark per patch when same file/area.
+   - **reply-track:** structured reply text + `<!-- ginee:review-reply r=<thread-id> -->` marker. Specialist owns the wording (rationale, declined-with-cite, deferred-to-#N); team-lead never paraphrases.
+6. **Reconcile + post.** Team-lead: squash fix-track patches into one cycle commit on the PR branch + push; post reply-track texts via `gh api .../comments/{thread-id}/replies` (or PR-review-comment-reply equivalent); verify lossless coverage before step 7.
+7. **Post sticky cycle summary** per `core/templates/pr-comment-cadence.md` — one per cycle. Marker `<!-- ginee:review-cycle n=<N> -->`. Full dispatch contract: `core/roles/team-lead.details.md § Review-comment dispatch`.
+
+### Plan table — surface contract
+
+| Column | Source |
+|---|---|
+| `#` | 1-indexed running count |
+| `thread` | `T#<short-id>` — last 6 chars of GitHub thread-id |
+| `file:line` | from `path:line` in payload |
+| `role` | resolved per step 3 |
+| `proposed action` | one-line digest |
+| `action-type` | `fix` or `reply` |
+
+### HTML markers
+
+| Marker | Purpose | Cardinality |
+|---|---|---|
+| `<!-- ginee:review-reply r=<thread-id> -->` | Per-thread addressed-this-cycle | 1 per addressed thread per cycle |
+| `<!-- ginee:review-cycle n=<N> -->` | Sticky cycle summary | 1 per cycle |
+
+`thread-id` = last 6 chars of GitHub thread-id (matches the `T#<short-id>` plan-table column). `<N>` = count of prior `ginee:review-cycle` markers + 1.
+
+### Lossless coverage rule
+
+Every unresolved plan-table remark MUST end the cycle as **fix** (patch in cycle commit) OR **reply** (text + marker on thread). No silent drops. Same principle as `core/index-protocol.md § Lossless rule for index § Coverage rule`.
+
+Team-lead verifies post-reconciliation: count of plan-table threads = count of `ginee:review-reply` markers + fix-touched-thread mappings. Gap → re-dispatch; never silently close.
+
+### Idempotency — re-invocation
+
+1. Re-fetch comments + reviews.
+2. Filter out threads with current `<!-- ginee:review-reply r=<id> -->` marker UNLESS newer reviewer comment exists after it.
+3. Plan table covers net-new + revisited threads only.
+4. Cycle ordinal increments; prior stickies preserved (immutable cycle log).
+
+### User-confirmation gate
+
+No fix committed, no reply posted, no commit pushed without plan-table approval — per `core/process.md § Executing actions with care` (PR is externally visible).
+
+In `auto:` mode (D12) the gate is a **forced-interactive trigger** per `core/automatic-mode.md § Forced-interactive triggers` (push + reply on external PR = "destructive / external" set). Auto pauses, surfaces the table, resumes only on explicit approval. **No exception for "trivial" remarks** (slope; explicit out-of-scope).
+
+### Comment cadence
+
+| Surface | Cap |
+|---|---|
+| Per-thread reply | 1 per addressed thread per cycle |
+| Sticky cycle summary | 1 per cycle (format per `core/templates/pr-comment-cadence.md`) |
+| Mid-cycle progress comments | 0 — sticky IS the signal |
+
+**D26 binding** — every framework-authored reply + cycle-summary passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done`. Specialist authoring a reply-track text runs the self-lint before returning to team-lead. Enforcement: `core/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
+
+### Example — worked cycle
+
+PR #42 has 3 unresolved remarks. Approved plan:
+
+| # | thread | file:line | role | proposed action | action-type |
+|---|---|---|---|---|---|
+| 1 | T#abc | backend/api/users.cs:42 | backend-engineer | "Switch to async overload" | fix |
+| 2 | T#def | docs/architecture.md:88 | solution-architect | "Decline — cite ADR-0006" | reply |
+| 3 | T#ghi | frontend/src/login.tsx:17 | frontend-engineer | "Add loading state per mockup Y" | fix |
+
+Parallel dispatch → cycle commit `abc1234` (squashes #1 + #3) pushed; replies posted on #1/#2/#3 with `ginee:review-reply` markers; sticky `Review cycle 1: 3 remarks addressed (2 code, 1 reply). HEAD: abc1234.` + `<!-- ginee:review-cycle n=1 -->`.
+
+Re-invocation later (new reviewer comment on `T#abc` + new `T#jkl`):
+
+- `T#abc` re-enters (newer comment after marker).
+- `T#def` + `T#ghi` skipped (markers; no newer comment).
+- `T#jkl` enters (net-new).
+- Cycle ordinal → 2; new sticky; prior preserved.
+
+### Out of scope
+
+- Drafting reviews on other people's PRs (reviewer role, not author).
+- Auto-resolving threads — reviewer / PR author owns.
+- Cross-repo coordinated reviews.
+- Auto-detecting new review comments — explicit invocation only; D20 CI-watch loop unaffected.
+- Sentiment / tone analysis.
+- Bypassing the user-confirmation gate for "trivial" remarks.
+- Skill-only or command-only delivery — parity mandatory.
 
 ## Forbidden actions
 

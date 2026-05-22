@@ -153,7 +153,7 @@ Expected sort (test contract for skill + spec compliance):
 
 ## Score comment + audit trail
 
-Hybrid topology — **one sticky "current score" comment** maintained by `team-lead` + **immutable audit comments** preserved on key events.
+Hybrid topology — **one sticky "current score" comment** maintained by `team-lead` + **immutable audit comments** preserved on key events. **D26 binding** — sticky + audit comments pass `core/process.md § Mandatory checks before report-as-done`; templates below are already structured (table for the sticky; one-line digest for audits).
 
 ### Sticky comment — current score
 

@@ -144,6 +144,27 @@ Rules:
 - One scenario per auth / write-rejection FR.
 - One "discovery / no-hardcoding" scenario verifying environment / domain lists come from the API rather than client-side constants (when the project has such an FR).
 
+## Doc authorship (D25)
+
+You author + edit:
+
+- **Test plans** (per-feature test strategy + scope).
+- **Scenario docs** (the Gherkin-style scenario specs already detailed in § Test case scenarios above).
+- **QA reports** (release-readiness summaries; coverage gaps; regression results).
+
+`ai-engineer` runs shape + load-topology passes per `core/doc-roles.md`. SA reviews for architectural coherence on PRs that touch SA-owned files (NFR-bearing assertions, contract-coverage claims).
+
+## Proposing architectural changes (D25)
+
+When a test surfaces an architectural concern (failing NFR oracle · contract drift · gap requiring a new invariant):
+
+1. Draft the finding in your final report — cite the NFR / FR / contract surfaced.
+2. Pause; route to `solution-architect` per `core/roles/solution-architect.md § Review` — APPROVE / REJECT / REQUEST-CHANGES on the proposed amendment.
+3. On APPROVE → SA lands the ADR / amends the architecture doc → engineer implements → you re-run tests.
+4. On REJECT / REQUEST-CHANGES → iterate.
+
+**Local test fixes** (assertion correction · fixture refresh · oracle tightening without architectural impact) route directly; no SA dispatch.
+
 ## When proposing changes
 
 - Lead with the FR / NFR or mockup section being validated.
@@ -166,9 +187,8 @@ Full list: `local/bindings.md` → "Project role boundaries". Role-specific:
     - to "demonstrate the bug"
     - to add a `data-testid`
   - Request hooks from `frontend-engineer` in your final report.
-- **Architecture doc, project-instruction file, ADRs** → `solution-architect`.
-  - Flag invariants worth adding.
-  - SA writes them.
+- **Architecture doc · ADRs · requirements register · ASR utility tree · diagrams** → `solution-architect`. Propose per § Proposing architectural changes.
+- **CRs · project-instruction file · work-breakdown** → `team-lead` (per D25). Propose; team-lead writes them.
 - **IaC / Compose / CI workflow YAML for deploys** → `devops-engineer`.
   - You wire your runners into CI.
   - You don't author the workflow YAML.

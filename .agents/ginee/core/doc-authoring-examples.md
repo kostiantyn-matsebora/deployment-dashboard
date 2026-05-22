@@ -116,3 +116,59 @@ Negative paths:
 
 - Missing role → 403, no deployment created.
 - Locked environment → 409, no deployment created.
+
+---
+
+## 7. Issue Summary (D26 — ginee-authored issue body)
+
+**Bad** — parenthetical-soup sentence:
+
+> GitHub issue bodies authored via ginee's `ginee-file-*` skills AND framework-authored comments (Phase-3/7/8 transitions · sticky `ginee:score` · `ginee:review-cycle` summary · audit comments · review-reply texts) bypass the structure-over-prose discipline that D22 binds for adopter markdown.
+
+**Good** — bulleted scope statement + tight intro sentence:
+
+**Apply D22 (doc-authoring protocol) to two surfaces it doesn't cover today:**
+
+- Issue bodies authored via `ginee-file-*` skills.
+- Framework-authored comments — Phase transitions · sticky scores · review-cycle summaries · audit comments · review-reply texts.
+
+Both are markdown + load-bearing LLM context + human-read. Without D22, they end up as walls of path-soup.
+
+---
+
+## 8. Issue body section (D26 — Affected surface)
+
+**Bad** — semicolon-chained file inventory:
+
+> testing/integration/Dashboard.Integration.Tests/ (18 src files: TestEnvironment / MockGhaClient / ScenarioFixture / BoxStateOracle / SseListener / 6 box-state tests + 4 cross-cutting tests); testing/fixtures/gha/{mappings,scenarios/_cross-cutting,scenarios/<state-id>,demo}/ (26 WireMock JSON mappings); testing/config/integration.json; testing/integration/{run-tests.ps1,README.md}.
+
+**Good** — table:
+
+| Path | What |
+|---|---|
+| `testing/integration/Dashboard.Integration.Tests/` | 18 src files: TestEnvironment · MockGhaClient · ScenarioFixture · BoxStateOracle · SseListener + 6 box-state tests + 4 cross-cutting tests |
+| `testing/fixtures/gha/{mappings,scenarios/_cross-cutting,scenarios/<state-id>,demo}/` | 26 WireMock JSON mappings |
+| `testing/config/integration.json` | Integration test config |
+| `testing/integration/{run-tests.ps1,README.md}` | Runner + docs |
+
+Scannable; one row per concept; zero connectives to parse.
+
+---
+
+## 9. Phase-transition comment (D26 — framework-authored)
+
+**Bad** — single dense paragraph:
+
+> Phase 8 acceptance gate. Work is surfaced for user accept / feedback / reject. The PR is #61 on the `ginee/issue-37-classical-architect` branch (Mode 1 delivery). 29 files changed with +741 / -271. There are 3 new files and 1 rename and 25 edits. D25 (new): Classical-architect SA model. The new doc-ownership map is in PLAN.md and CLAUDE.md. All 7 open questions in the issue are resolved (4 user-decided, 3 reasonable-defaulted). Migration: adopters run `@team-lead rediscover` on next upgrade.
+
+**Good** — structured Phase 8 transition:
+
+**Phase 8 — acceptance gate.** Work surfaced for accept / feedback / reject.
+
+- **PR:** #61 — `ginee/issue-37-classical-architect` branch (Mode 1).
+- **Files:** 29 (+741 / -271). 1 rename + 3 new + 25 edits.
+- **D25 (new):** Classical-architect SA model. Logged in `PLAN.md` + `CLAUDE.md`.
+- **Open questions:** 7/7 resolved (4 user-decided · 3 reasonable-defaulted).
+- **Migration:** Adopters run `@team-lead rediscover` on next upgrade.
+
+Issue auto-closes on PR merge via `Closes #37`.

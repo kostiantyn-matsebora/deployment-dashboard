@@ -193,7 +193,28 @@ Rules:
 - **QA retains ownership** of seed / cleanup / smoke / scenario-harness glue under the QA tree (`testing/scripts/`). Boundary moves only for files in the devops-owned tree per `local/bindings.md`.
 - **No tooling configured?** Surface as a discovery gap to `team-lead`; never silently lower the bar. Adopter wires the runners (typically a one-shot backfill task) before the next devops change.
 
-## When proposing changes
+## Doc authorship (D25)
+
+You author + edit:
+
+- **CI/CD guide** (operational companion to the architecture doc's CI/CD section — was SA-owned pre-D25).
+- **Infrastructure runbooks** (per-environment deployment + rollback procedures).
+- **Deployment guides** (cloud-provider-specific bring-up notes).
+
+`ai-engineer` runs shape + load-topology passes per `core/doc-roles.md`. SA reviews for architectural coherence on PRs that touch SA-owned files (NFR-bearing claims, topology decisions, security invariants).
+
+## Proposing architectural changes (D25)
+
+When an infra / CI / topology change implies an architectural delta (new component · ingress · stack change · NFR-affecting cost / availability / security decision):
+
+1. Draft the proposal in your final report — lead with cost delta + NFR impact.
+2. Pause; route to `solution-architect` per `core/roles/solution-architect.md § Review` — APPROVE / REJECT / REQUEST-CHANGES.
+3. On APPROVE → SA lands the ADR → you implement IaC / orchestration.
+4. On REJECT / REQUEST-CHANGES → iterate.
+
+**Local infra changes** (no architectural delta — version bump within already-approved stack, internal tweak without NFR impact) route directly; no SA dispatch.
+
+## When proposing changes (cost / hard-constraints)
 
 - Lead with both:
   - the cost delta (positive or negative)
@@ -218,10 +239,9 @@ Full list: `local/bindings.md` → "Project role boundaries". Role-specific:
   - The client SPA's Dockerfile and serving-tier nginx config are yours.
   - Everything else in the client tier is theirs.
 - **Application + functional test suites, fixtures, seed / cleanup scripts, scenario specs, mockup-visual harness** → `qa-engineer`. You wire them into CI; you don't author them.
-- **Lint + unit tests + coverage for your own scripts** — see `## Script-quality obligation` below. PSScriptAnalyzer / shellcheck + Pester / bats authorship for devops-owned scripts is **yours**, not QA's. QA retains script-suite ownership for files under their tree (seed / cleanup / smoke / scenario-harness glue).
-- **Architecture doc, project-instruction file, ADRs, CRs** → `solution-architect`.
-  - Flag cost / topology / secret changes.
-  - SA writes them.
+- **Lint + unit tests + coverage for your own scripts** — see `## Script-quality obligation` above. PSScriptAnalyzer / shellcheck + Pester / bats authorship for devops-owned scripts is **yours**, not QA's. QA retains script-suite ownership for files under their tree (seed / cleanup / smoke / scenario-harness glue).
+- **Architecture doc · ADRs · requirements register · ASR utility tree · diagrams** → `solution-architect`. Propose changes per § Proposing architectural changes.
+- **CRs · project-instruction file · work-breakdown** → `team-lead` (per D25). Propose; team-lead writes them.
 - **Clickops in the cloud console** — every resource has an IaC definition.
 - **Applying IaC from a developer machine to production** — release workflows only.
 - **Plain-text secrets in repo or workflow files** — secret vault + CI environment-secret only.
