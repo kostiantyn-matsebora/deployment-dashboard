@@ -8,15 +8,21 @@
 # must NOT edit installer scripts; report bugs, don't fix).
 #
 # Coverage matrix is dictated by the qa-engineer dispatch prompt for issue #7
-# (post-gh-CLI contract):
+# (post-gh-CLI contract) + the flag inversion from CR-0013 (issue #44):
 #   - Param defaults + persistence
-#   - GHA_TOKEN precondition (-Fetcher path)
+#   - Flag matrix (CR-0013):
+#       (no flag) -> demo stack (`--profile demo --profile fetcher`)
+#       -RealGha  -> real GitHub Actions upstream; renamed from `-Fetcher`;
+#                    requires `$env:GHA_TOKEN`.
+#       -Empty    -> bare-minimum stack (no fetcher, no demo-gha)
+#       -Demo     -> back-compat alias for the no-flag default + INFO log
 #   - gh CLI precondition (gh missing / unauthed / missing read:packages scope)
 #   - API_TOKEN defence-in-depth (literal refusal + env override + reuse)
 #   - POSTGRES_PASSWORD defence-in-depth (same shape)
 #   - gh release download tag branching (latest vs pinned tag)
-#   - Env-file output shape
-#   - Compose args (--profile fetcher / --env-file) -- per ADR-0009 the API
+#   - Env-file output shape (incl. demo-mode seeded keys per CR-0013)
+#   - Compose args (--profile demo + --profile fetcher / --profile fetcher /
+#     no profile, per the resolved install mode) -- per ADR-0009 the API
 #     self-applies migrations on startup; the installer no longer passes
 #     --profile migrate and no longer accepts -SkipMigrations.
 #   - Error paths (gh asset download failure; docker login failure; compose pull failure)
@@ -317,7 +323,12 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
     }
 }
 
-Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
+Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5; -RealGha path per CR-0013)' {
+    # Post-CR-0013 contract: the GHA_TOKEN precondition fires ONLY when -RealGha
+    # is set. The no-flag default routes to the demo stack (no PAT, no real
+    # GitHub API calls); -Empty has no fetcher at all; the back-compat -Demo
+    # alias also lands on the demo path. -Fetcher was renamed to -RealGha
+    # (PowerShell's [CmdletBinding()] rejects the historical flag name).
     BeforeEach {
         $script:tmp = New-TempTestDir
     }
@@ -325,22 +336,21 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
         if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp }
     }
 
-    It 'exits 1 with red error when -Fetcher is set without GHA_TOKEN (no -Demo)' {
-        # Post-Demo contract: when -Fetcher is set without -Demo and without
-        # $env:GHA_TOKEN, the script red-errors and exits 1 before any side
-        # effect. The error literal must steer users toward both alternatives
-        # (set the PAT, or switch to -Demo for the zero-PAT path).
-        $r = Invoke-Install -TmpDir $tmp -Args @('-Fetcher','-InstallDir',$tmp)
+    It 'exits 1 with red error when -RealGha is set without GHA_TOKEN' {
+        # CR-0013 contract: -RealGha without $env:GHA_TOKEN red-errors and exits
+        # 1 before any side effect. The error literal must steer users toward
+        # both alternatives (set the PAT, or drop the flag to use the zero-PAT
+        # demo default).
+        $r = Invoke-Install -TmpDir $tmp -Args @('-RealGha','-InstallDir',$tmp)
         $r.ExitCode | Should -Be 1
         $combined = "$($r.Stdout)`n$($r.Stderr)"
         $combined | Should -Match 'ERROR'
         $combined | Should -Match 'GHA_TOKEN'
-        $combined | Should -Match '-Demo'
-        $combined | Should -Match '60 req/h'
+        $combined | Should -Match '-RealGha'
     }
 
-    It 'exits BEFORE any docker compose / Invoke-WebRequest / gh release call (no install-dir artefacts)' {
-        $r = Invoke-Install -TmpDir $tmp -Args @('-Fetcher','-InstallDir',$tmp)
+    It '-RealGha without GHA_TOKEN exits BEFORE any docker compose / Invoke-WebRequest / gh release call (no install-dir artefacts)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-RealGha','-InstallDir',$tmp)
         $r.ExitCode | Should -Be 1
         # Strongest assertion -- no docker + no gh-release + no iwr events were logged.
         ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
@@ -352,18 +362,21 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
         Test-Path (Join-Path $tmp 'docker-compose.release.yml')    | Should -BeFalse
     }
 
-    It '-Fetcher with GHA_TOKEN set: no GHA_TOKEN advisory line is emitted' {
+    It '-RealGha with GHA_TOKEN set: no GHA_TOKEN advisory line is emitted' {
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-Fetcher','-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -Args @('-RealGha','-InstallDir',$tmp,'-Version','v9.9.9-test') `
                             -EnvOverrides @{ GHA_TOKEN = 'ghp_fake_pat_for_tests' }
         $r.ExitCode | Should -Be 0
         $r.Stdout   | Should -Not -Match 'GHA_TOKEN not set'
     }
 
-    It 'no -Fetcher: GHA_TOKEN is irrelevant regardless of whether it is set' {
+    It 'no -RealGha: GHA_TOKEN precondition is bypassed regardless of whether the env var is set' {
+        # No-flag default = demo stack; the demo upstream is offline-mocked, so
+        # the GHA_TOKEN precondition never fires. Verify the script reaches the
+        # happy path with and without $env:GHA_TOKEN.
         $r1 = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r1.ExitCode | Should -Be 0
-        $r1.Stdout   | Should -Not -Match 'GHA_TOKEN'
+        $r1.Stdout   | Should -Not -Match 'ERROR: -RealGha requires'
 
         $tmp2 = New-TempTestDir
         try {
@@ -371,20 +384,39 @@ Describe 'install.ps1 -- GHA_TOKEN precondition (inherited from issue #5)' {
                                  -Args @('-InstallDir',$tmp2,'-Version','v9.9.9-test') `
                                  -EnvOverrides @{ GHA_TOKEN = 'ghp_fake' }
             $r2.ExitCode | Should -Be 0
-            $r2.Stdout   | Should -Not -Match 'GHA_TOKEN'
+            $r2.Stdout   | Should -Not -Match 'ERROR: -RealGha requires'
         } finally {
             if (Test-Path $tmp2) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp2 }
         }
     }
+
+    It '-Empty does not require GHA_TOKEN (no fetcher in the resolved stack)' {
+        # -Empty drops the fetcher entirely, so the GHA_TOKEN precondition is
+        # bypassed regardless of whether $env:GHA_TOKEN is set.
+        $r = Invoke-Install -TmpDir $tmp -Args @('-Empty','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Not -Match 'ERROR: -RealGha requires'
+    }
 }
 
-Describe 'install.ps1 -- -Demo mode' {
-    # -Demo (zero-PAT demo install) implies -Fetcher, bakes in a public-repo
-    # default (PostHog/posthog @ 60s poll), and threads $env:GHA_TOKEN through
-    # to dashboard.env IFF set. When unset, the GHA_TOKEN= line is OMITTED so
-    # the compose-level placeholder triggers the fetcher's anonymous-mode
-    # fallback (60 req/h). Contract source: install/install.ps1 § 1 + § 4 demo
-    # block.
+Describe 'install.ps1 -- flag matrix (CR-0013: demo default + -RealGha / -Empty / -Demo back-compat)' {
+    # Per CR-0013 the no-flag default routes to the *demo stack* (offline,
+    # zero-PAT, populated dashboard within 60 s). The historical -Fetcher flag
+    # was renamed to -RealGha; -Empty is new (bare-minimum direct-POST stack);
+    # -Demo is a back-compat alias that silently maps to the new default and
+    # logs one INFO line. Contract source: install/install.ps1 § 0 flag matrix
+    # + § 4 demo-mode block + § 9 profile resolution.
+    #
+    # Demo-mode env-file seeding (CR-0013 § 3a flag matrix + § 3b profile-gating):
+    #   GHA_API_BASE_URL              = http://demo-gha:80
+    #   FETCHER_POLL_INTERVAL_SECONDS = 5
+    #   GHA_REPOSITORIES              = 6 demo-org repos (web-portal,
+    #                                    api-gateway, auth-service,
+    #                                    billing-service, notification-worker,
+    #                                    analytics-pipeline)
+    #   GHA_TOKEN                     = OMITTED on fresh install (demo-gha
+    #                                    never sees the Authorization header);
+    #                                    preserved on upgrade-re-run.
     BeforeEach {
         $script:tmp = New-TempTestDir
     }
@@ -392,59 +424,129 @@ Describe 'install.ps1 -- -Demo mode' {
         if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp }
     }
 
-    It '-Demo implies -Fetcher (--profile fetcher present in docker compose up args)' {
-        # No explicit -Fetcher; just -Demo. The script must canonicalise
-        # $Fetcher = $true and emit --profile fetcher in the up call.
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+    # ---- No-flag default = demo stack ----
+
+    It 'no-flag default activates --profile demo + --profile fetcher in docker compose up' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r.ExitCode | Should -Be 0
         $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
         $up | Should -Not -BeNullOrEmpty
         $upArgs = [object[]]$up.args
+        # Both demo + fetcher profiles must be active for the default path.
+        $upArgs | Should -Contain 'demo'
         $upArgs | Should -Contain 'fetcher'
     }
 
-    It '-Demo without $env:GHA_TOKEN: writes demo defaults; OMITS GHA_TOKEN line (anonymous-mode trigger)' {
-        # Critical contract assertion -- the ABSENCE of GHA_TOKEN= is what
-        # makes the fetcher container fall back to compose's placeholder and
-        # switch to anonymous-mode GitHub API calls (60 req/h).
-        # The demo GHA_REPOSITORIES JSON literal carries TWO public repos --
-        # PostHog/posthog AND grafana/grafana (order matters: PostHog first) --
-        # so the demo dashboard renders a multi-repo matrix out of the box.
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+    It 'no-flag default seeds demo-mode env-file keys (6 demo-org repos at 5 s poll, base URL = demo-gha)' {
+        # CR-0013 § 3a: the demo stack ships with a 6-service x 5-env populated
+        # bundle. The repo list mirrors the bundle's service inventory.
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r.ExitCode | Should -Be 0
         Test-Path $r.EnvFile | Should -BeTrue
         $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
-        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        $envContent | Should -Match '(?m)^GHA_API_BASE_URL=http://demo-gha:80$'
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=5$'
+        # All six demo-org repos are present in order in the JSON literal.
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*demo-org.*web-portal.*api-gateway.*auth-service.*billing-service.*notification-worker.*analytics-pipeline'
+        # GHA_TOKEN is intentionally OMITTED on a fresh demo install -- the
+        # demo upstream never sees an Authorization header.
         $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
     }
 
-    It '-Demo with $env:GHA_TOKEN set: threads token through to dashboard.env (authed mode)' {
-        # Same multi-repo demo contract (PostHog/posthog + grafana/grafana) --
-        # threading a real PAT must not mutate the repository list.
+    # ---- -Demo (back-compat alias) ----
+
+    It '-Demo back-compat alias: logs INFO line + routes to the demo default' {
+        # CR-0013 § 3a: -Demo silently routes to the no-flag default and emits
+        # exactly one INFO line steering callers to drop the flag.
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        # INFO line emitted (PowerShell writes Write-Host -ForegroundColor Yellow to stdout).
+        $r.Stdout | Should -Match 'INFO: demo is now the default'
+        $r.Stdout | Should -Match '-Demo flag is redundant'
+        # Same compose profile set as the no-flag default.
+        $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
+        $upArgs = [object[]]$up.args
+        $upArgs | Should -Contain 'demo'
+        $upArgs | Should -Contain 'fetcher'
+    }
+
+    It '-Demo seeds the same demo-mode env-file keys as the no-flag default' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^GHA_API_BASE_URL=http://demo-gha:80$'
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=5$'
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*demo-org.*web-portal.*api-gateway.*auth-service.*billing-service.*notification-worker.*analytics-pipeline'
+        $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
+    }
+
+    # ---- -RealGha ----
+
+    It '-RealGha (with GHA_TOKEN) activates only --profile fetcher (NOT --profile demo)' {
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo') `
-                            -EnvOverrides @{ GHA_TOKEN = 'ghp_demo_pat' }
+                            -Args @('-RealGha','-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ GHA_TOKEN = 'ghp_real_pat' }
         $r.ExitCode | Should -Be 0
-        $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
-        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
-        $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_demo_pat$'
-    }
-
-    It '-Demo + -Fetcher together: still works (idempotent flag combo)' {
-        # -Demo implies -Fetcher; supplying both explicitly must not break
-        # parsing or duplicate state. Sanity check on the canonicalisation --
-        # demo repo list (PostHog/posthog + grafana/grafana) is unchanged.
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo','-Fetcher')
-        $r.ExitCode | Should -Be 0
-        $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
-        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
-        $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
         $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
         $upArgs = [object[]]$up.args
         $upArgs | Should -Contain 'fetcher'
+        $upArgs | Should -Not -Contain 'demo'
+    }
+
+    It '-RealGha does NOT seed demo-mode env-file keys (no GHA_API_BASE_URL retarget, no GHA_REPOSITORIES default)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-RealGha','-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ GHA_TOKEN = 'ghp_real_pat' }
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        # The demo-mode block is skipped under -RealGha; none of the demo
+        # defaults appear in the env-file. (The fetcher container falls back to
+        # its compose-default GHA_API_BASE_URL = https://api.github.com.)
+        $envContent | Should -Not -Match '(?m)^GHA_API_BASE_URL=http://demo-gha:80$'
+        $envContent | Should -Not -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=5$'
+        $envContent | Should -Not -Match 'demo-org.*web-portal'
+    }
+
+    # ---- -Empty ----
+
+    It '-Empty activates NO profiles (no demo, no fetcher) -- bare-minimum stack' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-Empty','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
+        $upArgs = [object[]]$up.args
+        $upArgs | Should -Not -Contain 'demo'
+        $upArgs | Should -Not -Contain 'fetcher'
+        # Belt-and-suspenders -- the `--profile` flag itself should be absent.
+        $upArgs | Should -Not -Contain '--profile'
+    }
+
+    It '-Empty does NOT seed demo-mode env-file keys' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-Empty','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Not -Match '(?m)^GHA_API_BASE_URL=http://demo-gha:80$'
+        $envContent | Should -Not -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=5$'
+        $envContent | Should -Not -Match 'demo-org.*web-portal'
+    }
+
+    # ---- Mutual exclusion ----
+
+    It '-RealGha + -Empty together: rejected as mutually exclusive' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-RealGha','-Empty','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 1
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'mutually exclusive'
+    }
+
+    It '-RealGha + -Demo together: rejected as mutually exclusive' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-RealGha','-Demo','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 1
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'mutually exclusive'
+    }
+
+    It '-Empty + -Demo together: rejected as mutually exclusive' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-Empty','-Demo','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 1
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'mutually exclusive'
     }
 }
 
@@ -723,32 +825,55 @@ Describe 'install.ps1 -- compose args (profiles + env-file)' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
 
-    It 'default install -- neither --profile migrate nor --profile fetcher is passed (API self-applies migrations per ADR-0009)' {
+    It 'default install -- --profile migrate is NEVER passed (API self-applies migrations per ADR-0009); demo + fetcher profiles ARE passed (CR-0013)' {
         # Post-#22 contract: migrations are applied in-process by the api
         # container on startup; there is no migrate profile in the compose
-        # file and the installer never passes --profile migrate. Default
-        # install spins up the stack with no --profile flags at all.
+        # file and the installer never passes --profile migrate.
+        # Post-CR-0013 contract: the no-flag default brings up the demo stack,
+        # so --profile demo + --profile fetcher are BOTH present in the up
+        # call.
         $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r.ExitCode | Should -Be 0
         $up = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') }
         $up.Count | Should -BeGreaterThan 0
         $upArgs = [object[]]($up | Select-Object -First 1).args
         $upArgs | Should -Not -Contain 'migrate'
-        $upArgs | Should -Not -Contain 'fetcher'
-        # The `--profile` flag itself should be absent in the default case --
-        # belt-and-suspenders against future profiles silently slipping in.
-        $upArgs | Should -Not -Contain '--profile'
+        # Demo default per CR-0013: both demo + fetcher profiles ride along.
+        $upArgs | Should -Contain 'demo'
+        $upArgs | Should -Contain 'fetcher'
     }
 
-    It '-Fetcher -- only --profile fetcher is passed (no --profile migrate per ADR-0009)' {
+    It '-RealGha -- only --profile fetcher is passed (no --profile demo, no --profile migrate)' {
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Fetcher') `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-RealGha') `
                             -EnvOverrides @{ GHA_TOKEN = 'ghp_fake' }
         $r.ExitCode | Should -Be 0
         $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
         $upArgs = [object[]]$up.args
         $upArgs | Should -Contain 'fetcher'
+        $upArgs | Should -Not -Contain 'demo'
         $upArgs | Should -Not -Contain 'migrate'
+    }
+
+    It '-Empty -- no --profile flag at all (no fetcher, no demo, no migrate)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
+        $r.ExitCode | Should -Be 0
+        $up = ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1)
+        $upArgs = [object[]]$up.args
+        $upArgs | Should -Not -Contain 'fetcher'
+        $upArgs | Should -Not -Contain 'demo'
+        $upArgs | Should -Not -Contain 'migrate'
+        $upArgs | Should -Not -Contain '--profile'
+    }
+
+    It '-Fetcher -- rejected as an unknown parameter (renamed to -RealGha per CR-0013)' {
+        # PowerShell's [CmdletBinding()] surfaces the unknown switch as a
+        # non-zero exit with a "parameter cannot be found" error on stderr;
+        # the script MUST NOT proceed to any docker / gh side effect.
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Fetcher')
+        $r.ExitCode | Should -Not -Be 0
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'Fetcher'
+        ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
     }
 
     It '-SkipMigrations -- rejected as an unknown parameter (the flag was retired per ADR-0009 / #22)' {
@@ -1002,9 +1127,10 @@ Describe 'install.ps1 -- upgrade flow (issue #37)' {
         $envContent | Should -Match "(?m)^POSTGRES_PASSWORD=$pgPw$"
     }
 
-    It '-Demo re-run preserves existing GHA_REPOSITORIES' {
+    It 'demo re-run (no flag) preserves existing GHA_REPOSITORIES' {
         # Seed env-file with operator-customised repo list + valid secrets so
         # the secret block reuses them and doesn't shift our attention.
+        # No -Demo on the re-run -- the no-flag default IS the demo path now.
         $apiTok = 'a' * 64
         $pgPw   = 'c' * 32
         $customRepos = '[{"owner":"custom","repo":"thing"}]'
@@ -1012,30 +1138,31 @@ Describe 'install.ps1 -- upgrade flow (issue #37)' {
                     -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_REPOSITORIES=$customRepos" `
                     -Encoding utf8
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Match '(?m)^GHA_REPOSITORIES=\[\{"owner":"custom","repo":"thing"\}\]$'
-        $envContent | Should -Not -Match 'PostHog.*posthog.*grafana.*grafana'
+        $envContent | Should -Not -Match 'demo-org.*web-portal'
         $r.Stdout | Should -Match 'Preserving GHA_REPOSITORIES'
     }
 
-    It '-Demo re-run preserves existing FETCHER_POLL_INTERVAL_SECONDS' {
+    It 'demo re-run (no flag) preserves existing FETCHER_POLL_INTERVAL_SECONDS' {
         $apiTok = 'a' * 64
         $pgPw   = 'c' * 32
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
                     -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nFETCHER_POLL_INTERVAL_SECONDS=120" `
                     -Encoding utf8
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=120$'
-        $envContent | Should -Not -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        # The new demo default is 5 s; the preserved operator value (120) must win.
+        $envContent | Should -Not -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=5$'
         $r.Stdout | Should -Match 'Preserving FETCHER_POLL_INTERVAL_SECONDS'
     }
 
-    It '-Demo re-run preserves existing GHA_TOKEN when $env:GHA_TOKEN unset' {
+    It 'demo re-run (no flag) preserves existing GHA_TOKEN when $env:GHA_TOKEN unset' {
         $apiTok = 'a' * 64
         $pgPw   = 'c' * 32
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
@@ -1044,14 +1171,14 @@ Describe 'install.ps1 -- upgrade flow (issue #37)' {
         # No $env:GHA_TOKEN override -- Invoke-Install zeroes the env list, so
         # GHA_TOKEN is unset in the subprocess.
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_existing$'
         $r.Stdout | Should -Match 'Preserving GHA_TOKEN'
     }
 
-    It '-Demo + -ResetDemoDefaults re-applies hard-coded defaults' {
+    It '-ResetDemoDefaults re-applies hard-coded demo defaults (6 demo-org repos at 5 s poll)' {
         $apiTok = 'a' * 64
         $pgPw   = 'c' * 32
         $customRepos = '[{"owner":"custom","repo":"thing"}]'
@@ -1059,29 +1186,53 @@ Describe 'install.ps1 -- upgrade flow (issue #37)' {
                     -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_REPOSITORIES=$customRepos`nFETCHER_POLL_INTERVAL_SECONDS=120" `
                     -Encoding utf8
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo','-ResetDemoDefaults')
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-ResetDemoDefaults')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
-        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*demo-org.*web-portal.*api-gateway.*auth-service.*billing-service.*notification-worker.*analytics-pipeline'
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=5$'
         $envContent | Should -Not -Match 'custom.*thing'
         $r.Stdout | Should -Not -Match 'Preserving GHA_REPOSITORIES'
         $r.Stdout | Should -Not -Match 'Preserving FETCHER_POLL_INTERVAL_SECONDS'
     }
 
-    It '-Demo with new $env:GHA_TOKEN overrides preserved GHA_TOKEN (rotation)' {
+    It 'demo re-run preserves persisted GHA_TOKEN even when $env:GHA_TOKEN differs (demo upstream ignores Authorization header)' {
+        # Per CR-0013 + install.ps1 § 4 demo-mode block: GHA_TOKEN is preserved
+        # on demo upgrade-re-run so a later switch back to -RealGha keeps the
+        # operator's PAT. The demo-gha upstream never sees the Authorization
+        # header, so $env:GHA_TOKEN does NOT rotate the persisted value on the
+        # demo path. (Caller wanting to drop the persisted token uses
+        # -ResetDemoDefaults; caller wanting to use the env value points at
+        # -RealGha instead.)
         $apiTok = 'a' * 64
         $pgPw   = 'c' * 32
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
                     -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_TOKEN=ghp_old" `
                     -Encoding utf8
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo') `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
                             -EnvOverrides @{ GHA_TOKEN = 'ghp_new' }
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
-        $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_new$'
-        $envContent | Should -Not -Match '(?m)^GHA_TOKEN=ghp_old$'
-        $r.Stdout | Should -Match 'Rotating GHA_TOKEN'
+        # Persisted token wins on the demo path.
+        $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_old$'
+        $envContent | Should -Not -Match '(?m)^GHA_TOKEN=ghp_new$'
+        $r.Stdout | Should -Match 'Preserving GHA_TOKEN'
+    }
+
+    It '-ResetDemoDefaults drops the persisted GHA_TOKEN on demo re-run' {
+        # The escape hatch -- pass -ResetDemoDefaults to clear out the
+        # persisted GHA_TOKEN (e.g. when migrating from a stale RealGha install
+        # to the demo default and the operator wants the token off-disk).
+        $apiTok = 'a' * 64
+        $pgPw   = 'c' * 32
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_TOKEN=ghp_existing" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-ResetDemoDefaults')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Not -Match '(?m)^GHA_TOKEN='
     }
 }
