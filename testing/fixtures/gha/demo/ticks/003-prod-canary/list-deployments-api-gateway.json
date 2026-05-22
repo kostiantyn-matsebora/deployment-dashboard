@@ -1,0 +1,179 @@
+{
+  "_comment": "Demo bundle tick: list-deployments for service \"api-gateway\". Cumulative body \u2014 static base + prior-tick additions + this-tick additions. Sidecar PUTs to /__admin/mappings/7f8a3c20-46de-4a02-b202-d3e1a6b5c002.",
+  "Guid": "7f8a3c20-46de-4a02-b202-d3e1a6b5c002",
+  "Priority": 10,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "WildcardMatcher",
+          "Pattern": "/repos/demo-org/api-gateway/deployments"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "9999999999"
+    },
+    "BodyAsJson": [
+      {
+        "id": 11030,
+        "sha": "d0d000110300000000000000000000000000000d",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:23:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 11013,
+        "sha": "d0d000110130000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:21:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 11001,
+        "sha": "d0d000110010000000000000000000000000000d",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:20:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10062,
+        "sha": "d0d000100620000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:16:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10055,
+        "sha": "d0d000100550000000000000000000000000000d",
+        "ref": "main",
+        "environment": "uat",
+        "created_at": "2026-05-22T11:10:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10049,
+        "sha": "d0d000100490000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:06:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10041,
+        "sha": "d0d000100410000000000000000000000000000d",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:03:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10039,
+        "sha": "d0d000100390000000000000000000000000000d",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:02:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10033,
+        "sha": "d0d000100330000000000000000000000000000d",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:01:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10030,
+        "sha": "d0d000100300000000000000000000000000000d",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10010,
+        "sha": "d0d000100100000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10009,
+        "sha": "d0d000100090000000000000000000000000000d",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10008,
+        "sha": "d0d000100080000000000000000000000000000d",
+        "ref": "main",
+        "environment": "uat",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10007,
+        "sha": "d0d000100070000000000000000000000000000d",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      },
+      {
+        "id": 10006,
+        "sha": "d0d000100060000000000000000000000000000d",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-api-gateway"
+        }
+      }
+    ]
+  }
+}

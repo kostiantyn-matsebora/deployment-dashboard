@@ -74,6 +74,15 @@ WireMock.Net Scenario primitive (see "Scenario walk" below).
 just one subtree — kept under `scenarios/` for symmetry with the
 integration suite even though there's no name collision risk.
 
+## Dynamic ticks
+
+The demo-driver sidecar (issue [#46](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/46))
+advances the bundle through time without WireMock.Net Scenarios. See
+[`ticks/README.md`](./ticks/README.md) for the per-tick contract, the
+cumulative-body rule, the authored ID range, and the pinned-GUID
+dependency on the static-base `05-list-deployments-<service>.json`
+files.
+
 ## Mock identity
 
 | Surface | Value | Why |
