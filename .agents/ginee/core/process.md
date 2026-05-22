@@ -26,7 +26,7 @@
 
 Bindings may NOT override generic process.
 
-**Invocation notation.** This spec uses `@<role>` as vendor-neutral shorthand for "dispatch to that role." The literal `@<agent>` syntax works in some clients (Cursor) but not others (Claude Code). Per-client invocation surfaces (AgentSkills, natural-language routing, etc.) ship via the adapters — see `adapters/<x>/install.md § How to invoke`. Framework workflows (discovery / file / pick-up / triage / promote / reindex) auto-activate as Skills in any AgentSkills-compatible client; specialist dispatches route via subagent description match.
+**Invocation notation.** This spec uses `@<role>` as vendor-neutral shorthand for "dispatch to that role." The literal `@<agent>` syntax works in some clients (Cursor) but not others (Claude Code). Per-client invocation surfaces (AgentSkills, natural-language routing, etc.) ship via the adapters — see `adapters/<x>/install.md § How to invoke`. Framework workflows (discovery / file / pick-up / triage / promote / reindex / update) auto-activate as Skills in any AgentSkills-compatible client; specialist dispatches route via subagent description match.
 
 ## Dispatch & parallelism rules
 
@@ -38,6 +38,7 @@ Bindings may NOT override generic process.
 | Parallel-by-default for cross-domain Phase 2 | Default for Phase 2 of the cross-domain cycle is parallel. Justify any sequential Phase 2 dispatch in the dispatch prompt itself (one sentence). Habitual serialization is the failure mode. |
 | Doc-only changes | `solution-architect` only (architecture-family) or mockup-owning role only (UI-only edit with no architecture implication). |
 | Infrastructure changes affecting application config (env var, secret, endpoint URL) | Coordinate `devops-engineer` + affected service-owning role; service-owner first to confirm the app reads the new value, devops second. |
+| Surface owns the dispatch decision | Routing is determined by the touched surface per `local/bindings.md` — never by estimated task size. "Looks fast" is not grounds to self-execute or assign to a non-owning role. |
 
 **Overlap patterns** — next phase starts when its contract surface is fixed, not when prior phase's code lands:
 
@@ -397,6 +398,8 @@ Default freeform tasks and untagged TODOs do not load this file.
 - **Project-specific forbidden role-crossings table:** `local/bindings.md` → "Project role boundaries".
   - Each row is a hard stop.
   - Propose a hand-off in the final report instead.
+- **Size is not an exemption.** Estimated effort (in-thread "5-min fix", "tiny tweak") does not override surface ownership. Dispatch the owning specialist; if scope is genuinely ≤ 15 min, dispatch flags it explicitly so the iteration-protocol load is skipped.
+- **Regression-grade failure modes.** Catalogued in `team-lead.details.md § Common failure modes` — orchestrator self-check before any in-thread edit on a specialist-owned surface.
 
 ### Doc co-ownership — solution-architect ↔ ai-engineer
 

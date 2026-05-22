@@ -3,7 +3,7 @@
 **Load-on-demand.** Fetched when:
 
 - `team-lead` enumerates index classes during initial discovery or `rediscover`.
-- `team-lead` detects SHA-256 drift pre-dispatch and needs to route to `ai-engineer` for re-extraction.
+- `team-lead` detects SHA-256 drift pre-dispatch and needs to route to `ai-engineer` for reconciliation.
 - `ai-engineer` is dispatched to extract or re-extract index entries.
 - A role's "Source of truth" lookup pointed to `local/index/<file>` and the role needs the index-protocol contract (rare — most reads are direct).
 
@@ -236,21 +236,36 @@ Adopter decides per class. No silent removal — dormancy is a signal, not an au
 4. On any mismatch:
    - Flag staleness in PM's first response.
    - Offer:
-     - **`@ai-engineer reindex <source>`** — targeted re-extraction for the changed source.
-     - **`@team-lead rediscover`** — full re-discovery + re-extraction.
+     - **`@ai-engineer reindex <source>`** — scoped reconciliation for the affected source.
+     - **`@ai-engineer reindex`** — whole-repo reconciliation (cheap; also picks up net-new files within existing class globs).
+     - **`@team-lead rediscover`** — full re-discovery (use when class membership itself changed — new doc directory, new tooling type).
    - **Never auto-reindex.** User decides.
 
-### Re-extraction
+### Reconciliation
 
-`ai-engineer` dispatched (by PM or explicit user invocation):
+`@team-lead reindex [scope]` (and the `ginee-reindex` skill) reconciles `local/index/` against the current repo state at the chosen scope. Three sweeps, ordered:
 
-1. Read the changed source(s).
-2. Re-extract per the recorded recipe (built-in id or inline novel recipe) → overwrite affected `local/index/*` files.
-3. Update `manifest.yaml`:
-   - New SHA-256.
-   - New `indexed-on` date.
-   - Same `index-files` (or add new ones if extraction surfaced a new index file).
-4. Run lossless self-check on the affected entries.
+| Sweep | Action |
+|---|---|
+| 1. **SHA drift** | For each manifest entry in scope: recompute SHA-256 (`source` for single-file entries; per-file under `sha256-by-file:` for globbed). On change → re-extract per recorded recipe; update affected `local/index/*` files + entry. On match → skip. |
+| 2. **New files** | For each class in scope: list files matching its `source-glob`. Any file not yet in the manifest → add entry (recipe inherited from class) and extract. |
+| 3. **Stale entries** | Manifest entry whose `source` no longer exists → flag to the user with a `remove?` prompt. **Never auto-delete.** |
+
+Scopes:
+
+| Form | Effect |
+|---|---|
+| `reindex` (no arg) | All classes, whole repo. |
+| `reindex <file>` | The file's matching class only — Sweep 1 if entry exists, Sweep 2 if not. Multi-class match → ask which class. |
+| `reindex <class>` | One class's `source-glob` only — full three-sweep within that class. |
+
+After every Sweep-1 / Sweep-2 hit, `ai-engineer`:
+
+1. Updates `manifest.yaml` — new SHA-256, new `indexed-on`, refreshed `index-files` if extraction surfaced new ones.
+2. Runs sample-and-check (existence + compression) on the affected entries.
+3. Runs the dormant-index audit (`§ Dormant-index audit`).
+
+Reconciliation works **within existing classes only.** Novel-class detection (sources matching no manifest class glob — e.g. a new `docs/runbooks/` directory) remains a `rediscover` responsibility because it touches `project-profile.md` + `bindings.md` + may need consumer-coupling input from the user.
 
 ## Lossless rule for index
 
