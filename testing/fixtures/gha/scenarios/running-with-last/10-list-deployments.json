@@ -1,0 +1,35 @@
+{
+  "_comment": "Box state: running-with-last. Two deployments for env=state-rwl: id=22 in-progress (latest), id=21 success.",
+  "Priority": 10,
+  "Request": {
+    "Methods":  ["GET"],
+    "Path":     { "Matchers": [ { "Name": "WildcardMatcher", "Pattern": "/repos/integration-test-org/integration-test-repo/deployments" } ] }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type":          "application/json; charset=utf-8",
+      "X-RateLimit-Limit":     "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset":     "1700000000"
+    },
+    "BodyAsJson": [
+      {
+        "id":          22,
+        "sha":         "bbbb02200000000000000000000000000000bbbb",
+        "ref":         "main",
+        "environment": "state-rwl",
+        "created_at":  "2026-05-22T12:02:00Z",
+        "creator":     { "login": "mock-gha-actor" }
+      },
+      {
+        "id":          21,
+        "sha":         "bbbb02100000000000000000000000000000bbbb",
+        "ref":         "main",
+        "environment": "state-rwl",
+        "created_at":  "2026-05-22T12:01:00Z",
+        "creator":     { "login": "mock-gha-actor" }
+      }
+    ]
+  }
+}

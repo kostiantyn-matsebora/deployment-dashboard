@@ -1,0 +1,278 @@
+{
+  "_comment": "Demo bundle \u2014 service frontend. Returns 25 deployments across envs ['dev', 'qa', 'staging', 'prod'].",
+  "Priority": 100,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "WildcardMatcher",
+          "Pattern": "/repos/demo-org/demo-frontend/deployments"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "1700000000"
+    },
+    "BodyAsJson": [
+      {
+        "id": 25,
+        "sha": "d0d000002500000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 24,
+        "sha": "d0d000002400000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 23,
+        "sha": "d0d000002300000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 22,
+        "sha": "d0d000002200000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 21,
+        "sha": "d0d000002100000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 20,
+        "sha": "d0d000002000000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 19,
+        "sha": "d0d000001900000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 18,
+        "sha": "d0d000001800000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 17,
+        "sha": "d0d000001700000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 16,
+        "sha": "d0d000001600000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 15,
+        "sha": "d0d000001500000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 14,
+        "sha": "d0d000001400000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 13,
+        "sha": "d0d000001300000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 12,
+        "sha": "d0d000001200000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 11,
+        "sha": "d0d000001100000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 10,
+        "sha": "d0d000001000000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 9,
+        "sha": "d0d000000900000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 8,
+        "sha": "d0d000000800000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 7,
+        "sha": "d0d000000700000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 6,
+        "sha": "d0d000000600000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 5,
+        "sha": "d0d000000500000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 4,
+        "sha": "d0d000000400000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 3,
+        "sha": "d0d000000300000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 2,
+        "sha": "d0d000000200000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      },
+      {
+        "id": 1,
+        "sha": "d0d000000100000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-frontend"
+        }
+      }
+    ]
+  }
+}

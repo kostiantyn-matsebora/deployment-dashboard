@@ -1,0 +1,538 @@
+{
+  "_comment": "NFR-05 replica restart scenario. 51 deployments id=91..141 in env=state-restart. Mid-fetch the runner restarts the api container; the test asserts every deployment lands in the read API and SSE eventually (no missed events, no duplicate events, cursor advanced).",
+  "Priority": 10,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "WildcardMatcher",
+          "Pattern": "/repos/integration-test-org/integration-test-repo/deployments"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "1700000000"
+    },
+    "BodyAsJson": [
+      {
+        "id": 141,
+        "sha": "515100014100000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 140,
+        "sha": "515100014000000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 139,
+        "sha": "515100013900000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 138,
+        "sha": "515100013800000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 137,
+        "sha": "515100013700000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 136,
+        "sha": "515100013600000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 135,
+        "sha": "515100013500000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 134,
+        "sha": "515100013400000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 133,
+        "sha": "515100013300000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 132,
+        "sha": "515100013200000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 131,
+        "sha": "515100013100000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 130,
+        "sha": "515100013000000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 129,
+        "sha": "515100012900000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 128,
+        "sha": "515100012800000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 127,
+        "sha": "515100012700000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 126,
+        "sha": "515100012600000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 125,
+        "sha": "515100012500000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 124,
+        "sha": "515100012400000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 123,
+        "sha": "515100012300000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 122,
+        "sha": "515100012200000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 121,
+        "sha": "515100012100000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 120,
+        "sha": "515100012000000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 119,
+        "sha": "515100011900000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 118,
+        "sha": "515100011800000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 117,
+        "sha": "515100011700000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 116,
+        "sha": "515100011600000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 115,
+        "sha": "515100011500000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 114,
+        "sha": "515100011400000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 113,
+        "sha": "515100011300000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 112,
+        "sha": "515100011200000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 111,
+        "sha": "515100011100000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 110,
+        "sha": "515100011000000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 109,
+        "sha": "515100010900000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 108,
+        "sha": "515100010800000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 107,
+        "sha": "515100010700000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 106,
+        "sha": "515100010600000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 105,
+        "sha": "515100010500000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 104,
+        "sha": "515100010400000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 103,
+        "sha": "515100010300000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 102,
+        "sha": "515100010200000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 101,
+        "sha": "515100010100000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 100,
+        "sha": "515100010000000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 99,
+        "sha": "515100009900000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 98,
+        "sha": "515100009800000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 97,
+        "sha": "515100009700000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 96,
+        "sha": "515100009600000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 95,
+        "sha": "515100009500000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 94,
+        "sha": "515100009400000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 93,
+        "sha": "515100009300000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 92,
+        "sha": "515100009200000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      },
+      {
+        "id": 91,
+        "sha": "515100009100000000000000000000000000005151",
+        "ref": "main",
+        "environment": "state-restart",
+        "created_at": "2026-05-22T12:09:00Z",
+        "creator": {
+          "login": "mock-gha-actor"
+        }
+      }
+    ]
+  }
+}
