@@ -1,0 +1,32 @@
+# Per-Dockerfile .dockerignore for gateway/demo-driver/Dockerfile.
+# BuildKit picks this up when building with `-f gateway/demo-driver/Dockerfile`,
+# overriding the repo-root .dockerignore (which excludes `testing/` for the
+# .NET / SPA component builds that don't need the test corpus).
+#
+# This image's whole purpose is to ship the demo-driver entrypoint plus the
+# qa-authored tick bundle under testing/fixtures/gha/demo/ so it can PUT/POST
+# against the demo-gha admin API. We explicitly re-include the COPY source
+# paths from the Dockerfile; everything else stays excluded so the build
+# context remains tiny.
+
+# Default: exclude everything in the context (the repo root).
+**
+
+# Re-include the static-base subset (only the list-deployments mappings
+# the Dockerfile COPYs at /app/static-base/).
+!testing
+!testing/fixtures
+!testing/fixtures/gha
+!testing/fixtures/gha/demo
+!testing/fixtures/gha/demo/mappings
+!testing/fixtures/gha/demo/mappings/05-list-deployments-*.json
+
+# Re-include the ticks directory chain (all per-tick mapping snippets).
+!testing/fixtures/gha/demo/ticks
+!testing/fixtures/gha/demo/ticks/**
+
+# Re-include the Dockerfile + its sibling ignore file + the driver code so
+# BuildKit can reference / COPY them.
+!gateway/demo-driver/Dockerfile
+!gateway/demo-driver/Dockerfile.dockerignore
+!gateway/demo-driver/entrypoint.py
