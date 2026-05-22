@@ -1,0 +1,159 @@
+{
+  "_comment": "Demo bundle tick: list-deployments for service \"notification-worker\". Cumulative body \u2014 static base + prior-tick additions + this-tick additions. Sidecar PUTs to /__admin/mappings/7f8a3c20-46de-4a04-b204-d3e1a6b5c004.",
+  "Guid": "7f8a3c20-46de-4a04-b204-d3e1a6b5c004",
+  "Priority": 10,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "WildcardMatcher",
+          "Pattern": "/repos/demo-org/notification-worker/deployments"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "9999999999"
+    },
+    "BodyAsJson": [
+      {
+        "id": 11051,
+        "sha": "d0d000110510000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:25:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 11021,
+        "sha": "d0d000110210000000000000000000000000000d",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:22:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 11003,
+        "sha": "d0d000110030000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:20:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10064,
+        "sha": "d0d000100640000000000000000000000000000d",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:18:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10057,
+        "sha": "d0d000100570000000000000000000000000000d",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:12:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10051,
+        "sha": "d0d000100510000000000000000000000000000d",
+        "ref": "main",
+        "environment": "uat",
+        "created_at": "2026-05-22T11:08:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10045,
+        "sha": "d0d000100450000000000000000000000000000d",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:04:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10034,
+        "sha": "d0d000100340000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:01:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10024,
+        "sha": "d0d000100240000000000000000000000000000d",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10023,
+        "sha": "d0d000100230000000000000000000000000000d",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10022,
+        "sha": "d0d000100220000000000000000000000000000d",
+        "ref": "main",
+        "environment": "uat",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10021,
+        "sha": "d0d000100210000000000000000000000000000d",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      },
+      {
+        "id": 10020,
+        "sha": "d0d000100200000000000000000000000000000d",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:00:00Z",
+        "creator": {
+          "login": "demo-actor-notification-worker"
+        }
+      }
+    ]
+  }
+}

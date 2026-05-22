@@ -1,0 +1,88 @@
+# Demo-driver component CI -- builds the periodic-ticker sidecar image
+# (issue #46) that drives the demo-gha WireMock.Net admin API.
+#
+# Owner: devops-engineer.
+# Contract: Phase 3 design lock on #46 (extension to CR-0013). 6th component
+#           image alongside api / fetcher / frontend / gateway / demo-gha.
+#           Tag scheme + reusable-workflow shape inherited from CR-0010.
+#
+# Why no tests / no format gate:
+#   - Driver code is one stdlib-only Python file with no test target in MVP
+#     scope. Behaviour is verified at runtime under the demo profile
+#     (qa-owned ticks + Phase 6 acceptance check: visible activity within
+#     60 s of stack-up).
+#   - build-kind: copy -- the reusable workflow's language-setup / test /
+#     format-gate steps are `if`-gated to dotnet|static and naturally skip
+#     for `copy`, leaving only: checkout -> buildx -> (conditional)
+#     registry login -> metadata -> build + push.
+#
+# Path filters cover:
+#   - gateway/demo-driver/**        -- the Dockerfile + entrypoint + README
+#                                       owned by devops.
+#   - testing/fixtures/gha/demo/**  -- the static-base list-deployments
+#                                       Guids + per-tick directories baked
+#                                       into the image (qa-owned). A bundle
+#                                       change must rebuild this image to
+#                                       track the "bundle versioning tracks
+#                                       image tag" invariant inherited from
+#                                       CR-0013.
+#   - .github/workflows/demo-driver.yml             -- self-reference.
+#   - .github/workflows/_build-and-push-image.yml   -- reusable workflow
+#                                                      (a change to the
+#                                                      shared shape triggers
+#                                                      a rebuild).
+name: demo-driver
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'gateway/demo-driver/**'
+      - 'testing/fixtures/gha/demo/**'
+      - '.github/workflows/demo-driver.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'gateway/demo-driver/**'
+      - 'testing/fixtures/gha/demo/**'
+      - '.github/workflows/demo-driver.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-and-push-image.yml
+    with:
+      image-name: deployment-dashboard-demo-driver
+      # Content-only image -- no .NET, no Node, no tests. The reusable
+      # workflow's language-setup / test / format-gate steps are `if`-gated
+      # to dotnet|static and naturally skip for `copy`.
+      build-kind: copy
+      dockerfile-path: gateway/demo-driver/Dockerfile
+      # Build context MUST be the repo root: the Dockerfile's COPYs reach
+      # into testing/fixtures/gha/demo/ (static base + ticks) and
+      # gateway/demo-driver/ (entrypoint.py), which live in two different
+      # subtrees. Phase 3 design lock matches CR-0013's demo-gha posture.
+      context-path: .
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets: inherit
+
+# NOTE on BUILD_EPOCH: the Dockerfile defines `ARG BUILD_EPOCH=0` so the
+# image is self-sufficient under the reusable workflow today (which does
+# not yet expose a `build-args` input). When the entrypoint sees
+# BUILD_EPOCH=0 it falls back to process-start wall-clock as the
+# cycle_index anchor -- monotone within the process, may reset across
+# container restarts. To make cycle_index stable across restarts within
+# a single image tag, a follow-up should plumb `build-args:
+# BUILD_EPOCH=$(date -u +%s)` through the reusable workflow.

@@ -249,5 +249,36 @@ services:
       retries: 10
       start_period: 5s
 
+  # Demo-driver sidecar (issue #46) -- periodic WireMock.Net admin-API
+  # ticker that loops a qa-authored sequence of tick directories so the
+  # demo-mode dashboard surfaces ongoing deployment activity instead of a
+  # single frozen baseline. Same `demo` Compose profile as `demo-gha`.
+  #
+  # Strict NFR-04 posture:
+  #   - NO `ports:`       -- egress-only sidecar; no inbound listener.
+  #   - NO `healthcheck:` -- demo-gha's TCP probe is the demo-profile
+  #                          health signal; the driver's liveness is
+  #                          implied by its egress traffic. Adding a
+  #                          probe here would require an HTTP server
+  #                          inside the driver (rejected by Phase 3:
+  #                          stdlib-only, no listener).
+  #   - depends_on: demo-gha service_healthy -- the driver's first PUT
+  #                          would 404 / connection-refused otherwise.
+  #
+  # Env defaults baked into the Dockerfile; the rows here are explicit
+  # so operators can override via `dashboard.env` without rebuilding.
+  demo-driver:
+    profiles: ["demo"]
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:${DASHBOARD_VERSION:-latest}
+    container_name: dashboard-demo-driver
+    restart: unless-stopped
+    environment:
+      DEMO_DRIVER_GHA_URL: "http://demo-gha:80"
+      DEMO_DRIVER_PERIOD_SECONDS: "15"
+      DEMO_DRIVER_ID_STRIDE: "100"
+    depends_on:
+      demo-gha:
+        condition: service_healthy
+
 volumes:
   pg-data:
