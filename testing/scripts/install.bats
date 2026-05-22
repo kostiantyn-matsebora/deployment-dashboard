@@ -6,11 +6,14 @@
 # Each stub appends one line to $STUB_LOG with its invocation, then returns the
 # canned exit code controlled by env vars.
 #
-# Coverage matrix mirrors install.Tests.ps1 (post-gh-CLI contract) -- see that
-# file for the rationale.
+# Coverage matrix mirrors install.Tests.ps1 (post-gh-CLI contract + CR-0013
+# flag inversion) -- see that file for the rationale.
 #   - Asset fetch goes via `gh release download` (private repo).
 #   - GHCR pulls require `docker login ghcr.io` with `gh auth token` piped in.
 #   - curl is only used for the /health poll.
+#   - Flag matrix (CR-0013): no-flag default -> demo stack; --real-gha (renamed
+#     from --fetcher) -> real GitHub upstream; --empty -> bare-minimum;
+#     --demo -> back-compat alias for the default + INFO log.
 
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
@@ -248,19 +251,23 @@ log_not_contains() {
     ! grep -qF "$1" "$STUB_LOG"
 }
 
-# ---- GHA_TOKEN precondition matrix ----
+# ---- GHA_TOKEN precondition matrix (CR-0013: scoped to --real-gha) ----
+#
+# Per CR-0013 the GHA_TOKEN precondition fires ONLY when --real-gha is set.
+# The no-flag default routes to the demo stack (no PAT, no real GitHub API
+# calls); --empty has no fetcher at all; the back-compat --demo alias also
+# lands on the demo path. --fetcher was renamed to --real-gha (the shell
+# arg parser rejects the historical flag name).
 
-@test "--fetcher without GHA_TOKEN (no --demo) exits 1 with red error before any docker / gh-release call" {
-    # Post-Demo contract: --fetcher without $GHA_TOKEN and without --demo
-    # red-errors and exits 1 before any side effect. The error literal must
-    # mention GHA_TOKEN, --demo (the zero-PAT escape hatch), ERROR, and the
-    # "60 req/h" anonymous-mode rate hint.
-    run_install --fetcher --install-dir "$INSTALL_DIR"
+@test "--real-gha without GHA_TOKEN exits 1 with red error before any docker / gh-release call" {
+    # CR-0013 contract: --real-gha without $GHA_TOKEN red-errors and exits 1
+    # before any side effect. The error literal must mention GHA_TOKEN,
+    # --real-gha, and ERROR.
+    run_install --real-gha --install-dir "$INSTALL_DIR"
     [ "$status" -eq 1 ]
     [[ "$output" == *"ERROR"* ]]
     [[ "$output" == *"GHA_TOKEN"* ]]
-    [[ "$output" == *"--demo"* ]]
-    [[ "$output" == *"60 req/h"* ]]
+    [[ "$output" == *"--real-gha"* ]]
     # Strongest precondition signal -- no docker + no gh-release was invoked.
     log_not_contains 'docker compose'
     log_not_contains 'docker login'
@@ -269,76 +276,145 @@ log_not_contains() {
     [ ! -f "$INSTALL_DIR/docker-compose.release.yml" ]
 }
 
-@test "--fetcher with GHA_TOKEN set: no GHA_TOKEN advisory" {
+@test "--real-gha with GHA_TOKEN set: no GHA_TOKEN advisory" {
     export GHA_TOKEN='ghp_fake_pat'
-    run_install --fetcher --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --real-gha --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     [[ "$output" != *"GHA_TOKEN not set"* ]]
 }
 
-@test "no --fetcher: GHA_TOKEN irrelevant regardless of state" {
+@test "no --real-gha: GHA_TOKEN precondition is bypassed regardless of state" {
+    # No-flag default = demo stack; the demo upstream is offline-mocked, so
+    # the GHA_TOKEN precondition never fires.
     run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
-    [[ "$output" != *"GHA_TOKEN"* ]]
+    [[ "$output" != *"ERROR: --real-gha requires"* ]]
 }
 
-# ---- --demo mode ----
-# --demo (zero-PAT demo install) implies --fetcher, bakes in a public-repo
-# default (PostHog/posthog @ 60s poll), and threads $GHA_TOKEN through to
-# dashboard.env IFF set. When unset, the GHA_TOKEN= line is OMITTED so the
-# compose-level placeholder triggers the fetcher's anonymous-mode fallback
-# (60 req/h). Contract source: install/install.sh § 1 + § 4 demo block.
+@test "--empty does not require GHA_TOKEN (no fetcher in the resolved stack)" {
+    run_install --empty --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"ERROR: --real-gha requires"* ]]
+}
 
-@test "--demo implies --fetcher (--profile fetcher present in docker compose up args)" {
-    # No explicit --fetcher; just --demo. The script must canonicalise
-    # FETCHER=true and emit --profile fetcher in the up call.
-    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+# ---- Flag matrix (CR-0013: demo default + --real-gha / --empty / --demo back-compat) ----
+#
+# Per CR-0013 the no-flag default routes to the *demo stack* (offline,
+# zero-PAT, populated dashboard within 60 s). The historical --fetcher flag
+# was renamed to --real-gha; --empty is new (bare-minimum direct-POST stack);
+# --demo is a back-compat alias that silently maps to the new default and
+# logs one INFO line.
+#
+# Demo-mode env-file seeding (CR-0013 § 3a + § 3b):
+#   GHA_API_BASE_URL              = http://demo-gha:80
+#   FETCHER_POLL_INTERVAL_SECONDS = 5
+#   GHA_REPOSITORIES              = 6 demo-org repos (web-portal,
+#                                    api-gateway, auth-service,
+#                                    billing-service, notification-worker,
+#                                    analytics-pipeline)
+#   GHA_TOKEN                     = OMITTED on fresh install (demo-gha
+#                                    never sees the Authorization header);
+#                                    preserved on upgrade-re-run.
+
+@test "no-flag default activates --profile demo + --profile fetcher in docker compose up" {
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
     [ -n "$up_line" ]
+    [[ "$up_line" == *"--profile demo"* ]]
     [[ "$up_line" == *"--profile fetcher"* ]]
 }
 
-@test "--demo without \$GHA_TOKEN: writes demo defaults; OMITS GHA_TOKEN line (anonymous-mode trigger)" {
-    # Critical contract assertion -- the ABSENCE of GHA_TOKEN= is what makes
-    # the fetcher container fall back to compose's placeholder and switch to
-    # anonymous-mode GitHub API calls (60 req/h).
-    # The demo GHA_REPOSITORIES JSON literal carries TWO public repos --
-    # PostHog/posthog AND grafana/grafana (order matters: PostHog first) --
-    # so the demo dashboard renders a multi-repo matrix out of the box.
-    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+@test "no-flag default seeds demo-mode env-file keys (6 demo-org repos at 5 s poll, base URL = demo-gha)" {
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     f="$INSTALL_DIR/dashboard.env"
     [ -f "$f" ]
-    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$f"
-    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
+    grep -qE '^GHA_API_BASE_URL=http://demo-gha:80$' "$f"
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=5$' "$f"
+    grep -qE '^GHA_REPOSITORIES=.*demo-org.*web-portal.*api-gateway.*auth-service.*billing-service.*notification-worker.*analytics-pipeline' "$f"
+    # GHA_TOKEN is intentionally OMITTED on a fresh demo install -- demo-gha
+    # never sees the Authorization header.
     ! grep -qE '^GHA_TOKEN=' "$f"
 }
 
-@test "--demo with \$GHA_TOKEN set: threads token through to dashboard.env (authed mode)" {
-    # Same multi-repo demo contract (PostHog/posthog + grafana/grafana) --
-    # threading a real PAT must not mutate the repository list.
-    export GHA_TOKEN='ghp_demo_pat'
+@test "--demo back-compat alias: logs INFO line + routes to the demo default" {
+    # CR-0013 § 3a: --demo silently routes to the no-flag default and emits
+    # exactly one INFO line steering callers to drop the flag.
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"INFO: demo is now the default"* ]]
+    [[ "$output" == *"--demo flag is redundant"* ]]
+    # Same compose profile set as the no-flag default.
+    up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
+    [[ "$up_line" == *"--profile demo"* ]]
+    [[ "$up_line" == *"--profile fetcher"* ]]
+}
+
+@test "--demo seeds the same demo-mode env-file keys as the no-flag default" {
     run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     f="$INSTALL_DIR/dashboard.env"
-    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$f"
-    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
-    grep -qE '^GHA_TOKEN=ghp_demo_pat$' "$f"
+    grep -qE '^GHA_API_BASE_URL=http://demo-gha:80$' "$f"
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=5$' "$f"
+    grep -qE '^GHA_REPOSITORIES=.*demo-org.*web-portal.*api-gateway.*auth-service.*billing-service.*notification-worker.*analytics-pipeline' "$f"
+    ! grep -qE '^GHA_TOKEN=' "$f"
 }
 
-@test "--demo + --fetcher together: still works (idempotent flag combo)" {
-    # --demo implies --fetcher; supplying both explicitly must not break
-    # parsing or duplicate state. Sanity check on the canonicalisation --
-    # demo repo list (PostHog/posthog + grafana/grafana) is unchanged.
-    run_install --demo --fetcher --version v9.9.9-test --install-dir "$INSTALL_DIR"
+@test "--real-gha (with GHA_TOKEN) activates only --profile fetcher (NOT --profile demo)" {
+    export GHA_TOKEN='ghp_real_pat'
+    run_install --real-gha --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
-    f="$INSTALL_DIR/dashboard.env"
-    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$f"
-    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$f"
-    ! grep -qE '^GHA_TOKEN=' "$f"
     up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
     [[ "$up_line" == *"--profile fetcher"* ]]
+    [[ "$up_line" != *"--profile demo"* ]]
+}
+
+@test "--real-gha does NOT seed demo-mode env-file keys" {
+    export GHA_TOKEN='ghp_real_pat'
+    run_install --real-gha --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    f="$INSTALL_DIR/dashboard.env"
+    ! grep -qE '^GHA_API_BASE_URL=http://demo-gha:80$' "$f"
+    ! grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=5$' "$f"
+    ! grep -qE 'demo-org.*web-portal' "$f"
+}
+
+@test "--empty activates NO profiles (no demo, no fetcher) -- bare-minimum stack" {
+    run_install --empty --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
+    [[ "$up_line" != *"--profile demo"* ]]
+    [[ "$up_line" != *"--profile fetcher"* ]]
+    # Belt-and-suspenders -- the `--profile` flag itself should be absent.
+    [[ "$up_line" != *"--profile"* ]]
+}
+
+@test "--empty does NOT seed demo-mode env-file keys" {
+    run_install --empty --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    f="$INSTALL_DIR/dashboard.env"
+    ! grep -qE '^GHA_API_BASE_URL=http://demo-gha:80$' "$f"
+    ! grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=5$' "$f"
+    ! grep -qE 'demo-org.*web-portal' "$f"
+}
+
+@test "--real-gha + --empty together: rejected as mutually exclusive" {
+    run_install --real-gha --empty --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"mutually exclusive"* ]]
+}
+
+@test "--real-gha + --demo together: rejected as mutually exclusive" {
+    run_install --real-gha --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"mutually exclusive"* ]]
+}
+
+@test "--empty + --demo together: rejected as mutually exclusive" {
+    run_install --empty --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"mutually exclusive"* ]]
 }
 
 # ---- gh CLI precondition matrix ----
@@ -547,30 +623,51 @@ EOF
 
 # ---- Compose args (profiles + env-file) ----
 
-@test "default install -- neither --profile migrate nor --profile fetcher passed (API self-applies migrations per ADR-0009)" {
+@test "default install -- --profile migrate is NEVER passed (API self-applies migrations per ADR-0009); demo + fetcher profiles ARE passed (CR-0013)" {
     # Post-#22 contract: migrations are applied in-process by the api
     # container on startup; there is no migrate profile in the compose file
-    # and the installer never passes --profile migrate. Default install
-    # spins up the stack with no --profile flags at all.
+    # and the installer never passes --profile migrate.
+    # Post-CR-0013 contract: the no-flag default brings up the demo stack,
+    # so --profile demo + --profile fetcher are BOTH present in the up call.
     run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
-    # Extract the `compose ... up ...` line from the stub log.
     up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
     [ -n "$up_line" ]
     [[ "$up_line" != *"--profile migrate"* ]]
-    [[ "$up_line" != *"--profile fetcher"* ]]
-    # The `--profile` flag itself should be absent in the default case --
-    # belt-and-suspenders against future profiles silently slipping in.
-    [[ "$up_line" != *"--profile"* ]]
+    [[ "$up_line" == *"--profile demo"* ]]
+    [[ "$up_line" == *"--profile fetcher"* ]]
 }
 
-@test "--fetcher (with GHA_TOKEN) -- only --profile fetcher present (no --profile migrate per ADR-0009)" {
+@test "--real-gha (with GHA_TOKEN) -- only --profile fetcher present (no --profile demo, no --profile migrate)" {
     export GHA_TOKEN='ghp_fake'
-    run_install --fetcher --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --real-gha --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
     [[ "$up_line" == *"--profile fetcher"* ]]
+    [[ "$up_line" != *"--profile demo"* ]]
     [[ "$up_line" != *"--profile migrate"* ]]
+}
+
+@test "--empty -- no --profile flag at all (no fetcher, no demo, no migrate)" {
+    run_install --empty --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    up_line="$(grep -E '^docker.*compose.*up' "$STUB_LOG" | head -n1)"
+    [[ "$up_line" != *"--profile demo"* ]]
+    [[ "$up_line" != *"--profile fetcher"* ]]
+    [[ "$up_line" != *"--profile migrate"* ]]
+    [[ "$up_line" != *"--profile"* ]]
+}
+
+@test "--fetcher -- rejected as unknown argument (renamed to --real-gha per CR-0013)" {
+    # install.sh's case-based arg parser falls into the `*)` branch for the
+    # historical --fetcher flag and exits 2 with the 'unknown argument'
+    # literal; the script MUST NOT proceed to any docker / gh side effect.
+    run_install --fetcher --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unknown argument"* ]]
+    [[ "$output" == *"--fetcher"* ]]
+    log_not_contains 'docker compose'
+    log_not_contains 'gh release download'
 }
 
 @test "--skip-migrations -- rejected as unknown argument (the flag was retired per ADR-0009 / #22)" {
@@ -699,7 +796,8 @@ EOF
     grep -qE "^POSTGRES_PASSWORD=$pgPw$" "$INSTALL_DIR/dashboard.env"
 }
 
-@test "--demo re-run preserves existing GHA_REPOSITORIES" {
+@test "demo re-run (no flag) preserves existing GHA_REPOSITORIES" {
+    # No --demo on the re-run -- the no-flag default IS the demo path now.
     apiTok=$(printf 'a%.0s' {1..64})
     pgPw=$(printf 'c%.0s' {1..32})
     cat > "$INSTALL_DIR/dashboard.env" <<EOF
@@ -707,14 +805,14 @@ API_TOKEN=$apiTok
 POSTGRES_PASSWORD=$pgPw
 GHA_REPOSITORIES=[{"owner":"custom","repo":"thing"}]
 EOF
-    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     grep -qE '^GHA_REPOSITORIES=\[\{"owner":"custom","repo":"thing"\}\]$' "$INSTALL_DIR/dashboard.env"
-    ! grep -qE 'PostHog.*posthog.*grafana.*grafana' "$INSTALL_DIR/dashboard.env"
+    ! grep -qE 'demo-org.*web-portal' "$INSTALL_DIR/dashboard.env"
     [[ "$output" == *"Preserving GHA_REPOSITORIES"* ]]
 }
 
-@test "--demo re-run preserves existing FETCHER_POLL_INTERVAL_SECONDS" {
+@test "demo re-run (no flag) preserves existing FETCHER_POLL_INTERVAL_SECONDS" {
     apiTok=$(printf 'a%.0s' {1..64})
     pgPw=$(printf 'c%.0s' {1..32})
     cat > "$INSTALL_DIR/dashboard.env" <<EOF
@@ -722,14 +820,15 @@ API_TOKEN=$apiTok
 POSTGRES_PASSWORD=$pgPw
 FETCHER_POLL_INTERVAL_SECONDS=120
 EOF
-    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=120$' "$INSTALL_DIR/dashboard.env"
-    ! grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$INSTALL_DIR/dashboard.env"
+    # The new demo default is 5 s; the preserved operator value (120) must win.
+    ! grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=5$' "$INSTALL_DIR/dashboard.env"
     [[ "$output" == *"Preserving FETCHER_POLL_INTERVAL_SECONDS"* ]]
 }
 
-@test "--demo re-run preserves existing GHA_TOKEN when \$GHA_TOKEN unset" {
+@test "demo re-run (no flag) preserves existing GHA_TOKEN when \$GHA_TOKEN unset" {
     apiTok=$(printf 'a%.0s' {1..64})
     pgPw=$(printf 'c%.0s' {1..32})
     cat > "$INSTALL_DIR/dashboard.env" <<EOF
@@ -738,13 +837,13 @@ POSTGRES_PASSWORD=$pgPw
 GHA_TOKEN=ghp_existing
 EOF
     unset GHA_TOKEN
-    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     grep -qE '^GHA_TOKEN=ghp_existing$' "$INSTALL_DIR/dashboard.env"
     [[ "$output" == *"Preserving GHA_TOKEN"* ]]
 }
 
-@test "--demo + --reset-demo-defaults re-applies hard-coded defaults" {
+@test "--reset-demo-defaults re-applies hard-coded demo defaults (6 demo-org repos at 5 s poll)" {
     apiTok=$(printf 'a%.0s' {1..64})
     pgPw=$(printf 'c%.0s' {1..32})
     cat > "$INSTALL_DIR/dashboard.env" <<EOF
@@ -753,16 +852,23 @@ POSTGRES_PASSWORD=$pgPw
 GHA_REPOSITORIES=[{"owner":"custom","repo":"thing"}]
 FETCHER_POLL_INTERVAL_SECONDS=120
 EOF
-    run_install --demo --reset-demo-defaults --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --reset-demo-defaults --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
-    grep -qE '^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana' "$INSTALL_DIR/dashboard.env"
-    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=60$' "$INSTALL_DIR/dashboard.env"
+    grep -qE '^GHA_REPOSITORIES=.*demo-org.*web-portal.*api-gateway.*auth-service.*billing-service.*notification-worker.*analytics-pipeline' "$INSTALL_DIR/dashboard.env"
+    grep -qE '^FETCHER_POLL_INTERVAL_SECONDS=5$' "$INSTALL_DIR/dashboard.env"
     ! grep -qE 'custom.*thing' "$INSTALL_DIR/dashboard.env"
     [[ "$output" != *"Preserving GHA_REPOSITORIES"* ]]
     [[ "$output" != *"Preserving FETCHER_POLL_INTERVAL_SECONDS"* ]]
 }
 
-@test "--demo with new \$GHA_TOKEN overrides preserved GHA_TOKEN (rotation)" {
+@test "demo re-run preserves persisted GHA_TOKEN even when \$GHA_TOKEN differs (demo upstream ignores Authorization header)" {
+    # Per CR-0013 + install.sh § 4 demo-mode block: GHA_TOKEN is preserved on
+    # demo upgrade-re-run so a later switch back to --real-gha keeps the
+    # operator's PAT. The demo-gha upstream never sees the Authorization
+    # header, so $GHA_TOKEN does NOT rotate the persisted value on the demo
+    # path. (Caller wanting to drop the persisted token uses
+    # --reset-demo-defaults; caller wanting to use the env value points at
+    # --real-gha instead.)
     apiTok=$(printf 'a%.0s' {1..64})
     pgPw=$(printf 'c%.0s' {1..32})
     cat > "$INSTALL_DIR/dashboard.env" <<EOF
@@ -771,9 +877,26 @@ POSTGRES_PASSWORD=$pgPw
 GHA_TOKEN=ghp_old
 EOF
     export GHA_TOKEN='ghp_new'
-    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
-    grep -qE '^GHA_TOKEN=ghp_new$' "$INSTALL_DIR/dashboard.env"
-    ! grep -qE '^GHA_TOKEN=ghp_old$' "$INSTALL_DIR/dashboard.env"
-    [[ "$output" == *"Rotating GHA_TOKEN"* ]]
+    # Persisted token wins on the demo path.
+    grep -qE '^GHA_TOKEN=ghp_old$' "$INSTALL_DIR/dashboard.env"
+    ! grep -qE '^GHA_TOKEN=ghp_new$' "$INSTALL_DIR/dashboard.env"
+    [[ "$output" == *"Preserving GHA_TOKEN"* ]]
+}
+
+@test "--reset-demo-defaults drops the persisted GHA_TOKEN on demo re-run" {
+    # The escape hatch -- pass --reset-demo-defaults to clear out the
+    # persisted GHA_TOKEN (e.g. when migrating from a stale --real-gha
+    # install to the demo default and the operator wants the token off-disk).
+    apiTok=$(printf 'a%.0s' {1..64})
+    pgPw=$(printf 'c%.0s' {1..32})
+    cat > "$INSTALL_DIR/dashboard.env" <<EOF
+API_TOKEN=$apiTok
+POSTGRES_PASSWORD=$pgPw
+GHA_TOKEN=ghp_existing
+EOF
+    run_install --reset-demo-defaults --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    ! grep -qE '^GHA_TOKEN=' "$INSTALL_DIR/dashboard.env"
 }

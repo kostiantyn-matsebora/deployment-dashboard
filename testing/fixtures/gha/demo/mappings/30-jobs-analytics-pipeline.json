@@ -1,0 +1,47 @@
+{
+  "_comment": "Needs-recovery \u00e2\u20ac\u201d jobs DTO for analytics-pipeline. Templated so the 'deploy' job-id matches the status URL's /job/<run_id*10> segment.",
+  "Priority": 100,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/repos/demo-org/analytics-pipeline/actions/runs/6[0-9]+/jobs$"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "9999999999"
+    },
+    "UseTransformer": true,
+    "BodyAsJson": {
+      "jobs": [
+        {
+          "id": "{{Math.Add (Math.Multiply (Regex.Match request.path \"runs/(\\d+)/jobs\") 10) 4}}",
+          "name": "lint"
+        },
+        {
+          "id": "{{Math.Add (Math.Multiply (Regex.Match request.path \"runs/(\\d+)/jobs\") 10) 3}}",
+          "name": "test"
+        },
+        {
+          "id": "{{Math.Add (Math.Multiply (Regex.Match request.path \"runs/(\\d+)/jobs\") 10) 2}}",
+          "name": "build"
+        },
+        {
+          "id": "{{Math.Multiply (Regex.Match request.path \"runs/(\\d+)/jobs\") 10}}",
+          "name": "deploy"
+        }
+      ]
+    }
+  }
+}

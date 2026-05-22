@@ -56,9 +56,15 @@ fi
 
 COMPOSE_ARGS=(-f "$COMPOSE_FILE")
 if [ -f "$ENV_FILE" ]; then COMPOSE_ARGS+=(--env-file "$ENV_FILE"); fi
-# Migrations apply in-process inside the api container (ADR-0009); only the
-# fetcher profile remains gated, so we include it to tear down active fetchers.
-COMPOSE_ARGS+=(--profile fetcher)
+# Include every profile-gated service so any active container is also torn
+# down regardless of which install mode brought it up:
+#   fetcher     -- CR-0009 pull-mode worker (no-flag default + --real-gha)
+#   demo        -- CR-0013 demo-gha mock GitHub upstream (no-flag default)
+#   integration -- CR-0012 mock-gha (dev-time test runner; not normally
+#                  reachable from a release-install host, but defensive
+#                  inclusion is cheap and keeps `down` exhaustive).
+# Migrations apply in-process inside the api container (ADR-0009); no separate profile.
+COMPOSE_ARGS+=(--profile fetcher --profile demo --profile integration)
 
 DOWN_ARGS=(down)
 if [ "$REMOVE_DATA" = true ]; then DOWN_ARGS+=(-v); fi

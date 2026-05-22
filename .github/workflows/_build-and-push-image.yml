@@ -4,9 +4,23 @@
 # Contract: docs/cr/CR-0010-component-ci-pipeline.md (Q1–Q13 + Wave 4b decision locks).
 # Operational guide: docs/ci-cd-pipelines.md.
 #
-# One reusable workflow drives all four component pipelines (api / fetcher /
-# frontend / gateway) — the `build-kind` input flips between the .NET build
-# path (`dotnet`) and the static / nginx-based image path (`static`).
+# One reusable workflow drives all five component pipelines (api / fetcher /
+# frontend / gateway / demo-gha) — the `build-kind` input selects the build
+# path:
+#   - `dotnet` — .NET SDK setup + NuGet cache + format gate + (optionally)
+#                dotnet test + (optionally) mockup-visual + buildx + push.
+#                Used by api / fetcher.
+#   - `static` — Node setup (cache loaded from frontend/package-lock.json) +
+#                (optionally) ng test + (optionally) mockup-visual + buildx
+#                + push. Used by frontend / gateway.
+#   - `copy`   — no language toolchain, no tests, no format gate. Only
+#                buildx + (conditional) registry login + metadata + build +
+#                push. Used by demo-gha per CR-0013 — the image is content-
+#                only (Dockerfile = one COPY of qa-owned fixture content
+#                into a WireMock.Net base layer). Every language-setup /
+#                test / coverage step is `if`-gated to dotnet|static and
+#                naturally skips for `copy`; this branch is documented as a
+#                first-class third value of the input.
 #
 # Steps in order:
 #   1.  checkout
@@ -40,7 +54,7 @@ on:
         required: true
         type: string
       build-kind:
-        description: 'dotnet | static — selects the build path.'
+        description: 'dotnet | static | copy — selects the build path. `copy` is the content-only path (no language toolchain, no tests) used by demo-gha per CR-0013.'
         required: true
         type: string
       dockerfile-path:

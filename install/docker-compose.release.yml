@@ -10,7 +10,13 @@
 #   - NO bind-mounts          -- the release host has no source tree.
 #   - API self-migrates on start (per ADR-0009) -- no migrate profile, no migration runner.
 #   - NO pgadmin              -- dropped per issue #7 (dev-convenience only).
-#   - Profile-gated `fetcher`    service     -- enabled by the installer's `-Fetcher` switch.
+#   - Profile-gated `fetcher`    service     -- enabled by the installer's default
+#                                                or explicit `-RealGha` switch (CR-0013
+#                                                renamed the old `-Fetcher` flag).
+#   - Profile-gated `mock-gha`   service     -- enabled by the `integration` Compose
+#                                                profile (CR-0012 cross-stack suite).
+#   - Profile-gated `demo-gha`   service     -- enabled by the `demo` Compose profile
+#                                                (CR-0013 default install path).
 #
 # Image refs use `ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}:${DASHBOARD_VERSION:-latest}`.
 # The installer writes `DASHBOARD_VERSION` into `<InstallDir>/dashboard.env` so the same compose file
@@ -124,9 +130,20 @@ services:
       GHA_API_BASE_URL: "${GHA_API_BASE_URL:-https://api.github.com}"
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    # `depends_on: required: false` (docker compose >= 2.20) lets the
+    # fetcher start whether or not the profile-gated upstream mocks are
+    # active. Under the `demo` profile (CR-0013 default install path)
+    # `demo-gha` is up and we wait for its `service_healthy` gate; under
+    # `-RealGha` neither demo-gha nor mock-gha exist and the dependencies
+    # are silently skipped. The integration profile re-states the
+    # `mock-gha` dependency in `dev_env/docker-compose.local.yml` (the
+    # release-install host never runs the integration suite).
     depends_on:
       gateway:
         condition: service_started
+      demo-gha:
+        condition: service_healthy
+        required: false
 
   # Mock GitHub API (WireMock.Net) -- deterministic upstream for the
   # `testing/integration/` cross-stack suite (CR-0012). Profile-gated by
@@ -167,6 +184,64 @@ services:
     # probe uses bash's `/dev/tcp` redirection to verify port 80 accepts
     # TCP connects (sufficient signal: WireMock.Net only binds the port
     # once startup is complete + admin API is wired).
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ': > /dev/tcp/localhost/80' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # Demo GitHub Actions upstream (CR-0013) -- WireMock.Net with the demo
+  # bundle baked into the image at build-time. Profile-gated by `demo`:
+  # the release-install `install.ps1` / `install.sh` activate this profile
+  # by default; explicit opt-outs are `-RealGha` (real GitHub upstream)
+  # and `-Empty` (no fetcher, no mocks).
+  #
+  # Strict NFR-04 production posture (per CR-0013 S 3b + CR-0012 mirror):
+  #   - NO `ports:`     -- never published to the host. Production
+  #                        invariant from CR-0012 carried forward here.
+  #                        Internal-only; the fetcher reaches the admin
+  #                        port via internal Docker DNS at
+  #                        `http://demo-gha:80` when `GHA_API_BASE_URL`
+  #                        is set to that under the demo profile by the
+  #                        installer.
+  #   - NO `volumes:`   -- the demo bundle is baked into the image's
+  #                        `/app/__admin/mappings/` layer (CR-0013 S 3c:
+  #                        baked-image ship mechanism; no bind-mount, no
+  #                        gh release download for a separate bundle
+  #                        asset).
+  #   - Healthcheck     -- same bash `/dev/tcp` TCP probe `mock-gha` uses;
+  #                        image lineage is shared (both are
+  #                        `sheyenrath/wiremock.net:2.4.0`).
+  #   - Image tag pin   -- `${DASHBOARD_VERSION:-latest}` so the demo
+  #                        bundle is atomically versioned with the four
+  #                        sibling component images (api / fetcher /
+  #                        frontend / gateway). The installer writes
+  #                        `DASHBOARD_VERSION` into `dashboard.env`.
+  #
+  # The `demo` and `integration` profiles coexist -- they bind different
+  # services (`demo-gha` vs `mock-gha`) and the test runner activates
+  # `integration` while the installer activates `demo`.
+  demo-gha:
+    profiles: ["demo"]
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION:-latest}
+    container_name: dashboard-demo-gha
+    restart: unless-stopped
+    # `--ReadStaticMappings true` is REQUIRED -- WireMock.Net's default
+    # entry-point does NOT load the baked `/app/__admin/mappings/` tree
+    # on startup (admin API ships empty otherwise). Mirrors the `mock-gha`
+    # command override in dev_env/docker-compose.local.yml (CR-0012).
+    # `--Urls http://*:80` pins the bind port to match NFR-04's no-port-
+    # publish posture + the fetcher's `GHA_API_BASE_URL=http://demo-gha:80`.
+    command:
+      - "dotnet"
+      - "wiremock-net.dll"
+      - "--Urls"
+      - "http://*:80"
+      - "--ReadStaticMappings"
+      - "true"
+      - "--WireMockLogger"
+      - "WireMockConsoleLogger"
     healthcheck:
       test: ["CMD-SHELL", "bash -c ': > /dev/tcp/localhost/80' || exit 1"]
       interval: 5s

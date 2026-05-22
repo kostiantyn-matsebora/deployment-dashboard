@@ -1,0 +1,31 @@
+{
+  "_comment": "Needs-recovery \u00e2\u20ac\u201d runs DTO for billing-service. Matches /actions/runs/<run_id> where run_id begins with the service prefix digit '4'. Returned path + head_sha drive the contents mapping below.",
+  "Priority": 100,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/repos/demo-org/billing-service/actions/runs/4[0-9]+$"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "9999999999"
+    },
+    "BodyAsJson": {
+      "id": 0,
+      "path": ".github/workflows/billing-service-pipeline.yml",
+      "head_sha": "4ccc44444444ccccccccccccccccccccccc44444"
+    }
+  }
+}

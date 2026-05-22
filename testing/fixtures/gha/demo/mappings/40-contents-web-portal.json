@@ -1,0 +1,32 @@
+{
+  "_comment": "Needs-recovery \u00e2\u20ac\u201d workflow YAML for web-portal. Adapter parses needs: chains from this YAML to wire intra-run edges into ParentDeployments.",
+  "Priority": 100,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "WildcardMatcher",
+          "Pattern": "/repos/demo-org/web-portal/contents/.github/workflows/web-portal-deploy.yml"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "9999999999"
+    },
+    "BodyAsJson": {
+      "name": "web-portal-deploy.yml",
+      "path": ".github/workflows/web-portal-deploy.yml",
+      "content": "bmFtZTogV2ViIFBvcnRhbCBEZXBsb3kKb246CiAgcHVzaDoKICAgIGJyYW5jaGVzOiBbbWFpbl0Kam9iczoKICBidWlsZDoKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIHN0ZXBzOgogICAgICAtIHJ1bjogZWNobyBidWlsZAogIGRlcGxveToKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIG5lZWRzOiBbYnVpbGRdCiAgICBzdGVwczoKICAgICAgLSBydW46IGVjaG8gZGVwbG95Cg==",
+      "encoding": "base64"
+    }
+  }
+}

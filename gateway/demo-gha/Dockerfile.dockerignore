@@ -1,0 +1,24 @@
+# Per-Dockerfile .dockerignore for gateway/demo-gha/Dockerfile.
+# BuildKit picks this up when building with `-f gateway/demo-gha/Dockerfile`,
+# overriding the repo-root .dockerignore (which excludes `testing/` for the
+# .NET / SPA component builds that don't need the test corpus).
+#
+# This image's whole purpose is to bake the demo bundle under
+# testing/fixtures/gha/demo/ into /app/__admin/mappings/, so we explicitly
+# include that path. Everything else stays excluded so the build context
+# remains tiny (a few hundred KB).
+
+# Default: exclude everything in the context (the repo root).
+**
+
+# Re-include the demo bundle's directory chain.
+!testing
+!testing/fixtures
+!testing/fixtures/gha
+!testing/fixtures/gha/demo
+!testing/fixtures/gha/demo/**
+
+# Re-include the Dockerfile + its sibling ignore file so BuildKit can
+# reference them.
+!gateway/demo-gha/Dockerfile
+!gateway/demo-gha/Dockerfile.dockerignore
