@@ -54,9 +54,13 @@ BeforeAll {
     #                            stub output (use to assert write:packages / admin:packages pass too)
     #   DD_GH_DOWNLOAD_FAIL   -- if set to a substring, `gh release download` exits 1
     #                            when the requested asset matches the substring
+    #   DD_VOLUME_EXISTS      -- if 'true', `docker volume inspect <name>` exits 0
+    #                            with a stub JSON payload (drives the issue #37
+    #                            volume-detection safety net); otherwise exits 1
+    #                            with a stderr 'No such volume' message.
     #
     # Default: gh precondition passes, downloads succeed, docker login succeeds,
-    # pull + up succeed, /health succeeds.
+    # pull + up succeed, /health succeeds, no pre-existing volume.
     $script:ShimHeader = @'
 $script:__DDLog = $env:DD_SCRIPT_LOG
 if (-not $__DDLog) { throw 'DD_SCRIPT_LOG not set; tests should set it before invocation.' }
@@ -76,6 +80,18 @@ function docker {
     # the parent process and never sees EOF.)
     if ($argv[0] -eq 'login') {
         $global:LASTEXITCODE = if ($env:DD_LOGIN_EXIT) { [int]$env:DD_LOGIN_EXIT } else { 0 }
+        return
+    }
+    # `docker volume inspect <name>` -- issue #37 volume-detection safety net.
+    # Exit 0 (volume present) when DD_VOLUME_EXISTS=true; exit 1 (absent) otherwise.
+    if ($argv[0] -eq 'volume' -and $argv[1] -eq 'inspect') {
+        if ($env:DD_VOLUME_EXISTS -eq 'true') {
+            Write-Output '[{"Name":"deployment-dashboard_pg-data","Driver":"local"}]'
+            $global:LASTEXITCODE = 0
+            return
+        }
+        [Console]::Error.WriteLine("Error response from daemon: No such volume: $($argv[2])")
+        $global:LASTEXITCODE = 1
         return
     }
     # subcommand discriminator is argv[0] but `docker compose ...` makes argv[0] = 'compose'
@@ -255,7 +271,8 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
         $envKeys = @(
             'GHA_TOKEN','DASHBOARD_API_TOKEN','DD_SCRIPT_LOG',
             'DD_PULL_EXIT','DD_UP_EXIT','DD_LOGIN_EXIT','DD_IWR_HEALTH_OK',
-            'DD_GH_MISSING','DD_GH_NOT_AUTHED','DD_GH_NO_SCOPE','DD_GH_SCOPE_LITERAL','DD_GH_DOWNLOAD_FAIL'
+            'DD_GH_MISSING','DD_GH_NOT_AUTHED','DD_GH_NO_SCOPE','DD_GH_SCOPE_LITERAL','DD_GH_DOWNLOAD_FAIL',
+            'DD_VOLUME_EXISTS'
         )
         foreach ($k in $envKeys) { $envBackup[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
         try {
@@ -808,5 +825,263 @@ Describe 'install.ps1 -- error paths' {
         # `docker compose ... logs` was invoked on failure.
         ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'logs') }).Count `
             | Should -BeGreaterThan 0
+    }
+}
+
+Describe 'install.ps1 -- upgrade flow (issue #37)' {
+    # Phase 4 contract additions:
+    #   1. CWD-independent default -InstallDir (= $HOME/.dashboard-release).
+    #   2. -Demo defaults preservation on re-run (GHA_REPOSITORIES / FETCHER_POLL_INTERVAL_SECONDS / GHA_TOKEN).
+    #   3. Volume-detection safety net: docker volume inspect deployment-dashboard_pg-data exits 0
+    #      AND $envFile does NOT exist -> red-error + exit 1 BEFORE any side effect.
+    #   4. .DESCRIPTION upgrade-flow doc + .EXAMPLE blocks (verified by hand; not asserted here -- belongs in lint, not behavioural tests).
+    #   5. -ResetDemoDefaults switch: opts back into the legacy "always overwrite demo defaults" behaviour.
+    #
+    # The default-$InstallDir scenario writes into the REAL $HOME -- we capture
+    # the path before, snapshot any pre-existing file there, and restore it in
+    # AfterEach so a parallel `pwsh` session doing real work is not disturbed.
+    BeforeEach {
+        $script:tmp = New-TempTestDir
+        $script:userHome = [Environment]::GetFolderPath('UserProfile')
+        $script:defaultDir = Join-Path $script:userHome '.dashboard-release'
+        $script:defaultEnvFile = Join-Path $script:defaultDir 'dashboard.env'
+        # Snapshot any pre-existing dashboard.env at the real default so we can
+        # restore it after a test that uses the default $InstallDir.
+        $script:preExistedDefaultEnv = Test-Path -LiteralPath $script:defaultEnvFile
+        $script:preExistedDefaultEnvContent = if ($script:preExistedDefaultEnv) {
+            Get-Content -LiteralPath $script:defaultEnvFile -Raw
+        } else { $null }
+        $script:preExistedDefaultDir = Test-Path -LiteralPath $script:defaultDir
+    }
+    AfterEach {
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp }
+        # If the default dir did NOT pre-exist, drop everything we created.
+        # If it did pre-exist, restore the env-file content (or remove it if
+        # there was none originally) so we don't pollute the operator's machine.
+        if (-not $script:preExistedDefaultDir) {
+            if (Test-Path -LiteralPath $script:defaultDir) {
+                Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $script:defaultDir
+            }
+        } else {
+            if ($script:preExistedDefaultEnv) {
+                Set-Content -LiteralPath $script:defaultEnvFile -Value $script:preExistedDefaultEnvContent -Encoding utf8 -NoNewline
+            } elseif (Test-Path -LiteralPath $script:defaultEnvFile) {
+                Remove-Item -LiteralPath $script:defaultEnvFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    It 'default -InstallDir is $HOME/.dashboard-release (CWD-independent)' {
+        # Probe: invoke install.ps1 from a fake CWD ($tmp) WITHOUT -InstallDir.
+        # The shim's `Start-Process` does not override -WorkingDirectory, which
+        # would inherit the test process's CWD; pin it to $tmp so any CWD-anchored
+        # default (the old `Join-Path $PWD 'dashboard-release'` shape) would land
+        # under $tmp\dashboard-release, NOT under $HOME\.dashboard-release.
+        # Assertions: dashboard.env was written under $HOME\.dashboard-release;
+        # NOT written under $tmp\dashboard-release.
+        $shimmed = New-ShimmedScript -TmpDir $tmp
+        $log = Join-Path $tmp 'script.log'
+        $stdoutPath = Join-Path $tmp 'stdout.txt'
+        $stderrPath = Join-Path $tmp 'stderr.txt'
+        $envBackup = @{}
+        $envKeys = @('GHA_TOKEN','DASHBOARD_API_TOKEN','DD_SCRIPT_LOG','DD_IWR_HEALTH_OK','DD_VOLUME_EXISTS')
+        foreach ($k in $envKeys) { $envBackup[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
+        try {
+            foreach ($k in $envKeys) { [Environment]::SetEnvironmentVariable($k, $null, 'Process') }
+            [Environment]::SetEnvironmentVariable('DD_SCRIPT_LOG', $log, 'Process')
+            [Environment]::SetEnvironmentVariable('DD_IWR_HEALTH_OK', 'true', 'Process')
+            $proc = Start-Process -FilePath 'pwsh' `
+                                  -ArgumentList @('-NoProfile','-NonInteractive','-File',$shimmed,'-Version','v9.9.9-test') `
+                                  -WorkingDirectory $tmp `
+                                  -NoNewWindow -Wait -PassThru `
+                                  -RedirectStandardOutput $stdoutPath `
+                                  -RedirectStandardError  $stderrPath
+            $proc.ExitCode | Should -Be 0
+        } finally {
+            foreach ($k in $envKeys) {
+                [Environment]::SetEnvironmentVariable($k, $envBackup[$k], 'Process')
+            }
+        }
+        # Default-path assertion: dashboard.env written at $HOME\.dashboard-release.
+        Test-Path -LiteralPath $script:defaultEnvFile | Should -BeTrue
+        # CWD-anchored anti-assertion: nothing landed at $tmp\dashboard-release.
+        Test-Path -LiteralPath (Join-Path $tmp 'dashboard-release') | Should -BeFalse
+        # Belt-and-suspenders: compose calls reference the default env-file path.
+        $events = @()
+        if (Test-Path $log) {
+            foreach ($l in Get-Content $log) {
+                if ($l -match '\S') { $events += ($l | ConvertFrom-Json) }
+            }
+        }
+        $upCall = $events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1
+        $upCall | Should -Not -BeNullOrEmpty
+        $upArgs = [object[]]$upCall.args
+        $envFileIdx = [Array]::IndexOf($upArgs, '--env-file')
+        $envFileIdx | Should -BeGreaterThan -1
+        $upArgs[$envFileIdx + 1] | Should -Be $script:defaultEnvFile
+    }
+
+    It 'volume present + no env-file -> fail-fast with red error, no side effects' {
+        # Default install path (no -InstallDir). Force the volume probe to "exists".
+        # Pre-condition: defaultEnvFile must NOT exist; if a previous run on the
+        # real machine left one, the safety net is moot. The BeforeEach snapshot
+        # handles restoration; here we ensure the file is absent before the call.
+        if (Test-Path -LiteralPath $script:defaultEnvFile) {
+            Remove-Item -LiteralPath $script:defaultEnvFile -Force
+        }
+        $shimmed = New-ShimmedScript -TmpDir $tmp
+        $log = Join-Path $tmp 'script.log'
+        $stdoutPath = Join-Path $tmp 'stdout.txt'
+        $stderrPath = Join-Path $tmp 'stderr.txt'
+        $envBackup = @{}
+        $envKeys = @('GHA_TOKEN','DASHBOARD_API_TOKEN','DD_SCRIPT_LOG','DD_IWR_HEALTH_OK','DD_VOLUME_EXISTS')
+        foreach ($k in $envKeys) { $envBackup[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
+        try {
+            foreach ($k in $envKeys) { [Environment]::SetEnvironmentVariable($k, $null, 'Process') }
+            [Environment]::SetEnvironmentVariable('DD_SCRIPT_LOG', $log, 'Process')
+            [Environment]::SetEnvironmentVariable('DD_IWR_HEALTH_OK', 'true', 'Process')
+            [Environment]::SetEnvironmentVariable('DD_VOLUME_EXISTS', 'true', 'Process')
+            $proc = Start-Process -FilePath 'pwsh' `
+                                  -ArgumentList @('-NoProfile','-NonInteractive','-File',$shimmed,'-Version','v9.9.9-test') `
+                                  -WorkingDirectory $tmp `
+                                  -NoNewWindow -Wait -PassThru `
+                                  -RedirectStandardOutput $stdoutPath `
+                                  -RedirectStandardError  $stderrPath
+            $exit = $proc.ExitCode
+        } finally {
+            foreach ($k in $envKeys) {
+                [Environment]::SetEnvironmentVariable($k, $envBackup[$k], 'Process')
+            }
+        }
+        $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -Raw } else { '' }
+        $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -Raw } else { '' }
+        $combined = "$stdout`n$stderr"
+        $exit | Should -Be 1
+        $combined | Should -Match 'Pre-existing Postgres volume detected'
+        # No side effects: no env-file written, no compose pull, no gh release download.
+        Test-Path -LiteralPath $script:defaultEnvFile | Should -BeFalse
+        $events = @()
+        if (Test-Path $log) {
+            foreach ($l in Get-Content $log) {
+                if ($l -match '\S') { $events += ($l | ConvertFrom-Json) }
+            }
+        }
+        ($events | Where-Object {
+            $_.event -eq 'docker' -and ([object[]]$_.args)[0] -eq 'compose' -and (([object[]]$_.args) -contains 'pull')
+        }).Count | Should -Be 0
+        ($events | Where-Object {
+            $_.event -eq 'gh' -and ([object[]]$_.args)[0] -eq 'release'
+        }).Count | Should -Be 0
+    }
+
+    It 'volume absent + no env-file -> happy path (guard not triggered)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_VOLUME_EXISTS = 'false' }
+        $r.ExitCode | Should -Be 0
+        Test-Path $r.EnvFile | Should -BeTrue
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Not -Match 'Pre-existing Postgres volume detected'
+    }
+
+    It 'volume present + env-file present -> happy path (guard not triggered, secrets reused)' {
+        # Seed a valid env-file so the safety-net precondition is bypassed.
+        $apiTok = 'a' * 64
+        $pgPw   = 'c' * 32
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_VOLUME_EXISTS = 'true' }
+        $r.ExitCode | Should -Be 0
+        # Secrets reused (no regeneration log line for these two).
+        $r.Stdout | Should -Match 'Reusing API_TOKEN'
+        $r.Stdout | Should -Match 'Reusing POSTGRES_PASSWORD'
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match "(?m)^API_TOKEN=$apiTok$"
+        $envContent | Should -Match "(?m)^POSTGRES_PASSWORD=$pgPw$"
+    }
+
+    It '-Demo re-run preserves existing GHA_REPOSITORIES' {
+        # Seed env-file with operator-customised repo list + valid secrets so
+        # the secret block reuses them and doesn't shift our attention.
+        $apiTok = 'a' * 64
+        $pgPw   = 'c' * 32
+        $customRepos = '[{"owner":"custom","repo":"thing"}]'
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_REPOSITORIES=$customRepos" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=\[\{"owner":"custom","repo":"thing"\}\]$'
+        $envContent | Should -Not -Match 'PostHog.*posthog.*grafana.*grafana'
+        $r.Stdout | Should -Match 'Preserving GHA_REPOSITORIES'
+    }
+
+    It '-Demo re-run preserves existing FETCHER_POLL_INTERVAL_SECONDS' {
+        $apiTok = 'a' * 64
+        $pgPw   = 'c' * 32
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nFETCHER_POLL_INTERVAL_SECONDS=120" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=120$'
+        $envContent | Should -Not -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        $r.Stdout | Should -Match 'Preserving FETCHER_POLL_INTERVAL_SECONDS'
+    }
+
+    It '-Demo re-run preserves existing GHA_TOKEN when $env:GHA_TOKEN unset' {
+        $apiTok = 'a' * 64
+        $pgPw   = 'c' * 32
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_TOKEN=ghp_existing" `
+                    -Encoding utf8
+        # No $env:GHA_TOKEN override -- Invoke-Install zeroes the env list, so
+        # GHA_TOKEN is unset in the subprocess.
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_existing$'
+        $r.Stdout | Should -Match 'Preserving GHA_TOKEN'
+    }
+
+    It '-Demo + -ResetDemoDefaults re-applies hard-coded defaults' {
+        $apiTok = 'a' * 64
+        $pgPw   = 'c' * 32
+        $customRepos = '[{"owner":"custom","repo":"thing"}]'
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_REPOSITORIES=$customRepos`nFETCHER_POLL_INTERVAL_SECONDS=120" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo','-ResetDemoDefaults')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^GHA_REPOSITORIES=.*PostHog.*posthog.*grafana.*grafana'
+        $envContent | Should -Match '(?m)^FETCHER_POLL_INTERVAL_SECONDS=60$'
+        $envContent | Should -Not -Match 'custom.*thing'
+        $r.Stdout | Should -Not -Match 'Preserving GHA_REPOSITORIES'
+        $r.Stdout | Should -Not -Match 'Preserving FETCHER_POLL_INTERVAL_SECONDS'
+    }
+
+    It '-Demo with new $env:GHA_TOKEN overrides preserved GHA_TOKEN (rotation)' {
+        $apiTok = 'a' * 64
+        $pgPw   = 'c' * 32
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw`nGHA_TOKEN=ghp_old" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo') `
+                            -EnvOverrides @{ GHA_TOKEN = 'ghp_new' }
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^GHA_TOKEN=ghp_new$'
+        $envContent | Should -Not -Match '(?m)^GHA_TOKEN=ghp_old$'
+        $r.Stdout | Should -Match 'Rotating GHA_TOKEN'
     }
 }

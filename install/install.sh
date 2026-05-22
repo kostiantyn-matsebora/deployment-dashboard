@@ -43,9 +43,10 @@ set -euo pipefail
 VERSION='latest'
 FETCHER=false
 DEMO=false
+RESET_DEMO_DEFAULTS=false
 PORT=8080
 HEALTH_TIMEOUT_SECONDS=60
-INSTALL_DIR="$PWD/dashboard-release"
+INSTALL_DIR="$HOME/.dashboard-release"
 
 # ---- ANSI colours (tty only) ----
 if [ -t 1 ]; then
@@ -69,10 +70,32 @@ Options:
                                        default + 60s poll. If \$GHA_TOKEN is
                                        unset, fetcher runs anonymous (60 req/h);
                                        if set, threaded through (5000 req/h).
+      --reset-demo-defaults            Force-overwrite demo keys
+                                       (GHA_REPOSITORIES, FETCHER_POLL_INTERVAL_SECONDS,
+                                       GHA_TOKEN) even when a prior dashboard.env
+                                       already carries them. Without this, an
+                                       upgrade re-run with --demo preserves
+                                       operator customisation.
   -p, --port <int>                     Host port for the gateway (default: 8080).
       --health-timeout-seconds <int>   /health poll timeout (default: 60).
-      --install-dir <path>             Install directory (default: ./dashboard-release).
+      --install-dir <path>             Install directory (default: \$HOME/.dashboard-release;
+                                       CWD-independent so an upgrade re-run from
+                                       a different shell still finds the prior
+                                       install).
   -h, --help                           Show this help.
+
+Upgrade flow (v0.3.0 -> v0.4.0 worked example):
+  Pass --install-dir pointing at the prior install dir to preserve the
+  generated secrets + DB volume. The installer detects the pre-existing
+  dashboard.env, reuses API_TOKEN + POSTGRES_PASSWORD, and only rewrites
+  DASHBOARD_VERSION / DASHBOARD_PORT. Demo-mode defaults are preserved
+  unless --reset-demo-defaults is passed.
+
+  If a stray deployment-dashboard_pg-data Docker volume is detected but no
+  dashboard.env exists at --install-dir, the installer red-errors and exits
+  1 BEFORE writing any state -- otherwise a fresh POSTGRES_PASSWORD would
+  be generated against a DB seeded by the historical install, locking the
+  api container out.
 
 Examples:
   ./install.sh
@@ -80,6 +103,10 @@ Examples:
   ./install.sh --fetcher
   ./install.sh --demo
   ./install.sh --port 9090 --install-dir /opt/dashboard
+  # v0.3.0 -> v0.4.0 upgrade: preserve the prior install dir + secrets + DB volume.
+  ./install.sh --version v0.4.0 --install-dir /opt/dashboard
+  # Demo re-run, force-refresh the demo defaults to the new installer's baked-in values.
+  ./install.sh --demo --reset-demo-defaults
 EOF
 }
 
@@ -89,6 +116,7 @@ while [ $# -gt 0 ]; do
         -v|--version) VERSION="$2"; shift 2 ;;
         -f|--fetcher) FETCHER=true; shift ;;
         --demo) DEMO=true; shift ;;
+        --reset-demo-defaults) RESET_DEMO_DEFAULTS=true; shift ;;
         -p|--port) PORT="$2"; shift 2 ;;
         --health-timeout-seconds) HEALTH_TIMEOUT_SECONDS="$2"; shift 2 ;;
         --install-dir) INSTALL_DIR="$2"; shift 2 ;;
@@ -158,14 +186,35 @@ echo "${CYAN}==> Install directory: $INSTALL_DIR${NC}"
 
 # ---- 4. Secret handling ----
 ENV_FILE="$INSTALL_DIR/dashboard.env"
+
+# ---- 4a. Volume-detection safety net ----
+# If a previous installer run left a `deployment-dashboard_pg-data` volume but
+# the env-file we'd be writing into does NOT exist, refusing here prevents the
+# silent failure mode where a fresh POSTGRES_PASSWORD gets generated against a
+# DB seeded by the historical install (api container then 28P01s on connect).
+# Run BEFORE any secret read / generation / env-file write.
+if docker volume inspect deployment-dashboard_pg-data >/dev/null 2>&1 && [ ! -f "$ENV_FILE" ]; then
+    echo "${RED}ERROR: Pre-existing Postgres volume detected (deployment-dashboard_pg-data) but no dashboard.env at $ENV_FILE.${NC}" >&2
+    echo "" >&2
+    echo "${RED}The volume holds DB state seeded by an earlier installer run. Re-using a fresh dashboard.env here would generate a new POSTGRES_PASSWORD that does not match the running cluster -- the api container would fail to connect.${NC}" >&2
+    echo "" >&2
+    echo "${RED}Either:${NC}" >&2
+    echo "${RED}  - Pass --install-dir <path-to-prior-install> (the historical default was ./dashboard-release relative to where you first ran the installer).${NC}" >&2
+    echo "${RED}  - Run uninstall.sh --volumes (or uninstall.ps1 -Volumes) to drop the pg-data volume and start fresh.${NC}" >&2
+    exit 1
+fi
+
 LOCAL_DEV_API_LITERAL='local-dev-token-not-for-production'
 LOCAL_DEV_PW_LITERAL='local-dev-password'
 
 read_env_value() {
     local path="$1" key="$2"
     if [ ! -f "$path" ]; then return 0; fi
-    # POSIX grep: emit first matching value after the '='. Empty stdout on no match.
-    grep -E "^${key}=" "$path" | head -n 1 | sed -E "s/^${key}=//"
+    # POSIX sed: emit first matching value after the '='. Empty stdout on no match.
+    # Single-stage sed avoids the grep|head|sed pipeline's pipefail trap -- grep
+    # exits 1 on no-match, which under `set -euo pipefail` propagates out of the
+    # $(read_env_value ...) caller and terminates the script.
+    sed -nE "s/^${key}=(.*)$/\1/p" "$path" | head -n 1
 }
 
 new_random_hex() {
@@ -206,6 +255,13 @@ else
     echo "${CYAN}==> Reusing POSTGRES_PASSWORD from $ENV_FILE${NC}"
 fi
 
+# Capture historical demo-mode values BEFORE the secret block truncates $ENV_FILE.
+# These are read here (not inside the `if [ "$DEMO" = true ]` block below) because
+# the `cat > "$ENV_FILE"` write a few lines down destroys the prior contents.
+EXISTING_GHA_REPOS="$(read_env_value "$ENV_FILE" 'GHA_REPOSITORIES')"
+EXISTING_POLL="$(read_env_value "$ENV_FILE" 'FETCHER_POLL_INTERVAL_SECONDS')"
+EXISTING_GHA_TOKEN="$(read_env_value "$ENV_FILE" 'GHA_TOKEN')"
+
 # Persist env-file.
 cat > "$ENV_FILE" <<EOF
 # Generated by install.sh -- do not commit. Regenerated on install when secrets are missing or hold dev-literals.
@@ -224,15 +280,49 @@ EOF
 # detects it to switch into anonymous-mode (60 req/h). PostHog is a high-deploy-
 # activity public repo; PR-ephemeral noise is accepted -- env-filter is a separate
 # forthcoming feature.
+#
+# Upgrade-flow semantics: when a prior dashboard.env already carried any of
+# these keys, preserve the operator's customisation unless --reset-demo-defaults
+# is set. GHA_TOKEN additionally rotates when $GHA_TOKEN is set AND differs from
+# the persisted value -- caller is explicitly threading a new token. Historical
+# values were captured above before the secret block truncated $ENV_FILE.
 if [ "$DEMO" = true ]; then
-    cat >> "$ENV_FILE" <<EOF
+    DEMO_GHA_REPOS_DEFAULT='[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]'
+    DEMO_POLL_DEFAULT='60'
 
-# Demo-mode defaults (written by install.sh --demo)
-GHA_REPOSITORIES=[{"owner":"PostHog","repo":"posthog"},{"owner":"grafana","repo":"grafana"}]
-FETCHER_POLL_INTERVAL_SECONDS=60
-EOF
-    if [ -n "${GHA_TOKEN:-}" ]; then
+    printf '\n# Demo-mode defaults (written by install.sh --demo)\n' >> "$ENV_FILE"
+
+    if [ "$RESET_DEMO_DEFAULTS" = true ] || [ -z "$EXISTING_GHA_REPOS" ]; then
+        printf 'GHA_REPOSITORIES=%s\n' "$DEMO_GHA_REPOS_DEFAULT" >> "$ENV_FILE"
+    else
+        printf 'GHA_REPOSITORIES=%s\n' "$EXISTING_GHA_REPOS" >> "$ENV_FILE"
+        echo "${CYAN}==> Preserving GHA_REPOSITORIES from $ENV_FILE (pass --reset-demo-defaults to overwrite)${NC}"
+    fi
+
+    if [ "$RESET_DEMO_DEFAULTS" = true ] || [ -z "$EXISTING_POLL" ]; then
+        printf 'FETCHER_POLL_INTERVAL_SECONDS=%s\n' "$DEMO_POLL_DEFAULT" >> "$ENV_FILE"
+    else
+        printf 'FETCHER_POLL_INTERVAL_SECONDS=%s\n' "$EXISTING_POLL" >> "$ENV_FILE"
+        echo "${CYAN}==> Preserving FETCHER_POLL_INTERVAL_SECONDS from $ENV_FILE (pass --reset-demo-defaults to overwrite)${NC}"
+    fi
+
+    # GHA_TOKEN: three-way merge.
+    #   --reset-demo-defaults                       -> write $GHA_TOKEN (or omit if unset)
+    #   $GHA_TOKEN set AND differs from persisted   -> write $GHA_TOKEN (caller intent)
+    #   persisted value present                     -> preserve
+    #   neither persisted nor $GHA_TOKEN            -> omit (compose placeholder -> anon mode)
+    if [ "$RESET_DEMO_DEFAULTS" = true ]; then
+        if [ -n "${GHA_TOKEN:-}" ]; then
+            printf 'GHA_TOKEN=%s\n' "$GHA_TOKEN" >> "$ENV_FILE"
+        fi
+    elif [ -n "${GHA_TOKEN:-}" ] && [ "${GHA_TOKEN}" != "$EXISTING_GHA_TOKEN" ]; then
         printf 'GHA_TOKEN=%s\n' "$GHA_TOKEN" >> "$ENV_FILE"
+        if [ -n "$EXISTING_GHA_TOKEN" ]; then
+            echo "${CYAN}==> Rotating GHA_TOKEN (\$GHA_TOKEN differs from persisted value)${NC}"
+        fi
+    elif [ -n "$EXISTING_GHA_TOKEN" ]; then
+        printf 'GHA_TOKEN=%s\n' "$EXISTING_GHA_TOKEN" >> "$ENV_FILE"
+        echo "${CYAN}==> Preserving GHA_TOKEN from $ENV_FILE (pass --reset-demo-defaults to overwrite)${NC}"
     fi
 fi
 
