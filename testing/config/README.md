@@ -12,7 +12,7 @@ or test source — they live here.
 
 ## Schema
 
-A target file is a single JSON object with exactly these three keys:
+A target file is a single JSON object with the keys below:
 
 | Key            | Type   | Notes |
 |----------------|--------|-------|
@@ -27,8 +27,23 @@ No other keys are recognised. Unknown keys are ignored.
 | File             | Purpose | In repo |
 |------------------|---------|---------|
 | `local.json`     | Default for every runner — points at the local docker-compose stack from `dev_env/`. Committed. | yes |
+| `integration.json` | Default for the `testing/integration/` runner — points at the local docker-compose stack with the `integration` profile active (per [CR-0012](../../docs/cr/CR-0012-integration-test-substrate.md)). Adds `mockGhaAdminBaseUrl` + `fetcherSourceIds` on top of the base schema. Committed. | yes |
 | `dev.json`       | Optional. Points at a shared dev environment. Must source `apiKey` from a secret store; do not commit a real value. | no — gitignored if added |
 | `prod-smoke.json`| Optional. Read-only smoke target for the production deployment dashboard. Same caveat about `apiKey`. | no — gitignored if added |
+
+## Schema — integration target (`integration.json`)
+
+The integration runner consumes the base schema above **plus** two extra keys that govern mock-gha scenario activation. Unknown keys are ignored.
+
+| Key                    | Type            | Notes |
+|------------------------|-----------------|-------|
+| `readBaseUrl`          | string          | Same as base schema — base URL of the Read API + SPA. `GET /health` for preflight. |
+| `writeBaseUrl`         | string          | Same as base schema — base URL of the Write API. Used by the runner to assert fetcher POSTs landed (via Read-side echo per [CR-0012](../../docs/cr/CR-0012-integration-test-substrate.md) § FR-06 assertion seam). |
+| `apiKey`               | string          | Same as base schema. For `integration.json` this is the local-dev token (`local-dev-token-not-for-production`) baked into the integration profile of the compose stack. |
+| `mockGhaAdminBaseUrl`  | string          | Base URL of the `mock-gha` admin API as published on the host under the `integration` profile (e.g. `http://localhost:<port>`). The runner POSTs scenario bundles to `<mockGhaAdminBaseUrl>/__admin/mappings/import` and resets via `<mockGhaAdminBaseUrl>/__admin/mappings/reset`. **Published to host only under the `integration` profile** — NFR-04 strict (per [CR-0012](../../docs/cr/CR-0012-integration-test-substrate.md) § Profile-gating contract). |
+| `fetcherSourceIds`     | string[]        | The `owner/repo` source-ids the fetcher polls under the integration profile — typically one entry mirroring `GHA_SOURCE_ID`. Used by scenario mappings whose URL pattern references the source-id (e.g. `repos/{owner}/{repo}/deployments`). |
+
+See [`docs/integration-tests.md`](../../docs/integration-tests.md) for the full operational guide (mapping authoring, admin-API scenario activation, endpoint coverage matrix, CI invocation, `-Integration` switch).
 
 ## Adding a new target
 

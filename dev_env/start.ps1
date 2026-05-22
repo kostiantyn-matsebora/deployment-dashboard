@@ -17,6 +17,15 @@
     Permit `-Fetcher` to proceed when `$env:GHA_TOKEN` is unset/empty. The fetcher boots with the placeholder
     token from docker-compose.local.yml; GitHub API calls will 401. Use for boot-smoke / fetcher-code work
     that does not need real GH API access. `-Demo` implies this.
+.PARAMETER Integration
+    Activate the `integration` Compose profile (CR-0012). Brings up the `mock-gha` WireMock.Net container
+    sibling-ing the existing stack, re-points the fetcher at `http://mock-gha:80` via `$env:GHA_API_BASE_URL`,
+    tunes `$env:FETCHER_POLL_INTERVAL_SECONDS=1` so NFR-03's 5 s envelope is meaningfully oraclable, and
+    seeds `$env:GHA_REPOSITORIES` to a mock-friendly default (`[{"owner":"integration-test-org","repo":"integration-test-repo"}]`). Implies
+    `-Fetcher` + `-AllowMissingGhaToken` (the mock-gha service ignores Authorization headers, so a real
+    PAT is irrelevant). Mutually exclusive with `-Scaled` and `-Demo`. The mock-gha admin API is host-mapped
+    to localhost:18080 ONLY while this switch is active (`dev_env/docker-compose.local.yml` override) --
+    NFR-04 production posture is preserved (the release-install path NEVER publishes the admin port).
 .PARAMETER HealthTimeoutSeconds
     How long to wait for the gateway-fronted /health endpoint. Default 60. On failure, logs are dumped and the script exits 1.
 .EXAMPLE
@@ -29,11 +38,48 @@
     pwsh -NoProfile -File dev_env/start.ps1 -Demo
 .EXAMPLE
     pwsh -NoProfile -File dev_env/start.ps1 -Scaled -Fetcher
+.EXAMPLE
+    pwsh -NoProfile -File dev_env/start.ps1 -Integration
 #>
 #Requires -Version 7.0
 [CmdletBinding()]
-param([switch]$Scaled, [switch]$Fetcher, [switch]$Demo, [switch]$AllowMissingGhaToken, [int]$HealthTimeoutSeconds = 60)
+param([switch]$Scaled, [switch]$Fetcher, [switch]$Demo, [switch]$AllowMissingGhaToken, [switch]$Integration, [int]$HealthTimeoutSeconds = 60)
 $ErrorActionPreference = 'Stop'
+# -Integration canonicalisation (CR-0012). Block runs first so its mutual-
+# exclusion guards fire before -Demo / -Fetcher precondition checks. The
+# integration profile's substrate (mock-gha WireMock.Net + 1 s fetcher
+# poll + http://mock-gha:80 redirect) is incompatible with the scaled
+# stack (different compose file, no fetcher) and with the demo profile
+# (different GHA_REPOSITORIES default + different poll cadence + real
+# upstream); rather than try to reconcile the conflict at compose-merge
+# time, surface the user error here.
+if ($Integration) {
+    if ($Scaled) {
+        Write-Host "ERROR: -Integration and -Scaled are mutually exclusive. The scaled stack uses a standalone compose file (docker-compose.scaled.yml) that does not include the mock-gha integration substrate." -ForegroundColor Red
+        exit 1
+    }
+    if ($Demo) {
+        Write-Host "ERROR: -Integration and -Demo are mutually exclusive. -Demo points the fetcher at a public GitHub repo at a 60 s cadence; -Integration points it at the in-network mock-gha at a 1 s cadence. Pick one." -ForegroundColor Red
+        exit 1
+    }
+    $Fetcher = $true
+    $AllowMissingGhaToken = $true
+    # Env-var seeding -- consumed by the release file's `${VAR:-default}`
+    # substitutions at compose resolution time. Doing this here (rather than
+    # baking literals into dev_env/docker-compose.local.yml's `mock-gha` /
+    # `fetcher` blocks) keeps vanilla `start.ps1` runs unaffected by the
+    # integration tuning: a contributor who omits -Integration still gets
+    # the release defaults (30 s poll, https://api.github.com upstream).
+    $env:GHA_API_BASE_URL = 'http://mock-gha:80'
+    $env:FETCHER_POLL_INTERVAL_SECONDS = '1'
+    if ([string]::IsNullOrWhiteSpace($env:GHA_REPOSITORIES)) {
+        # Mock-friendly default -- mock-gha mappings under
+        # testing/fixtures/gha/ key URLs by `owner=integration-test-org`,
+        # `repo=integration-test-repo`. Must match testing/config/integration.json
+        # `fetcherSourceIds` + qa-engineer's scenario WildcardMatcher patterns.
+        $env:GHA_REPOSITORIES = '[{"owner":"integration-test-org","repo":"integration-test-repo"}]'
+    }
+}
 if ($Demo) {
     $Fetcher = $true
     $AllowMissingGhaToken = $true
@@ -74,6 +120,7 @@ if ($Scaled) {
     $composeArgs = @('-f', $releaseCompose, '-f', $localOverride)
 }
 if ($Fetcher) { $composeArgs += @('--profile', 'fetcher') }
+if ($Integration) { $composeArgs += @('--profile', 'integration') }
 Write-Host "==> docker compose $($composeArgs -join ' ') up -d --build" -ForegroundColor Cyan
 & docker compose @composeArgs up -d --build
 if ($LASTEXITCODE -ne 0) { throw "docker compose up failed with exit code $LASTEXITCODE" }
@@ -93,9 +140,14 @@ Write-Host "  pgAdmin:             http://localhost:5050/  (admin@example.com / 
 if ($Fetcher) {
     if ($Demo) {
         Write-Host "  Fetcher:             profile 'fetcher' active in DEMO mode - polling $env:GHA_REPOSITORIES every $env:FETCHER_POLL_INTERVAL_SECONDS s"
+    } elseif ($Integration) {
+        Write-Host "  Fetcher:             profile 'fetcher' active in INTEGRATION mode - polling mock-gha every $env:FETCHER_POLL_INTERVAL_SECONDS s"
     } else {
         Write-Host "  Fetcher:             profile 'fetcher' active - POSTs to gateway as dashboard-fetcher/github-actions"
     }
+}
+if ($Integration) {
+    Write-Host "  mock-gha admin API:  http://localhost:18080/__admin/  (WireMock.Net admin -- integration profile only)"
 }
 Write-Host ""
 Write-Host "  curl -X POST http://localhost:8080/api/deployments -H 'Content-Type: application/json' -H 'X-Api-Key: local-dev-token-not-for-production' -d '{`"service`":`"adminportal`",`"environment`":`"dev`",`"version`":`"v2.3.1`",`"status`":`"success`",`"run_url`":`"https://example.test/run/1`",`"run_number`":1,`"actor`":`"local`"}'"

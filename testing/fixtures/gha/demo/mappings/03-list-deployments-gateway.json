@@ -1,0 +1,278 @@
+{
+  "_comment": "Demo bundle \u2014 service gateway. Returns 25 deployments across envs ['dev', 'qa', 'staging', 'prod'].",
+  "Priority": 102,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "WildcardMatcher",
+          "Pattern": "/repos/demo-org/demo-gateway/deployments"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "1700000000"
+    },
+    "BodyAsJson": [
+      {
+        "id": 75,
+        "sha": "d2d200007500000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 74,
+        "sha": "d2d200007400000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 73,
+        "sha": "d2d200007300000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 72,
+        "sha": "d2d200007200000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 71,
+        "sha": "d2d200007100000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 70,
+        "sha": "d2d200007000000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T12:10:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 69,
+        "sha": "d2d200006900000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 68,
+        "sha": "d2d200006800000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 67,
+        "sha": "d2d200006700000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 66,
+        "sha": "d2d200006600000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 65,
+        "sha": "d2d200006500000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 64,
+        "sha": "d2d200006400000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 63,
+        "sha": "d2d200006300000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 62,
+        "sha": "d2d200006200000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 61,
+        "sha": "d2d200006100000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 60,
+        "sha": "d2d200006000000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 59,
+        "sha": "d2d200005900000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 58,
+        "sha": "d2d200005800000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 57,
+        "sha": "d2d200005700000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 56,
+        "sha": "d2d200005600000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 55,
+        "sha": "d2d200005500000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 54,
+        "sha": "d2d200005400000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "prod",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 53,
+        "sha": "d2d200005300000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "staging",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 52,
+        "sha": "d2d200005200000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "qa",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      },
+      {
+        "id": 51,
+        "sha": "d2d200005100000000000000000000000000000ddd",
+        "ref": "main",
+        "environment": "dev",
+        "created_at": "2026-05-22T11:55:00Z",
+        "creator": {
+          "login": "demo-actor-gateway"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Integration test suite for the Deployment Dashboard cross-stack write
+    path. Verifies the inbound ingest pipeline end-to-end:
+
+        Dashboard.Fetcher  →  mock-gha (WireMock.Net)  →  fetcher poll  →
+        POST /api/deployments (via gateway)  →  Postgres NOTIFY/LISTEN  →
+        SSE fan-out  →  Read-API echo (matrix + history).
+
+    Substrate is governed by docs/cr/CR-0012-integration-test-substrate.md.
+    Operational guide lives at docs/integration-tests.md.
+
+    Unlike the per-project unit tests under backend/, these tests run
+    against a real Docker Compose stack brought up with the `integration`
+    profile (see dev_env/start.ps1 -Integration) and never spin up an
+    in-process WebApplicationFactory. Scenario activation happens via the
+    mock-gha admin API (POST /__admin/mappings/import). The runner script
+    testing/integration/run-tests.ps1 handles the reachability pre-flight
+    (Read API /health AND mock-gha admin /__admin/) and the env-var
+    plumbing before invoking `dotnet test`.
+
+    Owner: qa-engineer (.claude/agents/qa-engineer.md).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Dashboard.Integration.Tests</RootNamespace>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Versions match the functional + backend test projects. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the shared DTOs so tests assert against the same C#
+         records the production code emits (FR-06 wire-shape echo). -->
+    <ProjectReference Include="..\..\..\backend\shared\Dashboard.Shared\Dashboard.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

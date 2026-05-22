@@ -77,6 +77,53 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       DASHBOARD_WRITE_API_KEY: "local-dev-token-not-for-production"
+    # `depends_on: required: false` (docker compose >= 2.20) lets the
+    # fetcher start whether or not `mock-gha` is active. Under the
+    # `integration` compose profile `mock-gha` is up and we wait for its
+    # `service_healthy` gate (CR-0012); for vanilla `dev_env/start.ps1`
+    # bring-ups `mock-gha` is profile-gated out and this dependency is
+    # silently skipped.
+    depends_on:
+      mock-gha:
+        condition: service_healthy
+        required: false
+
+  # Mock GitHub API override (CR-0012).
+  #
+  # The release file (install/docker-compose.release.yml) carries the canonical
+  # `mock-gha` service definition without any host-port publishing -- production
+  # posture is NFR-04 strict (admin port never reachable from outside the Docker
+  # network). This override layers ONE delta on top: publish the admin port to
+  # host port 18080 so `dotnet test` running on the developer's host (or on the
+  # GHA runner under `.github/workflows/integration.yml`) can POST scenario
+  # bundles to <host>:18080/__admin/mappings/import. The mapping is gated to
+  # the integration profile only -- a vanilla `docker compose up` (no
+  # `--profile integration`) never starts mock-gha, so this ports stanza is
+  # inert outside the integration flow.
+  #
+  # FETCHER_POLL_INTERVAL_SECONDS is NOT set here -- doing so would override
+  # the release file's `${FETCHER_POLL_INTERVAL_SECONDS:-30}` substitution
+  # unconditionally and break non-integration runs (a vanilla `start.ps1`
+  # would suddenly poll once per second). Instead, `dev_env/start.ps1
+  # -Integration` seeds `$env:FETCHER_POLL_INTERVAL_SECONDS = '1'` before
+  # invoking docker compose, so the release file's substitution resolves to
+  # `1` for integration runs and to `30` for everything else. Source of
+  # truth: see start.ps1's -Integration canonicalisation block.
+  mock-gha:
+    ports:
+      - "18080:80"
+    # Bind-mount qa-engineer's base mappings into WireMock.Net's admin-mappings
+    # directory. The sheyenrath/wiremock.net image reads bootstrap mappings
+    # from `/app/__admin/mappings` at start-up; per-scenario overrides are
+    # still loaded via the admin API at runtime (CR-0012 S 5), but the base
+    # five-endpoint coverage matrix (CR-0009 S 3d / docs/integration-tests.md
+    # S 6) is mounted once so a fresh `start.ps1 -Integration` boots with
+    # the GHA contract surface already populated. `:ro` -- mappings are
+    # source-of-truth in the repo; the container must not mutate them.
+    # Mount lives in the override (not the release file) because the
+    # release-install host has no source tree.
+    volumes:
+      - ../testing/fixtures/gha/mappings:/app/__admin/mappings:ro
 
   # Dev-only convenience -- not present in the release stack.
   pgadmin:

@@ -1,0 +1,21 @@
+{
+  "_comment": "ADR-0004 cursor contract — tick 2. List returns 71 + 72; per ADR-0004 the adapter watermark-filters (id > cursor=71) so ONLY id=72 should produce a new event downstream.",
+  "Priority": 10,
+  "Request": {
+    "Methods":  ["GET"],
+    "Path":     { "Matchers": [ { "Name": "WildcardMatcher", "Pattern": "/repos/integration-test-org/integration-test-repo/deployments" } ] }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type":          "application/json; charset=utf-8",
+      "X-RateLimit-Limit":     "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset":     "1700000000"
+    },
+    "BodyAsJson": [
+      { "id": 72, "sha": "7777077200000000000000000000000000007777", "ref": "main", "environment": "state-cursor", "created_at": "2026-05-22T12:08:00Z", "creator": { "login": "mock-gha-actor" } },
+      { "id": 71, "sha": "7777077100000000000000000000000000007777", "ref": "main", "environment": "state-cursor", "created_at": "2026-05-22T12:07:00Z", "creator": { "login": "mock-gha-actor" } }
+    ]
+  }
+}
