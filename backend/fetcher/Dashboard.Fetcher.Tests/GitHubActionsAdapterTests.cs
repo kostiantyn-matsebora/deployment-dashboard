@@ -152,6 +152,33 @@ public sealed class GitHubActionsAdapterTests
     }
 
     [Fact]
+    public async Task FetchPage_RateLimited_403_With_PostInt32Epoch_DoesNotOverflow_PreservesCursor()
+    {
+        var (adapter, handler) = Build();
+
+        handler.When(IsDeploymentsList, () =>
+        {
+            var resp = new HttpResponseMessage(HttpStatusCode.Forbidden);
+            resp.Headers.TryAddWithoutValidation("X-RateLimit-Limit", "5000");
+            resp.Headers.TryAddWithoutValidation("X-RateLimit-Remaining", "0");
+            // 10-digit epoch seconds > Int32.MaxValue (2147483647); year 2286.
+            resp.Headers.TryAddWithoutValidation("X-RateLimit-Reset", "9999999999");
+            return resp;
+        });
+
+        var page = await adapter.FetchPageAsync("acme/svc", cursor: "888", pageSize: 50, CancellationToken.None);
+
+        Assert.Empty(page.Events);
+        Assert.Equal("888", page.NewCursor);
+        Assert.False(page.HasMore);
+        if (page.RateLimit is not null)
+        {
+            Assert.True(page.RateLimit.UpstreamResetAt.Year >= 2286,
+                $"UpstreamResetAt.Year should be >= 2286 for epoch 9999999999, got {page.RateLimit.UpstreamResetAt:o}");
+        }
+    }
+
+    [Fact]
     public async Task FetchPage_RateLimited_429_ReturnsEmpty_PreservesCursor()
     {
         var (adapter, handler) = Build();

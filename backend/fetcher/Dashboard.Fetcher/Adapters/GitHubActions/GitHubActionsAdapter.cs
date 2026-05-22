@@ -323,7 +323,7 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
 
         if (!TryGetIntHeader(resp, "X-RateLimit-Limit", out var limit) ||
             !TryGetIntHeader(resp, "X-RateLimit-Remaining", out var remaining) ||
-            !TryGetIntHeader(resp, "X-RateLimit-Reset", out var resetEpochSeconds))
+            !TryGetLongHeader(resp, "X-RateLimit-Reset", out var resetEpochSeconds))
         {
             _logger.LogInformation(
                 "GHA rate-limit headers missing or malformed on response for {SourceId}; usage push will carry prior observation if available",
@@ -358,6 +358,15 @@ public sealed class GitHubActionsAdapter : ICiCdAdapter
         var raw = values.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(raw)) return false;
         return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryGetLongHeader(HttpResponseMessage resp, string headerName, out long value)
+    {
+        value = 0;
+        if (!resp.Headers.TryGetValues(headerName, out var values)) return false;
+        var raw = values.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        return long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
     }
 
     private async Task<GitHubDeploymentStatusDto?> FetchLatestStatusAsync(
