@@ -1,0 +1,27 @@
+{
+  "_comment": "Priority-fallback for /deployments/{id}/statuses — returns an empty status list, which the adapter treats as InProgress per FetchLatestStatusAsync. Specific per-deployment status mappings under statuses/ override this.",
+  "Priority": 500,
+  "Request": {
+    "Methods": [
+      "GET"
+    ],
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/repos/demo-org/demo-repo/deployments/[0-9]+/statuses$"
+        }
+      ]
+    }
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-RateLimit-Limit": "5000",
+      "X-RateLimit-Remaining": "4999",
+      "X-RateLimit-Reset": "9999999999"
+    },
+    "BodyAsJson": []
+  }
+}
