@@ -40,6 +40,20 @@
       The installer fails fast (exit 1) if gh is missing, not logged in to
       github.com, or the active token lacks `read:packages`.
 
+    Upgrade flow (v0.3.0 -> v0.4.0 worked example):
+      Pass `-InstallDir` pointing at the prior install dir to preserve the
+      generated secrets + DB volume. The installer detects the pre-existing
+      `dashboard.env`, reuses `API_TOKEN` + `POSTGRES_PASSWORD`, and only
+      rewrites `DASHBOARD_VERSION` / `DASHBOARD_PORT`. Demo-mode defaults
+      (GHA_REPOSITORIES, FETCHER_POLL_INTERVAL_SECONDS, GHA_TOKEN) are
+      preserved unless `-ResetDemoDefaults` is passed.
+
+      If a stray `deployment-dashboard_pg-data` Docker volume is detected but
+      no `dashboard.env` exists at `-InstallDir`, the installer red-errors
+      and exits 1 BEFORE writing any state -- otherwise a fresh
+      `POSTGRES_PASSWORD` would be generated against a DB seeded by the
+      historical install, locking the api container out.
+
 .PARAMETER Version
     Release tag to install (e.g. `v1.2.3`) or `latest`. The installer fetches the
     tag-pinned release assets via `gh release download` (the repo is private) and
@@ -67,11 +81,8 @@
 .PARAMETER InstallDir
     Install directory. Created if absent. Defaults to `.dashboard-release` under
     the current user's profile directory (cross-platform: `$HOME` on POSIX,
-    `%USERPROFILE%` on Windows). CWD-independent so that re-running the
-    installer from a different shell still finds a prior install -- mismatched
-    install dirs are the dominant failure mode of the v0.3.0 -> v0.4.0 upgrade
-    flow (fresh dashboard.env vs pre-existing pg-data volume == api unable to
-    auth to the DB).
+    `%USERPROFILE%` on Windows). See the "Upgrade flow" sub-section above for
+    upgrade-re-run semantics.
 .PARAMETER ResetDemoDefaults
     Force-overwrite the demo-mode keys (`GHA_REPOSITORIES`,
     `FETCHER_POLL_INTERVAL_SECONDS`, and `GHA_TOKEN`) even when a prior
@@ -79,21 +90,6 @@
     with `-Demo` preserves whatever the operator customised. `GHA_TOKEN`
     additionally rotates when `$env:GHA_TOKEN` is set AND differs from the
     persisted value (caller is explicitly threading a new token through).
-
-.DESCRIPTION
-    Upgrade flow (v0.3.0 -> v0.4.0 worked example):
-      Pass `-InstallDir` pointing at the prior install dir to preserve the
-      generated secrets + DB volume. The installer detects the pre-existing
-      `dashboard.env`, reuses `API_TOKEN` + `POSTGRES_PASSWORD`, and only
-      rewrites `DASHBOARD_VERSION` / `DASHBOARD_PORT`. Demo-mode defaults
-      (GHA_REPOSITORIES, FETCHER_POLL_INTERVAL_SECONDS, GHA_TOKEN) are
-      preserved unless `-ResetDemoDefaults` is passed.
-
-      If a stray `deployment-dashboard_pg-data` Docker volume is detected but
-      no `dashboard.env` exists at `-InstallDir`, the installer red-errors
-      and exits 1 BEFORE writing any state -- otherwise a fresh
-      `POSTGRES_PASSWORD` would be generated against a DB seeded by the
-      historical install, locking the api container out.
 
 .EXAMPLE
     pwsh -NoProfile -File install.ps1
