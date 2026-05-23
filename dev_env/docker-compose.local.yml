@@ -127,6 +127,25 @@ services:
     volumes:
       - ../testing/fixtures/gha/mappings:/home/wiremock/mappings:ro
 
+  # Demo-gha local build (demo profile). Build context MUST be the repo root
+  # because the Dockerfile COPYs from testing/fixtures/gha/demo/ (outside
+  # gateway/). Mirrors the CI workflow's `context-path: .` decision (CR-0013).
+  demo-gha:
+    build:
+      context: ..
+      dockerfile: gateway/demo-gha/Dockerfile
+    image: deployment-dashboard/demo-gha:dev
+    pull_policy: never
+
+  # Demo-driver local build (demo profile). Also requires repo-root context:
+  # its Dockerfile COPYs testing/fixtures/gha/demo/ + gateway/demo-driver/entrypoint.py.
+  demo-driver:
+    build:
+      context: ..
+      dockerfile: gateway/demo-driver/Dockerfile
+    image: deployment-dashboard/demo-driver:dev
+    pull_policy: never
+
   # Dev-only convenience -- not present in the release stack.
   pgadmin:
     image: dpage/pgadmin4:latest
