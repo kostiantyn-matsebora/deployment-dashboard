@@ -1,7 +1,7 @@
 {
   "$comment": "Declarative configuration for the mockup-visual harness. Per CLAUDE.md 'Configuration vs. data' — no URLs, viewport sizes, tolerances, or combination matrices live as literals inside the spec or runner. Edit this file to add/remove combinations or tune tolerances.",
 
-  "mockupRelativePath": "../../docs/ui/deployment-dashboard.html",
+  "mockupRelativePath": "../../docs/ui/mockups/deployment-dashboard.html",
   "screenshotsDir": "./__screenshots__",
   "reportPath": "./__screenshots__/_report.json",
 
