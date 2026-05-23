@@ -1,28 +1,18 @@
 {
-  "_comment": "Needs-recovery \u00e2\u20ac\u201d workflow YAML for billing-service. Adapter parses needs: chains from this YAML to wire intra-run edges into ParentDeployments.",
-  "Priority": 100,
-  "Request": {
-    "Methods": [
-      "GET"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/billing-service/contents/.github/workflows/billing-service-pipeline.yml"
-        }
-      ]
-    }
+  "priority": 100,
+  "request": {
+    "method": "GET",
+    "urlPath": "/repos/demo-org/billing-service/contents/.github/workflows/billing-service-pipeline.yml"
   },
-  "Response": {
-    "StatusCode": 200,
-    "Headers": {
+  "response": {
+    "status": 200,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
       "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
       "X-RateLimit-Reset": "9999999999"
     },
-    "BodyAsJson": {
+    "jsonBody": {
       "name": "billing-service-pipeline.yml",
       "path": ".github/workflows/billing-service-pipeline.yml",
       "content": "bmFtZTogQmlsbGluZyBTZXJ2aWNlIFBpcGVsaW5lCm9uOgogIHB1c2g6CiAgICBicmFuY2hlczogW21haW5dCmpvYnM6CiAgbGludDoKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIHN0ZXBzOgogICAgICAtIHJ1bjogZWNobyBsaW50CiAgdGVzdDoKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIG5lZWRzOiBbbGludF0KICAgIHN0ZXBzOgogICAgICAtIHJ1bjogZWNobyB0ZXN0CiAgYnVpbGQ6CiAgICBydW5zLW9uOiB1YnVudHUtbGF0ZXN0CiAgICBuZWVkczogW2xpbnQsIHRlc3RdCiAgICBzdGVwczoKICAgICAgLSBydW46IGVjaG8gYnVpbGQKICBkZXBsb3k6CiAgICBydW5zLW9uOiB1YnVudHUtbGF0ZXN0CiAgICBuZWVkczogW2J1aWxkXQogICAgc3RlcHM6CiAgICAgIC0gcnVuOiBlY2hvIGRlcGxveQo=",

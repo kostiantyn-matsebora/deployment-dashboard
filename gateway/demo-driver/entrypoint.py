@@ -191,6 +191,15 @@ _STATUS_TICK_RE = re.compile(r"^status-")
 # fallback is noted once.
 _put_fallback_announced: set[str] = set()
 
+# Track Guids assigned by WireMock.Net for status mappings posted in the
+# previous tick. Before each tick's status POSTs, the prior set is DELETEd
+# so the live-mapping count stays bounded at ~status-files-per-tick.
+#
+# Issue #57: keeping fewer mappings live (~4 instead of ~30 cumulative)
+# reduces the per-request leak in WireMock.Net 2.4.0 -- each registered
+# matcher contributes to per-request allocation that does not free.
+_prev_status_guids: set[str] = set()
+
 
 def _apply_list_deployments(tick_file: pathlib.Path, slug: str, offset: int, guid_map: dict[str, str]) -> None:
     pinned = guid_map.get(slug)
@@ -223,20 +232,44 @@ def _apply_list_deployments(tick_file: pathlib.Path, slug: str, offset: int, gui
     log.warning("PUT /__admin/mappings/%s -> status %d body=%s", pinned, status, text[:200])
 
 
-def _apply_status(tick_file: pathlib.Path, offset: int) -> None:
+def _apply_status(tick_file: pathlib.Path, offset: int) -> str | None:
+    """POST a status mapping; return the WireMock-assigned Guid (or None on failure)."""
     try:
         body = json.loads(tick_file.read_text(encoding="utf-8"))
     except Exception as exc:
         log.warning("parse tick %s: %s", tick_file.name, exc)
-        return
+        return None
     rewrite_ids_in_mapping(body, offset)
-    status, text = _admin_request("POST", "/__admin/mappings", body)
-    if not (200 <= status < 300):
-        log.warning("POST /__admin/mappings (status tick %s) -> status %d body=%s", tick_file.name, status, text[:200])
+    http_status, text = _admin_request("POST", "/__admin/mappings", body)
+    if not (200 <= http_status < 300):
+        log.warning("POST /__admin/mappings (status tick %s) -> status %d body=%s", tick_file.name, http_status, text[:200])
+        return None
+    try:
+        # JVM WireMock returns "id" (not "Guid" as WireMock.Net did).
+        assigned_guid = json.loads(text).get("id")
+        if isinstance(assigned_guid, str) and assigned_guid:
+            return assigned_guid
+    except Exception:
+        pass
+    log.warning("POST /__admin/mappings (status tick %s) succeeded but id missing in response; mapping will not be pruned", tick_file.name)
+    return None
+
+
+def _delete_prev_status_guids() -> None:
+    """DELETE all status mappings posted in the previous tick (idempotent)."""
+    global _prev_status_guids
+    for guid in _prev_status_guids:
+        del_status, _ = _admin_request("DELETE", f"/__admin/mappings/{guid}", None)
+        if not (200 <= del_status < 300 or del_status == 404):
+            log.warning("DELETE prior status mapping %s -> status %d", guid, del_status)
+    _prev_status_guids = set()
 
 
 def apply_tick(tick_dir: pathlib.Path, offset: int, guid_map: dict[str, str]) -> None:
+    global _prev_status_guids
     log.info("applying tick %s (id-offset=%d)", tick_dir.name, offset)
+    _delete_prev_status_guids()
+    new_status_guids: set[str] = set()
     for f in sorted(tick_dir.iterdir()):
         if not f.is_file() or not f.name.endswith(".json"):
             continue
@@ -245,9 +278,12 @@ def apply_tick(tick_dir: pathlib.Path, offset: int, guid_map: dict[str, str]) ->
             _apply_list_deployments(f, m_list.group("slug"), offset, guid_map)
             continue
         if _STATUS_TICK_RE.match(f.name):
-            _apply_status(f, offset)
+            guid = _apply_status(f, offset)
+            if guid:
+                new_status_guids.add(guid)
             continue
         log.info("tick %s: unrecognised filename %s; skipping", tick_dir.name, f.name)
+    _prev_status_guids = new_status_guids
 
 
 # -------- Cycle-index anchor ---------------------------------------------------

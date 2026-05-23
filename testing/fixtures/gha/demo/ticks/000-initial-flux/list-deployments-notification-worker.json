@@ -1,29 +1,19 @@
 {
-  "_comment": "Demo bundle tick: list-deployments for service \"notification-worker\". Cumulative body \u2014 static base + prior-tick additions + this-tick additions. Sidecar PUTs to /__admin/mappings/7f8a3c20-46de-4a04-b204-d3e1a6b5c004.",
-  "Guid": "7f8a3c20-46de-4a04-b204-d3e1a6b5c004",
-  "Priority": 10,
-  "Request": {
-    "Methods": [
-      "GET"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/notification-worker/deployments"
-        }
-      ]
-    }
+  "id": "7f8a3c20-46de-4a04-b204-d3e1a6b5c004",
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPath": "/repos/demo-org/notification-worker/deployments"
   },
-  "Response": {
-    "StatusCode": 200,
-    "Headers": {
+  "response": {
+    "status": 200,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
       "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
       "X-RateLimit-Reset": "9999999999"
     },
-    "BodyAsJson": [
+    "jsonBody": [
       {
         "id": 11003,
         "sha": "d0d000110030000000000000000000000000000d",

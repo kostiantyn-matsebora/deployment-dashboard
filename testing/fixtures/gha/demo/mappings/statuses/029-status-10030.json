@@ -1,28 +1,18 @@
 {
-  "_comment": "Status for api-gateway/qa dep #10030 = failure. Includes /job/ \u00e2\u2020\u2019 adapter walks needs-recovery.",
-  "Priority": 50,
-  "Request": {
-    "Methods": [
-      "GET"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/api-gateway/deployments/10030/statuses"
-        }
-      ]
-    }
+  "priority": 50,
+  "request": {
+    "method": "GET",
+    "urlPath": "/repos/demo-org/api-gateway/deployments/10030/statuses"
   },
-  "Response": {
-    "StatusCode": 200,
-    "Headers": {
+  "response": {
+    "status": 200,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
       "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
       "X-RateLimit-Reset": "9999999999"
     },
-    "BodyAsJson": [
+    "jsonBody": [
       {
         "state": "failure",
         "log_url": "https://github.com/demo-org/demo-repo/actions/runs/200030/job/2000300",

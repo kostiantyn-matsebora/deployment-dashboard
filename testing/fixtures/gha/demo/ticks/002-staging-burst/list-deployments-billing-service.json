@@ -1,29 +1,19 @@
 {
-  "_comment": "Demo bundle tick: list-deployments for service \"billing-service\". Cumulative body \u2014 static base + prior-tick additions + this-tick additions. Sidecar PUTs to /__admin/mappings/7f8a3c20-46de-4a03-b203-d3e1a6b5c003.",
-  "Guid": "7f8a3c20-46de-4a03-b203-d3e1a6b5c003",
-  "Priority": 10,
-  "Request": {
-    "Methods": [
-      "GET"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/billing-service/deployments"
-        }
-      ]
-    }
+  "id": "7f8a3c20-46de-4a03-b203-d3e1a6b5c003",
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPath": "/repos/demo-org/billing-service/deployments"
   },
-  "Response": {
-    "StatusCode": 200,
-    "Headers": {
+  "response": {
+    "status": 200,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
       "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
       "X-RateLimit-Reset": "9999999999"
     },
-    "BodyAsJson": [
+    "jsonBody": [
       {
         "id": 11020,
         "sha": "d0d000110200000000000000000000000000000d",

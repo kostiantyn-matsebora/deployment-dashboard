@@ -112,9 +112,9 @@ services:
   mock-gha:
     ports:
       - "18080:80"
-    # Bind-mount qa-engineer's base mappings into WireMock.Net's admin-mappings
-    # directory. The sheyenrath/wiremock.net image reads bootstrap mappings
-    # from `/app/__admin/mappings` at start-up; per-scenario overrides are
+    # Bind-mount qa-engineer's base mappings into JVM WireMock's mappings
+    # directory. JVM WireMock reads bootstrap mappings from
+    # `/home/wiremock/mappings` at start-up; per-scenario overrides are
     # still loaded via the admin API at runtime (CR-0012 S 5), but the base
     # five-endpoint coverage matrix (CR-0009 S 3d / docs/integration-tests.md
     # S 6) is mounted once so a fresh `start.ps1 -Integration` boots with
@@ -122,8 +122,10 @@ services:
     # source-of-truth in the repo; the container must not mutate them.
     # Mount lives in the override (not the release file) because the
     # release-install host has no source tree.
+    # Issue #57: path changed from `/app/__admin/mappings` (WireMock.Net) to
+    # `/home/wiremock/mappings` (JVM WireMock).
     volumes:
-      - ../testing/fixtures/gha/mappings:/app/__admin/mappings:ro
+      - ../testing/fixtures/gha/mappings:/home/wiremock/mappings:ro
 
   # Dev-only convenience -- not present in the release stack.
   pgadmin:

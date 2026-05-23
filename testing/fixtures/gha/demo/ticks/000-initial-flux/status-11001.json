@@ -1,28 +1,18 @@
 {
-  "_comment": "Status for api-gateway dep #11001 = success. Includes /job/ \u2014 adapter walks needs-recovery.",
-  "Priority": 50,
-  "Request": {
-    "Methods": [
-      "GET"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "WildcardMatcher",
-          "Pattern": "/repos/demo-org/api-gateway/deployments/11001/statuses"
-        }
-      ]
-    }
+  "priority": 50,
+  "request": {
+    "method": "GET",
+    "urlPath": "/repos/demo-org/api-gateway/deployments/11001/statuses"
   },
-  "Response": {
-    "StatusCode": 200,
-    "Headers": {
+  "response": {
+    "status": 200,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
       "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
       "X-RateLimit-Reset": "9999999999"
     },
-    "BodyAsJson": [
+    "jsonBody": [
       {
         "state": "success",
         "log_url": "https://github.com/demo-org/demo-repo/actions/runs/211001/job/2110010",

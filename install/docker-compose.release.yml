@@ -175,27 +175,40 @@ services:
   # minimal: contract here, deltas there.
   mock-gha:
     profiles: ["integration"]
-    image: sheyenrath/wiremock.net:2.4.0
+    image: wiremock/wiremock:3.10.0
     container_name: dashboard-mock-gha
     restart: unless-stopped
-    # WireMock.Net admin API is the healthcheck surface but the underlying
-    # `sheyenrath/wiremock.net:2.4.0` image is Microsoft `dotnet/aspnet:8.0`
-    # based -- ships neither `wget` nor `curl`. It DOES ship `bash`, so the
-    # probe uses bash's `/dev/tcp` redirection to verify port 80 accepts
-    # TCP connects (sufficient signal: WireMock.Net only binds the port
-    # once startup is complete + admin API is wired).
+    # Issue #57: switched from sheyenrath/wiremock.net:2.4.0 to
+    # wiremock/wiremock:3.10.0 -- JVM heap is GC-bounded (vs monotonic .NET
+    # growth). `--port 80` keeps the fetcher's `GHA_API_BASE_URL=http://mock-gha:80`
+    # unchanged. `--max-request-journal 100` caps the request log so it does
+    # not grow unboundedly under continuous fetcher polling.
+    command:
+      - "--port"
+      - "80"
+      - "--max-request-journal"
+      - "100"
+    environment:
+      JAVA_OPTS: "-Xms32m -Xmx256m"
+    # JVM WireMock ships wget; probe the admin health endpoint directly.
     healthcheck:
-      test: ["CMD-SHELL", "bash -c ': > /dev/tcp/localhost/80' || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/__admin/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 5s
+      start_period: 10s
 
-  # Demo GitHub Actions upstream (CR-0013) -- WireMock.Net with the demo
+  # Demo GitHub Actions upstream (CR-0013) -- JVM WireMock with the demo
   # bundle baked into the image at build-time. Profile-gated by `demo`:
   # the release-install `install.ps1` / `install.sh` activate this profile
   # by default; explicit opt-outs are `-RealGha` (real GitHub upstream)
   # and `-Empty` (no fetcher, no mocks).
+  #
+  # Issue #57: switched from sheyenrath/wiremock.net:2.4.0 to
+  # wiremock/wiremock:3.10.0 -- WireMock.Net had an unfixed memory leak
+  # in its request-handling internals under sustained fetcher polling load
+  # (~22 MiB/min monotonic). JVM WireMock is GC-bounded and heap-capped
+  # via JAVA_OPTS -Xmx256m.
   #
   # Strict NFR-04 production posture (per CR-0013 S 3b + CR-0012 mirror):
   #   - NO `ports:`     -- never published to the host. Production
@@ -206,13 +219,12 @@ services:
   #                        is set to that under the demo profile by the
   #                        installer.
   #   - NO `volumes:`   -- the demo bundle is baked into the image's
-  #                        `/app/__admin/mappings/` layer (CR-0013 S 3c:
+  #                        `/home/wiremock/mappings/` layer (CR-0013 S 3c:
   #                        baked-image ship mechanism; no bind-mount, no
   #                        gh release download for a separate bundle
   #                        asset).
-  #   - Healthcheck     -- same bash `/dev/tcp` TCP probe `mock-gha` uses;
-  #                        image lineage is shared (both are
-  #                        `sheyenrath/wiremock.net:2.4.0`).
+  #   - Healthcheck     -- wget probe against `/__admin/health` (JVM
+  #                        WireMock ships wget; WireMock.Net did not).
   #   - Image tag pin   -- `${DASHBOARD_VERSION:-latest}` so the demo
   #                        bundle is atomically versioned with the four
   #                        sibling component images (api / fetcher /
@@ -227,27 +239,26 @@ services:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION:-latest}
     container_name: dashboard-demo-gha
     restart: unless-stopped
-    # `--ReadStaticMappings true` is REQUIRED -- WireMock.Net's default
-    # entry-point does NOT load the baked `/app/__admin/mappings/` tree
-    # on startup (admin API ships empty otherwise). Mirrors the `mock-gha`
-    # command override in dev_env/docker-compose.local.yml (CR-0012).
-    # `--Urls http://*:80` pins the bind port to match NFR-04's no-port-
-    # publish posture + the fetcher's `GHA_API_BASE_URL=http://demo-gha:80`.
+    # `--port 80` pins the bind port to match the fetcher's
+    # `GHA_API_BASE_URL=http://demo-gha:80`. JVM WireMock loads mappings
+    # from `/home/wiremock/mappings/` automatically at startup (no
+    # `--ReadStaticMappings` flag needed). `--max-request-journal 100`
+    # caps the request log so it does not grow unboundedly under
+    # continuous fetcher polling.
     command:
-      - "dotnet"
-      - "wiremock-net.dll"
-      - "--Urls"
-      - "http://*:80"
-      - "--ReadStaticMappings"
-      - "true"
-      - "--WireMockLogger"
-      - "WireMockConsoleLogger"
+      - "--port"
+      - "80"
+      - "--max-request-journal"
+      - "100"
+    environment:
+      JAVA_OPTS: "-Xms32m -Xmx256m"
+    # JVM WireMock ships wget; probe the admin health endpoint directly.
     healthcheck:
-      test: ["CMD-SHELL", "bash -c ': > /dev/tcp/localhost/80' || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/__admin/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 5s
+      start_period: 10s
 
   # Demo-driver sidecar (issue #46) -- periodic WireMock.Net admin-API
   # ticker that loops a qa-authored sequence of tick directories so the
