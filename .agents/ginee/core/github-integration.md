@@ -39,15 +39,9 @@ Framework tracks two repo handles:
 
 Resolution rules:
 
-1. **Primary repo.**
-   - `github.repo` override wins.
-   - Else infer from `git remote get-url origin` (strip `.git`).
-   - Multi-remote: use `origin` unless overridden.
-   - No remote / detached: PM surfaces the gap; offers to add the override key.
-2. **Framework repo.**
-   - `github.framework-repo` value wins if set.
-   - Absent → framework-targeted operations are disabled. PM surfaces this and offers to populate the key.
-3. **Same-repo case.** When working IN the framework repo (rare for the framework's own development), primary == framework. Target-based template selection (see below) naturally picks framework templates. Explicit `framework-` prefix on commands is accepted but redundant.
+1. **Primary repo.** `github.repo` override wins; else infer from `git remote get-url origin` (strip `.git`); multi-remote: use `origin` unless overridden; no remote / detached: PM surfaces the gap + offers to add the override key.
+2. **Framework repo.** `github.framework-repo` value wins if set; absent → framework-targeted operations disabled (PM surfaces + offers to populate the key).
+3. **Same-repo case.** When working IN the framework repo (rare for framework self-dev), primary == framework. Target-based template selection naturally picks framework templates. Explicit `framework-` prefix is accepted but redundant.
 
 ## Command targeting — primary vs framework
 
@@ -60,9 +54,9 @@ Default target is the primary repo. The `framework-` prefix routes **metadata-on
 | `@team-lead triage` | `@team-lead triage framework` |
 | `@team-lead promote discussion #<N>` | `@team-lead promote discussion framework#<N>` |
 
-`pick up` has **no `framework-` variant.** Addressing an issue requires the source — that means working in the framework repo, where target = origin = framework and standard `@team-lead pick up #<N>` applies. From an adopter project (no framework source available), PM rejects framework-issue pickup attempts with: *"Clone `<framework-repo>` separately, cd into it, then `@team-lead pick up #<N>`."*
+`pick up` has **no `framework-` variant.** Addressing an issue requires the source — work in the framework repo (target = origin = framework, standard `@team-lead pick up #<N>` applies). From an adopter project (no framework source), PM rejects framework-issue pickup with: *"Clone `<framework-repo>` separately, cd into it, then `@team-lead pick up #<N>`."*
 
-If `github.framework-repo` is unset, framework-targeted commands fail fast with a one-line "framework-repo not configured" message + an offer to populate the key. No silent fallback to primary.
+If `github.framework-repo` is unset, framework-targeted commands fail fast with a one-line "framework-repo not configured" message + offer to populate the key. No silent fallback to primary.
 
 ## Template selection
 
@@ -73,7 +67,7 @@ Driven by **target repo**, not command shape:
 | primary repo | `core/templates/issues/bug-report.md` | `core/templates/issues/feature-request.md` |
 | framework repo | `core/templates/issues/framework-bug-report.md` | `core/templates/issues/framework-feature-request.md` |
 
-When working IN the framework repo (primary == framework), the framework-* templates apply for every file/pick-up — no special command needed.
+When working IN the framework repo (primary == framework), framework-* templates apply for every file/pick-up — no special command needed.
 
 ## Label scheme (configurable)
 
@@ -117,23 +111,25 @@ Trigger: `@team-lead file bug <title>` / `file feature <title>` (→ primary) or
 
 Trigger: `@team-lead pick up #<N>` — always targets the primary repo (= the working tree's origin). **Never auto-picks.** **No `framework-` variant** — see § Command targeting.
 
-1. Fetch:
+**Skill-runner vs team-lead split (D28).** Steps 1–5 below are **mechanical ops** the skill-runner (`ginee-pick-up`) runs directly. After Step 5 the skill-runner dispatches `@team-lead` and team-lead owns every subsequent decision — Phase 1 analysis, plan drafting, specialist routing, comment cadence, gate enforcement, close-out. Full boundary: `core/process.md § Skill-runner — surface boundary`.
+
+1. **Mechanical (skill-runner).** Fetch:
    ```
    gh issue view <N> --repo <primary-repo> --json title,body,labels,state,comments
    ```
-2. Validate:
+2. **Mechanical (skill-runner).** Validate:
    - State must be `OPEN`.
-   - Labels include `ready-label` — if absent, PM offers to add it before pickup.
-3. Parse the structured body per the template sections. Map `affected area` → routing per `local/bindings.md`.
-4. **Scoring labels** per `core/triage-scoring.md`:
-   - Missing `value:*` → ask user (H / M / L); add `value:high|medium|low` label; post `<!-- ginee:value-prompt -->` audit comment.
-   - Missing `complexity:*` → dispatch `solution-architect` for H / M / L estimate; post `<!-- ginee:complexity-estimate -->` audit comment + add `complexity:high|medium|low` label.
-   - Post / update the sticky `<!-- ginee:score v=1 -->` comment per `core/triage-scoring.md § Score comment + audit trail` (find via marker; update in place; never duplicate).
-5. Swap labels:
+   - Labels include `ready-label` — if absent, skill-runner offers to add it before pickup; on user approval, mechanical label-add.
+3. **Mechanical (skill-runner).** Parse the structured body per the template sections. Forward `affected area` to team-lead in the hand-off payload; skill-runner never resolves routing itself.
+4. **Mixed — mechanical ops + first dispatch.** Scoring labels per `core/triage-scoring.md`:
+   - Missing `value:*` → skill-runner asks user (H / M / L) per the skill text; mechanical label-add + audit comment post.
+   - Missing `complexity:*` → skill-runner's **one allowed first-batch dispatch** is `@solution-architect` for H / M / L estimate per the skill text; mechanical audit-comment post + label-add on SA return.
+   - Mechanical sticky post — find via marker; update in place; never duplicate.
+5. **Mechanical (skill-runner).** Swap labels:
    ```
    gh issue edit <N> --remove-label <ready-label> --add-label <in-progress-label>
    ```
-6. Run Phase 1 analysis treating the parsed issue body as the task description. Standard Phase 1–8 dispatch from here.
+6. **Hand to `team-lead`.** Skill-runner dispatches `@team-lead` with the parsed issue body + scoring labels + label-swap result + (Mode 1) branch handle. team-lead runs Phase 1 analysis treating the parsed issue body as the task description. Standard Phase 1–8 dispatch from here.
 7. **Comment cadence** — PM posts a structured comment at each major transition:
 
    | Trigger | Comment shape |
@@ -245,9 +241,7 @@ Both run the same procedure under the same governance — **skill / command pari
 
 ### Lossless coverage rule
 
-Every unresolved plan-table remark MUST end the cycle as **fix** (patch in cycle commit) OR **reply** (text + marker on thread). No silent drops. Same principle as `core/index-protocol.md § Lossless rule for index § Coverage rule`.
-
-Team-lead verifies post-reconciliation: count of plan-table threads = count of `ginee:review-reply` markers + fix-touched-thread mappings. Gap → re-dispatch; never silently close.
+Every unresolved plan-table remark MUST end the cycle as **fix** (patch in cycle commit) OR **reply** (text + marker on thread). No silent drops. Same principle as `core/index-protocol.md § Lossless rule for index § Coverage rule`. Team-lead verifies post-reconciliation: count of plan-table threads = count of `ginee:review-reply` markers + fix-touched-thread mappings; gap → re-dispatch, never silently close.
 
 ### Idempotency — re-invocation
 
@@ -258,9 +252,7 @@ Team-lead verifies post-reconciliation: count of plan-table threads = count of `
 
 ### User-confirmation gate
 
-No fix committed, no reply posted, no commit pushed without plan-table approval — per `core/process.md § Executing actions with care` (PR is externally visible).
-
-In `auto:` mode (D12) the gate is a **forced-interactive trigger** per `core/automatic-mode.md § Forced-interactive triggers` (push + reply on external PR = "destructive / external" set). Auto pauses, surfaces the table, resumes only on explicit approval. **No exception for "trivial" remarks** (slope; explicit out-of-scope).
+No fix committed, no reply posted, no commit pushed without plan-table approval — per `core/process.md § Executing actions with care` (PR is externally visible). In `auto:` mode (D12) the gate is a **forced-interactive trigger** per `core/automatic-mode.md § Forced-interactive triggers` (push + reply on external PR = "destructive / external" set) — auto pauses, surfaces the table, resumes only on explicit approval. **No exception for "trivial" remarks** (slope; explicit out-of-scope).
 
 ### Comment cadence
 

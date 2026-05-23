@@ -21,13 +21,15 @@ Thin wrapper. Loads `.agents/ginee/core/github-integration.md § Review-comment 
 ## Procedure
 
 1. Load `.agents/ginee/core/github-integration.md § Review-comment ingestion`.
-2. Run its 7-step shared procedure verbatim. Key invariants:
+2. **Mechanical ops only.** Skill-runner verifies checked-out branch == PR head; fetches `pulls/{N}/comments` + `/reviews`; deduplicates by `thread-id`; skips threads carrying current `<!-- ginee:review-reply r=<id> -->` markers without newer reviewer comments. No routing decisions in the main thread.
+3. **Hand to `team-lead` (D28).** Skill-runner dispatches `@team-lead` with the deduplicated thread list. team-lead owns: routing per `local/bindings.md § Source-of-truth ownership` (fallback `team-lead`; ambiguous → surface-closest role), plan-table construction, forced-interactive approval prompt, parallel specialist dispatch, reconciliation (cycle commit + per-thread replies), sticky cycle-summary post. Per `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
+4. Run the shared 7-step procedure verbatim under team-lead. Key invariants:
    - Plan-table approval gate is **forced-interactive** — applies even in `auto:` mode per `.agents/ginee/core/automatic-mode.md § Forced-interactive triggers`.
    - Routing per `local/bindings.md § Source-of-truth ownership`; fallback to `team-lead`.
    - Lossless coverage — every plan-table thread ends cycle as `fix` OR `reply`.
    - Idempotency markers: `<!-- ginee:review-reply r=<thread-id> -->` per thread; `<!-- ginee:review-cycle n=<N> -->` sticky per cycle.
    - Sticky format per `.agents/ginee/core/templates/pr-comment-cadence.md`.
-3. Re-invocation = same procedure. Skips already-marked threads unless a newer reviewer comment landed.
+5. Re-invocation = same procedure. Skips already-marked threads unless a newer reviewer comment landed.
 
 ## Forbidden
 
@@ -38,3 +40,4 @@ Thin wrapper. Loads `.agents/ginee/core/github-integration.md § Review-comment 
 - Never auto-detect new review comments — invocation is explicit; D20 CI-watch unaffected.
 - Never federate across repos — single-PR scope.
 - Never run when checked-out branch ≠ PR head — fix would land on the wrong branch.
+- **Skill-runner forbiddens (D28).** After Step 3 hand-off the skill-runner must not build the plan table itself · synthesize specialist returns · pick default selections on routing ambiguity · re-dispatch in the main thread · paraphrase specialist reply-text. Every decision dispatches `@team-lead`. Full boundary: `.agents/ginee/core/process.md § Skill-runner — surface boundary`.

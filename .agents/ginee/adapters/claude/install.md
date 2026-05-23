@@ -85,11 +85,60 @@ Cheat sheet for the 12 framework workflows (AgentSkills auto-activates from thes
 
 The framework's own `core/process.md` and role kernels use `@<role>` notation as vendor-neutral shorthand — Claude Code adopters read that as "the orchestrator routes here," not as a literal command.
 
+## Model tier (D31)
+
+Per-role model selection routes reasoning-heavy roles to capable models and execution-heavy roles to cheaper ones.
+
+| Tier | Default model | Default for |
+|---|---|---|
+| `reasoning` | `claude-opus-4-7` | `team-lead` · `solution-architect` |
+| `standard` | `claude-sonnet-4-6` | `ai-engineer` · `backend-engineer` · `frontend-engineer` · `devops-engineer` · `qa-engineer` |
+| `fast` | `claude-haiku-4-5-20251001` | (none by default — opt-in for adopter-defined mechanical work) |
+
+**Out of the box.** Each `.claude/agents/<role>.md` ships with `model: <id>` in its YAML frontmatter, pre-resolved from the role's `default-tier:` per `core/roles/<role>.md`.
+
+**Adopter override.** Edit `local/framework.config.yaml § model-tier`:
+
+```yaml
+model-tier:
+  per-role:
+    ai-engineer: reasoning  # bump from standard
+    qa-engineer: fast       # downshift mechanical test harness work
+  adapters:
+    claude:
+      reasoning: claude-opus-4-7
+      standard:  claude-sonnet-4-6
+      fast:      claude-haiku-4-5-20251001
+```
+
+Re-run the installer (`@team-lead update` or the bootstrap one-liner with `GINEE_UPDATE_ONLY=1`) to apply overrides. The Claude branch reads the config and rewrites each pointer's `model:` line accordingly.
+
+**Per-task prefix.** Prefix any dispatch with `model:<tier>` to override for one call (combinable with `auto:` / `branch:` / `wt:` / `commit:` per D17). Claude routes via the `Task` tool's `model` field for that dispatch.
+
+```
+model:reasoning Add the new ASR utility-tree leaves for the latency NFR.
+auto: model:fast Re-label stale issues with ginee:blocked.
+```
+
+Resolution order — stop at first match: (1) per-task prefix, (2) Phase-3 user answer, (3) `local/framework.config.yaml § model-tier.per-role.<role>`, (4) `core/roles/<role>.md` frontmatter `default-tier:`.
+
+Spec: `core/MIGRATIONS/D31-model-tier.md`.
+
 ## Updates
 
-**Recommended — re-run the installer**: `.\install.ps1 -UpdateOnly -Adapter claude` (or `./install.sh --update-only --adapter claude`). It performs all the steps below automatically, including the pointer-block sync in step 5.
+**Recommended — `/ginee-update`** (or "update ginee" / "upgrade the framework"). The skill fetches the installer from upstream at the target ref and drives `--update-only` for you — no local installer needed (D27). Performs all steps below automatically, including the pointer-block sync in step 5.
 
-Manual equivalent:
+**Manual fallback — bootstrap one-liner** (the installer is intentionally NOT inside `.agents/ginee/` per D27):
+
+```powershell
+$env:GINEE_UPDATE_ONLY='1'; $env:GINEE_ADAPTER='claude'; iwr -useb https://raw.githubusercontent.com/kostiantyn-matsebora/ginee/main/install.ps1 | iex
+```
+
+```bash
+GINEE_UPDATE_ONLY=1 GINEE_ADAPTER=claude bash -c "$(curl -fsSL https://raw.githubusercontent.com/kostiantyn-matsebora/ginee/main/install.sh)"
+```
+
+**Step-by-step equivalent:**
 
 1. Re-fetch `.agents/ginee/core/` + `.agents/ginee/adapters/` + `.agents/ginee/extras/` (your `local/` survives).
 2. Re-copy `.agents/ginee/adapters/_shared/agents/*.md` to `.claude/agents/` (pointers may have been refined).

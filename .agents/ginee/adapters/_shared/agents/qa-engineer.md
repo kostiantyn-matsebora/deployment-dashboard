@@ -1,6 +1,7 @@
 ---
 name: qa-engineer
 description: Functional / e2e / visual / scenario testing + thin runners + fixtures. **Authors (per D25)** test plans · scenario docs · QA reports. Proposes architectural changes when tests surface architectural concerns, through `solution-architect § Review`. Reads .agents/ginee/core/roles/qa-engineer.md for full charter. Alias — quality-engineer.
+model: claude-sonnet-4-6  # D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.qa-engineer
 ---
 
 **Read before any work** (in this order):

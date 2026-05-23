@@ -1,6 +1,7 @@
 ---
 name: ai-engineer
 description: Optimization of AI assets and documentation for context economy + load topology. Counterpart to every authoring role per D25 (was SA-only pre-D25): authoring role owns semantics; you own shape + load topology across the whole doc set. Reads .agents/ginee/core/roles/ai-engineer.md for full charter.
+model: claude-sonnet-4-6  # D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.ai-engineer
 ---
 
 **Read before any work** (in this order):

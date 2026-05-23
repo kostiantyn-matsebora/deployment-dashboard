@@ -50,11 +50,24 @@ User asks "pick up X" / "work on X" / "start on X" / "begin X" where X is one of
 1. Treat the prompt as the task description.
 2. Run Phase 1–8. No per-source artefact to update.
 
-### Step 3 — common lifecycle
+### Step 3 — hand to `team-lead` (D28)
 
-- Dispatch specialists per `local/bindings.md`.
-- Run iteration protocol per `.agents/ginee/core/iteration-protocol.md` when total scope > 15 min — estimation-first dispatch.
-- Honour gates at Phase 3 (design review), Phase 7 (SA review), Phase 8 (user approval).
+After the mechanical ops in Step 2 (label swap · sticky post · branch resolution) and **before any Phase 1 plan drafting**, the skill-runner dispatches `@team-lead` per `.agents/ginee/core/process.md § Skill-runner — surface boundary`. Inbound payload to team-lead: parsed task body + scoring labels + label-swap result + (issue-sourced) branch.
+
+From here on every orchestration decision — Phase 1–8 plan drafting · specialist routing · synthesis of parallel returns · lifecycle gate text · re-dispatch · routing reconciliation · default selection — flows through team-lead. The skill-runner never:
+
+- Drafts a Phase 1–8 plan in the main thread.
+- Reads `local/bindings.md` to settle a routing question — it dispatches team-lead instead.
+- Synthesizes specialist returns or proposes reconciliation options.
+- Picks defaults ("I'll pick option 1 if you don't redirect"). Defaults belong to team-lead.
+
+### Step 4 — common lifecycle (team-lead-owned)
+
+team-lead runs the full lifecycle per `.agents/ginee/core/roles/team-lead.md` + `.agents/ginee/core/process.md`:
+
+- Dispatches specialists per `local/bindings.md`.
+- Runs iteration protocol per `.agents/ginee/core/iteration-protocol.md` when total scope > 15 min.
+- Enforces gates at Phase 3 (design review), Phase 7 (SA review), Phase 8 (user approval).
 
 ## Forbidden
 
@@ -63,3 +76,4 @@ User asks "pick up X" / "work on X" / "start on X" / "begin X" where X is one of
 - TODO item: never auto-add new TODO lines (`§ TODO file rules` — never auto-generated, never auto-extended).
 - Never silently close out — Phase 8 acceptance is always surfaced.
 - Never run the framework-upstream variant from an adopter project — addressing a framework issue requires working in the framework repo (where origin = framework; plain `pick up #<N>` works).
+- **Skill-runner forbiddens (D28).** After Step 3 hand-off the skill-runner must not draft plans · synthesize parallel returns · answer routing/governance questions by reading project files · propose default-selection options · re-dispatch specialists in the main thread. Every such decision dispatches `@team-lead`. Full boundary: `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
