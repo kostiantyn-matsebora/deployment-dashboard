@@ -601,7 +601,7 @@ EOF
 # ---- Env-file shape ----
 
 @test "env-file -- contains every required key with -Version + -Port substituted" {
-    run_install --version v1.2.3 --port 9090 --install-dir "$INSTALL_DIR"
+    run_install --empty --version v1.2.3 --port 9090 --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     f="$INSTALL_DIR/dashboard.env"
     grep -qE '^POSTGRES_DB=dashboard$' "$f"
@@ -763,7 +763,7 @@ EOF
     fake_home="$BATS_TEST_TMPDIR/fakehome"
     mkdir -p "$fake_home"
     export DD_VOLUME_EXISTS=true
-    HOME="$fake_home" run bash "$SCRIPT" --version v9.9.9-test
+    HOME="$fake_home" run bash "$SCRIPT" --empty --version v9.9.9-test
     [ "$status" -eq 1 ]
     [[ "$output" == *"Pre-existing Postgres volume detected"* ]]
     [ ! -f "$fake_home/.dashboard-release/dashboard.env" ]
@@ -788,7 +788,7 @@ API_TOKEN=$apiTok
 POSTGRES_PASSWORD=$pgPw
 EOF
     export DD_VOLUME_EXISTS=true
-    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    run_install --empty --version v9.9.9-test --install-dir "$INSTALL_DIR"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Reusing API_TOKEN"* ]]
     [[ "$output" == *"Reusing POSTGRES_PASSWORD"* ]]
