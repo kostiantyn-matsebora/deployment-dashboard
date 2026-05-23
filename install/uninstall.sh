@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-INSTALL_DIR="$PWD/dashboard-release"
+INSTALL_DIR="$HOME/.dashboard-release"
 REMOVE_DATA=false
 REMOVE_SECRETS=false
 
@@ -23,7 +23,7 @@ Usage: uninstall.sh [OPTIONS]
 Tear down a release-installed Deployment Dashboard stack.
 
 Options:
-      --install-dir <path>   Install directory (default: ./dashboard-release).
+      --install-dir <path>   Install directory (default: $HOME/.dashboard-release; D-2 fix per CR-0014).
       --remove-data          Remove the pg-data named volume. IRREVERSIBLE.
       --remove-secrets       Delete <InstallDir>/dashboard.env.
   -h, --help                 Show this help.

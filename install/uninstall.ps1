@@ -14,7 +14,7 @@
     `-RemoveData` is irreversible -- the database is gone.
 .PARAMETER InstallDir
     Install directory previously passed to install.ps1. Defaults to
-    `./dashboard-release`.
+    `$HOME/.dashboard-release` (same default as install.ps1; D-1 fix per CR-0014).
 .PARAMETER RemoveData
     Append `-v` to `docker compose down` -- removes the `pg-data` named volume.
     IRREVERSIBLE.
@@ -29,7 +29,7 @@
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $PWD 'dashboard-release'),
+    [string]$InstallDir = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dashboard-release'),
     [switch]$RemoveData,
     [switch]$RemoveSecrets
 )
