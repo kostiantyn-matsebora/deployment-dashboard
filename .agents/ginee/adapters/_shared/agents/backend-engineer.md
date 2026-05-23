@@ -1,7 +1,8 @@
 ---
 name: backend-engineer
 description: Server-side / API engineering. **Authors (per D25)** backend READMEs · API docs · service docs. Proposes architectural changes through `solution-architect § Review`. Reads .agents/ginee/core/roles/backend-engineer.md for full charter. Alias — service-engineer.
-model: claude-sonnet-4-6  # D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.backend-engineer
+# D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.backend-engineer
+model: claude-sonnet-4-6
 ---
 
 **Read before any work** (in this order):

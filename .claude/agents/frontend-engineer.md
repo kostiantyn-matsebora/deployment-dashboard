@@ -1,7 +1,8 @@
 ---
 name: frontend-engineer
 description: Client-side / UI engineering. **Authors (per D25)** frontend READMEs · component docs · style guides. Proposes architectural changes through `solution-architect § Review`. Reads .agents/ginee/core/roles/frontend-engineer.md for full charter. Alias — client-engineer.
-model: claude-sonnet-4-6  # D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.frontend-engineer
+# D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.frontend-engineer
+model: claude-sonnet-4-6
 ---
 
 **Read before any work** (in this order):
