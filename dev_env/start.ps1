@@ -25,6 +25,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $releaseCompose = Join-Path $PSScriptRoot '..' 'install' 'docker-compose.release.yml'
+$demoCompose    = Join-Path $PSScriptRoot '..' 'install' 'docker-compose.demo.yml'
 $localCompose   = Join-Path $PSScriptRoot 'docker-compose.local.yml'
 $scaledCompose  = Join-Path $PSScriptRoot 'docker-compose.scaled.yml'
 
@@ -46,5 +47,5 @@ if ($Integration) {
     exit $LASTEXITCODE
 }
 
-& docker compose -f $releaseCompose -f $localCompose --profile demo --profile fetcher up -d --build --wait
+& docker compose -f $releaseCompose -f $demoCompose -f $localCompose --profile demo --profile fetcher up -d --build --wait
 exit $LASTEXITCODE

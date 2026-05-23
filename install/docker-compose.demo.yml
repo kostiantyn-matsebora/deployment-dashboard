@@ -1,0 +1,29 @@
+# Demo-mode compose overlay -- single source of truth for demo env config.
+#
+# Layered by:
+#   install/install.ps1   (release):   docker compose -f release -f demo
+#   dev_env/start.ps1     (local dev): docker compose -f release -f demo -f local
+#
+# Provides all env vars the release file needs for demo mode as inline literals,
+# so neither script needs an --env-file or a secret-management helper.
+# Replaces Resolve-DemoEnvDefaults + the demo path of Resolve-DashboardSecrets
+# from the retired install/_bringup-core.ps1.
+
+name: deployment-dashboard
+
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: "local-dev-password"
+
+  api:
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
+      API_TOKEN: "demo-api-token"
+
+  fetcher:
+    environment:
+      DASHBOARD_WRITE_API_KEY: "demo-api-token"
+      GHA_API_BASE_URL: "http://demo-gha:80"
+      FETCHER_POLL_INTERVAL_SECONDS: "5"
+      GHA_REPOSITORIES: '[{"owner":"demo-org","repo":"web-portal"},{"owner":"demo-org","repo":"api-gateway"},{"owner":"demo-org","repo":"auth-service"},{"owner":"demo-org","repo":"billing-service"},{"owner":"demo-org","repo":"notification-worker"},{"owner":"demo-org","repo":"analytics-pipeline"}]'

@@ -77,9 +77,6 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       DASHBOARD_WRITE_API_KEY: "demo-api-token"
-      GHA_API_BASE_URL: "http://demo-gha:80"
-      FETCHER_POLL_INTERVAL_SECONDS: "5"
-      GHA_REPOSITORIES: '[{"owner":"demo-org","repo":"web-portal"},{"owner":"demo-org","repo":"api-gateway"},{"owner":"demo-org","repo":"auth-service"},{"owner":"demo-org","repo":"billing-service"},{"owner":"demo-org","repo":"notification-worker"},{"owner":"demo-org","repo":"analytics-pipeline"}]'
     # `depends_on: required: false` (docker compose >= 2.20) lets the
     # fetcher start whether or not `mock-gha` is active. Under the
     # `integration` compose profile `mock-gha` is up and we wait for its
@@ -104,10 +101,11 @@ services:
   # `--profile integration`) never starts mock-gha, so this ports stanza is
   # inert outside the integration flow.
   #
-  # FETCHER_POLL_INTERVAL_SECONDS for the integration profile is overridden
-  # by start.ps1 -Integration via `$env:FETCHER_POLL_INTERVAL_SECONDS = '1'`
-  # before invoking docker compose; the fetcher service's inline value (`5`)
-  # is superseded by that env var for integration runs.
+  # GHA_API_BASE_URL / FETCHER_POLL_INTERVAL_SECONDS / GHA_REPOSITORIES are
+  # NOT set here -- for demo mode they come from docker-compose.demo.yml;
+  # for integration mode start.ps1 -Integration seeds them as process env
+  # vars before invoking docker compose, which feeds the release file's
+  # ${VAR:-default} substitutions directly (no overlay override blocks them).
   mock-gha:
     ports:
       - "18080:80"
