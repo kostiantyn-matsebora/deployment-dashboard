@@ -33,6 +33,7 @@ network calls. The installer:
 | `install.ps1 -RealGha` / `install.sh --real-gha` | Real GitHub Actions upstream; requires `$env:GHA_TOKEN` | You want to point the fetcher at your own repos. |
 | `install.ps1 -Empty` / `install.sh --empty` | No fetcher; no demo-gha; bare api/gateway/frontend/db | Direct `POST /api/deployments` integrators / power users. |
 | `install.ps1 -Demo` (back-compat) | Routes to default + logs an info line | Migration aid; will be removed after one release cycle. See § Migration from earlier versions. |
+| `install.ps1 -ResetDemoDefaults` / `install.sh --reset-demo-defaults` | Demo with credential reset | Re-runs where the prior install used different credentials (pre-CR-0014 random secrets or a `-RealGha` install). See § Demo credentials and re-run safety. |
 
 ## Prerequisites
 
@@ -133,6 +134,43 @@ Within ~60 seconds of `/health` returning 200:
 The demo bundle is content-only — there is no admin UI to inject new events.
 Re-run `install.ps1` to reset the scenario state to tick 1.
 
+## Demo credentials and re-run safety
+
+As of [CR-0014](cr/CR-0014-shared-bringup-logic-and-demo-credentials.html), the demo path writes **fixed** credentials to `dashboard.env` instead of random-per-install values. This makes demo re-runs idempotent against an existing `pg-data` volume — you no longer need to uninstall between re-runs.
+
+| Variable | Demo path value | Non-demo paths (`-RealGha` / `--real-gha`, `-Empty` / `--empty`) |
+|---|---|---|
+| `POSTGRES_PASSWORD` | `local-dev-password` | Random hex per install |
+| `API_TOKEN` | `demo-api-token` | Random hex per install |
+
+> **Do not use demo credentials in production.** These are publicly documented fixed literals. They are safe for the demo path only because the stack is internal-only with no public ingress (NFR-04). Any `-RealGha` or `-Empty` install generates random secrets and refuses the demo literals.
+
+### Re-run safety
+
+Re-running `install.ps1` (no flags — demo default) against an existing `pg-data` volume succeeds without data loss. The Postgres cluster was initialised with `local-dev-password`; the re-run writes the same password; the API container connects successfully.
+
+### `-ResetDemoDefaults` — credential drift escape hatch
+
+If a prior install used different credentials (for example, a pre-CR-0014 install with random secrets, or a `-RealGha` install that left a non-demo `POSTGRES_PASSWORD` in `dashboard.env`), re-running as the demo default detects the drift and hard-fails with a remediation menu:
+
+1. **Re-run with `-ResetDemoDefaults`** (PowerShell) / `--reset-demo-defaults` (bash). Force-overwrites `dashboard.env` with demo literals. You MUST then run `uninstall.ps1 -RemoveData` / `uninstall.sh --remove-data` before the next bring-up to drop the incompatible pg volume.
+2. **Run `uninstall.ps1 -RemoveData` then re-install** — clean slate.
+3. **Manually edit `dashboard.env`** and set `POSTGRES_PASSWORD=local-dev-password` — only valid if you know the cluster was seeded with that exact password.
+
+```powershell
+# PowerShell: reset demo credentials + drop the old pg volume before re-running
+pwsh -NoProfile -File install.ps1 -ResetDemoDefaults
+pwsh -NoProfile -File uninstall.ps1 -RemoveData
+pwsh -NoProfile -File install.ps1
+```
+
+```bash
+# bash: same sequence
+bash install.sh --reset-demo-defaults
+bash uninstall.sh --remove-data
+bash install.sh
+```
+
 ## Real GitHub repos — `-RealGha`
 
 For pointing the fetcher at your own GitHub Actions repos (CR-0009 pull-mode worker), opt in with `-RealGha` (PowerShell) / `--real-gha` (bash). The `GHA_TOKEN` precondition must hold before any `docker compose` invocation runs (per [issue #5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) — preserved verbatim under the renamed flag):
@@ -164,6 +202,11 @@ compose-default placeholder literal `local-dev-gha-token-placeholder`. See
 [`docs/ci-cd-integration.md`](ci-cd-integration.html) § Anonymous-mode transport
 for the wire detail. The demo-default path does not exercise this anonymous-mode
 transport — `demo-gha` ignores the `Authorization` header entirely.
+
+> **Anonymous public-repo fetch via `dev_env/start.ps1` is not supported.**
+> Contributors should use `-Demo` for zero-config onboarding. To run a live
+> anonymous fetch, invoke `install.ps1 -RealGha` directly; the token
+> precondition will require `$env:GHA_TOKEN` to be set in the parent shell.
 
 ## Empty stack — `-Empty` (direct-POST integrators)
 
@@ -219,6 +262,8 @@ pwsh -NoProfile -File install.ps1 -Port 9090
 ```
 
 ## Uninstall
+
+The default install directory is `$HOME/.dashboard-release` (the same default as `install.ps1` / `install.sh`). Pass `--install-dir` / `-InstallDir` if you used a custom path.
 
 ```powershell
 pwsh -NoProfile -File uninstall.ps1                                # preserve data + secrets

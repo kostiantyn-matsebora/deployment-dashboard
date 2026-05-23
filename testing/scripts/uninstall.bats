@@ -163,3 +163,57 @@ seed_install() {
     [[ "$output" == *"unknown argument"* ]]
     [[ "$output" == *"Usage:"* ]]
 }
+
+# ---- D-2 default INSTALL_DIR path (CR-0014 defect coverage) ----
+# D-2 (High): uninstall.sh had a stale default INSTALL_DIR=./dashboard-release
+# instead of $HOME/.dashboard-release (matching install.sh). After the fix the
+# default must resolve to $HOME/.dashboard-release, NOT $CWD/dashboard-release.
+
+@test "D-2: default --install-dir is \$HOME/.dashboard-release (not ./dashboard-release)" {
+    fake_home="$BATS_TEST_TMPDIR/fakehome"
+    fake_cwd="$BATS_TEST_TMPDIR/fakecwd"
+    mkdir -p "$fake_home" "$fake_cwd"
+    # Seed a valid install under the canonical default location.
+    fake_dir="$fake_home/.dashboard-release"
+    mkdir -p "$fake_dir"
+    echo 'services: {}' > "$fake_dir/docker-compose.release.yml"
+    echo 'API_TOKEN=abc' > "$fake_dir/dashboard.env"
+    # Run from fake_cwd so any CWD-anchored default would land there instead.
+    HOME="$fake_home" run bash -c "cd '$fake_cwd' && bash '$SCRIPT'"
+    [ "$status" -eq 0 ]
+    # Compose call must reference $HOME/.dashboard-release path.
+    down_line="$(grep -E '^docker.*compose.*down' "$STUB_LOG" | head -n1)"
+    [[ "$down_line" == *"$fake_home/.dashboard-release"* ]]
+    # Anti-assertion: must NOT use $fake_cwd/dashboard-release.
+    [[ "$down_line" != *"$fake_cwd/dashboard-release"* ]]
+}
+
+# ---- D-6 oracle gap: demo + integration profile assertions (CR-0014 defect coverage) ----
+# D-6 (Low): uninstall.bats previously did not assert the demo + integration
+# profiles in the docker compose down call. CR-0014 adds these assertions.
+
+@test "D-6: compose down includes --profile demo" {
+    seed_install
+    run bash "$SCRIPT" --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    down_line="$(grep -E '^docker.*compose.*down' "$STUB_LOG" | head -n1)"
+    [[ "$down_line" == *"--profile demo"* ]]
+}
+
+@test "D-6: compose down includes --profile integration" {
+    seed_install
+    run bash "$SCRIPT" --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    down_line="$(grep -E '^docker.*compose.*down' "$STUB_LOG" | head -n1)"
+    [[ "$down_line" == *"--profile integration"* ]]
+}
+
+@test "D-6: compose down includes all three profiles: fetcher, demo, integration" {
+    seed_install
+    run bash "$SCRIPT" --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    down_line="$(grep -E '^docker.*compose.*down' "$STUB_LOG" | head -n1)"
+    [[ "$down_line" == *"--profile fetcher"* ]]
+    [[ "$down_line" == *"--profile demo"* ]]
+    [[ "$down_line" == *"--profile integration"* ]]
+}

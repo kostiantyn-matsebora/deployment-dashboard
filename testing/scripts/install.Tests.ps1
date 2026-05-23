@@ -235,6 +235,8 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
     }
 
     # Build a shimmed copy of install.ps1 in $tmp and return its path.
+    # CR-0014: install.ps1 dot-sources _bringup-core.ps1 from $PSScriptRoot; the
+    # shim runs in a temp dir, so we must copy the helper alongside the shimmed script.
     function New-ShimmedScript {
         param([string]$TmpDir)
         $shimmed = Join-Path $TmpDir 'install.shimmed.ps1'
@@ -250,6 +252,14 @@ function Start-Sleep { param([int]$Seconds, [int]$Milliseconds) }
         $insertAt = $match.Index + $match.Length
         $injected = $content.Substring(0, $insertAt) + "`n" + $script:ShimHeader + "`n" + $content.Substring($insertAt)
         Set-Content -LiteralPath $shimmed -Value $injected -Encoding utf8
+
+        # Copy the dot-sourced helper into the temp dir so $PSScriptRoot-relative
+        # dot-source in install.ps1 resolves correctly when the shim runs.
+        $helperSrc = Join-Path $script:RepoRoot 'install/_bringup-core.ps1'
+        if (Test-Path $helperSrc) {
+            Copy-Item -LiteralPath $helperSrc -Destination (Join-Path $TmpDir '_bringup-core.ps1') -Force
+        }
+
         return $shimmed
     }
 
@@ -646,8 +656,11 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
 
+    # CR-0014: demo is now the default mode. Random-secret tests use -Empty (no fetcher,
+    # no demo-gha) to exercise the non-demo secret generation path without requiring GHA_TOKEN.
+
     It 'new install -- generates a 64-char hex API_TOKEN and persists it to dashboard.env' {
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
         $r.ExitCode | Should -Be 0
         Test-Path $r.EnvFile | Should -BeTrue
         $envContent = Get-Content $r.EnvFile -Raw
@@ -659,7 +672,7 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
                     -Value "API_TOKEN=local-dev-token-not-for-production`nPOSTGRES_PASSWORD=preexisting-pg-pw" `
                     -Encoding utf8
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Not -Match 'API_TOKEN=local-dev-token-not-for-production'
@@ -672,7 +685,7 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
                     -Value "API_TOKEN=$preexisting`nPOSTGRES_PASSWORD=preexisting-pg-pw" `
                     -Encoding utf8
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Match "(?m)^API_TOKEN=$preexisting$"
@@ -682,7 +695,7 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
     It '$env:DASHBOARD_API_TOKEN -- wins over generation when no env-file exists' {
         $custom = 'custom-api-token-from-env-' + ('x' * 32)
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty') `
                             -EnvOverrides @{ DASHBOARD_API_TOKEN = $custom }
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
@@ -692,7 +705,7 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
 
     It '$env:DASHBOARD_API_TOKEN = dev literal -- refused, random generation kicks in' {
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty') `
                             -EnvOverrides @{ DASHBOARD_API_TOKEN = 'local-dev-token-not-for-production' }
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
@@ -702,7 +715,7 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
     }
 
     It 'new install -- generates a 32-char hex POSTGRES_PASSWORD' {
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Match '(?m)^POSTGRES_PASSWORD=([0-9a-f]{32})$'
@@ -713,7 +726,7 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
                     -Value "POSTGRES_PASSWORD=local-dev-password`nAPI_TOKEN=$('b' * 64)" `
                     -Encoding utf8
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Not -Match 'POSTGRES_PASSWORD=local-dev-password'
@@ -726,7 +739,7 @@ Describe 'install.ps1 -- secret handling (API_TOKEN + POSTGRES_PASSWORD)' {
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
                     -Value "POSTGRES_PASSWORD=$preexisting`nAPI_TOKEN=$('b' * 64)" `
                     -Encoding utf8
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
         $r.ExitCode | Should -Be 0
         $envContent = Get-Content $r.EnvFile -Raw
         $envContent | Should -Match "(?m)^POSTGRES_PASSWORD=$preexisting$"
@@ -798,7 +811,8 @@ Describe 'install.ps1 -- env-file output shape' {
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
 
     It 'writes every required key with the supplied -Version + -Port values' {
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v1.2.3','-Port','9090')
+        # Use -Empty to get random-secret generation (demo mode writes fixed literals not random hex).
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v1.2.3','-Port','9090','-Empty')
         $r.ExitCode | Should -Be 0
         $env = Get-Content $r.EnvFile -Raw
         $env | Should -Match '(?m)^POSTGRES_DB=dashboard$'
@@ -811,7 +825,8 @@ Describe 'install.ps1 -- env-file output shape' {
     }
 
     It 'ConnectionStrings password matches POSTGRES_PASSWORD literally (not a $ref)' {
-        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        # Use -Empty to get random-secret generation so we can assert the password is echoed verbatim.
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty')
         $r.ExitCode | Should -Be 0
         $env = Get-Content $r.EnvFile -Raw
         $pgMatch = [regex]::Match($env, '(?m)^POSTGRES_PASSWORD=([0-9a-f]{32})$')
@@ -907,6 +922,33 @@ Describe 'install.ps1 -- compose args (profiles + env-file)' {
     }
 }
 
+Describe 'install.ps1 -- smoke regression: health-poll + URL panel + exit code' {
+    # CR-0014 batch 5 smoke additions. Verifies the end-to-end observable surface
+    # (health 200 -> exit 0 + URL panel; health timeout -> exit non-zero + log dump).
+    BeforeEach { $script:tmp = New-TempTestDir }
+    AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
+
+    It 'happy path -- exits 0 and stdout contains the gateway port (URL panel smoke)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Port','8080')
+        $r.ExitCode | Should -Be 0
+        $r.Stdout   | Should -Match '8080'
+    }
+
+    It 'happy path -- /health poll IWR call is emitted exactly once (health-poll smoke)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        ($r.Events | Where-Object { $_.event -eq 'iwr' -and ($_.uri -like '*/health') }).Count `
+            | Should -Be 1
+    }
+
+    It 'health timeout -- exit code is non-zero (exit-code regression guard)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-HealthTimeoutSeconds','1') `
+                            -EnvOverrides @{ DD_IWR_HEALTH_OK = 'false' }
+        $r.ExitCode | Should -Not -Be 0
+    }
+}
+
 Describe 'install.ps1 -- error paths' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
@@ -950,6 +992,70 @@ Describe 'install.ps1 -- error paths' {
         # `docker compose ... logs` was invoked on failure.
         ($r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'logs') }).Count `
             | Should -BeGreaterThan 0
+    }
+}
+
+Describe 'install.ps1 -- CR-0014 demo fixed credentials + helper delegation' {
+    # CR-0014 § 3c: demo path writes POSTGRES_PASSWORD=local-dev-password
+    # and API_TOKEN=demo-api-token (fixed literals). Non-demo paths generate random.
+    # CR-0014 § 3a: install.ps1 dot-sources _bringup-core.ps1; entrypoint tests
+    # assert delegation outcome (fixed creds), not helper internals.
+    BeforeEach { $script:tmp = New-TempTestDir }
+    AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
+
+    It 'demo path (no flag) -- writes POSTGRES_PASSWORD=local-dev-password to dashboard.env (CR-0014 § 3c)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+    }
+
+    It 'demo path (no flag) -- writes API_TOKEN=demo-api-token to dashboard.env (CR-0014 § 3c)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^API_TOKEN=demo-api-token$'
+    }
+
+    It '-Demo back-compat alias -- writes fixed demo credentials (same as no-flag default)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+        $envContent | Should -Match '(?m)^API_TOKEN=demo-api-token$'
+    }
+
+    It '-RealGha path -- does NOT write fixed demo POSTGRES_PASSWORD (still random) (CR-0014 § 3c non-demo)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-RealGha','-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ GHA_TOKEN = 'ghp_fake_pat' }
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Not -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+        $envContent | Should -Match '(?m)^POSTGRES_PASSWORD=[0-9a-f]'
+    }
+
+    It '-Empty path -- does NOT write fixed demo credentials (still random) (CR-0014 § 3c non-demo)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-Empty','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Not -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+        $envContent | Should -Not -Match '(?m)^API_TOKEN=demo-api-token$'
+    }
+
+    It 'demo re-run against existing pg-data volume -- succeeds without volume drop (CR-0014 § 3c re-run safety)' {
+        # With fixed demo credentials, pg cluster initialised on first install
+        # accepts the same password on subsequent re-runs.
+        # Seed an env-file with the fixed demo creds (post-CR-0014 state).
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=demo-api-token`nPOSTGRES_PASSWORD=local-dev-password" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_VOLUME_EXISTS = 'true' }
+        # Guard must not red-error (fixed creds make collision impossible).
+        $r.ExitCode | Should -Be 0
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Not -Match 'Pre-existing Postgres volume detected'
     }
 }
 
@@ -1066,8 +1172,9 @@ Describe 'install.ps1 -- upgrade flow (issue #37)' {
             [Environment]::SetEnvironmentVariable('DD_SCRIPT_LOG', $log, 'Process')
             [Environment]::SetEnvironmentVariable('DD_IWR_HEALTH_OK', 'true', 'Process')
             [Environment]::SetEnvironmentVariable('DD_VOLUME_EXISTS', 'true', 'Process')
+            # -Empty: volume guard only fires in non-demo mode (SA pin S8 skips guard in demo).
             $proc = Start-Process -FilePath 'pwsh' `
-                                  -ArgumentList @('-NoProfile','-NonInteractive','-File',$shimmed,'-Version','v9.9.9-test') `
+                                  -ArgumentList @('-NoProfile','-NonInteractive','-File',$shimmed,'-Version','v9.9.9-test','-Empty') `
                                   -WorkingDirectory $tmp `
                                   -NoNewWindow -Wait -PassThru `
                                   -RedirectStandardOutput $stdoutPath `
@@ -1110,13 +1217,14 @@ Describe 'install.ps1 -- upgrade flow (issue #37)' {
 
     It 'volume present + env-file present -> happy path (guard not triggered, secrets reused)' {
         # Seed a valid env-file so the safety-net precondition is bypassed.
+        # Use -Empty so the volume guard runs (SA pin S8: guard skipped in demo mode).
         $apiTok = 'a' * 64
         $pgPw   = 'c' * 32
         Set-Content -Path (Join-Path $tmp 'dashboard.env') `
                     -Value "API_TOKEN=$apiTok`nPOSTGRES_PASSWORD=$pgPw" `
                     -Encoding utf8
         $r = Invoke-Install -TmpDir $tmp `
-                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Empty') `
                             -EnvOverrides @{ DD_VOLUME_EXISTS = 'true' }
         $r.ExitCode | Should -Be 0
         # Secrets reused (no regeneration log line for these two).
