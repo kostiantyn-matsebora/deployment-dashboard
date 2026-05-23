@@ -901,6 +901,26 @@ EOF
     ! grep -qE '^GHA_TOKEN=' "$INSTALL_DIR/dashboard.env"
 }
 
+# ---- Smoke regression: health-poll + URL panel + exit code (CR-0014 batch 5) ----
+
+@test "smoke: happy path -- exits 0 and stdout contains gateway port (URL panel smoke)" {
+    run_install --version v9.9.9-test --port 8080 --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"8080"* ]]
+}
+
+@test "smoke: happy path -- health curl call emitted at least once (health-poll smoke)" {
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^curl.*\/health' "$STUB_LOG"
+}
+
+@test "smoke: health timeout -- exit code is non-zero (exit-code regression guard)" {
+    export DD_HEALTH_OK=false
+    run_install --version v9.9.9-test --health-timeout-seconds 1 --install-dir "$INSTALL_DIR"
+    [ "$status" -ne 0 ]
+}
+
 # ---- CR-0014 demo fixed credentials + helper delegation ----
 # CR-0014 § 3c: demo path writes fixed POSTGRES_PASSWORD=local-dev-password
 # and API_TOKEN=demo-api-token. Non-demo paths remain random.

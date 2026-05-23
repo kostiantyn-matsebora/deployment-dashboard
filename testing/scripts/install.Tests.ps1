@@ -907,6 +907,33 @@ Describe 'install.ps1 -- compose args (profiles + env-file)' {
     }
 }
 
+Describe 'install.ps1 -- smoke regression: health-poll + URL panel + exit code' {
+    # CR-0014 batch 5 smoke additions. Verifies the end-to-end observable surface
+    # (health 200 -> exit 0 + URL panel; health timeout -> exit non-zero + log dump).
+    BeforeEach { $script:tmp = New-TempTestDir }
+    AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
+
+    It 'happy path -- exits 0 and stdout contains the gateway port (URL panel smoke)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Port','8080')
+        $r.ExitCode | Should -Be 0
+        $r.Stdout   | Should -Match '8080'
+    }
+
+    It 'happy path -- /health poll IWR call is emitted exactly once (health-poll smoke)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        ($r.Events | Where-Object { $_.event -eq 'iwr' -and ($_.uri -like '*/health') }).Count `
+            | Should -Be 1
+    }
+
+    It 'health timeout -- exit code is non-zero (exit-code regression guard)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-HealthTimeoutSeconds','1') `
+                            -EnvOverrides @{ DD_IWR_HEALTH_OK = 'false' }
+        $r.ExitCode | Should -Not -Be 0
+    }
+}
+
 Describe 'install.ps1 -- error paths' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
