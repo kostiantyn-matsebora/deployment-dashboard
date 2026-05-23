@@ -1,61 +1,114 @@
 # class: topology
-# source-glob: dev_env/docker-compose.local.yml + dev_env/docker-compose.scaled.yml + gateway/nginx.conf
+# source-glob: install/docker-compose.release.yml + dev_env/docker-compose.local.yml + dev_env/docker-compose.scaled.yml + gateway/nginx.conf
 # recipe: builtin:container-orchestration
+# reindexed: 2026-05-23 (added install/docker-compose.release.yml as canonical inventory; updated local override per ADR-0010; added demo/integration profile services; updated migration actuation per ADR-0009)
 
 orchestrators:
   - tool: docker-compose
-    file: '@dev_env/docker-compose.local.yml'
+    file: '@install/docker-compose.release.yml'
     name: deployment-dashboard
-    role: Local-dev stack (zero-setup; no .env files)
+    role: 'Canonical service inventory (ADR-0010); release-install stack (image-only; no build: blocks; no bind-mounts; no pgadmin)'
+  - tool: docker-compose
+    file: '@dev_env/docker-compose.local.yml (OVERRIDE layered on install/docker-compose.release.yml per ADR-0010)'
+    name: deployment-dashboard
+    role: 'Contributor-flow override: build: blocks + dev-literal env-vars + pgadmin convenience service; invoked as: docker compose -f install/docker-compose.release.yml -f dev_env/docker-compose.local.yml up -d --build'
   - tool: docker-compose
     file: '@dev_env/docker-compose.scaled.yml'
     name: deployment-dashboard-scaled
-    role: NFR-05 validation (api replicas:3; gateway round-robins)
+    role: 'NFR-05 validation (api replicas:3; gateway round-robins); standalone single-file (NOT layered on release compose per ADR-0010 §Decision §Constraints)'
 
-services-local:
+compose-merge-model:
+  adr: ADR-0010
+  base-file: install/docker-compose.release.yml
+  override-file: dev_env/docker-compose.local.yml
+  override-carries-only:
+    - 'build: blocks + image: tag overrides + pull_policy: never (contributor-flow image source)'
+    - 'dev-literal env-var substitutions (one key per service; Compose merges by key; override wins)'
+    - 'pgadmin service (full service entry; Compose appends services not in base)'
+  cosmetic-warning: 'Compose interpolates -f files independently; ${POSTGRES_PASSWORD}/${API_TOKEN}/${ConnectionStrings__DefaultConnection} warn on stderr (empty string before override merge replaces them with dev literals); functional behaviour correct'
+
+services-release-canonical:
   - name: db
     image: postgres:16-alpine
     tier: data-store
-    role: PostgreSQL primary; LISTEN/NOTIFY channel; dev-only host port 5432
-    source-anchor: '@dev_env/docker-compose.local.yml:36-53'
-  - name: migrations
-    image: 'mcr.microsoft.com/dotnet/sdk:10.0'
-    tier: data-store
-    role: One-shot dotnet ef database update; depends_on db service_healthy; restart no
-    source-anchor: '@dev_env/docker-compose.local.yml:58-108'
+    role: 'PostgreSQL primary; LISTEN/NOTIFY channel; restart: unless-stopped; ${POSTGRES_PASSWORD} required from dashboard.env'
+    source-anchor: '@install/docker-compose.release.yml:db service'
   - name: api
-    image: 'deployment-dashboard/api:dev'
+    image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:${DASHBOARD_VERSION:-latest}'
     tier: server
-    role: Single host composing Write+Read endpoint groups; internal-only; expose 8080
-    source-anchor: '@dev_env/docker-compose.local.yml:115-134'
+    role: 'Single host composing Write+Read endpoint groups; API-key on Write only; self-applies EF migrations on startup per ADR-0009 before serving requests; restart: unless-stopped'
+    source-anchor: '@install/docker-compose.release.yml:api service'
   - name: dashboard
-    image: 'deployment-dashboard/dashboard:dev'
+    image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-frontend:${DASHBOARD_VERSION:-latest}'
     tier: client
-    role: Static SPA on nginx:alpine; internal-only; expose 80
-    source-anchor: '@dev_env/docker-compose.local.yml:136-144'
+    role: 'Static SPA on nginx:alpine; internal-only'
+    source-anchor: '@install/docker-compose.release.yml:dashboard service'
   - name: gateway
-    image: 'deployment-dashboard/gateway:dev'
+    image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:${DASHBOARD_VERSION:-latest}'
     tier: gateway
-    role: Sole public ingress; host-published 8080:80
-    source-anchor: '@dev_env/docker-compose.local.yml:146-158'
-  - name: pgadmin
-    image: 'dpage/pgadmin4:latest'
-    tier: data-tooling
-    role: Dev-only convenience UI; host port 5050
-    source-anchor: '@dev_env/docker-compose.local.yml:160-171'
+    role: 'Sole public ingress; host-published ${DASHBOARD_PORT:-8080}:80; restart: unless-stopped'
+    source-anchor: '@install/docker-compose.release.yml:gateway service'
   - name: fetcher
-    image: 'deployment-dashboard/fetcher:dev'
+    image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-fetcher:${DASHBOARD_VERSION:-latest}'
     tier: fetcher
-    role: Optional pull-mode adapter (CR-0009 / WBS §1.5; profile=fetcher; default-off); outbound-only (no ports, no healthcheck per NFR-04 strict); POSTs to gateway as dashboard-fetcher/github-actions; depends_on gateway:service_started
-    source-anchor: '@dev_env/docker-compose.local.yml:199-230 (profiles:[fetcher])'
+    profile: 'fetcher (activated by -RealGha installer flag or --profile fetcher)'
+    role: 'Optional pull-mode adapter (CR-0009); outbound-only; no inbound port; no healthcheck per NFR-04; POSTs to gateway; GHA_TOKEN required under fetcher profile'
+    source-anchor: '@install/docker-compose.release.yml:fetcher service'
+  - name: mock-gha
+    image: 'sheyenrath/wiremock.net:2.4.0'
+    tier: test-substrate
+    profile: 'integration (activated by dev_env/start.ps1 -Integration or .github/workflows/integration.yml)'
+    role: 'WireMock.Net mock of api.github.com; admin API on port 80 (same port); host-mapped 18080->80 under integration profile only per NFR-04; fetcher retargeted via GHA_API_BASE_URL=http://mock-gha:80; FETCHER_POLL_INTERVAL_SECONDS=1'
+    source-anchor: '@install/docker-compose.release.yml:mock-gha service'
+  - name: demo-gha
+    image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION:-latest}'
+    tier: demo-substrate
+    profile: 'demo (activated by default installer path or --profile demo)'
+    role: 'First-party baked WireMock.Net image with demo bundle (6 services × 5+ envs / 80-150 deployments); no admin port published (NFR-04 strictly); fetcher retargeted via GHA_API_BASE_URL=http://demo-gha:80; FETCHER_POLL_INTERVAL_SECONDS=5-10'
+    source-anchor: '@install/docker-compose.release.yml:demo-gha service'
+  - name: demo-driver
+    image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:${DASHBOARD_VERSION:-latest}'
+    tier: demo-substrate
+    profile: 'demo (CR-0013 §3e amendment per issue #46)'
+    role: 'Python sidecar that walks ticks/ subdirectories and PUTs/POSTs to demo-gha admin API on DEMO_DRIVER_PERIOD_SECONDS interval; outbound-only; graceful SIGTERM; no crash on tick errors'
+    source-anchor: '@install/docker-compose.release.yml:demo-driver service'
+
+services-local-override-deltas:
+  - name: db
+    delta: 'image: unchanged from release; POSTGRES_PASSWORD=local-dev-password (dev literal override)'
+    source-anchor: '@dev_env/docker-compose.local.yml:db override'
+  - name: api
+    delta: 'build: backend/api/Dockerfile context + image: deployment-dashboard/api:dev + pull_policy: never; dev-literal env-var overrides (API_TOKEN=local-dev-token-not-for-production; ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password)'
+    source-anchor: '@dev_env/docker-compose.local.yml:api override'
+  - name: dashboard
+    delta: 'build: frontend/dashboard/Dockerfile context + image: deployment-dashboard/dashboard:dev + pull_policy: never'
+    source-anchor: '@dev_env/docker-compose.local.yml:dashboard override'
+  - name: gateway
+    delta: 'build: gateway/Dockerfile context + image: deployment-dashboard/gateway:dev + pull_policy: never'
+    source-anchor: '@dev_env/docker-compose.local.yml:gateway override'
+  - name: fetcher
+    delta: 'build: backend/fetcher-host/Dockerfile context + image: deployment-dashboard/fetcher:dev + pull_policy: never; DASHBOARD_WRITE_API_KEY=local-dev-token-not-for-production (dev literal override)'
+    source-anchor: '@dev_env/docker-compose.local.yml:fetcher override'
+  - name: pgadmin
+    delta: 'NEW service (full entry, not in release base); dpage/pgadmin4:latest; host port 5050; dev-convenience only'
+    source-anchor: '@dev_env/docker-compose.local.yml:pgadmin service'
 
 services-scaled-deltas:
   - service: api
     replicas: 3
     note: NFR-05 statelessness validation; SSE fan-out via PG LISTEN/NOTIFY across all replicas
-    source-anchor: '@dev_env/docker-compose.scaled.yml:94-114'
+    source-anchor: '@dev_env/docker-compose.scaled.yml:api'
   - omitted: pgadmin (and host-port 5432 on db) - scaled stack drops dev-tooling
     source-anchor: '@dev_env/docker-compose.scaled.yml'
+  - note: 'Scaled stack is standalone single-file (NOT layered on release.yml); invoked as: docker compose -f dev_env/docker-compose.scaled.yml up'
+
+migration-actuation:
+  model: startup-applied (ADR-0009)
+  adr: ADR-0009 (supersedes ADR-0005)
+  mechanism: 'Database.Migrate() between app.Build() and app.Run() in backend/api/Dashboard.Api/Program.cs'
+  retired-surfaces: 'migrations service in both compose files; --profile migrate gate; -SkipMigrations/--skip-migrations installer flags; migration.sql release asset; emit-migration-artefact workflow machinery'
+  failure-mode: 'LogLevel.Critical log + non-zero exit before app.Run(); restart-loop via unless-stopped policy'
+  sequence: 'db (service_healthy) -> api (self-migrates then begins serving) — collapses from 3-step (db->migrations->api) to 2-step'
 
 gateway-routing-matrix:
   source: '@gateway/nginx.conf'
@@ -71,19 +124,20 @@ gateway-routing-matrix:
 
 network-topology: |
   Single bridged Docker network. Only gateway has a host-published port
-  (8080) in the production-shape scaled stack; dev stack adds 5432 (psql)
+  (${DASHBOARD_PORT:-8080}) in the production-shape release stack; dev stack adds 5432 (psql)
   + 5050 (pgAdmin) as convenience. All container-to-container traffic is
   internal-only. Write + Read API services are co-located in the
   deployment-dashboard-api image today (microservices architecture per
-  ADR-0006; co-location mechanics per ADR-0002). Future move from
-  co-location to per-service images is a gateway-config-only change
-  (POST /api/deployments -> write-upstream). Optional fetcher profile
+  ADR-0006; co-location mechanics per ADR-0002). Optional fetcher profile
   (CR-0009) joins the same internal network when activated; outbound-only
   so adds no host port and no inbound surface (NFR-04 strict).
+  demo-gha + demo-driver join the same network under the demo profile;
+  mock-gha joins under the integration profile (host admin port 18080 only
+  when integration profile is active per NFR-04).
 
 volumes:
-  count: 3 (local: pg-data, dotnet-tools, nuget-cache) / 3 (scaled: *-scaled variants)
-  source-anchor: '@dev_env/docker-compose.local.yml:232-235'
+  count: 1 (release: pg-data) / 3 (local-dev: pg-data, dotnet-tools, nuget-cache) / 3 (scaled: *-scaled variants)
+  source-anchor: '@install/docker-compose.release.yml:volumes + @dev_env/docker-compose.local.yml:volumes'
 
 iac:
   status: planned (Terraform azurerm >= 4.x per NFR-06 + WBS §4); infrastructure/ directory does not yet exist
