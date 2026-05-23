@@ -285,76 +285,51 @@ if ($modeDemo) {
 Write-DashboardEnvFile -EnvFilePath $envFile -Version $Version -Port $Port -ApiToken $apiToken -PgPassword $pgPassword -DemoLines $demoLines
 Write-Host "==> Wrote $envFile" -ForegroundColor Cyan
 
-# ---- 5 + 6. Resolve compose file (local build) or download release asset ----
-$repo = 'kostiantyn-matsebora/deployment-dashboard'
+# ---- 5 + 6. Download release asset ----
+$repo        = 'kostiantyn-matsebora/deployment-dashboard'
+$composeFile = Join-Path $InstallDir 'docker-compose.release.yml'
 
-if ($BuildLocally) {
-    # Local contributor flow: use the in-tree compose file directly; no download needed.
-    $composeFile = Join-Path $PSScriptRoot 'docker-compose.release.yml'
-    Write-Host "==> BuildLocally: using local compose file $composeFile" -ForegroundColor Cyan
-} else {
-    function Invoke-AssetDownload {
-        param([string]$AssetName, [string]$DestPath)
-        Write-Host "==> gh release download ($Version) $AssetName -> $DestPath" -ForegroundColor Cyan
-        if ($Version -eq 'latest') {
-            & gh release download --repo $repo --pattern $AssetName --output $DestPath --clobber
-        } else {
-            & gh release download $Version --repo $repo --pattern $AssetName --output $DestPath --clobber
-        }
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: failed to download $AssetName from release '$Version' via gh release download (exit $LASTEXITCODE)." -ForegroundColor Red
-            Write-Host "       Confirm that release '$Version' exists and advertises a '$AssetName' asset, and that the active gh account can read this repo." -ForegroundColor Red
-            exit 1
-        }
-    }
-
-    $composeFile = Join-Path $InstallDir 'docker-compose.release.yml'
-    Invoke-AssetDownload -AssetName 'docker-compose.release.yml' -DestPath $composeFile
-
-    # ---- 7. GHCR docker login (release-install only; local builds use locally-built images) ----
-    $ghLogin = (& gh api user --jq .login 2>$null)
-    if ([string]::IsNullOrWhiteSpace($ghLogin)) { $ghLogin = 'oauth2' }
-    $ghToken = & gh auth token
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ghToken)) {
-        Write-Host "ERROR: docker login ghcr.io failed -- could not obtain a token from gh auth token (exit $LASTEXITCODE)." -ForegroundColor Red
-        exit 1
-    }
-    Write-Host "==> docker login ghcr.io --username $ghLogin --password-stdin" -ForegroundColor Cyan
-    $ghToken | & docker login ghcr.io --username $ghLogin --password-stdin
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "ERROR: docker login ghcr.io failed (exit $LASTEXITCODE). Verify the gh account has 'read:packages' and access to the deployment-dashboard packages." -ForegroundColor Red
-        exit 1
-    }
+Write-Host "==> gh release download ($Version) docker-compose.release.yml -> $composeFile" -ForegroundColor Cyan
+$dlArgs = @('--repo', $repo, '--pattern', 'docker-compose.release.yml', '--output', $composeFile, '--clobber')
+if ($Version -ne 'latest') { $dlArgs = @($Version) + $dlArgs }
+& gh release download @dlArgs
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: failed to download docker-compose.release.yml from release '$Version' (exit $LASTEXITCODE)." -ForegroundColor Red
+    exit 1
 }
 
-# ---- 8. Build compose args via helper ----
-$overlayFile = if ($BuildLocally) { Join-Path $PSScriptRoot '..' 'dev_env' 'docker-compose.local.yml' } else { '' }
+# ---- 7. GHCR docker login ----
+$ghLogin = (& gh api user --jq .login 2>$null)
+if ([string]::IsNullOrWhiteSpace($ghLogin)) { $ghLogin = 'oauth2' }
+$ghToken = & gh auth token
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($ghToken)) {
+    Write-Host "ERROR: docker login ghcr.io failed -- could not obtain a token from gh auth token (exit $LASTEXITCODE)." -ForegroundColor Red
+    exit 1
+}
+Write-Host "==> docker login ghcr.io --username $ghLogin --password-stdin" -ForegroundColor Cyan
+$ghToken | & docker login ghcr.io --username $ghLogin --password-stdin
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: docker login ghcr.io failed (exit $LASTEXITCODE). Verify the gh account has 'read:packages' and access to the deployment-dashboard packages." -ForegroundColor Red
+    exit 1
+}
+
+# ---- 8. Build compose args via helper + pull images ----
 $composeArgs = Resolve-ComposeArgs `
     -ModeDemo $modeDemo -ModeRealGha $modeRealGha -ModeEmpty $modeEmpty `
     -BuildLocally ([bool]$BuildLocally) `
-    -ComposeFile $composeFile -EnvFile $envFile -OverlayFile $overlayFile
+    -ComposeFile $composeFile -EnvFile $envFile
 
-if ($BuildLocally) {
-    # ---- 9a. Local build: build images then bring up ----
-    Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait --build --force-recreate" -ForegroundColor Cyan
-    & docker compose @composeArgs up -d --wait --build --force-recreate
-    if ($LASTEXITCODE -ne 0) {
-        & docker compose @composeArgs logs --tail=50
-        throw "docker compose up --build failed with exit code $LASTEXITCODE"
-    }
-} else {
-    # ---- 9b. Release-install: pull images then bring up ----
-    Write-Host "==> docker compose $($composeArgs -join ' ') pull" -ForegroundColor Cyan
-    & docker compose @composeArgs pull
-    if ($LASTEXITCODE -ne 0) { throw "docker compose pull failed with exit code $LASTEXITCODE" }
+Write-Host "==> docker compose $($composeArgs -join ' ') pull" -ForegroundColor Cyan
+& docker compose @composeArgs pull
+if ($LASTEXITCODE -ne 0) { throw "docker compose pull failed with exit code $LASTEXITCODE" }
 
-    Write-Host "==> All services will be recreated (--force-recreate ensures GHCR digest changes are picked up)." -ForegroundColor Cyan
-    Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait --force-recreate" -ForegroundColor Cyan
-    & docker compose @composeArgs up -d --wait --force-recreate
-    if ($LASTEXITCODE -ne 0) {
-        & docker compose @composeArgs logs --tail=50
-        throw "docker compose up --force-recreate failed with exit code $LASTEXITCODE"
-    }
+# ---- 9. Bring up ----
+Write-Host "==> All services will be recreated (--force-recreate ensures GHCR digest changes are picked up)." -ForegroundColor Cyan
+Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait --force-recreate" -ForegroundColor Cyan
+& docker compose @composeArgs up -d --wait --force-recreate
+if ($LASTEXITCODE -ne 0) {
+    & docker compose @composeArgs logs --tail=50
+    throw "docker compose up --force-recreate failed with exit code $LASTEXITCODE"
 }
 
 # ---- 10. Health-poll via helper ----
