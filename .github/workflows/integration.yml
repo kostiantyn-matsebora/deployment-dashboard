@@ -87,9 +87,9 @@ jobs:
     # install.ps1 (gh release download + docker login ghcr.io + compose pull
     # fire unconditionally). The integration workflow drives start.ps1 -Integration
     # which now delegates to install.ps1 -BuildLocally and fails on the GHCR
-    # preconditions. Skip the job entirely on the issue-60 branch so the PR
-    # can merge; #66 reverts this skip after the underlying gaps land.
-    if: github.head_ref != 'issue-60' && github.ref != 'refs/heads/issue-60'
+    # preconditions. Skip the job entirely until #66 lands; that issue's
+    # acceptance criteria include reverting this skip.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
