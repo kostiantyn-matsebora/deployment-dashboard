@@ -235,3 +235,111 @@ Describe 'uninstall.ps1 -- error surfacing' {
         "$($r.Stdout)`n$($r.Stderr)" | Should -Match 'docker compose down failed'
     }
 }
+
+Describe 'uninstall.ps1 -- D-1 default InstallDir path (CR-0014 defect coverage)' {
+    # D-1 (High): uninstall.ps1 had a stale default $InstallDir = ./dashboard-release
+    # instead of $HOME/.dashboard-release (matching install.ps1). After the fix the
+    # default must resolve to $HOME/.dashboard-release, NOT $CWD/dashboard-release.
+    BeforeEach {
+        $script:tmp = New-TempTestDir
+        $script:userHome = [Environment]::GetFolderPath('UserProfile')
+        $script:fixedDefaultDir  = Join-Path $script:userHome '.dashboard-release'
+        $script:preExistedDir = Test-Path -LiteralPath $script:fixedDefaultDir
+    }
+    AfterEach {
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp }
+        # Don't leave behind a .dashboard-release dir we created.
+        if (-not $script:preExistedDir -and (Test-Path -LiteralPath $script:fixedDefaultDir)) {
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $script:fixedDefaultDir
+        }
+    }
+
+    It 'default -InstallDir resolves to $HOME/.dashboard-release (NOT ./dashboard-release)' {
+        # Seed the canonical default location with a fake install so the
+        # precondition passes and we can assert compose was called with it.
+        $composeFile = Join-Path $script:fixedDefaultDir 'docker-compose.release.yml'
+        $envFile     = Join-Path $script:fixedDefaultDir 'dashboard.env'
+        if (-not (Test-Path $script:fixedDefaultDir)) {
+            New-Item -ItemType Directory $script:fixedDefaultDir -Force | Out-Null
+        }
+        Set-Content $composeFile -Value 'services: {}' -Encoding utf8
+        Set-Content $envFile     -Value 'API_TOKEN=abc' -Encoding utf8
+
+        # Invoke WITHOUT -InstallDir so the script uses its default.
+        $shimmed = New-ShimmedScript -TmpDir $tmp
+        $log = Join-Path $tmp 'script.log'
+        $stdoutPath = Join-Path $tmp 'stdout.txt'
+        $stderrPath = Join-Path $tmp 'stderr.txt'
+        $envBackup = @{}
+        $envKeys = @('DD_SCRIPT_LOG','DD_DOWN_EXIT')
+        foreach ($k in $envKeys) { $envBackup[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
+        try {
+            foreach ($k in $envKeys) { [Environment]::SetEnvironmentVariable($k, $null, 'Process') }
+            [Environment]::SetEnvironmentVariable('DD_SCRIPT_LOG', $log, 'Process')
+            $proc = Start-Process -FilePath 'pwsh' `
+                                  -ArgumentList @('-NoProfile','-NonInteractive','-File',$shimmed) `
+                                  -WorkingDirectory $tmp `
+                                  -NoNewWindow -Wait -PassThru `
+                                  -RedirectStandardOutput $stdoutPath `
+                                  -RedirectStandardError  $stderrPath
+            $exit = $proc.ExitCode
+        } finally {
+            foreach ($k in $envKeys) {
+                [Environment]::SetEnvironmentVariable($k, $envBackup[$k], 'Process')
+            }
+        }
+        # Should succeed -- default dir has a valid install.
+        $exit | Should -Be 0
+        # The compose call must reference $HOME/.dashboard-release, not ./dashboard-release.
+        $events = @()
+        if (Test-Path $log) {
+            foreach ($l in Get-Content $log) { if ($l -match '\S') { $events += ($l | ConvertFrom-Json) } }
+        }
+        $downCall = $events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') } | Select-Object -First 1
+        $downCall | Should -Not -BeNullOrEmpty
+        $a = [object[]]$downCall.args
+        $fIdx = [Array]::IndexOf($a, '-f')
+        $a[$fIdx + 1] | Should -BeLike '*\.dashboard-release*'
+        $a[$fIdx + 1] | Should -Not -BeLike '*\dashboard-release*'
+    }
+}
+
+Describe 'uninstall.ps1 -- D-6 oracle gap: demo + integration profile assertions (CR-0014 defect coverage)' {
+    # D-6 (Low): uninstall.Tests.ps1 previously did not assert the demo + integration
+    # profiles in the docker compose down call. CR-0014 adds these assertions.
+    # Per uninstall.ps1 source: compose args include --profile fetcher --profile demo
+    # --profile integration so all profile-gated services are torn down regardless
+    # of which install mode was used.
+    BeforeEach { $script:tmp = New-TempTestDir }
+    AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
+
+    It 'docker compose down call includes --profile demo (D-6 oracle gap filled)' {
+        $installDir = New-FakeInstall -TmpDir $tmp
+        $r = Invoke-Uninstall -TmpDir $tmp -Args @('-InstallDir', $installDir)
+        $r.ExitCode | Should -Be 0
+        $downCall = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') } | Select-Object -First 1
+        $downCall | Should -Not -BeNullOrEmpty
+        $a = [object[]]$downCall.args
+        $a | Should -Contain 'demo'
+    }
+
+    It 'docker compose down call includes --profile integration (D-6 oracle gap filled)' {
+        $installDir = New-FakeInstall -TmpDir $tmp
+        $r = Invoke-Uninstall -TmpDir $tmp -Args @('-InstallDir', $installDir)
+        $r.ExitCode | Should -Be 0
+        $downCall = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') } | Select-Object -First 1
+        $a = [object[]]$downCall.args
+        $a | Should -Contain 'integration'
+    }
+
+    It 'docker compose down call includes all three profiles: fetcher, demo, integration' {
+        $installDir = New-FakeInstall -TmpDir $tmp
+        $r = Invoke-Uninstall -TmpDir $tmp -Args @('-InstallDir', $installDir)
+        $r.ExitCode | Should -Be 0
+        $downCall = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') } | Select-Object -First 1
+        $a = [object[]]$downCall.args
+        $a | Should -Contain 'fetcher'
+        $a | Should -Contain 'demo'
+        $a | Should -Contain 'integration'
+    }
+}
