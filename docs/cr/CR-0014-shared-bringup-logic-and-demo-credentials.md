@@ -149,6 +149,8 @@ All Phase 3 open issues (OI-1 / OI-2 / OI-4) pinned by SA roundtrip 2026-05-23 a
 | O-5 | `dev_env/stop.ps1` reach into helper — URL-panel reuse on teardown banner? | Open — Phase 4 work | `devops-engineer` (SA flag — confirm scope on Phase 4 dispatch) |
 | O-6 | Contract gap — `start.ps1` `$env:*` mutations vs. `install.ps1` subprocess invocation | **Resolved 2026-05-23** — Option α (OS-level env-block inheritance); no `-EnvVars` parameter on helpers. See § 3b "Env-block inheritance contract" | — (closed) |
 
+**OI-5 (Phase 4 SA roundtrip 2026-05-23)** — `start.ps1 -Fetcher` anonymous-fetcher path declared YAGNI / unsupported. `install.ps1` keeps unconditional `$env:GHA_TOKEN` precondition; no `-AllowMissingGhaToken` parameter is introduced. `start.ps1 -Fetcher` requires `$env:GHA_TOKEN` set in the parent shell; anonymous mode via `start.ps1` is unsupported. Contributors use `-Demo` for zero-config onboarding; live anonymous fetch is reachable only by invoking `install.ps1 -RealGha` directly (with `$env:GHA_TOKEN` set). Doc-only update in `docs/install.md` (this CR). Same YAGNI reasoning as OI-2 (PostHog branch deletion).
+
 ### O-4 defect inventory — Phase 2 step 2 QA discovery
 
 Six concrete defects identified by `qa-engineer` against `install/uninstall.{ps1,sh}` + tests. `D-5` verified NOT a defect — demo profile IS included in uninstall compose-args; logged for completeness.

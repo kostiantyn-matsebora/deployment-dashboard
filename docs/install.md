@@ -203,6 +203,11 @@ compose-default placeholder literal `local-dev-gha-token-placeholder`. See
 for the wire detail. The demo-default path does not exercise this anonymous-mode
 transport — `demo-gha` ignores the `Authorization` header entirely.
 
+> **Anonymous public-repo fetch via `dev_env/start.ps1` is not supported.**
+> Contributors should use `-Demo` for zero-config onboarding. To run a live
+> anonymous fetch, invoke `install.ps1 -RealGha` directly; the token
+> precondition will require `$env:GHA_TOKEN` to be set in the parent shell.
+
 ## Empty stack — `-Empty` (direct-POST integrators)
 
 Power-user escape: bring up the stack with no fetcher and no demo-gha. Useful when an external pipeline POSTs deployment events directly to `/api/deployments` and the in-stack fetcher would be redundant or conflicting.
