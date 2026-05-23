@@ -197,35 +197,37 @@ if ($modeRealGha) {
     }
 }
 
-# ---- 2. gh CLI precondition ----
-$ghAvailable = $false
-try {
-    & gh --version *> $null
-    $ghAvailable = ($LASTEXITCODE -eq 0)
-} catch {
+# ---- 2. gh CLI precondition (only for GHCR-pull mode) ----
+if (-not $BuildLocally) {
     $ghAvailable = $false
-}
-if (-not $ghAvailable) {
-    Write-Host "ERROR: gh CLI not found on PATH. The repo and GHCR images are private, so the installer needs gh to fetch release assets and authenticate to ghcr.io." -ForegroundColor Red
-    Write-Host "       Install it from https://cli.github.com/ and then run:" -ForegroundColor Red
-    Write-Host "         gh auth login --hostname github.com" -ForegroundColor Red
-    Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
-    exit 1
-}
+    try {
+        & gh --version *> $null
+        $ghAvailable = ($LASTEXITCODE -eq 0)
+    } catch {
+        $ghAvailable = $false
+    }
+    if (-not $ghAvailable) {
+        Write-Host "ERROR: gh CLI not found on PATH. The repo and GHCR images are private, so the installer needs gh to fetch release assets and authenticate to ghcr.io." -ForegroundColor Red
+        Write-Host "       Install it from https://cli.github.com/ and then run:" -ForegroundColor Red
+        Write-Host "         gh auth login --hostname github.com" -ForegroundColor Red
+        Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
+        exit 1
+    }
 
-& gh auth status --hostname github.com *> $null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: gh is not authenticated for github.com. Run:" -ForegroundColor Red
-    Write-Host "         gh auth login --hostname github.com" -ForegroundColor Red
-    Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
-    exit 1
-}
+    & gh auth status --hostname github.com *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: gh is not authenticated for github.com. Run:" -ForegroundColor Red
+        Write-Host "         gh auth login --hostname github.com" -ForegroundColor Red
+        Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
+        exit 1
+    }
 
-$ghScopeOutput = (& gh auth status --hostname github.com --show-token 2>&1 | Out-String)
-if ($ghScopeOutput -notmatch '(read|write|admin):packages') {
-    Write-Host "ERROR: gh token for github.com lacks GHCR read access. Need one of: 'read:packages', 'write:packages', or 'admin:packages'. Run:" -ForegroundColor Red
-    Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
-    exit 1
+    $ghScopeOutput = (& gh auth status --hostname github.com --show-token 2>&1 | Out-String)
+    if ($ghScopeOutput -notmatch '(read|write|admin):packages') {
+        Write-Host "ERROR: gh token for github.com lacks GHCR read access. Need one of: 'read:packages', 'write:packages', or 'admin:packages'. Run:" -ForegroundColor Red
+        Write-Host "         gh auth refresh --hostname github.com --scopes read:packages" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # ---- 3. Install dir ----
