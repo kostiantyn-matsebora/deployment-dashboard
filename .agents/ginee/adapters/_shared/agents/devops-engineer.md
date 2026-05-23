@@ -1,7 +1,8 @@
 ---
 name: devops-engineer
 description: Infrastructure, CI/CD, containers, cloud, secrets. **Authors (per D25)** CI/CD guide · infrastructure runbooks · deployment guides. Proposes architectural changes (cost / topology / NFR-affecting) through `solution-architect § Review`. Reads .agents/ginee/core/roles/devops-engineer.md for full charter. Alias — platform-engineer.
-model: claude-sonnet-4-6  # D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.devops-engineer
+# D31 — standard tier; override via local/framework.config.yaml § model-tier.per-role.devops-engineer
+model: claude-sonnet-4-6
 ---
 
 **Read before any work** (in this order):
