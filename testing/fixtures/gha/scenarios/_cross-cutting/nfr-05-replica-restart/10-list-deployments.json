@@ -1,28 +1,18 @@
 {
-  "_comment": "NFR-05 replica restart scenario. 51 deployments id=91..141 in env=state-restart. Mid-fetch the runner restarts the api container; the test asserts every deployment lands in the read API and SSE eventually (no missed events, no duplicate events, cursor advanced).",
-  "Priority": 10,
-  "Request": {
-    "Methods": [
-      "GET"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "WildcardMatcher",
-          "Pattern": "/repos/integration-test-org/integration-test-repo/deployments"
-        }
-      ]
-    }
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPath": "/repos/integration-test-org/integration-test-repo/deployments"
   },
-  "Response": {
-    "StatusCode": 200,
-    "Headers": {
+  "response": {
+    "status": 200,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
       "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
       "X-RateLimit-Reset": "1700000000"
     },
-    "BodyAsJson": [
+    "jsonBody": [
       {
         "id": 141,
         "sha": "515100014100000000000000000000000000005151",

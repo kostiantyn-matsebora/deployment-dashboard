@@ -46,7 +46,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       ConnectionStrings__DefaultConnection: "Host=db;Database=dashboard;Username=dashboard;Password=local-dev-password"
-      API_TOKEN: "local-dev-token-not-for-production"
+      API_TOKEN: "demo-api-token"
 
   dashboard:
     build:
@@ -76,7 +76,7 @@ services:
     pull_policy: never
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
-      DASHBOARD_WRITE_API_KEY: "local-dev-token-not-for-production"
+      DASHBOARD_WRITE_API_KEY: "demo-api-token"
     # `depends_on: required: false` (docker compose >= 2.20) lets the
     # fetcher start whether or not `mock-gha` is active. Under the
     # `integration` compose profile `mock-gha` is up and we wait for its
@@ -101,20 +101,17 @@ services:
   # `--profile integration`) never starts mock-gha, so this ports stanza is
   # inert outside the integration flow.
   #
-  # FETCHER_POLL_INTERVAL_SECONDS is NOT set here -- doing so would override
-  # the release file's `${FETCHER_POLL_INTERVAL_SECONDS:-30}` substitution
-  # unconditionally and break non-integration runs (a vanilla `start.ps1`
-  # would suddenly poll once per second). Instead, `dev_env/start.ps1
-  # -Integration` seeds `$env:FETCHER_POLL_INTERVAL_SECONDS = '1'` before
-  # invoking docker compose, so the release file's substitution resolves to
-  # `1` for integration runs and to `30` for everything else. Source of
-  # truth: see start.ps1's -Integration canonicalisation block.
+  # GHA_API_BASE_URL / FETCHER_POLL_INTERVAL_SECONDS / GHA_REPOSITORIES are
+  # NOT set here -- for demo mode they come from docker-compose.demo.yml;
+  # for integration mode start.ps1 -Integration seeds them as process env
+  # vars before invoking docker compose, which feeds the release file's
+  # ${VAR:-default} substitutions directly (no overlay override blocks them).
   mock-gha:
     ports:
       - "18080:80"
-    # Bind-mount qa-engineer's base mappings into WireMock.Net's admin-mappings
-    # directory. The sheyenrath/wiremock.net image reads bootstrap mappings
-    # from `/app/__admin/mappings` at start-up; per-scenario overrides are
+    # Bind-mount qa-engineer's base mappings into JVM WireMock's mappings
+    # directory. JVM WireMock reads bootstrap mappings from
+    # `/home/wiremock/mappings` at start-up; per-scenario overrides are
     # still loaded via the admin API at runtime (CR-0012 S 5), but the base
     # five-endpoint coverage matrix (CR-0009 S 3d / docs/integration-tests.md
     # S 6) is mounted once so a fresh `start.ps1 -Integration` boots with
@@ -122,8 +119,29 @@ services:
     # source-of-truth in the repo; the container must not mutate them.
     # Mount lives in the override (not the release file) because the
     # release-install host has no source tree.
+    # Issue #57: path changed from `/app/__admin/mappings` (WireMock.Net) to
+    # `/home/wiremock/mappings` (JVM WireMock).
     volumes:
-      - ../testing/fixtures/gha/mappings:/app/__admin/mappings:ro
+      - ../testing/fixtures/gha/mappings:/home/wiremock/mappings:ro
+
+  # Demo-gha local build (demo profile). Build context MUST be the repo root
+  # because the Dockerfile COPYs from testing/fixtures/gha/demo/ (outside
+  # gateway/). Mirrors the CI workflow's `context-path: .` decision (CR-0013).
+  demo-gha:
+    build:
+      context: ..
+      dockerfile: gateway/demo-gha/Dockerfile
+    image: deployment-dashboard/demo-gha:dev
+    pull_policy: never
+
+  # Demo-driver local build (demo profile). Also requires repo-root context:
+  # its Dockerfile COPYs testing/fixtures/gha/demo/ + gateway/demo-driver/entrypoint.py.
+  demo-driver:
+    build:
+      context: ..
+      dockerfile: gateway/demo-driver/Dockerfile
+    image: deployment-dashboard/demo-driver:dev
+    pull_policy: never
 
   # Dev-only convenience -- not present in the release stack.
   pgadmin:

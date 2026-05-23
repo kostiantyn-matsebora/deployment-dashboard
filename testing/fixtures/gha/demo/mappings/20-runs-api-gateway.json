@@ -1,28 +1,18 @@
 {
-  "_comment": "Needs-recovery \u00e2\u20ac\u201d runs DTO for api-gateway. Matches /actions/runs/<run_id> where run_id begins with the service prefix digit '2'. Returned path + head_sha drive the contents mapping below.",
-  "Priority": 100,
-  "Request": {
-    "Methods": [
-      "GET"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "RegexMatcher",
-          "Pattern": "^/repos/demo-org/api-gateway/actions/runs/2[0-9]+$"
-        }
-      ]
-    }
+  "priority": 100,
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/repos/demo-org/api-gateway/actions/runs/2[0-9]+"
   },
-  "Response": {
-    "StatusCode": 200,
-    "Headers": {
+  "response": {
+    "status": 200,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
       "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
       "X-RateLimit-Reset": "9999999999"
     },
-    "BodyAsJson": {
+    "jsonBody": {
       "id": 0,
       "path": ".github/workflows/api-gateway-release.yml",
       "head_sha": "2bbb22222222bbbbbbbbbbbbbbbbbbbbbbb22222"

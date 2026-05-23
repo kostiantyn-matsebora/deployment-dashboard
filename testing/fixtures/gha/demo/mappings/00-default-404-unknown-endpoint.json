@@ -1,29 +1,15 @@
 {
-  "_comment": "Catch-all 404 for any URL the demo bundle does not cover. Lowest priority \u00e2\u20ac\u201d fires only when no other mapping matches.",
-  "Priority": 999,
-  "Request": {
-    "Methods": [
-      "GET",
-      "POST",
-      "PUT",
-      "DELETE",
-      "PATCH"
-    ],
-    "Path": {
-      "Matchers": [
-        {
-          "Name": "WildcardMatcher",
-          "Pattern": "/*"
-        }
-      ]
-    }
+  "priority": 999,
+  "request": {
+    "method": "ANY",
+    "urlPathPattern": ".*"
   },
-  "Response": {
-    "StatusCode": 404,
-    "Headers": {
+  "response": {
+    "status": 404,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8"
     },
-    "BodyAsJson": {
+    "jsonBody": {
       "message": "Not Found (demo-gha catch-all)"
     }
   }

@@ -1,20 +1,18 @@
 {
-  "_comment": "Catch-all 404 for any request not matched by a higher-priority mapping. Priority 999 keeps it strictly subordinate to base mappings (Priority 100) and per-scenario mappings (Priority 1-29). Returns the GitHub-shaped 404 body so the fetcher's silent-degrade paths exercise the same JSON-decode logic against the mock as they do against api.github.com.",
-  "Priority": 999,
-  "Request": {
-    "Methods": ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    "Url":     "*"
+  "priority": 999,
+  "request": {
+    "method": "ANY"
   },
-  "Response": {
-    "StatusCode": 404,
-    "Headers": {
+  "response": {
+    "status": 404,
+    "headers": {
       "Content-Type": "application/json; charset=utf-8",
-      "X-RateLimit-Limit":     "5000",
+      "X-RateLimit-Limit": "5000",
       "X-RateLimit-Remaining": "4999",
-      "X-RateLimit-Reset":     "1700000000"
+      "X-RateLimit-Reset": "1700000000"
     },
-    "BodyAsJson": {
-      "message":           "Not Found",
+    "jsonBody": {
+      "message": "Not Found",
       "documentation_url": "https://docs.github.com/rest"
     }
   }
