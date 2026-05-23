@@ -11,6 +11,9 @@
     which depends on a cloned repo and bind-mounts the source tree for
     hot-reload / migration generation.
 
+    CR-0014: bring-up logic extracted to install/_bringup-core.ps1 (dot-sourced
+    below). dev_env/start.ps1 delegates to this script via subprocess per S3.
+
     Flag matrix (CR-0013):
       (no flag)            Demo stack -- demo-gha + fetcher pointing at
                            http://demo-gha:80; no GHA_TOKEN required.
@@ -24,6 +27,10 @@
                            Silently routes + logs one INFO line. Drop the
                            flag from your install command after this
                            release cycle.
+      -BuildLocally        Passed by dev_env/start.ps1 when delegating here.
+                           No-op at helper boundary per S5; image-source
+                           divergence is carried by docker compose -f overlay
+                           per ADR-0010.
 
     What this script does, in order:
       1.  `GHA_TOKEN` precondition (issue #5 verbatim) -- fires only when
@@ -34,26 +41,18 @@
           modes exit 1 BEFORE any side effect (no install dir, no asset writes, no
           docker calls).
       3.  Ensures the install directory exists.
-      4.  Generates / preserves `API_TOKEN` + `POSTGRES_PASSWORD` random secrets;
-          persists them to `<InstallDir>/dashboard.env`. Refuses the dev-literal.
-          When the demo path is active (default or `-Demo`), also bakes in the
-          demo-profile env-var contract (`GHA_API_BASE_URL=http://demo-gha:80`,
-          `FETCHER_POLL_INTERVAL_SECONDS=5`,
-          `GHA_REPOSITORIES=[{"owner":"demo-org","repo":"demo-repo"}]`).
-      5+6. Downloads `docker-compose.release.yml` via `gh release download` -- the
-          repo + GHCR images are private, so anonymous HTTPS asset fetch 404s.
-      7.  `docker login ghcr.io` using `gh auth token` -- required because the
-          component images are private GHCR packages and anonymous pulls 401.
-      8.  `docker compose pull` -- pulls the GHCR-hosted component images
-          (api / fetcher / frontend / gateway, plus demo-gha when the demo
-          profile is active).
-      9.  `docker compose up -d --wait` with the resolved profile set:
-            (no flag) / -Demo  -> `--profile demo --profile fetcher`
-            -RealGha           -> `--profile fetcher`
-            -Empty             -> no extra profiles
-          `--wait` blocks until each service's healthcheck reports healthy.
-      10. Polls the gateway-fronted `/health` for up to `-HealthTimeoutSeconds`.
-      11. Prints the URL panel + the generated `API_TOKEN` + a sample `curl`.
+      4a. Volume-detection safety net (non-demo path only; demo path skips per S8).
+          -ResetDemoDefaults drift guard on demo path.
+      4b. Generates / preserves `API_TOKEN` + `POSTGRES_PASSWORD` via helper.
+          Demo path: fixed literals per CR-0014 § 3c.
+          Non-demo path: random per install; refuse dev-literals.
+      4c. Persists secrets + demo defaults to `<InstallDir>/dashboard.env`.
+      5+6. Downloads `docker-compose.release.yml` via `gh release download`.
+      7.  `docker login ghcr.io` using `gh auth token`.
+      8.  `docker compose pull`.
+      9.  `docker compose up -d --wait --force-recreate`.
+      10. Polls the gateway-fronted `/health`.
+      11. Prints the URL panel.
 
     Per ADR-0009: the API self-migrates on start; the installer does not actuate migrations.
 
@@ -97,6 +96,23 @@
     Back-compat alias for the no-flag default. Silently routes to the demo stack
     bring-up + logs one informational line. Drop the flag from your install
     command after this release cycle (one-cycle deprecation per CR-0013).
+.PARAMETER BuildLocally
+    Passed by dev_env/start.ps1 when delegating here via subprocess (S3).
+    No-op at helper boundary per CR-0014 S5 -- build-vs-pull divergence is
+    carried entirely by docker compose -f overlay per ADR-0010.
+.PARAMETER ResetDemoDefaults
+    Force-overwrite the demo-mode keys (`GHA_REPOSITORIES`,
+    `FETCHER_POLL_INTERVAL_SECONDS`, `GHA_API_BASE_URL`, `GHA_TOKEN`) even
+    when a prior `dashboard.env` already contains them. Without this switch,
+    an upgrade re-run on the demo path preserves whatever the operator
+    customised. `GHA_TOKEN` additionally rotates when `$env:GHA_TOKEN` is set
+    AND differs from the persisted value (caller is explicitly threading a
+    new token through).
+
+    Also force-overwrites demo credentials (`POSTGRES_PASSWORD`, `API_TOKEN`)
+    with fixed demo literals per CR-0014 § 3c, and emits a yellow warning that
+    the operator MUST run `uninstall -RemoveData` before the next bringup to
+    drop the incompatible pg volume.
 .PARAMETER Port
     Host port to publish the gateway on. Default 8080. Becomes `DASHBOARD_PORT` in
     the env-file; compose substitutes it into the `gateway` service's `ports:`.
@@ -108,14 +124,6 @@
     the current user's profile directory (cross-platform: `$HOME` on POSIX,
     `%USERPROFILE%` on Windows). See the "Upgrade flow" sub-section above for
     upgrade-re-run semantics.
-.PARAMETER ResetDemoDefaults
-    Force-overwrite the demo-mode keys (`GHA_REPOSITORIES`,
-    `FETCHER_POLL_INTERVAL_SECONDS`, `GHA_API_BASE_URL`, `GHA_TOKEN`) even
-    when a prior `dashboard.env` already contains them. Without this switch,
-    an upgrade re-run on the demo path preserves whatever the operator
-    customised. `GHA_TOKEN` additionally rotates when `$env:GHA_TOKEN` is set
-    AND differs from the persisted value (caller is explicitly threading a
-    new token through).
 
 .EXAMPLE
     # No-flag default per CR-0013: brings up the demo stack with the baked
@@ -146,12 +154,16 @@ param(
     [switch]$RealGha,
     [switch]$Empty,
     [switch]$Demo,
+    [switch]$BuildLocally,
     [switch]$ResetDemoDefaults,
     [int]$Port = 8080,
     [int]$HealthTimeoutSeconds = 60,
     [string]$InstallDir = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dashboard-release')
 )
 $ErrorActionPreference = 'Stop'
+
+# CR-0014: dot-source the shared helper (colocated under install/ per S1).
+. (Join-Path $PSScriptRoot '_bringup-core.ps1')
 
 # ---- 0. Resolve the install mode from the flag matrix (CR-0013) ----
 # Mutually exclusive triple: $modeDemo (default), $modeRealGha, $modeEmpty.
@@ -177,11 +189,6 @@ if ($Demo) {
 }
 
 # ---- 1. GHA_TOKEN precondition (issue #5 verbatim, scoped to -RealGha) ----
-# Contract (CR-0013):
-#   -RealGha + token set    -> proceed, write token to dashboard.env (authed, 5000/h)
-#   -RealGha + token unset  -> red error, exit 1 (mirrors today's -Fetcher precondition)
-#   default / -Demo         -> demo-gha upstream, no PAT, no GitHub API calls
-#   -Empty                  -> no fetcher at all
 if ($modeRealGha) {
     $tokenSet = -not [string]::IsNullOrWhiteSpace($env:GHA_TOKEN)
     if (-not $tokenSet) {
@@ -191,13 +198,6 @@ if ($modeRealGha) {
 }
 
 # ---- 2. gh CLI precondition ----
-# The repo + GHCR component images are private. Anonymous HTTPS asset fetch 404s,
-# anonymous docker pulls 401. All three failure modes below MUST exit 1 BEFORE we
-# create the install dir, write any asset, or invoke docker.
-#
-# Note: $ErrorActionPreference = 'Stop' turns a missing-command into a TERMINATING
-# exception, which would crash before our friendly red-error fires. Wrap the
-# version probe in try/catch so we can surface the install-the-CLI hint.
 $ghAvailable = $false
 try {
     & gh --version *> $null
@@ -221,12 +221,6 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Scope check: `gh auth status --show-token` prints "Token scopes: 'a', 'b', ..."
-# on stderr. Capture both streams + match the *:packages hierarchy. GitHub's
-# OAuth scope model is hierarchical -- write:packages includes read:packages,
-# and admin:packages includes both -- and `gh auth status` only lists the
-# highest granted scope, never the redundant subset. A regex on the union
-# accepts any token that can pull from GHCR.
 $ghScopeOutput = (& gh auth status --hostname github.com --show-token 2>&1 | Out-String)
 if ($ghScopeOutput -notmatch '(read|write|admin):packages') {
     Write-Host "ERROR: gh token for github.com lacks GHCR read access. Need one of: 'read:packages', 'write:packages', or 'admin:packages'. Run:" -ForegroundColor Red
@@ -241,140 +235,55 @@ if (-not (Test-Path $InstallDir)) {
 $InstallDir = (Resolve-Path $InstallDir).Path
 Write-Host "==> Install directory: $InstallDir" -ForegroundColor Cyan
 
-# ---- 4. Secret handling (API_TOKEN + POSTGRES_PASSWORD) ----
-# Defence-in-depth: refuse the local-dev literals. If a pre-existing dashboard.env
-# carries them, regenerate. This applies to:
-#   - API_TOKEN   == 'local-dev-token-not-for-production'
-#   - POSTGRES_PASSWORD == 'local-dev-password'
+# ---- 4a. Volume-detection safety net + -ResetDemoDefaults drift guard ----
 $envFile = Join-Path $InstallDir 'dashboard.env'
 
-# ---- 4a. Volume-detection safety net ----
-# If a previous installer run left a `deployment-dashboard_pg-data` volume but
-# the env-file we'd be writing into does NOT exist, refusing here prevents the
-# silent failure mode where a fresh POSTGRES_PASSWORD gets generated against a
-# DB seeded by the historical install (api container then 28P01s on connect).
-# Run BEFORE any secret read / generation / env-file write.
-& docker volume inspect deployment-dashboard_pg-data *> $null
-$volumeExists = ($LASTEXITCODE -eq 0)
-if ($volumeExists -and -not (Test-Path -LiteralPath $envFile)) {
-    Write-Host "ERROR: Pre-existing Postgres volume detected (deployment-dashboard_pg-data) but no dashboard.env at $envFile." -ForegroundColor Red
-    Write-Host "" -ForegroundColor Red
-    Write-Host "The volume holds DB state seeded by an earlier installer run. Re-using a fresh dashboard.env here would generate a new POSTGRES_PASSWORD that does not match the running cluster -- the api container would fail to connect." -ForegroundColor Red
-    Write-Host "" -ForegroundColor Red
-    Write-Host "Either:" -ForegroundColor Red
-    Write-Host "  - Pass -InstallDir <path-to-prior-install> (the historical default was ./dashboard-release relative to where you first ran the installer)." -ForegroundColor Red
-    Write-Host "  - Run uninstall.ps1 -Volumes (or uninstall.sh --volumes) to drop the pg-data volume and start fresh." -ForegroundColor Red
-    exit 1
-}
-
-$localDevApiLiteral = 'local-dev-token-not-for-production'
-$localDevPwLiteral  = 'local-dev-password'
-
-function Read-EnvValue {
-    param([string]$Path, [string]$Key)
-    if (-not (Test-Path $Path)) { return $null }
-    $line = Select-String -Path $Path -Pattern "^$Key=" -SimpleMatch:$false | Select-Object -First 1
-    if (-not $line) { return $null }
-    return $line.ToString().Split('=', 2)[1].Trim()
-}
-
-function New-RandomHex {
-    param([int]$ByteCount)
-    $bytes = New-Object byte[] $ByteCount
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    return (-join ($bytes | ForEach-Object { '{0:x2}' -f $_ }))
-}
-
-# API_TOKEN
-$apiToken = Read-EnvValue -Path $envFile -Key 'API_TOKEN'
-if ([string]::IsNullOrWhiteSpace($apiToken) -or $apiToken -eq $localDevApiLiteral) {
-    if (-not [string]::IsNullOrWhiteSpace($env:DASHBOARD_API_TOKEN) -and $env:DASHBOARD_API_TOKEN -ne $localDevApiLiteral) {
-        $apiToken = $env:DASHBOARD_API_TOKEN
-        Write-Host "==> Using API_TOKEN from `$env:DASHBOARD_API_TOKEN" -ForegroundColor Cyan
-    } else {
-        $apiToken = New-RandomHex -ByteCount 32
-        Write-Host "==> Generated random API_TOKEN (64 hex chars)" -ForegroundColor Cyan
-    }
-} else {
-    Write-Host "==> Reusing API_TOKEN from $envFile" -ForegroundColor Cyan
-}
-
-# POSTGRES_PASSWORD (random per install; refuse the dev literal too).
-$pgPassword = Read-EnvValue -Path $envFile -Key 'POSTGRES_PASSWORD'
-if ([string]::IsNullOrWhiteSpace($pgPassword) -or $pgPassword -eq $localDevPwLiteral) {
-    $pgPassword = New-RandomHex -ByteCount 16
-    Write-Host "==> Generated random POSTGRES_PASSWORD (32 hex chars)" -ForegroundColor Cyan
-} else {
-    Write-Host "==> Reusing POSTGRES_PASSWORD from $envFile" -ForegroundColor Cyan
-}
-
-# Persist the env-file. NOTE the docker-compose value-substitution rules:
-#   - Values are read literally (no shell expansion).
-#   - `${VAR}` inside another value would need that var to be defined too.
-# So we write the connection-string with the password VALUE inlined, not a `${}` ref.
-$envFileContent = @"
-# Generated by install.ps1 -- do not commit. Regenerated on install when secrets are missing or hold dev-literals.
-POSTGRES_DB=dashboard
-POSTGRES_USER=dashboard
-POSTGRES_PASSWORD=$pgPassword
-API_TOKEN=$apiToken
-DASHBOARD_VERSION=$Version
-DASHBOARD_PORT=$Port
-ConnectionStrings__DefaultConnection=Host=db;Database=dashboard;Username=dashboard;Password=$pgPassword
-"@
-
-# Demo mode (CR-0013): retarget the fetcher at the baked demo-gha mock
-# GitHub upstream so a fresh install renders deployments with zero caller
-# configuration AND zero external GitHub API calls. The fetcher's env-var
-# indirection (GHA_API_BASE_URL substitution in the release compose file)
-# was added by CR-0012 for the integration profile and is reused verbatim
-# here -- the demo profile points the fetcher at `http://demo-gha:80`,
-# the internal Docker DNS name of the profile-gated demo-gha service.
-#
-# Upgrade-flow semantics: when a prior `dashboard.env` already carries any
-# of these keys, preserve the operator's customisation unless
-# `-ResetDemoDefaults` is set. `GHA_TOKEN` is intentionally NOT seeded here
-# (the demo upstream never sees an Authorization header) but is preserved
-# on upgrade-re-run so that switching from `-RealGha` to the default and
-# back keeps the operator's PAT.
 if ($modeDemo) {
-    $demoDefaults = [ordered]@{
-        'GHA_API_BASE_URL'              = 'http://demo-gha:80'
-        'FETCHER_POLL_INTERVAL_SECONDS' = '5'
-        'GHA_REPOSITORIES'              = '[{"owner":"demo-org","repo":"web-portal"},{"owner":"demo-org","repo":"api-gateway"},{"owner":"demo-org","repo":"auth-service"},{"owner":"demo-org","repo":"billing-service"},{"owner":"demo-org","repo":"notification-worker"},{"owner":"demo-org","repo":"analytics-pipeline"}]'
-    }
-
-    $demoLines = @('', '# Demo-mode defaults (CR-0013; written by install.ps1)')
-    foreach ($key in $demoDefaults.Keys) {
-        $existing = Read-EnvValue -Path $envFile -Key $key
-        if ($ResetDemoDefaults -or [string]::IsNullOrWhiteSpace($existing)) {
-            $demoLines += "$key=$($demoDefaults[$key])"
-        } else {
-            $demoLines += "$key=$existing"
-            Write-Host "==> Preserving $key from $envFile (pass -ResetDemoDefaults to overwrite)" -ForegroundColor Cyan
+    # Demo path: skip Test-PgVolumeConflict per S8 (fixed credentials make collision impossible).
+    # -ResetDemoDefaults drift guard per CR-0014 § 3c + OI-4:
+    # Three-condition trigger: (a) demo re-run + (b) persisted PG password != demo literal +
+    # (c) pg volume exists.
+    & docker volume inspect deployment-dashboard_pg-data *> $null
+    $volumeExists = ($LASTEXITCODE -eq 0)
+    if ($volumeExists) {
+        $persistedPg = ''
+        if (Test-Path -LiteralPath $envFile) {
+            $persistedPg = _dd-read-env-value -Path $envFile -Key 'POSTGRES_PASSWORD'
+        }
+        $pgDrifted = (-not [string]::IsNullOrWhiteSpace($persistedPg) -and $persistedPg -ne 'local-dev-password')
+        if ($pgDrifted -and -not $ResetDemoDefaults) {
+            Write-Host "ERROR: Demo re-run detected with a pg volume initialised under different credentials (POSTGRES_PASSWORD in $envFile is not 'local-dev-password')." -ForegroundColor Red
+            Write-Host "" -ForegroundColor Red
+            Write-Host "Remediation paths:" -ForegroundColor Red
+            Write-Host "  1. Re-run with -ResetDemoDefaults (force-overwrites dashboard.env with demo literals, then run uninstall -RemoveData before next bringup)." -ForegroundColor Red
+            Write-Host "  2. Run uninstall.ps1 -RemoveData then re-run install.ps1 (clean slate)." -ForegroundColor Red
+            Write-Host "  3. Manually edit $envFile and set POSTGRES_PASSWORD=local-dev-password (only if you know the cluster was seeded with that password)." -ForegroundColor Red
+            exit 1
+        }
+        if ($pgDrifted -and $ResetDemoDefaults) {
+            Write-Host "WARNING: -ResetDemoDefaults set. Overwriting dashboard.env with demo credentials." -ForegroundColor Yellow
+            Write-Host "WARNING: You MUST run 'uninstall.ps1 -RemoveData' before the next bringup to drop the incompatible pg volume." -ForegroundColor Yellow
         }
     }
-
-    # GHA_TOKEN: not seeded for the demo profile (demo-gha is offline-mocked,
-    # no Authorization header sent), but preserved on upgrade-re-run so a
-    # later switch back to -RealGha keeps the operator's PAT.
-    $persistedGhaToken = Read-EnvValue -Path $envFile -Key 'GHA_TOKEN'
-    if (-not $ResetDemoDefaults -and -not [string]::IsNullOrWhiteSpace($persistedGhaToken)) {
-        $demoLines += "GHA_TOKEN=$persistedGhaToken"
-        Write-Host "==> Preserving GHA_TOKEN from $envFile (pass -ResetDemoDefaults to drop)" -ForegroundColor Cyan
-    }
-
-    $envFileContent = $envFileContent + "`n" + ($demoLines -join "`n")
+} else {
+    # Non-demo path: run the volume conflict guard per S8.
+    Test-PgVolumeConflict -VolumeName 'deployment-dashboard_pg-data' -EnvFilePath $envFile -InstallDir $InstallDir
 }
 
-Set-Content -Path $envFile -Value $envFileContent -Encoding utf8 -NoNewline
+# ---- 4b. Secret handling via helper ----
+$secrets = Resolve-DashboardSecrets -EnvFilePath $envFile -ModeDemo $modeDemo -ResetDemoDefaults ([bool]$ResetDemoDefaults)
+$apiToken   = $secrets.ApiToken
+$pgPassword = $secrets.PgPassword
+
+# ---- 4c. Persist env-file ----
+$demoLines = @()
+if ($modeDemo) {
+    $demoLines = Resolve-DemoEnvDefaults -EnvFilePath $envFile -ResetDemoDefaults ([bool]$ResetDemoDefaults)
+}
+Write-DashboardEnvFile -EnvFilePath $envFile -Version $Version -Port $Port -ApiToken $apiToken -PgPassword $pgPassword -DemoLines $demoLines
 Write-Host "==> Wrote $envFile" -ForegroundColor Cyan
 
 # ---- 5 + 6. Download release assets via gh ----
-# The repo is private -- anonymous HTTPS asset fetch 404s. `gh release download`
-# uses the auth context vetted by step 2. The two URL shapes (`latest` vs pinned
-# tag) collapse into a single CLI: omit the positional tag for `latest`, supply it
-# otherwise. `--clobber` keeps re-install idempotent against a stale install dir.
 $repo = 'kostiantyn-matsebora/deployment-dashboard'
 
 function Invoke-AssetDownload {
@@ -396,10 +305,6 @@ $composeFile = Join-Path $InstallDir 'docker-compose.release.yml'
 Invoke-AssetDownload -AssetName 'docker-compose.release.yml' -DestPath $composeFile
 
 # ---- 7. GHCR docker login ----
-# The four component images live in private GHCR packages. We mint an ephemeral
-# docker-login session using the same gh token we just validated. `--password-stdin`
-# keeps the token off the process-args list; the username field is informational
-# for ghcr (a valid GH login or the `oauth2` sentinel both work).
 $ghLogin = (& gh api user --jq .login 2>$null)
 if ([string]::IsNullOrWhiteSpace($ghLogin)) { $ghLogin = 'oauth2' }
 $ghToken = & gh auth token
@@ -414,34 +319,17 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ---- 8. Pull images ----
-$composeBase = @('-f', $composeFile, '--env-file', $envFile)
-Write-Host "==> docker compose $($composeBase -join ' ') pull" -ForegroundColor Cyan
-& docker compose @composeBase pull
+# ---- 8. Build compose args via helper + pull images ----
+$composeArgs = Resolve-ComposeArgs `
+    -ModeDemo $modeDemo -ModeRealGha $modeRealGha -ModeEmpty $modeEmpty `
+    -BuildLocally ([bool]$BuildLocally) `
+    -ComposeFile $composeFile -EnvFile $envFile
+
+Write-Host "==> docker compose $($composeArgs -join ' ') pull" -ForegroundColor Cyan
+& docker compose @composeArgs pull
 if ($LASTEXITCODE -ne 0) { throw "docker compose pull failed with exit code $LASTEXITCODE" }
 
 # ---- 9. Bring up ----
-# Profile resolution per CR-0013 flag matrix:
-#   default / -Demo  -> --profile demo --profile fetcher
-#                       (demo-gha + fetcher-pointing-at-demo-gha)
-#   -RealGha         -> --profile fetcher
-#                       (fetcher-pointing-at-api.github.com; demo-gha inert)
-#   -Empty           -> no extra profiles
-#                       (db + api + gateway + dashboard only)
-$composeArgs = @() + $composeBase
-if ($modeDemo) {
-    $composeArgs += @('--profile', 'demo', '--profile', 'fetcher')
-} elseif ($modeRealGha) {
-    $composeArgs += @('--profile', 'fetcher')
-}
-# $modeEmpty -- intentionally no profiles appended.
-
-# --force-recreate (issue #53): GHCR `:latest` digest swaps under the same tag are
-# invisible to compose's textual-equality recreate heuristic, so a re-install would
-# silently keep the old containers. Unconditional --force-recreate guarantees the
-# new image is in flight for every release-install service. Trade-off: a re-run
-# with identical digests still recreates (brief restart blip); preferred over
-# Option B's per-service digest diff per the issue reporter's call.
 Write-Host "==> All services will be recreated (--force-recreate ensures GHCR digest changes are picked up)." -ForegroundColor Cyan
 Write-Host "==> docker compose $($composeArgs -join ' ') up -d --wait --force-recreate" -ForegroundColor Cyan
 & docker compose @composeArgs up -d --wait --force-recreate
@@ -450,33 +338,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "docker compose up --force-recreate failed with exit code $LASTEXITCODE"
 }
 
-# ---- 10. Health-poll ----
+# ---- 10. Health-poll via helper ----
 $healthUrl = "http://localhost:$Port/health"
-Write-Host "==> Waiting up to $HealthTimeoutSeconds s for $healthUrl" -ForegroundColor Cyan
-$deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)
-$ok = $false
-while ((Get-Date) -lt $deadline) {
-    try { if ((Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200) { $ok = $true; break } } catch { }
-    Start-Sleep -Seconds 2
-}
-if (-not $ok) {
-    & docker compose @composeArgs logs --tail=50
-    throw "Gateway-fronted /health did not return 200 at $healthUrl within $HealthTimeoutSeconds s."
-}
+Wait-DashboardHealth -HealthUrl $healthUrl -TimeoutSeconds $HealthTimeoutSeconds -ComposeArgs $composeArgs
 
-# ---- 11. URL panel ----
-Write-Host ""
-Write-Host "  Dashboard / Gateway: http://localhost:$Port/"
-Write-Host "  API_TOKEN:           $apiToken (saved to $envFile)"
-Write-Host "  Postgres (dev):      localhost:5432 (user: dashboard / password in $envFile)"
-if ($modeDemo) {
-    Write-Host "  Mode:                Demo (default) -- demo-gha + fetcher; offline, zero-PAT" -ForegroundColor Cyan
-    Write-Host "  Demo upstream:       http://demo-gha:80 (internal; baked WireMock.Net bundle)" -ForegroundColor Cyan
-    Write-Host "  Poll cadence:        $((Read-EnvValue -Path $envFile -Key 'FETCHER_POLL_INTERVAL_SECONDS')) s" -ForegroundColor Cyan
-} elseif ($modeRealGha) {
-    Write-Host "  Mode:                RealGha -- fetcher pointed at https://api.github.com (authed, 5000 req/h)" -ForegroundColor Cyan
-} elseif ($modeEmpty) {
-    Write-Host "  Mode:                Empty -- no fetcher, no demo-gha. Direct-POST integrators only." -ForegroundColor Cyan
-}
-Write-Host ""
-Write-Host "  curl -X POST http://localhost:$Port/api/deployments -H 'Content-Type: application/json' -H 'X-Api-Key: $apiToken' -d '{`"service`":`"adminportal`",`"environment`":`"dev`",`"version`":`"v2.3.1`",`"status`":`"success`",`"run_url`":`"https://example.test/run/1`",`"run_number`":1,`"actor`":`"local`"}'"
+# ---- 11. URL panel via helper ----
+Write-DashboardUrlPanel -Port $Port -ApiToken $apiToken -EnvFile $envFile `
+    -ModeDemo $modeDemo -ModeRealGha $modeRealGha -ModeEmpty $modeEmpty
