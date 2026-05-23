@@ -953,6 +953,70 @@ Describe 'install.ps1 -- error paths' {
     }
 }
 
+Describe 'install.ps1 -- CR-0014 demo fixed credentials + helper delegation' {
+    # CR-0014 § 3c: demo path writes POSTGRES_PASSWORD=local-dev-password
+    # and API_TOKEN=demo-api-token (fixed literals). Non-demo paths generate random.
+    # CR-0014 § 3a: install.ps1 dot-sources _bringup-core.ps1; entrypoint tests
+    # assert delegation outcome (fixed creds), not helper internals.
+    BeforeEach { $script:tmp = New-TempTestDir }
+    AfterEach  { if (Test-Path $tmp) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp } }
+
+    It 'demo path (no flag) -- writes POSTGRES_PASSWORD=local-dev-password to dashboard.env (CR-0014 § 3c)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+    }
+
+    It 'demo path (no flag) -- writes API_TOKEN=demo-api-token to dashboard.env (CR-0014 § 3c)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^API_TOKEN=demo-api-token$'
+    }
+
+    It '-Demo back-compat alias -- writes fixed demo credentials (same as no-flag default)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test','-Demo')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+        $envContent | Should -Match '(?m)^API_TOKEN=demo-api-token$'
+    }
+
+    It '-RealGha path -- does NOT write fixed demo POSTGRES_PASSWORD (still random) (CR-0014 § 3c non-demo)' {
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-RealGha','-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ GHA_TOKEN = 'ghp_fake_pat' }
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Not -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+        $envContent | Should -Match '(?m)^POSTGRES_PASSWORD=[0-9a-f]'
+    }
+
+    It '-Empty path -- does NOT write fixed demo credentials (still random) (CR-0014 § 3c non-demo)' {
+        $r = Invoke-Install -TmpDir $tmp -Args @('-Empty','-InstallDir',$tmp,'-Version','v9.9.9-test')
+        $r.ExitCode | Should -Be 0
+        $envContent = Get-Content $r.EnvFile -Raw
+        $envContent | Should -Not -Match '(?m)^POSTGRES_PASSWORD=local-dev-password$'
+        $envContent | Should -Not -Match '(?m)^API_TOKEN=demo-api-token$'
+    }
+
+    It 'demo re-run against existing pg-data volume -- succeeds without volume drop (CR-0014 § 3c re-run safety)' {
+        # With fixed demo credentials, pg cluster initialised on first install
+        # accepts the same password on subsequent re-runs.
+        # Seed an env-file with the fixed demo creds (post-CR-0014 state).
+        Set-Content -Path (Join-Path $tmp 'dashboard.env') `
+                    -Value "API_TOKEN=demo-api-token`nPOSTGRES_PASSWORD=local-dev-password" `
+                    -Encoding utf8
+        $r = Invoke-Install -TmpDir $tmp `
+                            -Args @('-InstallDir',$tmp,'-Version','v9.9.9-test') `
+                            -EnvOverrides @{ DD_VOLUME_EXISTS = 'true' }
+        # Guard must not red-error (fixed creds make collision impossible).
+        $r.ExitCode | Should -Be 0
+        "$($r.Stdout)`n$($r.Stderr)" | Should -Not -Match 'Pre-existing Postgres volume detected'
+    }
+}
+
 Describe 'install.ps1 -- upgrade flow (issue #37)' {
     # Phase 4 contract additions:
     #   1. CWD-independent default -InstallDir (= $HOME/.dashboard-release).

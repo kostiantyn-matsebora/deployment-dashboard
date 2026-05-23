@@ -900,3 +900,54 @@ EOF
     [ "$status" -eq 0 ]
     ! grep -qE '^GHA_TOKEN=' "$INSTALL_DIR/dashboard.env"
 }
+
+# ---- CR-0014 demo fixed credentials + helper delegation ----
+# CR-0014 § 3c: demo path writes fixed POSTGRES_PASSWORD=local-dev-password
+# and API_TOKEN=demo-api-token. Non-demo paths remain random.
+
+@test "demo path (no flag) -- writes POSTGRES_PASSWORD=local-dev-password (CR-0014 § 3c)" {
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^POSTGRES_PASSWORD=local-dev-password$' "$INSTALL_DIR/dashboard.env"
+}
+
+@test "demo path (no flag) -- writes API_TOKEN=demo-api-token (CR-0014 § 3c)" {
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^API_TOKEN=demo-api-token$' "$INSTALL_DIR/dashboard.env"
+}
+
+@test "--demo back-compat alias -- writes fixed demo credentials (CR-0014 § 3c)" {
+    run_install --demo --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    grep -qE '^POSTGRES_PASSWORD=local-dev-password$' "$INSTALL_DIR/dashboard.env"
+    grep -qE '^API_TOKEN=demo-api-token$' "$INSTALL_DIR/dashboard.env"
+}
+
+@test "--real-gha path -- does NOT write fixed demo POSTGRES_PASSWORD (still random) (CR-0014 § 3c non-demo)" {
+    export GHA_TOKEN='ghp_fake_pat'
+    run_install --real-gha --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    ! grep -qE '^POSTGRES_PASSWORD=local-dev-password$' "$INSTALL_DIR/dashboard.env"
+    grep -qE '^POSTGRES_PASSWORD=[0-9a-f]' "$INSTALL_DIR/dashboard.env"
+}
+
+@test "--empty path -- does NOT write fixed demo credentials (still random) (CR-0014 § 3c non-demo)" {
+    run_install --empty --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    ! grep -qE '^POSTGRES_PASSWORD=local-dev-password$' "$INSTALL_DIR/dashboard.env"
+    ! grep -qE '^API_TOKEN=demo-api-token$' "$INSTALL_DIR/dashboard.env"
+}
+
+@test "demo re-run against existing pg-data volume -- succeeds without volume drop (CR-0014 § 3c re-run safety)" {
+    # Seed env-file with fixed demo creds (post-CR-0014 state).
+    cat > "$INSTALL_DIR/dashboard.env" <<'EOF'
+API_TOKEN=demo-api-token
+POSTGRES_PASSWORD=local-dev-password
+EOF
+    # Signal that pg volume exists; demo guard must not red-error.
+    export DD_VOLUME_EXISTS=true
+    run_install --version v9.9.9-test --install-dir "$INSTALL_DIR"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Pre-existing Postgres volume detected"* ]]
+}
