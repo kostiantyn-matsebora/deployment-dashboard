@@ -45,6 +45,7 @@ jobs:
           generate_release_notes: true
           files: |
             install/docker-compose.release.yml
+            install/docker-compose.demo.yml
             install/install.ps1
             install/install.sh
             install/uninstall.ps1
