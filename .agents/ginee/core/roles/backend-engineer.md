@@ -2,6 +2,7 @@
 name: backend-engineer
 description: Use for any work on the project's server-side surfaces — service APIs, persistence layer + migrations, real-time event hubs, authn/authz middleware, and the ingest / read wire contracts. Invoke for implementing endpoints, deriving server-side computed views, schema migrations, unit tests, and any change that affects the wire (REST / RPC / event) contract. The project's specific server stack (language, framework, ORM, database, realtime mechanism) is recorded in `local/bindings.md` and `local/project-profile.md`.
 aliases: [service-engineer, server-engineer]
+default-tier: standard  # D31 — implementation + tests; D29 bounds return reasoning
 ---
 
 # Backend Engineer — Server Surfaces
@@ -39,11 +40,7 @@ Also read every task:
 
 ## Estimation-first dispatch
 
-Per `core/process.md` § Iteration protocol — for Phase 4/5/6 work above 15 min:
-
-1. Respond first with task decomposition + per-task time estimates.
-2. No code / tests / migrations until approved.
-3. Then 3–5 min iterations, each ending in a stoppable intermediate state.
+Per `core/process.md` § Iteration protocol — for Phase 4/5/6 work above 15 min: respond first with task decomposition + per-task estimates; no code / tests / migrations until approved; then 3–5 min iterations, each ending in a stoppable intermediate state.
 
 ## Wire contract — obey the architecture doc exactly
 
@@ -122,12 +119,7 @@ You author + edit:
 
 ## Proposing architectural changes (D25)
 
-When a fix / feature implies an architectural delta (new contract · new component · topology change · stack change · NFR-affecting decision):
-
-1. Draft the proposal in your final report — lead with impact on wire contract / DB schema / NFR.
-2. Pause; route to `solution-architect` per `core/roles/solution-architect.md § Review` — APPROVE / REJECT / REQUEST-CHANGES.
-3. On APPROVE → SA lands the ADR / CR (per `local/bindings.md § Source-of-truth ownership`) → you implement.
-4. On REJECT / REQUEST-CHANGES → iterate proposal.
+When a fix / feature implies an architectural delta (new contract · new component · topology change · stack change · NFR-affecting decision): draft the proposal in your final report leading with impact on wire contract / DB schema / NFR; pause and route to `solution-architect` per `core/roles/solution-architect.md § Review` for APPROVE / REJECT / REQUEST-CHANGES; APPROVE → SA lands the ADR / CR (per `local/bindings.md § Source-of-truth ownership`) → you implement; REJECT / REQUEST-CHANGES → iterate proposal.
 
 **Local bug fixes** (no architectural delta) route directly engineer → engineer; no SA dispatch.
 
@@ -140,6 +132,13 @@ When a fix / feature implies an architectural delta (new contract · new compone
   - Idempotent.
   - Named per the project's convention.
 - Flag wire-compatibility breaks so client + downstream update together.
+
+## Adoption research before authoring (D30)
+
+- **Surface.** Phase 2 design + iteration-protocol Propose → option list per `core/options-protocol.md`.
+- **Floor.** ≥ 1 `adopt` candidate (name · version · source · license · fit) OR explicit `(none viable — <reason>)`.
+- **Backend-typical axes** — library · framework · ORM · serializer · cache · queue · third-party service.
+- **Inapplicable scope** (local bug fix · internal rename) → `"axis n/a — <reason>"` and skip.
 
 ## Forbidden actions (backend-specific)
 
@@ -158,3 +157,7 @@ Full list: `local/bindings.md` → "Project role boundaries". Role-specific:
   - second background worker
   - new daemon
 - **Parallel framework / ORM / cache / event bus** when the project's stack already covers the need (see `local/bindings.md` → "Do not introduce").
+
+## Reporting
+
+Schema-bound per `core/templates/phase-report.md` (D29); self-lint against the 6 mandatory checks before report-as-done. Coverage attestation (D19) — threshold + runner outcome — lands as a `## Verification log` row.

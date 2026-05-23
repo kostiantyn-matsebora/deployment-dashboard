@@ -212,6 +212,39 @@ triage:
   #   value-minus-complexity           →  value - complexity
   scoring-formula: value-over-complexity
 
+# --- Per-role + per-task model tier (D31) ---
+# Routes reasoning-heavy roles to capable models and execution-heavy roles to
+# cheaper ones. Tier names are vendor-neutral in core/; concrete model IDs live
+# only in the per-adapter map below. Spec: core/MIGRATIONS/D31-model-tier.md.
+#
+# Resolution order (per dispatch) — stop at first match:
+#   1. Per-task prefix  model:<tier>  in the dispatch line.
+#   2. Phase-3 user answer.
+#   3. model-tier.per-role.<role>  below.
+#   4. core/roles/<role>.md frontmatter  default-tier:
+#
+# All keys optional — framework defaults apply when absent.
+# model-tier:
+#   per-role:
+#     team-lead: reasoning
+#     solution-architect: reasoning
+#     ai-engineer: standard
+#     backend-engineer: standard
+#     frontend-engineer: standard
+#     devops-engineer: standard
+#     qa-engineer: standard
+#   adapters:
+#     claude:
+#       reasoning: claude-opus-4-7
+#       standard:  claude-sonnet-4-6
+#       fast:      claude-haiku-4-5-20251001
+#     # Other adapters: no programmatic per-role model selection today
+#     # (model picked via the client's own UI). Install emits a one-line
+#     # warning. Per-task  model:<tier>  prefix documented as user hint.
+#     copilot-cli: {}
+#     agents-md:   {}
+#     generic:     {}
+
 # --- GitHub integration (D14) ---
 # Lets team-lead pick up GitHub issues as a task source alongside
 # TODO files + direct instructions, file new issues from user requests,

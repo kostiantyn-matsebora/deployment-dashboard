@@ -42,6 +42,7 @@ Default short tasks ( ≤ 15 min, no timeframe ) do not load this file.
 1. **Propose.**
    - Specialist submits structured proposal listing each sub-task: change / where / why / risk / time estimate.
    - For doc work, also include lossless evidence.
+   - **Adopt-vs-build axis (D30).** Where the sub-task involves a choice between authoring new code / config and adopting an existing solution, surface the option list per `core/options-protocol.md` — ≥ 1 adopt candidate (with citation) or explicit `(none viable — <reason>)`. Inapplicable sub-tasks cite *"axis n/a — <reason>"* and skip.
    - No edits yet.
 2. **Review.**
    - Reviewer responds per item: accept / decline / accept-with-modification, each with one-line reasoning.

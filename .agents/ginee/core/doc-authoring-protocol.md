@@ -1,4 +1,4 @@
-# Doc-authoring protocol — adopter docs + ginee-authored GitHub artefacts (D22 + D26)
+# Doc-authoring protocol — adopter docs + ginee-authored GitHub artefacts + subagent returns (D22 + D26 + D29)
 
 **Load-on-demand at Phase 5 / report-as-done** for any doc-touching task. Default shape rules + mandatory checks live in `core/process.md § Documentation style` (always-loaded); this file carries scope + enforcement + attestation.
 
@@ -13,8 +13,11 @@ Examples gallery: `core/doc-authoring-examples.md` (load on first-time authoring
 | Role definitions (`core/roles/`, `local/roles/`) · framework specs · skills | framework upstream / adopter `local/roles/` | D22 |
 | **GitHub issue bodies** authored via `ginee-file-*` skills | `team-lead` (orchestrator drafts; user approves) | **D26** |
 | **Framework-authored GitHub comments** — Phase-transition · sticky `ginee:score` / `ginee:review-cycle` · audit comments · per-thread review-replies | `team-lead` + specialists per the comment-cadence procedures | **D26** |
+| **Subagent returns** — every cardinal-dispatch return per `core/templates/phase-report.md` schema | every cardinal role | **D29** |
 
 **The lint covers every section, including Summary.** No section-by-length exemption — a one-sentence Summary still trips the mandatory checks if it packs a comma-separated inventory into a parenthetical.
+
+**Subagent-return surface adds a 6th check** — *no narrative preamble* (first non-Status line must be a `##` section header). The 5 standing checks apply unchanged. Full schema: `core/templates/phase-report.md`.
 
 ### Out of scope
 
@@ -61,3 +64,17 @@ Different from adopter-doc enforcement (which piggybacks on the discovered linte
 | Publish | Only after user approval of the linted draft. |
 
 **No external linter.** The check is LLM self-review against the same 5 mandatory rules used for adopter docs.
+
+## Enforcement for subagent returns (D29)
+
+Different again from D22 / D26. Returns are ephemeral (consumed by the orchestrator in-thread, not published), so the loop closes inside the dispatched role:
+
+| Stage | Mechanism |
+|---|---|
+| Author | Dispatched cardinal drafts the return per `core/templates/phase-report.md` schema. |
+| Self-lint | Role runs the 6 mandatory checks (5 from D22 / D26 + *no narrative preamble*) against the draft **before** returning. Violations → restructure; un-restructurable content → lift into capped `## Notes`. |
+| Violation reaches orchestrator | `team-lead` surfaces a one-line advisory (`"Return missed self-lint: <violation>; consuming anyway"`), consumes the return, never re-dispatches purely for format, never auto-rewrites (analogous to D14 reporter-content forbidden). |
+| Iteration-protocol intermediate return | Same schema with sections marked `(in-progress)`; `## Stop-state` required; `Status: In-progress`. |
+| Failed dispatch (forced handoff per `core/cross-agent-handoff.md`) | Same schema + required `## Hand-off` section embedding `core/templates/hand-off-note.md`. |
+
+**No external linter.** LLM self-review against the schema; identical machinery to D22 / D26 enforcement loop. Forward-only — pre-D29 returns are not retroactively rewritten.

@@ -172,3 +172,106 @@ Scannable; one row per concept; zero connectives to parse.
 - **Migration:** Adopters run `@team-lead rediscover` on next upgrade.
 
 Issue auto-closes on PR merge via `Closes #37`.
+
+---
+
+## 10. Subagent return — Phase-4 cardinal dispatch (D29)
+
+**Bad** — narrative-padded return with restated dispatch context, verbose rationale, embedded code dump (3,603 chars — typical complex Phase-4 cardinal return per the D29 issue's measurements):
+
+> The orchestrator dispatched me to add a `## Reporting` schema-bound pointer section to every cardinal role kernel that currently lacks one, while amending the two kernels that already have a `## Reporting` section so they cite the new schema instead of re-stating the template. I started by carefully reading `core/process.md § Reporting` (the new always-loaded section that landed in this same PR) to make sure I understood the binding rule — schema-bound per `core/templates/phase-report.md`, self-lint against the 6 mandatory checks before report-as-done. I then re-read `core/templates/phase-report.md` end-to-end to internalize the cardinality table (Files touched / Decisions made / Verification log / Open issues / Next dispatch needed are mandatory; Hand-off + Stop-state are conditional; Notes is the optional escape hatch with a 200-word cap). With that grounding in place, I opened `core/roles/team-lead.md` first because it already had a structured `## Reporting` block with five bullets restating the template's section list — those five bullets are now redundant because the schema lives in `core/templates/phase-report.md`. I replaced the block with a one-line pointer that cites the schema + the 6 mandatory checks + the hand-off cross-reference, which removes 10 lines from an always-loaded kernel (good for context economy under D21). Next I opened `core/roles/solution-architect.md` and applied the same treatment to its existing `## Reporting` block, but I kept the three Phase-1 design-mode bullets (resolved mode + ASR utility-tree summary + requirements register diff) because those are SA-specific obligations not captured by the generic schema — they now live under "Phase 1 design-mode report adds three rows to `## Decisions made`" as a single bullet with nested specifics. After that I turned to the five kernels that have no `## Reporting` section: `ai-engineer.md`, `frontend-engineer.md`, `backend-engineer.md`, `devops-engineer.md`, `qa-engineer.md`. For each of those I appended a new `## Reporting` section after `## Forbidden actions`. I kept every new section deliberately short — one to two lines — because the just-completed D18→D28 context-economy optimization pass left the kernels lean and I did not want to re-inflate them. The ai-engineer kernel section additionally calls out that the lossless-self-check sample goes in the Verification log as a row; the backend kernel section references D19 coverage attestation; the devops kernel section references both D18 script-quality and the post-step health check; the qa kernel section references test-run + manual-smoke outcomes. Frontend kernel only got the bare one-liner since it has no extra attestation obligation. Here's the exact text I added to backend-engineer.md so you can verify the shape:
+>
+> ```
+> ## Reporting
+>
+> Schema-bound per `core/templates/phase-report.md` (D29); self-lint against the 6 mandatory checks before report-as-done. Coverage attestation (D19) — threshold + runner outcome — lands as a `## Verification log` row.
+> ```
+>
+> All seven edits passed the lossless self-check — every prior Reporting-related rule in the two amended kernels (team-lead, SA) survives in the new structure, and the five new sections add zero new normative rules (they cite, not introduce). I then ran `git diff --stat core/roles/` and confirmed the net line change across the seven kernels is +20 / -17. No other files touched in this dispatch. The orchestrator should now be able to dispatch the doc-authoring-protocol § Scope extension + the doc-authoring-examples bad/good pair as the next batch.
+
+**Good** — schema-bound return (1,136 chars, **68.5% reduction**):
+
+```
+Status: Done
+
+## Files touched
+
+| Path | Δ lines | Purpose |
+|---|---|---|
+| `core/roles/team-lead.md` | +1 / -10 | Replace verbose 5-bullet Reporting block with schema pointer |
+| `core/roles/solution-architect.md` | +4 / -7 | Same — keep Phase-1 design-mode bullets |
+| `core/roles/ai-engineer.md` | +3 / -0 | New Reporting section (1-line) |
+| `core/roles/frontend-engineer.md` | +3 / -0 | New Reporting section (1-line) |
+| `core/roles/backend-engineer.md` | +3 / -0 | New Reporting section — D19 coverage row noted |
+| `core/roles/devops-engineer.md` | +3 / -0 | New Reporting section — D18 + health-check rows noted |
+| `core/roles/qa-engineer.md` | +3 / -0 | New Reporting section — test + smoke rows noted |
+
+## Decisions made
+
+- Kernels with existing Reporting sections: amend in place — D29 schema pointer
+- Kernels without: insert one-line section after `## Forbidden actions`
+
+## Verification log
+
+| Command | Outcome |
+|---|---|
+| `git diff --stat core/roles/` | +20 / -17 net across 7 files |
+| Lossless self-check | 6 prior rules sampled, all present |
+
+## Open issues
+
+(none)
+
+## Next dispatch needed
+
+(none)
+```
+
+**Measurement (honest).** Bad return = 3,603 chars (narrative preamble + restated dispatch context + verbose per-file rationale + embedded code snippet). Good return = 1,136 chars (Status + 4 tables + 2 bullet sections + 2 empty-case markers). **Reduction: (3603 − 1136) / 3603 = 68.5%** — within rounding of the issue's ~70% target.
+
+**Why the ratio holds.** Bloat scales with task scope (narrative restatement + per-decision rationale paragraphs + code-snippet quotes); schema-bound size scales with file count + decision count. Simple cardinal dispatches reduce by similar ratios (1,500–3,000 char prose → 400–800 char schema). Sub-1,000-char dispatches don't reduce as far because the schema's table headers carry a fixed overhead — and that's fine: at those sizes the absolute saving is small either way and the parseability gain dominates.
+
+---
+
+## 11. Option list — adopt-vs-build (D30)
+
+**Context.** Sub-task: add a content-compression layer for context payloads. Proposing role surfaces the option list as part of the iteration-protocol Propose step (or Phase 2 design output).
+
+**Bad** — build-only, no adoption research surfaced:
+
+> Options:
+> - Build a custom dictionary-based compressor tuned to markdown.
+> - Build a simple LZ-style compressor inline.
+
+Tripped checks: **#1** (no adopt candidate, no `(none viable)` cite) · **#3** (candidates untagged).
+
+**Bad** — adoption hand-waved:
+
+> Options:
+> - Use a charting library (it's mature).
+> - Build our own.
+
+Tripped checks: **#2** (no name · version · source link · license) · **#5** (`"mature"` isn't a concrete fit rationale) · **#3** (untagged).
+
+**Good** — adopt candidates fully cited, build alternative explicit:
+
+```
+Options:
+- adopt — zstd via `python-zstandard` v0.22 — BSD-3 — https://pypi.org/project/zstandard/
+  — fit: streaming API; 4 ms/kB on <1 kB payloads (cite `runtime-facts.yaml`).
+- adopt — brotli v1.1 — MIT — https://pypi.org/project/Brotli/
+  — fit: better text ratios; +30 ms latency cost on small payloads.
+- build — minimal in-house — rationale: surveyed adopt candidates above; both exceed
+  the latency NFR on the <1 kB hot path. ADR draft below.
+```
+
+**Good** — empty research, explicit `(none viable)`:
+
+```
+Options:
+- (none viable — surveyed 3 token-aware compressors; all require tokenizer-specific
+  dictionaries the framework does not ship).
+- build — minimal in-house — see ADR draft.
+```
+
+Passes all 5 checks: floor present · citations complete · tagging explicit · empty research documented · fit rationale concrete.

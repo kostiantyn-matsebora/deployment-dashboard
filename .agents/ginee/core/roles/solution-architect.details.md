@@ -4,6 +4,23 @@ Companion to `core/roles/solution-architect.md`. Elaborations only; kernel rules
 
 **Note (D25):** CR template moved to `team-lead.details.md § CR template` — CRs are coordination decisions, not architectural ones. SA reviews CRs for architectural coherence per `core/doc-roles.md § SA architectural-coherence review` but does NOT author them.
 
+## D25 doc-ownership redistribution table
+
+Moved from `solution-architect.md § What you own` for context-economy. Kernel keeps the bulleted summary; this is the full table.
+
+| Doc class | New owner |
+|---|---|
+| CRs (requirement-change records) | `team-lead` |
+| Project-instruction file | `team-lead` |
+| Work-breakdown doc | `team-lead` |
+| CI/CD guide · infra runbooks | `devops-engineer` |
+| Backend READMEs · API docs · service docs | `backend-engineer` |
+| Frontend READMEs · component docs | `frontend-engineer` |
+| Test plans · scenario docs · QA reports | `qa-engineer` |
+| Mockup | mockup-owning role (unchanged) |
+
+Each role's doc edits are SA-reviewed for architectural coherence on PRs that touch SA-owned files per the Review activity in the kernel.
+
 ## ADR template
 
 Standard four-section:

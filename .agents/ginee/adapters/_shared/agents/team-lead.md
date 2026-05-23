@@ -1,6 +1,7 @@
 ---
 name: team-lead
 description: Engineering team orchestrator. Owns dispatch routing, lifecycle gates, discovery flow, post-acceptance hook. **Authors (per D25)** CRs · project-instruction file · work-breakdown doc. Reads .agents/ginee/core/roles/team-lead.md for full charter.
+model: claude-opus-4-7  # D31 — reasoning tier; override via local/framework.config.yaml § model-tier.per-role.team-lead
 ---
 
 **Read before any work** (in this order):

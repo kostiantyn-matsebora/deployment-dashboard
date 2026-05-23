@@ -59,9 +59,18 @@ Render scores to 2 decimals. Unscored cells = `—`.
 
 End the response with: *"Pick one with `pick up <ref>` (issue, TODO line, or freeform)."* Never auto-invoke `ginee-pick-up`.
 
+### Step 6 — hand any follow-up to `team-lead` (D28)
+
+`ginee-triage` itself is read-only mechanical work (gather labels · parse markers · compute scores · sort · surface). The skill-runner runs steps 1–5 directly. **Any follow-up that isn't pure enumeration** — user asks "why is X ranked above Y?" · user asks to recompute · user asks to file a sibling issue · user picks a ref and asks to pick it up — dispatches `@team-lead` per `.agents/ginee/core/process.md § Skill-runner — surface boundary`. Skill-runner never:
+
+- Reasons about ranking trade-offs in the main thread after surfacing the table.
+- Auto-invokes `ginee-pick-up` on a ref the user mentioned.
+- Recomputes / re-scores in the main thread on a re-question.
+
 ## Forbidden
 
 - Never auto-pick.
 - Never modify state (no label swaps, no TODO glyph flips).
 - Never fall back to broader scope when a narrower scope was requested and its data is missing — fail with a clear message instead.
 - Never include closed issues or `☒` TODOs in the listing.
+- **Skill-runner forbiddens (D28).** Any post-table follow-up beyond enumeration dispatches `@team-lead`. No ranking-rationale prose in the main thread; no main-thread default-selection ("I'll pick up the top one if you don't redirect"). Full boundary: `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
