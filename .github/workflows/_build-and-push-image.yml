@@ -17,7 +17,7 @@
 #                buildx + (conditional) registry login + metadata + build +
 #                push. Used by demo-gha per CR-0013 — the image is content-
 #                only (Dockerfile = one COPY of qa-owned fixture content
-#                into a WireMock.Net base layer). Every language-setup /
+#                into a JVM WireMock base layer). Every language-setup /
 #                test / coverage step is `if`-gated to dotnet|static and
 #                naturally skips for `copy`; this branch is documented as a
 #                first-class third value of the input.

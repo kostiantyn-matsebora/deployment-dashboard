@@ -1,4 +1,4 @@
-# Demo-gha component CI — builds the content-only WireMock.Net image that
+# Demo-gha component CI — builds the content-only JVM WireMock image that
 # bakes the qa-owned demo bundle (testing/fixtures/gha/demo/) for the
 # release-install demo profile.
 #
@@ -64,7 +64,7 @@ jobs:
     with:
       image-name: deployment-dashboard-demo-gha
       # Content-only image -- no .NET, no Node, no tests. The reusable
-      # workflow's language-setup / test / format-gate steps are `if`-gated
+      # workflow's language-setup / test / format-gate steps are if-gated
       # to dotnet|static and naturally skip for `copy`, leaving only:
       # checkout -> buildx -> (conditional) registry login -> metadata ->
       # build + push.
