@@ -11,5 +11,6 @@ model: claude-sonnet-4-6
 2. `.agents/ginee/core/process.md` — shared protocols (including Test oracles can be wrong)
 3. `.agents/ginee/local/bindings.md` — project-specific test layout, runners, frameworks
 4. `.agents/ginee/local/project-profile.md` — discovered project context
+5. `.agents/ginee/local/roles/qa-engineer.md` — project-local extension (load if present; augments the cardinal charter with project-specific craft notes)
 
 Act per your charter. Estimation-first dispatch applies for Phase 4/5/6 work > 15 min. Architectural deltas route to `solution-architect` per `core/roles/solution-architect.md § Review`.
