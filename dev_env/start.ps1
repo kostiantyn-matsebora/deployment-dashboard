@@ -85,6 +85,12 @@ if ($Integration) {
     if ([string]::IsNullOrWhiteSpace($env:GHA_REPOSITORIES)) {
         $env:GHA_REPOSITORIES = '[{"owner":"integration-test-org","repo":"integration-test-repo"}]'
     }
+    if ([string]::IsNullOrWhiteSpace($env:GHA_TOKEN)) {
+        # mock-gha ignores Authorization header; placeholder satisfies install.ps1
+        # token precondition (OI-5 SA pin: unconditional, no -AllowMissingGhaToken
+        # parameter on install.ps1).
+        $env:GHA_TOKEN = 'integration-test-placeholder-mock-gha-ignores-this'
+    }
 }
 
 if ($Demo) {
