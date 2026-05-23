@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-# demo-driver sidecar -- periodic WireMock.Net admin-API ticker (issue #46).
+# demo-driver sidecar -- periodic JVM WireMock admin-API ticker (issue #46).
 #
 # Owner: devops-engineer.
-# Contract: Phase 3 design lock on #46 (extension to CR-0013 demo profile).
 #
 # Lifecycle:
-#   1. Discover pinned GUIDs from /app/static-base/05-list-deployments-*.json
-#      (each file's top-level `Guid` field is the WireMock.Net mapping id the
-#      sidecar will PUT against to replace that mapping's response body).
-#   2. Walk /app/ticks/<NNN>-<slug>/ subdirectories in sorted order, indefinitely.
+#   1. Walk /app/ticks/<NNN>-<slug>/ subdirectories in sorted order, indefinitely.
 #      Per tick: for each JSON file in the subdir, identify intent by filename
-#      prefix, rewrite numeric `id` / `run_id` fields under Response.BodyAsJson
+#      prefix, rewrite numeric `id` / `run_id` fields under response.jsonBody
 #      using cycle-anchored monotone stride, and PUT (list-deployments) or
 #      POST (status) the body to demo-gha's admin API.
-#   3. Sleep DEMO_DRIVER_PERIOD_SECONDS between ticks; SIGTERM aborts the
+#   2. Sleep DEMO_DRIVER_PERIOD_SECONDS between ticks; SIGTERM aborts the
 #      sleep but lets the current tick's IO finish (graceful <=10s).
+#
+# list-deployments tick files carry their own `id` field; the driver PUTs
+# directly to /__admin/mappings/{id} each tick -- no startup GUID discovery.
+# status tick files have no `id`; JVM WireMock assigns one on POST. The
+# driver DELETEs the previous tick's status mappings before each new tick
+# so the live-mapping count stays bounded.
 #
 # Error handling: every admin-API call is best-effort; 4xx/5xx is logged at
 # WARNING and the loop continues. The driver never crashes -- on uncaught
@@ -40,7 +42,6 @@ GHA_URL = os.environ.get("DEMO_DRIVER_GHA_URL", "http://demo-gha:80")
 PERIOD_SECONDS = int(os.environ.get("DEMO_DRIVER_PERIOD_SECONDS", "15"))
 ID_STRIDE = int(os.environ.get("DEMO_DRIVER_ID_STRIDE", "100"))
 BUILD_EPOCH = int(os.environ.get("DEMO_DRIVER_BUILD_EPOCH", "0"))
-STATIC_BASE_DIR = pathlib.Path("/app/static-base")
 TICKS_DIR = pathlib.Path("/app/ticks")
 
 # -------- Logging --------------------------------------------------------------
@@ -96,53 +97,7 @@ def _admin_request(method: str, path: str, body: dict | None) -> tuple[int, str]
         conn.close()
 
 
-# -------- GUID discovery -------------------------------------------------------
-
-_LIST_DEPLOY_FILE_RE = re.compile(r"^05-list-deployments-(?P<slug>[^/]+?)\.json$")
-
-
-def discover_guid_map() -> dict[str, str]:
-    """Read /app/static-base/05-list-deployments-*.json files; return slug->Guid.
-
-    Files without a top-level `Guid` field are skipped (qa-engineer pins those
-    in parallel). Logged once at startup at INFO.
-    """
-    out: dict[str, str] = {}
-    if not STATIC_BASE_DIR.is_dir():
-        log.warning("static-base dir missing: %s", STATIC_BASE_DIR)
-        return out
-    for f in sorted(STATIC_BASE_DIR.iterdir()):
-        m = _LIST_DEPLOY_FILE_RE.match(f.name)
-        if not m:
-            continue
-        slug = m.group("slug")
-        try:
-            doc = json.loads(f.read_text(encoding="utf-8"))
-        except Exception as exc:
-            log.warning("parse static-base %s: %s", f.name, exc)
-            continue
-        guid = doc.get("Guid")
-        if not isinstance(guid, str) or not guid:
-            log.info("static-base %s: no `Guid` pinned -- service skipped at tick-time", f.name)
-            continue
-        out[slug] = guid
-    log.info("guid-map discovered: %d services -> %s", len(out), sorted(out.keys()))
-    return out
-
-
 # -------- ID rewriter ----------------------------------------------------------
-
-# WireMock.Net mapping JSON has two shapes the driver must rewrite under:
-#   - Response.BodyAsJson is the literal response body the mock returns. For
-#     list-deployments + status / runs etc. this is a JSON array of objects
-#     with numeric `id` / `run_id` fields.
-#   - Some authoring conventions wrap one more layer (BodyAsJson.Response.
-#     BodyAsJson); we walk both to be tolerant of bundle-author choice.
-#
-# Numeric id rewrite: effective = authored + cycle_index * ID_STRIDE. Only
-# fields named exactly `id` or `run_id` whose value is an int are rewritten.
-# `sha` (string) + `created_at` (timestamp) are NOT touched -- they're
-# authored verbatim by qa and intentional.
 
 _ID_FIELDS = ("id", "run_id")
 
@@ -160,80 +115,41 @@ def _walk_and_rewrite(node: Any, offset: int) -> None:
 
 
 def rewrite_ids_in_mapping(mapping: dict, offset: int) -> None:
-    """Rewrite numeric id/run_id fields under the response body. Mutates in place.
-
-    Walks Response.BodyAsJson regardless of nesting depth -- handles both
-    `mapping.Response.BodyAsJson` (the WireMock.Net default authoring shape)
-    and `mapping.BodyAsJson.Response.BodyAsJson` (alternate wrapper). Mapping
-    `Guid` is NEVER rewritten (it identifies the mapping itself).
-    """
-    response = mapping.get("Response")
+    """Rewrite numeric id/run_id fields under response.jsonBody. Mutates in place."""
+    response = mapping.get("response")
     if isinstance(response, dict):
-        body = response.get("BodyAsJson")
+        body = response.get("jsonBody")
         if body is not None:
             _walk_and_rewrite(body, offset)
-    nested = mapping.get("BodyAsJson")
-    if isinstance(nested, dict):
-        inner = nested.get("Response")
-        if isinstance(inner, dict):
-            body2 = inner.get("BodyAsJson")
-            if body2 is not None:
-                _walk_and_rewrite(body2, offset)
 
 
 # -------- Tick application -----------------------------------------------------
 
-_LIST_DEPLOY_TICK_RE = re.compile(r"^list-deployments-(?P<slug>[^/]+?)\.json$")
+_LIST_DEPLOY_TICK_RE = re.compile(r"^list-deployments-")
 _STATUS_TICK_RE = re.compile(r"^status-")
 
-# Trips once per process when the PUT-then-fallback path activates so we
-# don't spam the log on every tick. Per-service so each service's first
-# fallback is noted once.
-_put_fallback_announced: set[str] = set()
-
-# Track Guids assigned by WireMock.Net for status mappings posted in the
-# previous tick. Before each tick's status POSTs, the prior set is DELETEd
-# so the live-mapping count stays bounded at ~status-files-per-tick.
-#
-# Issue #57: keeping fewer mappings live (~4 instead of ~30 cumulative)
-# reduces the per-request leak in WireMock.Net 2.4.0 -- each registered
-# matcher contributes to per-request allocation that does not free.
 _prev_status_guids: set[str] = set()
 
 
-def _apply_list_deployments(tick_file: pathlib.Path, slug: str, offset: int, guid_map: dict[str, str]) -> None:
-    pinned = guid_map.get(slug)
-    if not pinned:
-        log.info("tick %s: no pinned Guid for service %s; skipping", tick_file.name, slug)
-        return
+def _apply_list_deployments(tick_file: pathlib.Path, offset: int) -> None:
+    """PUT a list-deployments mapping using the `id` field baked into the file."""
     try:
         body = json.loads(tick_file.read_text(encoding="utf-8"))
     except Exception as exc:
         log.warning("parse tick %s: %s", tick_file.name, exc)
         return
     rewrite_ids_in_mapping(body, offset)
-    # Preserve the pinned Guid in the PUT body so admin keeps mapping identity.
-    body["Guid"] = pinned
-    status, text = _admin_request("PUT", f"/__admin/mappings/{pinned}", body)
-    if 200 <= status < 300:
+    mapping_id = body.get("id")
+    if not isinstance(mapping_id, str) or not mapping_id:
+        log.warning("tick %s: no `id` field in mapping body; skipping", tick_file.name)
         return
-    # 4xx fallback path -- DELETE then POST (full body), once-per-service notice.
-    if 400 <= status < 500:
-        if slug not in _put_fallback_announced:
-            log.info("PUT /__admin/mappings/%s returned %d for service %s; using DELETE+POST fallback", pinned, status, slug)
-            _put_fallback_announced.add(slug)
-        del_status, _ = _admin_request("DELETE", f"/__admin/mappings/{pinned}", None)
-        if not (200 <= del_status < 300 or del_status == 404):
-            log.warning("DELETE fallback for %s -> status %d", pinned, del_status)
-        post_status, post_text = _admin_request("POST", "/__admin/mappings", body)
-        if not (200 <= post_status < 300):
-            log.warning("POST fallback for %s -> status %d body=%s", pinned, post_status, post_text[:200])
-        return
-    log.warning("PUT /__admin/mappings/%s -> status %d body=%s", pinned, status, text[:200])
+    status, text = _admin_request("PUT", f"/__admin/mappings/{mapping_id}", body)
+    if not (200 <= status < 300):
+        log.warning("PUT /__admin/mappings/%s (tick %s) -> status %d body=%s", mapping_id, tick_file.name, status, text[:200])
 
 
 def _apply_status(tick_file: pathlib.Path, offset: int) -> str | None:
-    """POST a status mapping; return the WireMock-assigned Guid (or None on failure)."""
+    """POST a status mapping; return the JVM WireMock-assigned id (or None on failure)."""
     try:
         body = json.loads(tick_file.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -245,10 +161,9 @@ def _apply_status(tick_file: pathlib.Path, offset: int) -> str | None:
         log.warning("POST /__admin/mappings (status tick %s) -> status %d body=%s", tick_file.name, http_status, text[:200])
         return None
     try:
-        # JVM WireMock returns "id" (not "Guid" as WireMock.Net did).
-        assigned_guid = json.loads(text).get("id")
-        if isinstance(assigned_guid, str) and assigned_guid:
-            return assigned_guid
+        assigned_id = json.loads(text).get("id")
+        if isinstance(assigned_id, str) and assigned_id:
+            return assigned_id
     except Exception:
         pass
     log.warning("POST /__admin/mappings (status tick %s) succeeded but id missing in response; mapping will not be pruned", tick_file.name)
@@ -265,7 +180,7 @@ def _delete_prev_status_guids() -> None:
     _prev_status_guids = set()
 
 
-def apply_tick(tick_dir: pathlib.Path, offset: int, guid_map: dict[str, str]) -> None:
+def apply_tick(tick_dir: pathlib.Path, offset: int) -> None:
     global _prev_status_guids
     log.info("applying tick %s (id-offset=%d)", tick_dir.name, offset)
     _delete_prev_status_guids()
@@ -273,9 +188,8 @@ def apply_tick(tick_dir: pathlib.Path, offset: int, guid_map: dict[str, str]) ->
     for f in sorted(tick_dir.iterdir()):
         if not f.is_file() or not f.name.endswith(".json"):
             continue
-        m_list = _LIST_DEPLOY_TICK_RE.match(f.name)
-        if m_list:
-            _apply_list_deployments(f, m_list.group("slug"), offset, guid_map)
+        if _LIST_DEPLOY_TICK_RE.match(f.name):
+            _apply_list_deployments(f, offset)
             continue
         if _STATUS_TICK_RE.match(f.name):
             guid = _apply_status(f, offset)
@@ -290,12 +204,6 @@ def apply_tick(tick_dir: pathlib.Path, offset: int, guid_map: dict[str, str]) ->
 
 
 def cycle_index_for(now: float, total_cycles: int) -> int:
-    """Returns the current cycle index since BUILD_EPOCH (mod total_cycles).
-
-    cycle_length = total_cycles * PERIOD_SECONDS. With BUILD_EPOCH=0 we fall
-    back to PROCESS_START_EPOCH so the index is still monotone within the
-    process lifetime (may reset across restarts; documented in Dockerfile).
-    """
     if total_cycles <= 0:
         return 0
     anchor = BUILD_EPOCH if BUILD_EPOCH > 0 else _PROCESS_START_EPOCH
@@ -320,7 +228,6 @@ def main() -> int:
         "demo-driver starting -- url=%s period=%ds id-stride=%d build-epoch=%d",
         GHA_URL, PERIOD_SECONDS, ID_STRIDE, BUILD_EPOCH,
     )
-    guid_map = discover_guid_map()
 
     if not TICKS_DIR.is_dir():
         log.error("ticks dir missing: %s; exiting", TICKS_DIR)
@@ -338,8 +245,8 @@ def main() -> int:
         tick_dir = tick_dirs[step % total]
         offset = cycle * ID_STRIDE
         try:
-            apply_tick(tick_dir, offset, guid_map)
-        except Exception as exc:  # never crash the loop
+            apply_tick(tick_dir, offset)
+        except Exception as exc:
             log.error("tick %s raised %s; continuing", tick_dir.name, exc)
         step += 1
         if _shutdown:

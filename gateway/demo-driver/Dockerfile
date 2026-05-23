@@ -52,13 +52,6 @@ ENV DEMO_DRIVER_GHA_URL="http://demo-gha:80" \
 
 WORKDIR /app
 
-# Static base = the pinned list-deployments mappings whose `Guid` field
-# the sidecar reads at startup to learn which mapping GUID to PUT
-# against per service. qa-engineer owns the `Guid` pinning (CR-0013
-# bundle-author concern); the COPY itself is a devops concern (image
-# layout). The seam is the path pattern.
-COPY testing/fixtures/gha/demo/mappings/05-list-deployments-*.json /app/static-base/
-
 # Ticks = the qa-authored sequence of per-tick mapping snippets. Each
 # subdirectory is one tick (sorted lexically by directory name); each
 # JSON file inside encodes one PUT (list-deployments update) or POST
