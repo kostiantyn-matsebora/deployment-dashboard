@@ -40,4 +40,9 @@ export const routes: Routes = [
   },
 
   // Sub-batch D' — /invariants route (lazy)
+  {
+    path: 'invariants',
+    loadComponent: () =>
+      import('./invariants/invariants.route').then(m => m.InvariantsRouteComponent)
+  }
 ];
