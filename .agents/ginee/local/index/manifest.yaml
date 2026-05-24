@@ -4,6 +4,9 @@
 # Prior version: 2026-05-21 by ai-engineer (Step 8b dispatch).
 # Reindexed by ai-engineer (2026-05-24): WireMock JVM consolidation cycle 2 SHA drift sweep
 #   (commits 95132bd + 082e80d + c9d2f22); 5 SHA entries updated across 5 classes.
+# Reindexed by ai-engineer (2026-05-24): WireMock JVM consolidation cycle 3 SHA drift sweep
+#   (commits 37e1cb4 + 983627d + 467c2aa); 3 SHA entries updated across 3 classes:
+#   integration-tests (source SHA), stack (index-file SHA), ci-pipelines (index-file SHA).
 # Spec: core/index-protocol.md § Manifest shape.
 #
 # Rediscovery 2026-05-23 notes:
@@ -250,7 +253,7 @@ indexed:
     sha-refreshed: 2026-05-24
     index-files: [ci-pipelines-index.idx]
     index-file-sha256:
-      ci-pipelines-index.idx: cb57cedeca74e05ab6e9d6f60d02a150a440f9a743913d975aeb924e1a88d175
+      ci-pipelines-index.idx: 30297fba3cd9e7957c81157d1bc75df218372c65a4fe8aee78ea09be08b48f8c
     source-bytes: 24988
     status: sha-stable
     drift-note: |
@@ -276,8 +279,9 @@ indexed:
       Admin-API subsections (POST /__admin/mappings/import, /reset, GET /__admin/requests)
       + scenario-bundle co-location story are first-class rows. Bodies NOT copied.
     source: docs/integration-tests.md
-    sha256: 4c2dacf02da89554d0f42326337c7cc3cb1d5dfa913fa2a1164990d7e323d8e8
+    sha256: df54d98ecc68e6a8f2dea99caeb13bf49456cd81a005d362f8dc2768b673f6d6
     indexed-on: 2026-05-24
+    sha-refreshed: 2026-05-24
     index-files: [integration-tests-index.idx]
     index-file-sha256:
       integration-tests-index.idx: cd7477ebbbf87a08b4bd59881d7c9b27ce1cf349c64ba9eac57772d25405056d
@@ -291,6 +295,9 @@ indexed:
       fixture-corpus-demo, six-box-states, wiremock-admin-api-pattern, local-run,
       integration-ci, severity-posture, adding-scenarios, troubleshooting, future-work.
       SHA-refreshed 2026-05-24 (WireMock JVM consolidation): updated image tags, wording, stale anchors; source-bytes 32893 -> 32238.
+      SHA-refreshed 2026-05-24 (cycle 3 devops fix): commit 37e1cb4 corrected
+      Dockerfile.dockerignore path prose and integration-tests.md path reference;
+      index rows unchanged (no new rows; source-bytes drift minor). Source SHA updated.
     consumed-by: [qa-engineer, devops-engineer]
 
   - class: install-guide
@@ -454,7 +461,7 @@ indexed:
     sha-refreshed: 2026-05-24
     index-files: [stack.yaml]
     index-file-sha256:
-      stack.yaml: f4362a168e9fd2346ec765541bf2b1a76813b5ce969c16f68000f35004379d3d
+      stack.yaml: 1cb31169e0a99126f3bbbdf514c4825acea4a5cd58596a272a7ebcf090a8090a
     status: sha-stable
     drift-note: |
       Reindexed 2026-05-23: added fetcher tier (fetcher, fetcher-host, fetcher-tests);
@@ -467,6 +474,9 @@ indexed:
       updated XML comment in Dashboard.Integration.Tests.csproj (line 7); comment-only
       change, no package references or target framework altered; stack.yaml content
       remains correct; source SHA updated.
+      SHA-refreshed 2026-05-24 (cycle 3 fix-track): commit 467c2aa corrected
+      demo-gha dockerfile prose: /app/__admin/mappings/ -> /home/wiremock/mappings/;
+      index-file SHA updated to reflect the prose fix. Source file SHAs unchanged.
     consumed-by: [solution-architect, backend-engineer, frontend-engineer, devops-engineer]
 
   - class: topology
