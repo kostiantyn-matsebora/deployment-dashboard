@@ -4,23 +4,23 @@
 #   - GitHub issue #7    -- one-liner install (no git clone) for evaluators / internal adopters.
 #   - ADR-0009           -- the API container self-applies EF Core migrations on startup; no separate runner / asset.
 #   - docs/ci-cd-pipelines.md S 10 -- Release pipeline (assets + canonical URL pattern).
+#   - GitHub issue #72   -- split release vs demo compose; ASR-A profile contract.
 #
 # This file is the release counterpart to `dev_env/docker-compose.local.yml`:
 #   - NO `build:` blocks      -- every service references a pre-built GHCR image pinned by ${DASHBOARD_VERSION}.
 #   - NO bind-mounts          -- the release host has no source tree.
 #   - API self-migrates on start (per ADR-0009) -- no migrate profile, no migration runner.
 #   - NO pgadmin              -- dropped per issue #7 (dev-convenience only).
-#   - Profile-gated `fetcher`    service     -- enabled by the installer's default
-#                                                or explicit `-RealGha` switch (CR-0013
-#                                                renamed the old `-Fetcher` flag).
-#   - Profile-gated `mock-gha`   service     -- enabled by the `integration` Compose
-#                                                profile (CR-0012 cross-stack suite).
-#   - Profile-gated `demo-gha`   service     -- enabled by the `demo` Compose profile
-#                                                (CR-0013 default install path).
-#
-# Image refs use `ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}:${DASHBOARD_VERSION:-latest}`.
-# The installer writes `DASHBOARD_VERSION` into `<InstallDir>/dashboard.env` so the same compose file
-# resolves to the requested tag on every host.
+#   - Profile-gated `db`      service     -- enabled by `-LocalDb` (installer) or explicit
+#                                            `--profile db`. Without the profile, the release
+#                                            stack assumes an external Postgres and
+#                                            `ConnectionStrings__DefaultConnection` must be
+#                                            set in the environment or dashboard.env. (ASR-A)
+#   - Profile-gated `fetcher` service     -- enabled by the installer's `-RealGha`
+#                                            or `-Demo` switch (CR-0013, issue #72).
+#   - Demo + integration stacks are factored out:
+#       demo-gha + demo-driver  -> install/docker-compose.demo.yml
+#       mock-gha                -> dev_env/docker-compose.integration.yml (ASR-B)
 #
 # `DASHBOARD_PORT` lets the installer's `-Port` / `--port` argument retarget the host port collision-free.
 # Defaults to 8080 to mirror local-dev's gateway URL.
@@ -28,7 +28,14 @@
 name: deployment-dashboard
 
 services:
+  # Optional bundled Postgres (ASR-A). Profile-gated by `db` -- the release
+  # stack's default install path assumes an external Postgres endpoint supplied
+  # via ConnectionStrings__DefaultConnection in the environment or dashboard.env.
+  # Activating `--profile db` starts this container and supplies the connection
+  # string automatically. Without the profile, the `api` service reads
+  # ConnectionStrings__DefaultConnection from the environment directly.
   db:
+    profiles: ["db"]
     image: postgres:16-alpine
     container_name: dashboard-db
     restart: unless-stopped
@@ -66,6 +73,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+        required: false                   # db is profile-gated; skip when using external Postgres
 
   dashboard:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-frontend:${DASHBOARD_VERSION:-latest}
@@ -88,8 +96,8 @@ services:
 
   # Optional pull-mode fetcher worker (CR-0009 / issue #7 release-install parity).
   # Opt-in via the `fetcher` Compose profile -- the installer adds `--profile fetcher`
-  # when invoked with `-Fetcher` / `--fetcher`. Stays out of the default stack so the
-  # baseline install remains a 4-service bring-up.
+  # when invoked with `-RealGha` or `-Demo`. Stays out of the default stack so the
+  # baseline install remains a 3-service bring-up (no db, no fetcher).
   #
   # Strict NFR-04 (per CR-0009 S 3a + architecture.md S 7):
   #   - NO `ports:`       -- fetcher has no inbound listener.
@@ -102,7 +110,7 @@ services:
   # `GHA_TOKEN` falls back to a placeholder when unset; the fetcher detects the
   # placeholder (or empty) and switches to anonymous-mode GitHub API calls
   # (omits the Authorization header, 60 req/h limit). The installer's normal
-  # `-Fetcher` path requires a real GHA_TOKEN; `-Demo` permits the fall-back
+  # `-RealGha` path requires a real GHA_TOKEN; `-Demo` permits the fall-back
   # explicitly for zero-PAT public-repo demo installs.
   fetcher:
     profiles: ["fetcher"]
@@ -130,165 +138,9 @@ services:
       GHA_API_BASE_URL: "${GHA_API_BASE_URL:-https://api.github.com}"
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-    # `depends_on: required: false` (docker compose >= 2.20) lets the
-    # fetcher start whether or not the profile-gated upstream mocks are
-    # active. Under the `demo` profile (CR-0013 default install path)
-    # `demo-gha` is up and we wait for its `service_healthy` gate; under
-    # `-RealGha` neither demo-gha nor mock-gha exist and the dependencies
-    # are silently skipped. The integration profile re-states the
-    # `mock-gha` dependency in `dev_env/docker-compose.local.yml` (the
-    # release-install host never runs the integration suite).
     depends_on:
       gateway:
         condition: service_started
-      demo-gha:
-        condition: service_healthy
-        required: false
-
-  # Mock GitHub API (JVM WireMock) -- deterministic upstream for the
-  # `testing/integration/` cross-stack suite (CR-0012). Profile-gated by
-  # `integration`: defined in this canonical inventory so the `dev_env/`
-  # override + `.github/workflows/integration.yml` can layer on top per
-  # ADR-0010 merge-override mechanics, but inert in the default release
-  # bring-up (`docker compose up` without `--profile integration` never
-  # starts the container).
-  #
-  # Strict NFR-04 production posture (per CR-0012 S 3a + Profile-gating
-  # contract):
-  #   - NO `ports:` here -- the release-install stack NEVER publishes the
-  #     admin port to the host. The integration profile's host-mapping of
-  #     port `18080` is added by `dev_env/docker-compose.local.yml` ONLY,
-  #     and consumed by `dotnet test` running on the host. CI runners use
-  #     the same override.
-  #   - WireMock listens on port `80` inside the container (`--port 80`
-  #     CLI flag); the fetcher reaches it via internal Docker DNS at
-  #     `http://mock-gha:80` when `GHA_API_BASE_URL` is re-pointed there
-  #     under the integration profile.
-  #   - Image pin `wiremock/wiremock:3.10.0` per CR-0013 -- community
-  #     image, same posture as `postgres:16-alpine` already in this stack.
-  #   - Mappings admin path `/__admin/mappings` (JVM WireMock convention;
-  #     NOT the former `/app/__admin/mappings` of the WireMock.Net image).
-  #
-  # Fixture mount + env tuning live in `dev_env/docker-compose.local.yml`
-  # (integration profile overrides) so the release-install asset stays
-  # minimal: contract here, deltas there.
-  mock-gha:
-    profiles: ["integration"]
-    image: wiremock/wiremock:3.10.0
-    container_name: dashboard-mock-gha
-    restart: unless-stopped
-    # Issue #57: switched from sheyenrath/wiremock.net:2.4.0 to
-    # wiremock/wiremock:3.10.0 -- JVM heap is GC-bounded (vs monotonic .NET
-    # growth). `--port 80` keeps the fetcher's `GHA_API_BASE_URL=http://mock-gha:80`
-    # unchanged. `--max-request-journal 100` caps the request log so it does
-    # not grow unboundedly under continuous fetcher polling.
-    command:
-      - "--port"
-      - "80"
-      - "--max-request-journal"
-      - "100"
-    environment:
-      JAVA_OPTS: "-Xms32m -Xmx256m"
-    # JVM WireMock ships wget; probe the admin health endpoint directly.
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/__admin/health || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-
-  # Demo GitHub Actions upstream (CR-0013) -- JVM WireMock with the demo
-  # bundle baked into the image at build-time. Profile-gated by `demo`:
-  # the release-install `install.ps1` / `install.sh` activate this profile
-  # by default; explicit opt-outs are `-RealGha` (real GitHub upstream)
-  # and `-Empty` (no fetcher, no mocks).
-  #
-  # Issue #57: switched from sheyenrath/wiremock.net:2.4.0 to
-  # wiremock/wiremock:3.10.0 -- WireMock.Net had an unfixed memory leak
-  # in its request-handling internals under sustained fetcher polling load
-  # (~22 MiB/min monotonic). JVM WireMock is GC-bounded and heap-capped
-  # via JAVA_OPTS -Xmx256m.
-  #
-  # Strict NFR-04 production posture (per CR-0013 S 3b + CR-0012 mirror):
-  #   - NO `ports:`     -- never published to the host. Production
-  #                        invariant from CR-0012 carried forward here.
-  #                        Internal-only; the fetcher reaches the admin
-  #                        port via internal Docker DNS at
-  #                        `http://demo-gha:80` when `GHA_API_BASE_URL`
-  #                        is set to that under the demo profile by the
-  #                        installer.
-  #   - NO `volumes:`   -- the demo bundle is baked into the image's
-  #                        `/home/wiremock/mappings/` layer (CR-0013 S 3c:
-  #                        baked-image ship mechanism; no bind-mount, no
-  #                        gh release download for a separate bundle
-  #                        asset).
-  #   - Healthcheck     -- wget probe against `/__admin/health` (JVM
-  #                        WireMock ships wget; WireMock.Net did not).
-  #   - Image tag pin   -- `${DASHBOARD_VERSION:-latest}` so the demo
-  #                        bundle is atomically versioned with the four
-  #                        sibling component images (api / fetcher /
-  #                        frontend / gateway). The installer writes
-  #                        `DASHBOARD_VERSION` into `dashboard.env`.
-  #
-  # The `demo` and `integration` profiles coexist -- they bind different
-  # services (`demo-gha` vs `mock-gha`) and the test runner activates
-  # `integration` while the installer activates `demo`.
-  demo-gha:
-    profiles: ["demo"]
-    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION:-latest}
-    container_name: dashboard-demo-gha
-    restart: unless-stopped
-    # `--port 80` pins the bind port to match the fetcher's
-    # `GHA_API_BASE_URL=http://demo-gha:80`. JVM WireMock loads mappings
-    # from `/home/wiremock/mappings/` automatically at startup (no
-    # `--ReadStaticMappings` flag needed). `--max-request-journal 100`
-    # caps the request log so it does not grow unboundedly under
-    # continuous fetcher polling.
-    command:
-      - "--port"
-      - "80"
-      - "--max-request-journal"
-      - "100"
-    environment:
-      JAVA_OPTS: "-Xms32m -Xmx256m"
-    # JVM WireMock ships wget; probe the admin health endpoint directly.
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/__admin/health || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-
-  # Demo-driver sidecar (issue #46) -- periodic JVM WireMock admin-API
-  # ticker that loops a qa-authored sequence of tick directories so the
-  # demo-mode dashboard surfaces ongoing deployment activity instead of a
-  # single frozen baseline. Same `demo` Compose profile as `demo-gha`.
-  #
-  # Strict NFR-04 posture:
-  #   - NO `ports:`       -- egress-only sidecar; no inbound listener.
-  #   - NO `healthcheck:` -- demo-gha's TCP probe is the demo-profile
-  #                          health signal; the driver's liveness is
-  #                          implied by its egress traffic. Adding a
-  #                          probe here would require an HTTP server
-  #                          inside the driver (rejected by Phase 3:
-  #                          stdlib-only, no listener).
-  #   - depends_on: demo-gha service_healthy -- the driver's first PUT
-  #                          would 404 / connection-refused otherwise.
-  #
-  # Env defaults baked into the Dockerfile; the rows here are explicit
-  # so operators can override via `dashboard.env` without rebuilding.
-  demo-driver:
-    profiles: ["demo"]
-    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:${DASHBOARD_VERSION:-latest}
-    container_name: dashboard-demo-driver
-    restart: unless-stopped
-    environment:
-      DEMO_DRIVER_GHA_URL: "http://demo-gha:80"
-      DEMO_DRIVER_PERIOD_SECONDS: "15"
-      DEMO_DRIVER_ID_STRIDE: "100"
-    depends_on:
-      demo-gha:
-        condition: service_healthy
 
 volumes:
   pg-data:

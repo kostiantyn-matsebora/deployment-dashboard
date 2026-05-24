@@ -1,0 +1,44 @@
+# Demo-mode local-build overrides (issue #72).
+#
+# Layered by dev_env/start.ps1 -Demo (and the no-flag default) AFTER
+# docker-compose.demo.yml, so these build overrides supersede the GHCR
+# image refs the demo overlay inherits from the release file.
+#
+# Activation pattern (start.ps1 Demo mode / default):
+#   docker compose \
+#     -f install/docker-compose.release.yml \
+#     -f install/docker-compose.demo.yml \
+#     -f dev_env/docker-compose.local.yml \
+#     -f dev_env/docker-compose.demo-local.yml \
+#     --profile db --profile fetcher up -d --build --wait
+#
+# Why a separate file (not in docker-compose.local.yml):
+#   docker-compose.local.yml is included in ALL dev_env chains (demo,
+#   integration, local-db, real-gha). Adding demo-gha / demo-driver service
+#   blocks there would bring those services into the integration and other
+#   non-demo chains. This file is ONLY added when -Demo is active.
+#
+# Build contexts MUST be the repo root because the Dockerfiles COPY from
+# directories outside their own subtree (testing/fixtures/gha/demo/,
+# gateway/). This mirrors the CI workflow's `context-path: .` decision
+# (CR-0013).
+
+name: deployment-dashboard
+
+services:
+  # Local-build override for demo-gha (CR-0013). Swaps the GHCR-pinned image
+  # reference from docker-compose.demo.yml with the locally-built dev tag.
+  demo-gha:
+    build:
+      context: ..
+      dockerfile: gateway/demo-gha/Dockerfile
+    image: deployment-dashboard/demo-gha:dev
+    pull_policy: never
+
+  # Local-build override for demo-driver. Same repo-root context requirement.
+  demo-driver:
+    build:
+      context: ..
+      dockerfile: gateway/demo-driver/Dockerfile
+    image: deployment-dashboard/demo-driver:dev
+    pull_policy: never

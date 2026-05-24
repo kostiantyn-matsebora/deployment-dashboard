@@ -22,7 +22,7 @@ ATAM convention: rate on H / M / L. Per `core/triage-scoring.md` numeric mapping
 
 | ASR ID | Scenario | Source (NFR / CON) | Business value | Architectural impact | ASR? |
 |---|---|---|---|---|---|
-| `ASR-002` | System is deployed inside the organisation's internal network with no public ingress required. Precludes public ACA ingress + public load balancer; SPA never embeds the dev API key. Write group is API-key gated; Read group is unauthenticated by design. WireMock admin port published only under the `integration` compose profile, never by release-install. | `NFR-004` / `CON-003` | H | H | yes |
+| `ASR-002` | System is deployed inside the organisation's internal network with no public ingress required. Precludes public ACA ingress + public load balancer; SPA never embeds the dev API key. Write group is API-key gated; Read group is unauthenticated by design. WireMock admin port published only under the `dev_env/docker-compose.integration.yml` overlay (post-#72 / CR-0015 / ADR-0010 amended framing), never by release-install. | `NFR-004` / `CON-003` | H | H | yes |
 
 ### Scalability
 

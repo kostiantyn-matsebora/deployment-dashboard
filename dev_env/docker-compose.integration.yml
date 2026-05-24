@@ -1,0 +1,73 @@
+# Integration-test substrate overlay (ASR-B / issue #72 / CR-0012).
+#
+# Activation pattern:
+#   dev_env/start.ps1 -Integration expands to:
+#     docker compose \
+#       -f install/docker-compose.release.yml \
+#       -f dev_env/docker-compose.local.yml \
+#       -f dev_env/docker-compose.integration.yml \
+#       --profile db --profile fetcher up -d --build --wait
+#
+#   Overlay presence in the compose chain is the activation signal.
+#   No profile gating is applied to mock-gha in this file -- the
+#   release file's `profiles: ["integration"]` gating was removed as
+#   part of issue #72 ASR-B (mock-gha relocated here from release.yml).
+#
+# Cross-reference: CR-0012-integration-test-substrate.md
+
+name: deployment-dashboard
+
+services:
+  # Mock GitHub API (JVM WireMock) -- deterministic upstream for the
+  # testing/integration/ cross-stack suite (CR-0012).
+  #
+  # Strict NFR-04 production posture (per CR-0012 S 3a):
+  #   - ports: 18080:80 -- host-mapped ONLY in this overlay so dotnet test
+  #     running on the developer's host (or GHA runner under
+  #     .github/workflows/integration.yml) can POST scenario bundles to
+  #     <host>:18080/__admin/mappings/import.
+  #   - WireMock listens on port 80 inside the container (--port 80 CLI
+  #     flag); the fetcher reaches it via internal Docker DNS at
+  #     http://mock-gha:80 when GHA_API_BASE_URL is re-pointed there.
+  #   - Image pin wiremock/wiremock:3.10.0 per CR-0013.
+  #   - Mappings admin path /__admin/mappings (JVM WireMock convention).
+  #
+  # Fixture mount: qa-engineer's base mappings are bind-mounted so a
+  # fresh start.ps1 -Integration boots with the GHA contract surface
+  # already populated. :ro -- mappings are source-of-truth in the repo.
+  #
+  # Issue #57: switched from sheyenrath/wiremock.net:2.4.0 to
+  # wiremock/wiremock:3.10.0 -- JVM heap is GC-bounded vs monotonic
+  # .NET growth. --port 80 keeps the fetcher's GHA_API_BASE_URL
+  # unchanged. --max-request-journal 100 caps the request log.
+  mock-gha:
+    image: wiremock/wiremock:3.10.0
+    container_name: dashboard-mock-gha
+    restart: unless-stopped
+    ports:
+      - "18080:80"                        # host-mapped for dotnet test access (admin API)
+    command:
+      - "--port"
+      - "80"
+      - "--max-request-journal"
+      - "100"
+    environment:
+      JAVA_OPTS: "-Xms32m -Xmx256m"
+    volumes:
+      - ../testing/fixtures/gha/mappings:/home/wiremock/mappings:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/__admin/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Overlay-merge: adds mock-gha service_healthy gate to the fetcher's
+  # depends_on map. `required: false` (docker compose >= 2.20) is a
+  # belt-and-suspenders guard; the integration chain always includes mock-gha
+  # but the flag prevents a hard failure if the service is somehow absent.
+  fetcher:
+    depends_on:
+      mock-gha:
+        condition: service_healthy
+        required: false

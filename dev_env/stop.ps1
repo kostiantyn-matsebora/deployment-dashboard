@@ -5,20 +5,25 @@
 .DESCRIPTION
     Implements `docs/WBS.md` MVP §2.3.
 
-    Runs `docker compose down` for both the default local compose file
-    (`docker-compose.local.yml`) and, if present, the scaled compose
-    file (`docker-compose.scaled.yml`). Safe to run when nothing is up.
-    `docker compose down` removes services from any Compose profile that
-    was activated at bring-up time (including the `fetcher` profile from
-    `start.ps1 -Fetcher` and the scaled variant from `start.ps1 -Scaled`),
-    so no extra flag is needed here.
+    Runs `docker compose down` for each compose variant that may be active.
+    The overlay chain is reconstructed to match the possible start.ps1 modes
+    (issue #72 ASR-C: stop mirrors the start switch surface 1-for-1).
 
-    No env-file involvement: all configuration is inline in the compose
-    files, so there is nothing to interpolate on teardown.
+    Modes handled:
+      - Default (demo): release + demo + local + demo-local overlays, --profile db + fetcher
+      - LocalDb:        release + local, --profile db
+      - RealGha:        release + local, --profile fetcher (or --profile db + fetcher)
+      - Integration:    release + local + integration overlays, --profile db + fetcher
+      - Scaled:         scaled compose standalone
+
+    `docker compose down --remove-orphans` is safe to call on a stopped or
+    partially-running stack -- it is idempotent.
+
+    No env-file involvement: all configuration is inline in the compose files.
 
 .PARAMETER Volumes
     Also remove the named Postgres data volume(s). Default: off.
-    USE WITH CARE — this destroys all locally stored deployment events.
+    USE WITH CARE -- this destroys all locally stored deployment events.
 
 .EXAMPLE
     pwsh -NoProfile -File dev_env/stop.ps1
@@ -36,24 +41,21 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$scriptDir = $PSScriptRoot
-# Default contributor stack derives from install/docker-compose.release.yml
-# via Compose's `-f` chaining (issue #21). Both files must be passed to
-# `docker compose down` so the merged service set tears down cleanly. The
-# scaled stack stays standalone (see start.ps1 comment).
-$defaultComposeFiles = @(
-    Join-Path $scriptDir '..' 'install' 'docker-compose.release.yml'
-    Join-Path $scriptDir 'docker-compose.local.yml'
-)
-$scaledComposeFiles = @(
-    Join-Path $scriptDir 'docker-compose.scaled.yml'
-)
+$scriptDir          = $PSScriptRoot
+$releaseCompose     = Join-Path $scriptDir '..' 'install' 'docker-compose.release.yml'
+$demoCompose        = Join-Path $scriptDir '..' 'install' 'docker-compose.demo.yml'
+$localCompose       = Join-Path $scriptDir 'docker-compose.local.yml'
+$demoLocalCompose   = Join-Path $scriptDir 'docker-compose.demo-local.yml'
+$integrationCompose = Join-Path $scriptDir 'docker-compose.integration.yml'
+$scaledCompose      = Join-Path $scriptDir 'docker-compose.scaled.yml'
 
 function Invoke-Down {
     param(
         [string[]]$ComposeFiles,
+        [string[]]$Profiles = @(),
         [switch]$RemoveVolumes
     )
+    # Skip if any required compose file is missing.
     foreach ($f in $ComposeFiles) {
         if (-not (Test-Path -LiteralPath $f)) {
             Write-Host "    [skip] $f (not found)" -ForegroundColor Yellow
@@ -62,6 +64,7 @@ function Invoke-Down {
     }
     $dargs = @()
     foreach ($f in $ComposeFiles) { $dargs += @('-f', $f) }
+    foreach ($p in $Profiles)     { $dargs += @('--profile', $p) }
     $dargs += @('down', '--remove-orphans')
     if ($RemoveVolumes) { $dargs += '--volumes' }
     Write-Host "    docker compose $($dargs -join ' ')" -ForegroundColor DarkGray
@@ -74,17 +77,41 @@ function Invoke-Down {
 }
 
 Write-Host ""
-Write-Host "==> Tearing down local compose" -ForegroundColor Cyan
-Invoke-Down -ComposeFiles $defaultComposeFiles -RemoveVolumes:$Volumes
+Write-Host "==> Tearing down demo stack (release + demo + local + demo-local overlays)" -ForegroundColor Cyan
+Invoke-Down `
+    -ComposeFiles @($releaseCompose, $demoCompose, $localCompose, $demoLocalCompose) `
+    -Profiles @('db', 'fetcher') `
+    -RemoveVolumes:$Volumes
+
+Write-Host ""
+Write-Host "==> Tearing down integration stack (release + local + integration overlays)" -ForegroundColor Cyan
+Invoke-Down `
+    -ComposeFiles @($releaseCompose, $localCompose, $integrationCompose) `
+    -Profiles @('db', 'fetcher') `
+    -RemoveVolumes:$Volumes
+
+Write-Host ""
+Write-Host "==> Tearing down local-db stack (release + local overlays, db profile)" -ForegroundColor Cyan
+Invoke-Down `
+    -ComposeFiles @($releaseCompose, $localCompose) `
+    -Profiles @('db') `
+    -RemoveVolumes:$Volumes
+
+Write-Host ""
+Write-Host "==> Tearing down fetcher stack (release + local overlays, fetcher profile)" -ForegroundColor Cyan
+Invoke-Down `
+    -ComposeFiles @($releaseCompose, $localCompose) `
+    -Profiles @('fetcher') `
+    -RemoveVolumes:$Volumes
 
 Write-Host ""
 Write-Host "==> Tearing down scaled compose (if present)" -ForegroundColor Cyan
-Invoke-Down -ComposeFiles $scaledComposeFiles -RemoveVolumes:$Volumes
+Invoke-Down -ComposeFiles @($scaledCompose) -RemoveVolumes:$Volumes
 
 Write-Host ""
 if ($Volumes) {
-    Write-Host "Removed named volumes (pg-data, pg-data-scaled, dotnet-tools*, nuget-cache*)." -ForegroundColor Green
+    Write-Host "Removed named volumes (pg-data, pg-data-scaled, etc.)." -ForegroundColor Green
 } else {
-    Write-Host "Preserved named volumes — re-run with -Volumes to drop pg-data and friends." -ForegroundColor DarkGray
+    Write-Host "Preserved named volumes -- re-run with -Volumes to drop pg-data and friends." -ForegroundColor DarkGray
 }
 Write-Host "Done." -ForegroundColor Green

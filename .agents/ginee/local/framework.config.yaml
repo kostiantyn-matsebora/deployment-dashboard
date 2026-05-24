@@ -151,3 +151,11 @@ github:
   ready-label: ginee:ready
   in-progress-label: ginee:in-progress
   blocked-label: ginee:blocked
+
+# --- Dispatch tracking (D39) ---
+# Sub-issue dispatch posture for github.repo-sourced tasks. `sub-issues` is the
+# framework default per core/github-integration.md § Sub-issue dispatch; pinned
+# here to lock for future pickups after issue #72's in-context-this-cycle
+# exception (skill-runner overreach mid-cycle, surfaced + acknowledged on #72).
+dispatch:
+  tracking: sub-issues
