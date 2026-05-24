@@ -27,30 +27,35 @@ nav_order: 15
 
 - **Change.** Five concerns addressed in this cycle. Retirement of the legacy HTML mockup + harness retargeting are explicitly **out of scope** and tracked under a sibling tech-debt issue (filed alongside #79; labelled `ginee:blocked` until #79 merges).
 
-  - **3a — Mockup-app at `mockup/` (repo root).** New Angular 20 standalone application authored at `mockup/` — sibling of `frontend/`, `backend/`, `gateway/`, `install/`, `dev_env/`, `docs/`, `testing/`. The mockup-app is **not** placed inside the existing `frontend/` Angular workspace; it lives at the same level as the other top-level concerns. Rationale + alternatives evaluated in ADR-0011.
+  - **3a — Mockup-app at `mockup/` (repo root) — STANDALONE (Amendment 2026-05-25).** New Angular 20 standalone application authored at `mockup/` — sibling of `frontend/`, `backend/`, `gateway/`, `install/`, `dev_env/`, `docs/`, `testing/`. The mockup-app is **not** placed inside the existing `frontend/` Angular workspace AND **not** integrated via npm workspaces; it lives as a truly independent Angular application with its own `package.json`, its own `node_modules`, its own build. Architectural amendment 2026-05-25 reflects user constraint surfaced mid-G5: mockup must be small + independent + must not pull the SPA's dep graph ("the monster"). Rationale + alternatives evaluated in ADR-0011.
 
     | Aspect | Choice |
     |---|---|
     | Path | `mockup/` at repo root |
-    | Angular project | Standalone Angular 20 application (not a library) |
+    | Angular project | Standalone Angular 20 application (not a library; not a workspace member) |
     | Prefix | `dd-mockup` (avoids selector collision with `frontend/dashboard/`'s `dd` prefix) |
     | Dev server port | 4201 (avoids dashboard's default 4200) |
     | Production build | `mockup/dist/` static bundle; deployment out-of-scope for v1 |
-    | Test runner | Karma (same as `frontend/`) |
+    | Test runner | Karma (same shape as `frontend/`; independent install) |
+    | Dep graph | Minimal — `@angular/{common,core,platform-browser,router}` + `tailwindcss` only; ZERO transitive coupling to `@dd/shared` / `@dd/matrix` / `@dd/drawer` |
+    | Install command | `cd mockup && npm install` (independent of `cd frontend && npm install`) |
 
-  - **3b — npm workspaces at repo root + TypeScript path aliases.** A new root `package.json` declares an npm workspace `["frontend", "mockup"]`. `node_modules` hoists to repo root; a single `npm install` installs the union. The mockup-app consumes `@dd/matrix` + `@dd/shared` + `@dd/drawer` via TypeScript path aliases in `mockup/tsconfig.json` pointing back at `../frontend/{matrix,shared,drawer}/src/public-api.ts` — same alias pattern `frontend/tsconfig.base.json` already uses internally. Zero build step between source edit and mockup render; hot reload on `frontend/matrix/src/**` is immediately visible to `ng serve mockup`. ADR-0011 § Alternatives Considered records the rejection of file-package and TS-aliases-only variants.
+  - **3b — Standalone install model (Amendment 2026-05-25; supersedes prior npm-workspaces decision).** Mockup-app installs independently of frontend via `cd mockup && npm install`; no root `package.json`, no npm workspaces, no transitive hoisting. Two `node_modules` trees by design: `frontend/node_modules` (full SPA dep graph, ~1+ GB) and `mockup/node_modules` (minimal mockup deps, ~150–200 MB). Mockup chrome is hand-authored Angular templates + Tailwind classes mirroring the SPA's visual output — NOT shared-component reuse via `@dd/matrix`. Chrome-drift risk is real and mitigated by (a) sibling issue #80's mockup-visual harness retargeting (geometric oracle) + (b) cheap manual visual review (the mockup surface is small).
 
     | Aspect | Decision |
     |---|---|
-    | Mechanism | npm workspaces (npm 7+) |
-    | Root `package.json` | New file; `{ "name": "deployment-dashboard-workspace", "private": true, "workspaces": ["frontend", "mockup"] }` |
-    | `node_modules` location | Hoisted to repo root |
-    | Install command | `npm install` at repo root (single invocation) |
-    | Library consumption | TS path aliases (`@dd/matrix` → `../frontend/matrix/src/public-api.ts` etc.) |
-    | Version drift | Eliminated by construction (single hoisted dep tree) |
-    | `frontend/package.json` | `"private": true` already present; no schema change required |
+    | Mechanism | Standalone Angular app; no workspace integration |
+    | Root `package.json` | **None** — repo root does not host a `package.json` |
+    | `node_modules` location | Two independent trees: `frontend/node_modules` + `mockup/node_modules` |
+    | Install command | `cd frontend && npm install` (SPA) and `cd mockup && npm install` (mockup) — independent invocations |
+    | Library consumption | None — mockup hand-authors its own chrome components |
+    | Fixture source | Hardcoded inline in `mockup/src/` — NOT `@dd/shared` `FIXTURE_*` reuse |
+    | Version drift between apps | Possible (acceptable — two independent apps; no shared runtime) |
+    | `frontend/package.json` | Unchanged — `"private": true` already present |
 
-  - **3c — Layouts + header migration to `@dd/matrix` (structural prerequisite).** The mockup-app and the SPA must compose the **same** components, not separate copies, for byte-identical chrome to hold by construction. Three components currently sit in `frontend/dashboard/src/app/` but were always shared-shaped — they depend only on `@dd/shared` types and the `DeploymentMatrixStore`. They migrate to `frontend/matrix/src/lib/` and re-export via `@dd/matrix`. The dashboard re-imports them from `@dd/matrix`; no behavioural change.
+    Original npm-workspaces decision (commit `2845e39`) reverted per user constraint surfaced mid-G5. See revert commit `fe0d550` on branch + § Alternatives Considered for the rejection rationale.
+
+  - **3c — Layouts + header migration to `@dd/matrix` (frontend library cleanup; Amendment 2026-05-25 — kept on independent grounds).** Three components migrate from `frontend/dashboard/src/app/` to `frontend/matrix/src/lib/` and re-export via `@dd/matrix`. Originally justified as the structural prerequisite for mockup chrome sharing; under the standalone-mockup amendment, mockup does NOT consume `@dd/matrix` — so the mockup-sharing rationale is moot. **The migration is retained on independent grounds** as a frontend library organisational cleanup: the layout components + header + topology-utils were always shared-shaped WITHIN frontend (dashboard-shell vs matrix-library boundary was semantically misplaced); the migration formalises a cleaner library boundary independently of mockup consumption. The dashboard re-imports them from `@dd/matrix`; no behavioural change. Landed at commit `57714f5`.
 
     | Source | Destination | New `@dd/matrix` export? |
     |---|---|---|
@@ -78,18 +83,19 @@ nav_order: 15
 
     Variant fixtures (`FIXTURE_TOPOLOGY_BRANCHING`, `FIXTURE_TOPOLOGY_DISCONNECTED`) author into `frontend/shared/src/lib/fixtures.ts` or a sibling `fixtures-variants.ts` (frontend-engineer chooses based on size). The `/invariants` page reads `testing/mockup-visual/harness.config.json` at build time (`import` via Angular's JSON loader) so the invariant catalogue stays single-source.
 
-  - **3e — State bootstrap differs only in seed source.** Mockup-app reuses the `DeploymentMatrixStore` from `@dd/shared` unchanged. The store contract is identical to the SPA's; only the bootstrap differs.
+  - **3e — Hardcoded fixtures inline (Amendment 2026-05-25 — supersedes shared-store decision).** Mockup-app does NOT use `DeploymentMatrixStore` from `@dd/shared`. Fixtures are hardcoded as TypeScript constants under `mockup/src/app/fixtures/` and bound directly to component inputs. No store machinery, no SSE service, no API client.
 
     | Concern | SPA (`frontend/dashboard/`) | Mockup-app (`mockup/`) |
     |---|---|---|
-    | Environments seed | `ApiClientService.environments()` with `FIXTURE_ENVIRONMENTS` fallback | `store.setEnvironments(FIXTURE_ENVIRONMENTS)` synchronously |
-    | Services seed | `ApiClientService.services()` with `FIXTURE_SERVICES` fallback | `store.setServices(FIXTURE_SERVICES)` synchronously |
-    | Matrix seed | `ApiClientService.matrix(...)` with `FIXTURE_MATRIX` fallback | `store.setMatrix(FIXTURE_MATRIX)` (or variant-specific) synchronously |
-    | Topology seed | from matrix response with `FIXTURE_TOPOLOGY` fallback | `store.setTopology(FIXTURE_TOPOLOGY)` (or variant-specific) synchronously |
-    | SSE subscription | `SseService.connect()` + `slotUpdates$` wiring | omitted; no live updates |
-    | Topology config | `ApiClientService.topologyConfig()` with `FIXTURE_TOPOLOGY_CONFIG` fallback | `store.setTopologyConfig(FIXTURE_TOPOLOGY_CONFIG)` synchronously |
+    | Environments seed | `ApiClientService.environments()` with `FIXTURE_ENVIRONMENTS` fallback to `DeploymentMatrixStore` | hardcoded `MOCKUP_ENVIRONMENTS` const passed as component input |
+    | Services seed | same pattern via `ApiClientService.services()` | hardcoded `MOCKUP_SERVICES` const |
+    | Matrix seed | via `ApiClientService.matrix(...)` | hardcoded `MOCKUP_MATRIX` const (or variant-specific) |
+    | Topology seed | from matrix response | hardcoded `MOCKUP_TOPOLOGY` const (or variant-specific) |
+    | SSE subscription | `SseService.connect()` + `slotUpdates$` wiring | omitted entirely; no live updates; no SSE service |
+    | Topology config | `ApiClientService.topologyConfig()` | hardcoded `MOCKUP_TOPOLOGY_CONFIG` const |
+    | Drawer | `<dd-history-drawer>` from `@dd/drawer`; functional | hand-authored static drawer template (visual presence only) OR omitted (mockup-app decision per Phase 4 step) |
 
-    Components observe the same store and are unaware of which app hosts them. The `<dd-history-drawer>` is included for visual parity but is static (no drawer-open events without click).
+    Mockup components do NOT observe the SPA's store; they consume hardcoded data via Angular `@Input()` / route-resolver pattern. Trade-off: shape conformance to the wire models (`@dd/shared/lib/models.ts`) is a manual discipline rather than a TypeScript-enforced guarantee. Mitigated by the small fixture surface + visual review.
 
   - **3f — Transitional source-of-truth via `mockup-spa:` sibling key.** `local/framework.config.yaml` adds a sibling key `mockup-spa: mockup/` alongside the existing `mockup: docs/ui/mockups/deployment-dashboard.html`. Both keys coexist for the cycle between this CR's merge and the sibling retirement issue's merge. On retirement, the HTML `mockup:` key repoints to `mockup/` (or is deleted in favour of `mockup-spa:` — the retirement CR locks that detail). Rationale: the staged switch avoids a windowless cutover and lets users compare HTML mockup vs mockup-app side-by-side for one cycle.
 
