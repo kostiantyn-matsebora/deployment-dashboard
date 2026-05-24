@@ -103,7 +103,7 @@ param(
     [switch]$Demo,
     [int]$Port = 8080,
     [int]$HealthTimeoutSeconds = 60,
-    [string]$InstallDir = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.dashboard-release')
+    [string]$InstallDir = (Join-Path $HOME '.dashboard-release')
 )
 $ErrorActionPreference = 'Stop'
 

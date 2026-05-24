@@ -157,7 +157,12 @@ fi
 GH_LOGIN="$(gh api user --jq .login 2>/dev/null || echo oauth2)"
 GH_TOKEN="$(gh auth token)"
 echo "${_CYA}==> docker login ghcr.io --username $GH_LOGIN${_NC}"
-printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GH_LOGIN" --password-stdin
+if ! printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GH_LOGIN" --password-stdin; then
+    rc=$?
+    unset GH_TOKEN
+    printf 'ERROR: docker login ghcr.io failed (exit %d).\n' "$rc" 1>&2
+    exit 1
+fi
 unset GH_TOKEN
 
 # ---- 7. Set env vars for compose substitution ----
