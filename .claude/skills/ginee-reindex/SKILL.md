@@ -5,7 +5,7 @@ description: Reconcile local/index/ with the current repo state at the named sco
 
 # Reconcile the index (ginee)
 
-Run the reconciliation workflow per `.agents/ginee/core/index-protocol.md § Reconciliation`. Dispatches `ai-engineer` to make `local/index/` match the current repo state at the chosen scope.
+Run the reconciliation workflow per `.agents/ginee/core/protocols/index-protocol.md § Reconciliation`. Dispatches `ai-engineer` to make `local/index/` match the current repo state at the chosen scope.
 
 ## Activation
 
@@ -22,7 +22,7 @@ Run the reconciliation workflow per `.agents/ginee/core/index-protocol.md § Rec
 
 ## Procedure
 
-1. Load `.agents/ginee/core/index-protocol.md § Reconciliation` and `.agents/ginee/core/roles/ai-engineer.details.md § Project extraction recipes`.
+1. Load `.agents/ginee/core/protocols/index-protocol.md § Reconciliation` and `.agents/ginee/core/roles/ai-engineer.details.md § Project extraction recipes`.
 2. Resolve the scope:
    - **No arg** → all manifest entries + every class's `source-glob`.
    - **`<file>`** → look up the file's matching class via manifest `source-glob`. Multi-class match → ask which class. No class match at all → reconciliation cannot help (novel class); suggest `ginee-rediscover` for class enumeration.

@@ -15,7 +15,7 @@ Distinct from `devops-engineer`:
 
 ## Source of truth
 
-Index-first per `core/index-protocol.md` (`local/index/`):
+Index-first per `core/protocols/index-protocol.md` (`local/index/`):
 
 | Read first | What it gives you |
 |---|---|

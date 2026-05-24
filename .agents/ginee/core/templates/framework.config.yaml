@@ -152,7 +152,7 @@ unit-backend:
 # --- Project-doc index (D13) ---
 # Adopter-declared index classes — pre-declare doc classes that the index
 # layer should handle. Takes precedence over auto-detection. Full spec:
-# core/index-protocol.md § Extension.
+# core/protocols/index-protocol.md § Extension.
 # Uncomment + adjust for your project's adopter-specific doc types.
 # index:
 #   dir: local/index
@@ -244,6 +244,21 @@ triage:
 #     copilot-cli: {}
 #     agents-md:   {}
 #     generic:     {}
+
+# --- Host capability tools (D38) ---
+# Team-lead surfaces matching tools from the active adapter's
+# install.md § Specialist-tool affinity table as dispatch hints. Specialist
+# judgment never overruled — protocol is "prefer if available", not "must use".
+# Full spec: core/MIGRATIONS/D38-host-capability-tools.md.
+# All keys optional — defaults shown.
+capability-tools:
+  enabled: true                # set false to disable affinity injection repo-wide
+  # disabled:                  # scope-out specific tools while keeping the rest
+  #   - frontend-design
+  # required-context:          # optional force-required pairs (rare; off by default)
+  #   - tool: security-review
+  #     role: solution-architect
+  #     task: ".*security.*"   # regex against task description; force-surfaces when matched
 
 # --- GitHub integration (D14) ---
 # Lets team-lead pick up GitHub issues as a task source alongside

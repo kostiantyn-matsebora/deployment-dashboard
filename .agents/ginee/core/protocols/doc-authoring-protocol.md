@@ -78,3 +78,33 @@ Different again from D22 / D26. Returns are ephemeral (consumed by the orchestra
 | Failed dispatch (forced handoff per `core/cross-agent-handoff.md`) | Same schema + required `## Hand-off` section embedding `core/templates/hand-off-note.md`. |
 
 **No external linter.** LLM self-review against the schema; identical machinery to D22 / D26 enforcement loop. Forward-only — pre-D29 returns are not retroactively rewritten.
+
+## Taxonomy identifier pairing (D34)
+
+Cardinal outputs · ginee-authored artefacts · adopter docs cite taxonomy items in **slug-glued form** matching the on-disk filename. Bare IDs force reader context-switch; slug-glued lets the reader copy-paste into a filesystem search.
+
+| Class | Pattern | Example |
+|---|---|---|
+| D-decision | `D<NN>-<slug>` | `D28-skill-runner-boundary` |
+| ADR | `ADR-<NNNN>-<slug>` | `ADR-0001-topology-derivation-five-pass` |
+| CR | `CR-<NNNN>-<slug>` | `CR-0010-component-ci-pipeline` |
+| FR / NFR / ASR | `<TYPE>-<NN>-<slug>` | `FR-04-deploy-rollback` · `NFR-02-cost-cap` · `ASR-03-availability-budget` |
+| Index class | `<class-name>` | `repo-map` · `architecture-fr` |
+
+**Out of scope** — issue / PR / commit-SHA / version-tag / package-name refs stay bare. `#87` correct; `#87-<slug>` wrong (titles are mutable).
+
+### Resolution lookup
+
+Resolve short name **before** emitting — never bare-ID fallback. Lookup failure → surface inline `D28-?? (slug lookup failed: core/MIGRATIONS/D28-*.md not found)`; carry forward.
+
+| Class | Short-name source |
+|---|---|
+| File-backed (D / ADR / CR / migration) | Filename slug after numeric prefix — `ls core/MIGRATIONS/D<NN>-*.md` etc. |
+| Inline-table (FR / NFR / ASR) | First noun phrase of the register-row description, ≤ 5 words, kebab-cased |
+| Index-class | `name:` field per class in `local/index/manifest.yaml § indexed[]` |
+
+### Self-lint + enforcement
+
+Extends D22 / D26 / D29 check #5. Regex `\b(D|ADR-?|CR-?|FR-?|NFR-?|ASR-?)\d+\b` not followed by `-<slug>` trips. Excluded: issue / PR / SHA refs; markdown links to issue / PR URLs; code-fenced package names.
+
+Same machinery as D22 / D26 / D29 — LLM self-review at draft time; no external linter. Orchestrator advisory on hit (`"Output cited <bare-id> without slug; consuming anyway."`); consumes; never re-dispatches for format; never auto-rewrites. Forward-only — historical outputs not rewritten.

@@ -11,13 +11,13 @@ Same machinery as D22 / D26 / D29 — LLM self-review against a small mandatory-
 
 ## Schema · floor · tagging · checks · forbidden patterns
 
-Full canonical spec: `core/options-protocol.md`. Summary:
+Full canonical spec: `core/protocols/options-protocol.md`. Summary:
 
 - **Candidate types** — `adopt` (name · version · source · license · fit) · `build` (scope · rejection rationale) · `hybrid` (adopt + build + boundary) · `(none viable — <reason>)`.
 - **Floor** — Hard: ≥ 1 `adopt` OR `(none viable)`. Soft: 2–3 candidates for non-trivial scope.
 - **Tagging** — explicit `adopt` / `build` / `hybrid` per candidate; no silent mixing.
-- **5 mandatory checks** — adopt floor · citations complete · tagging explicit · empty research documented · fit rationale concrete (`core/options-protocol.md § 5 mandatory checks`).
-- **Forbidden** — silent skip · build-only on a live axis · hand-waved candidate · silent mix · citation without fit (`core/options-protocol.md § Forbidden patterns`).
+- **5 mandatory checks** — adopt floor · citations complete · tagging explicit · empty research documented · fit rationale concrete (`core/protocols/options-protocol.md § 5 mandatory checks`).
+- **Forbidden** — silent skip · build-only on a live axis · hand-waved candidate · silent mix · citation without fit (`core/protocols/options-protocol.md § Forbidden patterns`).
 
 ## Open-question picks
 
@@ -28,7 +28,7 @@ Full canonical spec: `core/options-protocol.md`. Summary:
 | Empty-research documentation | `(none viable — <reason>)` cite. Mirrors D29 `(none)` empty-section convention. |
 | License + supply-chain stance | Defer to adopter `local/`. Framework requires citation only. |
 | Research depth | Cite-only baseline (name · version · source · license · fit). SBOM / full-ADR are escalations the proposer MAY adopt. |
-| Spec topology | New load-on-demand `core/options-protocol.md`; tiny pointer in always-loaded `process.md § Phase 2` + `iteration-protocol.md § Propose`. |
+| Spec topology | New load-on-demand `core/protocols/options-protocol.md`; tiny pointer in always-loaded `process.md § Phase 2` + `iteration-protocol.md § Propose`. |
 | `ai-engineer` byte cap | None on the option list; bounded by iteration-protocol estimation + D29 `## Notes` carve-out (≤ 200 words) if it appears in a return. |
 | D-number | D30 (D29 just landed). |
 
@@ -50,9 +50,9 @@ LLM self-review against the schema **before surfacing**. No external linter.
 
 | Path | Change |
 |---|---|
-| `core/options-protocol.md` | **NEW** — load-on-demand spec (scope · schema · 5 checks · forbidden patterns · enforcement · worked example) |
+| `core/protocols/options-protocol.md` | **NEW** — load-on-demand spec (scope · schema · 5 checks · forbidden patterns · enforcement · worked example) |
 | `core/process.md § Phase 2 — Design & architecture` | New 1-line option-shape rule + pointer |
-| `core/iteration-protocol.md § Each iteration § Propose` | New bullet — surface adopt-vs-build axis where applicable; cite |
+| `core/protocols/iteration-protocol.md § Each iteration § Propose` | New bullet — surface adopt-vs-build axis where applicable; cite |
 | `core/roles/solution-architect.md § Design § Phase 2` | Adopt-vs-build as a first-class design axis; pointer |
 | `core/roles/{backend,frontend,devops,qa,ai}-engineer.md` | 1-line "Adoption research before authoring" pointer above `## Forbidden actions` (×5) |
 | `core/doc-authoring-examples.md § 11` | New bad / good example pair — option-list shape |
@@ -72,9 +72,9 @@ LLM self-review against the schema **before surfacing**. No external linter.
 
 Not recommended — D30 closes the "LLMs default to authoring novel implementations" failure mode. To revert:
 
-1. Delete `core/options-protocol.md`.
+1. Delete `core/protocols/options-protocol.md`.
 2. Remove option-shape pointer from `core/process.md § Phase 2`.
-3. Remove Propose-step bullet from `core/iteration-protocol.md`.
+3. Remove Propose-step bullet from `core/protocols/iteration-protocol.md`.
 4. Remove adopt-vs-build axis from `core/roles/solution-architect.md § Design § Phase 2`.
 5. Remove "Adoption research before authoring" pointer from the 5 engineer kernels.
 6. Remove `core/doc-authoring-examples.md § 11`.

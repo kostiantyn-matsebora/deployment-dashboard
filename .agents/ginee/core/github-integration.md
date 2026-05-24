@@ -139,7 +139,7 @@ Trigger: `@team-lead pick up #<N>` — always targets the primary repo (= the wo
    | Phase 8 acceptance | Summary + PR/commit links + "closing on accept" |
    | Stoppable intermediate state (user paused) | Current phase + done/in-progress/not-started lists |
 
-   Comments are structured summaries, not chatty. One per transition. **D26 binding** — every framework-authored comment passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done` (tables for inventories · numbered lists for steps · parent + sub-bullets for multi-rule statements · no parenthetical comma-lists in sentences). Enforcement: `core/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
+   Comments are structured summaries, not chatty. One per transition. **D26 binding** — every framework-authored comment passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done` (tables for inventories · numbered lists for steps · parent + sub-bullets for multi-rule statements · no parenthetical comma-lists in sentences). Enforcement: `core/protocols/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
 8. On Phase 8 acceptance, PM closes the issue:
    ```
    gh issue close <N> --repo <repo> --comment "<final summary + PR links>"
@@ -241,7 +241,7 @@ Both run the same procedure under the same governance — **skill / command pari
 
 ### Lossless coverage rule
 
-Every unresolved plan-table remark MUST end the cycle as **fix** (patch in cycle commit) OR **reply** (text + marker on thread). No silent drops. Same principle as `core/index-protocol.md § Lossless rule for index § Coverage rule`. Team-lead verifies post-reconciliation: count of plan-table threads = count of `ginee:review-reply` markers + fix-touched-thread mappings; gap → re-dispatch, never silently close.
+Every unresolved plan-table remark MUST end the cycle as **fix** (patch in cycle commit) OR **reply** (text + marker on thread). No silent drops. Same principle as `core/protocols/index-protocol.md § Lossless rule for index § Coverage rule`. Team-lead verifies post-reconciliation: count of plan-table threads = count of `ginee:review-reply` markers + fix-touched-thread mappings; gap → re-dispatch, never silently close.
 
 ### Idempotency — re-invocation
 
@@ -262,7 +262,7 @@ No fix committed, no reply posted, no commit pushed without plan-table approval 
 | Sticky cycle summary | 1 per cycle (format per `core/templates/pr-comment-cadence.md`) |
 | Mid-cycle progress comments | 0 — sticky IS the signal |
 
-**D26 binding** — every framework-authored reply + cycle-summary passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done`. Specialist authoring a reply-track text runs the self-lint before returning to team-lead. Enforcement: `core/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
+**D26 binding** — every framework-authored reply + cycle-summary passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done`. Specialist authoring a reply-track text runs the self-lint before returning to team-lead. Enforcement: `core/protocols/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
 
 ### Example — worked cycle
 

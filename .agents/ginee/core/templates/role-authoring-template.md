@@ -28,7 +28,7 @@ aliases: [<generic-alias-1>, <generic-alias-2>]
 ## Source of truth
 
 <!--
-  Index-first per core/index-protocol.md § Role consumption pattern.
+  Index-first per core/protocols/index-protocol.md § Role consumption pattern.
   Use the two-tier table for any role consuming index files: `always` for
   foundational reads; trigger phrase for scope-loaded files. Drop the bullet
   list when the table covers the role's reads.
@@ -39,7 +39,7 @@ aliases: [<generic-alias-1>, <generic-alias-2>]
 | `local/index/<file>` | `<one-line — what signal the role gets>` | **always** |
 | `local/index/<file>` | `<one-line>` | `<trigger phrase, e.g. wire/endpoint touch>` |
 
-Report loaded set in first response (per `core/index-protocol.md § Role consumption pattern § Reporting`).
+Report loaded set in first response (per `core/protocols/index-protocol.md § Role consumption pattern § Reporting`).
 
 For roles that don't consume index files (governance-only / fully ad-hoc roles), use a flat list instead:
 
@@ -50,7 +50,7 @@ For roles that don't consume index files (governance-only / fully ad-hoc roles),
 
 ## Estimation-first dispatch
 
-<!-- Trigger: dispatch scope > 15-min threshold (per core/iteration-protocol.md). -->
+<!-- Trigger: dispatch scope > 15-min threshold (per core/protocols/iteration-protocol.md). -->
 
 **First response (before any edits):**
 

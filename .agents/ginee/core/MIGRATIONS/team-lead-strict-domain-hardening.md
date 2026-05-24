@@ -12,7 +12,7 @@ Affected files:
 - `core/roles/team-lead.md § Forbidden actions` — new bullet: "Never self-execute work in a specialist-owned surface, regardless of estimated size." Includes a "size is not an exemption" clause and the correct dispatch shape for ≤ 15 min work (explicit estimate flag → iteration-protocol load skipped).
 - `core/process.md § Dispatch & parallelism rules` — new table row: "Surface owns the dispatch decision" — routing is owned by the touched surface, not by estimated task size.
 - `core/process.md § Strict-domain rule` — two sub-bullets appended: "Size is not an exemption" + pointer to the failure-modes catalogue in `team-lead.details.md`.
-- `core/iteration-protocol.md § Stoppable intermediate states` — new sub-section `### Scope-overrun trigger`: > 2× initial estimate → mandatory stop-and-report. Trigger applies symmetrically to specialists and to orchestrator in-thread work.
+- `core/protocols/iteration-protocol.md § Stoppable intermediate states` — new sub-section `### Scope-overrun trigger`: > 2× initial estimate → mandatory stop-and-report. Trigger applies symmetrically to specialists and to orchestrator in-thread work.
 - `core/roles/team-lead.details.md § Common failure modes` — NEW section (added in iteration 2 of #50): regression-grade catalogue of observed orchestrator violations + self-check shape.
 
 ## Why
@@ -26,7 +26,7 @@ None required. Clarifications to existing rules; no config, API, or surface chan
 ## Behavioural change to expect
 
 - Orchestrator no longer rationalises in-thread edits to specialist-owned surfaces with "this is small / fast". The surface owns the routing decision.
-- ≤ 15 min specialist work is dispatched with an explicit estimate flag, which keeps `core/iteration-protocol.md` unloaded for short tasks.
+- ≤ 15 min specialist work is dispatched with an explicit estimate flag, which keeps `core/protocols/iteration-protocol.md` unloaded for short tasks.
 - Specialists and orchestrator both stop-and-report at the next iteration boundary when apparent scope exceeds the initial estimate by > 2× — never continue silently.
 
 ## Backward compatibility
@@ -39,7 +39,7 @@ Revert the touched files to their pre-change state:
 
 - `core/roles/team-lead.md`
 - `core/process.md`
-- `core/iteration-protocol.md`
+- `core/protocols/iteration-protocol.md`
 - `core/roles/team-lead.details.md` (iteration 2 added the `§ Common failure modes` section)
 
 No data migration, no adopter cleanup.
@@ -48,7 +48,7 @@ No data migration, no adopter cleanup.
 
 - D1 — strict-domain rule (`core/process.md § Strict-domain rule`).
 - D5 — cardinal roles (`core/roles/team-lead.md`).
-- Iteration-protocol load triggers (`core/process.md § Iteration protocol` + `core/iteration-protocol.md` preamble).
+- Iteration-protocol load triggers (`core/process.md § Iteration protocol` + `core/protocols/iteration-protocol.md` preamble).
 - `local/bindings.md § Project role boundaries` (adopter-owned forbidden-crossings table).
 
 ## Issue reference

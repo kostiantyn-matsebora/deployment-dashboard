@@ -5,9 +5,9 @@
 
 ## What changed
 
-`core/index-protocol.md § Lossless rule for index` and `core/roles/ai-engineer.details.md § Project extraction recipes` now treat the index as a **summarization tier**, not a re-encoding tier:
+`core/protocols/index-protocol.md § Lossless rule for index` and `core/roles/ai-engineer.details.md § Project extraction recipes` now treat the index as a **summarization tier**, not a re-encoding tier:
 
-- New **`§ Where compression pays off — and where it doesn't`** section in `core/index-protocol.md § Why` — honest about prose-heavy vs. list-of-records vs. already-structured asymmetry.
+- New **`§ Where compression pays off — and where it doesn't`** section in `core/protocols/index-protocol.md § Why` — honest about prose-heavy vs. list-of-records vs. already-structured asymmetry.
 - New **`§ Compression floor`** sub-rule in `§ Lossless rule for index`:
   - `compression = index-bytes / source-bytes`. `≥ 0.5 = recipe failed`.
   - Two remedies: rewrite recipe to drop bulk, OR mark class `template: read-source-directly` (skip extraction; role kernels read source via `repo-map.idx`).

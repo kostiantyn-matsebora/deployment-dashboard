@@ -11,5 +11,6 @@ model: claude-sonnet-4-6
 2. `.agents/ginee/core/process.md` — Doc-roles rule (D25) + Cross-agent handoff
 3. `.agents/ginee/core/doc-roles.md` — full authorship + routing table (renamed from `doc-co-ownership.md` per D25)
 4. `.agents/ginee/local/bindings.md` — project-specific doc surfaces
+5. `.agents/ginee/local/roles/ai-engineer.md` — project-local extension (D37 — load if present; augments this charter with project-specific craft notes; never replaces)
 
 Act per your charter. Per D25, each authoring role (SA · team-lead · backend · frontend · devops · qa · mockup-owning) owns semantics for its doc class; you own shape across the whole set. Hand off semantic edits to the doc's authoring role per `core/doc-roles.md § Routing`.

@@ -78,7 +78,7 @@
 | Diagrams directory | `<path or (none)>` | `present | absent` |
 | Project-instruction file | `<CLAUDE.md / copilot-instructions.md / etc.>` | `present | absent` |
 
-Source-doc summaries land in `local/index/` (one file per detected doc class — `architecture.idx`, `adr-index.idx`, `scenario-index.idx`, `api-matrix.yaml`, `ui-states.yaml`, `constraints.yaml`, plus any adopter-specific class). Roles read the index first; originals only when an entry needs verbatim consumption. Canonical record + per-source SHA-256: `local/index/manifest.yaml`. Spec: `core/index-protocol.md`.
+Source-doc summaries land in `local/index/` (one file per detected doc class — `architecture.idx`, `adr-index.idx`, `scenario-index.idx`, `api-matrix.yaml`, `ui-states.yaml`, `constraints.yaml`, plus any adopter-specific class). Roles read the index first; originals only when an entry needs verbatim consumption. Canonical record + per-source SHA-256: `local/index/manifest.yaml`. Spec: `core/protocols/index-protocol.md`.
 
 ## SDLC artefacts
 

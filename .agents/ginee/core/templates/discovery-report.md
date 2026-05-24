@@ -97,7 +97,7 @@
 ## Indexed docs (`local/index/`)
 
 <!--
-  Produced by ai-engineer per core/index-protocol.md.
+  Produced by ai-engineer per core/protocols/index-protocol.md.
   Every detected doc class has an entry. SHA-256 + recipe + index-file list
   recorded canonically in local/index/manifest.yaml; this section is a
   human-readable view of that manifest at discovery time.
@@ -111,7 +111,7 @@
 | `<e.g. rfc — adopter-declared>` | `<docs/rfcs/*.md>` | `builtin:adr` (reused shape) | `rfc-index.idx` | `<per-file in manifest>` |
 | `<e.g. runbook — novel class>` | `<ops/runbooks/*.md>` | `inline (see manifest)` | `runbook-index.idx` | `<per-file in manifest>` |
 
-Canonical record: `local/index/manifest.yaml`. Pre-dispatch staleness checks compute current SHA-256 and compare against this entry — see `core/index-protocol.md § Pre-dispatch staleness check`.
+Canonical record: `local/index/manifest.yaml`. Pre-dispatch staleness checks compute current SHA-256 and compare against this entry — see `core/protocols/index-protocol.md § Pre-dispatch staleness check`.
 
 ## Artefacts written
 

@@ -5,7 +5,7 @@
 ## Activation cues
 
 - Phase 2 design proposal — any cardinal authoring architecture · ADR · CR · wire / mockup contract.
-- Iteration-protocol Propose step (`core/iteration-protocol.md § Each iteration`) for Phase 4–7 sub-tasks where adopt-vs-build is a live axis (new library · runner · framework · tool · dependency).
+- Iteration-protocol Propose step (`core/protocols/iteration-protocol.md § Each iteration`) for Phase 4–7 sub-tasks where adopt-vs-build is a live axis (new library · runner · framework · tool · dependency).
 - Mode-aware — applies in both greenfield and delta mode.
 
 **Inapplicable when** the sub-task carries no adopt-vs-build axis (rename · single-file bug fix inside existing logic · doc paragraph restyling). Proposer cites `"axis n/a — <reason>"` and skips the option list.
@@ -19,7 +19,7 @@
 
 ### Out of scope
 
-- **Local bug fixes** without an adoption axis (per `core/iteration-protocol.md § Conflict resolution` — engineer domain).
+- **Local bug fixes** without an adoption axis (per `core/protocols/iteration-protocol.md § Conflict resolution` — engineer domain).
 - **Existing closed proposals.** Forward-only; no retroactive rewrite.
 - **License gating.** Framework requires citation, expresses no opinion on which licenses pass. Adopter authors a `local/` policy if gating is wanted.
 - **External lint enforcement.** LLM self-review only — same machinery as D22 / D26 / D29.

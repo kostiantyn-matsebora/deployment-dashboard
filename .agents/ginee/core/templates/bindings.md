@@ -23,7 +23,7 @@
 
 ## Source-of-truth ownership
 
-**Default reads:** `local/index/*` per `core/index-protocol.md`. The table below is a **governance map** — who edits each source + where the verbatim text lives when an index entry points to "see source." NOT a per-dispatch read list; pulling raw doc paths into every dispatch defeats the load-on-demand contract.
+**Default reads:** `local/index/*` per `core/protocols/index-protocol.md`. The table below is a **governance map** — who edits each source + where the verbatim text lives when an index entry points to "see source." NOT a per-dispatch read list; pulling raw doc paths into every dispatch defeats the load-on-demand contract.
 
 | File | Role | Edited by |
 |---|---|---|
@@ -154,7 +154,7 @@ Task spans two roles → dispatch in parallel per `core/process.md` § Dispatch 
     without editing upstream `core/roles/*.md` kernels (those are
     framework-owned and replaced on upgrade).
   - Read by `team-lead` at dispatch time + `ai-engineer` at
-    dormant-index audit time (per `core/index-protocol.md § Consumer coupling`
+    dormant-index audit time (per `core/protocols/index-protocol.md § Consumer coupling`
     + `§ Dormant-index audit`).
   Rule:
   - Every entry in `local/index/*` that is NOT cited by a cardinal role's
@@ -182,7 +182,7 @@ Empty table → no novel-class citations declared. Discovery will surface any un
 <!--
   Scope:
   - Per-project; raises or lowers a role's per-file load tier vs the
-    cardinal kernel default (per `core/index-protocol.md § Role consumption
+    cardinal kernel default (per `core/protocols/index-protocol.md § Role consumption
     pattern § Adopter overrides`).
   Rule:
   - One row per (role, index-file) override.

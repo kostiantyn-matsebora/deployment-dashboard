@@ -1,0 +1,16 @@
+# Phase 4 — Implementation
+
+**Load triggers** — any cardinal whose `phase-participation:` includes `4`. Per-role roster: `team-lead` · `solution-architect` (review / governance dips) · all engineering cardinals.
+
+- **Goal.** Working code mirroring approved Phase 2 contracts.
+- **Rules.**
+  - Each engineering role implements its part in its owned paths (`local/bindings.md`).
+  - Parallel where independent.
+  - Phase 5 overlaps once Phase 3 passes.
+  - Runs under `core/protocols/iteration-protocol.md`.
+- **`solution-architect` governance dip (D25-classical-architect).** Triggered only when the in-flight PR touches an SA-owned file per `local/bindings.md § Source-of-truth ownership` (NOT every Phase 4 PR). Spot-checks engineer deltas against architecture invariants + ASRs. Drift → PR comment + dispatch back to owning engineer. Per `core/roles/solution-architect.md § Governance`.
+- **`solution-architect` review on in-flight proposals (D25-classical-architect).** If an engineer proposes an architectural change mid-Phase 4 (new contract / topology / stack / NFR-affecting decision), SA reviews per `§ Review` — APPROVE / REJECT / REQUEST-CHANGES. SA never edits the engineer's code.
+- **Acceptance.**
+  - Compiles / builds clean.
+  - Per-project unit tests pass.
+  - No new lint or type errors.

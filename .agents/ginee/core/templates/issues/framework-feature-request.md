@@ -60,11 +60,14 @@ labels: [ginee:ready, framework]
 ## Locked-decision impact
 
 <!--
-  Does this require a new locked decision (D15+) or amend an existing one (D1 — D14)?
+  Does this require a new locked decision or amend existing ones?
   Framework's source of truth for decisions is PLAN.md + CLAUDE.md tables.
+  D34 — cite existing decisions in slug-glued form (filename slug after the
+  numeric prefix); `ls core/MIGRATIONS/D<NN>-*.md` resolves the slug.
+  Example: `D28-skill-runner-boundary`, not bare `D28`.
 -->
 - New decision needed: `<yes | no>`
-- Existing decisions affected: `<D1 | D5 | D7 | ... | none>`
+- Existing decisions affected: `<D28-skill-runner-boundary | D29-strict-subagent-return-schema | ... | none>`
 
 ## Backward compatibility
 

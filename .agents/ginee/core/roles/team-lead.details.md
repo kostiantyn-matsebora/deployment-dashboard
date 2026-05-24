@@ -87,7 +87,7 @@ Steps:
    - `local/bindings.md` ← `core/templates/bindings.md`
    - `local/framework.config.yaml` ← `core/templates/framework.config.yaml`
 
-8b. **Enumerate index classes (doc + code) + dispatch `ai-engineer` for index extraction.** Full spec: `core/index-protocol.md`. Covers both categories — doc (D13) and code/config (D15) — under one `local/index/manifest.yaml`.
+8b. **Enumerate index classes (doc + code) + dispatch `ai-engineer` for index extraction.** Full spec: `core/protocols/index-protocol.md`. Covers both categories — doc (D13) and code/config (D15) — under one `local/index/manifest.yaml`.
    1. Enumerate classes to index in this priority order:
       1. **Adopter-declared** — `local/framework.config.yaml § index.classes` (highest priority; overrides auto-detection). Each entry declares `category: doc | code` + source-glob + template.
       2. **Built-in matched by heuristics** — globs against the templates in `core/templates/index/`:
@@ -180,12 +180,43 @@ Regression-grade catalogue. Each row names an observed orchestrator violation + 
 
 | Pattern | Correct shape |
 |---|---|
-| **"Feels fast → I'll just do it."** Orchestrator estimates a task at 5–7 min, elects to edit in the main thread, skips Phase 2 dispatch + estimation contract. Routinely balloons to ~60 min unbroken main-thread work with no stop-and-report boundaries. | Dispatch the owning specialist with explicit estimate: *"≤ 15 min, no iteration-protocol load"*. The dispatch overhead is ~30 seconds; the safety it buys (correct owner, stop-and-report on overrun per `core/iteration-protocol.md § Stoppable intermediate states`) is non-negotiable per `core/roles/team-lead.md § Forbidden actions`. |
+| **"Feels fast → I'll just do it."** Orchestrator estimates a task at 5–7 min, elects to edit in the main thread, skips Phase 2 dispatch + estimation contract. Routinely balloons to ~60 min unbroken main-thread work with no stop-and-report boundaries. | Dispatch the owning specialist with explicit estimate: *"≤ 15 min, no iteration-protocol load"*. The dispatch overhead is ~30 seconds; the safety it buys (correct owner, stop-and-report on overrun per `core/protocols/iteration-protocol.md § Stoppable intermediate states`) is non-negotiable per `core/roles/team-lead.md § Forbidden actions`. |
 | **Skill-runner orchestrates instead of dispatching (D28 — issue #71).** Skill-runner main thread drafts the Phase 1–8 plan itself, synthesizes parallel specialist returns, answers routing questions by reading `local/bindings.md` directly, or proposes default-selection options ("I'll pick option 1 if you don't redirect"). All four are orchestration decisions the skill-runner is structurally banned from making per `core/process.md § Skill-runner — surface boundary`. | After the skill's first mechanical batch the skill-runner dispatches `@team-lead`. Every subsequent decision flows through team-lead. Skill-runner never reads `local/bindings.md` to settle a routing question; it dispatches team-lead to read and reconcile. Defaults belong to team-lead, never the skill-runner. |
+| **D29 self-lint skipped + skill-runner "cleans up" the return (D33 — issue #86).** Cardinal return arrives without the `<!-- D29 self-lint: pass -->` marker, missing mandatory sections, or opens with a narrative preamble. Skill-runner notices the shape is off, consumes the return silently (no advisory), then re-renders the content into its own summary table to present to the user — crossing the D28 surface boundary in the cleanup. Two failure modes compound: D29 self-lint silently bypassed; D28 boundary breached as the orchestrator's cleanup workaround. | Skill-runner forwards the non-compliant return **as-is** to team-lead and surfaces the one-line advisory per `core/templates/phase-report.md § Orchestrator behaviour on non-compliant returns` (e.g. `"Return missed self-lint: marker absent; consuming anyway."`). Never re-renders. Never re-dispatches purely for format. Carry-forward rephrasing fires on the *next* dispatch to the same subagent — `"last cycle's return missed self-lint (<violation>) — apply the 6 checks + marker this cycle."` |
+
+## Warm specialist reuse (D36-warm-specialist-reuse)
+
+Per-task in-conversation registry tracking specialists already dispatched in the current Phase 1–8 lifecycle. On 2nd+ dispatch of the same role within the same task AND within that role's `phase-participation:` window (per D35-process-md-load-topology), resume the existing specialist via the adapter's native mechanism instead of fresh-spawn.
+
+| Lifecycle event | Action |
+|---|---|
+| First dispatch of role `R` in task `T` | Spawn fresh (background-mode on adapters that support it · e.g. Claude `run_in_background: true`). Record `{role, agent-id, task, last-phase}`. |
+| 2nd+ dispatch of `R` in `T`, new phase ∈ `R.phase-participation` | Resume via adapter native mechanism (Claude `SendMessage` to recorded agent-id). Payload = new instruction + phase identity + drift advisory. |
+| Forced-fresh trigger fires | Spawn fresh; replace registry entry. Triggers: prior `Status: Blocked` / `Hand-off` resolved externally · worktree mismatch · `local/bindings.md` · `local/project-profile.md` · `local/index/manifest.yaml` material rewrite · explicit `fresh:` prefix · adapter resume-failure. |
+| Phase 8 acceptance OR task abandonment | Clear registry. Background agents receive `## Phase 8 close — release` and terminate. Next task starts cold. |
+| Adapter lacks resume mechanism | Fallback — fresh-spawn on every dispatch (pre-D36 behaviour). No registry maintenance. |
+
+**Drift advisory shape** (always present in resume payload; empty case `(no drift)`):
+
+```
+## Drift since your last interaction
+
+| Index entry | Old SHA | New SHA |
+|---|---|---|
+| local/index/<file>.idx | <old> | <new> |
+```
+
+Mirrors `core/protocols/index-protocol.md § Pre-dispatch staleness check`. Reuses the same SHA-comparison mechanism; no new tooling.
+
+**Adopter opt-out** — `local/framework.config.yaml § warm-reuse.enabled: false` disables the contract repo-wide; default `true` on capable adapters.
+
+**D28 / D29 / D32 interaction** — warm reuse is team-lead's surface, not skill-runner's. The decision authority split (D32) holds: team-lead resolves warm-vs-fresh in its plan-cycle; skill-runner forwards the dispatch contract verbatim. Return schema (D29) unchanged — a warm-resume marker in `## Notes` is optional, not required.
+
+Full spec: `core/MIGRATIONS/D36-warm-specialist-reuse.md`.
 
 ## Pre-dispatch staleness check (index)
 
-Before dispatching a specialist whose task may consume any indexed source doc, verify the index isn't stale. Full spec: `core/index-protocol.md § Pre-dispatch staleness check`.
+Before dispatching a specialist whose task may consume any indexed source doc, verify the index isn't stale. Full spec: `core/protocols/index-protocol.md § Pre-dispatch staleness check`.
 
 1. **Identify candidate sources.** From `local/index/manifest.yaml § indexed[]`, pick the source(s) the dispatched role is likely to consume (cross-reference role × task context against the index-files mapping). Both categories are in scope:
    - **Doc** drift relevant when dispatched role consumes design / governance / scenario surfaces (e.g. `solution-architect`, `qa-engineer` authoring against an FR).

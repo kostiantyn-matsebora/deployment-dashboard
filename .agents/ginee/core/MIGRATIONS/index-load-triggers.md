@@ -7,7 +7,7 @@
 
 Role kernel `## Source of truth` tables now declare **per-file load triggers** — two-tier model: `always` for foundational baseline, trigger phrases for scope-loaded files. A trivial dispatch no longer pays the full role baseline; a deep-work dispatch picks up exactly the indexes its task touches.
 
-- **New `§ Role consumption pattern`** in `core/index-protocol.md`:
+- **New `§ Role consumption pattern`** in `core/protocols/index-protocol.md`:
   - Two-tier load model — `always` + scope-loaded with trigger phrase.
   - Trigger evaluation procedure (specialist evaluates on first reasoning step).
   - Reporting — specialist reports its load decision in first response.

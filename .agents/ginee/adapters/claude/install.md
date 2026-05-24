@@ -55,6 +55,7 @@
 5. **Verify.** Ask Claude for the status of each cardinal. Each should:
    - Report its charter (read from `.agents/ginee/core/roles/<role>.md`).
    - Confirm the project's bindings.
+   - If a `.agents/ginee/local/roles/<role>.md` extension is present (D37-local-role-extensions), surface its project-specific craft notes as part of the status report.
 
 ## How to invoke
 
@@ -84,6 +85,39 @@ Cheat sheet for the 12 framework workflows (AgentSkills auto-activates from thes
 | "Address review on PR #N" / "Respond to review on #N" / "Handle review feedback on #N" | `ginee-address-review` |
 
 The framework's own `core/process.md` and role kernels use `@<role>` notation as vendor-neutral shorthand — Claude Code adopters read that as "the orchestrator routes here," not as a literal command.
+
+## Specialist-tool affinity (D38)
+
+Host capability tools the Claude Code adapter exposes, with the role / task surfaces they help. Team-lead consults this table during dispatch composition per D38-host-capability-tools and surfaces matching tools as a one-line hint in the dispatch prompt (prefer if available; never required).
+
+| Tool | Class | Role / task affinity | Invocation hint |
+|---|---|---|---|
+| `frontend-design` | Skill | `frontend-engineer` authoring or modifying an HTML mockup | "use the `frontend-design` skill to author the mockup variant" |
+| `code-review` | Skill | `solution-architect` Phase 7 governance · engineer self-check pre-PR | "run `code-review` on the diff before sign-off" |
+| `verify` | Skill | `qa-engineer` Phase 5 manual smoke · engineer Phase 6 fix verification | "use `verify` to confirm the change works end-to-end" |
+| `security-review` | Skill | NFR-security ASR coverage · `solution-architect` review on security-touching PRs | "run `security-review` against the changed surface" |
+
+**Adopter opt-out** — `local/framework.config.yaml § capability-tools.disabled: [<tool-id>, …]` scopes out a specific tool while keeping the rest. `capability-tools.enabled: false` disables affinity injection repo-wide. Defaults: `enabled: true`, `disabled: []`.
+
+**Adding more tools** — append rows to this table as the Claude Code ecosystem grows. The affinity column drives matching (`grep`-style regex against the role + task description in the dispatch contract); update the migration spec only if the matching semantics change.
+
+Full spec: `core/MIGRATIONS/D38-host-capability-tools.md`.
+
+## Subagent dispatch limitation (D32)
+
+Claude Code's `Agent` / `Task` tool is **top-level only** — subagents do not inherit it, so the D28 hand-back (skill-runner → `@team-lead` → specialists) silently degrades on Claude (team-lead-as-subagent has no `Agent` tool). D32 narrows D28 on this adapter: split **decision authority** (team-lead, re-invoked each cycle) from **mechanical dispatch execution** (skill-runner, verbatim).
+
+| Step | Surface |
+|---|---|
+| Plan drafting · synthesis · gate text · routing · defaults · `local/bindings.md` lookup | `team-lead` (re-invoked) |
+| User approval of the plan | user |
+| Mechanical dispatch of approved specialists (parallel where independent) · pass-through of returns | **skill-runner** (verbatim, no discretion, no synthesis) |
+
+**Loop.** `skill-runner batch → @team-lead (plan) → user approve → skill-runner (verbatim dispatch) → collect returns → @team-lead (synthesis + next decision) → loop` until phase complete.
+
+**Self-check before any main-thread reasoning during a skill run** — mechanical op OR verbatim execution of an approved contract? → proceed. Anything else (synthesize · pick next specialist · draft reply · answer routing question) → re-invoke `@team-lead`. No "fast" / "trivial" exception; D28 origination ban holds even when team-lead is a subagent.
+
+Full spec + worked example + decision-authority table: `core/MIGRATIONS/D32-claude-adapter-subagent-dispatch.md`.
 
 ## Model tier (D31)
 
@@ -123,6 +157,34 @@ auto: model:fast Re-label stale issues with ginee:blocked.
 Resolution order — stop at first match: (1) per-task prefix, (2) Phase-3 user answer, (3) `local/framework.config.yaml § model-tier.per-role.<role>`, (4) `core/roles/<role>.md` frontmatter `default-tier:`.
 
 Spec: `core/MIGRATIONS/D31-model-tier.md`.
+
+## Phase-file loading (D35)
+
+Per D35-process-md-load-topology, the 8 lifecycle phases + orchestration content live under `core/process/` and load per-cardinal via `phase-participation:` frontmatter.
+
+| Step | Behaviour |
+|---|---|
+| Read each `.claude/agents/<role>.md` frontmatter | Lift `phase-participation: [N, M, …]` |
+| For each `N` in the list | Surface `.agents/ginee/core/process/phase-<N>-<name>.md` as a load reference in the rendered kernel body |
+| `team-lead` only (and skill-runner main thread on `ginee-*` skill entry) | Additionally surface `.agents/ginee/core/process/dispatch.md` |
+| Cardinals with empty list (`ai-engineer`) | Load no phase files; common `.agents/ginee/core/process.md` only |
+
+Non-participating phase files are not surfaced to that role. The shared pointer subagents under `.agents/ginee/adapters/_shared/agents/*.md` render this contract; no per-adapter loader change is required on Claude (the kernel body itself cites the load paths). Full spec: `core/MIGRATIONS/D35-process-md-load-topology.md`.
+
+## Warm specialist reuse (D36)
+
+Per D36-warm-specialist-reuse, the same specialist is resumed (not fresh-spawned) on 2nd+ dispatch within one Phase 1–8 task AND within that role's `phase-participation:` window. Saves 15–50 k tokens of duplicated reload per task on a typical 3–5-dispatch workload.
+
+| Step | Action on Claude |
+|---|---|
+| First dispatch of role `R` in task `T` | Team-lead calls `Agent` with `run_in_background: true`; receives the agent-id; records `{role, agent-id, task, last-phase}` in its in-conversation registry. |
+| 2nd+ dispatch of `R` in `T` (new phase within `phase-participation:`) | Team-lead calls `SendMessage` to the recorded agent-id with the new payload — new instruction + phase identity + drift advisory (no kernel reload). |
+| Forced-fresh trigger | Team-lead opens a new background `Agent` and replaces the registry entry; old agent receives `## Forced-fresh — release`. |
+| Phase 8 acceptance / abandonment | Team-lead sends `## Phase 8 close — release` to every background agent; registry cleared. |
+
+Adopter opt-out: `local/framework.config.yaml § warm-reuse.enabled: false`. Default on Claude is `true` (resume capability present).
+
+Forced-fresh triggers + drift-advisory shape + full lifecycle: `core/MIGRATIONS/D36-warm-specialist-reuse.md`.
 
 ## Updates
 

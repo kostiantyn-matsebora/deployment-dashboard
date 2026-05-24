@@ -10,7 +10,7 @@
 # Compression target: ≤ 0.15 (15% of source compose/Helm/k8s/IaC combined).
 # Per-service metadata is OUT OF SCOPE — compose / Helm / k8s YAML IS already
 # machine-parseable; re-encoding as YAML wastes tokens. See
-# core/index-protocol.md § Compression floor.
+# core/protocols/index-protocol.md § Compression floor.
 
 services:
   - name: <e.g. gateway>
