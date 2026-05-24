@@ -17,7 +17,7 @@ Authorship rule:
 | Ordering | Functionality-first: behavioural paths → error / status-code branches → edge / boundary → wiring last (smoke-only). |
 | Exemptions | DTOs / records / pure data types; generated code; configuration-binding classes. |
 | Waiver | SA may grant a per-task waiver documented in the PR description for mechanical / infrastructure-adjacent / baseline-matching changes. Never silent; never retroactive. |
-| Gate | Failed run / sub-threshold coverage = stoppable intermediate state per `core/iteration-protocol.md`. |
+| Gate | Failed run / sub-threshold coverage = stoppable intermediate state per `core/protocols/iteration-protocol.md`. |
 
 ## Modified
 

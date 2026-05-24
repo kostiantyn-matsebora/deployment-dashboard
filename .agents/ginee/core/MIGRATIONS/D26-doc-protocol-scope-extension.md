@@ -26,7 +26,7 @@ Reporter-authored content (your own issue bodies, your own comments) is **unchan
 
 | Path | Change |
 |---|---|
-| `core/doc-authoring-protocol.md` | Added `## Scope` section + new `## Enforcement for ginee-authored GitHub artefacts` |
+| `core/protocols/doc-authoring-protocol.md` | Added `## Scope` section + new `## Enforcement for ginee-authored GitHub artefacts` |
 | `core/process.md § Documentation style` | Artefacts list extended — issue bodies + framework-authored comments |
 | `core/skills/ginee-file-{bug,feature,framework-bug,framework-feature}/SKILL.md` | Added self-lint step before user approval |
 | `core/templates/issues/{bug-report,feature-request,framework-bug-report,framework-feature-request}.md` | D26 shape-rule banner at top |
@@ -47,7 +47,7 @@ Reporter-authored content (your own issue bodies, your own comments) is **unchan
 
 Not recommended. The D22 protocol is the framework's structure-over-prose discipline; D26 is an additive scope extension with no behavior change for reporter content. If a project genuinely wants ginee-authored issue bodies + comments to revert to free-form prose:
 
-1. Revert `core/doc-authoring-protocol.md § Scope` to the pre-D26 version.
+1. Revert `core/protocols/doc-authoring-protocol.md § Scope` to the pre-D26 version.
 2. Revert the 4 `ginee-file-*` skill self-lint steps.
 3. Revert the 2 github-integration.md comment-cadence D26 declarations.
 

@@ -20,6 +20,6 @@ description: Update the installed ginee framework in place to a release or named
    - Win: `iwr -useb <raw>.ps1 -OutFile <tmp>/install.ps1; pwsh -File <tmp>/install.ps1 -Target <root> -Adapter <adapter> -Ref <target> -RepoUrl <repo-url> -UpdateOnly`.
    - Non-Win: `curl -fsSL <raw>.sh -o <tmp>/install.sh && bash <tmp>/install.sh --target <root> --adapter <adapter> --ref <target> --repo <repo-url> --update-only`.
    - Stream stdout/stderr; capture exit.
-7. **Report.** `core/VERSION` `old→new`. Diff `local/index/manifest.yaml` SHA-256s vs fresh `core/`; on drift **never auto-reindex** — offer `ginee-reindex` per `core/index-protocol.md § Pre-dispatch staleness check`. Excerpt `docs/CHANGELOG.md` `(old,new]`. List new `core/MIGRATIONS/` + each `## Action required` if any; recommend `@team-lead rediscover` if any cites discovery/class/role catalog.
+7. **Report.** `core/VERSION` `old→new`. Diff `local/index/manifest.yaml` SHA-256s vs fresh `core/`; on drift **never auto-reindex** — offer `ginee-reindex` per `core/protocols/index-protocol.md § Pre-dispatch staleness check`. Excerpt `docs/CHANGELOG.md` `(old,new]`. List new `core/MIGRATIONS/` + each `## Action required` if any; recommend `@team-lead rediscover` if any cites discovery/class/role catalog.
 
 **Forbidden.** Edit `local/*`; mask installer failure (must surface exit code + last 20 lines stderr; no silent retry); bypass adopter's pinned `--ref` (`local/framework.config.yaml § framework.pinned-ref`) without confirming; assume installer is co-located (D27 — always fetch).

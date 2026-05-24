@@ -74,7 +74,7 @@ The sweep is adopter-initiated (never automatic). Until `rediscover` runs, exist
 **Updated:**
 
 - `core/process.md` — Phase 1 / 2 / 4 / 5 / 6 / 7 hooks + Doc-roles section retitled
-- `core/iteration-protocol.md` — refs generalized
+- `core/protocols/iteration-protocol.md` — refs generalized
 - `core/templates/bindings.md` — ownership table extended
 
 **New:**

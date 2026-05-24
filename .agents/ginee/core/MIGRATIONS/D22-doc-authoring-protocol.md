@@ -10,7 +10,7 @@
 | Layer | What it does | Where it lives | Load tier |
 |---|---|---|---|
 | Binding declaration + shape map + mandatory checks | The working contract — every role consults these when authoring docs. | `core/process.md § Documentation style` | **always-loaded** |
-| Enforcement procedure + attestation format + out-of-scope | How to invoke the discovered lint, what to write in the phase report. | `core/doc-authoring-protocol.md` | load-on-demand at Phase 5 / report-as-done |
+| Enforcement procedure + attestation format + out-of-scope | How to invoke the discovered lint, what to write in the phase report. | `core/protocols/doc-authoring-protocol.md` | load-on-demand at Phase 5 / report-as-done |
 | Paired bad / good examples — 6 doc classes | Learning material. Useful first time authoring a class; dead weight once internalized. | `core/doc-authoring-examples.md` | load-on-demand on first-time / explicit request |
 | Attestation entry | One-line Verification-log line. | `core/templates/phase-report.md`, `core/templates/pr-description.md` | always-loaded with template |
 | Discovery | `team-lead` runs the existing `builtin:commands` + `builtin:conventions` recipes, which now recognise markdown / prose linters. | `core/roles/ai-engineer.details.md § Recipes` | load-on-demand at indexing |
@@ -23,7 +23,7 @@ The protocol is loaded by every cardinal role on every doc-touching task. Once *
 The split:
 
 - **Shape map + checks** (the working contract) are tiny — they ride along with `core/process.md` which is already always-loaded. Zero per-task fetch cost.
-- **Enforcement + attestation** (~1.5 KB) load once per task at Phase 5 / report-as-done, via the phase-report template's reference to `core/doc-authoring-protocol.md`. No per-role-authoring fetch.
+- **Enforcement + attestation** (~1.5 KB) load once per task at Phase 5 / report-as-done, via the phase-report template's reference to `core/protocols/doc-authoring-protocol.md`. No per-role-authoring fetch.
 - **Examples** (~6 KB) only load when a role explicitly needs them. Empirically that's the first time a role authors a given doc class; afterwards the role internalizes the shape.
 
 Net per-task delta after #37 amplification (vs. monolithic protocol):
@@ -49,7 +49,7 @@ If no linter is discovered, `team-lead` recommends one in the discovery report. 
 
 ## Activation
 
-Automatic on update. Roles fetch `core/doc-authoring-protocol.md` on-demand when authoring markdown. Discovery picks up adopter lint configs on next `rediscover`.
+Automatic on update. Roles fetch `core/protocols/doc-authoring-protocol.md` on-demand when authoring markdown. Discovery picks up adopter lint configs on next `rediscover`.
 
 ## Out of scope
 

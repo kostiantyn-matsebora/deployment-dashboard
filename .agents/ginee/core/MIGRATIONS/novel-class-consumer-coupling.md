@@ -7,7 +7,7 @@
 
 The index protocol now requires every extracted class to declare at least one consumer role. Extraction without a consumer is the bug — it produces files no role reads.
 
-- **New `§ Consumer coupling`** section in `core/index-protocol.md`:
+- **New `§ Consumer coupling`** section in `core/protocols/index-protocol.md`:
   - Built-in classes auto-populate `consumed-by` from cardinal kernel scans + `local/bindings.md § Project-specific index citations`.
   - Novel classes MUST declare consumer via one of three paths: `framework.config.yaml`, `bindings.md` table, or interactive prompt during discovery.
   - **Default skip on no consumer** — novel class without declared consumer is NOT extracted; logged in discovery report instead.

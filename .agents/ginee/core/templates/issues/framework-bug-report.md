@@ -86,8 +86,13 @@ labels: [ginee:ready, framework]
 
 ## Locked decisions referenced
 
-<!-- D1 — D14. Tag affected ones so framework owners know the surface. -->
-- `<DNN>` — `<one-line decision summary or "n/a">`
+<!--
+  Tag affected D-decisions so framework owners know the surface.
+  D34 — taxonomy IDs slug-glued (filename slug after the numeric prefix).
+  Look up: `ls core/MIGRATIONS/D<NN>-*.md` and use the full `D<NN>-<slug>` form.
+  Example: `D28-skill-runner-boundary`, not bare `D28`.
+-->
+- `<D<NN>-<slug>>` — `<one-line decision summary or "n/a">`
 
 ## Acceptance criteria
 

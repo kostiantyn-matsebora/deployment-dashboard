@@ -10,7 +10,7 @@
 # Compression target: ≤ 0.15 (15% of source manifests combined).
 # Per-dep listing is OUT OF SCOPE — manifest IS already a machine-parseable
 # inventory; re-encoding it as YAML wastes tokens. See
-# core/index-protocol.md § Compression floor.
+# core/protocols/index-protocol.md § Compression floor.
 
 # Nested by tier; absent tiers omitted.
 tiers:

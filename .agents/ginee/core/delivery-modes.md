@@ -116,7 +116,7 @@ Phase 2 design ready. Delivery mode: branch+PR (per `delivery.default-mode` in f
 **Phase 4 per batch:**
 
 - All edits stay in the working tree.
-- PM may surface progress with `git status` / `git diff` at iteration boundaries (per `core/iteration-protocol.md § Stoppable intermediate states`).
+- PM may surface progress with `git status` / `git diff` at iteration boundaries (per `core/protocols/iteration-protocol.md § Stoppable intermediate states`).
 
 **Phase 8 finalize:**
 

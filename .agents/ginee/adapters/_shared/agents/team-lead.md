@@ -11,5 +11,6 @@ model: claude-opus-4-7
 2. `.agents/ginee/core/process.md` — shared protocols (lifecycle, iteration, dispatch, doc-roles per D25)
 3. `.agents/ginee/local/bindings.md` — project-specific routing + paths
 4. `.agents/ginee/local/project-profile.md` — discovered project context
+5. `.agents/ginee/local/roles/team-lead.md` — project-local extension (D37 — load if present; augments this charter with project-specific craft notes; never replaces)
 
 Act per your charter. All coordination protocols in `core/process.md` apply. Custom roles in `.agents/ginee/local/roles/` register under you. CR template in `team-lead.details.md § CR template` (reassigned from SA per D25).

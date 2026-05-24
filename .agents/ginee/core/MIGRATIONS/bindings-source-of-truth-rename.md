@@ -5,19 +5,19 @@
 
 ## What changed
 
-`core/templates/bindings.md` previously rendered a section header `## Source of truth (read before any work)` whose "read before any work" framing told every dispatched specialist to load the raw doc paths listed in the table. On projects with non-trivial documentation (architecture doc + ADRs + CRs + mockup + WBS + scenarios), this re-introduced the per-dispatch full-corpus read that `core/index-protocol.md` (D13) + the code-derived index (D15) exist to eliminate.
+`core/templates/bindings.md` previously rendered a section header `## Source of truth (read before any work)` whose "read before any work" framing told every dispatched specialist to load the raw doc paths listed in the table. On projects with non-trivial documentation (architecture doc + ADRs + CRs + mockup + WBS + scenarios), this re-introduced the per-dispatch full-corpus read that `core/protocols/index-protocol.md` (D13) + the code-derived index (D15) exist to eliminate.
 
 The fix:
 
 - **Renamed** the section to `## Source-of-truth ownership`.
 - **Reframed** the section as a **governance map** (who edits each raw source + where the verbatim text lives when an index entry points to "see source"). NOT a default read list.
-- **Default reads** stay on `local/index/*` per `core/index-protocol.md`.
-- **Cross-referenced** from `core/index-protocol.md § Why` so the load-on-demand contract is visible from both sides.
+- **Default reads** stay on `local/index/*` per `core/protocols/index-protocol.md`.
+- **Cross-referenced** from `core/protocols/index-protocol.md § Why` so the load-on-demand contract is visible from both sides.
 
 Affected files:
 
 - `core/templates/bindings.md` — heading rename + new preamble line.
-- `core/index-protocol.md § Why` — cross-reference paragraph added.
+- `core/protocols/index-protocol.md § Why` — cross-reference paragraph added.
 - `core/roles/backend-engineer.md`, `devops-engineer.md`, `frontend-engineer.md`, `qa-engineer.md`, `solution-architect.md` — tie-breaker reference updated.
 - `core/templates/role-authoring-template.md` — conflict-resolution reference updated.
 
@@ -34,7 +34,7 @@ After re-fetching framework files on upgrade:
 2. **Add the preamble line** (one line, immediately under the new heading, above the table):
 
    ```
-   **Default reads:** `local/index/*` per `core/index-protocol.md`. The table below is a **governance map** — who edits each source + where the verbatim text lives when an index entry points to "see source." NOT a per-dispatch read list; pulling raw doc paths into every dispatch defeats the load-on-demand contract.
+   **Default reads:** `local/index/*` per `core/protocols/index-protocol.md`. The table below is a **governance map** — who edits each source + where the verbatim text lives when an index entry points to "see source." NOT a per-dispatch read list; pulling raw doc paths into every dispatch defeats the load-on-demand contract.
    ```
 
 3. **No other changes required.** The table rows themselves stay as-is — same files, same `Edited by` column.

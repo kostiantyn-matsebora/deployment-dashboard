@@ -30,7 +30,7 @@
 - **`ai-engineer` owns shape + load topology** — structure (tables vs prose), file splits, cross-reference integrity, byte / line discipline. Never changes semantics.
 - Neither overrides the other's invariants.
 
-Runs under `core/iteration-protocol.md`.
+Runs under `core/protocols/iteration-protocol.md`.
 
 ## Routing — who edits when
 

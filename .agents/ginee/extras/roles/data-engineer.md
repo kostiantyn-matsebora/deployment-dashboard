@@ -10,7 +10,7 @@ Specialist role — opt-in for projects with non-trivial data movement / transfo
 
 ## Source of truth
 
-Index-first per `core/index-protocol.md` (`local/index/`):
+Index-first per `core/protocols/index-protocol.md` (`local/index/`):
 
 | Read first | What it gives you |
 |---|---|

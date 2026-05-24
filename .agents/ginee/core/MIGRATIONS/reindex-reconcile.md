@@ -17,7 +17,7 @@ Scopes: `reindex` (no arg) = whole repo; `reindex <file>` = the file's class; `r
 
 Modified files:
 
-- `core/index-protocol.md` — `§ Re-extraction` renamed `§ Reconciliation`; body rewritten as the three-sweep algorithm + scope table. `§ Pre-dispatch staleness check` updated to offer scoped vs whole-repo reconciliation as separate options.
+- `core/protocols/index-protocol.md` — `§ Re-extraction` renamed `§ Reconciliation`; body rewritten as the three-sweep algorithm + scope table. `§ Pre-dispatch staleness check` updated to offer scoped vs whole-repo reconciliation as separate options.
 - `core/skills/ginee-reindex/SKILL.md` — full rewrite as a thin spec wrapper. Drops both previous forbiddens (new-source refusal + redirect-to-rediscover).
 - `core/roles/team-lead.md` — kernel staleness offer + `Index dispatch` section renamed and broadened.
 - `core/roles/team-lead.details.md` — `§ Pre-dispatch staleness check (index)` offer table updated to three options.
@@ -44,7 +44,7 @@ After re-fetching framework files on upgrade:
 ## Safeguards
 
 - **Never auto-delete.** Stale-entry sweep always prompts.
-- **Sample-and-check unchanged.** Every Sweep-1 / Sweep-2 hit still runs existence + compression-floor verification per `core/index-protocol.md § Lossless rule for index`.
+- **Sample-and-check unchanged.** Every Sweep-1 / Sweep-2 hit still runs existence + compression-floor verification per `core/protocols/index-protocol.md § Lossless rule for index`.
 - **Dormant-index audit unchanged.** `ai-engineer` still emits the audit after extraction.
 - **Novel-class detection remains a `rediscover` responsibility** — `reindex` reconciles within existing classes only. Sources matching no class glob need full discovery (profile + bindings + index + consumer-coupling input).
 

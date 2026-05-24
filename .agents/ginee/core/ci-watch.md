@@ -88,7 +88,7 @@ Same structural rule as `core/automatic-mode.md § Forced-interactive triggers`,
 | Flake-classified failure recurs after the one allowed auto-retry | Treat as attributable / unattributable per heuristic; if unattributable, hand back. |
 | `ci-watch-timeout-minutes` exceeded mid-cycle | Post "CI still running after N minutes, handing back" comment; record stoppable-intermediate-state. |
 | `ci-watch-max-fix-cycles` reached (default 3) | Post cumulative fix-cycle log; ask user to direct. |
-| User interrupts at any poll boundary | Record state; exit per `core/iteration-protocol.md § Stoppable intermediate states`. No orphaned watch threads. |
+| User interrupts at any poll boundary | Record state; exit per `core/protocols/iteration-protocol.md § Stoppable intermediate states`. No orphaned watch threads. |
 | Token-budget / wall-clock thresholds exceed `core/automatic-mode.md § Forced-interactive triggers` ceilings | Inherit existing escalation. |
 
 On any trigger: `team-lead` halts the watch, surfaces a structured report (last green check / failing check / commits attempted / cycle count), resumes auto mode only on explicit user direction.
@@ -154,6 +154,6 @@ All keys optional — framework defaults shown.
 - `core/automatic-mode.md § Delivery handoff` — Accept action calls into this spec for Mode 1.
 - `core/delivery-modes.md § Mode 1` — finalize procedure references this spec as a post-`gh pr create` step.
 - `core/github-integration.md § PR linkage` — describes the comment surfaces this spec writes to.
-- `core/iteration-protocol.md § Stoppable intermediate states` — interrupt contract.
+- `core/protocols/iteration-protocol.md § Stoppable intermediate states` — interrupt contract.
 - `core/process.md § Phase 6 — Bug fixing` — where attributable failures route.
 - `core/process.md § Executing actions with care` — never-auto-merge invariant.

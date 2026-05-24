@@ -1,6 +1,6 @@
 # local/index/manifest.yaml — written by ai-engineer during discovery / re-extraction.
 # Tracks every detected doc class: source(s), SHA-256, derived index files, extraction recipe id.
-# See core/index-protocol.md § Manifest shape.
+# See core/protocols/index-protocol.md § Manifest shape.
 # Lossless rule: every doc class detected during discovery has an entry here.
 
 indexed:

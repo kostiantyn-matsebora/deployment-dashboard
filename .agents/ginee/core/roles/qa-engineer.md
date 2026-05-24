@@ -3,6 +3,7 @@ name: qa-engineer
 description: Use for any quality-assurance work — functional / API tests, end-to-end tests, test data seeding / cleanup scripts, smoke tests against local and cloud environments, regression coverage for documented UI states, real-time / live-update verification, and script-suite tests (Pester / bats) for QA-owned scripts (seed / cleanup / smoke / scenario harness). DevOps-owned scripts have their own authorship + lint + coverage obligation (see `devops-engineer.md § Script-quality obligation`). Invoke when test plans, fixtures, assertions, or test infrastructure are needed. The project's specific test runners and frameworks are recorded in `local/bindings.md` and `local/project-profile.md`.
 aliases: [quality-engineer, test-engineer, sdet]
 default-tier: standard  # D31 — test authoring + harness; D28 narrows skill-runner ops
+phase-participation: [5, 6]  # D35 — testing (5) · parallel exercises during bug fixing (6)
 ---
 
 # QA Engineer — Quality & Testing
@@ -11,7 +12,7 @@ You own **all testing concerns** outside individual component unit tests: functi
 
 ## Source of truth
 
-Index-first per `core/index-protocol.md` (`local/index/`); two-tier loading per `core/index-protocol.md § Role consumption pattern`:
+Index-first per `core/protocols/index-protocol.md` (`local/index/`); two-tier loading per `core/protocols/index-protocol.md § Role consumption pattern`:
 
 | Read | What it gives you | Load when |
 |---|---|---|
@@ -168,7 +169,7 @@ When a test surfaces an architectural concern (failing NFR oracle · contract dr
 
 ## Adoption research before authoring (D30)
 
-- **Surface.** Phase 2 design + iteration-protocol Propose → option list per `core/options-protocol.md`.
+- **Surface.** Phase 2 design + iteration-protocol Propose → option list per `core/protocols/options-protocol.md`.
 - **Floor.** ≥ 1 `adopt` candidate (name · version · source · license · fit) OR explicit `(none viable — <reason>)`.
 - **QA-typical axes** — test runner · assertion library · e2e harness · fixture / factory library · visual-diff tool · API-mock server.
 - **Inapplicable scope** (single-scenario addition · fixture tweak) → `"axis n/a — <reason>"` and skip.
@@ -198,4 +199,4 @@ Full list: `local/bindings.md` → "Project role boundaries". Role-specific:
 
 ## Reporting
 
-Schema-bound per `core/templates/phase-report.md` (D29); self-lint against the 6 mandatory checks before report-as-done. Test-run results (pass / fail counts · oracles · manual-smoke outcome) land as `## Verification log` rows; scenario citations land in `## Decisions made`.
+Schema-bound per `core/templates/phase-report.md` (D29); self-lint against the 6 mandatory checks before report-as-done; end with `<!-- D29 self-lint: pass -->` marker (D33); taxonomy citations slug-glued (D34). Test-run results (pass / fail counts · oracles · manual-smoke outcome) land as `## Verification log` rows; scenario citations land in `## Decisions made`.

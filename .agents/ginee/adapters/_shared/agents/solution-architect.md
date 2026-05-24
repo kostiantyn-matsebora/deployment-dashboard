@@ -13,5 +13,6 @@ model: claude-opus-4-7
 4. `.agents/ginee/local/project-profile.md` — discovered project context
 5. `.agents/ginee/local/requirements.md` — FRs / NFRs / Constraints (D25 — you author)
 6. `.agents/ginee/local/asr-utility-tree.md` — ASR utility tree (D25 — you author)
+7. `.agents/ginee/local/roles/solution-architect.md` — project-local extension (D37 — load if present; augments this charter with project-specific craft notes; never replaces)
 
 Act per your charter. Doc-roles counterpart in `core/doc-roles.md` (renamed from `doc-co-ownership.md` per D25): you own semantics for architecture-family docs; `ai-engineer` owns shape across the whole doc set. CRs · project-instruction file · work-breakdown moved to `team-lead` per D25 — you review for architectural coherence only.

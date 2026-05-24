@@ -27,7 +27,7 @@ Measured worked example (`core/doc-authoring-examples.md § 10`): bad return 3,6
 | `## Open issues` | **required** (else `(none)`) | Bullets — `<issue> — <owner>` | ≤ 80 chars / bullet |
 | `## Next dispatch needed` | **required** (else `(none)`) | One-liner — `<role> · <surface> · <reason>` | 1 line |
 | `## Hand-off` | conditional — forced handoff per `core/cross-agent-handoff.md` | Embed `core/templates/hand-off-note.md` shape | per template |
-| `## Stop-state` | conditional — `Status: In-progress` (iteration-protocol stop boundary) | Three-bucket bullets — Done / In-progress / Not-started | per `core/iteration-protocol.md § Stoppable intermediate states` |
+| `## Stop-state` | conditional — `Status: In-progress` (iteration-protocol stop boundary) | Three-bucket bullets — Done / In-progress / Not-started | per `core/protocols/iteration-protocol.md § Stoppable intermediate states` |
 | `## Notes` | **optional** — narrative-rationale escape hatch | Free-form prose | ≤ 200 words; ≤ 5-line code-snippet carve-out |
 
 **Status header** (single line at top): `Status: Done | In-progress | Blocked | Hand-off`.
@@ -87,7 +87,7 @@ LLM self-review against the schema **before returning**. No external linter.
 | `core/roles/backend-engineer.md` | New `## Reporting` section (1-line pointer + D19 coverage attestation row note) |
 | `core/roles/devops-engineer.md` | New `## Reporting` section (1-line pointer + D18 script-quality + health-check row notes) |
 | `core/roles/qa-engineer.md` | New `## Reporting` section (1-line pointer + test-run + manual-smoke row notes) |
-| `core/doc-authoring-protocol.md` | Title + `§ Scope` extended to subagent returns; new `§ Enforcement for subagent returns (D29)` |
+| `core/protocols/doc-authoring-protocol.md` | Title + `§ Scope` extended to subagent returns; new `§ Enforcement for subagent returns (D29)` |
 | `core/doc-authoring-examples.md` | New § 10 — paired bad / good Phase-4 return with measured 68.5% reduction |
 | `docs/CONCEPTS.md` · `docs/CHEATSHEET.md` · `docs/CHANGELOG.md` | D29 entries |
 | `CLAUDE.md` · `PLAN.md` | D29 row |
@@ -109,7 +109,7 @@ Not recommended. D29 is the discipline that closes the largest current orchestra
 2. Remove `core/process.md § Reporting — schema-bound (D29)`.
 3. Remove the `## Reporting` sections from the 5 cardinals that didn't have one.
 4. Revert `core/roles/team-lead.md` + `core/roles/solution-architect.md § Reporting` to their pre-D29 prose.
-5. Revert `core/doc-authoring-protocol.md § Scope` + remove `§ Enforcement for subagent returns`.
+5. Revert `core/protocols/doc-authoring-protocol.md § Scope` + remove `§ Enforcement for subagent returns`.
 6. Remove `core/doc-authoring-examples.md § 10`.
 
 The framework still functions but cardinal returns return to free-form prose; orchestration-thread bloat returns to pre-D29 levels.

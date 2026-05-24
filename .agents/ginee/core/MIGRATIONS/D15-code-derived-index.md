@@ -27,7 +27,7 @@ New built-in recipes (`core/roles/ai-engineer.details.md § Project extraction r
 
 Modified:
 
-- `core/index-protocol.md` — title broadens; new `§ Source types` section; common-files table covers both categories; manifest shape adds `category: doc | code` per entry; lifecycle + lossless rule + adopter-declared example extended.
+- `core/protocols/index-protocol.md` — title broadens; new `§ Source types` section; common-files table covers both categories; manifest shape adds `category: doc | code` per entry; lifecycle + lossless rule + adopter-declared example extended.
 - `core/roles/ai-engineer.md` — In-scope-edits row renamed (Project knowledge index) + recipe list extended.
 - `core/roles/ai-engineer.details.md` — `§ Project-doc extraction recipes` → `§ Project extraction recipes`; new doc/code sub-tables; sample-and-check verify-step is category-aware.
 - `core/roles/team-lead.details.md` — Discovery Step 8b heuristics split into doc + code sub-groups; pre-dispatch staleness check covers both categories.
@@ -46,7 +46,7 @@ After re-fetching framework files on upgrade:
    @ai-engineer extract code-derived sources
    ```
 
-   `ai-engineer` reads `core/index-protocol.md § Source types § Code` + the new recipe sub-table, runs each `builtin:<code-recipe>` against the project's matching sources, writes 6 new index files (skipping any source category the project doesn't have), and appends entries to `manifest.yaml` with `category: code`.
+   `ai-engineer` reads `core/protocols/index-protocol.md § Source types § Code` + the new recipe sub-table, runs each `builtin:<code-recipe>` against the project's matching sources, writes 6 new index files (skipping any source category the project doesn't have), and appends entries to `manifest.yaml` with `category: code`.
 
 2. **Existing doc-category entries are untouched.** No re-extraction of architecture / adr / cr / etc. required.
 

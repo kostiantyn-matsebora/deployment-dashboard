@@ -66,7 +66,7 @@ From here on every orchestration decision — Phase 1–8 plan drafting · speci
 team-lead runs the full lifecycle per `.agents/ginee/core/roles/team-lead.md` + `.agents/ginee/core/process.md`:
 
 - Dispatches specialists per `local/bindings.md`.
-- Runs iteration protocol per `.agents/ginee/core/iteration-protocol.md` when total scope > 15 min.
+- Runs iteration protocol per `.agents/ginee/core/protocols/iteration-protocol.md` when total scope > 15 min.
 - Enforces gates at Phase 3 (design review), Phase 7 (SA review), Phase 8 (user approval).
 
 ## Forbidden

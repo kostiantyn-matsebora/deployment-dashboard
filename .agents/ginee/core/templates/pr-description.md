@@ -45,11 +45,11 @@
 
 | Source | Reference |
 |---|---|
-| Requirement | `<FR-NN | NFR-NN>` |
+| Requirement | `<FR-NN-slug | NFR-NN-slug>` (slug-glued per D34 — e.g. `FR-04-deploy-rollback`) |
 | Architecture-doc section | `<§N or anchor>` |
 | Mockup section / behaviour | `<section / interaction>` |
-| CR | `<CR-NNNN>` (post-finalization) |
-| ADR | `<ADR-NNNN>` (new architectural decision) |
+| CR | `<CR-NNNN-slug>` (post-finalization — e.g. `CR-0010-component-ci-pipeline`) |
+| ADR | `<ADR-NNNN-slug>` (new architectural decision — e.g. `ADR-0001-topology-derivation-five-pass`) |
 | Hand-off note | `<path or link>` (when resolving cross-domain hand-off) |
 
 **No source → no PR.** Uncited by something authoritative:
@@ -124,7 +124,7 @@
 - State so explicitly.
 - **Never** claim PASS without doing it.
 
-**Doc-style protocol** *(when PR touches adopter markdown — rules in `core/process.md § Documentation style`; enforcement in `core/doc-authoring-protocol.md`)*
+**Doc-style protocol** *(when PR touches adopter markdown — rules in `core/process.md § Documentation style`; enforcement in `core/protocols/doc-authoring-protocol.md`)*
 
 - `<discovered linter command>: PASS / N findings` OR `no linter configured; self-checked against § Mandatory checks`.
 
