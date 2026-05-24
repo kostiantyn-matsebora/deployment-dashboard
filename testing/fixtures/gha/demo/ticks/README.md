@@ -2,7 +2,7 @@
 
 Per-tick mapping bundles applied by the demo-driver sidecar
 ([#46](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/46))
-to advance the demo bundle through time without WireMock.Net Scenarios.
+to advance the demo bundle through time without WireMock (JVM) Scenarios.
 Sidecar wakes on 15 s, picks next subdir in lex order, applies via Admin API.
 
 ## Per-tick contract
@@ -17,7 +17,7 @@ Sidecar wakes on 15 s, picks next subdir in lex order, applies via Admin API.
 
 ### `list-deployments-<service>.json` — cumulative body rule
 
-Full WireMock.Net mapping; sidecar PUTs to
+Full WireMock (JVM) mapping; sidecar PUTs to
 `PUT /__admin/mappings/{pinned-guid}` (in-place replace). `Guid` field
 MUST equal the static-base pinned GUID (see § Pinned-GUID dependency).
 
@@ -27,7 +27,7 @@ MUST equal the static-base pinned GUID (see § Pinned-GUID dependency).
 ### `status-<dep-id>.json`
 
 Mirrors `../mappings/statuses/NNN-status-<dep-id>.json`. Sidecar POSTs
-to `POST /__admin/mappings` (WireMock.Net assigns GUID).
+to `POST /__admin/mappings` (WireMock (JVM) assigns GUID).
 
 ## ID range — authored only
 
