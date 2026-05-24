@@ -12,7 +12,7 @@
 | `docs/ui/mockups/deployment-dashboard.html` | Visual + behavioural client contract (palette, six box states, NFR-09 reflow invariant) | mockup owner (`frontend-engineer`); `solution-architect` reviews, no edits |
 | `docs/ui/mockups/env-tag-column-alignment-variant-{a,b}.html` | Mockup variants pairing the `env-tag-column-alignment` UI option | `frontend-engineer` |
 | `docs/adr/` | Architecture Decision Records (ADR-0001 topology / ADR-0002 co-location mechanics - **superseded on framing by ADR-0006** / ADR-0003 theme persistence + FOIT bootstrap / ADR-0004 opaque-cursor + fetcher non-co-location / ADR-0005 release-install migration - **superseded by ADR-0009** / ADR-0006 microservices architecture + container co-location / ADR-0007 vendor adapters emit parent_deployments / ADR-0008 leaky-bucket cap + republish-on-tick / ADR-0009 startup-applied EF migrations / ADR-0010 dev_env compose derives from release) | `solution-architect` |
-| `docs/cr/` | Change Requests (CR-0001..CR-0013) - **reassigned to `team-lead` per D25** (coordination decisions, not architectural). SA reviews each for architectural coherence. | `team-lead`; `solution-architect` reviews |
+| (retired) | Change Requests no longer authored per-GitHub-issue (the issue body + PR description carry the design-of-record). CRs are now authored ONLY for free-form / TODO-sourced tasks lacking a GitHub issue, per `CLAUDE.md § CR convention (local)`. Historical CRs removed in this branch; see git history pre-deletion. | n/a |
 | `docs/ui/*.md` | UI option docs (compact / focus-layout / theme / tree-topology / version-display / env-tag-column-alignment / rate-limit-cluster) - mockup-supporting design records | `solution-architect` (semantics) + `frontend-engineer` (proposes option mockups) |
 | `docs/ui/index.md` | Jekyll UI-options landing page | `solution-architect` (Just the Docs nav-order + content); `devops-engineer` reviews Jekyll mechanics |
 | `docs/WBS.md` | Operational work-breakdown - per-phase items, MVP / Phase 2.0 split (D25 - reassigned to `team-lead`) | `team-lead`; `solution-architect` reviews for scope-impact coherence |
@@ -24,8 +24,6 @@
 | `docs/features.md` | User-visible surface map citing source-of-truth docs | `solution-architect` (semantics map) + `frontend-engineer` (UI rows) |
 | `docs/index.md` | Jekyll landing page (mermaid C4, governance links, quickstart) | `solution-architect` (semantics) + `devops-engineer` (Just the Docs mechanics) |
 | `docs/_config.yml`, `docs/Gemfile`, `docs/assets/` | Jekyll site config + theme pin + static assets | `devops-engineer` |
-| `docs/cr/CR-0012-integration-test-substrate.md` | CR-0012 - integration test substrate design-of-record | `team-lead` (per D25); `solution-architect` + `qa-engineer` review |
-| `docs/cr/CR-0013-demo-mode-default-installer.md` | CR-0013 - demo-mode default in release-install entrypoint design-of-record (+ §3e demo-driver sidecar amendment per issue #46) | `team-lead` (per D25); `solution-architect` + `devops-engineer` + `qa-engineer` review |
 | `testing/integration/` | xUnit integration test project - scenarios, runners, admin-API scenario-loader, assertion oracles for FR-06 / NFR-03 / NFR-05 / ADR-0004 cursor contract | `qa-engineer` |
 | `testing/fixtures/gha/` | WireMock-native JSON mappings (per-endpoint x per-scenario) + scenario bundles + demo-mode bundle (`mappings/`, `scenarios/<state-id>/`, `scenarios/_cross-cutting/`, `demo/mappings/`, `demo/mappings/statuses/`, `demo/ticks/`) | `qa-engineer` |
 | `.github/workflows/integration.yml` | Integration-test workflow gate - triggers + path filters + compose stack lifecycle + scenario invocation | `devops-engineer` (workflow shape) + `qa-engineer` (suite content via `testing/integration/`) |
@@ -58,7 +56,7 @@
 |---|---|---|
 | Visual / interactive behaviour: architecture doc vs. mockup | mockup | flag architecture doc for update |
 | API / data / stack / infrastructure: architecture doc vs. mockup | architecture doc | flag mockup for update |
-| SAD-frozen FR/NFR text vs. a CR's "SAD-level content owned by this CR" block | CR (post-freeze) | the CR is the source of truth; SAD is the frozen baseline |
+| SAD-frozen FR/NFR text vs. a GitHub issue's accepted scope (or a CR for free-form/TODO-sourced work) | issue / CR (post-acceptance) | the issue body + PR description (or CR file, for non-issue tasks) is the source of truth post-acceptance; SAD is the frozen baseline |
 | Request / instinct / existing code vs. docs | docs | **stop, flag owning role** - doc update lands first, code follows |
 | Release `install/docker-compose.release.yml` vs `dev_env/docker-compose.local.yml` shared service | release compose | per ADR-0010, dev_env merges-over release; release is the source-of-truth |
 
@@ -92,7 +90,7 @@ deployment-dashboard/
 |   `-- demo-driver/     Dockerfile + entrypoint.py for the demo-driver sidecar (CR-0013 §3e / issue #46) - Python ticker driving demo-gha admin API
 |-- install/             docker-compose.release.yml + install.{ps1,sh} + uninstall.{ps1,sh} - release-install canonical compose; dev_env layers via `-f` merge per ADR-0010
 |-- dev_env/             docker-compose.local.yml (override on install), docker-compose.scaled.yml (standalone NFR-05), start.ps1, stop.ps1
-|-- docs/                architecture.md, WBS.md, ci-cd-integration.md, ci-cd-pipelines.md, integration-tests.md, install.md, getting-started.md, features.md, index.md, _config.yml, Gemfile, adr/, cr/, ui/ (option docs + mockups/), assets/
+|-- docs/                architecture.md, WBS.md, ci-cd-integration.md, ci-cd-pipelines.md, integration-tests.md, install.md, getting-started.md, features.md, index.md, _config.yml, Gemfile, adr/, ui/ (option docs + mockups/), assets/      # docs/cr/ retired per CLAUDE.md § CR convention (local); CRs are now authored only for free-form / TODO-sourced tasks
 |-- testing/             functional/ (xUnit), integration/ (xUnit cross-stack CR-0012), e2e/ (Playwright), mockup-visual/ (Playwright), scripts/ (Pester + bats), fixtures/ (incl. fixtures/gha/ - WireMock mappings + scenarios + demo bundle), config/
 |-- .agents/ginee/       framework install
 |-- .claude/             Claude Code adapter (skills + agents)
@@ -171,8 +169,8 @@ Violation -> **stop, propose a doc update first** (CR + ADR pair if it changes a
 
 | Role | Concerns |
 |---|---|
-| `team-lead` | Discovery / rediscovery; dispatch routing; parallel / serial decisions; TODO check-ins; lifecycle gate enforcement; post-acceptance doc-optimization trigger; GitHub issue operations (file / pick up / triage / promote / address-review); CR authoring (D25); `docs/WBS.md` operational ownership (D25); root governance files (`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE`); `CLAUDE.md` (D25); `.github/ISSUE_TEMPLATE/` + `.github/PULL_REQUEST_TEMPLATE.md`. |
-| `solution-architect` | `docs/architecture.md`; `local/requirements.md`; `local/asr-utility-tree.md`; mockup governance review (no edits); UI option docs in `docs/ui/*.md`; ADRs in `docs/adr/`; CR architectural-coherence review (D25); `docs/index.md` + `docs/features.md` semantic content; coherence audits; tie-breaker resolution. |
+| `team-lead` | Discovery / rediscovery; dispatch routing; parallel / serial decisions; TODO check-ins; lifecycle gate enforcement; post-acceptance doc-optimization trigger; GitHub issue operations (file / pick up / triage / promote / address-review); CR authoring **only for free-form / TODO-sourced tasks** (see `CLAUDE.md § CR convention (local)` — GitHub-issue-sourced work uses issue body + PR description as design-of-record); `docs/WBS.md` operational ownership (D25); root governance files (`README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE`); `CLAUDE.md` (D25); `.github/ISSUE_TEMPLATE/` + `.github/PULL_REQUEST_TEMPLATE.md`. |
+| `solution-architect` | `docs/architecture.md`; `local/requirements.md`; `local/asr-utility-tree.md`; mockup governance review (no edits); UI option docs in `docs/ui/*.md`; ADRs in `docs/adr/`; architectural-coherence review of GitHub-issue scope at Phase 7 + of free-form/TODO CRs when present; `docs/index.md` + `docs/features.md` semantic content; coherence audits; tie-breaker resolution. |
 | `frontend-engineer` (alias `client-engineer`) | `frontend/` (Angular workspace - dashboard / matrix / drawer / shared); `docs/ui/mockups/*.html` (mockup HTML/CSS/JS/SVG/fixtures + variants); Signal Store; Tailwind styling; client-side fetch / SSE; per-option mockup proposals under `docs/ui/`; per-app docs (D25 per-tier reassignment). |
 | `backend-engineer` (alias `service-engineer`) | `backend/api/` host (`Program.cs`, composition root); `backend/write-api/` + `backend/read-api/` endpoint-group libraries; `backend/shared/` (DbContext, entities, migrations, API-key middleware, NOTIFY/LISTEN, SSE writer); `backend/fetcher/` + `backend/fetcher-host/` (Fetcher pull-mode adapter + worker host); wire-format JSON contract; per-service READMEs (D25 per-tier reassignment). |
 | `devops-engineer` (alias `platform-engineer`) | `dev_env/` (compose + ps1 scripts); `gateway/` (nginx config + Dockerfile + `demo-gha/` + `demo-driver/`); per-tier Dockerfiles (`backend/api/Dockerfile`, `backend/fetcher-host/Dockerfile`, `frontend/dashboard/Dockerfile`, `gateway/Dockerfile`, `gateway/demo-gha/Dockerfile`, `gateway/demo-driver/Dockerfile`); `install/` (release-install compose + .ps1 / .sh entrypoints); `.github/actions/notify/`; `.github/workflows/` (all 11); `infrastructure/` (Terraform) once it lands; reverse-proxy config; secret provisioning; cost tracking; **`docs/ci-cd-integration.md` (D25 CI/CD guide stays with devops)**; `docs/ci-cd-pipelines.md`; `docs/install.md` + `docs/getting-started.md` + `docs/integration-tests.md` (operational shape); `docs/_config.yml` + `docs/Gemfile` + `docs/assets/`; `.config/dotnet-tools.json`; `CHANGELOG.md` (release pipeline owner). |
@@ -188,10 +186,10 @@ Task spans two roles -> dispatch in parallel per `core/process.md` § Dispatch &
 | `solution-architect` | `docs/ui/mockups/*.html`; `backend/` source; `frontend/` source; `gateway/`; `dev_env/`; `install/`; Dockerfiles; `.github/`; `infrastructure/`; `docs/ci-cd-integration.md` (D25 - reviews only); `docs/ci-cd-pipelines.md`. |
 | `frontend-engineer` | `backend/` source (incl. SQL in read-API endpoints); `gateway/`; `dev_env/`; `install/`; Dockerfiles; `.github/workflows/`; `infrastructure/`. |
 | `backend-engineer` | `frontend/` source; `docs/ui/mockups/*.html`; `gateway/`; `dev_env/`; `install/`; Dockerfiles outside `backend/`; `.github/workflows/`; `infrastructure/`. |
-| `devops-engineer` | Application-tier manifests / lockfiles (`backend/**/*.csproj`, `frontend/**/package.json`); application source under `backend/` + `frontend/`; mockup; CR/ADR semantics; `local/requirements.md`. |
+| `devops-engineer` | Application-tier manifests / lockfiles (`backend/**/*.csproj`, `frontend/**/package.json`); application source under `backend/` + `frontend/`; mockup; ADR / CR semantics; `local/requirements.md`. |
 | `qa-engineer` | `docs/ui/mockups/*.html`; production code under `backend/` + `frontend/`. Owns `testing/` directories + xUnit test projects (test code only) + fixtures + scenarios + runners + `testing/fixtures/gha/demo/{mappings/statuses,ticks}/` bundle content for the demo-driver. |
 | `ai-engineer` | Rules / invariants / routing / requirements (semantics -> `solution-architect`); production code; test code; IaC; CI workflows. |
-| `team-lead` | Production / test / IaC / workflow surfaces. Never edits production code. Edits CRs / WBS / governance / `CLAUDE.md` / `local/*` written during discovery. |
+| `team-lead` | Production / test / IaC / workflow surfaces. Never edits production code. Edits CRs (free-form / TODO only) / WBS / governance / `CLAUDE.md` / `local/*` written during discovery. |
 
 ## Project-specific index citations
 
@@ -207,6 +205,7 @@ Task spans two roles -> dispatch in parallel per `core/process.md` § Dispatch &
 | `local/index/governance-files-index.idx` | `team-lead`, `solution-architect` | Root `README.md` / `CONTRIBUTING.md` / `SECURITY.md` / `CODE_OF_CONDUCT.md` / `CHANGELOG.md` are project-instruction-class per D25 - team-lead edits; SA reviews architectural coherence. |
 | `local/index/docs-site.yaml` | `devops-engineer`, `solution-architect` | Jekyll-site config + Gemfile pin + nav-ordered landing pages - devops maintains the workflow + theme pin; SA maintains semantic content. |
 | `local/index/github-templates.yaml` | `team-lead`, `devops-engineer` | Issue + PR templates drive D14 inbound flow + `ginee:ready` labelling. |
+| `local/index/github-issues-index.idx` | `team-lead`, `solution-architect` | GitHub issues registry — since issues are the canonical design-of-record post-CR-retirement (per `CLAUDE.md § CR convention (local)`), this index lists every open + recently-closed issue with number / state / labels / scoring / title for quick triage + cross-reference without `gh issue list` round-trips. Refreshed on `ginee-reindex` or post-acceptance. |
 
 ## Per-role load-trigger overrides
 

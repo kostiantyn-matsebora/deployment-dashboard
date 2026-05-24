@@ -26,3 +26,20 @@ Project uses the [`ginee`](.agents/ginee/) framework. **Read before any work:**
 **First install.** Type `Run initial discovery` — activates the `ginee-discovery` skill.
 
 ---
+
+## CR convention (local)
+
+GitHub issues are the canonical design-of-record for any work picked up via `/ginee-pick-up #<N>` — the issue body + comment thread + linked PR description carry scope, motivation, decisions, and acceptance criteria. A separate CR markdown file is **redundant** for issue-sourced work and is no longer authored for this project.
+
+**Authoring rule.** A new Change Request (`docs/cr/CR-<N>-*.md`) is authored **only** when the task source is:
+
+- A **free-form** instruction without a GitHub issue (e.g., `pick up "refactor the X service"`), **OR**
+- A **TODO line** (e.g., `pick up TODO:42`).
+
+When a free-form task escalates and gains a GitHub issue mid-flight, the in-flight CR is closed in place and the issue body takes over as design-of-record.
+
+**Historical CRs.** `CR-0001..CR-0015` were retired in the branch that introduced this rule. Their substantive decisions live on in: `docs/architecture.md` (FRs / NFRs / invariants), `docs/adr/` (architectural decisions), and the corresponding GitHub issues where back-mappable. See git history for the original CR text.
+
+**Issue registry.** Open + recently-closed issues are summarized in `.agents/ginee/local/index/github-issues-index.idx` (refreshed by `ginee-reindex` and post-acceptance). Consume this index in place of `docs/cr/` lookups.
+
+---
