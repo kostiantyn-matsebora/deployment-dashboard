@@ -994,7 +994,7 @@ Describe 'install.ps1 -- error paths' {
 Describe 'install.ps1 -- default -InstallDir is $HOME/.dashboard-release (CWD-independent)' {
     BeforeEach {
         $script:tmp = New-TempTestDir
-        $script:userHome = [Environment]::GetFolderPath('UserProfile')
+        $script:userHome = $HOME
         $script:defaultDir = Join-Path $script:userHome '.dashboard-release'
         $script:defaultEnvFile = Join-Path $script:defaultDir 'dashboard.env'
         $script:preExistedDefaultEnv = Test-Path -LiteralPath $script:defaultEnvFile
@@ -1018,7 +1018,7 @@ Describe 'install.ps1 -- default -InstallDir is $HOME/.dashboard-release (CWD-in
         }
     }
 
-    It 'default -InstallDir is $HOME/.dashboard-release (CWD-independent)' -Skip:(-not $IsWindows) {
+    It 'default -InstallDir is $HOME/.dashboard-release (CWD-independent)' {
         $shimmed = New-ShimmedScript -TmpDir $tmp
         $log = Join-Path $tmp 'script.log'
         $stdoutPath = Join-Path $tmp 'stdout.txt'
