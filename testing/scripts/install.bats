@@ -627,6 +627,11 @@ log_not_contains() {
     [[ "$output" == *"v0.0.0-doesnotexist"* ]]
 }
 
+# TODO(devops-bug): install.sh lacks an exit-code check after `docker login ghcr.io`.
+# With set -euo pipefail the script exits 1 silently on login failure — it never emits
+# the "docker login ghcr.io failed" message this test asserts. The assertion is the
+# correct safety oracle (guard against pulling after a failed login); the production fix
+# is to add an explicit error-message branch in install.sh (see issue raised in PR #77).
 @test "error: docker login ghcr.io failure -- exits 1 and NEVER calls docker compose pull" {
     export DD_LOGIN_EXIT=1
     run_install --local-db --install-dir "$INSTALL_DIR" --version v9.9.9-test
