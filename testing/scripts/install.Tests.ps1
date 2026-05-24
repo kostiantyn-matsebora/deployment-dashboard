@@ -1018,7 +1018,7 @@ Describe 'install.ps1 -- default -InstallDir is $HOME/.dashboard-release (CWD-in
         }
     }
 
-    It 'default -InstallDir is $HOME/.dashboard-release (CWD-independent)' {
+    It 'default -InstallDir is $HOME/.dashboard-release (CWD-independent)' -Skip:(-not $IsWindows) {
         $shimmed = New-ShimmedScript -TmpDir $tmp
         $log = Join-Path $tmp 'script.log'
         $stdoutPath = Join-Path $tmp 'stdout.txt'
