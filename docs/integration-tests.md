@@ -58,7 +58,7 @@ distinct Compose profiles + two distinct services + two distinct images.
 | Profile | Service | Image | Bundle source | Mount mechanism | Audience |
 |---|---|---|---|---|---|
 | `integration` | `mock-gha` | upstream `wiremock/wiremock:3.10.0` (JVM WireMock) | `testing/fixtures/gha/mappings/` + `testing/fixtures/gha/scenarios/<state-id>/` | bind-mount (test runner activates scenarios via the admin API) | `testing/integration/` xUnit suite |
-| `demo` | `demo-gha` | first-party `ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION}` | `testing/fixtures/gha/demo/` | **baked into image at build time** (`COPY testing/fixtures/gha/demo/ /app/__admin/mappings/` in `gateway/demo-gha/Dockerfile`) | release-install no-flag default (per CR-0013) |
+| `demo` | `demo-gha` | first-party `ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION}` | `testing/fixtures/gha/demo/` | **baked into image at build time** (`COPY testing/fixtures/gha/demo/ /home/wiremock/mappings/` in `gateway/demo-gha/Dockerfile`) | release-install no-flag default (per CR-0013) |
 
 **The two profiles coexist on the same compose project.** They do not
 compete because:
