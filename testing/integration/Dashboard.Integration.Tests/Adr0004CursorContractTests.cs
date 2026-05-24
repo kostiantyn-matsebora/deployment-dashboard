@@ -104,7 +104,7 @@ public sealed class Adr0004CursorContractTests : IClassFixture<ScenarioFixture>
     private static bool TryGetUrl(JsonElement request, out string url)
     {
         url = string.Empty;
-        // WireMock.Net request envelope: { "Request": { "AbsoluteUrl": "...", "Url": "...", ... }, ... }
+        // JVM WireMock request envelope: { "Request": { "AbsoluteUrl": "...", "Url": "...", ... }, ... }
         if (request.TryGetProperty("Request", out var inner))
         {
             if (inner.TryGetProperty("AbsoluteUrl", out var abs) && abs.ValueKind == JsonValueKind.String)
@@ -123,7 +123,7 @@ public sealed class Adr0004CursorContractTests : IClassFixture<ScenarioFixture>
                 return true;
             }
         }
-        // Fallback if WireMock.Net flattens the envelope.
+        // Fallback if JVM WireMock flattens the envelope.
         if (request.TryGetProperty("AbsoluteUrl", out var absFlat) && absFlat.ValueKind == JsonValueKind.String)
         {
             url = absFlat.GetString() ?? string.Empty;

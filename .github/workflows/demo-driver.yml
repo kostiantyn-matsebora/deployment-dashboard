@@ -1,5 +1,5 @@
 # Demo-driver component CI -- builds the periodic-ticker sidecar image
-# (issue #46) that drives the demo-gha WireMock.Net admin API.
+# (issue #46) that drives the demo-gha JVM WireMock admin API via PUT-by-file-id.
 #
 # Owner: devops-engineer.
 # Contract: Phase 3 design lock on #46 (extension to CR-0013). 6th component

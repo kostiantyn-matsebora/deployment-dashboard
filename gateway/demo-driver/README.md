@@ -1,6 +1,6 @@
 # `gateway/demo-driver/` — demo-driver sidecar image
 
-Source for the **6th first-party component image** introduced by [#46](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/46): a periodic ticker that drives the `demo-gha` WireMock.Net admin API so the demo-mode dashboard surfaces ongoing deployment activity instead of a single frozen baseline.
+Source for the **6th first-party component image** introduced by [#46](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/46): a periodic ticker that drives the `demo-gha` JVM WireMock admin API (`/__admin/mappings`) via PUT-by-file-id so the demo-mode dashboard surfaces ongoing deployment activity instead of a single frozen baseline.
 
 ## Purpose
 

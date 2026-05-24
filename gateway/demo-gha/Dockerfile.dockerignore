@@ -4,7 +4,7 @@
 # .NET / SPA component builds that don't need the test corpus).
 #
 # This image's whole purpose is to bake the demo bundle under
-# testing/fixtures/gha/demo/ into /app/__admin/mappings/, so we explicitly
+# testing/fixtures/gha/demo/ into /home/wiremock/mappings/, so we explicitly
 # include that path. Everything else stays excluded so the build context
 # remains tiny (a few hundred KB).
 

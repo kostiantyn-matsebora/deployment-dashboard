@@ -3,6 +3,7 @@
 # source: docs/ci-cd-pipelines.md
 # recipe: novel
 # reindexed: 2026-05-23 (§2 updated: 5 callers not 4; §5 integration.yml + demo-gha rows; §7 completely rewritten for ADR-0009 startup-applied migrations; §10 assets: migration.sql removed; §10 migration-actuation: no install-time step)
+# sha-drift: 2026-05-24 (WireMock JVM consolidation cycle 2): source SHA updated in manifest; index content has no stale WireMock.Net prose; no row edits needed
 
 intro | CI/CD Pipelines - outbound view for this repo | rationale | MVP-CI = build+test+package only; no deploy (CR-0010 §3k); CD deferred until Terraform §4 | @docs/ci-cd-pipelines.md#cicd-pipelines--deployment-dashboard
 two-docs | Two CI/CD docs - different concerns | rationale | ci-cd-integration.md = inbound; ci-cd-pipelines.md = outbound (this repo's 5 components -> GHCR) | @docs/ci-cd-pipelines.md#1-two-cicd-docs--different-concerns

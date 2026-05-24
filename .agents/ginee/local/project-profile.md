@@ -69,7 +69,7 @@ Source-doc summaries land in `local/index/` (one file per detected doc class - `
 | Release-install orchestration | `install/docker-compose.release.yml` (canonical service inventory), `install/install.ps1`, `install/install.sh`, `install/uninstall.ps1`, `install/uninstall.sh` |
 | .NET tool manifest | `.config/dotnet-tools.json` (pinned `dotnet-ef` 10.0.0 for CI EF migration script generation) |
 | Test directories | `testing/functional/Dashboard.Functional.Tests/` (xUnit), `testing/integration/Dashboard.Integration.Tests/` (xUnit + CR-0012 cross-stack), `testing/e2e/` (Playwright), `testing/mockup-visual/` (Playwright), `testing/scripts/` (Pester + bats), `backend/**/Dashboard.*.Tests/` (xUnit unit + per-tier integration including new `Dashboard.Api.Tests/` host tests + `Dashboard.Fetcher.Tests/`) |
-| Fixtures directory | `testing/fixtures/` (`seed-data.json`) + `testing/fixtures/gha/` (WireMock.Net mappings + scenarios + demo bundle per CR-0012 / CR-0013 - `mappings/`, `scenarios/<state-id>/`, `scenarios/_cross-cutting/`, `demo/mappings/`, `demo/mappings/statuses/`, `demo/ticks/`) |
+| Fixtures directory | `testing/fixtures/` (`seed-data.json`) + `testing/fixtures/gha/` (JVM WireMock mappings + scenarios + demo bundle per CR-0012 / CR-0013 - `mappings/`, `scenarios/<state-id>/`, `scenarios/_cross-cutting/`, `demo/mappings/`, `demo/mappings/statuses/`, `demo/ticks/`) |
 | Config directory | `testing/config/` (`local.json` - declarative seed config consumed by `testing/scripts/seed.ps1`) |
 | Seed / cleanup scripts | `testing/scripts/seed.ps1`, `dev_env/stop.ps1` |
 | Docs site config | `docs/_config.yml`, `docs/Gemfile` |
@@ -87,7 +87,7 @@ deployment-dashboard/
 |   `-- fetcher-host/    Fetcher worker host (Dashboard.Fetcher.Host) + Dockerfile - separate ACA container target
 |-- frontend/            Angular 20 workspace - dashboard/ (shell), matrix/, drawer/, shared/
 |-- gateway/             nginx reverse proxy - single public ingress (port 8080)
-|   |-- demo-gha/        Demo-gha image source (Dockerfile + bakes testing/fixtures/gha/demo/ as WireMock.Net mappings per CR-0013)
+|   |-- demo-gha/        Demo-gha image source (Dockerfile + bakes testing/fixtures/gha/demo/ as JVM WireMock mappings per CR-0013)
 |   `-- demo-driver/     Demo-driver sidecar source (Dockerfile + entrypoint.py - Python ticker driving demo-gha admin API per CR-0013 §3e amendment / issue #46)
 |-- install/             Release-install stack - docker-compose.release.yml (canonical) + install.ps1/.sh + uninstall.ps1/.sh; dev_env layers via `-f` merge per ADR-0010
 |-- dev_env/             Contributor stacks (docker-compose.local.yml = override; docker-compose.scaled.yml = standalone NFR-05) + PowerShell start/stop scripts
@@ -124,7 +124,7 @@ deployment-dashboard/
 | Composite actions | `.github/actions/` | `devops-engineer` |
 | Issue + PR templates | `.github/ISSUE_TEMPLATE/`, `.github/PULL_REQUEST_TEMPLATE.md` | `team-lead` (D14 governance) + `devops-engineer` (form mechanics) |
 | Tests | `testing/` + `backend/**/Dashboard.*.Tests/` | `qa-engineer` |
-| WireMock.Net fixtures + scenarios | `testing/fixtures/gha/` | `qa-engineer` |
+| WireMock fixtures + scenarios | `testing/fixtures/gha/` | `qa-engineer` |
 | Architecture docs | `docs/architecture.md`, `docs/adr/`, `docs/WBS.md` | `solution-architect` |
 | Change records | `docs/cr/` | `team-lead` (per D25 - coordination decisions) with `solution-architect` review |
 | UI option design records | `docs/ui/*.md` (option docs) | `solution-architect` (semantics) + `frontend-engineer` (proposes option mockups) |

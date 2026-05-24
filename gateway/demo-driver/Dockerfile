@@ -1,4 +1,4 @@
-# Demo-driver sidecar -- periodic WireMock.Net admin-API ticker (issue #46).
+# Demo-driver sidecar -- periodic JVM WireMock admin-API ticker (issue #46).
 #
 # Owner: devops-engineer.
 # Contract: Phase 3 design lock on #46 (extension to CR-0013).
@@ -6,7 +6,7 @@
 # This image is the 6th first-party component image alongside
 # api / fetcher / frontend / gateway / demo-gha. It runs as a sidecar to
 # `demo-gha` and periodically PUTs/POSTs updated mapping bodies to the
-# WireMock.Net admin API so the demo-mode dashboard surfaces ongoing
+# JVM WireMock admin API so the demo-mode dashboard surfaces ongoing
 # deployment activity rather than a single frozen baseline snapshot.
 #
 # Why a separate image (not a script baked into demo-gha):

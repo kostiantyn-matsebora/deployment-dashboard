@@ -1,12 +1,25 @@
-# Demo-mode WireMock.Net bundle
+> **Superseded — see CR-0013**
+>
+> As of CR-0013 (accepted 2026-05-22, amended by issue #57), the `demo-gha` service runs
+> [JVM WireMock 3.10.0](https://wiremock.org/) (`wiremock/wiremock:3.10.0`), not WireMock.Net.
+> The demo-driver sidecar advances the bundle via PUT-by-file-id (`PUT /__admin/mappings/{guid}`)
+> — not by walking Scenario state. The admin path is `/__admin/mappings` (no `/app` prefix).
+> The bundle is baked into `/home/wiremock/mappings/` inside the image (JVM WireMock's default
+> mappings directory), not `/app/__admin/mappings/`.
+> The historical Scenario-walk description below explains why the `scenarios/walk/` layout
+> exists; it is no longer the active mechanism.
+> See [CR-0013](../../../docs/cr/CR-0013-demo-mode-default-installer.md) for the current
+> design-of-record.
+
+# Demo-mode fixture bundle
 
 This directory carries the demo-mode mapping corpus loaded by the
 `demo-gha` service under the `demo` Compose profile (`install.ps1` /
 `install.sh` no-flag default). The corpus is **baked into the
 `deployment-dashboard-demo-gha` image** at build time — see
 [CR-0013 § 3c](../../../docs/cr/CR-0013-demo-mode-default-installer.md#3c--baked-demo-gha-docker-image-ship-mechanism)
-for the ship mechanism — and dropped under `/app/__admin/mappings/`
-inside the image so WireMock.Net loads everything recursively at
+for the ship mechanism — and baked into `/home/wiremock/mappings/`
+inside the image so JVM WireMock loads everything recursively at
 startup.
 
 ## What this bundle does
@@ -145,8 +158,9 @@ make priority intent visible in `ls` output.
 
 ## Templating
 
-Three of the four base-mapping bands use Handlebars templating
-(`"UseTransformer": true`) to compute job ids dynamically:
+Three of the four base-mapping bands embed Handlebars helper
+expressions in their `"jsonBody"` fields to compute job ids
+dynamically:
 
 ```handlebars
 {{Math.Multiply (Regex.Match request.path "runs/(\\d+)/jobs") 10}}
@@ -158,9 +172,14 @@ so the response's deploy-job id matches the status URL's
 prefix. Without templating we'd need one jobs mapping per
 deployment; with it we author exactly one per service.
 
-WireMock.Net's transformer auto-converts numeric strings back to
-JSON numbers (`StringUtils.TryConvertToKnownType`), so the
-`GitHubRunJobDto.Id long` field deserializes correctly.
+JVM WireMock 3.10.0 (`wiremock/wiremock:3.10.0`) evaluates the
+Handlebars helper expressions embedded as string values in each
+mapping's `"jsonBody"` when the response-template transformer is
+active (either per-mapping via `"transformers": ["response-template"]`
+or server-wide via `--global-response-templating`). The interpolated
+result is emitted as a JSON string into the response body; the
+`GitHubRunJobDto.Id long` field deserializes correctly via
+System.Text.Json's numeric-string handling.
 
 ## Authoring new ticks
 
@@ -179,7 +198,7 @@ The fastest loop is via `devops-engineer`'s `gateway/demo-gha/`
 build path — see
 [CR-0013 § 3c](../../../docs/cr/CR-0013-demo-mode-default-installer.md#3c--baked-demo-gha-docker-image-ship-mechanism).
 The build COPYs this directory's contents to
-`/app/__admin/mappings/` inside the image so any change to a JSON
+`/home/wiremock/mappings/` inside the image so any change to a JSON
 file is picked up on the next image rebuild.
 
 ## Cross-references
@@ -187,7 +206,7 @@ file is picked up on the next image rebuild.
 - [CR-0013 § 3d + § 3e](../../../docs/cr/CR-0013-demo-mode-default-installer.md#3d--demo-bundle-content-shape)
   — bundle content shape + scenario walk design-of-record.
 - [CR-0012 § 3d](../../../docs/cr/CR-0012-integration-test-substrate.md#3d-demo-bundle-co-location)
-  — co-location rationale (single WireMock.Net image across both
+  — co-location rationale (single JVM WireMock image across both
   profiles, one mapping format).
 - [`docs/integration-tests.md § 3.1`](../../../docs/integration-tests.md#31-two-profiles-two-bundles)
   — two profiles, two bundles.
@@ -196,5 +215,3 @@ file is picked up on the next image rebuild.
   headers, filename prefix mapping).
 - [ADR-0004](../../../docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md)
   — opaque cursor contract (monotonically increasing deployment ids).
-- [WireMock.Net Stateful Behaviour wiki](https://github.com/WireMock-Net/WireMock.Net/wiki/Stateful-Behaviour)
-  — `Scenario` / `WhenStateIs` / `SetStateTo` field reference.

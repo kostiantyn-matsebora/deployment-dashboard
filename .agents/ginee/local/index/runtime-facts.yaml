@@ -2,6 +2,7 @@
 # source-glob: install/docker-compose.release.yml (env: blocks) + dev_env/docker-compose.local.yml (env: blocks) + backend/README.md (env-var table) + gateway/demo-driver/entrypoint.py (DEMO_DRIVER_* env-vars)
 # recipe: builtin:runtime-facts
 # reindexed: 2026-05-23 (added install/docker-compose.release.yml env blocks; added DEMO_DRIVER_* env-vars from gateway/demo-driver/entrypoint.py; updated migration-actuation notes for ADR-0009; added DASHBOARD_PORT + DASHBOARD_VERSION release-compose vars)
+# reindexed: 2026-05-24 (WireMock JVM consolidation: DEMO_DRIVER_GHA_URL notes WireMock.Net -> JVM WireMock; Dockerfile comments updated to JVM WireMock admin API)
 
 env-vars:
   - name: ConnectionStrings__DefaultConnection
@@ -194,7 +195,7 @@ env-vars:
     required: false
     default: 'http://demo-gha:80'
     secret: false
-    notes: 'WireMock.Net admin API base URL for the demo-driver sidecar. Must resolve to demo-gha container admin port.'
+    notes: 'JVM WireMock admin API base URL for the demo-driver sidecar. Must resolve to demo-gha container admin port.'
     source-anchor: '@gateway/demo-driver/entrypoint.py:39'
   - name: DEMO_DRIVER_PERIOD_SECONDS
     consumed-by: [demo-driver]

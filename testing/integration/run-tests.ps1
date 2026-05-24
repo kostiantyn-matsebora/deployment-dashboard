@@ -108,10 +108,10 @@ if (-not $stackReachable) {
 }
 
 # Preflight #2 — mock-gha admin API.
+# JVM WireMock 3.x returns 200 on GET /__admin/ — treat any 2xx as a pass.
 try {
     $adminResp = Invoke-WebRequest -Uri "$adminUrl/__admin/" -Method GET -TimeoutSec 5 -UseBasicParsing -SkipHttpErrorCheck -ErrorAction Stop
-    # Both 200 and 404 are acceptable - some WireMock.Net builds return 404 on the bare /__admin/ root.
-    $mockReachable = ([int]$adminResp.StatusCode -ge 200 -and [int]$adminResp.StatusCode -lt 500)
+    $mockReachable = ([int]$adminResp.StatusCode -ge 200 -and [int]$adminResp.StatusCode -lt 300)
 } catch { $mockReachable = $false }
 if (-not $mockReachable) {
     Write-Host "mock-gha admin API not reachable at $adminUrl/__admin/ - integration compose profile not up. Run dev_env/start.ps1 -Integration first." -ForegroundColor Yellow
