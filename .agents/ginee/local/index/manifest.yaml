@@ -271,12 +271,12 @@ indexed:
       Admin-API subsections (POST /__admin/mappings/import, /reset, GET /__admin/requests)
       + scenario-bundle co-location story are first-class rows. Bodies NOT copied.
     source: docs/integration-tests.md
-    sha256: 35b5b6b197de8f74552011d03b1b7f050e3edaed16c7691fdfb19b1a17dad528
-    indexed-on: 2026-05-23
+    sha256: 4c2dacf02da89554d0f42326337c7cc3cb1d5dfa913fa2a1164990d7e323d8e8
+    indexed-on: 2026-05-24
     index-files: [integration-tests-index.idx]
     index-file-sha256:
-      integration-tests-index.idx: 9a5084693201f059090f485e0f99c6f7ff3aa5efe6127f87c180b5af5702e132
-    source-bytes: 32893
+      integration-tests-index.idx: cd7477ebbbf87a08b4bd59881d7c9b27ce1cf349c64ba9eac57772d25405056d
+    source-bytes: 32238
     status: sha-stable
     drift-note: |
       Novel recipe authored + index extracted 2026-05-23. Covers 20 rows:
@@ -285,6 +285,7 @@ indexed:
       fixture-corpus-mappings, fixture-corpus-scenarios, fixture-corpus-cross-cutting,
       fixture-corpus-demo, six-box-states, wiremock-admin-api-pattern, local-run,
       integration-ci, severity-posture, adding-scenarios, troubleshooting, future-work.
+      SHA-refreshed 2026-05-24 (WireMock JVM consolidation): updated image tags, wording, stale anchors; source-bytes 32893 -> 32238.
     consumed-by: [qa-engineer, devops-engineer]
 
   - class: install-guide
@@ -443,12 +444,12 @@ indexed:
       testing/mockup-visual/package.json: 3ff6ba73152ef9c02aea69d5dac7f73639e2f80e244d4b53df6849550f182c4c
       gateway/Dockerfile: e8f6de9108a3591c46a23e197001fe1124bc31cd9340cfdea734b34fc63c5321
       gateway/demo-gha/Dockerfile: ce1a96c34b210553a2af571f517462c545bb79124e0f863c66a01ec4e73d54d5
-      gateway/demo-driver/Dockerfile: 70bdb0f8f45f12648af625e7e289fc71919c9c85dd9dc6a9f232a3ca085de062
+      gateway/demo-driver/Dockerfile: a3ac5e11e282c8fc588acb75bbe5574f67efc9705b89d7f31103bab0b7267454
     indexed-on: 2026-05-23
-    sha-refreshed: 2026-05-23
+    sha-refreshed: 2026-05-24
     index-files: [stack.yaml]
     index-file-sha256:
-      stack.yaml: 2b408881f78c12fcb62183b911fe21c555471caa8f3e7c5bec1b88178d4e4b89
+      stack.yaml: f4362a168e9fd2346ec765541bf2b1a76813b5ce969c16f68000f35004379d3d
     status: sha-stable
     drift-note: |
       Reindexed 2026-05-23: added fetcher tier (fetcher, fetcher-host, fetcher-tests);
@@ -456,6 +457,7 @@ indexed:
       section (demo-gha + demo-driver with DEMO_DRIVER_* env-vars); added integration
       xUnit project under testing tier; updated port-contract; added wiremock-net
       version floor; updated rate-limit-governance note. Index now covers 163 lines (+31).
+      SHA-refreshed 2026-05-24 (WireMock JVM consolidation): demo-gha image wiremock.net:2.4.0 -> wiremock/wiremock:3.10.0; WireMock.Net -> JVM WireMock wording; demo-driver Dockerfile SHA updated.
     consumed-by: [solution-architect, backend-engineer, frontend-engineer, devops-engineer]
 
   - class: topology
@@ -470,10 +472,10 @@ indexed:
       dev_env/docker-compose.scaled.yml: 6ec8da2b45d21cad1346ae9507b8a3ea9130a9ae78b254f934fce85cc5646744
       gateway/nginx.conf: afc32a95843e376b2a9e421e8c2cb0dec146e3745f9bdb839b02dc393cacacc4
     indexed-on: 2026-05-23
-    sha-refreshed: 2026-05-23
+    sha-refreshed: 2026-05-24
     index-files: [topology.yaml]
     index-file-sha256:
-      topology.yaml: f36043c561b3e348673ed3e4f1bbe35c342b5b0d49a6191db8d483ee2c405631
+      topology.yaml: 426ed1e2c764fcdf1b3b265b62feed276eeb0ac3783d5715d9709460ec186470
     status: sha-stable
     drift-note: |
       Reindexed 2026-05-23: updated source-glob to include install/docker-compose.release.yml;
@@ -481,6 +483,7 @@ indexed:
       inventory (8 services with profile assignments); added services-local-override-deltas
       section; added migration-actuation section (ADR-0009 2-step sequence);
       updated volumes count. Index now covers 153 lines (+55 vs prior).
+      SHA-refreshed 2026-05-24 (WireMock JVM consolidation): mock-gha image wiremock.net:2.4.0 -> wiremock/wiremock:3.10.0; WireMock.Net -> JVM WireMock in mock-gha + demo-gha roles.
     consumed-by: [solution-architect, devops-engineer]
 
   - class: commands
@@ -562,13 +565,14 @@ indexed:
       gateway/demo-driver/entrypoint.py: 018fd3144c301b076b3c1414bee345ae09813404844b1e2e09f0b1f5b4958fed
       backend/README.md: '(SHA tracked via per-file walk; backend/README.md hashing deferred)'
     indexed-on: 2026-05-23
-    sha-refreshed: 2026-05-23
+    sha-refreshed: 2026-05-24
     index-files: [runtime-facts.yaml]
     index-file-sha256:
-      runtime-facts.yaml: c9f8cb7fe4215cef22a61de2d436eea5f39455f0ed51dc026552ba11f607c265
+      runtime-facts.yaml: 4ad118d8db6dbf6e879cc9df2770029d093c571502163272661cae91dee456cc
     status: sha-stable
     drift-note: |
       Reindexed 2026-05-23: updated ConnectionStrings__DefaultConnection notes for
+      SHA-refreshed 2026-05-24 (WireMock JVM consolidation): DEMO_DRIVER_GHA_URL notes WireMock.Net -> JVM WireMock admin API.
       ADR-0009 Database.Migrate() usage; updated POSTGRES_PASSWORD for release-install
       random hex; added DASHBOARD_VERSION + DASHBOARD_PORT env-vars; updated GHA_TOKEN
       and GHA_REPOSITORIES for demo profile; updated GHA_API_BASE_URL (3 values);
@@ -584,10 +588,10 @@ indexed:
     source-glob: 'repo walk (top-level + significant nested) + per-dir READMEs'
     file-count: 'N/A - derived from filesystem walk'
     indexed-on: 2026-05-23
-    sha-refreshed: 2026-05-23
+    sha-refreshed: 2026-05-24
     index-files: [repo-map.idx]
     index-file-sha256:
-      repo-map.idx: 0501a52105028e5ce2261a15d9988c8b3589b8cf041af0c9af4b26d7c2d9d6cf
+      repo-map.idx: 8406243b4c03a1a165feb6e83f7bf5e479904f0f965a187c1d6198e5ba65dfd9
     status: sha-stable
     drift-note: |
       Reindexed 2026-05-23: full repo-walk refresh; added backend/fetcher/ and
@@ -597,6 +601,7 @@ indexed:
       testing/fixtures/gha/; added .github/ISSUE_TEMPLATE/ and PULL_REQUEST_TEMPLATE.md;
       added all root governance files; updated docs/cr/ owner to team-lead (D25).
       Index now covers 54 lines (+18 vs prior).
+      SHA-refreshed 2026-05-24 (WireMock JVM consolidation): gateway/demo-gha/ WireMock.Net -> JVM WireMock; gateway/demo-driver/ WireMock.Net -> JVM WireMock; testing/fixtures/gha/ WireMock.Net -> JVM WireMock.
     consumed-by: [solution-architect, devops-engineer, team-lead]
 
   # ============================================================
@@ -624,7 +629,7 @@ indexed:
       .github/workflows/demo-gha.yml: 9ea6d8b92010da8bc7c49e48ebbb5be12f93a18e3ed390c3ae443cb98b6ce180
       .github/workflows/demo-driver.yml: 5b8c6625407c47d723238d2c5a00d548cb31c659572edf4475f5c5194f56970f
       .github/workflows/_build-and-push-image.yml: 6e3be3e66a3ab1881effd59219cf9d0df2f2badc29e44f96e1593f2f42283401
-      .github/workflows/integration.yml: 455e8342f608359de20622748dc9661241aa5ced2e90f66d34f93e59cf277a45
+      .github/workflows/integration.yml: dba986babbaf65289fc5e324476c22910abfb7ecc06de3eb781b98fde12807ee
       .github/workflows/release.yml: 00095c7c6af6ee9fcd8ee10672ef061ff48ff2d6f3754accdf76450d7dff939d
       .github/workflows/scripts.yml: 74e21efd17413f1d07aed875559aab4a29ec70ac2b2093de9d901ebb59b0489b
       .github/workflows/pages.yml: 95aa66c03d23ccc084fe851fc8902ad476183ab2d3c37fe1de13359b8f049e95

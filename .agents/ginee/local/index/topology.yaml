@@ -2,6 +2,7 @@
 # source-glob: install/docker-compose.release.yml + dev_env/docker-compose.local.yml + dev_env/docker-compose.scaled.yml + gateway/nginx.conf
 # recipe: builtin:container-orchestration
 # reindexed: 2026-05-23 (added install/docker-compose.release.yml as canonical inventory; updated local override per ADR-0010; added demo/integration profile services; updated migration actuation per ADR-0009)
+# reindexed: 2026-05-24 (WireMock JVM consolidation: mock-gha image sheyenrath/wiremock.net:2.4.0 -> wiremock/wiremock:3.10.0; WireMock.Net wording -> JVM WireMock)
 
 orchestrators:
   - tool: docker-compose
@@ -55,16 +56,16 @@ services-release-canonical:
     role: 'Optional pull-mode adapter (CR-0009); outbound-only; no inbound port; no healthcheck per NFR-04; POSTs to gateway; GHA_TOKEN required under fetcher profile'
     source-anchor: '@install/docker-compose.release.yml:fetcher service'
   - name: mock-gha
-    image: 'sheyenrath/wiremock.net:2.4.0'
+    image: 'wiremock/wiremock:3.10.0'
     tier: test-substrate
     profile: 'integration (activated by dev_env/start.ps1 -Integration or .github/workflows/integration.yml)'
-    role: 'WireMock.Net mock of api.github.com; admin API on port 80 (same port); host-mapped 18080->80 under integration profile only per NFR-04; fetcher retargeted via GHA_API_BASE_URL=http://mock-gha:80; FETCHER_POLL_INTERVAL_SECONDS=1'
+    role: 'JVM WireMock mock of api.github.com; admin API on port 80 (same port); host-mapped 18080->80 under integration profile only per NFR-04; fetcher retargeted via GHA_API_BASE_URL=http://mock-gha:80; FETCHER_POLL_INTERVAL_SECONDS=1'
     source-anchor: '@install/docker-compose.release.yml:mock-gha service'
   - name: demo-gha
     image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION:-latest}'
     tier: demo-substrate
     profile: 'demo (activated by default installer path or --profile demo)'
-    role: 'First-party baked WireMock.Net image with demo bundle (6 services × 5+ envs / 80-150 deployments); no admin port published (NFR-04 strictly); fetcher retargeted via GHA_API_BASE_URL=http://demo-gha:80; FETCHER_POLL_INTERVAL_SECONDS=5-10'
+    role: 'First-party baked JVM WireMock image (base: wiremock/wiremock:3.10.0) with demo bundle (6 services × 5+ envs / 80-150 deployments); no admin port published (NFR-04 strictly); fetcher retargeted via GHA_API_BASE_URL=http://demo-gha:80; FETCHER_POLL_INTERVAL_SECONDS=5-10'
     source-anchor: '@install/docker-compose.release.yml:demo-gha service'
   - name: demo-driver
     image: 'ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:${DASHBOARD_VERSION:-latest}'
