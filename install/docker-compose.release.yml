@@ -145,7 +145,7 @@ services:
         condition: service_healthy
         required: false
 
-  # Mock GitHub API (WireMock.Net) -- deterministic upstream for the
+  # Mock GitHub API (JVM WireMock) -- deterministic upstream for the
   # `testing/integration/` cross-stack suite (CR-0012). Profile-gated by
   # `integration`: defined in this canonical inventory so the `dev_env/`
   # override + `.github/workflows/integration.yml` can layer on top per
@@ -160,15 +160,14 @@ services:
   #     port `18080` is added by `dev_env/docker-compose.local.yml` ONLY,
   #     and consumed by `dotnet test` running on the host. CI runners use
   #     the same override.
-  #   - WireMock listens on port `80` inside the container by default
-  #     (sheyenrath/wiremock.net:2.4.0 image convention); the fetcher
-  #     reaches it via internal Docker DNS at `http://mock-gha:80` when
-  #     `GHA_API_BASE_URL` is re-pointed there under the integration
-  #     profile.
-  #   - Image pin `sheyenrath/wiremock.net:2.4.0` per CR-0012 -- community
+  #   - WireMock listens on port `80` inside the container (`--port 80`
+  #     CLI flag); the fetcher reaches it via internal Docker DNS at
+  #     `http://mock-gha:80` when `GHA_API_BASE_URL` is re-pointed there
+  #     under the integration profile.
+  #   - Image pin `wiremock/wiremock:3.10.0` per CR-0013 -- community
   #     image, same posture as `postgres:16-alpine` already in this stack.
-  #   - Mappings mount path `/app/__admin/mappings` (NOT `/home/wiremock/...`)
-  #     -- the .NET image lays out admin files under `/app`.
+  #   - Mappings admin path `/__admin/mappings` (JVM WireMock convention;
+  #     NOT the former `/app/__admin/mappings` of the WireMock.Net image).
   #
   # Fixture mount + env tuning live in `dev_env/docker-compose.local.yml`
   # (integration profile overrides) so the release-install asset stays
@@ -260,7 +259,7 @@ services:
       retries: 10
       start_period: 10s
 
-  # Demo-driver sidecar (issue #46) -- periodic WireMock.Net admin-API
+  # Demo-driver sidecar (issue #46) -- periodic JVM WireMock admin-API
   # ticker that loops a qa-authored sequence of tick directories so the
   # demo-mode dashboard surfaces ongoing deployment activity instead of a
   # single frozen baseline. Same `demo` Compose profile as `demo-gha`.

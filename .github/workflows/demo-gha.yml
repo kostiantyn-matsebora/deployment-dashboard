@@ -10,7 +10,7 @@
 #
 # Why no tests / no format gate:
 #   - Image content is one `COPY testing/fixtures/gha/demo/` over a
-#     WireMock.Net 2.4.0 base layer. No .NET source, no Angular source,
+#     JVM WireMock 3.10.0 base layer. No .NET source, no Angular source,
 #     no shell logic. Format gate + unit tests have nothing to gate.
 #   - Bundle content correctness is verified at runtime by the qa-owned
 #     scenarios (CR-0013 S 3e dynamic-mock scenario walk) and by Phase 5
