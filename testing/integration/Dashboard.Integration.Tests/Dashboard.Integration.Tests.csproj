@@ -4,7 +4,7 @@
     Integration test suite for the Deployment Dashboard cross-stack write
     path. Verifies the inbound ingest pipeline end-to-end:
 
-        Dashboard.Fetcher  →  mock-gha (WireMock.Net)  →  fetcher poll  →
+        Dashboard.Fetcher  →  mock-gha (JVM WireMock)  →  fetcher poll  →
         POST /api/deployments (via gateway)  →  Postgres NOTIFY/LISTEN  →
         SSE fan-out  →  Read-API echo (matrix + history).
 
