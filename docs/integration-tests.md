@@ -5,7 +5,7 @@ nav_order: 12
 
 # Integration Tests — Deployment Dashboard
 
-Operational guide for the cross-stack runtime-verification surface introduced by [CR-0012](./cr/CR-0012-integration-test-substrate.md). Substrate: a `mock-gha` WireMock.Net service emulating `api.github.com`, an `integration` compose profile, the `testing/integration/` xUnit suite, and `.github/workflows/integration.yml`. The same fixture root co-locates the demo-mode mapping bundle for follow-up demo-mode wire-up.
+Operational guide for the cross-stack runtime-verification surface introduced by [CR-0012](./cr/CR-0012-integration-test-substrate.md). Substrate: a `mock-gha` JVM WireMock service emulating `api.github.com`, an `integration` compose profile, the `testing/integration/` xUnit suite, and `.github/workflows/integration.yml`. The same fixture root co-locates the demo-mode mapping bundle for follow-up demo-mode wire-up.
 
 ## 1. Purpose + audience
 
@@ -33,7 +33,7 @@ When the `integration` compose profile is active, the stack adds one container (
 
 | Service | DNS name | Container port | Host-mapped port (integration profile only) | Owner |
 |---|---|---|---|---|
-| `mock-gha` | `mock-gha` | `80` (mock surface + admin API on same port, distinct paths — WireMock.Net default for the `sheyenrath/wiremock.net:2.4.0` image) | `18080` (host) → `80` (container); admin-API access for the runner | `devops-engineer` (service defn) + `qa-engineer` (mappings) |
+| `mock-gha` | `mock-gha` | `80` (mock surface + admin API on same port, distinct paths — JVM WireMock `wiremock/wiremock:3.10.0`) | `18080` (host) → `80` (container); admin-API access for the runner | `devops-engineer` (service defn) + `qa-engineer` (mappings) |
 | `fetcher` | `fetcher` | n/a (worker) | n/a | existing — `GHA_API_BASE_URL` re-pointed to `http://mock-gha:80` |
 | `api`, `gateway`, `db`, `pgadmin` | unchanged | unchanged | unchanged | existing |
 
@@ -57,7 +57,7 @@ distinct Compose profiles + two distinct services + two distinct images.
 
 | Profile | Service | Image | Bundle source | Mount mechanism | Audience |
 |---|---|---|---|---|---|
-| `integration` | `mock-gha` | upstream `sheyenrath/wiremock.net:2.4.0` | `testing/fixtures/gha/mappings/` + `testing/fixtures/gha/scenarios/<state-id>/` | bind-mount (test runner activates scenarios via the admin API) | `testing/integration/` xUnit suite |
+| `integration` | `mock-gha` | upstream `wiremock/wiremock:3.10.0` (JVM WireMock) | `testing/fixtures/gha/mappings/` + `testing/fixtures/gha/scenarios/<state-id>/` | bind-mount (test runner activates scenarios via the admin API) | `testing/integration/` xUnit suite |
 | `demo` | `demo-gha` | first-party `ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-gha:${DASHBOARD_VERSION}` | `testing/fixtures/gha/demo/` | **baked into image at build time** (`COPY testing/fixtures/gha/demo/ /app/__admin/mappings/` in `gateway/demo-gha/Dockerfile`) | release-install no-flag default (per CR-0013) |
 
 **The two profiles coexist on the same compose project.** They do not
@@ -337,7 +337,7 @@ Dashboard / Gateway: http://localhost:8080/
 Postgres (dev):      localhost:5432 (user: dashboard / password: local-dev-password)
 pgAdmin:             http://localhost:5050/  (admin@example.com / admin)
 Fetcher:             profile 'fetcher' active in INTEGRATION mode - polling mock-gha every 1 s
-mock-gha admin API:  http://localhost:18080/__admin/  (WireMock.Net admin -- integration profile only)
+mock-gha admin API:  http://localhost:18080/__admin/  (JVM WireMock admin -- integration profile only)
 ```
 
 The mock-gha admin URL is the contract surface for `dotnet test` running on the host — runners read `mockGhaAdminBaseUrl=http://localhost:18080` from `testing/config/integration.json` and POST scenario bundles there.

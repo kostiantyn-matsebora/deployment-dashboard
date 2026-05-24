@@ -1,7 +1,7 @@
 # Integration tests -- cross-stack runtime verification (CR-0012).
 #
 # Brings up the local docker-compose stack with the `integration` profile
-# active (mock-gha WireMock.Net + fetcher repointed to http://mock-gha:80
+# active (mock-gha JVM WireMock + fetcher repointed to http://mock-gha:80
 # at a 1 s poll cadence) and runs the testing/integration/ xUnit suite
 # against it. Asserts FR-06 wire shape, NFR-03 5 s latency envelope,
 # NFR-05 stateless-replica behaviour, and the ADR-0004 cursor contract.
