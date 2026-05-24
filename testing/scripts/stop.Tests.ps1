@@ -4,6 +4,16 @@
 # of stop.ps1 in a per-test tmpdir. The shim overrides `docker` so we can
 # capture compose-down args. stop.ps1 derives compose-file paths from
 # `$PSScriptRoot`, so we seed (or omit) fake compose files in $tmp.
+#
+# Issue #72 / ASR-C: stop.ps1 makes 5 Invoke-Down calls for idempotent
+# teardown across all stack modes:
+#   1. Demo stack     : release + demo + local + demo-local  (--profile db + fetcher)
+#   2. Integration    : release + local + integration        (--profile db + fetcher)
+#   3. LocalDb stack  : release + local                      (--profile db)
+#   4. Fetcher stack  : release + local                      (--profile fetcher)
+#   5. Scaled         : scaled                               (no profiles)
+#
+# Each Invoke-Down skips (emits [skip]) when any required compose file is absent.
 
 #Requires -Version 7.0
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
@@ -53,13 +63,24 @@ function docker {
     }
 
     # Create the shimmed script in $TmpDir.DevEnv and seed compose files.
-    # The NoLocal / NoScaled / NoRelease switches drive the "[skip]" branch.
+    # Issue #72 ASR-C: stop.ps1 handles 6 compose file paths:
+    #   install/docker-compose.release.yml
+    #   install/docker-compose.demo.yml
+    #   dev_env/docker-compose.local.yml
+    #   dev_env/docker-compose.demo-local.yml
+    #   dev_env/docker-compose.integration.yml
+    #   dev_env/docker-compose.scaled.yml
+    #
+    # No* switches suppress creation of the corresponding file (drives [skip] branch).
     function New-ShimmedScript {
         param(
             [object]$TmpDir,
             [switch]$NoScaled,
             [switch]$NoLocal,
-            [switch]$NoRelease
+            [switch]$NoRelease,
+            [switch]$NoDemo,
+            [switch]$NoDemoLocal,
+            [switch]$NoIntegration
         )
         $shimmed = Join-Path $TmpDir.DevEnv 'stop.shimmed.ps1'
         $match = [regex]::Match($script:OriginalContent, '(?ms)^\)\s*$')
@@ -67,9 +88,12 @@ function docker {
         $insertAt = $match.Index + $match.Length
         $injected = $script:OriginalContent.Substring(0, $insertAt) + "`n" + $script:ShimHeader + "`n" + $script:OriginalContent.Substring($insertAt)
         Set-Content -LiteralPath $shimmed -Value $injected -Encoding utf8
-        if (-not $NoLocal)   { Set-Content -LiteralPath (Join-Path $TmpDir.DevEnv  'docker-compose.local.yml')   -Value 'services: {}' -Encoding utf8 }
-        if (-not $NoScaled)  { Set-Content -LiteralPath (Join-Path $TmpDir.DevEnv  'docker-compose.scaled.yml')  -Value 'services: {}' -Encoding utf8 }
-        if (-not $NoRelease) { Set-Content -LiteralPath (Join-Path $TmpDir.Install 'docker-compose.release.yml') -Value 'services: {}' -Encoding utf8 }
+        if (-not $NoRelease)     { Set-Content -LiteralPath (Join-Path $TmpDir.Install 'docker-compose.release.yml')     -Value 'services: {}' -Encoding utf8 }
+        if (-not $NoDemo)        { Set-Content -LiteralPath (Join-Path $TmpDir.Install 'docker-compose.demo.yml')        -Value 'services: {}' -Encoding utf8 }
+        if (-not $NoLocal)       { Set-Content -LiteralPath (Join-Path $TmpDir.DevEnv  'docker-compose.local.yml')       -Value 'services: {}' -Encoding utf8 }
+        if (-not $NoDemoLocal)   { Set-Content -LiteralPath (Join-Path $TmpDir.DevEnv  'docker-compose.demo-local.yml')  -Value 'services: {}' -Encoding utf8 }
+        if (-not $NoIntegration) { Set-Content -LiteralPath (Join-Path $TmpDir.DevEnv  'docker-compose.integration.yml') -Value 'services: {}' -Encoding utf8 }
+        if (-not $NoScaled)      { Set-Content -LiteralPath (Join-Path $TmpDir.DevEnv  'docker-compose.scaled.yml')      -Value 'services: {}' -Encoding utf8 }
         return $shimmed
     }
 
@@ -80,12 +104,18 @@ function docker {
             [hashtable] $EnvOverrides = @{},
             [switch] $NoScaled,
             [switch] $NoLocal,
-            [switch] $NoRelease
+            [switch] $NoRelease,
+            [switch] $NoDemo,
+            [switch] $NoDemoLocal,
+            [switch] $NoIntegration
         )
         $shimParams = @{ TmpDir = $TmpDir }
-        if ($NoScaled)  { $shimParams.NoScaled  = $true }
-        if ($NoLocal)   { $shimParams.NoLocal   = $true }
-        if ($NoRelease) { $shimParams.NoRelease = $true }
+        if ($NoScaled)      { $shimParams.NoScaled      = $true }
+        if ($NoLocal)       { $shimParams.NoLocal       = $true }
+        if ($NoRelease)     { $shimParams.NoRelease     = $true }
+        if ($NoDemo)        { $shimParams.NoDemo        = $true }
+        if ($NoDemoLocal)   { $shimParams.NoDemoLocal   = $true }
+        if ($NoIntegration) { $shimParams.NoIntegration = $true }
         $shimmed = New-ShimmedScript @shimParams
         $log = Join-Path $TmpDir.Root 'script.log'
         if (Test-Path $log) { Remove-Item $log -Force }
@@ -130,9 +160,7 @@ function docker {
 
     # Walks a docker-down arg array and returns the values that follow each
     # `-f` flag in order. Used by tests to assert both the dev_env override
-    # and the install/release.yml base land in the merge invocation (#21).
-    # Param is named $Argv (not $Args) to avoid shadowing PowerShell's
-    # automatic-variable binding inside the function.
+    # and the install/release.yml base land in the merge invocation.
     function Get-ComposeFiles {
         param([object[]]$Argv)
         $files = @()
@@ -145,26 +173,89 @@ function docker {
     }
 }
 
-Describe 'dev_env/stop.ps1 -- default teardown (all compose files present)' {
+# ---------------------------------------------------------------------------
+# Default teardown -- all compose files present
+# Issue #72 ASR-C: 5 Invoke-Down calls when all 6 compose files are present.
+# ---------------------------------------------------------------------------
+Describe 'dev_env/stop.ps1 -- default teardown (all compose files present, issue #72)' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if ($tmp -and (Test-Path $tmp.Root)) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp.Root } }
 
-    It 'invokes docker compose -f release.yml -f local.yml down --remove-orphans (issue #21)' {
+    It 'invokes docker compose down exactly 5 times (all chains active, issue #72 ASR-C)' {
         $r = Invoke-Stop -TmpDir $tmp
         $r.ExitCode | Should -Be 0
         $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
-        $downs.Count | Should -Be 2
-        $localCall = $downs | Where-Object {
+        $downs.Count | Should -Be 5
+    }
+
+    It 'demo chain -- release.yml + demo.yml + local.yml + demo-local.yml --profile db fetcher --remove-orphans' {
+        $r = Invoke-Stop -TmpDir $tmp
+        $r.ExitCode | Should -Be 0
+        $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
+        $demoCall = $downs | Where-Object {
+            $files = Get-ComposeFiles -Argv ([object[]]$_.args)
+            ($files.Count -eq 4) -and
+            ($files[0] -like '*install*docker-compose.release.yml') -and
+            ($files[1] -like '*install*docker-compose.demo.yml') -and
+            ($files[2] -like '*dev_env*docker-compose.local.yml') -and
+            ($files[3] -like '*dev_env*docker-compose.demo-local.yml')
+        } | Select-Object -First 1
+        $demoCall | Should -Not -BeNullOrEmpty
+        ([object[]]$demoCall.args) | Should -Contain '--remove-orphans'
+        ([object[]]$demoCall.args) | Should -Contain 'db'
+        ([object[]]$demoCall.args) | Should -Contain 'fetcher'
+    }
+
+    It 'integration chain -- release.yml + local.yml + integration.yml --profile db fetcher --remove-orphans' {
+        $r = Invoke-Stop -TmpDir $tmp
+        $r.ExitCode | Should -Be 0
+        $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
+        $intCall = $downs | Where-Object {
+            $files = Get-ComposeFiles -Argv ([object[]]$_.args)
+            ($files.Count -eq 3) -and
+            ($files[0] -like '*install*docker-compose.release.yml') -and
+            ($files[1] -like '*dev_env*docker-compose.local.yml') -and
+            ($files[2] -like '*dev_env*docker-compose.integration.yml')
+        } | Select-Object -First 1
+        $intCall | Should -Not -BeNullOrEmpty
+        ([object[]]$intCall.args) | Should -Contain '--remove-orphans'
+        ([object[]]$intCall.args) | Should -Contain 'db'
+        ([object[]]$intCall.args) | Should -Contain 'fetcher'
+    }
+
+    It 'local-db chain -- release.yml + local.yml --profile db --remove-orphans' {
+        $r = Invoke-Stop -TmpDir $tmp
+        $r.ExitCode | Should -Be 0
+        $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
+        $localDbCall = $downs | Where-Object {
             $files = Get-ComposeFiles -Argv ([object[]]$_.args)
             ($files.Count -eq 2) -and
             ($files[0] -like '*install*docker-compose.release.yml') -and
-            ($files[1] -like '*dev_env*docker-compose.local.yml')
+            ($files[1] -like '*dev_env*docker-compose.local.yml') -and
+            (([object[]]$_.args) -contains 'db') -and
+            (-not (([object[]]$_.args) -contains 'fetcher'))
         } | Select-Object -First 1
-        $localCall | Should -Not -BeNullOrEmpty
-        ([object[]]$localCall.args) | Should -Contain '--remove-orphans'
+        $localDbCall | Should -Not -BeNullOrEmpty
+        ([object[]]$localDbCall.args) | Should -Contain '--remove-orphans'
     }
 
-    It 'invokes docker compose -f scaled down --remove-orphans too (single -f)' {
+    It 'fetcher chain -- release.yml + local.yml --profile fetcher --remove-orphans' {
+        $r = Invoke-Stop -TmpDir $tmp
+        $r.ExitCode | Should -Be 0
+        $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
+        $fetcherCall = $downs | Where-Object {
+            $files = Get-ComposeFiles -Argv ([object[]]$_.args)
+            ($files.Count -eq 2) -and
+            ($files[0] -like '*install*docker-compose.release.yml') -and
+            ($files[1] -like '*dev_env*docker-compose.local.yml') -and
+            (([object[]]$_.args) -contains 'fetcher') -and
+            (-not (([object[]]$_.args) -contains 'db'))
+        } | Select-Object -First 1
+        $fetcherCall | Should -Not -BeNullOrEmpty
+        ([object[]]$fetcherCall.args) | Should -Contain '--remove-orphans'
+    }
+
+    It 'scaled chain -- docker-compose.scaled.yml (single -f, no profiles) --remove-orphans' {
         $r = Invoke-Stop -TmpDir $tmp
         $r.ExitCode | Should -Be 0
         $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
@@ -176,7 +267,7 @@ Describe 'dev_env/stop.ps1 -- default teardown (all compose files present)' {
         ([object[]]$scaledCall.args) | Should -Contain '--remove-orphans'
     }
 
-    It 'WITHOUT -Volumes -- no --volumes flag in either down call' {
+    It 'WITHOUT -Volumes -- no --volumes flag in any down call' {
         $r = Invoke-Stop -TmpDir $tmp
         $r.ExitCode | Should -Be 0
         $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
@@ -187,15 +278,18 @@ Describe 'dev_env/stop.ps1 -- default teardown (all compose files present)' {
     }
 }
 
+# ---------------------------------------------------------------------------
+# -Volumes flag
+# ---------------------------------------------------------------------------
 Describe 'dev_env/stop.ps1 -- -Volumes flag' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if ($tmp -and (Test-Path $tmp.Root)) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp.Root } }
 
-    It '-Volumes -- every down call carries --volumes' {
+    It '-Volumes -- every down call carries --volumes (5 calls total)' {
         $r = Invoke-Stop -TmpDir $tmp -Args @('-Volumes')
         $r.ExitCode | Should -Be 0
         $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
-        $downs.Count | Should -Be 2
+        $downs.Count | Should -Be 5
         foreach ($d in $downs) {
             ([object[]]$d.args) | Should -Contain '--volumes'
         }
@@ -203,41 +297,52 @@ Describe 'dev_env/stop.ps1 -- -Volumes flag' {
     }
 }
 
+# ---------------------------------------------------------------------------
+# Missing compose files (skip branch)
+# ---------------------------------------------------------------------------
 Describe 'dev_env/stop.ps1 -- missing compose files (skip branch)' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if ($tmp -and (Test-Path $tmp.Root)) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp.Root } }
 
-    It 'docker-compose.scaled.yml missing -- yellow [skip] line; local teardown still runs' {
+    It 'docker-compose.scaled.yml missing -- yellow [skip] line; other 4 down calls still run' {
         $r = Invoke-Stop -TmpDir $tmp -NoScaled
         $r.ExitCode | Should -Be 0
         $r.Stdout   | Should -Match '\[skip\].*docker-compose\.scaled\.yml'
         $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
-        $downs.Count | Should -Be 1
-        $files = Get-ComposeFiles -Argv ([object[]]$downs[0].args)
-        $files.Count | Should -Be 2
-        $files[0]    | Should -BeLike '*install*docker-compose.release.yml'
-        $files[1]    | Should -BeLike '*dev_env*docker-compose.local.yml'
+        $downs.Count | Should -Be 4
     }
 
-    It 'install/release.yml missing -- local flow skips; scaled teardown still runs' {
+    It 'install/release.yml missing -- all chains that require it skip; only scaled runs (1 down)' {
         $r = Invoke-Stop -TmpDir $tmp -NoRelease
         $r.ExitCode | Should -Be 0
         $r.Stdout   | Should -Match '\[skip\].*docker-compose\.release\.yml'
         $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
+        # Demo, integration, local-db, fetcher chains all require release.yml; only scaled runs.
         $downs.Count | Should -Be 1
         $files = Get-ComposeFiles -Argv ([object[]]$downs[0].args)
         $files.Count | Should -Be 1
         $files[0]    | Should -BeLike '*docker-compose.scaled.yml'
     }
 
-    It 'all compose files missing -- two skip lines; no docker invocations' {
-        $r = Invoke-Stop -TmpDir $tmp -NoScaled -NoLocal -NoRelease
+    It 'install/docker-compose.demo.yml missing -- demo chain [skip]; other 4 chains run' {
+        $r = Invoke-Stop -TmpDir $tmp -NoDemo
+        $r.ExitCode | Should -Be 0
+        $r.Stdout   | Should -Match '\[skip\].*docker-compose\.demo\.yml'
+        $downs = $r.Events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'down') }
+        $downs.Count | Should -Be 4
+    }
+
+    It 'all compose files missing -- multiple skip lines; no docker invocations' {
+        $r = Invoke-Stop -TmpDir $tmp -NoScaled -NoLocal -NoRelease -NoDemo -NoDemoLocal -NoIntegration
         $r.ExitCode | Should -Be 0
         ($r.Stdout -split '\r?\n' | Where-Object { $_ -match '\[skip\]' }).Count | Should -BeGreaterOrEqual 2
         ($r.Events | Where-Object event -eq 'docker').Count | Should -Be 0
     }
 }
 
+# ---------------------------------------------------------------------------
+# Non-zero docker exit is non-fatal (warn-and-continue)
+# ---------------------------------------------------------------------------
 Describe 'dev_env/stop.ps1 -- non-zero docker exit is non-fatal (warn-and-continue)' {
     BeforeEach { $script:tmp = New-TempTestDir }
     AfterEach  { if ($tmp -and (Test-Path $tmp.Root)) { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmp.Root } }

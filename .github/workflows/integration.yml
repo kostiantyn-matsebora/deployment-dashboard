@@ -45,7 +45,9 @@ on:
       - 'testing/fixtures/gha/**'
       - 'testing/config/integration.json'
       - 'install/docker-compose.release.yml'
+      - 'install/docker-compose.demo.yml'
       - 'dev_env/docker-compose.local.yml'
+      - 'dev_env/docker-compose.integration.yml'
       - 'dev_env/start.ps1'
       - 'dev_env/stop.ps1'
       - '.github/workflows/integration.yml'
@@ -64,7 +66,9 @@ on:
       - 'testing/fixtures/gha/**'
       - 'testing/config/integration.json'
       - 'install/docker-compose.release.yml'
+      - 'install/docker-compose.demo.yml'
       - 'dev_env/docker-compose.local.yml'
+      - 'dev_env/docker-compose.integration.yml'
       - 'dev_env/start.ps1'
       - 'dev_env/stop.ps1'
       - '.github/workflows/integration.yml'
@@ -166,10 +170,11 @@ jobs:
         run: |
           $logDir = "integration-failure-logs"
           New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-          $releaseCompose = "install/docker-compose.release.yml"
-          $localOverride  = "dev_env/docker-compose.local.yml"
-          & docker compose -f $releaseCompose -f $localOverride --profile fetcher --profile integration logs --no-color --tail=500 > "$logDir/compose-logs.txt" 2>&1
-          & docker compose -f $releaseCompose -f $localOverride --profile fetcher --profile integration ps --all > "$logDir/compose-ps.txt" 2>&1
+          $releaseCompose     = "install/docker-compose.release.yml"
+          $localOverride      = "dev_env/docker-compose.local.yml"
+          $integrationOverlay = "dev_env/docker-compose.integration.yml"
+          & docker compose -f $releaseCompose -f $localOverride -f $integrationOverlay --profile db --profile fetcher logs --no-color --tail=500 > "$logDir/compose-logs.txt" 2>&1
+          & docker compose -f $releaseCompose -f $localOverride -f $integrationOverlay --profile db --profile fetcher ps --all > "$logDir/compose-ps.txt" 2>&1
           # Best-effort -- on failure, the WireMock admin port may or may not be
           # reachable. `try/catch` keeps the rest of the bundle uploadable.
           try {
