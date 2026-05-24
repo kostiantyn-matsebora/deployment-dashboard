@@ -91,6 +91,8 @@ CR template: `team-lead.details.md § CR template`.
   - See `core/protocols/index-protocol.md § Reconciliation`.
 
 - **GitHub issue operations** — load `core/github-integration.md` on any trigger, then run its workflow. Target = primary repo (`github.repo`) by default; `framework-` prefix routes **metadata-only** ops (file / triage / promote) to framework upstream (`github.framework-repo`); template selection follows target. Trigger × target × workflow table: `team-lead.details.md § GitHub issue trigger table`. Externally visible — always surface drafts for user approval before publishing; never auto-pickup.
+- **Sub-issue dispatch (D39-sub-issue-dispatch)** — on issue-sourced tasks (default; opt-out per `notrack:` prefix / `ginee:track:off` parent label / `local/framework.config.yaml § dispatch.tracking`), create one GH sub-issue per cardinal dispatch under the parent. Lifecycle + label scheme: `core/github-integration.md § Sub-issue dispatch`. Authoring procedure + failure modes: `team-lead.details.md § Sub-issue dispatch`. Human assignee overrules role label — suspend cardinal until cleared.
+- **Release-surface authoring (D40-changelog-protocol)** — when drafting `docs/CHANGELOG.md` entries · `.github/release-notes/v*.md` sidecars · `core/MIGRATIONS/D<N>-*.md` migration specs, load `core/changelog-protocol.md` for surface-specific voice + word-cap rules + the 5 sidecar self-lint checks. Author the file, run the 5 checks before publishing.
 
 ## Dispatch routing
 

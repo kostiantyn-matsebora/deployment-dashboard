@@ -293,6 +293,28 @@ Re-invocation later (new reviewer comment on `T#abc` + new `T#jkl`):
 - Bypassing the user-confirmation gate for "trivial" remarks.
 - Skill-only or command-only delivery — parity mandatory.
 
+## Sub-issue dispatch
+
+One sub-issue per `team-lead` → cardinal dispatch under the parent task issue (issue-sourced tasks only; TODO / freeform → in-context). Full lifecycle + interactions: **`core/MIGRATIONS/D39-sub-issue-dispatch.md`**. Authoring procedure: `core/roles/team-lead.details.md § Sub-issue dispatch`. Body shape: `core/templates/sub-issue-dispatch.md`.
+
+| Step | Op |
+|---|---|
+| Plan | team-lead drafts contract — scope · acceptance · spec links · phase · estimate |
+| Create | `gh issue create` titled `[<phase>:<cardinal>] <task>` + body per template + labels `ginee:role:<cardinal>` · `ginee:phase:<N>` · inherited `value:*`/`complexity:*`; attach via `gh api .../issues/<parent>/sub_issues` |
+| Execute | Cardinal posts progress comments per `core/templates/pr-comment-cadence.md` shape — each carries `time: <N>m` (since last comment) + `cumulative: <N>m` (since dispatch start); D26 self-lint applies |
+| Close | D29 phase-report return = closing comment with mandatory `## Time spent`; `gh issue close <M> --reason completed`. Stop-state (`Status: In-progress`) posts as progress comment — sub-issue stays open |
+| Parent sync | Edit sticky `<!-- ginee:dispatch-map -->` on parent in place — one per parent; table of dispatches + per-cardinal time rollup |
+
+**Resolution (stop at first match):** `notrack:` task prefix → `ginee:track:off` parent label → `local/framework.config.yaml § dispatch.tracking` (`sub-issues` | `in-context`) → default `sub-issues` on `github.repo`.
+
+**Assignee precedence.** Empty → role label drives cardinal execution. Non-empty human → cardinal suspended; team-lead surfaces *"Sub-issue #M has human assignee @user; cardinal dispatch suspended. Reassign to clear."* once per session.
+
+**Labels.** `ginee:role:<cardinal>` (one of 7 cardinals · per sub-issue) · `ginee:phase:<N>` (updated on transition) · inherited `value:*`/`complexity:*` (per sub-issue) · `ginee:blocked` (optional) · `ginee:track:off` (parent-only · opts out for that issue's lifetime).
+
+**Sticky shape** — `<!-- ginee:dispatch-map -->` headline + table `Sub-issue · Role · Phase · Status · Time` + per-cardinal totals line. D26 binding.
+
+**Forbidden** — edit sub-issue body after create (scope change = close + new sub-issue) · reuse across dispatches (1 dispatch = 1 sub-issue) · federate cross-repo · auto-file umbrellas for TODO / freeform · close on PR merge (PR closes parent; sub-issues close on phase-report return).
+
 ## Forbidden actions
 
 - **Never silently create / close / re-open an issue.** Each requires explicit user approval per `core/process.md § Executing actions with care` — issues are externally visible.

@@ -13,6 +13,7 @@
 | `## Next dispatch needed` | **required** (else `(none)`) | One-liner — `<role> · <surface> · <reason>` | 1 line |
 | `## Hand-off` | required **if failed dispatch / cross-domain root cause outside domain** (per `core/cross-agent-handoff.md`) | Embed `core/templates/hand-off-note.md` shape | per template |
 | `## Stop-state` | required **if `Status: In-progress`** (iteration-protocol stop boundary) | Three-bucket bullets — Done / In-progress / Not-started | per `core/protocols/iteration-protocol.md § Stoppable intermediate states` |
+| `## Time spent` | required **if sub-issue mode is active** (D39-sub-issue-dispatch) — return doubles as sub-issue closing comment | One-liner — `<H>h <M>m perceived effort; <N> progress comments on sub-issue #<M>.` | 1 line |
 | `## Notes` | **optional** — narrative-rationale escape hatch only | Free-form prose | ≤ 200 words |
 
 **Status header** (single line at top): `Status: Done | In-progress | Blocked | Hand-off`. For iteration-protocol intermediate returns: same schema, sections marked `(in-progress)` where partial, plus the required `## Stop-state`.
@@ -100,6 +101,14 @@ Empty case: `(none)`.
 
 Doc-authoring attestation lines (D22 / D26 / D29) live here as table rows, not free-form bullets.
 
+**Blueprint-diff row (D41-blueprint-diff-gate).** Phase 4 dispatches touching the configured `visual-source-of-truth.path` add one row per protocol invocation:
+
+```
+Blueprint-diff (<type>) vs <blueprint-ref> on <path>: <N> expected / <M> unexpected / <K> pre-existing — surfaced + approved.
+```
+
+Inapplicable case — `Blueprint-diff: visual-SoT untouched — protocol n/a.` Full spec: `core/protocols/blueprint-diff-protocol.md`.
+
 ### `## Open issues`
 
 - `<issue>` — `<owner / blocker / TODO surfaced>`
@@ -121,6 +130,18 @@ Per `core/templates/hand-off-note.md`. Required when the dispatch hit a forced-h
 - **Done.** `<sub-tasks completed · files touched>`
 - **In-progress.** `<sub-task interrupted · partial state · concrete resume instructions>`
 - **Not-started.** `<sub-tasks remaining in approved batch · original estimates intact>`
+
+### `## Time spent` *(when sub-issue mode is active, D39)*
+
+One line — cardinal-reported perceived effort (NOT wall-clock); progress-comment count for traceability:
+
+```
+1h 38m perceived effort; 4 progress comments on sub-issue #142.
+```
+
+Cardinal owns the number; team-lead never re-derives. Doubles as the rollup feeding the parent's `<!-- ginee:dispatch-map -->` sticky.
+
+**In-flight cadence (every cardinal, sub-issue mode only).** While the dispatch runs, the cardinal posts progress comments on the sub-issue per `core/templates/sub-issue-dispatch.md § Comment cadence` — each carrying `time: <N>m` (since last comment) + `cumulative: <N>m` (since dispatch start). D26 self-lint applies. This is the SINGLE place where the cadence rule binds every cardinal; per-kernel addenda are intentionally avoided to keep the always-loaded surface free of duplication (D35 load-topology).
 
 ### `## Notes` *(optional, capped)*
 

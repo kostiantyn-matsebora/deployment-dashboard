@@ -8,6 +8,7 @@
   - Parallel where independent.
   - Phase 5 overlaps once Phase 3 passes.
   - Runs under `core/protocols/iteration-protocol.md`.
+- **Blueprint-diff entry precondition (D41-blueprint-diff-gate).** Every dispatch touching the configured `visual-source-of-truth.path` runs `core/protocols/blueprint-diff-protocol.md` as first step — diff vs `blueprint-ref` · classify Expected / Unexpected / Pre-existing · surface to team-lead before any edit. Unexpected delta → forced-interactive gate (auto-mode does NOT elide). Inapplicable when dispatch carries no edit on the configured path — cite `"visual-SoT untouched — protocol n/a"` and skip.
 - **`solution-architect` governance dip (D25-classical-architect).** Triggered only when the in-flight PR touches an SA-owned file per `local/bindings.md § Source-of-truth ownership` (NOT every Phase 4 PR). Spot-checks engineer deltas against architecture invariants + ASRs. Drift → PR comment + dispatch back to owning engineer. Per `core/roles/solution-architect.md § Governance`.
 - **`solution-architect` review on in-flight proposals (D25-classical-architect).** If an engineer proposes an architectural change mid-Phase 4 (new contract / topology / stack / NFR-affecting decision), SA reviews per `§ Review` — APPROVE / REJECT / REQUEST-CHANGES. SA never edits the engineer's code.
 - **Acceptance.**

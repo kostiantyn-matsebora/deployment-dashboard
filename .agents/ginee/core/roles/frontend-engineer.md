@@ -70,6 +70,7 @@ Cross-references on mockup changes:
 
 | Trigger | Action |
 |---|---|
+| **Phase 4 entry on any mockup edit (D41-blueprint-diff-gate)** | Run `core/protocols/blueprint-diff-protocol.md` as first step — diff working copy vs `visual-source-of-truth.blueprint-ref` (default `origin/main`); classify Expected / Unexpected / Pre-existing; surface to team-lead before any edit. Unexpected delta → forced-interactive gate; auto-mode does NOT elide. |
 | Architecture-level implication (new view / attribute / layout primitive / invariant / fixture shape) | <ol><li>Propose architecture-doc change in final report.</li><li>Pause for `solution-architect`.</li><li>Mirror after architecture-doc edit lands.</li></ol> |
 | Geometric / interaction invariant touched (UX-responsiveness or other harness-encoded invariant) | <ul><li>Run the mockup-visual harness.</li><li>Include PASS/FAIL table in final report.</li><li>**All-green is the definition of done.**</li><li>A failing assertion is not "the test is wrong"; it is the bug.</li></ul> |
 | New mockup surface (new view, layout, or invariant) needs new harness assertion | <ul><li>Flag for `qa-engineer` in final report.</li><li>You do not edit the harness; `qa-engineer` does.</li></ul> |
