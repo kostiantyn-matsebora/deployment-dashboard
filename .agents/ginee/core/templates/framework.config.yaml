@@ -26,6 +26,28 @@ mockup: docs/mockup.html
 #   - Owner: frontend-engineer.
 #   - Reviewed by: solution-architect.
 #   - Comment out if none.
+
+# --- Visual source-of-truth blueprint-diff gate (D41) ---
+# Phase 4 entry precondition for any dispatch touching the visual SoT path.
+# Diff working copy vs blueprint-ref; classify Expected / Unexpected / Pre-existing;
+# Unexpected → forced-interactive gate before edits begin.
+# Full spec: core/protocols/blueprint-diff-protocol.md.
+# Migration: core/MIGRATIONS/D41-blueprint-diff-gate.md.
+#
+# All keys optional — framework defaults derive from `mockup:` above when absent:
+#   type            html-mockup if `mockup:` ends .html/.htm; otherwise `other`
+#   path            value of `mockup:`
+#   blueprint-ref   origin/main
+#   scope-discriminator  block-glob
+#   enabled         true
+#
+# Override for non-trunk mainlines / Figma / image / video / adopter-supplied tools.
+# visual-source-of-truth:
+#   type: html-mockup           # html-mockup | figma | image | video | other
+#   path: docs/mockup.html      # working-copy path or external URL
+#   blueprint-ref: origin/main  # git ref / tag / commit / external URL / file path
+#   scope-discriminator: block-glob  # block-glob | section-anchor | full-file | external
+#   enabled: true
 # api-contract: docs/api.md
 #   - Standalone API contract.
 #   - Omit when API lives inside the SAD.
@@ -259,6 +281,29 @@ capability-tools:
   #   - tool: security-review
   #     role: solution-architect
   #     task: ".*security.*"   # regex against task description; force-surfaces when matched
+
+# --- Sub-issue dispatch tracking (D39) ---
+# Each team-lead → cardinal dispatch lands as a GitHub sub-issue under the
+# parent task issue — labelled by role + phase, threading progress comments
+# + cumulative time, closed by the cardinal's D29 phase-report return. Lets
+# cross-session resume reconstruct state from parent + open sub-issues
+# without transcript replay. Full spec: core/MIGRATIONS/D39-sub-issue-dispatch.md.
+#
+# Active only on issue-sourced tasks. TODO / freeform fall back to in-context.
+# Resolution (stop at first match):
+#   1. Per-task prefix  notrack:  on the parent dispatch.
+#   2.  ginee:track:off  label on the parent issue.
+#   3.  dispatch.tracking  key below.
+#   4. Framework default — sub-issues when  github.repo  is configured.
+#
+# Assignee precedence — non-empty human assignee on a sub-issue overrules the
+#  ginee:role:<cardinal>  label; cardinal dispatch suspended until cleared.
+#
+# All keys optional — defaults shown.
+dispatch:
+  tracking: sub-issues          # sub-issues | in-context
+  time-tracking: true           # set false to disable the time-tracking surface
+  # closing-label: ginee:done   # optional sub-issue close marker (auto-removed on close); omit to skip
 
 # --- GitHub integration (D14) ---
 # Lets team-lead pick up GitHub issues as a task source alongside

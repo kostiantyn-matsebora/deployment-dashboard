@@ -14,6 +14,7 @@ Examples gallery: `core/doc-authoring-examples.md` (load on first-time authoring
 | **GitHub issue bodies** authored via `ginee-file-*` skills | `team-lead` (orchestrator drafts; user approves) | **D26** |
 | **Framework-authored GitHub comments** — Phase-transition · sticky `ginee:score` / `ginee:review-cycle` · audit comments · per-thread review-replies | `team-lead` + specialists per the comment-cadence procedures | **D26** |
 | **Subagent returns** — every cardinal-dispatch return per `core/templates/phase-report.md` schema | every cardinal role | **D29** |
+| **Release surfaces** — `docs/CHANGELOG.md` entries · `.github/release-notes/v*.md` sidecars · `core/MIGRATIONS/D<N>-*.md` migration specs — surface-specific voice + word cap per `core/changelog-protocol.md` | framework maintainers drafting release artefacts | **D40** |
 
 **The lint covers every section, including Summary.** No section-by-length exemption — a one-sentence Summary still trips the mandatory checks if it packs a comma-separated inventory into a parenthetical.
 

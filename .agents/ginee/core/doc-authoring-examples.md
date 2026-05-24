@@ -357,3 +357,24 @@ Reader knows every citation at a glance; `grep -r D28-skill-runner-boundary core
 **Lookup failure** — surface inline (`D28-?? (slug lookup failed)`); carry forward; never invent.
 
 Full lookup table + self-lint regex: `core/protocols/doc-authoring-protocol.md § Taxonomy identifier pairing (D34)`.
+
+---
+
+## 14. Release-notes sidecar bullet (D40)
+
+Sidecar bullets (`.github/release-notes/v*.md`) lead with adopter-visible benefit, stay ≤ 20 words, end with `(D<N>)` tag. Implementation jargon belongs in the migration spec, not the marketing layer.
+
+**Bad** — dense framework-dev paragraph masquerading as a bullet:
+
+> - D31 introduces three vendor-neutral tiers (reasoning · standard · fast) declared as role-kernel `default-tier:` with per-adapter `<tier> → <id>` map. Resolution: per-task prefix `model:<tier>` → Phase-3 answer → `local/framework.config.yaml § model-tier.per-role.<role>` → kernel `default-tier:`. Claude adapter writes `model: <id>` into `.claude/agents/<role>.md` frontmatter; non-Claude adapters emit install warning. Purely additive — absent `model-tier:` → defaults apply.
+
+Trips checks 1 (75+ words), 2 (no adopter-visible benefit at line start; `default-tier:` jargon), 3 (D-tag buried), 4 (resolution chain + adapter writeback are migration-spec content).
+
+**Good** — Pass-4 shape from v0.12.0 PR #80:
+
+> - **Lower LLM bills** — cheaper models on execution work, capable ones stay on orchestration + architecture. Out of the box. (D31)
+> - **Per-task model override** — prefix any dispatch with `model:reasoning` / `model:standard` / `model:fast`. (D31)
+
+Each bullet: adopter-visible verb / outcome at start · concrete user benefit · ≤ 20 words · `(D<N>)` tag. The migration spec + verbose CHANGELOG entry carry the resolution chain + adapter writeback; sidecar carries only what an adopter needs to decide whether to bump.
+
+Full surface topology + self-lint checks: `core/changelog-protocol.md`.

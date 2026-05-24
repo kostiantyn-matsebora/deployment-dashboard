@@ -317,6 +317,33 @@ Affected components, roles, downstream docs. Any follow-up ADRs needed (route to
 
 Numbering: zero-padded four-digit per family (`CR-0001`). Never reused. Superseded records keep their number + reference the replacement.
 
+## Sub-issue dispatch (D39-sub-issue-dispatch)
+
+Lifecycle table + resolution + labels + sticky shape live in `core/github-integration.md § Sub-issue dispatch`. Full codification: `core/MIGRATIONS/D39-sub-issue-dispatch.md`. This section covers authoring concerns only.
+
+### Authoring procedure per dispatch
+
+| Step | Op |
+|---|---|
+| 1 — Draft contract | scope · acceptance · spec links · phase · estimate (same machinery as standard Phase-4/5/6/7 dispatch composition; sub-issue body is the serialised form) |
+| 2 — Create sub-issue | `gh issue create` + body per `core/templates/sub-issue-dispatch.md` + labels (`ginee:role:*` + `ginee:phase:*` + inherited `value:*`/`complexity:*`); attach via `gh api .../sub_issues`; D26 self-lint on body before posting |
+| 3 — Surface for approval | Sub-issue creation is externally visible — always confirm unless auto mode is active (per `core/roles/team-lead.md § Confirm-before-parallel-dispatch` + `core/process.md § Executing actions with care`) |
+| 4 — Dispatch cardinal | Forward sub-issue URL + body in dispatch prompt; cardinal authors progress comments per `core/templates/sub-issue-dispatch.md § Comment cadence` |
+| 5 — Honour assignee precedence | Check assignee per cycle; non-empty human → suspend dispatch + surface once-per-session advisory; resume on clear |
+| 6 — Forced-fresh on cross-session resume | D36 registry is in-conversation only; sub-issue body + comment history feed the fresh cardinal the full state |
+| 7 — Receive phase-report return | Verify `## Time spent` present (mandatory in sub-issue mode); missing → one-line advisory + consume per `core/templates/phase-report.md § Orchestrator behaviour on non-compliant returns` |
+| 8 — Close sub-issue | Post return as closing comment via `gh issue comment <M>`; `gh issue close <M> --reason completed`. Stop-state (`Status: In-progress`) → progress comment only; sub-issue stays open |
+| 9 — Update parent sticky | Edit `<!-- ginee:dispatch-map -->` in place — append row + refresh per-cardinal rollup; D26 self-lint applies |
+
+### Common failure modes — sub-issue mode
+
+| Pattern | Correct shape |
+|---|---|
+| **In-context dispatch despite sub-issue mode active** — work happens, parent has no sub-issue trail, cross-session resume can't reconstruct | Create sub-issue **before** the cardinal dispatch; create-call is part of dispatch composition, never deferred |
+| **Sub-issue body edited mid-flight to "fix" scope** — audit trail destroyed | Close existing (reason `not_planned` / `completed` per partial-work state); open new sub-issue with corrected scope — append-only |
+| **Assignee ignored** — human + cardinal collide; cardinal PR clobbers human work | Check assignee per cycle; non-empty → suspend + surface advisory; resume only on clear |
+| **Stop-state closes the sub-issue** — resume protocol breaks; closed = done by convention | Stop-state → progress comment only; close fires on `Status: Done` (or `Blocked` / `Hand-off` per D39) |
+
 ## Review-comment dispatch
 
 Full procedure: **`core/github-integration.md § Review-comment ingestion`** (ingestion + idempotency + comment shape). Kernel registration: `team-lead.md § GitHub issue operations`. This section covers dispatch-specific concerns only.
