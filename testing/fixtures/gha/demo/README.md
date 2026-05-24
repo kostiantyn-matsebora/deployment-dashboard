@@ -158,8 +158,9 @@ make priority intent visible in `ls` output.
 
 ## Templating
 
-Three of the four base-mapping bands use Handlebars templating
-(`"UseTransformer": true`) to compute job ids dynamically:
+Three of the four base-mapping bands embed Handlebars helper
+expressions in their `"jsonBody"` fields to compute job ids
+dynamically:
 
 ```handlebars
 {{Math.Multiply (Regex.Match request.path "runs/(\\d+)/jobs") 10}}
@@ -171,9 +172,14 @@ so the response's deploy-job id matches the status URL's
 prefix. Without templating we'd need one jobs mapping per
 deployment; with it we author exactly one per service.
 
-WireMock.Net's transformer auto-converts numeric strings back to
-JSON numbers (`StringUtils.TryConvertToKnownType`), so the
-`GitHubRunJobDto.Id long` field deserializes correctly.
+JVM WireMock 3.10.0 (`wiremock/wiremock:3.10.0`) evaluates the
+Handlebars helper expressions embedded as string values in each
+mapping's `"jsonBody"` when the response-template transformer is
+active (either per-mapping via `"transformers": ["response-template"]`
+or server-wide via `--global-response-templating`). The interpolated
+result is emitted as a JSON string into the response body; the
+`GitHubRunJobDto.Id long` field deserializes correctly via
+System.Text.Json's numeric-string handling.
 
 ## Authoring new ticks
 
@@ -200,7 +206,7 @@ file is picked up on the next image rebuild.
 - [CR-0013 § 3d + § 3e](../../../docs/cr/CR-0013-demo-mode-default-installer.md#3d--demo-bundle-content-shape)
   — bundle content shape + scenario walk design-of-record.
 - [CR-0012 § 3d](../../../docs/cr/CR-0012-integration-test-substrate.md#3d-demo-bundle-co-location)
-  — co-location rationale (single WireMock.Net image across both
+  — co-location rationale (single JVM WireMock image across both
   profiles, one mapping format).
 - [`docs/integration-tests.md § 3.1`](../../../docs/integration-tests.md#31-two-profiles-two-bundles)
   — two profiles, two bundles.
@@ -209,5 +215,3 @@ file is picked up on the next image rebuild.
   headers, filename prefix mapping).
 - [ADR-0004](../../../docs/adr/ADR-0004-opaque-per-progress-reporter-cursor.md)
   — opaque cursor contract (monotonically increasing deployment ids).
-- [WireMock.Net Stateful Behaviour wiki](https://github.com/WireMock-Net/WireMock.Net/wiki/Stateful-Behaviour)
-  — `Scenario` / `WhenStateIs` / `SetStateTo` field reference.
