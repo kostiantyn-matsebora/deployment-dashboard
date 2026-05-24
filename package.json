@@ -1,0 +1,16 @@
+{
+  "name": "deployment-dashboard-workspace",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "mockup"
+  ],
+  "scripts": {
+    "start:mockup": "npm run -w mockup start",
+    "build:mockup": "npm run -w mockup build",
+    "test:mockup": "npm run -w mockup test",
+    "start:dashboard": "npm run -w frontend start",
+    "build:dashboard": "npm run -w frontend build",
+    "test:dashboard": "npm run -w frontend test"
+  }
+}
