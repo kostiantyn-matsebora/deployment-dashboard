@@ -39,7 +39,7 @@
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR description scaffold | `team-lead` (D14 governance) |
 | `install/docker-compose.release.yml`, `install/install.{ps1,sh}`, `install/uninstall.{ps1,sh}` | Release-install stack - canonical service inventory; consumed by `dev_env/` via `-f` merge per ADR-0010 | `devops-engineer` |
 | `gateway/demo-gha/` | Demo-gha Docker image source - `Dockerfile` + bakes qa-owned `testing/fixtures/gha/demo/` content into `/app/__admin/mappings/` per CR-0013. Dockerfile is a devops concern; bundle content is qa-owned. | `devops-engineer` |
-| `gateway/demo-driver/` | Demo-driver sidecar Docker image source - `Dockerfile` + `entrypoint.py` (Python WireMock.Net admin-API ticker per CR-0013 §3e amendment / issue #46). Drives demo-gha so the demo dashboard surfaces ongoing activity. | `devops-engineer` |
+| `gateway/demo-driver/` | Demo-driver sidecar Docker image source - `Dockerfile` + `entrypoint.py` (Python JVM WireMock admin-API ticker per CR-0013 §3e amendment / issue #46 / issue #57 runtime migration). Drives demo-gha so the demo dashboard surfaces ongoing activity. | `devops-engineer` |
 | `backend/api/`, `backend/write-api/`, `backend/read-api/`, `backend/shared/`, `backend/fetcher/`, `backend/fetcher-host/` (+ READMEs) | Per-service code + per-service docs (D25 per-tier docs reassignment) | `backend-engineer`; `solution-architect` reviews for architectural coherence |
 | `frontend/` (+ per-app READMEs in `dashboard/`, `matrix/`, `drawer/`, `shared/` when authored) | Per-app code + per-app docs (D25) | `frontend-engineer`; `solution-architect` reviews for architectural coherence |
 | `testing/` (test plans / scenario docs / READMEs under `testing/scripts/README.md`, `testing/fixtures/gha/README.md`) | Quality docs (D25) | `qa-engineer`; `solution-architect` reviews for architectural coherence |
@@ -134,7 +134,7 @@ deployment-dashboard/
 | IaC | Terraform `azurerm` >= 4.x (NFR-06) - planned per WBS §4, not yet present |
 | CI/CD | GitHub Actions - component CI live per CR-0010 (`_build-and-push-image.yml` reusable + `api.yml` / `fetcher.yml` / `frontend.yml` / `gateway.yml` callers); per CR-0013 + issue #46 two additional content-only callers: `demo-gha.yml` builds + pushes `deployment-dashboard-demo-gha` (baked `testing/fixtures/gha/demo/`) and `demo-driver.yml` builds + pushes `deployment-dashboard-demo-driver` (Python sidecar); `release.yml` publishes release assets per ADR-0005; `integration.yml` per CR-0012; `scripts.yml` for Pester + bats; `pages.yml` for Jekyll docs site; `.github/actions/notify/` composite present (dogfooding TODO deferred). |
 | Docs site | Jekyll + Just the Docs remote-theme; mermaid via theme; private-repo Pages plan-gated |
-| Demo sidecar runtime | Python 3 (gateway/demo-driver/entrypoint.py) - single standalone script consuming WireMock.Net admin API; no Python framework footprint beyond `requests`-style HTTP |
+| Demo sidecar runtime | Python 3 (gateway/demo-driver/entrypoint.py) - single standalone script consuming JVM WireMock admin API (post-#57 runtime migration); no Python framework footprint beyond `requests`-style HTTP |
 
 ## Do not introduce
 
