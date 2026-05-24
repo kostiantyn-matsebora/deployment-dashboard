@@ -88,7 +88,7 @@ deployment-dashboard/
 |   |-- drawer/          history drawer
 |   `-- shared/          Signal Store + API client + SSE service + models + fixtures
 |-- gateway/             nginx reverse proxy + Dockerfile (single public ingress on :8080)
-|   |-- demo-gha/        Dockerfile for the demo-gha image (CR-0013) - bakes testing/fixtures/gha/demo/ into a WireMock.Net image
+|   |-- demo-gha/        Dockerfile for the demo-gha image (CR-0013) - bakes testing/fixtures/gha/demo/ into a JVM WireMock image (wiremock/wiremock:3.10.0)
 |   `-- demo-driver/     Dockerfile + entrypoint.py for the demo-driver sidecar (CR-0013 §3e / issue #46) - Python ticker driving demo-gha admin API
 |-- install/             docker-compose.release.yml + install.{ps1,sh} + uninstall.{ps1,sh} - release-install canonical compose; dev_env layers via `-f` merge per ADR-0010
 |-- dev_env/             docker-compose.local.yml (override on install), docker-compose.scaled.yml (standalone NFR-05), start.ps1, stop.ps1

@@ -41,7 +41,7 @@ stack:
   ci-tool: GitHub Actions (live - 11 workflows: _build-and-push-image.yml reusable + api/fetcher/frontend/gateway/demo-gha/demo-driver component callers per CR-0010 + CR-0013 + issue #46; integration.yml per CR-0012; release.yml per ADR-0005; scripts.yml for Pester/bats; pages.yml for Jekyll docs site)
   container-runtime: Docker (Docker Compose v2 for local; Azure Container Apps for prod)
   docs-site: Jekyll + Just the Docs theme (GitHub Pages - docs/_config.yml + docs/Gemfile + docs/index.md nav-ordered; pages.yml workflow)
-  sidecar-runtime: Python 3 (gateway/demo-driver/entrypoint.py - WireMock.Net admin-API ticker; per CR-0013 §3e amendment / issue #46)
+  sidecar-runtime: Python 3 (gateway/demo-driver/entrypoint.py - JVM WireMock admin-API ticker; per CR-0013 §3e amendment / issue #46)
 
 # --- Hard constraints ---
 constraints:
