@@ -5,7 +5,8 @@
 
 # --- Source of truth ---
 architecture-doc: docs/architecture.md
-mockup: docs/ui/mockups/deployment-dashboard.html
+mockup: docs/ui/mockups/deployment-dashboard.html       # legacy HTML mockup - retire under sibling issue #80 once #79 merges
+mockup-spa: mockup/                                     # standalone Angular 20 mockup-app per CR-0015 / ADR-0011 - new visual contract; transitional dual-key state per CR-0015 § 3f until #80 collapses
 # api-contract: omitted - API contract lives inside architecture.md §7.
 work-breakdown-doc: docs/WBS.md
 ci-cd-integration-doc: docs/ci-cd-integration.md
@@ -23,6 +24,7 @@ project-instruction-file: CLAUDE.md
 # --- Repository structure ---
 server-tier-path: backend/
 client-tier-path: frontend/
+mockup-app-path: mockup/                # standalone Angular 20 mockup-app per CR-0015 / ADR-0011 - port 4201; own package.json + node_modules
 infrastructure-path: infrastructure/   # planned per WBS §4 / NFR-06 - directory does not yet exist
 local-dev-path: dev_env/
 testing-path: testing/
@@ -62,6 +64,7 @@ test-runners:
   integration: testing/integration/run-tests.ps1   # CR-0012 cross-stack runtime verification (mock-gha + fetcher + api + gateway + db)
   unit-backend: dotnet test backend/Dashboard.sln
   unit-frontend: npm test --prefix frontend -- --watch=false --browsers=ChromeHeadlessNoSandbox
+  unit-mockup: npm test --prefix mockup -- --watch=false --browsers=ChromeHeadless    # standalone mockup-app Karma suite per CR-0015 / ADR-0011 (post issue #79)
   # smoke / script-suite: not yet present (referenced in template but not authored)
 
 # --- DevOps script quality (D18) ---

@@ -37,8 +37,9 @@ Real-time deployment dashboard. Renders a services x environments matrix sourced
 | Concept | Path | Status |
 |---|---|---|
 | Architecture doc | `docs/architecture.md` | present |
-| Mockup (canonical) | `docs/ui/mockups/deployment-dashboard.html` | present (relocated from `docs/ui/` per PR #62) |
-| Mockup variants | `docs/ui/mockups/env-tag-column-alignment-variant-{a,b}.html` | present (per `docs/ui/env-tag-column-alignment.md` option) |
+| Mockup (legacy HTML — retire under issue #80) | `docs/ui/mockups/deployment-dashboard.html` | present (relocated from `docs/ui/` per PR #62; superseded by `mockup/` per CR-0015) |
+| Mockup variants (legacy HTML — retire under issue #80) | `docs/ui/mockups/env-tag-column-alignment-variant-{a,b}.html` | present (ported to mockup-app variant routes per CR-0015 § 3d) |
+| Mockup-app (standalone Angular 20) | `mockup/` (port 4201; own `package.json` + `node_modules`; zero `@dd/*` deps; hand-authored Tailwind chrome + hardcoded fixtures; 7 routes — `/swim-lane` · `/workflow-rows` · `/invariants` · `/variants/{branching-dag, disconnected, env-tag-a, env-tag-b}` + `/variants` index) | present (new per CR-0015 + ADR-0011 amended for standalone architecture; issue #79) |
 | API contract | inside `docs/architecture.md` §7 (no standalone file) | present |
 | ADR directory | `docs/adr/` (ADR-0001..ADR-0010 + README; ADR-0009 supersedes ADR-0005; ADR-0002 superseded on framing by ADR-0006 - mechanics-of-record) | present |
 | CR directory | `docs/cr/` (CR-0001..CR-0013 + README) | present |
@@ -114,7 +115,8 @@ deployment-dashboard/
 | Server (API host + composed groups + shared) | `backend/api/`, `backend/write-api/`, `backend/read-api/`, `backend/shared/` | `backend-engineer` |
 | Server (Fetcher) | `backend/fetcher/`, `backend/fetcher-host/` | `backend-engineer` |
 | Client | `frontend/` | `frontend-engineer` |
-| Mockup | `docs/ui/mockups/deployment-dashboard.html` + `docs/ui/mockups/*.html` variants | `frontend-engineer` |
+| Mockup (legacy HTML — retire under issue #80) | `docs/ui/mockups/deployment-dashboard.html` + `docs/ui/mockups/*.html` variants | `frontend-engineer` |
+| Mockup-app (standalone Angular 20 — new per CR-0015 + ADR-0011) | `mockup/` | `frontend-engineer`; `solution-architect` reviews for architectural coherence |
 | Gateway | `gateway/` (nginx + Dockerfile) | `devops-engineer` |
 | Gateway demo sidecars | `gateway/demo-gha/`, `gateway/demo-driver/` | `devops-engineer` (Dockerfiles + Python entrypoint) + `qa-engineer` (bundle content under `testing/fixtures/gha/demo/`) |
 | Local-dev orchestration | `dev_env/` | `devops-engineer` |
@@ -177,6 +179,28 @@ Other awesome-copilot matches (.NET / Angular / API Architect / AI Team Dev / AI
 | `technical-writer` external-agent suggestion | Docs co-owned per D25 between SA + tier-engineers + team-lead; Jekyll surface is small (5 nav pages + indexes); not enabled |
 | `python-engineer` external-agent suggestion | Single Python sidecar (`gateway/demo-driver/entrypoint.py`, ~ standalone script consuming `requests`-style HTTP); owned by `devops-engineer` (same governance as a bash entrypoint) |
 
+## Mockup-app tier (standalone Angular 20 — added 2026-05-25 per issue #79)
+
+Per CR-0015 + ADR-0011 (both amended 2026-05-25 to standalone architecture per user constraint surfaced mid-G5):
+
+| Aspect | Choice |
+|---|---|
+| Path | `mockup/` at repo root (sibling of `frontend/`, `backend/`, `gateway/`, `install/`, `dev_env/`, `docs/`, `testing/`) |
+| Workspace integration | **None** — standalone Angular 20 application; own `package.json` + own `node_modules` + own build |
+| Library consumption | **None** — hand-authored Tailwind chrome components mirroring SPA visual output; no `@dd/matrix` / `@dd/shared` / `@dd/drawer` imports |
+| State management | **None** — hardcoded fixtures inline under `mockup/src/app/fixtures/`; no `DeploymentMatrixStore`, no SSE service, no API client |
+| Dep graph | Minimal — `@angular/{common,compiler,core,platform-browser,router}` + `rxjs` + `tslib` + `zone.js` + (dev) Karma + Tailwind + `@angular/build` + `@angular/cli` + `@angular/compiler-cli` + `typescript` + `postcss` + `autoprefixer` |
+| Dev server | `cd mockup && npm run start` on port 4201 (avoids dashboard's 4200) |
+| Production build | `mockup/dist/` static bundle; deployment out-of-scope |
+| Test runner | Karma (own `karma.conf.js` + own `npm test`) |
+| Selector prefix | `dd-mockup` (avoids collision with `frontend/dashboard/`'s `dd` prefix) |
+| Routes (7) | `/` redirect → `/swim-lane` · `/swim-lane` · `/workflow-rows` · `/invariants` (sourced from `testing/mockup-visual/harness.config.json` content; hardcoded copy per standalone boundary) · `/variants/{branching-dag, disconnected, env-tag-a, env-tag-b}` + `/variants` index |
+| Frontend `@dd/matrix` migration (commit `57714f5`) | KEPT on independent grounds — `DashboardHeaderComponent` + `SwimLaneLayoutComponent` + `WorkflowRowsLayoutComponent` + `topology-utils.ts` moved from `frontend/dashboard/src/app/` to `frontend/matrix/src/lib/` as frontend organisational cleanup; mockup-app does NOT consume them |
+
+**Trade-off accepted:** chrome drift risk between mockup-app + SPA (no longer byte-identical by construction). Mitigated by (a) sibling issue #80's mockup-visual harness retargeting (geometric oracle) + (b) cheap manual visual review (mockup surface is small).
+
+**Visual contract during transitional cycle:** dual source-of-truth keys in `local/framework.config.yaml` — `mockup:` (legacy HTML) + `mockup-spa:` (new mockup-app) — until sibling issue #80 collapses to single key on its merge.
+
 ## Staleness watchlist
 
 | Trigger | Where |
@@ -187,6 +211,8 @@ Other awesome-copilot matches (.NET / Angular / API Architect / AI Team Dev / AI
 | New top-level directory not listed above | repo root |
 | New tier-1 doc class under `docs/` (e.g. runbooks, threat-model, scenarios) | `docs/` |
 | New mockup file outside `docs/ui/mockups/` | `docs/ui/` |
+| Mockup-app tier changes shape — new route class, new dep, new tier-level concern (`mockup/` post issue #79) | `mockup/` |
+| Sibling issue #80 merges — retire legacy HTML mockup + collapse `mockup:` + `mockup-spa:` keys + retarget `testing/mockup-visual/` harness | repo-wide |
 | New CI workflow file (cron / scanning / dogfooding hook) | `.github/workflows/` |
 | `.gitattributes` added (cross-OS EOL discipline) | repo root - see `local/roles/devops-engineer.md` |
 | New root governance file (e.g. `GOVERNANCE.md`, `MAINTAINERS.md`) | repo root |
