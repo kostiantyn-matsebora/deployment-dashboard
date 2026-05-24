@@ -91,71 +91,33 @@ sees the notification and fans out to its own SSE subscribers; SSE
 clients must reconnect cleanly across replicas via `Last-Event-ID`.
 Not the default local-dev experience.
 
-## Optional services — pull-mode fetcher
+## Optional services — pull-mode fetcher (real GitHub API)
 
 Per CR-0009 / WBS §1.5, an opt-in pull-mode fetcher worker can be brought
-up alongside the default stack. It polls CI/CD-tool APIs (MVP: GitHub
-Actions) and POSTs deployments to the existing `POST /api/deployments`
-endpoint, identifying itself via `X-Progress-Reporter:
-dashboard-fetcher/github-actions`. Strict NFR-04: no inbound listener, no
-host port, no healthcheck in MVP.
-
-### Recommended — `start.ps1 -Fetcher`
+up alongside the default stack. Use `-RealGha` to point it at your own repos.
 
 ```powershell
 $env:GHA_TOKEN = "<your-pat>"
-pwsh -NoProfile -File dev_env/start.ps1 -Fetcher
+pwsh -NoProfile -File dev_env/start.ps1 -RealGha
 ```
 
-Activates the `fetcher` Compose profile alongside the default stack and
-keeps the `start.ps1` health-poll + URL panel. The URL panel adds one
-line confirming the fetcher is active. `-Fetcher` is composable with
-`-Scaled` (`start.ps1 -Scaled -Fetcher`); both flags together activate
-the profile against the scaled compose file.
-
-**`GHA_TOKEN` precondition.** When `-Fetcher` is set, `start.ps1`
+**`GHA_TOKEN` precondition.** When `-RealGha` is set, `start.ps1`
 requires `$env:GHA_TOKEN` to be a non-empty string and exits non-zero
-**before** any `docker compose up` if it is not. The error names the
-fix:
-
-```
-ERROR: -Fetcher requires $env:GHA_TOKEN to be set.
-Set $env:GHA_TOKEN = '<PAT>' or re-run with -AllowMissingGhaToken to use the placeholder.
-```
-
-**`-AllowMissingGhaToken` escape hatch.** For pure-boot smoke or
-fetcher-code work that does not need real GitHub API access:
+before any `docker compose up` if it is missing. Pass `-AllowMissingGhaToken`
+to skip the precondition (fetcher boots with placeholder token; GitHub API
+calls will 401):
 
 ```powershell
-pwsh -NoProfile -File dev_env/start.ps1 -Fetcher -AllowMissingGhaToken
+pwsh -NoProfile -File dev_env/start.ps1 -RealGha -AllowMissingGhaToken
 ```
 
-Skips the precondition and prints a yellow notice — the fetcher boots
-with the placeholder token from
-`dev_env/docker-compose.local.yml:215` and GitHub API calls will 401.
-The rest of the stack is unaffected.
-
-The fetcher reuses the existing `API_TOKEN`
-(`local-dev-token-not-for-production`) for writing — same key the seed
-scripts trust — so there is no extra token to manage for local dev.
-
-### Escape hatch — raw `docker compose` invocation
-
-The Compose v2 profile can also be activated directly, bypassing the
-`start.ps1` wrapper (no health-poll, no URL panel, no precondition
-check):
+`-RealGha` uses external Postgres by default. Combine with `-LocalDb` for
+a fully self-contained bring-up:
 
 ```powershell
 $env:GHA_TOKEN = "<your-pat>"
-docker compose --profile fetcher -f dev_env/docker-compose.local.yml up
+pwsh -NoProfile -File dev_env/start.ps1 -RealGha -LocalDb
 ```
-
-Without `GHA_TOKEN` set this path boots silently with the placeholder
-and calls to the GitHub API will fail authentication — exactly the
-silent-401 footgun the `start.ps1 -Fetcher` precondition was added to
-catch. Prefer the wrapper unless you have a specific reason. The
-fetcher service is fully omitted from `docker compose up` when the
-`fetcher` profile is not activated.
 
 ## Stopping
 
@@ -228,11 +190,51 @@ Confirm `gateway/nginx.conf` is being baked into the gateway image
 and that `proxy_buffering off; proxy_read_timeout 1h;` are present in
 the `/api/stream` location.
 
+## Overlay-chain story (issue #72)
+
+The contributor stack is built from the release compose base plus one or more overlays.
+Which overlays are added depends on the `start.ps1` flag passed.
+
+### Overlay chains per flag
+
+| `start.ps1` flag | Compose chain | Profiles activated |
+|---|---|---|
+| (no flag — default) | `release.yml` + `demo.yml` + `local.yml` + `demo-local.yml` | `--profile db --profile fetcher` |
+| `-LocalDb` | `release.yml` + `local.yml` | `--profile db` |
+| `-RealGha` | `release.yml` + `local.yml` | `--profile fetcher` |
+| `-RealGha -LocalDb` | `release.yml` + `local.yml` | `--profile db --profile fetcher` |
+| `-Integration` | `release.yml` + `local.yml` + `integration.yml` | `--profile db --profile fetcher` |
+| `-Scaled` | `scaled.yml` (standalone) | (none) |
+
+### Activation-via-overlay-presence pattern
+
+Two overlays use **presence in the compose chain** as their activation signal — no
+profile gating is applied to their services:
+
+- `install/docker-compose.demo.yml` — defines `demo-gha` + `demo-driver` (release-image
+  variants). Added by `start.ps1` (default) and `install.ps1 -Demo`.
+- `dev_env/docker-compose.demo-local.yml` — local-build overrides for `demo-gha` +
+  `demo-driver` (swaps GHCR refs with locally-built `:dev` images). Added by `start.ps1`
+  (default) after `demo.yml` in the chain. NOT added for `install.ps1` (release uses GHCR).
+- `dev_env/docker-compose.integration.yml` — defines `mock-gha` with host port
+  `18080:80` and the fixture bind-mount. Added by `start.ps1 -Integration`.
+
+This avoids two `--profile` flags that would otherwise need to be coordinated
+across three files (release + local + overlay). Per ADR-0010, the release file is
+the source-of-truth; overlays carry only the deltas.
+
+### Cross-references
+
+- [ADR-0010](../docs/adr/ADR-0010-dev-env-compose-derives-from-release.md) — dev_env compose derives from release.
+- [CR-0015](../docs/cr/CR-0015-release-vs-demo-compose-split.md) — release vs demo compose split (issue #72 design-of-record).
+
 ## Files
 
 | File | Purpose |
 |---|---|
-| `docker-compose.local.yml` | Override layered on `install/docker-compose.release.yml` — `build:` blocks + dev-literal secrets + pgAdmin. See [ADR-0010](../docs/adr/ADR-0010-dev-env-compose-derives-from-release.md). |
+| `docker-compose.local.yml` | Core contributor-flow override — `build:` blocks + dev-literal secrets + pgAdmin for core services (api/dashboard/gateway/fetcher). See [ADR-0010](../docs/adr/ADR-0010-dev-env-compose-derives-from-release.md). |
+| `docker-compose.demo-local.yml` | Demo-mode local-build overrides — swaps GHCR-pinned `demo-gha` + `demo-driver` images with locally-built `:dev` tags. Only in chain for demo mode. (issue #72) |
+| `docker-compose.integration.yml` | Integration substrate overlay — `mock-gha` with host port `18080:80` + fixture bind-mount. Added to chain by `start.ps1 -Integration` (issue #72 ASR-B). |
 | `docker-compose.scaled.yml` | Standalone scaled variant — 3 API replicas behind the gateway. NFR-05 validation. NOT layered on release. |
-| `start.ps1` | Thin wrapper: compose up (`-f release -f local` on the default path) → poll `http://localhost:8080/health` (via the gateway) → print URLs. `-Scaled`, `-Fetcher`, `-Demo`, `-AllowMissingGhaToken`, `-HealthTimeoutSeconds`. |
-| `stop.ps1` | Tear down both compose variants (default path passes both `-f` flags). `-Volumes` to wipe DB data. |
+| `start.ps1` | Thin wrapper: compose up → poll `http://localhost:8080/health` → print URLs. Flags: `-LocalDb`, `-RealGha`, `-Demo`, `-Integration`, `-Scaled`, `-AllowMissingGhaToken`, `-HealthTimeoutSeconds`. |
+| `stop.ps1` | Tear down all compose variants (reconstructs the overlay chain for each mode). `-Volumes` to wipe DB data. |

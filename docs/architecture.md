@@ -627,13 +627,18 @@ Conventional environment variables on the API container: `ConnectionStrings__Def
 
 **Docker Compose — Local Development**
 
-| File | Purpose | Owner |
-|---|---|---|
-| `install/docker-compose.release.yml` | Canonical service inventory shared by the release-install and contributor flows (services / profiles / env-var contract / volumes). | `devops-engineer` |
-| `dev_env/docker-compose.local.yml` | Contributor-flow OVERRIDE — `build:` blocks, `pull_policy: never`, dev-literal secrets, `pgadmin`. Layered on the release file via `docker compose -f release.yml -f local.yml`. | `devops-engineer` |
-| `dev_env/docker-compose.scaled.yml` | Standalone NFR-05 validation variant (3-replica `api`, no fetcher, no pgadmin). NOT layered on release. | `devops-engineer` |
+The inventory is distributed across five overlay files. The release file owns solution app services; demo + integration services live in dedicated overlays; contributor-flow build deltas live in `dev_env/` (per [CR-0015](cr/CR-0015-release-vs-demo-overlay-split.md), amending [ADR-0010](adr/ADR-0010-dev-env-compose-derives-from-release.md)).
 
-Merge mechanics + dev-flow rationale: see [ADR-0010](adr/ADR-0010-dev-env-compose-derives-from-release.md). Per-service env-var contract: see `install/docker-compose.release.yml` (canonical source of truth — do not duplicate inline). Migration actuation: API applies pending EF migrations on startup (between `app.Build()` and `app.Run()`); EF idempotency makes re-apply a no-op; no external migrations service; no profile gate; no opt-out — see [ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.md).
+| File | Owns | Owner |
+|---|---|---|
+| `install/docker-compose.release.yml` | Canonical inventory of solution app services (`db`, `api`, `dashboard`, `gateway`, `fetcher`); `db` + `fetcher` are profile-gated (`db` / `fetcher`). No demo or integration services. | `devops-engineer` |
+| `install/docker-compose.demo.yml` | Demo overlay — `demo-gha` + `demo-driver` service blocks + env overrides on `db` / `api` / `fetcher`. Activated by overlay-presence in the `-f` chain (no profile gate on the relocated services). | `devops-engineer` |
+| `dev_env/docker-compose.local.yml` | Contributor-flow OVERRIDE — `build:` blocks for app services, `pull_policy: never`, dev-literal secrets, `pgadmin`. Layered on the release file. | `devops-engineer` |
+| `dev_env/docker-compose.demo-local.yml` | Demo-mode local-build overrides — `build:` blocks for `demo-gha` + `demo-driver` (sibling to the local-overrides file; kept separate so non-demo dev chains do not pull demo services in). | `devops-engineer` |
+| `dev_env/docker-compose.integration.yml` | Integration-test substrate — `mock-gha` service + host-mapped `18080:80` admin port. Activated by overlay-presence (no profile gate). | `devops-engineer` |
+| `dev_env/docker-compose.scaled.yml` | Standalone NFR-05 validation variant (3-replica `api`, no fetcher, no pgadmin). NOT layered on the release file. | `devops-engineer` |
+
+Merge mechanics + dev-flow rationale: see [ADR-0010](adr/ADR-0010-dev-env-compose-derives-from-release.md) (amended by [CR-0015](cr/CR-0015-release-vs-demo-overlay-split.md) for the multi-file overlay shape). Per-service env-var contract: see `install/docker-compose.release.yml` (canonical source of truth — do not duplicate inline). Migration actuation: API applies pending EF migrations on startup (between `app.Build()` and `app.Run()`); EF idempotency makes re-apply a no-op; no external migrations service; no profile gate; no opt-out — see [ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.md).
 
 The browser only ever talks to `http://localhost:8080/` — the gateway resolves whether a request is for the SPA or one of the APIs. There is no CORS preflight anywhere in the system. In Azure the same topology applies: only the gateway's ACA app has public ingress.
 

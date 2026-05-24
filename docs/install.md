@@ -1,39 +1,69 @@
 ---
 title: Install
 nav_order: 3
-description: Full install reference — demo-default release path, real-GHA opt-in, empty stack, contributor flow, escape hatches.
+description: Full install reference — flag matrix, Postgres options, real-GHA opt-in, demo stack, contributor flow, escape hatches.
 ---
 
 # Install
 
-Full install reference for the Deployment Dashboard. For a 60-second taste, the [Get Started](getting-started.html) page is faster. This page is the operational reference: prereqs, all flags, pinning, custom ports, uninstall, contributor flow, and the escape-hatch paths for locked-down environments.
+Full install reference for the Deployment Dashboard. For a 60-second taste, the [Get Started](getting-started.html) page is faster. This page is the operational reference: prereqs, all flags, Postgres assumptions, pinning, custom ports, uninstall, contributor flow, and the escape-hatch paths for locked-down environments.
 
 A clean machine with Docker + the GitHub CLI (`gh`) installed can be running the
 dashboard in two commands — no `git clone`, no source tree, no .NET SDK
-required. **As of [CR-0013](cr/CR-0013-demo-mode-default-installer.html), the
-no-flag install boots a self-contained demo stack**: the dashboard renders a
-populated, evolving matrix within 60 seconds with no GitHub PAT, no external
-network calls. The installer:
+required. The installer:
 
 1. fetches release assets from GitHub via `gh release download`,
 2. authenticates to GHCR via `gh auth token | docker login`,
 3. pulls the pinned private component images from GHCR
-   (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}` —
-   plus `deployment-dashboard-demo-gha` under the default `demo` profile, per
-   [CR-0013](cr/CR-0013-demo-mode-default-installer.html)),
-4. brings up the stack with `docker compose` (default profile: `demo`),
+   (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-{api,fetcher,frontend,gateway}`
+   — plus `deployment-dashboard-demo-gha` and `deployment-dashboard-demo-driver`
+   when `-Demo` is passed),
+4. brings up the stack with `docker compose`,
 5. polls `/health` — the `api` container self-applies pending EF Core migrations on startup before reporting healthy (per [ADR-0009](adr/ADR-0009-startup-applied-ef-migrations.html)),
-6. and prints the URL panel + the generated `API_TOKEN`.
+6. and prints the URL panel.
+
+## Production assumption — external Postgres
+
+The release stack assumes an external Postgres endpoint by default. The bundled
+`db` container (image `postgres:16-alpine`) is a convenience activated only via
+`-LocalDb` or `-Demo`. It is NOT a production contract:
+
+- For production deployments, supply `ConnectionStrings__DefaultConnection`
+  pointing at your Azure Postgres Flexible instance (or equivalent).
+- For quick local evals, pass `-LocalDb` to start the bundled container.
+- For the zero-configuration demo, pass `-Demo`.
 
 ## Flag matrix at a glance
 
-| Invocation | Stack | When to use |
-|---|---|---|
-| `install.ps1` / `install.sh` (no flag) | Demo — `demo-gha` + fetcher pointing at it; 6-service × 5+-env matrix evolves over time | Default. Evaluators / first-look installs. Zero configuration. |
-| `install.ps1 -RealGha` / `install.sh --real-gha` | Real GitHub Actions upstream; requires `$env:GHA_TOKEN` | You want to point the fetcher at your own repos. |
-| `install.ps1 -Empty` / `install.sh --empty` | No fetcher; no demo-gha; bare api/gateway/frontend/db | Direct `POST /api/deployments` integrators / power users. |
-| `install.ps1 -Demo` (back-compat) | Routes to default + logs an info line | Migration aid; will be removed after one release cycle. See § Migration from earlier versions. |
-| `install.ps1 -ResetDemoDefaults` / `install.sh --reset-demo-defaults` | Demo with credential reset | Re-runs where the prior install used different credentials (pre-CR-0014 random secrets or a `-RealGha` install). See § Demo credentials and re-run safety. |
+| Invocation | Postgres | Fetcher | Demo upstream | When to use |
+|---|---|---|---|---|
+| `install.ps1` / `install.sh` (no flag) | External — `ConnectionStrings__DefaultConnection` required | None | None | Production / CI integration. You supply Postgres and push events via `POST /api/deployments`. |
+| `install.ps1 -LocalDb` / `install.sh --local-db` | Bundled `db` container (`--profile db`) | None | None | Quick local eval without external Postgres. No fetcher — push events manually. |
+| `install.ps1 -RealGha` / `install.sh --real-gha` | External — `ConnectionStrings__DefaultConnection` required | Real GitHub Actions (`--profile fetcher`) | None | Point the fetcher at your own GitHub repos. Requires `$env:GHA_TOKEN`. |
+| `install.ps1 -Demo` / `install.sh --demo` | Bundled `db` container (`--profile db`) | Fetcher (`--profile fetcher`) | `demo-gha` + `demo-driver` (baked WireMock bundle) | Evaluators / first-look installs. Zero configuration, zero-PAT, offline. |
+
+## ConnectionStrings__DefaultConnection precondition (ASR-D)
+
+When neither `-LocalDb` nor `-Demo` is passed, the installer fails fast (exit 1)
+before any `docker compose up` if `ConnectionStrings__DefaultConnection` is unset.
+
+Three resolution paths:
+
+1. Pass `-LocalDb` to start the bundled Postgres container (quick local eval).
+2. Pass `-Demo` for the full self-contained demo stack (offline, zero-PAT).
+3. Set the connection string before running:
+
+```powershell
+# PowerShell
+$env:ConnectionStrings__DefaultConnection = 'Host=<host>;Database=dashboard;Username=<user>;Password=<password>'
+pwsh -NoProfile -File install.ps1
+```
+
+```bash
+# bash
+export ConnectionStrings__DefaultConnection='Host=<host>;Database=dashboard;Username=<user>;Password=<password>'
+./install.sh
+```
 
 ## Prerequisites
 
@@ -80,149 +110,124 @@ Verify:
 gh auth status --hostname github.com
 ```
 
-## Quick start — demo default (Windows, PowerShell 7+)
+## Quick start — demo stack (Windows, PowerShell 7+)
 
-The two-step flow: `gh release download` fetches `install.ps1` into the
-current directory; `pwsh` runs it. No flag — boots the demo-default stack per
-[CR-0013](cr/CR-0013-demo-mode-default-installer.html). The dashboard renders
-a populated, evolving 6-service × 5+-env matrix within ~60 seconds, with no
-PAT and no external network calls.
+Two-step flow: `gh release download` fetches `install.ps1`; `pwsh -Demo` runs it.
+The dashboard renders a populated, evolving 6-service × 5+-env matrix within
+~60 seconds with no PAT and no external network calls.
 
 Latest release:
 
 ```powershell
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
-pwsh -NoProfile -File install.ps1
+pwsh -NoProfile -File install.ps1 -Demo
 ```
 
 Pin to a specific tag:
 
 ```powershell
 gh release download v1.2.3 --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
-pwsh -NoProfile -File install.ps1 -Version v1.2.3
+pwsh -NoProfile -File install.ps1 -Demo -Version v1.2.3
 ```
 
-## Quick start — demo default (Linux / macOS)
+## Quick start — demo stack (Linux / macOS)
 
 ```bash
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
-bash install.sh
+bash install.sh --demo
 ```
 
 Pin to a specific tag:
 
 ```bash
 gh release download v1.2.3 --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
-bash install.sh --version v1.2.3
+bash install.sh --demo --version v1.2.3
 ```
 
-The dashboard is then on `http://localhost:8080/`. The installer prints the
-generated `API_TOKEN` once — it is also persisted to
-`./dashboard-release/dashboard.env` for subsequent CI/CD POSTs.
+The dashboard is then on `http://localhost:8080/`.
 
-### What you see
+### What you see (demo mode)
 
 Within ~60 seconds of `/health` returning 200:
 
 | Surface | Behaviour |
 |---|---|
-| Matrix | ≥ 20 populated slots (6 services × 5+ environments); ≥ 5 of the canonical 6 box states from `local/index/ui-states.yaml` appear |
+| Matrix | ≥ 20 populated slots (6 services × 5+ environments); ≥ 5 of the canonical 6 box states appear |
 | DAG | All four `parent_deployments` shapes covered — empty / single per-env / intra-run `needs:` / multi-`needs:` mixed |
 | SSE | New deployment events arrive every 5–10 s; the dashboard evolves visibly for ~10 minutes before the scenario walk loops |
 | Network | Zero outbound calls — the fetcher polls the in-network `demo-gha` container; no GitHub.com traffic |
 
 The demo bundle is content-only — there is no admin UI to inject new events.
-Re-run `install.ps1` to reset the scenario state to tick 1.
+Re-run `install.ps1 -Demo` to reset the scenario state to tick 1.
 
-## Demo credentials and re-run safety
+## Quick start — local evaluation with bundled Postgres
 
-As of [CR-0014](cr/CR-0014-shared-bringup-logic-and-demo-credentials.html), the demo path writes **fixed** credentials to `dashboard.env` instead of random-per-install values. This makes demo re-runs idempotent against an existing `pg-data` volume — you no longer need to uninstall between re-runs.
-
-| Variable | Demo path value | Non-demo paths (`-RealGha` / `--real-gha`, `-Empty` / `--empty`) |
-|---|---|---|
-| `POSTGRES_PASSWORD` | `local-dev-password` | Random hex per install |
-| `API_TOKEN` | `demo-api-token` | Random hex per install |
-
-> **Do not use demo credentials in production.** These are publicly documented fixed literals. They are safe for the demo path only because the stack is internal-only with no public ingress (NFR-04). Any `-RealGha` or `-Empty` install generates random secrets and refuses the demo literals.
-
-### Re-run safety
-
-Re-running `install.ps1` (no flags — demo default) against an existing `pg-data` volume succeeds without data loss. The Postgres cluster was initialised with `local-dev-password`; the re-run writes the same password; the API container connects successfully.
-
-### `-ResetDemoDefaults` — credential drift escape hatch
-
-If a prior install used different credentials (for example, a pre-CR-0014 install with random secrets, or a `-RealGha` install that left a non-demo `POSTGRES_PASSWORD` in `dashboard.env`), re-running as the demo default detects the drift and hard-fails with a remediation menu:
-
-1. **Re-run with `-ResetDemoDefaults`** (PowerShell) / `--reset-demo-defaults` (bash). Force-overwrites `dashboard.env` with demo literals. You MUST then run `uninstall.ps1 -RemoveData` / `uninstall.sh --remove-data` before the next bring-up to drop the incompatible pg volume.
-2. **Run `uninstall.ps1 -RemoveData` then re-install** — clean slate.
-3. **Manually edit `dashboard.env`** and set `POSTGRES_PASSWORD=local-dev-password` — only valid if you know the cluster was seeded with that exact password.
+Use `-LocalDb` when you want to push your own deployment events to an empty
+dashboard without supplying an external Postgres.
 
 ```powershell
-# PowerShell: reset demo credentials + drop the old pg volume before re-running
-pwsh -NoProfile -File install.ps1 -ResetDemoDefaults
-pwsh -NoProfile -File uninstall.ps1 -RemoveData
-pwsh -NoProfile -File install.ps1
+gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
+pwsh -NoProfile -File install.ps1 -LocalDb
 ```
 
 ```bash
-# bash: same sequence
-bash install.sh --reset-demo-defaults
-bash uninstall.sh --remove-data
-bash install.sh
+gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
+bash install.sh --local-db
 ```
+
+The dashboard starts empty. Push events via `POST /api/deployments` (see
+[`docs/ci-cd-integration.md`](ci-cd-integration.html)).
 
 ## Real GitHub repos — `-RealGha`
 
-For pointing the fetcher at your own GitHub Actions repos (CR-0009 pull-mode worker), opt in with `-RealGha` (PowerShell) / `--real-gha` (bash). The `GHA_TOKEN` precondition must hold before any `docker compose` invocation runs (per [issue #5](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/5) — preserved verbatim under the renamed flag):
+Point the fetcher at your own GitHub Actions repos (CR-0009 pull-mode worker).
+`GHA_TOKEN` is required. Supply your own Postgres via
+`ConnectionStrings__DefaultConnection` or omit if it is already in the environment.
 
 ```powershell
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
 $env:GHA_TOKEN = '<your-github-pat>'
+$env:ConnectionStrings__DefaultConnection = 'Host=<host>;Database=dashboard;Username=<user>;Password=<password>'
 pwsh -NoProfile -File install.ps1 -RealGha
 ```
 
 ```bash
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
 export GHA_TOKEN='<your-github-pat>'
+export ConnectionStrings__DefaultConnection='Host=<host>;Database=dashboard;Username=<user>;Password=<password>'
 bash install.sh --real-gha
 ```
 
-Note: the `GHA_TOKEN` and the `gh` CLI's stored token are two distinct secrets; one is not a substitute for the other, and both must be set when running the `-RealGha` path.
+Note: `GHA_TOKEN` and the `gh` CLI stored token are distinct secrets.
 
 | Token | Purpose | Used by | Required when |
 |---|---|---|---|
-| `GHA_TOKEN` | GitHub Actions API PAT | fetcher worker | running the `-RealGha` path |
+| `GHA_TOKEN` | GitHub Actions API PAT | fetcher worker | `-RealGha` / `--real-gha` |
 | `gh` CLI stored token | GitHub Releases + GHCR auth | installer | every install |
 
-`-RealGha` consumes the same fetcher service and the same env-var contract that today's `-Fetcher` does — the rename is install-time UX only, not a backend change. `GHA_REPOSITORIES` defaults to your own value via the existing `dashboard.env` round-trip; pre-CR-0013 behaviour is otherwise unchanged.
+Under the hood, the fetcher omits the `Authorization` header entirely when
+`GHA_TOKEN` is empty or equals the placeholder literal
+`local-dev-gha-token-placeholder`. See
+[`docs/ci-cd-integration.md`](ci-cd-integration.html) § Anonymous-mode transport.
 
-Under the hood, the fetcher's GitHub-API adapter omits the
-`Authorization` header entirely when `GHA_TOKEN` is empty or equals the
-compose-default placeholder literal `local-dev-gha-token-placeholder`. See
-[`docs/ci-cd-integration.md`](ci-cd-integration.html) § Anonymous-mode transport
-for the wire detail. The demo-default path does not exercise this anonymous-mode
-transport — `demo-gha` ignores the `Authorization` header entirely.
+## Production / CI integration (no flag)
 
-> **Anonymous public-repo fetch via `dev_env/start.ps1` is not supported.**
-> Contributors should use `-Demo` for zero-config onboarding. To run a live
-> anonymous fetch, invoke `install.ps1 -RealGha` directly; the token
-> precondition will require `$env:GHA_TOKEN` to be set in the parent shell.
-
-## Empty stack — `-Empty` (direct-POST integrators)
-
-Power-user escape: bring up the stack with no fetcher and no demo-gha. Useful when an external pipeline POSTs deployment events directly to `/api/deployments` and the in-stack fetcher would be redundant or conflicting.
+Bring up the app stack against your own Postgres and push events via
+`POST /api/deployments`. No fetcher, no demo services.
 
 ```powershell
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.ps1 --output install.ps1 --clobber
-pwsh -NoProfile -File install.ps1 -Empty
+$env:ConnectionStrings__DefaultConnection = 'Host=<host>;Database=dashboard;Username=<user>;Password=<password>'
+$env:API_TOKEN = '<your-api-token>'
+pwsh -NoProfile -File install.ps1
 ```
 
 ```bash
 gh release download --repo kostiantyn-matsebora/deployment-dashboard --pattern install.sh --output install.sh --clobber
-bash install.sh --empty
+export ConnectionStrings__DefaultConnection='Host=<host>;Database=dashboard;Username=<user>;Password=<password>'
+export API_TOKEN='<your-api-token>'
+bash install.sh
 ```
-
-The resulting stack is `api` + `gateway` + `dashboard` (frontend) + `db` — four services, identical to the pre-CR-0013 no-flag default. The dashboard renders empty on first load; populate it via direct `POST /api/deployments` (see [`docs/ci-cd-integration.md`](ci-cd-integration.html)).
 
 ## Pin a version
 
@@ -360,25 +365,6 @@ prefer it where local policy permits.
 
 ---
 
-## Migration from earlier versions
-
-[CR-0013](cr/CR-0013-demo-mode-default-installer.html) inverted the
-release-install no-flag default from "empty stack" to "demo stack" and renamed
-two flags. The pre-CR-0013 flag set is preserved on a one-release-cycle
-back-compat alias schedule:
-
-| Pre-CR-0013 flag | CR-0013 replacement | Status |
-|---|---|---|
-| (no flag) | (no flag) | **Behaviour inverted.** Pre-CR-0013 brought up an empty stack; CR-0013 brings up the demo stack. To replicate the old empty-stack default, pass `-Empty` / `--empty`. |
-| `-Fetcher` / `--fetcher` | `-RealGha` / `--real-gha` | Flag renamed. The fetcher service, the env-var contract, and the `$env:GHA_TOKEN` precondition are unchanged. The old flag name routes to the new behaviour for one release cycle. |
-| `-Demo` / `--demo` | (no flag) | Behaviour folded into the default. Passing `-Demo` silently routes to the new demo default + logs one informational "demo is now the default; `-Demo` flag is redundant" line. The PostHog/Grafana public-repo upstream the pre-CR-0013 `-Demo` flag pointed at is no longer used — the new default polls the in-stack `demo-gha` container instead. |
-
-The back-compat aliases (`-Fetcher`, `-Demo`) will be removed in the
-release-after-next. Adopters pinning to a recent tag have one full release
-cycle to switch to `-RealGha` / no-flag.
-
----
-
 ## Contributor flow (from a clone)
 
 For maintainers / contributors who need the source tree + hot-reload:
@@ -389,13 +375,6 @@ cd deployment-dashboard
 pwsh -NoProfile -File dev_env/start.ps1
 ```
 
-The contributor stack is `dev_env/docker-compose.local.yml` — builds images
-locally and bind-mounts `backend/`. Migrations apply on `api` startup the same
-way as the release stack (see § Migrations). See `dev_env/README.md` for the
-full contributor instructions (including `-Scaled`, `-Fetcher`, and the NFR-05
-validation harness).
-
-The release-install path and the contributor flow share **no token value** —
-the dev-literal `local-dev-token-not-for-production` is hard-coded in
-`dev_env/docker-compose.local.yml` and refused by `install.ps1` / `install.sh`
-as `API_TOKEN`.
+The default (no flag) is demo mode — same semantics as `install.ps1 -Demo`. See
+`dev_env/README.md` for the full contributor instructions including `-LocalDb`,
+`-RealGha`, `-Integration`, `-Scaled`, and the NFR-05 validation harness.

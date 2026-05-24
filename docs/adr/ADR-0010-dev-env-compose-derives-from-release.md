@@ -35,28 +35,47 @@ nav_order: 10
 
 - **Decision.**
 
-  > **`dev_env/docker-compose.local.yml` is a compose-merge OVERRIDE layered on `install/docker-compose.release.yml`. The default contributor invocation is `docker compose -f install/docker-compose.release.yml -f dev_env/docker-compose.local.yml up -d --build`. The override file carries only the three contributor-flow deltas (build blocks, dev-literal env-var substitutions, `pgadmin` convenience service) plus `pull_policy: never` on every overridden image.**
+  > **`install/docker-compose.release.yml` is the canonical inventory of solution app services (`db`, `api`, `dashboard`, `gateway`, `fetcher`); the demo overlay (`install/docker-compose.demo.yml`) carries demo-only services (`demo-gha`, `demo-driver`); the integration substrate lives under `dev_env/` (`dev_env/docker-compose.integration.yml`, owning `mock-gha`). Each overlay layers via compose `-f` merge per the same mechanic. `dev_env/docker-compose.local.yml` is the contributor-flow OVERRIDE for app services on top of those bases; `dev_env/docker-compose.demo-local.yml` is the sibling demo-mode build-override (factored out so non-demo dev chains do not pull demo service blocks in). The default contributor invocation (demo) is `docker compose -f install/docker-compose.release.yml -f install/docker-compose.demo.yml -f dev_env/docker-compose.local.yml -f dev_env/docker-compose.demo-local.yml up -d --build`. The override files carry only the contributor-flow deltas (build blocks, `pgadmin` convenience service) plus `pull_policy: never` on every overridden image.**
 
   Mechanics:
 
-  1. **The release file is the canonical service inventory.**
-     - Every service lives there: `db`, `api`, `dashboard`, `gateway`, `fetcher`.
-     - Every env-var contract lives there: substitutions like `${FETCHER_POLL_INTERVAL_SECONDS:-30}`, `${GHA_TOKEN:-…placeholder}`.
-     - Every profile gate + structural detail lives there: `fetcher` profile, `container_name`, `depends_on`, healthchecks, the `pg-data` volume, port mapping `${DASHBOARD_PORT:-8080}:80`.
+  1. **The release file is the canonical inventory of solution app services.**
+     - Solution app services live there: `db`, `api`, `dashboard`, `gateway`, `fetcher`.
+     - Demo-only services (`demo-gha`, `demo-driver`) live in `install/docker-compose.demo.yml`.
+     - Integration substrate (`mock-gha`) lives in `dev_env/docker-compose.integration.yml`.
+     - Every env-var contract for app services lives in the release file: substitutions like `${FETCHER_POLL_INTERVAL_SECONDS:-30}`, `${GHA_TOKEN:-…placeholder}`.
+     - Every profile gate + structural detail for app services lives there: `fetcher` profile, `container_name`, `depends_on`, healthchecks, the `pg-data` volume, port mapping `${DASHBOARD_PORT:-8080}:80`.
   2. **The override file states only what differs.**
      - **Service delta** — `build:` block + `image:` tag override + `pull_policy: never`.
      - **Env-var delta** — a single key under that service's `environment:` block (Compose merges by key; the override wins without re-stating the rest of the env).
      - **New service** (e.g. `pgadmin`) — a full service entry (Compose appends services not in the base).
-  3. **Cosmetic warnings accepted.**
+  3. **Profile-gating is the standard activation pattern for opt-in stack components within a single compose file.**
+     - `db` carries `profiles: ["db"]` in the release file; activated by `--profile db` on `-LocalDb` / `-Demo` install paths. External-Postgres paths (default release install) omit the profile and skip the local `db` container entirely.
+     - `fetcher` carries `profiles: ["fetcher"]` in the release file (existing gate); activated by `--profile fetcher` on `-RealGha` / `-Demo` install paths.
+     - **Profile gating vs overlay activation are distinct mechanisms.** Profile gating opts a service in or out within a single compose file. Overlay activation (demo / integration overlays) is purely a function of the `-f` flag count on the compose invocation — services in `docker-compose.demo.yml` / `docker-compose.integration.yml` carry NO profile gate on their relocated blocks; their activation is binary on overlay presence.
+  4. **Cosmetic warnings accepted.**
      - **Symptom.** Compose interpolates each `-f` file independently. The three secret substitutions the release file expects from `dashboard.env` (`POSTGRES_PASSWORD`, `API_TOKEN`, `ConnectionStrings__DefaultConnection`) interpolate to empty strings when `start.ps1` runs without an env-file, producing one-line `variable XXX not set` warnings on stderr.
      - **Why functional behaviour stays correct.** The override merge then re-sets the keys to the dev literals — only the warnings are visible.
      - **Why not suppressed.** Suppressing them would require either an env-file (violates the "no `.env`" invariant) or in-script `$env:VAR =` exports (creates a second source of truth for the dev literals).
-  4. **`start.ps1` + `stop.ps1` pass both `-f` flags on the default path.**
+  5. **`start.ps1` + `stop.ps1` pass the required `-f` flags per the resolved chain (see § Consequences table for the full per-invocation matrix).**
      - `-Scaled` keeps a single `-f` against the standalone scaled compose.
-     - The argument order (`-f release.yml -f local.yml`) is fixed by Compose's later-wins merge rule.
+     - The argument order is fixed by Compose's later-wins merge rule: release → demo → local → demo-local (contributor demo / default) · release → local → integration (contributor `-Integration`) · release → local (contributor `-LocalDb` / `-RealGha`).
 
 - **Consequences.**
 
+  - **`dev_env/start.ps1` mirrors `install.ps1`'s switch surface 1-for-1** (`-LocalDb`, `-RealGha`, `-Demo`, default), so contributor flow and release install are parity-tested by construction. Cites ASR-C from issue [#72](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/72) (per CR-0015).
+  - **`install/docker-compose.demo.yml` extends the compose-merge override pattern from the two-file shape this ADR was authored for (`release` + `local`) to a multi-file overlay stack** (per CR-0015). Resolved per-invocation:
+
+    | Invocation | Overlay chain | File count |
+    |---|---|---|
+    | Release install — default | `release.yml` | 1 |
+    | Release install — `-LocalDb` / `-RealGha` | `release.yml` | 1 (profile gating adds services within the same file) |
+    | Release install — `-Demo` | `release.yml` + `demo.yml` | 2 |
+    | Contributor flow — `-LocalDb` / `-RealGha` | `release.yml` + `local.yml` | 2 |
+    | Contributor flow — `-Integration` | `release.yml` + `local.yml` + `integration.yml` | 3 |
+    | Contributor flow — `-Demo` / default | `release.yml` + `demo.yml` + `local.yml` + `demo-local.yml` | 4 |
+
+    Order-of-application follows Compose's later-wins rule, fixed by the invoking script. The merge mechanic itself is unchanged; only the overlay count grows. The contributor demo chain peaks at four files because demo-only build overrides are factored into `dev_env/docker-compose.demo-local.yml` to keep non-demo dev chains (LocalDb / RealGha / Integration) free of the demo service blocks.
   - **Single source of truth for the shared inventory.** Installer-side env-var additions, profile additions, image-name renames propagate to the contributor flow automatically. The duplication drift documented in the issue body is structurally eliminated.
   - **Override file shrinks.** From ~175 declarative lines to ~95 (comment-heavy; ~45 lines body). Below the issue's <50-line target if comments are stripped; the comments are retained because the file is the canonical reading entry-point for contributors learning the override pattern.
   - **No backend / frontend / gateway source change.** Build contexts, Dockerfiles, image structure, NFR contracts unchanged.
@@ -67,6 +86,10 @@ nav_order: 10
   - **One-line stderr noise from variable interpolation.** Cosmetic; see § Decision § Mechanics #3 above for symptom + trade-off analysis.
   - **No FR / NFR amendment.** The change records a structural decision about contributor-flow composition, not a user-facing system requirement. Existing FRs all describe SPA / API behaviour — this concern belongs in an ADR. The issue body's *"new: FR-15"* framing is reclassified here.
   - **bash sibling (`start.sh` / `stop.sh`) deferred.** Out of scope per issue #21's own *"Out of scope — Cross-OS shell sugar (PS-vs-bash parity for start/stop)"*. PowerShell 7+ remains the documented contributor-flow prerequisite.
+
+- **Supersession.**
+
+  - Cross-referenced by [CR-0015](../cr/CR-0015-release-vs-demo-overlay-split.md) (coordination record for the release / demo / integration overlay split per issue [#72](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/72)). CR-0015 amends the canonical-inventory framing this ADR was authored under; the compose-merge override mechanic itself stands unchanged.
 
 - **Alternatives considered.**
 
