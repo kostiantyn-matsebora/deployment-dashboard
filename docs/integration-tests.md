@@ -107,9 +107,9 @@ Concrete per-mapping conventions (qa-engineer-owned, mirrors [`testing/fixtures/
   | `100` | Base mappings (the `mappings/` directory). |
   | `999` | Catch-alls — lowest precedence (e.g. `00-default-404-unknown-endpoint.json`). |
 
-- **WireMock.Net JSON shape**. Requests use PascalCase properties (`Method` / `Methods`, `Url`, `Path`, `Headers`, `Params`). The upstream Java WireMock `request: { method, urlPattern }` shape is NOT compatible — see [WireMock.Net Mappings wiki](https://github.com/WireMock-Net/WireMock.Net/wiki/Mappings).
-- **Regex matchers go through the `Matchers` array** — `"Path": { "Matchers": [{ "Name": "RegexMatcher", "Pattern": "..." }] }` — not via a bare `urlPattern` key. Use `WildcardMatcher` for literal-with-`*` patterns, `RegexMatcher` for proper regex.
-- **Response body inlined as `BodyAsJson`** (object or array). Do NOT mix `BodyAsJson` and `BodyAsString` on the same mapping.
+- **JVM WireMock JSON shape**. All property names are camelCase (`priority`, `request`, `response`, `method`, `urlPath`, `status`, `jsonBody`, `bodyPatterns`). See [wiremock.org/docs/stubbing/](https://wiremock.org/docs/stubbing/) for the full schema reference.
+- **Regex URL matchers** use the `"urlPattern"` key (regex string) at the `request` level. Use `"urlPath"` for exact-path matches. Example: `"urlPattern": "/repos/[^/]+/[^/]+/deployments"`.
+- **Response body inlined as `"jsonBody"`** (object or array). Use `"body"` for plain string responses. Do NOT mix `jsonBody` and `body` on the same mapping.
 - **Rate-limit headers required on every successful response** — `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. The fetcher's CR-0011 observation path parses these on every 2xx; missing headers leave usage gauges stale.
 - **No hand-coded JSON inside C# test code**. Mapping bodies live under `testing/fixtures/gha/` only; tests reference scenarios by directory name (`fixture.LoadScenarioAsync("<state-id>")`).
 - **Stateful (cursor-evolving) responses use per-tick subdirectories**, not WireMock's `"Scenario"` + `"WhenStateIs"`.
@@ -135,25 +135,18 @@ SA-locked invariants:
 Scenario-loader code paths (qa-engineer-owned):
 
 - **Loader class.** [`Dashboard.Integration.Tests.MockGhaClient`](../testing/integration/Dashboard.Integration.Tests/MockGhaClient.cs) — admin-API client; owned by the per-test [`ScenarioFixture`](../testing/integration/Dashboard.Integration.Tests/ScenarioFixture.cs). One client per test class via xUnit `IClassFixture<ScenarioFixture>`.
-- **Surface discovery.** First call lazily issues `GET /__admin/` + `GET /__admin/mappings` to verify reachability + capture diagnostics for failing runs. Cached for the rest of the test process.
+- **Surface discovery.** First call lazily issues `GET /__admin/` + `GET /__admin/mappings` to verify reachability. Result is cached for the rest of the test process.
 - **Method signatures.**
 
   | Method | Signature | Purpose |
   |---|---|---|
-  | `DiscoverAdminSurfaceAsync` | `Task DiscoverAdminSurfaceAsync(CancellationToken)` | Lazy reachability probe + path-capability detection. |
-  | `LoadScenarioAsync` | `Task LoadScenarioAsync(string scenarioName, CancellationToken)` | Reads every `*.json` under `testing/fixtures/gha/scenarios/{scenarioName}/`; posts as a JSON array via the bulk-import path. |
-  | `ResetMappingsAsync` | `Task ResetMappingsAsync(CancellationToken)` | Drops every loaded mapping. Tries `POST /__admin/mappings/reset` then falls back to `DELETE /__admin/mappings` on 404/405. |
+  | `DiscoverAdminSurfaceAsync` | `Task DiscoverAdminSurfaceAsync(CancellationToken)` | Lazy reachability probe — `GET /__admin/` + `GET /__admin/mappings`. |
+  | `LoadScenarioAsync` | `Task LoadScenarioAsync(string scenarioName, CancellationToken)` | Reads every `*.json` under `testing/fixtures/gha/scenarios/{scenarioName}/`; posts as a JSON array via `POST /__admin/mappings/import`. |
+  | `ResetMappingsAsync` | `Task ResetMappingsAsync(CancellationToken)` | Drops every loaded mapping via `POST /__admin/mappings/reset`. |
   | `GetRecordedRequestsAsync` | `Task<JsonDocument> GetRecordedRequestsAsync(CancellationToken)` | Raw `GET /__admin/requests` array for negative assertions. |
   | `ClearRecordedRequestsAsync` | `Task ClearRecordedRequestsAsync(CancellationToken)` | `DELETE /__admin/requests` — pristine log per scenario. |
 
-- **WireMock.Net admin-route variance — strict reality check.** WireMock.Net's admin surface differs from upstream Java WireMock. `MockGhaClient` is robust to the variance via two fallback paths:
-
-  | First-choice path | Fallback path | Reason |
-  |---|---|---|
-  | `POST /__admin/mappings/import` | `POST /__admin/mappings` (array body) | WireMock.Net may not implement the `/import` route; `POST /__admin/mappings` accepts either a single object or an array — same semantics. |
-  | `POST /__admin/mappings/reset` | `DELETE /__admin/mappings` | WireMock.Net's canonical reset is `DELETE /__admin/mappings`; the `/reset` route exists only in some builds. |
-
-  On a 404 / 405 from the first-choice path, the client transparently falls back, caches the choice, and proceeds. The chosen path is implicit in the test output through the eventual mapping count (no extra log line).
+- **JVM WireMock admin surface.** `MockGhaClient` targets the JVM WireMock 3.x admin API directly — both `POST /__admin/mappings/import` and `POST /__admin/mappings/reset` are natively supported; no fallback paths are required. See [wiremock.org/docs/standalone/admin-api-reference/](https://wiremock.org/docs/standalone/admin-api-reference/) for the full admin-route inventory.
 
 - **Error semantics.** Any non-2xx, non-404-on-fallback admin response throws `InvalidOperationException` with the response status, the request URL, and up to 512 chars of the response body. The exception bubbles into the xUnit test result so the failure pinpoints the admin-API call rather than masquerading as a generic "no event arrived" timeout downstream.
 - **Scenario reset cadence.** Per-test (`ScenarioFixture.InitializeAsync` resets + clears + TRUNCATEs deployments via `seed.ps1 -CleanOnly`). The fixture is bound via `IClassFixture<ScenarioFixture>` so the reset fires once per test class — single test method per class keeps it 1:1.

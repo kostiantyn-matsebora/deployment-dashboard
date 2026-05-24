@@ -21,7 +21,7 @@ namespace Dashboard.Integration.Tests;
 /// <c>WebApplicationFactory</c>, no in-process mocks for the dashboard
 /// stack. These tests speak HTTP to the real binaries; the only mocked
 /// surface is the upstream GHA API, replaced by the <c>mock-gha</c>
-/// WireMock.Net service under the <c>integration</c> compose profile.</para>
+/// JVM WireMock service under the <c>integration</c> compose profile.</para>
 /// </summary>
 internal static class TestEnvironment
 {
@@ -32,7 +32,7 @@ internal static class TestEnvironment
     public static string ApiKey => Required("DASHBOARD_API_KEY");
 
     /// <summary>
-    /// Host-published base URL of the mock-gha admin API
+    /// Host-published base URL of the JVM WireMock admin API
     /// (e.g. <c>http://localhost:18080</c>). Strict per CR-0012 § Profile-
     /// gating contract: published ONLY under the <c>integration</c> compose
     /// profile; never in production.
@@ -157,9 +157,9 @@ internal static class TestEnvironment
     }
 
     /// <summary>
-    /// Build an <see cref="HttpClient"/> pointed at the mock-gha admin API.
-    /// No auth — the WireMock.Net admin surface is unauthenticated by
-    /// design and reachable only under the integration profile (NFR-04 is
+    /// Build an <see cref="HttpClient"/> pointed at the JVM WireMock admin API.
+    /// No auth — the WireMock admin surface is unauthenticated by design
+    /// and reachable only under the integration profile (NFR-04 is
     /// preserved by the compose profile gate, not by admin-API auth).
     /// </summary>
     public static HttpClient CreateMockGhaAdminClient()
