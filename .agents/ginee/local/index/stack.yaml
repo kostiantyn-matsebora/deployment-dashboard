@@ -100,7 +100,7 @@ tiers:
     demo-gha:
       image: 'wiremock/wiremock:3.10.0 (base image baked into first-party ghcr.io/.../deployment-dashboard-demo-gha:${DASHBOARD_VERSION})'
       role: 'Baked JVM WireMock demo bundle image; 6 services × 5+ envs; 80-150 deployment events; CI/CD caller: gateway/demo-gha/Dockerfile; demo Compose profile only (CR-0013)'
-      dockerfile: '@gateway/demo-gha/Dockerfile (FROM wiremock/wiremock:3.10.0; COPY testing/fixtures/gha/demo/ /app/__admin/mappings/; build context: repo root)'
+      dockerfile: '@gateway/demo-gha/Dockerfile (FROM wiremock/wiremock:3.10.0; COPY testing/fixtures/gha/demo/ /home/wiremock/mappings/; build context: repo root)'
       ci-caller: '@.github/workflows/demo-gha.yml (5th CR-0010 caller)'
     demo-driver:
       language: Python 3 (stdlib only - http.client + json + os + pathlib + time + signal + logging)
