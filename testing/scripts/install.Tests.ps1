@@ -996,11 +996,6 @@ Describe 'install.ps1 -- default -InstallDir is $HOME/.dashboard-release (CWD-in
         $script:tmp = New-TempTestDir
         $script:userHome = $HOME
         $script:defaultDir = Join-Path $script:userHome '.dashboard-release'
-        $script:defaultEnvFile = Join-Path $script:defaultDir 'dashboard.env'
-        $script:preExistedDefaultEnv = Test-Path -LiteralPath $script:defaultEnvFile
-        $script:preExistedDefaultEnvContent = if ($script:preExistedDefaultEnv) {
-            Get-Content -LiteralPath $script:defaultEnvFile -Raw
-        } else { $null }
         $script:preExistedDefaultDir = Test-Path -LiteralPath $script:defaultDir
     }
     AfterEach {
@@ -1008,12 +1003,6 @@ Describe 'install.ps1 -- default -InstallDir is $HOME/.dashboard-release (CWD-in
         if (-not $script:preExistedDefaultDir) {
             if (Test-Path -LiteralPath $script:defaultDir) {
                 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $script:defaultDir
-            }
-        } else {
-            if ($script:preExistedDefaultEnv) {
-                Set-Content -LiteralPath $script:defaultEnvFile -Value $script:preExistedDefaultEnvContent -Encoding utf8 -NoNewline
-            } elseif (Test-Path -LiteralPath $script:defaultEnvFile) {
-                Remove-Item -LiteralPath $script:defaultEnvFile -Force -ErrorAction SilentlyContinue
             }
         }
     }
@@ -1042,7 +1031,8 @@ Describe 'install.ps1 -- default -InstallDir is $HOME/.dashboard-release (CWD-in
         } finally {
             foreach ($k in $envKeys) { [Environment]::SetEnvironmentVariable($k, $envBackup[$k], 'Process') }
         }
-        Test-Path -LiteralPath $script:defaultEnvFile | Should -BeTrue
+        Test-Path -LiteralPath $script:defaultDir | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $script:defaultDir 'docker-compose.release.yml') | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $tmp 'dashboard-release') | Should -BeFalse
         $events = @()
         if (Test-Path $log) {
@@ -1053,8 +1043,5 @@ Describe 'install.ps1 -- default -InstallDir is $HOME/.dashboard-release (CWD-in
         $upCall = $events | Where-Object { $_.event -eq 'docker' -and ($_.args -contains 'up') } | Select-Object -First 1
         $upCall | Should -Not -BeNullOrEmpty
         $upArgs = [object[]]$upCall.args
-        $envFileIdx = [Array]::IndexOf($upArgs, '--env-file')
-        $envFileIdx | Should -BeGreaterThan -1
-        $upArgs[$envFileIdx + 1] | Should -Be $script:defaultEnvFile
     }
 }
