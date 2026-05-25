@@ -80,13 +80,6 @@ function defaultPathIndex(
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="px-6 py-2 flex items-center gap-3 text-xs bg-white border-b border-gray-200">
-      <button
-        type="button"
-        class="text-xs border border-gray-200 rounded-md px-2.5 py-1 bg-white text-gray-700 hover:bg-gray-50"
-        data-testid="workflow-rows-expand-all"
-        disabled
-        title="Expand/collapse is static in the mockup"
-      >Expand all workflows</button>
       <span class="text-gray-400" data-testid="workflow-rows-total">{{ totalPaths() }} workflows</span>
     </div>
 
@@ -213,9 +206,23 @@ export class WorkflowRowsLayoutComponent {
   topoLabel(service: ServiceDescriptor): string {
     const edges = this.topology[service.id]?.edges ?? [];
     if (edges.length === 0) return 'linear';
-    const out: Record<string, number> = {};
-    for (const e of edges) out[e.from] = (out[e.from] ?? 0) + 1;
-    return Object.values(out).some(d => d > 1) ? 'branching DAG' : 'linear chain';
+    const outDeg: Record<string, number> = {};
+    const inDeg: Record<string, number> = {};
+    for (const e of edges) {
+      outDeg[e.from] = (outDeg[e.from] ?? 0) + 1;
+      inDeg[e.to]    = (inDeg[e.to]    ?? 0) + 1;
+    }
+    const hasFork   = Object.values(outDeg).some(d => d > 1);
+    const hasMerge  = Object.values(inDeg).some(d => d > 1);
+    // Check if any slot in the current path has a failure
+    const slots = Object.values(this.matrix[service.id] ?? {});
+    const hasFailure = slots.some(s => s?.current.status === 'failure');
+    const hasRunning = slots.some(s => s?.current.status === 'in-progress');
+    if (hasFork && hasMerge) return 'branching + merging';
+    if (hasFork)  return 'branching';
+    if (hasFailure) return 'has failures';
+    if (hasRunning) return 'deploying…';
+    return 'All green';
   }
 
   totalPaths(): number {
