@@ -1,9 +1,14 @@
-// Specs for pass-4 additions:
+// Specs for pass-4 + pass-5 additions:
 //   1. View-mode switcher buttons exist and drive ViewModeService signal.
 //   2. Display / Topology / Settings popover buttons exist and open their panels.
 //   3. SwimLaneLayoutComponent renders Glance pills in glance mode.
 //   4. WorkflowRowsLayoutComponent renders Glance pills in glance mode.
 //   5. LayoutLeafComponent renders compact box in compact mode.
+//   6. (pass-5) SwimLaneLayoutComponent Focus chrome: helper bar + chevron + pin per service.
+//   7. (pass-5) SwimLaneLayoutComponent Detailed mode: arrow-gap connectors present.
+//   8. (pass-5) WorkflowRowsLayoutComponent Focus chrome: helper bar + 3 controls + expand-all.
+//   9. (pass-5) Dark theme: selecting Dark radio sets data-theme="dark" on documentElement.
+//  10. (pass-5) Fixtures: recovered state present (success + previousFailed: true).
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -306,5 +311,231 @@ describe('LayoutLeafComponent — compact view', () => {
   it('should NOT render dd-mockup-stage-box in compact mode', () => {
     const box = el.querySelector('dd-mockup-stage-box');
     expect(box).toBeNull();
+  });
+});
+
+// ── SwimLaneLayoutComponent: Focus chrome ─────────────────────────────────
+
+describe('SwimLaneLayoutComponent — focus view chrome', () => {
+  let fixture: ComponentFixture<SwimLaneLayoutComponent>;
+  let el: HTMLElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [SwimLaneLayoutComponent]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(SwimLaneLayoutComponent);
+    const comp = fixture.componentInstance;
+    comp.services = MOCKUP_SERVICES;
+    comp.environments = MOCKUP_ENVIRONMENTS;
+    comp.matrix = MOCKUP_MATRIX;
+    comp.topology = MOCKUP_TOPOLOGY;
+    comp.viewMode = 'focus';
+    fixture.detectChanges();
+    el = fixture.nativeElement;
+  });
+
+  it('should render focus data-view attribute', () => {
+    expect(el.querySelector('[data-view="focus"]')).toBeTruthy();
+  });
+
+  it('should render the focus helper text bar', () => {
+    expect(el.querySelector('[data-testid="focus-helper-bar"]')).toBeTruthy();
+  });
+
+  it('should render a chevron button per service', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="focus-chevron-"]');
+    expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
+  });
+
+  it('should render a pin button per service', () => {
+    const pins = el.querySelectorAll('[data-testid^="focus-pin-"]');
+    expect(pins.length).toBe(MOCKUP_SERVICES.length);
+  });
+
+  it('should start with all services collapsed (data-expanded=false)', () => {
+    const rows = el.querySelectorAll('[data-testid^="swim-lane-row-"]');
+    rows.forEach(row => {
+      expect(row.getAttribute('data-expanded')).toBe('false');
+    });
+  });
+
+  it('should expand a service row when its chevron is clicked', () => {
+    const svcId = MOCKUP_SERVICES[0].id;
+    const chevron = el.querySelector(`[data-testid="focus-chevron-${svcId}"]`) as HTMLButtonElement;
+    chevron.click();
+    fixture.detectChanges();
+    const row = el.querySelector(`[data-testid="swim-lane-row-${svcId}"]`);
+    expect(row?.getAttribute('data-expanded')).toBe('true');
+  });
+
+  it('should toggle pin state when pin button is clicked', () => {
+    const svcId = MOCKUP_SERVICES[0].id;
+    const pin = el.querySelector(`[data-testid="focus-pin-${svcId}"]`) as HTMLButtonElement;
+    expect(pin?.getAttribute('aria-pressed')).toBe('false');
+    pin.click();
+    fixture.detectChanges();
+    expect(pin?.getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+// ── SwimLaneLayoutComponent: connector arrows in detailed mode ─────────────
+
+describe('SwimLaneLayoutComponent — detailed view arrow connectors', () => {
+  let fixture: ComponentFixture<SwimLaneLayoutComponent>;
+  let el: HTMLElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [SwimLaneLayoutComponent]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(SwimLaneLayoutComponent);
+    const comp = fixture.componentInstance;
+    comp.services = MOCKUP_SERVICES;
+    comp.environments = MOCKUP_ENVIRONMENTS;
+    comp.matrix = MOCKUP_MATRIX;
+    comp.topology = MOCKUP_TOPOLOGY;
+    comp.viewMode = 'detailed';
+    fixture.detectChanges();
+    el = fixture.nativeElement;
+  });
+
+  it('should render arrow-gap connector elements between depth columns', () => {
+    const gaps = el.querySelectorAll('.arrow-gap');
+    expect(gaps.length).toBeGreaterThan(0);
+  });
+});
+
+// ── WorkflowRowsLayoutComponent: Focus chrome ────────────────────────────
+
+describe('WorkflowRowsLayoutComponent — focus view chrome', () => {
+  let fixture: ComponentFixture<WorkflowRowsLayoutComponent>;
+  let el: HTMLElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [WorkflowRowsLayoutComponent]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(WorkflowRowsLayoutComponent);
+    const comp = fixture.componentInstance;
+    comp.services = MOCKUP_SERVICES;
+    comp.environments = MOCKUP_ENVIRONMENTS;
+    comp.matrix = MOCKUP_MATRIX;
+    comp.topology = MOCKUP_TOPOLOGY;
+    comp.viewMode = 'focus';
+    fixture.detectChanges();
+    el = fixture.nativeElement;
+  });
+
+  it('should render focus data-view attribute', () => {
+    expect(el.querySelector('[data-view="focus"]')).toBeTruthy();
+  });
+
+  it('should render the focus helper text bar', () => {
+    expect(el.querySelector('[data-testid="focus-helper-bar"]')).toBeTruthy();
+  });
+
+  it('should render the "Expand all workflows" button', () => {
+    expect(el.querySelector('[data-testid="expand-all-workflows"]')).toBeTruthy();
+  });
+
+  it('should render a wf-chevron per service', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="focus-wf-chevron-"]');
+    expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
+  });
+
+  it('should render a pin per service', () => {
+    const pins = el.querySelectorAll('[data-testid^="focus-pin-"]');
+    expect(pins.length).toBe(MOCKUP_SERVICES.length);
+  });
+
+  it('should render a detail-chevron per service', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="focus-detail-chevron-"]');
+    expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
+  });
+
+  it('should expand workflow rows when wf-chevron is clicked', () => {
+    const svcId = MOCKUP_SERVICES[0].id;
+    const chevron = el.querySelector(`[data-testid="focus-wf-chevron-${svcId}"]`) as HTMLButtonElement;
+    chevron.click();
+    fixture.detectChanges();
+    const wfRow = el.querySelector(`[data-testid="workflow-row-${svcId}-0"]`);
+    expect(wfRow).toBeTruthy();
+  });
+
+  it('should expand all workflows when "Expand all" is clicked', () => {
+    const btn = el.querySelector('[data-testid="expand-all-workflows"]') as HTMLButtonElement;
+    btn.click();
+    fixture.detectChanges();
+    // All services should now have wfExpanded = true, so workflow-row-*-0 should be present for each
+    for (const svc of MOCKUP_SERVICES) {
+      const wfRow = el.querySelector(`[data-testid="workflow-row-${svc.id}-0"]`);
+      expect(wfRow).toBeTruthy(`expected workflow-row for ${svc.id} to be present`);
+    }
+  });
+});
+
+// ── Dark theme: Settings radio wires to document.documentElement ──────────
+
+describe('AppComponent — dark theme wiring', () => {
+  let fixture: ComponentFixture<AppComponent>;
+  let el: HTMLElement;
+
+  beforeEach(async () => {
+    // Remove any lingering data-theme from prior tests
+    document.documentElement.removeAttribute('data-theme');
+
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideRouter([])]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    el = fixture.nativeElement;
+  });
+
+  afterEach(() => {
+    // Clean up so subsequent test suites start with no theme override
+    document.documentElement.removeAttribute('data-theme');
+  });
+
+  it('should not set data-theme on documentElement by default (Light)', () => {
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+  });
+
+  it('should set data-theme="dark" when Dark radio is selected', () => {
+    const comp = fixture.componentInstance;
+    comp.selectedTheme = 'dark';
+    fixture.detectChanges();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('should remove data-theme when Light radio is selected after Dark', () => {
+    const comp = fixture.componentInstance;
+    comp.selectedTheme = 'dark';
+    fixture.detectChanges();
+    comp.selectedTheme = 'light';
+    fixture.detectChanges();
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+  });
+});
+
+// ── Fixtures: recovered state (success + previousFailed: true) ────────────
+
+describe('Fixtures — recovered state present', () => {
+  it('should have at least one slot with success status and previousFailed=true', () => {
+    let found = false;
+    for (const service of Object.values(MOCKUP_MATRIX)) {
+      for (const slot of Object.values(service)) {
+        if (slot && slot.current.status === 'success' && slot.previousFailed === true) {
+          found = true;
+        }
+      }
+    }
+    expect(found).toBeTrue();
   });
 });

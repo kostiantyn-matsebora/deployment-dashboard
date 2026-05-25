@@ -139,9 +139,11 @@ export const MOCKUP_MATRIX: MatrixState = {
     },
     qahotfix: null,
     uat: {
+      // Recovered case: success after a previous failure — demonstrates the
+      // "recovered" state combo (success + previousFailed: true).
       current: ev('gh-1215', 'v1.7.8', 'success', '2026-05-09T10:30:00Z', 1215, 'alice.johnson'),
       lastSuccessful: null,
-      previousFailed: false
+      previousFailed: true
     },
     prod: {
       current: ev('gh-1185', 'v1.7.7', 'success', '2026-04-30T09:15:00Z', 1185, 'bob.wilson'),

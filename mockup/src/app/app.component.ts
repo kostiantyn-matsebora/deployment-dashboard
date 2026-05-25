@@ -8,6 +8,9 @@
 //   Pass 3 — layout-switcher label readability fix (Tailwind !important override)
 //   Pass 4 — view-switcher wired to ViewModeService signal; Display / Topology /
 //             Settings popover panels restored; click-outside + Escape close logic.
+//   Pass 5 — dark theme wired: Settings radio drives document.documentElement
+//             data-theme attr; styles.css [data-theme="dark"] block handles palette.
+//             Auto follows prefers-color-scheme media query.
 //
 // Popovers:
 //   Three inline anchor panels (Display, Topology, Settings).
@@ -319,7 +322,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
 
               @if (openPopover() === 'settings') {
                 <div class="popover-panel" data-testid="settings-popover" style="right:0; min-width:180px">
-                  <p class="popover-title">Settings: Light</p>
+                  <p class="popover-title">Settings: {{ selectedThemeLabel }}</p>
                   @for (item of themeOptions; track item.id) {
                     <label class="popover-row select-none cursor-pointer">
                       <input
@@ -439,7 +442,35 @@ export class AppComponent {
   ];
 
   // ── Settings popover state ───────────────────────────────────────────────────
-  selectedTheme = 'light';
+  private _selectedTheme = 'light';
+
+  get selectedTheme(): string { return this._selectedTheme; }
+  get selectedThemeLabel(): string {
+    return this.themeOptions.find(t => t.id === this._selectedTheme)?.label ?? 'Light';
+  }
+
+  set selectedTheme(value: string) {
+    this._selectedTheme = value;
+    this.applyTheme(value);
+  }
+
+  private applyTheme(theme: string): void {
+    if (typeof document === 'undefined') return; // SSR guard
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (theme === 'auto') {
+      const prefersDark =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }
 
   readonly themeOptions = [
     { id: 'light', label: 'Light' },

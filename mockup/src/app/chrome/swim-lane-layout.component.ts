@@ -8,14 +8,15 @@
 //   - OnPush change detection.
 //
 // viewMode rendering:
-//   detailed — full 5-row stage-box via layout-leaf
-//   compact  — condensed 3-row box via layout-leaf (viewMode='compact')
-//   focus    — same as compact (Focus treated as Compact density in mockup)
+//   detailed — full 5-row stage-box via layout-leaf; arrow connectors between depth columns
+//   compact  — condensed 3-row box via layout-leaf; same connector arrows
+//   focus    — compact density + per-service chevron/pin focus chrome;
+//              helper text bar; arrow connectors between depth columns
 //   glance   — one row per service: service-name + horizontal mini env-pill strip;
 //              each pill: env-label + status icon + 7-char hash inline;
 //              greyed placeholder for empty slots; arrow connectors between pills
 
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LayoutLeafComponent } from './layout-leaf.component';
 import type {
@@ -99,11 +100,34 @@ function shortHash(slot: SlotState): string {
   return id.slice(0, 7);
 }
 
+// Per-service Focus state shape.
+interface FocusState { expanded: boolean; pinned: boolean; }
+
 @Component({
   selector: 'dd-mockup-swim-lane-layout',
   standalone: true,
   imports: [CommonModule, LayoutLeafComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    .focus-chevron {
+      transition: transform 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #9ca3af;
+    }
+    .focus-chevron:hover { color: #6b7280; }
+    .focus-chevron.expanded { transform: rotate(90deg); }
+    .focus-pin {
+      cursor: pointer;
+      color: #9ca3af;
+      opacity: 0.6;
+      transition: color 0.15s, opacity 0.15s;
+    }
+    .focus-pin:hover { color: #6366f1; opacity: 1; }
+    .focus-pin.pinned { color: #6366f1; opacity: 1; }
+  `],
   template: `
     @if (viewMode === 'glance') {
       <!-- ════════════════════════════════════════════════════════════════════
@@ -182,10 +206,140 @@ function shortHash(slot: SlotState): string {
           </div>
         }
       </main>
+
+    } @else if (viewMode === 'focus') {
+      <!-- ════════════════════════════════════════════════════════════════════
+           FOCUS VIEW — depth-bucket swim lanes with Focus chrome:
+             - Helper text bar above service list.
+             - Each service row: chevron-right (expand to Detailed density) +
+               pin icon + service name. Clicks toggle local signal state.
+             - Expanded rows show Compact-density layout-leaf boxes with
+               arrow connectors between depth columns.
+           Matches spa-swim_lane-focus.png.
+           ════════════════════════════════════════════════════════════════════ -->
+      <div data-testid="pipeline-matrix" data-view="focus" data-layout="swim-lane">
+
+        <!-- Focus helper text bar -->
+        <div
+          class="mx-6 mt-3 mb-2 px-3 py-1.5 rounded border border-indigo-100 bg-indigo-50 text-[11px] text-indigo-600 leading-snug"
+          data-testid="focus-helper-bar"
+        >
+          Click the chevron next to a service to drill into Detailed-size fidelity. Pin to keep it expanded across filters.
+        </div>
+
+        <main class="px-6 pb-8 space-y-1.5">
+          @for (service of services; track service.id) {
+            <div
+              class="focus-row lane-row relative bg-white rounded-lg border border-gray-200"
+              [attr.data-service-row]="service.id"
+              [attr.data-testid]="'swim-lane-row-' + service.id"
+              [attr.data-expanded]="focusState(service.id).expanded"
+              [attr.data-pinned]="focusState(service.id).pinned"
+            >
+              <!-- Focus chrome header: chevron + pin + service name + topo label -->
+              <div class="flex items-center gap-2 px-3 py-2">
+                <!-- Expand/collapse chevron -->
+                <button
+                  type="button"
+                  class="focus-chevron w-5 h-5 shrink-0"
+                  [class.expanded]="focusState(service.id).expanded"
+                  [attr.data-testid]="'focus-chevron-' + service.id"
+                  [attr.aria-expanded]="focusState(service.id).expanded"
+                  [attr.aria-label]="'Expand ' + service.name"
+                  (click)="toggleFocusExpand(service.id)"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                <!-- Pin icon -->
+                <button
+                  type="button"
+                  class="focus-pin w-4 h-4 shrink-0"
+                  [class.pinned]="focusState(service.id).pinned"
+                  [attr.data-testid]="'focus-pin-' + service.id"
+                  [attr.aria-pressed]="focusState(service.id).pinned"
+                  [attr.aria-label]="'Pin ' + service.name"
+                  (click)="toggleFocusPin(service.id)"
+                  title="Pin to keep expanded across filters"
+                >
+                  <!-- Thumbtack SVG: filled when pinned, outline when not -->
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    @if (focusState(service.id).pinned) {
+                      <path fill="currentColor" stroke="none" d="M12 2l3 6h5l-4 4 1.5 6.5L12 15l-5.5 3.5L8 12 4 8h5z" />
+                    } @else {
+                      <line x1="12" y1="17" x2="12" y2="22" />
+                      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+                    }
+                  </svg>
+                </button>
+
+                <!-- Service name + topo label -->
+                <div class="flex-1 min-w-0">
+                  <p
+                    class="text-sm font-semibold text-gray-800 whitespace-nowrap truncate"
+                    [attr.data-testid]="'service-name-' + service.id"
+                    [title]="service.name"
+                  >{{ service.name }}</p>
+                  <p class="text-[10px] text-gray-400 italic leading-tight">{{ topoLabel(service) }}</p>
+                </div>
+              </div>
+
+              <!-- Expanded content: depth columns with arrow connectors -->
+              @if (focusState(service.id).expanded) {
+                <div class="px-3 pb-2">
+                  <div
+                    class="flex items-stretch"
+                    [attr.data-depth-columns]="bucketsFor(service).length"
+                  >
+                    @for (bucket of bucketsFor(service); track $index; let bLast = $last) {
+                      <div class="depth-slot flex flex-col gap-2 min-w-0">
+                        @if (bucket.length === 0) {
+                          <div class="text-[10px] text-gray-300 text-center italic">—</div>
+                        } @else {
+                          @for (envId of bucket; track envId) {
+                            <div
+                              class="leaf-pair relative"
+                              [attr.data-env]="envId"
+                            >
+                              <span class="env-tag">{{ envLabel(envId) }}</span>
+                              <dd-mockup-layout-leaf
+                                [service]="service"
+                                [env]="envFor(envId)"
+                                [slot]="slotFor(service, envId)"
+                                viewMode="compact"
+                              ></dd-mockup-layout-leaf>
+                            </div>
+                          }
+                        }
+                      </div>
+
+                      @if (!bLast) {
+                        <div class="arrow-gap">
+                          <div class="arrow-line"></div>
+                        </div>
+                      }
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          @if (services.length === 0) {
+            <div class="text-center py-16 text-gray-400" data-testid="empty-state">
+              <p class="text-lg font-medium">No services</p>
+            </div>
+          }
+        </main>
+      </div>
+
     } @else {
       <!-- ════════════════════════════════════════════════════════════════════
-           DETAILED / COMPACT / FOCUS VIEW — depth-bucket swim lanes.
-           viewMode threaded to layout-leaf for compact/focus condensed boxes.
+           DETAILED / COMPACT VIEW — depth-bucket swim lanes with arrow
+           connectors between adjacent depth columns.
+           viewMode threaded to layout-leaf for compact condensed boxes.
            ════════════════════════════════════════════════════════════════════ -->
       <main
         class="px-6 pt-4 pb-8"
@@ -215,13 +369,12 @@ function shortHash(slot: SlotState): string {
                   <p class="text-[10px] text-gray-400 italic mt-0.5 leading-tight">{{ topoLabel(service) }}</p>
                 </div>
 
-                <!-- Depth columns -->
+                <!-- Depth columns with arrow connectors between adjacent buckets -->
                 <div
                   class="flex-1 min-w-0 flex items-stretch"
-                  style="column-gap: clamp(8px, 1.5vw, 28px); gap: clamp(8px, 1.5vw, 28px)"
                   [attr.data-depth-columns]="bucketsFor(service).length"
                 >
-                  @for (bucket of bucketsFor(service); track $index) {
+                  @for (bucket of bucketsFor(service); track $index; let bLast = $last) {
                     <div class="depth-slot flex flex-col gap-2 min-w-0">
                       @if (bucket.length === 0) {
                         <div class="text-[10px] text-gray-300 text-center italic">—</div>
@@ -242,6 +395,12 @@ function shortHash(slot: SlotState): string {
                         }
                       }
                     </div>
+
+                    @if (!bLast) {
+                      <div class="arrow-gap">
+                        <div class="arrow-line"></div>
+                      </div>
+                    }
                   }
                 </div>
               </div>
@@ -271,6 +430,29 @@ export class SwimLaneLayoutComponent {
   @Input({ required: true }) topology!: TopologyState;
   @Input() viewMode: ViewMode = 'detailed';
 
+  // ── Focus chrome state ──────────────────────────────────────────────────────
+  // Per-service expand/pin state. Record keyed by service.id.
+  private readonly _focusStates = signal<Record<string, FocusState>>({});
+
+  focusState(serviceId: string): FocusState {
+    return this._focusStates()[serviceId] ?? { expanded: false, pinned: false };
+  }
+
+  toggleFocusExpand(serviceId: string): void {
+    this._focusStates.update(prev => ({
+      ...prev,
+      [serviceId]: { ...this.focusState(serviceId), expanded: !this.focusState(serviceId).expanded }
+    }));
+  }
+
+  toggleFocusPin(serviceId: string): void {
+    this._focusStates.update(prev => ({
+      ...prev,
+      [serviceId]: { ...this.focusState(serviceId), pinned: !this.focusState(serviceId).pinned }
+    }));
+  }
+
+  // ── Data helpers ────────────────────────────────────────────────────────────
   bucketsFor(service: ServiceDescriptor): readonly (readonly string[])[] {
     return depthBuckets(
       this.topology[service.id] ?? { edges: [] },
