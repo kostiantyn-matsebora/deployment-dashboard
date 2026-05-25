@@ -134,9 +134,19 @@ interface FocusState { detailExpanded: boolean; pinned: boolean; allWfsExpanded:
             [attr.data-service-row]="service.id"
             [attr.data-testid]="'workflow-rows-' + service.id"
           >
-            <svg class="w-3.5 h-3.5 text-gray-400 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
+            <button
+              type="button"
+              class="chev"
+              [class.expanded]="isRowExpanded(service.id)"
+              [attr.data-testid]="'row-chevron-' + service.id"
+              [attr.aria-expanded]="isRowExpanded(service.id)"
+              title="Expand service"
+              (click)="toggleRowExpand(service.id)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 6 15 12 9 18"/>
+              </svg>
+            </button>
             <p
               class="text-sm font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap shrink-0"
               [attr.data-testid]="'service-name-' + service.id"
@@ -360,7 +370,8 @@ interface FocusState { detailExpanded: boolean; pinned: boolean; allWfsExpanded:
 
     } @else {
       <!-- ════════════════════════════════════════════════════════════════════
-           DETAILED / COMPACT VIEW — workflow rows with collapsed-default.
+           DETAILED / COMPACT VIEW — workflow rows with per-service expand.
+           First service is expanded by default; all chevrons are wired.
            ════════════════════════════════════════════════════════════════════ -->
       <main
         class="px-6 py-2 space-y-3"
@@ -368,18 +379,28 @@ interface FocusState { detailExpanded: boolean; pinned: boolean; allWfsExpanded:
         [attr.data-view]="viewMode"
         data-layout="workflow-rows"
       >
-        @for (service of services; track service.id; let idx = $index) {
-          @if (idx > 0) {
+        @for (service of services; track service.id) {
+          @if (!isRowExpanded(service.id)) {
+            <!-- Collapsed row -->
             <div
-              class="svc-block-collapsed bg-white dark:bg-[#161b22] rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2 cursor-default"
+              class="svc-block-collapsed bg-white dark:bg-[#161b22] rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-2"
               [attr.data-service]="service.id"
               [attr.data-service-row]="service.id"
               [attr.data-testid]="'workflow-rows-' + service.id"
               data-expanded="false"
             >
-              <svg class="w-3.5 h-3.5 text-gray-400 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
+              <button
+                type="button"
+                class="chev"
+                [attr.data-testid]="'row-chevron-' + service.id"
+                [attr.aria-expanded]="false"
+                title="Expand service"
+                (click)="toggleRowExpand(service.id)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 6 15 12 9 18"/>
+                </svg>
+              </button>
               <p
                 class="text-sm font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap"
                 [attr.data-testid]="'service-name-' + service.id"
@@ -392,6 +413,7 @@ interface FocusState { detailExpanded: boolean; pinned: boolean; allWfsExpanded:
               <span class="text-[10px] text-gray-400 dark:text-gray-500 italic ml-1">{{ topoLabel(service) }}</span>
             </div>
           } @else {
+            <!-- Expanded row -->
             <section
               class="svc-block dark:[background:rgb(22_27_34)] dark:border-gray-700"
               [attr.data-service]="service.id"
@@ -401,9 +423,18 @@ interface FocusState { detailExpanded: boolean; pinned: boolean; allWfsExpanded:
             >
               <div class="svc-block-meta dark:border-gray-800">
                 <div class="svc-block-meta-row">
-                  <svg class="w-3.5 h-3.5 text-gray-500 dark:text-gray-400 shrink-0 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <button
+                    type="button"
+                    class="chev expanded"
+                    [attr.data-testid]="'row-chevron-' + service.id"
+                    [attr.aria-expanded]="true"
+                    title="Collapse service"
+                    (click)="toggleRowExpand(service.id)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 6 15 12 9 18"/>
+                    </svg>
+                  </button>
                   <p
                     class="text-sm font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap ml-1"
                     style="width: max-content"
@@ -481,6 +512,26 @@ export class WorkflowRowsLayoutComponent {
   @Input({ required: true }) matrix!: MatrixState;
   @Input({ required: true }) topology!: TopologyState;
   @Input() viewMode: ViewMode = 'detailed';
+
+  // ── Non-Focus per-service expand state ─────────────────────────────────────
+  // Default: first service expanded, rest collapsed. Shared across Detailed,
+  // Compact, and Glance views (all three use the same signal so toggling is
+  // consistent when the user switches density without leaving the route).
+  private readonly _rowExpanded = signal<Record<string, boolean>>({});
+
+  isRowExpanded(serviceId: string): boolean {
+    const stored = this._rowExpanded()[serviceId];
+    if (stored !== undefined) return stored;
+    // Default: first service in the list is expanded.
+    return this.services.length > 0 && this.services[0].id === serviceId;
+  }
+
+  toggleRowExpand(serviceId: string): void {
+    this._rowExpanded.update(prev => ({
+      ...prev,
+      [serviceId]: !this.isRowExpanded(serviceId)
+    }));
+  }
 
   // ── Focus chrome state ──────────────────────────────────────────────────────
   private readonly _focusStates = signal<Record<string, FocusState>>({});

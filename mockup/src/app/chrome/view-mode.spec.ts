@@ -484,6 +484,100 @@ describe('WorkflowRowsLayoutComponent — focus view chrome', () => {
   });
 });
 
+// ── WorkflowRowsLayoutComponent: wired chevrons in non-Focus views ────────
+
+describe('WorkflowRowsLayoutComponent — wired chevrons (detailed)', () => {
+  let fixture: ComponentFixture<WorkflowRowsLayoutComponent>;
+  let el: HTMLElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [WorkflowRowsLayoutComponent]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(WorkflowRowsLayoutComponent);
+    const comp = fixture.componentInstance;
+    comp.services = MOCKUP_SERVICES;
+    comp.environments = MOCKUP_ENVIRONMENTS;
+    comp.matrix = MOCKUP_MATRIX;
+    comp.topology = MOCKUP_TOPOLOGY;
+    comp.viewMode = 'detailed';
+    fixture.detectChanges();
+    el = fixture.nativeElement;
+  });
+
+  it('should render a row-chevron button per service in detailed mode', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="row-chevron-"]');
+    expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
+  });
+
+  it('first service should be expanded by default', () => {
+    const svcId = MOCKUP_SERVICES[0].id;
+    const expanded = el.querySelector(`[data-testid="workflow-rows-${svcId}"][data-expanded="true"]`);
+    expect(expanded).toBeTruthy();
+  });
+
+  it('subsequent services should be collapsed by default', () => {
+    if (MOCKUP_SERVICES.length < 2) { pending('need 2+ services'); return; }
+    const svcId = MOCKUP_SERVICES[1].id;
+    const collapsed = el.querySelector(`[data-testid="workflow-rows-${svcId}"][data-expanded="false"]`);
+    expect(collapsed).toBeTruthy();
+  });
+
+  it('should expand a collapsed service when its chevron is clicked', () => {
+    if (MOCKUP_SERVICES.length < 2) { pending('need 2+ services'); return; }
+    const svcId = MOCKUP_SERVICES[1].id;
+    const chevron = el.querySelector(`[data-testid="row-chevron-${svcId}"]`) as HTMLButtonElement;
+    expect(chevron).toBeTruthy();
+    chevron.click();
+    fixture.detectChanges();
+    const expanded = el.querySelector(`[data-testid="workflow-rows-${svcId}"][data-expanded="true"]`);
+    expect(expanded).toBeTruthy();
+  });
+
+  it('should collapse an expanded service when its chevron is clicked', () => {
+    const svcId = MOCKUP_SERVICES[0].id;
+    const chevron = el.querySelector(`[data-testid="row-chevron-${svcId}"]`) as HTMLButtonElement;
+    chevron.click();
+    fixture.detectChanges();
+    const collapsed = el.querySelector(`[data-testid="workflow-rows-${svcId}"][data-expanded="false"]`);
+    expect(collapsed).toBeTruthy();
+  });
+});
+
+describe('WorkflowRowsLayoutComponent — wired chevrons (glance)', () => {
+  let fixture: ComponentFixture<WorkflowRowsLayoutComponent>;
+  let el: HTMLElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [WorkflowRowsLayoutComponent]
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(WorkflowRowsLayoutComponent);
+    const comp = fixture.componentInstance;
+    comp.services = MOCKUP_SERVICES;
+    comp.environments = MOCKUP_ENVIRONMENTS;
+    comp.matrix = MOCKUP_MATRIX;
+    comp.topology = MOCKUP_TOPOLOGY;
+    comp.viewMode = 'glance';
+    fixture.detectChanges();
+    el = fixture.nativeElement;
+  });
+
+  it('should render a wired row-chevron button per service in glance mode', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="row-chevron-"]');
+    expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
+  });
+
+  it('each glance chevron should be a <button> element', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="row-chevron-"]');
+    chevrons.forEach(btn => {
+      expect(btn.tagName.toLowerCase()).toBe('button');
+    });
+  });
+});
+
 // ── Dark theme: Settings radio wires to document.documentElement ──────────
 
 describe('AppComponent — dark theme wiring', () => {

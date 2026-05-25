@@ -9,6 +9,13 @@ module.exports = {
     './src/**/*.{html,ts}'
   ],
   darkMode: ['selector', '[data-theme="dark"]'],
+  // Safelist dynamic classes that the JIT scanner misses (bound via routerLinkActive).
+  safelist: [
+    '!bg-purple-600',
+    '!text-white',
+    'dark:!bg-purple-600',
+    'dark:!text-white',
+  ],
   theme: {
     extend: {
       fontFamily: {

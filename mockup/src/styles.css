@@ -108,6 +108,20 @@
   .row-expanded { background: linear-gradient(0deg, #f9fafb, white); }
   .pin-active { color: #d97706; }
 
+  /* ============== Layout-switcher active fill ============== */
+  /* Belt-and-suspenders override for the dynamic routerLinkActive binding.
+     Tailwind's JIT scanner can miss class names that are applied purely
+     through routerLinkActive (not as static template strings).
+     This class is referenced by both routerLinkActive AND the safelist. */
+  .layout-active {
+    background-color: rgb(147 51 234) !important; /* purple-600 */
+    color: white !important;
+  }
+  [data-theme="dark"] .layout-active {
+    background-color: rgb(147 51 234) !important;
+    color: white !important;
+  }
+
   .focus-row { position: relative; }
   .focus-row::before {
     content: '';

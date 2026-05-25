@@ -77,13 +77,16 @@ type PopoverId = 'display' | 'topology' | 'settings';
       class="min-h-screen bg-gray-50 dark:bg-[#0d1117] flex flex-col"
     >
 
-      <!-- Full-screen backdrop — closes any open popover on click-outside -->
+      <!-- Full-screen backdrop — pointer-events:none so it does NOT block the
+           popover panel or any other element. Click-outside-to-close is handled
+           by @HostListener('document:click') which fires for all clicks that
+           DO NOT originate inside a z-[61] popover anchor (stop-propagation on
+           the trigger button is already in place). -->
       @if (openPopover() !== null) {
         <div
           class="fixed inset-0 z-50"
-          style="background: transparent"
+          style="background: transparent; pointer-events: none"
           data-testid="popover-backdrop"
-          (click)="closePopover()"
         ></div>
       }
 
@@ -183,14 +186,14 @@ type PopoverId = 'display' | 'topology' | 'settings';
             >
               <a
                 routerLink="/swim-lane"
-                routerLinkActive="!bg-purple-600 !text-white"
+                routerLinkActive="layout-active"
                 [routerLinkActiveOptions]="{ exact: true }"
                 class="px-2.5 py-1.5 font-medium border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161b22] text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors no-underline"
                 data-testid="layout-option-swim-lane"
               >Swim-lane</a>
               <a
                 routerLink="/workflow-rows"
-                routerLinkActive="!bg-purple-600 !text-white"
+                routerLinkActive="layout-active"
                 [routerLinkActiveOptions]="{ exact: true }"
                 class="px-2.5 py-1.5 font-medium bg-white dark:bg-[#161b22] text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors no-underline"
                 data-testid="layout-option-workflow-rows"
@@ -219,7 +222,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
               </button>
 
               @if (openPopover() === 'display') {
-                <div class="popover-panel" data-testid="display-popover">
+                <div class="popover-panel" data-testid="display-popover" (click)="$event.stopPropagation()">
                   <p class="popover-title">Display: Box contents</p>
                   @for (item of displayItems; track item.id) {
                     <label class="popover-row select-none cursor-pointer">
@@ -260,7 +263,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
               </button>
 
               @if (openPopover() === 'topology') {
-                <div class="popover-panel" data-testid="topology-popover" style="min-width:290px">
+                <div class="popover-panel" data-testid="topology-popover" style="min-width:290px" (click)="$event.stopPropagation()">
                   <p class="popover-title">Topology: Version</p>
                   <div class="flex gap-4">
                     <div class="flex-1">
@@ -324,7 +327,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
               </button>
 
               @if (openPopover() === 'settings') {
-                <div class="popover-panel" data-testid="settings-popover" style="right:0; min-width:180px">
+                <div class="popover-panel" data-testid="settings-popover" style="right:0; min-width:180px" (click)="$event.stopPropagation()">
                   <p class="popover-title">Settings: {{ selectedThemeLabel }}</p>
                   @for (item of themeOptions; track item.id) {
                     <label class="popover-row select-none cursor-pointer">
@@ -409,6 +412,14 @@ export class AppComponent implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    this.closePopover();
+  }
+
+  // Close on any click that bubbles up to document (i.e. outside a popover trigger).
+  // Trigger buttons call event.stopPropagation() so they don't reach here.
+  // Popover panel content must also stop propagation to avoid closing on inner clicks.
+  @HostListener('document:click')
+  onDocumentClick(): void {
     this.closePopover();
   }
 
