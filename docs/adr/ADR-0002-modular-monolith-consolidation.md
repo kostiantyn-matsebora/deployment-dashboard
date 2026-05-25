@@ -16,7 +16,7 @@ nav_order: 2
   Constraints:
   - **NFR-02 (≤ $30/month)** — one ACA container app is cheaper than two on the Consumption plan; collapsing the two halves reduces per-app fixed overhead and stays comfortably inside the cap.
   - **NFR-05 (stateless backend)** — co-location must not introduce sticky-session or in-memory-fan-out shortcuts. Each instance still subscribes to PostgreSQL `LISTEN deployments` independently.
-  - **§8 Security (FR-10 — write-only auth)** — the API-key boundary MUST persist after consolidation. Read endpoints remain unauthenticated; only `POST /api/deployments` (and `PATCH /api/config/topology`, added by CR-0003) require `X-Api-Key`.
+  - **§8 Security (FR-10 — write-only auth)** — the API-key boundary MUST persist after consolidation. Read endpoints remain unauthenticated; only `POST /api/deployments` (and `PATCH /api/config/topology`) require `X-Api-Key`.
   - **Future split option must remain cheap.** The day a real traffic-shape signal (asymmetric resource needs, divergent release cadence, tightened security boundary, inverted cost-cap) justifies a split, the split must be a host-project + gateway-config change — not a code rewrite.
 
 - **Decision:** Ship **one ASP.NET Core host project** (`backend/api/`) that composes **two library projects** — one per API surface — plus a shared library for cross-cutting concerns.

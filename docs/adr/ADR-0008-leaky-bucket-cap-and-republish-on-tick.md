@@ -6,9 +6,9 @@ nav_order: 8
 
 # ADR-0008 — Leaky-bucket cap on observed remaining; re-publish-on-tick (no persistence); per-token cap with per-(adapter, source-id) reporting
 
-- **Status:** accepted (paired with [CR-0011](../cr/CR-0011-fetcher-rate-limit-governance.md))
+- **Status:** accepted (paired with the fetcher rate-limit governance change request, historical CR-0011)
 
-- **Context.** [CR-0011](../cr/CR-0011-fetcher-rate-limit-governance.md) introduces a configurable self-imposed rate-limit cap on the fetcher, plus a `POST /api/fetcher/usage` → in-memory cache → `GET /api/fetcher/usage` reporting flow, plus a dashboard surfacing. Three cross-cutting technical decisions are co-introduced by that CR and need a single anchor so Wave-2 backend + every future vendor adapter implementing this CR's posture do not relitigate them:
+- **Context.** The fetcher rate-limit governance change request introduces a configurable self-imposed rate-limit cap on the fetcher, plus a `POST /api/fetcher/usage` → in-memory cache → `GET /api/fetcher/usage` reporting flow, plus a dashboard surfacing. Three cross-cutting technical decisions are co-introduced by that change request and need a single anchor so Wave-2 backend + every future vendor adapter implementing this posture do not relitigate them:
 
   1. **How does the fetcher account for its self-imposed cap — fetcher-side counter, sliding window, token bucket, or leaky-bucket-on-observed-remaining?**
   2. **Where does the per-`(adapter, source_id)` usage snapshot live on the backend — durable table, distributed cache, or in-memory process-local with re-publish-on-tick?**
@@ -18,10 +18,10 @@ nav_order: 8
 
   - **NFR-05 (stateless backend across replicas).** Any API instance must be able to serve any request without instance-local durable state. New state shape must either be replica-fungible (e.g. persisted in the existing Postgres database, read by every replica) **or** rebuildable from external input (re-publish-on-tick from a single-writer source).
   - **NFR-02 (≤ $30/month).** No new infra-tier components (no Redis, no second Postgres, no new ACA app) for a "now gauge" that does not need durability.
-  - **NFR-09 (reflow invariant).** Applies to the SPA surface this ADR enables — not to the backend / fetcher decisions here directly, but the staleness affordance the cache exposes (`received_at`) is consumed by the SPA cluster (CR-0011 § 3d).
+  - **NFR-09 (reflow invariant).** Applies to the SPA surface this ADR enables — not to the backend / fetcher decisions here directly, but the staleness affordance the cache exposes (`received_at`) is consumed by the SPA rate-limit cluster.
   - **[ADR-0004](./ADR-0004-opaque-per-progress-reporter-cursor.md) Decision 3 — fetcher `minReplicas == maxReplicas == 1`.** The fetcher is a single-writer process by construction when enabled. Whatever cache mechanism the backend uses can rely on single-writer semantics from the upstream push.
   - **[ADR-0004](./ADR-0004-opaque-per-progress-reporter-cursor.md) Decision 4 — host owns rate-limit back-off.** The leaky-bucket gate sits in the host, not the adapter. Adapters surface observation; host owns the decision to issue or skip the next request.
-  - **[CR-0009](../cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md) § 3c — pull-mode is a strict subset of push-mode.** Whatever discriminator the usage cache uses must compose cleanly with the `progress_reporter` + `source_id` identifiers already established by CR-0009 + ADR-0004 — one concept across attribution, cursor state, and now usage state.
+  - **Pull-mode is a strict subset of push-mode.** Whatever discriminator the usage cache uses must compose cleanly with the `progress_reporter` + `source_id` identifiers already established by the pull-mode fetcher change request + ADR-0004 — one concept across attribution, cursor state, and now usage state.
 
 - **Decision.**
 
@@ -54,7 +54,7 @@ nav_order: 8
 
   **Trade-off (acknowledged).** The fetcher's view of `(upstream_limit - upstream_remaining)` lags reality by one request — after issuing request N, the fetcher doesn't see the upstream's updated `Remaining` until N's response arrives. In the worst case this lets the fetcher overshoot the cap by one in-flight request. At the default 30s poll interval + 1 concurrent fetch this is at most 1 request per window (e.g. 1/5000 = 0.02% slop on a GHA token). For an "operator-visible budget governance" use case (not a hard regulatory limit) this is acceptable.
 
-  **Naming note.** Calling this "leaky-bucket" follows the issue #28 wording. Technically it's neither a textbook leaky bucket (which has a fixed drain rate) nor a token bucket (which has a fixed refill rate) — it's "a watermark on a counter the upstream owns". The name is a label, not a literal algorithm description. The CR-0011 wording is preserved verbatim.
+  **Naming note.** Calling this "leaky-bucket" follows the issue #28 wording. Technically it's neither a textbook leaky bucket (which has a fixed drain rate) nor a token bucket (which has a fixed refill rate) — it's "a watermark on a counter the upstream owns". The name is a label, not a literal algorithm description. The original change-request wording is preserved verbatim.
 
   ### Decision 2 — Reporting topology is **in-memory cache per API process + re-publish-on-tick** — no persistence
 
@@ -88,7 +88,7 @@ nav_order: 8
   |---|---|
   | **Avoid double-accounting.** | If the cap were per `(adapter, source_id)`, the GHA adapter polling 4 repos on one PAT with a 30% cap would behave as 4 × 30% = 120% of the upstream limit — meaningless. The upstream PAT has one window; the cap must align with the window. |
   | **Match the upstream's rate-limit subject.** | GHA's rate-limit is per *user* (per *PAT*), not per *repo*. ADO's is per *organisation* per *service-connection*. Jenkins / GitLab / CircleCI similarly: the rate-limit subject is the credential, not the polled resource. Per-token cap aligns the cap to the actual subject. |
-  | **Per-`(adapter, source_id)` reporting still distinguishes which repo "ate the budget".** | The fetcher pushes `upstream_used` from the response headers it observed *after each call*; the cache holds the latest snapshot per `(adapter, source-id)`. Two repos sharing a PAT will show different `upstream_remaining` only when their respective last polls happened at different times — but they will converge to the same `upstream_remaining` value (because they ARE the same window) within ≤ 2 poll cycles. The dashboard interpretation is "these rows share a budget"; the visual treatment (e.g. a small "shared budget" indicator) is a `frontend-engineer` mockup decision per CR-0011 § 3e. |
+  | **Per-`(adapter, source_id)` reporting still distinguishes which repo "ate the budget".** | The fetcher pushes `upstream_used` from the response headers it observed *after each call*; the cache holds the latest snapshot per `(adapter, source-id)`. Two repos sharing a PAT will show different `upstream_remaining` only when their respective last polls happened at different times — but they will converge to the same `upstream_remaining` value (because they ARE the same window) within ≤ 2 poll cycles. The dashboard interpretation is "these rows share a budget"; the visual treatment (e.g. a small "shared budget" indicator) is a `frontend-engineer` mockup decision. |
   | **Future-proof against per-credential adapter splits.** | A future adapter implementation that wires N PATs to one adapter (e.g. GHA-with-org-fan-out) becomes a new adapter (or a new adapter instance with a new `AdapterId`); each instance has its own cap. The "per upstream token = per adapter instance" identity stays true. |
 
   **Trade-off (acknowledged).** An operator who *wants* per-repo caps (e.g. "cap `acme/widget-a` at 500/hr separately from `acme/widget-b`") cannot get that with this CR. The workaround is to deploy two adapter instances each with its own PAT and its own cap — but that doubles the credential surface and is undocumented in MVP. If this need surfaces post-MVP, a future CR amends FR-18 to support per-`(adapter, source_id)` caps with explicit overflow accounting; the wire shape (`self_imposed_cap` on `GET /api/fetcher/usage` already per-`(adapter, source_id)`) absorbs that change without further amendment.
@@ -109,16 +109,16 @@ nav_order: 8
 
 - **Consequences:**
 
-  - **Wire-shape implications.** The `POST /api/fetcher/usage` body field is `upstream_used` (not `self_imposed_used`). Documented verbatim in CR-0011 § 3b.
+  - **Wire-shape implications.** The `POST /api/fetcher/usage` body field is `upstream_used` (not `self_imposed_used`). Documented verbatim in the rate-limit governance change request.
 
   - **Backend grows by:** two endpoints (`POST` + `GET /api/fetcher/usage`), one DTO pair (`FetcherUsageSnapshotRequest` + `FetcherUsageSnapshotResponse`), one singleton service (`IFetcherUsageCache`). No EF entity. No migration. No second persistence tier.
 
-  - **Fetcher grows by:** two `FetcherOptions` properties (`RateLimitAbsolute`, `RateLimitPercentage`), one cap-resolution function, one leaky-bucket gate inside the host scheduler, one per-tick push to `POST /api/fetcher/usage`. Adapter contract gains a surface for upstream rate-limit headers (extension of `FetchPage` or parallel hook — locked at Phase 4 per CR-0011 Open trade-off (i)).
+  - **Fetcher grows by:** two `FetcherOptions` properties (`RateLimitAbsolute`, `RateLimitPercentage`), one cap-resolution function, one leaky-bucket gate inside the host scheduler, one per-tick push to `POST /api/fetcher/usage`. Adapter contract gains a surface for upstream rate-limit headers (extension of `FetchPage` or parallel hook — see ADR-0004 Decision 4 amendment).
 
   - **NFR alignment.**
     - NFR-05 preserved — cache is rebuildable from external input within one poll interval; comparable to the existing Real-time Hub recovery via SSE `Last-Event-ID`.
     - NFR-02 preserved — no new infra tier; ~< 1 KB per `(adapter, source-id)` in process memory.
-    - NFR-09 preserved — backend / fetcher decisions don't touch UI geometry; the consumed `received_at` field gates the SPA stale-affordance per CR-0011 § 3d.
+    - NFR-09 preserved — backend / fetcher decisions don't touch UI geometry; the consumed `received_at` field gates the SPA stale-affordance on the rate-limit cluster.
     - NFR-04 preserved — POST `X-Api-Key`-gated; GET unauthenticated like every other Read endpoint.
 
   - **Operator visibility implications.** Operators reading the dashboard see "how much of the PAT is gone" not "how much this fetcher spent". The interpretation aligns with the issue's stated goal: surface PAT saturation, not fetcher-local accounting. The `INFO` log line on cap-reached states the resolved cap + the observed `upstream_used` at the moment of trip, so operator debugging is unambiguous.
@@ -137,17 +137,17 @@ nav_order: 8
   | **Token-bucket cap with fetcher-managed refill rate** | Adds an algorithmic abstraction (refill rate, bucket size) where the upstream already provides the equivalent via `X-RateLimit-Reset`. Two parameters per adapter (rate + cap) where one (cap) is sufficient. Issue #28 explicitly defers this ("Token-bucket / sliding-window cap accounting; the leaky-bucket approach is chosen here. Revisit only if accuracy proves insufficient — would need a CR + ADR pair given NFR-05"). |
   | **Persist usage to a Postgres table (`fetcher_usage_history`)** | NFR-02 cost (one more table + retention pruning); NFR-05 violation surface (cache writes become DB writes on every tick — adds DB load proportional to the fetch cadence × number of source-ids); semantically wrong for a "now gauge" (the value's TTL is one poll cycle, not 90+ days). Time-series sink is explicitly out of scope (issue #28). |
   | **Distributed cache (Redis) for the snapshot** | Adds a new infra tier (NFR-02 cost + NFR-01 single-cloud envelope) for state that the fetcher itself can re-publish within 30 s. Solves a multi-writer concurrency problem this system explicitly does not have (fetcher is `minReplicas == maxReplicas == 1` per ADR-0004 Decision 3). |
-  | **SSE channel for usage events** | CR-0003 § "SSE carries slot updates only" is an explicit boundary. Adding non-slot payloads to SSE would require either a new event type (breaks the single-event-type assumption SPA + harness rely on) or a second SSE endpoint (doubles the LISTEN/NOTIFY load on Postgres). Polling `GET /api/fetcher/usage` on the SPA cadence is sufficient — usage is a "now gauge", not a real-time stream. |
+  | **SSE channel for usage events** | The "SSE carries slot updates only" boundary is an explicit architectural constraint (see SAD §7 SSE semantics). Adding non-slot payloads to SSE would require either a new event type (breaks the single-event-type assumption SPA + harness rely on) or a second SSE endpoint (doubles the LISTEN/NOTIFY load on Postgres). Polling `GET /api/fetcher/usage` on the SPA cadence is sufficient — usage is a "now gauge", not a real-time stream. |
   | **Per-`(adapter, source_id)` cap (one cap per polled repo)** | Multiplies effective consumption beyond the upstream window (e.g. 4 source-ids × 30% cap = 120% of one PAT's window). Aligns the cap to the polled resource instead of the rate-limit subject (the credential); makes the cap meaningless for the issue's stated goal of preserving headroom for other consumers of the same PAT. Per-repo cap can be re-introduced post-MVP via two adapter instances with their own PATs, or via a future CR amending FR-18 with overflow accounting. |
   | **Field name `self_imposed_used` per issue #28 verbatim** | Implies a fetcher-local counter (drifts on restart, doesn't exist). Misleading on the wire — the value is `upstream_limit - upstream_remaining`, which counts *every* consumer of the PAT. Renamed to `upstream_used` to match the semantic. |
 
 - **References.**
 
-  - [CR-0011](../cr/CR-0011-fetcher-rate-limit-governance.md) — the paired requirement (introduces the cap, the endpoints, the dashboard surfacing).
-  - [CR-0009](../cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md) — fetcher charter (§ 3a `X-Progress-Reporter` reused on the new POST; § 3c pull-mode-is-strict-subset-of-push-mode framing preserved).
-  - [CR-0003](../cr/CR-0003-tree-topology-and-layout-axis.md) — SSE-carries-slot-updates-only boundary (referenced in Alternatives Considered).
-  - [CR-0008](../cr/CR-0008-api-validation-and-openapi-scalar.md) — length-validation + `ProblemDetails` contract reused for the new endpoints.
-  - [ADR-0004](./ADR-0004-opaque-per-progress-reporter-cursor.md) — fetcher plug-in shape (Decision 4 `FetchPage` shape may grow a fourth field per CR-0011 Open trade-off (i); ADR-0004 stays the canonical source of the adapter contract) + fetcher `minReplicas == maxReplicas == 1` (Decision 3) which guarantees single-writer semantics for the new cache.
+  - Fetcher rate-limit governance change request (historical CR-0011) — the paired requirement (introduces the cap, the endpoints, the dashboard surfacing).
+  - Pull-mode fetcher change request (historical CR-0009) — fetcher charter (`X-Progress-Reporter` reused on the new POST; pull-mode-is-strict-subset-of-push-mode framing preserved).
+  - Tree-topology and layout-axis change request (historical CR-0003) — SSE-carries-slot-updates-only boundary (referenced in Alternatives Considered).
+  - API validation + OpenAPI/Scalar change request (historical CR-0008) — length-validation + `ProblemDetails` contract reused for the new endpoints.
+  - [ADR-0004](./ADR-0004-opaque-per-progress-reporter-cursor.md) — fetcher plug-in shape (Decision 4 `FetchPage` shape grew a fourth `RateLimit` field — see ADR-0004 § Decision 4 amendment; ADR-0004 stays the canonical source of the adapter contract) + fetcher `minReplicas == maxReplicas == 1` (Decision 3) which guarantees single-writer semantics for the new cache.
   - [ADR-0006](./ADR-0006-microservices-architecture-with-container-co-location.md) — microservices architecture; the API host hosting the new in-memory cache is the same co-located Write + Read API image.
   - [ADR-0007](./ADR-0007-vendor-adapters-emit-parent-deployments.md) — vendor-adapter posture precedent (negative-space discipline + silent-degrade-with-INFO-log pattern reused here for the cap-reached log shape).
   - GitHub issue [#28](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/28) — the trigger; explicit out-of-scope list informs this ADR's "no persistence / no time-series / no token-bucket" decisions.

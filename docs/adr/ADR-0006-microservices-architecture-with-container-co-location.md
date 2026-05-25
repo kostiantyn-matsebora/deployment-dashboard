@@ -10,7 +10,7 @@ nav_order: 6
 
 - **Context.**
 
-  The project's architecture has been described in several places (SAD §7, [ADR-0002](./ADR-0002-modular-monolith-consolidation.md), [`docs/WBS.md`](../WBS.md) §1.0 + §4.5, [`README.md`](../../README.md), [CR-0009](../cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md) and [CR-0010](../cr/CR-0010-component-ci-pipeline.md) cross-refs, the `.github/workflows/api.yml` header comment) as a **"modular monolith."** That framing is **misleading at the architectural level**.
+  The project's architecture has been described in several places (SAD §7, [ADR-0002](./ADR-0002-modular-monolith-consolidation.md), [`docs/WBS.md`](../WBS.md) §1.0 + §4.5, [`README.md`](../../README.md), historical change-request cross-refs, the `.github/workflows/api.yml` header comment) as a **"modular monolith."** That framing is **misleading at the architectural level**.
 
   The system is decomposed at the **project and boundary level** into distinct services with distinct concerns:
 
@@ -77,7 +77,7 @@ nav_order: 6
   | Option | Rejected because |
   |---|---|
   | **Amend ADR-0002 in place.** Rewrite the title + decision text in ADR-0002 to use "microservices + co-location" framing; no new ADR. | The framing change is significant — it touches the architectural identity claim, not a mechanics detail. A superseding ADR makes the correction visible in the ADR index (`docs/adr/README.md`) as a discrete entry with its own audit trail. Engineers searching for "why does the project use this framing" land on ADR-0006 directly instead of needing to read ADR-0002's revision history. |
-  | **Drop "modular monolith" wording everywhere without a paired ADR.** Search-and-replace the ~15 docs; cite no ADR for the new framing. | Cross-refs to ADR-0002 already exist in five other docs (SAD §7 invariants block, ADR-0004 Context + Decision 3 + References, ADR-0005 References, CR-0009 References, CR-0010 References, WBS §1.0 + §4.5). Removing the framing source without a replacement ADR leaves dangling pointers to a framing the project has implicitly abandoned. The replacement framing needs an ADR of record. |
+  | **Drop "modular monolith" wording everywhere without a paired ADR.** Search-and-replace the ~15 docs; cite no ADR for the new framing. | Cross-refs to ADR-0002 already exist in five other docs (SAD §7 invariants block, ADR-0004 Context + Decision 3 + References, ADR-0005 References, historical change-request cross-refs, WBS §1.0 + §4.5). Removing the framing source without a replacement ADR leaves dangling pointers to a framing the project has implicitly abandoned. The replacement framing needs an ADR of record. |
   | **Keep "modular monolith" framing; explain why it's actually-microservices in a footnote.** | Compounds the confusion. The label is what shows up in skim-reads and in the SAD §7 invariants header. Footnotes do not propagate through index extracts (`adr-index.idx`, `repo-map.idx`) or framework metadata (`stack.yaml`, `framework.config.yaml`). |
 
 - **References.**
