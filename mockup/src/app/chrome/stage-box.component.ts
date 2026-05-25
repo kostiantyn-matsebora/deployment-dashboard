@@ -47,11 +47,11 @@ function shortHashFromSha(sha: string | null | undefined): string {
 }
 
 function boxBorderClass(slot: SlotState | null): string {
-  if (!slot) return 'border-gray-200 bg-white';
+  if (!slot) return 'border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161b22]';
   const st = slot.current.status;
-  if (st === 'success') return 'border-green-300 bg-white';
-  if (st === 'failure') return 'border-red-300 bg-white';
-  return 'border-orange-400 bg-white in-progress-box';
+  if (st === 'success') return 'border-green-300 dark:border-green-700 bg-white dark:bg-[#161b22]';
+  if (st === 'failure') return 'border-red-300 dark:border-red-700 bg-white dark:bg-[#161b22]';
+  return 'border-orange-400 dark:border-orange-600 bg-white dark:bg-[#161b22] in-progress-box';
 }
 
 @Component({
@@ -106,7 +106,7 @@ function boxBorderClass(slot: SlotState | null): string {
 
             <!-- Row 2: commit hash (primary identity) -->
             <p
-              class="text-sm font-bold text-gray-900 font-mono leading-tight break-all"
+              class="text-sm font-bold text-gray-900 dark:text-gray-100 font-mono leading-tight break-all"
               [attr.data-testid]="'current-version-' + service.id + '-' + env.id"
               [title]="slot.current.sha ?? slot.current.deploymentId"
             >{{ shortHash(slot) }}</p>
@@ -137,13 +137,13 @@ function boxBorderClass(slot: SlotState | null): string {
           <!-- Last-successful split -->
           @if (slot.lastSuccessful) {
             <div
-              class="border-t border-dashed border-gray-200 px-2.5 py-2 bg-white"
+              class="border-t border-dashed border-gray-200 dark:border-gray-700 px-2.5 py-2 bg-white dark:bg-[#161b22]"
               data-testid="last-successful-section"
             >
               <div class="flex items-center gap-1.5 min-w-0">
                 <span class="text-green-600 text-xs font-bold leading-none shrink-0">✓</span>
                 <span
-                  class="text-xs font-mono font-semibold text-gray-600 truncate min-w-0"
+                  class="text-xs font-mono font-semibold text-gray-600 dark:text-gray-400 truncate min-w-0"
                   [attr.data-testid]="'last-successful-version-' + service.id + '-' + env.id"
                   [title]="slot.lastSuccessful.sha ?? slot.lastSuccessful.version"
                 >{{ shortHashFromSha(slot.lastSuccessful.sha) || truncate(slot.lastSuccessful.version, 12) }}</span>

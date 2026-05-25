@@ -20,7 +20,7 @@
 //   Escape handled via @HostListener('document:keydown.escape').
 
 import {
-  ChangeDetectionStrategy, Component, HostListener, inject, signal
+  ChangeDetectionStrategy, Component, HostListener, OnInit, inject, signal
 } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -39,8 +39,9 @@ type PopoverId = 'display' | 'topology' | 'settings';
       position: absolute;
       top: calc(100% + 6px);
       z-index: 60;
-      background: white;
-      border: 1px solid #e5e7eb;
+      background: var(--theme-popover-bg, white);
+      border: 1px solid var(--theme-popover-bd, #e5e7eb);
+      color: var(--theme-popover-fg, #111827);
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.12);
       min-width: 220px;
@@ -50,7 +51,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.06em;
-      color: #9ca3af;
+      color: var(--theme-popover-muted-fg, #9ca3af);
       text-transform: uppercase;
       margin-bottom: 10px;
     }
@@ -60,12 +61,12 @@ type PopoverId = 'display' | 'topology' | 'settings';
       gap: 8px;
       padding: 3px 0;
       font-size: 12px;
-      color: #374151;
+      color: var(--theme-popover-fg, #374151);
     }
     .popover-section-label {
       font-size: 10px;
       font-weight: 600;
-      color: #6b7280;
+      color: var(--theme-popover-muted-fg, #6b7280);
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin: 8px 0 4px;
@@ -73,7 +74,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
   `],
   template: `
     <div
-      class="min-h-screen bg-gray-50 flex flex-col"
+      class="min-h-screen bg-gray-50 dark:bg-[#0d1117] flex flex-col"
     >
 
       <!-- Full-screen backdrop — closes any open popover on click-outside -->
@@ -87,7 +88,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
       }
 
       <!-- App header -->
-      <header class="bg-white border-b border-gray-200 sticky top-0 z-40" data-testid="app-header">
+      <header class="bg-white dark:bg-[#161b22] border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40" data-testid="app-header">
         <div class="px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
 
           <!-- Brand + subtitle -->
@@ -97,8 +98,8 @@ type PopoverId = 'display' | 'topology' | 'settings';
                 d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             <div>
-              <h1 class="text-base font-semibold text-gray-900 leading-tight">Deployment Dashboard</h1>
-              <p class="text-xs text-gray-400 leading-tight" data-testid="header-subtitle">
+              <h1 class="text-base font-semibold text-gray-900 dark:text-gray-100 leading-tight">Deployment Dashboard</h1>
+              <p class="text-xs text-gray-400 dark:text-gray-500 leading-tight" data-testid="header-subtitle">
                 4 services · 5 environments
               </p>
             </div>
@@ -108,7 +109,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
           <div class="flex items-center gap-4 flex-wrap">
 
             <!-- Failures only toggle (static visual) -->
-            <label class="flex items-center gap-2 text-sm text-gray-600 select-none cursor-default"
+            <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 select-none cursor-default"
                    data-testid="failures-only-label">
               <input
                 type="checkbox"
@@ -119,7 +120,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
             </label>
 
             <!-- Focus on last event toggle (checked by default) -->
-            <label class="flex items-center gap-2 text-sm text-gray-600 select-none cursor-default"
+            <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 select-none cursor-default"
                    title="When on, an incoming event scrolls the affected element into view"
                    data-testid="focus-on-last-event-label">
               <input
@@ -142,14 +143,14 @@ type PopoverId = 'display' | 'topology' | 'settings';
                 type="text"
                 data-testid="search-input"
                 placeholder="Filter services…"
-                class="text-sm border border-gray-200 rounded-md pl-8 pr-3 py-1.5 w-44 focus:outline-none bg-white"
+                class="text-sm border border-gray-200 dark:border-gray-700 rounded-md pl-8 pr-3 py-1.5 w-44 focus:outline-none bg-white dark:bg-[#161b22] dark:text-gray-300 dark:placeholder-gray-600"
                 readonly
               />
             </div>
 
             <!-- View switcher — wired to ViewModeService signal -->
             <div
-              class="flex items-center text-xs border border-gray-200 rounded-md overflow-hidden"
+              class="flex items-center text-xs border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden"
               data-testid="view-switcher"
               role="tablist"
               aria-label="Matrix layout view"
@@ -157,13 +158,15 @@ type PopoverId = 'display' | 'topology' | 'settings';
               @for (opt of viewOpts; track opt.id) {
                 <button
                   type="button"
-                  class="px-2.5 py-1.5 font-medium transition-colors"
+                  class="px-2.5 py-1.5 font-medium transition-colors dark:border-gray-700"
                   [class.border-r]="!$last"
                   [class.border-gray-200]="!$last"
                   [class.bg-blue-600]="viewMode.mode() === opt.id"
                   [class.text-white]="viewMode.mode() === opt.id"
                   [class.bg-white]="viewMode.mode() !== opt.id"
+                  [class.dark:bg-gray-800]="viewMode.mode() !== opt.id"
                   [class.text-gray-600]="viewMode.mode() !== opt.id"
+                  [class.dark:text-gray-400]="viewMode.mode() !== opt.id"
                   [attr.data-active]="viewMode.mode() === opt.id"
                   [attr.data-testid]="'view-option-' + opt.id"
                   (click)="viewMode.set(opt.id)"
@@ -173,7 +176,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
 
             <!-- Layout switcher — purple active fill via routerLinkActive -->
             <div
-              class="flex items-center text-xs border border-gray-200 rounded-md overflow-hidden"
+              class="flex items-center text-xs border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden"
               data-testid="layout-switcher"
               role="tablist"
               aria-label="Dashboard layout"
@@ -182,14 +185,14 @@ type PopoverId = 'display' | 'topology' | 'settings';
                 routerLink="/swim-lane"
                 routerLinkActive="!bg-purple-600 !text-white"
                 [routerLinkActiveOptions]="{ exact: true }"
-                class="px-2.5 py-1.5 font-medium border-r border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors no-underline"
+                class="px-2.5 py-1.5 font-medium border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161b22] text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors no-underline"
                 data-testid="layout-option-swim-lane"
               >Swim-lane</a>
               <a
                 routerLink="/workflow-rows"
                 routerLinkActive="!bg-purple-600 !text-white"
                 [routerLinkActiveOptions]="{ exact: true }"
-                class="px-2.5 py-1.5 font-medium bg-white text-gray-600 hover:bg-gray-50 transition-colors no-underline"
+                class="px-2.5 py-1.5 font-medium bg-white dark:bg-[#161b22] text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors no-underline"
                 data-testid="layout-option-workflow-rows"
               >Workflow rows</a>
             </div>
@@ -198,7 +201,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
             <div class="relative z-[61]">
               <button
                 type="button"
-                class="flex items-center gap-1.5 text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+                class="flex items-center gap-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-md px-2.5 py-1.5 bg-white dark:bg-[#161b22] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 [class.ring-2]="openPopover() === 'display'"
                 [class.ring-blue-400]="openPopover() === 'display'"
                 data-testid="attribute-picker"
@@ -238,7 +241,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
             <div class="relative z-[61]">
               <button
                 type="button"
-                class="flex items-center gap-1.5 text-xs border border-gray-200 rounded-md px-2.5 py-1.5 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+                class="flex items-center gap-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-md px-2.5 py-1.5 bg-white dark:bg-[#161b22] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 [class.ring-2]="openPopover() === 'topology'"
                 [class.ring-blue-400]="openPopover() === 'topology'"
                 data-testid="topology-picker"
@@ -304,7 +307,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
             <div class="relative z-[61]">
               <button
                 type="button"
-                class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                class="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent dark:border-gray-700 transition-colors"
                 [class.ring-2]="openPopover() === 'settings'"
                 [class.ring-blue-400]="openPopover() === 'settings'"
                 data-testid="theme-switcher"
@@ -342,7 +345,7 @@ type PopoverId = 'display' | 'topology' | 'settings';
             </div>
 
             <!-- Live indicator -->
-            <span class="flex items-center gap-1.5 text-xs text-gray-400 border-l border-gray-200 pl-4"
+            <span class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 border-l border-gray-200 dark:border-gray-700 pl-4"
                   data-testid="live-indicator">
               <span class="relative flex h-2.5 w-2.5 shrink-0">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -352,17 +355,17 @@ type PopoverId = 'display' | 'topology' | 'settings';
             </span>
 
             <!-- Mockup-specific sandbox links -->
-            <div class="flex items-center gap-2 border-l border-gray-200 pl-3" data-testid="mockup-nav">
+            <div class="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3" data-testid="mockup-nav">
               <a
                 routerLink="/invariants"
                 routerLinkActive="text-indigo-600 font-semibold"
-                class="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                class="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
               >Invariants</a>
-              <span class="text-gray-300">·</span>
+              <span class="text-gray-300 dark:text-gray-700">·</span>
               <a
                 routerLink="/variants"
                 routerLinkActive="text-indigo-600 font-semibold"
-                class="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                class="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
               >Variants</a>
             </div>
 
@@ -376,13 +379,13 @@ type PopoverId = 'display' | 'topology' | 'settings';
       </div>
 
       <!-- Footer -->
-      <footer class="border-t border-gray-100 px-6 py-1.5 text-[10px] text-gray-300 flex items-center gap-2 bg-white">
+      <footer class="border-t border-gray-100 dark:border-gray-800 px-6 py-1.5 text-[10px] text-gray-300 dark:text-gray-700 flex items-center gap-2 bg-white dark:bg-[#161b22]">
         <span>Mockup · Angular 20 standalone · port 4201 · hardcoded fixtures · no SSE</span>
       </footer>
     </div>
   `
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
   readonly viewMode = inject(ViewModeService);
 
   readonly viewOpts: { id: 'detailed' | 'compact' | 'glance' | 'focus'; label: string }[] = [
@@ -456,20 +459,32 @@ export class AppComponent {
 
   private applyTheme(theme: string): void {
     if (typeof document === 'undefined') return; // SSR guard
+    // Persist preference so the FOIT-safe bootstrap script picks it up on reload.
+    try { localStorage.setItem('mockup.theme', theme); } catch(e) {}
+    let effective: 'dark' | 'light';
     if (theme === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark');
+      effective = 'dark';
     } else if (theme === 'auto') {
       const prefersDark =
         typeof window !== 'undefined' &&
         window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else {
-        document.documentElement.removeAttribute('data-theme');
-      }
+      effective = prefersDark ? 'dark' : 'light';
     } else {
-      document.documentElement.removeAttribute('data-theme');
+      effective = 'light';
     }
+    document.documentElement.setAttribute('data-theme', effective);
+    document.documentElement.setAttribute('data-theme-pref', theme);
+  }
+
+  /** Read persisted preference from localStorage on init. */
+  ngOnInit(): void {
+    try {
+      const stored = localStorage.getItem('mockup.theme');
+      if (stored === 'light' || stored === 'dark' || stored === 'auto') {
+        this._selectedTheme = stored;
+        // data-theme is already set by the inline script; no DOM write needed.
+      }
+    } catch(e) {}
   }
 
   readonly themeOptions = [

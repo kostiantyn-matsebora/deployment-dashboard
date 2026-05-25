@@ -39,11 +39,11 @@ function shortHashFromSha(sha: string | null | undefined): string {
 }
 
 function boxBorderClass(slot: SlotState | null): string {
-  if (!slot) return 'border-gray-200 bg-white';
+  if (!slot) return 'border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161b22]';
   const st = slot.current.status;
-  if (st === 'success')     return 'border-green-300 bg-white';
-  if (st === 'failure')     return 'border-red-300 bg-white';
-  return 'border-orange-400 bg-white in-progress-box';
+  if (st === 'success')     return 'border-green-300 dark:border-green-700 bg-white dark:bg-[#161b22]';
+  if (st === 'failure')     return 'border-red-300 dark:border-red-700 bg-white dark:bg-[#161b22]';
+  return 'border-orange-400 dark:border-orange-600 bg-white dark:bg-[#161b22] in-progress-box';
 }
 
 @Component({
@@ -82,7 +82,7 @@ function boxBorderClass(slot: SlotState | null): string {
                 <span class="text-red-500 text-xs leading-none shrink-0">✗</span>
               }
               <span
-                class="text-xs font-mono font-bold text-gray-900 truncate flex-1 min-w-0"
+                class="text-xs font-mono font-bold text-gray-900 dark:text-gray-100 truncate flex-1 min-w-0"
                 [attr.data-testid]="'current-version-' + service.id + '-' + env.id"
               >{{ shortHash(slot) }}</span>
               <a
@@ -103,7 +103,7 @@ function boxBorderClass(slot: SlotState | null): string {
           </div>
           @if (slot.lastSuccessful) {
             <div
-              class="border-t border-dashed border-gray-200 px-2 py-1"
+              class="border-t border-dashed border-gray-200 dark:border-gray-700 px-2 py-1"
               data-testid="last-successful-section"
             >
               <div class="flex items-center gap-1 min-w-0">

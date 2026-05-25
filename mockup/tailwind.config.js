@@ -1,12 +1,14 @@
 /** @type {import('tailwindcss').Config} */
 // Mockup-app Tailwind config — standalone; no @dd/* library content paths.
-// Theme axis strategy: CSS-overlay only (no `dark:` utility variants),
-// mirroring the SPA's approach. Dark palette is in src/styles.css as a
-// [data-theme="dark"] block, identical to the SPA's styles.css.
+// Theme axis strategy: selector-based dark mode keyed on [data-theme="dark"]
+// on <html>. Tailwind v3.4+ supports ['selector', '...'] array form.
+// The matching [data-theme="dark"] CSS overrides in styles.css are kept for
+// legacy component-class specificity; dark: variants now also work directly.
 module.exports = {
   content: [
     './src/**/*.{html,ts}'
   ],
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       fontFamily: {

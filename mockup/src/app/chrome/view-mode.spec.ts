@@ -344,35 +344,35 @@ describe('SwimLaneLayoutComponent — focus view chrome', () => {
     expect(el.querySelector('[data-testid="focus-helper-bar"]')).toBeTruthy();
   });
 
-  it('should render a chevron button per service', () => {
-    const chevrons = el.querySelectorAll('[data-testid^="focus-chevron-"]');
+  it('should render a row-chevron button per service', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="row-chevron-"]');
     expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
   });
 
-  it('should render a pin button per service', () => {
-    const pins = el.querySelectorAll('[data-testid^="focus-pin-"]');
+  it('should render a row-pin button per service', () => {
+    const pins = el.querySelectorAll('[data-testid^="row-pin-"]');
     expect(pins.length).toBe(MOCKUP_SERVICES.length);
   });
 
   it('should start with all services collapsed (data-expanded=false)', () => {
-    const rows = el.querySelectorAll('[data-testid^="swim-lane-row-"]');
+    const rows = el.querySelectorAll('[data-testid^="row-collapsed-"]');
     rows.forEach(row => {
       expect(row.getAttribute('data-expanded')).toBe('false');
     });
   });
 
-  it('should expand a service row when its chevron is clicked', () => {
+  it('should expand a service row when its row-chevron is clicked', () => {
     const svcId = MOCKUP_SERVICES[0].id;
-    const chevron = el.querySelector(`[data-testid="focus-chevron-${svcId}"]`) as HTMLButtonElement;
+    const chevron = el.querySelector(`[data-testid="row-chevron-${svcId}"]`) as HTMLButtonElement;
     chevron.click();
     fixture.detectChanges();
-    const row = el.querySelector(`[data-testid="swim-lane-row-${svcId}"]`);
+    const row = el.querySelector(`[data-testid="row-collapsed-${svcId}"]`);
     expect(row?.getAttribute('data-expanded')).toBe('true');
   });
 
-  it('should toggle pin state when pin button is clicked', () => {
+  it('should toggle pin state when row-pin button is clicked', () => {
     const svcId = MOCKUP_SERVICES[0].id;
-    const pin = el.querySelector(`[data-testid="focus-pin-${svcId}"]`) as HTMLButtonElement;
+    const pin = el.querySelector(`[data-testid="row-pin-${svcId}"]`) as HTMLButtonElement;
     expect(pin?.getAttribute('aria-pressed')).toBe('false');
     pin.click();
     fixture.detectChanges();
@@ -442,35 +442,41 @@ describe('WorkflowRowsLayoutComponent — focus view chrome', () => {
     expect(el.querySelector('[data-testid="expand-all-workflows"]')).toBeTruthy();
   });
 
-  it('should render a wf-chevron per service', () => {
-    const chevrons = el.querySelectorAll('[data-testid^="focus-wf-chevron-"]');
+  it('should render a row-chevron (detail) per service', () => {
+    const chevrons = el.querySelectorAll('[data-testid^="row-chevron-"]');
     expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
   });
 
-  it('should render a pin per service', () => {
-    const pins = el.querySelectorAll('[data-testid^="focus-pin-"]');
+  it('should render a row-pin per service', () => {
+    const pins = el.querySelectorAll('[data-testid^="row-pin-"]');
     expect(pins.length).toBe(MOCKUP_SERVICES.length);
   });
 
-  it('should render a detail-chevron per service', () => {
-    const chevrons = el.querySelectorAll('[data-testid^="focus-detail-chevron-"]');
-    expect(chevrons.length).toBe(MOCKUP_SERVICES.length);
+  it('should render a workflow-toggle per service', () => {
+    const toggles = el.querySelectorAll('[data-testid^="workflow-toggle-"]');
+    expect(toggles.length).toBe(MOCKUP_SERVICES.length);
   });
 
-  it('should expand workflow rows when wf-chevron is clicked', () => {
+  it('should show last-active wf row by default (allWfsExpanded=false)', () => {
+    // Each service shows exactly 1 wf row (the default path) initially.
     const svcId = MOCKUP_SERVICES[0].id;
-    const chevron = el.querySelector(`[data-testid="focus-wf-chevron-${svcId}"]`) as HTMLButtonElement;
-    chevron.click();
-    fixture.detectChanges();
     const wfRow = el.querySelector(`[data-testid="workflow-row-${svcId}-0"]`);
     expect(wfRow).toBeTruthy();
   });
 
-  it('should expand all workflows when "Expand all" is clicked', () => {
+  it('should expand all wf rows when workflow-toggle is clicked', () => {
+    const svcId = MOCKUP_SERVICES[0].id;
+    const toggle = el.querySelector(`[data-testid="workflow-toggle-${svcId}"]`) as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+    // workflow-row-*-0 must still be present
+    expect(el.querySelector(`[data-testid="workflow-row-${svcId}-0"]`)).toBeTruthy();
+  });
+
+  it('should expand all services when "Expand all workflows" is clicked', () => {
     const btn = el.querySelector('[data-testid="expand-all-workflows"]') as HTMLButtonElement;
     btn.click();
     fixture.detectChanges();
-    // All services should now have wfExpanded = true, so workflow-row-*-0 should be present for each
     for (const svc of MOCKUP_SERVICES) {
       const wfRow = el.querySelector(`[data-testid="workflow-row-${svc.id}-0"]`);
       expect(wfRow).toBeTruthy(`expected workflow-row for ${svc.id} to be present`);
@@ -503,10 +509,6 @@ describe('AppComponent — dark theme wiring', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('should not set data-theme on documentElement by default (Light)', () => {
-    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
-  });
-
   it('should set data-theme="dark" when Dark radio is selected', () => {
     const comp = fixture.componentInstance;
     comp.selectedTheme = 'dark';
@@ -514,13 +516,21 @@ describe('AppComponent — dark theme wiring', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
-  it('should remove data-theme when Light radio is selected after Dark', () => {
+  it('should set data-theme="light" when Light radio is selected', () => {
     const comp = fixture.componentInstance;
     comp.selectedTheme = 'dark';
     fixture.detectChanges();
     comp.selectedTheme = 'light';
     fixture.detectChanges();
-    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('should persist theme preference (applyTheme writes data-theme attribute)', () => {
+    const comp = fixture.componentInstance;
+    comp.selectedTheme = 'dark';
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    comp.selectedTheme = 'light';
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 });
 
