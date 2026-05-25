@@ -11,11 +11,11 @@
   | ADRs + diagrams + requirements / ASR updates | `solution-architect` |
   | Mockup | mockup-owning role |
   | Wire contract | service-owning role |
-  | Work breakdown | `team-lead` (per D25-classical-architect); each engineer contributes their slice |
+  | Work breakdown | `team-lead`; each engineer contributes their slice |
   | Engineer-proposed architectural deltas | originating engineer drafts; `solution-architect` reviews per `§ Review` (APPROVE / REJECT / REQUEST-CHANGES) |
 
   Parallel where independent. **Mode-aware** — greenfield mode authors the architecture doc; delta mode produces ADRs + CRs and never rewrites the doc wholesale.
-- **Option-shape rule (D30-adopt-existing-solution).** Every design proposal MUST surface ≥ 1 adopt-existing-solution candidate **or** an explicit `(none viable — <reason>)` cite. Full schema · 5 mandatory checks · enforcement: `core/protocols/options-protocol.md` (load-on-demand).
+- **Option-shape rule.** Every design proposal MUST surface ≥ 1 adopt-existing-solution candidate **or** an explicit `(none viable — <reason>)` cite. Full schema · 5 mandatory checks · enforcement: `core/protocols/options-protocol.md` (load-on-demand).
 - **Acceptance.**
   - Fixed wire shape + mockup behaviour + work breakdown.
   - Visual / contract harness green (where one exists).

@@ -1,4 +1,4 @@
-# Triage scoring (D23) — value × complexity priority
+# Triage scoring — value × complexity priority
 
 **Load-on-demand.** Fetched when:
 
@@ -10,8 +10,8 @@ Default tasks (freeform, TODOs without `[v:N c:M]` markers) skip this file.
 
 ## Why
 
-- Pre-D23 `ginee-triage` ranked by age only — ignored leverage.
-- D23 adds two axes — **value** + **complexity** — and a derived **score**.
+- Ranking by age alone ignores leverage.
+- Two axes — **value** + **complexity** — drive a derived **score**.
 - Goal: highest-leverage ready work surfaces first.
 
 ## Axes + scale
@@ -68,7 +68,7 @@ Edge cases:
 
 ## Source-of-truth = labels
 
-- **Reason:** queryable via `gh api`, mutable via `gh issue edit --add-label`, visible in GitHub UI, consistent with the `ginee:*` namespace from D14.
+- **Reason:** queryable via `gh api`, mutable via `gh issue edit --add-label`, visible in GitHub UI, consistent with the `ginee:*` label namespace.
 - **Body fields are not parsed.** Issue templates include a reporter-note comment; only labels bind.
 - **Mutation:**
   - Reporter sets at file-time via the issue template (label-picker) or `gh issue create --label value:high --label complexity:low`.
@@ -153,7 +153,7 @@ Expected sort (test contract for skill + spec compliance):
 
 ## Score comment + audit trail
 
-Hybrid topology — **one sticky "current score" comment** maintained by `team-lead` + **immutable audit comments** preserved on key events. **D26 binding** — sticky + audit comments pass `core/process.md § Mandatory checks before report-as-done`; templates below are already structured (table for the sticky; one-line digest for audits).
+Hybrid topology — **one sticky "current score" comment** maintained by `team-lead` + **immutable audit comments** preserved on key events. Sticky + audit comments pass `core/process.md § Mandatory checks before report-as-done`; templates below are already structured (table for the sticky; one-line digest for audits).
 
 ### Sticky comment — current score
 
@@ -238,7 +238,7 @@ Colors are advisory — adopter may recolor. `team-lead` does NOT recreate or ov
 
 ## Backward compatibility
 
-- Adopters with no scoring labels: `ginee-triage` shows everything in the "Unscored" bucket; sort behaviour matches pre-D23 age-order.
+- Adopters with no scoring labels: `ginee-triage` shows everything in the "Unscored" bucket; sort behaviour matches previously age-order.
 - Existing issues without `value:*` / `complexity:*` labels are unaffected — adopter applies labels at their own pace.
 - TODO files without `[v:N c:M]` markers continue to work unchanged.
 

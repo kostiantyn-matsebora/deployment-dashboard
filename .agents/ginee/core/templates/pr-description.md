@@ -45,7 +45,7 @@
 
 | Source | Reference |
 |---|---|
-| Requirement | `<FR-NN-slug | NFR-NN-slug>` (slug-glued per D34 — e.g. `FR-04-deploy-rollback`) |
+| Requirement | `<FR-NN-slug | NFR-NN-slug>` (slug-glued — e.g. `FR-04-deploy-rollback`) |
 | Architecture-doc section | `<§N or anchor>` |
 | Mockup section / behaviour | `<section / interaction>` |
 | CR | `<CR-NNNN-slug>` (post-finalization — e.g. `CR-0010-component-ci-pipeline`) |
@@ -60,7 +60,7 @@
 ## Issue linkage
 
 <!--
-  Required when this PR resolves a GitHub-issue-sourced task (per D14 / core/github-integration.md).
+  Required when this PR resolves a GitHub-issue-sourced task (per core/github-integration.md).
   GitHub auto-closes referenced issues on merge when one of: Closes / Fixes / Resolves precedes the #.
   Use Fixes for bug-report issues; Closes for feature-request issues.
   Drop this section when the task originated from a TODO line or direct instruction.
@@ -131,7 +131,7 @@
 ## CI status
 
 <!--
-  Optional placeholder for automatic-mode CI-watch (D20 / core/ci-watch.md).
+  Optional placeholder for automatic-mode CI-watch.
   team-lead updates this section only on exit-clean ("all required checks green")
   or final handback ("CI failed — see comment trail"). Never mid-cycle.
   Drop this section in interactive mode or when `automatic-mode.ci-watch: disabled`.

@@ -87,7 +87,7 @@ Steps:
    - `local/bindings.md` ← `core/templates/bindings.md`
    - `local/framework.config.yaml` ← `core/templates/framework.config.yaml`
 
-8b. **Enumerate index classes (doc + code) + dispatch `ai-engineer` for index extraction.** Full spec: `core/protocols/index-protocol.md`. Covers both categories — doc (D13) and code/config (D15) — under one `local/index/manifest.yaml`.
+8b. **Enumerate index classes (doc + code) + dispatch `ai-engineer` for index extraction.** Full spec: `core/protocols/index-protocol.md`. Covers both categories — doc and code/config — under one `local/index/manifest.yaml`.
    1. Enumerate classes to index in this priority order:
       1. **Adopter-declared** — `local/framework.config.yaml § index.classes` (highest priority; overrides auto-detection). Each entry declares `category: doc | code` + source-glob + template.
       2. **Built-in matched by heuristics** — globs against the templates in `core/templates/index/`:
@@ -113,15 +113,15 @@ Steps:
       - Writes `local/index/manifest.yaml` (SHA-256 per source + `category: doc | code`).
       - Runs sample-and-check (5 random items per affected index file).
 
-8c. **D25 re-attribution sweep (rediscover only).** When invoked via `@team-lead rediscover`, after Step 8a rewrites `local/bindings.md`:
+8c. **Doc-ownership re-attribution sweep (rediscover only).** When invoked via `@team-lead rediscover`, after Step 8a rewrites `local/bindings.md`:
    1. Read the previous ownership table (pre-rediscover) from `local/bindings.md § Source-of-truth ownership`.
-   2. Apply the D25 ownership map per `core/templates/bindings.md` — CRs · project-instruction · work-breakdown → `team-lead`; CI/CD guide · infra runbooks → `devops-engineer`; per-tier READMEs / API docs / test plans → tier engineers.
+   2. Apply the doc-ownership map per `core/templates/bindings.md` — CRs · project-instruction · work-breakdown → `team-lead`; CI/CD guide · infra runbooks → `devops-engineer`; per-tier READMEs / API docs / test plans → tier engineers.
    3. Surface the diff to the user; on approval, write the updated table.
    4. Detect greenfield — if no `<architecture-doc path>` resolved during Step 3 → flag `greenfield: true` in `local/project-profile.md § Architecture artefacts`.
    5. Add empty optional `§ Architects` section to `local/bindings.md` (single-architect default; adopter populates for multi-architect projects).
    6. Initialize `local/requirements.md` (from `core/templates/requirements-register.md`) + `local/asr-utility-tree.md` (from `core/templates/asr-utility-tree.md`) if missing; populate from discovered NFR / Constraint sections in the architecture doc when one exists.
 
-   Full background: `core/MIGRATIONS/D25-classical-architect.md`. Skip 8c on first-run discovery (no previous ownership table to migrate).
+   Skip 8c on first-run discovery (no previous ownership table to migrate).
 
 9. **Report.**
    - Use `core/templates/discovery-report.md` shape.
@@ -137,7 +137,7 @@ Steps:
        3. Write to `local/roles/<name>.md`.
        4. Add the routing entry to `local/bindings.md`.
 
-   Never enable a specialist or external agent without explicit user approval (per D5/D10).
+   Never enable a specialist or external agent without explicit user approval.
 
 10. **Embed approved external agents into the process.** For each external agent the user approves:
     - **Translation.**
@@ -181,12 +181,12 @@ Regression-grade catalogue. Each row names an observed orchestrator violation + 
 | Pattern | Correct shape |
 |---|---|
 | **"Feels fast → I'll just do it."** Orchestrator estimates a task at 5–7 min, elects to edit in the main thread, skips Phase 2 dispatch + estimation contract. Routinely balloons to ~60 min unbroken main-thread work with no stop-and-report boundaries. | Dispatch the owning specialist with explicit estimate: *"≤ 15 min, no iteration-protocol load"*. The dispatch overhead is ~30 seconds; the safety it buys (correct owner, stop-and-report on overrun per `core/protocols/iteration-protocol.md § Stoppable intermediate states`) is non-negotiable per `core/roles/team-lead.md § Forbidden actions`. |
-| **Skill-runner orchestrates instead of dispatching (D28 — issue #71).** Skill-runner main thread drafts the Phase 1–8 plan itself, synthesizes parallel specialist returns, answers routing questions by reading `local/bindings.md` directly, or proposes default-selection options ("I'll pick option 1 if you don't redirect"). All four are orchestration decisions the skill-runner is structurally banned from making per `core/process.md § Skill-runner — surface boundary`. | After the skill's first mechanical batch the skill-runner dispatches `@team-lead`. Every subsequent decision flows through team-lead. Skill-runner never reads `local/bindings.md` to settle a routing question; it dispatches team-lead to read and reconcile. Defaults belong to team-lead, never the skill-runner. |
-| **D29 self-lint skipped + skill-runner "cleans up" the return (D33 — issue #86).** Cardinal return arrives without the `<!-- D29 self-lint: pass -->` marker, missing mandatory sections, or opens with a narrative preamble. Skill-runner notices the shape is off, consumes the return silently (no advisory), then re-renders the content into its own summary table to present to the user — crossing the D28 surface boundary in the cleanup. Two failure modes compound: D29 self-lint silently bypassed; D28 boundary breached as the orchestrator's cleanup workaround. | Skill-runner forwards the non-compliant return **as-is** to team-lead and surfaces the one-line advisory per `core/templates/phase-report.md § Orchestrator behaviour on non-compliant returns` (e.g. `"Return missed self-lint: marker absent; consuming anyway."`). Never re-renders. Never re-dispatches purely for format. Carry-forward rephrasing fires on the *next* dispatch to the same subagent — `"last cycle's return missed self-lint (<violation>) — apply the 6 checks + marker this cycle."` |
+| **Skill-runner orchestrates instead of dispatching.** Skill-runner main thread drafts the Phase 1–8 plan itself, synthesizes parallel specialist returns, answers routing questions by reading `local/bindings.md` directly, or proposes default-selection options ("I'll pick option 1 if you don't redirect"). All four are orchestration decisions the skill-runner is structurally banned from making per `core/process.md § Skill-runner — surface boundary`. | After the skill's first mechanical batch the skill-runner dispatches `@team-lead`. Every subsequent decision flows through team-lead. Skill-runner never reads `local/bindings.md` to settle a routing question; it dispatches team-lead to read and reconcile. Defaults belong to team-lead, never the skill-runner. |
+| **Self-lint skipped + skill-runner "cleans up" the return.** Cardinal return arrives without the `<!-- self-lint: pass -->` marker, missing mandatory sections, or opens with a narrative preamble. Skill-runner notices the shape is off, consumes the return silently (no advisory), then re-renders the content into its own summary table to present to the user — crossing the surface boundary in the cleanup. Two failure modes compound: self-lint silently bypassed; surface boundary breached as the orchestrator's cleanup workaround. | Skill-runner forwards the non-compliant return **as-is** to team-lead and surfaces the one-line advisory per `core/templates/phase-report.md § Orchestrator behaviour on non-compliant returns` (e.g. `"Return missed self-lint: marker absent; consuming anyway."`). Never re-renders. Never re-dispatches purely for format. Carry-forward rephrasing fires on the *next* dispatch to the same subagent — `"last cycle's return missed self-lint (<violation>) — apply the 6 checks + marker this cycle."` |
 
-## Warm specialist reuse (D36-warm-specialist-reuse)
+## Warm specialist reuse
 
-Per-task in-conversation registry tracking specialists already dispatched in the current Phase 1–8 lifecycle. On 2nd+ dispatch of the same role within the same task AND within that role's `phase-participation:` window (per D35-process-md-load-topology), resume the existing specialist via the adapter's native mechanism instead of fresh-spawn.
+Per-task in-conversation registry tracking specialists already dispatched in the current Phase 1–8 lifecycle. On 2nd+ dispatch of the same role within the same task AND within that role's `phase-participation:` window, resume the existing specialist via the adapter's native mechanism instead of fresh-spawn.
 
 | Lifecycle event | Action |
 |---|---|
@@ -194,7 +194,7 @@ Per-task in-conversation registry tracking specialists already dispatched in the
 | 2nd+ dispatch of `R` in `T`, new phase ∈ `R.phase-participation` | Resume via adapter native mechanism (Claude `SendMessage` to recorded agent-id). Payload = new instruction + phase identity + drift advisory. |
 | Forced-fresh trigger fires | Spawn fresh; replace registry entry. Triggers: prior `Status: Blocked` / `Hand-off` resolved externally · worktree mismatch · `local/bindings.md` · `local/project-profile.md` · `local/index/manifest.yaml` material rewrite · explicit `fresh:` prefix · adapter resume-failure. |
 | Phase 8 acceptance OR task abandonment | Clear registry. Background agents receive `## Phase 8 close — release` and terminate. Next task starts cold. |
-| Adapter lacks resume mechanism | Fallback — fresh-spawn on every dispatch (pre-D36 behaviour). No registry maintenance. |
+| Adapter lacks resume mechanism | Fallback — fresh-spawn on every dispatch (previously behaviour). No registry maintenance. |
 
 **Drift advisory shape** (always present in resume payload; empty case `(no drift)`):
 
@@ -210,9 +210,8 @@ Mirrors `core/protocols/index-protocol.md § Pre-dispatch staleness check`. Reus
 
 **Adopter opt-out** — `local/framework.config.yaml § warm-reuse.enabled: false` disables the contract repo-wide; default `true` on capable adapters.
 
-**D28 / D29 / D32 interaction** — warm reuse is team-lead's surface, not skill-runner's. The decision authority split (D32) holds: team-lead resolves warm-vs-fresh in its plan-cycle; skill-runner forwards the dispatch contract verbatim. Return schema (D29) unchanged — a warm-resume marker in `## Notes` is optional, not required.
+**Skill-runner interaction** — warm reuse is team-lead's surface, not skill-runner's. The decision authority split holds: team-lead resolves warm-vs-fresh in its plan-cycle; skill-runner forwards the dispatch contract verbatim. Return schema unchanged — a warm-resume marker in `## Notes` is optional, not required.
 
-Full spec: `core/MIGRATIONS/D36-warm-specialist-reuse.md`.
 
 ## Pre-dispatch staleness check (index)
 
@@ -287,9 +286,9 @@ Moved from `team-lead.md § Testing scope` for context-economy. Kernel rule live
   - approximate token cost
 - It does not retroactively become a gate.
 
-## CR template (D25)
+## CR template
 
-Reassigned from `solution-architect.details.md` per D25. CRs are coordination decisions (requirement / scope changes), not architectural ones. team-lead authors; SA reviews for architectural coherence per `core/doc-roles.md § SA architectural-coherence review`.
+Reassigned from `solution-architect.details.md`. CRs are coordination decisions (requirement / scope changes), not architectural ones. team-lead authors; SA reviews for architectural coherence per `core/doc-roles.md § SA architectural-coherence review`.
 
 ```markdown
 # CR-NNNN — <short title>
@@ -317,23 +316,23 @@ Affected components, roles, downstream docs. Any follow-up ADRs needed (route to
 
 Numbering: zero-padded four-digit per family (`CR-0001`). Never reused. Superseded records keep their number + reference the replacement.
 
-## Sub-issue dispatch (D39-sub-issue-dispatch)
+## Sub-issue dispatch
 
-Lifecycle table + resolution + labels + sticky shape live in `core/github-integration.md § Sub-issue dispatch`. Full codification: `core/MIGRATIONS/D39-sub-issue-dispatch.md`. This section covers authoring concerns only.
+Lifecycle table + resolution + labels + sticky shape live in `core/github-integration.md § Sub-issue dispatch`. This section covers authoring concerns only.
 
 ### Authoring procedure per dispatch
 
 | Step | Op |
 |---|---|
 | 1 — Draft contract | scope · acceptance · spec links · phase · estimate (same machinery as standard Phase-4/5/6/7 dispatch composition; sub-issue body is the serialised form) |
-| 2 — Create sub-issue | `gh issue create` + body per `core/templates/sub-issue-dispatch.md` + labels (`ginee:role:*` + `ginee:phase:*` + inherited `value:*`/`complexity:*`); attach via `gh api .../sub_issues`; D26 self-lint on body before posting |
+| 2 — Create sub-issue | `gh issue create` + body per `core/templates/sub-issue-dispatch.md` + labels (`ginee:role:*` + `ginee:phase:*` + inherited `value:*`/`complexity:*`); attach via `gh api .../sub_issues`; doc-authoring self-lint on body before posting |
 | 3 — Surface for approval | Sub-issue creation is externally visible — always confirm unless auto mode is active (per `core/roles/team-lead.md § Confirm-before-parallel-dispatch` + `core/process.md § Executing actions with care`) |
 | 4 — Dispatch cardinal | Forward sub-issue URL + body in dispatch prompt; cardinal authors progress comments per `core/templates/sub-issue-dispatch.md § Comment cadence` |
 | 5 — Honour assignee precedence | Check assignee per cycle; non-empty human → suspend dispatch + surface once-per-session advisory; resume on clear |
-| 6 — Forced-fresh on cross-session resume | D36 registry is in-conversation only; sub-issue body + comment history feed the fresh cardinal the full state |
+| 6 — Forced-fresh on cross-session resume | Warm-reuse registry is in-conversation only; sub-issue body + comment history feed the fresh cardinal the full state |
 | 7 — Receive phase-report return | Verify `## Time spent` present (mandatory in sub-issue mode); missing → one-line advisory + consume per `core/templates/phase-report.md § Orchestrator behaviour on non-compliant returns` |
 | 8 — Close sub-issue | Post return as closing comment via `gh issue comment <M>`; `gh issue close <M> --reason completed`. Stop-state (`Status: In-progress`) → progress comment only; sub-issue stays open |
-| 9 — Update parent sticky | Edit `<!-- ginee:dispatch-map -->` in place — append row + refresh per-cardinal rollup; D26 self-lint applies |
+| 9 — Update parent sticky | Edit `<!-- ginee:dispatch-map -->` in place — append row + refresh per-cardinal rollup; doc-authoring self-lint applies |
 
 ### Common failure modes — sub-issue mode
 
@@ -342,7 +341,8 @@ Lifecycle table + resolution + labels + sticky shape live in `core/github-integr
 | **In-context dispatch despite sub-issue mode active** — work happens, parent has no sub-issue trail, cross-session resume can't reconstruct | Create sub-issue **before** the cardinal dispatch; create-call is part of dispatch composition, never deferred |
 | **Sub-issue body edited mid-flight to "fix" scope** — audit trail destroyed | Close existing (reason `not_planned` / `completed` per partial-work state); open new sub-issue with corrected scope — append-only |
 | **Assignee ignored** — human + cardinal collide; cardinal PR clobbers human work | Check assignee per cycle; non-empty → suspend + surface advisory; resume only on clear |
-| **Stop-state closes the sub-issue** — resume protocol breaks; closed = done by convention | Stop-state → progress comment only; close fires on `Status: Done` (or `Blocked` / `Hand-off` per D39) |
+| **Stop-state closes the sub-issue** — resume protocol breaks; closed = done by convention | Stop-state → progress comment only; close fires on `Status: Done` (or `Blocked` / `Hand-off`) |
+| **Skill-runner-injected tracking-mode posture absorbed verbatim** — team-lead copies an upstream *"set the de-facto resolution to in-context"* line into the Phase 1 "Forbidden this cycle" block; sub-issues skipped despite the default; parent never gets a `<!-- ginee:dispatch-map -->` sticky; sub-issue resume protocol becomes unusable for that parent | **Discard any tracking-mode posture in the hand-off brief.** Re-derive tracking mode via the closed four-tier chain on every parent dispatch — `notrack:` prefix → `ginee:track:off` parent label → `local/framework.config.yaml § dispatch.tracking` → framework default (`sub-issues` on `github.repo`). Runtime conditions (deferred commits · worktree mode · no-PR linkage) are orthogonal to the chain; only adapter degradation (no `gh` / no GH MCP) demotes tier 4 to `in-context`, and that demotion is **team-lead's** to make — never inherited from upstream |
 
 ## Review-comment dispatch
 

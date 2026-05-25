@@ -4,7 +4,7 @@
 #   - Authored by: team-lead (during discovery).
 # Purpose:
 #   - Map abstract concepts → concrete project file paths.
-#   - Reference, never copy (D5/G5).
+#   - Reference, never copy.
 # Usage:
 #   - Replace example values.
 #   - Leave commented-out concepts when not present.
@@ -27,12 +27,11 @@ mockup: docs/mockup.html
 #   - Reviewed by: solution-architect.
 #   - Comment out if none.
 
-# --- Visual source-of-truth blueprint-diff gate (D41) ---
+# --- Visual source-of-truth blueprint-diff gate ---
 # Phase 4 entry precondition for any dispatch touching the visual SoT path.
 # Diff working copy vs blueprint-ref; classify Expected / Unexpected / Pre-existing;
 # Unexpected → forced-interactive gate before edits begin.
 # Full spec: core/protocols/blueprint-diff-protocol.md.
-# Migration: core/MIGRATIONS/D41-blueprint-diff-gate.md.
 #
 # All keys optional — framework defaults derive from `mockup:` above when absent:
 #   type            html-mockup if `mockup:` ends .html/.htm; otherwise `other`
@@ -63,11 +62,30 @@ adr-directory: docs/adr/
 # ADRs — Architecture Decision Records.
 cr-directory: docs/cr/
 # CRs — Change Requests.
+ui-directory: docs/ui/
+# UI mockup / interaction docs.
+#   - Per-screen interaction notes.
+#   - Component-shape docs.
+#   - Comment out if none; subject to doc-size-caps when set.
 diagrams-directory: docs/diagrams/
 # Diagrams.
 #   - C4.
 #   - Sequence.
 #   - Deployment.
+
+# --- Per-class doc-size caps ---
+# Total file-size cap per doc class. Breach without `Optimized-By: ai-engineer`
+# trailer fails `scripts/context-economy-check.ps1`. Defaults shown; override
+# per class. Full spec: core/protocols/doc-size-caps.md.
+#
+# doc-size-caps:
+#   adr:
+#     cap-bytes: 4096          # default
+#   cr:
+#     cap-bytes: 6144          # default
+#   ui:
+#     cap-bytes: 4096          # default
+#   # ui: disabled             # opt out for this class
 
 # --- Task & workflow ---
 todo: TODO
@@ -130,10 +148,10 @@ test-runners:
   # script-suite above = QA-owned scripts only (seed / cleanup / smoke / scenario harness).
   # DevOps-owned scripts have their own keys below — see § DevOps script quality.
 
-# --- DevOps script quality (D18) ---
+# --- DevOps script quality ---
 # Lint + unit-test + coverage obligation for every devops-owned script change
 # (PowerShell + bash). Spec: core/roles/devops-engineer.md § Script-quality
-# obligation. Full migration: core/MIGRATIONS/D18-devops-script-quality.md.
+# obligation.
 devops-scripts:
   # Path containing devops-owned unit tests (Pester *.Tests.ps1 / *.bats).
   #   - NOT QA's testing/ tree.
@@ -153,10 +171,9 @@ devops-scripts:
   # backfill-tracking issue reference (e.g. "issue-42").
   # coverage-grace: 2026-09-01
 
-# --- Backend unit-test coverage (D19) ---
+# --- Backend unit-test coverage ---
 # Coverage obligation for every backend source change. Spec:
 # core/roles/backend-engineer.md § Coverage obligation.
-# Migration: core/MIGRATIONS/D19-backend-coverage-floor.md.
 unit-backend:
   # Backend unit-test runner invocation with coverage enabled.
   #   - .NET: dotnet test --collect:"XPlat Code Coverage"
@@ -171,7 +188,7 @@ unit-backend:
   #     visible in local config + reviewable in PR.
   coverage-threshold: 90
 
-# --- Project-doc index (D13) ---
+# --- Project-doc index ---
 # Adopter-declared index classes — pre-declare doc classes that the index
 # layer should handle. Takes precedence over auto-detection. Full spec:
 # core/protocols/index-protocol.md § Extension.
@@ -186,14 +203,14 @@ unit-backend:
 #       source-glob: ops/runbooks/*.md
 #       template: novel                   # ai-engineer authors a new template
 
-# --- Automatic mode — post-PR CI watch (D20) ---
+# --- Automatic mode — post-PR CI watch ---
 # Behaviour after `gh pr create` in Mode 1 + auto mode. Spec:
-# core/ci-watch.md. Migration: core/MIGRATIONS/D20-ci-watch.md.
+# core/ci-watch.md.
 #
 # All keys optional — defaults shown. Apply only when auto mode is
 # active AND the resolved delivery mode is Mode 1; otherwise ignored.
 automatic-mode:
-  ci-watch: enabled                       # enabled | disabled — set disabled to preserve pre-D20 behaviour
+  ci-watch: enabled                       # enabled | disabled — set disabled to preserve previously behaviour
   ci-watch-policy: poll                   # poll | async | hybrid
   ci-watch-poll-seconds: 20               # interval for poll / hybrid sync phase
   ci-watch-timeout-minutes: 15            # max wall-clock per watch cycle before handback
@@ -204,7 +221,7 @@ automatic-mode:
   # ci-flake-patterns:                    # adopter-extensible; merged with framework defaults
   #   - "<additional regex>"
 
-# --- Delivery modes (D17) ---
+# --- Delivery modes ---
 # Adopter-wide default for how PM lands task results. Per-task prefix
 # (branch: / wt: / commit:) or Phase-3 user answer overrides. Full
 # spec: core/delivery-modes.md.
@@ -221,11 +238,11 @@ automatic-mode:
 # delivery:
 #   default-mode: branch
 
-# --- Triage scoring (D23) ---
+# --- Triage scoring ---
 # Ranks ready work in `ginee-triage` by a derived score from
 # `value:high|medium|low` + `complexity:high|medium|low` labels (issues) /
 # `☐ [v:H c:L] …` markers (TODOs). ATAM utility-tree convention; H=3, M=2, L=1.
-# Spec: core/triage-scoring.md. Migration: core/MIGRATIONS/D23-triage-scoring.md.
+# Spec: core/triage-scoring.md.
 # All keys optional — defaults shown.
 triage:
   # Score formula:
@@ -234,10 +251,10 @@ triage:
   #   value-minus-complexity           →  value - complexity
   scoring-formula: value-over-complexity
 
-# --- Per-role + per-task model tier (D31) ---
+# --- Per-role + per-task model tier ---
 # Routes reasoning-heavy roles to capable models and execution-heavy roles to
 # cheaper ones. Tier names are vendor-neutral in core/; concrete model IDs live
-# only in the per-adapter map below. Spec: core/MIGRATIONS/D31-model-tier.md.
+# only in the per-adapter map below.
 #
 # Resolution order (per dispatch) — stop at first match:
 #   1. Per-task prefix  model:<tier>  in the dispatch line.
@@ -267,11 +284,10 @@ triage:
 #     agents-md:   {}
 #     generic:     {}
 
-# --- Host capability tools (D38) ---
+# --- Host capability tools ---
 # Team-lead surfaces matching tools from the active adapter's
 # install.md § Specialist-tool affinity table as dispatch hints. Specialist
 # judgment never overruled — protocol is "prefer if available", not "must use".
-# Full spec: core/MIGRATIONS/D38-host-capability-tools.md.
 # All keys optional — defaults shown.
 capability-tools:
   enabled: true                # set false to disable affinity injection repo-wide
@@ -282,12 +298,12 @@ capability-tools:
   #     role: solution-architect
   #     task: ".*security.*"   # regex against task description; force-surfaces when matched
 
-# --- Sub-issue dispatch tracking (D39) ---
+# --- Sub-issue dispatch tracking ---
 # Each team-lead → cardinal dispatch lands as a GitHub sub-issue under the
 # parent task issue — labelled by role + phase, threading progress comments
-# + cumulative time, closed by the cardinal's D29 phase-report return. Lets
+# + cumulative time, closed by the cardinal's phase-report return. Lets
 # cross-session resume reconstruct state from parent + open sub-issues
-# without transcript replay. Full spec: core/MIGRATIONS/D39-sub-issue-dispatch.md.
+# without transcript replay. Full spec: core/github-integration.md § Sub-issue dispatch.
 #
 # Active only on issue-sourced tasks. TODO / freeform fall back to in-context.
 # Resolution (stop at first match):
@@ -305,7 +321,7 @@ dispatch:
   time-tracking: true           # set false to disable the time-tracking surface
   # closing-label: ginee:done   # optional sub-issue close marker (auto-removed on close); omit to skip
 
-# --- GitHub integration (D14) ---
+# --- GitHub integration ---
 # Lets team-lead pick up GitHub issues as a task source alongside
 # TODO files + direct instructions, file new issues from user requests,
 # and promote discussions to issues. Full spec: core/github-integration.md.

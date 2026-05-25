@@ -1,6 +1,6 @@
-# Sub-issue dispatch — body template (D39)
+# Sub-issue dispatch — body template
 
-Authored by `team-lead` per `core/MIGRATIONS/D39-sub-issue-dispatch.md`. One sub-issue per cardinal dispatch under the parent task issue. D26 self-lint applies before posting.
+Authored by `team-lead` per `core/github-integration.md § Sub-issue dispatch`. One sub-issue per cardinal dispatch under the parent task issue. Doc-authoring self-lint applies before posting.
 
 ## Title
 
@@ -63,9 +63,9 @@ Examples — `[4:backend-engineer] Implement /v1/items pagination per ADR-0014-c
 
 ## Closing comment
 
-D29 phase-report return per `core/templates/phase-report.md` doubles as the closing comment. **`## Time spent`** mandatory — one-liner: `<H>h <M>m perceived effort; <N> progress comments on sub-issue #<M>.` Marker `<!-- D29 self-lint: pass -->` last line (D33). team-lead posts the return then `gh issue close <M> --reason completed`.
+Phase-report return per `core/templates/phase-report.md` doubles as the closing comment. **`## Time spent`** mandatory — one-liner: `<H>h <M>m perceived effort; <N> progress comments on sub-issue #<M>.` Marker `<!-- self-lint: pass -->` last line. team-lead posts the return then `gh issue close <M> --reason completed`.
 
-Stop-state (`Status: In-progress`) → progress comment only; sub-issue stays open per `core/MIGRATIONS/D39-sub-issue-dispatch.md § Stop-state interaction`.
+Stop-state (`Status: In-progress`) → progress comment only; sub-issue stays open.
 
 ## Forbidden
 
@@ -73,5 +73,5 @@ Stop-state (`Status: In-progress`) → progress comment only; sub-issue stays op
 - Never close with `--reason not_planned` on completed work — only on cancelled / superseded dispatches.
 - Never reuse a sub-issue across dispatches — 1 dispatch = 1 sub-issue.
 - Never federate sub-issues across repos.
-- Never inline code blocks > 5 lines (D29 carve-out — link the commit / paste path instead).
-- Never include the cardinal's full reasoning prose — `## Notes` 200-word cap (D29) applies to closing comments too.
+- Never inline code blocks > 5 lines.
+- Never include the cardinal's full reasoning prose — `## Notes` 200-word cap applies to closing comments too.

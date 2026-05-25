@@ -28,18 +28,18 @@
 | File | Role | Edited by |
 |---|---|---|
 | `<architecture-doc path>` | Architecture — components · data model · API · invariants · target architecture | `solution-architect` |
-| `local/requirements.md` | FRs · NFRs · Constraints register (D25) | `solution-architect` |
-| `local/asr-utility-tree.md` | ASR utility tree (D25 — Architecturally Significant Requirements derived via ATAM) | `solution-architect` |
+| `local/requirements.md` | FRs · NFRs · Constraints register | `solution-architect` |
+| `local/asr-utility-tree.md` | ASR utility tree | `solution-architect` |
 | `<ADR directory path>` | Architecture decision records | `solution-architect` |
 | `<diagrams directory path>` | System / topology / sequence diagrams | `solution-architect` |
-| `<CR directory path>` | Change requests (reassigned to `team-lead` per D25 — coordination decisions, not architectural) | `team-lead` |
-| `<project-instruction file>` (`CLAUDE.md` / `AGENTS.md` / equivalent) | Repo-structure tree · routing table · coordination protocol · hard constraints · principles (D25 — reassigned from SA) | `team-lead`; SA reviews for architectural coherence |
-| `<work-breakdown doc path>` | Operational work plan — per-phase items (D25 — reassigned from SA) | `team-lead` |
-| `<CI/CD guide path>` (D25) | Operational companion to architecture doc's CI/CD section | `devops-engineer`; SA reviews for architectural coherence |
-| `<infrastructure runbook directory>` (D25) | Per-environment deployment + rollback procedures | `devops-engineer` |
-| `<backend READMEs / API docs / service docs>` (D25) | Per-service docs | `backend-engineer`; SA reviews for architectural coherence |
-| `<frontend READMEs / component docs>` (D25) | Per-app docs | `frontend-engineer`; SA reviews for architectural coherence |
-| `<test plans / scenario docs / QA reports>` (D25) | Quality docs | `qa-engineer`; SA reviews for architectural coherence |
+| `<CR directory path>` | Change requests (reassigned to `team-lead` — coordination decisions, not architectural) | `team-lead` |
+| `<project-instruction file>` (`CLAUDE.md` / `AGENTS.md` / equivalent) | Repo-structure tree · routing table · coordination protocol · hard constraints · principles | `team-lead`; SA reviews for architectural coherence |
+| `<work-breakdown doc path>` | Operational work plan — per-phase items | `team-lead` |
+| `<CI/CD guide path>` | Operational companion to architecture doc's CI/CD section | `devops-engineer`; SA reviews for architectural coherence |
+| `<infrastructure runbook directory>` | Per-environment deployment + rollback procedures | `devops-engineer` |
+| `<backend READMEs / API docs / service docs>` | Per-service docs | `backend-engineer`; SA reviews for architectural coherence |
+| `<frontend READMEs / component docs>` | Per-app docs | `frontend-engineer`; SA reviews for architectural coherence |
+| `<test plans / scenario docs / QA reports>` | Quality docs | `qa-engineer`; SA reviews for architectural coherence |
 | `<mockup path>` (if present) | Visual + behavioural client contract | mockup owner (default `frontend-engineer`); `solution-architect` reviews, no edits |
 
 **Tie-breakers.**
@@ -119,8 +119,8 @@ Violation → **stop, propose a doc update first**.
 | `solution-architect` | `<architecture-doc path>`; mockup governance review (no edits); `<CI/CD integration guide>`; project-instruction file rules / routing / repo-structure; ADRs / CRs; coherence audits; tie-breaker resolution. |
 | `frontend-engineer` (alias `client-engineer`) | `<client tier paths>`; `<mockup path>` (HTML/CSS/JS/SVG/fixtures); state; styling; client-side fetch / realtime. |
 | `backend-engineer` (alias `service-engineer`) | `<server tier paths>`; ORM entities / migrations; schema, indexes; realtime hub; auth middleware; wire-format JSON contract. |
-| `devops-engineer` (alias `platform-engineer`) | `<infra path>`; Dockerfiles; compose / orchestration; IaC; CI workflows; reverse-proxy config; secret provisioning; cost tracking; **unit tests + lint + coverage for devops-owned scripts** under `<devops-scripts.tests-path>` per D18. |
-| `qa-engineer` (alias `quality-engineer`) | `<testing path>`; scenario specs; e2e / functional / smoke; harness assertions; fixtures; seed / cleanup scripts; **script-suite tests for QA-owned scripts only** (devops scripts → `devops-engineer` per D18). |
+| `devops-engineer` (alias `platform-engineer`) | `<infra path>`; Dockerfiles; compose / orchestration; IaC; CI workflows; reverse-proxy config; secret provisioning; cost tracking; **unit tests + lint + coverage for devops-owned scripts** under `<devops-scripts.tests-path>`. |
+| `qa-engineer` (alias `quality-engineer`) | `<testing path>`; scenario specs; e2e / functional / smoke; harness assertions; fixtures; seed / cleanup scripts; **script-suite tests for QA-owned scripts only** (devops scripts → `devops-engineer`). |
 | `ai-engineer` | Optimization passes on AI assets + docs; structure / topology / token economy; lossless restructures. Between-phase only. |
 | `<local custom role>` | `<owned paths/concerns>` |
 
@@ -141,8 +141,8 @@ Task spans two roles → dispatch in parallel per `core/process.md` § Dispatch 
 | `solution-architect` | `<mockup path>`; `<server source>`; `<client source>`; IaC, Dockerfiles, compose, CI workflows. |
 | `frontend-engineer` | `<server source>` (incl. SQL in read-API endpoints); IaC, Dockerfiles, CI workflows. |
 | `backend-engineer` | `<client source>`; `<mockup path>`; IaC, Dockerfiles, CI workflows. |
-| `devops-engineer` | Application-tier manifests / lockfiles; application source; client config. May NOT skip script-quality obligation (lint + tests + coverage at `<devops-scripts.coverage-threshold>`) on any devops-owned script change per D18. |
-| `qa-engineer` | `<mockup path>`; production server / client code; **lint / unit tests / coverage for devops-owned scripts** (those belong to `devops-engineer` per D18). Owns application + functional test code, fixtures, scenarios, runners, QA-owned script-suite only. |
+| `devops-engineer` | Application-tier manifests / lockfiles; application source; client config. May NOT skip script-quality obligation (lint + tests + coverage at `<devops-scripts.coverage-threshold>`) on any devops-owned script change. |
+| `qa-engineer` | `<mockup path>`; production server / client code; **lint / unit tests / coverage for devops-owned scripts** (those belong to `devops-engineer`). Owns application + functional test code, fixtures, scenarios, runners, QA-owned script-suite only. |
 | `ai-engineer` | Rules / invariants / routing / requirements (semantics → `solution-architect`); production code; test code; IaC; CI workflows. |
 | `team-lead` | Everything except `local/*` written during discovery. Never edits production surfaces. |
 

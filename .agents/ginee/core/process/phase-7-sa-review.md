@@ -3,7 +3,7 @@
 **Load triggers** — any cardinal whose `phase-participation:` includes `7`. Per-role roster: `team-lead` (gate surface) · `solution-architect` (sign-off).
 
 - **Goal.** `solution-architect` confirms compliance with architecture invariants, requirements, mockup behavioural contracts.
-- **Lighter under D25-classical-architect.** Governance already ran continuously across Phase 4 / 5 / 6 (per `core/roles/solution-architect.md § Governance`); Phase 7 is the **final coherence check**, not a first-pass review. Most concerns should already be resolved.
+- **Lighter under the classical-architect model.** Governance already ran continuously across Phase 4 / 5 / 6 (per `core/roles/solution-architect.md § Governance`); Phase 7 is the **final coherence check**, not a first-pass review. Most concerns should already be resolved.
 - **Checks.**
   - Architecture invariants honoured (cross-check against ASR utility tree).
   - Mockup behavioural contract honoured.

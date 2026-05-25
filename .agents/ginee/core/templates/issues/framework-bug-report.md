@@ -22,7 +22,7 @@ labels: [ginee:ready, framework]
 -->
 
 <!--
-  D26 shape rules — apply to EVERY section, including Summary:
+  Doc shape rules — apply to EVERY section, including Summary:
   - File / endpoint / config inventories → table, not comma-separated prose.
   - Procedures / steps → numbered list.
   - Multi-rule statements → parent bullet + sub-bullets, one rule per line.
@@ -84,15 +84,15 @@ labels: [ginee:ready, framework]
 
 <temporary mitigation the adopter is using>
 
-## Locked decisions referenced
+## Owner-history pointers
 
 <!--
-  Tag affected D-decisions so framework owners know the surface.
-  D34 — taxonomy IDs slug-glued (filename slug after the numeric prefix).
-  Look up: `ls core/MIGRATIONS/D<NN>-*.md` and use the full `D<NN>-<slug>` form.
-  Example: `D28-skill-runner-boundary`, not bare `D28`.
+  Optional. If the bug overlaps with prior owner decisions, point to PLAN.md
+  entries by short slug so the owner can locate context. These are pointers
+  to owner history, NOT load-bearing on the runtime framework.
+  Skip the field if the answer is "none".
 -->
-- `<D<NN>-<slug>>` — `<one-line decision summary or "n/a">`
+- `<short-slug>` — `<one-line summary or "n/a">`
 
 ## Acceptance criteria
 
