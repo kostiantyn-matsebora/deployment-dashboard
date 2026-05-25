@@ -113,11 +113,15 @@
      Tailwind's JIT scanner can miss class names that are applied purely
      through routerLinkActive (not as static template strings).
      This class is referenced by both routerLinkActive AND the safelist. */
-  .layout-active {
+  .layout-active,
+  .bg-white.layout-active {
     background-color: rgb(147 51 234) !important; /* purple-600 */
     color: white !important;
   }
-  [data-theme="dark"] .layout-active {
+  [data-theme="dark"] .layout-active,
+  [data-theme="dark"] .bg-white.layout-active {
+    /* Specificity (0,2,1) — beats blanket `[data-theme="dark"] .bg-white !important` (0,2,0)
+       palette overlay defined later in this file. */
     background-color: rgb(147 51 234) !important;
     color: white !important;
   }
