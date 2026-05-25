@@ -13,3 +13,9 @@ export * from './lib/compact-row.component';
 export * from './lib/glance-row.component';
 export * from './lib/focus-row.component';
 export { getBoxClass, getTooltip } from './lib/box-styles';
+// CR-0015 § 3c — migrated from frontend/dashboard/src/app/ (shared-shaped components)
+export * from './lib/dashboard-header.component';
+export * from './lib/swim-lane-layout.component';
+export * from './lib/workflow-rows-layout.component';
+// topology-utils.ts is intentionally NOT re-exported: internal to matrix/src/lib/
+// (O-9 audit confirmed zero external consumers)
