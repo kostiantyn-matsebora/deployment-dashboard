@@ -19,10 +19,10 @@ Run the promote workflow per `.agents/ginee/core/github-integration.md § Promot
    - Default: primary repo.
    - With 'framework' / `framework#N`: `github.framework-repo` — fail fast if unset.
 3. Fetch the discussion: `gh api repos/<target>/discussions/<N>` (or MCP Discussions API equivalent). Read body + top comments verbatim.
-4. **Hand to `team-lead` (D28).** Skill-runner dispatches `@team-lead` with the fetched discussion payload + target repo. team-lead owns: classification of bug-vs-feature, template selection, draft authoring (the discussion may need restructuring per D26 doc-authoring rules), source-section linkage, surfacing the draft to the user, post-approval issue creation + discussion comment. Per `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
+4. **Hand to `team-lead`.** Skill-runner dispatches `@team-lead` with the fetched discussion payload + target repo. team-lead owns: classification of bug-vs-feature, template selection, draft authoring (the discussion may need restructuring doc-authoring rules), source-section linkage, surfacing the draft to the user, post-approval issue creation + discussion comment. Per `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
 5. Under team-lead: choose template — `feature-request.md` (primary) / `framework-feature-request.md` (framework) by default; switch to bug-report template if the discussion is clearly about a defect.
 6. Draft the issue body. Title prefix: `Promoted from discussion #<N>: <title>`. Body includes a `## Source` section linking the discussion.
-7. **Surface the draft for user approval.** D26 self-lint runs before publish.
+7. **Surface the draft for user approval.** Doc-authoring self-lint runs before publish.
 8. On approval:
    - Create the issue against the target repo with `ready-label` (+ `framework` label for framework target). Tool priority: gh CLI → GitHub MCP → HTTPS.
    - Comment on the original discussion: "Promoted to issue #<M>" with the issue URL.
@@ -33,4 +33,4 @@ Run the promote workflow per `.agents/ginee/core/github-integration.md § Promot
 - Never silently create — surface the draft.
 - Never close the discussion as part of the promotion — discussions stay open for continued conversation.
 - Never edit the discussion body — comment only.
-- **Skill-runner forbiddens (D28).** After Step 4 hand-off the skill-runner must not classify bug-vs-feature in the main thread · author the draft body · paraphrase the discussion content · decide on the title shape. Every authoring decision dispatches `@team-lead`. Full boundary: `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
+- **Skill-runner forbiddens.** After Step 4 hand-off the skill-runner must not classify bug-vs-feature in the main thread · author the draft body · paraphrase the discussion content · decide on the title shape. Every authoring decision dispatches `@team-lead`. Full boundary: `.agents/ginee/core/process.md § Skill-runner — surface boundary`.

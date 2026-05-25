@@ -21,7 +21,7 @@ Project uses the [`ginee`](.agents/ginee/) framework. **Read before any work:**
 **Custom roles + cardinal extensions.** `.agents/ginee/local/roles/`. Two uses:
 
 - **Custom new roles** — author a role definition; register under `team-lead` per discovery flow.
-- **Cardinal extensions** (D37-local-role-extensions) — author `.agents/ginee/local/roles/<cardinal>.md` (matching name of a cardinal: `team-lead` · `solution-architect` · `backend-engineer` · `frontend-engineer` · `devops-engineer` · `qa-engineer` · `ai-engineer`). The shared pointer auto-loads it as the final read in the cardinal's read chain — augments the charter with project-specific craft notes; never replaces. Absence is a no-op.
+- **Cardinal extensions** — author `.agents/ginee/local/roles/<cardinal>.md` (matching name of a cardinal: `team-lead` · `solution-architect` · `backend-engineer` · `frontend-engineer` · `devops-engineer` · `qa-engineer` · `ai-engineer`). The shared pointer auto-loads it as the final read in the cardinal's read chain — augments the charter with project-specific craft notes; never replaces. Absence is a no-op.
 
 **First install.** Type `Run initial discovery` — activates the `ginee-discovery` skill.
 

@@ -8,7 +8,7 @@
   - QA exercises other scenarios in parallel — a fix never freezes the test run.
   - Routes back to the specific Phase 4 surface, not a full Phase 4 rerun.
   - Runs under `core/protocols/iteration-protocol.md`.
-- **`solution-architect` review on architectural fixes (D25-classical-architect).** If a proposed fix involves an architectural change (vs. local bug fix), SA reviews per `§ Review`. APPROVE → engineer implements; REJECT / REQUEST-CHANGES → iterate. Local bug fixes route directly engineer → engineer, no SA dispatch.
+- **`solution-architect` review on architectural fixes.** If a proposed fix involves an architectural change (vs. local bug fix), SA reviews per `§ Review`. APPROVE → engineer implements; REJECT / REQUEST-CHANGES → iterate. Local bug fixes route directly engineer → engineer, no SA dispatch.
 - **Acceptance.**
   - Change-scoped oracles green.
   - No regression in touched surfaces.

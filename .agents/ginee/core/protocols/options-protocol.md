@@ -1,4 +1,4 @@
-# Option protocol — adopt-vs-build proposal shape (D30)
+# Option protocol — adopt-vs-build proposal shape
 
 **Load-on-demand.** Fetched by the proposing role on activation. 5 mandatory checks below run **before surfacing**; no edits / no dispatch until the option list passes.
 
@@ -12,17 +12,17 @@
 
 ## Scope
 
-| Surface | Bound since |
-|---|---|
-| Phase 2 design proposals — architecture · ADRs · CRs · wire / mockup contracts | D30 |
-| Iteration-protocol Propose step — Phase 4–7 sub-tasks with a live adopt-vs-build axis | D30 |
+| Surface |
+|---|
+| Phase 2 design proposals — architecture · ADRs · CRs · wire / mockup contracts |
+| Iteration-protocol Propose step — Phase 4–7 sub-tasks with a live adopt-vs-build axis |
 
 ### Out of scope
 
 - **Local bug fixes** without an adoption axis (per `core/protocols/iteration-protocol.md § Conflict resolution` — engineer domain).
 - **Existing closed proposals.** Forward-only; no retroactive rewrite.
 - **License gating.** Framework requires citation, expresses no opinion on which licenses pass. Adopter authors a `local/` policy if gating is wanted.
-- **External lint enforcement.** LLM self-review only — same machinery as D22 / D26 / D29.
+- **External lint enforcement.** LLM self-review only — same machinery as the doc-authoring + phase-report protocols.
 
 ## Option-list schema
 
@@ -106,18 +106,18 @@ Bad / good doc-style examples for option lists: `core/doc-authoring-examples.md 
 | Reviewer (orchestrator / SA / user) | MAY surface a one-line advisory on violation (`"Option list missed: <check>; consuming anyway"`). Never re-dispatches purely for format. Never auto-rewrites. |
 | Iteration-protocol intermediate proposals | Same checks; empty-research path still requires `(none viable)` cite — partial work no excuse. |
 
-**No external linter.** Same machinery as D22 / D26 / D29 — LLM self-review against the rules above.
+**No external linter.** LLM self-review against the rules above; same machinery as the doc-authoring protocol.
 
-## Interaction with other decisions
+## Interaction with other framework surfaces
 
-| Decision | Interaction |
+| Surface | Interaction |
 |---|---|
-| D22 (doc-authoring protocol) | Doc-shape rules apply to surrounding proposal text; D30 adds option-shape layer on top. |
-| D25 (classical-architect SA) | SA `§ Design § Phase 2` lists adopt-vs-build as a first-class design axis. SA Review on engineer-proposed architectural changes inspects the option list. |
-| D26 (D22 scope extension) | Option lists in ginee-authored GitHub artefacts (issue bodies · framework comments) follow D26 doc-style + D30 option-shape — both lints run. |
-| D29 (subagent-return schema) | Option lists in a return land under `## Decisions made` (one-line each, cite) or capped `## Notes` carve-out (≤ 200 words) when longer. No new section. |
-| D17 (delivery modes) | Mode selection itself is a Phase 3 question — not an adopt-vs-build choice. Out of scope. |
+| `core/protocols/doc-authoring-protocol.md` | Doc-shape rules apply to surrounding proposal text; this protocol adds the option-shape layer on top. |
+| `core/roles/solution-architect.md` | SA `§ Design § Phase 2` lists adopt-vs-build as a first-class design axis. SA Review on engineer-proposed architectural changes inspects the option list. |
+| GitHub artefacts (issue bodies · framework comments) | Option lists in ginee-authored artefacts follow both the doc-authoring shape rules and the option-shape rules here — both lints run. |
+| `core/templates/phase-report.md` | Option lists in a return land under `## Decisions made` (one-line each, cite) or capped `## Notes` carve-out (≤ 200 words) when longer. No new section. |
+| `core/delivery-modes.md` | Mode selection itself is a Phase 3 question — not an adopt-vs-build choice. Out of scope. |
 
 ## Reporting
 
-Outcomes land in `## Decisions made` per D29 (one-line each — `<verb> <choice> — cite`). Full option list lives in the proposal artefact (architecture doc · ADR · CR · iteration-protocol Propose output) — the return cites the artefact path, never restates the table.
+Outcomes land in `## Decisions made` (one-line each — `<verb> <choice> — cite`). Full option list lives in the proposal artefact (architecture doc · ADR · CR · iteration-protocol Propose output) — the return cites the artefact path, never restates the table.

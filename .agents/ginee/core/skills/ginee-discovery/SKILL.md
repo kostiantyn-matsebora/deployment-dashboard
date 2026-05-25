@@ -23,6 +23,6 @@ Run the ginee framework's initial-discovery workflow per `.agents/ginee/core/rol
 
 ## Forbidden
 
-- Never enable a specialist or external agent without explicit user approval (D5 / D10).
+- Never enable a specialist or external agent without explicit user approval.
 - Never overwrite existing `local/*` files — full rewrite requires `ginee-rediscover`.
 - Never auto-extend any TODO file.

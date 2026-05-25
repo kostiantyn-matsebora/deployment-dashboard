@@ -41,11 +41,13 @@ import {
   type ServiceDescriptor,
   type SlotUpdatePayload
 } from '@dd/shared';
-import { StatsBarComponent } from '@dd/matrix';
+import {
+  DashboardHeaderComponent,
+  StatsBarComponent,
+  SwimLaneLayoutComponent,
+  WorkflowRowsLayoutComponent
+} from '@dd/matrix';
 import { HistoryDrawerComponent } from '@dd/drawer';
-import { DashboardHeaderComponent } from './dashboard-header.component';
-import { SwimLaneLayoutComponent } from './swim-lane-layout.component';
-import { WorkflowRowsLayoutComponent } from './workflow-rows-layout.component';
 
 /** SAD §"SSE topology semantics" — the coalescing window for follow-up GETs. */
 const REFRESH_COALESCE_MS = 250;

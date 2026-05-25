@@ -22,7 +22,7 @@ labels: [ginee:ready, framework]
 -->
 
 <!--
-  D26 shape rules — apply to EVERY section, including Summary:
+  Doc shape rules — apply to EVERY section, including Summary:
   - File / endpoint / config inventories → table, not comma-separated prose.
   - Procedures / steps → numbered list.
   - Multi-rule statements → parent bullet + sub-bullets, one rule per line.
@@ -57,26 +57,26 @@ labels: [ginee:ready, framework]
 
 <observable framework behavior after the change — what would `team-lead` / cardinals / `ai-engineer` do differently?>
 
-## Locked-decision impact
+## Owner-decision impact
 
 <!--
-  Does this require a new locked decision or amend existing ones?
-  Framework's source of truth for decisions is PLAN.md + CLAUDE.md tables.
-  D34 — cite existing decisions in slug-glued form (filename slug after the
-  numeric prefix); `ls core/MIGRATIONS/D<NN>-*.md` resolves the slug.
-  Example: `D28-skill-runner-boundary`, not bare `D28`.
+  Does this require a new owner decision or amend existing ones?
+  Owner's design log lives in PLAN.md (table at § Locked decisions).
+  Cite affected decisions by short slug or PLAN.md anchor — these are
+  pointers to owner history, NOT load-bearing on the runtime framework.
+  Skip the field if the answer is "none".
 -->
 - New decision needed: `<yes | no>`
-- Existing decisions affected: `<D28-skill-runner-boundary | D29-strict-subagent-return-schema | ... | none>`
+- Owner-history pointers: `<short-slug-1 | short-slug-2 | ... | none>`
 
 ## Backward compatibility
 
 <!--
   Does this break existing adopters? Required because copy-paste install
-  + tarball upgrade are supported (D4) — adopters re-fetch core/ on update.
+  + tarball upgrade are supported — adopters re-fetch core/ on update.
 -->
 - Breaks existing `local/` files: `<yes | no — explain>`
-- Migration note required in `core/MIGRATIONS/`: `<yes | no>`
+- Migration note required: `<yes | no>`
 
 ## Acceptance criteria
 

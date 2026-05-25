@@ -2,7 +2,7 @@
 
 Sticky comment posted by `team-lead` after every `ginee-address-review` cycle. One per cycle (hard cap). Idempotent via `<!-- ginee:review-cycle n=<N> -->` marker — find via marker; post if absent; do NOT edit prior cycles (immutable cycle log).
 
-Full ingestion spec: `core/github-integration.md § Review-comment ingestion`. **D26 binding** — template below is already structured (table for thread rows · one-line headline); team-lead self-lints any per-cycle wording before posting per `core/process.md § Mandatory checks before report-as-done`.
+Full ingestion spec: `core/github-integration.md § Review-comment ingestion`. Template below is already structured (table for thread rows · one-line headline); team-lead self-lints any per-cycle wording before posting per `core/process.md § Mandatory checks before report-as-done`.
 
 ## Format
 

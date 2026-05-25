@@ -111,7 +111,7 @@ Trigger: `@team-lead file bug <title>` / `file feature <title>` (→ primary) or
 
 Trigger: `@team-lead pick up #<N>` — always targets the primary repo (= the working tree's origin). **Never auto-picks.** **No `framework-` variant** — see § Command targeting.
 
-**Skill-runner vs team-lead split (D28).** Steps 1–5 below are **mechanical ops** the skill-runner (`ginee-pick-up`) runs directly. After Step 5 the skill-runner dispatches `@team-lead` and team-lead owns every subsequent decision — Phase 1 analysis, plan drafting, specialist routing, comment cadence, gate enforcement, close-out. Full boundary: `core/process.md § Skill-runner — surface boundary`.
+**Skill-runner vs team-lead split.** Steps 1–5 below are **mechanical ops** the skill-runner (`ginee-pick-up`) runs directly. After Step 5 the skill-runner dispatches `@team-lead` and team-lead owns every subsequent decision — Phase 1 analysis, plan drafting, specialist routing, comment cadence, gate enforcement, close-out. Full boundary: `core/process.md § Skill-runner — surface boundary`.
 
 1. **Mechanical (skill-runner).** Fetch:
    ```
@@ -139,7 +139,7 @@ Trigger: `@team-lead pick up #<N>` — always targets the primary repo (= the wo
    | Phase 8 acceptance | Summary + PR/commit links + "closing on accept" |
    | Stoppable intermediate state (user paused) | Current phase + done/in-progress/not-started lists |
 
-   Comments are structured summaries, not chatty. One per transition. **D26 binding** — every framework-authored comment passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done` (tables for inventories · numbered lists for steps · parent + sub-bullets for multi-rule statements · no parenthetical comma-lists in sentences). Enforcement: `core/protocols/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
+   Comments are structured summaries, not chatty. One per transition. Every framework-authored comment passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done` (tables for inventories · numbered lists for steps · parent + sub-bullets for multi-rule statements · no parenthetical comma-lists in sentences). Enforcement: `core/protocols/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
 8. On Phase 8 acceptance, PM closes the issue:
    ```
    gh issue close <N> --repo <repo> --comment "<final summary + PR links>"
@@ -188,18 +188,18 @@ When a task is issue-sourced, every resulting PR description includes a `Closes 
 
 Template carries this: `core/templates/pr-description.md § Issue linkage`.
 
-**Post-PR CI watch (D20).** In automatic mode with `automatic-mode.ci-watch: enabled` (default), the orchestrator does not exit at `gh pr create`. It enters the watch loop per `core/ci-watch.md`, posting at most three PR comments per fix cycle (`"CI watch started"` / `"CI fix pushed (cycle N of M)"` / `"CI complete — all green"`), routing attributable failures back through Phase 6, and gating delivery on all-required-green. Interactive mode + `ci-watch: disabled` preserve pre-D20 behaviour (exit at "PR opened").
+**Post-PR CI watch.** In automatic mode with `automatic-mode.ci-watch: enabled` (default), the orchestrator does not exit at `gh pr create`. It enters the watch loop per `core/ci-watch.md`, posting at most three PR comments per fix cycle (`"CI watch started"` / `"CI fix pushed (cycle N of M)"` / `"CI complete — all green"`), routing attributable failures back through Phase 6, and gating delivery on all-required-green. Interactive mode + `ci-watch: disabled` preserve previously behaviour (exit at "PR opened").
 
 ## Review-comment ingestion
 
-Address external code-review feedback on an open PR. Sits between Phase 7 (internal SA review) and Phase 8 (user acceptance) for PRs exposed to peer maintainers / OSS contributors / the user wearing a reviewer hat. Explicit invocation only — no extension of D20 CI-watch.
+Address external code-review feedback on an open PR. Sits between Phase 7 (internal SA review) and Phase 8 (user acceptance) for PRs exposed to peer maintainers / OSS contributors / the user wearing a reviewer hat. Explicit invocation only — no extension of the CI-watch loop (`core/ci-watch.md`).
 
 | Path | Form |
 |---|---|
 | Skill (AgentSkills clients) | `/ginee-address-review #<N>` |
 | Command (every adapter) | `@team-lead address-review #<N>` |
 
-Both run the same procedure under the same governance — **skill / command parity is mandatory** (D24). Target = primary repo. No `framework-` variant; checked-out branch must be the PR's head ref.
+Both run the same procedure under the same governance — **skill / command parity is mandatory**. Target = primary repo. No `framework-` variant; checked-out branch must be the PR's head ref.
 
 ### Procedure
 
@@ -252,7 +252,7 @@ Every unresolved plan-table remark MUST end the cycle as **fix** (patch in cycle
 
 ### User-confirmation gate
 
-No fix committed, no reply posted, no commit pushed without plan-table approval — per `core/process.md § Executing actions with care` (PR is externally visible). In `auto:` mode (D12) the gate is a **forced-interactive trigger** per `core/automatic-mode.md § Forced-interactive triggers` (push + reply on external PR = "destructive / external" set) — auto pauses, surfaces the table, resumes only on explicit approval. **No exception for "trivial" remarks** (slope; explicit out-of-scope).
+No fix committed, no reply posted, no commit pushed without plan-table approval — per `core/process.md § Executing actions with care` (PR is externally visible). In `auto:` mode the gate is a **forced-interactive trigger** per `core/automatic-mode.md § Forced-interactive triggers` (push + reply on external PR = "destructive / external" set) — auto pauses, surfaces the table, resumes only on explicit approval. **No exception for "trivial" remarks** (slope; explicit out-of-scope).
 
 ### Comment cadence
 
@@ -262,7 +262,7 @@ No fix committed, no reply posted, no commit pushed without plan-table approval 
 | Sticky cycle summary | 1 per cycle (format per `core/templates/pr-comment-cadence.md`) |
 | Mid-cycle progress comments | 0 — sticky IS the signal |
 
-**D26 binding** — every framework-authored reply + cycle-summary passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done`. Specialist authoring a reply-track text runs the self-lint before returning to team-lead. Enforcement: `core/protocols/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
+Every framework-authored reply + cycle-summary passes the mandatory checks per `core/process.md § Mandatory checks before report-as-done`. Specialist authoring a reply-track text runs the self-lint before returning to team-lead. Enforcement: `core/protocols/doc-authoring-protocol.md § Enforcement for ginee-authored GitHub artefacts`.
 
 ### Example — worked cycle
 
@@ -288,30 +288,32 @@ Re-invocation later (new reviewer comment on `T#abc` + new `T#jkl`):
 - Drafting reviews on other people's PRs (reviewer role, not author).
 - Auto-resolving threads — reviewer / PR author owns.
 - Cross-repo coordinated reviews.
-- Auto-detecting new review comments — explicit invocation only; D20 CI-watch loop unaffected.
+- Auto-detecting new review comments — explicit invocation only; CI-watch loop (`core/ci-watch.md`) unaffected.
 - Sentiment / tone analysis.
 - Bypassing the user-confirmation gate for "trivial" remarks.
 - Skill-only or command-only delivery — parity mandatory.
 
 ## Sub-issue dispatch
 
-One sub-issue per `team-lead` → cardinal dispatch under the parent task issue (issue-sourced tasks only; TODO / freeform → in-context). Full lifecycle + interactions: **`core/MIGRATIONS/D39-sub-issue-dispatch.md`**. Authoring procedure: `core/roles/team-lead.details.md § Sub-issue dispatch`. Body shape: `core/templates/sub-issue-dispatch.md`.
+One sub-issue per `team-lead` → cardinal dispatch under the parent task issue (issue-sourced tasks only; TODO / freeform → in-context). Authoring procedure: `core/roles/team-lead.details.md § Sub-issue dispatch`. Body shape: `core/templates/sub-issue-dispatch.md`.
 
 | Step | Op |
 |---|---|
 | Plan | team-lead drafts contract — scope · acceptance · spec links · phase · estimate |
 | Create | `gh issue create` titled `[<phase>:<cardinal>] <task>` + body per template + labels `ginee:role:<cardinal>` · `ginee:phase:<N>` · inherited `value:*`/`complexity:*`; attach via `gh api .../issues/<parent>/sub_issues` |
-| Execute | Cardinal posts progress comments per `core/templates/pr-comment-cadence.md` shape — each carries `time: <N>m` (since last comment) + `cumulative: <N>m` (since dispatch start); D26 self-lint applies |
-| Close | D29 phase-report return = closing comment with mandatory `## Time spent`; `gh issue close <M> --reason completed`. Stop-state (`Status: In-progress`) posts as progress comment — sub-issue stays open |
+| Execute | Cardinal posts progress comments per `core/templates/pr-comment-cadence.md` shape — each carries `time: <N>m` (since last comment) + `cumulative: <N>m` (since dispatch start); doc-authoring self-lint applies |
+| Close | Phase-report return = closing comment with mandatory `## Time spent`; `gh issue close <M> --reason completed`. Stop-state (`Status: In-progress`) posts as progress comment — sub-issue stays open |
 | Parent sync | Edit sticky `<!-- ginee:dispatch-map -->` on parent in place — one per parent; table of dispatches + per-cardinal time rollup |
 
 **Resolution (stop at first match):** `notrack:` task prefix → `ginee:track:off` parent label → `local/framework.config.yaml § dispatch.tracking` (`sub-issues` | `in-context`) → default `sub-issues` on `github.repo`.
+
+**Chain is closed — team-lead re-derives on every parent dispatch.** No fifth tier exists or may be inserted at runtime — no `skill-runner / runtime-condition / de-facto / commits-deferred / worktree-mode / no-PR` tier. The skill-runner per `core/process/dispatch.md § Skill-runner — surface boundary` never sets, recommends, or carries a tracking-mode posture in the hand-off payload — tracking-mode resolution is orchestration, not a mechanical op. Team-lead re-derives via the chain on every parent dispatch (initial pickup + every cross-session resume); any posture asserted upstream (in the skill-runner hand-off brief, in a prior session's transcript, in a paraphrased hand-off note) is **discarded without inheritance**. Runtime conditions (deferred commits · worktree mode · no-PR linkage) are **orthogonal** to the chain; only adapter degradation (no `gh` / no GH MCP) demotes tier 4 to `in-context`, and that demotion happens inside team-lead's resolution — never upstream.
 
 **Assignee precedence.** Empty → role label drives cardinal execution. Non-empty human → cardinal suspended; team-lead surfaces *"Sub-issue #M has human assignee @user; cardinal dispatch suspended. Reassign to clear."* once per session.
 
 **Labels.** `ginee:role:<cardinal>` (one of 7 cardinals · per sub-issue) · `ginee:phase:<N>` (updated on transition) · inherited `value:*`/`complexity:*` (per sub-issue) · `ginee:blocked` (optional) · `ginee:track:off` (parent-only · opts out for that issue's lifetime).
 
-**Sticky shape** — `<!-- ginee:dispatch-map -->` headline + table `Sub-issue · Role · Phase · Status · Time` + per-cardinal totals line. D26 binding.
+**Sticky shape** — `<!-- ginee:dispatch-map -->` headline + table `Sub-issue · Role · Phase · Status · Time` + per-cardinal totals line. Doc-authoring rules apply.
 
 **Forbidden** — edit sub-issue body after create (scope change = close + new sub-issue) · reuse across dispatches (1 dispatch = 1 sub-issue) · federate cross-repo · auto-file umbrellas for TODO / freeform · close on PR merge (PR closes parent; sub-issues close on phase-report return).
 

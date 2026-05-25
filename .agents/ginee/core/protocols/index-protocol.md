@@ -35,10 +35,10 @@ The protocol covers two source categories — same machinery (manifest + SHA-256
 
 | Category | Source examples | Example index files |
 |---|---|---|
-| **Documentation** (D13 baseline) | architecture doc, mockup, ADR/CR directories, scenarios, glossary | `architecture.idx`, `api-matrix.yaml`, `ui-states.yaml`, `adr-index.idx`, `cr-index.idx`, `scenario-index.idx`, `glossary.idx`, `constraints.yaml`, `mockup-index.idx` |
-| **Code / config** (D15 extension) | package manifests, lockfiles, container orchestration, IaC, lint / formatter configs, env schemas, build scripts, repo directory tree | `stack.yaml`, `topology.yaml`, `commands.yaml`, `conventions.yaml`, `runtime-facts.yaml`, `repo-map.idx` |
+| **Documentation** | architecture doc, mockup, ADR/CR directories, scenarios, glossary | `architecture.idx`, `api-matrix.yaml`, `ui-states.yaml`, `adr-index.idx`, `cr-index.idx`, `scenario-index.idx`, `glossary.idx`, `constraints.yaml`, `mockup-index.idx` |
+| **Code / config** | package manifests, lockfiles, container orchestration, IaC, lint / formatter configs, env schemas, build scripts, repo directory tree | `stack.yaml`, `topology.yaml`, `commands.yaml`, `conventions.yaml`, `runtime-facts.yaml`, `repo-map.idx` |
 
-D13 framed the protocol around documentation; D15 broadened it to "extracted" so any structured fact source can be indexed under one tier with one manifest.
+The protocol was originally framed around documentation, then broadened to "extracted" so any structured fact source can be indexed under one tier with one manifest.
 
 ## Layout
 
@@ -84,7 +84,7 @@ Common index files (from built-in recipes):
 
 ```yaml
 indexed:
-  # Doc class (D13)
+  # Doc class
   - class: architecture
     category: doc
     template: multi                       # multi-file output — see index-files
@@ -114,7 +114,7 @@ indexed:
     index-bytes: 8200
     compression: 0.06
 
-  # Code class (D15)
+  # Code class
   - class: stack
     category: code
     template: stack.yaml
@@ -163,7 +163,7 @@ indexed:
 
 - **Single-file sources** record one `sha256`.
 - **Glob sources** record `sha256-by-file` so a single new/changed file flags only that subset.
-- **`category`** — `doc` (D13) or `code` (D15). Drives heuristic-detection mapping during discovery.
+- **`category`** — `doc` or `code`. Drives heuristic-detection mapping during discovery.
 - **`recipe`** — either a built-in id (`builtin:<recipe>`) or an inline recipe block (for novel classes).
 - **`source-bytes`** + **`index-bytes`** + **`compression`** — byte-size accounting; surfaces compression ratio so adopters and `ai-engineer` see when a recipe is over-extracting (`compression` ≥ 0.5 → failed; see `§ Compression floor`). `index-bytes` = sum across all `index-files` entries.
 - **`consumed-by`** — list of roles whose baseline reads at least one of the entry's `index-files`. **Required for novel classes** (else extraction is skipped per `§ Consumer coupling`). Auto-populated for built-in classes by scanning cardinal role kernels' `Source of truth` tables + `local/bindings.md § Project-specific index citations`.
@@ -358,10 +358,10 @@ index:
 ## Out of scope
 
 - Automated checksum tooling beyond `sha256sum` / `Get-FileHash` invocations.
-- True vector-store RAG (markdown-only baseline per D1 / D4).
+- True vector-store RAG (markdown-only baseline).
 - Cross-project index sharing.
 - Auto-promotion of novel classes to built-in templates. May happen in future framework releases based on observed adopter patterns.
 - Index pre-cooking on framework install. Adopters run `@team-lead rediscover` to build their first index.
 - Runtime-discovered facts requiring live execution (e.g. actual DB schema via introspection, runtime memory profile). Static-extraction only.
 - Auto-generated API docs from code (OpenAPI/spec generation). Separate concern; the index *consumes* an existing OpenAPI spec if one's present, but doesn't generate one.
-- Per-role facts files (Approach C of issue #1). Layered on top of the canonical index if a future need arises; not in D15 scope.
+- Per-role facts files (Approach C of issue #1). Layered on top of the canonical index if a future need arises; not in scope here.

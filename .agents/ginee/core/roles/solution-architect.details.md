@@ -2,9 +2,9 @@
 
 Companion to `core/roles/solution-architect.md`. Elaborations only; kernel rules are binding.
 
-**Note (D25):** CR template moved to `team-lead.details.md § CR template` — CRs are coordination decisions, not architectural ones. SA reviews CRs for architectural coherence per `core/doc-roles.md § SA architectural-coherence review` but does NOT author them.
+**Note:** CR template moved to `team-lead.details.md § CR template` — CRs are coordination decisions, not architectural ones. SA reviews CRs for architectural coherence per `core/doc-roles.md § SA architectural-coherence review` but does NOT author them.
 
-## D25 doc-ownership redistribution table
+## Doc-ownership redistribution table
 
 Moved from `solution-architect.md § What you own` for context-economy. Kernel keeps the bulleted summary; this is the full table.
 
@@ -41,7 +41,7 @@ The architectural decision in one paragraph. Imperative voice.
 Positive, negative, neutral. Knock-on effects on components, contracts, ops.
 ```
 
-## Architectural-change review flow (D25)
+## Architectural-change review flow
 
 Two routing paths depending on what the engineer is proposing:
 
@@ -56,7 +56,7 @@ Engineer proposes a contract / topology / stack / NFR-affecting change. Procedur
    - List downstream dispatches required (example: *"wire-shape revision affects service + client + qa"*).
 4. SA never edits the engineer's code; engineer implements after APPROVE.
 
-### Path B — Requirements / scope delta (team-lead's authority per D25)
+### Path B — Requirements / scope delta (team-lead's authority)
 
 Engineer proposes adding / modifying / retiring an FR / NFR / Constraint. Procedure:
 
