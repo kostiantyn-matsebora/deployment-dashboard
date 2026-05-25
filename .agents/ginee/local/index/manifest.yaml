@@ -103,40 +103,31 @@ indexed:
       ADR-0001..ADR-0010 (16 rows).
     consumed-by: [solution-architect]
 
-  - class: cr
-    category: doc
-    template: cr-index.idx
-    recipe: builtin:cr
-    source-glob: docs/cr/*.md
-    file-count: 14                  # CR-0001..CR-0013 + README
-    sha256-by-file:
-      docs/cr/CR-0001-generic-project-agnostic.md: 46122e736ab0c806f4bbab79efaba1529522e7828af29a8229dca452b8ec78c3
-      docs/cr/CR-0002-four-named-views-and-attribute-picker.md: e49cdd01887161415654495441563fc7280c764e8edb14c8bcaf4f4617fc490f
-      docs/cr/CR-0003-tree-topology-and-layout-axis.md: 34974fe60578d42bb66de89ca15f631ea948f1c69c291f73166338c1043acbfd
-      docs/cr/CR-0004-ref-and-sha-optional-fields.md: ba9b819cbe7fe7535ffc1dd0214f32c3829a713d6c8f4759ccfc810606bb1335
-      docs/cr/CR-0005-ref-sha-display-and-topology.md: 4f4eacf5cf7011719a5451caefe54dcaaf19d0d752015a9e14ad3aef31c8b508
-      docs/cr/CR-0006-light-dark-auto-theme.md: 2cb4e57afb5ec78e27906b925a571404ad16caa3c154b036c312a2ebf432b994
-      docs/cr/CR-0007-defer-matrix-layout-to-phase-2.md: f1df907f5973f77554733ab032f686c4995a0f3bf45d01c0d3f869d1b1caf5c2
-      docs/cr/CR-0008-api-validation-and-openapi-scalar.md: 48f5693db3544f15f480c218189c4cb1294a428ab7e61bd02dd30aacf8da6c44
-      docs/cr/CR-0009-pull-mode-fetcher-and-progress-reporter.md: da06d328483e41b55cfc23d5f492cf369b1c69f416a7f895c4d561b3f14df1a8
-      docs/cr/CR-0010-component-ci-pipeline.md: 66fd623a2500bc61bff480316402bffb015dc6fd261ead17b6693c912b9b614d
-      docs/cr/CR-0011-fetcher-rate-limit-governance.md: fe1a17e0e050c65db0d7445a6e423bb62ea2fc9b092405b1c76a78622ed460d6
-      docs/cr/CR-0012-integration-test-substrate.md: ffa4d4910b41eaa82302e115f8acb20cf5a6863c5086adff3a0b781ae10719ab
-      docs/cr/CR-0013-demo-mode-default-installer.md: 92d65051e52c5b74faab08608c8738108d6d6cd3a693f96e55834ccd5700fd37
-      docs/cr/README.md: c61d3684b01d4de29c18ac3932f629bec26edf3f887b4658dfcafbbb4a1d453a
-    indexed-on: 2026-05-23
-    sha-refreshed: 2026-05-23
-    index-files: [cr-index.idx]
-    index-file-sha256:
-      cr-index.idx: 7a14759f9fbb95012a057c67c28fc494bbfe07ba3f7f4d20bf95809995bfc81c
+  # `cr` class RETIRED 2026-05-25 — per CLAUDE.md § CR convention (local), GitHub
+  # issues are the canonical design-of-record; CRs are authored only for free-form /
+  # TODO-sourced tasks. Historical CR-0001..CR-0015 deleted in branch
+  # chore/retire-crs-for-github-issues. See `github-issues` class below for replacement.
+  # If a future free-form CR is authored, re-introduce this class with the new file set.
+
+  - class: github-issues
+    category: registry
+    template: github-issues-index.idx
+    recipe: builtin:github-issues
+    source: 'gh issue list --state all --limit 100'
+    file-count: 'derived from gh CLI'
+    indexed-on: 2026-05-25
+    sha-refreshed: 2026-05-25
+    index-files: [github-issues-index.idx]
     status: sha-stable
     drift-note: |
-      Reindexed 2026-05-23: added CR-0011 (rate-limit governance), CR-0012
-      (integration test substrate), CR-0013 (demo-mode default installer);
-      updated CR-0010 to note demo-gha.yml + demo-driver.yml as 5th/6th callers;
-      noted EF migration artefact retired by ADR-0009. Index now covers
-      CR-0001..CR-0013 (19 rows).
-    consumed-by: [team-lead, solution-architect]  # D25 reassignment - team-lead now primary consumer
+      Created 2026-05-25 as part of CR-retirement (branch
+      chore/retire-crs-for-github-issues). Replaces the retired `cr` class:
+      since GitHub issues are now the canonical design-of-record for picked-up
+      work, this index summarises them for team-lead triage + SA cross-reference.
+      Refresh trigger: `ginee-reindex` whole-repo sweep, OR post-acceptance hook
+      on any picked-up issue, OR explicit `@team-lead refresh issue index`.
+      Schema: number | state | labels | value | complexity | title.
+    consumed-by: [team-lead, solution-architect]
 
   - class: mockup
     category: doc

@@ -7,7 +7,7 @@ nav_order: 1
 # ADR-0001 — Per-service topology derivation — five-pass algorithm on the read side
 
 - **Status:** accepted
-- **Context:** CR-0003 introduced **tree-shaped per-service topology** (FR-13) and added two new payload fields — `deployment_id` (required, CI/CD-side identifier) and `parent_deployments` (optional list of explicit parent references inside the same service). The matrix wire shape now carries a sibling `topology.edges` array per service. The architecture must answer:
+- **Context:** The tree-shaped per-service topology requirement (FR-13) added two new payload fields — `deployment_id` (required, CI/CD-side identifier) and `parent_deployments` (optional list of explicit parent references inside the same service). The matrix wire shape now carries a sibling `topology.edges` array per service. The architecture must answer:
   - **Where is topology computed — write-side or read-side?**
   - **What is the algorithm — purely explicit, purely correlated, or a merge?**
   - **What happens to out-of-order references (parent not yet ingested)?**
@@ -16,9 +16,9 @@ nav_order: 1
 
   Constraints:
   - **NFR-05 (stateless backend)** — every instance must compute topology independently from the same database; no shared state.
-  - **CR-0003 Decision 7 (three-tier correlation-attribute precedence)** — the attribute that drives the fallback varies per request (server default vs. ops-managed per-service override vs. per-user query parameter). The algorithm must read it at request time, not bake it into stored rows.
-  - **CR-0003 Decision 8 (SSE topology semantics)** — SSE carries slot updates only; topology is fetched via a follow-up `GET /api/deployments?correlationAttribute=…`. The derivation runs on every matrix read.
-  - **CR-0003 Decision 9 (dangling references accepted at ingest)** — references to not-yet-ingested deployments must contribute no edge in the current read but must reconcile automatically on the next read after the missing source lands.
+  - **Historical Decision 7 (three-tier correlation-attribute precedence)** — the attribute that drives the fallback varies per request (server default vs. ops-managed per-service override vs. per-user query parameter). The algorithm must read it at request time, not bake it into stored rows.
+  - **Historical Decision 8 (SSE topology semantics)** — SSE carries slot updates only; topology is fetched via a follow-up `GET /api/deployments?correlationAttribute=…`. The derivation runs on every matrix read.
+  - **Historical Decision 9 (dangling references accepted at ingest)** — references to not-yet-ingested deployments must contribute no edge in the current read but must reconcile automatically on the next read after the missing source lands.
 
 - **Decision:** Topology is derived **on the read side** by a **five-pass algorithm** applied to all deployment rows for the requested service. The Write API persists raw rows including `parent_deployments`; the Read API recomputes the topology on every matrix read (and on every NOTIFY-triggered slot recompute). **No topology rows are stored.**
 
@@ -61,15 +61,14 @@ nav_order: 1
   ```
 
 - **Consequences:**
-  - **Topology is always current with respect to the user's correlation-attribute preference.** Two viewers with different picker values see different topologies for the same underlying data; this is by design (CR-0003 Decision 7).
+  - **Topology is always current with respect to the user's correlation-attribute preference.** Two viewers with different picker values see different topologies for the same underlying data; this is by design (three-tier correlation-attribute precedence — see historical Decision 7 in Context).
   - **No stored topology rows → no migration churn when the algorithm or precedence rules change.** Replacing the correlation algorithm in a future revision is a backend-only redeploy.
   - **Read cost grows linearly with deployments per service.** For the dashboard's scale (10s of services × 10s of envs × 10s of deployments per env over the retention window), the cost is negligible and stays inside NFR-03's 5 s budget by orders of magnitude. If a future scale forces a change, the algorithm can be moved to a materialised view without altering the wire shape (output is identical).
   - **The explicit pass strictly wins over the correlated pass** when both produce the same `(from, to)`. This is the contract the SPA relies on to distinguish operator-stated edges from inferred edges (`source: "explicit"` vs `source: "correlated"`).
-  - **Dangling references self-heal** on the next read after the missing source lands — no compensating job is needed (consequence of CR-0003 Decision 9 and the algorithm's pass 5).
+  - **Dangling references self-heal** on the next read after the missing source lands — no compensating job is needed (consequence of the dangling-references-accepted-at-ingest rule — see historical Decision 9 in Context — and the algorithm's pass 5).
   - **Cross-instance consistency holds without coordination.** Every Read API instance applies the same algorithm to the same database state and the same per-request inputs, so all viewers see the same topology for the same request (NFR-05 preserved).
 
 - **References:**
-  - CR-0003 — Tree topology and three-layout axis (the requirement).
-  - SAD §7 "Data Model → `deployments` table" — `deployment_id` and `parent_deployments` columns and write-time constraints (extended by CR-0003).
-  - SAD §7 "API Contract → Matrix response shape — per service" — the `topology.edges` block (extended by CR-0003).
-  - SAD §7 "API Contract → `correlationAttribute` query parameter" — the per-request attribute (extended by CR-0003).
+  - SAD §7 "Data Model → `deployments` table" — `deployment_id` and `parent_deployments` columns and write-time constraints.
+  - SAD §7 "API Contract → Matrix response shape — per service" — the `topology.edges` block.
+  - SAD §7 "API Contract → `correlationAttribute` query parameter" — the per-request attribute.

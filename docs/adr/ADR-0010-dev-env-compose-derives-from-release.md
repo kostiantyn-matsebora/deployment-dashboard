@@ -20,7 +20,7 @@ nav_order: 10
 
   Before this ADR, the two files duplicated every shared detail. Each installer-side improvement therefore required a parallel edit in `dev_env/`. The drift was observable in the commit history:
 
-  - `-Demo` flag landed in `install.ps1` first; `start.ps1 -Demo` was a follow-up commit on a separate branch (CR-0009 demo-mode landing sequence).
+  - `-Demo` flag landed in `install.ps1` first; `start.ps1 -Demo` was a follow-up commit on a separate branch (pull-mode fetcher demo-mode landing sequence).
   - `GHA_REPOSITORIES` + `FETCHER_POLL_INTERVAL_SECONDS` substitution syntax shipped to the release compose ahead of the dev compose.
   - Anonymous-mode fetcher (`-AllowMissingGhaToken`) reached parity only after a dedicated catch-up edit.
 
@@ -63,8 +63,8 @@ nav_order: 10
 
 - **Consequences.**
 
-  - **`dev_env/start.ps1` mirrors `install.ps1`'s switch surface 1-for-1** (`-LocalDb`, `-RealGha`, `-Demo`, default), so contributor flow and release install are parity-tested by construction. Cites ASR-C from issue [#72](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/72) (per CR-0015).
-  - **`install/docker-compose.demo.yml` extends the compose-merge override pattern from the two-file shape this ADR was authored for (`release` + `local`) to a multi-file overlay stack** (per CR-0015). Resolved per-invocation:
+  - **`dev_env/start.ps1` mirrors `install.ps1`'s switch surface 1-for-1** (`-LocalDb`, `-RealGha`, `-Demo`, default), so contributor flow and release install are parity-tested by construction. Cites ASR-C from issue [#72](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/72).
+  - **`install/docker-compose.demo.yml` extends the compose-merge override pattern from the two-file shape this ADR was authored for (`release` + `local`) to a multi-file overlay stack** (per the release/demo overlay split — issue [#72](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/72)). Resolved per-invocation:
 
     | Invocation | Overlay chain | File count |
     |---|---|---|
@@ -89,7 +89,7 @@ nav_order: 10
 
 - **Supersession.**
 
-  - Cross-referenced by [CR-0015](../cr/CR-0015-release-vs-demo-overlay-split.md) (coordination record for the release / demo / integration overlay split per issue [#72](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/72)). CR-0015 amends the canonical-inventory framing this ADR was authored under; the compose-merge override mechanic itself stands unchanged.
+  - Cross-referenced by the release/demo overlay split (historical CR-0015; coordination record per issue [#72](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/72)). That change request amends the canonical-inventory framing this ADR was authored under; the compose-merge override mechanic itself stands unchanged.
 
 - **Alternatives considered.**
 
