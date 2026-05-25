@@ -49,28 +49,26 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
           <!-- Controls row -->
           <div class="flex items-center gap-4 flex-wrap">
 
-            <!-- Failures only toggle (static visual) -->
-            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none"
+            <!-- Failures only toggle (static visual — pointer-events-none preserves checkbox appearance) -->
+            <label class="flex items-center gap-2 text-sm text-gray-600 select-none cursor-default"
                    data-testid="failures-only-label">
               <input
                 type="checkbox"
                 data-testid="failures-only-toggle"
-                class="rounded border-gray-300 text-red-500 focus:ring-red-400"
-                disabled
+                class="rounded border-gray-300 text-red-500 pointer-events-none"
               />
               <span>Failures only</span>
             </label>
 
             <!-- Focus on last event toggle (static visual, checked by default) -->
-            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none"
+            <label class="flex items-center gap-2 text-sm text-gray-600 select-none cursor-default"
                    title="When on, an incoming event scrolls the affected element into view"
                    data-testid="focus-on-last-event-label">
               <input
                 type="checkbox"
                 data-testid="focus-on-last-event-toggle"
-                class="rounded border-gray-300 text-indigo-500 focus:ring-indigo-400"
+                class="rounded border-gray-300 text-indigo-500 pointer-events-none"
                 checked
-                disabled
               />
               <span>Focus on last event</span>
             </label>
@@ -86,8 +84,8 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
                 type="text"
                 data-testid="search-input"
                 placeholder="Filter services…"
-                class="text-sm border border-gray-200 rounded-md pl-8 pr-3 py-1.5 w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled
+                class="text-sm border border-gray-200 rounded-md pl-8 pr-3 py-1.5 w-44 focus:outline-none bg-white"
+                readonly
               />
             </div>
 
@@ -194,9 +192,9 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
             <!-- Live indicator -->
             <span class="flex items-center gap-1.5 text-xs text-gray-400 border-l border-gray-200 pl-4"
                   data-testid="live-indicator">
-              <span class="relative flex h-2 w-2">
+              <span class="relative flex h-2.5 w-2.5 shrink-0">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
               </span>
               Live · updated just now
             </span>

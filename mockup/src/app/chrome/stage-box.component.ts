@@ -1,6 +1,12 @@
 // Hand-authored visual mirror of <dd-stage-box> from frontend/matrix/src/lib/.
 // Detailed view only (used as the 'detailed' branch in layout-leaf).
 // Static: all data via @Input(); no store; OnPush.
+//
+// Pass 2 chrome parity — box content mirrors SPA density:
+//   Primary identity: 7-char commit hash (derived from slot.sha if present,
+//     otherwise synthesized from deploymentId for visual fidelity)
+//   Secondary: run number link (#N)
+//   Then: age · actor · prev-failed badge · last-successful split
 
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -20,6 +26,26 @@ function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + '…' : s;
 }
 
+// 7-char short hash for display.
+// Prefers slot.sha (first 7 chars); synthesizes a deterministic hex string
+// from deploymentId digits when sha is absent.
+function shortHash(slot: SlotState): string {
+  if (slot.current.sha) {
+    return slot.current.sha.slice(0, 7);
+  }
+  const id = slot.current.deploymentId;
+  const digits = id.replace(/\D/g, '');
+  if (digits) {
+    return parseInt(digits, 10).toString(16).padStart(7, '0').slice(0, 7);
+  }
+  return id.slice(0, 7);
+}
+
+function shortHashFromSha(sha: string | null | undefined): string {
+  if (!sha) return '';
+  return sha.slice(0, 7);
+}
+
 function boxBorderClass(slot: SlotState | null): string {
   if (!slot) return 'border-gray-200 bg-white';
   const st = slot.current.status;
@@ -35,7 +61,7 @@ function boxBorderClass(slot: SlotState | null): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
-      class="rounded-md border overflow-hidden relative transition-shadow stage-box"
+      class="stage-box rounded-lg border-2 overflow-hidden relative"
       style="width: var(--leaf-width, 200px)"
       [ngClass]="boxBorderClass(slot)"
       [attr.data-testid]="'stage-box-' + service.id + '-' + env.id"
@@ -43,15 +69,17 @@ function boxBorderClass(slot: SlotState | null): string {
       [attr.data-view]="'detailed'"
     >
       @if (!slot) {
-        <div class="h-8 flex items-center justify-center">
-          <span class="text-gray-300 text-xs">—</span>
+        <div class="h-16 flex items-center justify-center">
+          <span class="text-gray-300 text-xl">—</span>
         </div>
       } @else {
         <div>
-          <div class="px-1.5 py-1 min-w-0">
-            <div class="flex items-center justify-between gap-1 min-w-0">
+          <div class="p-2.5">
+
+            <!-- Row 1: status badge + run link -->
+            <div class="flex items-center justify-between mb-1.5">
               <span
-                class="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-semibold leading-tight shrink-0"
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold"
                 [class.bg-green-100]="slot.current.status === 'success'"
                 [class.text-green-700]="slot.current.status === 'success'"
                 [class.bg-red-100]="slot.current.status === 'failure'"
@@ -60,50 +88,69 @@ function boxBorderClass(slot: SlotState | null): string {
                 [class.text-orange-700]="slot.current.status === 'in-progress'"
               >
                 @if (slot.current.status === 'in-progress') {
-                  <span class="spinner" data-testid="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+                  <span class="spinner" data-testid="spinner"></span>
+                  <span>running…</span>
                 } @else if (slot.current.status === 'success') {
-                  <span>✓</span>
+                  <span>✓</span><span>success</span>
                 } @else {
-                  <span>✗</span>
+                  <span>✗</span><span>failed</span>
                 }
               </span>
-              <span
-                class="text-[11px] font-bold text-gray-900 font-mono leading-tight truncate flex-1 min-w-0 text-right"
-                [attr.data-testid]="'current-version-' + service.id + '-' + env.id"
-                [title]="slot.current.version"
-              >{{ truncate(slot.current.version, 12) }}</span>
-            </div>
-            <div class="flex items-center justify-between gap-1 mt-0.5 min-w-0">
-              <span class="text-[10px] text-gray-400 leading-tight truncate min-w-0 flex-1"
-                    [attr.data-testid]="'current-ago-' + service.id + '-' + env.id"
-              >{{ relativeTime(slot.current.deployedAt) }}</span>
-              <a href="#"
-                 class="text-[10px] text-blue-500 hover:underline font-mono leading-tight shrink-0 ml-auto"
-                 [attr.data-testid]="'run-link-current-' + service.id + '-' + env.id"
+              <a
+                href="#"
+                (click)="$event.preventDefault()"
+                class="text-xs text-blue-500 hover:underline font-mono ml-auto"
+                [attr.data-testid]="'run-link-current-' + service.id + '-' + env.id"
               >#{{ slot.current.runNumber }}</a>
             </div>
-            <p class="text-[10px] text-gray-500 truncate leading-tight mt-0.5"
-               [attr.data-testid]="'current-actor-' + service.id + '-' + env.id"
-               [title]="slot.current.actor"
-            >{{ truncate(slot.current.actor, 16) }}</p>
+
+            <!-- Row 2: commit hash (primary identity) -->
+            <p
+              class="text-sm font-bold text-gray-900 font-mono leading-tight break-all"
+              [attr.data-testid]="'current-version-' + service.id + '-' + env.id"
+              [title]="slot.current.sha ?? slot.current.deploymentId"
+            >{{ shortHash(slot) }}</p>
+
+            <!-- Row 3: age -->
+            <p
+              class="text-xs text-gray-400 mt-1 leading-tight truncate"
+              [attr.data-testid]="'current-ago-' + service.id + '-' + env.id"
+            >{{ relativeTime(slot.current.deployedAt) }}</p>
+
+            <!-- Row 4: actor -->
+            <p
+              class="text-xs text-gray-400 truncate leading-tight"
+              [attr.data-testid]="'current-actor-' + service.id + '-' + env.id"
+              [title]="slot.current.actor"
+            >{{ slot.current.actor }}</p>
+
+            <!-- Prev-failed badge -->
             @if (slot.current.status === 'in-progress' && slot.previousFailed) {
               <div
-                class="mt-0.5 inline-flex items-center text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0 leading-none"
+                class="mt-1.5 inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
                 data-testid="prev-failed-badge"
-              >⚠ prev failed</div>
+              >⚠ prev. failed</div>
             }
+
           </div>
+
+          <!-- Last-successful split -->
           @if (slot.lastSuccessful) {
-            <div class="border-t border-dashed border-gray-200 px-1.5 py-0.5 bg-white"
-                 data-testid="last-successful-section">
-              <div class="flex items-center justify-between gap-1 min-w-0">
-                <span class="text-green-600 text-[10px] font-bold leading-none shrink-0">✓</span>
-                <span class="text-[10px] font-mono font-semibold text-gray-600 truncate min-w-0 flex-1"
-                      [attr.data-testid]="'last-successful-version-' + service.id + '-' + env.id"
-                      [title]="slot.lastSuccessful.version"
-                >{{ truncate(slot.lastSuccessful.version, 12) }}</span>
-                <span class="text-[9px] text-gray-400 leading-tight shrink-0">{{ relativeTime(slot.lastSuccessful.deployedAt) }}</span>
+            <div
+              class="border-t border-dashed border-gray-200 px-2.5 py-2 bg-white"
+              data-testid="last-successful-section"
+            >
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-green-600 text-xs font-bold leading-none shrink-0">✓</span>
+                <span
+                  class="text-xs font-mono font-semibold text-gray-600 truncate min-w-0"
+                  [attr.data-testid]="'last-successful-version-' + service.id + '-' + env.id"
+                  [title]="slot.lastSuccessful.sha ?? slot.lastSuccessful.version"
+                >{{ shortHashFromSha(slot.lastSuccessful.sha) || truncate(slot.lastSuccessful.version, 12) }}</span>
               </div>
+              <p class="text-xs text-gray-400 mt-0.5 leading-tight truncate">
+                {{ relativeTime(slot.lastSuccessful.deployedAt) }}
+              </p>
             </div>
           }
         </div>
@@ -119,6 +166,8 @@ export class StageBoxComponent {
   readonly boxBorderClass = boxBorderClass;
   readonly relativeTime = relativeTime;
   readonly truncate = truncate;
+  readonly shortHash = shortHash;
+  readonly shortHashFromSha = shortHashFromSha;
 
   dataState(): string {
     const s = this.slot;

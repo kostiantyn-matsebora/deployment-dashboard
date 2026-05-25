@@ -1,7 +1,8 @@
 // Hand-authored visual mirror of the stats-bar from frontend/dashboard/.
-// Pass 1 chrome parity — restructured to widget shape matching the SPA:
-//   Left cluster:  Services N/N · Failures N (red dot) · Last deploy X ago · Never reached PROD N
-//   Right cluster: Rate-limit cluster pill (static green, 0% used · N sources)
+// Pass 2 chrome parity — label-first format matching SPA:
+//   Services N/N · Failures N · Last deploy X ago · Never reached PROD N
+// Running count folded into Services widget as small orange pulse dot
+// when in-flight deployments exist (not a standalone column).
 
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 
@@ -17,48 +18,37 @@ import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
       <!-- Left cluster -->
       <div class="flex items-center gap-5" data-testid="stats-bar-left">
 
-        <!-- Services widget -->
+        <!-- Services N/N (with optional orange pulse dot when deployments in-flight) -->
         <span class="flex items-center gap-1.5" data-testid="stats-services">
+          <span class="text-gray-500">Services</span>
           <span class="font-semibold text-gray-700">{{ serviceCount }}/{{ serviceCount }}</span>
-          <span class="text-gray-400">services</span>
+          @if (runningCount > 0) {
+            <span class="relative flex h-1.5 w-1.5 ml-0.5" [title]="runningCount + ' running'">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-500"></span>
+            </span>
+          }
         </span>
 
-        <!-- Failures widget -->
+        <!-- Failures N -->
         <span class="flex items-center gap-1.5" data-testid="stats-failures">
-          @if (failureCount > 0) {
-            <span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
-          } @else {
-            <span class="w-2 h-2 rounded-full bg-gray-200 shrink-0"></span>
-          }
+          <span class="text-gray-500">Failures</span>
           <span
-            [class.font-semibold]="failureCount > 0"
+            class="font-semibold"
             [class.text-red-600]="failureCount > 0"
             [class.text-gray-700]="failureCount === 0"
           >{{ failureCount }}</span>
-          <span class="text-gray-400">failure{{ failureCount === 1 ? '' : 's' }}</span>
         </span>
 
-        <!-- Running widget -->
-        @if (runningCount > 0) {
-          <span class="flex items-center gap-1.5" data-testid="stats-running">
-            <span class="relative flex h-2 w-2 shrink-0">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-            </span>
-            <span class="font-semibold text-orange-600">{{ runningCount }}</span>
-            <span class="text-gray-400">running</span>
-          </span>
-        }
-
-        <!-- Last deploy widget -->
+        <!-- Last deploy X ago -->
         <span class="flex items-center gap-1.5" data-testid="stats-last-deploy">
-          <span class="text-gray-400">Last deploy</span>
+          <span class="text-gray-500">Last deploy</span>
           <span class="font-semibold text-gray-700">{{ lastDeployAgo }}</span>
         </span>
 
-        <!-- Never reached PROD widget -->
+        <!-- Never reached PROD N -->
         <span class="flex items-center gap-1.5" data-testid="stats-never-prod">
-          <span class="text-gray-400">Never reached PROD</span>
+          <span class="text-gray-500">Never reached PROD</span>
           <span class="font-semibold text-gray-700">{{ neverReachedProd }}</span>
         </span>
       </div>
@@ -72,9 +62,7 @@ import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
           <span class="relative flex h-1.5 w-1.5">
             <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
           </span>
-          <span>0% used</span>
-          <span class="text-green-600">·</span>
-          <span>{{ serviceCount }} sources</span>
+          <span>0% used · {{ serviceCount }} sources</span>
         </div>
       </div>
     </div>

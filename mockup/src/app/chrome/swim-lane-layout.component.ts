@@ -190,11 +190,21 @@ export class SwimLaneLayoutComponent {
 
   topoLabel(service: ServiceDescriptor): string {
     const edges = this.topology[service.id]?.edges ?? [];
-    if (edges.length === 0) return 'linear';
-    const inDegree: Record<string, number> = {};
-    for (const e of edges) inDegree[e.to] = (inDegree[e.to] ?? 0) + 1;
-    const hasBranch = Object.values(inDegree).some(d => d > 1) ||
-      (() => { const out: Record<string, number> = {}; for (const e of edges) out[e.from] = (out[e.from] ?? 0) + 1; return Object.values(out).some(d => d > 1); })();
-    return hasBranch ? 'branching DAG' : 'linear chain';
+    const outDeg: Record<string, number> = {};
+    const inDeg: Record<string, number> = {};
+    for (const e of edges) {
+      outDeg[e.from] = (outDeg[e.from] ?? 0) + 1;
+      inDeg[e.to]    = (inDeg[e.to]    ?? 0) + 1;
+    }
+    const hasFork  = Object.values(outDeg).some(d => d > 1);
+    const hasMerge = Object.values(inDeg).some(d => d > 1);
+    const slots = Object.values(this.matrix[service.id] ?? {});
+    const hasFailure = slots.some(s => s?.current.status === 'failure');
+    const hasRunning = slots.some(s => s?.current.status === 'in-progress');
+    if (hasFork && hasMerge) return 'branching + merging';
+    if (hasFork)    return 'branching';
+    if (hasFailure) return 'has failures';
+    if (hasRunning) return 'deploying…';
+    return 'All green';
   }
 }

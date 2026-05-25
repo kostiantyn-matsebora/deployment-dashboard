@@ -89,77 +89,114 @@ function defaultPathIndex(
       data-view="detailed"
       data-layout="workflow-rows"
     >
-      @for (service of services; track service.id) {
-        <section
-          class="svc-block"
-          [attr.data-service]="service.id"
-          [attr.data-service-row]="service.id"
-          [attr.data-testid]="'workflow-rows-' + service.id"
-        >
-          <!-- Meta column -->
-          <div class="svc-block-meta">
-            <div class="svc-block-meta-row">
-              <p
-                class="text-sm font-semibold text-gray-800 whitespace-nowrap"
-                style="width: max-content"
-                [attr.data-testid]="'service-name-' + service.id"
-                [title]="service.name"
-              >{{ service.name }}</p>
-              <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight ml-1 shrink-0">
-                {{ pathsFor(service).length }} wf{{ pathsFor(service).length === 1 ? '' : 's' }}
-              </span>
-            </div>
-            <p class="text-[10px] text-gray-400 italic leading-tight">{{ topoLabel(service) }}</p>
+      @for (service of services; track service.id; let idx = $index) {
+        <!-- Collapsed row (default state — matches SPA default before expand).
+             First service is shown expanded so both states are visible in one capture. -->
+        @if (idx > 0) {
+          <!-- Collapsed: chevron + name + wf-count badge + topo label -->
+          <div
+            class="svc-block-collapsed bg-white rounded-lg border border-gray-200 px-4 py-2 flex items-center gap-2 cursor-default"
+            [attr.data-service]="service.id"
+            [attr.data-service-row]="service.id"
+            [attr.data-testid]="'workflow-rows-' + service.id"
+            data-expanded="false"
+          >
+            <!-- Chevron -->
+            <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <!-- Service name -->
+            <p
+              class="text-sm font-semibold text-gray-800 whitespace-nowrap"
+              [attr.data-testid]="'service-name-' + service.id"
+              [title]="service.name"
+            >{{ service.name }}</p>
+            <!-- Wf count badge -->
+            <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight shrink-0"
+                  [attr.data-testid]="'wf-count-' + service.id">
+              {{ pathsFor(service).length }} wf{{ pathsFor(service).length === 1 ? '' : 's' }}
+            </span>
+            <!-- Topo label -->
+            <span class="text-[10px] text-gray-400 italic ml-1">{{ topoLabel(service) }}</span>
           </div>
+        } @else {
+          <!-- Expanded: full svc-block with workflow rows (first service only) -->
+          <section
+            class="svc-block"
+            [attr.data-service]="service.id"
+            [attr.data-service-row]="service.id"
+            [attr.data-testid]="'workflow-rows-' + service.id"
+            data-expanded="true"
+          >
+            <!-- Meta column -->
+            <div class="svc-block-meta">
+              <div class="svc-block-meta-row">
+                <!-- Chevron (expanded state — rotated down) -->
+                <svg class="w-3.5 h-3.5 text-gray-500 shrink-0 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                <p
+                  class="text-sm font-semibold text-gray-800 whitespace-nowrap ml-1"
+                  style="width: max-content"
+                  [attr.data-testid]="'service-name-' + service.id"
+                  [title]="service.name"
+                >{{ service.name }}</p>
+                <span class="text-[10px] text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1.5 leading-tight ml-1 shrink-0">
+                  {{ pathsFor(service).length }} wf{{ pathsFor(service).length === 1 ? '' : 's' }}
+                </span>
+              </div>
+              <p class="text-[10px] text-gray-400 italic leading-tight">{{ topoLabel(service) }}</p>
+            </div>
 
-          <!-- Workflow rows (default path only in mockup) -->
-          <div class="svc-block-rows">
-            <div
-              class="wf-row default-row"
-              [attr.data-service-row]="service.id"
-              [attr.data-testid]="'workflow-row-' + service.id + '-0'"
-              data-expanded="false"
-              data-active="true"
-            >
-              <div class="flex items-stretch">
-                @for (envId of defaultPathFor(service); track envId + ':' + $index; let idx = $index) {
-                  <div class="flex items-stretch">
-                    <div
-                      class="leaf-pair relative"
-                      [attr.data-env]="envId"
-                      [attr.data-env-position]="idx"
-                    >
-                      <span class="env-tag">{{ envLabel(envId) }}</span>
-                      <dd-mockup-layout-leaf
-                        [service]="service"
-                        [env]="envFor(envId)"
-                        [slot]="slotFor(service, envId)"
-                      ></dd-mockup-layout-leaf>
-                    </div>
-
-                    @if (idx < defaultPathFor(service).length - 1) {
-                      <div class="arrow-gap">
-                        <div class="arrow-line"></div>
+            <!-- Workflow rows (default path) -->
+            <div class="svc-block-rows">
+              <div
+                class="wf-row default-row"
+                [attr.data-service-row]="service.id"
+                [attr.data-testid]="'workflow-row-' + service.id + '-0'"
+                data-expanded="true"
+                data-active="true"
+              >
+                <div class="flex items-stretch">
+                  @for (envId of defaultPathFor(service); track envId + ':' + $index; let eIdx = $index) {
+                    <div class="flex items-stretch">
+                      <div
+                        class="leaf-pair relative"
+                        [attr.data-env]="envId"
+                        [attr.data-env-position]="eIdx"
+                      >
+                        <span class="env-tag">{{ envLabel(envId) }}</span>
+                        <dd-mockup-layout-leaf
+                          [service]="service"
+                          [env]="envFor(envId)"
+                          [slot]="slotFor(service, envId)"
+                        ></dd-mockup-layout-leaf>
                       </div>
-                    }
-                  </div>
-                }
 
-                @if (pathsFor(service).length > 1) {
-                  <div class="flex items-center pl-3">
-                    <span class="default-tag" data-testid="workflow-default-tag">default</span>
-                  </div>
-                }
+                      @if (eIdx < defaultPathFor(service).length - 1) {
+                        <div class="arrow-gap">
+                          <div class="arrow-line"></div>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  @if (pathsFor(service).length > 1) {
+                    <div class="flex items-center pl-3">
+                      <span class="default-tag" data-testid="workflow-default-tag">default</span>
+                    </div>
+                  }
+                </div>
               </div>
+
+              @if (pathsFor(service).length > 1) {
+                <div class="text-[10px] text-gray-400 italic px-1 py-0.5">
+                  + {{ pathsFor(service).length - 1 }} more workflow{{ pathsFor(service).length > 2 ? 's' : '' }} (expand to view)
+                </div>
+              }
             </div>
-
-            @if (pathsFor(service).length > 1) {
-              <div class="text-[10px] text-gray-400 italic px-1 py-0.5">
-                + {{ pathsFor(service).length - 1 }} more workflow{{ pathsFor(service).length > 2 ? 's' : '' }} (expand to view)
-              </div>
-            }
-          </div>
-        </section>
+          </section>
+        }
       }
 
       @if (services.length === 0) {
