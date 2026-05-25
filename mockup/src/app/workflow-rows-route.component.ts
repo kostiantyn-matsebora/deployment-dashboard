@@ -1,8 +1,9 @@
 // Canonical workflow-rows route — binds MOCKUP_* fixtures to the workflow-rows layout chrome.
 
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { WorkflowRowsLayoutComponent } from './chrome/workflow-rows-layout.component';
 import { StatsBarComponent } from './chrome/stats-bar.component';
+import { ViewModeService } from './view-mode.service';
 import {
   MOCKUP_SERVICES,
   MOCKUP_ENVIRONMENTS,
@@ -29,11 +30,13 @@ import {
         [environments]="environments"
         [matrix]="matrix"
         [topology]="topology"
+        [viewMode]="viewModeService.mode()"
       ></dd-mockup-workflow-rows-layout>
     </div>
   `
 })
 export class WorkflowRowsRouteComponent {
+  readonly viewModeService = inject(ViewModeService);
   readonly services = MOCKUP_SERVICES;
   readonly environments = MOCKUP_ENVIRONMENTS;
   readonly matrix = MOCKUP_MATRIX;

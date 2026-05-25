@@ -1,8 +1,9 @@
 // Canonical swim-lane route — binds MOCKUP_* fixtures to the swim-lane layout chrome.
 
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { SwimLaneLayoutComponent } from './chrome/swim-lane-layout.component';
 import { StatsBarComponent } from './chrome/stats-bar.component';
+import { ViewModeService } from './view-mode.service';
 import {
   MOCKUP_SERVICES,
   MOCKUP_ENVIRONMENTS,
@@ -29,11 +30,13 @@ import {
         [environments]="environments"
         [matrix]="matrix"
         [topology]="topology"
+        [viewMode]="viewModeService.mode()"
       ></dd-mockup-swim-lane-layout>
     </div>
   `
 })
 export class SwimLaneRouteComponent {
+  readonly viewModeService = inject(ViewModeService);
   readonly services = MOCKUP_SERVICES;
   readonly environments = MOCKUP_ENVIRONMENTS;
   readonly matrix = MOCKUP_MATRIX;
@@ -60,7 +63,6 @@ export class SwimLaneRouteComponent {
   }
 
   get lastDeployAgo(): string {
-    // Most recent deployedAt across all slots in the canonical fixture.
     let latestMs = 0;
     for (const svc of Object.values(this.matrix)) {
       for (const slot of Object.values(svc)) {
