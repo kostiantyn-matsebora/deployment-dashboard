@@ -1,4 +1,4 @@
-# CI watch — post-PR iterate-fix-recheck loop (D20)
+# CI watch — post-PR iterate-fix-recheck loop
 
 **Load-on-demand.** Fetched when:
 
@@ -17,7 +17,7 @@ Per `core/automatic-mode.md`, auto-mode's invariant is to minimize user interven
 | Resolved mode | `ci-watch` | Action |
 |---|---|---|
 | Mode 1 (branch + PR) | `enabled` (default) | Enter watch state immediately after `gh pr create`. |
-| Mode 1 (branch + PR) | `disabled` | Exit Phase 8 at "PR opened" — pre-D20 behaviour. |
+| Mode 1 (branch + PR) | `disabled` | Exit Phase 8 at "PR opened" — previously behaviour. |
 | Mode 2 (wt) / Mode 3 (commit-no-push) | any | Not applicable — no PR exists for the orchestrator to watch. |
 | Interactive mode (no `auto:`) | any | Not applicable — CI-watch is an automatic-mode extension. |
 

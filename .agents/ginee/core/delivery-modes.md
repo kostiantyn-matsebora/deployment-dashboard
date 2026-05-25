@@ -1,11 +1,11 @@
-# Delivery modes (D17)
+# Delivery modes
 
 **Load-on-demand.** Fetched when:
 
 - `team-lead` is about to dispatch a task and needs to resolve or propose the delivery mode.
 - A specialist enters Phase 4 (implementation) and needs to know which mode applies to its commit cadence.
 - `team-lead` is at Phase 8 finalize and runs the per-mode finalize procedure.
-- `team-lead` is in auto-mode delivery-handoff (D12) and runs the Accept action.
+- `team-lead` is in auto-mode delivery-handoff and runs the Accept action.
 
 Default short tasks load this file on first use; the resolved mode is then carried through the session in the task's working state.
 
@@ -18,7 +18,7 @@ Default short tasks load this file on first use; the resolved mode is then carri
 | Mode | Phase 4 commits | Phase 8 finalize | When to default |
 |---|---|---|---|
 | **1. Feature branch + PR** | `git checkout -b <slug>` once at task start; commits per batch on the branch | `git push -u origin <branch>`; `gh pr create` per `core/templates/pr-description.md`; PR description includes `Closes #<N>` for issue-sourced tasks | Multi-developer projects; framework upstream; issue-sourced or TODO-sourced tasks |
-| **2. Working-tree only** | No `git add` / `git commit` ever | PM surfaces `git diff` + `git status`; user picks: keep / discard / escalate to Mode 1 or 3 | Exploratory tasks; "show me what would change"; freeform without a clear scope; auto-mode default per D12 |
+| **2. Working-tree only** | No `git add` / `git commit` ever | PM surfaces `git diff` + `git status`; user picks: keep / discard / escalate to Mode 1 or 3 | Exploratory tasks; "show me what would change"; freeform without a clear scope; auto-mode default |
 | **3. Commit-no-push** | Commits per batch on the current branch (no branch switch) | PM surfaces `git log --oneline -<N>`; user pushes manually | Solo-dev private repos; rapid iteration where the user controls all pushes |
 
 ## Mode resolution (Approach C — precedence order)
@@ -42,7 +42,7 @@ Drop the prefix at the start of the task description:
 | `wt:` | 2 |
 | `commit:` | 3 |
 
-Combinable with the `auto:` precedent (D12) in either order:
+Combinable with the `auto:` precedent in either order:
 
 ```
 auto: branch: fix the deployment-failure log spam
@@ -96,9 +96,9 @@ Phase 2 design ready. Delivery mode: branch+PR (per `delivery.default-mode` in f
 
 1. `git push -u origin <branch>`.
 2. `gh pr create` (or GitHub MCP / HTTPS) with body from `core/templates/pr-description.md`.
-3. For issue-sourced tasks, PR description includes `Closes #<N>` (or `Fixes #<N>` for bugs) per D14.
+3. For issue-sourced tasks, PR description includes `Closes #<N>` (or `Fixes #<N>` for bugs).
 4. Report PR URL.
-5. **Automatic mode + `ci-watch: enabled`** (D20 default): enter the CI-watch state per `core/ci-watch.md`. Interactive mode and `ci-watch: disabled` exit here.
+5. **Automatic mode + `ci-watch: enabled`**: enter the CI-watch state per `core/ci-watch.md`. Interactive mode and `ci-watch: disabled` exit here.
 
 **Forbidden:**
 
@@ -136,7 +136,7 @@ Phase 2 design ready. Delivery mode: branch+PR (per `delivery.default-mode` in f
 
 **Phase 4 per batch:**
 
-- Standard commits on the current branch (matches the framework's pre-D17 de-facto behaviour).
+- Standard commits on the current branch (matches the framework's previously de-facto behaviour).
 - Same commit-message conventions as Mode 1.
 
 **Phase 8 finalize:**
@@ -150,17 +150,17 @@ Phase 2 design ready. Delivery mode: branch+PR (per `delivery.default-mode` in f
 - Never push.
 - Never auto-pick this mode when target branch is `main` / `master` / `trunk` on a multi-developer repo — recommend Mode 1 instead (PM should flag at Phase 3).
 
-## Auto-mode integration (D12)
+## Auto-mode integration
 
-When auto mode is active per D12, the resolved delivery mode determines what the delivery-handoff Accept does:
+When auto mode is active, the resolved delivery mode determines what the delivery-handoff Accept does:
 
 | Mode | Delivery-handoff Accept action |
 |---|---|
-| 1 (branch + PR) | Push branch; open PR per `core/templates/pr-description.md`; **enter CI-watch per `core/ci-watch.md`** when `automatic-mode.ci-watch: enabled` (D20 default). |
+| 1 (branch + PR) | Push branch; open PR per `core/templates/pr-description.md`; **enter CI-watch per `core/ci-watch.md`** when `automatic-mode.ci-watch: enabled`. |
 | 2 (wt) | No-op — changes already in working tree; user commits + pushes. |
 | 3 (commit-no-push) | No-op — commits already on current branch; user pushes. |
 
-Auto-mode framework default = **Mode 2 (wt)**. Aligns with D12 wording "working-tree changes prepared but not committed." Adopter can override via config or per-task prefix.
+Auto-mode framework default = **Mode 2 (wt)** — working-tree changes prepared but not committed. Adopter can override via config or per-task prefix.
 
 ## Forbidden actions (all modes)
 
@@ -175,4 +175,4 @@ Auto-mode framework default = **Mode 2 (wt)**. Aligns with D12 wording "working-
 - Auto-rebasing / squash-merge policy. Adopter-owned via PR-merge settings on the git host.
 - Branch cleanup post-merge. Git host / adopter handles.
 - Cross-repo PRs. Mode 1 always targets the same repo the task came from.
-- Custom branch-naming conventions beyond the three patterns. Adopters can wrap PM's slug with a prefix via future config; not in D17 scope.
+- Custom branch-naming conventions beyond the three patterns. Adopters can wrap PM's slug with a prefix via future config; not in scope here.

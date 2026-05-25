@@ -3,7 +3,7 @@
 **Load-on-demand.** Fetched by orchestrator (or specialist) when dispatched work matches an activation cue:
 
 - Phase 4 / 5 / 6 / 7 dispatch with estimated total scope > 15 min.
-- Doc-roles pass between `ai-engineer` and any authoring role (per `core/doc-roles.md` — D25).
+- Doc-roles pass between `ai-engineer` and any authoring role (per `core/doc-roles.md`).
 - User gives a timeframe (e.g., "spend 30 min on X", "do as much as you can in an hour") — see § Timeframe-bounded autonomous work.
 
 Default short tasks ( ≤ 15 min, no timeframe ) do not load this file.
@@ -11,7 +11,7 @@ Default short tasks ( ≤ 15 min, no timeframe ) do not load this file.
 ## Scope
 
 - All team work in Phases 4–7 (Implementation, Testing, Bug fixing, SA review) with estimated total scope > 15 min.
-- Doc-roles passes between `ai-engineer` and any authoring role (per `core/doc-roles.md` — D25).
+- Doc-roles passes between `ai-engineer` and any authoring role (per `core/doc-roles.md`).
 
 **User intervention** bounded to:
 
@@ -28,7 +28,7 @@ Default short tasks ( ≤ 15 min, no timeframe ) do not load this file.
   1. Synthesizes all specialist proposals.
   2. Surfaces total + per-task breakdown to the user when scope warrants.
   3. Waits for approval or redirect before any specialist enters implement.
-- **Applies to** Phase 4, Phase 5, Phase 6, Phase 7, and `ai-engineer` ↔ authoring-role doc-roles passes (per `core/doc-roles.md` — D25).
+- **Applies to** Phase 4, Phase 5, Phase 6, Phase 7, and `ai-engineer` ↔ authoring-role doc-roles passes (per `core/doc-roles.md`).
 
 ## Sizing
 
@@ -42,7 +42,7 @@ Default short tasks ( ≤ 15 min, no timeframe ) do not load this file.
 1. **Propose.**
    - Specialist submits structured proposal listing each sub-task: change / where / why / risk / time estimate.
    - For doc work, also include lossless evidence.
-   - **Adopt-vs-build axis (D30).** Where the sub-task involves a choice between authoring new code / config and adopting an existing solution, surface the option list per `core/protocols/options-protocol.md` — ≥ 1 adopt candidate (with citation) or explicit `(none viable — <reason>)`. Inapplicable sub-tasks cite *"axis n/a — <reason>"* and skip.
+   - **Adopt-vs-build axis.** Where the sub-task involves a choice between authoring new code / config and adopting an existing solution, surface the option list per `core/protocols/options-protocol.md` — ≥ 1 adopt candidate (with citation) or explicit `(none viable — <reason>)`. Inapplicable sub-tasks cite *"axis n/a — <reason>"* and skip.
    - No edits yet.
 2. **Review.**
    - Reviewer responds per item: accept / decline / accept-with-modification, each with one-line reasoning.

@@ -30,7 +30,7 @@ Bindings may NOT override generic process.
 
 **Invocation notation.** This spec uses `@<role>` as vendor-neutral shorthand for "dispatch to that role." The literal `@<agent>` syntax works in some clients (Cursor) but not others (Claude Code). Per-client invocation surfaces (AgentSkills, natural-language routing, etc.) ship via the adapters — see `adapters/<x>/install.md § How to invoke`. Framework workflows (discovery / file / pick-up / triage / promote / reindex / update) auto-activate as Skills in any AgentSkills-compatible client; specialist dispatches route via subagent description match.
 
-## Lifecycle — load topology (D35-process-md-load-topology)
+## Lifecycle — load topology
 
 - **8 phases**, one file each — `core/process/phase-<N>-<name>.md`. Specialists within a phase run in parallel; phases overlap wherever a contract surface decouples them. Each phase file declares: **Goal · Acceptance** (+ phase-specific anchors).
 - **Per-role loading.** Cardinal kernel frontmatter `phase-participation: [N, M, …]` selects which phase files load. Roster: `team-lead [1-8]` · `solution-architect [1, 2, 4, 5, 6, 7]` · backend / frontend / devops [2, 4, 5, 6] · `qa-engineer [5, 6]` · `ai-engineer []` (between-phase only).
@@ -66,9 +66,9 @@ Bindings may NOT override generic process.
 
 ## Documentation style — structure over prose
 
-**Binding, not aspirational** — framework-self-dev (per `CLAUDE.md § Framework authoring`) + adopter-project outputs authored by any role (D22-doc-authoring-protocol — protocol + 6 paired examples + discovery-driven enforcement: `core/protocols/doc-authoring-protocol.md`).
+**Binding, not aspirational** — framework-self-dev (per `CLAUDE.md § Framework authoring`) + adopter-project outputs authored by any role. Protocol + 6 paired examples + discovery-driven enforcement: `core/protocols/doc-authoring-protocol.md`.
 
-**Scope.** Applies to project-instruction files · role definitions (`core/roles/`, `local/roles/`) · future skills · architecture doc + mockup + ADRs · per-component READMEs · **GitHub issue bodies authored via `ginee-file-*` skills (D26-doc-protocol-scope-extension)** · **framework-authored GitHub comments — Phase-transition · sticky `ginee:score` / `ginee:review-cycle` · audit comments · per-thread review-replies (D26-doc-protocol-scope-extension)**.
+**Scope.** Applies to project-instruction files · role definitions (`core/roles/`, `local/roles/`) · future skills · architecture doc + mockup + ADRs · per-component READMEs · **GitHub issue bodies authored via `ginee-file-*` skills** · **framework-authored GitHub comments — Phase-transition · sticky `ginee:score` / `ginee:review-cycle` · audit comments · per-thread review-replies**.
 
 | Rule | Application |
 |---|---|
@@ -81,9 +81,10 @@ Bindings may NOT override generic process.
 | **Cross-reference, don't duplicate** | Cite the section ("per architecture-doc §X"); don't restate. |
 | **Drop filler** | No "It is important to note that…", "Please ensure…", "In general…". Lead with the verb or noun. |
 | **Prose** | Narrative exposition only — explaining *why*. Keep tight. |
-| **Framework-self-dev (D21-context-economy-gates)** | Framework-source PRs in the ginee repo are gated by `scripts/context-economy-check.ps1` (Claude Code hook + git hooks + CI workflow). Threshold breach without an `Optimized-By: ai-engineer` trailer fails the gate. Spec: `core/MIGRATIONS/D21-context-economy-gates.md`. |
+| **Framework-self-dev** | Framework-source PRs in the ginee repo are gated by `scripts/context-economy-check.ps1` (Claude Code hook + git hooks + CI workflow). Threshold breach without an `Optimized-By: ai-engineer` trailer fails the gate. |
+| **Per-class doc size caps** | Load-on-demand doc classes (ADR · CR · UI) carry a total file-size cap. Defaults: ADR 4 KB · CR 6 KB · UI 4 KB. Adopter override per class via `local/framework.config.yaml § doc-size-caps`. Breach without `Optimized-By: ai-engineer` trailer fails the same gate. Full spec: `core/protocols/doc-size-caps.md`. |
 
-### Default-shape map (D22-doc-authoring-protocol)
+### Default-shape map
 
 | Doc artefact | Default shape |
 |---|---|
@@ -94,27 +95,27 @@ Bindings may NOT override generic process.
 | Trade-off / decision-rationale | Two-column table (option / consequence) |
 | Narrative *why* (rationale only) | Prose — tight, < 4 sentences |
 
-### Mandatory checks before report-as-done (D22-doc-authoring-protocol)
+### Mandatory checks before report-as-done
 
 1. No paragraph contains > 2 rules (sentence terminators: `. ` `! ` `? `).
 2. No table cell holds a multi-sentence sub-paragraph.
 3. No bullet runs > 25 words *unless* it carries nested sub-bullets.
 4. Inventories (services, components, endpoints, env vars) are tables, not prose.
-5. Cross-references cite anchors (`§Name`, `#anchor`); never restate content. **Taxonomy identifiers carry their short name in slug-glued form (D34-identifier-short-name-pairing)** — `D28-skill-runner-boundary` / `ADR-0001-topology-derivation-five-pass` / `CR-0010-component-ci-pipeline` / `FR-04-deploy-rollback`, never bare `D28` / `ADR-0001` / `CR-0010` / `FR-04`. Issue / PR / commit references are NOT taxonomy IDs and stay bare (`#87`, PR-link, SHA). Full lookup procedure: `core/protocols/doc-authoring-protocol.md § Taxonomy identifier pairing (D34-identifier-short-name-pairing)`.
+5. Cross-references cite anchors (`§Name`, `#anchor`); never restate content. Cite rules by file path + section (e.g. `core/process.md § Reporting`), not by opaque identifier.
 
 **Enforcement procedure** (lint command, attestation format, no-tool fallback): `core/protocols/doc-authoring-protocol.md` — load at Phase 5 / report-as-done.
 **Paired bad-vs-good examples** (6 doc classes): `core/doc-authoring-examples.md` — load on first-time authoring or explicit request.
 
-## Reporting — schema-bound (D29-strict-subagent-return-schema)
+## Reporting — schema-bound
 
-**Every cardinal-dispatch return is schema-bound** per `core/templates/phase-report.md`. Same machinery as D22-doc-authoring-protocol / D26-doc-protocol-scope-extension doc-authoring protocol, scoped to the subagent-return surface.
+**Every cardinal-dispatch return is schema-bound** per `core/templates/phase-report.md`. Same machinery as the doc-authoring protocol (`core/protocols/doc-authoring-protocol.md`), scoped to the subagent-return surface.
 
 - **Mandatory sections** — `## Files touched` · `## Decisions made` · `## Verification log` · `## Open issues` · `## Next dispatch needed`. Empty case: `(none)`. `## Hand-off` required on forced-handoff per `core/cross-agent-handoff.md`. `## Stop-state` required when `Status: In-progress`.
 - **Optional escape hatch** — `## Notes` for narrative rationale (≤ 200 words). Code-snippet carve-out: ≤ 5 lines, only when the orchestrator needs verbatim text.
 - **Forbidden patterns** — narrative preamble · restated dispatch context · code snippets outside the carve-out · verbose rationale outside `## Notes` · parenthetical comma-soup.
-- **Self-lint at report-as-done** — 6 mandatory checks (5 from D22-doc-authoring-protocol / D26-doc-protocol-scope-extension + "no narrative preamble"); LLM self-review against the schema before returning. No external linter.
-- **Mandatory marker (D33-d29-enforcement-hardening)** — every return ends with the literal line `<!-- D29 self-lint: pass -->` as attestation that the 6 checks ran. Absence = structural skip signal; orchestrator surfaces the advisory at receive-time + carries the rule forward to the next dispatch. Marker is not a pass/fail gate; the return is still consumed.
-- **Orchestrator on non-compliance** — surfaces one-line advisory · consumes the return · never re-dispatches purely for format · never auto-rewrites · skill-runner forbidden from "cleaning up" the return before passing to team-lead (D28-skill-runner-boundary boundary).
+- **Self-lint at report-as-done** — 5 mandatory checks per `core/protocols/doc-authoring-protocol.md` + "no narrative preamble" (6 total); LLM self-review against the schema before returning. No external linter.
+- **Mandatory marker** — every return ends with the literal line `<!-- self-lint: pass -->` as attestation that the 6 checks ran. Absence = structural skip signal; orchestrator surfaces the advisory at receive-time + carries the rule forward to the next dispatch. Marker is not a pass/fail gate; the return is still consumed.
+- **Orchestrator on non-compliance** — surfaces one-line advisory · consumes the return · never re-dispatches purely for format · never auto-rewrites · skill-runner forbidden from "cleaning up" the return before passing to team-lead (skill-runner surface boundary per `core/process/dispatch.md`).
 
 Full schema (cardinality table · default-shape map · caps · forbidden patterns · 6 checks · worked size targets): **`core/templates/phase-report.md`**.
 
@@ -147,7 +148,7 @@ Three specs are orchestration-only and live in `core/process/dispatch.md § Team
 - Picked via per-task prefix (`branch:` / `wt:` / `commit:`), Phase-3 user answer, or `local/framework.config.yaml § delivery.default-mode`.
 - Resolved before Phase 4; honoured through Phase 8 finalize.
 - Full spec (precedence · per-mode procedure · auto-mode integration · forbidden actions): **`core/delivery-modes.md`**.
-- **Load triggers:** `team-lead` about to dispatch a task needs to resolve / propose the mode · specialist enters Phase 4 needs commit cadence · `team-lead` at Phase 8 finalize · auto-mode delivery-handoff (D12-automatic-mode) Accept action fires.
+- **Load triggers:** `team-lead` about to dispatch a task needs to resolve / propose the mode · specialist enters Phase 4 needs commit cadence · `team-lead` at Phase 8 finalize · auto-mode delivery-handoff Accept action fires.
 
 #### Strict-domain rule — no specialist works outside its domain
 
@@ -156,7 +157,7 @@ Three specs are orchestration-only and live in `core/process/dispatch.md § Team
 - **Size is not an exemption.** Estimated effort (in-thread "5-min fix", "tiny tweak") does not override surface ownership. Dispatch the owning specialist; if scope is genuinely ≤ 15 min, dispatch flags it explicitly so the iteration-protocol load is skipped.
 - **Regression-grade failure modes.** Catalogued in `team-lead.details.md § Common failure modes` — orchestrator self-check before any in-thread edit on a specialist-owned surface.
 
-#### Doc roles — all-roles authorship + ai-engineer shape (D25-classical-architect)
+#### Doc roles — all-roles authorship + ai-engineer shape
 
 - **Ownership split.** Authoring role owns documentation **semantics** per `core/doc-roles.md § Authorship` — authoring role differs by doc class (SA · team-lead · backend-engineer · frontend-engineer · devops-engineer · qa-engineer · mockup-owning role). `ai-engineer` owns **shape + load topology** across the whole doc set. Neither overrides the other's invariants.
 - **Runs under** `core/protocols/iteration-protocol.md` below.

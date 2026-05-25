@@ -64,7 +64,7 @@ Read `local/bindings.md` → "Network topology" for project specifics. Common pa
   - No CORS headers if the project is single-origin via gateway.
 - Adjust per project: if the project hosts the SPA inside the service, the architecture doc says so and the rules above do not apply.
 
-## Coverage tooling — per-stack invocation (D19)
+## Coverage tooling — per-stack invocation
 
 Per `backend-engineer.md § Coverage obligation`. The framework does not mandate a specific tool; pick the stack-native one and wire it into `local/framework.config.yaml § unit-backend.runner`:
 

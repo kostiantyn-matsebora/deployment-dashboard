@@ -9,7 +9,7 @@
   - A structure dispute surfaces between authoring role and `ai-engineer`.
 - Default tasks do not load this file.
 
-**Renamed from `core/doc-co-ownership.md` per D25.** Pre-D25 model was SA ↔ ai-engineer two-role co-ownership. D25 generalizes — every role authors content in its domain; `ai-engineer` owns shape + load topology across the whole set.
+**Renamed from `core/doc-co-ownership.md`.** Originally an SA ↔ ai-engineer two-role co-ownership model; now generalized — every role authors content in its domain; `ai-engineer` owns shape + load topology across the whole set.
 
 ## Authorship — per role, per doc class
 
@@ -46,7 +46,7 @@ Runs under `core/protocols/iteration-protocol.md`.
 
 ## SA architectural-coherence review
 
-Per D25, every non-SA-owned doc edit is **SA-reviewed for architectural coherence** before merge. This folds into the SA Review activity (`core/roles/solution-architect.md § Review`):
+Every non-SA-owned doc edit is **SA-reviewed for architectural coherence** before merge. This folds into the SA Review activity (`core/roles/solution-architect.md § Review`):
 
 - **Trigger.** Engineer / team-lead / mockup-owning role proposes a doc edit that touches an architectural concern (component name · contract · stack reference · NFR-bearing claim · invariant).
 - **Outcome.** APPROVE / REJECT / REQUEST-CHANGES. No edits to the engineer's doc.
@@ -58,7 +58,7 @@ Per D25, every non-SA-owned doc edit is **SA-reviewed for architectural coherenc
 - Each must appear (verbatim or semantically identical) in the new structure.
 - Any miss → revert and re-plan.
 
-Same rule as pre-D25. Applies across the whole doc set now, not just SA-owned docs.
+Same rule as previously. Applies across the whole doc set now, not just SA-owned docs.
 
 ## Dispatch trigger
 

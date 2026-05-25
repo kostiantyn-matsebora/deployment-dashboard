@@ -55,7 +55,7 @@
 5. **Verify.** Ask Claude for the status of each cardinal. Each should:
    - Report its charter (read from `.agents/ginee/core/roles/<role>.md`).
    - Confirm the project's bindings.
-   - If a `.agents/ginee/local/roles/<role>.md` extension is present (D37-local-role-extensions), surface its project-specific craft notes as part of the status report.
+   - If a `.agents/ginee/local/roles/<role>.md` extension is present, surface its project-specific craft notes as part of the status report.
 
 ## How to invoke
 
@@ -86,9 +86,9 @@ Cheat sheet for the 12 framework workflows (AgentSkills auto-activates from thes
 
 The framework's own `core/process.md` and role kernels use `@<role>` notation as vendor-neutral shorthand — Claude Code adopters read that as "the orchestrator routes here," not as a literal command.
 
-## Specialist-tool affinity (D38)
+## Specialist-tool affinity
 
-Host capability tools the Claude Code adapter exposes, with the role / task surfaces they help. Team-lead consults this table during dispatch composition per D38-host-capability-tools and surfaces matching tools as a one-line hint in the dispatch prompt (prefer if available; never required).
+Host capability tools the Claude Code adapter exposes, with the role / task surfaces they help. Team-lead consults this table during dispatch composition (see `core/process/dispatch.md § Host capability-tool affinity injection`) and surfaces matching tools as a one-line hint in the dispatch prompt (prefer if available; never required).
 
 | Tool | Class | Role / task affinity | Invocation hint |
 |---|---|---|---|
@@ -101,11 +101,10 @@ Host capability tools the Claude Code adapter exposes, with the role / task surf
 
 **Adding more tools** — append rows to this table as the Claude Code ecosystem grows. The affinity column drives matching (`grep`-style regex against the role + task description in the dispatch contract); update the migration spec only if the matching semantics change.
 
-Full spec: `core/MIGRATIONS/D38-host-capability-tools.md`.
 
-## Subagent dispatch limitation (D32)
+## Subagent dispatch limitation
 
-Claude Code's `Agent` / `Task` tool is **top-level only** — subagents do not inherit it, so the D28 hand-back (skill-runner → `@team-lead` → specialists) silently degrades on Claude (team-lead-as-subagent has no `Agent` tool). D32 narrows D28 on this adapter: split **decision authority** (team-lead, re-invoked each cycle) from **mechanical dispatch execution** (skill-runner, verbatim).
+Claude Code's `Agent` / `Task` tool is **top-level only** — subagents do not inherit it, so the standard skill-runner → `@team-lead` → specialists hand-back silently degrades on Claude (team-lead-as-subagent has no `Agent` tool). On this adapter the skill-runner boundary is narrowed: split **decision authority** (team-lead, re-invoked each cycle) from **mechanical dispatch execution** (skill-runner, verbatim).
 
 | Step | Surface |
 |---|---|
@@ -115,11 +114,9 @@ Claude Code's `Agent` / `Task` tool is **top-level only** — subagents do not i
 
 **Loop.** `skill-runner batch → @team-lead (plan) → user approve → skill-runner (verbatim dispatch) → collect returns → @team-lead (synthesis + next decision) → loop` until phase complete.
 
-**Self-check before any main-thread reasoning during a skill run** — mechanical op OR verbatim execution of an approved contract? → proceed. Anything else (synthesize · pick next specialist · draft reply · answer routing question) → re-invoke `@team-lead`. No "fast" / "trivial" exception; D28 origination ban holds even when team-lead is a subagent.
+**Self-check before any main-thread reasoning during a skill run** — mechanical op OR verbatim execution of an approved contract? → proceed. Anything else (synthesize · pick next specialist · draft reply · answer routing question) → re-invoke `@team-lead`. No "fast" / "trivial" exception; the origination ban (skill-runner never originates orchestration) holds even when team-lead is a subagent.
 
-Full spec + worked example + decision-authority table: `core/MIGRATIONS/D32-claude-adapter-subagent-dispatch.md`.
-
-## Model tier (D31)
+## Model tier
 
 Per-role model selection routes reasoning-heavy roles to capable models and execution-heavy roles to cheaper ones.
 
@@ -147,7 +144,7 @@ model-tier:
 
 Re-run the installer (`@team-lead update` or the bootstrap one-liner with `GINEE_UPDATE_ONLY=1`) to apply overrides. The Claude branch reads the config and rewrites each pointer's `model:` line accordingly.
 
-**Per-task prefix.** Prefix any dispatch with `model:<tier>` to override for one call (combinable with `auto:` / `branch:` / `wt:` / `commit:` per D17). Claude routes via the `Task` tool's `model` field for that dispatch.
+**Per-task prefix.** Prefix any dispatch with `model:<tier>` to override for one call (combinable with `auto:` / `branch:` / `wt:` / `commit:`). Claude routes via the `Task` tool's `model` field for that dispatch.
 
 ```
 model:reasoning Add the new ASR utility-tree leaves for the latency NFR.
@@ -156,11 +153,10 @@ auto: model:fast Re-label stale issues with ginee:blocked.
 
 Resolution order — stop at first match: (1) per-task prefix, (2) Phase-3 user answer, (3) `local/framework.config.yaml § model-tier.per-role.<role>`, (4) `core/roles/<role>.md` frontmatter `default-tier:`.
 
-Spec: `core/MIGRATIONS/D31-model-tier.md`.
 
-## Phase-file loading (D35)
+## Phase-file loading
 
-Per D35-process-md-load-topology, the 8 lifecycle phases + orchestration content live under `core/process/` and load per-cardinal via `phase-participation:` frontmatter.
+The 8 lifecycle phases + orchestration content live under `core/process/` and load per-cardinal via `phase-participation:` frontmatter declared in each role kernel.
 
 | Step | Behaviour |
 |---|---|
@@ -169,28 +165,106 @@ Per D35-process-md-load-topology, the 8 lifecycle phases + orchestration content
 | `team-lead` only (and skill-runner main thread on `ginee-*` skill entry) | Additionally surface `.agents/ginee/core/process/dispatch.md` |
 | Cardinals with empty list (`ai-engineer`) | Load no phase files; common `.agents/ginee/core/process.md` only |
 
-Non-participating phase files are not surfaced to that role. The shared pointer subagents under `.agents/ginee/adapters/_shared/agents/*.md` render this contract; no per-adapter loader change is required on Claude (the kernel body itself cites the load paths). Full spec: `core/MIGRATIONS/D35-process-md-load-topology.md`.
+Non-participating phase files are not surfaced to that role. The shared pointer subagents under `.agents/ginee/adapters/_shared/agents/*.md` render this contract; no per-adapter loader change is required on Claude (the kernel body itself cites the load paths).
 
-## Warm specialist reuse (D36)
+## Warm specialist reuse
 
-Per D36-warm-specialist-reuse, the same specialist is resumed (not fresh-spawned) on 2nd+ dispatch within one Phase 1–8 task AND within that role's `phase-participation:` window. Saves 15–50 k tokens of duplicated reload per task on a typical 3–5-dispatch workload.
+The same specialist is resumed (not fresh-spawned) on 2nd+ dispatch within one Phase 1–8 task AND within that role's `phase-participation:` window. Saves 15–50 k tokens of duplicated reload per task on a typical 3–5-dispatch workload.
 
-| Step | Action on Claude |
+### Prerequisite — `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+
+Claude Code gates `SendMessage` (the resume tool) behind an experimental flag. Without it the tool is genuinely absent from the session and warm reuse silently falls back to fresh-spawn on every dispatch. Set the flag once per project (or globally) and **restart Claude Code**:
+
+```json
+// .claude/settings.json (project) or ~/.claude/settings.json (global)
+{
+  "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" }
+}
+```
+
+Env vars resolve at boot — Claude Code must restart for the change to take effect. After restart, `SendMessage` appears in the deferred-tool registry. References: `anthropics/claude-code#36196` · `#42737` · `#35240`.
+
+Adopters who cannot enable the flag (organisational policy, etc.) set `local/framework.config.yaml § warm-reuse.enabled: false` and accept the fresh-spawn cost — team-lead falls through to the capability-less-adapter behaviour transparently.
+
+### Architecture — skill-runner owns the plumbing; team-lead owns the decision
+
+The Claude `Agent` / `Task` tool is top-level only — subagents do not inherit it (see `§ Subagent dispatch limitation` above). On Claude that means team-lead is itself a subagent without `Agent` / `SendMessage`, and its conversation does not survive across dispatches — so the warm registry cannot live in team-lead's context as it does on adapters where team-lead has the resume tool.
+
+The skill-runner (main thread; durable across one Phase 1–8 task) holds the registry; team-lead reads it back as dispatch input + writes warm-vs-fresh decisions into its plan; the skill-runner executes those decisions verbatim. Decision authority is unchanged — only mechanical plumbing moves.
+
+| Surface | Owns |
 |---|---|
-| First dispatch of role `R` in task `T` | Team-lead calls `Agent` with `run_in_background: true`; receives the agent-id; records `{role, agent-id, task, last-phase}` in its in-conversation registry. |
-| 2nd+ dispatch of `R` in `T` (new phase within `phase-participation:`) | Team-lead calls `SendMessage` to the recorded agent-id with the new payload — new instruction + phase identity + drift advisory (no kernel reload). |
-| Forced-fresh trigger | Team-lead opens a new background `Agent` and replaces the registry entry; old agent receives `## Forced-fresh — release`. |
-| Phase 8 acceptance / abandonment | Team-lead sends `## Phase 8 close — release` to every background agent; registry cleared. |
+| skill-runner (main thread) | Warm registry holder · team-lead bootstrap (`Agent` with `run_in_background: true` on first dispatch · record team-lead agent-id · `SendMessage` to team-lead for every later cycle in the task) · specialist agent-id round-trip (capture on first `Agent` call · pass registry as input to team-lead's next dispatch · execute team-lead's `SendMessage` instructions verbatim) |
+| team-lead (re-invoked via `SendMessage` each cycle) | All warm-vs-fresh decisions · `mode: warm-resume \| fresh-spawn` field on every plan line · `agent-id: <id>` on `warm-resume` lines (from the registry the skill-runner passed in) · forced-fresh trigger evaluation per `migrations/warm-specialist-reuse.md § Forced-fresh triggers` |
 
-Adopter opt-out: `local/framework.config.yaml § warm-reuse.enabled: false`. Default on Claude is `true` (resume capability present).
+The carve-out is mechanical — skill-runner never reads `mode:` and second-guesses it; never picks an agent-id when team-lead omitted the field; never spawns or releases an agent outside an approved plan-line. Full boundary: `migrations/warm-reuse-claude-plumbing.md`.
 
-Forced-fresh triggers + drift-advisory shape + full lifecycle: `core/MIGRATIONS/D36-warm-specialist-reuse.md`.
+### Plan-line shape
+
+Every team-lead plan line for a dispatch carries:
+
+- `role: <cardinal>`
+- `mode: fresh-spawn` (first dispatch of `role` in the task, or any forced-fresh trigger fires) **or** `mode: warm-resume`
+- `agent-id: <id>` (required when `mode: warm-resume`; absent on `fresh-spawn`)
+- Standard dispatch contract — phase · scope · acceptance · drift advisory per `migrations/warm-specialist-reuse.md § Drift advisory`
+
+Skill-runner reads the line and: `mode: fresh-spawn` → `Agent` with `run_in_background: true` + capture new agent-id into registry · `mode: warm-resume` → `SendMessage` to the named `agent-id` with the payload.
+
+### Loop
+
+1. **First skill-runner batch** — parse · label / sticky ops · branch ops · `Agent` `run_in_background: true` to spawn team-lead · record team-lead's agent-id · pass parsed task + registry as input.
+2. **team-lead** authors the plan (per-line `mode:` + `agent-id:` as above).
+3. **User approves** (Phase 3; elided per `core/automatic-mode.md` in `auto:` mode).
+4. **skill-runner verbatim-executes** each plan line; captures new agent-ids into registry; updates registry.
+5. **skill-runner `SendMessage`s team-lead** with collected returns + updated registry → team-lead synthesises + plans next cycle.
+6. **Repeat** 2–5 until phase complete.
+7. **Phase 8 acceptance / abandonment** — skill-runner sends `## Phase 8 close — release` to every recorded agent-id (including team-lead's); registry cleared.
+
+### Known caveats
+
+| Caveat | Reference |
+|---|---|
+| Friendly-name `SendMessage` resume fails — raw `agent-id` only | `anthropics/claude-code#42999` |
+| First resume incurs a cache miss (the resumed agent reads its history afresh) | `anthropics/claude-code#44724` |
+
+Both are upstream issues outside ginee's control. The registry stores raw agent-ids exclusively. The first-resume cache miss is amortised across warm-reuse savings for the rest of the task.
+
+### Worked round-trip
+
+```
+skill-runner (Claude main thread)
+  ├─ ginee-pick-up batch — parse #115; checkout branch; create dispatch-map sticky
+  ├─ Agent(team-lead, run_in_background: true)            → captures team-lead-id = "tl-abc"
+  ├─ SendMessage(tl-abc, "Plan Phase 4 for #115")
+  │
+  │  team-lead replies with plan:
+  │    1. {role: backend-engineer, mode: fresh-spawn,  scope: ...}
+  │    2. {role: qa-engineer,      mode: fresh-spawn,  scope: ...}
+  │
+  ├─ user approves
+  ├─ Agent(backend-engineer, ...)                          → captures be-id = "be-xyz"
+  ├─ Agent(qa-engineer, ...)                               → captures qa-id = "qa-pqr"
+  ├─ (returns collected)
+  ├─ SendMessage(tl-abc, "Returns + registry: {be: be-xyz, qa: qa-pqr}")
+  │
+  │  team-lead replies with next plan:
+  │    1. {role: backend-engineer, mode: warm-resume, agent-id: be-xyz,
+  │       scope: "address QA finding F-03", drift-advisory: (no drift)}
+  │
+  ├─ SendMessage(be-xyz, "address QA finding F-03 ...")    ← no fresh spawn; kernel + process + index reads survive
+  ├─ ... loop until phase complete
+  └─ Phase 8: SendMessage(tl-abc, be-xyz, qa-xyz, "## Phase 8 close — release"); registry cleared
+```
+
+### Adopter opt-out
+
+`local/framework.config.yaml § warm-reuse.enabled: false`. Default on Claude is `true` (capability present when the env-var prerequisite is set). With `enabled: false`, every dispatch fresh-spawns — identical to capability-less-adapter behaviour.
 
 ## Updates
 
-**Recommended — `/ginee-update`** (or "update ginee" / "upgrade the framework"). The skill fetches the installer from upstream at the target ref and drives `--update-only` for you — no local installer needed (D27). Performs all steps below automatically, including the pointer-block sync in step 5.
+**Recommended — `/ginee-update`** (or "update ginee" / "upgrade the framework"). The skill fetches the installer from upstream at the target ref and drives `--update-only` for you — no local installer needed. Performs all steps below automatically, including the pointer-block sync in step 5.
 
-**Manual fallback — bootstrap one-liner** (the installer is intentionally NOT inside `.agents/ginee/` per D27):
+**Manual fallback — bootstrap one-liner** (the installer is intentionally NOT inside `.agents/ginee/`):
 
 ```powershell
 $env:GINEE_UPDATE_ONLY='1'; $env:GINEE_ADAPTER='claude'; iwr -useb https://raw.githubusercontent.com/kostiantyn-matsebora/ginee/main/install.ps1 | iex
@@ -205,13 +279,11 @@ GINEE_UPDATE_ONLY=1 GINEE_ADAPTER=claude bash -c "$(curl -fsSL https://raw.githu
 1. Re-fetch `.agents/ginee/core/` + `.agents/ginee/adapters/` + `.agents/ginee/extras/` (your `local/` survives).
 2. Re-copy `.agents/ginee/adapters/_shared/agents/*.md` to `.claude/agents/` (pointers may have been refined).
 3. Re-copy `.agents/ginee/core/skills/ginee-*` to `.claude/skills/` (skill bodies / descriptions may have been refined). Skip if you used symlinks in step 2 above.
-4. Read `.agents/ginee/core/MIGRATIONS/` for breaking-change notes.
-5. **Re-sync the pointer block in `CLAUDE.md`** — pointer blocks evolve across releases. Find the existing block (between `## Engineering team framework` and the next `---`) and replace its body with the current `.agents/ginee/adapters/claude/CLAUDE-pointer.md` content. The installer's `-UpdateOnly` path does this automatically; manual one-liner equivalents in `core/MIGRATIONS/engineering-team-renamed-ginee.md § Action required #2`.
-6. **For pre-D11 (pre-2026-05-18) upgrades** — run the rename migration script once:
+4. **Re-sync the pointer block in `CLAUDE.md`** — pointer blocks evolve across releases. Find the existing block (between `## Engineering team framework` and the next `---`) and replace its body with the current `.agents/ginee/adapters/claude/CLAUDE-pointer.md` content. The installer's `-UpdateOnly` path does this automatically.
+5. **For previously (pre-2026-05-18) upgrades** — run the rename migration script once:
    - `.\.agents\ginee\core\scripts\migrate-engineering-team-to-ginee.ps1` (or `.sh`).
    - Rewrites legacy `engineering-team` references under `local/*`.
    - Idempotent; safe to run on already-migrated installs.
-   - Full notes: `.agents/ginee/core/MIGRATIONS/engineering-team-renamed-ginee.md`.
 
 ## Uninstall
 

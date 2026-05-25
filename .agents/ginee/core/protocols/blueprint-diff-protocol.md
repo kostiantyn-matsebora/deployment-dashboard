@@ -1,11 +1,11 @@
-# Blueprint-diff protocol — pre-implementation gate for visual source-of-truth (D41)
+# Blueprint-diff protocol — pre-implementation gate for visual source-of-truth
 
 **Load-on-demand at Phase 4 dispatch entry** for any task touching the configured `visual-source-of-truth` artefact. Runs **before any edit**; 4 mandatory checks pass + diff surfaces to team-lead, then edits proceed.
 
 ## Why
 
 - Visual source-of-truth (mockup · Figma file · design baselines) defines client contract per `local/bindings.md § Source-of-truth ownership`.
-- Pre-D41 the framework named the artefact as canonical but had no pre-edit step asserting *what already changed* before the dispatch added more.
+- Originally the framework named the artefact as canonical but had no pre-edit step asserting *what already changed* before the dispatch added more.
 - Adopter incident (`deployment-dashboard#54`) — Phase 4 rewrote a mockup section from scratch; chrome elements (badges · version-block · timestamps · prev-failed warnings) silently vanished. Phase 5/6 geometry oracles ran green; SPA's reused component carried fidelity the mockup lost. User caught it via manual screenshot comparison only.
 - Blueprint diff catches this **before** edits begin — surfaces unexpected deltas vs the configured reference for explicit user resolution.
 
@@ -65,8 +65,8 @@ Doc-shape checks from `core/process.md § Documentation style` still apply to su
 
 - **Editing the visual SoT before the protocol completes** — even one-line tweaks. The diff captures the baseline state; pre-diff edits poison the comparison.
 - **Auto-resolving unexpected deltas.** Always surface to user; never silently re-scope.
-- **Silently skipping the protocol on auto-mode.** D12 elides routine gates; D41 is a forced-interactive gate, same shape as D24 review-comment ingestion.
-- **Substituting the geometry / mockup-visual harness for the blueprint diff.** Harness runs at Phase 5/6 on edits; D41 runs at Phase 4 entry on the *baseline*. The adopter incident proves these are complementary, not interchangeable.
+- **Silently skipping the protocol on auto-mode.** Auto mode elides routine gates; this one is forced-interactive, same shape as review-comment ingestion (`core/github-integration.md § Review-comment ingestion`).
+- **Substituting the geometry / mockup-visual harness for the blueprint diff.** Harness runs at Phase 5/6 on edits; this protocol runs at Phase 4 entry on the *baseline*. The adopter incident proves these are complementary, not interchangeable.
 - **Pointing `blueprint-ref` at the working copy.** Defeats the purpose — the reference must be a frozen state (commit · tag · snapshot · external URL).
 
 ## Enforcement
@@ -78,7 +78,7 @@ Doc-shape checks from `core/process.md § Documentation style` still apply to su
 | Reviewer (team-lead) | Surfaces a one-line advisory on violation (`"Blueprint-diff missed: <check>; consuming anyway."`). Never re-dispatches purely for format. Never auto-rewrites. |
 | Iteration-protocol intermediate proposals | Same 4 checks; first iteration carries the diff; subsequent iterations cite the same diff unless `blueprint-ref` changes. |
 
-**No external linter.** Same machinery as D22 / D26 / D29 / D30 / D40 — LLM self-review against the rules above.
+**No external linter.** LLM self-review against the rules above; same machinery as the doc-authoring + options + phase-report protocols.
 
 ## Reporting
 
@@ -90,19 +90,19 @@ Example `## Verification log` row:
 Blueprint-diff (html-mockup) vs origin/main on docs/mockup.html: 4 expected / 0 unexpected / 2 pre-existing — surfaced + approved.
 ```
 
-## Interaction with other decisions
+## Interaction with other framework surfaces
 
-| Decision | Interaction |
+| Surface | Interaction |
 |---|---|
-| D12-automatic-mode | Unexpected-delta gate is forced-interactive — auto-mode does NOT elide it. Same carve-out as D24-review-comment-ingestion. |
-| D14-github-issues | Issue body's expected-change set drives the `Expected` classification. Reporter ambiguity → forced-interactive gate; never silent. |
-| D17-delivery-modes | Mode-independent — protocol runs at Phase 4 entry in all three delivery modes. |
-| D22-doc-authoring-protocol | Doc-shape rules apply to surrounding return text; D41 adds the 4-check layer on top of Verification-log entries. |
-| D25-classical-architect | Mockup-owning role (typically `frontend-engineer` per `local/bindings.md § Source-of-truth ownership`) gains the diff-and-surface obligation. <ul><li>Charter addendum: `core/roles/frontend-engineer.md § Mockup ownership`.</li></ul> |
-| D29-strict-subagent-return-schema | Verification-log row carries the diff outcome; no new section needed. Full payload optionally lifted to `## Notes` carve-out. |
-| D30-adopt-existing-solution | Diff tooling layer adopts existing tools per type (`git diff` · Figma compare · pixelmatch / odiff); protocol layer is build per the framework's load-on-demand spec pattern. |
-| D36-warm-specialist-reuse | Warm-resumed specialist re-runs the protocol on each new dispatch — `blueprint-ref` may have advanced since the prior cycle. |
-| D39-sub-issue-dispatch | Sub-issue body carries the expected-change set; closing comment's `## Verification log` carries the diff outcome. |
+| `core/automatic-mode.md` | Unexpected-delta gate is forced-interactive — auto-mode does NOT elide it. Same carve-out as review-comment ingestion. |
+| `core/github-integration.md` (issues) | Issue body's expected-change set drives the `Expected` classification. Reporter ambiguity → forced-interactive gate; never silent. |
+| `core/delivery-modes.md` | Mode-independent — protocol runs at Phase 4 entry in all three delivery modes. |
+| `core/protocols/doc-authoring-protocol.md` | Doc-shape rules apply to surrounding return text; the 4-check layer here applies on top of Verification-log entries. |
+| `core/roles/solution-architect.md` | Mockup-owning role (typically `frontend-engineer` per `local/bindings.md § Source-of-truth ownership`) gains the diff-and-surface obligation. <ul><li>Charter addendum: `core/roles/frontend-engineer.md § Mockup ownership`.</li></ul> |
+| `core/templates/phase-report.md` | Verification-log row carries the diff outcome; no new section needed. Full payload optionally lifted to `## Notes` carve-out. |
+| `core/protocols/options-protocol.md` | Diff tooling layer adopts existing tools per type (`git diff` · Figma compare · pixelmatch / odiff); protocol layer is build per the framework's load-on-demand spec pattern. |
+| Warm specialist reuse (`core/process/dispatch.md`) | Warm-resumed specialist re-runs the protocol on each new dispatch — `blueprint-ref` may have advanced since the prior cycle. |
+| Sub-issue dispatch (`core/github-integration.md § Sub-issue dispatch`) | Sub-issue body carries the expected-change set; closing comment's `## Verification log` carries the diff outcome. |
 
 ## Out of scope
 

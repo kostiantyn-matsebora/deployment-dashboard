@@ -23,7 +23,7 @@ labels: [ginee:ready]
 -->
 
 <!--
-  D26 shape rules — apply to EVERY section, including Summary:
+  Doc shape rules — apply to EVERY section, including Summary:
   - File / endpoint / config inventories → table, not comma-separated prose.
   - Procedures / steps → numbered list.
   - Multi-rule statements → parent bullet + sub-bullets, one rule per line.

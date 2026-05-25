@@ -50,7 +50,7 @@ User asks "pick up X" / "work on X" / "start on X" / "begin X" where X is one of
 1. Treat the prompt as the task description.
 2. Run Phase 1–8. No per-source artefact to update.
 
-### Step 3 — hand to `team-lead` (D28)
+### Step 3 — hand to `team-lead`
 
 After the mechanical ops in Step 2 (label swap · sticky post · branch resolution) and **before any Phase 1 plan drafting**, the skill-runner dispatches `@team-lead` per `.agents/ginee/core/process.md § Skill-runner — surface boundary`. Inbound payload to team-lead: parsed task body + scoring labels + label-swap result + (issue-sourced) branch.
 
@@ -76,4 +76,4 @@ team-lead runs the full lifecycle per `.agents/ginee/core/roles/team-lead.md` + 
 - TODO item: never auto-add new TODO lines (`§ TODO file rules` — never auto-generated, never auto-extended).
 - Never silently close out — Phase 8 acceptance is always surfaced.
 - Never run the framework-upstream variant from an adopter project — addressing a framework issue requires working in the framework repo (where origin = framework; plain `pick up #<N>` works).
-- **Skill-runner forbiddens (D28).** After Step 3 hand-off the skill-runner must not draft plans · synthesize parallel returns · answer routing/governance questions by reading project files · propose default-selection options · re-dispatch specialists in the main thread. Every such decision dispatches `@team-lead`. Full boundary: `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
+- **Skill-runner forbiddens.** After Step 3 hand-off the skill-runner must not draft plans · synthesize parallel returns · answer routing/governance questions by reading project files · propose default-selection options · re-dispatch specialists in the main thread · **set, recommend, or carry a tracking-mode posture in the hand-off payload — the four-tier resolution chain (`core/github-integration.md § Sub-issue dispatch`) is closed and re-derived by team-lead on every parent dispatch**. Every such decision dispatches `@team-lead`. Full boundary: `.agents/ginee/core/process/dispatch.md § Skill-runner — surface boundary`.

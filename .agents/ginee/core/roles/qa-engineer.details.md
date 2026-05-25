@@ -181,7 +181,7 @@ Run after every cloud deploy:
 
 ## Script-suite tests
 
-QA scope is **QA-owned scripts only** (seed / cleanup / smoke / scenario-harness glue under `testing/scripts/` or the per-project equivalent). Devops-owned scripts (build / orchestration / deploy / dev-loop / composite CI actions) have their own authorship + lint + coverage obligation — see `devops-engineer.md § Script-quality obligation` (D18). The split is by **file ownership**, not by test framework — same Pester / bats tool, different authors per location.
+QA scope is **QA-owned scripts only** (seed / cleanup / smoke / scenario-harness glue under `testing/scripts/` or the per-project equivalent). Devops-owned scripts (build / orchestration / deploy / dev-loop / composite CI actions) have their own authorship + lint + coverage obligation — see `devops-engineer.md § Script-quality obligation`. The split is by **file ownership**, not by test framework — same Pester / bats tool, different authors per location.
 
 Use the project's script test framework (Pester / bats) for any non-trivial QA scripting logic — examples:
 
