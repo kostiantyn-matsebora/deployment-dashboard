@@ -1,8 +1,8 @@
 // Hand-authored visual mirror of <dd-layout-leaf> from frontend/matrix/src/lib/.
 // Renders the detailed view leaf inside swim-lane / workflow-rows layouts.
 // Static: all data via @Input(); no store; OnPush.
-// Mockup simplification: only 'detailed' and 'compact' views are rendered
-// (no glance pill, no focus variant — the mockup uses detailed as the default).
+// Mockup: Detailed is the only rendered density (no Compact / Glance variants —
+// the view-switcher buttons are visual-only chrome).
 
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
