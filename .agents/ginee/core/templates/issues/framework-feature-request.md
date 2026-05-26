@@ -6,75 +6,49 @@ labels: [ginee:ready, framework]
 ---
 
 <!--
-  Priority signal (optional but recommended) — add `value:high|medium|low`
-  + `complexity:high|medium|low` labels (ATAM utility-tree convention) so
-  `ginee-triage` ranks this against other ready framework work.
-  Full rules: `.agents/ginee/core/triage-scoring.md`.
--->
-
-
-<!--
-  Filed against the ginee framework upstream repo (per
-  local/framework.config.yaml § github.framework-repo) via:
+  Filed against ginee upstream (per local/framework.config.yaml § github.framework-repo):
     @team-lead file framework-feature <title>
-  Sections parsed by team-lead when picking up framework work.
-  Keep headings intact.
--->
+  Priority signal: add `value:*` + `complexity:*` labels (ATAM convention).
+  Full: .agents/ginee/core/protocols/triage-scoring.md.
 
-<!--
-  Doc shape rules — apply to EVERY section, including Summary:
-  - File / endpoint / config inventories → table, not comma-separated prose.
-  - Procedures / steps → numbered list.
-  - Multi-rule statements → parent bullet + sub-bullets, one rule per line.
-  - No paragraph with > 2 sentence terminators.
-  - No parenthetical comma-lists inside a sentence — promote to a bulleted list.
-  - Cross-reference; never restate (cite `§Name`, `#anchor`).
-  Full rules: `core/process.md § Mandatory checks before report-as-done`.
+  Sections parsed by team-lead; keep headings intact.
+  Doc shape (every section): inventories → table · steps → numbered list · multi-rule → parent + sub-bullets ·
+  no paragraph > 2 sentence terminators · no parenthetical comma-lists · cross-ref never restate.
+  Full: core/process.md § Mandatory checks before report-as-done.
 -->
 
 ## Summary
 
-<!-- One short bulleted-list or 1–2 short sentences. Avoid parenthetical inventories. -->
 <1–2 sentences describing the proposed framework capability>
 
 ## Motivation
 
-<what's missing in the current framework — adopter pain, recurring workaround, gap in a locked decision>
+<what's missing today — adopter pain · recurring workaround · gap in a locked decision>
 
 ## Affected framework surface
 
-<!--
-  Where the change would land. Pick one or more:
-    process | role-kernel | role-details | new-role | template | adapter | extras-role |
-    spec (index-protocol / github-integration / new) | install-mechanism
-  Plus the specific file path(s).
--->
+<!-- Pick one or more: process | role-kernel | role-details | new-role | template | adapter | extras-role |
+     spec (index-protocol / github-integration / new) | install-mechanism. Plus file paths. -->
 
 - Surface: <categories>
 - Files likely touched: `<path-globs>`
 
 ## Proposed behavior
 
-<observable framework behavior after the change — what would `team-lead` / cardinals / `ai-engineer` do differently?>
+<observable framework behavior after the change — what team-lead / cardinals / ai-engineer do differently>
 
 ## Owner-decision impact
 
-<!--
-  Does this require a new owner decision or amend existing ones?
-  Owner's design log lives in PLAN.md (table at § Locked decisions).
-  Cite affected decisions by short slug or PLAN.md anchor — these are
-  pointers to owner history, NOT load-bearing on the runtime framework.
-  Skip the field if the answer is "none".
--->
+<!-- New owner decision or amends existing? Owner log in PLAN.md § Locked decisions. Pointers NOT load-bearing
+     on runtime. Skip if "none". -->
+
 - New decision needed: `<yes | no>`
-- Owner-history pointers: `<short-slug-1 | short-slug-2 | ... | none>`
+- Owner-history pointers: `<short-slug-1 | short-slug-2 | … | none>`
 
 ## Backward compatibility
 
-<!--
-  Does this break existing adopters? Required because copy-paste install
-  + tarball upgrade are supported — adopters re-fetch core/ on update.
--->
+<!-- Adopters re-fetch core/ on update — surface any break. -->
+
 - Breaks existing `local/` files: `<yes | no — explain>`
 - Migration note required: `<yes | no>`
 
@@ -85,7 +59,6 @@ labels: [ginee:ready, framework]
 
 ## Out of scope
 
-<!-- What this proposal explicitly does NOT cover. -->
 - <item>
 - <item>
 
@@ -93,4 +66,4 @@ labels: [ginee:ready, framework]
 
 - Related framework issues: `#<N>` …
 - Discussion source: `#<N>` …
-- Adopter project examples: <link / description>
+- Adopter examples: <link / description>

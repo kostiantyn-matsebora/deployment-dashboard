@@ -9,8 +9,7 @@ Re-run the full discovery flow per `.agents/ginee/core/roles/team-lead.details.m
 
 ## Activation
 
-- User invokes "rediscover" / "re-run discovery" / "refresh project discovery".
-- Major project structure changed (new top-level dirs, new tier, new doc class).
+Per `adapters/_shared/install-common.md § Skill cheat sheet`; OR major project structure changed (new top-level dirs · new tier · new doc class).
 
 ## Procedure
 

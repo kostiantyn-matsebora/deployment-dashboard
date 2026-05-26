@@ -1,32 +1,42 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [doc-authoring, documentation, structure-over-prose, self-lint]
+cap-bytes: 8192
+reads-before-applying: []
+---
+
 # Doc-authoring protocol — adopter docs + ginee-authored GitHub artefacts + subagent returns
 
 **Load-on-demand at Phase 5 / report-as-done** for any doc-touching task. Default shape rules + mandatory checks live in `core/process.md § Documentation style` (always-loaded); this file carries scope + enforcement + attestation.
 
-Examples gallery: `core/doc-authoring-examples.md` (load on first-time authoring / explicit request).
+Examples gallery: `core/protocols/doc-authoring-examples.md` (load on first-time authoring / explicit request).
 
 ## Scope
 
 | Surface | Authored by |
 |---|---|
-| Architecture doc · ADRs · CRs · READMEs · runbooks · scenarios · API docs | adopter roles per `core/doc-roles.md` |
+| Architecture doc · ADRs · CRs · READMEs · runbooks · scenarios · API docs | adopter roles per `core/protocols/doc-roles.md` |
 | Project-instruction file (`CLAUDE.md` / `AGENTS.md` / equivalent) | `team-lead` |
 | Role definitions (`core/roles/`, `local/roles/`) · framework specs · skills | framework upstream / adopter `local/roles/` |
 | **GitHub issue bodies** authored via `ginee-file-*` skills | `team-lead` (orchestrator drafts; user approves) |
 | **Framework-authored GitHub comments** — Phase-transition · sticky `ginee:score` / `ginee:review-cycle` · audit comments · per-thread review-replies | `team-lead` + specialists per the comment-cadence procedures |
 | **Subagent returns** — every cardinal-dispatch return per `core/templates/phase-report.md` schema | every cardinal role |
-| **Release surfaces** — `docs/CHANGELOG.md` entries · `.github/release-notes/v*.md` sidecars — surface-specific voice + word cap per `core/changelog-protocol.md` | framework maintainers drafting release artefacts |
+| **Release surfaces** — `docs/CHANGELOG.md` entries · `.github/release-notes/v*.md` sidecars — surface-specific voice + word cap per `core/protocols/changelog-protocol.md` | framework maintainers drafting release artefacts |
 
 **The lint covers every section, including Summary.** No section-by-length exemption — a one-sentence Summary still trips the mandatory checks if it packs a comma-separated inventory into a parenthetical.
 
-**Subagent-return surface adds a 6th check** — *no narrative preamble* (first non-Status line must be a `##` section header). The 5 standing checks apply unchanged. Full schema: `core/templates/phase-report.md`.
+**Subagent-return surface adds a 7th check** — *no narrative preamble* (first non-Status line must be a `##` section header). The 6 standing checks apply unchanged. Full schema: `core/templates/phase-report.md`.
 
-### Out of scope
+## Mandatory check — binding-strength signal
 
-- **Reporter-authored issue bodies / comments.** Per `core/github-integration.md § Forbidden actions` — *"Never edit an issue body authored by another reporter."* `ginee-pick-up` MAY surface a polite restructure advisory on pickup, but never auto-rewrites and never edits reporter content.
-- **Existing adopter docs.** Forward-only — new + edited content follows the protocol; mass-restructure of legacy docs is a separate user-initiated task.
-- **Discussion bodies.** Read-only context; promote-to-issue first.
-- **Style / tone / branding.** This protocol governs **structure**, not voice. Adopter style guides own those.
-- **Framework-self-dev hygiene gates**. Separate enforcement layer; cross-references the same Mandatory checks but runs via the gate script.
+Authored markdown signals binding strength via RFC 2119 keywords:
+
+- **MUST · MUST NOT · SHOULD · SHOULD NOT · MAY** — the only modifiers that carry normative weight.
+- Do not use `always` / `never` / `binding` / `mandatory` / `required` as rule modifiers. They read as RFC 2119 synonyms without the precision; LLMs spend interpretation cycles disambiguating.
+- Imperative voice alone is permitted inside numbered procedures where every step is implicitly MUST.
+
+Single binding-strength convention removes the ambiguity from prior mixed signalling (bold-italic-caps for emphasis, `always` for MUST, `binding` for MUST NOT-bypass). The 6 standing checks (per `core/process.md § Documentation style § Mandatory checks before report-as-done`) gain this as check #6; the subagent-return surface's *no narrative preamble* becomes check #7.
 
 ## Enforcement via discovered stack
 
@@ -64,7 +74,7 @@ Different from adopter-doc enforcement (which piggybacks on the discovered linte
 | Violation | Surfaces as a suggestion in the user-approval prompt. User accepts the restructure / rejects / overrides. No silent publish. |
 | Publish | Only after user approval of the linted draft. |
 
-**No external linter.** The check is LLM self-review against the same 5 mandatory rules used for adopter docs.
+**No external linter.** The check is LLM self-review against the same 6 mandatory rules used for adopter docs.
 
 ## Enforcement for subagent returns
 
@@ -73,9 +83,9 @@ Returns are ephemeral (consumed by the orchestrator in-thread, not published), s
 | Stage | Mechanism |
 |---|---|
 | Author | Dispatched cardinal drafts the return per `core/templates/phase-report.md` schema. |
-| Self-lint | Role runs the 6 mandatory checks (5 standing + *no narrative preamble*) against the draft **before** returning. Violations → restructure; un-restructurable content → lift into capped `## Notes`. |
-| Violation reaches orchestrator | `team-lead` surfaces a one-line advisory (`"Return missed self-lint: <violation>; consuming anyway"`), consumes the return, never re-dispatches purely for format, never auto-rewrites (analogous to the reporter-content forbidden rule in `core/github-integration.md § Forbidden actions`). |
+| Self-lint | Role runs the 7 mandatory checks (6 standing + *no narrative preamble*) against the draft **before** returning. Violations → restructure; un-restructurable content → lift into capped `## Notes`. |
+| Violation reaches orchestrator | `team-lead` surfaces a one-line advisory (`"Return missed self-lint: <violation>; consuming anyway"`), consumes the return, never re-dispatches purely for format, never auto-rewrites (analogous to the reporter-content forbidden rule in `core/protocols/github-integration.md § Forbidden actions`). |
 | Iteration-protocol intermediate return | Same schema with sections marked `(in-progress)`; `## Stop-state` required; `Status: In-progress`. |
-| Failed dispatch (forced handoff per `core/cross-agent-handoff.md`) | Same schema + required `## Hand-off` section embedding `core/templates/hand-off-note.md`. |
+| Failed dispatch (forced handoff per `core/protocols/cross-agent-handoff.md`) | Same schema + required `## Hand-off` section embedding `core/templates/hand-off-note.md`. |
 
 **No external linter.** LLM self-review against the schema; identical machinery to the adopter-doc enforcement loop. Forward-only — previously returns are not retroactively rewritten.

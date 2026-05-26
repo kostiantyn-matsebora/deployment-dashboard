@@ -1,3 +1,11 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [index, project-index, manifest, drift, staleness]
+cap-bytes: 32000
+reads-before-applying: []
+---
+
 # Project knowledge index protocol
 
 **Load-on-demand.** Fetched when:
@@ -9,25 +17,27 @@
 
 Default short tasks do not load this file.
 
-`.idx` grammar spec: `core/index-syntax.md` (load-on-demand on first `.idx` read or write).
+`.idx` grammar spec: `core/protocols/index-syntax.md` (load-on-demand on first `.idx` read or write).
 
-## Why
+## Read order
 
-Adopter projects accumulate substantial knowledge across two source categories — **documentation** (architecture doc 30–50K, mockup 30–100K, ADRs / CRs / scenarios often 100K+ corpora) and **code / config** (`package.json`, `Dockerfile`, `docker-compose.yml`, `terraform/`, `.editorconfig`, lockfiles). Pulling raw sources into LLM context on every dispatch burns tokens before any work has started. The index replaces full-source reads with lightweight per-class summaries; roles read originals only when the index points to a fragment they need verbatim.
+- **Index-first bedrock.** Cardinals consult `local/index/` summaries + role-kernel `Source of truth § always` rows before any source read; raw source reads are fallback when the index entry's anchor points at a fragment needed verbatim OR the role authors new content in that source.
+- **Trigger conditions for raw source reads.** Index entry insufficient for verbatim citation · role authoring new content in source · novel-class file with no index entry yet (recipe-extracted on first encounter).
+- **Justification-required reporting.** Every raw source read records a one-line justification in the cardinal return per `core/templates/phase-report.md § Source reads (this dispatch)`. Missing-justification carve-out per the same file's `§ Format-only re-dispatch — single carve-out`.
 
-`local/index/*` is the **only default read surface** for source-of-truth artefacts. `core/templates/bindings.md § Source-of-truth ownership` records who edits each raw source + where its verbatim text lives — it is a governance map, not a per-dispatch read list. Any framework surface that names raw `docs/**` or code/config paths as "read before any work" silently competes with this protocol and re-introduces the cost it exists to eliminate.
+## Default read surface
 
-### Where compression pays off — and where it doesn't
+`local/index/*` is the only default read surface for source-of-truth artefacts. `core/templates/bindings.md § Source-of-truth ownership` is a governance map (who edits what), NOT a per-dispatch read list — any framework surface that names raw `docs/**` or code/config paths as "read before any work" silently competes with this protocol.
 
-The index is a **summarization tier**, not a re-encoding tier. The win depends on source shape:
+### Compression targets
 
-| Source shape | Realistic compression | Strategy |
+| Source shape | Target | Strategy |
 |---|---|---|
-| Prose-heavy (architecture rationale, ADR body, scenario Given/When/Then) | 5–15% of source | Aggressive — extract identifiers + anchors; drop motivation, alternatives, narrative |
-| List-of-records with metadata (FRs, NFRs, endpoints, UI states, glossary terms) | 15–25% of source | Per-record row with title + key-signal + anchor; full body stays in source |
-| Already-structured config (compose, IaC, package manifests, lint configs) | 5–15% of source — **inventory only** | Record existence (name + tier + anchor); roles read source for per-record detail |
+| Prose-heavy (architecture rationale · ADR body · Gherkin) | 5–15% | Extract identifiers + anchors; drop motivation, alternatives, narrative |
+| List-of-records (FRs · NFRs · endpoints · UI states · glossary) | 15–25% | Per-record row — title + key-signal + anchor; body stays in source |
+| Already-structured config (compose · IaC · manifests · lint configs) | 5–15% | Inventory-only: name + tier + anchor; roles read source for per-record detail |
 
-**Compression floor: ≥ 50% of source bytes = recipe failed.** Either rewrite the recipe to drop bulk OR mark the class as `read-source-directly` (skip extraction; role kernels cite the source path via `repo-map.idx`). See `§ Lossless rule for index § Compression floor` for the self-check.
+**Floor:** `compression ≥ 0.5` = recipe failed. Rewrite OR mark `read-source-directly`. Self-check: § Compression floor.
 
 ## Source types
 
@@ -45,7 +55,7 @@ The protocol was originally framed around documentation, then broadened to "extr
 ```
 local/index/
 ├── manifest.yaml            ← detected classes (doc + code) + SHA-256 + source paths + derived index files
-├── <flat-record indexes>.idx       ← compact DSL per core/index-syntax.md
+├── <flat-record indexes>.idx       ← compact DSL per core/protocols/index-syntax.md
 └── <nested indexes>.yaml           ← YAML for nested data
 ```
 
@@ -80,243 +90,179 @@ Common index files (from built-in recipes):
 
 ## Manifest shape
 
-`local/index/manifest.yaml` records every detected class — doc, code, built-in, or novel — with sources, SHA-256, derived index files, and extraction recipe id.
+`local/index/manifest.yaml` records every detected class. Schematic example:
 
 ```yaml
 indexed:
-  # Doc class
-  - class: architecture
+  - class: architecture           # built-in doc, multi-file output
     category: doc
-    template: multi                       # multi-file output — see index-files
+    template: multi
     recipe: builtin:architecture
     source: docs/architecture.md
     sha256: a3f5b8...c4d1
     indexed-on: 2026-05-17
     index-files: [architecture.idx, architecture-fr.idx, api-matrix.yaml, ui-states.yaml, constraints.yaml, glossary.idx]
     source-bytes: 48230
-    index-bytes: 6420                    # sum across index-files
-    compression: 0.13                     # index-bytes / source-bytes; ≥ 0.5 = failed (see § Compression floor)
+    index-bytes: 6420            # sum across index-files
+    compression: 0.13            # index-bytes / source-bytes
     consumed-by: [solution-architect, backend-engineer, frontend-engineer, qa-engineer, devops-engineer]
-                                          # roles whose kernel baselines cite at least one of index-files
 
-  - class: scenario
+  - class: scenario               # built-in doc, globbed
     category: doc
     template: scenario-index.idx
     recipe: builtin:scenario
     source-glob: docs/scenarios/*.md
     file-count: 47
-    sha256-by-file:
-      docs/scenarios/login-happy.md: b7...
-      docs/scenarios/login-fail.md: c9...
-    indexed-on: 2026-05-17
+    sha256-by-file: { ... }       # per-file SHA so a single change flags only that subset
     index-files: [scenario-index.idx]
-    source-bytes: 142800
-    index-bytes: 8200
-    compression: 0.06
+    # source-bytes / index-bytes / compression / indexed-on / consumed-by as above
 
-  # Code class
-  - class: stack
+  - class: stack                  # built-in code
     category: code
     template: stack.yaml
     recipe: builtin:package-manifest
     source-glob: "package.json,**/package.json,**/*.csproj,pyproject.toml,Cargo.toml,go.mod,Dockerfile,**/Dockerfile"
     file-count: 12
     sha256-by-file: { ... }
-    indexed-on: 2026-05-17
     index-files: [stack.yaml]
 
-  - class: topology
-    category: code
-    template: topology.yaml
-    recipe: builtin:container-orchestration
-    source-glob: "docker-compose*.yml,k8s/**/*.yaml,helm/**/*.yaml,terraform/**/*.tf"
-    file-count: 8
-    sha256-by-file: { ... }
-    indexed-on: 2026-05-17
-    index-files: [topology.yaml]
-
-  # Adopter-declared, reuses doc template
-  - class: rfc
-    category: doc
-    template: adr-index.idx
-    recipe: builtin:adr
-    source-glob: docs/rfcs/*.md
-    file-count: 12
-    sha256-by-file: { ... }
-    indexed-on: 2026-05-17
-    index-files: [rfc-index.idx]
-
-  # Novel class — ai-engineer authored
-  - class: runbook
+  - class: runbook                # novel — ai-engineer authored
     category: doc
     template: novel
     recipe: |
-      Per file: extract title, alert id, severity, first-action step,
-      escalation contact. Body NOT copied.
+      Per file: extract title, alert id, severity, first-action step, escalation contact. Body NOT copied.
     source-glob: ops/runbooks/*.md
     file-count: 8
     sha256-by-file: { ... }
-    indexed-on: 2026-05-17
     index-files: [runbook-index.idx]
     consumed-by: [sre, devops-engineer]   # REQUIRED for novel classes; see § Consumer coupling
 ```
 
-- **Single-file sources** record one `sha256`.
-- **Glob sources** record `sha256-by-file` so a single new/changed file flags only that subset.
-- **`category`** — `doc` or `code`. Drives heuristic-detection mapping during discovery.
-- **`recipe`** — either a built-in id (`builtin:<recipe>`) or an inline recipe block (for novel classes).
-- **`source-bytes`** + **`index-bytes`** + **`compression`** — byte-size accounting; surfaces compression ratio so adopters and `ai-engineer` see when a recipe is over-extracting (`compression` ≥ 0.5 → failed; see `§ Compression floor`). `index-bytes` = sum across all `index-files` entries.
-- **`consumed-by`** — list of roles whose baseline reads at least one of the entry's `index-files`. **Required for novel classes** (else extraction is skipped per `§ Consumer coupling`). Auto-populated for built-in classes by scanning cardinal role kernels' `Source of truth` tables + `local/bindings.md § Project-specific index citations`.
+| Field | Notes |
+|---|---|
+| Single-file source | One `sha256`. |
+| Glob source | `sha256-by-file` — change flags only the subset. |
+| `category` | `doc` or `code`. Drives heuristic detection during discovery. |
+| `recipe` | Built-in id (`builtin:<recipe>`) OR inline block (novel). |
+| `source-bytes` / `index-bytes` / `compression` | Byte-size accounting; `compression ≥ 0.5` → recipe failed (see `§ Compression floor`). |
+| `consumed-by` | Roles whose baseline cites at least one `index-files` entry. **Required for novel classes** (else extraction is skipped). Auto-populated for built-in by scanning cardinal `Source of truth` tables + `local/bindings.md § Project-specific index citations`. |
 
 ## Consumer coupling
 
-Every extracted class MUST have at least one consumer role. Extracting an index file no role reads is pure waste — disk + staleness-check + extraction-time cost for no observable benefit.
+Every extracted class MUST have at least one consumer role — extracting an index no role reads is pure waste.
 
-**Built-in classes.** Cardinal role kernels (`core/roles/*.md § Source of truth`) cite specific built-in index files. `ai-engineer` auto-populates each manifest entry's `consumed-by` by scanning kernel citations + `local/bindings.md § Project-specific index citations` (adopter overrides). A built-in class with zero matches across both sources is a framework bug — surface it; do not extract.
+**Built-in classes** — cardinal role kernels (`core/roles/*.md § Source of truth`) cite specific built-in index files. `ai-engineer` auto-populates each manifest's `consumed-by` by scanning kernel citations + `local/bindings.md § Project-specific index citations`. Built-in class with zero matches → framework bug; surface, do not extract.
 
-**Novel classes.** Adopter must declare the consumer **before** extraction. Three declaration paths:
+**Novel classes** — adopter declares consumer BEFORE extraction. Declaration paths (priority):
 
-1. **`local/framework.config.yaml § index.classes[].consumed-by: [<role>...]`** — pre-declared in config; preferred for adopter-known classes (e.g. `runbook → [sre, devops-engineer]`).
-2. **`local/bindings.md § Project-specific index citations`** — adopter-side citation table that wires a novel class to a cardinal role's baseline without editing upstream kernels. `team-lead` reads this at dispatch time and extends the role's baseline accordingly.
-3. **Interactive during discovery** — `team-lead` detects a novel class without declared consumer; surfaces to the user: *"Detected novel class `<X>` (~`<N>` source files). Which role consumes it?  [role-options] / [skip extraction]."* User answer recorded in `local/framework.config.yaml § index.classes` for future runs.
+1. `local/framework.config.yaml § index.classes[].consumed-by: [<role>...]` (preferred for adopter-known classes).
+2. `local/bindings.md § Project-specific index citations` — wires novel class to a kernel without editing upstream.
+3. Interactive — `team-lead` surfaces: *"Detected novel class `<X>` (~`<N>` files). Which role consumes it? [role-options] / [skip extraction]."* User answer → recorded in `local/framework.config.yaml § index.classes`.
 
-**Skip-extraction default.** A novel class with NO consumer declared after all three paths exhaust → `ai-engineer` skips extraction; manifest does NOT gain an entry; discovery report logs the skipped class with the heuristic that detected it. Cost: zero. Adopter can wire later via path 1 or 2 + invoke `@ai-engineer extract <class>`.
+**Skip-extraction default.** No consumer after all 3 paths → `ai-engineer` skips extraction; no manifest entry; discovery report logs the skip + heuristic. Adopter wires later via path 1 / 2 + invokes `@ai-engineer extract <class>`.
 
 ## Dormant-index audit
 
-`ai-engineer` runs after every extraction or re-extraction:
+`ai-engineer` after every extraction:
 
-1. For each `manifest.yaml § indexed[]` entry, verify `consumed-by` is non-empty.
-2. Cross-check that every role listed in `consumed-by` actually cites at least one of `index-files` in its kernel (or `local/bindings.md § Project-specific index citations` for adopter-side wiring).
-3. Any class with empty `consumed-by` OR with citations that don't resolve → dormant. Emit in the discovery report:
+1. Each `manifest.yaml § indexed[]` entry has non-empty `consumed-by`.
+2. Every role in `consumed-by` cites at least one `index-files` entry in its kernel OR `local/bindings.md § Project-specific index citations`.
+3. Empty `consumed-by` OR unresolved citations → dormant. Discovery report:
 
    ```
    Dormant index files (extracted but unread):
      - <class>: <index-files> (<size KB>) — no consumer cites these. Remedies:
        (a) Wire in local/bindings.md § Project-specific index citations
        (b) Skip extraction: remove from local/framework.config.yaml § index.classes
-       (c) Reframe as a built-in class via PR to ginee upstream
+       (c) Reframe as built-in via PR to ginee upstream
    ```
 
-Adopter decides per class. No silent removal — dormancy is a signal, not an auto-pruner.
+Adopter decides per class. **No silent removal** — dormancy is a signal, not auto-pruner.
 
 ## Lifecycle
 
 ### Initial extraction (discovery)
 
-`team-lead` extends Step 8 of the discovery flow:
+Extends Step 8 of `team-lead.details.md § Discovery flow`:
 
-1. **Enumerate classes** to index in this priority order:
-   1. Adopter-declared classes from `local/framework.config.yaml § index.classes`.
-   2. Built-in classes matched by glob heuristics:
-      - **Doc:** architecture / adr / cr / scenario / mockup / constraints / glossary.
-      - **Code:** stack / topology / commands / conventions / runtime-facts / repo-map.
-   3. Novel classes — any unmatched doc directory or code/config source the framework doesn't pre-recognize.
-2. **For each novel class, resolve consumer** per `§ Consumer coupling`. No consumer → skip the class.
-3. **Dispatch `ai-engineer`** with the enumerated + consumer-resolved class list.
-4. `ai-engineer`:
-   - For built-in classes → applies the built-in recipe; auto-populates `consumed-by` from kernel scan.
-   - For novel classes → authors a new template at `core/templates/index/<class>-index.<ext>` (or directly populates `local/index/<class>-index.<ext>` without a sibling template if it's a one-off) AND records the inline recipe + `consumed-by` in `manifest.yaml`.
-   - Computes SHA-256 per source.
-   - Writes `local/index/manifest.yaml`.
-5. `ai-engineer` runs the **lossless self-check** (existence + compression — see § Lossless rule).
-6. `ai-engineer` runs the **dormant-index audit** (see § Dormant-index audit) and reports findings.
+1. Enumerate classes (priority: adopter-declared > built-in heuristics > novel).
+2. Resolve consumer per `§ Consumer coupling`; novel without consumer → skip.
+3. Dispatch `ai-engineer` with enumerated + consumer-resolved list.
+4. `ai-engineer` — built-in: apply recipe + auto-populate `consumed-by` from kernel scan. Novel: author template at `core/templates/index/<class>-index.<ext>` (or skip template for one-off) + record inline recipe + `consumed-by` in `manifest.yaml`. Compute SHA-256 per source; write manifest.
+5. Run lossless self-check (existence + compression).
+6. Run dormant-index audit; report findings.
 
 ### Pre-dispatch staleness check
 
-`team-lead` extends `§ Auto-flag staleness`:
+Extends `team-lead.md § Auto-flag staleness`:
 
-1. Identify which sources the dispatched task may consume (based on role + task context):
-   - Doc sources for design / governance / scenario authoring.
-   - Code sources for build / test / deploy / lint work and stack-version-sensitive changes.
-2. For each, compute current SHA-256:
-   - Bash: `sha256sum <file>` or `find <glob> -type f -exec sha256sum {} +`
-   - PowerShell: `Get-FileHash -Algorithm SHA256 <file>`
-3. Compare with `manifest.yaml` entry.
-4. On any mismatch:
-   - Flag staleness in PM's first response.
-   - Offer:
-     - **`@ai-engineer reindex <source>`** — scoped reconciliation for the affected source.
-     - **`@ai-engineer reindex`** — whole-repo reconciliation (cheap; also picks up net-new files within existing class globs).
-     - **`@team-lead rediscover`** — full re-discovery (use when class membership itself changed — new doc directory, new tooling type).
-   - **Never auto-reindex.** User decides.
+1. Identify candidate sources by role × task context (doc → design / governance / scenarios; code → build / test / deploy / lint / stack-version-sensitive).
+2. SHA-256: bash `sha256sum <file>` or `find <glob> -type f -exec sha256sum {} +` · PowerShell `Get-FileHash -Algorithm SHA256 <file>`.
+3. Compare with `manifest.yaml`.
+4. Mismatch → flag + offer:
+
+   | Option | Effect |
+   |---|---|
+   | `@ai-engineer reindex <source>` | Scoped — affected source only. |
+   | `@ai-engineer reindex` | Whole-repo — picks up net-new files within existing class globs. |
+   | `@team-lead rediscover` | Full re-discovery — class membership changed (new doc dir · new tooling type). |
+
+   **Never auto-reindex.** User decides.
 
 ### Reconciliation
 
-`@team-lead reindex [scope]` (and the `ginee-reindex` skill) reconciles `local/index/` against the current repo state at the chosen scope. Three sweeps, ordered:
+`@ai-engineer reindex [scope]` (and `ginee-reindex` skill) — three sweeps:
 
 | Sweep | Action |
 |---|---|
-| 1. **SHA drift** | For each manifest entry in scope: recompute SHA-256 (`source` for single-file entries; per-file under `sha256-by-file:` for globbed). On change → re-extract per recorded recipe; update affected `local/index/*` files + entry. On match → skip. |
-| 2. **New files** | For each class in scope: list files matching its `source-glob`. Any file not yet in the manifest → add entry (recipe inherited from class) and extract. |
-| 3. **Stale entries** | Manifest entry whose `source` no longer exists → flag to the user with a `remove?` prompt. **Never auto-delete.** |
+| 1. SHA drift | Each manifest entry in scope: recompute SHA-256 (`source` for single-file · per-file `sha256-by-file:` for globbed). Change → re-extract per recipe + update `local/index/*` + entry. |
+| 2. New files | List files per class `source-glob`. Not in manifest → add entry + extract. |
+| 3. Stale entries | `source` no longer exists → `remove?` prompt to user. **Never auto-delete.** |
 
-Scopes:
-
-| Form | Effect |
+| Scope | Effect |
 |---|---|
 | `reindex` (no arg) | All classes, whole repo. |
-| `reindex <file>` | The file's matching class only — Sweep 1 if entry exists, Sweep 2 if not. Multi-class match → ask which class. |
-| `reindex <class>` | One class's `source-glob` only — full three-sweep within that class. |
+| `reindex <file>` | File's matching class — Sweep 1 if entry exists, Sweep 2 if not. Multi-class match → ask. |
+| `reindex <class>` | Class's `source-glob` — full three-sweep within class. |
 
-After every Sweep-1 / Sweep-2 hit, `ai-engineer`:
+After each Sweep-1 / Sweep-2 hit, `ai-engineer` updates manifest (new SHA-256 · `indexed-on` · refreshed `index-files`) + runs sample-and-check + dormant-index audit.
 
-1. Updates `manifest.yaml` — new SHA-256, new `indexed-on`, refreshed `index-files` if extraction surfaced new ones.
-2. Runs sample-and-check (existence + compression) on the affected entries.
-3. Runs the dormant-index audit (`§ Dormant-index audit`).
-
-Reconciliation works **within existing classes only.** Novel-class detection (sources matching no manifest class glob — e.g. a new `docs/runbooks/` directory) remains a `rediscover` responsibility because it touches `project-profile.md` + `bindings.md` + may need consumer-coupling input from the user.
+**Within existing classes only.** Novel-class detection (sources matching no manifest class glob — e.g. new `docs/runbooks/`) is `rediscover` responsibility (touches `project-profile.md` + `bindings.md` + may need consumer-coupling input).
 
 ## Lossless rule for index
 
-### Coverage rule
+**Coverage.** Every named record in source has an **existence-entry** in the index (name + source-anchor):
 
-- Every named record in the source MUST have an **existence-entry** in the index (name + source-anchor). Per category:
-  - **Doc:** every FR / NFR / endpoint / state / ADR / CR / scenario / glossary term.
-  - **Code:** every declared dependency / service / port / command / convention rule / env-var / top-level directory.
-- Index entries MAY summarize but MUST cite source path + section anchor (or `file:line` ref for non-section sources).
-- Coverage is about *existence*, not *fidelity*. Index records the signals the role needs for routing (existence, name, tier, owner, anchor). Full metadata (per-service env-vars, per-dep version pins, per-port mappings, per-record motivation) stays in source — the index entry's anchor is the contract that the source still holds it.
+- **Doc:** every FR · NFR · endpoint · state · ADR · CR · scenario · glossary term.
+- **Code:** every declared dep · service · port · command · convention rule · env-var · top-level directory.
 
-### Compression floor
+Index entries MAY summarize but MUST cite source path + section anchor (or `file:line` for non-section sources). Coverage is about **existence**, not fidelity — record signals the role needs for routing (existence · name · tier · owner · anchor). Full metadata (per-service env-vars · per-dep version pins · per-port mappings · per-record motivation) stays in source; the anchor is the contract.
 
-- **`compression` (`index-bytes / source-bytes`) ≥ 0.5 = recipe failed.** A summary tier that produces ≥ half the source bytes is re-encoding, not summarizing.
-- Remedies, in order of preference:
-  1. **Rewrite the recipe** to drop bulk — extract existence + anchors only; relegate per-record metadata back to source. Re-extract; verify the ratio falls below 0.5 (target: ≤ 0.15 for prose-heavy, ≤ 0.25 for list-of-records, ≤ 0.15 for already-structured config inventory).
-  2. **Mark the class `read-source-directly`** in `manifest.yaml § indexed[].template`. Skip extraction entirely. Role kernels needing the class cite the source path via `repo-map.idx`. Appropriate when the source is already structured (YAML / JSON / TOML) and compression below 0.5 isn't achievable without losing required existence-entries.
-- Per-class targets recorded in `manifest.yaml § indexed[].compression`. Discovery report flags any entry above target so the adopter sees the bloat up front.
+**Compression floor.** `compression = index-bytes / source-bytes` ≥ 0.5 = recipe failed (re-encoding, not summarizing). Remedies (priority):
 
-### Sample-and-check
+1. **Rewrite recipe** to drop bulk — existence + anchors only; per-record metadata stays in source. Targets: ≤ 0.15 prose-heavy · ≤ 0.25 list-of-records · ≤ 0.15 structured-config inventory.
+2. **Mark `template: read-source-directly`** in manifest — skip extraction; kernels cite source via `repo-map.idx`. Appropriate when source is already structured (YAML / JSON / TOML) and < 0.5 unreachable without losing existence-entries.
 
-After extraction or re-extraction, `ai-engineer` runs:
+Per-class targets in `manifest.yaml § indexed[].compression`. Discovery report flags entries above target.
 
-1. **Existence check** — pick 5 random items per affected index file. Verify the source still has them at the cited anchor.
-2. **Compression check** — measure `index-bytes / source-bytes`. If ≥ 0.5, the extraction is rejected; rewrite the recipe per § Compression floor.
-3. **On any miss** → revert and re-plan. Do not commit partial extractions.
+**Sample-and-check** after every extraction:
+
+1. **Existence** — 5 random items per affected index file; source still has them at cited anchor.
+2. **Compression** — `index-bytes / source-bytes`; ≥ 0.5 → reject + rewrite recipe.
+3. **Any miss** → revert + re-plan; never commit partial extractions.
 
 ## Role consumption pattern
 
-Every role's "Source of truth" table declares **per-file load triggers** — not a flat "Read first" list. A trivial dispatch shouldn't load the full role baseline; a deep-work dispatch should pick up exactly the indexes its task touches.
+Every role's `## Source of truth` table declares per-file load triggers — not a flat "Read first" list. Trivial dispatch loads less; deep-work loads exactly what its task touches.
 
-### Two-tier load model
-
-Each row in a role's `## Source of truth` table carries a `Load when` column:
-
-| Tier | `Load when` value | When to use |
+| Tier | `Load when` value | Use for |
 |---|---|---|
-| **always** | `always` | Foundational index — loaded on every dispatch to this role. Reserved for small, high-signal files (FR table, NFR list, top-level architecture map). Target: single-digit-KB combined. |
-| **scope** | Trigger phrase (e.g. `wire/endpoint/serializer touch`, `Phase 5/6 testing`, `deploy/infra work`, `dep bump`, `env-var work`) | Conditional — loaded only when the task description matches the trigger. The dispatched specialist evaluates triggers on its first reasoning step. |
+| **always** | `always` | Foundational index — every dispatch. Reserved for small, high-signal files (FR table · NFR list · top-level architecture map). Target: single-digit-KB combined. |
+| **scope** | Trigger phrase (`wire/endpoint/serializer touch` · `Phase 5/6 testing` · `deploy/infra work` · `dep bump` · `env-var work`) | Conditional — load only when task matches trigger. Dispatched specialist evaluates on first reasoning step. |
 
-### Trigger evaluation
+**Trigger evaluation when dispatched.** Load all `always` rows unconditionally. Evaluate each `scope` row's trigger against task; load matching, skip rest. Source-doc full reads remain on-demand per existing rule.
 
-When dispatched:
-
-1. Read the kernel's `## Source of truth § always` rows. Load all listed index files unconditionally.
-2. Read the `## Source of truth § scope` rows. For each, evaluate whether the task description matches the trigger phrase. Load matching files; skip the rest.
-3. Source-doc full reads remain on-demand per the existing rule — "ONLY when the index entry points at the source and the role needs verbatim text" OR "the role is authoring new content."
-
-### Reporting
-
-The dispatched specialist reports its load decision in the first response (Phase 4/5/6/7 estimation-first dispatch, or directly in trivial dispatches):
+**Reporting** in first response:
 
 ```
 Loaded baselines (this dispatch):
@@ -325,43 +271,20 @@ Loaded baselines (this dispatch):
   skipped:   scenario-index.idx (no test-authoring trigger), stack.yaml (no dep bump)
 ```
 
-Gives the adopter visibility into the per-dispatch baseline cost.
-
-### Adopter overrides
-
-The role kernel's `Load when` values are **defaults**. Per-project overrides land in `local/bindings.md § Per-role load-trigger overrides` (when present) — adopter raises or lowers a file's tier based on project specifics (e.g. a project where `topology.yaml` is hit by every backend dispatch, not just devops).
+**Adopter overrides** in `local/bindings.md § Per-role load-trigger overrides` — promote scope→always for a role on this project OR demote always→scope by trigger phrase.
 
 ## Extension — adopter-declared classes
 
-Adopters may pre-declare classes in `local/framework.config.yaml`:
+Pre-declare in `local/framework.config.yaml`:
 
 ```yaml
 index:
   dir: local/index
   classes:
-    - name: rfc
-      category: doc
-      source-glob: docs/rfcs/*.md
-      template: adr-index.idx             # reuse ADR template shape
-    - name: runbook
-      category: doc
-      source-glob: ops/runbooks/*.md
-      template: novel                     # ai-engineer authors a new template
-    - name: build-tools
-      category: code
-      source-glob: tools/build/*.json
-      template: novel
+    - { name: rfc,         category: doc,  source-glob: docs/rfcs/*.md,     template: adr-index.idx }   # reuse template shape
+    - { name: runbook,     category: doc,  source-glob: ops/runbooks/*.md,  template: novel }           # ai-engineer authors
+    - { name: build-tools, category: code, source-glob: tools/build/*.json, template: novel }
 ```
 
-`team-lead` reads this block first during class enumeration. Takes precedence over auto-detection heuristics.
+`team-lead` reads first during class enumeration; precedence over auto-detection heuristics.
 
-## Out of scope
-
-- Automated checksum tooling beyond `sha256sum` / `Get-FileHash` invocations.
-- True vector-store RAG (markdown-only baseline).
-- Cross-project index sharing.
-- Auto-promotion of novel classes to built-in templates. May happen in future framework releases based on observed adopter patterns.
-- Index pre-cooking on framework install. Adopters run `@team-lead rediscover` to build their first index.
-- Runtime-discovered facts requiring live execution (e.g. actual DB schema via introspection, runtime memory profile). Static-extraction only.
-- Auto-generated API docs from code (OpenAPI/spec generation). Separate concern; the index *consumes* an existing OpenAPI spec if one's present, but doesn't generate one.
-- Per-role facts files (Approach C of issue #1). Layered on top of the canonical index if a future need arises; not in scope here.

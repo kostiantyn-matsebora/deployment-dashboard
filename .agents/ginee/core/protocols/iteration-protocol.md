@@ -1,136 +1,83 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [iteration, propose-review-implement, 15-min]
+cap-bytes: 8192
+reads-before-applying: []
+---
+
 # Iteration protocol — propose → review → implement
 
-**Load-on-demand.** Fetched by orchestrator (or specialist) when dispatched work matches an activation cue:
+**Load-on-demand.** Activation cues:
 
 - Phase 4 / 5 / 6 / 7 dispatch with estimated total scope > 15 min.
-- Doc-roles pass between `ai-engineer` and any authoring role (per `core/doc-roles.md`).
-- User gives a timeframe (e.g., "spend 30 min on X", "do as much as you can in an hour") — see § Timeframe-bounded autonomous work.
+- Doc-roles pass between `ai-engineer` and any authoring role per `core/protocols/doc-roles.md`.
+- User-supplied timeframe ("spend 30 min on X", "do as much as you can in an hour") — see § Timeframe-bounded autonomous work.
 
-Default short tasks ( ≤ 15 min, no timeframe ) do not load this file.
+Default short tasks (≤ 15 min, no timeframe) do not load.
 
 ## Scope
 
-- All team work in Phases 4–7 (Implementation, Testing, Bug fixing, SA review) with estimated total scope > 15 min.
-- Doc-roles passes between `ai-engineer` and any authoring role (per `core/doc-roles.md`).
-
-**User intervention** bounded to:
-
-- Kickoff approval.
-- Final report.
+All team work in Phases 4–7 (Implementation · Testing · Bug fixing · SA review) with estimated total scope > 15 min, plus `ai-engineer` ↔ authoring-role doc-roles passes. User intervention bounded to kickoff approval + final report.
 
 ## Estimation-first dispatch
 
-- Before any code / tests / fixes / doc edits, each dispatched specialist MUST respond with:
-  - Task decomposition.
-  - Per-task time estimate.
-  - No edits yet.
-- Orchestrator:
-  1. Synthesizes all specialist proposals.
-  2. Surfaces total + per-task breakdown to the user when scope warrants.
-  3. Waits for approval or redirect before any specialist enters implement.
-- **Applies to** Phase 4, Phase 5, Phase 6, Phase 7, and `ai-engineer` ↔ authoring-role doc-roles passes (per `core/doc-roles.md`).
+Before any code / tests / fixes / doc edits, each dispatched specialist returns task decomposition + per-task time estimate. Orchestrator: synthesizes proposals → surfaces total + per-task to user when scope warrants → waits for approval before any specialist enters implement.
 
 ## Sizing
 
-| Estimated total scope | Approach |
+| Estimated scope | Approach |
 |---|---|
-| ≤ 15 min | Single iteration: specialist proposes full pass; reviewer (orchestrator / SA / user as appropriate) reviews; specialist implements. |
-| > 15 min | Multiple short iterations of 3–5 min each; each produces a visible partial result. Specialist scopes the next batch (3–7 sub-tasks) at the start of each iteration. |
+| ≤ 15 min | Single iteration: specialist proposes full pass · reviewer reviews · specialist implements. |
+| > 15 min | Multiple 3–5 min iterations, each producing a visible partial result. Specialist scopes next batch (3–7 sub-tasks) at iteration start. |
 
 ## Each iteration
 
-1. **Propose.**
-   - Specialist submits structured proposal listing each sub-task: change / where / why / risk / time estimate.
-   - For doc work, also include lossless evidence.
-   - **Adopt-vs-build axis.** Where the sub-task involves a choice between authoring new code / config and adopting an existing solution, surface the option list per `core/protocols/options-protocol.md` — ≥ 1 adopt candidate (with citation) or explicit `(none viable — <reason>)`. Inapplicable sub-tasks cite *"axis n/a — <reason>"* and skip.
-   - No edits yet.
-2. **Review.**
-   - Reviewer responds per item: accept / decline / accept-with-modification, each with one-line reasoning.
-   - **Reviewer identity:**
+1. **Propose.** Specialist submits structured proposal listing each sub-task — change / where / why / risk / time estimate. Doc work includes lossless evidence. **Adopt-vs-build axis** — surface the option list per `core/protocols/options-protocol.md` (≥ 1 adopt candidate with citation OR `(none viable — <reason>)`); inapplicable sub-tasks cite `"axis n/a — <reason>"`. No edits yet.
+2. **Review.** Reviewer responds per item: accept · decline · accept-with-modification — each with one-line reasoning.
 
-     | Work class | Reviewer |
-     |---|---|
-     | Doc semantics (any authoring role) | The doc's authoring role per `core/doc-roles.md § Authorship`. SA reviews for architectural coherence per `§ SA architectural-coherence review`. |
-     | Phase 4–7 engineering | orchestrator (surfacing to user when scope warrants) |
-3. **Implement.**
-   - Specialist executes accepted items.
-   - Applies reviewer's modifications.
-   - Runs domain self-check: build / lint / harness / lossless check as applicable.
-   - Updates cross-references in dependent files.
-   - Ends in a stoppable intermediate state per § Stoppable intermediate states.
+   | Work class | Reviewer |
+   |---|---|
+   | Doc semantics (any authoring role) | Authoring role per `core/protocols/doc-roles.md § Authorship`; SA reviews for architectural coherence. |
+   | Phase 4–7 engineering | Orchestrator (surface to user when scope warrants). |
+
+3. **Implement.** Specialist executes accepted items · applies reviewer modifications · runs domain self-check (build / lint / harness / lossless) · updates cross-refs in dependent files · ends in a stoppable intermediate state.
 
 ## Loop termination
 
-Any one of:
-
-- Specialist reports "no further productive proposals" in the next batch.
-- Specialist or reviewer hits semantic territory only the user can decide.
-- Pre-agreed budget exhausted.
-- User stops at any iteration boundary.
+Any one: specialist reports "no further productive proposals" · semantic territory only the user can decide · budget exhausted · user stops at any iteration boundary.
 
 ## Conflict resolution
 
-- **Doc semantics** → the doc's authoring role wins per `core/doc-roles.md § Authorship` (SA wins on architectural-coherence concerns).
-- **Implementation craft within a specialist's domain** → domain-owning specialist wins (per `local/bindings.md` → "Project role boundaries").
-- **Product intent** → user wins.
-- **Re-proposal limit.** Specialist may re-propose with new evidence ONCE per item. Second decline is final.
-
-## Orchestrator role
-
-- Dispatches the three steps each iteration.
-- Surfaces the estimation batch before implement.
-- Surfaces intermediate results when:
-  - User requests, OR
-  - An iteration revealed something to redirect on.
+- Doc semantics → authoring role wins per `core/protocols/doc-roles.md § Authorship` (SA wins on architectural-coherence).
+- Implementation craft within a domain → domain-owning specialist wins.
+- Product intent → user wins.
+- **Re-proposal limit** — specialist may re-propose with new evidence ONCE per item; second decline is final.
 
 ## Stoppable intermediate states
 
-Each iteration must leave the system in a valid, resumable state:
+Each iteration must leave the system valid + resumable:
 
-| Role | What "stoppable" means |
+| Role | "Stoppable" means |
 |---|---|
-| Engineers | No half-written code that breaks build, type-check, or per-project unit tests. |
-| QA | No partial test runs that pollute fixtures, leave seeded data behind, or leave local stack non-reproducible. |
-| Bug fixes | No half-applied contract changes (e.g. service half landed, client half pending) — gate behind feature flag or stage behind no-op default. |
+| Engineers | No half-written code that breaks build / type-check / per-project unit tests. |
+| QA | No partial test runs polluting fixtures · leaving seeded data behind · non-reproducible local stack. |
+| Bug fixes | No half-applied contract changes — gate behind feature flag or stage behind no-op default. |
 | Doc edits | No broken cross-references or orphaned sections. |
 
-**User stops at any iteration boundary.** Orchestrator's stop report:
-
-- **Done.** Sub-tasks completed, with files touched.
-- **In-progress.** Sub-task interrupted, with partial state recorded + concrete resume instructions (same partial-result format as § Timeframe-bounded autonomous work).
-- **Not-started.** Sub-tasks remaining in the approved batch, with original estimates intact.
-
-Continuation from the recorded state must require zero rework.
+**User stops at any iteration boundary.** Orchestrator's stop report — **Done** (sub-tasks completed · files touched) · **In-progress** (interrupted · partial state · concrete resume instructions) · **Not-started** (remaining in approved batch · original estimates intact). Continuation from recorded state must require zero rework.
 
 ### Scope-overrun trigger
 
-When apparent scope exceeds the initial estimate by **> 2×** (specialist's own estimate, OR orchestrator's estimate on in-thread work that should have been dispatched per `core/roles/team-lead.md § Forbidden actions`):
-
-- Specialist MUST stop at the next iteration boundary and report (done / in-progress / not-started per the stop-report format above) — never continue silently.
-- Orchestrator MUST force the same stop-and-report when observing the trigger in a specialist's reports or its own in-thread work, and re-resolve scope with the user.
+Apparent scope exceeds initial estimate by **> 2×** → specialist MUST stop at the next iteration boundary and report (Done / In-progress / Not-started). Orchestrator MUST force the same stop-and-report when observing the trigger in specialist reports OR its own in-thread work. Re-resolve scope with the user.
 
 ## Timeframe-bounded autonomous work
 
-**Trigger.** User gives a timeframe (e.g., "spend 30 min on X", "do as much as you can in an hour"). Orchestrator treats it as a budget for autonomous work.
+**Trigger.** User-supplied timeframe ("spend 30 min on X", "do as much as you can in an hour").
 
-- **Autonomy.** Work autonomously for the full period:
-  - Drive multi-specialist loops.
-  - Run sequential dispatches.
-  - Iterate.
-- **Checkpoint.** Boundary is the checkpoint — report at the end, not before.
-- **Result classes** — all three acceptable; honesty about which is required:
-
-  | Class | Meaning |
-  |---|---|
-  | **Full** | Everything done within the budget. |
-  | **Partial** | Ran out of budget mid-way. |
-  | **Early** | Done sooner than expected. |
-
-- **No per-iteration check-ins.** Valid mid-flight interrupts:
-  - Scope creep.
-  - Genuine ambiguity.
-  - Semantic conflict the orchestrator can't resolve.
-- **Partial results** — report must include:
-  - **done / in-progress / not-started** breakdown.
-  - Concrete resume instructions.
-- **Iteration.** Runs through this protocol until the timeframe expires; each iteration ends in a stoppable intermediate state.
+- **Autonomy.** Drive multi-specialist loops · sequential dispatches · iterations for the full period.
+- **Checkpoint.** Boundary IS the checkpoint — report at end, never before.
+- **Result classes** (honesty required): **Full** (everything done) · **Partial** (ran out mid-way) · **Early** (done sooner).
+- **No per-iteration check-ins.** Valid mid-flight interrupts: scope creep · genuine ambiguity · semantic conflict the orchestrator can't resolve.
+- **Partial results** include done / in-progress / not-started + concrete resume instructions.
+- **Iteration.** Runs through this protocol until timeframe expires; each iteration ends in a stoppable state.

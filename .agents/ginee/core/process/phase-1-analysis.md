@@ -1,6 +1,14 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [phase-1, analysis, elicitation]
+cap-bytes: 4096
+reads-before-applying: []
+---
+
 # Phase 1 — Analysis
 
-**Load triggers** — any cardinal whose `phase-participation:` includes `1`. Per-role roster: `team-lead` (always) · `solution-architect` (design dip) · the originating engineer if scope is engineer-elicited.
+**Load triggers** — TL (always) · SA (design dip) · originating engineer (when scope is engineer-elicited).
 
 - **Goal.** Bound scope; identify touched domains.
 - **Reads.** TODO line + relevant architecture sections + mockup + code.

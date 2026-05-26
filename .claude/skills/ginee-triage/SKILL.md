@@ -30,7 +30,7 @@ Optional positional arg narrows scope:
 
 ### Step 2 — parse scoring labels + markers
 
-Per `.agents/ginee/core/triage-scoring.md`:
+Per `.agents/ginee/core/protocols/triage-scoring.md`:
 
 - **Issues:** parse `value:high|medium|low` + `complexity:high|medium|low` from the `labels` array.
 - **TODOs:** parse `[v:H c:L]` inline marker (H/M/L, case-insensitive) between glyph and description; partial markers (`[v:H]` only / `[c:L]` only) handled; missing marker = unscored.
@@ -53,7 +53,7 @@ Render scores to 2 decimals. Unscored cells = `—`.
 
 - Primary sort: `Score DESC, Age DESC` (older first within tie).
 - Group unscored items at the bottom under a one-line header: *"Unscored — leverage unknown; ask reporter or auto-estimate on pickup."*
-- Worked example + sort contract: `triage-scoring.md § Examples`.
+- Worked example + sort contract: `core/protocols/triage-scoring.md § Examples`.
 
 ### Step 5 — close with explicit pickup instruction
 

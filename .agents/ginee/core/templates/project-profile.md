@@ -1,26 +1,11 @@
 # Project Profile — `local/project-profile.md` Template
 
 <!--
-  Scope:
-  - Per-project.
-  - Path: local/project-profile.md.
-  Authored by:
-  - team-lead during discovery.
-  - Refreshed on rediscover OR staleness flag.
-  Contents — detected snapshot of project shape:
-  - Stack.
-  - Domain.
-  - Architecture artefacts.
-  - SDLC artefacts.
-  Sibling files:
-  - local/bindings.md — per-project routing + role boundaries (handwritten, seeded by discovery).
-  - local/framework.config.yaml — concept → file-path mappings (machine-readable).
-  Lifecycle:
-  - Read-mostly for roles.
-  - team-lead OVERWRITES on rediscover.
-  Usage:
-  - Replace bracketed placeholders.
-  - Drop sections with no content (mark "(none detected)").
+  Per-project; authored by team-lead during discovery; refreshed on rediscover OR staleness flag.
+  Detected snapshot of project shape — stack · domain · architecture artefacts · SDLC artefacts.
+  Sibling: bindings.md (per-project routing + role boundaries) · framework.config.yaml (machine-readable mappings).
+  Read-mostly for roles; team-lead OVERWRITES on rediscover.
+  Replace bracketed placeholders; mark empty sections "(none detected)".
 -->
 
 ---
@@ -29,18 +14,11 @@
 
 **Generated:** `<YYYY-MM-DD>` by `team-lead`
 **Source:** `initial discovery | rediscovery | staleness refresh`
-**Revision:** `<N>` (incremented on each rediscovery)
+**Revision:** `<N>` (incremented per rediscovery)
 
 ## Domain
 
-<!--
-  Form:
-  - 2–4 sentence summary from README + top-level docs.
-  Rules:
-  - Cite the file(s).
-  - No invention.
-  - Empty README → say so, flag for the user.
--->
+<!-- 2–4 sentences from README + top-level docs. Cite the file(s); no invention. Empty README → flag for user. -->
 
 `<domain summary>`
 
@@ -48,23 +26,23 @@
 
 ## Tech stack
 
-| Layer | Choice | Source of evidence |
+| Layer | Choice | Evidence |
 |---|---|---|
-| Primary language(s) | `<e.g. C# / TypeScript / Python / Go>` | `<file(s)>` |
-| Server runtime | `<e.g. .NET 10 / Node.js 22 / Python 3.13 / Go 1.23>` | `<file(s)>` |
-| Server framework | `<e.g. ASP.NET Core / Express / FastAPI / Spring Boot>` | `<file(s)>` |
-| Server ORM / persistence | `<e.g. EF Core / Prisma / SQLAlchemy / Hibernate>` | `<file(s)>` |
-| Data store | `<e.g. PostgreSQL 16 / MongoDB 7 / DynamoDB>` | `<file(s)>` |
-| Real-time mechanism | `<e.g. SSE over LISTEN/NOTIFY / WebSocket via SignalR / change-stream>` | `<file(s)>` |
-| Auth approach | `<e.g. API key middleware on writes / OAuth2 / mTLS>` | `<file(s)>` |
-| Client framework | `<e.g. Angular 20 standalone / React 18 / Vue 3 / Svelte 5>` | `<file(s)>` |
-| Client state | `<e.g. NgRx Signal Store / Redux Toolkit / Pinia / Zustand>` | `<file(s)>` |
-| Client styling | `<e.g. Tailwind CSS / CSS Modules / Sass / Styled Components>` | `<file(s)>` |
-| Container runtime | `<e.g. Docker / Podman / none>` | `<file(s)>` |
-| Orchestration | `<e.g. Docker Compose for local / Azure Container Apps for prod>` | `<file(s)>` |
-| IaC | `<e.g. Terraform azurerm 4.x / Pulumi TypeScript / Bicep / none>` | `<file(s)>` |
-| CI/CD | `<e.g. GitHub Actions / GitLab CI / Azure Pipelines / Jenkins / none>` | `<file(s)>` |
-| Test runners | `<e.g. xUnit + Jest + Playwright + Pester>` | `<file(s)>` |
+| Primary language(s) | `<C# / TypeScript / Python / Go / …>` | `<files>` |
+| Server runtime | `<.NET 10 / Node.js 22 / Python 3.13 / Go 1.23 / …>` | `<files>` |
+| Server framework | `<ASP.NET Core / Express / FastAPI / Spring Boot / …>` | `<files>` |
+| Server ORM / persistence | `<EF Core / Prisma / SQLAlchemy / Hibernate / …>` | `<files>` |
+| Data store | `<PostgreSQL 16 / MongoDB 7 / DynamoDB / …>` | `<files>` |
+| Real-time mechanism | `<SSE over LISTEN/NOTIFY · WebSocket via SignalR · change-stream / …>` | `<files>` |
+| Auth approach | `<API key on writes · OAuth2 · mTLS / …>` | `<files>` |
+| Client framework | `<Angular 20 standalone · React 18 · Vue 3 · Svelte 5 / …>` | `<files>` |
+| Client state | `<NgRx Signal Store · Redux Toolkit · Pinia · Zustand / …>` | `<files>` |
+| Client styling | `<Tailwind · CSS Modules · Sass · Styled Components / …>` | `<files>` |
+| Container runtime | `<Docker / Podman / none>` | `<files>` |
+| Orchestration | `<Docker Compose for local · Azure Container Apps for prod / …>` | `<files>` |
+| IaC | `<Terraform azurerm 4.x / Pulumi TS / Bicep / none>` | `<files>` |
+| CI/CD | `<GitHub Actions / GitLab CI / Azure Pipelines / Jenkins / none>` | `<files>` |
+| Test runners | `<xUnit + Jest + Playwright + Pester / …>` | `<files>` |
 
 ## Architecture artefacts (referenced — not copied)
 
@@ -72,13 +50,13 @@
 |---|---|---|
 | Architecture doc | `<path or (none detected)>` | `present | absent — flag to user` |
 | Mockup | `<path or (none detected)>` | `present | absent` |
-| API contract | `<path or "inside architecture doc" or (none)>` | `present | absent` |
+| API contract | `<path or "inside SAD" or (none)>` | `present | absent` |
 | ADR directory | `<path or (none)>` | `present | absent` |
 | CR directory | `<path or (none)>` | `present | absent` |
 | Diagrams directory | `<path or (none)>` | `present | absent` |
-| Project-instruction file | `<CLAUDE.md / copilot-instructions.md / etc.>` | `present | absent` |
+| Project-instruction file | `<CLAUDE.md / copilot-instructions.md / AGENTS.md / …>` | `present | absent` |
 
-Source-doc summaries land in `local/index/` (one file per detected doc class — `architecture.idx`, `adr-index.idx`, `scenario-index.idx`, `api-matrix.yaml`, `ui-states.yaml`, `constraints.yaml`, plus any adopter-specific class). Roles read the index first; originals only when an entry needs verbatim consumption. Canonical record + per-source SHA-256: `local/index/manifest.yaml`. Spec: `core/protocols/index-protocol.md`.
+Source-doc summaries land in `local/index/*` (`architecture.idx · adr-index.idx · scenario-index.idx · api-matrix.yaml · ui-states.yaml · constraints.yaml` + adopter-specific). Roles read index first; canonical record + SHA-256: `local/index/manifest.yaml`. Spec: `core/protocols/index-protocol.md`.
 
 ## SDLC artefacts
 
@@ -97,15 +75,14 @@ Source-doc summaries land in `local/index/` (one file per detected doc class —
 
 ```
 <project root>/
-├── <top-level dir 1>/    <one-line description>
-├── <top-level dir 2>/    <one-line description>
-├── <top-level dir 3>/    <one-line description>
+├── <top-level dir 1>/    <one-line>
+├── <top-level dir 2>/    <one-line>
 └── ...
 ```
 
 ## Detected tiers + role attributions
 
-| Tier | Path | Default cardinal owner |
+| Tier | Path | Owner |
 |---|---|---|
 | Server | `<path>` | `backend-engineer` |
 | Client | `<path>` | `frontend-engineer` |
@@ -115,7 +92,7 @@ Source-doc summaries land in `local/index/` (one file per detected doc class —
 | Tests | `<path>` | `qa-engineer` |
 | Architecture docs | `<path>` | `solution-architect` |
 
-**Defaults don't fit?** Refine in `local/bindings.md`.
+Defaults don't fit → refine in `local/bindings.md`.
 
 ## Active roles
 
@@ -123,45 +100,39 @@ Source-doc summaries land in `local/index/` (one file per detected doc class —
 |---|---|
 | `team-lead` | always active |
 | `solution-architect` | `active | inactive` |
-| `frontend-engineer` | `active | inactive — no client tier detected` |
-| `backend-engineer` | `active | inactive — no server tier detected` |
-| `devops-engineer` | `active | inactive — no infra/CI detected` |
-| `qa-engineer` | `active | inactive — no test surface detected` |
-| `ai-engineer` | always available (between-phase invocation) |
+| `frontend-engineer` | `active | inactive — no client tier` |
+| `backend-engineer` | `active | inactive — no server tier` |
+| `devops-engineer` | `active | inactive — no infra/CI` |
+| `qa-engineer` | `active | inactive — no test surface` |
+| `ai-engineer` | always available (between-phase) |
 
 ## Project-local roles (under `local/roles/`)
 
-| Role file | Description (from front-matter) |
+| Role file | Description (from frontmatter) |
 |---|---|
-| `<local/roles/<name>.md>` | `<one-line>` |
+| `local/roles/<name>.md` | `<one-line>` |
 
 ## Specialist suggestions (from `extras/roles/`)
 
-<!--
-  Status:
-  - Recommendations from discovery.
-  - NOT enabled.
-  Opt-in:
-  - User copies the chosen file into local/roles/.
--->
+Recommendations only — NOT enabled. User copies into `local/roles/` to opt in.
 
-| Suggested specialist | Trigger |
+| Specialist | Trigger |
 |---|---|
-| `<e.g. security-engineer>` | `<one-line evidence>` |
+| `<security-engineer>` | `<one-line evidence>` |
 
 ## Out-of-scope / non-applicable
 
 | Item | Reason |
 |---|---|
-| `<e.g. mobile-engineer suggestion declined>` | `<one-line>` |
+| `<mobile-engineer suggestion declined>` | `<one-line>` |
 
 ## Staleness watchlist
 
-<!-- Triggers auto-staleness flag (per core/roles/team-lead.md § Auto-flag staleness). -->
+Triggers auto-staleness flag per `team-lead.md § Auto-flag staleness`.
 
 | Trigger | Where |
 |---|---|
-| New top-level directory not listed above | repo root |
-| New file type not represented in the tech-stack table | anywhere |
+| New top-level directory not listed | repo root |
+| New file type not in tech-stack table | anywhere |
 | New CI workflow file | `<CI workflows path>` |
-| Significant new doc not listed in architecture artefacts | `<docs directory>` |
+| Significant new doc not in architecture artefacts | `<docs directory>` |

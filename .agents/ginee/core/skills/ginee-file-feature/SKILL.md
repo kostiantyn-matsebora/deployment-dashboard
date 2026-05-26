@@ -5,25 +5,25 @@ description: File a feature request against the primary GitHub repo (the adopter
 
 # File feature — primary repo
 
-Run the file-an-issue workflow per `.agents/ginee/core/github-integration.md § Outbound — file an issue` with target = primary repo, template = feature-request.
+Run the file-an-issue workflow per `.agents/ginee/core/protocols/github-integration.md § Outbound — file an issue` with target = primary repo, template = feature-request.
 
 ## Activation
 
-- User asks to "file a feature" / "request a feature" / "create a feature request" without mentioning the framework upstream.
-- User describes new functionality and wants it tracked.
+"file a feature" / "request a feature" / "create a feature request" for the current project. Cheat sheet: `adapters/_shared/install-common.md § Skill cheat sheet`.
 
 ## Procedure
 
-1. Load `.agents/ginee/core/github-integration.md` and `.agents/ginee/core/templates/issues/feature-request.md`.
+1. Load `.agents/ginee/core/protocols/github-integration.md` + `.agents/ginee/core/templates/issues/feature-request.md`.
 2. Resolve target repo (same as `ginee-file-bug`).
-3. Draft the body from the feature-request template. Populate `## Summary`, `## Motivation`, `## Proposed behavior`, `## Affected area`, `## FR / NFR`, `## Acceptance criteria`, `## Out of scope`, `## References` from user prompt + project context. Present multiple design options when the user requested ideas / alternatives.
-4. **Self-lint the draft** against `.agents/ginee/core/process.md § Mandatory checks before report-as-done` — **every section, including Summary**. Catch: prose paragraphs > 2 sentence terminators · comma-separated inventories (incl. parenthetical lists) · multi-rule single-line statements · inventories not rendered as tables.
-5. **Surface the draft for user approval.** Include any self-lint findings + proposed restructure as part of the approval prompt.
-6. On approval, create the issue with `ready-label`. Tool priority: gh CLI → GitHub MCP → HTTPS.
+3. Draft body from template; populate all sections from user prompt + project context. Present alternatives when user requested ideas.
+4. **Self-lint** against `core/process.md § Mandatory checks before report-as-done` (every section incl. Summary).
+5. **Surface draft for approval**; include self-lint findings.
+6. On approval: `gh issue create` (priority) / GitHub MCP / HTTPS+token. Label: `ready-label`; auto-create if absent.
 7. Report URL + number.
 
 ## Forbidden
 
 - Never publish silently.
-- Never target the framework upstream — use `ginee-file-framework-feature`.
-- Never pre-commit to one design approach when the user asked for ideas — present alternatives in `## Proposed behavior`.
+- Never target framework upstream — use `ginee-file-framework-feature`.
+- Never pre-commit to one design when user asked for ideas — present alternatives in `## Proposed behavior`.
+- Skill-runner per `core/process/dispatch.md § Skill-runner — surface boundary`.

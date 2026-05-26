@@ -1,3 +1,11 @@
+---
+audience: ai-engineer
+load: on-demand
+triggers: [idx, index-syntax, flat-record]
+cap-bytes: 4096
+reads-before-applying: [core/protocols/index-protocol.md]
+---
+
 # `.idx` syntax — compact DSL for flat-record indexes
 
 **Load-on-demand.** Fetched when a role or `ai-engineer` first reads or writes any `local/index/*.idx` file in a session. Not needed for YAML index files (`api-matrix.yaml`, `ui-states.yaml`, `constraints.yaml`, `manifest.yaml`).

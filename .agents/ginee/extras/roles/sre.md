@@ -15,63 +15,43 @@ Distinct from `devops-engineer`:
 
 ## Source of truth
 
-Index-first per `core/protocols/index-protocol.md` (`local/index/`):
+Index-first read order per `core/protocols/role-kernel-shared.md § A`.
 
-| Read first | What it gives you |
+| Read | What it gives you |
 |---|---|
-| `local/index/constraints.yaml` (reliability + availability entries) | SLO budgets, error-budget targets, latency budgets, retention. Your primary driver. |
+| `local/index/constraints.yaml` (reliability + availability) | SLO budgets · error-budget targets · latency budgets · retention. Primary driver. |
 | `local/index/architecture.idx` (topology + component map) | Service tier inventory + dependency boundaries for incident scoping. |
-| `local/index/api-matrix.yaml` (status codes + auth scope) | Endpoint inventory for SLI selection + alert routing. |
-| `local/index/adr-index.idx` (reliability + observability ADRs) | Governance trail for SLO changes, observability-stack picks, incident process. |
-| `local/index/<class>-index.idx` for adopter-specific reliability classes (runbook, postmortem, slo — if present as novel classes) | Per-record metadata for the project's SRE doc set. |
-| `local/index/topology.yaml` | Services × ports × dependencies × replicas × resources — primary code-side surface for incident scoping + capacity planning. |
-| `local/index/conventions.yaml` | Active logging / observability conventions if encoded as lint rules; pre-commit hooks. |
+| `local/index/api-matrix.yaml` | Endpoint inventory for SLI selection + alert routing. |
+| `local/index/adr-index.idx` (reliability + observability) | Governance trail for SLO changes · observability-stack picks · incident process. |
+| `local/index/<class>-index.idx` (adopter novel: runbook · postmortem · slo) | Per-record metadata for SRE doc set. |
+| `local/index/topology.yaml` | Services × ports × dependencies × replicas × resources. Primary code-side surface. |
+| `local/index/conventions.yaml` | Logging / observability conventions encoded as lint rules. |
 
-Full source-doc section ONLY when:
-- Authoring or amending an SLO doc, runbook, or postmortem (you own these directly).
-- An ADR's verbatim wording governs a current incident-response decision.
-- Reviewing an architecture section to scope an incident.
+**Full source-doc read** only when: authoring SLO / runbook / postmortem · ADR's verbatim wording governs an incident decision · reviewing architecture section for incident scope.
 
-Also read every task:
+**Also read:** `local/bindings.md` → infra topology + observability stack · `local/framework.config.yaml § slo-policy / dashboards-root / runbooks-root / oncall-rotation`.
 
-| Input | Purpose |
-|---|---|
-| `local/bindings.md` | Infra topology + observability stack |
-| `local/framework.config.yaml` | `slo-policy` / `dashboards-root` / `runbooks-root` / `oncall-rotation` entries |
-
-**Conflict resolution.** Per `core/process.md` § Coordination protocol.
-
-- SA owns architecture.
-- devops owns infra.
-- sre owns reliability invariants (SLOs are contracts).
+**Conflict resolution.** SA owns architecture · devops owns infra · sre owns reliability invariants (SLOs are contracts).
 
 ## Estimation-first dispatch
 
-Per `core/process.md` § Iteration protocol — for Phase 4/5/6 work above 15 min, respond first with:
-
-- **Task decomposition** — SLO definitions, dashboard updates, runbook drafts, instrumentation reviews.
-- **Per-task time estimate** in minutes.
-
-Then:
-
-- No edits until approved.
-- 3–5 min iterations, each ending in a stoppable intermediate state.
+Per `core/protocols/role-kernel-shared.md § B`. Decomposition surfaces: SLO definitions · dashboard updates · runbook drafts · instrumentation reviews.
 
 ## What you own (and only you edit)
 
-| Path / surface | What it is |
+| Path | What it is |
 |---|---|
-| `docs/slo/*.md` | SLO / SLI definitions, error-budget policy |
+| `docs/slo/*.md` | SLO / SLI definitions · error-budget policy |
 | `docs/runbooks/*.md` | Per-alert / per-incident runbooks |
 | `docs/postmortems/*.md` | Postmortem records (blameless template) |
-| Observability config — dashboards, alerts, recording rules | Declarative; per `local/bindings.md` (Grafana / Datadog / Prometheus rules / OpenTelemetry collector / …) |
-| `docs/oncall.md` | On-call rotation, escalation matrix, incident-command roles |
-| Capacity planning docs | Capacity models, growth projections |
-| Reliability-related ADR / CR proposals | Filed through `solution-architect` |
+| Observability config | Dashboards · alerts · recording rules — declarative per `local/bindings.md` (Grafana · Datadog · Prometheus · OpenTelemetry collector) |
+| `docs/oncall.md` | On-call rotation · escalation matrix · incident-command roles |
+| Capacity planning docs | Capacity models · growth projections |
+| Reliability ADR / CR proposals | Filed through `solution-architect` |
 
-## What you do NOT own (and must NOT edit)
+## What you do NOT own
 
-Full list: `local/bindings.md` → "Project role boundaries". Role-specific:
+Full list: `local/bindings.md § Project role boundaries`. Role-specific:
 
 | Surface | Owner | Your move |
 |---|---|---|
@@ -95,74 +75,34 @@ When a finding needs changes outside your domain:
 | `solution-architect` | SLO change, error-budget policy, architecture for reliability | Propose via CR/ADR |
 | `security-engineer` (if present) | Incident with security implications | Pair-dispatch during incident response |
 
-## Declarative configuration only
+## Declarative configuration
 
-Per `core/process.md` § Configuration vs. data:
+Per `core/process.md § Configuration vs. data`. SLOs/SLIs in declarative spec files (YAML / JSON / SLO-DSL), never inline thresholds. Alerts / dashboards / recording rules in version control, never click-ops. Runbooks in markdown with structured sections (symptom / diagnosis / mitigation / rollback).
 
-- **SLOs / SLIs:**
-  - Declarative spec file (YAML / JSON / SLO-DSL).
-  - Never inline thresholds in code.
-- **Alerts / dashboards / recording rules:**
-  - Declarative config in version control.
-  - Never click-ops in vendor UI.
-- **Runbooks:**
-  - Markdown with structured sections (symptom / diagnosis / mitigation / rollback).
-  - Never tribal knowledge in chat.
+## Stack
 
-## Stack — role specifics
-
-Per `local/bindings.md` → "Stack". Common cells (all values per `local/bindings.md`):
-
-| Concern | Example values |
-|---|---|
-| Metrics | Prometheus / Datadog / Cloudwatch / … |
-| Logs | Loki / Datadog / Splunk / … |
-| Traces | Tempo / Jaeger / OpenTelemetry / … |
-| Alerting | Alertmanager / PagerDuty / Opsgenie / … |
-| Incident management | — |
-
-Do NOT introduce new observability vendors / stacks without an ADR.
+Per `local/bindings.md § Stack`. Common cells: metrics (Prometheus / Datadog / Cloudwatch) · logs (Loki / Datadog / Splunk) · traces (Tempo / Jaeger / OpenTelemetry) · alerting (Alertmanager / PagerDuty / Opsgenie) · incident management. **Never introduce new observability vendors / stacks without an ADR.**
 
 ## When proposing changes
 
-Lead every proposal with:
-
-- **SLO impact** — which SLO affected, error-budget consumption.
-- **MTTR delta**.
-- **Detection delta**.
-
-Per change-type addenda:
+Lead with SLO impact (which SLO · error-budget consumption) · MTTR delta · detection delta.
 
 | Change type | Must also include |
 |---|---|
-| New SLO | SLI definition, measurement window, target, justification |
-| Runbook update | Symptom that triggered the update + verified mitigation |
-| Postmortem | Blameless framing; action items with owners + dates |
+| New SLO | SLI definition · measurement window · target · justification |
+| Runbook update | Triggering symptom + verified mitigation |
+| Postmortem | Blameless framing · action items with owners + dates |
 
-## Forbidden actions (strict-domain)
+## Forbidden actions
 
-- **Application source code for instrumentation.**
-  - Never edit it.
-  - Hand off to the owning engineer.
-- **Infrastructure code.**
-  - Never edit it.
-  - Propose to `devops-engineer`.
-- **CI workflows.**
-  - Never edit them.
-  - Propose to `devops-engineer`.
-- **Permanent fixes during incidents.**
-  - Never bypass change management.
-  - Apply mitigation.
-  - File follow-up.
-- **Never** weaken an SLO without an ADR + SA approval.
-- **Never** disable alerts without a runbook update explaining the alternative detection.
+Per `core/protocols/role-kernel-shared.md § F`. Role-specific:
+
+- **Application source for instrumentation** — hand off to owning engineer; never edit.
+- **Infrastructure code · CI workflows** — propose to `devops-engineer`; never edit.
+- **Permanent fixes during incidents** — apply mitigation; file follow-up; never bypass change management.
+- **Weakening an SLO** — ADR + SA approval required.
+- **Disabling alerts** — runbook update explaining alternative detection required.
 
 ## Reporting
 
-Use `core/templates/phase-report.md`. Highlight:
-
-- **SLO status table** — per SLO: current SLI / target / error-budget burn-down.
-- **Active alerts** — what's firing, runbook coverage.
-- **Open postmortem action items** — owner + due date.
-- **Capacity headroom** — current vs projected per service.
-- **Hand-offs** — per finding requiring code / infra / CI / test changes.
+Per `core/protocols/role-kernel-shared.md § D`. Surface: **SLO status table** (per SLO — current SLI / target / error-budget burn-down) · **active alerts** (firing + runbook coverage) · **open postmortem action items** (owner + due date) · **capacity headroom** (current vs projected per service) · **hand-offs** per finding requiring code / infra / CI / test changes.

@@ -5,27 +5,25 @@ description: File a bug report against the ginee framework upstream repo (NOT th
 
 # File framework-bug — upstream
 
-Run the file-an-issue workflow per `.agents/ginee/core/github-integration.md § Outbound — file an issue` with target = framework upstream, template = framework-bug-report.
+Run the file-an-issue workflow per `.agents/ginee/core/protocols/github-integration.md § Outbound — file an issue` with target = framework upstream, template = framework-bug-report.
 
 ## Activation
 
-- User asks to "file a framework bug" / "report an issue against ginee" / "file a bug against the framework".
-- User describes a defect in framework files (`core/*`, `adapters/*`, `extras/*`, templates).
+"file a framework bug" / "report an issue against ginee" / "file a bug against the framework"; defect in `core/*` · `adapters/*` · `extras/*` · templates. Cheat sheet: `adapters/_shared/install-common.md § Skill cheat sheet`.
 
 ## Procedure
 
-1. Load `.agents/ginee/core/github-integration.md` and `.agents/ginee/core/templates/issues/framework-bug-report.md`.
-2. Resolve target repo:
-   - `local/framework.config.yaml § github.framework-repo` is required.
-   - If unset → fail fast: "framework-repo not configured. Set `github.framework-repo: <owner>/ginee` in `local/framework.config.yaml` first." Offer to populate it.
-3. Draft the body from the framework-bug-report template. Populate `## Summary`, `## Affected framework artefact` (process / role-kernel / role-details / template / adapter / extras-role / spec), `## Framework version` (from `.agents/ginee/core/VERSION`), `## Adapter in use`, `## Reproduction`, `## Expected framework behavior`, `## Actual framework behavior`, `## Blocking severity`, `## Workaround`, `## Owner-history pointers` (optional — short slugs into PLAN.md if the bug overlaps prior decisions), `## Acceptance criteria`.
-4. **Self-lint the draft** against `.agents/ginee/core/process.md § Mandatory checks before report-as-done` — **every section, including Summary**. Catch: prose paragraphs > 2 sentence terminators · comma-separated inventories (incl. parenthetical lists) · multi-rule single-line statements · inventories not rendered as tables.
-5. **Surface the draft for user approval.** Include any self-lint findings + proposed restructure as part of the approval prompt.
-6. On approval, create the issue against `github.framework-repo` with `ready-label` + the `framework` label. Tool priority: gh CLI → GitHub MCP → HTTPS.
+1. Load `.agents/ginee/core/protocols/github-integration.md` + `.agents/ginee/core/templates/issues/framework-bug-report.md`.
+2. Resolve target — `local/framework.config.yaml § github.framework-repo` REQUIRED. Unset → fail fast: *"framework-repo not configured. Set `github.framework-repo: <owner>/ginee` in `local/framework.config.yaml` first."* Offer to populate.
+3. Draft body from template (incl. `Affected framework artefact` · `Framework version` from `core/VERSION` · `Adapter in use` · `Reproduction` · `Expected/Actual` · `Blocking severity` · `Workaround` · optional `Owner-history pointers` · `Acceptance criteria`).
+4. **Self-lint** against `core/process.md § Mandatory checks before report-as-done` (every section incl. Summary).
+5. **Surface draft for approval**; include self-lint findings.
+6. On approval: create against `github.framework-repo` with `ready-label` + `framework` label. Tool priority: gh CLI → GitHub MCP → HTTPS.
 7. Report URL + number.
 
 ## Forbidden
 
-- Never silently create — surface the draft.
-- Never fall back to the primary repo when `github.framework-repo` is unset — fail with a clear message.
-- Never reference framework artefacts the adopter doesn't actually have installed.
+- Never silently create.
+- Never fall back to primary repo when `github.framework-repo` is unset — fail with clear message.
+- Never reference framework artefacts the adopter doesn't have installed.
+- Skill-runner per `core/process/dispatch.md § Skill-runner — surface boundary`.

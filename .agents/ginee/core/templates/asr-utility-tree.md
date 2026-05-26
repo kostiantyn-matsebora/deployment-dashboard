@@ -18,7 +18,7 @@
 
   Authority:
   - solution-architect owns content (semantics) per `core/roles/solution-architect.md § Design`.
-  - ai-engineer owns shape per `core/doc-roles.md`.
+  - ai-engineer owns shape per `core/protocols/doc-roles.md`.
   - ADRs cite the ASR(s) they address.
 -->
 
@@ -30,7 +30,7 @@
 
 Each branch below is a **quality attribute** (performance, availability, security, ...). Each leaf is a **scenario** — a concrete situation that exercises the attribute, rated `(business value, architectural impact)`. Scenarios rated `(H, H)` are **Architecturally Significant Requirements (ASRs)** and drive architecture decisions.
 
-ATAM convention: rate on H / M / L. Per `core/triage-scoring.md` numeric mapping: `H=3, M=2, L=1` for any cross-tool sorting.
+ATAM convention: rate on H / M / L. Per `core/protocols/triage-scoring.md` numeric mapping: `H=3, M=2, L=1` for any cross-tool sorting.
 
 ## Utility tree
 
