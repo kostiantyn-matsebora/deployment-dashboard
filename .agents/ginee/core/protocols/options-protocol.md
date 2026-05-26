@@ -1,3 +1,11 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [options, adopt-vs-build, proposal, phase-2]
+cap-bytes: 8192
+reads-before-applying: []
+---
+
 # Option protocol — adopt-vs-build proposal shape
 
 **Load-on-demand.** Fetched by the proposing role on activation. 5 mandatory checks below run **before surfacing**; no edits / no dispatch until the option list passes.
@@ -16,13 +24,6 @@
 |---|
 | Phase 2 design proposals — architecture · ADRs · CRs · wire / mockup contracts |
 | Iteration-protocol Propose step — Phase 4–7 sub-tasks with a live adopt-vs-build axis |
-
-### Out of scope
-
-- **Local bug fixes** without an adoption axis (per `core/protocols/iteration-protocol.md § Conflict resolution` — engineer domain).
-- **Existing closed proposals.** Forward-only; no retroactive rewrite.
-- **License gating.** Framework requires citation, expresses no opinion on which licenses pass. Adopter authors a `local/` policy if gating is wanted.
-- **External lint enforcement.** LLM self-review only — same machinery as the doc-authoring + phase-report protocols.
 
 ## Option-list schema
 
@@ -95,7 +96,7 @@ Options:
 - build — minimal in-house — see ADR draft.
 ```
 
-Bad / good doc-style examples for option lists: `core/doc-authoring-examples.md § 11`.
+Bad / good doc-style examples for option lists: `core/protocols/doc-authoring-examples.md § 11`.
 
 ## Enforcement
 
@@ -108,16 +109,6 @@ Bad / good doc-style examples for option lists: `core/doc-authoring-examples.md 
 
 **No external linter.** LLM self-review against the rules above; same machinery as the doc-authoring protocol.
 
-## Interaction with other framework surfaces
-
-| Surface | Interaction |
-|---|---|
-| `core/protocols/doc-authoring-protocol.md` | Doc-shape rules apply to surrounding proposal text; this protocol adds the option-shape layer on top. |
-| `core/roles/solution-architect.md` | SA `§ Design § Phase 2` lists adopt-vs-build as a first-class design axis. SA Review on engineer-proposed architectural changes inspects the option list. |
-| GitHub artefacts (issue bodies · framework comments) | Option lists in ginee-authored artefacts follow both the doc-authoring shape rules and the option-shape rules here — both lints run. |
-| `core/templates/phase-report.md` | Option lists in a return land under `## Decisions made` (one-line each, cite) or capped `## Notes` carve-out (≤ 200 words) when longer. No new section. |
-| `core/delivery-modes.md` | Mode selection itself is a Phase 3 question — not an adopt-vs-build choice. Out of scope. |
-
 ## Reporting
 
-Outcomes land in `## Decisions made` (one-line each — `<verb> <choice> — cite`). Full option list lives in the proposal artefact (architecture doc · ADR · CR · iteration-protocol Propose output) — the return cites the artefact path, never restates the table.
+Outcomes land in `## Decisions made` (one-line — `<verb> <choice> — cite`). Full option list lives in the proposal artefact; the return cites the artefact path, never restates.

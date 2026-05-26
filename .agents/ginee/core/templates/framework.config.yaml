@@ -1,110 +1,64 @@
 # ginee — framework.config.yaml template
-# Header:
-#   - Path: local/framework.config.yaml.
-#   - Authored by: team-lead (during discovery).
-# Purpose:
-#   - Map abstract concepts → concrete project file paths.
-#   - Reference, never copy.
-# Usage:
-#   - Replace example values.
-#   - Leave commented-out concepts when not present.
-#   - Do NOT invent paths.
+# Path: local/framework.config.yaml. Authored by team-lead during discovery.
+# Maps concept → concrete project paths. Per-block specs live in core/protocols/*.
+# Replace example values; comment out concepts not present.
 
 # --- Source of truth ---
-architecture-doc: docs/architecture.md
-# SAD — System Architecture Document.
-#   - Requirements.
-#   - Constraints.
-#   - Components.
-#   - Data model.
-#   - API.
-#   - Decisions.
-#   - Owner: solution-architect.
-mockup: docs/mockup.html
-# Mockup.
-#   - Visual + behavioural client contract.
-#   - Owner: frontend-engineer.
-#   - Reviewed by: solution-architect.
-#   - Comment out if none.
+architecture-doc: docs/architecture.md   # SAD — solution-architect owns
+mockup: docs/mockup.html                 # frontend-engineer owns; SA reviews
+# api-contract: docs/api.md              # omit when API lives in the SAD
+work-breakdown-doc: docs/WBS.md          # team-lead owns
+# ci-cd-integration-doc: docs/ci-cd-integration.md
 
 # --- Visual source-of-truth blueprint-diff gate ---
-# Phase 4 entry precondition for any dispatch touching the visual SoT path.
-# Diff working copy vs blueprint-ref; classify Expected / Unexpected / Pre-existing;
-# Unexpected → forced-interactive gate before edits begin.
+# Phase 4 precondition for any dispatch touching the visual SoT.
+# Defaults derive from `mockup:` when absent (type per extension; blueprint-ref=origin/main;
+# scope-discriminator=block-glob; enabled=true). Override for non-trunk / Figma / image / video.
 # Full spec: core/protocols/blueprint-diff-protocol.md.
-#
-# All keys optional — framework defaults derive from `mockup:` above when absent:
-#   type            html-mockup if `mockup:` ends .html/.htm; otherwise `other`
-#   path            value of `mockup:`
-#   blueprint-ref   origin/main
-#   scope-discriminator  block-glob
-#   enabled         true
-#
-# Override for non-trunk mainlines / Figma / image / video / adopter-supplied tools.
 # visual-source-of-truth:
-#   type: html-mockup           # html-mockup | figma | image | video | other
-#   path: docs/mockup.html      # working-copy path or external URL
-#   blueprint-ref: origin/main  # git ref / tag / commit / external URL / file path
-#   scope-discriminator: block-glob  # block-glob | section-anchor | full-file | external
+#   type: html-mockup            # html-mockup | figma | image | video | other
+#   path: docs/mockup.html
+#   blueprint-ref: origin/main
+#   scope-discriminator: block-glob   # block-glob | section-anchor | full-file | external
 #   enabled: true
-# api-contract: docs/api.md
-#   - Standalone API contract.
-#   - Omit when API lives inside the SAD.
-work-breakdown-doc: docs/WBS.md
-# WBS — Operational work-breakdown.
-#   - Per-phase items.
-#   - Milestones.
-# ci-cd-integration-doc: docs/ci-cd-integration.md
-#   - Operational companion to the SAD.
 
 # --- Change governance ---
 adr-directory: docs/adr/
-# ADRs — Architecture Decision Records.
 cr-directory: docs/cr/
-# CRs — Change Requests.
-ui-directory: docs/ui/
-# UI mockup / interaction docs.
-#   - Per-screen interaction notes.
-#   - Component-shape docs.
-#   - Comment out if none; subject to doc-size-caps when set.
+ui-directory: docs/ui/                   # comment out if absent; subject to doc-size-caps
 diagrams-directory: docs/diagrams/
-# Diagrams.
-#   - C4.
-#   - Sequence.
-#   - Deployment.
+
+# --- Change-governance gating + opt-out ---
+# Gates CR / ADR authorship BEFORE drafting. Per-task prefixes (cr: / nocr: / adr: / noadr:)
+# override at dispatch time. Precedence: prefix > config > default; explicit-force > skip.
+# Full spec: core/roles/team-lead.md § CR-gate + core/roles/solution-architect.md § ADR-gate.
+change-governance:
+  cr:
+    enabled: true                        # false → skip-reason: config-disabled
+    skip-when-issue-source: true         # issue IS the requirement record
+  adr:
+    enabled: true
+    require-architectural-delta: true    # no delta-trigger match → skip
+  prompt-before-create: non-trivial      # always | never | non-trivial
 
 # --- Per-class doc-size caps ---
-# Total file-size cap per doc class. Breach without `Optimized-By: ai-engineer`
-# trailer fails `scripts/context-economy-check.ps1`. Defaults shown; override
-# per class. Full spec: core/protocols/doc-size-caps.md.
-#
+# Breach without `Optimized-By: ai-engineer` trailer fails the context-economy gate.
+# Full spec: core/protocols/doc-size-caps.md.
 # doc-size-caps:
-#   adr:
-#     cap-bytes: 4096          # default
-#   cr:
-#     cap-bytes: 6144          # default
-#   ui:
-#     cap-bytes: 4096          # default
-#   # ui: disabled             # opt out for this class
+#   adr:  { cap-bytes: 4096 }            # default 4096
+#   cr:   { cap-bytes: 6144 }            # default 6144
+#   ui:   { cap-bytes: 4096 }            # default 4096
+#   # ui: disabled                       # opt out for this class
 
 # --- Task & workflow ---
 todo: TODO
-# Repo-root TODO file.
-#   - User-curated open items.
-nested-todos-glob: "**/TODO"
-# Nested per-component TODOs.
-#   - Glob.
-#   - null if unused.
-# Always-loaded project-instruction file — path varies per adapter:
-#   - claude → CLAUDE.md
-#   - copilot → .github/copilot-instructions.md
-#   - cursor → .cursor/rules/*.mdc
-#   - codex → AGENTS.md
-#   - generic → INSTRUCTIONS.md
+nested-todos-glob: "**/TODO"             # null if unused
+# Always-loaded project-instruction file — per adapter:
+#   claude → CLAUDE.md · copilot → .github/copilot-instructions.md
+#   cursor → .cursor/rules/*.mdc · codex → AGENTS.md · generic → INSTRUCTIONS.md
 project-instruction-file: CLAUDE.md
 
 # --- Repository structure ---
-# Used by team-lead to attribute paths to roles.
 server-tier-path: backend/
 client-tier-path: frontend/
 infrastructure-path: infrastructure/
@@ -112,9 +66,7 @@ local-dev-path: dev_env/
 testing-path: testing/
 ci-workflows-path: .github/workflows/
 
-# --- Stack identity ---
-# Declarative summary.
-#   - Full detail in local/project-profile.md.
+# --- Stack identity --- (full detail in local/project-profile.md)
 stack:
   server-language: <e.g. C# / TypeScript / Python / Go>
   server-framework: <e.g. ASP.NET Core / Express / FastAPI / Spring Boot>
@@ -125,8 +77,7 @@ stack:
   ci-tool: <GitHub Actions / GitLab CI / Azure Pipelines / Jenkins / none>
   container-runtime: <Docker / Podman / none>
 
-# --- Hard constraints ---
-# Mirror of local/bindings.md → "Hard constraints".
+# --- Hard constraints --- (mirror of local/bindings.md → "Hard constraints")
 constraints:
   hosting-cloud: <e.g. Azure / AWS / GCP / none>
   cost-cap-usd-per-month: <number or null>
@@ -136,133 +87,91 @@ constraints:
 
 # --- Tooling commands ---
 local-dev-startup-command: pwsh -NoProfile -File dev_env/start.ps1
-# Surfaced by team-lead when asking for manual smoke.
 
-# Test-runner entry points.
-#   - Per core/roles/qa-engineer.md § Zero-setup rule for test runners.
-test-runners:
+test-runners:                            # QA-owned only
   functional: testing/functional/run-tests.ps1
   e2e: testing/e2e/run-tests.ps1
   smoke: testing/smoke/run-smoke.ps1
   script-suite: testing/pester/run-pester.ps1
-  # script-suite above = QA-owned scripts only (seed / cleanup / smoke / scenario harness).
-  # DevOps-owned scripts have their own keys below — see § DevOps script quality.
 
 # --- DevOps script quality ---
-# Lint + unit-test + coverage obligation for every devops-owned script change
-# (PowerShell + bash). Spec: core/roles/devops-engineer.md § Script-quality
-# obligation.
+# Spec: core/roles/devops-engineer.md § Script-quality obligation.
 devops-scripts:
-  # Path containing devops-owned unit tests (Pester *.Tests.ps1 / *.bats).
-  #   - NOT QA's testing/ tree.
-  #   - Typically sibling tests/ next to each script root (e.g. dev_env/tests/,
-  #     .github/actions/<name>/tests/).
-  tests-path: tests/
-  # Coverage threshold (line coverage on the changed + added line set).
-  #   - Framework default: 90.
-  #   - Adopter may raise (stricter) or lower (catch-up periods); any
-  #     deviation visible in PR.
-  coverage-threshold: 90
-  # bash coverage tool (Pester is native via Invoke-Pester -CodeCoverage).
-  #   - bashcov | kcov | null (skip when no bash scripts under devops).
-  coverage-tool-bash: bashcov
-  # Optional grace window — declare an adopter-wide catch-up period for
-  # raising coverage on existing devops scripts. Format: ISO date or
-  # backfill-tracking issue reference (e.g. "issue-42").
-  # coverage-grace: 2026-09-01
+  tests-path: tests/                     # NOT QA's testing/ tree
+  coverage-threshold: 90                 # line coverage on changed + added lines
+  coverage-tool-bash: bashcov            # bashcov | kcov | null
+  # coverage-grace: 2026-09-01           # adopter catch-up window (ISO date or issue-N)
 
 # --- Backend unit-test coverage ---
-# Coverage obligation for every backend source change. Spec:
-# core/roles/backend-engineer.md § Coverage obligation.
+# Spec: core/roles/backend-engineer.md § Coverage obligation.
 unit-backend:
-  # Backend unit-test runner invocation with coverage enabled.
-  #   - .NET: dotnet test --collect:"XPlat Code Coverage"
-  #   - Node: npm test -- --coverage
-  #   - Python: pytest --cov=<pkg>
-  #   - Go: go test -cover ./...
-  #   - leave null when project has no backend tier yet.
+  # .NET: dotnet test --collect:"XPlat Code Coverage"
+  # Node: npm test -- --coverage   ·   Python: pytest --cov=<pkg>   ·   Go: go test -cover ./...
   runner: dotnet test --collect:"XPlat Code Coverage"
-  # Line coverage threshold on the changed + added line set.
-  #   - Framework default: 90.
-  #   - Adopter may raise (stricter) or lower (catch-up); deviation
-  #     visible in local config + reviewable in PR.
   coverage-threshold: 90
 
 # --- Project-doc index ---
-# Adopter-declared index classes — pre-declare doc classes that the index
-# layer should handle. Takes precedence over auto-detection. Full spec:
+# Adopter-declared classes; precedence over auto-detection. Full spec:
 # core/protocols/index-protocol.md § Extension.
-# Uncomment + adjust for your project's adopter-specific doc types.
 # index:
 #   dir: local/index
 #   classes:
-#     - name: rfc
-#       source-glob: docs/rfcs/*.md
-#       template: adr-index.idx           # reuse ADR template shape
-#     - name: runbook
-#       source-glob: ops/runbooks/*.md
-#       template: novel                   # ai-engineer authors a new template
+#     - { name: rfc,     source-glob: docs/rfcs/*.md,     template: adr-index.idx }
+#     - { name: runbook, source-glob: ops/runbooks/*.md,  template: novel }
 
 # --- Automatic mode — post-PR CI watch ---
-# Behaviour after `gh pr create` in Mode 1 + auto mode. Spec:
-# core/ci-watch.md.
-#
-# All keys optional — defaults shown. Apply only when auto mode is
-# active AND the resolved delivery mode is Mode 1; otherwise ignored.
+# Applies when auto: AND Mode 1. Spec: core/protocols/ci-watch.md.
 automatic-mode:
-  ci-watch: enabled                       # enabled | disabled — set disabled to preserve previously behaviour
-  ci-watch-policy: poll                   # poll | async | hybrid
-  ci-watch-poll-seconds: 20               # interval for poll / hybrid sync phase
-  ci-watch-timeout-minutes: 15            # max wall-clock per watch cycle before handback
-  ci-watch-sync-probe-minutes: 3          # hybrid only: synchronous probe before falling through to async
-  ci-watch-max-fix-cycles: 3              # cap on iterate-fix-recheck loops
-  ci-required-checks: strict              # strict | branch-protection-aware
-  ci-auto-retry-flakes: true              # rerun-failed once per cycle on flake-pattern match
-  # ci-flake-patterns:                    # adopter-extensible; merged with framework defaults
-  #   - "<additional regex>"
+  ci-watch: enabled                      # enabled | disabled
+  ci-watch-policy: poll                  # poll | async | hybrid
+  ci-watch-poll-seconds: 20
+  ci-watch-timeout-minutes: 15
+  ci-watch-sync-probe-minutes: 3         # hybrid only
+  ci-watch-max-fix-cycles: 3
+  ci-required-checks: strict             # strict | branch-protection-aware
+  ci-auto-retry-flakes: true
+  # ci-flake-patterns: ["<additional regex>"]
+
+# --- Lifecycle mode (lite / default) ---
+# `lite:` / `direct:` skips Phase 1-3; dispatches one named cardinal in Phase 4.
+# CR / ADR / Phase 7 / Phase 8 gates remain. Spec: core/process/dispatch.md.
+# lifecycle:
+#   lite-mode:
+#     default: false                     # repo-wide opt-in
+#     label-trigger: false               # complexity:low + single role label → lite
 
 # --- Delivery modes ---
-# Adopter-wide default for how PM lands task results. Per-task prefix
-# (branch: / wt: / commit:) or Phase-3 user answer overrides. Full
-# spec: core/delivery-modes.md.
-#
-# default-mode values:
-#   branch   — Mode 1: feature branch + PR (recommended for multi-dev
-#              repos; default for issue/TODO-sourced tasks if this key
-#              is unset).
-#   wt       — Mode 2: working-tree only; no commits.
-#   commit   — Mode 3: commit-no-push on current branch.
-#
-# Commented out by default → framework defaults apply (branch for
-# issue/TODO-sourced; wt for freeform).
+# Per-task prefix (branch: / wt: / commit:) > Phase-3 answer > config > framework default
+# (branch for issue/TODO-sourced; wt for freeform). Spec: core/protocols/delivery-modes.md.
 # delivery:
-#   default-mode: branch
+#   default-mode: branch                 # branch | wt | commit
+
+# --- QA pixel-check (optional Phase 5 visual oracle) ---
+# Visual diff app vs mockup at shared seed-state. Off by default.
+# Requires local/bindings.md § Visual oracle fields when enabled.
+# Spec: core/protocols/pixel-check-protocol.md.
+# qa:
+#   pixel-check:
+#     enabled: false
+#     alignment: mockup-follows-seed     # mockup-follows-seed | seed-follows-mockup
+#     tolerance:
+#       max-diff-pixels: 100
+#       max-diff-ratio: 0.001
+#       mask-regions:                    # selector + `# why: <reason>` per entry
+#         - { selector: ".timestamp",          }  # why: non-deterministic wall-clock
+#         - { selector: "[data-pixel-ignore]", }  # why: adopter opt-out marker
+#     viewports:
+#       - { name: desktop, width: 1440, height: 900 }
+#       - { name: mobile,  width: 390,  height: 844 }
 
 # --- Triage scoring ---
-# Ranks ready work in `ginee-triage` by a derived score from
-# `value:high|medium|low` + `complexity:high|medium|low` labels (issues) /
-# `☐ [v:H c:L] …` markers (TODOs). ATAM utility-tree convention; H=3, M=2, L=1.
-# Spec: core/triage-scoring.md.
-# All keys optional — defaults shown.
+# H/M/L (ATAM). Spec: core/protocols/triage-scoring.md.
 triage:
-  # Score formula:
-  #   value-over-complexity (default)  →  value / complexity  (WSJF-style)
-  #   value-only                       →  value
-  #   value-minus-complexity           →  value - complexity
-  scoring-formula: value-over-complexity
+  scoring-formula: value-over-complexity  # value-over-complexity | value-only | value-minus-complexity
 
 # --- Per-role + per-task model tier ---
-# Routes reasoning-heavy roles to capable models and execution-heavy roles to
-# cheaper ones. Tier names are vendor-neutral in core/; concrete model IDs live
-# only in the per-adapter map below.
-#
-# Resolution order (per dispatch) — stop at first match:
-#   1. Per-task prefix  model:<tier>  in the dispatch line.
-#   2. Phase-3 user answer.
-#   3. model-tier.per-role.<role>  below.
-#   4. core/roles/<role>.md frontmatter  default-tier:
-#
-# All keys optional — framework defaults apply when absent.
+# Resolution per dispatch (stop at first match): per-task prefix `model:<tier>` >
+# Phase-3 answer > model-tier.per-role.<role> > core/roles/<role>.md frontmatter `default-tier:`.
 # model-tier:
 #   per-role:
 #     team-lead: reasoning
@@ -277,64 +186,42 @@ triage:
 #       reasoning: claude-opus-4-7
 #       standard:  claude-sonnet-4-6
 #       fast:      claude-haiku-4-5-20251001
-#     # Other adapters: no programmatic per-role model selection today
-#     # (model picked via the client's own UI). Install emits a one-line
-#     # warning. Per-task  model:<tier>  prefix documented as user hint.
+#     # Non-Claude adapters today: no programmatic per-role selection — install emits warning;
+#     # per-task model:<tier> prefix documented as user-side hint.
 #     copilot-cli: {}
 #     agents-md:   {}
 #     generic:     {}
 
+# --- Compliance playbook opt-outs ---
+# Per-tactic opt-out for Claude compliance playbook. Absent → all enabled.
+# Tactic ids: subagent-tools-whitelist (T1) · pretooluse-edit-hook (T2) ·
+# pretooluse-bash-hook (T3) · compliance-statusline (T4).
+# compliance:
+#   disabled:
+#     - subagent-tools-whitelist
+
 # --- Host capability tools ---
-# Team-lead surfaces matching tools from the active adapter's
-# install.md § Specialist-tool affinity table as dispatch hints. Specialist
-# judgment never overruled — protocol is "prefer if available", not "must use".
-# All keys optional — defaults shown.
+# Team-lead surfaces matching tools from the active adapter's install.md § Specialist-tool
+# affinity table as dispatch hints. "Prefer if available", not "must use".
 capability-tools:
-  enabled: true                # set false to disable affinity injection repo-wide
-  # disabled:                  # scope-out specific tools while keeping the rest
-  #   - frontend-design
-  # required-context:          # optional force-required pairs (rare; off by default)
-  #   - tool: security-review
-  #     role: solution-architect
-  #     task: ".*security.*"   # regex against task description; force-surfaces when matched
+  enabled: true                          # false → disable affinity injection repo-wide
+  # disabled: [frontend-design]          # scope-out specific tools
+  # required-context:                    # force-required pairs (rare; off by default)
+  #   - { tool: security-review, role: solution-architect, task: ".*security.*" }
 
 # --- Sub-issue dispatch tracking ---
-# Each team-lead → cardinal dispatch lands as a GitHub sub-issue under the
-# parent task issue — labelled by role + phase, threading progress comments
-# + cumulative time, closed by the cardinal's phase-report return. Lets
-# cross-session resume reconstruct state from parent + open sub-issues
-# without transcript replay. Full spec: core/github-integration.md § Sub-issue dispatch.
-#
-# Active only on issue-sourced tasks. TODO / freeform fall back to in-context.
-# Resolution (stop at first match):
-#   1. Per-task prefix  notrack:  on the parent dispatch.
-#   2.  ginee:track:off  label on the parent issue.
-#   3.  dispatch.tracking  key below.
-#   4. Framework default — sub-issues when  github.repo  is configured.
-#
-# Assignee precedence — non-empty human assignee on a sub-issue overrules the
-#  ginee:role:<cardinal>  label; cardinal dispatch suspended until cleared.
-#
-# All keys optional — defaults shown.
+# Each team-lead → cardinal dispatch lands as a GitHub sub-issue. Active only on issue-sourced.
+# Resolution (stop at first match): `notrack:` prefix > `ginee:track:off` parent label >
+# `dispatch.tracking` below > framework default (sub-issues when github.repo set).
+# Spec: core/protocols/github-integration.md § Sub-issue dispatch.
 dispatch:
-  tracking: sub-issues          # sub-issues | in-context
-  time-tracking: true           # set false to disable the time-tracking surface
-  # closing-label: ginee:done   # optional sub-issue close marker (auto-removed on close); omit to skip
+  tracking: sub-issues                   # sub-issues | in-context
+  time-tracking: true
+  # closing-label: ginee:done
 
 # --- GitHub integration ---
-# Lets team-lead pick up GitHub issues as a task source alongside
-# TODO files + direct instructions, file new issues from user requests,
-# and promote discussions to issues. Full spec: core/github-integration.md.
-#
-# Two repos:
-#   repo            — primary (this adopter project). Defaults to `git remote get-url origin`.
-#   framework-repo  — upstream ginee framework. Lets adopters file feedback
-#                     against the framework with `@team-lead file framework-bug`
-#                     / `file framework-feature` / `pick up framework#<N>`.
-#                     Set during install (curl/tarball script populates it from the
-#                     install source); override for forks.
-#                     Leave unset to disable framework-targeted operations entirely.
-# Labels are configurable; PM creates missing ones on first use (default color).
+# `repo` defaults to `git remote get-url origin`. `framework-repo` lets adopters file
+# feedback against ginee upstream. Spec: core/protocols/github-integration.md.
 github:
   # repo: <owner>/<repo>
   # framework-repo: <owner>/ginee

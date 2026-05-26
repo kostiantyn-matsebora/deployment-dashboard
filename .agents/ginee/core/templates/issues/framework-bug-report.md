@@ -6,56 +6,37 @@ labels: [ginee:ready, framework]
 ---
 
 <!--
-  Priority signal (optional but recommended) — add `value:high|medium|low`
-  + `complexity:high|medium|low` labels (ATAM utility-tree convention) so
-  `ginee-triage` ranks this against other ready framework work.
-  Full rules: `.agents/ginee/core/triage-scoring.md`.
--->
-
-
-<!--
-  Filed against the ginee framework upstream repo (per
-  local/framework.config.yaml § github.framework-repo) via:
+  Filed against ginee upstream (per local/framework.config.yaml § github.framework-repo):
     @team-lead file framework-bug <title>
-  Sections parsed by team-lead when picking up framework work.
-  Keep headings (## Summary / ## Reproduction / etc.) intact.
--->
+  Priority signal (recommended): add `value:*` + `complexity:*` labels (ATAM convention) per
+  .agents/ginee/core/protocols/triage-scoring.md.
 
-<!--
-  Doc shape rules — apply to EVERY section, including Summary:
-  - File / endpoint / config inventories → table, not comma-separated prose.
-  - Procedures / steps → numbered list.
-  - Multi-rule statements → parent bullet + sub-bullets, one rule per line.
-  - No paragraph with > 2 sentence terminators.
-  - No parenthetical comma-lists inside a sentence — promote to a bulleted list.
-  - Cross-reference; never restate (cite `§Name`, `#anchor`).
-  Full rules: `core/process.md § Mandatory checks before report-as-done`.
+  Sections parsed by team-lead; keep headings intact.
+  Doc shape (every section): inventories → table · steps → numbered list · multi-rule → parent + sub-bullets ·
+  no paragraph > 2 sentence terminators · no parenthetical comma-lists · cross-ref never restate.
+  Full: core/process.md § Mandatory checks before report-as-done.
 -->
 
 ## Summary
 
-<!-- One short bulleted-list or 1–2 short sentences. Avoid parenthetical inventories. -->
 <1–2 sentences describing what the framework did wrong>
 
 ## Affected framework artefact
 
-<!--
-  Where the bug lives. Pick one:
-    process | role-kernel | role-details | template | adapter | extras-role | spec (index-protocol / github-integration / etc.)
-  Plus the specific file path.
--->
+<!-- Pick one: process | role-kernel | role-details | template | adapter | extras-role | spec (index-protocol / github-integration / etc.) -->
 
 - Type: <category>
-- File: `<core/process.md | core/roles/<name>.md | adapters/<client>/... | extras/roles/<name>.md | ...>`
+- File: `<core/process.md | core/roles/<name>.md | adapters/<client>/… | extras/roles/<name>.md | …>`
 
 ## Framework version
 
 - `core/VERSION`: `<value from .agents/ginee/core/VERSION>`
-- Last upstream sync: `<date or commit SHA — from install-script record if known>`
+- Last upstream sync: `<date or commit SHA from install-script record, if known>`
 
 ## Adapter in use
 
-<!-- claude | copilot | cursor | codex | generic. Drives "is this an adapter-specific issue?" -->
+<!-- claude | copilot | cursor | codex | generic. Drives "is this adapter-specific?" -->
+
 <adapter>
 
 ## Reproduction
@@ -66,7 +47,7 @@ labels: [ginee:ready, framework]
 
 ## Expected framework behavior
 
-<what should have happened per the relevant spec section — cite `core/process.md § X` / `core/<spec>.md § Y` / etc.>
+<what should have happened — cite `core/process.md § X` / `core/<spec>.md § Y`>
 
 ## Actual framework behavior
 
@@ -74,28 +55,21 @@ labels: [ginee:ready, framework]
 
 ## Blocking severity
 
-<!--
-  How much it blocks the adopter:
-    blocker — cannot proceed | workaround-available — describe | minor — quality issue, no block
--->
+<!-- blocker — cannot proceed | workaround-available — describe | minor — quality issue, no block -->
+
 <severity>
 
 ## Workaround (if any)
 
-<temporary mitigation the adopter is using>
+<temporary mitigation>
 
 ## Owner-history pointers
 
-<!--
-  Optional. If the bug overlaps with prior owner decisions, point to PLAN.md
-  entries by short slug so the owner can locate context. These are pointers
-  to owner history, NOT load-bearing on the runtime framework.
-  Skip the field if the answer is "none".
--->
-- `<short-slug>` — `<one-line summary or "n/a">`
+<!-- Optional. Pointers to PLAN.md entries by short slug; NOT load-bearing on runtime. Skip if none. -->
+
+- `<short-slug>` — `<one-line or "n/a">`
 
 ## Acceptance criteria
 
-<!-- Testable conditions the framework owners would accept as "fixed". -->
 - [ ] <criterion>
 - [ ] <criterion>

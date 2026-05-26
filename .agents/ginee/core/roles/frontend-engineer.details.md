@@ -1,3 +1,11 @@
+---
+audience: frontend-engineer
+load: on-demand
+triggers: [frontend-details, client, ui, mockup, styling, state]
+cap-bytes: 4096
+reads-before-applying: []
+---
+
 # Frontend Engineer — Domain Elaboration
 
 Companion to `core/roles/frontend-engineer.md`. The kernel file holds normative rules; this file holds elaboration, patterns, and stack-specific guidance.

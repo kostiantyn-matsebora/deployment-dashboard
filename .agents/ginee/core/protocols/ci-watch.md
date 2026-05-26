@@ -1,16 +1,14 @@
+---
+audience: team-lead-only
+load: on-demand
+triggers: [ci-watch, post-pr, auto]
+cap-bytes: 12000
+reads-before-applying: []
+---
+
 # CI watch — post-PR iterate-fix-recheck loop
 
-**Load-on-demand.** Fetched when:
-
-- `team-lead` runs the Mode 1 finalize procedure in automatic mode AND `automatic-mode.ci-watch` is `enabled` (the framework default).
-- `team-lead` is the orchestrator at a delivery-handoff Accept that pushes a branch + opens a PR.
-- A specialist's Phase 6 fix is dispatched from a CI-attributable failure (specialist reads this file's § Failure classification).
-
-Default short tasks (Mode 2 / Mode 3 / `ci-watch: disabled`) do not load this file.
-
-## Why
-
-Per `core/automatic-mode.md`, auto-mode's invariant is to minimize user intervention. Without this spec, Mode 1 finalize stops at `gh pr create` — CI red after push lands as a fresh human prompt instead of an orchestrator dispatch. CI-watch extends the **single delivery handoff** through to "CI green," running an iterate-fix-recheck loop for attributable failures.
+Load triggers: Mode 1 finalize in auto mode + `ci-watch: enabled` (framework default) · delivery-handoff Accept that pushes branch + opens PR · specialist Phase 6 fix routed from CI-attributable failure. Default short tasks (Mode 2/3 · `ci-watch: disabled`) do not load.
 
 ## Activation
 
@@ -65,33 +63,29 @@ Mixed runs (one attributable + one unattributable) → handback wins — never a
 
 ## Iterate-fix-recheck loop
 
-Triggered when the first watch cycle returns ≥ 1 attributable (or auto-retried-flake-still-failing-but-attributable) failure.
+Triggered when first watch cycle returns ≥ 1 attributable (or auto-retried-flake-still-failing-but-attributable) failure:
 
-1. **Phase 6 dispatch.** `team-lead` reads the failing run log (`gh run view <id> --log-failed`), routes to the owning specialist per `local/bindings.md § Project role boundaries` based on touched paths + failure category.
-2. **Fix commits** land on the same branch — standard Mode 1 commit cadence per `core/delivery-modes.md § Mode 1`.
-3. **Push** the new commits — triggers a fresh CI run on the PR.
-4. **Re-enter watch state** at step 1 of § Watch state. `gh pr checks` reports the latest run by design; stale check_run results are ignored.
-5. **Loop terminates** on one of:
-   - All green → § Exit clean.
-   - `ci-watch-max-fix-cycles` reached (default 3) → § Forced-handback triggers.
-   - Same check fails twice in consecutive cycles after a fix attempt → § Forced-handback triggers.
-   - Forced-interactive trigger fires (see below).
+1. **Phase 6 dispatch** — team-lead reads `gh run view <id> --log-failed`, routes to owning specialist per `local/bindings.md § Project role boundaries` by touched paths + failure category.
+2. **Fix commits** on same branch — standard Mode 1 cadence per `core/protocols/delivery-modes.md § Mode 1`.
+3. **Push** new commits → fresh CI run on PR.
+4. **Re-enter watch state** at step 1 of § Watch state. `gh pr checks` reports latest run; stale results ignored.
+5. **Loop terminates** on: all green (§ Exit clean) · `ci-watch-max-fix-cycles` reached (default 3) → handback · same check fails twice consecutively after a fix attempt → handback · forced-interactive trigger fires.
 
 ## Forced-handback triggers
 
-Same structural rule as `core/automatic-mode.md § Forced-interactive triggers`, scoped to CI-watch:
+Scoped variant of `core/protocols/automatic-mode.md § Forced-interactive triggers`:
 
 | Trigger | Action |
 |---|---|
-| Failure unattributable to the changeset | Surface failure log verbatim; ask user to direct. |
-| Same check fails twice in consecutive cycles after a fix attempt | Surface before/after diff of the failing assertion + new failure log; ask user to direct. No third Phase 6 for that surface. |
-| Flake-classified failure recurs after the one allowed auto-retry | Treat as attributable / unattributable per heuristic; if unattributable, hand back. |
-| `ci-watch-timeout-minutes` exceeded mid-cycle | Post "CI still running after N minutes, handing back" comment; record stoppable-intermediate-state. |
-| `ci-watch-max-fix-cycles` reached (default 3) | Post cumulative fix-cycle log; ask user to direct. |
+| Failure unattributable to changeset | Surface log verbatim; ask user. |
+| Same check fails twice consecutively after fix attempt | Surface before/after diff of failing assertion + new log; ask user. No third Phase 6 for that surface. |
+| Flake recurs after one allowed auto-retry | Re-classify; unattributable → hand back. |
+| `ci-watch-timeout-minutes` exceeded mid-cycle | Post `"CI still running after N minutes, handing back"`; record stoppable-intermediate-state. |
+| `ci-watch-max-fix-cycles` reached (default 3) | Post cumulative fix-cycle log; ask user. |
 | User interrupts at any poll boundary | Record state; exit per `core/protocols/iteration-protocol.md § Stoppable intermediate states`. No orphaned watch threads. |
-| Token-budget / wall-clock thresholds exceed `core/automatic-mode.md § Forced-interactive triggers` ceilings | Inherit existing escalation. |
+| Token-budget / wall-clock exceeds `automatic-mode.md § Forced-interactive triggers` ceilings | Inherit existing escalation. |
 
-On any trigger: `team-lead` halts the watch, surfaces a structured report (last green check / failing check / commits attempted / cycle count), resumes auto mode only on explicit user direction.
+On any trigger: team-lead halts watch · surfaces structured report (last green check · failing check · commits attempted · cycle count) · resumes only on explicit direction.
 
 ## Exit clean
 
@@ -111,25 +105,9 @@ All checks reach terminal-green per the `ci-required-checks` policy:
 | `strict` (default) | All check_runs reported by `gh pr checks` must reach `success`. |
 | `branch-protection-aware` | Only "required" checks must succeed; reads from `gh api repos/<o>/<r>/branches/<b>/protection`. Non-required checks reported but don't gate exit-clean. |
 
-## Configuration keys
+## Configuration
 
-All under `local/framework.config.yaml § automatic-mode`:
-
-```yaml
-automatic-mode:
-  ci-watch: enabled                       # enabled | disabled
-  ci-watch-policy: poll                   # poll | async | hybrid
-  ci-watch-poll-seconds: 20               # poll interval (poll / hybrid sync phase only)
-  ci-watch-timeout-minutes: 15            # max wall-clock per cycle
-  ci-watch-sync-probe-minutes: 3          # hybrid: synchronous probe duration
-  ci-watch-max-fix-cycles: 3              # cap on iterate-fix-recheck cycles
-  ci-required-checks: strict              # strict | branch-protection-aware
-  ci-auto-retry-flakes: true              # rerun-failed once per cycle on flake-pattern match
-  ci-flake-patterns:                      # adopter-extensible; merged with defaults
-    - "<additional regex>"
-```
-
-All keys optional — framework defaults shown.
+All keys under `local/framework.config.yaml § automatic-mode`; full keys + defaults in the template. Schema: `ci-watch` (`enabled`/`disabled`) · `ci-watch-policy` (`poll`/`async`/`hybrid`) · `ci-watch-poll-seconds` (20) · `ci-watch-timeout-minutes` (15) · `ci-watch-sync-probe-minutes` (3; hybrid only) · `ci-watch-max-fix-cycles` (3) · `ci-required-checks` (`strict`/`branch-protection-aware`) · `ci-auto-retry-flakes` (true) · `ci-flake-patterns` (adopter-extensible).
 
 ## Cross-cutting invariants
 
@@ -137,23 +115,5 @@ All keys optional — framework defaults shown.
 - **Never modify the PR description silently** mid-watch. Optional `## CI status` placeholder in `core/templates/pr-description.md` is updated only on exit-clean or final handback.
 - **Never auto-merge, never auto-approve, never auto-dismiss reviews.** All human decisions.
 - **Never edit the changeset to make a flake pass.** Flakes are surfaced, retried once, then escalated.
-- **Never federate watches across PRs.** One PR per task per `core/delivery-modes.md § Out of scope`.
+- **Never federate watches across PRs.** One PR per task per `core/protocols/delivery-modes.md § Out of scope`.
 
-## Out of scope
-
-- Auto-merging the PR after all-green.
-- Approving / dismissing reviews.
-- Direct support for non-GitHub hosts (GitLab / Bitbucket / Gitea ship as their own framework features).
-- Mocking CI for unit-testing the watcher itself.
-- Automatic branch deletion after merge — adopter / git-host owns.
-- Cross-PR coordination ("wait for this PR before opening the next").
-- Modifying the changeset to mask a flake.
-
-## References
-
-- `core/automatic-mode.md § Delivery handoff` — Accept action calls into this spec for Mode 1.
-- `core/delivery-modes.md § Mode 1` — finalize procedure references this spec as a post-`gh pr create` step.
-- `core/github-integration.md § PR linkage` — describes the comment surfaces this spec writes to.
-- `core/protocols/iteration-protocol.md § Stoppable intermediate states` — interrupt contract.
-- `core/process.md § Phase 6 — Bug fixing` — where attributable failures route.
-- `core/process.md § Executing actions with care` — never-auto-merge invariant.

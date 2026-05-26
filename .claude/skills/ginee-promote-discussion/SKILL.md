@@ -5,7 +5,7 @@ description: Promote a GitHub discussion to a labelled issue via the ginee frame
 
 # Promote discussion → issue
 
-Run the promote workflow per `.agents/ginee/core/github-integration.md § Promote — discussion → issue`.
+Run the promote workflow per `.agents/ginee/core/protocols/github-integration.md § Promote — discussion → issue`.
 
 ## Activation
 
@@ -14,7 +14,7 @@ Run the promote workflow per `.agents/ginee/core/github-integration.md § Promot
 
 ## Procedure
 
-1. Load `.agents/ginee/core/github-integration.md § Promote`.
+1. Load `.agents/ginee/core/protocols/github-integration.md § Promote`.
 2. **Mechanical ops only (skill-runner).** Resolve target repo:
    - Default: primary repo.
    - With 'framework' / `framework#N`: `github.framework-repo` — fail fast if unset.

@@ -1,6 +1,14 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [phase-3, design-review]
+cap-bytes: 4096
+reads-before-applying: []
+---
+
 # Phase 3 — Design review
 
-**Load triggers** — any cardinal whose `phase-participation:` includes `3`. Per-role roster: `team-lead` only (gate surface).
+**Load triggers** — `team-lead` only (synchronous gate surface).
 
 - **Goal.** Synchronous gate — explicit user approval of Phase 2 before implementation.
 - **Action.** Orchestrator MUST present: architecture-doc diff + mockup link + API contract + work-breakdown.
@@ -9,7 +17,7 @@
   - Remarks → loop back to Phase 2.
 - **Distinct from.** Phase 8 (closes TODO); TODO-workflow checkpoint (sits before Phase 1).
 - **Acceptance.** Explicit user approval. Without it, Phase 4 does not start.
-- **In automatic mode.** Elided when Phase 2 produces no user-visible behaviour change. Forced back to interactive per `core/automatic-mode.md § Forced-interactive triggers`.
+- **In automatic mode.** Elided when Phase 2 produces no user-visible behaviour change. Forced back to interactive per `core/protocols/automatic-mode.md § Forced-interactive triggers`.
 
 ## Implementation gate
 

@@ -1,6 +1,14 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [phase-7, sa-review, pr-review]
+cap-bytes: 4096
+reads-before-applying: []
+---
+
 # Phase 7 — SA review
 
-**Load triggers** — any cardinal whose `phase-participation:` includes `7`. Per-role roster: `team-lead` (gate surface) · `solution-architect` (sign-off).
+**Load triggers** — SA (sign-off, no bypass) + TL (TL4 lead-elision per `core/protocols/heavy-role-bypass.md`: single-cardinal PR collapses to SA → user; TL re-entry on multi-cardinal PR · SA REJECT · cross-domain bug surfaced · Phase 8 finalize in auto mode).
 
 - **Goal.** `solution-architect` confirms compliance with architecture invariants, requirements, mockup behavioural contracts.
 - **Lighter under the classical-architect model.** Governance already ran continuously across Phase 4 / 5 / 6 (per `core/roles/solution-architect.md § Governance`); Phase 7 is the **final coherence check**, not a first-pass review. Most concerns should already be resolved.

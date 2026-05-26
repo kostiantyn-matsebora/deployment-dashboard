@@ -1,6 +1,10 @@
 ---
 name: ginee-update
-description: Update the installed ginee framework in place to a release or named ref. Triggers: 'update ginee'; 'upgrade the framework'; 'pull the latest ginee'; 'bump ginee to v<X>'; 'update to ref <branch|sha>'; also session-start name check finding new upstream release.
+description: >-
+  Update the installed ginee framework in place to a release or named ref.
+  Triggers — 'update ginee'; 'upgrade the framework'; 'pull the latest
+  ginee'; 'bump ginee to v<X>'; 'update to ref <branch|sha>'; also
+  session-start name check finding new upstream release.
 ---
 
 **Scope.** `update`→latest via `/releases/latest`; `update <tag>`→that tag (downgrade needs `--allow-downgrade`); `update <branch|sha>`→`git clone --depth 1` (git on PATH) + "non-release ref" notice.

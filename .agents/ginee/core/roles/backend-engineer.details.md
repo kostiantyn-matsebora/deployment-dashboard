@@ -1,3 +1,11 @@
+---
+audience: backend-engineer
+load: on-demand
+triggers: [backend-details, server, api, persistence, migrations]
+cap-bytes: 6144
+reads-before-applying: []
+---
+
 # Backend Engineer — Domain Elaboration
 
 Companion to `core/roles/backend-engineer.md`. The kernel file holds normative rules; this file holds elaboration, patterns, and stack-specific guidance.

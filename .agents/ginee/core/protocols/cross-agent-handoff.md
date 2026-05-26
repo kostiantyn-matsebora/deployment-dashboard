@@ -1,3 +1,11 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [cross-agent-handoff, cross-domain, handoff]
+cap-bytes: 4096
+reads-before-applying: []
+---
+
 # Cross-agent handoff — diagnose ≠ fix
 
 **Load-on-demand.** Fetched when a specialist discovers a root cause **outside** their domain while working on their own task. The orchestrator may also load this file when a specialist's final report flags a cross-domain root cause that needs hand-off.

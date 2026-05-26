@@ -1,3 +1,11 @@
+---
+audience: all-cardinals
+load: on-demand
+triggers: [cross-domain-bugs, integration, compliance, bug-fixing]
+cap-bytes: 4096
+reads-before-applying: []
+---
+
 # Cross-domain bugs — integration + compliance cycle
 
 **Load-on-demand.**

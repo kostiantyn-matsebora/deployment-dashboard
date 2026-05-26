@@ -3,7 +3,7 @@
 <!--
   Trigger:
   - Engineer discovers a root cause OUTSIDE their domain while working their own task
-    (per core/cross-agent-handoff.md).
+    (per core/protocols/cross-agent-handoff.md).
   Flow:
   - Discoverer → diagnoses fully.
   - Discoverer → does NOT fix.

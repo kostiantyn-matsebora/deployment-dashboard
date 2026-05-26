@@ -9,8 +9,7 @@ Run the ginee framework's initial-discovery workflow per `.agents/ginee/core/rol
 
 ## Activation
 
-- Any of `local/project-profile.md`, `local/bindings.md`, `local/framework.config.yaml` missing.
-- User invokes "initial discovery" / "set up ginee" / "discover the project".
+Any of `local/project-profile.md` · `local/bindings.md` · `local/framework.config.yaml` missing; OR user invokes per `adapters/_shared/install-common.md § Skill cheat sheet`.
 
 ## Procedure
 

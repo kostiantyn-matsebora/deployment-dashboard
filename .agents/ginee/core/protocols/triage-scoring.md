@@ -1,3 +1,11 @@
+---
+audience: team-lead-only
+load: on-demand
+triggers: [triage, scoring, value-complexity, wsjf]
+cap-bytes: 16384
+reads-before-applying: []
+---
+
 # Triage scoring — value × complexity priority
 
 **Load-on-demand.** Fetched when:
@@ -7,12 +15,6 @@
 - `ginee-triage` / `ginee-pick-up` skills sort or estimate.
 
 Default tasks (freeform, TODOs without `[v:N c:M]` markers) skip this file.
-
-## Why
-
-- Ranking by age alone ignores leverage.
-- Two axes — **value** + **complexity** — drive a derived **score**.
-- Goal: highest-leverage ready work surfaces first.
 
 ## Axes + scale
 
@@ -68,18 +70,15 @@ Edge cases:
 
 ## Source-of-truth = labels
 
-- **Reason:** queryable via `gh api`, mutable via `gh issue edit --add-label`, visible in GitHub UI, consistent with the `ginee:*` label namespace.
-- **Body fields are not parsed.** Issue templates include a reporter-note comment; only labels bind.
-- **Mutation:**
-  - Reporter sets at file-time via the issue template (label-picker) or `gh issue create --label value:high --label complexity:low`.
-  - `team-lead` adds / replaces via `gh issue edit <N> --remove-label complexity:<old> --add-label complexity:<new>` when auto-estimating.
+Queryable via `gh api` · mutable via `gh issue edit --add-label` · visible in GitHub UI · consistent with `ginee:*` namespace. **Body fields are NOT parsed** — templates include a reporter-note comment; only labels bind. Reporter sets at file-time via template label-picker or `gh issue create --label …`. `team-lead` adds/replaces via `gh issue edit <N> --remove-label complexity:<old> --add-label complexity:<new>` when auto-estimating.
 
 ## Auto-estimation on pickup
 
 **Trigger.** `team-lead` picks up an issue and `complexity:*` is absent.
 
 1. `team-lead` dispatches `solution-architect` with the issue body + repo context.
-2. `solution-architect` returns an `H` / `M` / `L` estimate using ATAM-style signals:
+2. `solution-architect` gathers signals from `issue body + index entries` only; raw source reads require a one-line justification in the return per `core/templates/phase-report.md § Source reads (this dispatch)`.
+3. `solution-architect` returns an `H` / `M` / `L` estimate using ATAM-style signals:
 
    | Signal | Weight | Drives toward |
    |---|---|---|
@@ -88,8 +87,8 @@ Edge cases:
    | Novel concepts (new spec / new role / new ADR needed) | high | novel → H |
    | Existing pattern reuse | reduces estimate | reuse → L |
 
-3. `team-lead` posts a comment recording the estimate (`<!-- ginee:complexity-estimate by=solution-architect value=H -->`) and adds `complexity:high` / `:medium` / `:low` label.
-4. Continues normal Phase 1–8 flow.
+4. `team-lead` posts a comment recording the estimate (`<!-- ginee:complexity-estimate by=solution-architect value=H -->`) and adds `complexity:high` / `:medium` / `:low` label.
+5. Continues normal Phase 1–8 flow.
 
 **Value is never auto-estimated.** Missing `value:*` → `team-lead` asks the user (H / M / L) before proceeding past Phase 1. User answer → label added.
 
@@ -153,66 +152,54 @@ Expected sort (test contract for skill + spec compliance):
 
 ## Score comment + audit trail
 
-Hybrid topology — **one sticky "current score" comment** maintained by `team-lead` + **immutable audit comments** preserved on key events. Sticky + audit comments pass `core/process.md § Mandatory checks before report-as-done`; templates below are already structured (table for the sticky; one-line digest for audits).
+Hybrid topology — one sticky "current score" comment + immutable audit comments. Output shapes: sticky per `core/protocols/score-comment-schema.md`; audits per `core/protocols/audit-comment-schema.md`.
 
-### Sticky comment — current score
+### Sticky — current score
 
-- **One per issue.** First posted on pickup (after value-prompt + complexity auto-estimate complete); updated in place on every ginee-driven label change or `@team-lead recompute score #N`.
-- **Find / update via the marker header line:** `<!-- ginee:score v=1 -->`. `team-lead` searches issue comments for this marker; updates if found, posts if not. Adopters MUST NOT edit the comment body manually.
-- **Strict format:**
+One per issue. First posted on pickup (after value-prompt + complexity auto-estimate); updated in place on every ginee-driven label change or `@team-lead recompute score #N`. Find/update via marker `<!-- ginee:score v=1 -->`. Adopters MUST NOT edit the body manually.
 
-  ```
-  <!-- ginee:score v=1 -->
-  ## Triage score: <combo> = <number>
+```
+<!-- ginee:score v=1 -->
+## Triage score: <combo> = <number>
 
-  | Axis | Label | Numeric | Set by | Reasoning |
-  |---|---|---|---|---|
-  | value | `<high|medium|low|unscored>` | <3|2|1|—> | <@handle (source)> | <one-line | —> |
-  | complexity | `<high|medium|low|unscored>` | <3|2|1|—> | <@handle (source)> | <one-line | —> |
+| Axis | Label | Numeric | Set by | Reasoning |
+|---|---|---|---|---|
+| value | `<high|medium|low|unscored>` | <3|2|1|—> | <@handle (source)> | <one-line | —> |
+| complexity | `<high|medium|low|unscored>` | <3|2|1|—> | <@handle (source)> | <one-line | —> |
 
-  - Formula: `<formula>` (`<scoring-formula key>`)
-  - Last updated: <ISO 8601 UTC> by ginee team-lead
-  - Recomputed live by `ginee-triage` from labels — see audit trail below.
-  ```
+- Formula: `<formula>` (`<scoring-formula key>`)
+- Last updated: <ISO 8601 UTC> by ginee team-lead
+- Recomputed live by `ginee-triage` from labels — see audit trail.
+```
 
-- **`Reasoning` column rules — populated only when ginee set the label:**
+**`Reasoning` column** — one-line digest when ginee set the label (e.g. `1 file · 1 role · pattern reuse → L`); `—` when user-set; `unscored` when axis not set.
 
-  | Row state | `Reasoning` content |
-  |---|---|
-  | Most-recent change was a ginee auto-estimate | One-line digest (e.g. `1 file · 1 role · pattern reuse → L`) |
-  | Most-recent change was the reporter or a user `gh issue edit` | `—` |
-  | Axis not yet set | `unscored` |
+**`Set by` values** — user: `@<handle> (reporter | manual edit)` · ginee: `@solution-architect (auto-estimate)` (complexity) · `@team-lead (imputed c=L)` (missing-axis) · `@<handle> (user reply to ginee prompt)` (value-prompt).
 
-- **`Set by` column values:**
-  - User-set → `@<handle> (reporter)` or `@<handle> (manual edit)`.
-  - ginee-set → `@solution-architect (auto-estimate)` (complexity), `@team-lead (imputed c=L)` (missing-axis rule), `@<handle> (user reply to ginee prompt)` (value-prompt at pickup).
+**`<combo>` notation** — `<value-letter><complexity-letter>` (e.g. `HL`, `MH`); unscored rows render `—`.
 
-- **`<combo>` notation:** `<value-letter><complexity-letter>` (e.g. `HL`, `MH`, `MM`). Unscored rows render as `—` in place of the letter.
-
-### Immutable audit comments — key-event trail
-
-Preserved alongside the sticky comment; never deleted, never edited.
+### Audit comments — immutable key-event trail
 
 | Event | Marker | Body |
 |---|---|---|
 | SA auto-estimate of complexity | `<!-- ginee:complexity-estimate by=solution-architect value=<H|M|L> at=<ISO> -->` | One-line outcome + SA signals digest. |
-| User reply to ginee's value-prompt at pickup | `<!-- ginee:value-prompt by=<@handle> value=<H|M|L> at=<ISO> -->` | One-line outcome ("user set value=high during pickup of #N"). |
-| Score recomputed on demand | `<!-- ginee:score-recompute by=<@handle> at=<ISO> -->` | Reason + delta from previous sticky state. |
+| User reply to ginee's value-prompt | `<!-- ginee:value-prompt by=<@handle> value=<H|M|L> at=<ISO> -->` | One-line outcome. |
+| Score recomputed on demand | `<!-- ginee:score-recompute by=<@handle> at=<ISO> -->` | Reason + delta from previous sticky. |
 
-User-driven label changes via `gh issue edit` do NOT produce an audit comment (GitHub's own activity log already records them).
+User-driven `gh issue edit` label changes do NOT produce audit comments (GitHub activity log already records them).
 
-### Triggers — when `team-lead` writes / updates the sticky
+### Triggers — when team-lead writes/updates sticky
 
-1. **Pickup** — after value-prompt + complexity auto-estimate complete, before the `ready` → `in-progress` label swap.
-2. **Any ginee-driven label change** during a task (e.g. SA revising complexity after Phase 2 design widens scope — requires Phase-3-style user surface per `§ Forbidden`).
-3. **`@team-lead recompute score #<N>`** — explicit user invocation; re-reads current labels (catches manual `gh issue edit` changes that ginee did not see), updates the sticky, posts a `ginee:score-recompute` audit comment.
+1. **Pickup** — after value-prompt + complexity auto-estimate, before `ready` → `in-progress` swap.
+2. **Any ginee-driven label change** during a task (SA revising complexity after Phase 2 widens scope — requires Phase-3-style user surface per § Forbidden).
+3. **`@team-lead recompute score #<N>`** — explicit; re-reads labels (catches manual `gh issue edit` changes), updates sticky, posts `ginee:score-recompute` audit.
 
-### Forbidden
+### Forbidden — sticky / audit
 
-- Never post a second sticky-score comment — always update via the marker.
+- Never post a second sticky — always update via marker.
 - Never edit or delete an immutable audit comment.
-- Never auto-detect manual `gh issue edit` changes between sessions — the sticky reflects the last ginee-driven update; users must invoke `recompute score #N` to refresh it. `ginee-triage` always sorts from live labels regardless of sticky staleness.
-- Never include adopter-secret data in the comment (issue body / labels only — never local repo paths, never SHA-256 fingerprints, never user PII).
+- Never auto-detect manual `gh issue edit` between sessions — sticky reflects last ginee-driven update; users invoke `recompute score #N` to refresh. `ginee-triage` sorts from live labels regardless of sticky staleness.
+- Never include adopter-secret data (no local paths · no SHA-256 fingerprints · no PII).
 
 ## Labels — first-use provisioning
 
@@ -227,25 +214,12 @@ gh label create complexity:medium --color 6195c0 --description "ginee triage: AT
 gh label create complexity:low    --color c2e0c6 --description "ginee triage: ATAM difficulty — low"
 ```
 
-Colors are advisory — adopter may recolor. `team-lead` does NOT recreate or overwrite existing labels.
+Colors advisory; team-lead never recreates or overwrites existing labels.
 
 ## Forbidden
 
-- **Never auto-set `value`.** Reporter or user input only. Auto-guessing user-impact is out of scope.
-- **Never overwrite an existing `complexity:*` label without surfacing.** Auto-estimate only fills a missing label; revising an existing estimate requires a Phase-3-style surface to the user.
-- **Never use any other scale than H/M/L.** No 1–5 / XS/S/M/L/XL / "critical" aliases — keeps the score formula deterministic and matches ATAM utility-tree convention.
-- **Never gate pickup on score.** Low-scored issues are still pickable on user request; score informs order, not eligibility.
+- **Never auto-set `value`** — reporter / user input only.
+- **Never overwrite existing `complexity:*` without surfacing** — auto-estimate only fills missing; revising requires Phase-3-style surface.
+- **Never use a scale other than H/M/L** — no 1–5 / XS-XL / "critical" aliases.
+- **Never gate pickup on score** — score informs order, not eligibility.
 
-## Backward compatibility
-
-- Adopters with no scoring labels: `ginee-triage` shows everything in the "Unscored" bucket; sort behaviour matches previously age-order.
-- Existing issues without `value:*` / `complexity:*` labels are unaffected — adopter applies labels at their own pace.
-- TODO files without `[v:N c:M]` markers continue to work unchanged.
-
-## Out of scope
-
-- Multi-dimensional scoring (ICE, RICE, full WSJF) — restart on demand if leverage proven.
-- Auto-estimating `value`.
-- Per-team / per-role priority overrides.
-- Cross-repo prioritization.
-- Issue-state-transition automation (auto-bump priority on stale issues).

@@ -1,246 +1,97 @@
+---
+audience: qa-engineer
+load: on-demand
+triggers: [qa-details, tests, e2e, fixtures, smoke, harness]
+cap-bytes: 12000
+reads-before-applying: []
+---
+
 # QA Engineer — Domain Elaboration
 
 Companion to `core/roles/qa-engineer.md`. The kernel file holds normative rules; this file holds elaboration, patterns, and stack-specific guidance.
 
 ## Functional / API test catalogue (FR & API-section driven)
 
-Drive from the architecture doc:
-
-- Every endpoint × every documented status code. Examples:
-  - happy path
-  - auth-failure
-  - validation-failure
-  - not-found
-  - conflict
-- Every server-side derived view (computed columns, latest-per-key, joined snapshots) covered for the documented null/empty/edge cases.
-- Real-time stream:
-  - Connects.
-  - Receives a fresh event after the write within the documented latency budget.
-  - Honours resume-token semantics on reconnect.
-- Health endpoint check:
-  - Returns success.
-  - The underlying-store ping is confirmed.
+Drive from architecture doc. Cover every endpoint × every documented status code (happy path · auth-failure · validation-failure · not-found · conflict). Every server-side derived view (computed columns · latest-per-key · joined snapshots) for documented null/empty/edge cases. Real-time stream — connects · receives a fresh event after write within documented latency · honours resume-token on reconnect. Health endpoint — returns success + underlying-store ping confirmed.
 
 ## E2E test catalogue (mockup driven)
 
-Drive from the mockup. Every documented behaviour. Examples:
+Drive from mockup. Every documented behaviour: rendering of each UI state · hover · click → drawer · real-time update without reload · filters · empty state · stats / summary widgets.
 
-- rendering of each UI state
-- hover effects
-- click → drawer
-- real-time update without reload
-- filters
-- empty state
-- stats / summary widgets
+## Zero-setup rule for test runners (functional · E2E · smoke)
 
-## Zero-setup rule for test runners (functional, E2E, smoke)
+Developer runs any test suite against local dev stack with no arguments. Every test-runner entry point at a predictable path. Runners accept (but never require) parameters for non-local targets only.
 
-Same principle as the data scripts:
-
-- A developer must run any test suite against the local dev stack with no arguments.
-- Every test-runner entry point lives at a predictable path.
-- Runners accept (but do not require) parameters only for non-local targets.
-
-**Configuration is declarative, runners are thin.**
-
-- Test endpoint URLs and the local-dev API token live in a declarative config file.
-- NOT in script defaults or test source.
+**Configuration declarative; runners thin.** Test endpoint URLs + local-dev API token in declarative config file, NEVER in script defaults / test source.
 
 Standard layout:
 
 ```
 testing/
-├── config/
-│   ├── local.json        # default config consumed by every runner — { readBaseUrl, writeBaseUrl, apiKey, ... }
-│   └── README.md         # how to add a new target (e.g. dev.json, prod-smoke.json)
-├── fixtures/
-│   └── seed-data.json    # canonical UI-state corpus
-├── functional/
-│   ├── run-tests.<ext>   # thin wrapper — ≤ 40 lines
-│   └── ...
-├── e2e/
-│   ├── run-tests.<ext>   # thin wrapper — ≤ 40 lines
-│   ├── <runner config>
-│   ├── scenarios/
-│   └── tests/
-├── smoke/
-│   └── run-smoke.<ext>
-├── pester/               # or equivalent script-test directory
-│   └── run-pester.<ext>
-└── scripts/
-    ├── seed.<ext>
-    ├── cleanup.<ext>
-    └── ...
+├── config/local.json       # { readBaseUrl, writeBaseUrl, apiKey, ... } consumed by every runner
+├── config/README.md        # how to add target (dev.json, prod-smoke.json)
+├── fixtures/seed-data.json # canonical UI-state corpus
+├── functional/run-tests.<ext>  # thin wrapper ≤ 40 lines
+├── e2e/run-tests.<ext>         # thin wrapper ≤ 40 lines
+├── e2e/{<runner config>,scenarios/,tests/}
+├── smoke/run-smoke.<ext>
+├── pester/run-pester.<ext>     # or equivalent
+└── scripts/{seed,cleanup}.<ext>
 ```
 
-Runner-script rules:
+**Runner rules:**
 
-1. **Zero-arg local run.**
-   - Running the runner with no parameters loads `testing/config/local.json` and runs the suite.
-   - Assumes the local-dev startup ran.
-   - If the stack isn't reachable:
-     - Emit `"Local stack not reachable at <url> — run the local startup script first."`.
-     - Exit non-zero.
-2. **Non-local targets pass `-Config <file>`** (or the equivalent flag in the project's scripting language) pointing to another declarative file.
-   - Runner does NOT accept loose `-BaseUrl` / `-ApiKey` overrides — those are configuration and belong in the config file.
-   - Only acceptable runtime parameters are *behavioural* knobs. Examples:
-     - filter
-     - fail-fast
-     - headed/headless
-     - project selector
-3. **Runners are thin.**
-   - ≤ 40 lines each.
-   - No bake-in defaults.
-   - Entire job:
-     - Load config.
-     - Preflight reachability check.
-     - Invoke underlying tool.
-     - Propagate exit code.
-4. **No imperative configuration anywhere.**
-   - Test specs, fixtures, and config never live as literals inside runner scripts.
-   - Only string literals allowed in a runner are:
-     - the path to the default config file
-     - tool-flag names
-   - Never URLs, tokens, or fixture data.
-5. **Tool bootstrap is idempotent and silent.**
-   - Browser-driver installs / tool restores run on every invocation.
-   - No-ops after first run.
-6. **Seeding is separate from running.**
-   - Runners do NOT re-seed the database — that's the seed script's job, which developer (or CI) invokes once before the suite.
-   - If a runner needs the corpus and the data store is empty:
-     - It errors with a hint.
-     - It does not silently seed.
-7. **Common runner parameters:**
-   - config-file selector
-   - filter
-   - fail-fast
-   - plus layer-specific behavioural switches
-   - Document each in the runner's help output.
-8. **CI uses the same runners** with the appropriate `-Config testing/config/<env>.json` — no duplicated YAML test-execution logic.
+1. **Zero-arg local run.** No params → load `testing/config/local.json` + run. Stack unreachable → emit `"Local stack not reachable at <url> — run the local startup script first."` + exit non-zero.
+2. **Non-local targets** pass `-Config <file>`. Runner does NOT accept loose `-BaseUrl` / `-ApiKey` (those are config). Acceptable runtime params are *behavioural* knobs: filter · fail-fast · headed/headless · project selector.
+3. **Runners are thin** (≤ 40 lines). No baked defaults. Job: load config · preflight reachability · invoke underlying tool · propagate exit code.
+4. **No imperative config.** Only literals allowed in a runner: path to default config file + tool-flag names. Never URLs / tokens / fixture data.
+5. **Tool bootstrap idempotent + silent.** Browser-driver installs / tool restores run every invocation; no-op after first.
+6. **Seeding separate from running.** Runners NEVER re-seed — that's the seed script's job (developer / CI invokes once before suite). Empty store + runner needs corpus → error with hint; never silently seed.
+7. **Common runner params:** config-file selector · filter · fail-fast + layer-specific behavioural switches. Document each in help output.
+8. **CI uses same runners** with `-Config testing/config/<env>.json`. No duplicated YAML test-execution.
 
-When adding a new test layer, ship a runner + a matching `testing/config/local.json` extension alongside.
-
-- The runner is the imperative shell.
-- The JSON config is the declarative contract.
+New test layer → ship runner + matching `testing/config/local.json` extension. Runner = imperative shell; JSON config = declarative contract.
 
 ## Test data scripts
 
-You own these scripts; place them under the project's scripts directory (per `local/bindings.md`):
+You own; place under project scripts directory (per `local/bindings.md`):
 
-- `seed.<ext>` — POSTs prefilled events covering all documented UI states against a target `--baseUrl` with `--apiKey`.
-  - Idempotent (re-running yields the same final state).
-- `cleanup.<ext>` — deletes test rows by an agreed marker (e.g. `actor = "qa.bot"` or a reserved key prefix).
-  - Verifies the data store returns empty for those entries afterwards.
-- `test-notify.<ext>` (or equivalent):
-  1. Sends one realistic event.
-  2. Verifies success.
-  3. Verifies the wire reflects it within the documented latency budget.
-- `init-data.<ext>` — one-shot, used to backfill real baseline state.
-  - Reads input from a CSV/JSON file.
-  - **Never** hardcodes domain values.
+| Script | Purpose |
+|---|---|
+| `seed.<ext>` | POSTs prefilled events covering all UI states against `--baseUrl` + `--apiKey`. Idempotent — re-run yields same final state. |
+| `cleanup.<ext>` | Deletes test rows by agreed marker (`actor = "qa.bot"` / reserved key prefix). Verifies empty afterwards. |
+| `test-notify.<ext>` | Sends one realistic event → verifies success → verifies wire reflects it within documented latency budget. |
+| `init-data.<ext>` | One-shot backfill of real baseline state from CSV/JSON. **NEVER** hardcodes domain values. |
 
-All scripts:
+All scripts: project's standard HTTP client · accept `--baseUrl` / `--apiKey` / `--dryRun` · structured logs.
 
-- Use the project's standard HTTP client.
-- Accept arguments:
-  - `--baseUrl`
-  - `--apiKey`
-  - `--dryRun`
-- Write structured logs.
-
-**Zero-setup rule for local dev:**
-
-- Every script's defaults must match the local stack produced by the startup script.
-- A developer can run startup then immediately run any script with:
-  - No `-ApiKey` argument.
-  - No env-var export.
-  - No edit-this-file step.
-
-Defaults:
-
-- `-BaseUrl` defaults to the local gateway URL.
-- `-ApiKey` defaults to the same fixed fake token the startup script bakes in.
-- Defaults are explicitly for the local dev stack only.
-  - When pointed at cloud or any non-local target, the user must pass a real `-ApiKey`.
-  - Script should warn (not fail) when default is used against a non-`localhost` `-BaseUrl`.
-
-Production hardening (real tokens, secret-vault references, IP allow-lists) lives in cloud-targeted automation, not these local scripts.
+**Zero-setup for local dev.** Every script's defaults match local stack from startup. Developer runs startup → immediately runs any script with no `-ApiKey` · no env-var export · no edit-file step. `-BaseUrl` defaults to local gateway URL; `-ApiKey` defaults to startup's fixed fake token. Defaults explicitly local-only — non-`localhost` `-BaseUrl` with default `-ApiKey` warns (not fails). Production hardening (real tokens · secret-vault refs · IP allow-lists) lives in cloud-targeted automation, not these scripts.
 
 ## Smoke tests
 
-Run after every cloud deploy:
+After every cloud deploy:
 
 1. Health endpoint returns success.
-2. Real-time endpoint check:
-   1. Open the real-time endpoint.
-   2. Post a tagged test event.
-   3. Receive it on the stream within the documented latency budget.
-   4. Then delete the row.
-3. Application root returns the expected shell / response.
-4. The persistence-layer schema matches the migration (run a schema diff).
+2. Real-time endpoint — open · post tagged event · receive within latency budget · delete row.
+3. Application root returns expected shell / response.
+4. Persistence-layer schema matches migration (schema diff).
 
 ## Script-suite tests
 
-QA scope is **QA-owned scripts only** (seed / cleanup / smoke / scenario-harness glue under `testing/scripts/` or the per-project equivalent). Devops-owned scripts (build / orchestration / deploy / dev-loop / composite CI actions) have their own authorship + lint + coverage obligation — see `devops-engineer.md § Script-quality obligation`. The split is by **file ownership**, not by test framework — same Pester / bats tool, different authors per location.
+QA scope = QA-owned scripts only (seed · cleanup · smoke · scenario-harness glue under `testing/scripts/`). Devops-owned scripts (build · orchestration · deploy · dev-loop · composite CI) → `devops-engineer.md § Script-quality obligation`. Split is by **file ownership**, not test framework — same Pester / bats tool, different authors per location.
 
-Use the project's script test framework (Pester / bats) for any non-trivial QA scripting logic — examples:
-
-- Seed-data idempotency check.
-- Cleanup script's marker-scope guard.
-- Smoke runner's polling / timeout logic.
-- Scenario-harness oracle helpers.
-
-Rules:
-
-- Keep tests fast and hermetic.
-- Mock HTTP at the boundary.
+Project's script-test framework (Pester / bats) for non-trivial QA scripting — seed-data idempotency · cleanup marker-scope guard · smoke polling/timeout · harness oracle helpers. Tests fast + hermetic; mock HTTP at the boundary.
 
 ## Non-functional checks worth automating
 
-Drive from the architecture-doc NFR table. Common patterns:
+Drive from architecture-doc NFR table:
 
-- **End-to-end live-update latency.**
-  - Measure write → realtime arrival time.
-  - Alert on regressions.
-- **Retention.**
-  - Verify the prune job retains the documented window.
-  - Test by inserting data older than retention and running the prune job.
-- **Statelessness** — multi-replica E2E:
-  1. Run two backend replicas behind a load balancer.
-  2. Open a realtime subscription on replica A.
-  3. Write on replica B.
-  4. Assert delivery.
+- **End-to-end live-update latency** — measure write → realtime arrival; alert on regression.
+- **Retention** — verify prune job retains documented window (insert data older than retention + run prune).
+- **Statelessness** — multi-replica E2E: 2 backend replicas behind LB · subscribe on A · write on B · assert delivery.
 
-## Mockup-visual harness (when the project has one)
+## Mockup-visual harness (when project has one)
 
-Ownership:
+You own harness (assertions · geometric oracles · runner scripts). You do NOT own the mockup — `frontend-engineer` does. Pattern per `core/protocols/cross-domain-bugs.md`: SA defines invariant in architecture doc → you encode as harness assertion (fails loudly when violated · passes only when holds) → `frontend-engineer` edits mockup CSS/JS/SVG until all-green → SA reviews coherence (no edits).
 
-- You own the harness — assertions, geometric oracles, runner scripts.
-- You do NOT own the mockup itself.
-  - `frontend-engineer` does.
-
-Collaboration pattern: see `core/cross-domain-bugs.md`. Your role in the cycle:
-
-- `solution-architect` defines an invariant in the architecture doc.
-- **You encode it as a harness assertion** under the project's mockup-visual directory.
-  - Your assertion is the executable form of the invariant.
-  - Must fail loudly when violated.
-  - Must pass only when it holds.
-- `frontend-engineer` edits the mockup's CSS/JS/SVG until your assertions go all-green.
-- `solution-architect` reviews for architecture coherence (governance, no edits).
-
-Rules:
-
-- When `frontend-engineer` adds a new mockup surface (new view, layout primitive, invariant), extend the harness with the new assertion.
-  - They flag the need in their final report.
-  - You implement.
-- **You do not edit the mockup.**
-  - Not for any of these reasons:
-    - to "make a test pass"
-    - to "demonstrate the bug"
-    - to add a `data-testid`
-  - Request hooks from `frontend-engineer` in your final report.
-- **`frontend-engineer` does not edit the harness.**
-  - If a harness assertion is genuinely wrong (encodes the invariant incorrectly):
-    - They flag it.
-    - You fix the harness.
+New mockup surface (view · layout primitive · invariant) → `frontend-engineer` flags in final report; you extend the harness. **You never edit the mockup** (not to make a test pass · demonstrate the bug · add a `data-testid` — request hooks in final report). **`frontend-engineer` never edits the harness** — if an assertion is wrong (encodes invariant incorrectly), they flag, you fix.

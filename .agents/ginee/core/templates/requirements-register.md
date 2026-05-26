@@ -14,7 +14,7 @@
 
   Authority:
   - solution-architect owns content (semantics) per `core/roles/solution-architect.md § Design`.
-  - ai-engineer owns shape (file splits, structure) per `core/doc-roles.md`.
+  - ai-engineer owns shape (file splits, structure) per `core/protocols/doc-roles.md`.
   - team-lead's CRs (`<cr-directory>/CR-NNNN-*.md`) propose modifications to entries here; SA accepts the CR + applies the diff.
 -->
 

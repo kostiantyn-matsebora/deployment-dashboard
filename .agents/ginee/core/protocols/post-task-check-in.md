@@ -1,3 +1,11 @@
+---
+audience: team-lead-only
+load: on-demand
+triggers: [post-task, check-in, wrap-up, phase-8]
+cap-bytes: 4096
+reads-before-applying: []
+---
+
 # Post-task check-in
 
 **Load-on-demand.** Fetched by `team-lead` at task wrap-up — after Phase 8 user approval (interactive) or after the delivery-handoff Accept (auto mode). Mid-task turns do not load this file.
