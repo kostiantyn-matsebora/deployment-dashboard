@@ -1,0 +1,67 @@
+# Pages — builds and deploys the project documentation site
+# (Just the Docs theme under docs/, configured via docs/_config.yml +
+# docs/Gemfile) to GitHub Pages.
+#
+# Owner: devops-engineer.
+# Contract: shared with solution-architect — site source lives under docs/
+# (Just the Docs via remote_theme; Gemfile pinned to github-pages). This
+# workflow consumes those files verbatim; the actions/jekyll-build-pages
+# action runs `bundle install` against docs/Gemfile automatically (no
+# manual Ruby setup needed).
+#
+# Active mitigation: a job-level `if:` guard on both jobs skips this
+# workflow whenever the repo is private. Remove the guard (or let it
+# naturally re-enable) once Pages is enabled — either by making the
+# repo public or by moving to a plan that supports private-repo Pages.
+#
+# Note: the kostiantyn-matsebora/deployment-dashboard repo is PRIVATE.
+# GitHub Pages on private repos requires a paid plan (Pro / Team /
+# Enterprise). The workflow YAML is valid regardless; the deploy step
+# will fail with a clear "Pages not enabled" error if the active plan
+# does not support private-repo Pages.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

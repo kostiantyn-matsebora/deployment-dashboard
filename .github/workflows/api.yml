@@ -1,0 +1,65 @@
+# API component CI — builds the co-located Write + Read API host
+# (Dashboard.Api — Write and Read services share one image per ADR-0006;
+# microservices architecture, container co-location is a packaging choice),
+# runs all backend unit tests EXCEPT Dashboard.Fetcher.Tests (those live with
+# the fetcher workflow), and pushes the image to GHCR on main / tag pushes.
+#
+# Owner: devops-engineer.
+# Contract: docs/cr/CR-0010-component-ci-pipeline.md (api.yml row in § Impact).
+# Path filter covers the host + both endpoint-group libraries + shared
+# (one host, one image, one container target — co-location mechanics per
+# ADR-0002; architectural framing per ADR-0006).
+name: api
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'backend/api/**'
+      - 'backend/write-api/**'
+      - 'backend/read-api/**'
+      - 'backend/shared/**'
+      - 'backend/Dashboard.sln'
+      - 'backend/.dockerignore'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/api.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/api/**'
+      - 'backend/write-api/**'
+      - 'backend/read-api/**'
+      - 'backend/shared/**'
+      - 'backend/Dashboard.sln'
+      - 'backend/.dockerignore'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/api.yml'
+      - '.github/workflows/_build-and-push-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-and-push-image.yml
+    with:
+      image-name: deployment-dashboard-api
+      build-kind: dotnet
+      dockerfile-path: backend/api/Dockerfile
+      context-path: backend
+      run-dotnet-tests: true
+      # Run every backend unit test EXCEPT Dashboard.Fetcher.Tests — the
+      # fetcher suite is owned by fetcher.yml so each component's PR shows
+      # only its own test signal.
+      test-filter: 'FullyQualifiedName!~Dashboard.Fetcher.Tests'
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets: inherit

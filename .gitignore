@@ -1,0 +1,98 @@
+# ---- Secrets (never commit) ---------------------------------------------
+# Local-dev configuration is inline in dev_env/docker-compose.local.yml —
+# no .env files are used here. The patterns below are a defence-in-depth
+# net: if anyone accidentally introduces an env-file anywhere in the tree
+# (including dev_env/), it stays uncommitted.
+**/.env
+**/.env.local
+**/.env.*.local
+
+# ---- .NET ----------------------------------------------------------------
+**/bin/
+**/obj/
+**/TestResults/
+**/*.user
+**/*.suo
+**/.vs/
+**/*.lscache
+
+# ---- Node / Angular ------------------------------------------------------
+**/node_modules/
+**/dist/
+
+# ---- IDEs / OS junk ------------------------------------------------------
+**/.idea/
+**/.vscode/
+**/Thumbs.db
+**/.DS_Store
+**/*.swp
+**/*.swo
+**/.history/
+
+# ---- Angular CLI cache ---------------------------------------------------
+# Created on first `ng build`; must never be committed.
+**/.angular/
+
+# ---- Playwright runtime artifacts ----------------------------------------
+# Generated per-test-run under testing/e2e/. None of this is source.
+testing/e2e/test-results/
+testing/e2e/playwright-report/
+testing/e2e/.playwright/
+testing/e2e/blob-report/
+**/playwright/.cache/
+# Scratch capture directories written by ad-hoc oracle runs (O5 etc.).
+testing/e2e/__o5-captures__/
+
+# ---- Mockup-visual capture / diagnostic scratch --------------------------
+# Ad-hoc Playwright capture scripts (capture-*.mjs, diag-*.mjs, probe-*.mjs)
+# and PNG outputs used during visual iteration / blueprint comparison.
+# Local scratch only; never source.
+testing/mockup-visual/
+
+# ---- E2E forensic scratch (testing/e2e/captures/) -----------------------
+# Committed baselines under testing/e2e/captures/ are limited to
+# `spa-head-{light,dark}.png` (qa iteration baselines). Everything else in
+# that directory is ad-hoc forensic scratch authored during fix-cycles —
+# capture-*.mjs, inspect-*.mjs, *-baseline-*.png, *-inspect*.png, head-*.png.
+# These are local-only and must not be committed.
+testing/e2e/captures/capture-*.mjs
+testing/e2e/captures/inspect-*.mjs
+testing/e2e/captures/diag-*.mjs
+testing/e2e/captures/probe-*.mjs
+testing/e2e/captures/spa-baseline-*
+testing/e2e/captures/*-inspect.png
+testing/e2e/captures/*-inspect-*.png
+testing/e2e/captures/head-*.png
+
+# ---- Code coverage / test runners ----------------------------------------
+**/coverage/
+**/.nyc_output/
+**/junit*.xml
+**/test-results*.xml
+**/testResults.xml
+**/pester-results.xml
+**/bats-results.tap
+
+# ---- Terraform (state must never live in the repo, per devops-engineer
+#       spec — state lives in Azure Storage) -------------------------------
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/crash.log
+
+# ---- Claude Code runtime (never commit) ---------------------------------
+# Background-agent worktrees, local settings, scheduler lock — all runtime
+# scratch under .claude/.
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# ---- dotnet format / analyzer scratch -----------------------------------
+# `dotnet format --report` writes this at repo root when invoked manually
+# (e.g. during the Wave 4a baseline). CI uses `--verify-no-changes` (no
+# report file), so this guard only matters for local invocations.
+format-report.json
+
+# ---- Misc ----------------------------------------------------------------
+*.log

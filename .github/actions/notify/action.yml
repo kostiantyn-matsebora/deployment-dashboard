@@ -1,0 +1,307 @@
+---
+# Deployment Dashboard - notify composite action
+#
+# Implements WBS MVP §1.4.2 / CI/CD Integration §1.2 of
+# docs/architecture.md (§7 "CI/CD Integration").
+#
+# Sends a single POST /api/deployments event to the Deployment Dashboard
+# from a GitHub Actions workflow. Portable across ubuntu-latest,
+# windows-latest, macos-latest and self-hosted runners: the implementation
+# is pure PowerShell Core (pwsh), which is preinstalled on all GitHub-hosted
+# runner images and uses only Invoke-RestMethod from the BCL.
+#
+# The action is idempotent from the dashboard's perspective: POST
+# /api/deployments is append-only (see SAD §7 "API Contract" and the
+# duplicate-(service, deployment_id) validation rule introduced by
+# CR-0003 "Removed SAD content" -> "POST /api/deployments validation -
+# failure modes"). A duplicate call with a fresh deployment_id creates
+# an extra history row but does not corrupt the matrix view, which
+# always picks the latest event by deployed_at; a duplicate
+# (service, deployment_id) is rejected with HTTP 409.
+name: Deployment Dashboard - notify
+description: >-
+  Send a deployment event to the Deployment Dashboard ingest API
+  (POST /api/deployments). See docs/ci-cd-integration.md.
+author: deployment-dashboard
+
+inputs:
+  dashboard_url:
+    description: >-
+      Base URL of the Deployment Dashboard (no trailing slash). Typically
+      sourced from the DEPLOYMENT_DASHBOARD_URL secret.
+    required: true
+  api_token:
+    description: >-
+      Write-API key. Sent as the X-Api-Key header. Typically sourced from
+      the DEPLOYMENT_DASHBOARD_TOKEN secret. The value is masked in logs by
+      this action via ::add-mask::.
+    required: true
+  deployment_id:
+    description: >-
+      CI/CD-side identifier for this deployment event. Required, non-empty,
+      and unique within (service, deployment_id) per CR-0003 "Removed SAD
+      content" -> "POST /api/deployments validation - failure modes".
+      Distinct from the dashboard's internal surrogate id. Recommended
+      source on GitHub Actions:
+      "gh-${{ github.run_id }}-${{ github.run_attempt }}" - the "gh-" prefix
+      namespaces this CI/CD tool from others (ado-, jenkins-, ...) to avoid
+      collisions per SAD §7 "Other tools". A workflow-supplied guid is
+      equally acceptable. A duplicate (service, deployment_id) is rejected
+      with HTTP 409 Conflict by the dashboard.
+    required: true
+  parent_deployments:
+    description: >-
+      Optional space- or comma-separated list of deployment_id values
+      identifying upstream deployments in the same service (e.g. the dev
+      deploy whose artefact is being promoted to qa). Empty (default) means
+      "fall back to correlation-based topology derivation" per ADR-0001
+      "Per-service topology derivation - five-pass algorithm on the read
+      side" (paired with CR-0003). Each entry must reference an existing
+      or future deployment within the same service - cross-service
+      references and cycles are rejected with HTTP 400.
+    required: false
+    default: ""
+  service:
+    description: Service identifier (e.g. "service-a").
+    required: true
+  environment:
+    description: Environment identifier (e.g. "dev", "qa", "uat", "prod").
+    required: true
+  version:
+    description: Version string (semver, git SHA, build number - any string).
+    required: true
+  status:
+    description: One of "success", "failure", or "in-progress".
+    required: true
+  run_url:
+    description: >-
+      Link to the CI/CD run. Defaults to the GitHub Actions run URL derived
+      from the github context.
+    required: false
+    default: >-
+      ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  run_number:
+    description: >-
+      Numeric run identifier. Defaults to github.run_number. Must parse as
+      an integer.
+    required: false
+    default: ${{ github.run_number }}
+  actor:
+    description: >-
+      User or service principal that triggered the deployment. Defaults to
+      github.actor.
+    required: false
+    default: ${{ github.actor }}
+  ref:
+    description: >-
+      Optional human-readable git ref associated with this deployment -
+      a branch name (`main`), a PR number (`PR-42`), a tag (`v1.2.3`), a
+      full ref (`refs/heads/main`, `refs/pull/42/merge`), or any other
+      free-form string. The dashboard does not parse or validate the
+      value (CR-0004 "Removed SAD content" -> "§10 Decision 10" -
+      opaque correlation attributes; validation deferred). Surfaces the
+      deployed code reference in the matrix / drawer per CR-0004 POST
+      body row `ref` and FR-05 (as amended by CR-0004). Defaults to
+      `${{ github.ref }}` so the action "just works" with no extra
+      wiring, matching the convention already used for `run_url`,
+      `run_number`, and `actor` (sensible default sourced from the
+      github.* context, overridable by the caller). Non-GitHub callers
+      or workflows that want to emit no ref should pass an empty string
+      explicitly - empty values are dropped from the wire payload.
+    required: false
+    default: ${{ github.ref }}
+  sha:
+    description: >-
+      Optional commit SHA associated with this deployment. Free-form
+      string - the dashboard does not parse or validate length or hex
+      shape (CR-0004 "Removed SAD content" -> "§10 Decision 10" -
+      opaque correlation attributes; validation deferred). Surfaces
+      the deployed commit in the matrix / drawer per CR-0004 POST
+      body row `sha` and FR-05 (as amended by CR-0004). Defaults to
+      `${{ github.sha }}` so the action "just works" with no extra
+      wiring. Pass an empty string to omit explicitly - empty values
+      are dropped from the wire payload.
+    required: false
+    default: ${{ github.sha }}
+  fail_on_error:
+    description: >-
+      When "true" (default), a non-2xx response or transport error fails
+      the step. When "false", the failure is logged as a warning and the
+      step succeeds - useful when the dashboard is best-effort and must not
+      block a release pipeline.
+    required: false
+    default: "true"
+
+outputs:
+  status_code:
+    description: HTTP status code returned by the dashboard (empty on transport error).
+    value: ${{ steps.notify.outputs.status_code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Notify Deployment Dashboard
+      id: notify
+      shell: pwsh
+      env:
+        DD_URL: ${{ inputs.dashboard_url }}
+        DD_TOKEN: ${{ inputs.api_token }}
+        DD_DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+        DD_PARENT_DEPLOYMENTS: ${{ inputs.parent_deployments }}
+        DD_SERVICE: ${{ inputs.service }}
+        DD_ENVIRONMENT: ${{ inputs.environment }}
+        DD_VERSION: ${{ inputs.version }}
+        DD_STATUS: ${{ inputs.status }}
+        DD_RUN_URL: ${{ inputs.run_url }}
+        DD_RUN_NUMBER: ${{ inputs.run_number }}
+        DD_ACTOR: ${{ inputs.actor }}
+        DD_REF: ${{ inputs.ref }}
+        DD_SHA: ${{ inputs.sha }}
+        DD_FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # Mask the token in logs as a defensive measure. GitHub already
+        # masks values flowing from secrets, but an action may be called
+        # with a literal token in tests or custom wrappers.
+        if ($env:DD_TOKEN) {
+          Write-Host "::add-mask::$env:DD_TOKEN"
+        }
+
+        function Fail([string]$msg) {
+          Write-Host "::error title=Deployment Dashboard notify::$msg"
+          exit 1
+        }
+
+        # ---- Input validation ----------------------------------------------
+        if ([string]::IsNullOrWhiteSpace($env:DD_URL))           { Fail 'dashboard_url is required.' }
+        if ([string]::IsNullOrWhiteSpace($env:DD_TOKEN))         { Fail 'api_token is required.' }
+        if ([string]::IsNullOrWhiteSpace($env:DD_DEPLOYMENT_ID)) { Fail 'deployment_id is required (CR-0003 "Removed SAD content" -> "POST /api/deployments validation - failure modes": missing -> HTTP 422).' }
+        if ([string]::IsNullOrWhiteSpace($env:DD_SERVICE))       { Fail 'service is required.' }
+        if ([string]::IsNullOrWhiteSpace($env:DD_ENVIRONMENT))   { Fail 'environment is required.' }
+        if ([string]::IsNullOrWhiteSpace($env:DD_VERSION))       { Fail 'version is required.' }
+        if ([string]::IsNullOrWhiteSpace($env:DD_STATUS))        { Fail 'status is required.' }
+
+        # parent_deployments is an optional space- or comma-separated string.
+        # Composite-action inputs are strings only, so we parse here and
+        # serialise as a real JSON array in the request body. Empty input ->
+        # field omitted entirely (server treats absent === empty per
+        # ADR-0001 "Per-service topology derivation - five-pass algorithm
+        # on the read side"; explicit "[]" is also valid but redundant).
+        $parentIds = @()
+        if (-not [string]::IsNullOrWhiteSpace($env:DD_PARENT_DEPLOYMENTS)) {
+          $parentIds = $env:DD_PARENT_DEPLOYMENTS -split '[,\s]+' |
+            ForEach-Object { $_.Trim() } |
+            Where-Object   { $_ -ne '' }
+        }
+
+        $allowedStatus = @('success', 'failure', 'in-progress')
+        if ($allowedStatus -notcontains $env:DD_STATUS) {
+          Fail "status must be one of: $($allowedStatus -join ', '). Got '$($env:DD_STATUS)'."
+        }
+
+        $runNumber = 0
+        if (-not [int]::TryParse($env:DD_RUN_NUMBER, [ref]$runNumber)) {
+          Fail "run_number must be an integer. Got '$($env:DD_RUN_NUMBER)'."
+        }
+
+        # Normalise the URL - tolerate one trailing slash.
+        $baseUrl = $env:DD_URL.TrimEnd('/')
+        $endpoint = "$baseUrl/api/deployments"
+
+        # ---- Payload (must match SAD §7 API Contract, as extended by
+        # CR-0003 (deployment_id, parent_deployments) and CR-0004
+        # (ref, sha), exactly) ---------------------------------------------
+        # deployment_id is always emitted (required by the contract per
+        # CR-0003). parent_deployments is emitted only when non-empty -
+        # omitting it is semantically identical to sending [] and keeps
+        # the wire compact. ref / sha are optional free-form strings per
+        # CR-0004 POST body rows `ref` / `sha` and FR-05 (as amended by
+        # CR-0004); also emitted only when non-empty so the wire stays
+        # compact when a caller explicitly opts out (passes ""). CR-0004
+        # "Removed SAD content" -> "§10 Decision 10" - the dashboard
+        # treats both as opaque correlation attributes with no shape
+        # validation.
+        $payload = [ordered]@{
+          deployment_id = $env:DD_DEPLOYMENT_ID
+          service       = $env:DD_SERVICE
+          environment   = $env:DD_ENVIRONMENT
+          version       = $env:DD_VERSION
+          status        = $env:DD_STATUS
+          run_url       = $env:DD_RUN_URL
+          run_number    = $runNumber
+          actor         = $env:DD_ACTOR
+        }
+        if ($parentIds.Count -gt 0) {
+          # Force JSON-array serialisation even for a single element -
+          # ConvertTo-Json otherwise collapses a 1-element array to a scalar.
+          $payload['parent_deployments'] = @($parentIds)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($env:DD_REF)) {
+          $payload['ref'] = $env:DD_REF
+        }
+        if (-not [string]::IsNullOrWhiteSpace($env:DD_SHA)) {
+          $payload['sha'] = $env:DD_SHA
+        }
+        $body = $payload | ConvertTo-Json -Compress -Depth 4
+
+        $headers = @{
+          'X-Api-Key'    = $env:DD_TOKEN
+          'Content-Type' = 'application/json'
+          'User-Agent'   = 'deployment-dashboard-notify/1.0 (+github-actions)'
+        }
+
+        $parentSummary = if ($parentIds.Count -gt 0) { " parents=[$($parentIds -join ', ')]" } else { '' }
+        $refSummary    = if (-not [string]::IsNullOrWhiteSpace($env:DD_REF)) { " ref=$($env:DD_REF)" } else { '' }
+        $shaSummary    = if (-not [string]::IsNullOrWhiteSpace($env:DD_SHA)) { " sha=$($env:DD_SHA)" } else { '' }
+        Write-Host "Notifying $endpoint for $($env:DD_SERVICE)/$($env:DD_ENVIRONMENT) @ $($env:DD_VERSION) [$($env:DD_STATUS)] deployment_id=$($env:DD_DEPLOYMENT_ID)$parentSummary$refSummary$shaSummary"
+
+        # ---- HTTP call -----------------------------------------------------
+        $statusCode = ''
+        $failOnError = ($env:DD_FAIL_ON_ERROR -ne 'false')
+
+        try {
+          $response = Invoke-WebRequest `
+            -Uri $endpoint `
+            -Method POST `
+            -Headers $headers `
+            -Body $body `
+            -UseBasicParsing `
+            -SkipHttpErrorCheck `
+            -TimeoutSec 15
+
+          $statusCode = [string]$response.StatusCode
+          Write-Host "Dashboard responded with HTTP $statusCode"
+
+          if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 300) {
+            # Surface the response body in the action log so pipeline authors
+            # see WHY the dashboard rejected the payload (per the validation
+            # table in CR-0003 "Removed SAD content" -> "POST /api/deployments
+            # validation - failure modes").
+            $hint = switch ([int]$response.StatusCode) {
+              401 { '401 Unauthorized - X-Api-Key missing or invalid (SAD §4 FR-10).' }
+              409 { "409 Conflict - duplicate (service, deployment_id). This deployment_id was already ingested for service '$($env:DD_SERVICE)'. Use a unique deployment_id per event (CR-0003 'POST /api/deployments validation - failure modes')." }
+              400 { '400 Bad Request - parent_deployments references a deployment in a different service, or would form a directed cycle (CR-0003 "POST /api/deployments validation - failure modes").' }
+              422 { '422 Unprocessable Entity - payload validation failed (e.g. missing deployment_id, invalid status, run_number not an integer). See response body below (CR-0003 "POST /api/deployments validation - failure modes").' }
+              default { '' }
+            }
+            $msg = "Dashboard returned HTTP $($response.StatusCode). Body: $($response.Content)"
+            if ($hint) { $msg = "$hint`n$msg" }
+            if ($failOnError) {
+              Fail $msg
+            } else {
+              Write-Host "::warning title=Deployment Dashboard notify::$msg"
+            }
+          }
+        }
+        catch {
+          $msg = "Request to $endpoint failed: $($_.Exception.Message)"
+          if ($failOnError) {
+            Fail $msg
+          } else {
+            Write-Host "::warning title=Deployment Dashboard notify::$msg"
+          }
+        }
+
+        # Emit the captured status code as a step output.
+        "status_code=$statusCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append

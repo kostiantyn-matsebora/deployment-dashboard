@@ -1,0 +1,321 @@
+# Reusable workflow — build, test, and push a single component image.
+#
+# Owner: devops-engineer.
+# Contract: docs/cr/CR-0010-component-ci-pipeline.md (Q1–Q13 + Wave 4b decision locks).
+# Operational guide: docs/ci-cd-pipelines.md.
+#
+# One reusable workflow drives all five component pipelines (api / fetcher /
+# frontend / gateway / demo-gha) — the `build-kind` input selects the build
+# path:
+#   - `dotnet` — .NET SDK setup + NuGet cache + format gate + (optionally)
+#                dotnet test + (optionally) mockup-visual + buildx + push.
+#                Used by api / fetcher.
+#   - `static` — Node setup (cache loaded from frontend/package-lock.json) +
+#                (optionally) ng test + (optionally) mockup-visual + buildx
+#                + push. Used by frontend / gateway.
+#   - `copy`   — no language toolchain, no tests, no format gate. Only
+#                buildx + (conditional) registry login + metadata + build +
+#                push. Used by demo-gha per CR-0013 — the image is content-
+#                only (Dockerfile = one COPY of qa-owned fixture content
+#                into a JVM WireMock base layer). Every language-setup /
+#                test / coverage step is `if`-gated to dotnet|static and
+#                naturally skips for `copy`; this branch is documented as a
+#                first-class third value of the input.
+#
+# Steps in order:
+#   1.  checkout
+#   2.  language setup (dotnet OR node, conditional on build-kind)
+#   3.  NuGet cache (dotnet only)
+#   4.  .config/dotnet-tools.json restore — tool-pin sanity check (dotnet only)
+#   5.  dotnet format gate — blocking (dotnet only)
+#   6.  npm ci (static + run-ng-tests only)
+#   7.  Unit tests (conditional)
+#   8.  Mockup-visual Playwright run (conditional)
+#   9.  Coverage artefact upload (when tests ran)
+#   10. Mockup-visual report + on-failure trace upload (conditional)
+#   11. Buildx setup
+#   12. Registry login (conditional on inputs.push)
+#   13. Metadata (tag rules) — Q5 verbatim
+#   14. Build + push (cache-from / cache-to via GHA backend)
+#
+# Decision locks from Wave 4b that shape this file:
+#   D1  Dogfooding notify hook — DROPPED. We do not call .github/actions/notify/.
+#   D2  dotnet format baseline landed in Wave 4a — the format gate passes from day one.
+#   D3  Frontend lint gate — DROPPED for MVP-CI. No `ng lint` step.
+#   D4  Frontend coverage — QA wires karma.conf.js + angular.json karmaConfig in
+#       parallel; this workflow assumes cobertura emission once those land.
+name: _build-and-push-image
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: 'GHCR image name (e.g. deployment-dashboard-api). Tags appended per Q5 rules.'
+        required: true
+        type: string
+      build-kind:
+        description: 'dotnet | static | copy — selects the build path. `copy` is the content-only path (no language toolchain, no tests) used by demo-gha per CR-0013.'
+        required: true
+        type: string
+      dockerfile-path:
+        description: 'Path to the Dockerfile, relative to repo root.'
+        required: true
+        type: string
+      context-path:
+        description: 'Docker build context, relative to repo root.'
+        required: true
+        type: string
+      test-filter:
+        description: 'dotnet test --filter expression (only consumed when run-dotnet-tests=true).'
+        required: false
+        type: string
+        default: ''
+      run-dotnet-tests:
+        description: 'Run dotnet test against backend/Dashboard.sln with the test-filter.'
+        required: false
+        type: boolean
+        default: false
+      run-ng-tests:
+        description: 'Run ng test on the four frontend projects with coverage.'
+        required: false
+        type: boolean
+        default: false
+      run-mockup-visual:
+        description: 'Run the Playwright mockup-visual harness (testing/mockup-visual/run-tests.ps1).'
+        required: false
+        type: boolean
+        default: false
+      registry:
+        description: 'Container registry host (default ghcr.io; ACR cutover swaps this).'
+        required: false
+        type: string
+        default: 'ghcr.io'
+      push:
+        description: 'Push the built image to the registry. False for PR builds.'
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      image-digest:
+        description: 'Digest of the built image (empty when push=false).'
+        value: ${{ jobs.build.outputs.image-digest }}
+      pushed-tags:
+        description: 'Newline-separated list of tags pushed (empty when push=false).'
+        value: ${{ jobs.build.outputs.pushed-tags }}
+
+# No top-level `permissions:` — for reusable workflows it becomes a "request
+# from the caller" and expands `read-all` to all read scopes, which the caller
+# doesn't grant (caller grants only contents/packages/id-token). Per-job
+# permissions below are what actually run.
+
+jobs:
+  build:
+    name: build (${{ inputs.image-name }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      image-digest: ${{ steps.build-push.outputs.digest }}
+      pushed-tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      # 1. Checkout — full SHA needed by docker/metadata-action for type=sha.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2a. .NET SDK (dotnet only).
+      - name: Setup .NET 10
+        if: inputs.build-kind == 'dotnet'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # 2b. Node + npm cache (static images only — frontend uses node for the
+      # ng build inside the Dockerfile, but the workflow needs node when we run
+      # ng test outside the image build).
+      - name: Setup Node 22
+        if: inputs.build-kind == 'static'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      # 3. NuGet restore cache (dotnet only). The setup-dotnet built-in cache
+      # is package-lock-aware; we use the action/cache@v4 fallback keyed on
+      # csproj hashes because the repo has no packages.lock.json files yet.
+      - name: NuGet cache
+        if: inputs.build-kind == 'dotnet'
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # 4. Restores `.config/dotnet-tools.json` (currently `dotnet-ef` 10.0.0).
+      # Sanity check that the host-authored EF tool pin is consistent across the
+      # team; not directly consumed by any CI step post-ADR-0009. Cheap on cache hit.
+      - name: Restore .NET tools
+        if: inputs.build-kind == 'dotnet'
+        run: dotnet tool restore
+
+      # 5. Format gate — blocking. CR-0010 § 3h. Baseline already clean (D2).
+      - name: dotnet format (verify)
+        if: inputs.build-kind == 'dotnet'
+        run: dotnet format backend/Dashboard.sln --verify-no-changes --severity warn
+
+      # 6. npm install for frontend test + ng-test path. The image build itself
+      # also runs npm ci inside the Dockerfile; outside-image install is here
+      # only when we need node for tests.
+      - name: npm ci (frontend workspace)
+        if: inputs.build-kind == 'static' && inputs.run-ng-tests == true
+        working-directory: frontend
+        run: npm ci
+
+      # 7a. Backend unit tests — single combined run across the solution, filtered
+      # by FullyQualifiedName per the caller's split (Q6). XPlat Code Coverage
+      # emits cobertura under ./artifacts/coverage/backend/<run-guid>/coverage.cobertura.xml.
+      - name: Backend tests (dotnet test, coverage)
+        if: inputs.build-kind == 'dotnet' && inputs.run-dotnet-tests == true
+        run: |
+          dotnet test backend/Dashboard.sln \
+            --configuration Release \
+            --filter "${{ inputs.test-filter }}" \
+            --settings backend/Dashboard.runsettings \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./artifacts/coverage/backend \
+            --logger "trx;LogFileName=test-results.trx"
+
+      # 7b. Frontend unit tests across all four Angular projects — sequential
+      # for deterministic Karma launcher reuse. ChromeHeadlessNoSandbox per
+      # commands.yaml:58 (NOT raw ChromeHeadless — required for headless
+      # operation in the GHA runner sandbox). --code-coverage emits cobertura
+      # under frontend/coverage/<project>/cobertura.xml once QA's karma.conf.js
+      # + angular.json karmaConfig wiring (D4) lands.
+      - name: Frontend tests (ng test, coverage)
+        if: inputs.build-kind == 'static' && inputs.run-ng-tests == true
+        working-directory: frontend
+        run: |
+          npx ng test dashboard --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage
+          npx ng test shared    --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage
+          npx ng test matrix    --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage
+          npx ng test drawer    --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage
+
+      # 8a. Cache Playwright browser binaries — keyed on the pinned @playwright/test
+      # version in testing/mockup-visual/package.json (1.49.1 today). Cache hit
+      # makes the subsequent install a no-op; cache miss installs Chromium once.
+      - name: Cache Playwright browsers
+        if: inputs.run-mockup-visual == true
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('testing/mockup-visual/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      # 8b. Mockup-visual run — call the runner via pwsh per the canonical command
+      # in commands.yaml:78. The runner is self-installing (npm ci on first hit,
+      # playwright install chromium) and zero-stack — asserts geometry against
+      # docs/ui/deployment-dashboard.html loaded via file://.
+      - name: Mockup-visual (Playwright)
+        if: inputs.run-mockup-visual == true
+        shell: pwsh
+        run: pwsh -NoProfile -File testing/mockup-visual/run-tests.ps1
+
+      # 9a. Coverage artefacts — backend (cobertura.xml + trx).
+      - name: Upload backend coverage
+        if: always() && inputs.build-kind == 'dotnet' && inputs.run-dotnet-tests == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-backend-${{ inputs.image-name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ./artifacts/coverage/backend/**/coverage.cobertura.xml
+            ./artifacts/coverage/backend/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14
+
+      # 9b. Coverage artefacts — frontend (cobertura.xml, four projects).
+      # Path assumes QA's karma.conf.js writes to frontend/coverage/<project>/cobertura.xml.
+      - name: Upload frontend coverage
+        if: always() && inputs.build-kind == 'static' && inputs.run-ng-tests == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-frontend-${{ inputs.image-name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: frontend/coverage/**/cobertura.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+      # 11a. Mockup-visual report — always uploaded when the run executed.
+      - name: Upload mockup-visual report
+        if: always() && inputs.run-mockup-visual == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: mockup-visual-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: testing/mockup-visual/__screenshots__/_report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      # 11b. Playwright traces — failure-only (retain-on-failure per playwright.config.ts).
+      - name: Upload mockup-visual traces (on failure)
+        if: failure() && inputs.run-mockup-visual == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: mockup-visual-traces-${{ github.run_id }}-${{ github.run_attempt }}
+          path: testing/mockup-visual/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # 12. BuildKit setup — needed for the type=gha cache backend.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 13. Registry login — skipped for PR builds (push=false). The
+      # PR-from-fork case is handled gracefully because the caller sets
+      # push: github.event_name != 'pull_request'.
+      - name: Login to ${{ inputs.registry }}
+        if: inputs.push == true
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 14. Tag rules — CR-0010 § 3e (Q5) verbatim, using the action's built-in
+      # short-SHA format (`type=sha,prefix=sha-,format=short` -> sha-<7chars>).
+      # The `latest` tag is enabled on main pushes via the `type=raw` line and
+      # on tag pushes via `type=semver,pattern={{version}},prefix=v`. PR runs
+      # produce a deterministic pr-<N>-sha-<7> tag locally but never push it
+      # (push=false on PR).
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.image-name }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=pr,prefix=pr-,suffix=-sha-{{sha}}
+            type=semver,pattern={{version}},prefix=v
+            type=semver,pattern={{major}}.{{minor}},prefix=v
+          flavor: |
+            latest=false
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      # 15. Build + push. Cache scope is per-image so the four components do
+      # not stomp each other in the GHA cache. mode=max stores intermediate
+      # layers (CR-0010 § 3g).
+      - name: Build and push
+        id: build-push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context-path }}
+          file: ${{ inputs.dockerfile-path }}
+          push: ${{ inputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ inputs.image-name }}
+          cache-to: type=gha,scope=${{ inputs.image-name }},mode=max
