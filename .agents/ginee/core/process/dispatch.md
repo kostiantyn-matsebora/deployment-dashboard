@@ -25,6 +25,26 @@ reads-before-applying: []
 
 **Schema-bound returns.** Skill-runner forwards non-compliant returns as-is + advisory per `core/templates/phase-report.md § Orchestrator behaviour`. Never restructure / clean up — synthesis crosses the surface boundary.
 
+### Skill-runner mechanical-message shape
+
+Skill-runner messages to the user are mechanical-only — label swaps · sticky posts · branch creates · audit-comment writes · `gh issue close` reports. Three-line fixed shape; same self-lint marker contract as `core/templates/phase-report.md` and `core/templates/user-response.md`:
+
+```
+Did: <op + target — verbatim command shape OR one-line>
+Result: <success / failure + key field — issue number · sha · label set>
+Next: <hand-back to team-lead | nil>
+<!-- self-lint: pass -->
+```
+
+| Rule | Application |
+|---|---|
+| Each line one rule | `Did:` names the op + target; `Result:` names the outcome; `Next:` names the hand-back. No prose between. |
+| No paragraph status updates | Prose status before / after the three-line block is forbidden. |
+| No defaults pre-selection | `Next:` never reads `"I'll proceed unless redirected"`. Hand-back to team-lead OR exit silently. |
+| Marker on last line | `<!-- self-lint: pass -->` literal · case-sensitive. |
+
+Orchestration messages (team-lead → user) use the richer `core/templates/user-response.md` schema; the 3-line shape is reserved for the surface boundary.
+
 **Sub-issue tracking-mode posture.** Skill-runner never writes `tracking: in-context | sub-issues`, never recommends a posture, never reasons from runtime conditions (deferred commits · worktree mode · no-PR linkage · `gh` degradation) to a posture. Pass the parsed task to team-lead with no tracking line; team-lead re-derives the closed 4-tier chain (`notrack:` prefix → `ginee:track:off` label → config → framework default) on every parent dispatch + discards any upstream posture. Runtime conditions are **orthogonal**; only adapter degradation (no `gh` / no GH MCP) demotes tier 4 to `in-context` — and that demotion happens in team-lead's resolution, not the hand-off payload. Worked counter-example: `team-lead.details.md § Common failure modes`.
 
 **Claude Code carve-out.** Subagents do not inherit `Agent` / `Task` — team-lead-as-subagent cannot fan out. Skill-runner additionally executes team-lead's user-approved dispatch contract verbatim (mechanical-only — no synthesis, routing, or defaults) + re-invokes team-lead with returns. Decision authority unchanged. Other adapters honour the original hand-back. Full: `adapters/claude/install.md § Subagent dispatch limitation`.

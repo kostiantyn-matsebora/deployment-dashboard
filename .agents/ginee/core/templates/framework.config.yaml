@@ -195,10 +195,20 @@ triage:
 # --- Compliance playbook opt-outs ---
 # Per-tactic opt-out for Claude compliance playbook. Absent → all enabled.
 # Tactic ids: subagent-tools-whitelist (T1) · pretooluse-edit-hook (T2) ·
-# pretooluse-bash-hook (T3) · compliance-statusline (T4).
+# pretooluse-bash-hook (T3) · compliance-statusline (T4) · user-prompt-submit-hook (T5) ·
+# posttooluse-edit-hook (T6) · stop-hook (T7) · pretooluse-send-message-hook (T8) ·
+# slash-commands (T10) · main-thread-permissions (T11) · session-start-hook (T12) ·
+# optimized-by-attestation (T13).
 # compliance:
 #   disabled:
 #     - subagent-tools-whitelist
+
+# --- Warm cardinal reuse + dispatch-cap (T11 / #147) ---
+# Per-issue warm registry expiry — force-fresh on dispatch count over the soft cap.
+# Spec: migrations/warm-cardinal-default.md. Default: 15.
+# warm-reuse:
+#   enabled: true                        # set false to disable warm reuse entirely (D36 opt-out)
+#   dispatch-cap: 15                     # forced-fresh trigger; summary-handoff payload preserves prior decisions
 
 # --- Host capability tools ---
 # Team-lead surfaces matching tools from the active adapter's install.md § Specialist-tool

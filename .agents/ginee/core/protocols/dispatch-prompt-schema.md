@@ -80,13 +80,22 @@ Phase-report schema per core/templates/phase-report.md. End with <!-- self-lint:
 - Auto-set value — cite core/protocols/triage-scoring.md § Forbidden
 ```
 
-## Self-lint — before sending
+## Self-lint — pre-send gate
+
+Team-lead authors the dispatch + runs the gate before sending. Different machinery from `core/templates/phase-report.md § Orchestrator behaviour on non-compliant returns` — that surface receives another role's draft, so a one-line advisory is the proportionate response. Dispatch-prompts are the author's own draft; a non-compliant draft MUST restructure inline before sending.
 
 1. No paragraph contains > 2 rules (sentence terminators).
 2. Inventories are tables / bullets, not prose.
-3. Reading-list entries cite a path; never restate the rule.
+3. Reading-list entries cite a path; MUST NOT restate the rule.
 4. `## Read discipline` cites `core/protocols/index-protocol.md § Read order` verbatim.
 5. No narrative preamble — first non-header line is a `##` section header.
+
+**Pre-send gate:**
+
+- All 5 checks pass + marker present → send.
+- Any check fails OR marker absent → restructure inline; re-run gate; MUST NOT dispatch a non-compliant payload.
+- No carry-forward mechanism (no prior author to carry the rule to). The author is the orchestrator; the fix is the author's own pre-send restructure.
+- Pre-send-restructure count surfaces in the orchestrator's user-response per `core/templates/user-response.md § Synthesis from phase-report returns` — `## Notes` line: `Dispatch pre-send restructures this turn: <N>.` Tracking signal; MUST NOT auto-disable the gate.
 
 Last line: `<!-- self-lint: pass -->`.
 

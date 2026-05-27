@@ -70,11 +70,48 @@ Different from adopter-doc enforcement (which piggybacks on the discovered linte
 | Stage | Mechanism |
 |---|---|
 | Author | `ginee-file-*` skill drafts the body. Specialist drafts a Phase-transition / sticky / review-reply comment. |
-| Self-lint | Author role runs the `core/process.md § Mandatory checks` against the drafted text **before** publishing — every section, including Summary. |
+| Self-lint | Author role runs the `core/process.md § Mandatory checks` against the drafted text + the audience check below **before** publishing — every section, including Summary. |
 | Violation | Surfaces as a suggestion in the user-approval prompt. User accepts the restructure / rejects / overrides. No silent publish. |
 | Publish | Only after user approval of the linted draft. |
 
-**No external linter.** The check is LLM self-review against the same 6 mandatory rules used for adopter docs.
+**No external linter.** The check is LLM self-review against the 6 mandatory rules used for adopter docs + the audience check.
+
+### Audience check — humans + LLMs
+
+ginee GitHub artefacts MUST serve two audiences — humans (contractors · future maintainers · cold reviewers) AND LLMs (next-session pickup · cardinal dispatch · triage scoring). LLM-only voice (`[6:frontend-engineer] Stage 1 forensic — confirm Bug C/D root cause (#92 iteration 1)`) is opaque to a cold human reader; human-only voice loses the framework hooks LLMs route by.
+
+**Five binding checks** — applies to issue bodies (`core/templates/issues/*.md`) · sub-issue dispatches (`core/templates/sub-issue-dispatch.md`) · framework-authored issue comments · PR descriptions (`core/templates/pr-description.md § What`):
+
+1. **Title — user-facing language.** Describes the problem / request / outcome a human can act on cold. Sub-issue framework prefix `[<phase>:<cardinal>]` stays; the `<task-one-liner>` is outcome-shaped, not investigation-shaped.
+2. **First paragraph — 2-4 sentence human summary.** Restates the title for a cold reader. No jargon · no assumed prior context · no internal identifiers.
+3. **Bug reports — numbered steps to reproduce.** Reader MUST be able to repro without loading the framework.
+4. **Framework-internal sections AFTER the human summary.** Dispatch contract · investigation notes · forensic links · ADR amendments · root-cause hypotheses live in clearly-labelled later sections. MUST NOT lead with internals.
+5. **Forbidden in title.** Internal bug identifiers (`Bug C` · `OV1` · `Stage 1 forensic`) · framework-internal phase / iteration tags beyond `[<phase>:<cardinal>]` (`(#92 iteration 1)` · `cycle 2-ter` · `Phase B`) · file paths · module names · code-level technical terms · references to root causes or fix mechanisms.
+
+**Title-shape examples** (canonical — peers cite this table):
+
+| LLM-only (forbidden) | Human + LLM (binding) |
+|---|---|
+| `[4:backend-engineer] Implement /v1/items pagination per ADR-0014-cursor-pagination` | `[4:backend-engineer] Add cursor-based pagination to the items list endpoint so SPAs can scroll past 1k results` |
+| `[6:frontend-engineer] Stage 1 forensic — confirm Bug C/D root cause on demo-gha data (#92 iteration 1)` | `[6:frontend-engineer] Investigate why deployment tiles render as isolated nodes without connecting graph edges` |
+| `[6:qa-engineer] Overlap-invariants regression spec — permanent CI gate (#83 framework hygiene)` | `[6:qa-engineer] Add automated tests that catch when deployment tiles overlap or leak past service-row boundaries` |
+| `[6:solution-architect] Stage 2a: ADR-0012 amendment per iteration-1 forensic (§4 + §5 + §2)` | `[6:solution-architect] Update the ngx-graph layout contract so deployment tiles render as a DAG instead of stacked nodes` |
+| `[7:solution-architect] Governance review of PR #142` | `[7:solution-architect] Review whether the new pagination endpoint preserves backward compatibility for v0 SPA clients` |
+| `[Feature] Migrate frontend graph + connector rendering to @swimlane/ngx-graph` | `[Feature] Replace bespoke connector lines between deployment tiles with the ngx-graph library so branching pipelines render without crossing arrows` |
+
+**Scope of binding.**
+
+| Surface | In scope |
+|---|---|
+| Issue bodies via `ginee-file-*` | yes — titles + first paragraphs + section ordering |
+| Sub-issue dispatches via team-lead | yes — title `<task-one-liner>` + first body paragraph |
+| Framework-authored issue / PR comments | yes — first line per `core/templates/pr-comment-cadence.md` matches the audience principle |
+| `core/templates/pr-description.md § What` | yes — adopter-visible change at line start; framework mechanics in later sections |
+| User-response surface (orchestrator → user) | yes — `core/templates/user-response.md § Decision-led header` carries the same principle |
+| Phase-report returns (cardinal → orchestrator) | no — internal surface; `core/templates/phase-report.md` governs |
+| Dispatch-prompt payloads (orchestrator → cardinal) | no — internal surface; `core/protocols/dispatch-prompt-schema.md` governs |
+
+**Out of scope.** Reporter-authored bodies + comments (MUST NOT auto-edit; `core/protocols/github-integration.md § Forbidden actions`). Discussion bodies (read-only context). Adopter docs governed by the discovered linter — adopter's own audience conventions apply.
 
 ## Enforcement for subagent returns
 

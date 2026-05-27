@@ -1,0 +1,86 @@
+# ginee — T5 (#141) keyword → context-injection table.
+# Schema: list of blocks separated by a blank line. Each block:
+#   pattern: '<regex — case-insensitive, anchored on word boundaries by the hook>'
+#   label:   <kebab-id, no spaces — labels the trigger in stderr/diagnostics>
+#   context: |   (literal block scalar — 2-space indented lines that follow)
+#     <≤ 28 body lines — recency-dilution ceiling per playbook #135 anti-patterns>
+#
+# The hook prepends matched contexts as `[ginee:context:<label>]\n<context>` to
+# the user prompt via hookSpecificOutput.additionalContext. Multiple matches
+# concatenate in pattern order, separated by a blank line.
+
+pattern: 'pick\s*up\s*#\d+|pickup\s*#\d+|work\s+on\s+issue\s*#?\d+|start\s+(on|working\s+on)\s+#\d+'
+label: ginee-pick-up
+context: |
+  Skill: ginee-pick-up (core/skills/ginee-pick-up/SKILL.md).
+  Procedure (GitHub issue source):
+    1. gh issue view <N> --comments  AND  gh api repos/<o>/<r>/issues/<N>/sub_issues — both mandatory.
+    2. Validate OPEN + a ready-label (ginee:ready or equivalent).
+    3. Scoring labels + sticky `<!-- ginee:score v=1 -->` per core/protocols/triage-scoring.md.
+    4. Swap label `ginee:ready` → `ginee:in-progress`.
+    5. Sub-issue + exactly one `ginee:role:<cardinal>` label + dispatch contract → fast-path to that cardinal.
+       Otherwise → hand off to @team-lead with parsed body + scoring + branch.
+  Schema-bound returns: every cardinal return ends with `<!-- self-lint: pass -->`.
+  Skill-runner forbiddens after hand-off: never draft plans · synthesize returns · re-dispatch in main thread (core/process/dispatch.md § Skill-runner — surface boundary).
+
+pattern: '(^|\s)auto:|address\s+team-lead\s+with\s+auto\b'
+label: automatic-mode
+context: |
+  Protocol: core/protocols/automatic-mode.md.
+  Activation MUST be explicit + per-task; never session-wide, never inherited.
+  Gates respected even in auto: Phase 7 SA review · destructive / external actions (never without consent) · Phase 8 user-approval invariant (single final handoff).
+  Forced-interactive triggers (halt + surface report on ANY):
+    - Phase 2 material UX choice (new screen · breaking wire shape · NFR trade-off)
+    - 2 iteration batches fail to resolve same defect
+    - cross-domain integration cycle (core/protocols/cross-domain-bugs.md)
+    - test oracle proven wrong (core/process.md § Test oracles can be wrong)
+    - budget > 1.5× tokens OR > 2× wall-clock estimate
+    - planned destructive / external action
+    - change-governance gate hits prompt branch (CR / ADR draft + skip-or-author choice)
+  Default delivery mode in auto: Mode 2 (wt — working tree, no commits) UNLESS adopter override.
+  Auto NEVER pushes / transitions task state without explicit Accept.
+
+pattern: '(^|\s)(branch:|wt:|commit:)'
+label: delivery-modes
+context: |
+  Protocol: core/protocols/delivery-modes.md.
+    branch: → Mode 1 (commits on feature branch; push only on explicit Accept; `gh pr create` per core/templates/pr-description.md).
+    wt:     → Mode 2 (changes in working tree; NOTHING committed without Accept).
+    commit: → Mode 3 (commits on current branch; nothing pushed without Accept).
+  Default by source: GitHub issue → Mode 1 · auto-mode default → Mode 2 · adopter override via local/framework.config.yaml § delivery.
+
+pattern: '/ginee-update'
+label: ginee-update
+context: |
+  Skill: ginee-update (core/skills/ginee-update/SKILL.md). Re-runs are idempotent.
+  Flow: fetch framework upstream · apply migrations not previously applied · run core/scripts/sync-claude-settings.{ps1,sh} (claude adapter) to merge .claude/settings.json hooks · preserve adopter customisations (statusLine override · non-ginee PreToolUse entries).
+  Adopter-owned surfaces (local/**, .claude/settings.json customisations) MUST survive untouched.
+
+pattern: '\btriage\b'
+label: triage-scoring
+context: |
+  Protocol: core/protocols/triage-scoring.md.
+  ATAM utility-tree H/M/L scale (H=3 · M=2 · L=1). NEVER 1–5 numeric — H/M/L only.
+  Two axes: `value:*` (user-facing utility) + `complexity:*` (engineering effort).
+  Missing value → ask user H/M/L + post audit comment. Missing complexity → dispatch @solution-architect for estimate + audit.
+  Sticky comment per issue: `<!-- ginee:score v=1 -->` — one per issue, update in place; never duplicate.
+
+pattern: 'address\s+review|review\s*#\d+'
+label: ginee-address-review
+context: |
+  Skill: ginee-address-review (core/skills/ginee-address-review/SKILL.md).
+  Read review comments via `gh api repos/<o>/<r>/pulls/<N>/comments` AND `gh pr view <N> --comments`.
+  Route replies to warm cardinals via SendMessage (per warm-reuse plumbing); never fresh-spawn for review-cycle continuity.
+  Sticky reply comment per cycle: `<!-- ginee:review-cycle v=1 -->`.
+
+pattern: '@(team-lead|solution-architect|backend-engineer|frontend-engineer|qa-engineer|devops-engineer|ai-engineer)\b|\bdispatch\b'
+label: dispatch-prompt-schema
+context: |
+  Dispatch prompt schema: every Agent / SendMessage prompt MUST carry:
+    - Goal (single line)
+    - Inbound payload (parsed body · prior-phase artefacts · contracts)
+    - Acceptance criteria (per Phase N spec)
+    - Forbidden surfaces (per role)
+    - Stop-state (when partial progress is acceptable)
+  Schema-bound return: phase-report.md § mandatory sections — Files touched · Decisions made · Verification log · Open issues · Next dispatch needed · Source reads. Empty: `(none)`. Tail: `<!-- self-lint: pass -->`.
+  Specialist role boundaries: stay-in-tier; cross-domain bugs route via @team-lead.

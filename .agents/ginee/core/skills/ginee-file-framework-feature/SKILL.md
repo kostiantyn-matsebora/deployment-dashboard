@@ -17,7 +17,7 @@ Run the file-an-issue workflow per `.agents/ginee/core/protocols/github-integrat
 2. Resolve target — `local/framework.config.yaml § github.framework-repo` REQUIRED; fail fast if unset.
 3. Draft body from template (incl. `Affected framework surface` · `Owner-decision impact` · `Backward compatibility` · standard sections).
 4. User asked for ideas → present 2–3 candidate design solutions in `## Proposed behavior` with tradeoff bullets. Do NOT pre-decide; let framework owners pick during Phase 2.
-5. **Self-lint** against `core/process.md § Mandatory checks before report-as-done` (every section incl. Summary).
+5. **Self-lint** against `core/process.md § Mandatory checks` + `core/protocols/doc-authoring-protocol.md § Audience check` (every section incl. Summary) — title outcome-shaped (no D-IDs / file paths / implementation mechanics) · 2-4 sentence human Summary · framework-internal sections after Summary.
 6. **Surface draft for approval**; include self-lint findings.
 7. On approval: create against `github.framework-repo` with `ready-label` + `framework` label. Tool priority: gh CLI → GitHub MCP → HTTPS.
 8. Report URL + number.

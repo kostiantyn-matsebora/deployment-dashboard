@@ -201,7 +201,7 @@ Every framework-authored reply + cycle-summary passes the mandatory checks per `
 
 ## Sub-issue dispatch
 
-One sub-issue per team-lead → cardinal dispatch under the parent task issue (issue-sourced only; TODO / freeform → in-context). Authoring: `team-lead.details.md § Sub-issue dispatch`. Body: `core/templates/sub-issue-dispatch.md`. Rules + self-lint across surfaces: `core/protocols/sub-issue-dispatch-schema.md`.
+One sub-issue per team-lead → cardinal dispatch under the parent task issue (issue-sourced only; TODO / freeform → in-context). Authoring: `team-lead.details.md § Sub-issue dispatch`. Body: `core/templates/sub-issue-dispatch.md`. Rules + self-lint across surfaces: `core/protocols/sub-issue-dispatch-schema.md`. Title + `## Summary` follow `core/protocols/doc-authoring-protocol.md § Audience check` — outcome-shaped one-liner · forbidden-identifier list scrubbed · human-summary precedes framework-internal sections.
 
 | Step | Op |
 |---|---|

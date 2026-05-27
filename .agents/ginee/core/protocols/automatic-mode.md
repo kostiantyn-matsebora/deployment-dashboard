@@ -70,7 +70,19 @@ State at handoff per resolved mode (`core/protocols/delivery-modes.md`):
 
 **Auto-mode default = Mode 2 (`wt`)** — aligns with "nothing committed yet" invariant. Adopter overrides via `delivery.default-mode` or per-task prefix.
 
-**Delivery report** includes — TODO / issue / freeform task addressed · Phase 2/4/5 artefact deltas (files touched · contracts changed) · change-scoped test results (pass/fail per suite + manual-smoke note) · SA review sign-off · *"Full regression: not run (auto mode). Request before accept if desired."* · forced-interactive escalations during run · resolved mode + per-mode state (commit list / wt diff / branch) · suggested commit message(s) per `local/bindings.md` (Mode 2 only).
+**Delivery report shape.** `core/templates/user-response.md § Auto-mode delivery-handoff addendum` — `## Result` · `## What changed` · `## Verification` · `## Next` · `## Delivery state` · `## Accept / Feedback / Reject` · optional `## Notes` ≤ 150 words · marker. Synthesis from cardinal phase-reports per the same template's mapping table.
+
+**Required content:**
+
+- TODO / issue / freeform task addressed.
+- Phase 2/4/5 artefact deltas — files touched · contracts changed.
+- Change-scoped test results — pass/fail per suite + manual-smoke note.
+- SA review sign-off.
+- *"Full regression: not run (auto mode). Request before accept if desired."*
+- Forced-interactive escalations during run.
+- Resolved mode + per-mode state (commit list / wt diff / branch).
+- Suggested commit message(s) per `local/bindings.md` (Mode 2 only).
+- Schema-bound-return compliance count from the task — `## Notes` line per `core/templates/phase-report.md § Orchestrator behaviour on non-compliant returns`.
 
 | Action | Effect by mode |
 |---|---|

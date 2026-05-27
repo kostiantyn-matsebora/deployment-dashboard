@@ -16,7 +16,7 @@ Run the file-an-issue workflow per `.agents/ginee/core/protocols/github-integrat
 1. Load `.agents/ginee/core/protocols/github-integration.md` + `.agents/ginee/core/templates/issues/framework-bug-report.md`.
 2. Resolve target — `local/framework.config.yaml § github.framework-repo` REQUIRED. Unset → fail fast: *"framework-repo not configured. Set `github.framework-repo: <owner>/ginee` in `local/framework.config.yaml` first."* Offer to populate.
 3. Draft body from template (incl. `Affected framework artefact` · `Framework version` from `core/VERSION` · `Adapter in use` · `Reproduction` · `Expected/Actual` · `Blocking severity` · `Workaround` · optional `Owner-history pointers` · `Acceptance criteria`).
-4. **Self-lint** against `core/process.md § Mandatory checks before report-as-done` (every section incl. Summary).
+4. **Self-lint** against `core/process.md § Mandatory checks` + `core/protocols/doc-authoring-protocol.md § Audience check` (every section incl. Summary) — title user-facing (no D-IDs / file paths / fix mechanics) · 2-4 sentence human Summary · numbered Reproduction steps · framework-internal sections after Summary.
 5. **Surface draft for approval**; include self-lint findings.
 6. On approval: create against `github.framework-repo` with `ready-label` + `framework` label. Tool priority: gh CLI → GitHub MCP → HTTPS.
 7. Report URL + number.

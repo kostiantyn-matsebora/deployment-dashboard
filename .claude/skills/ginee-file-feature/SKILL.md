@@ -16,7 +16,7 @@ Run the file-an-issue workflow per `.agents/ginee/core/protocols/github-integrat
 1. Load `.agents/ginee/core/protocols/github-integration.md` + `.agents/ginee/core/templates/issues/feature-request.md`.
 2. Resolve target repo (same as `ginee-file-bug`).
 3. Draft body from template; populate all sections from user prompt + project context. Present alternatives when user requested ideas.
-4. **Self-lint** against `core/process.md § Mandatory checks before report-as-done` (every section incl. Summary).
+4. **Self-lint** against `core/process.md § Mandatory checks` + `core/protocols/doc-authoring-protocol.md § Audience check` (every section incl. Summary) — title outcome-shaped · 2-4 sentence human Summary · framework-internal sections after Summary · forbidden-identifier list scrubbed from title.
 5. **Surface draft for approval**; include self-lint findings.
 6. On approval: `gh issue create` (priority) / GitHub MCP / HTTPS+token. Label: `ready-label`; auto-create if absent.
 7. Report URL + number.

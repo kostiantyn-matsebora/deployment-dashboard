@@ -1,11 +1,16 @@
 ---
 name: Framework bug report (ginee)
 about: Defect in the ginee framework itself (role definitions, process docs, adapters, templates, extras)
-title: "[Framework Bug] <one-line title>"
+title: "[Framework Bug] <user-facing problem in plain language — what the framework did wrong, not which file is at fault>"
 labels: [ginee:ready, framework]
 ---
 
 <!--
+  Audience binding — title + Summary describe what the framework did wrong in language a maintainer-on-call can grok cold.
+  Forbidden in title: internal IDs (D<N> · Stage N) · file paths · module names · fix mechanics.
+  Framework-internal sections (Affected artefact · Reproduction · Expected/Actual) come AFTER Summary.
+  Full: core/protocols/doc-authoring-protocol.md § Audience check.
+
   Filed against ginee upstream (per local/framework.config.yaml § github.framework-repo):
     @team-lead file framework-bug <title>
   Priority signal (recommended): add `value:*` + `complexity:*` labels (ATAM convention) per
@@ -19,7 +24,7 @@ labels: [ginee:ready, framework]
 
 ## Summary
 
-<1–2 sentences describing what the framework did wrong>
+<2–4 sentences — restate the title for a cold human reader. No jargon. No D-IDs. No assumed prior context. What the framework did wrong, when, who notices.>
 
 ## Affected framework artefact
 

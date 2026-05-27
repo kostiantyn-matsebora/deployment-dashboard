@@ -8,7 +8,13 @@ Authored by `team-lead` per `core/protocols/github-integration.md § Sub-issue d
 [<phase>:<cardinal>] <task-one-liner>
 ```
 
-Examples — `[4:backend-engineer] Implement /v1/items pagination per ADR-0014-cursor-pagination` · `[5:qa-engineer] Author scenario suite for FR-12-bulk-import` · `[7:solution-architect] Governance review of PR #142`.
+**Audience binding.** Sub-issues serve humans (contractors · new team members · adopters reviewing the parent's `<!-- ginee:dispatch-map -->`) AND LLMs (next-session pickup · cardinal dispatch).
+
+- Keep the framework prefix `[<phase>:<cardinal>]` — LLMs route off it.
+- The `<task-one-liner>` after the prefix MUST be outcome-shaped; investigation framing · internal identifiers · file paths · fix mechanics belong in the body.
+- **Forbidden in `<task-one-liner>`** — internal bug IDs (`Bug C` · `OV1`) · forensic stage tags (`Stage 1 forensic`) · iteration markers (`#92 iteration 1` · `cycle 2-ter`) · file paths · module names · code-level technical terms · references to root causes or fix mechanisms.
+
+Title-shape examples (LLM-only ❌ vs Human+LLM ✅): `core/protocols/doc-authoring-protocol.md § Audience check § Title-shape examples`. Full binding: same file § Audience check.
 
 ## Labels (set at create)
 
@@ -18,6 +24,11 @@ Examples — `[4:backend-engineer] Implement /v1/items pagination per ADR-0014-c
 
 ```markdown
 <!-- ginee:sub-issue-dispatch v=1 parent=#<parent-number> -->
+
+## Summary
+
+<2-4 sentences — restate the title's work for a cold human reader. No jargon. No assumed prior context.
+What problem this dispatch resolves, who notices the outcome.>
 
 ## Dispatch contract
 
@@ -50,6 +61,8 @@ Examples — `[4:backend-engineer] Implement /v1/items pagination per ADR-0014-c
 | sub-tasks | (none started — cardinal owns decomposition per `core/protocols/iteration-protocol.md`) |
 | blockers | (none) |
 ```
+
+**Section ordering.** `## Summary` is the human-facing entry point and MUST appear first under the header marker. Framework-internal sections (`## Dispatch contract` · `## Scope` · `## Acceptance` · `## Spec links` · `## Initial state`) follow. Reverse ordering fails the audience check.
 
 ## Comment cadence — cardinal-authored on the sub-issue
 
@@ -85,6 +98,7 @@ Phase-report return per `core/templates/phase-report.md` doubles as closing comm
 4. Every progress comment carries both `time: <N>m` AND `cumulative: <N>m`.
 5. Closing includes `## Time spent` per `phase-report.md`.
 6. Doc-authoring 6 mandatory checks per `core/process.md § Documentation style`.
+7. **Audience check** per `core/protocols/doc-authoring-protocol.md § Audience check` — title `<task-one-liner>` outcome-shaped · forbidden-identifier list scrubbed · `## Summary` precedes framework-internal sections in body.
 
 Last line of every posted surface: `<!-- self-lint: pass -->`.
 

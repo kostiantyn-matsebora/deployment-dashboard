@@ -22,7 +22,7 @@ Run the promote workflow per `.agents/ginee/core/protocols/github-integration.md
 4. **Hand to `team-lead`.** Skill-runner dispatches `@team-lead` with the fetched discussion payload + target repo. team-lead owns: classification of bug-vs-feature, template selection, draft authoring (the discussion may need restructuring doc-authoring rules), source-section linkage, surfacing the draft to the user, post-approval issue creation + discussion comment. Per `.agents/ginee/core/process.md § Skill-runner — surface boundary`.
 5. Under team-lead: choose template — `feature-request.md` (primary) / `framework-feature-request.md` (framework) by default; switch to bug-report template if the discussion is clearly about a defect.
 6. Draft the issue body. Title prefix: `Promoted from discussion #<N>: <title>`. Body includes a `## Source` section linking the discussion.
-7. **Surface the draft for user approval.** Doc-authoring self-lint runs before publish.
+7. **Surface the draft for user approval.** Doc-authoring self-lint runs before publish — `core/process.md § Mandatory checks` + `core/protocols/doc-authoring-protocol.md § Audience check` (title outcome-shaped · 2-4 sentence human Summary · framework-internal sections after Summary).
 8. On approval:
    - Create the issue against the target repo with `ready-label` (+ `framework` label for framework target). Tool priority: gh CLI → GitHub MCP → HTTPS.
    - Comment on the original discussion: "Promoted to issue #<M>" with the issue URL.
