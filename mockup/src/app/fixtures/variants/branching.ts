@@ -7,7 +7,9 @@ import type {
   MatrixState,
   ServiceDescriptor,
   EnvironmentDescriptor,
-  TopologyState
+  TopologyState,
+  ServiceWithDeployments,
+  Deployment
 } from '../index';
 
 export const BRANCHING_ENVIRONMENTS: readonly EnvironmentDescriptor[] = [
@@ -57,6 +59,44 @@ export const MOCKUP_MATRIX_BRANCHING: MatrixState = {
     prod:     { current: ev('auth-290', 'v5.0.8', 'success', '2026-05-10T11:00:00Z', 290, 'frank'), lastSuccessful: null, previousFailed: false }
   }
 };
+
+// ServiceWithDeployments — derives DAG from deployments[] per ADR-0012 rev 3.
+// Uses parentDeployments for the branching topology (explicit path).
+export const BRANCHING_SERVICES_WITH_DEPLOYMENTS: readonly ServiceWithDeployments[] = [
+  {
+    id: 'gateway',
+    name: 'Gateway',
+    deployments: [
+      { id: 'gw-101', env: BRANCHING_ENVIRONMENTS[0], version: 'v1.2.0', status: 'success',     timestamp: '2026-05-14T10:00:00Z' },
+      { id: 'gw-102', env: BRANCHING_ENVIRONMENTS[1], version: 'v1.2.0', status: 'success',     timestamp: '2026-05-14T11:00:00Z', parentDeployments: ['gw-101'] },
+      { id: 'gw-103', env: BRANCHING_ENVIRONMENTS[2], version: 'v1.1.5', status: 'success',     timestamp: '2026-05-13T08:00:00Z', parentDeployments: ['gw-101'] },
+      { id: 'gw-104', env: BRANCHING_ENVIRONMENTS[3], version: 'v1.2.0', status: 'in-progress', timestamp: '2026-05-14T12:00:00Z', parentDeployments: ['gw-102', 'gw-103'] }
+      // prod: null (no deployment)
+    ]
+  },
+  {
+    id: 'payments',
+    name: 'Payments',
+    deployments: [
+      { id: 'pay-190', env: BRANCHING_ENVIRONMENTS[4], version: 'v2.9.7', status: 'success',     timestamp: '2026-05-08T12:00:00Z' },
+      { id: 'pay-199', env: BRANCHING_ENVIRONMENTS[3], version: 'v2.9.8', status: 'success',     timestamp: '2026-05-10T15:00:00Z', parentDeployments: ['pay-190'] },
+      { id: 'pay-210', env: BRANCHING_ENVIRONMENTS[2], version: 'v2.9.9', status: 'success',     timestamp: '2026-05-11T10:00:00Z', parentDeployments: ['pay-199'] },
+      { id: 'pay-202', env: BRANCHING_ENVIRONMENTS[1], version: 'v3.0.0', status: 'failure',     timestamp: '2026-05-14T09:00:00Z', parentDeployments: ['pay-199'] },
+      { id: 'pay-201', env: BRANCHING_ENVIRONMENTS[0], version: 'v3.0.1', status: 'in-progress', timestamp: '2026-05-14T13:00:00Z', parentDeployments: ['pay-202'] }
+    ]
+  },
+  {
+    id: 'auth',
+    name: 'Auth',
+    deployments: [
+      { id: 'auth-290', env: BRANCHING_ENVIRONMENTS[4], version: 'v5.0.8', status: 'success', timestamp: '2026-05-10T11:00:00Z' },
+      { id: 'auth-303', env: BRANCHING_ENVIRONMENTS[3], version: 'v5.0.9', status: 'success', timestamp: '2026-05-13T16:00:00Z', parentDeployments: ['auth-290'] },
+      { id: 'auth-302', env: BRANCHING_ENVIRONMENTS[1], version: 'v5.1.0', status: 'success', timestamp: '2026-05-14T09:30:00Z', parentDeployments: ['auth-303'] },
+      { id: 'auth-301', env: BRANCHING_ENVIRONMENTS[0], version: 'v5.1.0', status: 'success', timestamp: '2026-05-14T08:30:00Z', parentDeployments: ['auth-302'] }
+      // qahotfix: null (no deployment)
+    ]
+  }
+];
 
 // Branching DAG: dev forks to qa AND qahotfix; both converge to uat; uat → prod.
 // This is the #54-reporter topology that caused the 6-iteration Alpine burn.

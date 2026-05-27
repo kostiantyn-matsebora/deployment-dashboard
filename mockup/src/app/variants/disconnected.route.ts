@@ -1,22 +1,28 @@
 // Variant route — disconnected topology.
-// Renders the swim-lane view with MOCKUP_TOPOLOGY_DISCONNECTED: two
-// independent sub-DAGs (alpha: dev→qa→uat→prod; beta: dev→staging) plus
-// an orphan service (gamma: prod only, no edges).
 
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { SwimLaneLayoutComponent } from '../chrome/swim-lane-layout.component';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { SwimLaneGlanceComponent } from '../chrome/swim-lane-glance.component';
+import { SwimLaneCompactComponent } from '../chrome/swim-lane-compact.component';
+import { SwimLaneDetailedComponent } from '../chrome/swim-lane-detailed.component';
+import { SwimLaneFocusComponent } from '../chrome/swim-lane-focus.component';
 import { StatsBarComponent } from '../chrome/stats-bar.component';
+import { ViewModeService } from '../view-mode.service';
 import {
   DISCONNECTED_ENVIRONMENTS,
-  DISCONNECTED_SERVICES,
-  MOCKUP_MATRIX_DISCONNECTED,
-  MOCKUP_TOPOLOGY_DISCONNECTED
+  DISCONNECTED_SERVICES_WITH_DEPLOYMENTS,
+  MOCKUP_MATRIX_DISCONNECTED
 } from '../fixtures/variants/disconnected';
 
 @Component({
   selector: 'dd-mockup-disconnected-route',
   standalone: true,
-  imports: [SwimLaneLayoutComponent, StatsBarComponent],
+  imports: [
+    SwimLaneGlanceComponent,
+    SwimLaneCompactComponent,
+    SwimLaneDetailedComponent,
+    SwimLaneFocusComponent,
+    StatsBarComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div>
@@ -28,20 +34,44 @@ import {
         [failureCount]="failureCount"
         [runningCount]="runningCount"
       ></dd-mockup-stats-bar>
-      <dd-mockup-swim-lane-layout
-        [services]="services"
-        [environments]="environments"
-        [matrix]="matrix"
-        [topology]="topology"
-      ></dd-mockup-swim-lane-layout>
+      @switch (viewModeService.mode()) {
+        @case ('glance') {
+          <dd-mockup-swim-lane-glance
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-swim-lane-glance>
+        }
+        @case ('compact') {
+          <dd-mockup-swim-lane-compact
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-swim-lane-compact>
+        }
+        @case ('focus') {
+          <dd-mockup-swim-lane-focus
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-swim-lane-focus>
+        }
+        @default {
+          <dd-mockup-swim-lane-detailed
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-swim-lane-detailed>
+        }
+      }
     </div>
   `
 })
 export class DisconnectedRouteComponent {
-  readonly services = DISCONNECTED_SERVICES;
+  readonly viewModeService = inject(ViewModeService);
+  readonly servicesWithDeployments = DISCONNECTED_SERVICES_WITH_DEPLOYMENTS;
   readonly environments = DISCONNECTED_ENVIRONMENTS;
   readonly matrix = MOCKUP_MATRIX_DISCONNECTED;
-  readonly topology = MOCKUP_TOPOLOGY_DISCONNECTED;
 
   get failureCount(): number {
     let n = 0;

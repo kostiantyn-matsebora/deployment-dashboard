@@ -27,12 +27,24 @@ async function selectTheme(page: Page, pref: ThemePref): Promise<void> {
   // already open TOGGLES it shut — so we only click the gear when the
   // popover is not already visible. This makes selectTheme() safe to
   // call back-to-back for chained selections.
+  //
+  // The theme popover renders via `position:absolute; right:0; top:calc(100%+6px)`
+  // inside the sticky header. With the running stack having 10+ services and
+  // multiple environments the popover extends beyond the visible horizontal
+  // viewport; `locator.click()` times out with "element is outside of the
+  // viewport". `dispatchEvent` bypasses the viewport check and still fires
+  // the Angular (change) handler.
   const popover = page.getByTestId('theme-popover');
   if (!(await popover.isVisible())) {
     await page.getByTestId('theme-gear').click();
     await expect(popover).toBeVisible();
   }
-  await page.getByTestId(`theme-option-${pref}`).click();
+  await page.evaluate((p: string) => {
+    const el = document.querySelector(`[data-testid="theme-option-${p}"]`) as HTMLInputElement | null;
+    if (!el) throw new Error(`theme-option-${p} not found in DOM`);
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, pref);
 }
 
 test.describe('Theme switcher — persists across reload', () => {

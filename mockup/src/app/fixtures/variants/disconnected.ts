@@ -8,7 +8,8 @@ import type {
   MatrixState,
   ServiceDescriptor,
   EnvironmentDescriptor,
-  TopologyState
+  TopologyState,
+  ServiceWithDeployments
 } from '../index';
 
 export const DISCONNECTED_ENVIRONMENTS: readonly EnvironmentDescriptor[] = [
@@ -58,6 +59,39 @@ export const MOCKUP_MATRIX_DISCONNECTED: MatrixState = {
     prod:    { current: ev('gm-001', 'v0.1.0', 'success', '2026-05-01T08:00:00Z', 201, 'dave'), lastSuccessful: null, previousFailed: false }
   }
 };
+
+// ServiceWithDeployments — disconnected topology via correlation-key fallback.
+// No parentDeployments set, so DAG builder uses correlation key.
+// alpha: version varies → version is discriminating → linear chain by timestamp.
+// beta: version varies → version is discriminating → dev→staging.
+// gamma: only prod → single node, no edges.
+export const DISCONNECTED_SERVICES_WITH_DEPLOYMENTS: readonly ServiceWithDeployments[] = [
+  {
+    id: 'alpha',
+    name: 'Alpha',
+    deployments: [
+      { id: 'al-001', env: DISCONNECTED_ENVIRONMENTS[0], version: 'v1.0.0', status: 'success',     timestamp: '2026-05-14T08:00:00Z' },
+      { id: 'al-002', env: DISCONNECTED_ENVIRONMENTS[2], version: 'v1.0.1', status: 'success',     timestamp: '2026-05-14T09:00:00Z' },
+      { id: 'al-003', env: DISCONNECTED_ENVIRONMENTS[3], version: 'v0.9.9', status: 'success',     timestamp: '2026-05-13T12:00:00Z' },
+      { id: 'al-004', env: DISCONNECTED_ENVIRONMENTS[4], version: 'v0.9.8', status: 'success',     timestamp: '2026-05-10T10:00:00Z' }
+    ]
+  },
+  {
+    id: 'beta',
+    name: 'Beta',
+    deployments: [
+      { id: 'bt-001', env: DISCONNECTED_ENVIRONMENTS[0], version: 'v2.1.0', status: 'in-progress', timestamp: '2026-05-14T14:00:00Z' },
+      { id: 'bt-002', env: DISCONNECTED_ENVIRONMENTS[1], version: 'v2.0.5', status: 'failure',     timestamp: '2026-05-14T11:00:00Z' }
+    ]
+  },
+  {
+    id: 'gamma',
+    name: 'Gamma',
+    deployments: [
+      { id: 'gm-001', env: DISCONNECTED_ENVIRONMENTS[4], version: 'v0.1.0', status: 'success', timestamp: '2026-05-01T08:00:00Z' }
+    ]
+  }
+];
 
 // Disconnected topology:
 //   alpha: linear dev→qa→uat→prod (sub-DAG 1; no staging)

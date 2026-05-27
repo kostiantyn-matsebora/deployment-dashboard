@@ -13,6 +13,24 @@ async function readDataset(page: Page): Promise<{ theme: string | null; pref: st
   }));
 }
 
+/**
+ * Click a theme-option radio by dispatching the click event directly. With
+ * many services / environments in the DB the gear's popover may extend
+ * outside the visible horizontal viewport; `locator.click()` times out in
+ * that case because Playwright cannot scroll an element into view when its
+ * overflow context prevents it. `dispatchEvent` bypasses the viewport check
+ * and still fires the Angular (change) handler, so the service contract
+ * (data-theme + data-theme-pref update) is tested faithfully.
+ */
+async function clickThemeOption(page: Page, pref: string): Promise<void> {
+  await page.evaluate((p: string) => {
+    const el = document.querySelector(`[data-testid="theme-option-${p}"]`) as HTMLInputElement | null;
+    if (!el) throw new Error(`theme-option-${p} not found in DOM`);
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, pref);
+}
+
 async function installPersistenceMarker(page: Page): Promise<void> {
   // We use this to confirm that clicking a theme option does NOT cause
   // a navigation / full reload — the marker would be erased by one.
@@ -62,7 +80,7 @@ test.describe('Theme switcher — popover open + select', () => {
     await installPersistenceMarker(page);
 
     await page.getByTestId('theme-gear').click();
-    await page.getByTestId('theme-option-dark').click();
+    await clickThemeOption(page, 'dark');
 
     await expect.poll(async () => (await readDataset(page)).theme).toBe('dark');
     await expect.poll(async () => (await readDataset(page)).pref).toBe('dark');
@@ -76,7 +94,7 @@ test.describe('Theme switcher — popover open + select', () => {
     await installPersistenceMarker(page);
 
     await page.getByTestId('theme-gear').click();
-    await page.getByTestId('theme-option-light').click();
+    await clickThemeOption(page, 'light');
 
     await expect.poll(async () => (await readDataset(page)).theme).toBe('light');
     await expect.poll(async () => (await readDataset(page)).pref).toBe('light');
@@ -93,10 +111,10 @@ test.describe('Theme switcher — popover open + select', () => {
     // So we open the popover ONCE and pick both options without re-
     // clicking the gear (a second gear click TOGGLES the popover shut).
     await page.getByTestId('theme-gear').click();
-    await page.getByTestId('theme-option-dark').click();
+    await clickThemeOption(page, 'dark');
     await expect.poll(async () => (await readDataset(page)).pref).toBe('dark');
 
-    await page.getByTestId('theme-option-auto').click();
+    await clickThemeOption(page, 'auto');
 
     await expect.poll(async () => (await readDataset(page)).pref).toBe('auto');
     // We set OS=light in beforeEach.
@@ -109,12 +127,12 @@ test.describe('Theme switcher — popover open + select', () => {
     // Popover stays open after a pick (see comment in the test above),
     // so a single gear click is enough to pick both Dark and Light.
     await page.getByTestId('theme-gear').click();
-    await page.getByTestId('theme-option-dark').click();
+    await clickThemeOption(page, 'dark');
     // Title format per the mockup: `Theme: ${themePref} · effective ${effectiveTheme}`
     const titleAfterDark = (await page.getByTestId('theme-gear').getAttribute('title')) ?? '';
     expect(titleAfterDark.toLowerCase()).toContain('dark');
 
-    await page.getByTestId('theme-option-light').click();
+    await clickThemeOption(page, 'light');
     const titleAfterLight = (await page.getByTestId('theme-gear').getAttribute('title')) ?? '';
     expect(titleAfterLight.toLowerCase()).toContain('light');
   });

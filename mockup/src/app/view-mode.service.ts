@@ -5,7 +5,7 @@
 //
 // Consumed via inject(ViewModeService) in:
 //   - app.component       → drives view-switcher button active styling
-//   - swim-lane-route     → passes viewMode() to swim-lane-layout
+//   - swim-lane-route     → @switch dispatches to per-view-mode component
 //   - workflow-rows-route → passes viewMode() to workflow-rows-layout
 
 import { Injectable, signal } from '@angular/core';

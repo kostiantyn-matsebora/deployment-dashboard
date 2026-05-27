@@ -97,14 +97,36 @@ $cfg = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 foreach ($k in 'readBaseUrl','writeBaseUrl','apiKey') {
     if ([string]::IsNullOrWhiteSpace([string]$cfg.$k)) { Write-Error "Config '$ConfigPath' missing required key '$k'."; exit 1 }
 }
-$readUrl  = ([string]$cfg.readBaseUrl).TrimEnd('/')
-$writeUrl = ([string]$cfg.writeBaseUrl).TrimEnd('/')
-$apiKey   = [string]$cfg.apiKey
+$readUrl   = ([string]$cfg.readBaseUrl).TrimEnd('/')
+$writeUrl  = ([string]$cfg.writeBaseUrl).TrimEnd('/')
+$apiKey    = [string]$cfg.apiKey
+# mockupBaseUrl is optional (only required when the visual-parity spec runs).
+# If present in config, wire it; runner emits a clear preflight message when absent.
+$mockupUrl = if ($cfg.PSObject.Properties.Match('mockupBaseUrl').Count -gt 0 -and -not [string]::IsNullOrWhiteSpace([string]$cfg.mockupBaseUrl)) {
+    ([string]$cfg.mockupBaseUrl).TrimEnd('/')
+} else {
+    ''
+}
 try {
     $resp = Invoke-WebRequest -Uri "$readUrl/health" -Method GET -TimeoutSec 5 -UseBasicParsing -SkipHttpErrorCheck -ErrorAction Stop
     $reachable = ([int]$resp.StatusCode -ge 200 -and [int]$resp.StatusCode -lt 500)
 } catch { $reachable = $false }
 if (-not $reachable) { Write-Host "Local stack not reachable at $readUrl - run dev_env/start.ps1 first." -ForegroundColor Yellow; exit 1 }
+# Mockup preflight: if mockupBaseUrl is configured, verify it is reachable before running.
+# Missing mockupBaseUrl is allowed (non-visual-parity suites don't need it);
+# a configured-but-unreachable mockupBaseUrl fails fast so the spec gets a clear error.
+if (-not [string]::IsNullOrWhiteSpace($mockupUrl)) {
+    try {
+        $mResp = Invoke-WebRequest -Uri "$mockupUrl/" -Method GET -TimeoutSec 5 -UseBasicParsing -SkipHttpErrorCheck -ErrorAction Stop
+        $mockupReachable = ([int]$mResp.StatusCode -ge 200 -and [int]$mResp.StatusCode -lt 500)
+    } catch { $mockupReachable = $false }
+    if (-not $mockupReachable) {
+        Write-Host "Mockup app not reachable at $mockupUrl - run 'npm start --prefix mockup' first." -ForegroundColor Yellow
+        exit 1
+    }
+} else {
+    Write-Host "[e2e/run-tests] mockupBaseUrl not configured - visual-parity spec (O6) will fail if invoked." -ForegroundColor DarkYellow
+}
 Push-Location $PSScriptRoot
 try {
     if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'node_modules/@playwright/test'))) {
@@ -115,6 +137,11 @@ try {
     $env:DASHBOARD_READ_BASE_URL  = $readUrl
     $env:DASHBOARD_WRITE_BASE_URL = $writeUrl
     $env:DASHBOARD_API_KEY        = $apiKey
+    # Export MOCKUP_BASE_URL so swim-lane-detailed-visual-parity.spec.ts can reach :4201.
+    # Empty string means "not configured" — the spec performs its own preflight check.
+    if (-not [string]::IsNullOrWhiteSpace($mockupUrl)) {
+        $env:MOCKUP_BASE_URL = $mockupUrl
+    }
     $pwArgs = @('playwright', 'test', "--project=$Project")
     if ($PSBoundParameters.ContainsKey('Filter') -and -not [string]::IsNullOrWhiteSpace($Filter)) { $pwArgs += @('--grep', $Filter) }
     if ($Headed)   { $pwArgs += '--headed' }

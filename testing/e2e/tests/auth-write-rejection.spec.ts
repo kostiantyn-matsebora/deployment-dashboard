@@ -35,7 +35,7 @@ test('Writes without a valid X-Api-Key are rejected and produce no matrix update
   const respNoKey = await noKey.post('/api/deployments', { data: VALID_PAYLOAD });
   expect(respNoKey.status()).toBe(401);
   const bodyNoKey = await respNoKey.json();
-  expect(bodyNoKey.error).toBe('Missing X-Api-Key header.');
+  expect(bodyNoKey.detail).toBe('Missing X-Api-Key header.');
 
   // --- Wrong API key ---
   const wrongKey = await playwrightRequest.newContext({
@@ -48,7 +48,7 @@ test('Writes without a valid X-Api-Key are rejected and produce no matrix update
   const respWrong = await wrongKey.post('/api/deployments', { data: VALID_PAYLOAD });
   expect(respWrong.status()).toBe(401);
   const bodyWrong = await respWrong.json();
-  expect(bodyWrong.error).toBe('Invalid API key.');
+  expect(bodyWrong.detail).toBe('Invalid API key.');
 
   // Wait 3 s (well below NFR-03's 5 s budget) — no SSE event should
   // arrive because no row was inserted, so the matrix DOM must remain
