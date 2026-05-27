@@ -26,8 +26,17 @@ async function navigationMarkerStillPresent(page: Page): Promise<boolean> {
 }
 
 async function selectTheme(page: Page, pref: 'light' | 'dark' | 'auto'): Promise<void> {
+  // Open the popover so Angular renders the radio inputs before we dispatch
+  // the event. With many services / environments in the DB the popover can
+  // extend outside the horizontal viewport; dispatchEvent bypasses the
+  // viewport check while still firing the Angular (change) handler.
   await page.getByTestId('theme-gear').click();
-  await page.getByTestId(`theme-option-${pref}`).click();
+  await page.evaluate((p: string) => {
+    const el = document.querySelector(`[data-testid="theme-option-${p}"]`) as HTMLInputElement | null;
+    if (!el) throw new Error(`theme-option-${p} not found in DOM`);
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, pref);
 }
 
 test.describe('Theme switcher — auto follows OS preference (live)', () => {

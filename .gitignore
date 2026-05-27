@@ -40,6 +40,29 @@ testing/e2e/playwright-report/
 testing/e2e/.playwright/
 testing/e2e/blob-report/
 **/playwright/.cache/
+# Scratch capture directories written by ad-hoc oracle runs (O5 etc.).
+testing/e2e/__o5-captures__/
+
+# ---- Mockup-visual capture / diagnostic scratch --------------------------
+# Ad-hoc Playwright capture scripts (capture-*.mjs, diag-*.mjs, probe-*.mjs)
+# and PNG outputs used during visual iteration / blueprint comparison.
+# Local scratch only; never source.
+testing/mockup-visual/
+
+# ---- E2E forensic scratch (testing/e2e/captures/) -----------------------
+# Committed baselines under testing/e2e/captures/ are limited to
+# `spa-head-{light,dark}.png` (qa iteration baselines). Everything else in
+# that directory is ad-hoc forensic scratch authored during fix-cycles —
+# capture-*.mjs, inspect-*.mjs, *-baseline-*.png, *-inspect*.png, head-*.png.
+# These are local-only and must not be committed.
+testing/e2e/captures/capture-*.mjs
+testing/e2e/captures/inspect-*.mjs
+testing/e2e/captures/diag-*.mjs
+testing/e2e/captures/probe-*.mjs
+testing/e2e/captures/spa-baseline-*
+testing/e2e/captures/*-inspect.png
+testing/e2e/captures/*-inspect-*.png
+testing/e2e/captures/head-*.png
 
 # ---- Code coverage / test runners ----------------------------------------
 **/coverage/

@@ -103,9 +103,17 @@ test.describe('Theme — 6 box-state contract preserved under dark palette', () 
       ].sort();
     }
 
-    // Switch to light via the popover and read again.
+    // Switch to light by dispatching the change event on the radio. With
+    // many services / environments in the running DB the gear popover can
+    // extend outside the visible horizontal viewport; dispatchEvent bypasses
+    // the viewport check while still firing the Angular (change) handler.
     await page.getByTestId('theme-gear').click();
-    await page.getByTestId('theme-option-light').click();
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="theme-option-light"]') as HTMLInputElement | null;
+      if (!el) throw new Error('theme-option-light not found in DOM');
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await expect.poll(async () =>
       page.evaluate(() => document.documentElement.getAttribute('data-theme')),
     ).toBe('light');

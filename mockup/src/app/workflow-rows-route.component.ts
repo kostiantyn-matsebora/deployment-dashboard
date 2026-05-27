@@ -1,46 +1,77 @@
-// Canonical workflow-rows route — binds MOCKUP_* fixtures to the workflow-rows layout chrome.
+// Canonical workflow-rows route — dispatches to per-view-mode components.
+// No workflow-rows-layout monolith; each (workflow-rows × viewMode) combination is its own component.
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { WorkflowRowsLayoutComponent } from './chrome/workflow-rows-layout.component';
+import { WorkflowRowsDetailedComponent } from './chrome/workflow-rows-detailed.component';
+import { WorkflowRowsCompactComponent } from './chrome/workflow-rows-compact.component';
+import { WorkflowRowsGlanceComponent } from './chrome/workflow-rows-glance.component';
+import { WorkflowRowsFocusComponent } from './chrome/workflow-rows-focus.component';
 import { StatsBarComponent } from './chrome/stats-bar.component';
 import { ViewModeService } from './view-mode.service';
 import {
-  MOCKUP_SERVICES,
+  MOCKUP_SERVICES_WITH_DEPLOYMENTS,
   MOCKUP_ENVIRONMENTS,
-  MOCKUP_MATRIX,
-  MOCKUP_TOPOLOGY
+  MOCKUP_MATRIX
 } from './fixtures/index';
 
 @Component({
   selector: 'dd-mockup-workflow-rows-route',
   standalone: true,
-  imports: [WorkflowRowsLayoutComponent, StatsBarComponent],
+  imports: [
+    WorkflowRowsDetailedComponent,
+    WorkflowRowsCompactComponent,
+    WorkflowRowsGlanceComponent,
+    WorkflowRowsFocusComponent,
+    StatsBarComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div>
       <dd-mockup-stats-bar
-        [serviceCount]="services.length"
+        [serviceCount]="servicesWithDeployments.length"
         [failureCount]="failureCount"
         [runningCount]="runningCount"
         [lastDeployAgo]="lastDeployAgo"
         [neverReachedProd]="neverReachedProd"
       ></dd-mockup-stats-bar>
-      <dd-mockup-workflow-rows-layout
-        [services]="services"
-        [environments]="environments"
-        [matrix]="matrix"
-        [topology]="topology"
-        [viewMode]="viewModeService.mode()"
-      ></dd-mockup-workflow-rows-layout>
+      @switch (viewModeService.mode()) {
+        @case ('compact') {
+          <dd-mockup-workflow-rows-compact
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-workflow-rows-compact>
+        }
+        @case ('glance') {
+          <dd-mockup-workflow-rows-glance
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-workflow-rows-glance>
+        }
+        @case ('focus') {
+          <dd-mockup-workflow-rows-focus
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-workflow-rows-focus>
+        }
+        @default {
+          <dd-mockup-workflow-rows-detailed
+            [servicesWithDeployments]="servicesWithDeployments"
+            [environments]="environments"
+            [matrix]="matrix"
+          ></dd-mockup-workflow-rows-detailed>
+        }
+      }
     </div>
   `
 })
 export class WorkflowRowsRouteComponent {
   readonly viewModeService = inject(ViewModeService);
-  readonly services = MOCKUP_SERVICES;
+  readonly servicesWithDeployments = MOCKUP_SERVICES_WITH_DEPLOYMENTS;
   readonly environments = MOCKUP_ENVIRONMENTS;
   readonly matrix = MOCKUP_MATRIX;
-  readonly topology = MOCKUP_TOPOLOGY;
 
   get failureCount(): number {
     let n = 0;

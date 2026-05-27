@@ -8,9 +8,10 @@
  * component + utility layers (frontend/dashboard/src/styles.css).
  * Sections:
  *   - keyframes + swap-pulse
- *   - stage-box, arrow-line, spinner, pill primitives
- *   - swim-lane primitives (.lane-row, .edge-overlay, .leaf-pair, .env-tag)
- *   - workflow-rows primitives (.svc-block, .wf-row, .arrow-gap, .chev, .default-tag)
+ *   - stage-box, spinner, pill primitives
+ *   - swim-lane primitives (.lane-row, .leaf-pair, .env-tag)
+ *   - workflow-rows primitives (.svc-block, .wf-row, .default-tag)
+ *   - ngx-graph connectors: edge stroke tokens applied via ::ng-deep in component styles
  *   - per-view --leaf-width source of truth
  *   - theme switcher chrome + dark palette overlay
  */
@@ -34,22 +35,6 @@
 @layer components {
   .stage-box {
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
-  }
-
-  .arrow-line {
-    width: 28px;
-    height: 1px;
-    background: #d1d5db;
-    position: relative;
-  }
-  .arrow-line::after {
-    content: '';
-    position: absolute;
-    right: -6px;
-    top: -3px;
-    border-top: 4px solid transparent;
-    border-bottom: 4px solid transparent;
-    border-left: 6px solid #d1d5db;
   }
 
   .spinner {
@@ -140,7 +125,8 @@
   .focus-row[data-pinned="true"]::before   { background: #f59e0b; }
 
   /* ============== Per-view --leaf-width source of truth ============== */
-  [data-view="detailed"]      { --leaf-width: 200px; }
+  /* Aligned to ADR-0012 dimension table: detailed 160px; compact/focus 160px. */
+  [data-view="detailed"]      { --leaf-width: 160px; }
   [data-view="compact"]       { --leaf-width: 160px; }
   [data-view="glance"]        { --leaf-width: 150px; }
   [data-view="focus"]         { --leaf-width: 160px; }
@@ -203,22 +189,6 @@
     line-height: 1;
   }
 
-  /* SVG edge overlay — swim-lane */
-  .edge-overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: visible;
-  }
-  .edge {
-    fill: none;
-    stroke: #d1d5db;
-    stroke-width: 1.5;
-  }
-  .edge-correlated {
-    stroke-dasharray: 4 3;
-  }
-
   /* ============== Workflow-rows view ============== */
   .svc-block {
     background: white;
@@ -250,22 +220,6 @@
     flex-direction: column;
     min-width: 0;
   }
-  .chev {
-    width: 18px; height: 18px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: #6b7280;
-    transition: transform 0.15s ease;
-    cursor: pointer;
-    flex-shrink: 0;
-    user-select: none;
-  }
-  .chev.disabled { color: #d1d5db; cursor: default; }
-  .chev.expanded { transform: rotate(90deg); }
-
   .wf-row {
     position: relative;
     display: flex;
@@ -291,21 +245,6 @@
     font-weight: 600;
   }
 
-  .arrow-gap {
-    width: clamp(14px, 1.5vw, 32px);
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-    flex-shrink: 0;
-    align-self: stretch;
-    overflow: visible;
-  }
-  .arrow-gap .arrow-line {
-    width: var(--target-line-width, calc(100% - 6px));
-    margin-left: var(--source-offset, 0);
-    margin-top: var(--target-half, 0);
-  }
 }
 
 @keyframes spin {
@@ -395,21 +334,16 @@
 [data-theme="dark"] .border-gray-100 { border-color: #21262d !important; }
 [data-theme="dark"] .border-gray-200 { border-color: #30363d !important; }
 [data-theme="dark"] .border-gray-300 { border-color: #484f58 !important; }
-[data-theme="dark"] .arrow-line { background: #484f58 !important; }
-[data-theme="dark"] .arrow-line::after { border-left-color: #484f58 !important; }
 [data-theme="dark"] .pill-empty { background: #1c232b !important; border-color: #30363d !important; color: #484f58 !important; }
 [data-theme="dark"] .lane-row { background: #161b22 !important; border-color: #30363d !important; }
 [data-theme="dark"] .svc-block { background: #161b22 !important; border-color: #30363d !important; }
 [data-theme="dark"] .svc-block-meta { border-right-color: #21262d !important; }
-[data-theme="dark"] .edge { stroke: #484f58 !important; }
 [data-theme="dark"] .row-expanded { background: linear-gradient(0deg, #1c232b, #161b22) !important; }
 [data-theme="dark"] .focus-row::before { background: #30363d !important; }
 [data-theme="dark"] .focus-row[data-expanded="true"]::before { background: #58a6ff !important; }
 [data-theme="dark"] .focus-row[data-pinned="true"]::before   { background: #fcd34d !important; }
 [data-theme="dark"] .env-tag { color: #7d8590 !important; }
 [data-theme="dark"] .pill .env-tag { color: #c9d1d9 !important; }
-[data-theme="dark"] .chev { color: #7d8590 !important; }
-[data-theme="dark"] .chev.disabled { color: #484f58 !important; }
 [data-theme="dark"] .pin-active { color: #fcd34d !important; }
 [data-theme="dark"] .bg-green-50  { background-color: #0d2818 !important; }
 [data-theme="dark"] .bg-green-100 { background-color: #14532d !important; }
@@ -452,3 +386,53 @@
 [data-theme="dark"] input[type="text"]::placeholder,
 [data-theme="dark"] input[type="search"]::placeholder { color: #7d8590 !important; }
 [data-theme="dark"] input[type="checkbox"] { accent-color: #58a6ff; }
+
+/* ============================================================
+   Deployment-node SVG palette (issue #83 ngx-graph PoC).
+   SVG <rect>/<text>/<line> reference var(--dep-*) so theme swap
+   is pure CSS, no Angular template conditionals.
+   ============================================================ */
+:root {
+  --dep-box-fill:           #ffffff;
+  --dep-stroke-empty:       #e5e7eb;
+  --dep-stroke-success:     #86efac;
+  --dep-stroke-failure:     #fca5a5;
+  --dep-stroke-progress:    #fdba74;
+  --dep-text-primary:       #111827;
+  --dep-text-secondary:     #374151;
+  --dep-text-muted:         #9ca3af;
+  --dep-text-env:           #6b7280;
+  --dep-text-link:          #2563eb;
+  --dep-divider:            #e5e7eb;
+  --dep-status-success:     #22c55e;
+  --dep-status-failure:     #ef4444;
+  --dep-status-progress:    #f97316;
+  --dep-status-success-fg:  #16a34a;
+  --dep-badge-fill:         #fef3c7;
+  --dep-badge-stroke:       #fcd34d;
+  --dep-badge-text:         #92400e;
+  --dep-edge-stroke:        #9ca3af;
+  --dep-arrow-fill:         #9ca3af;
+}
+[data-theme="dark"] {
+  --dep-box-fill:           #161b22;
+  --dep-stroke-empty:       #30363d;
+  --dep-stroke-success:     #166534;
+  --dep-stroke-failure:     #991b1b;
+  --dep-stroke-progress:    #9a3412;
+  --dep-text-primary:       #e6edf3;
+  --dep-text-secondary:     #c9d1d9;
+  --dep-text-muted:         #7d8590;
+  --dep-text-env:           #9aa4ae;
+  --dep-text-link:          #58a6ff;
+  --dep-divider:            #30363d;
+  --dep-status-success:     #4ade80;
+  --dep-status-failure:     #fca5a5;
+  --dep-status-progress:    #fdba74;
+  --dep-status-success-fg:  #86efac;
+  --dep-badge-fill:         #2a1f0a;
+  --dep-badge-stroke:       #92400e;
+  --dep-badge-text:         #fcd34d;
+  --dep-edge-stroke:        #484f58;
+  --dep-arrow-fill:         #484f58;
+}

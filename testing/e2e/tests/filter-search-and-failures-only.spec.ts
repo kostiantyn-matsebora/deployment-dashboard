@@ -19,8 +19,12 @@ test.describe('Header filters', () => {
     await page.goto('/');
     await expect(page.getByTestId('pipeline-matrix')).toBeVisible();
     // Every seeded service is rendered on first paint.
+    // Both swim-lane and workflow-rows layouts emit [data-service-row="{id}"]
+    // on the outer container. The deferred Matrix layout uses service-row-{id}
+    // testid on sub-components; use the attribute selector here so this spec
+    // works across both active layouts regardless of which is the default.
     for (const id of SEEDED_SERVICES) {
-      await expect(page.getByTestId(`service-row-${id}`)).toBeVisible();
+      await expect(page.locator(`[data-service-row="${id}"]`).first()).toBeVisible();
     }
   });
 
@@ -33,19 +37,19 @@ test.describe('Header filters', () => {
     // (mockup §filteredServices), so the query must contain the
     // hyphen to match.
     await search.fill('service-a');
-    await expect(page.getByTestId('service-row-service-a')).toBeVisible();
-    await expect(page.getByTestId('service-row-service-b')).toHaveCount(0);
-    await expect(page.getByTestId('service-row-service-c')).toHaveCount(0);
-    await expect(page.getByTestId('service-row-service-d')).toHaveCount(0);
+    await expect(page.locator('[data-service-row="service-a"]').first()).toBeVisible();
+    await expect(page.locator('[data-service-row="service-b"]')).toHaveCount(0);
+    await expect(page.locator('[data-service-row="service-c"]')).toHaveCount(0);
+    await expect(page.locator('[data-service-row="service-d"]')).toHaveCount(0);
 
     await search.fill('');
     await search.fill('SERVICE-B');
-    await expect(page.getByTestId('service-row-service-b')).toBeVisible();
-    await expect(page.getByTestId('service-row-service-a')).toHaveCount(0);
+    await expect(page.locator('[data-service-row="service-b"]').first()).toBeVisible();
+    await expect(page.locator('[data-service-row="service-a"]')).toHaveCount(0);
 
     await search.fill('');
     for (const id of SEEDED_SERVICES) {
-      await expect(page.getByTestId(`service-row-${id}`)).toBeVisible();
+      await expect(page.locator(`[data-service-row="${id}"]`).first()).toBeVisible();
     }
   });
 
@@ -54,20 +58,20 @@ test.describe('Header filters', () => {
 
     await toggle.check();
     for (const id of SERVICES_WITH_FAILURES) {
-      await expect(page.getByTestId(`service-row-${id}`)).toBeVisible();
+      await expect(page.locator(`[data-service-row="${id}"]`).first()).toBeVisible();
     }
     // service-a, service-c, and service-d have no slot with
     // `current.status === 'failure'` in the seeded corpus.
     // (service-d has an in-progress slot with
     // `previousFailed: true`, which the mockup's filter intentionally
     // does NOT count.)
-    await expect(page.getByTestId('service-row-service-a')).toHaveCount(0);
-    await expect(page.getByTestId('service-row-service-c')).toHaveCount(0);
-    await expect(page.getByTestId('service-row-service-d')).toHaveCount(0);
+    await expect(page.locator('[data-service-row="service-a"]')).toHaveCount(0);
+    await expect(page.locator('[data-service-row="service-c"]')).toHaveCount(0);
+    await expect(page.locator('[data-service-row="service-d"]')).toHaveCount(0);
 
     await toggle.uncheck();
     for (const id of SEEDED_SERVICES) {
-      await expect(page.getByTestId(`service-row-${id}`)).toBeVisible();
+      await expect(page.locator(`[data-service-row="${id}"]`).first()).toBeVisible();
     }
   });
 

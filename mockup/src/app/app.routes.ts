@@ -35,6 +35,16 @@ export const routes: Routes = [
         path: 'env-tag-b',
         loadComponent: () =>
           import('./variants/env-tag-b.route').then(m => m.EnvTagBRouteComponent)
+      },
+      {
+        path: 'dag-test',
+        loadComponent: () =>
+          import('./variants/dag-test.route').then(m => m.DagTestRouteComponent)
+      },
+      {
+        path: 'dag-all',
+        loadComponent: () =>
+          import('./variants/dag-all.route').then(m => m.DagAllRouteComponent)
       }
     ]
   },

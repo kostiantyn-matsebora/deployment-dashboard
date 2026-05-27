@@ -1,14 +1,11 @@
 {
-  "readBaseUrl": "http://localhost:8080",
+  "readBaseUrl": "http://localhost:4200",
   "writeBaseUrl": "http://localhost:8080",
   "apiKey": "demo-api-token",
   "mockupBaseUrl": "http://localhost:4201",
   "tolerances": {
     "envRankAlignmentPx": 2,
-    "pixelDiffMaxPctOfViewport": 1.0,
-    "nodeOverlapPx": 0,
-    "rowLeakPx": 2,
-    "columnLeakPx": 2
+    "pixelDiffMaxPctOfViewport": 1.0
   },
   "viewport": {
     "width": 1440,

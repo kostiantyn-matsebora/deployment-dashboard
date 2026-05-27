@@ -31,12 +31,19 @@ test('Environments and services are discovered from stored data, not hardcoded',
     expect(services).toContain(s);
   }
 
-  // SPA renders one env-header per discovered env.
+  // SPA shows discovered environments in the matrix. The deferred Matrix
+  // layout uses env-header-{id} column headers; the current active layouts
+  // (swim-lane, workflow-rows) show environments inline as env-tag spans.
+  // We verify env discovery by checking that known stage-boxes from the seed
+  // corpus are rendered for seeded (service, environment) pairs:
+  //   dev  — service-b/dev (success), service-a/dev (in-progress)
+  //   qa   — service-b/qa (failure)
+  //   uat  — service-d/uat (in-progress)
   await page.goto('/');
   await expect(page.getByTestId('pipeline-matrix')).toBeVisible();
-  for (const e of SEEDED_ENVIRONMENTS) {
-    await expect(page.getByTestId(`env-header-${e}`)).toBeVisible();
-  }
+  await expect(page.getByTestId('stage-box-service-b-dev')).toHaveCount(1);
+  await expect(page.getByTestId('stage-box-service-b-qa')).toHaveCount(1);
+  await expect(page.getByTestId('stage-box-service-d-uat')).toHaveCount(1);
 
   // ----- Introduce a brand-new (service, environment) -----
   const suffix = runSuffix();
@@ -75,8 +82,9 @@ test('Environments and services are discovered from stored data, not hardcoded',
     return list.includes(NEW_SERVICE);
   }, { timeout: 5_000 }).toBe(true);
 
-  // Matrix header in the SPA gets the new env via the SSE-driven re-render.
-  await expect(page.getByTestId(`env-header-${NEW_ENV}`)).toBeVisible({ timeout: 5_000 });
+  // SPA gets the new (service, env) slot via the SSE-driven re-render and
+  // shows the new stage-box within the NFR-03 5 s budget.
+  await expect(page.getByTestId(`stage-box-${NEW_SERVICE}-${NEW_ENV}`)).toBeVisible({ timeout: 5_000 });
 
   await readApi.dispose();
   await writeApi.dispose();
