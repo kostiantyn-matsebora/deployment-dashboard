@@ -52,7 +52,7 @@ backend-build:
     - 'Microsoft.EntityFrameworkCore.Design PrivateAssets=all on Dashboard.Api host (CR-0010 §3l - required by dotnet ef migrations script in CI)'
 
 ignored:
-  gitignore: '@.gitignore - bin/, obj/, node_modules/, dist/, .angular/, playwright-report/, test-results/, .terraform/, *.tfstate, .claude/worktrees/, .claude/scheduled_tasks.lock, .claude/settings.local.json, format-report.json'
+  gitignore: '@.gitignore - bin/, obj/, node_modules/, dist/, .angular/, playwright-report/, test-results/, .terraform/, *.tfstate, .claude/worktrees/, .claude/scheduled_tasks.lock, .claude/settings.local.json, format-report.json (SHA refreshed 2026-05-27 — .gitignore drifted)'
   dockerignore: '@.dockerignore - **/bin, **/obj, **/node_modules, **/dist, .git, **/test-results'
 
 hooks-naming:
