@@ -1,11 +1,15 @@
 ---
 name: Feature request (ginee)
 about: New functionality that the ginee framework will pick up via @team-lead
-title: "[Feature] <one-line title>"
+title: "[Feature] <user-facing capability in plain language — no internal IDs / file paths / implementation mechanics>"
 labels: [ginee:ready]
 ---
 
 <!--
+  Audience binding — title + Summary in user-facing outcome language for humans + LLMs.
+  Forbidden in title: file paths · module names · implementation mechanics.
+  Framework-internal sections come AFTER Summary. Full: core/protocols/doc-authoring-protocol.md § Audience check.
+
   Priority signal (recommended): add `value:*` + `complexity:*` labels (ATAM convention).
   team-lead auto-estimates missing `complexity:*` on pickup. Full: .agents/ginee/core/protocols/triage-scoring.md.
 
@@ -19,7 +23,7 @@ labels: [ginee:ready]
 
 ## Summary
 
-<1–2 sentences describing the proposed feature>
+<2–4 sentences — restate the title for a cold human reader. No jargon. No assumed prior context. What outcome the user gets, where it shows up, who benefits.>
 
 ## Motivation
 

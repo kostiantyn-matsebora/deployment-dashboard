@@ -11,7 +11,7 @@ reads-before-applying: []
 **Load triggers** — `team-lead` only (gate surface + delivery finalize).
 
 - **Goal.** User confirms delivered work satisfies the TODO line.
-- **Action.** Orchestrator surfaces per the Task model. If manual smoke wasn't run (e.g. headless), asks the user to run it.
+- **Action.** Orchestrator surfaces per `core/templates/user-response.md` — `## Result` · `## What changed` · `## Verification` · `## Next` · optional `## Notes` ≤ 150 words · marker. If manual smoke wasn't run (e.g. headless), `## Verification` states it explicitly + names the command for the user to run.
 - **User choices.**
   - "Yes — mark complete" → see Acceptance below.
   - "No — needs more work" → loop back to Phase 6 with feedback.

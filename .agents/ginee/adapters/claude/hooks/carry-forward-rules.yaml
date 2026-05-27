@@ -1,0 +1,17 @@
+# ginee — T8 (#144) per-cardinal carry-forward rules for SendMessage continuations.
+# Schema: per-target-name lookup. One rule line per cardinal.
+# The hook checks SendMessage continuation messages contain `[carry-forward]`
+# as a leading anchor; if missing, it blocks (exit 2) and the stderr remediation
+# cites the cardinal's rule from this table.
+#
+# Format: `target: rule` — one rule per cardinal name.
+# `target` is matched against the SendMessage payload's target/recipient field
+# (case-insensitive substring); first match wins.
+
+solution-architect: APPROVE / REJECT / REQUEST-CHANGES only — no code edits (tools whitelist enforces).
+ai-engineer: lossless rule binds — every existing rule survives byte-for-byte.
+team-lead: skill-runner boundary — do not synthesize specialist returns yourself; re-dispatch the owning role.
+backend-engineer: stay in own tier — cross-domain bugs route via @team-lead (core/protocols/cross-domain-bugs.md).
+frontend-engineer: stay in own tier — cross-domain bugs route via @team-lead (core/protocols/cross-domain-bugs.md).
+qa-engineer: tighten failing oracle; do not modify product code (core/process.md § Test oracles can be wrong).
+devops-engineer: infra change first; service-owner confirms application reads the new value before merge.

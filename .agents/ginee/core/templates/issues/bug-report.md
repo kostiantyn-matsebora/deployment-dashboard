@@ -1,11 +1,15 @@
 ---
 name: Bug report (ginee)
 about: Defect that the ginee framework will pick up via @team-lead
-title: "[Bug] <one-line title>"
+title: "[Bug] <user-facing problem in plain language — no internal IDs / file paths / fix mechanics>"
 labels: [ginee:ready]
 ---
 
 <!--
+  Audience binding — title + Summary in user-facing language for humans + LLMs.
+  Forbidden in title: internal bug IDs · iteration tags · file paths · module names · fix mechanics.
+  Framework-internal sections come AFTER Summary. Full: core/protocols/doc-authoring-protocol.md § Audience check.
+
   Priority signal (recommended) — add `value:high|medium|low` + `complexity:high|medium|low` labels
   (ATAM convention) so `ginee-triage` ranks this. team-lead auto-estimates missing `complexity:*` on pickup.
   Full: .agents/ginee/core/protocols/triage-scoring.md.
@@ -20,7 +24,7 @@ labels: [ginee:ready]
 
 ## Summary
 
-<1–2 sentences describing what's wrong>
+<2–4 sentences — restate the title for a cold human reader. No jargon. No assumed prior context. What's broken, where it shows up, who notices.>
 
 ## Steps to reproduce
 

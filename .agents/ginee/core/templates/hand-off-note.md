@@ -13,6 +13,10 @@
   - Discoverer → removes any local workaround.
   Usage:
   - Replace bracketed placeholders.
+  Audience:
+  - Default audience is the owning role (LLM or human picking up the hand-off).
+  - When the note is surfaced to a user decision-point (rare), wrap per
+    core/templates/user-response.md — lead with the decision asked of the user.
 -->
 
 ---

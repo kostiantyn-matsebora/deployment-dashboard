@@ -1,11 +1,16 @@
 ---
 name: Framework feature request (ginee)
 about: New capability or improvement to the ginee framework itself
-title: "[Framework Feature] <one-line title>"
+title: "[Framework Feature] <user-facing capability in plain language — what adopters get, not how it's implemented>"
 labels: [ginee:ready, framework]
 ---
 
 <!--
+  Audience binding — title + Summary describe what adopters get in outcome language for humans + LLMs.
+  Forbidden in title: D-IDs · file paths · module names · implementation mechanics.
+  Framework-internal sections (Affected surface · Owner-decision impact · Backward compatibility) come AFTER Summary.
+  Full: core/protocols/doc-authoring-protocol.md § Audience check.
+
   Filed against ginee upstream (per local/framework.config.yaml § github.framework-repo):
     @team-lead file framework-feature <title>
   Priority signal: add `value:*` + `complexity:*` labels (ATAM convention).
@@ -19,7 +24,7 @@ labels: [ginee:ready, framework]
 
 ## Summary
 
-<1–2 sentences describing the proposed framework capability>
+<2–4 sentences — restate the title for a cold human reader. No jargon. No D-IDs. No assumed prior context. What outcome adopters get, who benefits, what changes for them.>
 
 ## Motivation
 

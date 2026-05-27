@@ -44,13 +44,28 @@ Without marker the 7 checks are aspirational + the orchestrator has no structura
 ## Orchestrator behaviour on non-compliant returns
 
 - Surface one-line advisory before consuming (`"Return missed self-lint: <violation>; consuming anyway."`).
-- **Never re-dispatch purely for format.** Absorb the verbose return once; carry rule forward to next dispatch.
+- **Never re-dispatch purely for format** (two narrow carve-outs below).
 - Never auto-rewrite content (same forbidden as reporter-content rule in `github-integration.md § Forbidden actions`).
 - **Skill-runner forbidden** from cleanup before passing to team-lead.
+- **Violation count surfaces in the user-response.** Per turn, team-lead's `## Notes` to user includes one line: `Schema-bound returns: <N>/<M> compliant.` Source: `core/templates/user-response.md § Synthesis from phase-report returns`. No prose; no per-cardinal breakdown.
 
-### Format-only re-dispatch — single carve-out
+### Non-compliance threshold — auto-fires carry-forward
 
-Re-dispatch fires ONLY when raw source paths appear in `## Files touched` (paths outside `local/index/`) AND `## Source reads (this dispatch)` is missing or `(none)`. Rationale: missing audit trail is substantive omission (missing decision data), not format. Never re-dispatch for pure format issues (preamble · marker absence · table shape).
+| Threshold | Action |
+|---|---|
+| Marker present, ≤ 1 missing required section, no forbidden-pattern hit | Advisory; consume. No carry-forward. |
+| Marker absent OR ≥ 2 missing required sections OR ≥ 1 forbidden-pattern hit | Advisory; consume; **carry-forward rephrasing fires automatically** on next dispatch to same cardinal (see § Carry-forward rephrasing). |
+| Same cardinal returns non-compliant 2 turns in a row in the same task | Format-only re-dispatch ONCE per task per cardinal (second carve-out below). |
+
+Threshold is mechanical, not judgmental — count missing sections; check forbidden-pattern hits; decide.
+
+### Format-only re-dispatch — two carve-outs
+
+**Carve-out 1 — missing audit trail.** Re-dispatch fires when raw source paths appear in `## Files touched` (paths outside `local/index/`) AND `## Source reads (this dispatch)` is missing or `(none)`. Rationale: missing audit trail is substantive omission (missing decision data), not format.
+
+**Carve-out 2 — consecutive non-compliance, same cardinal, same task.** When a cardinal returns non-compliant 2 consecutive turns within the same task (per the threshold table above), team-lead MAY format-only re-dispatch ONCE. Bounded: one retry per task per cardinal; further non-compliance after the retry → carry-forward only · surface in `## Notes` for user awareness. Prevents indefinite consume-anyway loops on a drifting cardinal without re-instating habitual format-only re-dispatch.
+
+Never re-dispatch for pure format issues outside these two carve-outs (preamble · marker absence · table shape on first occurrence).
 
 ### Worked advisories
 
@@ -66,7 +81,7 @@ Re-dispatch fires ONLY when raw source paths appear in `## Files touched` (paths
 
 ### Carry-forward rephrasing for next dispatch
 
-Append single-line reminder at end of next dispatch prompt to same subagent — cite specific violation; never reopen prior return; never re-dispatch for format:
+**Auto-fires** on threshold hit (per § Non-compliance threshold). Team-lead appends a single-line reminder at end of next dispatch prompt to the same cardinal — cite specific violation; never reopen prior return; never re-dispatch for format (subject to the two carve-outs above):
 
 ```
 <original dispatch text>
@@ -74,6 +89,8 @@ Append single-line reminder at end of next dispatch prompt to same subagent — 
 Return format: schema-bound per core/templates/phase-report.md;
 last cycle's return missed self-lint (<violation>) — apply the 7 checks + marker this cycle.
 ```
+
+**Scope.** Carry-forward applies to the *next dispatch to the same cardinal within the same task*. Cross-cardinal violations don't propagate; cross-task carry-forward is out of scope (treat each task fresh). Tracking: orchestrator counts forward-applied violations per turn; surface in `## Notes` of the user-response per `core/templates/user-response.md § Synthesis`.
 
 ## Section templates
 

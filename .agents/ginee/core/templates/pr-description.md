@@ -3,15 +3,22 @@
 <!--
   Every PR cites one of: requirement · NFR · mockup section · CR · ADR.
   Replace placeholders; drop empty sections.
+
+  Audience binding — PR descriptions are read by humans (reviewers · contractors · future maintainers) AND
+  LLMs (CI bots · ginee CI-watch · review-comment ingestion). Lead with the adopter-visible change in `## What`;
+  framework mechanics + internal IDs come AFTER in `## Cites` / `## Verification log` / `## Notes`. Full:
+  core/protocols/doc-authoring-protocol.md § Audience check.
 -->
 
 ---
 
 ## What
 
-<!-- 1–2 sentences, imperative voice. -->
+<!-- 1–2 sentences. Lead with the adopter-visible change in plain language — what users / reviewers see
+     differently after this lands. Framework mechanics belong in `## Cites` and `## Verification log`,
+     not here. Imperative voice. -->
 
-`<change summary>`
+`<adopter-visible change summary>`
 
 ## Why
 

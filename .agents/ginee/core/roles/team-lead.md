@@ -179,3 +179,5 @@ When any of the above is required: dispatch the owning specialist; do not edit.
 ## Reporting
 
 Per `core/protocols/role-kernel-shared.md § D`. Cross-domain bug / diagnosis hand-off → `core/templates/hand-off-note.md` embedded under `## Hand-off`.
+
+**User-facing surfaces.** Phase-8 interactive · auto-mode delivery handoff · mid-task user reports · forced-interactive escalations → `core/templates/user-response.md` (schema · forbidden patterns · 8 mandatory checks · marker). Synthesis from cardinal phase-reports per that template's mapping table; never forward cardinal reports verbatim.
