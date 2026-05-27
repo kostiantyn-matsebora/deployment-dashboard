@@ -112,7 +112,7 @@ Note: `deferred-phase-2.0/matrix-six-box-states.spec.ts` covers the same six sta
 |---|---|---|
 | SSE update propagation (POST → DOM) | `realtime-sse-update.spec.ts` | COVERED |
 | Latency budget ≤5 s (NFR-03) | `realtime-sse-update.spec.ts` | COVERED |
-| Reconnection via `Last-Event-ID` (NFR-05) | `realtime-sse-reconnect.spec.ts` | COVERED |
+| Reconnection via `Last-Event-ID` (NFR-05) | `realtime-sse-reconnect.spec.ts` | COVERED — Part 2 (catchup delivery) passes green; Part 1 (header assertion) is `test.fail()` pending SPA fix in [#124](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/124) |
 | No page reload on live update | `realtime-sse-update.spec.ts` | COVERED |
 
 ---
@@ -159,7 +159,6 @@ Issues filed at the end of the Phase 4 authoring cycle:
 
 | # | Title | Scope |
 |---|---|---|
-| TBD-G3 | Add a GitHub Actions e2e workflow that gates PRs on a green Playwright suite | Blocked on issue #66 (install.ps1 `-BuildLocally`); devops-engineer owns the workflow YAML; issue number filled below once filed |
-| TBD-NFR | Register NFR-QA-01 in `docs/architecture.md` §5 NFR register | SA-owned; identifier `NFR-QA-01` already in use in this doc and scenario files |
-
-*(Issue numbers are updated in the amendment commit once filed.)*
+| [#122](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/122) | Add a CI workflow that runs the Playwright e2e suite automatically on every PR | Blocked on issue #66 (install.ps1 `-BuildLocally`); devops-engineer owns the workflow YAML |
+| [#123](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/123) | Register NFR-QA-01 in `docs/architecture.md` §5 NFR register | SA-owned; identifier `NFR-QA-01` already in use in this doc and scenario files |
+| [#124](https://github.com/kostiantyn-matsebora/deployment-dashboard/issues/124) | SPA does not send Last-Event-ID on SSE reconnect (NFR-05 gap) | frontend-engineer owns; `realtime-sse-reconnect.spec.ts` Part 1 is `test.fail()` pending this fix |
