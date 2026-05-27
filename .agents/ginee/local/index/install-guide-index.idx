@@ -3,9 +3,11 @@
 # source: docs/install.md
 # recipe: novel
 # authored: 2026-05-23
+# reindexed: 2026-05-27 (flag matrix restructured: -LocalDb flag added; no-flag default changed to production/CI; SHA drift refresh)
 # Recipe: per flag/prereq/stack-shape/migration/troubleshooting row extract id, kind (prereq / flag / stack-shape / migration / troubleshooting), one-line summary, source anchor.
 
-flag-no-flag | flag | (no flag) demo-default: boots demo-gha + demo-driver + fetcher pointed at demo-gha; >=20 populated slots within ~60s; no GHA_TOKEN required; default per CR-0013 | @docs/install.md#flag-matrix-at-a-glance
+flag-no-flag | flag | (no flag) production/CI default: app stack against external Postgres (ConnectionStrings__DefaultConnection required); no fetcher, no demo services; fail-fast (exit 1) if connection string unset | @docs/install.md#flag-matrix-at-a-glance
+flag-local-db | flag | -LocalDb (PowerShell) / --local-db (bash): starts bundled db container (--profile db + postgres:16-alpine); no fetcher; no demo; push events manually via POST /api/deployments; quick local eval without external Postgres | @docs/install.md#quick-start--local-evaluation-with-bundled-postgres
 flag-real-gha | flag | -RealGha (PowerShell) / --real-gha (bash): real GitHub Actions upstream; requires $env:GHA_TOKEN; fetcher profile active; renamed from -Fetcher per CR-0013 | @docs/install.md#flag-matrix-at-a-glance
 flag-empty | flag | -Empty (PowerShell) / --empty (bash): bare stack api+gateway+frontend+db; no fetcher; no demo-gha; direct POST /api/deployments integrators / power users | @docs/install.md#flag-matrix-at-a-glance
 flag-demo-back-compat | flag | -Demo (PowerShell) / --demo (bash): back-compat alias; routes to default demo stack + logs one informational line; NOT documented in quick-start; will be removed after one release cycle | @docs/install.md#flag-matrix-at-a-glance

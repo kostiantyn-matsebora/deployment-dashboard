@@ -1,8 +1,9 @@
 # class: topology
-# source-glob: install/docker-compose.release.yml + dev_env/docker-compose.local.yml + dev_env/docker-compose.scaled.yml + gateway/nginx.conf
+# source-glob: install/docker-compose.release.yml + dev_env/docker-compose.local.yml + dev_env/docker-compose.scaled.yml + dev_env/docker-compose.demo-local.yml + dev_env/docker-compose.integration.yml + gateway/nginx.conf
 # recipe: builtin:container-orchestration
 # reindexed: 2026-05-23 (added install/docker-compose.release.yml as canonical inventory; updated local override per ADR-0010; added demo/integration profile services; updated migration actuation per ADR-0009)
 # reindexed: 2026-05-24 (WireMock JVM consolidation: mock-gha image sheyenrath/wiremock.net:2.4.0 -> wiremock/wiremock:3.10.0; WireMock.Net wording -> JVM WireMock)
+# reindexed: 2026-05-27 (Sweep 2 — added dev_env/docker-compose.demo-local.yml + dev_env/docker-compose.integration.yml; updated orchestrators + services-demo-local-overlay + services-integration-overlay sections; SHA refresh on install/docker-compose.release.yml + dev_env/docker-compose.local.yml)
 
 orchestrators:
   - tool: docker-compose
@@ -17,6 +18,14 @@ orchestrators:
     file: '@dev_env/docker-compose.scaled.yml'
     name: deployment-dashboard-scaled
     role: 'NFR-05 validation (api replicas:3; gateway round-robins); standalone single-file (NOT layered on release compose per ADR-0010 §Decision §Constraints)'
+  - tool: docker-compose
+    file: '@dev_env/docker-compose.demo-local.yml (overlay on top of install/docker-compose.demo.yml in Demo/default chain)'
+    name: deployment-dashboard
+    role: 'Local-build override for demo-gha + demo-driver services only; activated by start.ps1 -Demo (and no-flag default); swaps GHCR image refs from demo overlay with locally-built deployment-dashboard/demo-gha:dev + demo-driver:dev tags; build context = repo root (demo Dockerfiles COPY from testing/fixtures/gha/demo/)'
+  - tool: docker-compose
+    file: '@dev_env/docker-compose.integration.yml (overlay in Integration chain)'
+    name: deployment-dashboard
+    role: 'Integration-test substrate overlay (ASR-B / issue #72 / CR-0012); adds mock-gha service (JVM WireMock wiremock/wiremock:3.10.0; host-mapped 18080->80; mappings bind-mounted :ro from testing/fixtures/gha/mappings/) + fetcher depends_on mock-gha:service_healthy gate; activated by start.ps1 -Integration'
 
 compose-merge-model:
   adr: ADR-0010
@@ -102,6 +111,29 @@ services-scaled-deltas:
   - omitted: pgadmin (and host-port 5432 on db) - scaled stack drops dev-tooling
     source-anchor: '@dev_env/docker-compose.scaled.yml'
   - note: 'Scaled stack is standalone single-file (NOT layered on release.yml); invoked as: docker compose -f dev_env/docker-compose.scaled.yml up'
+
+services-demo-local-overlay:
+  - name: demo-gha
+    override: 'build: context=repo-root, dockerfile=gateway/demo-gha/Dockerfile; image=deployment-dashboard/demo-gha:dev; pull_policy=no-pull'
+    note: 'Swaps GHCR-pinned image from install/docker-compose.demo.yml with local dev build; build context = repo root (Dockerfile COPYs from testing/fixtures/gha/demo/)'
+    source-anchor: '@dev_env/docker-compose.demo-local.yml:demo-gha service'
+  - name: demo-driver
+    override: 'build: context=repo-root, dockerfile=gateway/demo-driver/Dockerfile; image=deployment-dashboard/demo-driver:dev; pull_policy=no-pull'
+    source-anchor: '@dev_env/docker-compose.demo-local.yml:demo-driver service'
+
+services-integration-overlay:
+  - name: mock-gha
+    image: wiremock/wiremock:3.10.0
+    container_name: dashboard-mock-gha
+    role: 'JVM WireMock; deterministic GitHub API mock for integration suite (CR-0012); listens port 80 inside container; host-mapped 18080:80 ONLY in integration overlay for dotnet test admin-API access'
+    command: '--port 80 --max-request-journal 100'
+    env: 'JAVA_OPTS=-Xms32m -Xmx256m'
+    volumes: '../testing/fixtures/gha/mappings:/home/wiremock/mappings:ro'
+    healthcheck: 'wget -qO- http://localhost:80/__admin/health'
+    source-anchor: '@dev_env/docker-compose.integration.yml:mock-gha service'
+  - name: fetcher (overlay addition)
+    delta: 'depends_on: mock-gha:service_healthy (required:false); overlay-merge adds gate to fetcher from release.yml'
+    source-anchor: '@dev_env/docker-compose.integration.yml:fetcher depends_on'
 
 migration-actuation:
   model: startup-applied (ADR-0009)

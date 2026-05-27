@@ -2,6 +2,7 @@
 # source-glob: frontend/{,**/}package.json§scripts + testing/{e2e,mockup-visual}/package.json§scripts + install/install.{ps1,sh} + install/uninstall.{ps1,sh} + dev_env/*.ps1 + testing/**/run-tests.ps1 + testing/scripts/{seed.ps1,*.Tests.ps1,*.bats} + .config/dotnet-tools.json + framework.config.yaml§test-runners + .github/workflows/*.yml
 # recipe: builtin:commands
 # reindexed: 2026-05-23 (added release-install commands; updated dev_env scripts for ADR-0010 dual-file invocation + new flags; added integration runner; added dotnet-tools.json as tool-pin entry; updated start.ps1 switch enumeration for CR-0013 flag rename)
+# reindexed: 2026-05-27 (Sweep 2 — added testing/integration/run-tests.ps1 as tracked source; SHA refresh on install scripts + dev_env scripts + testing/e2e/run-tests.ps1 + 3 workflow files)
 
 build:
   - name: frontend-build
@@ -113,6 +114,13 @@ test:
     prereq: 'dev_env/start.ps1 -Integration (mock-gha service up; integration profile active)'
     tool: xUnit
     source-anchor: '@testing/integration/ + .github/workflows/integration.yml'
+  - name: integration-runner
+    cmd: 'pwsh -NoProfile -File testing/integration/run-tests.ps1'
+    delegates-to: 'dotnet test testing/integration/Dashboard.Integration.Tests; sets DASHBOARD_READ_BASE_URL / DASHBOARD_WRITE_BASE_URL / DASHBOARD_API_KEY / MOCK_GHA_ADMIN_BASE_URL / FETCHER_SOURCE_IDS from testing/config/integration.json; two preflights (/health + mock-gha /__admin/); auto-teardown via seed.ps1 -CleanOnly'
+    scope: 'Integration xUnit suite (CR-0012); requires stack up with -Integration + mock-gha admin reachable at mockGhaAdminBaseUrl'
+    params: '-Config (default testing/config/integration.json) | -Filter (xUnit filter expr) | -FailFast | -NoTeardown'
+    tool: xUnit + PowerShell
+    source-anchor: '@testing/integration/run-tests.ps1'
   - name: functional
     cmd: 'pwsh -NoProfile -File testing/functional/run-tests.ps1'
     delegates-to: 'dotnet test testing/functional/Dashboard.Functional.Tests'

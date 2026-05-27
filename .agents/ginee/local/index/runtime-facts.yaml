@@ -1,8 +1,9 @@
 # class: runtime-facts
-# source-glob: install/docker-compose.release.yml (env: blocks) + dev_env/docker-compose.local.yml (env: blocks) + backend/README.md (env-var table) + gateway/demo-driver/entrypoint.py (DEMO_DRIVER_* env-vars)
+# source-glob: install/docker-compose.release.yml (env: blocks) + dev_env/docker-compose.local.yml (env: blocks) + dev_env/docker-compose.demo-local.yml + dev_env/docker-compose.integration.yml + backend/README.md (env-var table) + gateway/demo-driver/entrypoint.py (DEMO_DRIVER_* env-vars)
 # recipe: builtin:runtime-facts
 # reindexed: 2026-05-23 (added install/docker-compose.release.yml env blocks; added DEMO_DRIVER_* env-vars from gateway/demo-driver/entrypoint.py; updated migration-actuation notes for ADR-0009; added DASHBOARD_PORT + DASHBOARD_VERSION release-compose vars)
 # reindexed: 2026-05-24 (WireMock JVM consolidation: DEMO_DRIVER_GHA_URL notes WireMock.Net -> JVM WireMock; Dockerfile comments updated to JVM WireMock admin API)
+# reindexed: 2026-05-27 (Sweep 2 — added dev_env/docker-compose.demo-local.yml + dev_env/docker-compose.integration.yml as tracked sources; added JAVA_OPTS mock-gha row; SHA refresh on install/docker-compose.release.yml + dev_env/docker-compose.local.yml + gateway/demo-driver/entrypoint.py + backend/README.md)
 
 env-vars:
   - name: ConnectionStrings__DefaultConnection
@@ -221,6 +222,16 @@ env-vars:
     secret: false
     notes: 'Base epoch for numeric id rewriting. Allows each demo-gha image build to anchor its ID range without overlap.'
     source-anchor: '@gateway/demo-driver/entrypoint.py:42'
+
+  # ----- Integration-overlay env-vars (dev_env/docker-compose.integration.yml) -----
+  - name: JAVA_OPTS
+    consumed-by: [mock-gha]
+    tier: test-substrate
+    required: false
+    default: '-Xms32m -Xmx256m'
+    secret: false
+    notes: 'JVM heap bounds for mock-gha (JVM WireMock). Caps heap growth; GC-bounded vs monotonic .NET growth (issue #57 fix rationale). Integration overlay only.'
+    source-anchor: '@dev_env/docker-compose.integration.yml:mock-gha environment'
 
 ci-cd-callee-secrets:
   - name: DEPLOYMENT_DASHBOARD_URL
