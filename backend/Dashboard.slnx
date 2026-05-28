@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/api/">
+    <Project Path="api/Dashboard.Api/Dashboard.Api.csproj" />
+  </Folder>
+  <Folder Name="/read-api/">
+    <Project Path="read-api/Dashboard.Read/Dashboard.Read.csproj" />
+  </Folder>
+  <Folder Name="/shared/">
+    <Project Path="shared/Dashboard.Shared/Dashboard.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dashboard.Api.Tests/Dashboard.Api.Tests.csproj" />
+    <Project Path="tests/Dashboard.Read.Tests/Dashboard.Read.Tests.csproj" />
+    <Project Path="tests/Dashboard.Shared.Tests/Dashboard.Shared.Tests.csproj" />
+    <Project Path="tests/Dashboard.Write.Tests/Dashboard.Write.Tests.csproj" />
+  </Folder>
+  <Folder Name="/write-api/">
+    <Project Path="write-api/Dashboard.Write/Dashboard.Write.csproj" />
+  </Folder>
+</Solution>
