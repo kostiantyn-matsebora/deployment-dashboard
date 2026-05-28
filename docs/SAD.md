@@ -304,19 +304,19 @@ The ingest API is the sole integration point. Any CI/CD tool that can make an HT
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
-| `event_id` | GUID  | TRUE | Unique synthetic identifier |
-| `deployment_id` | string  | TRUE | Unique deployment identifier |
-| `component` | STRING | TRUE | Component (service/application) identifier |
+| `id` | UUID (v7) | TRUE | Server-assigned surrogate row identifier. Time-ordered UUIDv7 — unique **and** sortable by insert time (doubles as the SSE `Last-Event-ID` resume cursor). |
+| `deployment_id` | STRING | TRUE | Emitter-supplied **correlation key** grouping all event rows of one logical deployment. NOT unique per row, NOT an idempotency key. |
+| `service` | STRING | TRUE | Service (component / application) identifier. Wire name is `service`. |
 | `environment` | STRING | TRUE | Environment identifier  |
 | `version` | STRING | FALSE | Version of service  |
 | `status` | ENUM | TRUE| `in-progress` / `success` / `failure` |
 | `run_url` | STRING | FALSE| Link to the CI/CD run |
-| `sha` | STRING | FALSE| Unique identifier of commit |
-| `run_number` | STRING | FALSE| CI/CD run identifier |
-| `ref` | STRING | FALSE | Branch or PR number
+| `sha` | STRING | FALSE| Opaque commit SHA (not parsed) |
+| `run_number` | INTEGER | FALSE| Numeric CI/CD run identifier |
+| `ref` | STRING | FALSE | Opaque git ref (branch, tag, `PR-42`, `refs/…`) |
 | `actor` | STRING | FALSE| Username that triggered the run |
-| `happened_at` | DATETIME | TRUE | UTC timestamp of the event |
-| `parrent_deployments` | GUID[] | FALSE | References to parent deployments |
+| `happened_at` | DATETIME | TRUE | **Emitter-supplied** UTC wall-clock at which the deployment transitioned to `status`. All read surfaces order by this value. |
+| `parent_deployments` | STRING[] | FALSE | Explicit upstream correlation keys (each a `deployment_id` value), stored verbatim for client-side DAG rendering. |
 
 #### Retention
 
