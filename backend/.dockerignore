@@ -1,0 +1,13 @@
+**/.vs
+**/.vscode
+**/.idea
+**/bin
+**/obj
+**/TestResults
+**/*.user
+**/*.suo
+**/.git
+**/.gitignore
+**/Dockerfile*
+**/.dockerignore
+**/Dashboard.runsettings
