@@ -961,7 +961,7 @@
      design principle: stretch to fit content; never truncate version). */
   .ver {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 13.5px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.2px;
     color: var(--ink-0);
@@ -1314,41 +1314,38 @@
     letter-spacing: 0.15px;
     white-space: nowrap;
     line-height: 1.2;
-    margin-bottom: 2px;
+    margin-bottom: 0;
   }
-  /* version-row: version (left) + happened_at (right). Right-aligned via
-     margin-left:auto on the time chip. Overflows scroll horizontally inside
-     the row instead of pushing the card past its lane width. */
+  /* TOP row is a single full-width cell spanning both grid columns
+     (colspan=2). Version hugs the card's left edge; happened_at hugs the
+     card's right edge. Their gap = card_width - ver - time and grows on
+     wider cards — that's intentional (it's a header row, not a column row). */
   .vis-card .vc-ver-row {
+    grid-column: 1 / -1;
     display: flex;
     align-items: baseline;
-    gap: 8px;
     min-width: 0;
     max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: thin;
   }
-  .vis-card .vc-ver-row .vc-ver { margin-bottom: 0; }
+  .vis-card .vc-ver-row .vc-ver   { margin-bottom: 0; }
   .vis-card .vc-ver-row .fld-time { margin-left: auto; flex-shrink: 0; }
 
-  /* env-row: sha (left) + environment (right). `margin-top: auto` pushes
-     this row to the card's bottom edge past whatever the attrs grid renders.
-     If sha + env together exceed the card width, the row scrolls. */
+  /* Lower rows are subgrids that inherit the card's 2-column structure.
+     Every lower row's column-gap = the parent's 14px (set explicitly here
+     because the base `.tile-attrs { column-gap: 8px }` rule otherwise wins
+     the cascade for tile-attrs). Left items use col 1 + justify-self:start,
+     right items use col 2 + justify-self:end. */
   .vis-card .vc-env-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    column-gap: 20px;
     align-items: center;
-    gap: 8px;
-    margin-top: auto;
-    padding-top: 3px;
     min-width: 0;
     max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: thin;
   }
-  .vis-card .vc-env-row .fld-sha { flex-shrink: 0; }
-  .vis-card .vc-env-row .vc-env { margin-left: auto; }
+  .vis-card .vc-env-row .fld-sha { grid-column: 1; justify-self: start; }
+  .vis-card .vc-env-row .vc-env  { grid-column: 2; justify-self: end; }
 
   /* environment PROMOTED: PRIMARY identifier within a lane (lane = component,
      env distinguishes nodes). Inter semibold, cream/off-white. The
@@ -1356,7 +1353,7 @@
      carries its own typography + right-shrink behavior. */
   .vis-card .vc-env {
     font-family: 'Inter', system-ui, sans-serif;
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--ink-0);
     letter-spacing: 0.1px;
@@ -1369,14 +1366,40 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* card uses column flow so env can sit at the bottom-right corner */
+  /* Card body is a 2-column grid: left column (col 1) holds version, ref,
+     parents, sha; right column (col 2) holds happened_at, run-cluster, env.
+     `column-gap: 14px` defines the single vertical "gap column" the user
+     wants consistent across every row. `row-gap: 2px` keeps rows tight.
+     Auto column widths so the grid shrinks/grows to its content; the card's
+     `width: max-content` then sizes to fit the widest left + 14 + widest right. */
   .vis-card {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 20px;
+    row-gap: 2px;
   }
-  /* vis-card: same mixed-treatment wrap but tighter type + spacing.
-     Card max-width caps the row → fields wrap naturally within the card. */
-  .vis-card .tile-attrs { padding-top: 3px; column-gap: 7px; row-gap: 1px; }
+  /* tile-attrs row is also a subgrid: ta-bl in col 1, ta-br in col 2.
+     Explicit column-gap overrides the base `.tile-attrs { column-gap: 8px }`. */
+  .vis-card .tile-attrs {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    column-gap: 20px;
+    margin-top: 0;
+    padding-top: 0;
+    align-items: center;
+  }
+  .vis-card .tile-attrs .ta-bl { grid-column: 1; justify-self: start; }
+  .vis-card .tile-attrs .ta-br { grid-column: 2; justify-self: end; }
+  /* parents-row: left column only; col 2 stays empty so the gap column
+     remains visually consistent on this row too. */
+  .vis-card .vc-parents-row {
+    display: grid;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
+  }
+  .vis-card .vc-parents-row .fld-parents { grid-column: 1; justify-self: start; }
   .vis-card .ver-row { gap: 3px 8px; }
   .vis-card .fld-sha,
   .vis-card .fld-runno,
@@ -3448,13 +3471,36 @@ function buildSwim() {
     if (tim) verRow.appendChild(tim);
     if (verRow.childElementCount) card.appendChild(verRow);
 
-    // Mid grid — same as before but with happened_at + sha excluded;
-    // they live on the version-row and env-row respectively.
+    // Mid grid — happened_at + sha + parents are excluded:
+    //   happened_at rides on the version row (top-right)
+    //   sha rides on the env row (bottom-left)
+    //   parents has its own sibling row below
+    // Excluding parents from .tile-attrs is critical: inside the flex-wrap
+    // container, `.ta-full { flex-basis:100% }` inflates the container's
+    // max-content as if parents shared a line with bl+br, growing card width
+    // by parent-text-width. The `margin-left:auto` on .ta-br then converts
+    // that surplus into a variable gap between left + right clusters
+    // (0 on parent-less cards, ~70px on cards with `↵ 2 parents`). Rendering
+    // parents as a sibling row keeps tile-attrs max-content = bl+br+gap.
     const attrs = renderAttrs(rec, visFieldsOn, {
       environment: n.environment,
-      skipFields: new Set(['happened_at', 'sha']),
+      skipFields: new Set(['happened_at', 'sha', 'parrent_deployments']),
     });
-    if (attrs) card.appendChild(attrs);
+    if (attrs) {
+      // attrs is a DocumentFragment containing .tile-attrs + .vc-env-row.
+      // Insert a parents row between them.
+      const parentsSpan = fieldSpan('parrent_deployments', rec, visFieldsOn);
+      if (parentsSpan) {
+        const parRow = document.createElement('div');
+        parRow.className = 'vc-parents-row';
+        parRow.appendChild(parentsSpan);
+        // Insert before the .vc-env-row child of the fragment, if present.
+        const envRowEl = attrs.querySelector('.vc-env-row');
+        if (envRowEl) attrs.insertBefore(parRow, envRowEl);
+        else attrs.appendChild(parRow);
+      }
+      card.appendChild(attrs);
+    }
 
     card.addEventListener('click', () => selectVisNode(n.id));
     cards.appendChild(card);

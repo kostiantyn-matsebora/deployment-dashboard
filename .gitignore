@@ -96,3 +96,6 @@ format-report.json
 
 # ---- Misc ----------------------------------------------------------------
 *.log
+
+# Local screenshot scratch (puppeteer + node_modules)
+.tmp-card-shots/
