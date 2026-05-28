@@ -1,0 +1,63 @@
+---
+title: Design
+shortTitle: Design
+intro: 'Frontend engineering design spec — tokens, components, views, behavior, data model, libraries. Stack: Angular 20+ · PrimeNG (unstyled) · ngx-graph.'
+children:
+  - /README
+  - /design-tokens
+  - /components
+  - /views
+  - /behavior
+  - /data-model
+  - /libraries
+  - /mockup
+---
+
+## Contents
+
+### `design-tokens.md`
+
+- [Backgrounds & Washes](./design-tokens.md#backgrounds--washes)
+- [Glass Surfaces](./design-tokens.md#glass-surfaces)
+- [Ink (Text)](./design-tokens.md#ink-text)
+- [Status Palette](./design-tokens.md#status-palette)
+- [Structural Surfaces](./design-tokens.md#structural-surfaces)
+- [Typography](./design-tokens.md#typography)
+- [Geometry](./design-tokens.md#geometry)
+
+### `components.md`
+
+- [Topbar](./components.md#topbar)
+- [Matrix Tile](./components.md#matrix-tile)
+- [6 Box States](./components.md#6-box-states)
+- [Swimlane Node Card](./components.md#swimlane-node-card)
+- [History Drawer](./components.md#history-drawer)
+- [Inspector Panel](./components.md#inspector-panel)
+- [Popovers](./components.md#popovers)
+
+### `views.md`
+
+- [Matrix View Layout](./views.md#matrix-view-layout)
+- [Swimlanes View Layout](./views.md#swimlanes-view-layout)
+
+### `behavior.md`
+
+- [Field Rendering System](./behavior.md#field-rendering-system)
+- [Interactions](./behavior.md#interactions)
+- [Theme System](./behavior.md#theme-system)
+- [Responsive Rules](./behavior.md#responsive-rules)
+
+### `data-model.md`
+
+- [Deployment Event (11 visible fields)](./data-model.md#deployment-event-11-visible-fields)
+- [Swimlane Edge Derivation](./data-model.md#swimlane-edge-derivation)
+- [Attribute Visibility Pickers](./data-model.md#attribute-visibility-pickers)
+- [KPIs & Derived Values](./data-model.md#kpis--derived-values)
+- [Derived Field Rendering](./data-model.md#derived-field-rendering)
+
+### `libraries.md`
+
+- [PrimeNG Unstyled Mode — Configuration](./libraries.md#primeng-unstyled-mode--configuration)
+- [Feature → PrimeNG Component Mapping](./libraries.md#feature--primeng-component-mapping)
+- [Full Dependency Inventory](./libraries.md#full-dependency-inventory)
+- [package.json Summary](./libraries.md#packagejson-summary)

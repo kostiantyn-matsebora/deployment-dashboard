@@ -304,7 +304,8 @@ The ingest API is the sole integration point. Any CI/CD tool that can make an HT
 
 | Attribute | Type | Required | Description |
 |---|---|---|---|
-| `id` | GUID  | TRUE | Unique synthetic identifier |
+| `event_id` | GUID  | TRUE | Unique synthetic identifier |
+| `deployment_id` | string  | TRUE | Unique deployment identifier |
 | `component` | STRING | TRUE | Component (service/application) identifier |
 | `environment` | STRING | TRUE | Environment identifier  |
 | `version` | STRING | FALSE | Version of service  |
