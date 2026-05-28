@@ -1,6 +1,7 @@
 ---
 description: Update the "Sources of truth" section.
 argument-hint: [--propose-only]
+model: sonnet
 ---
 
 # /docs-registry-sync
@@ -42,18 +43,16 @@ If none exist: **halt and ask** the user where the registry lives.
 
 ## Steps
 
-1. **Locate the section.** `Read` the host file IN FULL (the entire file content is needed for the surgical Write fallback in step 8). Identify the exact heading and contiguous bullet block beneath it; capture every existing entry verbatim. Also capture the LINE FOLLOWING the bullet block (used by the Edit harness for uniqueness padding).
+1. **Locate the section.**
+   - `Read` the host file IN FULL (needed for surgical Write fallback in step 8).
+   - Identify the exact heading and the contiguous bullet block beneath it.
+   - Capture every existing entry verbatim.
+   - Capture the LINE FOLLOWING the bullet block (used for Edit uniqueness padding).
 
 2. **Build the coverage map.**
    - `Glob` every `**/index.md` under candidate doc roots (`docs/**` plus any owner-registered roots).
    - For each `index.md`, parse the YAML front-matter and extract `children:` (array of github/docs-style path strings — possibly nested).
-   - For each child path, resolve to a repo-root-relative path using the resolution rules from `.claude/agents/document-writer.md` § "Children path resolution" (leading `/` is **sibling-relative** to the parent `index.md`'s own directory; supports nested paths like `/sub/file`):
-
-     | Child entry | Resolution |
-     |---|---|
-     | `/<a>/<b>/.../<name>.<ext>` (has extension) | `<parent-dir>/<a>/<b>/.../<name>.<ext>` — direct or nested file. |
-     | `/<a>/<b>/.../<name>` (no extension) | Try `<parent-dir>/<a>/<b>/.../<name>.md` first (Markdown leaf). If not found, try `<parent-dir>/<a>/<b>/.../<name>/index.md` (sub-dir boundary). If both exist → flag duplicate-resolution warning. If neither → flag broken-link. |
-
+   - For each child path, resolve to a repo-root-relative path per `.claude/agents/document-writer.md` § "Children path resolution".
    - Aggregate into **CoverageSet** = `{ <relative-path> → <covering-index> }`.
 
 3. **Identify ROOT indexes.** An `index.md` is a ROOT iff it is NOT in CoverageSet. All other `index.md` files are nested.
@@ -86,7 +85,14 @@ If none exist: **halt and ask** the user where the registry lives.
    | REMOVE — legacy-readme | Entry exists; path is a `README.md` and a sibling `index.md` now indexes the same directory. |
    | KEEP | Exact match. |
 
-7. **Style-match the host.** Lock in from existing bullets before editing: bullet glyph, em-dash style, "Consult …" suffix, inline file-table convention, ordering principle. Default: preserve current ordering; append at end when unclear.
+7. **Style-match the host.** Lock in from existing bullets before editing:
+   - Bullet glyph.
+   - Em-dash style.
+   - "Consult …" suffix.
+   - Inline file-table convention.
+   - Ordering principle.
+
+   Default: preserve current ordering; append at end when unclear.
 
 8. **Apply (binding).** Drive each diff entry through the apply harness below. NEVER rewrite the whole section. NEVER reorder unrelated bullets. NEVER touch other sections in the same dispatch. Every byte outside the targeted bullets MUST be preserved byte-for-byte.
 
@@ -134,9 +140,12 @@ If none exist: **halt and ask** the user where the registry lives.
 
    1. **Already loaded.** The full host-file content was captured in step 1.
    2. **In-memory diff.** Apply ADDs / UPDATEs / REMOVEs as string-replace operations in memory, USING THE SAME PER-CLASS PATTERNS as Edit mode (the patterns above). Each pattern's `old_string` / `new_string` shapes apply identically.
-   3. **Invariant check (binding).** After all in-memory mutations, the modified buffer MUST be byte-identical to the original EXCEPT for the targeted bullet additions / updates / removals. If any other byte changed (whitespace normalization, line-ending swap, trailing-newline drift, etc.), HALT with error: "surgical invariant violated; refusing to Write." Compare-by-region helper:
-      - Capture byte range `[0, section_heading_start)` and `[section_end, EOF)` from the original.
-      - Verify those ranges are bit-identical in the modified buffer.
+   3. **Invariant check (binding).**
+      - Modified buffer MUST be byte-identical to the original EXCEPT for the targeted bullet additions / updates / removals.
+      - If any other byte changed (whitespace normalization, line-ending swap, trailing-newline drift, etc.): HALT with error `"surgical invariant violated; refusing to Write."`
+      - Compare-by-region helper:
+        - Capture byte range `[0, section_heading_start)` and `[section_end, EOF)` from the original.
+        - Verify those ranges are bit-identical in the modified buffer.
    4. **Write the full file.** Single `Write` call with the modified buffer. `file_path` is the host file's absolute path.
    5. **Confirm.** Re-Read the file; verify the targeted bullets are present in the expected shape. If verification fails, surface the discrepancy in the output and stop further apply work.
 

@@ -1,6 +1,7 @@
 ---
 description: Build or refresh a directory's index.md (github/docs-style — recursive-descent children list with sub-index boundaries, hierarchical, minimum-footprint at the root prompt). One invocation produces a full index for the target subtree; sub-indexes added later automatically shrink the parent's footprint. Walks UP the directory tree on completion. Body retains a ## Contents H2 TOC for the descent scope. Mode A of document-writer.
 argument-hint: <directory-path>
+model: sonnet
 ---
 
 # /docs-index
@@ -46,7 +47,12 @@ Boundaries compose: a deeply-nested `index.md` is a boundary for every ancestor 
 
    Resolution rule for any `/.../<name>` (no extension): try `<...>/<name>.md` first; if not found, try `<...>/<name>/index.md`. Ambiguity (both exist) → flag as open question.
 
-- **Front-matter keys.** Minimum useful set: `title` (required), `intro` (required, ≤ 25 words, single-quoted), `shortTitle` (optional), `children` (required if descent yields any entries). Owner-set keys are preserved verbatim.
+- **Front-matter keys.** Minimum useful set:
+  - `title` — required.
+  - `intro` — required; ≤ 25 words; single-quoted.
+  - `shortTitle` — optional.
+  - `children` — required if descent yields entries.
+  - Owner-set keys: preserved verbatim.
 - **YAML safety.** **Single-quote all prose string values** in front-matter — at minimum `intro`, and any `title` / `shortTitle` containing a colon, `#`, `&`, `*`, `!`, `|`, `>`, `%`, `@`, `?`, `,`, `[`, `]`, `{`, `}`, leading `-`, or template syntax. Matches the github/docs convention.
 - **Body.** Optional narrative (≤ 3 sentences, dropped if redundant with `intro`) + `## Contents` H2 TOC for every Markdown file the descent surfaced (direct + nested up to the sub-index boundary). No `## Files` / `## Child indexes` tables — the `children:` list IS the file index.
 
@@ -100,7 +106,9 @@ The descent yields a flat sorted list. Sub-indexes act as opaque boundaries — 
    | Stub / auto-generated | Front-matter + `## Contents` TOC only; no hand-authored narrative | Proceed with `Edit`. |
    | Hand-authored | Narrative paragraphs, owner-set front-matter beyond the minimum set, status / deprecation notes, custom body sections | Produce proposed `index.md` + diff → return for confirmation; do NOT write. |
 
-2. **Discover content.** Run the descent algorithm above starting at `$ARGUMENTS`. For every Markdown file the descent surfaces (direct + nested, before any boundary), `Grep '^## '` to capture second-layer headings. Do NOT descend into `###` unless host rules require.
+2. **Discover content.** Run the descent algorithm above starting at `$ARGUMENTS`.
+   - For every Markdown file surfaced (direct + nested, before any boundary): `Grep '^## '` to capture second-layer headings.
+   - Do NOT descend into `###` unless host rules require.
 
 3. **Verify references.** Cross-check the discovered file list against sibling docs (root prompt, parent index, top-level architecture doc) so you don't index files about to move.
 
@@ -142,7 +150,7 @@ The descent yields a flat sorted list. Sub-indexes act as opaque boundaries — 
 
 6. **Single-markdown collapse.** If the descent surfaced exactly one Markdown file (direct OR nested), collapse `## Contents` + `### <path>.md` into one `## Contents — \`<path>.md\`` section.
 
-7. **Anchor slugs.** Default to GFM / kramdown (full table in `.claude/agents/document-writer.md` § "Quick reference"). For non-default renderers (Docusaurus, MkDocs, Hugo, GitBook, AsciiDoc), surface as an open question — do NOT silently re-slug.
+7. **Anchor slugs.** Default to GFM / kramdown (full table in `.claude/agents/_anchor-slugs.md`). For non-default renderers (Docusaurus, MkDocs, Hugo, GitBook, AsciiDoc), surface as an open question — do NOT silently re-slug.
 
 8. **Respect host metadata.** Merge with existing front-matter — never clobber owner-set keys. Preserve `Version` / `Status` / `Owner` / `Last reviewed` / `redirect_from` / `versions` / similar verbatim. Structural keys (`title`, `intro`, `shortTitle`, `children`) may be added or refreshed.
 
@@ -187,4 +195,4 @@ The descent yields a flat sorted list. Sub-indexes act as opaque boundaries — 
 
 ## Report
 
-Use the **Documentation Report** template from `.claude/agents/document-writer.md` § "Output Template". Set Mode = A. Include a `Walk-up trace` block listing every ancestor visited and the per-ancestor action (Edit / Write / propose-only / idempotent-no-op). Include a `Descent summary` block stating (a) the deepest path the descent reached, (b) the count of files surfaced, (c) the count of boundaries encountered. Surface any **legacy-navigation** `README.md` siblings as deprecation candidates in the Open questions block; surface any **content-bearing** `README.md` newly added to a `children:` array as an additive walk-up event.
+Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = A. Include a `Walk-up trace` block listing every ancestor visited and the per-ancestor action (Edit / Write / propose-only / idempotent-no-op). Include a `Descent summary` block stating (a) the deepest path the descent reached, (b) the count of files surfaced, (c) the count of boundaries encountered. Surface any **legacy-navigation** `README.md` siblings as deprecation candidates in the Open questions block; surface any **content-bearing** `README.md` newly added to a `children:` array as an additive walk-up event.
