@@ -3,10 +3,13 @@ using System.Text.Json.Serialization;
 
 namespace Dashboard.Shared.Contracts;
 
+// D5: unknown write fields → 422. The exception is caught by the global exception handler.
+
 /// <summary>
 /// Request body for <c>POST /api/deployments</c>.
 /// Every accepted body appends exactly one row; the store does not deduplicate.
 /// </summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record DeploymentEventIngest
 {
     [Required]
