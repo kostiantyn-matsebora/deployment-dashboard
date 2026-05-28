@@ -1,0 +1,3588 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deployment Dashboard — Variant C — Glassy Dark Monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  /* Pre-paint theme bootstrap — sets data-theme BEFORE any CSS evaluates,
+     so the very first frame matches the user's persisted choice.
+     Default = 'dark' for first-time visitors. */
+  (function () {
+    try {
+      var v = localStorage.getItem('theme');
+      if (v === 'light' || v === 'auto') {
+        document.documentElement.setAttribute('data-theme', v);
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (_) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+<style>
+  /* =========================================================
+     PALETTE & BASE — tokenized for dark/light/auto theming
+     Geometry tokens (radii) shared on :root.
+     Color/surface tokens scoped to [data-theme=...] so the
+     switcher flips them via a single attribute on <html>.
+     ========================================================= */
+  :root {
+    --radius-lg: 16px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+  }
+
+  /* ---------------- DARK token set (default) ---------------- */
+  :root,
+  :root[data-theme="dark"] {
+    --bg-0:        #0b0d14;
+    --bg-1:        #0e1119;
+    --indigo-wash: rgba(98, 92, 220, 0.22);
+    --teal-wash:   rgba(36, 200, 196, 0.16);
+
+    --glass:        rgba(22, 26, 38, 0.55);
+    --glass-strong: rgba(28, 33, 48, 0.70);
+    --glass-edge:   rgba(255, 255, 255, 0.06);
+    --glass-edge-2: rgba(255, 255, 255, 0.10);
+
+    --ink-0:  #e9ecf4;
+    --ink-1:  #b8bdcc;
+    --ink-2:  #7c829a;
+    --ink-3:  #555b73;
+
+    --emerald:        #34d29a;
+    --emerald-deep:   #1e8e66;
+    --emerald-wash:   rgba(52, 210, 154, 0.18);
+    --emerald-glow:   rgba(52, 210, 154, 0.35);
+    --emerald-edge:   rgba(52, 210, 154, 0.55);
+
+    --amber:        #f5a524;
+    --amber-deep:   #b67100;
+    --amber-wash:   rgba(245, 165, 36, 0.20);
+    --amber-glow:   rgba(245, 165, 36, 0.40);
+    --amber-edge:   rgba(245, 165, 36, 0.65);
+
+    --coral:        #ff5d5d;
+    --coral-deep:   #b62a2a;
+    --coral-wash:   rgba(255, 93, 93, 0.20);
+    --coral-glow:   rgba(255, 93, 93, 0.38);
+    --coral-edge:   rgba(255, 93, 93, 0.60);
+
+    --neutral-wash: rgba(255, 255, 255, 0.03);
+
+    /* additional structural tokens consumed below */
+    --grid-line:        rgba(255,255,255,0.045);
+    --scrollbar-thumb:  rgba(255,255,255,0.07);
+    --scrollbar-thumb-hover: rgba(255,255,255,0.13);
+    --slot-bg:          rgba(20, 24, 36, 0.55);
+    --slot-empty-bg:    rgba(20, 24, 36, 0.30);
+    --vis-card-bg:      rgba(20, 24, 36, 0.65);
+    --tabs-bg:          rgba(10, 12, 20, 0.55);
+    --kpi-bg:           rgba(10, 12, 20, 0.45);
+    --input-bg:         rgba(10, 12, 20, 0.55);
+    --field-toggle-bg:  rgba(10, 12, 20, 0.45);
+    --popover-bg:       rgba(18, 22, 34, 0.78);
+    --drawer-overlay:   rgba(6, 8, 14, 0.55);
+    --drawer-bg:        rgba(14, 17, 26, 0.85);
+    --hist-bg:          rgba(20, 24, 36, 0.55);
+    --kvtag-bg:         rgba(255,255,255,0.04);
+    --env-tag-bg:       rgba(255,255,255,0.04);
+    --divider-dash:     rgba(255,255,255,0.18);
+    --switch-off-bg:    rgba(255,255,255,0.10);
+    --switch-knob:      #d4d8e6;
+    --accent-rgb:       120, 110, 255;   /* indigo accent for selection/focus */
+  }
+
+  /* ---------------- LIGHT token set ---------------- */
+  :root[data-theme="light"] {
+    --bg-0:        #f6f4f0;
+    --bg-1:        #efece6;
+    /* washes muted to 5-8% so glass identity remains without screaming */
+    --indigo-wash: rgba(98, 92, 220, 0.07);
+    --teal-wash:   rgba(36, 160, 156, 0.06);
+
+    --glass:        rgba(255, 255, 255, 0.55);
+    --glass-strong: rgba(255, 255, 255, 0.72);
+    --glass-edge:   rgba(20, 24, 40, 0.08);
+    --glass-edge-2: rgba(20, 24, 40, 0.14);
+
+    --ink-0:  #1a1c28;
+    --ink-1:  #3a3f55;
+    --ink-2:  #6a7088;
+    --ink-3:  #99a0b3;
+
+    /* status colors retained but slightly desaturated for light surfaces */
+    --emerald:        #1ea676;
+    --emerald-deep:   #14704f;
+    --emerald-wash:   rgba(30, 166, 118, 0.13);
+    --emerald-glow:   rgba(30, 166, 118, 0.28);
+    --emerald-edge:   rgba(30, 166, 118, 0.50);
+
+    --amber:        #b97400;
+    --amber-deep:   #815100;
+    --amber-wash:   rgba(245, 165, 36, 0.16);
+    --amber-glow:   rgba(245, 165, 36, 0.30);
+    --amber-edge:   rgba(245, 165, 36, 0.55);
+
+    --coral:        #c83c3c;
+    --coral-deep:   #872626;
+    --coral-wash:   rgba(255, 93, 93, 0.13);
+    --coral-glow:   rgba(255, 93, 93, 0.25);
+    --coral-edge:   rgba(255, 93, 93, 0.50);
+
+    --neutral-wash: rgba(20, 24, 40, 0.03);
+
+    --grid-line:        rgba(20, 24, 40, 0.05);
+    --scrollbar-thumb:  rgba(20, 24, 40, 0.18);
+    --scrollbar-thumb-hover: rgba(20, 24, 40, 0.30);
+    --slot-bg:          rgba(255, 255, 255, 0.55);
+    --slot-empty-bg:    rgba(255, 255, 255, 0.30);
+    --vis-card-bg:      rgba(255, 255, 255, 0.70);
+    --tabs-bg:          rgba(255, 255, 255, 0.55);
+    --kpi-bg:           rgba(255, 255, 255, 0.55);
+    --input-bg:         rgba(255, 255, 255, 0.60);
+    --field-toggle-bg:  rgba(255, 255, 255, 0.55);
+    --popover-bg:       rgba(255, 255, 255, 0.82);
+    --drawer-overlay:   rgba(60, 50, 80, 0.32);
+    --drawer-bg:        rgba(252, 250, 246, 0.85);
+    --hist-bg:          rgba(255, 255, 255, 0.65);
+    --kvtag-bg:         rgba(20, 24, 40, 0.05);
+    --env-tag-bg:       rgba(20, 24, 40, 0.05);
+    --divider-dash:     rgba(20, 24, 40, 0.20);
+    --switch-off-bg:    rgba(20, 24, 40, 0.14);
+    --switch-knob:      #ffffff;
+    --accent-rgb:       98, 92, 220;
+  }
+
+  /* ---------------- AUTO: follow OS via media query ---------------- */
+  @media (prefers-color-scheme: light) {
+    :root[data-theme="auto"] {
+      --bg-0:        #f6f4f0;
+      --bg-1:        #efece6;
+      --indigo-wash: rgba(98, 92, 220, 0.07);
+      --teal-wash:   rgba(36, 160, 156, 0.06);
+
+      --glass:        rgba(255, 255, 255, 0.55);
+      --glass-strong: rgba(255, 255, 255, 0.72);
+      --glass-edge:   rgba(20, 24, 40, 0.08);
+      --glass-edge-2: rgba(20, 24, 40, 0.14);
+
+      --ink-0:  #1a1c28;
+      --ink-1:  #3a3f55;
+      --ink-2:  #6a7088;
+      --ink-3:  #99a0b3;
+
+      --emerald:        #1ea676;
+      --emerald-deep:   #14704f;
+      --emerald-wash:   rgba(30, 166, 118, 0.13);
+      --emerald-glow:   rgba(30, 166, 118, 0.28);
+      --emerald-edge:   rgba(30, 166, 118, 0.50);
+
+      --amber:        #b97400;
+      --amber-deep:   #815100;
+      --amber-wash:   rgba(245, 165, 36, 0.16);
+      --amber-glow:   rgba(245, 165, 36, 0.30);
+      --amber-edge:   rgba(245, 165, 36, 0.55);
+
+      --coral:        #c83c3c;
+      --coral-deep:   #872626;
+      --coral-wash:   rgba(255, 93, 93, 0.13);
+      --coral-glow:   rgba(255, 93, 93, 0.25);
+      --coral-edge:   rgba(255, 93, 93, 0.50);
+
+      --neutral-wash: rgba(20, 24, 40, 0.03);
+
+      --grid-line:        rgba(20, 24, 40, 0.05);
+      --scrollbar-thumb:  rgba(20, 24, 40, 0.18);
+      --scrollbar-thumb-hover: rgba(20, 24, 40, 0.30);
+      --slot-bg:          rgba(255, 255, 255, 0.55);
+      --slot-empty-bg:    rgba(255, 255, 255, 0.30);
+      --vis-card-bg:      rgba(255, 255, 255, 0.70);
+      --tabs-bg:          rgba(255, 255, 255, 0.55);
+      --kpi-bg:           rgba(255, 255, 255, 0.55);
+      --input-bg:         rgba(255, 255, 255, 0.60);
+      --field-toggle-bg:  rgba(255, 255, 255, 0.55);
+      --popover-bg:       rgba(255, 255, 255, 0.82);
+      --drawer-overlay:   rgba(60, 50, 80, 0.32);
+      --drawer-bg:        rgba(252, 250, 246, 0.85);
+      --hist-bg:          rgba(255, 255, 255, 0.65);
+      --kvtag-bg:         rgba(20, 24, 40, 0.05);
+      --env-tag-bg:       rgba(20, 24, 40, 0.05);
+      --divider-dash:     rgba(20, 24, 40, 0.20);
+      --switch-off-bg:    rgba(20, 24, 40, 0.14);
+      --switch-knob:      #ffffff;
+      --accent-rgb:       98, 92, 220;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--ink-0);
+    background: var(--bg-0);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Two radial accent washes (indigo top-left, teal bottom-right) */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(900px 700px at 8% -10%, var(--indigo-wash), transparent 60%),
+      radial-gradient(1100px 800px at 110% 110%, var(--teal-wash), transparent 60%),
+      linear-gradient(180deg, var(--bg-0), var(--bg-1) 100%);
+    z-index: -2;
+    pointer-events: none;
+  }
+
+  /* Hairline grid masked to soft center ellipse */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 45%, #000 30%, transparent 80%);
+            mask-image: radial-gradient(ellipse 80% 60% at 50% 45%, #000 30%, transparent 80%);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  /* =========================================================
+     LAYOUT
+     ========================================================= */
+  .app {
+    /* full viewport packing — let matrix/vis consume the available width.
+       Cap is comfortable on ultrawide, but no longer the dominant constraint. */
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 14px 18px 24px;
+  }
+
+  /* ----- top header bar ----- */
+  .topbar {
+    /* position+z-index lift topbar's stacking context above the sibling
+       matrix-shell / vis-shell, which establish their own stacking contexts
+       via `backdrop-filter`. Without this, popovers (z-index:20 inside
+       topbar's stacking context) get painted UNDER the matrix/vis surfaces
+       — the popover title shows but its body is occluded by the matrix
+       headers / vis swim canvas. */
+    position: relative;
+    z-index: 30;
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 20px;
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 24px 64px -28px rgba(0,0,0,0.55);
+  }
+  .brand {
+    display: flex; align-items: center; gap: 12px;
+    padding-right: 18px;
+    border-right: 1px solid var(--glass-edge);
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+  .brand-mark {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    background:
+      radial-gradient(circle at 30% 30%, #8e88ff 0%, #4d49b8 60%, #1d1a55 100%);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.08) inset,
+      0 6px 20px -6px rgba(120, 110, 255, 0.6);
+  }
+  .brand-name {
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    font-size: 14.5px;
+  }
+  .brand-sub {
+    font-size: 11px;
+    color: var(--ink-2);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+
+  /* segmented tabs */
+  .tabs {
+    display: flex;
+    background: var(--tabs-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 999px;
+    padding: 4px;
+    gap: 2px;
+  }
+  .tab {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--ink-1);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color .2s ease, background .2s ease, box-shadow .2s ease;
+    letter-spacing: 0.15px;
+  }
+  .tab:hover { color: var(--ink-0); }
+  .tab.is-active {
+    color: #fff;
+    background: linear-gradient(180deg, rgba(var(--accent-rgb),0.35), rgba(var(--accent-rgb),0.18));
+    box-shadow:
+      0 0 0 1px rgba(var(--accent-rgb),0.45) inset,
+      0 6px 18px -8px rgba(var(--accent-rgb),0.7);
+  }
+
+  .topbar-spacer { flex: 1; }
+
+  /* KPI strip — compacted to share header strip with inline filter controls */
+  .kpis { display: flex; gap: 8px; flex-shrink: 1; min-width: 0; }
+  .kpi {
+    display: flex; flex-direction: column;
+    padding: 5px 11px;
+    border-radius: 10px;
+    background: var(--kpi-bg);
+    border: 1px solid var(--glass-edge);
+    min-width: 72px;
+  }
+  .kpi-label {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+  }
+  .kpi-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink-0);
+    margin-top: 2px;
+  }
+  .kpi.is-warn .kpi-value { color: var(--amber); }
+  .kpi.is-bad  .kpi-value { color: var(--coral); }
+
+  /* live pill with pulse ring */
+  .live-pill {
+    position: relative;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px 6px 12px;
+    border-radius: 999px;
+    background: rgba(52, 210, 154, 0.12);
+    border: 1px solid rgba(52, 210, 154, 0.40);
+    color: var(--emerald);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .live-dot {
+    position: relative;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--emerald);
+    box-shadow: 0 0 10px var(--emerald-glow);
+  }
+  .live-dot::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 1.5px solid var(--emerald);
+    animation: pulseRing 1.8s ease-out infinite;
+  }
+  @keyframes pulseRing {
+    0%   { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(1.7); opacity: 0;   }
+  }
+
+  /* ----- inline header filter (Matrix view only) ----- */
+  .hdr-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 10px;
+    margin-left: 2px;
+    border-left: 1px solid var(--glass-edge);
+  }
+  .hdr-filter-input {
+    /* glass-aesthetic-consistent: subtle translucent bg, hairline border,
+       small placeholder, monospace value — matches popover .input but
+       narrower for the header strip. */
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    padding: 7px 10px;
+    color: var(--ink-0);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    width: 200px;
+    min-width: 180px;
+    max-width: 220px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .hdr-filter-input::placeholder {
+    color: var(--ink-3);
+    font-size: 11.5px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .hdr-filter-input:focus {
+    outline: 0;
+    border-color: rgba(var(--accent-rgb), 0.6);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+  }
+  /* failures-only pill inline — visual treatment unchanged (.toggle base) */
+  .hdr-fail-toggle { white-space: nowrap; }
+
+  /* ----- theme switcher: 3-state segmented control (dark / light / auto) ----- */
+  .theme-switch {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 999px;
+    margin-left: 6px;
+    flex-shrink: 0;
+  }
+  .theme-switch .ts-opt {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--ink-2);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    line-height: 1.2;
+    transition: color .15s ease, background .15s ease, box-shadow .15s ease;
+    min-width: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-switch .ts-opt:hover { color: var(--ink-0); }
+  .theme-switch .ts-opt.is-on {
+    color: var(--ink-0);
+    background: rgba(var(--accent-rgb), 0.20);
+    box-shadow:
+      0 0 0 1px rgba(var(--accent-rgb), 0.45) inset,
+      0 4px 12px -6px rgba(var(--accent-rgb), 0.6);
+  }
+  .theme-switch .ts-opt[data-theme-pick="auto"] {
+    font-size: 10.5px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ----- header icon-buttons & popovers ----- */
+  .hdr-icons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 10px;
+    margin-left: 4px;
+    border-left: 1px solid var(--glass-edge);
+  }
+  .icon-btn {
+    appearance: none;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    color: var(--ink-1);
+    width: 34px; height: 34px;
+    border-radius: 9px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1;
+    position: relative;
+    transition: color .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+  }
+  .icon-btn:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .icon-btn.is-active {
+    color: var(--ink-0);
+    border-color: rgba(var(--accent-rgb),0.55);
+    background: rgba(var(--accent-rgb),0.18);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb),0.35), 0 0 14px rgba(var(--accent-rgb),0.25);
+  }
+  .icon-btn .badge-dot {
+    position: absolute;
+    top: 5px; right: 6px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--coral);
+    box-shadow: 0 0 6px var(--coral-glow);
+    display: none;
+  }
+  .icon-btn.has-active .badge-dot { display: block; }
+
+  /* popover surface */
+  .popover {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 260px;
+    padding: 14px 14px 12px;
+    background: var(--popover-bg);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge-2);
+    border-radius: var(--radius-md);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 24px 60px -22px rgba(0,0,0,0.45);
+    z-index: 20;
+    display: none;
+  }
+  .popover.is-open { display: block; }
+  .popover-title {
+    font-size: 11px;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .popover-section + .popover-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--glass-edge);
+  }
+  .popover .hint {
+    margin-top: 8px;
+    font-size: 10.5px;
+    color: var(--ink-3);
+    line-height: 1.45;
+    font-style: italic;
+  }
+
+  /* fields-picker checkboxes */
+  .fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+  }
+  .field-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--field-toggle-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--ink-1);
+    font-family: 'JetBrains Mono', monospace;
+    user-select: none;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .field-toggle:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .field-toggle .chk {
+    width: 14px; height: 14px;
+    border-radius: 4px;
+    background: var(--kvtag-bg);
+    border: 1.5px solid var(--glass-edge-2);
+    position: relative;
+    flex-shrink: 0;
+    transition: border-color .15s, background .15s;
+  }
+  .field-toggle .chk::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 2px;
+    background: transparent;
+    transition: background .15s;
+  }
+  .field-toggle.is-on {
+    color: var(--ink-0);
+    border-color: rgba(var(--accent-rgb), 0.5);
+    background: rgba(var(--accent-rgb), 0.10);
+  }
+  .field-toggle.is-on .chk {
+    border-color: rgba(var(--accent-rgb), 1);
+    background: rgba(var(--accent-rgb),0.10);
+  }
+  .field-toggle.is-on .chk::after {
+    background: rgba(var(--accent-rgb), 1);
+    box-shadow: 0 0 6px rgba(var(--accent-rgb),0.6);
+  }
+
+  /* filter popover — inputs reuse .input / .toggle */
+  .popover .input { min-width: 0; width: 100%; }
+  .popover-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .popover-row:last-child { margin-bottom: 0; }
+
+  /* ----- filter bar (matrix only) ----- */
+  .filterbar {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+  }
+  .filterbar-label {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+  .input {
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--ink-0);
+    font-family: inherit;
+    font-size: 13px;
+    min-width: 280px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .input:focus {
+    outline: 0;
+    border-color: rgba(var(--accent-rgb), 0.6);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+  }
+  .toggle {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 7px 13px;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--ink-1);
+    user-select: none;
+    transition: all .15s ease;
+  }
+  .toggle:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .toggle .switch {
+    width: 30px; height: 16px; border-radius: 999px;
+    background: var(--switch-off-bg);
+    position: relative;
+    transition: background .15s ease;
+  }
+  .toggle .switch::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    background: var(--switch-knob);
+    transition: transform .15s ease, background .15s ease;
+  }
+  .toggle.is-on {
+    color: var(--coral);
+    border-color: rgba(255, 93, 93, 0.45);
+    background: rgba(255, 93, 93, 0.10);
+  }
+  .toggle.is-on .switch { background: var(--coral); }
+  .toggle.is-on .switch::after { transform: translateX(14px); background: #fff; }
+
+  .filter-spacer { flex: 1; }
+  .filter-hint {
+    font-size: 11.5px;
+    color: var(--ink-3);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* =========================================================
+     MATRIX
+     ========================================================= */
+  .matrix-shell {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 30px 80px -40px rgba(0,0,0,0.7);
+    /* Horizontal scroll surfaces when an env column expands past viewport
+       to fit a long version. Vertical content remains in flow. */
+    overflow-x: auto;
+    overflow-y: visible;
+    /* Bug 5: closing edge — matrix container gets a clear bottom hairline
+       so the last service row doesn't appear to hang in empty space. */
+    border-bottom: 1px solid var(--glass-edge-2);
+  }
+
+  /* Content-driven packing: service column fixed at 180px; env columns size
+     to max-content so each column GROWS to fit its widest cell (e.g. a 50-char
+     version no longer truncates — the column expands and the matrix overflows
+     horizontally, surfacing scroll via .matrix-shell). minmax(140px, max-content)
+     keeps a sensible minimum so empty/short columns don't collapse.
+     Row gap increased to 9px (Bug 4: better service-row separation). */
+  .matrix {
+    display: grid;
+    grid-template-columns: 180px repeat(5, minmax(140px, max-content));
+    column-gap: 6px;
+    row-gap: 9px;
+  }
+  .col-head, .row-head {
+    color: var(--ink-2);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-weight: 600;
+  }
+  .col-head {
+    padding: 2px 8px 6px;
+    text-align: center;
+    border-bottom: 1px solid var(--glass-edge);
+  }
+  .col-head .env-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: var(--env-tag-bg);
+    border: 1px solid var(--glass-edge);
+    color: var(--ink-1);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    text-transform: lowercase;
+  }
+  .row-head {
+    display: flex; align-items: center;
+    padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--ink-0);
+    letter-spacing: 0.2px;
+    text-transform: none;
+    /* Sticky-left during horizontal scroll so service names stay visible
+       when env columns extend past viewport. The matrix-shell is the scroll
+       container (overflow-x: auto). Background is required so the sticky
+       cell isn't transparent over scrolling content beneath — use a glass
+       surface + backdrop-filter to keep the variant's aesthetic. */
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--glass-strong);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    /* subtle left accent bar anchors the row visually (Bug 4 cue) */
+    border-left: 2px solid rgba(var(--accent-rgb), 0.35);
+    padding-left: 10px;
+  }
+
+  /* ----- slot card (base) -----
+     Tile sizing is DYNAMIC: min-height ≈ size of bare 6-box-state chrome
+     (~64px), height grows naturally to fit currently-rendered attributes.
+     When all attribute fields are toggled off, tile collapses to a chip.
+     PACKING: padding tightened on the body; headline keeps breathing room
+     via .ver's own margin/padding. Mid/tail rows pack via flex-wrap below.
+  */
+  .slot {
+    position: relative;
+    min-height: 56px;
+    height: auto;
+    padding: 6px 8px 6px 12px;
+    border-radius: var(--radius-md);
+    background: var(--slot-bg);
+    border: 1px solid var(--glass-edge);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    cursor: pointer;
+    /* overflow:visible so a long single-line version isn't clipped — the
+       column itself stretches to fit (grid uses minmax(140px, max-content)). */
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    transition:
+      transform .18s ease,
+      border-color .18s ease,
+      box-shadow .25s ease;
+  }
+  /* tile-attrs area shrinks to 0 when no fields render */
+  .slot .tile-attrs:empty { display: none; }
+  .slot:hover { transform: translateY(-1px); border-color: var(--glass-edge-2); }
+
+  /* left-edge accent bar */
+  .slot::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--ink-3);
+    box-shadow: 0 0 10px rgba(255,255,255,0.05);
+    transition: background .2s ease, box-shadow .2s ease;
+  }
+
+  .slot.empty {
+    cursor: default;
+    background: var(--slot-empty-bg);
+  }
+  .slot.empty::before { background: transparent; box-shadow: none; }
+  .slot.empty .empty-mark {
+    color: var(--ink-3);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    height: 100%;
+  }
+
+  /* state — success */
+  .slot.s-success {
+    background: linear-gradient(180deg, var(--emerald-wash), rgba(52,210,154,0.06));
+    border-color: var(--emerald-edge);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 0 0 1px rgba(52,210,154,0.10),
+      0 12px 32px -16px var(--emerald-glow);
+  }
+  .slot.s-success::before {
+    background: var(--emerald);
+    box-shadow: 0 0 14px var(--emerald-glow);
+  }
+
+  /* state — full running (no prior) */
+  .slot.s-running-only {
+    background: linear-gradient(180deg, var(--amber-wash), rgba(245,165,36,0.06));
+    border-color: var(--amber-edge);
+    animation: breathe 3.6s ease-in-out infinite;
+  }
+  .slot.s-running-only::before {
+    background: var(--amber);
+    box-shadow: 0 0 14px var(--amber-glow);
+  }
+  @keyframes breathe {
+    0%, 100% { box-shadow:
+                 0 1px 0 var(--glass-edge-2) inset,
+                 0 0 0 1px rgba(245,165,36,0.10),
+                 0 10px 28px -16px var(--amber-glow); }
+    50%      { box-shadow:
+                 0 1px 0 var(--glass-edge-2) inset,
+                 0 0 0 1px rgba(245,165,36,0.22),
+                 0 18px 40px -16px rgba(245,165,36,0.55); }
+  }
+
+  /* split-box base — two sections separated by dashed divider */
+  .slot.split {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .slot.split .sec-top,
+  .slot.split .sec-bot {
+    padding: 5px 10px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+  .slot.split .divider {
+    border-top: 1.5px dashed var(--divider-dash);
+    margin: 0 12px;
+  }
+
+  /* top-section variants (full wash by spec) */
+  .sec-top.is-running {
+    background: linear-gradient(180deg, var(--amber-wash), rgba(245,165,36,0.05));
+  }
+  .sec-top.is-failed {
+    background: linear-gradient(180deg, var(--coral-wash), rgba(255,93,93,0.05));
+  }
+  .sec-bot {
+    background: var(--neutral-wash);
+  }
+
+  /* state colored accent bars on split tiles — colored by TOP section */
+  .slot.s-run-last      ::before,
+  .slot.s-run-fail-last ::before,
+  .slot.s-run-fail-only ::before { /* keep accent bar driven via parent */ }
+
+  .slot.s-run-last,
+  .slot.s-run-fail-last,
+  .slot.s-run-fail-only {
+    animation: breathe 3.6s ease-in-out infinite;
+    border-color: var(--amber-edge);
+  }
+  .slot.s-run-last::before,
+  .slot.s-run-fail-last::before,
+  .slot.s-run-fail-only::before {
+    background: var(--amber);
+    box-shadow: 0 0 14px var(--amber-glow);
+  }
+
+  .slot.s-fail-last {
+    border-color: var(--coral-edge);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 0 0 1px rgba(255,93,93,0.10),
+      0 12px 32px -16px var(--coral-glow);
+  }
+  .slot.s-fail-last::before {
+    background: var(--coral);
+    box-shadow: 0 0 14px var(--coral-glow);
+  }
+
+  /* ----- inside-slot content ----- */
+  /* version — primary identifier in Matrix (row=component, col=env header
+     are external). Mono identity preserved. Single-line, NO truncation, NO
+     wrap, NO ellipsis. The column expands to fit the full version (per the
+     design principle: stretch to fit content; never truncate version). */
+  .ver {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: var(--ink-0);
+    cursor: default;
+    display: inline-block;
+    padding: 1px 6px;
+    margin-left: -6px;
+    border-radius: 5px;
+    white-space: nowrap;
+    line-height: 1.25;
+    vertical-align: top;
+    transition: background .15s ease, box-shadow .15s ease, color .15s ease;
+  }
+  .ver:hover {
+    background: rgba(245, 165, 36, 0.18);
+    color: var(--amber);
+    box-shadow: 0 0 0 1px rgba(245,165,36,0.4), 0 0 14px rgba(245,165,36,0.30);
+  }
+  .ver.highlighted {
+    background: rgba(245, 165, 36, 0.20);
+    color: var(--amber);
+    box-shadow: 0 0 0 1px rgba(245,165,36,0.45), 0 0 14px rgba(245,165,36,0.35);
+  }
+  .slot.highlighted-slot {
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 0 0 1px var(--amber-edge),
+      0 0 22px var(--amber-glow);
+  }
+
+  .meta-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px;
+    color: var(--ink-1);
+  }
+  .meta-row .actor { color: var(--ink-1); }
+  .meta-row .dot   { color: var(--ink-3); }
+  .meta-row .time  { color: var(--ink-2); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+
+  /* spinner — bespoke arc */
+  .spinner {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(245,165,36,0.18);
+    border-top-color: var(--amber);
+    animation: spin 0.9s linear infinite;
+    filter: drop-shadow(0 0 4px var(--amber-glow));
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .running-line { display: flex; align-items: center; gap: 8px; }
+
+  /* prev-failed warning badge */
+  .warn-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 7px 2px 6px;
+    border-radius: 999px;
+    background: rgba(255, 93, 93, 0.15);
+    border: 1px solid rgba(255, 93, 93, 0.45);
+    color: var(--coral);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+  }
+  .warn-badge .warn-icon { font-size: 10px; }
+
+  .failed-line {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .failed-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--coral);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .last-label {
+    font-size: 10px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+  }
+
+  /* ----- mixed-treatment tile/node attribute layout (no uniform chips) -----
+     PACKING: single flex-wrap container so secondary fields sit side-by-side
+     instead of one-per-line. Items naturally wrap when the row is full.
+     Logical row groups (.ta-bl / .ta-br / .ta-full) are inline-flex clusters
+     that themselves participate in the parent wrap — they hint horizontal
+     groupings ("what changed" left, "where it ran" right) but no longer
+     dictate per-line breaks. .ta-br auto-margin pushes its cluster to the
+     right edge of the row it lands in; .ta-full forces a row break.
+  */
+  .tile-attrs {
+    margin-top: auto;
+    padding-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 2px;
+    min-width: 0;
+  }
+  .tile-attrs .ta-bl {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .tile-attrs .ta-br {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px 8px;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;       /* shove BR cluster to the right edge of its row */
+  }
+  .tile-attrs .ta-full {
+    flex-basis: 100%;        /* force a fresh row */
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+  }
+
+  /* Headline row: version (left) sits on the same line as a small actor+time
+     cluster on the right. Allows the "who/when" pair to ride alongside the
+     version headline instead of taking its own row. */
+  .ver-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .ver-row .ver { flex: 0 1 auto; min-width: 0; }
+  .ver-row .ver-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px 8px;
+    flex-wrap: wrap;
+    margin-left: auto;       /* right-align the meta pair */
+    min-width: 0;
+  }
+
+  /* sha — mono short-hex, no glyph, no chip; self-identifying typography */
+  .fld-sha {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-1);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+  /* run_number — '#' prefix is the identifier */
+  .fld-runno {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-1);
+    white-space: nowrap;
+  }
+  .fld-runno .glyph { color: var(--ink-3); margin-right: 1px; }
+  /* run_url — ↗ run dashed link */
+  .fld-runurl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+  }
+  .fld-runurl a {
+    color: #a8a0ff;
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(168,160,255,0.45);
+    white-space: nowrap;
+  }
+  .fld-runurl a:hover { color: #c8c2ff; }
+  .fld-runurl .glyph { margin-right: 2px; }
+  /* actor — @-prefixed handle */
+  .fld-actor {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-1);
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fld-actor .glyph { color: var(--ink-3); }
+  /* happened_at — pure muted typography, no glyph */
+  .fld-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-2);
+    letter-spacing: 0.1px;
+    white-space: nowrap;
+  }
+  /* ref — branch glyph + name */
+  .fld-ref {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-1);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .fld-ref > :not(.glyph) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .fld-ref .glyph { color: var(--ink-2); font-size: 11px; line-height: 1; }
+  /* parrent_deployments — chain glyph + count */
+  .fld-parents {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-2);
+  }
+  .fld-parents .glyph { color: var(--ink-3); margin-right: 2px; }
+
+  /* ref-line: ref slotted under the version headline (full-width line) */
+  .ref-line {
+    margin-top: 1px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-1);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ref-line .glyph { color: var(--ink-2); font-size: 11px; line-height: 1; flex-shrink: 0; }
+  .ref-line > :not(.glyph) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  /* bottom-section single-identifier line (split tiles) — uses fld-* class
+     matching the chosen field, so visual treatment matches top-section. */
+  .lastline {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-1);
+  }
+  .lastline .glyph { color: var(--ink-3); }
+
+  /* Enriched tiles: NO static min-height. Tile grows to fit currently-
+     rendered attributes; when fields are toggled off, it shrinks back
+     toward the .slot base min-height (~56px). Split tiles still need
+     enough breathing room for divider geometry. */
+  .matrix-shell.fields-rich .slot.split .sec-top,
+  .matrix-shell.fields-rich .slot.split .sec-bot { padding: 6px 10px; }
+  /* split-tile sections: NO static min-height. sec-top still needs to
+     hold spinner/badge row; sec-bot may be empty if its single
+     fallback identifier is unavailable. Both collapse with content. */
+  .matrix-shell.fields-rich .slot.split .sec-top { min-height: 28px; }
+  .matrix-shell.fields-rich .slot.split .sec-bot { min-height: 0; }
+  /* empty bottom section in a split tile renders blank — hide it to avoid
+     stray padding on shrunk tiles when the fallback identifier evaluates
+     to nothing (all fallback fields gone). */
+  .slot.split .sec-bot:empty { display: none; }
+  /* S3 / S6: spinner + ⚠ badge — let them wrap rather than overlap */
+  .running-line { flex-wrap: wrap; row-gap: 4px; }
+  .failed-line  { flex-wrap: wrap; row-gap: 4px; }
+
+  /* =========================================================
+     VISUALISATION NODE CARDS (replace bare dots)
+     ========================================================= */
+  /* Vis-card sizing is DYNAMIC and content-driven: width = max-content (whatever
+     the widest line needs — typically the version). NO max-width cap. The card
+     stretches to fit a 50-char version on a single line; the rank-column
+     algorithm in buildSwim picks up the measured width and pushes the next
+     rank further right so cards never overlap. When the canvas exceeds the
+     viewport, .vis-canvas surfaces horizontal scroll. */
+  .vis-card {
+    position: absolute;
+    width: max-content;
+    min-width: 110px;
+    padding: 5px 10px 6px 12px;
+    border-radius: 10px;
+    background: var(--vis-card-bg);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    border: 1px solid var(--glass-edge);
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+    transition: transform .15s ease, box-shadow .2s ease, border-color .15s ease;
+    /* overflow:visible — version must NEVER be clipped or truncated */
+    overflow: visible;
+  }
+  .vis-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--ink-3);
+  }
+  .vis-card:hover { transform: translate(-50%, -50%) translateY(-1px); }
+  .vis-card.s-success {
+    background: linear-gradient(180deg, var(--emerald-wash), rgba(52,210,154,0.06));
+    border-color: var(--emerald-edge);
+    box-shadow: 0 0 0 1px rgba(52,210,154,0.10), 0 10px 24px -14px var(--emerald-glow);
+  }
+  .vis-card.s-success::before { background: var(--emerald); box-shadow: 0 0 12px var(--emerald-glow); }
+  .vis-card.s-progress {
+    background: linear-gradient(180deg, var(--amber-wash), rgba(245,165,36,0.06));
+    border-color: var(--amber-edge);
+    animation: breathe 3.6s ease-in-out infinite;
+  }
+  .vis-card.s-progress::before { background: var(--amber); box-shadow: 0 0 12px var(--amber-glow); }
+  .vis-card.s-failure {
+    background: linear-gradient(180deg, var(--coral-wash), rgba(255,93,93,0.05));
+    border-color: var(--coral-edge);
+    box-shadow: 0 0 0 1px rgba(255,93,93,0.10), 0 10px 24px -14px var(--coral-glow);
+  }
+  .vis-card.s-failure::before { background: var(--coral); box-shadow: 0 0 12px var(--coral-glow); }
+  .vis-card.is-selected {
+    box-shadow:
+      0 0 0 2px rgba(var(--accent-rgb),0.55),
+      0 0 22px rgba(var(--accent-rgb),0.30);
+  }
+  /* version DEMOTED: top-left, mono, small, muted, lighter weight.
+     Single-line, no truncation, no wrap, no ellipsis. The card width grows
+     to accommodate the full version string (per design principle: stretch to
+     fit content; NEVER truncate version text). A 50-char version makes the
+     card ~360–400px wide; buildSwim picks up the measured width and shifts
+     downstream ranks right to prevent overlap. */
+  .vis-card .vc-ver {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--ink-2);
+    letter-spacing: 0.15px;
+    white-space: nowrap;
+    line-height: 1.2;
+    margin-bottom: 2px;
+  }
+  /* environment PROMOTED: PRIMARY identifier within a lane (lane = component,
+     env distinguishes nodes). Inter semibold, cream/off-white, sits in the
+     bottom-right corner. `margin-top: auto` pushes it past the attrs grid
+     to the card's bottom edge regardless of how many attribute rows render. */
+  .vis-card .vc-env {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink-0);
+    letter-spacing: 0.1px;
+    text-transform: lowercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    align-self: flex-end;
+    margin-top: auto;
+    padding-top: 3px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* card uses column flow so env can sit at the bottom-right corner */
+  .vis-card {
+    display: flex;
+    flex-direction: column;
+  }
+  /* vis-card: same mixed-treatment wrap but tighter type + spacing.
+     Card max-width caps the row → fields wrap naturally within the card. */
+  .vis-card .tile-attrs { padding-top: 3px; column-gap: 7px; row-gap: 1px; }
+  .vis-card .ver-row { gap: 3px 8px; }
+  .vis-card .fld-sha,
+  .vis-card .fld-runno,
+  .vis-card .fld-runurl,
+  .vis-card .fld-actor,
+  .vis-card .fld-ref,
+  .vis-card .ref-line { font-size: 9.5px; }
+  .vis-card .fld-time { font-size: 9px; }
+  .vis-card .fld-parents { font-size: 9px; }
+
+  /* container holding absolutely positioned cards + svg edges.
+     Width is dynamic (set inline by buildSwim) — stage stretches to fit the
+     widest rank-column row so cards never overlap; .vis-canvas wraps with
+     overflow-x: auto so the user can scroll horizontally past the viewport.
+     Card pixel sizes line up with viewBox units 1:1 (no scaling). */
+  .vis-stage {
+    position: relative;
+    /* width set inline by buildSwim — fallback 1340px (the design baseline). */
+    width: 1340px;
+    min-width: 1340px;
+  }
+  .vis-stage svg.edges {
+    display: block;
+    /* width set inline by buildSwim to match stage width. */
+    width: 1340px;
+    height: auto;
+    position: relative;
+    z-index: 0;
+  }
+  .vis-stage .cards-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .vis-stage .cards-layer .vis-card { pointer-events: auto; }
+
+  /* =========================================================
+     VISUALISATION VIEW
+     ========================================================= */
+  .view { display: none; }
+  .view.is-active { display: block; }
+
+  .vis-shell {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 14px;
+  }
+  .vis-side {
+    padding: 16px;
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-lg);
+    align-self: flex-start;
+  }
+  .vis-side h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: var(--ink-0);
+  }
+  .vis-side .sub {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    margin-bottom: 14px;
+  }
+  .predicate-list { display: flex; flex-direction: column; gap: 8px; }
+  .predicate {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 11px;
+    background: var(--field-toggle-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--ink-1);
+    user-select: none;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .predicate:hover { border-color: var(--glass-edge-2); color: var(--ink-0); }
+  .predicate .radio {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--kvtag-bg);
+    border: 1.5px solid var(--glass-edge-2);
+    position: relative; flex-shrink: 0;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .predicate .radio::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background .15s ease, box-shadow .15s ease;
+  }
+  .predicate.is-on {
+    color: var(--ink-0);
+    border-color: rgba(var(--accent-rgb), 0.5);
+    background: rgba(var(--accent-rgb), 0.10);
+  }
+  .predicate.is-on .radio {
+    border-color: rgba(var(--accent-rgb), 1);
+    background: rgba(var(--accent-rgb),0.10);
+  }
+  .predicate.is-on .radio::after {
+    background: rgba(var(--accent-rgb), 1);
+    box-shadow: 0 0 8px rgba(var(--accent-rgb),0.7);
+  }
+  .predicate .pred-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  /* time-window control */
+  .timewin {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--glass-edge);
+  }
+  .timewin-label {
+    font-size: 11px;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    margin-bottom: 8px;
+  }
+  .timewin-select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--ink-0);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    transition: opacity .15s ease, border-color .15s ease;
+  }
+  .timewin-select:focus {
+    outline: 0;
+    border-color: rgba(var(--accent-rgb), 0.6);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+  }
+  .timewin.is-disabled .timewin-select {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .timewin.is-disabled .timewin-label { opacity: 0.6; }
+  .timewin-hint {
+    margin-top: 8px;
+    font-size: 10.5px;
+    color: var(--ink-3);
+    line-height: 1.45;
+    font-style: italic;
+  }
+
+  /* inspector — visualisation right-rail */
+  .vis-inspector {
+    padding: 16px;
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-lg);
+    align-self: flex-start;
+    position: sticky;
+    top: 20px;
+  }
+  .vis-inspector h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: var(--ink-0);
+  }
+  .vis-inspector .insp-crumbs {
+    font-size: 11px;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+  }
+  .insp-grid {
+    display: grid;
+    /* label column sizes to longest label (e.g. `parrent_deployments`,
+       the longest domain-model field name). Without auto-sizing, a fixed
+       78px column truncated long labels and let GUID values overflow back
+       into the label cell. */
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 7px;
+    column-gap: 10px;
+    font-size: 11.5px;
+    align-items: baseline;
+  }
+  .insp-grid .k {
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .insp-grid .v {
+    color: var(--ink-0);
+    font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
+    min-width: 0;
+  }
+  .insp-grid .v.muted { color: var(--ink-2); }
+  .insp-grid .v.parents { display: flex; flex-direction: column; gap: 3px; }
+  .insp-grid .v a.run-link {
+    color: #a8a0ff;
+    text-decoration: none;
+    border-bottom: 1px dashed rgba(168,160,255,0.45);
+  }
+  .insp-grid .v a.run-link:hover { color: #c8c2ff; border-color: #c8c2ff; }
+  .insp-status-row {
+    display: flex; align-items: center; gap: 8px;
+    margin: 4px 0 12px;
+  }
+
+  .vis-canvas {
+    padding: 18px 18px 14px;
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-lg);
+    position: relative;
+    overflow-x: auto;      /* horizontal scroll if the inspector squeezes the canvas */
+    overflow-y: visible;
+    min-width: 0;
+    align-self: start;
+  }
+  .vis-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .vis-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--ink-0);
+    letter-spacing: 0.2px;
+  }
+  .vis-axis {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.4px;
+  }
+  .vis-axis .axis-arrow {
+    width: 90px; height: 1px;
+    background: linear-gradient(to right, transparent, var(--glass-edge-2), transparent);
+    position: relative;
+  }
+  .vis-axis .axis-arrow::after {
+    content: ''; position: absolute; right: -2px; top: -3px;
+    border-left: 6px solid var(--ink-2);
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+  }
+
+  .swim {
+    position: relative;
+    width: 100%;
+  }
+  .swim svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* =========================================================
+     HISTORY DRAWER
+     ========================================================= */
+  .drawer-overlay {
+    position: fixed; inset: 0;
+    background: var(--drawer-overlay);
+    backdrop-filter: blur(8px) saturate(110%);
+    -webkit-backdrop-filter: blur(8px) saturate(110%);
+    z-index: 30;
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  .drawer-overlay.is-open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 480px;
+    max-width: 92vw;
+    background: var(--drawer-bg);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border-left: 1px solid var(--glass-edge);
+    box-shadow: -30px 0 80px -20px rgba(0,0,0,0.45);
+    z-index: 40;
+    transform: translateX(100%);
+    transition: transform .3s cubic-bezier(.2,.7,.2,1);
+    display: flex; flex-direction: column;
+  }
+  .drawer.is-open { transform: translateX(0); }
+  .drawer-head {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--glass-edge);
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px;
+  }
+  .drawer-title-block .crumbs {
+    font-size: 11px;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .drawer-title-block .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink-0);
+    margin-top: 4px;
+  }
+  .drawer-close {
+    appearance: none;
+    background: var(--kvtag-bg);
+    border: 1px solid var(--glass-edge);
+    color: var(--ink-1);
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    transition: all .15s ease;
+  }
+  .drawer-close:hover {
+    background: var(--glass-edge-2);
+    color: var(--ink-0);
+  }
+
+  .drawer-body {
+    overflow-y: auto;
+    padding: 12px 16px 24px;
+    flex: 1;
+  }
+  .hist {
+    display: flex; flex-direction: column;
+    gap: 8px;
+  }
+  .hist-entry {
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--hist-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 10px;
+    position: relative;
+  }
+  .hist-entry .pip {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-top: 5px;
+  }
+  .hist-entry.s-success .pip  { background: var(--emerald); box-shadow: 0 0 10px var(--emerald-glow); }
+  .hist-entry.s-failure .pip  { background: var(--coral);   box-shadow: 0 0 10px var(--coral-glow); }
+  .hist-entry.s-progress .pip { background: var(--amber);   box-shadow: 0 0 10px var(--amber-glow); }
+
+  .hist-main { display: flex; flex-direction: column; gap: 4px; }
+  .hist-main .l1 {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--ink-0);
+  }
+  .hist-main .l2 {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px;
+    color: var(--ink-2);
+    flex-wrap: wrap;
+  }
+  .hist-main .sha {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-1);
+    background: var(--kvtag-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .hist-main .l2 .dot { color: var(--ink-3); }
+  .status-chip {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid;
+  }
+  .status-chip.s-success  { color: var(--emerald); border-color: rgba(52,210,154,0.5);  background: rgba(52,210,154,0.10); }
+  .status-chip.s-failure  { color: var(--coral);   border-color: rgba(255,93,93,0.5);   background: rgba(255,93,93,0.10); }
+  .status-chip.s-progress { color: var(--amber);   border-color: rgba(245,165,36,0.5);  background: rgba(245,165,36,0.10); }
+
+  .hist-link {
+    color: var(--ink-2);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    border-bottom: 1px dashed var(--ink-3);
+    padding-bottom: 1px;
+  }
+  .hist-link:hover { color: var(--ink-0); border-color: var(--ink-1); }
+
+  /* extra meta lines inside drawer entries */
+  .hist-main .l3,
+  .hist-main .l4 {
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap;
+    font-size: 10.5px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .hist-main .kvtag {
+    display: inline-flex; gap: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--kvtag-bg);
+    border: 1px solid var(--glass-edge);
+  }
+  .hist-main .kvtag .k {
+    color: var(--ink-3);
+    text-transform: uppercase;
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+  }
+  .hist-main .kvtag .v { color: var(--ink-1); }
+  .hist-main .ts {
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+  }
+  .hist-main .ts .abs { color: var(--ink-3); margin-left: 4px; }
+  .hist-main .parents-line {
+    display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+    font-size: 10.5px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .hist-main .parents-line .pk {
+    color: var(--ink-3);
+    text-transform: uppercase;
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+  }
+  .hist-main .parents-line .pid {
+    color: var(--ink-1);
+    background: rgba(var(--accent-rgb),0.10);
+    border: 1px solid rgba(var(--accent-rgb),0.30);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .hist-main .parents-line .pid.none {
+    color: var(--ink-3);
+    background: transparent;
+    border-color: var(--glass-edge);
+    font-style: italic;
+  }
+  .hist-entry.pre-opened {
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb),0.45), 0 0 18px rgba(var(--accent-rgb),0.25);
+    border-color: rgba(var(--accent-rgb),0.45);
+  }
+
+  /* visualisation node — selected highlight */
+  .vis-node-circle.is-selected {
+    stroke-width: 2.5;
+  }
+
+  /* scroll bar (webkit only) */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); border: 2px solid transparent; background-clip: padding-box; }
+
+  /* hide rows that don't match filter */
+  .matrix.is-filtered .row.is-hidden { display: contents; }
+  .row.is-hidden > * { display: none !important; }
+
+  /* Bug 4: hairline divider between service rows — applied to every grid cell
+     (both row-head and tile cells, which share the .row class). Theme-tokenized
+     via --glass-edge so it works in dark/light/auto. The divider sits 4px below
+     cell content (extra padding-bottom) so it reads as row separation, not
+     cell internal chrome. Last service row also gets the hairline; the
+     matrix-shell border-bottom (Bug 5) provides the final closing edge so
+     the bottom row never appears to hang in space. */
+  .matrix > .row {
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--glass-edge);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============== TOP BAR ============== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <div class="brand-name">Deployment Dashboard</div>
+        <div class="brand-sub">Variant C · Glassy Dark</div>
+      </div>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-view="matrix" role="tab">Matrix</button>
+      <button class="tab" data-view="vis" role="tab">Visualisation</button>
+    </nav>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="kpis">
+      <div class="kpi"><span class="kpi-label">Services</span><span class="kpi-value" id="kpi-services">8</span></div>
+      <div class="kpi"><span class="kpi-label">Envs</span><span class="kpi-value" id="kpi-envs">5</span></div>
+      <div class="kpi is-warn"><span class="kpi-label">In-flight</span><span class="kpi-value" id="kpi-inflight">5</span></div>
+      <div class="kpi is-bad"><span class="kpi-label">Failed</span><span class="kpi-value" id="kpi-failed">2</span></div>
+    </div>
+
+    <!-- Inline matrix filter (persistent, no popover) -->
+    <div class="hdr-filter" id="hdr-matrix-filter">
+      <input type="text" class="input hdr-filter-input" id="svc-filter" placeholder="filter services…" autocomplete="off" spellcheck="false">
+      <label class="toggle hdr-fail-toggle" id="fail-toggle">
+        <span class="switch"></span>
+        <span>Failures only</span>
+      </label>
+    </div>
+
+    <!-- Theme switcher: dark / light / auto. Persists via localStorage.theme,
+         flips data-theme on <html>, default = dark. -->
+    <div class="theme-switch" id="theme-switch" role="radiogroup" aria-label="Theme">
+      <button class="ts-opt" data-theme-pick="dark"  role="radio" aria-checked="true"  title="Dark"  aria-label="Dark">☾</button>
+      <button class="ts-opt" data-theme-pick="light" role="radio" aria-checked="false" title="Light" aria-label="Light">☼</button>
+      <button class="ts-opt" data-theme-pick="auto"  role="radio" aria-checked="false" title="Auto (follow system)" aria-label="Auto">Auto</button>
+    </div>
+
+    <div class="hdr-icons">
+      <!-- Visualisation-only icons -->
+      <div style="position:relative; display:none" id="hdr-vis-icons">
+        <button class="icon-btn" id="btn-correlation" title="Correlation &amp; time window" aria-label="Correlation">
+          <span aria-hidden="true">⇆</span>
+        </button>
+        <div class="popover" id="pop-correlation" role="dialog" aria-label="Correlation">
+          <div class="popover-title">Correlation</div>
+          <div class="popover-section">
+            <div class="sub" style="font-size:11.5px;color:var(--ink-2);margin-bottom:10px">Pick one predicate. Rebuilds edges across services to define "same flow".</div>
+            <div class="predicate-list" id="predicates" role="radiogroup">
+              <label class="predicate" data-p="sha" role="radio" aria-checked="false">
+                <span class="radio"></span><span class="pred-name">same sha</span>
+              </label>
+              <label class="predicate" data-p="run_number" role="radio" aria-checked="false">
+                <span class="radio"></span><span class="pred-name">same run_number</span>
+              </label>
+              <label class="predicate" data-p="actor" role="radio" aria-checked="false">
+                <span class="radio"></span><span class="pred-name">same actor</span>
+              </label>
+              <label class="predicate" data-p="version" role="radio" aria-checked="false">
+                <span class="radio"></span><span class="pred-name">same version</span>
+              </label>
+              <label class="predicate is-on" data-p="parent" role="radio" aria-checked="true">
+                <span class="radio"></span><span class="pred-name">explicit parent</span>
+              </label>
+            </div>
+          </div>
+          <div class="popover-section">
+            <div class="timewin is-disabled" id="timewin">
+              <div class="timewin-label">Time window</div>
+              <select class="timewin-select" id="timewin-select" disabled>
+                <option value="5m">5 min</option>
+                <option value="1h" selected>1 hr</option>
+                <option value="1d">1 day</option>
+                <option value="7d">7 days</option>
+              </select>
+              <div class="timewin-hint">time window bounds parent search for sha/run_number/actor/version; not applicable for explicit parent</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fields picker (shared icon-button, popover content swaps per view) -->
+      <div style="position:relative">
+        <button class="icon-btn" id="btn-fields" title="Fields" aria-label="Fields">
+          <span aria-hidden="true">▦</span>
+        </button>
+        <div class="popover" id="pop-fields" role="dialog" aria-label="Visible fields">
+          <div class="popover-title" id="pop-fields-title">Visible fields — Matrix</div>
+          <div class="fields-grid" id="fields-grid-matrix"></div>
+          <div class="fields-grid" id="fields-grid-vis" style="display:none"></div>
+          <div class="hint" id="pop-fields-hint">component &amp; environment are implicit (row × column). status is shown via the colored container.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="live-pill">
+      <span class="live-dot"></span>
+      <span>SSE live</span>
+    </div>
+  </header>
+
+  <!-- ============== MATRIX VIEW ============== -->
+  <section class="view is-active" id="view-matrix">
+
+    <div class="matrix-shell fields-rich" id="matrix-shell">
+      <div class="matrix" id="matrix">
+        <!-- header row -->
+        <div></div>
+        <div class="col-head"><span class="env-tag">dev</span></div>
+        <div class="col-head"><span class="env-tag">staging</span></div>
+        <div class="col-head"><span class="env-tag">qa</span></div>
+        <div class="col-head"><span class="env-tag">preprod</span></div>
+        <div class="col-head"><span class="env-tag">prod</span></div>
+
+        <!-- ROWS POPULATED BY JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== VISUALISATION VIEW ============== -->
+  <section class="view" id="view-vis">
+    <div class="vis-shell">
+      <div class="vis-canvas">
+        <div class="vis-head">
+          <div class="vis-title">Deployments — per-service swimlanes</div>
+          <div class="vis-axis">
+            <span>older</span>
+            <span class="axis-arrow"></span>
+            <span>newer (happened_at &rarr;)</span>
+          </div>
+        </div>
+        <div class="swim" id="swim"></div>
+      </div>
+
+      <aside class="vis-inspector" id="inspector">
+        <h3>Inspector</h3>
+        <div class="insp-crumbs" id="insp-crumbs">&mdash;</div>
+        <div class="insp-status-row" id="insp-status-row"></div>
+        <div class="insp-grid" id="insp-grid"></div>
+      </aside>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============== DRAWER ============== -->
+<div class="drawer-overlay" id="overlay"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Deployment history">
+  <header class="drawer-head">
+    <div class="drawer-title-block">
+      <div class="crumbs" id="drawer-crumbs">payments-api · prod</div>
+      <div class="title" id="drawer-title">history</div>
+    </div>
+    <button class="drawer-close" id="drawer-close" aria-label="Close">×</button>
+  </header>
+  <div class="drawer-body">
+    <div class="hist" id="hist"></div>
+  </div>
+</aside>
+
+<script>
+/* =================================================================
+   FIXTURE — matrix
+   Domain-model fields only:
+   component, environment, version, status, run_url, sha, run_number,
+   actor, happened_at, parrent_deployments
+   ================================================================= */
+const ENVS = ['dev', 'staging', 'qa', 'preprod', 'prod'];
+const SERVICES = [
+  'payments-api',
+  'notification-worker',
+  'auth-bff',
+  'order-svc',
+  'catalog-edge',
+  'ledger-projector',
+  'search-indexer',
+  'billing-webhook'
+];
+
+// Slot shape: { state: one of 6, current: {...}, last: {...} }
+// state codes:
+//   success            -> S1
+//   run-last           -> S2 (running + last successful)
+//   run-fail-last      -> S3 (running + prev failed + last successful)
+//   fail-last          -> S4 (failed + last successful)
+//   running-only       -> S5 (running, no prior)
+//   run-fail-only      -> S6 (running + prev failed, no successful)
+//   empty              -> no event for that slot
+// Each `current` / `last` carries the full set of domain-model fields
+// (id, version, run_url, sha, run_number, actor, happened_at-as-elapsed, parents-count).
+// component & environment come from the key. status comes from `state`.
+const SLOTS = {
+  // payments-api
+  'payments-api|dev':      { state: 'success', current: { id:'9f4c8b21e7a3', version: 'v2.14.3', ref:'feat/auth-refactor', actor: 'mreyes',      elapsed: '12m ago', sha:'7d3e2a1', run_number:4821, run_url:'https://ci.internal/runs/4821', parents:2 } },
+  'payments-api|staging':  { state: 'success', current: { id:'8e3b7a10d692', version: 'v2.14.3', ref:'feat/auth-refactor', actor: 'mreyes',      elapsed: '38m ago', sha:'7d3e2a1', run_number:4819, run_url:'https://ci.internal/runs/4819', parents:1 } },
+  'payments-api|qa':       { state: 'success', current: { id:'7d2a690cf581', version: 'v2.14.2', ref:'#4218',              actor: 'l.osman',     elapsed: '2h ago',  sha:'6c2d3b8', run_number:4810, run_url:'https://ci.internal/runs/4810', parents:1 } },
+  'payments-api|preprod':  { state: 'run-last',
+                              current: { id:'6c19580be470', version: 'v2.14.3', ref:'feat/auth-refactor',                                       elapsed: '4m ago',  sha:'7d3e2a1', run_number:4825, run_url:'https://ci.internal/runs/4825', parents:1 },
+                              // bottom-section fallback DEMO step 4: no version, no sha, no ref → falls to run_number
+                              last:    { id:'5b08470ad36f', version: '',                                actor: 'release-bot',                   elapsed: '1d ago', sha:'',        run_number:4801, run_url:'https://ci.internal/runs/4801', parents:1 } },
+  'payments-api|prod':     { state: 'success', current: { id:'4a07360cd25e', version: 'v2.14.1', ref:'release/2.14',      actor: 'release-bot', elapsed: '6h ago',  sha:'5b1c4a9', run_number:4798, run_url:'https://ci.internal/runs/4798', parents:1 } },
+
+  // notification-worker
+  'notification-worker|dev':      { state: 'success', current: { id:'1a2b3c4d5e6f', version: 'v1.9.0', ref:'main',               actor: 'akhan',       elapsed: '4m ago',  sha:'a1b2c3d', run_number:3104, run_url:'https://ci.internal/runs/3104', parents:1 } },
+  'notification-worker|staging':  { state: 'fail-last',
+                                    current: { id:'2b3c4d5e6f70', version: 'v1.9.0', ref:'main',                              actor: 'akhan',       elapsed: '38m ago', sha:'a1b2c3d', run_number:3108, run_url:'https://ci.internal/runs/3108', parents:1 },
+                                    // bottom-section fallback DEMO step 2: no version, sha present → falls to sha
+                                    last:    { id:'3c4d5e6f7081', version: '',       ref:'release/1.8',                       actor: 'release-bot', elapsed: '11h ago', sha:'9f8e7d6', run_number:3081, run_url:'https://ci.internal/runs/3081', parents:1 } },
+  'notification-worker|qa':       { state: 'success', current: { id:'4d5e6f708192', version: 'v1.8.4', ref:'release/1.8',         actor: 'akhan',       elapsed: '9h ago',  sha:'9f8e7d6', run_number:3076, run_url:'https://ci.internal/runs/3076', parents:1 } },
+  'notification-worker|preprod':  { state: 'success', current: { id:'5e6f70819203', version: 'v1.8.4', ref:'release/1.8',         actor: 'release-bot', elapsed: '1d ago',  sha:'9f8e7d6', run_number:3060, run_url:'https://ci.internal/runs/3060', parents:1 } },
+  'notification-worker|prod':     { state: 'success', current: { id:'6f7081920314', version: 'v1.8.3', ref:'release/1.8',         actor: 'release-bot', elapsed: '3d ago',  sha:'8e7d6c5', run_number:3041, run_url:'https://ci.internal/runs/3041', parents:1 } },
+
+  // auth-bff
+  'auth-bff|dev':      { state: 'run-fail-last',
+                          current: { id:'7c1e2b8f3a40', version: '',      ref:'feat/oauth-rotate',                              elapsed: '8m ago',  sha:'b5c6d7e', run_number:3260, run_url:'https://ci.internal/runs/3260', parents:1 },
+                          last:    { id:'8d2f3c9a4b51', version: 'v3.2.5', ref:'main',          actor: 's.harper',              elapsed: '6h ago',  sha:'a4b5c6d', run_number:3245, run_url:'https://ci.internal/runs/3245', parents:1 } },
+  /* STRESS-TEST: long ~50-char version on auth-bff|staging — verifies tile width
+     cap + wrap/ellipsis. Don't shorten without re-validating geometry. */
+  'auth-bff|staging':  { state: 'success', current: { id:'9e3a4d0b5c62', version: '1.2.3-alpha.5+sha.7d3e2a1.branch.feat-auth-x', ref:'feat/oauth-rotate',  actor: 's.harper',             elapsed: '23m ago', sha:'b5c6d7e', run_number:3258, run_url:'https://ci.internal/runs/3258', parents:1 } },
+  'auth-bff|qa':       { state: 'success', current: { id:'0f4b5e1c6d73', version: 'v3.2.5', ref:'main',               actor: 's.harper',             elapsed: '3h ago',  sha:'a4b5c6d', run_number:3240, run_url:'https://ci.internal/runs/3240', parents:1 } },
+  'auth-bff|preprod':  { state: 'success', current: { id:'1a5c6f2d7e84', version: 'v3.2.5', ref:'main',               actor: 'release-bot',          elapsed: '1d ago',  sha:'a4b5c6d', run_number:3230, run_url:'https://ci.internal/runs/3230', parents:1 } },
+  'auth-bff|prod':     { state: 'success', current: { id:'2b6d703e8f95', version: 'v3.2.4', ref:'release/3.2',         actor: 'release-bot',          elapsed: '5d ago',  sha:'93a4b5c', run_number:3210, run_url:'https://ci.internal/runs/3210', parents:1 } },
+
+  // order-svc
+  'order-svc|dev':      { state: 'success', current: { id:'3c7e814f90a6', version: 'v0.41.2', ref:'#7912',                actor: 'jpark',             elapsed: '18m ago', sha:'c8d9e0f', run_number:2950, run_url:'https://ci.internal/runs/2950', parents:1 } },
+  'order-svc|staging':  { state: 'run-last',
+                          current: { id:'4d8f9250a1b7', version: 'v0.41.2', ref:'#7912',                                                              elapsed: '6m ago',  sha:'c8d9e0f', run_number:2955, run_url:'https://ci.internal/runs/2955', parents:1 },
+                          last:    { id:'5e90a361b2c8', version: 'v0.41.1', ref:'main',                actor: 'jpark',                                elapsed: '4h ago',  sha:'b7c8d9e', run_number:2935, run_url:'https://ci.internal/runs/2935', parents:2 } },
+  'order-svc|qa':       { state: 'success', current: { id:'6fa1b472c3d9', version: 'v0.41.1', ref:'main',                  actor: 'jpark',             elapsed: '2h ago',  sha:'b7c8d9e', run_number:2938, run_url:'https://ci.internal/runs/2938', parents:1 } },
+  'order-svc|preprod':  { state: 'success', current: { id:'70b2c583d4ea', version: 'v0.41.0', ref:'release/0.41',         actor: 'release-bot',       elapsed: '11h ago', sha:'a6b7c8d', run_number:2920, run_url:'https://ci.internal/runs/2920', parents:1 } },
+  'order-svc|prod':     { state: 'fail-last',
+                          current: { id:'81c3d694e5fb', version: 'v0.41.0', ref:'release/0.41',                                                       elapsed: '52m ago', sha:'a6b7c8d', run_number:2945, run_url:'https://ci.internal/runs/2945', parents:1 },
+                          // bottom-section fallback DEMO step 3: no version, no sha, ref present → falls to ref
+                          last:    { id:'92d4e7a5f60c', version: '',         ref:'release/0.40',         actor: 'release-bot',                          elapsed: '2d ago', sha:'',        run_number:2901, run_url:'https://ci.internal/runs/2901', parents:0 } },
+
+  // catalog-edge
+  'catalog-edge|dev':      { state: 'success', current: { id:'a3e5f8b6071d', version: 'v5.0.0-rc2', ref:'feat/v5-rewrite', actor: 'tcheng',       elapsed: '7m ago',  sha:'2d9e0f1', run_number:5155, run_url:'https://ci.internal/runs/5155', parents:1 } },
+  'catalog-edge|staging':  { state: 'success', current: { id:'b4f60a9c182e', version: 'v5.0.0-rc2', ref:'feat/v5-rewrite', actor: 'tcheng',       elapsed: '52m ago', sha:'2d9e0f1', run_number:5151, run_url:'https://ci.internal/runs/5151', parents:1 } },
+  'catalog-edge|qa':       { state: 'running-only',
+                              current: { id:'c5071badc93f', version: 'v5.0.0-rc2', ref:'feat/v5-rewrite',                                            elapsed: '3m ago',  sha:'2d9e0f1', run_number:5158, run_url:'https://ci.internal/runs/5158', parents:0 } },
+  'catalog-edge|preprod':  { state: 'success', current: { id:'d6182cbed40a', version: 'v4.18.7', ref:'release/4.18',     actor: 'release-bot',     elapsed: '2d ago',  sha:'3e0f1a2', run_number:5145, run_url:'https://ci.internal/runs/5145', parents:1 } },
+  'catalog-edge|prod':     { state: 'success', current: { id:'e7293dcfe51b', version: 'v4.18.7', ref:'release/4.18',     actor: 'release-bot',     elapsed: '4d ago',  sha:'3e0f1a2', run_number:5132, run_url:'https://ci.internal/runs/5132', parents:1 } },
+
+  // ledger-projector
+  'ledger-projector|dev':      { state: 'success', current: { id:'f8304ea0f62c', version: 'v2.0.1', ref:'main',              actor: 'r.iyer',       elapsed: '32m ago', sha:'4a5b6c7', run_number:1820, run_url:'https://ci.internal/runs/1820', parents:1 } },
+  'ledger-projector|staging':  { state: 'success', current: { id:'09415fb1073d', version: 'v2.0.1', ref:'main',              actor: 'r.iyer',       elapsed: '1h ago',  sha:'4a5b6c7', run_number:1818, run_url:'https://ci.internal/runs/1818', parents:1 } },
+  'ledger-projector|qa':       { state: 'run-fail-only',
+                                  current: { id:'1a5260c2184e', version: '', ref:'fix/skew-projection',                                              elapsed: '12m ago', sha:'5b6c7d8', run_number:1828, run_url:'https://ci.internal/runs/1828', parents:0 } },
+  'ledger-projector|preprod':  { state: 'success', current: { id:'2b6371d3295f', version: 'v1.9.8', ref:'release/1.9',     actor: 'release-bot',    elapsed: '8h ago',  sha:'39a4b5c', run_number:1802, run_url:'https://ci.internal/runs/1802', parents:1 } },
+  'ledger-projector|prod':     { state: 'success', current: { id:'3c7482e43a60', version: 'v1.9.8', ref:'release/1.9',     actor: 'release-bot',    elapsed: '1d ago',  sha:'39a4b5c', run_number:1790, run_url:'https://ci.internal/runs/1790', parents:1 } },
+
+  // search-indexer
+  'search-indexer|dev':      { state: 'success', current: { id:'4d8593f54b71', version: 'v0.7.12', ref:'#5021',              actor: 'mreyes',        elapsed: '3m ago',  sha:'6c7d8e9', run_number:1402, run_url:'https://ci.internal/runs/1402', parents:1 } },
+  'search-indexer|staging':  { state: 'success', current: { id:'5e96a4065c82', version: 'v0.7.12', ref:'#5021',              actor: 'mreyes',        elapsed: '44m ago', sha:'6c7d8e9', run_number:1400, run_url:'https://ci.internal/runs/1400', parents:1 } },
+  'search-indexer|qa':       { state: 'success', current: { id:'6fa7b5176d93', version: 'v0.7.11', ref:'main',                actor: 'mreyes',        elapsed: '4h ago',  sha:'5b6c7d8', run_number:1391, run_url:'https://ci.internal/runs/1391', parents:1 } },
+  'search-indexer|preprod':  { state: 'success', current: { id:'70b8c6287ea4', version: 'v0.7.10', ref:'release/0.7',         actor: 'release-bot',   elapsed: '2d ago',  sha:'4a5b6c7', run_number:1378, run_url:'https://ci.internal/runs/1378', parents:1 } },
+  'search-indexer|prod':     { state: 'success', current: { id:'81c9d7398fb5', version: 'v0.7.10', ref:'release/0.7',         actor: 'release-bot',   elapsed: '5d ago',  sha:'4a5b6c7', run_number:1370, run_url:'https://ci.internal/runs/1370', parents:1 } },
+
+  // billing-webhook
+  'billing-webhook|dev':      { state: 'success', current: { id:'92d0e84a90c6', version: 'v1.4.0', ref:'feat/retry-jitter', actor: 'l.osman',        elapsed: '15m ago', sha:'7d8e9f0', run_number:822, run_url:'https://ci.internal/runs/822', parents:1 } },
+  'billing-webhook|staging':  { state: 'running-only',
+                                current: { id:'a3e1f95ba1d7', version: 'v1.4.0', ref:'feat/retry-jitter',                                              elapsed: '5m ago',  sha:'7d8e9f0', run_number:825, run_url:'https://ci.internal/runs/825', parents:1 } },
+  'billing-webhook|qa':       { state: 'success', current: { id:'b4f20a6cb2e8', version: 'v1.3.9', ref:'#1188',              actor: 'l.osman',        elapsed: '6h ago',  sha:'6c7d8e9', run_number:810, run_url:'https://ci.internal/runs/810', parents:1 } },
+  'billing-webhook|preprod':  { state: 'success', current: { id:'c5031b7dc3f9', version: 'v1.3.9', ref:'#1188',              actor: 'release-bot',    elapsed: '1d ago',  sha:'6c7d8e9', run_number:801, run_url:'https://ci.internal/runs/801', parents:1 } },
+  'billing-webhook|prod':     { state: 'success', current: { id:'d6142c8ed40a', version: 'v1.3.8', ref:'release/1.3',         actor: 'release-bot',    elapsed: '6d ago',  sha:'5b6c7d8', run_number:792, run_url:'https://ci.internal/runs/792', parents:0 } },
+};
+
+/* ---- fixture-tag map for marker comments ---- */
+const SX_MARK = {
+  'billing-webhook|dev':            'S1',
+  'order-svc|staging':              'S2',
+  'auth-bff|dev':                   'S3',
+  'notification-worker|staging':    'S4',
+  'catalog-edge|qa':                'S5',
+  'ledger-projector|qa':            'S6',
+};
+
+/* =================================================================
+   FIELDS-PICKER state
+   Domain-model whitelist only. component & environment are implicit
+   for matrix (row × col); environment is toggleable for visualisation.
+   ================================================================= */
+const MATRIX_FIELDS = [
+  { key: 'version',             label: 'version' },
+  { key: 'run_url',             label: 'run_url' },
+  { key: 'sha',                 label: 'sha' },
+  { key: 'run_number',          label: 'run_number' },
+  { key: 'ref',                 label: 'ref' },
+  { key: 'actor',               label: 'actor' },
+  { key: 'happened_at',         label: 'happened_at' },
+  { key: 'parrent_deployments', label: 'parrent_deployments' },
+];
+const VIS_FIELDS = [
+  { key: 'environment',         label: 'environment' },
+  { key: 'version',             label: 'version' },
+  { key: 'run_url',             label: 'run_url' },
+  { key: 'sha',                 label: 'sha' },
+  { key: 'run_number',          label: 'run_number' },
+  { key: 'ref',                 label: 'ref' },
+  { key: 'actor',               label: 'actor' },
+  { key: 'happened_at',         label: 'happened_at' },
+  { key: 'parrent_deployments', label: 'parrent_deployments' },
+];
+
+// Default: ALL ON
+const matrixFieldsOn = new Set(MATRIX_FIELDS.map(f => f.key));
+const visFieldsOn    = new Set(VIS_FIELDS.map(f => f.key));
+
+/* =================================================================
+   MIXED-TREATMENT field renderer (Change 4)
+   Each field has its OWN shape + position. Reader learns mapping
+   by silhouette/position, NOT by label. No uniform icon+value chips.
+
+   Position contract on tiles + nodes:
+   - version    → headline (rendered separately by callers, top)
+   - ref        → full-width line directly under version (⎇ prefix)
+   - environment→ small muted subtitle (vis-card only, under version)
+   - bottom-left  cluster: run_url (↗ run), sha (plain mono short-hex)
+   - bottom-right cluster: run_number (#N), actor (@x), happened_at (3h ago)
+   - parents    → full-width tail line (⟵ N)
+   ================================================================= */
+
+/* Build one inline field span. Returns null if field is off or value empty. */
+function fieldSpan(field, rec, fieldsOn, opts) {
+  if (!fieldsOn.has(field)) return null;
+  const el = document.createElement('span');
+  switch (field) {
+    case 'sha': {
+      if (!rec.sha) return null;
+      el.className = 'fld-sha';
+      el.textContent = rec.sha;
+      return el;
+    }
+    case 'run_number': {
+      if (rec.run_number === undefined || rec.run_number === null || rec.run_number === '') return null;
+      el.className = 'fld-runno';
+      el.innerHTML = `<span class="glyph">#</span>${rec.run_number}`;
+      return el;
+    }
+    case 'run_url': {
+      if (!rec.run_url) return null;
+      el.className = 'fld-runurl';
+      el.innerHTML = `<a href="${rec.run_url}" target="_blank" rel="noreferrer"><span class="glyph">↗</span>run</a>`;
+      return el;
+    }
+    case 'actor': {
+      if (!rec.actor) return null;
+      el.className = 'fld-actor';
+      el.innerHTML = `<span class="glyph">@</span>${rec.actor}`;
+      return el;
+    }
+    case 'happened_at': {
+      if (!rec.elapsed) return null;
+      el.className = 'fld-time';
+      el.textContent = rec.elapsed;
+      return el;
+    }
+    case 'ref': {
+      if (!rec.ref) return null;
+      el.className = 'fld-ref';
+      el.innerHTML = `<span class="glyph">⎇</span>${rec.ref}`;
+      return el;
+    }
+    case 'parrent_deployments': {
+      if (rec.parents === undefined || rec.parents === null) return null;
+      if (rec.parents <= 0) return null;
+      el.className = 'fld-parents';
+      el.innerHTML = `<span class="glyph">⟵</span>${rec.parents}${rec.parents === 1 ? ' parent' : ' parents'}`;
+      return el;
+    }
+  }
+  return null;
+}
+
+/* Render mixed-treatment attribute block for a tile or vis-card.
+   `rec` carries domain-model fields.
+   `fieldsOn` = picker set.
+   `opts.environment` (vis-card): adds a small muted subtitle line.
+   `opts.includeRefLine` (default true): emits a full-width ref line under version.
+   `opts.skipMeta`: when true, actor + happened_at are NOT placed in the
+     attrs block (caller already placed them inline in the headline row).
+   Version is intentionally not rendered here — callers render it separately as headline.
+
+   PACKING contract: the attrs container is a single flex-wrap row that
+   tries to pack [ref + sha] on the left and [run_url + run_number] on the
+   right of the same physical line. Items wrap to a new row only when the
+   row overflows. Parents lives on its own forced-wrap full row at the tail.
+*/
+function renderAttrs(rec, fieldsOn, opts) {
+  opts = opts || {};
+  const frag = document.createDocumentFragment();
+
+  // Mid-row container: ref+sha to the left, run_url+run_number to the right.
+  // Single flex-wrap means short tiles stay on one line; long values wrap.
+  const grid = document.createElement('div');
+  grid.className = 'tile-attrs';
+
+  const bl = document.createElement('span'); bl.className = 'ta-bl';
+  const br = document.createElement('span'); br.className = 'ta-br';
+
+  // LEFT cluster: what changed (ref + sha). ref keeps its prominence.
+  if (opts.includeRefLine !== false) {
+    const refSpan = fieldSpan('ref', rec, fieldsOn);
+    if (refSpan) bl.appendChild(refSpan);
+  }
+  const shaSpan = fieldSpan('sha', rec, fieldsOn);
+  if (shaSpan) bl.appendChild(shaSpan);
+
+  // RIGHT cluster: where it ran (run_url + run_number).
+  const runUrl = fieldSpan('run_url', rec, fieldsOn);
+  if (runUrl) br.appendChild(runUrl);
+  const runNo = fieldSpan('run_number', rec, fieldsOn);
+  if (runNo) br.appendChild(runNo);
+
+  // If caller didn't pre-place actor+happened_at in the headline row,
+  // they ride in the BR cluster as the "who/when" pair.
+  if (!opts.skipMeta) {
+    const act = fieldSpan('actor', rec, fieldsOn);
+    if (act) br.appendChild(act);
+    const tim = fieldSpan('happened_at', rec, fieldsOn);
+    if (tim) br.appendChild(tim);
+  }
+
+  if (bl.childElementCount) grid.appendChild(bl);
+  if (br.childElementCount) grid.appendChild(br);
+
+  // parents — full-width tail row (forced break via flex-basis:100%)
+  const parents = fieldSpan('parrent_deployments', rec, fieldsOn);
+  if (parents) {
+    const row = document.createElement('span');
+    row.className = 'ta-full';
+    row.appendChild(parents);
+    grid.appendChild(row);
+  }
+
+  if (bl.childElementCount || br.childElementCount || parents) {
+    frag.appendChild(grid);
+  }
+
+  // environment (vis-card PRIMARY identifier) — emitted LAST so margin-top:auto
+  // pushes it to the card's bottom-right corner past the attrs grid.
+  if (opts.environment && fieldsOn.has('environment')) {
+    const e = document.createElement('div');
+    e.className = 'vc-env';
+    e.textContent = opts.environment;
+    frag.appendChild(e);
+  }
+
+  return frag.childNodes.length ? frag : null;
+}
+
+/* Build the "who/when" meta cluster (actor + happened_at) that rides on the
+   headline row alongside the version. Returns null if neither field is on
+   or both values are missing. Used by matrix tiles only — vis-card keeps
+   version on its own line (vc-ver). */
+function renderHeadlineMeta(rec, fieldsOn) {
+  const wrap = document.createElement('span');
+  wrap.className = 'ver-meta';
+  const act = fieldSpan('actor', rec, fieldsOn);
+  if (act) wrap.appendChild(act);
+  const tim = fieldSpan('happened_at', rec, fieldsOn);
+  if (tim) wrap.appendChild(tim);
+  return wrap.childElementCount ? wrap : null;
+}
+
+/* Bottom-section single-attribute renderer for split tiles (S2/S3/S4).
+   Fallback chain: version → sha → ref → run_number.
+   Visual treatment matches that field's tile treatment per Change 4.
+*/
+function renderLastIdentifier(rec) {
+  const chain = ['version', 'sha', 'ref', 'run_number'];
+  for (const field of chain) {
+    const raw = rec[field];
+    if (raw === undefined || raw === null || raw === '' || (typeof raw === 'number' && isNaN(raw))) continue;
+    const span = document.createElement('span');
+    span.className = 'lastline';
+    if (field === 'version') {
+      // headline-ish but at smaller weight — version IS the identifier
+      span.style.fontWeight = '600';
+      span.style.color = 'var(--ink-0)';
+      span.textContent = raw;
+    } else if (field === 'sha') {
+      // plain mono short-hex, bottom-left treatment (no glyph)
+      span.textContent = raw;
+    } else if (field === 'ref') {
+      span.innerHTML = `<span class="glyph">⎇</span>${raw}`;
+    } else if (field === 'run_number') {
+      span.innerHTML = `<span class="glyph">#</span>${raw}`;
+    }
+    return span;
+  }
+  return null;
+}
+
+/* =================================================================
+   RENDER MATRIX
+   ================================================================= */
+const matrixEl = document.getElementById('matrix');
+
+function renderMatrix() {
+  // Remove any existing rows (keep header divs — first 6 nodes)
+  while (matrixEl.children.length > 6) matrixEl.removeChild(matrixEl.lastChild);
+
+  SERVICES.forEach((svc) => {
+    const rowFrag = document.createDocumentFragment();
+    const rowMarker = document.createElement('div');
+    rowMarker.className = 'row-head row';
+    rowMarker.textContent = svc;
+    rowMarker.dataset.svc = svc;
+    rowFrag.appendChild(rowMarker);
+
+    ENVS.forEach(env => {
+      const key = `${svc}|${env}`;
+      const slot = SLOTS[key];
+      const cell = document.createElement('div');
+      cell.className = 'row';
+      cell.dataset.svc = svc;
+      cell.appendChild(renderSlot(svc, env, slot, key));
+      rowFrag.appendChild(cell);
+    });
+
+    matrixEl.appendChild(rowFrag);
+  });
+}
+
+function v(version) {
+  // create a hover-highlightable version span
+  const s = document.createElement('span');
+  s.className = 'ver';
+  s.textContent = version;
+  s.dataset.version = version;
+  return s;
+}
+
+function renderSlot(svc, env, slot, key) {
+  const wrap = document.createElement('div');
+  if (!slot) {
+    wrap.className = 'slot empty';
+    const m = document.createElement('div');
+    m.className = 'empty-mark';
+    m.textContent = '—';
+    wrap.appendChild(m);
+    return wrap;
+  }
+
+  wrap.className = 'slot s-' + slot.state;
+  wrap.dataset.svc = svc;
+  wrap.dataset.env = env;
+  wrap.addEventListener('click', () => openDrawer(svc, env));
+
+  // fixture comment tag for S1..S6
+  if (SX_MARK[key]) {
+    wrap.appendChild(document.createComment(' ' + SX_MARK[key] + ' '));
+  }
+
+  const st = slot.state;
+
+  if (st === 'success') {
+    /* ---------- S1 — full green: headline row (version + actor + happened_at)
+       then packed mid-row (ref + sha | run_url + run_number) then parents.
+       Headline meta only attaches when the version itself is rendered, so
+       toggling version off cleanly drops the whole headline row. */
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (matrixFieldsOn.has('version') && slot.current.version) {
+      const verLine = document.createElement('div');
+      verLine.className = 'ver-row';
+      verLine.appendChild(v(slot.current.version));
+      if (headlineMeta) verLine.appendChild(headlineMeta);
+      wrap.appendChild(verLine);
+    } else if (headlineMeta) {
+      // version off but meta still wanted → standalone meta row
+      const metaLine = document.createElement('div');
+      metaLine.className = 'ver-row';
+      metaLine.appendChild(headlineMeta);
+      wrap.appendChild(metaLine);
+    }
+    const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (attrs) wrap.appendChild(attrs);
+  }
+
+  else if (st === 'running-only') {
+    /* ---------- S5 — full orange: spinner + version (if ON) + headline meta;
+       running-line itself wraps so actor/time can ride to the right of the
+       version on the same physical row when space allows. */
+    const line = document.createElement('div');
+    line.className = 'running-line';
+    const sp = document.createElement('span'); sp.className = 'spinner';
+    line.appendChild(sp);
+    if (matrixFieldsOn.has('version') && slot.current.version) {
+      line.appendChild(v(slot.current.version));
+    } else {
+      const lbl = document.createElement('span'); lbl.className = 'failed-tag'; lbl.textContent = 'Running'; line.appendChild(lbl);
+    }
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) line.appendChild(headlineMeta);
+    wrap.appendChild(line);
+    const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (attrs) wrap.appendChild(attrs);
+  }
+
+  else if (st === 'run-last') {
+    /* ---------- S2 — split: top spinner + version + meta; bottom = single fallback identifier.
+       Headline meta rides alongside the version on the spinner row. */
+    wrap.classList.add('split');
+    const top = document.createElement('div'); top.className = 'sec-top is-running';
+    const tl = document.createElement('div'); tl.className = 'running-line';
+    const sp = document.createElement('span'); sp.className = 'spinner';
+    tl.appendChild(sp);
+    if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) tl.appendChild(headlineMeta);
+    top.appendChild(tl);
+    const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (tAttrs) top.appendChild(tAttrs);
+    wrap.appendChild(top);
+
+    const div = document.createElement('div'); div.className = 'divider';
+    wrap.appendChild(div);
+
+    const bot = document.createElement('div'); bot.className = 'sec-bot';
+    const last = renderLastIdentifier(slot.last);
+    if (last) bot.appendChild(last);
+    wrap.appendChild(bot);
+  }
+
+  else if (st === 'run-fail-last') {
+    /* ---------- S3 — split: top spinner + ⚠ badge (NO running version, per spec);
+       actor + happened_at ride on the same physical row as the badge for
+       compact packing. Bottom = single fallback identifier. */
+    wrap.classList.add('split');
+    const top = document.createElement('div'); top.className = 'sec-top is-running';
+    const tl = document.createElement('div'); tl.className = 'running-line';
+    const sp = document.createElement('span'); sp.className = 'spinner';
+    const badge = document.createElement('span');
+    badge.className = 'warn-badge';
+    badge.innerHTML = `<span class="warn-icon">⚠</span><span>prev. failed</span>`;
+    tl.appendChild(sp); tl.appendChild(badge);
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) tl.appendChild(headlineMeta);
+    top.appendChild(tl);
+    // S3 explicitly has NO running version; other attrs (sha/run_number/ref/run_url) still allowed.
+    const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (tAttrs) top.appendChild(tAttrs);
+    wrap.appendChild(top);
+
+    const div = document.createElement('div'); div.className = 'divider';
+    wrap.appendChild(div);
+
+    const bot = document.createElement('div'); bot.className = 'sec-bot';
+    const last = renderLastIdentifier(slot.last);
+    if (last) bot.appendChild(last);
+    wrap.appendChild(bot);
+  }
+
+  else if (st === 'fail-last') {
+    /* ---------- S4 — split: top red + Failed tag + version + meta; bottom = single fallback identifier.
+       failed-line wraps so actor/time ride alongside the version. */
+    wrap.classList.add('split');
+    const top = document.createElement('div'); top.className = 'sec-top is-failed';
+    const tl = document.createElement('div'); tl.className = 'failed-line';
+    const tag = document.createElement('span');
+    tag.className = 'failed-tag';
+    tag.textContent = 'Failed';
+    tl.appendChild(tag);
+    if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) tl.appendChild(headlineMeta);
+    top.appendChild(tl);
+    const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (tAttrs) top.appendChild(tAttrs);
+    wrap.appendChild(top);
+
+    const div = document.createElement('div'); div.className = 'divider';
+    wrap.appendChild(div);
+
+    const bot = document.createElement('div'); bot.className = 'sec-bot';
+    const last = renderLastIdentifier(slot.last);
+    if (last) bot.appendChild(last);
+    wrap.appendChild(bot);
+  }
+
+  else if (st === 'run-fail-only') {
+    /* ---------- S6 — full orange: spinner + ⚠ badge + headline meta inline,
+       NO running version, NO bottom (per spec). */
+    const line = document.createElement('div');
+    line.className = 'running-line';
+    const sp = document.createElement('span'); sp.className = 'spinner';
+    const badge = document.createElement('span');
+    badge.className = 'warn-badge';
+    badge.innerHTML = `<span class="warn-icon">⚠</span><span>prev. failed</span>`;
+    line.appendChild(sp); line.appendChild(badge);
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) line.appendChild(headlineMeta);
+    wrap.appendChild(line);
+    // S6: no running version, no bottom. Other selected attrs (sha/run_number/ref/run_url/parents) still rendered.
+    const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (attrs) wrap.appendChild(attrs);
+  }
+
+  return wrap;
+}
+
+renderMatrix();
+
+/* =================================================================
+   VERSION-HOVER HIGHLIGHT
+   ================================================================= */
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest('.ver');
+  if (!el) return;
+  const ver = el.dataset.version;
+  if (!ver) return;
+  document.querySelectorAll('.ver').forEach(x => {
+    if (x.dataset.version === ver) {
+      x.classList.add('highlighted');
+      x.closest('.slot') && x.closest('.slot').classList.add('highlighted-slot');
+    }
+  });
+});
+document.addEventListener('mouseout', e => {
+  const el = e.target.closest('.ver');
+  if (!el) return;
+  document.querySelectorAll('.ver.highlighted').forEach(x => x.classList.remove('highlighted'));
+  document.querySelectorAll('.slot.highlighted-slot').forEach(x => x.classList.remove('highlighted-slot'));
+});
+
+/* =================================================================
+   FILTERS
+   ================================================================= */
+const svcInput = document.getElementById('svc-filter');
+const failToggle = document.getElementById('fail-toggle');
+let failuresOnly = false;
+
+function applyFilters() {
+  const q = svcInput.value.trim().toLowerCase();
+  // Build a per-service "has failure?" flag
+  const svcHasFail = new Map();
+  SERVICES.forEach(s => {
+    const has = ENVS.some(e => {
+      const slot = SLOTS[`${s}|${e}`];
+      if (!slot) return false;
+      return slot.state === 'fail-last' || slot.state === 'run-fail-last' || slot.state === 'run-fail-only';
+    });
+    svcHasFail.set(s, has);
+  });
+
+  // Hide whole rows that don't match
+  document.querySelectorAll('.matrix .row').forEach(node => {
+    const svc = node.dataset.svc;
+    if (!svc) return;
+    let visible = true;
+    if (q && !svc.toLowerCase().includes(q)) visible = false;
+    if (failuresOnly && !svcHasFail.get(svc)) visible = false;
+    node.classList.toggle('is-hidden', !visible);
+  });
+}
+
+/* Filter active-state is visible directly via the inline controls (input
+   text + pill on/off state). No separate badge to refresh. */
+svcInput.addEventListener('input', () => { applyFilters(); });
+failToggle.addEventListener('click', () => {
+  failuresOnly = !failuresOnly;
+  failToggle.classList.toggle('is-on', failuresOnly);
+  applyFilters();
+});
+
+/* =================================================================
+   TABS
+   ================================================================= */
+let currentView = 'matrix';
+function setView(view) {
+  currentView = view;
+  document.getElementById('view-matrix').classList.toggle('is-active', view === 'matrix');
+  document.getElementById('view-vis').classList.toggle('is-active', view === 'vis');
+  // inline matrix filter is matrix-only; vis view hides it (filter doesn't apply to DAG)
+  document.getElementById('hdr-matrix-filter').style.display = view === 'matrix' ? 'flex' : 'none';
+  document.getElementById('hdr-vis-icons').style.display    = view === 'vis'    ? '' : 'none';
+  // Fields popover content swaps per view
+  document.getElementById('fields-grid-matrix').style.display = view === 'matrix' ? '' : 'none';
+  document.getElementById('fields-grid-vis').style.display    = view === 'vis'    ? '' : 'none';
+  document.getElementById('pop-fields-title').textContent =
+    view === 'matrix' ? 'Visible fields — Matrix' : 'Visible fields — Visualisation';
+  // close any open popover when switching
+  closeAllPopovers();
+
+  // When switching to vis view: cards became visible → measurable. Re-run
+  // buildSwim so the deferred measurement pass can now read real card
+  // bounding boxes and re-layout the lanes with dynamic widths/heights.
+  if (view === 'vis') {
+    window.__visNodeDims = null;
+    buildSwim();
+    selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
+  }
+}
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('is-active'));
+    t.classList.add('is-active');
+    setView(t.dataset.view);
+  });
+});
+
+/* =================================================================
+   POPOVERS — click-outside / ESC / re-click to close
+   ================================================================= */
+/* Filter popover removed — filter controls are inline in the header now.
+   Vis correlation popover and shared fields-picker popover remain. */
+const POPOVERS = [
+  { btn: 'btn-correlation', pop: 'pop-correlation' },
+  { btn: 'btn-fields',      pop: 'pop-fields' },
+];
+function closeAllPopovers() {
+  POPOVERS.forEach(({btn, pop}) => {
+    document.getElementById(pop).classList.remove('is-open');
+    document.getElementById(btn).classList.remove('is-active');
+  });
+}
+POPOVERS.forEach(({btn, pop}) => {
+  const btnEl = document.getElementById(btn);
+  const popEl = document.getElementById(pop);
+  btnEl.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = popEl.classList.contains('is-open');
+    closeAllPopovers();
+    if (!wasOpen) {
+      popEl.classList.add('is-open');
+      btnEl.classList.add('is-active');
+    }
+  });
+  popEl.addEventListener('click', e => e.stopPropagation());
+});
+document.addEventListener('click', () => closeAllPopovers());
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAllPopovers();
+});
+
+/* =================================================================
+   FIELDS-PICKER — build checkboxes (matrix & vis), bind toggles
+   ================================================================= */
+function buildFieldsPicker(containerId, fields, fieldsOn, onChange) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = '';
+  fields.forEach(f => {
+    const lbl = document.createElement('label');
+    lbl.className = 'field-toggle' + (fieldsOn.has(f.key) ? ' is-on' : '');
+    lbl.innerHTML = `<span class="chk"></span><span>${f.label}</span>`;
+    lbl.addEventListener('click', e => {
+      e.preventDefault();
+      if (fieldsOn.has(f.key)) fieldsOn.delete(f.key);
+      else fieldsOn.add(f.key);
+      lbl.classList.toggle('is-on');
+      onChange();
+    });
+    c.appendChild(lbl);
+  });
+}
+buildFieldsPicker('fields-grid-matrix', MATRIX_FIELDS, matrixFieldsOn, () => {
+  renderMatrix();
+});
+buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
+  // Field toggle → clear cached dims so the measurement pass remeasures
+  // against the new content. This cascades into lane geometry.
+  window.__visNodeDims = null;
+  buildSwim();
+  // preserve selection ring after rebuild
+  selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
+});
+// initial view sync
+setView('matrix');
+
+/* =================================================================
+   DRAWER — history (domain-model fields only)
+   ================================================================= */
+const drawer = document.getElementById('drawer');
+const overlay = document.getElementById('overlay');
+const drawerClose = document.getElementById('drawer-close');
+const histEl = document.getElementById('hist');
+
+function makeHistory(svc, env) {
+  // synthetic per (svc, env), domain-model-only — full 11-field records
+  const seedVer = (SLOTS[`${svc}|${env}`] && (SLOTS[`${svc}|${env}`].current.version || SLOTS[`${svc}|${env}`].last?.version)) || 'v1.0.0';
+  const major = seedVer;
+  const topStatus =
+    SLOTS[`${svc}|${env}`]?.state.startsWith('run') ? 'in-progress' :
+    SLOTS[`${svc}|${env}`]?.state === 'fail-last'   ? 'failure'     : 'success';
+
+  // ids: 12-hex tail; used internally for parent joins only (NOT rendered visibly)
+  return [
+    { id: '9f4c8b21e7a3', component: svc, environment: env, version: major,
+      status: topStatus, run_url: 'https://ci.internal/runs/4821',
+      sha: '7d3e2a1', run_number: 4821, ref: 'feat/auth-refactor', actor: 'mreyes',
+      happened_at: '2026-05-27T14:22:10Z', elapsed: '3h ago',
+      parrent_deployments: ['21ab7c08d901', '5a2c4d10ffba'] },
+    { id: '21ab7c08d901', component: svc, environment: env, version: bumpVer(major, -1),
+      status: 'failure', run_url: 'https://ci.internal/runs/4814',
+      sha: '7c1e2b8', run_number: 4814, ref: 'feat/auth-refactor', actor: 's.harper',
+      happened_at: '2026-05-27T11:08:42Z', elapsed: '6h ago',
+      parrent_deployments: ['5a2c4d10ffba'] },
+    { id: '5a2c4d10ffba', component: svc, environment: env, version: bumpVer(major, -1),
+      status: 'success', run_url: 'https://ci.internal/runs/4808',
+      sha: '6b9f0a3', run_number: 4808, ref: 'main', actor: 's.harper',
+      happened_at: '2026-05-27T08:51:17Z', elapsed: '9h ago',
+      parrent_deployments: ['4e8b1f7a3c20'] },
+    { id: '4e8b1f7a3c20', component: svc, environment: env, version: bumpVer(major, -2),
+      status: 'success', run_url: 'https://ci.internal/runs/4792',
+      sha: '5a2c4d1', run_number: 4792, ref: 'release/2.14', actor: 'release-bot',
+      happened_at: '2026-05-26T20:14:33Z', elapsed: '1d ago',
+      parrent_deployments: ['3d7a6c2b15ee'] },
+    { id: '3d7a6c2b15ee', component: svc, environment: env, version: bumpVer(major, -2),
+      status: 'failure', run_url: 'https://ci.internal/runs/4787',
+      sha: '4e8b1f7', run_number: 4787, ref: '#4101', actor: 'release-bot',
+      happened_at: '2026-05-25T12:02:09Z', elapsed: '2d ago',
+      parrent_deployments: ['c1f8023ab9d4'] },
+    { id: 'c1f8023ab9d4', component: svc, environment: env, version: bumpVer(major, -3),
+      status: 'success', run_url: 'https://ci.internal/runs/4760',
+      sha: '3d7a6c2', run_number: 4760, ref: 'main', actor: 'jpark',
+      happened_at: '2026-05-22T09:30:55Z', elapsed: '5d ago',
+      parrent_deployments: [] },
+  ];
+}
+function bumpVer(v, delta) {
+  // crude — last numeric -> shift by delta
+  return v.replace(/(\d+)(?!.*\d)/, m => Math.max(0, parseInt(m,10) + delta));
+}
+
+function shortId(id) { return id.slice(0, 6) + '…'; }
+
+function openDrawer(svc, env, opts) {
+  opts = opts || {};
+  document.getElementById('drawer-crumbs').textContent = `${svc} · ${env}`;
+  document.getElementById('drawer-title').textContent = 'history';
+  histEl.innerHTML = '';
+  const entries = makeHistory(svc, env);
+  entries.forEach((h, idx) => {
+    const e = document.createElement('div');
+    const klass =
+      h.status === 'success'    ? 's-success'  :
+      h.status === 'failure'    ? 's-failure'  : 's-progress';
+    e.className = `hist-entry ${klass}` + (opts.markFirst && idx === 0 ? ' pre-opened' : '');
+
+    const parentsHtml = h.parrent_deployments.length
+      ? h.parrent_deployments.map(pid => `<span class="pid">${shortId(pid)}</span>`).join('')
+      : '<span class="pid none">none</span>';
+
+    e.innerHTML = `
+      <span class="pip"></span>
+      <div class="hist-main">
+        <div class="l1">
+          <span>${h.version}</span>
+          <span class="status-chip ${klass}">${h.status}</span>
+        </div>
+        <div class="l2">
+          <span class="kvtag"><span class="k">ref</span><span class="v">${h.ref}</span></span>
+          <span class="kvtag"><span class="k">sha</span><span class="v">${h.sha}</span></span>
+          <span class="kvtag"><span class="k">run</span><span class="v">${h.run_number}</span></span>
+          <span class="kvtag"><span class="k">actor</span><span class="v">${h.actor}</span></span>
+        </div>
+        <div class="l3">
+          <span class="ts">${h.elapsed} <span class="abs">&mdash; ${h.happened_at}</span></span>
+        </div>
+        <div class="parents-line">
+          <span class="pk">parrent_deployments:</span>${parentsHtml}
+        </div>
+      </div>
+      <a class="hist-link" href="${h.run_url}" target="_blank" rel="noreferrer">run #${h.run_number} &#x2197;</a>
+    `;
+    histEl.appendChild(e);
+  });
+
+  drawer.classList.add('is-open');
+  overlay.classList.add('is-open');
+}
+function closeDrawer() {
+  drawer.classList.remove('is-open');
+  overlay.classList.remove('is-open');
+}
+overlay.addEventListener('click', closeDrawer);
+drawerClose.addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDrawer();
+});
+
+/* =================================================================
+   VISUALISATION — per-service swimlanes (pure SVG)
+   Each swimlane shows MULTIPLE disconnected DAGs (no cross-service edges).
+   Shapes covered across the 4 lanes:
+     - linear chain   (payments-api graph A)
+     - fork           (auth-bff graph A)
+     - merge/diamond  (order-svc graph A)
+     - parallel       (catalog-edge graphs A + B side-by-side)
+     - isolated node  (auth-bff graph B; catalog-edge graph C)
+   Domain-model fields only — 11 per node.
+   ================================================================= */
+const SWIM_SERVICES = ['payments-api', 'auth-bff', 'order-svc', 'catalog-edge'];
+
+// Each node carries all 11 domain-model fields.
+// `col` is the time-bucket (0..7). `parrent_deployments` are intra-lane only.
+const VIS_NODES = [
+  /* ---------- payments-api ----------
+     Graph A: linear chain  p1 -> p2 -> p3 -> p4
+     Graph B: isolated      p5
+  */
+  { id: 'p1a2b3c4d5e6', component: 'payments-api', environment: 'dev',
+    version: 'v2.13.9', status: 'success', run_url: 'https://ci.internal/runs/4701',
+    sha: '1a9c3f4', run_number: 4701, ref: 'main', actor: 'mreyes',
+    happened_at: '2026-05-26T08:12:04Z', elapsed: '1d ago',
+    parrent_deployments: [], col: 0 },
+  { id: 'p2b3c4d5e6f7', component: 'payments-api', environment: 'staging',
+    version: 'v2.14.0', status: 'success', run_url: 'https://ci.internal/runs/4744',
+    sha: '2b7d4a5', run_number: 4744, ref: 'release/2.14', actor: 'mreyes',
+    happened_at: '2026-05-26T15:48:33Z', elapsed: '22h ago',
+    parrent_deployments: ['p1a2b3c4d5e6'], col: 1 },
+  { id: 'p3c4d5e6f7a8', component: 'payments-api', environment: 'qa',
+    version: 'v2.14.1', status: 'failure', run_url: 'https://ci.internal/runs/4768',
+    sha: '3c8e5b6', run_number: 4768, ref: '#4218', actor: 'l.osman',
+    happened_at: '2026-05-27T02:31:19Z', elapsed: '11h ago',
+    parrent_deployments: ['p2b3c4d5e6f7'], col: 2 },
+  { id: 'p4d5e6f7a8b9', component: 'payments-api', environment: 'preprod',
+    version: 'v2.14.3', status: 'in-progress', run_url: 'https://ci.internal/runs/4821',
+    sha: '7d3e2a1', run_number: 4821, ref: 'feat/auth-refactor', actor: 'mreyes',
+    happened_at: '2026-05-27T14:22:10Z', elapsed: '3h ago',
+    parrent_deployments: ['p3c4d5e6f7a8'], col: 3 },
+  { id: 'p5e6f7a8b9c0', component: 'payments-api', environment: 'prod',
+    version: 'v2.14.1', status: 'success', run_url: 'https://ci.internal/runs/4810',
+    sha: '4d9a1c2', run_number: 4810, ref: 'release/2.14', actor: 'release-bot',
+    happened_at: '2026-05-27T09:05:00Z', elapsed: '8h ago',
+    parrent_deployments: [], col: 6 },
+
+  /* ---------- auth-bff ----------
+     Graph A: fork  a1 -> a2 ; a1 -> a3
+     Graph B: isolated  a4
+     Graph C: linear short  a5 -> a6
+  */
+  { id: 'a1f7c2b8e1d2', component: 'auth-bff', environment: 'dev',
+    version: 'v3.2.3', status: 'success', run_url: 'https://ci.internal/runs/3201',
+    sha: '5a4b6c7', run_number: 3201, ref: 'main', actor: 's.harper',
+    happened_at: '2026-05-26T07:00:11Z', elapsed: '1d ago',
+    parrent_deployments: [], col: 0 },
+  { id: 'a2c8d9e0f1a2', component: 'auth-bff', environment: 'staging',
+    version: 'v3.2.4', status: 'success', run_url: 'https://ci.internal/runs/3215',
+    sha: '6b5c7d8', run_number: 3215, ref: 'release/3.2', actor: 's.harper',
+    happened_at: '2026-05-26T10:14:22Z', elapsed: '28h ago',
+    parrent_deployments: ['a1f7c2b8e1d2'], col: 1 },
+  { id: 'a3d9e0f1a2b3', component: 'auth-bff', environment: 'qa',
+    version: 'v3.2.5', status: 'success', run_url: 'https://ci.internal/runs/3218',
+    sha: '7c6d8e9', run_number: 3218, ref: 'feat/oauth-rotate', actor: 's.harper',
+    happened_at: '2026-05-26T11:42:55Z', elapsed: '26h ago',
+    parrent_deployments: ['a1f7c2b8e1d2'], col: 2 },
+  { id: 'a4e0f1a2b3c4', component: 'auth-bff', environment: 'preprod',
+    version: 'v3.2.5', status: 'success', run_url: 'https://ci.internal/runs/3230',
+    sha: '8d7e9f0', run_number: 3230, ref: 'release/3.2', actor: 'release-bot',
+    happened_at: '2026-05-27T01:08:00Z', elapsed: '16h ago',
+    parrent_deployments: [], col: 4 },
+  { id: 'a5f1a2b3c4d5', component: 'auth-bff', environment: 'prod',
+    version: 'v3.2.6', status: 'success', run_url: 'https://ci.internal/runs/3244',
+    sha: '9e8f0a1', run_number: 3244, ref: 'release/3.2', actor: 'release-bot',
+    happened_at: '2026-05-27T12:55:30Z', elapsed: '4h ago',
+    parrent_deployments: [], col: 6 },
+  { id: 'a6a2b3c4d5e6', component: 'auth-bff', environment: 'prod',
+    version: 'v3.2.6', status: 'in-progress', run_url: 'https://ci.internal/runs/3251',
+    sha: '9e8f0a1', run_number: 3251, ref: '#3251', actor: 's.harper',
+    happened_at: '2026-05-27T16:40:18Z', elapsed: '15m ago',
+    parrent_deployments: ['a5f1a2b3c4d5'], col: 7 },
+
+  /* ---------- order-svc ----------
+     Graph A: diamond / merge   o1 -> o2 -> o4 ; o1 -> o3 -> o4
+     Graph B: isolated          o5
+  */
+  { id: 'o1b3c4d5e6f7', component: 'order-svc', environment: 'dev',
+    version: 'v0.40.8', status: 'success', run_url: 'https://ci.internal/runs/2901',
+    sha: 'a1b2c3d', run_number: 2901, ref: 'main', actor: 'jpark',
+    happened_at: '2026-05-25T22:30:00Z', elapsed: '2d ago',
+    parrent_deployments: [], col: 0 },
+  { id: 'o2c4d5e6f7a8', component: 'order-svc', environment: 'staging',
+    version: 'v0.40.9', status: 'failure', run_url: 'https://ci.internal/runs/2912',
+    sha: 'b2c3d4e', run_number: 2912, ref: '#7910', actor: 'jpark',
+    happened_at: '2026-05-26T04:11:42Z', elapsed: '1d ago',
+    parrent_deployments: ['o1b3c4d5e6f7'], col: 1 },
+  { id: 'o3d5e6f7a8b9', component: 'order-svc', environment: 'qa',
+    version: 'v0.41.0', status: 'success', run_url: 'https://ci.internal/runs/2918',
+    sha: 'c3d4e5f', run_number: 2918, ref: 'feat/cart-merge', actor: 'jpark',
+    happened_at: '2026-05-26T05:42:11Z', elapsed: '1d ago',
+    parrent_deployments: ['o1b3c4d5e6f7'], col: 2 },
+  { id: 'o4e6f7a8b9c0', component: 'order-svc', environment: 'preprod',
+    version: 'v0.41.1', status: 'success', run_url: 'https://ci.internal/runs/2935',
+    sha: 'd4e5f6a', run_number: 2935, ref: 'release/0.41', actor: 'release-bot',
+    happened_at: '2026-05-26T19:08:55Z', elapsed: '22h ago',
+    parrent_deployments: ['o2c4d5e6f7a8', 'o3d5e6f7a8b9'], col: 4 },
+  { id: 'o5f7a8b9c0d1', component: 'order-svc', environment: 'prod',
+    version: 'v0.41.2', status: 'in-progress', run_url: 'https://ci.internal/runs/2948',
+    sha: 'e5f6a7b', run_number: 2948, ref: '#7912', actor: 'jpark',
+    happened_at: '2026-05-27T16:30:00Z', elapsed: '25m ago',
+    parrent_deployments: [], col: 7 },
+
+  /* ---------- catalog-edge ----------
+     Graph A: parallel branch 1  c1 -> c2
+     Graph B: parallel branch 2  c3 -> c4
+     Graph C: isolated           c5
+  */
+  { id: 'c1a8b9c0d1e2', component: 'catalog-edge', environment: 'dev',
+    version: 'v4.18.5', status: 'success', run_url: 'https://ci.internal/runs/5102',
+    sha: 'f6a7b8c', run_number: 5102, ref: 'release/4.18', actor: 'tcheng',
+    happened_at: '2026-05-26T06:00:33Z', elapsed: '1d ago',
+    parrent_deployments: [], col: 0 },
+  { id: 'c2b9c0d1e2f3', component: 'catalog-edge', environment: 'staging',
+    version: 'v4.18.6', status: 'success', run_url: 'https://ci.internal/runs/5118',
+    sha: '0b7c8d9', run_number: 5118, ref: 'release/4.18', actor: 'tcheng',
+    happened_at: '2026-05-26T08:48:14Z', elapsed: '32h ago',
+    parrent_deployments: ['c1a8b9c0d1e2'], col: 1 },
+  { id: 'c3c0d1e2f3a4', component: 'catalog-edge', environment: 'qa',
+    version: 'v5.0.0-rc1', status: 'success', run_url: 'https://ci.internal/runs/5140',
+    sha: '1c8d9e0', run_number: 5140, ref: 'feat/v5-rewrite', actor: 'tcheng',
+    happened_at: '2026-05-26T14:12:00Z', elapsed: '27h ago',
+    parrent_deployments: [], col: 3 },
+  /* STRESS-TEST: long ~50-char version on catalog-edge|preprod viz node —
+     verifies vis-card max-width 300px cap + wrap/ellipsis. */
+  { id: 'c4d1e2f3a4b5', component: 'catalog-edge', environment: 'preprod',
+    version: '2.14.0-rc.3+build.20260527.commit.9f8e7d6c', status: 'in-progress', run_url: 'https://ci.internal/runs/5151',
+    sha: '2d9e0f1', run_number: 5151, ref: 'feat/v5-rewrite', actor: 'tcheng',
+    happened_at: '2026-05-27T13:00:22Z', elapsed: '4h ago',
+    parrent_deployments: ['c3c0d1e2f3a4'], col: 4 },
+  { id: 'c5e2f3a4b5c6', component: 'catalog-edge', environment: 'prod',
+    version: 'v4.18.7', status: 'success', run_url: 'https://ci.internal/runs/5145',
+    sha: '3e0f1a2', run_number: 5145, ref: 'release/4.18', actor: 'release-bot',
+    happened_at: '2026-05-27T03:20:45Z', elapsed: '14h ago',
+    parrent_deployments: [], col: 6 },
+];
+
+// Pre-selected inspector node
+const PRESELECTED_NODE_ID = 'p4d5e6f7a8b9'; // payments-api preprod in-progress
+
+const VIS_BY_ID = {};
+VIS_NODES.forEach(n => { VIS_BY_ID[n.id] = n; });
+
+function statusKlass(s) {
+  return s === 'success' ? 's-success' : s === 'failure' ? 's-failure' : 's-progress';
+}
+
+/* -----------------------------------------------------------------
+   Layout algorithm (Fix 3 + Fix 4):
+   - Per service, partition nodes into DAGs by undirected connectivity
+     through intra-service `parrent_deployments`.
+   - Within a DAG, assign rank = max parent-distance from any root.
+   - Assign vertical tracks per rank greedily (siblings get distinct
+     tracks; merges centered between parents).
+   - Each service lane stacks its DAGs VERTICALLY.
+   ----------------------------------------------------------------- */
+
+// Per-service connected-component partition (undirected over intra-service parents)
+function partitionDAGs(svcNodes) {
+  const idToIdx = new Map();
+  svcNodes.forEach((n, i) => idToIdx.set(n.id, i));
+  const adj = svcNodes.map(() => new Set());
+  svcNodes.forEach((n, i) => {
+    n.parrent_deployments.forEach(pid => {
+      const j = idToIdx.get(pid);
+      if (j !== undefined) { adj[i].add(j); adj[j].add(i); }
+    });
+  });
+  const visited = new Array(svcNodes.length).fill(false);
+  const dags = [];
+  for (let i = 0; i < svcNodes.length; i++) {
+    if (visited[i]) continue;
+    const stack = [i]; const group = [];
+    while (stack.length) {
+      const k = stack.pop();
+      if (visited[k]) continue;
+      visited[k] = true;
+      group.push(svcNodes[k]);
+      adj[k].forEach(j => { if (!visited[j]) stack.push(j); });
+    }
+    dags.push(group);
+  }
+  return dags;
+}
+
+// Rank assignment via longest-path-from-roots (topological-ish, iterative).
+function rankNodes(dagNodes) {
+  const ids = new Set(dagNodes.map(n => n.id));
+  const parentsIn = new Map(dagNodes.map(n => [n.id,
+    n.parrent_deployments.filter(p => ids.has(p))]));
+  const ranks = new Map();
+  // iterate until stable; small DAGs so this terminates fast
+  let changed = true;
+  while (changed) {
+    changed = false;
+    dagNodes.forEach(n => {
+      const ps = parentsIn.get(n.id);
+      let r = 0;
+      if (ps.length === 0) r = 0;
+      else {
+        let max = -1;
+        ps.forEach(pid => {
+          const pr = ranks.get(pid);
+          if (pr !== undefined && pr > max) max = pr;
+        });
+        r = max + 1; // if no parent ranked yet, becomes 0 → fine for now
+      }
+      if (ranks.get(n.id) !== r) {
+        // only grow rank — guarantees monotonic convergence
+        const prev = ranks.get(n.id);
+        if (prev === undefined || r > prev) {
+          ranks.set(n.id, r);
+          changed = true;
+        }
+      }
+    });
+  }
+  return ranks;
+}
+
+// Assign tracks (vertical lanes within a DAG) so siblings on the same rank
+// occupy distinct tracks. Greedy, parent-aware:
+//  - For a node with one parent, prefer the parent's track if free.
+//  - Otherwise pick the lowest free track at that rank.
+//  - Merge nodes (>=2 parents): try midpoint between parent tracks, else lowest.
+function assignTracks(dagNodes, ranks) {
+  const sorted = [...dagNodes].sort((a, b) => {
+    const ra = ranks.get(a.id), rb = ranks.get(b.id);
+    if (ra !== rb) return ra - rb;
+    // tie-break by happened_at
+    return (a.happened_at || '').localeCompare(b.happened_at || '');
+  });
+  const occByRank = new Map(); // rank -> Set of used tracks
+  const tracks = new Map();    // nodeId -> track index
+  const ids = new Set(dagNodes.map(n => n.id));
+
+  const occOf = r => { if (!occByRank.has(r)) occByRank.set(r, new Set()); return occByRank.get(r); };
+  const lowestFree = r => {
+    const used = occOf(r);
+    let t = 0;
+    while (used.has(t)) t++;
+    return t;
+  };
+
+  sorted.forEach(n => {
+    const r = ranks.get(n.id);
+    const used = occOf(r);
+    const parents = n.parrent_deployments.filter(pid => ids.has(pid));
+    let candidate = null;
+
+    if (parents.length === 1) {
+      const pt = tracks.get(parents[0]);
+      if (pt !== undefined && !used.has(pt)) candidate = pt;
+    } else if (parents.length >= 2) {
+      const pts = parents.map(p => tracks.get(p)).filter(t => t !== undefined);
+      if (pts.length) {
+        const mid = Math.round(pts.reduce((a,b)=>a+b,0) / pts.length);
+        if (!used.has(mid)) candidate = mid;
+      }
+    }
+    if (candidate === null) candidate = lowestFree(r);
+    used.add(candidate);
+    tracks.set(n.id, candidate);
+  });
+
+  // compute max track count across ranks (DAG vertical "thickness")
+  let maxTrack = 0;
+  occByRank.forEach(s => { s.forEach(t => { if (t > maxTrack) maxTrack = t; }); });
+  return { tracks, maxTrack, ranks };
+}
+
+/* Vis layout — TWO-PASS to support dynamic card sizing:
+   Pass 1: render cards offscreen-ish with placeholder layout to measure
+           actual width/height per node (varies w/ visFieldsOn).
+   Pass 2: recompute rank-column widths, track positions, lane heights,
+           total viewBox using per-node measured dims, then reposition.
+
+   Wired into the fields-picker onChange so toggling fields cascades:
+   card content → measured dims → rank widths → track positions →
+   lane heights → SVG viewBox/canvas.
+*/
+function buildSwim() {
+  const swim = document.getElementById('swim');
+
+  // -------- layout constants --------
+  // Packing: lane heights pack densely — lane height = sub-row content + minimal
+  // padding. Inter-lane gap reduced. LANE_MIN_H lowered so empty/short lanes
+  // don't dictate a tall minimum; sub-row content drives lane height.
+  const W            = 1340;
+  const PAD_TOP      = 14;
+  const PAD_BOT      = 12;
+  const PAD_LEFT     = 170;   // room for lane label
+  const PAD_RIGHT    = 30;
+  const DEFAULT_W    = 156;   // fallback card width (pre-measurement)
+  const DEFAULT_H    = 80;    // fallback card height (pre-measurement) — tightened after packing
+  const COL_GAP      = 60;    // horizontal gap between rank columns
+  const TRACK_GAP    = 14;    // vertical gap between tracks within a DAG (packed)
+  const DAG_GAP      = 12;    // vertical gap between sibling DAGs in same lane (packed)
+  const LANE_PAD_TB  = 8;     // top/bottom padding inside a lane (packed)
+  const LANE_MIN_H   = 56;    // lane min so the label row reads — content can exceed
+  const LANE_GAP     = 6;     // inter-lane gap (packed)
+
+  // -------- per-service computation --------
+  // dimMap: nodeId → { w, h }; populated by initial pass or by remeasure.
+  // Read from window.__visNodeDims if available (set after first render).
+  const dimMap = window.__visNodeDims || new Map();
+  const dimOf = id => dimMap.get(id) || { w: DEFAULT_W, h: DEFAULT_H };
+
+  const svcLayouts = SWIM_SERVICES.map(svc => {
+    const svcNodes = VIS_NODES.filter(n => n.component === svc);
+    const dags = partitionDAGs(svcNodes);
+
+    // for each DAG: rank, tracks, max rank, max track
+    const dagInfos = dags.map(dagNodes => {
+      const ranks = rankNodes(dagNodes);
+      const { tracks, maxTrack } = assignTracks(dagNodes, ranks);
+      let maxRank = 0;
+      ranks.forEach(r => { if (r > maxRank) maxRank = r; });
+      return { dagNodes, ranks, tracks, maxRank, maxTrack };
+    });
+
+    // sort DAGs by earliest happened_at so older DAGs sit at top of lane
+    dagInfos.sort((a, b) => {
+      const ea = a.dagNodes.reduce((m, n) => (n.happened_at && (!m || n.happened_at < m)) ? n.happened_at : m, null);
+      const eb = b.dagNodes.reduce((m, n) => (n.happened_at && (!m || n.happened_at < m)) ? n.happened_at : m, null);
+      return (ea || '').localeCompare(eb || '');
+    });
+
+    // each DAG sub-row height — use max card height across the DAG per track row.
+    // Approximation: take the tallest card on the DAG as track-row height.
+    dagInfos.forEach(di => {
+      const hMax = Math.max(DEFAULT_H, ...di.dagNodes.map(n => dimOf(n.id).h));
+      di.trackRowH = hMax;
+      di.subRowH = (di.maxTrack + 1) * hMax + di.maxTrack * TRACK_GAP;
+
+      // per-rank max width across this DAG: drives rank-column step.
+      const wByRank = new Map();
+      di.dagNodes.forEach(n => {
+        const r = di.ranks.get(n.id);
+        const w = dimOf(n.id).w;
+        if (!wByRank.has(r) || wByRank.get(r) < w) wByRank.set(r, w);
+      });
+      di.wByRank = wByRank;
+    });
+    const totalDagsH = dagInfos.reduce((s, di) => s + di.subRowH, 0)
+      + Math.max(0, dagInfos.length - 1) * DAG_GAP;
+    const laneH = Math.max(LANE_MIN_H, totalDagsH + LANE_PAD_TB * 2);
+
+    return { svc, dagInfos, laneH };
+  });
+
+  // total stage height — sum of lane heights + packed inter-lane gaps
+  const H = PAD_TOP + svcLayouts.reduce((s, L) => s + L.laneH, 0)
+    + (svcLayouts.length - 1) * LANE_GAP + PAD_BOT;
+
+  // -------- assign x/y to every node --------
+  // Bug 1 fix — per-rank stepX (NOT global). The X-position of rank R within
+  // a DAG = sum of (max card-width at rank 0..R-1) + R × COL_GAP. So a wide
+  // card at rank 2 pushes rank 3+ further right and never overlaps its
+  // neighbour. Per-DAG independent since DAGs in different sub-rows don't
+  // share columns. Stage width may grow past viewBox W when a long-version
+  // card lives at a high rank — the .vis-canvas wrapper handles horizontal
+  // scroll via overflow-x: auto.
+  let laneCursor = PAD_TOP;
+  let maxRankRight = 0;   // tracks furthest right edge across all DAGs
+  svcLayouts.forEach(L => {
+    L.laneTop = laneCursor;
+    let dagCursor = laneCursor + LANE_PAD_TB;
+    L.dagInfos.forEach(di => {
+      di.subRowTop = dagCursor;
+      // Build per-rank cumulative left-edge offsets from PAD_LEFT.
+      //   rankLeft[0] = 0
+      //   rankLeft[r] = rankLeft[r-1] + maxW(r-1) + COL_GAP
+      const rankLeft = new Map();
+      rankLeft.set(0, 0);
+      for (let r = 1; r <= di.maxRank; r++) {
+        const prevMaxW = di.wByRank.get(r - 1) || DEFAULT_W;
+        rankLeft.set(r, rankLeft.get(r - 1) + prevMaxW + COL_GAP);
+      }
+      di.dagNodes.forEach(n => {
+        const r = di.ranks.get(n.id);
+        const t = di.tracks.get(n.id);
+        const { w, h } = dimOf(n.id);
+        // Anchor each rank's left edge; center of card sits at left + w/2.
+        // Cards are centered within their rank-column for visual alignment.
+        const colMaxW = di.wByRank.get(r) || DEFAULT_W;
+        n.x = PAD_LEFT + rankLeft.get(r) + colMaxW / 2;
+        n.y = dagCursor + di.trackRowH / 2 + t * (di.trackRowH + TRACK_GAP);
+        n._w = w;
+        n._h = h;
+        const right = n.x + w / 2;
+        if (right > maxRankRight) maxRankRight = right;
+      });
+      dagCursor += di.subRowH + DAG_GAP;
+    });
+    laneCursor += L.laneH + LANE_GAP;
+  });
+  // Stage width may need to grow past W when content extends right of viewBox.
+  // SVG viewBox + width are computed below; horizontal scroll on .vis-canvas
+  // surfaces overflow.
+  const stageW = Math.max(W, Math.ceil(maxRankRight + PAD_RIGHT));
+
+  // -------- theme-aware SVG colors --------
+  // Read computed CSS variables so SVG lane/edge fills track the active theme.
+  // We use --ink-1 for the lane label, and tokenized rgba wash/edge values for
+  // lane fill / lane border / DAG separator / edge stroke / arrowhead.
+  const css = getComputedStyle(document.documentElement);
+  const ink1     = (css.getPropertyValue('--ink-1') || '#b8bdcc').trim();
+  const laneEdge = (css.getPropertyValue('--glass-edge') || 'rgba(255,255,255,0.06)').trim();
+  const laneFill = (css.getPropertyValue('--neutral-wash') || 'rgba(255,255,255,0.025)').trim();
+  // Edge stroke: derive from ink-2 / divider tone — fall back to a hairline.
+  const edgeStroke = (css.getPropertyValue('--divider-dash') || 'rgba(255,255,255,0.30)').trim();
+  const arrowFill  = edgeStroke;
+
+  // -------- build SVG (lanes + edges) --------
+  // SVG width and viewBox use stageW (≥ W) so when a wide card pushes content
+  // past the design width, edges/lanes draw to the true right edge instead of
+  // being clipped. The .vis-canvas wrapper scrolls horizontally past viewport.
+  let svg = `<svg class="edges" viewBox="0 0 ${stageW} ${H}" preserveAspectRatio="xMinYMid meet" xmlns="http://www.w3.org/2000/svg" style="width:${stageW}px">`;
+  svg += `
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="${arrowFill}"/>
+      </marker>
+    </defs>
+  `;
+
+  // lane backgrounds + labels + intra-lane DAG separators
+  svgLanes: {
+    svcLayouts.forEach(L => {
+      const y = L.laneTop;
+      svg += `
+        <rect x="14" y="${y}" width="${stageW - 28}" height="${L.laneH - 4}"
+              rx="12" ry="12"
+              fill="${laneFill}"
+              stroke="${laneEdge}" />
+        <text x="28" y="${y + 20}" font-family="JetBrains Mono, monospace"
+              font-size="12.5" font-weight="600" fill="${ink1}"
+              letter-spacing="0.2">${L.svc}</text>
+      `;
+      // hairline separators between sibling DAGs
+      L.dagInfos.forEach((di, i) => {
+        if (i === 0) return;
+        const sepY = di.subRowTop - DAG_GAP / 2;
+        svg += `<line x1="${PAD_LEFT - 16}" y1="${sepY}" x2="${stageW - 20}" y2="${sepY}"
+                  stroke="${laneEdge}" stroke-dasharray="3 6"/>`;
+      });
+    });
+  }
+
+  // edges: parent → child within same DAG. Route around any node whose
+  // bounding box would intersect a straight line between endpoints.
+  // Strategy:
+  //   - if adjacent ranks AND same/adjacent track: smooth cubic, slight horizontal sag.
+  //   - if skip-rank: route as a multi-segment path going through the
+  //     vertical channel BETWEEN node columns (clear of all card boxes).
+  const stroke = edgeStroke;
+  const sw     = 1.5;
+  svcLayouts.forEach(L => {
+    L.dagInfos.forEach(di => {
+      di.dagNodes.forEach(n => {
+        n.parrent_deployments.forEach(pid => {
+          const p = di.dagNodes.find(x => x.id === pid);
+          if (!p) return;
+          const pr = di.ranks.get(p.id);
+          const nr = di.ranks.get(n.id);
+          const rankSpan = nr - pr;
+
+          const pW = p._w || DEFAULT_W, pH = p._h || DEFAULT_H;
+          const nW = n._w || DEFAULT_W, nH = n._h || DEFAULT_H;
+          const x0 = p.x + pW / 2;   // right edge of parent
+          const y0 = p.y;
+          const x3 = n.x - nW / 2;   // left edge of child
+          const y3 = n.y;
+
+          if (rankSpan <= 1) {
+            // adjacent-rank: smooth cubic
+            const mx = (x0 + x3) / 2;
+            const d = `M ${x0} ${y0} C ${mx} ${y0}, ${mx} ${y3}, ${x3} ${y3}`;
+            svg += `<path d="${d}" stroke="${stroke}" stroke-width="${sw}" fill="none" marker-end="url(#arrow)" />`;
+          } else {
+            // skip-rank: route via channel above/below intermediate cards
+            const detourY = Math.min(y0, y3) - Math.max(pH, nH) / 2 - 14;
+            const c1x = x0 + 40, c2x = x3 - 40;
+            const d = `M ${x0} ${y0} C ${c1x} ${detourY}, ${c2x} ${detourY}, ${x3} ${y3}`;
+            svg += `<path d="${d}" stroke="${stroke}" stroke-width="${sw}" fill="none" marker-end="url(#arrow)" />`;
+          }
+        });
+      });
+    });
+  });
+
+  svg += `</svg>`;
+
+  // Stage = SVG (edges + lanes) + absolutely positioned card layer.
+  // Stage width is dynamic (stageW) so the canvas extends right when a wide
+  // card at a deep rank pushes content past the design baseline 1340px.
+  swim.innerHTML = `<div class="vis-stage" id="vis-stage" style="width:${stageW}px;min-width:${stageW}px">${svg}<div class="cards-layer" id="cards-layer"></div></div>`;
+
+  // Stash dims so the cards layer can position correctly
+  swim.style.setProperty('--stage-w', stageW);
+  swim.style.setProperty('--stage-h', H);
+
+  // Cards layer uses percentage coords so it tracks the SVG's scaled coord space
+  const cards = document.getElementById('cards-layer');
+  VIS_NODES.forEach(n => {
+    if (n.x === undefined || n.y === undefined) return; // not in any service shown
+    const card = document.createElement('div');
+    const klass = statusKlass(n.status);
+    const selected = n.id === PRESELECTED_NODE_ID ? ' is-selected' : '';
+    card.className = `vis-card ${klass}${selected}`;
+    card.dataset.nodeId = n.id;
+    card.style.left = (n.x / stageW * 100) + '%';
+    card.style.top  = (n.y / H * 100) + '%';
+
+    // Build inner content driven by visFieldsOn — version headline first,
+    // then renderAttrs emits ref-line, environment subtitle, and mixed grid.
+    let html = '';
+    if (visFieldsOn.has('version') && n.version) {
+      html += `<div class="vc-ver">${n.version}</div>`;
+    }
+    card.innerHTML = html;
+
+    const rec = {
+      version: n.version, sha: n.sha, run_number: n.run_number, ref: n.ref,
+      run_url: n.run_url, actor: n.actor, elapsed: n.elapsed,
+      parents: n.parrent_deployments.length,
+    };
+    const attrs = renderAttrs(rec, visFieldsOn, { environment: n.environment });
+    if (attrs) card.appendChild(attrs);
+
+    card.addEventListener('click', () => selectVisNode(n.id));
+    cards.appendChild(card);
+  });
+
+  // ---- measurement pass ----
+  // After cards are in the DOM (first call uses DEFAULT dims), measure their
+  // natural bounding boxes and re-run layout once with the true per-node
+  // dims. This is the cascade: card content shrinks → measured dims smaller
+  // → rank-column widths shrink → track positions tighten → lane heights
+  // shrink → SVG viewBox shrinks → more lanes visible without scrolling.
+  // If the vis view is hidden (display:none), getBoundingClientRect returns
+  // 0×0 — skip the re-layout; we'll get a proper measurement when the user
+  // switches to vis (setView hook re-runs buildSwim with the view visible).
+  if (!buildSwim._reentering) {
+    const dimMap = new Map();
+    let anyMeasured = false;
+    document.querySelectorAll('#cards-layer .vis-card').forEach(c => {
+      const r = c.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        anyMeasured = true;
+        dimMap.set(c.dataset.nodeId, { w: Math.ceil(r.width), h: Math.ceil(r.height) });
+      }
+    });
+    if (anyMeasured) {
+      window.__visNodeDims = dimMap;
+      buildSwim._reentering = true;
+      buildSwim();
+      buildSwim._reentering = false;
+    }
+  }
+}
+buildSwim();
+
+/* =================================================================
+   INSPECTOR — render all 11 domain-model fields for selected node
+   ================================================================= */
+let currentSelectedNodeId = null;
+function selectVisNode(id) {
+  const n = VIS_BY_ID[id];
+  if (!n) return;
+  currentSelectedNodeId = id;
+  document.querySelectorAll('.vis-card').forEach(c => {
+    c.classList.toggle('is-selected', c.dataset.nodeId === id);
+  });
+  renderInspector(n);
+}
+
+function renderInspector(n) {
+  document.getElementById('insp-crumbs').textContent = `${n.component} · ${n.environment}`;
+  const klass =
+    n.status === 'success'    ? 's-success'  :
+    n.status === 'failure'    ? 's-failure'  : 's-progress';
+  document.getElementById('insp-status-row').innerHTML =
+    `<span class="status-chip ${klass}">${n.status}</span>` +
+    `<span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-0)">${n.version}</span>`;
+
+  const parentsHtml = n.parrent_deployments.length
+    ? n.parrent_deployments.map(pid => `<span class="pid" style="display:inline-block;margin-right:4px;padding:1px 6px;border-radius:4px;background:rgba(120,110,255,0.10);border:1px solid rgba(120,110,255,0.30);color:var(--ink-1)">${shortId(pid)}</span>`).join('')
+    : `<span class="muted" style="font-style:italic">none</span>`;
+
+  const grid = document.getElementById('insp-grid');
+  grid.innerHTML = `
+    <span class="k">component</span>     <span class="v">${n.component}</span>
+    <span class="k">environment</span>   <span class="v">${n.environment}</span>
+    <span class="k">version</span>       <span class="v">${n.version}</span>
+    <span class="k">status</span>        <span class="v">${n.status}</span>
+    <span class="k">run_url</span>       <span class="v"><a class="run-link" href="${n.run_url}" target="_blank" rel="noreferrer">run #${n.run_number} &#x2197;</a></span>
+    <span class="k">sha</span>           <span class="v">${n.sha}</span>
+    <span class="k">run_number</span>    <span class="v">${n.run_number}</span>
+    <span class="k">ref</span>           <span class="v">${n.ref}</span>
+    <span class="k">actor</span>         <span class="v">${n.actor}</span>
+    <span class="k">happened_at</span>   <span class="v">${n.elapsed} <span class="muted">&mdash; ${n.happened_at}</span></span>
+    <span class="k">parrent_deployments</span> <span class="v parents">${parentsHtml}</span>
+  `;
+}
+
+// Pre-select on load
+selectVisNode(PRESELECTED_NODE_ID);
+
+/* =================================================================
+   PREDICATE PICKER — single-select (radio), drives time-window state
+   ================================================================= */
+const timewinEl    = document.getElementById('timewin');
+const timewinSelect = document.getElementById('timewin-select');
+
+function selectPredicate(p) {
+  document.querySelectorAll('.predicate').forEach(x => {
+    const on = x === p;
+    x.classList.toggle('is-on', on);
+    x.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  // time-window disabled when explicit parent
+  const isParent = p.dataset.p === 'parent';
+  timewinEl.classList.toggle('is-disabled', isParent);
+  if (isParent) timewinSelect.setAttribute('disabled', '');
+  else          timewinSelect.removeAttribute('disabled');
+}
+
+document.querySelectorAll('.predicate').forEach(p => {
+  p.addEventListener('click', e => {
+    e.preventDefault();
+    selectPredicate(p);
+  });
+});
+
+// initial: 'explicit parent' marked is-on; ensure time-window starts disabled
+(function initPredicate() {
+  const initial = document.querySelector('.predicate.is-on') || document.querySelector('.predicate');
+  if (initial) selectPredicate(initial);
+})();
+
+/* =================================================================
+   KPI BAR — derive from fixture (no invented metrics)
+   ================================================================= */
+function computeKPIs() {
+  const svcSet = new Set();
+  const envSet = new Set();
+  let inflight = 0, failed = 0;
+  Object.entries(SLOTS).forEach(([key, slot]) => {
+    const [svc, env] = key.split('|');
+    svcSet.add(svc); envSet.add(env);
+    if (slot.state === 'running-only' || slot.state === 'run-last' ||
+        slot.state === 'run-fail-last' || slot.state === 'run-fail-only') inflight++;
+    if (slot.state === 'fail-last' || slot.state === 'run-fail-only') failed++;
+  });
+  document.getElementById('kpi-services').textContent = svcSet.size;
+  document.getElementById('kpi-envs').textContent     = envSet.size;
+  document.getElementById('kpi-inflight').textContent = inflight;
+  document.getElementById('kpi-failed').textContent   = failed;
+}
+computeKPIs();
+
+/* =================================================================
+   THEME SWITCHER — dark / light / auto
+   - On load: read localStorage.theme, default 'dark'.
+   - Click: update <html data-theme=...> + persist.
+   - Auto: prefers-color-scheme media-query swaps the resolved token set
+     reactively (handled in CSS); JS only listens to keep aria-state crisp.
+   ================================================================= */
+(function setupThemeSwitcher() {
+  const VALID = new Set(['dark', 'light', 'auto']);
+  const root = document.documentElement;
+  const sw = document.getElementById('theme-switch');
+  if (!sw) return;
+
+  function readStored() {
+    let v;
+    try { v = localStorage.getItem('theme'); } catch (_) { v = null; }
+    return VALID.has(v) ? v : 'dark';
+  }
+  function persist(v) {
+    try { localStorage.setItem('theme', v); } catch (_) { /* file://, private mode */ }
+  }
+  function apply(v) {
+    if (!VALID.has(v)) v = 'dark';
+    root.setAttribute('data-theme', v);
+    sw.querySelectorAll('.ts-opt').forEach(b => {
+      const on = b.dataset.themePick === v;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    // SVG lane/edge fills are stamped from getComputedStyle at build time —
+    // rebuild the viz so those baked-in colors track the new theme tokens.
+    if (typeof buildSwim === 'function') {
+      window.__visNodeDims = null;
+      buildSwim();
+      if (typeof selectVisNode === 'function') {
+        selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
+      }
+    }
+  }
+
+  // initial
+  apply(readStored());
+
+  // click handlers
+  sw.querySelectorAll('.ts-opt').forEach(b => {
+    b.addEventListener('click', () => {
+      const v = b.dataset.themePick;
+      apply(v);
+      persist(v);
+    });
+  });
+
+  // system-pref change while in auto: CSS handles the visual flip via
+  // @media (prefers-color-scheme: light) :root[data-theme="auto"] {...}.
+  // No JS re-render needed; this listener exists for any future hook.
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const onChange = () => { /* CSS reactive; no-op kept for clarity */ };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  }
+})();
+
+/* =================================================================
+   PRE-OPEN drawer on initial load — demonstrates full 11-field record
+   Target slot: payments-api · staging (Success)
+   ================================================================= */
+openDrawer('payments-api', 'staging', { markFirst: true });
+</script>
+</body>
+</html>
