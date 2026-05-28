@@ -290,7 +290,7 @@ paths:
                     : ping
                     id: 01J9F4WZK3W9G2T6X4QH3DKQF5
                     event: deployment
-                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","deployment_id":"gh-9491-1","service":"service-a","environment":"prod","version":"1.4.2","status":"success","happened_at":"2026-05-28T10:14:02Z","actor":"alice","run_number":9491,"parent_deployments":["gh-9482-1"]}
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","deployment_id":"gh-9491-1","service":"service-a","environment":"prod","version":"1.4.2","status":"success","happened_at":"2026-05-28T10:14:02Z","actor":"alice","run_number":"9491","parent_deployments":["gh-9482-1"]}
 
   # ───── Fetcher state ──────────────────────────────────────────────────────
   /api/fetcher/state/{adapter}:
@@ -493,10 +493,10 @@ components:
           maxLength: 2048
           examples: ["https://github.com/acme/repo/actions/runs/9491"]
         run_number:
-          type: integer
-          minimum: 0
-          description: Numeric CI/CD run identifier.
-          examples: [9491]
+          type: string
+          maxLength: 128
+          description: CI/CD run identifier. Format is tool-specific (e.g. a GitHub Actions run id, an ADO build number). Used for display and correlation only; never parsed.
+          examples: ["26602875882"]
         actor:
           type: string
           maxLength: 128
@@ -658,7 +658,7 @@ components:
         status: in-progress
         happened_at: "2026-05-28T10:14:02Z"
         run_url: https://github.com/acme/repo/actions/runs/9491
-        run_number: 9491
+        run_number: "9491"
         actor: alice
         ref: refs/heads/main
         sha: 3f2c1a9
@@ -678,7 +678,7 @@ components:
         status: success
         happened_at: "2026-05-28T09:42:17Z"
         run_url: https://github.com/acme/repo/actions/runs/9482
-        run_number: 9482
+        run_number: "9482"
         actor: alice
         ref: refs/heads/main
         sha: 3f2c1a9
@@ -699,7 +699,7 @@ components:
         status: in-progress
         happened_at: "2026-05-28T09:40:55Z"
         run_url: https://github.com/acme/repo/actions/runs/9482
-        run_number: 9482
+        run_number: "9482"
         actor: alice
         ref: refs/heads/main
         sha: 3f2c1a9

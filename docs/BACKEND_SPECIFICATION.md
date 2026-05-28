@@ -85,7 +85,7 @@ backend/
 | `status` | text | no | `in-progress` \| `success` \| `failure` |
 | `happened_at` | timestamptz | no | **emitter-supplied**; all read ordering uses this |
 | `run_url` | text | yes | ≤ 2048 |
-| `run_number` | integer | yes | ≥ 0 |
+| `run_number` | text | yes | ≤ 128 |
 | `actor` | text | yes | ≤ 128 |
 | `ref` | text | yes | ≤ 256, opaque |
 | `sha` | text | yes | ≤ 128, opaque |
