@@ -1316,10 +1316,44 @@
     line-height: 1.2;
     margin-bottom: 2px;
   }
+  /* version-row: version (left) + happened_at (right). Right-aligned via
+     margin-left:auto on the time chip. Overflows scroll horizontally inside
+     the row instead of pushing the card past its lane width. */
+  .vis-card .vc-ver-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .vis-card .vc-ver-row .vc-ver { margin-bottom: 0; }
+  .vis-card .vc-ver-row .fld-time { margin-left: auto; flex-shrink: 0; }
+
+  /* env-row: sha (left) + environment (right). `margin-top: auto` pushes
+     this row to the card's bottom edge past whatever the attrs grid renders.
+     If sha + env together exceed the card width, the row scrolls. */
+  .vis-card .vc-env-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 3px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .vis-card .vc-env-row .fld-sha { flex-shrink: 0; }
+  .vis-card .vc-env-row .vc-env { margin-left: auto; }
+
   /* environment PROMOTED: PRIMARY identifier within a lane (lane = component,
-     env distinguishes nodes). Inter semibold, cream/off-white, sits in the
-     bottom-right corner. `margin-top: auto` pushes it past the attrs grid
-     to the card's bottom edge regardless of how many attribute rows render. */
+     env distinguishes nodes). Inter semibold, cream/off-white. The
+     `.vc-env-row` wrapper handles bottom-anchoring; .vc-env itself only
+     carries its own typography + right-shrink behavior. */
   .vis-card .vc-env {
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 15px;
@@ -1330,9 +1364,6 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    align-self: flex-end;
-    margin-top: auto;
-    padding-top: 3px;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2251,6 +2282,8 @@ function fieldSpan(field, rec, fieldsOn, opts) {
 */
 function renderAttrs(rec, fieldsOn, opts) {
   opts = opts || {};
+  const skip = opts.skipFields || new Set();
+  const allowed = f => !skip.has(f);
   const frag = document.createDocumentFragment();
 
   // Mid-row container: ref+sha to the left, run_url+run_number to the right.
@@ -2262,51 +2295,74 @@ function renderAttrs(rec, fieldsOn, opts) {
   const br = document.createElement('span'); br.className = 'ta-br';
 
   // LEFT cluster: what changed (ref + sha). ref keeps its prominence.
-  if (opts.includeRefLine !== false) {
+  if (opts.includeRefLine !== false && allowed('ref')) {
     const refSpan = fieldSpan('ref', rec, fieldsOn);
     if (refSpan) bl.appendChild(refSpan);
   }
-  const shaSpan = fieldSpan('sha', rec, fieldsOn);
-  if (shaSpan) bl.appendChild(shaSpan);
+  if (allowed('sha')) {
+    const shaSpan = fieldSpan('sha', rec, fieldsOn);
+    if (shaSpan) bl.appendChild(shaSpan);
+  }
 
   // RIGHT cluster: where it ran (run_url + run_number).
-  const runUrl = fieldSpan('run_url', rec, fieldsOn);
-  if (runUrl) br.appendChild(runUrl);
-  const runNo = fieldSpan('run_number', rec, fieldsOn);
-  if (runNo) br.appendChild(runNo);
+  if (allowed('run_url')) {
+    const runUrl = fieldSpan('run_url', rec, fieldsOn);
+    if (runUrl) br.appendChild(runUrl);
+  }
+  if (allowed('run_number')) {
+    const runNo = fieldSpan('run_number', rec, fieldsOn);
+    if (runNo) br.appendChild(runNo);
+  }
 
   // If caller didn't pre-place actor+happened_at in the headline row,
   // they ride in the BR cluster as the "who/when" pair.
   if (!opts.skipMeta) {
-    const act = fieldSpan('actor', rec, fieldsOn);
-    if (act) br.appendChild(act);
-    const tim = fieldSpan('happened_at', rec, fieldsOn);
-    if (tim) br.appendChild(tim);
+    if (allowed('actor')) {
+      const act = fieldSpan('actor', rec, fieldsOn);
+      if (act) br.appendChild(act);
+    }
+    if (allowed('happened_at')) {
+      const tim = fieldSpan('happened_at', rec, fieldsOn);
+      if (tim) br.appendChild(tim);
+    }
   }
 
   if (bl.childElementCount) grid.appendChild(bl);
   if (br.childElementCount) grid.appendChild(br);
 
   // parents — full-width tail row (forced break via flex-basis:100%)
-  const parents = fieldSpan('parrent_deployments', rec, fieldsOn);
-  if (parents) {
-    const row = document.createElement('span');
-    row.className = 'ta-full';
-    row.appendChild(parents);
-    grid.appendChild(row);
+  let parents = null;
+  if (allowed('parrent_deployments')) {
+    parents = fieldSpan('parrent_deployments', rec, fieldsOn);
+    if (parents) {
+      const row = document.createElement('span');
+      row.className = 'ta-full';
+      row.appendChild(parents);
+      grid.appendChild(row);
+    }
   }
 
   if (bl.childElementCount || br.childElementCount || parents) {
     frag.appendChild(grid);
   }
 
-  // environment (vis-card PRIMARY identifier) — emitted LAST so margin-top:auto
-  // pushes it to the card's bottom-right corner past the attrs grid.
-  if (opts.environment && fieldsOn.has('environment')) {
-    const e = document.createElement('div');
-    e.className = 'vc-env';
-    e.textContent = opts.environment;
-    frag.appendChild(e);
+  // environment row (vis-card only — signalled by opts.environment being set).
+  // sha on the left, env on the right. Row is emitted if EITHER field would
+  // render so a picker toggle on one doesn't silently drop the other.
+  // margin-top:auto on the row pushes it to the card's bottom edge past
+  // whatever the attrs grid renders.
+  if (opts.environment !== undefined) {
+    const row = document.createElement('div');
+    row.className = 'vc-env-row';
+    const shaForEnv = fieldSpan('sha', rec, fieldsOn);
+    if (shaForEnv) row.appendChild(shaForEnv);
+    if (opts.environment && fieldsOn.has('environment')) {
+      const e = document.createElement('div');
+      e.className = 'vc-env';
+      e.textContent = opts.environment;
+      row.appendChild(e);
+    }
+    if (row.childElementCount) frag.appendChild(row);
   }
 
   return frag.childNodes.length ? frag : null;
@@ -3367,20 +3423,37 @@ function buildSwim() {
     card.style.left = (n.x / stageW * 100) + '%';
     card.style.top  = (n.y / H * 100) + '%';
 
-    // Build inner content driven by visFieldsOn — version headline first,
-    // then renderAttrs emits ref-line, environment subtitle, and mixed grid.
-    let html = '';
-    if (visFieldsOn.has('version') && n.version) {
-      html += `<div class="vc-ver">${n.version}</div>`;
-    }
-    card.innerHTML = html;
-
+    // Build inner content driven by visFieldsOn — version headline first
+    // (with happened_at riding on the same row, right-aligned), then
+    // renderAttrs emits the mixed grid. sha is rendered LAST on the env row
+    // (bottom-left) so the version-row and env-row become the two corners.
     const rec = {
       version: n.version, sha: n.sha, run_number: n.run_number, ref: n.ref,
       run_url: n.run_url, actor: n.actor, elapsed: n.elapsed,
       parents: n.parrent_deployments.length,
     };
-    const attrs = renderAttrs(rec, visFieldsOn, { environment: n.environment });
+
+    // Top row: version (left) + happened_at (right via margin-left:auto).
+    // Row is emitted if EITHER field is present so neither is silently dropped
+    // when the other is toggled off via the picker.
+    const verRow = document.createElement('div');
+    verRow.className = 'vc-ver-row';
+    if (visFieldsOn.has('version') && n.version) {
+      const ver = document.createElement('div');
+      ver.className = 'vc-ver';
+      ver.textContent = n.version;
+      verRow.appendChild(ver);
+    }
+    const tim = fieldSpan('happened_at', rec, visFieldsOn);
+    if (tim) verRow.appendChild(tim);
+    if (verRow.childElementCount) card.appendChild(verRow);
+
+    // Mid grid — same as before but with happened_at + sha excluded;
+    // they live on the version-row and env-row respectively.
+    const attrs = renderAttrs(rec, visFieldsOn, {
+      environment: n.environment,
+      skipFields: new Set(['happened_at', 'sha']),
+    });
     if (attrs) card.appendChild(attrs);
 
     card.addEventListener('click', () => selectVisNode(n.id));
