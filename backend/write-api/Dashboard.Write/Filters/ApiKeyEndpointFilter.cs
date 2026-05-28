@@ -12,13 +12,16 @@ internal sealed class ApiKeyEndpointFilter(IConfiguration configuration) : IEndp
 {
     private const string HeaderName = "X-Api-Key";
 
+    // Resolved once at construction; IConfiguration is loaded at startup and does not
+    // change at runtime, so reading the key per-request is unnecessary overhead.
+    private readonly string? _configuredKey = configuration["API_KEY"];
+
     public async ValueTask<object?> InvokeAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var configuredKey = configuration["API_KEY"];
         var providedKey = context.HttpContext.Request.Headers[HeaderName].FirstOrDefault();
 
-        if (string.IsNullOrEmpty(configuredKey) || providedKey != configuredKey)
+        if (string.IsNullOrEmpty(_configuredKey) || providedKey != _configuredKey)
         {
             return Results.Problem(
                 title: "Unauthorized.",
