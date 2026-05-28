@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Dashboard.Api.Extensions;
 using Dashboard.Shared.Data;
 using Dashboard.Write;
 using Microsoft.EntityFrameworkCore;
@@ -16,33 +17,7 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
 });
 
 // ── Problem details ───────────────────────────────────────────────────────────
-// Converts unhandled exceptions (including JsonException from unknown fields or
-// bad field types) to RFC 9457 application/problem+json responses.
-// NOTE: UseExceptionHandler() does NOT populate ctx.Exception — the exception
-// is only available via IExceptionHandlerFeature set on HttpContext.Features.
-builder.Services.AddProblemDetails(opts =>
-{
-    opts.CustomizeProblemDetails = ctx =>
-    {
-        var exception = ctx.HttpContext.Features
-            .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-
-        var jsonEx = exception as System.Text.Json.JsonException
-            ?? exception?.InnerException as System.Text.Json.JsonException;
-
-        if (jsonEx is null) return;
-
-        ctx.ProblemDetails.Status = StatusCodes.Status422UnprocessableEntity;
-        ctx.ProblemDetails.Title = "Unprocessable payload.";
-        ctx.ProblemDetails.Detail = "The request body is malformed or contains unknown fields.";
-        ctx.HttpContext.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
-
-        var pointer = jsonEx.Path is { } p
-            ? $"/{p.Replace(".", "/").TrimStart('$', '.')}"
-            : "/";
-        ctx.ProblemDetails.Extensions["errors"] = new[] { new { pointer, message = jsonEx.Message } };
-    };
-});
+builder.Services.AddDashboardProblemDetails();
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<DashboardDbContext>(options =>
