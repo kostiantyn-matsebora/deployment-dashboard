@@ -1,0 +1,3296 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deployment Dashboard — Minimal</title>
+  <script>
+    // Pre-paint theme resolve — avoids flash. Default light.
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t !== 'dark' && t !== 'light' && t !== 'auto') t = 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* -------------------------------------------------------------
+       Palette — restrained, status-only color. Tokenized for theme.
+       Hairline borders only — NO shadows, gradients, glows, or blur
+       in either light or dark. Minimalistic identity preserved.
+    ------------------------------------------------------------- */
+    :root {
+      --radius:     4px;
+      --gap-1:      4px;
+      --gap-2:      8px;
+      --gap-3:      12px;
+      --gap-4:      16px;
+      --gap-5:      24px;
+      --gap-6:      32px;
+      --gap-7:      48px;
+
+      --font:       'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    /* Light token set — current canonical aesthetic. */
+    :root[data-theme="light"] {
+      --ink:        #111418;
+      --ink-2:      #3a4048;
+      --ink-3:      #6b7280;
+      --ink-4:      #9aa1ab;
+      --line:       #e6e7ea;
+      --line-2:     #eef0f2;
+      --surface:    #ffffff;
+      --surface-2:  #fafafa;
+
+      --ok-bg:      #eaf5ee;
+      --ok-line:    #b9d8c4;
+      --ok-ink:     #1f6b3a;
+
+      --run-bg:     #fdf1e1;
+      --run-line:   #ecc88a;
+      --run-ink:    #8a5a12;
+
+      --fail-bg:    #fbe9e8;
+      --fail-line:  #e9b4b0;
+      --fail-ink:   #8a1a14;
+
+      --amber-hi:   #fff3c4;
+      --amber-line: #e0c46a;
+
+      --scrim-rgba: rgba(17, 20, 24, 0.18);
+    }
+
+    /* Dark token set — same minimalistic identity: hairline only, no shadows. */
+    :root[data-theme="dark"] {
+      --ink:        #e8e6e1;
+      --ink-2:      #c3c6cc;
+      --ink-3:      #9aa1ab;
+      --ink-4:      #6b7280;
+      --line:       #22262d;
+      --line-2:     #1a1e24;
+      --surface:    #111418;
+      --surface-2:  #161a20;
+
+      --ok-bg:      #182721;
+      --ok-line:    #2b4a3a;
+      --ok-ink:     #3ec88a;
+
+      --run-bg:     #2a2218;
+      --run-line:   #5a4520;
+      --run-ink:    #e8a430;
+
+      --fail-bg:    #2a1a1a;
+      --fail-line:  #5a2a2a;
+      --fail-ink:   #ed5e5e;
+
+      --amber-hi:   #3a2e10;
+      --amber-line: #f0c044;
+
+      --scrim-rgba: rgba(0, 0, 0, 0.55);
+    }
+
+    /* Auto theme — resolve via system preference. */
+    :root[data-theme="auto"] {
+      --ink:        #111418;
+      --ink-2:      #3a4048;
+      --ink-3:      #6b7280;
+      --ink-4:      #9aa1ab;
+      --line:       #e6e7ea;
+      --line-2:     #eef0f2;
+      --surface:    #ffffff;
+      --surface-2:  #fafafa;
+
+      --ok-bg:      #eaf5ee;
+      --ok-line:    #b9d8c4;
+      --ok-ink:     #1f6b3a;
+
+      --run-bg:     #fdf1e1;
+      --run-line:   #ecc88a;
+      --run-ink:    #8a5a12;
+
+      --fail-bg:    #fbe9e8;
+      --fail-line:  #e9b4b0;
+      --fail-ink:   #8a1a14;
+
+      --amber-hi:   #fff3c4;
+      --amber-line: #e0c46a;
+
+      --scrim-rgba: rgba(17, 20, 24, 0.18);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root[data-theme="auto"] {
+        --ink:        #e8e6e1;
+        --ink-2:      #c3c6cc;
+        --ink-3:      #9aa1ab;
+        --ink-4:      #6b7280;
+        --line:       #22262d;
+        --line-2:     #1a1e24;
+        --surface:    #111418;
+        --surface-2:  #161a20;
+
+        --ok-bg:      #182721;
+        --ok-line:    #2b4a3a;
+        --ok-ink:     #3ec88a;
+
+        --run-bg:     #2a2218;
+        --run-line:   #5a4520;
+        --run-ink:    #e8a430;
+
+        --fail-bg:    #2a1a1a;
+        --fail-line:  #5a2a2a;
+        --fail-ink:   #ed5e5e;
+
+        --amber-hi:   #3a2e10;
+        --amber-line: #f0c044;
+
+        --scrim-rgba: rgba(0, 0, 0, 0.55);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      height: 100%;
+    }
+
+    a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 2px; }
+    a:hover { text-decoration-color: var(--ink-3); }
+
+    /* -------- Page shell — fills viewport, no max-width cap.
+       height:100vh (not min-height) so matrix-wrap + vis-wrap can
+       flex-fill and clip vertically; scroll appears only when content
+       exceeds viewport. Dense packing at 1920×1080 fits all 8 services
+       without scroll. -------- */
+    .page {
+      width: 100%;
+      height: 100vh;
+      margin: 0;
+      padding: var(--gap-3) var(--gap-4) var(--gap-4);
+      display: flex;
+      flex-direction: column;
+    }
+
+    header.top {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-5);
+      padding-bottom: var(--gap-3);
+      border-bottom: 1px solid var(--line);
+      margin-bottom: var(--gap-4);
+      flex: 0 0 auto;
+    }
+    .brand {
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      font-size: 14px;
+      flex: 0 0 auto;
+    }
+    .brand .sub {
+      color: var(--ink-3);
+      font-weight: 400;
+      margin-left: var(--gap-2);
+    }
+    .top-spacer { flex: 1 1 auto; }
+
+    /* -------- Compact KPI strip (in header) -------- */
+    .kpi-strip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      flex: 0 0 auto;
+    }
+    .kpi-strip .kpi-mini {
+      padding: 4px 12px;
+      border-right: 1px solid var(--line);
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      line-height: 1.2;
+    }
+    .kpi-strip .kpi-mini:last-child { border-right: 0; }
+    .kpi-strip .kpi-mini .label {
+      color: var(--ink-3);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+    }
+    .kpi-strip .kpi-mini .val {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-strip .kpi-mini.alert .val { color: var(--fail-ink); }
+    .kpi-strip .kpi-mini.run .val   { color: var(--run-ink); }
+
+    /* -------- Theme switcher — 3-state segmented control -------- */
+    .theme-switch {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      height: 28px;
+      flex: 0 0 auto;
+    }
+    .theme-switch button {
+      appearance: none;
+      background: var(--surface);
+      border: 0;
+      border-right: 1px solid var(--line);
+      padding: 0 8px;
+      min-width: 28px;
+      font: 500 12px var(--font);
+      color: var(--ink-3);
+      cursor: pointer;
+      line-height: 1;
+    }
+    .theme-switch button:last-child { border-right: 0; }
+    .theme-switch button:hover { color: var(--ink); }
+    .theme-switch button[aria-pressed="true"] {
+      background: var(--surface-2);
+      color: var(--ink);
+      border-color: var(--ink-3);
+    }
+    .theme-switch button .glyph { font-size: 13px; line-height: 1; }
+
+    /* -------- Header icon-button cluster -------- */
+    .icon-cluster {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--gap-2);
+      flex: 0 0 auto;
+    }
+    .icon-btn {
+      appearance: none;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--ink-2);
+      cursor: pointer;
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font: 500 12px var(--font);
+      padding: 0;
+      position: relative;
+    }
+    .icon-btn:hover { color: var(--ink); border-color: var(--ink-3); }
+    .icon-btn[aria-pressed="true"] {
+      background: var(--surface-2);
+      color: var(--ink);
+      border-color: var(--ink-3);
+    }
+    .icon-btn .glyph {
+      font-size: 13px;
+      line-height: 1;
+      pointer-events: none;
+    }
+    /* SSE/live dot indicator (kept) */
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--ok-ink);
+      display: inline-block;
+    }
+    .live-dot.off { background: var(--ink-4); }
+
+    /* -------- Popover (anchored under header buttons) -------- */
+    .pop-anchor { position: relative; display: inline-flex; }
+    .popover {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 240px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--gap-3) var(--gap-4);
+      z-index: 40;
+      display: none;
+    }
+    .popover.open { display: block; }
+    .popover h3 {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      font-weight: 500;
+      margin: 0 0 var(--gap-2);
+    }
+    .popover .hint {
+      font-size: 11.5px;
+      color: var(--ink-3);
+      margin: 0 0 var(--gap-2);
+      line-height: 1.4;
+    }
+    .popover ul { list-style: none; margin: 0; padding: 0; }
+    .popover li {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-2);
+      padding: 4px 0;
+      border-bottom: 1px solid var(--line-2);
+      cursor: pointer;
+    }
+    .popover li:last-child { border-bottom: 0; }
+    .popover li input { accent-color: var(--ink); }
+    .popover li .lbl { color: var(--ink); }
+    .popover li .src {
+      margin-left: auto;
+      color: var(--ink-4);
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+    .popover .sect {
+      margin-top: var(--gap-3);
+      padding-top: var(--gap-3);
+      border-top: 1px solid var(--line);
+    }
+    .popover input[type="text"] {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 5px 8px;
+      font: inherit;
+      color: var(--ink);
+      background: var(--surface);
+      width: 100%;
+    }
+    .popover input[type="text"]:focus { outline: none; border-color: var(--ink-3); }
+    .popover .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--gap-2);
+      color: var(--ink-2);
+      cursor: pointer;
+      user-select: none;
+      margin-top: var(--gap-2);
+    }
+    .popover .toggle input { accent-color: var(--ink); }
+    .popover select {
+      appearance: none;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 5px 8px;
+      font: inherit;
+      color: var(--ink);
+      background: var(--surface);
+    }
+    .popover select:focus { outline: none; border-color: var(--ink-3); }
+    .popover select:disabled {
+      color: var(--ink-4);
+      background: var(--surface-2);
+      cursor: not-allowed;
+    }
+    .popover .tw-hint {
+      font-size: 11px;
+      color: var(--ink-3);
+      margin: var(--gap-2) 0 0;
+      line-height: 1.4;
+    }
+    .popover .legend {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: var(--ink-3);
+      font-size: 11.5px;
+    }
+    .popover .legend .swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: -1px;
+      border: 1px solid var(--line);
+    }
+    .popover .legend .ok  { background: var(--ok-bg);   border-color: var(--ok-line); }
+    .popover .legend .run { background: var(--run-bg);  border-color: var(--run-line); }
+    .popover .legend .fl  { background: var(--fail-bg); border-color: var(--fail-line); }
+
+    /* -------- Segmented nav -------- */
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .seg button {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      padding: 6px 14px;
+      font: inherit;
+      color: var(--ink-2);
+      cursor: pointer;
+      border-right: 1px solid var(--line);
+    }
+    .seg button:last-child { border-right: 0; }
+    .seg button[aria-pressed="true"] {
+      background: var(--surface-2);
+      color: var(--ink);
+      font-weight: 500;
+    }
+    .seg button:hover { color: var(--ink); }
+
+    /* -------- (KPI bar removed — folded into header as .kpi-strip) -------- */
+    /* -------- Inline filter (matrix-only, header) -------- */
+    .hdr-filter {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--gap-2);
+      flex: 0 1 auto;
+      min-width: 0;
+    }
+    .hdr-filter[hidden] { display: none; }
+    .hdr-filter-input {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      font: inherit;
+      font-size: 12px;
+      color: var(--ink);
+      background: var(--surface);
+      width: 200px;
+      min-width: 140px;
+      height: 28px;
+      line-height: 1.2;
+    }
+    .hdr-filter-input::placeholder { color: var(--ink-4); }
+    .hdr-filter-input:focus { outline: none; border-color: var(--ink-3); }
+    .hdr-filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 10px;
+      height: 28px;
+      font-size: 12px;
+      color: var(--ink-2);
+      background: var(--surface);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .hdr-filter-pill input {
+      accent-color: var(--ink);
+      margin: 0;
+    }
+    .hdr-filter-pill:hover { border-color: var(--ink-3); color: var(--ink); }
+    .hdr-filter-pill.on {
+      color: var(--fail-ink);
+      border-color: var(--fail-line);
+    }
+
+    /* =============================================================
+       Matrix — table-based, content-driven.
+       Service column sticky at left (180px); env columns size to widest
+       cell content via table-layout: auto. Horizontal scroll appears in
+       .matrix-wrap when total width exceeds viewport (Bug-3 fix).
+       Versions render on one line, never truncated (Bug-3 fix).
+       Row separation strengthened via hairline divider + service-col left
+       accent (Bug-4 fix). Container + last row have explicit bottom border
+       so the last row never hangs in empty space (Bug-5 fix).
+    ============================================================= */
+    .matrix-wrap {
+      border: 1px solid var(--line);   /* full hairline ring — includes
+                                          bottom edge so last row reads
+                                          as enclosed (Bug-5) */
+      border-radius: var(--radius);
+      overflow: auto;                  /* both axes — horizontal scroll
+                                          when content > viewport (Bug-3) */
+      background: var(--surface);
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 0;
+    }
+    table.matrix {
+      width: max-content;              /* grow with content; min still fills
+                                          via min-width below */
+      min-width: 100%;
+      border-collapse: separate;       /* enables row gap via border-spacing
+                                          + keeps sticky service-col bg
+                                          clean (Bug-4 / Bug-3) */
+      border-spacing: 0;
+      table-layout: auto;              /* env columns size to widest cell
+                                          content (Bug-3) */
+    }
+    table.matrix th, table.matrix td {
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      padding: 0;
+    }
+    table.matrix th:last-child, table.matrix td:last-child { border-right: 0; }
+    /* Bug-5: keep bottom hairline on the last row's td so it reads as
+       closed, not floating. (Container also has border-bottom.) */
+    table.matrix tr:last-child td { border-bottom: 1px solid var(--line); }
+
+    table.matrix thead th {
+      background: var(--surface-2);
+      color: var(--ink-3);
+      font-weight: 500;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    table.matrix thead th.row-head {
+      width: 180px;
+      min-width: 180px;
+      /* Service column header sticky at left during horizontal scroll
+         so service names remain visible (Bug-3). */
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: var(--surface-2);
+    }
+    /* Env columns: auto-width with a sane minimum so empty/short cells
+       don't collapse below readable size. Content drives growth. */
+    table.matrix thead th:not(.row-head) {
+      width: auto;
+      min-width: 140px;
+    }
+
+    table.matrix td.row-head {
+      background: var(--surface-2);
+      color: var(--ink);
+      font-weight: 500;
+      padding: 6px 12px 6px 14px;
+      width: 180px;
+      min-width: 180px;
+      white-space: nowrap;
+      /* Service column body sticky at left (Bug-3). */
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      /* Left accent bar — brand-consistent, hairline-token color, anchors
+         the row visually (Bug-4). */
+      box-shadow: inset 3px 0 0 0 var(--ink-4);
+    }
+    /* Bug-4: stronger inter-row separation via a slightly heavier hairline.
+       Uses --line-2 (lighter) below + a doubled hairline to make the
+       service-row boundary obviously different from tile-internal lines. */
+    table.matrix tbody tr td {
+      border-bottom: 2px solid var(--line);
+    }
+    table.matrix tbody tr:last-child td {
+      border-bottom: 1px solid var(--line);
+    }
+    /* Tile shell — compact; sizes to content. Lower bound just covers
+       the 6-box-state chrome (spinner / warn badge / corner row). */
+    .tile {
+      min-height: 40px;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      position: relative;
+    }
+    .tile.empty {
+      min-height: 40px;
+      background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 6px,
+        var(--line-2) 6px,
+        var(--line-2) 7px
+      );
+      cursor: default;
+    }
+    .tile-section {
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      justify-content: flex-start;
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      height: auto;
+      /* Bug-3: must be visible so a nowrap version (e.g. 50 chars) is
+         not clipped at the tile/cell edge — the matrix-wrap handles
+         scroll when total width exceeds viewport. */
+      overflow: visible;
+    }
+    /* Reserve right-side gutter so absolutely-positioned status corner
+       (spinner / ⚠ prev-failed / ✕ failed mark) never overlaps the
+       headline / ref / mid-line content underneath. */
+    .tile-section:has(.status-corner) { padding-right: 108px; }
+    .tile-section .status-corner {
+      position: absolute;
+      top: 5px;
+      right: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 2;
+      max-width: 100px;
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+    }
+    .tile-section.bottom {
+      border-top: 1px dashed var(--line);
+      background: var(--surface);
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      min-height: 0;
+    }
+
+    /* -------- Positional tile body — mixed treatment by field role --------
+       The tile body is a small grid; fields render at fixed roles:
+         · ver-head  : large headline (top, full row)
+         · ref-line  : ⎇ branch under headline
+         · mid-line  : ↗ run · #4218 (inline glyph-prefixed)
+         · parents   : ⟵ N parents (inline)
+         · corner-bl : 7d3e2a1 (mono sha, bottom-left)
+         · corner-br : @actor · 3h ago (bottom-right)
+       Reader learns the mapping by position, not by label. -------- */
+    .tile-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 0 0 auto;
+      min-height: 0;
+      height: auto;
+    }
+    /* Packed row — two-column flex with wrap. Left chunk + right chunk
+       sit on one line when there's room, wrap to a second line when the
+       row is full. Each chunk is itself a wrap-capable token-flow. */
+    .tile-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 10px;
+      min-width: 0;
+    }
+    .tile-row .row-l,
+    .tile-row .row-r {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 8px;
+      min-width: 0;
+    }
+    .tile-row .row-l { flex: 1 1 auto; }
+    .tile-row .row-r { flex: 0 1 auto; margin-left: auto; }
+    .ver-head {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+      cursor: pointer;
+      padding: 1px 4px;
+      margin: -1px -4px;
+      border-radius: 3px;
+      transition: background-color 80ms linear;
+      align-self: flex-start;
+      /* Bug-3: version renders on ONE line, NO ellipsis, NO clamp, NO
+         wrap. Tile (and matrix column) grow to fit; matrix-wrap supplies
+         horizontal scroll when total width exceeds viewport. */
+      white-space: nowrap;
+      overflow: visible;
+      max-width: none;
+    }
+    /* Matrix tile context: same one-line rule as the base — version
+       drives column width; clamp/ellipsis removed. */
+    .tile .ver-head {
+      font-size: 13px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: visible;
+      word-break: normal;
+      overflow-wrap: normal;
+    }
+    .ver-head.hi {
+      background: var(--amber-hi);
+      box-shadow: inset 0 0 0 1px var(--amber-line);
+    }
+    .ref-line {
+      font-size: 11px;
+      color: var(--ink-2);
+      font-family: var(--font-mono);
+      letter-spacing: -0.01em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+      min-width: 0;
+    }
+    /* Inline mid-line tokens — now live inside .tile-row chunks and flow
+       horizontally with siblings instead of consuming a dedicated row. */
+    .mid-line {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      font-size: 11px;
+      color: var(--ink-2);
+      line-height: 1.35;
+      align-items: baseline;
+    }
+    .mid-line a {
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .mid-line a:hover { text-decoration: underline; text-decoration-color: var(--ink-3); }
+    .mid-line .runnum {
+      font-variant-numeric: tabular-nums;
+    }
+    .mid-line .parents {
+      color: var(--ink-3);
+    }
+    /* sha — bottom-left identifier, now inline inside .row-l */
+    .corner-bl {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-2);
+      letter-spacing: -0.01em;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* actor·when — inline cluster (top-right or wrap-down) */
+    .corner-br {
+      font-size: 11px;
+      color: var(--ink-3);
+      display: inline-flex;
+      gap: 4px;
+      align-items: baseline;
+      flex-wrap: nowrap;
+      justify-content: flex-end;
+      white-space: nowrap;
+    }
+    .corner-br .actor { color: var(--ink-2); }
+    .corner-br .when  { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+    .corner-br .sep   { color: var(--ink-4); }
+
+    /* Bottom (split-tile) single-identifier — same treatment as its role.
+       Constrained to single-line ellipsis to keep split-tile geometry tight. */
+    .bottom-id {
+      display: block;
+      max-width: 100%;
+      font-size: 13px;
+      color: var(--ink);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bottom-id.is-version {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+      /* Bug-3: version is never truncated, even in the split-tile bottom
+         "last ok" section. Inherits white-space: nowrap from .bottom-id;
+         override max-width + overflow so the full text renders. */
+      max-width: none;
+      overflow: visible;
+      text-overflow: clip;
+    }
+    .bottom-id.is-sha,
+    .bottom-id.is-ref {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: -0.01em;
+    }
+    .bottom-id.is-run_number {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+    }
+
+    /* Status washes */
+    .wash-ok   { background: var(--ok-bg); }
+    .wash-run  { background: var(--run-bg); }
+    .wash-fail { background: var(--fail-bg); }
+
+    /* Version pill (un-styled — just a clickable span) */
+    .ver {
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      color: var(--ink);
+      cursor: pointer;
+      padding: 1px 4px;
+      margin: -1px -4px;
+      border-radius: 3px;
+      transition: background-color 80ms linear;
+    }
+    .ver.hi {
+      background: var(--amber-hi);
+      box-shadow: inset 0 0 0 1px var(--amber-line);
+    }
+    .tile.hi-tile {
+      box-shadow: inset 0 0 0 1px var(--amber-line);
+    }
+
+    .meta {
+      font-size: 11.5px;
+      color: var(--ink-3);
+      display: flex;
+      gap: var(--gap-2);
+      align-items: center;
+    }
+    .meta .dot { width: 2px; height: 2px; background: var(--ink-4); border-radius: 50%; }
+
+    .top-row {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-2);
+    }
+
+    /* Spinner — thin rotating arc, no glow */
+    .spin {
+      width: 12px;
+      height: 12px;
+      border: 1.5px solid var(--run-line);
+      border-top-color: var(--run-ink);
+      border-radius: 50%;
+      animation: spin 1.1s linear infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Failed indicator — a small square, no fill */
+    .x {
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid var(--fail-ink);
+      transform: rotate(45deg);
+      flex: 0 0 auto;
+    }
+
+    /* Prev-failed warning badge */
+    .warn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--fail-ink);
+      border: 1px solid var(--fail-line);
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: var(--surface);
+    }
+    .warn::before {
+      content: "⚠";
+      font-size: 10px;
+    }
+
+    .bottom-label {
+      font-size: 11px;
+      color: var(--ink-3);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    /* =============================================================
+       History Drawer
+    ============================================================= */
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background: var(--scrim-rgba);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms linear;
+      z-index: 20;
+    }
+    .scrim.open { opacity: 1; pointer-events: auto; }
+
+    aside.drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 440px;
+      background: var(--surface);
+      border-left: 1px solid var(--line);
+      transform: translateX(100%);
+      transition: transform 140ms ease-out;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+    }
+    aside.drawer.open { transform: translateX(0); }
+
+    .drawer-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: var(--gap-4) var(--gap-5);
+      border-bottom: 1px solid var(--line);
+    }
+    .drawer-head h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .drawer-head .ctx {
+      color: var(--ink-3);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .drawer-close {
+      appearance: none;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--ink-2);
+      cursor: pointer;
+      width: 26px;
+      height: 26px;
+      font: inherit;
+      line-height: 1;
+    }
+    .drawer-close:hover { color: var(--ink); border-color: var(--ink-3); }
+
+    .drawer-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .hist {
+      padding: var(--gap-3) var(--gap-5);
+      border-bottom: 1px solid var(--line);
+    }
+    .hist-head {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-2);
+      margin-bottom: 6px;
+    }
+    .hist-head .st {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+    .hist-head .st.ok  { background: var(--ok-ink); }
+    .hist-head .st.run { background: var(--run-ink); }
+    .hist-head .st.fl  { background: var(--fail-ink); }
+    .hist-head .v {
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+    }
+    .hist-head .chip {
+      font-size: 10.5px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      border: 1px solid var(--line);
+    }
+    .hist-head .chip.ok   { background: var(--ok-bg);   border-color: var(--ok-line);  color: var(--ok-ink); }
+    .hist-head .chip.run  { background: var(--run-bg);  border-color: var(--run-line); color: var(--run-ink); }
+    .hist-head .chip.fail { background: var(--fail-bg); border-color: var(--fail-line);color: var(--fail-ink); }
+    .hist-head .id {
+      margin-left: auto;
+      color: var(--ink-3);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .hist dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      row-gap: 4px;
+      column-gap: var(--gap-3);
+      font-size: 11.5px;
+    }
+    .hist dt {
+      color: var(--ink-3);
+      font-size: 11px;
+      min-width: 0;
+      overflow-wrap: break-word;
+    }
+    .hist dd {
+      margin: 0;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      word-break: break-word;
+    }
+    .hist dd code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-2);
+    }
+    .hist dd .abs {
+      display: block;
+      color: var(--ink-3);
+      font-size: 10.5px;
+      margin-top: 1px;
+    }
+    .hist dd a { color: var(--ink); }
+
+    /* =============================================================
+       Visualisation — vis-wrap fills viewport vertically; SVG scrolls
+       only when total height exceeds container.
+    ============================================================= */
+    .vis-shell {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: var(--gap-3);
+      align-items: stretch;
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 0;
+    }
+    .vis-wrap {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: auto;           /* both axes — horizontal scroll appears
+                                   when long-version cards extend canvas
+                                   past viewport width */
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .vis-head {
+      padding: var(--gap-3) var(--gap-4);
+      border-bottom: 1px solid var(--line);
+      color: var(--ink-3);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .vis-head .axis {
+      font-variant-numeric: tabular-nums;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--ink-4);
+      font-size: 11px;
+    }
+    /* width set explicitly from JS to canvas width so SVG can extend past
+       the viewport when a long-version card pushes total width out. The
+       parent .vis-wrap provides overflow-x: auto. */
+    .vis-canvas { height: auto; flex: 0 0 auto; display: block; }
+
+    .picker {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--gap-4);
+      background: var(--surface);
+    }
+    .picker h3 {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      font-weight: 500;
+      margin: 0 0 var(--gap-3);
+    }
+    .picker .hint {
+      font-size: 11.5px;
+      color: var(--ink-3);
+      margin-bottom: var(--gap-3);
+      line-height: 1.4;
+    }
+    .picker ul { list-style: none; margin: 0; padding: 0; }
+    .picker li {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-2);
+      padding: 6px 0;
+      border-bottom: 1px solid var(--line-2);
+      cursor: pointer;
+    }
+    .picker li:last-child { border-bottom: 0; }
+    .picker li input { accent-color: var(--ink); }
+    .picker li .lbl { color: var(--ink); }
+    .picker li .src {
+      margin-left: auto;
+      color: var(--ink-4);
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+
+    /* Time-window sub-control */
+    .picker .tw {
+      margin-top: var(--gap-4);
+      padding-top: var(--gap-3);
+      border-top: 1px solid var(--line);
+    }
+    .picker .tw h3 { margin-bottom: var(--gap-2); }
+    .picker .tw select {
+      appearance: none;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 5px 8px;
+      font: inherit;
+      color: var(--ink);
+      background: var(--surface);
+    }
+    .picker .tw select:focus { outline: none; border-color: var(--ink-3); }
+    .picker .tw select:disabled {
+      color: var(--ink-4);
+      background: var(--surface-2);
+      cursor: not-allowed;
+    }
+    .picker .tw-hint {
+      font-size: 11px;
+      color: var(--ink-3);
+      margin: var(--gap-2) 0 0;
+      line-height: 1.4;
+    }
+
+    /* Inspector panel (Visualisation) — persistent right rail */
+    .inspector {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: var(--gap-4);
+      overflow: auto;
+    }
+    .inspector h3 {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      font-weight: 500;
+      margin: 0 0 var(--gap-2);
+    }
+    .inspector .ctx {
+      font-size: 12px;
+      color: var(--ink-2);
+      margin-bottom: var(--gap-3);
+      padding-bottom: var(--gap-3);
+      border-bottom: 1px solid var(--line-2);
+    }
+    .inspector .ctx strong {
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .inspector dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      row-gap: 6px;
+      column-gap: var(--gap-3);
+      font-size: 11.5px;
+    }
+    .inspector dt {
+      color: var(--ink-3);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      min-width: 0;
+      overflow-wrap: break-word;
+    }
+    .inspector dd {
+      margin: 0;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      word-break: break-word;
+    }
+    .inspector dd code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-2);
+    }
+    .inspector dd .chip {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      border: 1px solid var(--line);
+    }
+    .inspector dd .chip.ok   { background: var(--ok-bg);   border-color: var(--ok-line);  color: var(--ok-ink); }
+    .inspector dd .chip.run  { background: var(--run-bg);  border-color: var(--run-line); color: var(--run-ink); }
+    .inspector dd .chip.fail { background: var(--fail-bg); border-color: var(--fail-line);color: var(--fail-ink); }
+    .inspector dd .abs {
+      display: block;
+      color: var(--ink-3);
+      font-size: 10.5px;
+      margin-top: 1px;
+    }
+
+    /* Selected-node ring in SVG */
+    .vis-canvas .node-sel {
+      fill: none;
+      stroke: var(--ink-2);
+      stroke-width: 1.5;
+    }
+    .vis-canvas g.node { cursor: pointer; }
+
+    /* Visualisation node text — role-differentiated per field.
+       env is PRIMARY (bottom-right, Inter semibold ~14px, primary ink).
+       version is SECONDARY (top-left, mono small, muted ink). */
+    .vis-canvas .nx-env {
+      font: 600 14px var(--font);
+      fill: var(--ink);
+      letter-spacing: -0.005em;
+    }
+    .vis-canvas .nx-ver {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 400;
+      fill: var(--ink-3);
+      letter-spacing: -0.01em;
+    }
+    .vis-canvas .nx-ref {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      fill: var(--ink-2);
+    }
+    .vis-canvas .nx-sha {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      fill: var(--ink-2);
+    }
+    .vis-canvas .nx-runnum,
+    .vis-canvas .nx-runurl,
+    .vis-canvas .nx-parents {
+      font: 400 9.5px var(--font);
+      fill: var(--ink-2);
+    }
+    .vis-canvas .nx-actor {
+      font: 400 9.5px var(--font);
+      fill: var(--ink-2);
+    }
+    .vis-canvas .nx-when {
+      font: 400 9.5px var(--font);
+      fill: var(--ink-3);
+    }
+
+    /* Hide whichever view is inactive */
+    .view { display: none; flex: 1 1 auto; min-height: 0; }
+    .view.active { display: flex; flex-direction: column; }
+
+    /* Visualisation SVG node/edge presentation */
+    .vis-canvas .lane-bg { fill: var(--surface-2); }
+    .vis-canvas .lane-divider { stroke: var(--line); stroke-width: 1; }
+    .vis-canvas .lane-label {
+      font: 500 12px var(--font);
+      fill: var(--ink);
+    }
+    .vis-canvas .lane-sub {
+      font: 400 11px var(--font);
+      fill: var(--ink-3);
+    }
+    .vis-canvas .edge {
+      fill: none;
+      stroke: var(--ink-4);
+      stroke-width: 1;
+    }
+    .vis-canvas .edge.cross {
+      stroke: var(--ink-3);
+      stroke-dasharray: 3 3;
+    }
+    /* Node card — white surface + hairline border + thin colored left stripe by status */
+    .vis-canvas .node-box {
+      fill: var(--surface);
+      stroke: var(--line);
+      stroke-width: 1;
+    }
+    .vis-canvas .node-stripe { stroke-width: 0; }
+    .vis-canvas .node-stripe.ok   { fill: var(--ok-line); }
+    .vis-canvas .node-stripe.run  { fill: var(--run-line); }
+    .vis-canvas .node-stripe.fail { fill: var(--fail-line); }
+    .vis-canvas .node-text {
+      font: 400 8.5px var(--font);
+      fill: var(--ink-2);
+    }
+    .vis-canvas .node-text.k {
+      fill: var(--ink-4);
+      font-size: 8px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .vis-canvas .node-text.v-strong {
+      fill: var(--ink);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .vis-canvas .node-text.mono {
+      font-family: var(--font-mono);
+      font-size: 8px;
+      fill: var(--ink-2);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <header class="top">
+      <div class="brand">
+        Deployment Dashboard
+        <span class="sub">minimal · proposal</span>
+      </div>
+      <nav class="seg" role="tablist" aria-label="View">
+        <button id="tab-matrix" aria-pressed="true">Matrix</button>
+        <button id="tab-vis"    aria-pressed="false">Visualisation</button>
+      </nav>
+
+      <div class="top-spacer"></div>
+
+      <!-- Compact KPI strip -->
+      <div class="kpi-strip" aria-label="Summary">
+        <span class="kpi-mini"><span class="label">svc</span><span class="val" id="kpi-svc">8</span></span>
+        <span class="kpi-mini"><span class="label">env</span><span class="val" id="kpi-env">5</span></span>
+        <span class="kpi-mini run"><span class="label">running</span><span class="val" id="kpi-run">5</span></span>
+        <span class="kpi-mini alert"><span class="label">failed</span><span class="val" id="kpi-fail">1</span></span>
+      </div>
+
+      <!-- Inline filter (matrix-only) -->
+      <div class="hdr-filter" id="hdr-filter" aria-label="Filter">
+        <input id="flt-text" class="hdr-filter-input" type="text" placeholder="filter services…" autocomplete="off" aria-label="Filter services" />
+        <label class="hdr-filter-pill" id="flt-fail-pill">
+          <input id="flt-fail" type="checkbox" />
+          <span>failures only</span>
+        </label>
+      </div>
+
+      <!-- Icon cluster: fields / correlation / theme / live -->
+      <div class="icon-cluster">
+        <!-- Theme switcher: dark / light / auto -->
+        <div class="theme-switch" id="theme-switch" role="group" aria-label="Theme">
+          <button id="th-dark"  data-theme="dark"  aria-pressed="false" title="Dark"  aria-label="Dark theme"><span class="glyph" aria-hidden="true">☾</span></button>
+          <button id="th-light" data-theme="light" aria-pressed="true"  title="Light" aria-label="Light theme"><span class="glyph" aria-hidden="true">☼</span></button>
+          <button id="th-auto"  data-theme="auto"  aria-pressed="false" title="Auto"  aria-label="Auto theme">Auto</button>
+        </div>
+
+        <!-- Vis-only: correlation + time-window -->
+        <span class="pop-anchor" data-pop-anchor="pop-corr" hidden>
+          <button class="icon-btn" id="btn-corr" data-pop="pop-corr" aria-haspopup="true" aria-expanded="false" aria-label="Correlation predicate" title="Correlation">
+            <span class="glyph">↹</span>
+          </button>
+          <div class="popover" id="pop-corr" role="dialog" aria-label="Correlation">
+            <h3>Correlation</h3>
+            <p class="hint">Pick the predicate used to consolidate deployment events into one graph. Re-evaluated client-side.</p>
+            <ul>
+              <li><input type="radio" name="pred" id="p-sha" /><label class="lbl" for="p-sha">same sha</label><span class="src">sha</span></li>
+              <li><input type="radio" name="pred" id="p-run" /><label class="lbl" for="p-run">same run_number</label><span class="src">run_number</span></li>
+              <li><input type="radio" name="pred" id="p-actor" /><label class="lbl" for="p-actor">same actor</label><span class="src">actor</span></li>
+              <li><input type="radio" name="pred" id="p-ver" /><label class="lbl" for="p-ver">same version</label><span class="src">version</span></li>
+              <li><input type="radio" name="pred" id="p-parent" checked /><label class="lbl" for="p-parent">explicit parent</label><span class="src">parrent_deployments</span></li>
+            </ul>
+            <div class="sect">
+              <h3>Time window</h3>
+              <select id="p-tw" disabled>
+                <option value="5m">5 min</option>
+                <option value="1h" selected>1 hr</option>
+                <option value="1d">1 day</option>
+                <option value="7d">7 days</option>
+              </select>
+              <p class="tw-hint">time window bounds parent search for sha/run_number/actor/version; not applicable for explicit parent</p>
+            </div>
+          </div>
+        </span>
+
+        <!-- Fields picker (view-specific) -->
+        <span class="pop-anchor" data-pop-anchor="pop-fields">
+          <button class="icon-btn" id="btn-fields" data-pop="pop-fields" aria-haspopup="true" aria-expanded="false" aria-label="Visible fields" title="Fields">
+            <span class="glyph">⊞</span>
+          </button>
+          <div class="popover" id="pop-fields" role="dialog" aria-label="Visible fields">
+            <h3>Visible fields</h3>
+            <p class="hint">Toggle attributes rendered inside each deployment element.</p>
+            <ul id="fields-list">
+              <!-- populated dynamically per active view -->
+            </ul>
+          </div>
+        </span>
+
+        <!-- Live / SSE indicator -->
+        <button class="icon-btn" id="btn-live" aria-pressed="true" aria-label="Live updates active (SSE)" title="Live · SSE">
+          <span class="live-dot" aria-hidden="true"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ===================== MATRIX VIEW ===================== -->
+    <section class="view active" id="view-matrix" role="tabpanel" aria-labelledby="tab-matrix">
+      <div class="matrix-wrap">
+        <table class="matrix" id="matrix">
+          <thead>
+            <tr>
+              <th class="row-head">Service</th>
+              <th>dev</th>
+              <th>staging</th>
+              <th>qa</th>
+              <th>preprod</th>
+              <th>prod</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- ROW 1 — payments-api -->
+            <tr data-svc="payments-api">
+              <td class="row-head">payments-api</td>
+              <!-- dev: S1 Success -->
+              <td>
+                <!-- S1 -->
+                <div class="tile" data-slot="payments-api/dev">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="2.14.0">2.14.0</span></div>
+                    <div class="meta"><span>alice</span><span class="dot"></span><span>12m ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: S2 Running + Last Successful -->
+              <td>
+                <!-- S2 -->
+                <div class="tile" data-slot="payments-api/staging">
+                  <div class="tile-section wash-run">
+                    <div class="top-row"><span class="spin" aria-hidden="true"></span><span class="ver" data-ver="2.14.0">2.14.0</span></div>
+                  </div>
+                  <div class="tile-section bottom">
+                    <div class="top-row"><span class="bottom-label">last ok</span><span class="ver" data-ver="2.13.4">2.13.4</span></div>
+                    <div class="meta"><span>bob</span><span class="dot"></span><span>4h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- qa: S1 Success -->
+              <td>
+                <div class="tile" data-slot="payments-api/qa">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="2.13.4">2.13.4</span></div>
+                    <div class="meta"><span>bob</span><span class="dot"></span><span>1d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- preprod: S3 Running + Failed + Last Successful -->
+              <td>
+                <!-- S3 -->
+                <div class="tile" data-slot="payments-api/preprod">
+                  <div class="tile-section wash-run">
+                    <div class="top-row">
+                      <span class="spin" aria-hidden="true"></span>
+                      <span class="warn">prev. failed</span>
+                    </div>
+                  </div>
+                  <div class="tile-section bottom">
+                    <div class="top-row"><span class="bottom-label">last ok</span><span class="ver" data-ver="2.12.9">2.12.9</span></div>
+                    <div class="meta"><span>carol</span><span class="dot"></span><span>3d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- prod: S1 Success -->
+              <td>
+                <div class="tile" data-slot="payments-api/prod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="2.12.9">2.12.9</span></div>
+                    <div class="meta"><span>carol</span><span class="dot"></span><span>5d ago</span></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- ROW 2 — notification-worker -->
+            <tr data-svc="notification-worker">
+              <td class="row-head">notification-worker</td>
+              <!-- dev: S4 Failed + Last Successful -->
+              <td>
+                <!-- S4 -->
+                <div class="tile" data-slot="notification-worker/dev">
+                  <div class="tile-section wash-fail">
+                    <div class="top-row"><span class="x" aria-hidden="true"></span><span class="ver" data-ver="0.9.1">0.9.1</span></div>
+                    <div class="meta"><span>dave</span><span class="dot"></span><span>22m ago</span></div>
+                  </div>
+                  <div class="tile-section bottom">
+                    <div class="top-row"><span class="bottom-label">last ok</span><span class="ver" data-ver="0.9.0">0.9.0</span></div>
+                    <div class="meta"><span>dave</span><span class="dot"></span><span>3h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: S1 Success -->
+              <td>
+                <div class="tile" data-slot="notification-worker/staging">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="0.9.0">0.9.0</span></div>
+                    <div class="meta"><span>dave</span><span class="dot"></span><span>6h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- qa: empty -->
+              <td><div class="tile empty" aria-label="no deployments"></div></td>
+              <!-- preprod: S1 Success -->
+              <td>
+                <div class="tile" data-slot="notification-worker/preprod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="0.8.7">0.8.7</span></div>
+                    <div class="meta"><span>erin</span><span class="dot"></span><span>2d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- prod: S1 Success -->
+              <td>
+                <div class="tile" data-slot="notification-worker/prod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="0.8.7">0.8.7</span></div>
+                    <div class="meta"><span>erin</span><span class="dot"></span><span>4d ago</span></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- ROW 3 — auth-bff -->
+            <tr data-svc="auth-bff">
+              <td class="row-head">auth-bff</td>
+              <!-- dev: S5 Running (no prior) — full orange, version only -->
+              <td>
+                <!-- S5 -->
+                <div class="tile" data-slot="auth-bff/dev">
+                  <div class="tile-section wash-run">
+                    <div class="top-row"><span class="spin" aria-hidden="true"></span><span class="ver" data-ver="1.0.0-rc1">1.0.0-rc1</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: empty -->
+              <td><div class="tile empty"></div></td>
+              <!-- qa: empty -->
+              <td><div class="tile empty"></div></td>
+              <!-- preprod: empty -->
+              <td><div class="tile empty"></div></td>
+              <!-- prod: empty -->
+              <td><div class="tile empty"></div></td>
+            </tr>
+
+            <!-- ROW 4 — order-svc -->
+            <tr data-svc="order-svc">
+              <td class="row-head">order-svc</td>
+              <!-- dev: S1 -->
+              <td>
+                <div class="tile" data-slot="order-svc/dev">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="4.2.1">4.2.1</span></div>
+                    <div class="meta"><span>frank</span><span class="dot"></span><span>30m ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: S1 -->
+              <td>
+                <div class="tile" data-slot="order-svc/staging">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="4.2.0">4.2.0</span></div>
+                    <div class="meta"><span>frank</span><span class="dot"></span><span>5h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- qa: S2 -->
+              <td>
+                <div class="tile" data-slot="order-svc/qa">
+                  <div class="tile-section wash-run">
+                    <div class="top-row"><span class="spin" aria-hidden="true"></span><span class="ver" data-ver="4.2.1">4.2.1</span></div>
+                  </div>
+                  <div class="tile-section bottom">
+                    <div class="top-row"><span class="bottom-label">last ok</span><span class="ver" data-ver="4.2.0">4.2.0</span></div>
+                    <div class="meta"><span>frank</span><span class="dot"></span><span>1d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- preprod: S1 -->
+              <td>
+                <div class="tile" data-slot="order-svc/preprod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="4.1.7">4.1.7</span></div>
+                    <div class="meta"><span>gina</span><span class="dot"></span><span>3d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- prod: S1 -->
+              <td>
+                <div class="tile" data-slot="order-svc/prod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="4.1.7">4.1.7</span></div>
+                    <div class="meta"><span>gina</span><span class="dot"></span><span>6d ago</span></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- ROW 5 — catalog-edge -->
+            <tr data-svc="catalog-edge">
+              <td class="row-head">catalog-edge</td>
+              <!-- dev: S6 Running + Failed (no prior) — full orange, no version, no bottom -->
+              <td>
+                <!-- S6 -->
+                <div class="tile" data-slot="catalog-edge/dev">
+                  <div class="tile-section wash-run">
+                    <div class="top-row">
+                      <span class="spin" aria-hidden="true"></span>
+                      <span class="warn">prev. failed</span>
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: empty -->
+              <td><div class="tile empty"></div></td>
+              <!-- qa: empty -->
+              <td><div class="tile empty"></div></td>
+              <!-- preprod: empty -->
+              <td><div class="tile empty"></div></td>
+              <!-- prod: empty -->
+              <td><div class="tile empty"></div></td>
+            </tr>
+
+            <!-- ROW 6 — ledger-projector -->
+            <tr data-svc="ledger-projector">
+              <td class="row-head">ledger-projector</td>
+              <!-- dev: S1 -->
+              <td>
+                <div class="tile" data-slot="ledger-projector/dev">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="1.7.3">1.7.3</span></div>
+                    <div class="meta"><span>henry</span><span class="dot"></span><span>2h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: S2 -->
+              <td>
+                <div class="tile" data-slot="ledger-projector/staging">
+                  <div class="tile-section wash-run">
+                    <div class="top-row"><span class="spin" aria-hidden="true"></span><span class="ver" data-ver="1.7.3">1.7.3</span></div>
+                  </div>
+                  <div class="tile-section bottom">
+                    <div class="top-row"><span class="bottom-label">last ok</span><span class="ver" data-ver="1.7.2">1.7.2</span></div>
+                    <div class="meta"><span>henry</span><span class="dot"></span><span>1d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- qa: S1 -->
+              <td>
+                <div class="tile" data-slot="ledger-projector/qa">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="1.7.2">1.7.2</span></div>
+                    <div class="meta"><span>henry</span><span class="dot"></span><span>2d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- preprod: S1 -->
+              <td>
+                <div class="tile" data-slot="ledger-projector/preprod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="1.7.1">1.7.1</span></div>
+                    <div class="meta"><span>iris</span><span class="dot"></span><span>4d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- prod: S1 -->
+              <td>
+                <div class="tile" data-slot="ledger-projector/prod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="1.7.1">1.7.1</span></div>
+                    <div class="meta"><span>iris</span><span class="dot"></span><span>7d ago</span></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- ROW 7 — search-indexer -->
+            <tr data-svc="search-indexer">
+              <td class="row-head">search-indexer</td>
+              <!-- dev: S1 -->
+              <td>
+                <div class="tile" data-slot="search-indexer/dev">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="0.4.12">0.4.12</span></div>
+                    <div class="meta"><span>jack</span><span class="dot"></span><span>3h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: S1 -->
+              <td>
+                <div class="tile" data-slot="search-indexer/staging">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="0.4.11">0.4.11</span></div>
+                    <div class="meta"><span>jack</span><span class="dot"></span><span>8h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- qa: empty -->
+              <td><div class="tile empty"></div></td>
+              <!-- preprod: S1 -->
+              <td>
+                <div class="tile" data-slot="search-indexer/preprod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="0.4.10">0.4.10</span></div>
+                    <div class="meta"><span>kara</span><span class="dot"></span><span>3d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- prod: S1 -->
+              <td>
+                <div class="tile" data-slot="search-indexer/prod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="0.4.10">0.4.10</span></div>
+                    <div class="meta"><span>kara</span><span class="dot"></span><span>5d ago</span></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- ROW 8 — billing-webhook -->
+            <tr data-svc="billing-webhook">
+              <td class="row-head">billing-webhook</td>
+              <!-- dev: S1 -->
+              <td>
+                <div class="tile" data-slot="billing-webhook/dev">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="3.0.1">3.0.1</span></div>
+                    <div class="meta"><span>leo</span><span class="dot"></span><span>1h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- staging: S1 -->
+              <td>
+                <div class="tile" data-slot="billing-webhook/staging">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="3.0.0">3.0.0</span></div>
+                    <div class="meta"><span>leo</span><span class="dot"></span><span>5h ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- qa: S2 -->
+              <td>
+                <div class="tile" data-slot="billing-webhook/qa">
+                  <div class="tile-section wash-run">
+                    <div class="top-row"><span class="spin" aria-hidden="true"></span><span class="ver" data-ver="3.0.1">3.0.1</span></div>
+                  </div>
+                  <div class="tile-section bottom">
+                    <div class="top-row"><span class="bottom-label">last ok</span><span class="ver" data-ver="3.0.0">3.0.0</span></div>
+                    <div class="meta"><span>leo</span><span class="dot"></span><span>1d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- preprod: S1 -->
+              <td>
+                <div class="tile" data-slot="billing-webhook/preprod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="2.9.4">2.9.4</span></div>
+                    <div class="meta"><span>maya</span><span class="dot"></span><span>3d ago</span></div>
+                  </div>
+                </div>
+              </td>
+              <!-- prod: S1 -->
+              <td>
+                <div class="tile" data-slot="billing-webhook/prod">
+                  <div class="tile-section wash-ok">
+                    <div class="top-row"><span class="ver" data-ver="2.9.4">2.9.4</span></div>
+                    <div class="meta"><span>maya</span><span class="dot"></span><span>6d ago</span></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================== VISUALISATION VIEW ===================== -->
+    <section class="view" id="view-vis" role="tabpanel" aria-labelledby="tab-vis">
+      <div class="vis-shell">
+        <div class="vis-wrap">
+          <div class="vis-head">
+            <span>Service swimlanes · deployments consolidated</span>
+            <span class="axis">happened_at →</span>
+          </div>
+          <svg class="vis-canvas" viewBox="0 0 1400 1300" preserveAspectRatio="xMinYMin meet" role="img" aria-label="Service swimlanes">
+
+            <!-- ============================================================
+                 Each swimlane stacks its disconnected DAGs VERTICALLY.
+                 Sibling DAGs in the same service get their own sub-row.
+                 Each sub-row keeps its own left-to-right time axis (oldest
+                 left, newest right per happened_at). No cross-lane edges.
+                 Lane backgrounds, labels, sub-row dividers, and node
+                 placements are ALL recomputed by computeVisLayout() on
+                 every field-toggle so card-size changes cascade into
+                 lane heights + total canvas height.
+            ============================================================ -->
+
+            <!-- Edges drawn by JS into <g id="edges-layer"> -->
+            <g id="edges-layer"></g>
+
+            <!-- ===== payments-api lane =====
+                 Sub-row 1 (top, cy=107): linear chain pa-prod → pa-qa → pa-dev → pa-staging
+                 Sub-row 2 (bot, cy=269): isolated pa-preprod -->
+            <g class="node" data-node="pa-prod">
+              <rect class="node-box" x="280"  y="92"  width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="pa-qa">
+              <rect class="node-box" x="530"  y="92"  width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="pa-dev">
+              <rect class="node-box" x="780"  y="92"  width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="pa-staging">
+              <rect class="node-box" x="1080" y="92"  width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="pa-preprod">
+              <rect class="node-box" x="280"  y="254" width="40" height="30" rx="3" />
+            </g>
+
+            <!-- ===== order-svc lane =====
+                 Sub-row 1 (top, cy=467): fork — os-prod → {os-staging, os-dev}
+                 Sub-row 2 (bot, cy=629): linear — os-qa → os-preprod -->
+            <g class="node" data-node="os-prod">
+              <rect class="node-box" x="280"  y="452" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="os-staging">
+              <rect class="node-box" x="680"  y="407" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="os-dev">
+              <rect class="node-box" x="680"  y="497" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="os-qa">
+              <rect class="node-box" x="280"  y="614" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="os-preprod">
+              <rect class="node-box" x="680"  y="614" width="40" height="30" rx="3" />
+            </g>
+
+            <!-- ===== ledger-projector lane =====
+                 Sub-row 1 only (cy=827): diamond lp-prod → {lp-qa, lp-dev} → lp-staging -->
+            <g class="node" data-node="lp-prod">
+              <rect class="node-box" x="280"  y="812" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="lp-qa">
+              <rect class="node-box" x="580"  y="767" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="lp-dev">
+              <rect class="node-box" x="580"  y="857" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="lp-staging">
+              <rect class="node-box" x="930"  y="812" width="40" height="30" rx="3" />
+            </g>
+
+            <!-- ===== notification-worker lane =====
+                 Sub-row 1 (top, cy=1027): parallel branch 1 — nw-prod → nw-staging
+                 Sub-row 2 (bot, cy=1189): parallel branch 2 — nw-dev → nw-preprod -->
+            <g class="node" data-node="nw-prod">
+              <rect class="node-box" x="280"  y="1012" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="nw-staging">
+              <rect class="node-box" x="680"  y="1012" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="nw-dev">
+              <rect class="node-box" x="280"  y="1174" width="40" height="30" rx="3" />
+            </g>
+            <g class="node" data-node="nw-preprod">
+              <rect class="node-box" x="680"  y="1174" width="40" height="30" rx="3" />
+            </g>
+
+          </svg>
+        </div>
+
+        <aside class="inspector" id="inspector" aria-label="Node inspector">
+          <h3>Inspector</h3>
+          <div class="ctx" id="insp-ctx">—</div>
+          <dl id="insp-dl">
+            <!-- populated by JS on initial-select + click -->
+          </dl>
+        </aside>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ===================== History Drawer ===================== -->
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <h2 id="drawer-title">History</h2>
+        <div class="ctx" id="drawer-ctx">—</div>
+      </div>
+      <button class="drawer-close" id="drawer-close" aria-label="Close">×</button>
+    </div>
+    <div class="drawer-list" id="drawer-list">
+      <!-- populated by JS -->
+    </div>
+  </aside>
+
+  <script>
+    // --------------------------------------------------------------
+    // Fixture: history per slot. Only domain-model fields are used.
+    // Whitelist: id, component, environment, version, status,
+    //            run_url, sha, run_number, actor, happened_at,
+    //            parrent_deployments.
+    // --------------------------------------------------------------
+    const HISTORY = {
+      'payments-api/staging': [
+        { id: '9f4c8b21e7d3', version: '1.2.3-alpha.5+sha.7d3e2a1.branch.feat-auth-x', status: 'in-progress', actor: 'bob',   when: 'now',
+          happened_at: '2026-05-28T08:42:11Z', sha: 'a1b2c3d', run_number: '4822', ref: 'feat/auth-refactor', run_url: 'https://ci.example.com/runs/4822',
+          parrent_deployments: ['7d3e2a19af4c', '21ab7c903e88'] },
+        { id: '7d3e2a19af4c', version: '2.13.4', status: 'success',     actor: 'bob',   when: '4h ago',
+          happened_at: '2026-05-28T04:42:11Z', sha: '9f8e7d6', run_number: '4812', ref: 'main', run_url: 'https://ci.example.com/runs/4812',
+          parrent_deployments: ['21ab7c903e88'] },
+        { id: '21ab7c903e88', version: '2.13.3', status: 'success',     actor: 'alice', when: '1d ago',
+          happened_at: '2026-05-27T08:42:11Z', sha: '7d6c5b4', run_number: '4805', ref: 'main', run_url: 'https://ci.example.com/runs/4805',
+          parrent_deployments: ['5e44b1f0c102'] },
+        { id: '5e44b1f0c102', version: '2.13.2', status: 'success',     actor: 'alice', when: '2d ago',
+          happened_at: '2026-05-26T08:42:11Z', sha: '4b3a291', run_number: '4795', ref: '#4218', run_url: 'https://ci.example.com/runs/4795',
+          parrent_deployments: ['c0ff3318a221'] },
+        { id: 'c0ff3318a221', version: '2.13.1', status: 'failure',     actor: 'carol', when: '3d ago',
+          happened_at: '2026-05-25T08:42:11Z', sha: 'c0ff331', run_number: '4788', ref: 'fix/null-token', run_url: 'https://ci.example.com/runs/4788',
+          parrent_deployments: ['b00b1e5d6f70'] },
+        { id: 'b00b1e5d6f70', version: '2.13.0', status: 'success',     actor: 'carol', when: '4d ago',
+          happened_at: '2026-05-24T08:42:11Z', sha: 'b00b1e5', run_number: '4779', ref: 'release/2.13', run_url: 'https://ci.example.com/runs/4779',
+          parrent_deployments: [] },
+      ],
+      'payments-api/dev': [
+        { id: 'aa01dd902f31', version: '2.14.0', status: 'success', actor: 'alice', when: '12m ago',
+          happened_at: '2026-05-28T08:30:00Z', sha: 'a1b2c3d', run_number: '4821', ref: 'feat/auth-refactor', run_url: 'https://ci.example.com/runs/4821',
+          parrent_deployments: ['bb02ee113040'] },
+        { id: 'bb02ee113040', version: '2.13.4', status: 'success', actor: 'bob',   when: '6h ago',
+          happened_at: '2026-05-28T02:42:11Z', sha: '9f8e7d6', run_number: '4810', ref: 'main', run_url: 'https://ci.example.com/runs/4810',
+          parrent_deployments: [] },
+      ],
+      'payments-api/preprod': [
+        { id: 'cc03ff224151', version: '2.13.4', status: 'in-progress', actor: 'carol', when: 'now',
+          happened_at: '2026-05-28T08:42:11Z', sha: '9f8e7d6', run_number: '4823', ref: 'main', run_url: 'https://ci.example.com/runs/4823',
+          parrent_deployments: [] },
+      ],
+      'notification-worker/dev': [
+        { id: 'dd04aa335262', version: '0.9.1', status: 'failure', actor: 'dave', when: '22m ago',
+          happened_at: '2026-05-28T08:20:00Z', sha: '11aabbc', run_number: '2210', ref: '#1102', run_url: 'https://ci.example.com/runs/2210',
+          parrent_deployments: ['ee05bb446373'] },
+        { id: 'ee05bb446373', version: '0.9.0', status: 'success', actor: 'dave', when: '3h ago',
+          happened_at: '2026-05-28T05:42:11Z', sha: 'aabbcc1', run_number: '2202', ref: 'main', run_url: 'https://ci.example.com/runs/2202',
+          parrent_deployments: [] },
+      ],
+    };
+
+    // Generic fallback history for slots that don't have a specific one.
+    function fallbackHistory(slot) {
+      const [svc, env] = slot.split('/');
+      const cell = document.querySelector(`.tile[data-slot="${slot}"]`);
+      const verEl = cell ? cell.querySelector('.ver') : null;
+      const headVer = verEl ? verEl.textContent : '0.0.0';
+      const actorEl = cell ? cell.querySelector('.meta span') : null;
+      const actor = actorEl ? actorEl.textContent : 'unknown';
+      const mkId = (n) => (svc.replace(/[^a-f0-9]/gi,'').padEnd(6,'0').slice(0,6) + String(1000+n).padStart(6,'0')).slice(0,12);
+      return [
+        { id: mkId(1), version: headVer, status: 'success', actor, when: '1d ago',  happened_at: '2026-05-27T08:00:00Z', sha: 'aaaa111', run_number: '1000', ref: 'main',              run_url: 'https://ci.example.com/runs/1000', parrent_deployments: [mkId(2)] },
+        { id: mkId(2), version: headVer, status: 'success', actor, when: '3d ago',  happened_at: '2026-05-25T08:00:00Z', sha: 'bbbb222', run_number:  '990', ref: 'main',              run_url: 'https://ci.example.com/runs/990',  parrent_deployments: [mkId(3)] },
+        { id: mkId(3), version: headVer, status: 'failure', actor, when: '4d ago',  happened_at: '2026-05-24T08:00:00Z', sha: 'cccc333', run_number:  '985', ref: 'feat/retry-policy', run_url: 'https://ci.example.com/runs/985',  parrent_deployments: [mkId(4)] },
+        { id: mkId(4), version: headVer, status: 'success', actor, when: '6d ago',  happened_at: '2026-05-22T08:00:00Z', sha: 'dddd444', run_number:  '970', ref: 'main',              run_url: 'https://ci.example.com/runs/970',  parrent_deployments: [mkId(5)] },
+        { id: mkId(5), version: headVer, status: 'success', actor, when: '9d ago',  happened_at: '2026-05-19T08:00:00Z', sha: 'eeee555', run_number:  '955', ref: 'release/2.13',      run_url: 'https://ci.example.com/runs/955',  parrent_deployments: [mkId(6)] },
+        { id: mkId(6), version: headVer, status: 'success', actor, when: '12d ago', happened_at: '2026-05-16T08:00:00Z', sha: 'ffff666', run_number:  '940', ref: 'main',              run_url: 'https://ci.example.com/runs/940',  parrent_deployments: [] },
+      ];
+    }
+
+    // --------------------------------------------------------------
+    // Fixture: Visualisation node records. Each maps to a node in
+    // the SVG and carries the full 11-field domain shape.
+    // --------------------------------------------------------------
+    const VIS_NODES = {
+      // payments-api lane
+      'pa-prod':    { id: '4b3a291f0c10', component: 'payments-api', environment: 'prod',    version: '2.12.9', status: 'success',     actor: 'carol', when: '5d ago', happened_at: '2026-05-23T08:00:00Z', sha: '4b3a291', run_number: '4760', ref: 'release/2.12',      run_url: 'https://ci.example.com/runs/4760', parrent_deployments: [] },
+      'pa-qa':      { id: '21ab7c903e88', component: 'payments-api', environment: 'qa',      version: '2.13.4', status: 'success',     actor: 'bob',   when: '1d ago', happened_at: '2026-05-27T08:42:11Z', sha: '7d6c5b4', run_number: '4805', ref: 'main',              run_url: 'https://ci.example.com/runs/4805', parrent_deployments: ['4b3a291f0c10'] },
+      'pa-dev':     { id: '7d3e2a19af4c', component: 'payments-api', environment: 'dev',     version: '2.14.0', status: 'success',     actor: 'alice', when: '12m ago',happened_at: '2026-05-28T08:30:00Z', sha: 'a1b2c3d', run_number: '4821', ref: 'feat/auth-refactor',run_url: 'https://ci.example.com/runs/4821', parrent_deployments: ['21ab7c903e88'] },
+      'pa-staging': { id: '9f4c8b21e7d3', component: 'payments-api', environment: 'staging', version: '1.2.3-alpha.5+sha.7d3e2a1.branch.feat-auth-x', status: 'in-progress', actor: 'bob',   when: 'now',    happened_at: '2026-05-28T08:42:11Z', sha: 'a1b2c3d', run_number: '4822', ref: 'feat/auth-refactor',run_url: 'https://ci.example.com/runs/4822', parrent_deployments: ['7d3e2a19af4c', '21ab7c903e88'] },
+      'pa-preprod': { id: 'cc03ff224151', component: 'payments-api', environment: 'preprod', version: '2.13.4', status: 'in-progress', actor: 'carol', when: 'now',    happened_at: '2026-05-28T08:15:00Z', sha: '9f8e7d6', run_number: '4823', ref: 'main',              run_url: 'https://ci.example.com/runs/4823', parrent_deployments: [] },
+
+      // order-svc lane
+      'os-prod':    { id: '1100aa554433', component: 'order-svc',    environment: 'prod',    version: '4.1.7',   status: 'success',     actor: 'gina',  when: '6d ago', happened_at: '2026-05-22T10:00:00Z', sha: '88ad12c', run_number: '8801', ref: 'release/4.1', run_url: 'https://ci.example.com/runs/8801', parrent_deployments: [] },
+      'os-staging': { id: '2200bb665544', component: 'order-svc',    environment: 'staging', version: '4.2.0',   status: 'success',     actor: 'frank', when: '5h ago', happened_at: '2026-05-28T03:42:11Z', sha: '7c0fee0', run_number: '8870', ref: 'main',        run_url: 'https://ci.example.com/runs/8870', parrent_deployments: ['1100aa554433'] },
+      'os-dev':     { id: '3300cc776655', component: 'order-svc',    environment: 'dev',     version: '4.2.0-rc',status: 'success',     actor: 'frank', when: '4h ago', happened_at: '2026-05-28T04:42:11Z', sha: '6bf119e', run_number: '8872', ref: '#3091',       run_url: 'https://ci.example.com/runs/8872', parrent_deployments: ['1100aa554433'] },
+      'os-qa':      { id: '4400dd887766', component: 'order-svc',    environment: 'qa',      version: '4.2.1',   status: 'success',     actor: 'frank', when: '2h ago', happened_at: '2026-05-28T06:42:11Z', sha: '5ade283', run_number: '8890', ref: '#3091',       run_url: 'https://ci.example.com/runs/8890', parrent_deployments: [] },
+      'os-preprod': { id: '5500ee998877', component: 'order-svc',    environment: 'preprod', version: '4.2.1',   status: 'in-progress', actor: 'gina',  when: 'now',    happened_at: '2026-05-28T08:42:11Z', sha: '5ade283', run_number: '8895', ref: '#3091',       run_url: 'https://ci.example.com/runs/8895', parrent_deployments: ['4400dd887766'] },
+
+      // ledger-projector lane (diamond)
+      'lp-prod':    { id: '6600ff009988', component: 'ledger-projector', environment: 'prod',    version: '1.7.1', status: 'success',     actor: 'iris',  when: '7d ago', happened_at: '2026-05-21T12:00:00Z', sha: '3192746', run_number: '5501', ref: 'release/1.7',     run_url: 'https://ci.example.com/runs/5501', parrent_deployments: [] },
+      'lp-qa':      { id: '7700aabbccdd', component: 'ledger-projector', environment: 'qa',      version: '1.7.2', status: 'success',     actor: 'henry', when: '2d ago', happened_at: '2026-05-26T12:00:00Z', sha: '20810e3', run_number: '5550', ref: 'main',            run_url: 'https://ci.example.com/runs/5550', parrent_deployments: ['6600ff009988'] },
+      'lp-dev':     { id: '8800bbccddee', component: 'ledger-projector', environment: 'dev',     version: '1.7.3', status: 'success',     actor: 'henry', when: '2h ago', happened_at: '2026-05-28T06:42:11Z', sha: '197fec2', run_number: '5588', ref: 'feat/replay-api', run_url: 'https://ci.example.com/runs/5588', parrent_deployments: ['6600ff009988'] },
+      'lp-staging': { id: '9900ccddeeff', component: 'ledger-projector', environment: 'staging', version: '1.7.3', status: 'in-progress', actor: 'henry', when: 'now',    happened_at: '2026-05-28T08:42:11Z', sha: '197fec2', run_number: '5599', ref: 'feat/replay-api', run_url: 'https://ci.example.com/runs/5599', parrent_deployments: ['7700aabbccdd', '8800bbccddee'] },
+
+      // notification-worker lane (parallel branches + later isolated)
+      'nw-prod':    { id: 'aa00ddeeff11', component: 'notification-worker', environment: 'prod',    version: '0.8.7', status: 'success',     actor: 'erin',  when: '4d ago', happened_at: '2026-05-24T09:00:00Z', sha: '7777fee', run_number: '2161', ref: 'release/0.8', run_url: 'https://ci.example.com/runs/2161', parrent_deployments: [] },
+      'nw-staging': { id: 'bb11eeff2200', component: 'notification-worker', environment: 'staging', version: '0.9.0', status: 'success',     actor: 'dave',  when: '6h ago', happened_at: '2026-05-28T02:42:11Z', sha: 'aabbcc1', run_number: '2202', ref: 'main',        run_url: 'https://ci.example.com/runs/2202', parrent_deployments: ['aa00ddeeff11'] },
+      'nw-dev':     { id: 'cc22ff003311', component: 'notification-worker', environment: 'dev',     version: '0.9.1', status: 'failure',     actor: 'dave',  when: '22m ago',happened_at: '2026-05-28T08:20:00Z', sha: '11aabbc', run_number: '2210', ref: '#1102',       run_url: 'https://ci.example.com/runs/2210', parrent_deployments: [] },
+      'nw-preprod': { id: 'dd3300114422', component: 'notification-worker', environment: 'preprod', version: '0.9.1', status: 'in-progress', actor: 'erin',  when: 'now',    happened_at: '2026-05-28T08:42:11Z', sha: '11aabbc', run_number: '2212', ref: '#1102',       run_url: 'https://ci.example.com/runs/2212', parrent_deployments: ['cc22ff003311'] },
+    };
+
+    // --------------------------------------------------------------
+    // Fixture: per-slot tile record(s). Each slot has at most:
+    //   running   — the in-progress deployment (states 2/3/5/6)
+    //   ls        — last-successful (states 2/3/4)
+    //   head      — single record for steady-state tile (state 1)
+    //   failed    — single record for failure tile (state 4 head)
+    //   prevFailed: boolean — show ⚠ warn badge (states 3/6)
+    // Plus state code 1..6 + status wash mode.
+    // --------------------------------------------------------------
+    const MATRIX_TILES = {
+      'payments-api/dev':            { state: 1, wash: 'ok',   head:    { id: 'aa01dd902f31', version: '2.14.0', actor: 'alice', when: '12m ago', happened_at: '2026-05-28T08:30:00Z', sha: 'a1b2c3d', run_number: '4821', ref: 'feat/auth-refactor', run_url: 'https://ci.example.com/runs/4821', parrent_deployments: ['bb02ee113040'] } },
+      'payments-api/staging':        { state: 2, wash: 'run',  running: { id: '9f4c8b21e7d3', version: '1.2.3-alpha.5+sha.7d3e2a1.branch.feat-auth-x', actor: 'bob',   when: 'now',     happened_at: '2026-05-28T08:42:11Z', sha: 'a1b2c3d', run_number: '4822', ref: 'feat/auth-refactor', run_url: 'https://ci.example.com/runs/4822', parrent_deployments: ['7d3e2a19af4c','21ab7c903e88'] },
+                                                    ls:      { id: '7d3e2a19af4c', version: '2.13.4', actor: 'bob',   when: '4h ago',  happened_at: '2026-05-28T04:42:11Z', sha: '9f8e7d6', run_number: '4812', ref: 'main', run_url: 'https://ci.example.com/runs/4812', parrent_deployments: ['21ab7c903e88'] } },
+      'payments-api/qa':             { state: 1, wash: 'ok',   head:    { id: '21ab7c903e88', version: '2.13.4', actor: 'bob',   when: '1d ago',  happened_at: '2026-05-27T08:42:11Z', sha: '7d6c5b4', run_number: '4805', ref: 'main', run_url: 'https://ci.example.com/runs/4805', parrent_deployments: ['4b3a291f0c10'] } },
+      'payments-api/preprod':        { state: 3, wash: 'run',  prevFailed: true,
+                                                    running: { id: 'cc03ff224151', version: '—',     actor: 'carol', when: 'now',     happened_at: '2026-05-28T08:42:11Z', sha: '9f8e7d6', run_number: '4823', ref: 'main', run_url: 'https://ci.example.com/runs/4823', parrent_deployments: [] },
+                                                    ls:      { id: 'aa55bb44cc33', version: '2.12.9', actor: 'carol', when: '3d ago',  happened_at: '2026-05-25T08:42:11Z', sha: '4b3a291', run_number: '4760', ref: 'release/2.12', run_url: 'https://ci.example.com/runs/4760', parrent_deployments: [] } },
+      'payments-api/prod':           { state: 1, wash: 'ok',   head:    { id: '4b3a291f0c10', version: '2.12.9', actor: 'carol', when: '5d ago',  happened_at: '2026-05-23T08:00:00Z', sha: '4b3a291', run_number: '4760', ref: 'release/2.12', run_url: 'https://ci.example.com/runs/4760', parrent_deployments: [] } },
+
+      'notification-worker/dev':     { state: 4, wash: 'fail', failed:  { id: 'dd04aa335262', version: '0.9.1', actor: 'dave',  when: '22m ago', happened_at: '2026-05-28T08:20:00Z', sha: '11aabbc', run_number: '2210', ref: '#1102', run_url: 'https://ci.example.com/runs/2210', parrent_deployments: ['ee05bb446373'] },
+                                                    ls:      { id: 'ee05bb446373', version: '0.9.0', actor: 'dave',  when: '3h ago',  happened_at: '2026-05-28T05:42:11Z', sha: 'aabbcc1', run_number: '2202', ref: 'main', run_url: 'https://ci.example.com/runs/2202', parrent_deployments: [] } },
+      'notification-worker/staging': { state: 1, wash: 'ok',   head:    { id: 'bb11eeff2200', version: '0.9.0', actor: 'dave',  when: '6h ago',  happened_at: '2026-05-28T02:42:11Z', sha: 'aabbcc1', run_number: '2202', ref: 'main', run_url: 'https://ci.example.com/runs/2202', parrent_deployments: ['aa00ddeeff11'] } },
+      'notification-worker/preprod': { state: 1, wash: 'ok',   head:    { id: 'ee22ff003344', version: '0.8.7', actor: 'erin',  when: '2d ago',  happened_at: '2026-05-26T08:00:00Z', sha: '7777fee', run_number: '2161', ref: 'release/0.8', run_url: 'https://ci.example.com/runs/2161', parrent_deployments: [] } },
+      'notification-worker/prod':    { state: 1, wash: 'ok',   head:    { id: 'aa00ddeeff11', version: '0.8.7', actor: 'erin',  when: '4d ago',  happened_at: '2026-05-24T09:00:00Z', sha: '7777fee', run_number: '2161', ref: 'release/0.8', run_url: 'https://ci.example.com/runs/2161', parrent_deployments: [] } },
+
+      'auth-bff/dev':                { state: 5, wash: 'run',  running: { id: '11aabb22cc33', version: '1.0.0-rc1', actor: 'nick', when: 'now', happened_at: '2026-05-28T08:42:11Z', sha: '0aa1b2c', run_number: '3001', ref: 'feat/oauth-flow', run_url: 'https://ci.example.com/runs/3001', parrent_deployments: [] } },
+
+      'order-svc/dev':               { state: 1, wash: 'ok',   head:    { id: '3300cc776655', version: '4.2.1', actor: 'frank', when: '30m ago', happened_at: '2026-05-28T08:12:00Z', sha: '6bf119e', run_number: '8872', ref: '#3091', run_url: 'https://ci.example.com/runs/8872', parrent_deployments: ['1100aa554433'] } },
+      'order-svc/staging':           { state: 1, wash: 'ok',   head:    { id: '2200bb665544', version: '4.2.0', actor: 'frank', when: '5h ago',  happened_at: '2026-05-28T03:42:11Z', sha: '7c0fee0', run_number: '8870', ref: 'main', run_url: 'https://ci.example.com/runs/8870', parrent_deployments: ['1100aa554433'] } },
+      'order-svc/qa':                { state: 2, wash: 'run',  running: { id: 'qa01aa22bb33', version: '4.2.1', actor: 'frank', when: 'now',     happened_at: '2026-05-28T08:42:11Z', sha: '5ade283', run_number: '8893', ref: '#3091', run_url: 'https://ci.example.com/runs/8893', parrent_deployments: ['4400dd887766'] },
+                                                    ls:      { id: '4400dd887766', version: '4.2.0', actor: 'frank', when: '1d ago',  happened_at: '2026-05-27T08:00:00Z', sha: '5ade283', run_number: '8890', ref: 'main', run_url: 'https://ci.example.com/runs/8890', parrent_deployments: [] } },
+      'order-svc/preprod':           { state: 1, wash: 'ok',   head:    { id: '5500ee998877', version: '4.1.7', actor: 'gina',  when: '3d ago',  happened_at: '2026-05-25T08:00:00Z', sha: '88ad12c', run_number: '8801', ref: 'release/4.1', run_url: 'https://ci.example.com/runs/8801', parrent_deployments: [] } },
+      'order-svc/prod':              { state: 1, wash: 'ok',   head:    { id: '1100aa554433', version: '4.1.7', actor: 'gina',  when: '6d ago',  happened_at: '2026-05-22T10:00:00Z', sha: '88ad12c', run_number: '8801', ref: 'release/4.1', run_url: 'https://ci.example.com/runs/8801', parrent_deployments: [] } },
+
+      'catalog-edge/dev':            { state: 6, wash: 'run',  prevFailed: true,
+                                                    running: { id: 'ce99aa88bb77', version: '—',     actor: 'omar', when: 'now',     happened_at: '2026-05-28T08:42:11Z', sha: 'cf0a1b2', run_number: '7701', ref: 'feat/edge-cache', run_url: 'https://ci.example.com/runs/7701', parrent_deployments: [] } },
+
+      'ledger-projector/dev':        { state: 1, wash: 'ok',   head:    { id: '8800bbccddee', version: '1.7.3', actor: 'henry', when: '2h ago',  happened_at: '2026-05-28T06:42:11Z', sha: '197fec2', run_number: '5588', ref: 'feat/replay-api', run_url: 'https://ci.example.com/runs/5588', parrent_deployments: ['6600ff009988'] } },
+      'ledger-projector/staging':    { state: 2, wash: 'run',  running: { id: '9900ccddeeff', version: '1.7.3', actor: 'henry', when: 'now',     happened_at: '2026-05-28T08:42:11Z', sha: '197fec2', run_number: '5599', ref: 'feat/replay-api', run_url: 'https://ci.example.com/runs/5599', parrent_deployments: ['7700aabbccdd','8800bbccddee'] },
+                                                    ls:      { id: 'lp01ee22ff33', version: '1.7.2', actor: 'henry', when: '1d ago',  happened_at: '2026-05-27T08:00:00Z', sha: '20810e3', run_number: '5550', ref: 'main', run_url: 'https://ci.example.com/runs/5550', parrent_deployments: [] } },
+      'ledger-projector/qa':         { state: 1, wash: 'ok',   head:    { id: '7700aabbccdd', version: '1.7.2', actor: 'henry', when: '2d ago',  happened_at: '2026-05-26T12:00:00Z', sha: '20810e3', run_number: '5550', ref: 'main', run_url: 'https://ci.example.com/runs/5550', parrent_deployments: ['6600ff009988'] } },
+      'ledger-projector/preprod':    { state: 1, wash: 'ok',   head:    { id: 'lp02ff33aa44', version: '1.7.1', actor: 'iris',  when: '4d ago',  happened_at: '2026-05-24T08:00:00Z', sha: '3192746', run_number: '5501', ref: 'release/1.7', run_url: 'https://ci.example.com/runs/5501', parrent_deployments: [] } },
+      'ledger-projector/prod':       { state: 1, wash: 'ok',   head:    { id: '6600ff009988', version: '1.7.1', actor: 'iris',  when: '7d ago',  happened_at: '2026-05-21T12:00:00Z', sha: '3192746', run_number: '5501', ref: 'release/1.7', run_url: 'https://ci.example.com/runs/5501', parrent_deployments: [] } },
+
+      'search-indexer/dev':          { state: 1, wash: 'ok',   head:    { id: 'si01aa11bb22', version: '0.4.12', actor: 'jack', when: '3h ago',  happened_at: '2026-05-28T05:00:00Z', sha: '4a5b6c7', run_number: '6612', ref: 'feat/ngram', run_url: 'https://ci.example.com/runs/6612', parrent_deployments: [] } },
+      'search-indexer/staging':      { state: 1, wash: 'ok',   head:    { id: 'si02bb22cc33', version: '0.4.11', actor: 'jack', when: '8h ago',  happened_at: '2026-05-28T00:42:11Z', sha: '3a4b5c6', run_number: '6611', ref: 'main', run_url: 'https://ci.example.com/runs/6611', parrent_deployments: [] } },
+      'search-indexer/preprod':      { state: 1, wash: 'ok',   head:    { id: 'si03cc33dd44', version: '0.4.10', actor: 'kara', when: '3d ago',  happened_at: '2026-05-25T08:00:00Z', sha: '2a3b4c5', run_number: '6610', ref: 'main', run_url: 'https://ci.example.com/runs/6610', parrent_deployments: [] } },
+      'search-indexer/prod':         { state: 1, wash: 'ok',   head:    { id: 'si04dd44ee55', version: '0.4.10', actor: 'kara', when: '5d ago',  happened_at: '2026-05-23T08:00:00Z', sha: '2a3b4c5', run_number: '6610', ref: 'main', run_url: 'https://ci.example.com/runs/6610', parrent_deployments: [] } },
+
+      'billing-webhook/dev':         { state: 1, wash: 'ok',   head:    { id: 'bw01aa11bb22', version: '3.0.1', actor: 'leo',  when: '1h ago',  happened_at: '2026-05-28T07:42:11Z', sha: '5c6d7e8', run_number: '9912', ref: 'fix/idempotency', run_url: 'https://ci.example.com/runs/9912', parrent_deployments: [] } },
+      'billing-webhook/staging':     { state: 1, wash: 'ok',   head:    { id: 'bw02bb22cc33', version: '3.0.0', actor: 'leo',  when: '5h ago',  happened_at: '2026-05-28T03:42:11Z', sha: '4c5d6e7', run_number: '9910', ref: 'main', run_url: 'https://ci.example.com/runs/9910', parrent_deployments: [] } },
+      'billing-webhook/qa':          { state: 2, wash: 'run',  running: { id: 'bw03cc33dd44', version: '3.0.1', actor: 'leo',  when: 'now',     happened_at: '2026-05-28T08:42:11Z', sha: '5c6d7e8', run_number: '9914', ref: 'fix/idempotency', run_url: 'https://ci.example.com/runs/9914', parrent_deployments: ['bw02bb22cc33'] },
+                                                    ls:      { id: 'bw04dd44ee55', version: '3.0.0', actor: 'leo',  when: '1d ago',  happened_at: '2026-05-27T08:00:00Z', sha: '4c5d6e7', run_number: '9910', ref: 'main', run_url: 'https://ci.example.com/runs/9910', parrent_deployments: [] } },
+      'billing-webhook/preprod':     { state: 1, wash: 'ok',   head:    { id: 'bw05ee55ff66', version: '2.9.4', actor: 'maya', when: '3d ago',  happened_at: '2026-05-25T08:00:00Z', sha: '3c4d5e6', run_number: '9890', ref: 'release/2.9', run_url: 'https://ci.example.com/runs/9890', parrent_deployments: [] } },
+      'billing-webhook/prod':        { state: 1, wash: 'ok',   head:    { id: 'bw06ff66aa77', version: '2.9.4', actor: 'maya', when: '6d ago',  happened_at: '2026-05-22T08:00:00Z', sha: '3c4d5e6', run_number: '9890', ref: 'release/2.9', run_url: 'https://ci.example.com/runs/9890', parrent_deployments: [] } },
+    };
+
+    // --------------------------------------------------------------
+    // Field visibility state — independent per view.
+    // Defaults: ALL ON.
+    // Matrix: 8 toggles (component+environment implicit; status intrinsic)
+    // Vis:    9 toggles (component implicit per lane; status via stripe)
+    // `id` is synthetic — excluded from every visible surface.
+    // --------------------------------------------------------------
+    const MATRIX_FIELDS = ['version','run_url','sha','run_number','ref','actor','happened_at','parrent_deployments'];
+    const VIS_FIELDS    = ['version','environment','run_url','sha','run_number','ref','actor','happened_at','parrent_deployments'];
+    const FIELD_LABELS  = {
+      version: 'version',
+      environment: 'environment',
+      run_url: 'run_url',
+      sha: 'sha',
+      run_number: 'run_number',
+      ref: 'ref',
+      actor: 'actor',
+      happened_at: 'happened_at',
+      parrent_deployments: 'parrent_deployments',
+    };
+
+    // --------------------------------------------------------------
+    // Hairline inline SVG icons — ~12px, 1.25px stroke, currentColor.
+    // Used on tiles + nodes; drawer + inspector keep text labels.
+    // --------------------------------------------------------------
+    const ICONS = {
+      version: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h5.5l5.5 5.5-5.5 5.5L2.5 8z"/><circle cx="5" cy="5" r="0.9"/></svg>',
+      run_url: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3h6.5v6.5"/><path d="M13 3l-7 7"/><path d="M11 8.5V13H3V5h4.5"/></svg>',
+      sha: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 8h4"/><path d="M10.5 8h4"/><circle cx="8" cy="8" r="2.5"/></svg>',
+      run_number: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5l-1.5 11"/><path d="M11.5 2.5l-1.5 11"/><path d="M2.5 6h11"/><path d="M2.5 10h11"/></svg>',
+      ref: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="4" cy="3.5" r="1.4"/><circle cx="4" cy="12.5" r="1.4"/><circle cx="12" cy="6" r="1.4"/><path d="M4 4.9v6.2"/><path d="M4 7.5c0-1.7 1.4-3 3-3h3.6"/></svg>',
+      actor: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.4"/><path d="M2.5 13.5c0-2.6 2.5-4.3 5.5-4.3s5.5 1.7 5.5 4.3"/></svg>',
+      happened_at: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.7"/><path d="M8 4.5V8l2.3 1.6"/></svg>',
+      parrent_deployments: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8"/><path d="M9.4 4.6a2.4 2.4 0 0 1 3.4 3.4l-1.4 1.4a2.4 2.4 0 0 1-3.4-3.4"/><path d="M6.6 11.4a2.4 2.4 0 0 1-3.4-3.4l1.4-1.4a2.4 2.4 0 0 1 3.4 3.4"/></svg>',
+      environment: '<svg class="ic" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="3" width="11" height="3.5" rx="0.6"/><rect x="2.5" y="9.5" width="11" height="3.5" rx="0.6"/><circle cx="4.8" cy="4.75" r="0.4" fill="currentColor"/><circle cx="4.8" cy="11.25" r="0.4" fill="currentColor"/></svg>',
+    };
+    // Live state — initialized to ALL ON below.
+    const matrixVisible = {};  MATRIX_FIELDS.forEach(f => matrixVisible[f] = true);
+    const visVisible    = {};  VIS_FIELDS.forEach(f => visVisible[f] = true);
+
+    // --------------------------------------------------------------
+    // View switching
+    // --------------------------------------------------------------
+    const tabMatrix = document.getElementById('tab-matrix');
+    const tabVis    = document.getElementById('tab-vis');
+    const viewMatrix = document.getElementById('view-matrix');
+    const viewVis    = document.getElementById('view-vis');
+
+    let currentView = 'matrix';
+
+    function setView(which) {
+      const m = which === 'matrix';
+      currentView = m ? 'matrix' : 'vis';
+      tabMatrix.setAttribute('aria-pressed', m ? 'true' : 'false');
+      tabVis.setAttribute('aria-pressed', m ? 'false' : 'true');
+      viewMatrix.classList.toggle('active', m);
+      viewVis.classList.toggle('active', !m);
+      // Show/hide view-specific header controls
+      document.getElementById('hdr-filter').hidden = !m;
+      document.querySelector('[data-pop-anchor="pop-corr"]').hidden   =  m;
+      // Close any open popover when switching
+      closeAllPopovers();
+      // Refresh fields-list to match active view
+      buildFieldsList();
+    }
+    tabMatrix.addEventListener('click', () => setView('matrix'));
+    tabVis.addEventListener('click',    () => setView('vis'));
+
+    // --------------------------------------------------------------
+    // Version hover highlight — delegated since DOM is rebuilt on toggle.
+    // Hover targets BOTH .ver (legacy / drawer / bottom-section identifier)
+    // and .ver-head (new headline treatment).
+    // --------------------------------------------------------------
+    const VER_SEL = '.ver, .ver-head';
+    document.addEventListener('mouseover', (e) => {
+      const el = e.target.closest && e.target.closest(VER_SEL);
+      if (!el || !el.dataset.ver) return;
+      if (el.classList.contains('hi')) return;
+      const v = el.dataset.ver;
+      const q = `[data-ver="${CSS.escape(v)}"]`;
+      document.querySelectorAll(q).forEach(x => x.classList.add('hi'));
+      document.querySelectorAll('.tile').forEach(t => {
+        if (t.querySelector(q)) t.classList.add('hi-tile');
+      });
+    });
+    document.addEventListener('mouseout', (e) => {
+      const el = e.target.closest && e.target.closest(VER_SEL);
+      if (!el) return;
+      document.querySelectorAll('.hi[data-ver]').forEach(x => x.classList.remove('hi'));
+      document.querySelectorAll('.tile.hi-tile').forEach(t => t.classList.remove('hi-tile'));
+    });
+
+    // --------------------------------------------------------------
+    // Filter (inline header controls — text input + failures-only pill)
+    // --------------------------------------------------------------
+    const flt = document.getElementById('flt-text');
+    const fltFail = document.getElementById('flt-fail');
+    function applyFilter() {
+      const term = flt.value.trim().toLowerCase();
+      const failOnly = fltFail.checked;
+      document.querySelectorAll('tr[data-svc]').forEach(tr => {
+        const svc = tr.dataset.svc.toLowerCase();
+        const matchesText = !term || svc.includes(term);
+        let matchesFail = true;
+        if (failOnly) {
+          matchesFail = !!tr.querySelector('.wash-fail');
+        }
+        tr.style.display = (matchesText && matchesFail) ? '' : 'none';
+      });
+    }
+    const fltFailPill = document.getElementById('flt-fail-pill');
+    function syncFailPillVisual() {
+      fltFailPill.classList.toggle('on', fltFail.checked);
+    }
+    flt.addEventListener('input', applyFilter);
+    fltFail.addEventListener('change', () => { syncFailPillVisual(); applyFilter(); });
+    syncFailPillVisual();
+
+    // --------------------------------------------------------------
+    // Popover management — open/close, click-outside, ESC, re-click
+    // --------------------------------------------------------------
+    function closeAllPopovers() {
+      document.querySelectorAll('.popover.open').forEach(p => p.classList.remove('open'));
+      document.querySelectorAll('.icon-btn[data-pop]').forEach(b => b.setAttribute('aria-expanded','false'));
+    }
+    function togglePopover(id) {
+      const pop = document.getElementById(id);
+      if (!pop) return;
+      const wasOpen = pop.classList.contains('open');
+      closeAllPopovers();
+      if (!wasOpen) {
+        pop.classList.add('open');
+        const btn = document.querySelector(`.icon-btn[data-pop="${id}"]`);
+        if (btn) btn.setAttribute('aria-expanded','true');
+      }
+    }
+    document.querySelectorAll('.icon-btn[data-pop]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePopover(btn.dataset.pop);
+      });
+    });
+    document.querySelectorAll('.popover').forEach(p => {
+      p.addEventListener('click', (e) => e.stopPropagation());
+    });
+    document.addEventListener('click', closeAllPopovers);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllPopovers(); });
+
+    // --------------------------------------------------------------
+    // Fields picker — view-specific, defaults ALL ON
+    // --------------------------------------------------------------
+    function buildFieldsList() {
+      const list = document.getElementById('fields-list');
+      const fields = currentView === 'matrix' ? MATRIX_FIELDS : VIS_FIELDS;
+      const state  = currentView === 'matrix' ? matrixVisible : visVisible;
+      list.innerHTML = fields.map(f => `
+        <li>
+          <input type="checkbox" id="f-${currentView}-${f}" data-field="${f}" ${state[f] ? 'checked' : ''} />
+          <label class="lbl" for="f-${currentView}-${f}">${FIELD_LABELS[f]}</label>
+          <span class="src">${f}</span>
+        </li>
+      `).join('');
+      list.querySelectorAll('input[data-field]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const f = cb.dataset.field;
+          if (currentView === 'matrix') matrixVisible[f] = cb.checked;
+          else                          visVisible[f]    = cb.checked;
+          if (currentView === 'matrix') renderMatrix();
+          else                          renderVisualisation();
+        });
+      });
+    }
+
+    // --------------------------------------------------------------
+    // Matrix render — DOM rebuilt from MATRIX_TILES on every change.
+    // 6-box-states container behavior preserved:
+    //   S1 / S5: full wash, single section, no LS
+    //   S2 / S4: dashed split (running/failed top + LS bottom)
+    //   S3 / S6: top section spinner + ⚠ badge, NO running version;
+    //            S3 has LS bottom; S6 has no LS.
+    // --------------------------------------------------------------
+    // --------------------------------------------------------------
+    // Mixed / positional tile body — each visible field has its own
+    // role + visual treatment + position. NOT a uniform [icon][value] row.
+    //
+    //   version              headline (top, big, semibold)
+    //   ref                  under headline, ⎇ glyph, mono
+    //   run_url              mid-line, ↗ run inline link
+    //   run_number           mid-line, #4218 inline
+    //   parrent_deployments  mid-line, ⟵ N parents inline
+    //   sha                  bottom-left, mono short hex (self-identifying)
+    //   actor                bottom-right, @alice
+    //   happened_at          bottom-right, muted "3h ago"
+    //
+    // `opts`:
+    //   topNode    — JSX-ish status indicator inserted at top-right of tile
+    //                (spinner, ⚠ badge, ✕ failed mark)
+    //   skipVersion — true for state 3/6 (running with no version)
+    // --------------------------------------------------------------
+    function tileBodyHTML(rec, state, opts) {
+      opts = opts || {};
+      const parts = [];
+
+      // 1. status corner (spinner / ⚠ / ✕) — absolutely positioned via .status-corner
+      const corner = opts.topNode || '';
+
+      // ----------------------------------------------------------------
+      // Packed tile body — 3 logical rows max. Each row is a flex-wrap
+      // container with left + right chunks; tokens collapse onto the
+      // same row when there's room and wrap when full.
+      //
+      //   Row A (head):  version-head (L)   |  @actor · 3h ago (R)
+      //   Row B (mid):   ⎇ ref · 7d3e2a1 (L) |  ↗ run · #4218 (R)
+      //   Row C (tail):  ⟵ N parents (L)
+      // ----------------------------------------------------------------
+
+      // ----- Row A: version + actor·when ------------------------------
+      const showVer = state.version && !opts.skipVersion && rec.version && rec.version !== '—';
+      const actorOn = state.actor && rec.actor;
+      const whenOn  = state.happened_at && (rec.when || rec.happened_at);
+      const headRBits = [];
+      if (actorOn) headRBits.push(`<span class="actor">@${rec.actor}</span>`);
+      if (actorOn && whenOn) headRBits.push(`<span class="sep">·</span>`);
+      if (whenOn) headRBits.push(`<span class="when">${rec.when || rec.happened_at}</span>`);
+      if (showVer || headRBits.length) {
+        const headL = showVer
+          ? `<span class="row-l"><span class="ver-head" data-ver="${rec.version}">${rec.version}</span></span>`
+          : `<span class="row-l"></span>`;
+        const headR = headRBits.length
+          ? `<span class="row-r"><span class="corner-br">${headRBits.join('')}</span></span>`
+          : '';
+        parts.push(`<div class="tile-row">${headL}${headR}</div>`);
+      }
+
+      // ----- Row B: ref + sha (L)  |  run_url + run_number (R) --------
+      const refOn = state.ref && rec.ref && rec.ref !== '—';
+      const shaOn = state.sha && rec.sha;
+      const runOn = state.run_url && rec.run_url;
+      const numOn = state.run_number && rec.run_number;
+      const midLBits = [];
+      if (refOn) midLBits.push(`<span class="ref-line">⎇ ${rec.ref}</span>`);
+      if (shaOn) midLBits.push(`<span class="corner-bl">${rec.sha}</span>`);
+      const midRBits = [];
+      if (runOn) midRBits.push(`<a href="${rec.run_url}" target="_blank" rel="noopener" title="open CI run">↗ run</a>`);
+      if (numOn) midRBits.push(`<span class="runnum">#${rec.run_number}</span>`);
+      if (midLBits.length || midRBits.length) {
+        const midL = midLBits.length
+          ? `<span class="row-l"><span class="mid-line">${midLBits.join('')}</span></span>`
+          : `<span class="row-l"></span>`;
+        const midR = midRBits.length
+          ? `<span class="row-r"><span class="mid-line">${midRBits.join('')}</span></span>`
+          : '';
+        parts.push(`<div class="tile-row">${midL}${midR}</div>`);
+      }
+
+      // ----- Row C: parents -------------------------------------------
+      if (state.parrent_deployments) {
+        const p = rec.parrent_deployments || [];
+        if (p.length > 0) {
+          parts.push(`<div class="tile-row"><span class="row-l"><span class="mid-line"><span class="parents">⟵ ${p.length} parent${p.length === 1 ? '' : 's'}</span></span></span></div>`);
+        }
+      }
+
+      return `${corner ? `<div class="status-corner">${corner}</div>` : ''}<div class="tile-body">${parts.join('')}</div>`;
+    }
+
+    // Bottom-section fallback chain for split-tile states (2/3/4).
+    // Picks the first present identifier in [version → sha → ref → run_number]
+    // and renders it with the SAME visual treatment as in the top section
+    // (no icon, no label, no "last ok" prefix — just the identifier).
+    function bottomIdentifierHTML(rec) {
+      if (!rec) return '';
+      const chain = ['version','sha','ref','run_number'];
+      for (const f of chain) {
+        const raw = rec[f];
+        if (raw === undefined || raw === null) continue;
+        const str = String(raw).trim();
+        if (!str || str === '—') continue;
+        let inner = '';
+        switch (f) {
+          case 'version':    inner = `<span class="ver" data-ver="${str}">${str}</span>`; break;
+          case 'sha':        inner = str; break;
+          case 'ref':        inner = `⎇ ${str}`; break;
+          case 'run_number': inner = `#${str}`; break;
+        }
+        return `<div class="bottom-id is-${f}">${inner}</div>`;
+      }
+      return '';
+    }
+
+    function renderMatrix() {
+      document.querySelectorAll('.tile[data-slot]').forEach(tile => {
+        const slot = tile.dataset.slot;
+        const t = MATRIX_TILES[slot];
+        if (!t) return;
+        tile.innerHTML = renderTileBody(t);
+      });
+    }
+
+    function renderTileBody(t) {
+      const state = matrixVisible;
+      // Each branch composes (a) the status indicator (top-right corner of
+      // the tile section) and (b) the tile-body via tileBodyHTML(...). The
+      // 6-box-state container behavior — washes, dashed split, no running
+      // version in states 3/6 — is preserved by the switch.
+      switch (t.state) {
+        case 1: { // full wash, single section, head record
+          return `
+            <div class="tile-section wash-${t.wash}">
+              ${tileBodyHTML(t.head, state, {})}
+            </div>`;
+        }
+        case 5: { // running, no prior, full orange — single section
+          return `
+            <div class="tile-section wash-${t.wash}">
+              ${tileBodyHTML(t.running, state, { topNode: '<span class="spin" aria-hidden="true"></span>' })}
+            </div>`;
+        }
+        case 6: { // running + prev-failed, no prior LS — full orange, NO running version, NO bottom
+          return `
+            <div class="tile-section wash-${t.wash}">
+              ${tileBodyHTML(t.running, state, { skipVersion: true, topNode: '<span class="spin" aria-hidden="true"></span><span class="warn">prev. failed</span>' })}
+            </div>`;
+        }
+        case 2: { // dashed split — running top + LS-identifier bottom
+          return `
+            <div class="tile-section wash-${t.wash}">
+              ${tileBodyHTML(t.running, state, { topNode: '<span class="spin" aria-hidden="true"></span>' })}
+            </div>
+            <div class="tile-section bottom">
+              ${bottomIdentifierHTML(t.ls)}
+            </div>`;
+        }
+        case 3: { // dashed split — running + prev-failed top (NO running version) + LS-identifier bottom
+          return `
+            <div class="tile-section wash-${t.wash}">
+              ${tileBodyHTML(t.running, state, { skipVersion: true, topNode: '<span class="spin" aria-hidden="true"></span><span class="warn">prev. failed</span>' })}
+            </div>
+            <div class="tile-section bottom">
+              ${bottomIdentifierHTML(t.ls)}
+            </div>`;
+        }
+        case 4: { // dashed split — failed top + LS-identifier bottom
+          return `
+            <div class="tile-section wash-${t.wash}">
+              ${tileBodyHTML(t.failed, state, { topNode: '<span class="x" aria-hidden="true"></span>' })}
+            </div>
+            <div class="tile-section bottom">
+              ${bottomIdentifierHTML(t.ls)}
+            </div>`;
+        }
+      }
+      return '';
+    }
+
+    // --------------------------------------------------------------
+    // Visualisation render — node cards rebuilt from VIS_NODES on toggle.
+    // Status conveyed via thin left stripe; box itself is a white card
+    // with selected fields stacked. Edges (re)drawn by JS each render.
+    //
+    // Layout model (recomputed on every field-toggle):
+    //   Each lane has N sub-rows of disconnected DAGs. Each sub-row has
+    //   a left-to-right rank axis (rank 0 = oldest/leftmost). Each rank
+    //   can stack >1 nodes vertically as tracks.
+    //
+    //   columnX(rank)   — x-center per rank, evenly spaced across canvas
+    //   trackY(subRow,  — y-center per track within a sub-row, centered
+    //          track,     around sub-row vertical mid-line
+    //          subTop, subH)
+    //   laneHeight      — Σ(subHeights) + (N-1)*subGap + 2*lanePad
+    //   total SVG h     — Σ(laneHeights) + (lanes-1)*laneGap + topPad
+    //
+    //   When card height shrinks (fewer fields), sub-row heights shrink,
+    //   lanes shrink, total canvas shrinks, viewBox updates, more lanes
+    //   become visible without scrolling.
+    // --------------------------------------------------------------
+    // Per-service lane spec — sub-rows + their node placements
+    // (rank, track). Drives layout recomputation on every render.
+    const VIS_LANES = [
+      {
+        key: 'payments-api',
+        label: 'payments-api',
+        sub: 'linear · isolated',
+        subRows: [
+          // sub-row 0: linear chain pa-prod (r0) → pa-qa (r1) → pa-dev (r2) → pa-staging (r3)
+          { tracks: 1, nodes: [
+            { key: 'pa-prod',    rank: 0, track: 0 },
+            { key: 'pa-qa',      rank: 1, track: 0 },
+            { key: 'pa-dev',     rank: 2, track: 0 },
+            { key: 'pa-staging', rank: 3, track: 0 },
+          ]},
+          // sub-row 1: isolated pa-preprod at rank 0
+          { tracks: 1, nodes: [
+            { key: 'pa-preprod', rank: 0, track: 0 },
+          ]},
+        ],
+      },
+      {
+        key: 'order-svc',
+        label: 'order-svc',
+        sub: 'fork · linear',
+        subRows: [
+          // fork: os-prod (r0,t0) → {os-staging (r1,t0), os-dev (r1,t1)}
+          { tracks: 2, nodes: [
+            { key: 'os-prod',    rank: 0, track: 0 },
+            { key: 'os-staging', rank: 1, track: 0 },
+            { key: 'os-dev',     rank: 1, track: 1 },
+          ]},
+          // linear: os-qa (r0) → os-preprod (r1)
+          { tracks: 1, nodes: [
+            { key: 'os-qa',      rank: 0, track: 0 },
+            { key: 'os-preprod', rank: 1, track: 0 },
+          ]},
+        ],
+      },
+      {
+        key: 'ledger-projector',
+        label: 'ledger-projector',
+        sub: 'diamond',
+        subRows: [
+          // diamond: lp-prod (r0,t0) → {lp-qa (r1,t0), lp-dev (r1,t1)} → lp-staging (r2,t0)
+          { tracks: 2, nodes: [
+            { key: 'lp-prod',    rank: 0, track: 0 },
+            { key: 'lp-qa',      rank: 1, track: 0 },
+            { key: 'lp-dev',     rank: 1, track: 1 },
+            { key: 'lp-staging', rank: 2, track: 0 },
+          ]},
+        ],
+      },
+      {
+        key: 'notification-worker',
+        label: 'notification-worker',
+        sub: 'parallel',
+        subRows: [
+          // branch 1: nw-prod → nw-staging
+          { tracks: 1, nodes: [
+            { key: 'nw-prod',    rank: 0, track: 0 },
+            { key: 'nw-staging', rank: 1, track: 0 },
+          ]},
+          // branch 2: nw-dev → nw-preprod
+          { tracks: 1, nodes: [
+            { key: 'nw-dev',     rank: 0, track: 0 },
+            { key: 'nw-preprod', rank: 1, track: 0 },
+          ]},
+        ],
+      },
+    ];
+
+    // Live anchor map — { nodeKey: { cx, cy } } — recomputed each render.
+    const VIS_LAYOUT = {};
+
+    // Geometry constants — packed for dense lane stacking.
+    // lanePadY + laneGap kept tight; cards drive height, not chrome.
+    // canvasW is now a *minimum* baseline; the live computed width can grow
+    // past this when wide (long-version) cards push rank columns rightward.
+    const VIS_GEOM = {
+      canvasW:    1400,
+      railW:      160,   // left rail for lane labels
+      laneRPad:   20,    // right padding inside canvas (right of last rank)
+      lanePadY:   5,     // top/bot padding inside each lane
+      subGap:     6,     // vertical gap between sub-rows
+      laneGap:    6,     // vertical gap between lanes
+      topPad:     8,     // top of first lane
+      trackGap:   4,     // vertical gap between tracks within a sub-row
+      colGap:     40,    // horizontal gap between adjacent rank columns
+      maxCols:    4,     // max ranks across visible sub-rows (4 for pa linear)
+    };
+
+    // computeVisLayout — per-rank stepX (Bug-1 fix).
+    //
+    // X-position of rank R = railW + Σ(maxCardW at ranks 0..R-1) + R*colGap
+    //                          + maxCardW[R]/2 (center)
+    //
+    // maxCardW[r] is taken globally across all sub-rows of all lanes so the
+    // rank axis stays aligned across lanes (lane labels read across a row).
+    // A wide card at rank 2 (e.g. payments-api/staging's 50-char version)
+    // pushes ranks 3+ further right; cards never overlap regardless of
+    // width variance.
+    //
+    // nodeWidths: { key: numericPxWidth }  — produced by renderVisualisation
+    //             from each node's measured content. Falls back to a uniform
+    //             width when a node has no entry.
+    // cardH:      uniform vertical card height (max-rows packing).
+    function computeVisLayout(nodeWidths, cardH) {
+      const G = VIS_GEOM;
+      const laneInnerX = G.railW;
+
+      // ---- per-rank max card width (global across all DAGs) ----
+      const rankMaxW = [];
+      VIS_LANES.forEach(lane => {
+        lane.subRows.forEach(sr => {
+          sr.nodes.forEach(nd => {
+            const w = (nodeWidths && nodeWidths[nd.key]) || 100;
+            if (rankMaxW[nd.rank] === undefined || w > rankMaxW[nd.rank]) {
+              rankMaxW[nd.rank] = w;
+            }
+          });
+        });
+      });
+      // Backfill any unused rank slots up to maxCols with the smallest width.
+      for (let r = 0; r < G.maxCols; r++) {
+        if (rankMaxW[r] === undefined) rankMaxW[r] = 100;
+      }
+
+      // ---- per-rank X centers ----
+      // leftX[r] = left edge of column r (in canvas coordinates).
+      const leftX = [];
+      let cursor = laneInnerX;
+      for (let r = 0; r < rankMaxW.length; r++) {
+        leftX[r] = cursor;
+        cursor += rankMaxW[r] + G.colGap;
+      }
+      // Total canvas width = last column right edge + right pad.
+      const lastRightX = (rankMaxW.length > 0)
+        ? leftX[rankMaxW.length - 1] + rankMaxW[rankMaxW.length - 1]
+        : laneInnerX;
+      const computedCanvasW = Math.max(G.canvasW, lastRightX + G.laneRPad);
+
+      const columnXForRank = (rank) => leftX[rank] + rankMaxW[rank] / 2;
+
+      // Sub-row height = top/bot card pad + cardH per track + gaps
+      const subRowH = (tracks) => tracks * cardH + (tracks - 1) * G.trackGap;
+
+      let y = G.topPad;
+      const laneRects = [];
+      VIS_LANES.forEach((lane, li) => {
+        const laneTop = y;
+        // Compute lane interior height
+        const subHeights = lane.subRows.map(sr => subRowH(sr.tracks));
+        const innerH = subHeights.reduce((a, b) => a + b, 0)
+                     + (lane.subRows.length - 1) * G.subGap;
+        const laneH = G.lanePadY * 2 + innerH;
+        const laneBot = laneTop + laneH;
+
+        // Lay out each sub-row inside the lane
+        let subY = laneTop + G.lanePadY;
+        lane.subRows.forEach((sr, si) => {
+          const sH = subHeights[si];
+          // Center tracks vertically inside sub-row
+          sr.nodes.forEach(nd => {
+            const cx = columnXForRank(nd.rank);
+            // track 0 → top, track 1 → next slot
+            const cy = subY + cardH / 2 + nd.track * (cardH + G.trackGap);
+            VIS_LAYOUT[nd.key] = { cx, cy };
+          });
+          subY += sH + G.subGap;
+        });
+
+        laneRects.push({ top: laneTop, bot: laneBot, lane });
+        y = laneBot + G.laneGap;
+      });
+
+      const totalH = y - G.laneGap + G.topPad;
+      return { laneRects, totalH, columnX: columnXForRank, canvasW: computedCanvasW, rankMaxW };
+    }
+
+    function renderLanesAndLabels(geom) {
+      const svg = document.querySelector('.vis-canvas');
+      // Live canvas width — driven by per-rank max card widths; may exceed
+      // VIS_GEOM.canvasW when a wide card pushes the rightmost rank out.
+      const W = geom.canvasW;
+      // Update SVG viewBox + intrinsic dims so canvas shrinks/grows.
+      // The parent .vis-wrap supplies overflow-x scroll when W exceeds it.
+      svg.setAttribute('viewBox', `0 0 ${W} ${geom.totalH}`);
+      svg.setAttribute('width', W);
+      svg.style.width = `${W}px`;
+      svg.style.height = `${geom.totalH}px`;
+
+      // Remove existing lane backgrounds, dividers, labels (keep edges + nodes)
+      svg.querySelectorAll('rect.lane-bg, line.lane-divider, text.lane-label, text.lane-sub').forEach(el => el.remove());
+
+      const NS = 'http://www.w3.org/2000/svg';
+      // Insert lane visuals BEFORE edges-layer + node groups
+      const edgesLayer = document.getElementById('edges-layer');
+
+      geom.laneRects.forEach(({ top, bot, lane }) => {
+        const laneInnerX = VIS_GEOM.railW;
+        const laneInnerW = W - VIS_GEOM.railW - VIS_GEOM.laneRPad;
+        // Background
+        const bg = document.createElementNS(NS, 'rect');
+        bg.setAttribute('class', 'lane-bg');
+        bg.setAttribute('x', laneInnerX);
+        bg.setAttribute('y', top);
+        bg.setAttribute('width', laneInnerW);
+        bg.setAttribute('height', bot - top);
+        svg.insertBefore(bg, edgesLayer);
+
+        // Bottom divider
+        const bd = document.createElementNS(NS, 'line');
+        bd.setAttribute('class', 'lane-divider');
+        bd.setAttribute('x1', laneInnerX);
+        bd.setAttribute('y1', bot);
+        bd.setAttribute('x2', W - VIS_GEOM.laneRPad);
+        bd.setAttribute('y2', bot);
+        svg.insertBefore(bd, edgesLayer);
+
+        // Dashed sub-row separators — midpoint between each consecutive
+        // sub-row's bottom-most node and the next sub-row's top-most node.
+        for (let si = 0; si < lane.subRows.length - 1; si++) {
+          const prevBots = lane.subRows[si].nodes
+            .map(nd => VIS_LAYOUT[nd.key]).filter(Boolean);
+          const nextTops = lane.subRows[si + 1].nodes
+            .map(nd => VIS_LAYOUT[nd.key]).filter(Boolean);
+          if (!prevBots.length || !nextTops.length) continue;
+          const yMid = (Math.max(...prevBots.map(a => a.cy))
+                      + Math.min(...nextTops.map(a => a.cy))) / 2;
+          const ln = document.createElementNS(NS, 'line');
+          ln.setAttribute('class', 'lane-divider');
+          ln.setAttribute('x1', laneInnerX + 20);
+          ln.setAttribute('y1', yMid);
+          ln.setAttribute('x2', W - VIS_GEOM.laneRPad - 20);
+          ln.setAttribute('y2', yMid);
+          ln.setAttribute('stroke-dasharray', '2 4');
+          svg.insertBefore(ln, edgesLayer);
+        }
+
+        // Lane label (centered vertically on lane)
+        const labelY = top + (bot - top) / 2 - 2;
+        const lbl = document.createElementNS(NS, 'text');
+        lbl.setAttribute('class', 'lane-label');
+        lbl.setAttribute('x', 20);
+        lbl.setAttribute('y', labelY);
+        lbl.textContent = lane.label;
+        svg.insertBefore(lbl, edgesLayer);
+
+        const sub = document.createElementNS(NS, 'text');
+        sub.setAttribute('class', 'lane-sub');
+        sub.setAttribute('x', 20);
+        sub.setAttribute('y', labelY + 16);
+        sub.textContent = lane.sub;
+        svg.insertBefore(sub, edgesLayer);
+      });
+
+      // Vertical rail divider (full canvas height)
+      const rail = document.createElementNS(NS, 'line');
+      rail.setAttribute('class', 'lane-divider');
+      rail.setAttribute('x1', VIS_GEOM.railW);
+      rail.setAttribute('y1', VIS_GEOM.topPad);
+      rail.setAttribute('x2', VIS_GEOM.railW);
+      rail.setAttribute('y2', geom.totalH - VIS_GEOM.topPad);
+      svg.insertBefore(rail, edgesLayer);
+    }
+
+    // Same-lane edges, declared as (child → parent) pairs of nodeKeys.
+    // Matches the original per-service DAGs.
+    const VIS_EDGES = [
+      // payments-api linear
+      ['pa-qa',      'pa-prod'],
+      ['pa-dev',     'pa-qa'],
+      ['pa-staging', 'pa-dev'],
+      // pa-preprod isolated — no parents
+      // order-svc fork from prod + linear qa→preprod
+      ['os-staging', 'os-prod'],
+      ['os-dev',     'os-prod'],
+      ['os-preprod', 'os-qa'],
+      // ledger-projector diamond
+      ['lp-qa',      'lp-prod'],
+      ['lp-dev',     'lp-prod'],
+      ['lp-staging', 'lp-qa'],
+      ['lp-staging', 'lp-dev'],
+      // notification-worker parallel + isolated
+      ['nw-staging', 'nw-prod'],
+      ['nw-preprod', 'nw-dev'],
+    ];
+
+    function renderEdges(nodeWidths, cardH) {
+      const layer = document.getElementById('edges-layer');
+      if (!layer) return;
+      layer.innerHTML = '';
+      const widthOf = (k) => (nodeWidths && nodeWidths[k]) || 100;
+      VIS_EDGES.forEach(([childKey, parentKey]) => {
+        const c = VIS_LAYOUT[childKey];
+        const p = VIS_LAYOUT[parentKey];
+        if (!c || !p) return;
+        const x1 = p.cx + widthOf(parentKey) / 2; // right edge of parent
+        const y1 = p.cy;
+        const x2 = c.cx - widthOf(childKey) / 2;  // left edge of child
+        const y2 = c.cy;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        let d;
+        if (Math.abs(y1 - y2) < 1) {
+          d = `M ${x1} ${y1} H ${x2}`;
+        } else {
+          const mx = (x1 + x2) / 2;
+          d = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
+        }
+        path.setAttribute('class', 'edge');
+        path.setAttribute('d', d);
+        layer.appendChild(path);
+      });
+    }
+
+    // Hairline SVG icon path data for in-canvas node icons (no <svg> nesting).
+    // Each entry is a list of <path>/<circle> elements rendered relative to (0,0)
+    // in a 16x16 box; drawNodeIcon places them at the given x,y.
+    const NODE_ICON_SVG = {
+      version: '<path d="M2.5 2.5h5.5l5.5 5.5-5.5 5.5L2.5 8z"/><circle cx="5" cy="5" r="0.9"/>',
+      run_url: '<path d="M6.5 3h6.5v6.5"/><path d="M13 3l-7 7"/><path d="M11 8.5V13H3V5h4.5"/>',
+      sha: '<path d="M1.5 8h4"/><path d="M10.5 8h4"/><circle cx="8" cy="8" r="2.5"/>',
+      run_number: '<path d="M6 2.5l-1.5 11"/><path d="M11.5 2.5l-1.5 11"/><path d="M2.5 6h11"/><path d="M2.5 10h11"/>',
+      ref: '<circle cx="4" cy="3.5" r="1.4"/><circle cx="4" cy="12.5" r="1.4"/><circle cx="12" cy="6" r="1.4"/><path d="M4 4.9v6.2"/><path d="M4 7.5c0-1.7 1.4-3 3-3h3.6"/>',
+      actor: '<circle cx="8" cy="5.5" r="2.4"/><path d="M2.5 13.5c0-2.6 2.5-4.3 5.5-4.3s5.5 1.7 5.5 4.3"/>',
+      happened_at: '<circle cx="8" cy="8" r="5.7"/><path d="M8 4.5V8l2.3 1.6"/>',
+      parrent_deployments: '<path d="M6.6 9.4l2.8-2.8"/><path d="M9.4 4.6a2.4 2.4 0 0 1 3.4 3.4l-1.4 1.4a2.4 2.4 0 0 1-3.4-3.4"/><path d="M6.6 11.4a2.4 2.4 0 0 1-3.4-3.4l1.4-1.4a2.4 2.4 0 0 1 3.4 3.4"/>',
+      environment: '<rect x="2.5" y="3" width="11" height="3.5" rx="0.6"/><rect x="2.5" y="9.5" width="11" height="3.5" rx="0.6"/><circle cx="4.8" cy="4.75" r="0.4"/><circle cx="4.8" cy="11.25" r="0.4"/>',
+    };
+
+    // --------------------------------------------------------------
+    // Visualisation node — mixed / positional treatment.
+    // env is the PRIMARY identifier (bottom-right, Inter semibold ~14px).
+    // version is SECONDARY (top-left, mono small, muted).
+    //
+    //   version       top-left,  mono ~10-11px, muted ink
+    //   actor·when    top-right, small muted
+    //   ref           ⎇ branch line, mono small
+    //   run_url/num/parents  mid-line, inline glyph-prefixed
+    //   sha           bottom-left, mono short hex
+    //   environment   bottom-right, Inter semibold ~14px, primary ink
+    //
+    // Card width capped at 280px so 50-char versions wrap/truncate
+    // instead of blowing up node geometry. Status conveyed via thin
+    // colored left stripe (no fill saturation). Selected node gets a
+    // slightly thicker hairline ring (no glow).
+    // --------------------------------------------------------------
+    function appendSvgText(g, cls, x, y, text, anchor) {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('class', cls);
+      t.setAttribute('x', x);
+      t.setAttribute('y', y);
+      if (anchor) t.setAttribute('text-anchor', anchor);
+      t.textContent = text;
+      g.appendChild(t);
+      return t;
+    }
+
+    // Approx-truncate SVG string by char count (no measureText in plain SVG).
+    // mono ~5.5px/char @10px font; we cap by available pixel width.
+    function truncForWidth(str, maxPx, pxPerChar) {
+      if (!str) return '';
+      const maxChars = Math.max(3, Math.floor(maxPx / pxPerChar));
+      if (str.length <= maxChars) return str;
+      return str.slice(0, Math.max(1, maxChars - 1)) + '…';
+    }
+
+    function renderVisualisation() {
+      const state = visVisible;
+      const stripeW = 3;
+      const padX = 6;
+      const padY = 4;
+
+      // Determine card dimensions per node. Cards now grow horizontally to
+      // fit content (Bug-2 fix): no max-width cap, version on one line and
+      // never truncated. Each card sizes independently to its widest line;
+      // the lane layout (computeVisLayout) computes per-rank max-width so
+      // cards never overlap regardless of width variance (Bug-1 fix).
+      const showVer = state.version;
+      const showEnv = state.environment;
+      const showRef = state.ref;
+      const showSha = state.sha;
+      const showRun = state.run_url;
+      const showNum = state.run_number;
+      const showAct = state.actor;
+      const showWhen = state.happened_at;
+      const showPar = state.parrent_deployments;
+
+      // Headline row (version L + actor·when R) — present when either is on.
+      const hasHeadRow = (showVer || showAct || showWhen);
+      // Mid tokens — ref, sha, run, runnum, parents — flex-wrap inside card.
+      const hasMidTokens = (showRef || showSha || showRun || showNum || showPar);
+      // Bottom row — env (R) dominant.
+      const hasBottomRow = showEnv;
+
+      // Pixel-width estimates per font role.
+      // mono 10.5px ~5.6 px/char; Inter 9.5px ~5.0; Inter semibold 14px ~7.6.
+      const PX_VER  = 5.6;           // nx-ver mono 10.5px (version headline)
+      const PX_MONO = 5.4;           // nx-ref / nx-sha mono 9.5px
+      const PX_INTER = 5.0;          // small Inter 9.5px
+      const PX_ENV = 7.6;            // Inter 14px semibold (environment)
+      const TOKEN_GAP = 6;           // px between tokens on a row
+      const ROW_GAP = 1;             // px between wrapped rows
+      const headRowH = 11;
+      const midRowH = 11;
+      const envRowH = 16;            // accommodates Inter 14px semibold
+      const HEAD_GAP_LR = 12;        // px between version (L) and actor·when (R)
+
+      // ---- Build mid-tokens list with measured widths ----
+      // Each token: { text, cls, px }. Version is no longer truncated, so
+      // mid tokens never overflow a card-bounded inner width: cards now
+      // grow to fit. Token rows are still computed for wrapping but use
+      // each node's own innerW.
+      function mkTokens(n) {
+        const t = [];
+        if (showRef && n.ref) {
+          const txt = `⎇ ${n.ref}`;
+          t.push({ text: txt, cls: 'nx-ref', px: 0 });
+        }
+        if (showSha && n.sha) {
+          t.push({ text: n.sha, cls: 'nx-sha', px: 0 });
+        }
+        if (showRun && n.run_url) {
+          t.push({ text: '↗ run', cls: 'nx-runurl', px: 0 });
+        }
+        if (showNum && n.run_number) {
+          t.push({ text: `#${n.run_number}`, cls: 'nx-runnum', px: 0 });
+        }
+        if (showPar) {
+          const p = n.parrent_deployments || [];
+          if (p.length > 0) t.push({ text: `⟵ ${p.length}`, cls: 'nx-parents', px: 0 });
+        }
+        // Measure
+        t.forEach(tok => {
+          const pxPerChar = (tok.cls === 'nx-ref' || tok.cls === 'nx-sha') ? PX_MONO : PX_INTER;
+          tok.px = tok.text.length * pxPerChar;
+        });
+        return t;
+      }
+
+      // Greedy line-packer — returns array of rows; each row is an array
+      // of {token, x} relative to innerX. `innerW` here bounds wrap width.
+      function packRows(tokens, innerW) {
+        const rows = [];
+        let cur = []; let curW = 0;
+        for (const tok of tokens) {
+          const need = (cur.length ? TOKEN_GAP : 0) + tok.px;
+          if (cur.length && curW + need > innerW) {
+            rows.push(cur);
+            cur = []; curW = 0;
+          }
+          const tokenX = curW + (cur.length ? TOKEN_GAP : 0);
+          cur.push({ tok, x: tokenX });
+          curW += need;
+        }
+        if (cur.length) rows.push(cur);
+        return rows;
+      }
+
+      // Per-node ideal card width — driven by widest single-line content.
+      // version is NEVER truncated and renders on ONE line (Bug-2 fix), so
+      // version pixel width participates in the max() directly.
+      function nodeContentW(n) {
+        let widest = 0;
+        // Head row width = verPx + gap + actorWhenPx (or just one if other absent).
+        if (hasHeadRow) {
+          let verPx = 0;
+          if (showVer && n.version) verPx = n.version.length * PX_VER;
+          const brParts = [];
+          if (showAct && n.actor) brParts.push(`@${n.actor}`);
+          if (showWhen && (n.when || n.happened_at)) brParts.push(n.when || n.happened_at);
+          const brStr = brParts.join(' · ');
+          const brPx = brStr.length * PX_INTER;
+          let headW = 0;
+          if (verPx && brPx) headW = verPx + HEAD_GAP_LR + brPx;
+          else headW = verPx + brPx;
+          if (headW > widest) widest = headW;
+        }
+        // Mid row — widest single token (since wrapping is allowed inside
+        // the card, we don't need to fit all tokens on one line; but cards
+        // shouldn't be narrower than the widest individual token).
+        if (hasMidTokens) {
+          const toks = mkTokens(n);
+          let widestTok = 0;
+          for (const tk of toks) if (tk.px > widestTok) widestTok = tk.px;
+          if (widestTok > widest) widest = widestTok;
+        }
+        // Bottom row: env right-aligned.
+        if (hasBottomRow && showEnv && n.environment) {
+          const envPx = n.environment.length * PX_ENV;
+          if (envPx > widest) widest = envPx;
+        }
+        // Chrome + sane minimum.
+        const total = Math.ceil(widest + stripeW + padX * 2);
+        return Math.max(36, total);
+      }
+
+      // ---- Compute per-node widths and uniform height ----
+      const nodeWidths = {};
+      Object.keys(VIS_NODES).forEach(k => {
+        nodeWidths[k] = nodeContentW(VIS_NODES[k]);
+      });
+
+      // For card-height calculation, use each node's own innerW for mid-row
+      // wrap counting, then take the global MAX rows so all cards share a
+      // uniform height (lane geometry stays clean).
+      let maxMidRows = 0;
+      Object.entries(VIS_NODES).forEach(([k, n]) => {
+        const toks = mkTokens(n);
+        const innerW = nodeWidths[k] - stripeW - padX * 2;
+        const rows = packRows(toks, innerW);
+        if (rows.length > maxMidRows) maxMidRows = rows.length;
+      });
+
+      let cardH;
+      if (!hasHeadRow && !hasMidTokens && !hasBottomRow) {
+        cardH = 12;                  // status-stripe-only badge
+      } else {
+        let h = padY * 2;
+        if (hasHeadRow) h += headRowH;
+        if (hasMidTokens && maxMidRows > 0) {
+          h += maxMidRows * midRowH + (maxMidRows - 1) * ROW_GAP;
+        }
+        if (hasBottomRow) h += envRowH;
+        cardH = h;
+      }
+
+      // Recompute lane geometry from per-rank max widths (Bug-1 fix).
+      const geom = computeVisLayout(nodeWidths, cardH);
+      renderLanesAndLabels(geom);
+
+      document.querySelectorAll('.vis-canvas g.node').forEach(g => {
+        const key = g.dataset.node;
+        const n = VIS_NODES[key];
+        if (!n) return;
+        const cardW = nodeWidths[key];
+        const sc = statusClass(n.status);
+        const stripeCls = sc === 'fl' ? 'fail' : sc;
+        const anchor = VIS_LAYOUT[key];
+        const x = anchor.cx - cardW / 2;
+        const y = anchor.cy - cardH / 2;
+
+        // Card box
+        const box = g.querySelector('rect.node-box');
+        box.setAttribute('x', x);
+        box.setAttribute('y', y);
+        box.setAttribute('width', cardW);
+        box.setAttribute('height', cardH);
+        box.setAttribute('class', 'node-box');
+
+        // Rebuild children
+        Array.from(g.querySelectorAll(':scope > :not(rect.node-box)')).forEach(el => el.remove());
+
+        // Status stripe (left edge)
+        const stripe = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        stripe.setAttribute('class', `node-stripe ${stripeCls}`);
+        stripe.setAttribute('x', x);
+        stripe.setAttribute('y', y);
+        stripe.setAttribute('width', stripeW);
+        stripe.setAttribute('height', cardH);
+        g.appendChild(stripe);
+
+        const innerX = x + stripeW + padX;
+        const innerR = x + cardW - padX;
+        const innerW = cardW - stripeW - padX * 2;
+        let cy = y + padY;
+
+        // Head row (top): version (left, mono, ONE LINE, NEVER TRUNCATED)
+        // + actor·when (right). Card width was sized to fit both.
+        if (hasHeadRow) {
+          const rowBase = cy + 8;
+          if (showVer && n.version) {
+            // Bug-2: render full version verbatim — no ellipsis, no clamp.
+            appendSvgText(g, 'nx-ver', innerX, rowBase, n.version);
+          }
+          const br = [];
+          if (showAct && n.actor) br.push(`@${n.actor}`);
+          if (showWhen && (n.when || n.happened_at)) br.push(n.when || n.happened_at);
+          if (br.length) {
+            appendSvgText(g, 'nx-when', innerR, rowBase, br.join(' · '), 'end');
+          }
+          cy += headRowH;
+        }
+
+        // Mid wrap-rows: ref / sha / run / runnum / parents flow inline.
+        if (hasMidTokens) {
+          const toks = mkTokens(n);
+          const rows = packRows(toks, innerW);
+          rows.forEach((row, ri) => {
+            const rowBase = cy + 8;
+            row.forEach(({ tok, x: tx }) => {
+              appendSvgText(g, tok.cls, innerX + tx, rowBase, tok.text);
+            });
+            cy += midRowH + (ri < rows.length - 1 ? ROW_GAP : 0);
+          });
+        }
+
+        // Bottom row: env (bottom-right, primary)
+        if (hasBottomRow) {
+          const bottomBase = y + cardH - 3;
+          if (showEnv && n.environment) {
+            appendSvgText(g, 'nx-env', innerR, bottomBase, n.environment, 'end');
+          }
+        }
+      });
+
+      renderEdges(nodeWidths, cardH);
+      if (currentSelectedNode) setSelectedNode(currentSelectedNode);
+    }
+
+    // --------------------------------------------------------------
+    // History drawer
+    // --------------------------------------------------------------
+    const drawer = document.getElementById('drawer');
+    const scrim  = document.getElementById('scrim');
+    const drawerCtx = document.getElementById('drawer-ctx');
+    const drawerList = document.getElementById('drawer-list');
+    const drawerClose = document.getElementById('drawer-close');
+
+    function statusClass(s) {
+      return s === 'success' ? 'ok' : s === 'failure' ? 'fl' : 'run';
+    }
+
+    function shortId(s) { return s.length > 12 ? s.slice(0, 12) + '…' : s; }
+    function fmtParents(arr) {
+      if (!arr || arr.length === 0) return 'none';
+      return arr.map(id => shortId(id)).join(', ');
+    }
+
+    function openDrawer(slot) {
+      const items = HISTORY[slot] || fallbackHistory(slot);
+      const [component, environment] = slot.split('/');
+      drawerCtx.textContent = `${component} · ${environment}`;
+      drawerList.innerHTML = items.map(h => `
+        <div class="hist">
+          <div class="hist-head">
+            <span class="st ${statusClass(h.status)}" aria-hidden="true"></span>
+            <span class="v">${h.version}</span>
+            <span class="chip ${statusClass(h.status) === 'fl' ? 'fail' : statusClass(h.status)}">${h.status}</span>
+          </div>
+          <dl>
+            <dt>component</dt><dd>${component}</dd>
+            <dt>environment</dt><dd>${environment}</dd>
+            <dt>version</dt><dd>${h.version}</dd>
+            <dt>status</dt><dd>${h.status}</dd>
+            <dt>run_url</dt><dd><a href="${h.run_url}" target="_blank" rel="noopener">run #${h.run_number} ↗</a></dd>
+            <dt>sha</dt><dd><code>${h.sha}</code></dd>
+            <dt>run_number</dt><dd>${h.run_number}</dd>
+            <dt>ref</dt><dd><code>${h.ref || '—'}</code></dd>
+            <dt>actor</dt><dd>${h.actor}</dd>
+            <dt>happened_at</dt><dd>${h.when}<span class="abs">${h.happened_at}</span></dd>
+            <dt>parrent_deployments</dt><dd>${fmtParents(h.parrent_deployments)}</dd>
+          </dl>
+        </div>
+      `).join('');
+      drawer.classList.add('open');
+      scrim.classList.add('open');
+      drawer.setAttribute('aria-hidden', 'false');
+      scrim.setAttribute('aria-hidden', 'false');
+    }
+    function closeDrawer() {
+      drawer.classList.remove('open');
+      scrim.classList.remove('open');
+      drawer.setAttribute('aria-hidden', 'true');
+      scrim.setAttribute('aria-hidden', 'true');
+    }
+
+    document.querySelectorAll('.tile[data-slot]').forEach(t => {
+      t.addEventListener('click', (e) => {
+        // Don't trigger when clicking a version (hover highlight is the affordance there)
+        if (e.target.classList && e.target.classList.contains('ver')) {
+          // Allow drawer open too — version click feels natural.
+        }
+        openDrawer(t.dataset.slot);
+      });
+    });
+    drawerClose.addEventListener('click', closeDrawer);
+    scrim.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+
+    // --------------------------------------------------------------
+    // Visualisation: Inspector panel — full 11-field record render
+    // --------------------------------------------------------------
+    const inspectorCtx = document.getElementById('insp-ctx');
+    const inspectorDl  = document.getElementById('insp-dl');
+
+    function renderInspector(nodeKey) {
+      const n = VIS_NODES[nodeKey];
+      if (!n) return;
+      const sc = statusClass(n.status);
+      const chipCls = sc === 'fl' ? 'fail' : sc;
+      inspectorCtx.innerHTML = `<strong>${n.component}</strong> · ${n.environment}`;
+      inspectorDl.innerHTML = `
+        <dt>component</dt><dd>${n.component}</dd>
+        <dt>environment</dt><dd>${n.environment}</dd>
+        <dt>version</dt><dd>${n.version}</dd>
+        <dt>status</dt><dd><span class="chip ${chipCls}">${n.status}</span></dd>
+        <dt>run_url</dt><dd><a href="${n.run_url}" target="_blank" rel="noopener">run #${n.run_number} ↗</a></dd>
+        <dt>sha</dt><dd><code>${n.sha}</code></dd>
+        <dt>run_number</dt><dd>${n.run_number}</dd>
+        <dt>ref</dt><dd><code>${n.ref || '—'}</code></dd>
+        <dt>actor</dt><dd>${n.actor}</dd>
+        <dt>happened_at</dt><dd>${n.when}<span class="abs">${n.happened_at}</span></dd>
+        <dt>parrent_deployments</dt><dd>${fmtParents(n.parrent_deployments)}</dd>
+      `;
+    }
+
+    let currentSelectedNode = null;
+
+    function setSelectedNode(nodeKey) {
+      currentSelectedNode = nodeKey;
+      // Remove prior selection ring
+      document.querySelectorAll('.vis-canvas .node-sel').forEach(r => r.remove());
+      const g = document.querySelector(`.vis-canvas g.node[data-node="${nodeKey}"]`);
+      if (g) {
+        const box = g.querySelector('rect.node-box');
+        const x = parseFloat(box.getAttribute('x')) - 4;
+        const y = parseFloat(box.getAttribute('y')) - 4;
+        const w = parseFloat(box.getAttribute('width')) + 8;
+        const h = parseFloat(box.getAttribute('height')) + 8;
+        const ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        ring.setAttribute('class', 'node-sel');
+        ring.setAttribute('x', x); ring.setAttribute('y', y);
+        ring.setAttribute('width', w); ring.setAttribute('height', h);
+        ring.setAttribute('rx', 4);
+        g.appendChild(ring);
+      }
+      renderInspector(nodeKey);
+    }
+
+    document.querySelectorAll('.vis-canvas g.node').forEach(g => {
+      g.addEventListener('click', () => setSelectedNode(g.dataset.node));
+    });
+
+    // --------------------------------------------------------------
+    // Correlation picker (now inside popover): time-window enable/disable
+    // --------------------------------------------------------------
+    const twSelect = document.getElementById('p-tw');
+    function syncTimeWindow() {
+      const parent = document.getElementById('p-parent');
+      twSelect.disabled = !!parent.checked;
+    }
+    document.querySelectorAll('input[name="pred"]').forEach(r => {
+      r.addEventListener('change', syncTimeWindow);
+    });
+    syncTimeWindow();
+
+    // --------------------------------------------------------------
+    // Initial render — order matters:
+    //   1. Build fields-list for the default (matrix) view
+    //   2. Render matrix tiles from MATRIX_TILES (all fields ON)
+    //   3. Render visualisation nodes from VIS_NODES (all fields ON)
+    //   4. Pre-select pa-staging
+    //   5. Apply per-view button visibility
+    //   6. Pre-open history drawer on payments-api/staging
+    //   7. Derive KPIs from rendered DOM
+    // --------------------------------------------------------------
+    buildFieldsList();
+    renderMatrix();
+    renderVisualisation();
+    setSelectedNode('pa-staging');
+    // Initial header button visibility — matrix view by default
+    document.querySelector('[data-pop-anchor="pop-corr"]').hidden = true;
+
+    openDrawer('payments-api/staging');
+
+    // --------------------------------------------------------------
+    // Theme switcher — dark / light / auto
+    //   - read localStorage.theme on load (default 'light')
+    //   - click updates data-theme on <html> + persists
+    //   - auto: prefers-color-scheme media query resolves live; pressed
+    //     state still reflects user's chosen mode ('auto'), tokens flip
+    //     automatically via CSS @media on :root[data-theme="auto"].
+    // --------------------------------------------------------------
+    (function themeSwitch() {
+      const sw = document.getElementById('theme-switch');
+      if (!sw) return;
+      const buttons = Array.from(sw.querySelectorAll('button[data-theme]'));
+      function getStored() {
+        try {
+          const t = localStorage.getItem('theme');
+          return (t === 'dark' || t === 'light' || t === 'auto') ? t : 'light';
+        } catch { return 'light'; }
+      }
+      function apply(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        buttons.forEach(b => b.setAttribute('aria-pressed', b.dataset.theme === theme ? 'true' : 'false'));
+        try { localStorage.setItem('theme', theme); } catch {}
+      }
+      buttons.forEach(b => b.addEventListener('click', () => apply(b.dataset.theme)));
+      // Init pressed state from current resolved theme (pre-paint already set data-theme).
+      apply(getStored());
+      // Auto-mode listener: when system flips and user is on 'auto', the
+      // CSS @media handles token swap; no JS work needed beyond no-op repaint.
+      if (window.matchMedia) {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const onChange = () => {
+          if (document.documentElement.getAttribute('data-theme') === 'auto') {
+            // Force style recomputation by no-op attribute toggle.
+            document.documentElement.setAttribute('data-theme', 'auto');
+          }
+        };
+        if (mq.addEventListener) mq.addEventListener('change', onChange);
+        else if (mq.addListener) mq.addListener(onChange);
+      }
+    })();
+
+    (function deriveKpis() {
+      const svcSet = new Set();
+      document.querySelectorAll('tr[data-svc]').forEach(tr => svcSet.add(tr.dataset.svc));
+      const envSet = new Set();
+      document.querySelectorAll('table.matrix thead th').forEach((th, i) => { if (i > 0) envSet.add(th.textContent.trim()); });
+      const inflight = document.querySelectorAll('.tile .wash-run').length;
+      const failed   = document.querySelectorAll('.tile .wash-fail').length;
+      document.getElementById('kpi-svc').textContent  = svcSet.size;
+      document.getElementById('kpi-env').textContent  = envSet.size;
+      document.getElementById('kpi-run').textContent  = inflight;
+      document.getElementById('kpi-fail').textContent = failed;
+    })();
+  </script>
+</body>
+</html>

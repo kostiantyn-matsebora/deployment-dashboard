@@ -1,7 +1,9 @@
 # Deployment Dashboard
 
-## Source of truth
-[docs/SAD.md](docs/SAD.md) — Solution Architecture Document describing the project's architecture (goals, non-goals, FR/NFR, constraints, target architecture, components, domain model). Consult it before making architectural decisions or changes that touch component boundaries, contracts, or stated requirements.
+## Sources of truth
+
+- [docs/SAD.md](docs/SAD.md) — Solution Architecture Document describing the project's architecture (goals, non-goals, FR/NFR, constraints, target architecture, components, domain model). Consult it before making architectural decisions or changes that touch component boundaries, contracts, or stated requirements.
+- [docs/FRONTEND_REQUIREMENTS.md](docs/FRONTEND_REQUIREMENTS.md) — Frontend functional / visual / behavior / data requirements that refine and extend SAD §7 "Dashboard Frontend (MVP)". Consult it before any frontend implementation, mockup iteration, or visual-change decision.
 
 ## Context economy and documentation authoring rules
 

@@ -1,4 +1,4 @@
-# Solution Architecture — Deployment Dashboard
+# Solution Architecture Document — Deployment Dashboard
 
 **Version:** 1.0  
 **Status:** Draft  
@@ -17,7 +17,13 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 
 ## 2. Goals
 
-- Show a real-time **services × environments deployment matrix** sourced from CI/CD pipeline events (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, or any tool that can make an HTTP POST)
+- Show a real-time:
+  - **services × environments deployment matrix**
+  - **graph of deployments of different environments per service**
+  
+  sourced from CI/CD pipeline events (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, or any tool that can make an HTTP POST)
+
+- Show a real-time **graph of deployments of different environments per service* 
 - Record a per-slot history of deployments (version, status, actor, time, run link)
 - Require **no changes to existing CI/CD pipelines** beyond adding a single notification step
 - Support **SSE fan-out across multiple backend instances** — all connected browser clients receive live updates regardless of which instance handled the ingest request; no sticky sessions required
@@ -260,7 +266,7 @@ Write and Read are **distinct microservices** with distinct concerns, **co-locat
 - One ACA app gets public ingress in Azure; the others stay internal.
 - The SPA and CI/CD callers are upstream-agnostic — they hit one URL.
 
-#### Dashboard Frontend (MVP)
+### Dashboard Frontend (MVP)
 
 Angular 20 SPA in its own nginx container; reached only via the App Gateway. Attributes below.
 
@@ -281,9 +287,12 @@ The box is split into two sections by a dashed divider when a last-successful st
 
 Boxes share a version highlight on hover — hovering a version amber-highlights all boxes across environments where the same version is deployed, making it easy to trace promotion progress.
 
-# Visualisation
+Box shows all attributes (except synthetic) belongs to deployment event model, with ability to configure by user set of attributes shown.
 
-View represent graph of deployments placed one under another, consolidating graphs of Github workflows for different services to one view.
+#### Views
+
+- Graph of deployments placed one under another, consolidating graphs of Github workflows for different services to one view.
+- Services × environments deployment matrix.
 
 ### CI/CD Integration
 
@@ -303,6 +312,7 @@ The ingest API is the sole integration point. Any CI/CD tool that can make an HT
 | `run_url` | STRING | FALSE| Link to the CI/CD run |
 | `sha` | STRING | FALSE| Unique identifier of commit |
 | `run_number` | STRING | FALSE| CI/CD run identifier |
+| `ref` | STRING | FALSE | Branch or PR number
 | `actor` | STRING | FALSE| Username that triggered the run |
 | `happened_at` | DATETIME | TRUE | UTC timestamp of the event |
 | `parrent_deployments` | GUID[] | FALSE | References to parent deployments |
