@@ -1924,7 +1924,7 @@
 
     <nav class="tabs" role="tablist">
       <button class="tab is-active" data-view="matrix" role="tab">Matrix</button>
-      <button class="tab" data-view="vis" role="tab">Visualisation</button>
+      <button class="tab" data-view="vis" role="tab">Swimlanes</button>
     </nav>
 
     <div class="topbar-spacer"></div>
@@ -2207,6 +2207,9 @@ const MATRIX_FIELDS = [
   { key: 'happened_at',         label: 'happened_at' },
   { key: 'parrent_deployments', label: 'parrent_deployments' },
 ];
+// parrent_deployments is intentionally NOT in VIS_FIELDS — the swimlane
+// graph already renders parent relationships as edges, so the "↵ N parents"
+// text would duplicate that information visually.
 const VIS_FIELDS = [
   { key: 'environment',         label: 'environment' },
   { key: 'version',             label: 'version' },
@@ -2216,7 +2219,6 @@ const VIS_FIELDS = [
   { key: 'ref',                 label: 'ref' },
   { key: 'actor',               label: 'actor' },
   { key: 'happened_at',         label: 'happened_at' },
-  { key: 'parrent_deployments', label: 'parrent_deployments' },
 ];
 
 // Default: ALL ON
@@ -2721,7 +2723,7 @@ function setView(view) {
   document.getElementById('fields-grid-matrix').style.display = view === 'matrix' ? '' : 'none';
   document.getElementById('fields-grid-vis').style.display    = view === 'vis'    ? '' : 'none';
   document.getElementById('pop-fields-title').textContent =
-    view === 'matrix' ? 'Visible fields — Matrix' : 'Visible fields — Visualisation';
+    view === 'matrix' ? 'Visible fields — Matrix' : 'Visible fields — Swimlanes';
   // close any open popover when switching
   closeAllPopovers();
 
@@ -3471,36 +3473,16 @@ function buildSwim() {
     if (tim) verRow.appendChild(tim);
     if (verRow.childElementCount) card.appendChild(verRow);
 
-    // Mid grid — happened_at + sha + parents are excluded:
+    // Mid grid — happened_at + sha are excluded:
     //   happened_at rides on the version row (top-right)
     //   sha rides on the env row (bottom-left)
-    //   parents has its own sibling row below
-    // Excluding parents from .tile-attrs is critical: inside the flex-wrap
-    // container, `.ta-full { flex-basis:100% }` inflates the container's
-    // max-content as if parents shared a line with bl+br, growing card width
-    // by parent-text-width. The `margin-left:auto` on .ta-br then converts
-    // that surplus into a variable gap between left + right clusters
-    // (0 on parent-less cards, ~70px on cards with `↵ 2 parents`). Rendering
-    // parents as a sibling row keeps tile-attrs max-content = bl+br+gap.
+    // parrent_deployments is absent from VIS_FIELDS entirely, so renderAttrs
+    // won't emit it — the graph edges already convey parent relationships.
     const attrs = renderAttrs(rec, visFieldsOn, {
       environment: n.environment,
-      skipFields: new Set(['happened_at', 'sha', 'parrent_deployments']),
+      skipFields: new Set(['happened_at', 'sha']),
     });
-    if (attrs) {
-      // attrs is a DocumentFragment containing .tile-attrs + .vc-env-row.
-      // Insert a parents row between them.
-      const parentsSpan = fieldSpan('parrent_deployments', rec, visFieldsOn);
-      if (parentsSpan) {
-        const parRow = document.createElement('div');
-        parRow.className = 'vc-parents-row';
-        parRow.appendChild(parentsSpan);
-        // Insert before the .vc-env-row child of the fragment, if present.
-        const envRowEl = attrs.querySelector('.vc-env-row');
-        if (envRowEl) attrs.insertBefore(parRow, envRowEl);
-        else attrs.appendChild(parRow);
-      }
-      card.appendChild(attrs);
-    }
+    if (attrs) card.appendChild(attrs);
 
     card.addEventListener('click', () => selectVisNode(n.id));
     cards.appendChild(card);
