@@ -1,0 +1,144 @@
+# Views
+
+## Matrix View Layout
+
+### Grid Structure
+
+```css
+.matrix {
+  display: grid;
+  grid-template-columns: 180px repeat(N, minmax(140px, max-content));
+  column-gap: 6px;
+  row-gap: 9px;  /* clear visual separation between service rows */
+}
+```
+
+- **First column (180px):** Service name, sticky-left during horizontal scroll (`position: sticky; left: 0`). Background: `--glass-strong` + `backdrop-filter` so content doesn't show through.
+- **Env columns:** `minmax(140px, max-content)` — each column expands to fit widest cell. Columns consume available viewport width when content allows.
+- **Service-row accent:** `border-left: 2px solid rgba(var(--accent-rgb), 0.35)` on `.row-head`.
+- **Matrix shell:** `overflow-x: auto; overflow-y: visible`. Bottom hairline: `border-bottom: 1px solid var(--glass-edge-2)` closes the container visually.
+- **Column headers:** environment tag in `.env-tag` monospace pill.
+
+### Filtering
+
+- **Service filter:** inline `pInputText` in topbar. Case-insensitive substring match against component name. Matching toggles `.is-hidden` on `.row` elements.
+- **Failures-only:** inline `p-toggleSwitch` pill. When ON, hides service rows that have no failed states (fail-last, run-fail-last, run-fail-only).
+
+---
+
+## Swimlanes View Layout
+
+### Overall Structure
+
+```css
+.vis-shell {
+  display: grid;
+  grid-template-columns: 1fr 320px;  /* canvas | inspector */
+  gap: 14px;
+}
+```
+
+### Canvas & Lanes
+
+- **One horizontal lane per service.** Each lane has a header (`.lane-head`) and a content area containing a dedicated `<ngx-graph>` instance.
+- **One `<ngx-graph>` per service** — since no cross-service edges exist (each lane is self-contained), each service gets its own graph component. This keeps data binding simple.
+- **Multiple disconnected DAGs** within a lane stack **vertically** (top-to-bottom), not horizontally. Dagre handles disconnected subgraphs natively.
+- **Time axis:** left-to-right within each DAG, based on `happened_at`.
+
+### ngx-graph Configuration
+
+```html
+<ngx-graph
+  [nodes]="laneNodes"           <!-- Node[] for this service -->
+  [links]="laneLinks"           <!-- Edge[] derived from parrent_deployments -->
+  [view]="[canvasWidth, laneHeight]"
+  layout="dagre"
+  [layoutSettings]="{
+    orientation: 'LR',          // left-to-right (time axis)
+    rankPadding: 60,            // gap between rank columns
+    nodePadding: 12,            // vertical gap between parallel nodes
+    edgePadding: 8,
+    multigraph: true
+  }"
+  [curve]="curveBundle"         // d3 curve for smooth edges
+  [autoZoom]="false"
+  [panningEnabled]="false"      // outer .vis-canvas scrolls instead
+  [zoomEnabled]="false"
+  (select)="onNodeSelect($event)"
+>
+  <ng-template #nodeTemplate let-node> ... </ng-template>
+  <ng-template #linkTemplate let-link> ... </ng-template>
+  <ng-template #defsTemplate> ... </ng-template>
+</ngx-graph>
+```
+
+### Data Mapping
+
+| ngx-graph Input | Source | Mapping |
+|-----------------|--------|---------|
+| `[nodes]` | Deployment events for this service | `{ id: event.id, label: event.version, data: { ...event } }`. Attach the full domain-model record in `data` so the node template can render all fields. |
+| `[links]` | `parrent_deployments` | For each node, emit one link per parent: `{ id: nodeId+parentId, source: parentId, target: nodeId, data: { status: parentNode.status } }`. Only intra-service parents produce links. |
+| `[view]` | Computed | `[availableWidth, computedLaneHeight]`. Re-evaluate on attribute toggle and window resize. |
+
+### Custom Node Template (`#nodeTemplate`)
+
+The `#nodeTemplate` receives `let-node` with `node.data` containing the full deployment record. Render the vis-card layout (see [§ Swimlane Node Card](components.md#swimlane-node-card)) as an SVG `<foreignObject>` wrapping an HTML `.vis-card` div — this preserves the glass aesthetic, `backdrop-filter`, and the 2-column CSS grid layout.
+
+```html
+<ng-template #nodeTemplate let-node>
+  <svg:foreignObject
+    [attr.width]="node.dimension.width"
+    [attr.height]="node.dimension.height">
+    <xhtml:div class="vis-card"
+      [class.s-success]="node.data.status === 'success'"
+      [class.s-progress]="node.data.status === 'in-progress'"
+      [class.s-failure]="node.data.status === 'failure'"
+      [class.is-selected]="node.data.id === selectedNodeId">
+      <!-- vis-card internal structure per § Swimlane Node Card -->
+    </xhtml:div>
+  </svg:foreignObject>
+</ng-template>
+```
+
+> **Node sizing:** ngx-graph uses `node.dimension.width` / `node.dimension.height` for layout. Pre-calculate these from the node's visible fields (or render once hidden, measure, then update). When attribute toggles change visible fields, update dimensions and call `graph.update$.next(true)` to trigger relayout.
+
+### Custom Link Template (`#linkTemplate`)
+
+Status-colored edges with arrow markers. The link's `data.status` determines stroke color.
+
+```html
+<ng-template #linkTemplate let-link>
+  <svg:g class="edge">
+    <svg:path
+      [attr.d]="link.line"
+      [attr.stroke]="getEdgeColor(link.data.status)"
+      stroke-width="1.5"
+      fill="none"
+      marker-end="url(#arrow)" />
+  </svg:g>
+</ng-template>
+
+<ng-template #defsTemplate>
+  <svg:marker id="arrow" viewBox="0 -5 10 10"
+    refX="8" refY="0" markerWidth="4" markerHeight="4"
+    orient="auto">
+    <svg:path d="M0,-5L10,0L0,5" fill="currentColor" />
+  </svg:marker>
+</ng-template>
+```
+
+### Edge Color Mapping
+
+| Parent Status | Stroke Color (dark) | Token |
+|---------------|--------------------:|-------|
+| `success` | emerald | `--emerald` |
+| `in-progress` | amber | `--amber` |
+| `failure` | coral | `--coral` |
+
+### Layout Constraints
+
+- DAG edges must **never cross node bounding boxes** — dagre's rank-based layout satisfies this for standard graphs; validate with dense fixtures.
+- Per-rank column spacing = the maximum card width in that rank plus the `rankPadding` gap.
+- Canvas scrolls horizontally via `.vis-canvas { overflow-x: auto }` when graph width exceeds viewport.
+- On attribute toggle → recalculate node dimensions → `graph.update$.next(true)` to relayout.
+- Lanes pack densely with minimal inter-lane gap (~8px margin between stacked `<ngx-graph>` instances).

@@ -1,0 +1,707 @@
+openapi: 3.1.0
+
+info:
+  title: Deployment Dashboard API
+  version: 1.0.0
+  summary: Push-based CI/CD deployment event store with matrix + DAG views and SSE fan-out.
+  description: |
+    REST contract for the Deployment Dashboard backend (`Dashboard.Api`).
+
+    Authoritative sources:
+      - `docs/SAD.md`            — architecture, domain model, NFRs.
+      - `docs/FRONTEND_REQUIREMENTS.md` — read-side consumer (Matrix + Swimlanes).
+      - `.github/actions/notify/action.yml` — deployed CI/CD wire contract for `POST /api/deployments`.
+
+    Surfaces:
+      - **Write** — append-only ingest of deployment **events**; gated by `X-Api-Key`.
+      - **Read**  — matrix + per-slot history + raw event listings + discovery; unauthenticated.
+      - **Stream** — SSE fan-out of newly-ingested events; unauthenticated.
+      - **Fetcher** — opaque per-adapter cursor state for `Dashboard.Fetcher`; gated by `X-Api-Key`.
+      - **Ops** — `/healthz`, `/readyz`.
+
+    **Event-store semantics.** The persistence model (SAD §11) is an append-only
+    log of deployment **events** — every `POST /api/deployments` appends one row.
+    A single logical deployment emits several rows during its lifecycle
+    (e.g. `in-progress` → `success`/`failure`), all sharing one `deployment_id`.
+    `deployment_id` is therefore an emitter-supplied **correlation key**, NOT a
+    row identity and NOT an idempotency key. Retries from a flaky CI step produce
+    additional rows; the read surface always reduces by `happened_at` (latest wins
+    per `(service, environment)` for the Matrix; full history for the drawer).
+
+    **`happened_at` is emitter-supplied**, not server-assigned (SAD §11). It is
+    the UTC wall-clock at which the deployment transitioned to the reported
+    `status` on the CI/CD side, NOT the moment the dashboard wrote the row.
+    Order in every read surface is by `happened_at` — a delayed POST from a
+    retry queue still sorts correctly relative to its peers.
+
+    Errors follow RFC 9457 `application/problem+json`.
+
+  contact:
+    name: Deployment Dashboard
+    url: https://github.com/kostiantyn-matsebora/deployment-dashboard
+  license:
+    name: MIT
+
+servers:
+  - url: /
+    description: App Gateway (single origin, internal-only, no CORS).
+
+tags:
+  - name: ingest
+    description: Write surface — append-only deployment events. Requires `X-Api-Key`.
+  - name: matrix
+    description: Denormalised services × environments view for the Matrix UI.
+  - name: deployments
+    description: Raw deployment-event listings + lookup. Used by Swimlanes + history drawer.
+  - name: discovery
+    description: Distinct services and environments derived from stored data.
+  - name: stream
+    description: Real-time SSE fan-out.
+  - name: fetcher
+    description: Opaque per-adapter cursor state for `Dashboard.Fetcher`.
+  - name: ops
+    description: Liveness + readiness probes.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security
+# ─────────────────────────────────────────────────────────────────────────────
+security: []  # default: unauthenticated (read surface). Write ops opt-in below.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ───── Write surface ──────────────────────────────────────────────────────
+  /api/deployments:
+    post:
+      tags: [ingest]
+      operationId: ingestDeployment
+      summary: Append a single deployment event to the log.
+      description: |
+        Push a deployment-state event from a CI/CD pipeline (or the optional fetcher).
+
+        **Pure append-only.** Every accepted call inserts one row. There is no
+        server-side dedup: the server does not compare `(service, deployment_id)`,
+        payload hashes, or any other key against existing rows. A retried POST
+        produces a duplicate row — handling retries is the caller's concern.
+
+        On success the backend `NOTIFY`s the PostgreSQL `deployment_events` channel,
+        which fans out to every connected SSE client across all API instances.
+      security:
+        - apiKey: []
+      parameters:
+        - $ref: '#/components/parameters/XProgressReporter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeploymentEventIngest'
+            examples:
+              promotionWithParent:
+                $ref: '#/components/examples/IngestWithParents'
+              terminalSuccess:
+                $ref: '#/components/examples/IngestMinimal'
+              standaloneInProgress:
+                $ref: '#/components/examples/IngestInProgressNoParents'
+      responses:
+        '201':
+          description: Event appended.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+              description: URL of the appended row (`/api/deployments/{id}`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: |
+            Payload validation failed — missing required field, bad enum,
+            non-integer `run_number`, malformed `happened_at`, oversized array, …
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+    # ───── Read surface — raw event listing ─────────────────────────────────
+    get:
+      tags: [deployments]
+      operationId: listDeployments
+      summary: List deployment events with cursor pagination.
+      description: |
+        Returns raw events, newest-first by `happened_at` (emitter-supplied).
+        Powers the Swimlanes view, the slot-history drawer (when filtered by
+        `service`+`environment`), and any general listing.
+
+        Because the store is append-only, multiple rows may share a
+        `deployment_id` (one per status transition). The client groups them
+        as needed (e.g. "latest row per `deployment_id`" for swimlane nodes).
+
+        DAG correlation is **client-side** — this endpoint never derives parent
+        relationships beyond the explicit `parent_deployments` array on the event.
+      parameters:
+        - { name: service,       in: query, schema: { type: string }, description: Filter by service identifier. }
+        - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
+        - { name: status,        in: query, schema: { $ref: '#/components/schemas/Status' }, description: Filter by status. }
+        - { name: deployment_id, in: query, schema: { type: string }, description: Filter to all rows of a single logical deployment. }
+        - { name: since,         in: query, schema: { type: string, format: date-time }, description: Only events with `happened_at >= since`. }
+        - { name: until,         in: query, schema: { type: string, format: date-time }, description: Only events with `happened_at <  until`. }
+        - { name: cursor,        in: query, schema: { type: string }, description: Opaque pagination cursor from a previous page. }
+        - { name: limit,         in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200':
+          description: A page of deployment events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentEventPage'
+
+  /api/deployments/{id}:
+    get:
+      tags: [deployments]
+      operationId: getDeployment
+      summary: Fetch a single event row by surrogate id.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The event row.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeploymentEvent' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ───── Read surface — Matrix view ─────────────────────────────────────────
+  /api/matrix:
+    get:
+      tags: [matrix]
+      operationId: getMatrix
+      summary: Services × environments deployment matrix (denormalised).
+      description: |
+        Returns one row per service. Each row contains a `slots` map keyed by
+        environment name. Each slot carries:
+
+          - `current` — the most recent event for that `(service, environment)`,
+            chosen by `MAX(happened_at)`.
+          - `last_successful` — the most recent `success` event in the same slot
+            (omitted when `current` is itself the last success).
+
+        The frontend resolves the **six box states** (SAD §7 / FR §"Box states (Matrix)")
+        from `(current.status, last_successful presence)` — no server-side state field.
+      parameters:
+        - { name: service, in: query, schema: { type: string }, description: Filter to a single service (Matrix inline filter). }
+      responses:
+        '200':
+          description: The matrix snapshot.
+          headers:
+            ETag:
+              schema: { type: string }
+              description: Weak ETag of the snapshot. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Matrix' }
+
+  # ───── Discovery ──────────────────────────────────────────────────────────
+  /api/services:
+    get:
+      tags: [discovery]
+      operationId: listServices
+      summary: Distinct service identifiers derived from stored events.
+      responses:
+        '200':
+          description: Sorted list of distinct service identifiers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: string }
+                examples:
+                  - { items: ["service-a", "service-b", "checkout-api"] }
+
+  /api/environments:
+    get:
+      tags: [discovery]
+      operationId: listEnvironments
+      summary: Distinct environment identifiers derived from stored events.
+      responses:
+        '200':
+          description: Sorted list of distinct environment identifiers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { type: string }
+                examples:
+                  - { items: ["dev", "qa", "uat", "prod"] }
+
+  # ───── Stream ─────────────────────────────────────────────────────────────
+  /api/events/stream:
+    get:
+      tags: [stream]
+      operationId: streamEvents
+      summary: Server-Sent Events stream of newly-appended deployment events.
+      description: |
+        Long-lived `text/event-stream` connection. Each accepted ingest produces
+        exactly one named event:
+
+        ```
+        id: 01J9F4WZK3W9G2T6X4QH3DKQF5
+        event: deployment
+        data: { ...DeploymentEvent... }
+        ```
+
+        Clients reconnect transparently with `Last-Event-ID` — the server replays
+        every event with a strictly greater id. A heartbeat comment (`: ping`) is
+        emitted every 15 s to keep intermediaries from idling the connection.
+
+        Backed by PostgreSQL `LISTEN/NOTIFY` — each API instance fans out only to
+        its own connected clients (NFR-05 statelessness).
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+          description: Resume cursor from a prior connection.
+        - name: service
+          in: query
+          schema: { type: string }
+          description: Optional server-side filter on service identifier.
+      responses:
+        '200':
+          description: SSE stream opened.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                examples:
+                  - |
+                    : ping
+                    id: 01J9F4WZK3W9G2T6X4QH3DKQF5
+                    event: deployment
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","deployment_id":"gh-9491-1","service":"service-a","environment":"prod","version":"1.4.2","status":"success","happened_at":"2026-05-28T10:14:02Z","actor":"alice","run_number":9491,"parent_deployments":["gh-9482-1"]}
+
+  # ───── Fetcher state ──────────────────────────────────────────────────────
+  /api/fetcher/state/{adapter}:
+    parameters:
+      - name: adapter
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,63}$' }
+        description: Adapter identifier (e.g. `github-actions`). Lowercase kebab.
+
+    get:
+      tags: [fetcher]
+      operationId: getFetcherState
+      summary: Read the opaque cursor for a fetcher adapter.
+      security:
+        - apiKey: []
+      responses:
+        '200':
+          description: Stored cursor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FetcherState' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No state has been stored for this adapter yet.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+    put:
+      tags: [fetcher]
+      operationId: putFetcherState
+      summary: Upsert the opaque cursor for a fetcher adapter.
+      description: |
+        The backend treats `cursor` as an opaque string — no parsing, no validation
+        of shape. Max 8 KiB. Larger payloads are rejected with `413`. Latest write
+        wins; the fetcher state row is the one place in the system that is NOT
+        append-only.
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FetcherStateUpsert' }
+      responses:
+        '204': { description: Stored. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413':
+          description: Cursor exceeds the 8 KiB limit.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  # ───── Ops ────────────────────────────────────────────────────────────────
+  /healthz:
+    get:
+      tags: [ops]
+      operationId: liveness
+      summary: Liveness probe (process is up).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+
+  /readyz:
+    get:
+      tags: [ops]
+      operationId: readiness
+      summary: Readiness probe (dependencies reachable).
+      responses:
+        '200':
+          description: Ready (DB reachable, LISTEN attached).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+        '503':
+          description: Not ready.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Components
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        Static, server-side-configured shared secret. Required on every write call.
+        Missing or invalid → `401`. The dev fake key is never embedded in the SPA
+        bundle (NFR-04).
+
+  parameters:
+    XProgressReporter:
+      name: X-Progress-Reporter
+      in: header
+      schema:
+        type: string
+        pattern: '^[a-z0-9][a-z0-9./-]{0,127}$'
+      description: |
+        Optional attribution header. Format: `<emitter>/<adapter>`, e.g.
+        `dashboard-fetcher/github-actions`. Stored alongside the event; never
+        rendered as an authoritative actor.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid `X-Api-Key`.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: Too many requests.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds until the next request is permitted.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+
+    Status:
+      type: string
+      enum: [in-progress, success, failure]
+      description: State carried by this individual event row.
+
+    DeploymentEventIngest:
+      type: object
+      description: |
+        Request body for `POST /api/deployments`. Matches the wire contract
+        emitted by `.github/actions/notify` (the deployed source of truth).
+
+        Every accepted body appends exactly one row. Multiple rows MAY share
+        `deployment_id`, `version`, `sha`, etc. — the store does not deduplicate.
+      required: [deployment_id, service, environment, status, happened_at]
+      additionalProperties: false
+      properties:
+        deployment_id:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: |
+            Emitter-supplied **correlation key** that groups all events of one
+            logical deployment (the `in-progress` row, the terminal `success`
+            or `failure` row, any retried rows). NOT unique per row, NOT an
+            idempotency key. Conventionally prefixed by tool family
+            (`gh-…`, `ado-…`, `jenkins-…`) so that values do not collide
+            across CI/CD tools. Also serves as the handle that
+            `parent_deployments` of downstream events points at.
+          examples: [gh-9491-1]
+        service:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Service / component identifier.
+          examples: [service-a]
+        environment:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Environment identifier (e.g. `dev`, `qa`, `prod`).
+          examples: [prod]
+        version:
+          type: string
+          maxLength: 50
+          description: Free-form version string (semver, SHA, build number). FR §"Responsive sizing" caps at 50 chars.
+          examples: ["1.4.2"]
+        status:
+          $ref: '#/components/schemas/Status'
+        happened_at:
+          type: string
+          format: date-time
+          description: |
+            **Emitter-supplied** UTC wall-clock at which the deployment
+            transitioned to `status` on the CI/CD side (SAD §11). RFC 3339;
+            MUST end with `Z` or a `±HH:MM` offset. NOT the moment the dashboard
+            persisted the row — that is an internal concern and is not exposed
+            on the wire. All read surfaces order by this value.
+          examples: ["2026-05-28T10:14:02Z"]
+        run_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          examples: ["https://github.com/acme/repo/actions/runs/9491"]
+        run_number:
+          type: integer
+          minimum: 0
+          description: Numeric CI/CD run identifier.
+          examples: [9491]
+        actor:
+          type: string
+          maxLength: 128
+          examples: [alice]
+        ref:
+          type: string
+          maxLength: 256
+          description: Opaque git ref (branch, tag, `PR-42`, `refs/…`). Not parsed.
+          examples: [refs/heads/main]
+        sha:
+          type: string
+          maxLength: 128
+          description: Opaque commit SHA. Not parsed for length or hex shape.
+          examples: ["3f2c1a9"]
+        parent_deployments:
+          type: array
+          maxItems: 32
+          uniqueItems: true
+          items:
+            type: string
+            description: A `deployment_id` correlation key naming an upstream logical deployment.
+          description: |
+            Explicit upstream-deployment correlation keys for client-side DAG
+            rendering (Swimlanes view, "explicit parent" predicate per
+            FRONTEND_REQUIREMENTS.md). Each entry is a `deployment_id` value
+            (a logical-deployment handle, not a row id). The server stores
+            values verbatim and does NOT resolve them against existing rows
+            at ingest time — forward references are allowed (the named
+            upstream may be appended later, or never). The Swimlanes view
+            resolves these strings to event rows at render time.
+          examples:
+            - [gh-9482-1]
+
+    DeploymentEvent:
+      allOf:
+        - $ref: '#/components/schemas/DeploymentEventIngest'
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Server-assigned surrogate row identifier (event-row primary key).
+
+    DeploymentEventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DeploymentEvent' }
+        next_cursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page. `null` when the page is final.
+
+    Matrix:
+      type: object
+      required: [environments, rows, generated_at]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          description: Snapshot timestamp.
+        environments:
+          type: array
+          description: Stable column order — sorted environment identifiers present in the snapshot.
+          items: { type: string }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/MatrixRow' }
+
+    MatrixRow:
+      type: object
+      required: [service, slots]
+      properties:
+        service:
+          type: string
+        slots:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/MatrixSlot'
+          description: Map of `environment` → slot. Missing keys mean "never deployed here".
+
+    MatrixSlot:
+      type: object
+      required: [current]
+      properties:
+        current:
+          $ref: '#/components/schemas/DeploymentEvent'
+        last_successful:
+          $ref: '#/components/schemas/DeploymentEvent'
+          description: |
+            Omitted when `current.status == success` (then `current` IS the last
+            successful). Also omitted when no successful deployment has ever
+            occurred in this slot.
+
+    FetcherState:
+      type: object
+      required: [adapter, cursor, updated_at]
+      properties:
+        adapter:    { type: string }
+        cursor:     { type: string, description: Opaque cursor blob. }
+        updated_at: { type: string, format: date-time }
+
+    FetcherStateUpsert:
+      type: object
+      required: [cursor]
+      additionalProperties: false
+      properties:
+        cursor:
+          type: string
+          maxLength: 8192
+          description: Opaque cursor blob; max 8 KiB.
+
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ready, degraded] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [ok, fail] }
+
+    Problem:
+      description: RFC 9457 problem detail.
+      type: object
+      required: [type, title, status]
+      properties:
+        type:     { type: string, format: uri, default: about:blank }
+        title:    { type: string }
+        status:   { type: integer }
+        detail:   { type: string }
+        instance: { type: string, format: uri }
+        errors:
+          type: array
+          description: Optional per-field validation errors (422).
+          items:
+            type: object
+            required: [pointer, message]
+            properties:
+              pointer: { type: string, description: JSON Pointer into the request body. }
+              message: { type: string }
+
+  examples:
+
+    IngestWithParents:
+      summary: Promotion with an explicit parent (default Swimlanes use case).
+      description: |
+        In-progress event for the prod promotion of `service-a 1.4.2`, pointing
+        at the dev deployment it inherits from. The same `deployment_id`
+        (`gh-9491-1`) will reappear on a follow-up event carrying the terminal
+        `success` / `failure` status — both rows persist (append-only).
+      value:
+        deployment_id: gh-9491-1
+        service: service-a
+        environment: prod
+        version: 1.4.2
+        status: in-progress
+        happened_at: "2026-05-28T10:14:02Z"
+        run_url: https://github.com/acme/repo/actions/runs/9491
+        run_number: 9491
+        actor: alice
+        ref: refs/heads/main
+        sha: 3f2c1a9
+        parent_deployments: [gh-9482-1]
+
+    IngestMinimal:
+      summary: Terminal success event (no upstream linkage).
+      description: |
+        Smallest reasonable body. `parent_deployments` is intentionally an empty
+        array to show the field shape on the wire — sending `[]` and omitting
+        the field entirely are semantically equivalent.
+      value:
+        deployment_id: gh-9482-1
+        service: service-a
+        environment: dev
+        version: 1.4.2
+        status: success
+        happened_at: "2026-05-28T09:42:17Z"
+        run_url: https://github.com/acme/repo/actions/runs/9482
+        run_number: 9482
+        actor: alice
+        ref: refs/heads/main
+        sha: 3f2c1a9
+        parent_deployments: []
+
+    IngestInProgressNoParents:
+      summary: Root deployment with no upstream (the dev row from the chain above).
+      description: |
+        First row of `gh-9482-1`'s lifecycle. A second POST with the same
+        `deployment_id` and `status: success` will be appended when the run
+        finishes; that second row's `happened_at` will be later than this one's.
+        Together the two rows form one logical deployment.
+      value:
+        deployment_id: gh-9482-1
+        service: service-a
+        environment: dev
+        version: 1.4.2
+        status: in-progress
+        happened_at: "2026-05-28T09:40:55Z"
+        run_url: https://github.com/acme/repo/actions/runs/9482
+        run_number: 9482
+        actor: alice
+        ref: refs/heads/main
+        sha: 3f2c1a9
