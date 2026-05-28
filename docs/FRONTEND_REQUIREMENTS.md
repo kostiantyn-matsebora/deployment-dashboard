@@ -6,35 +6,36 @@ Requirements distilled from design-iteration conversations. One requirement per 
 
 ### Views
 
-- The dashboard provides two views — **Matrix** and **Visualisation** — switchable via a top-nav segmented control.
+- The dashboard provides two views — **Matrix** and **Swimlanes** — switchable via a top-nav segmented control.
 - The Matrix view renders deployments as a services × environments grid with rows = services and columns = environments.
-- The Visualisation view renders deployments as per-service DAGs with one horizontal swimlane per service.
-- The Visualisation view stacks multiple disconnected DAGs within a service's lane vertically (top-to-bottom), not horizontally.
-- The Visualisation view uses rank-based 2D layout where each node's rank equals its max parent-distance from a root.
-- The Visualisation view places parallel branches at the same rank on different vertical tracks.
-- The Visualisation view derives edges from each node's `parrent_deployments` field.
-- The Visualisation view places no cross-service edges — each lane is fully self-contained.
-- The Visualisation view time axis flows left-to-right within each DAG based on `happened_at`.
+- The Swimlanes view renders deployments as per-service DAGs with one horizontal swimlane per service.
+- The Swimlanes view stacks multiple disconnected DAGs within a service's lane vertically (top-to-bottom), not horizontally.
+- The Swimlanes view uses rank-based 2D layout where each node's rank equals its max parent-distance from a root.
+- The Swimlanes view places parallel branches at the same rank on different vertical tracks.
+- The Swimlanes view derives edges from each node's `parrent_deployments` field.
+- The Swimlanes view places no cross-service edges — each lane is fully self-contained.
+- The Swimlanes view time axis flows left-to-right within each DAG based on `happened_at`.
+- The Swimlanes view does NOT render `parrent_deployments` as text on nodes — graph edges already convey parent relationships, so the text would duplicate information.
 
 ### Filtering and correlation
 
 - The Matrix view supports filtering deployments by service name via an inline text input.
 - The Matrix view supports a failures-only pill toggle that hides non-failed states.
-- The Visualisation view provides a correlation predicate picker with single-select choice of five options: `same sha`, `same run_number`, `same actor`, `same version`, `explicit parent`.
-- The Visualisation view provides a separate time-window parameter (e.g. 5 min / 1 hr / 1 day / 7 days) that bounds parent search for non-`explicit-parent` predicates.
+- The Swimlanes view provides a correlation predicate picker with single-select choice of five options: `same sha`, `same run_number`, `same actor`, `same version`, `explicit parent`.
+- The Swimlanes view provides a separate time-window parameter (e.g. 5 min / 1 hr / 1 day / 7 days) that bounds parent search for non-`explicit-parent` predicates.
 - The time-window control is disabled when `explicit parent` is the selected correlation predicate.
 
 ### Attribute visibility
 
 - Both views provide an attribute visibility picker that lets the user choose which fields render on deployment elements.
 - The Matrix attribute picker exposes 8 toggles: `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`, `parrent_deployments`.
-- The Visualisation attribute picker exposes 9 toggles — the Matrix 8 plus `environment`.
+- The Swimlanes attribute picker exposes 8 toggles: `environment`, `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`. `parrent_deployments` is intentionally absent — the graph edges convey it.
 - Both attribute pickers default to all options ON.
 
 ### Details surfaces
 
 - Clicking any slot in the Matrix view opens a side drawer showing the per-slot deployment history.
-- Clicking any node in the Visualisation view selects it and updates a persistent Inspector panel.
+- Clicking any node in the Swimlanes view selects it and updates a persistent Inspector panel.
 - The history drawer and Inspector panel always display every visible domain-model field regardless of attribute-picker state.
 
 ### Header surfaces
@@ -71,12 +72,13 @@ Requirements distilled from design-iteration conversations. One requirement per 
 ### Identifier prominence
 
 - The Matrix tile renders `version` as its prominent headline identifier.
-- The Visualisation node renders `environment` as the prominent identifier in the bottom-right corner.
-- The Visualisation node renders `version` as a secondary smaller mono identifier.
+- The Swimlanes node renders `environment` as the prominent identifier in the bottom-right corner.
+- The Swimlanes node renders `version` as a secondary smaller mono identifier.
+- The Matrix tile `version` font-size and the Swimlanes node `environment` font-size are matched — the two surfaces' primary identifiers share a size.
 
 ### Field treatment on deployment elements
 
-- Fields on Matrix tiles and Visualisation nodes use mixed visual treatments — position, glyph prefix, typography weight — rather than uniform label/value rows.
+- Fields on Matrix tiles and Swimlanes nodes use mixed visual treatments — position, glyph prefix, typography weight — rather than uniform label/value rows.
 - The reader identifies each field on a tile/node by its shape and position, not by a text label.
 
 ### Field treatment on details surfaces
@@ -88,25 +90,35 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - The Matrix provides clear visual separation between service rows via a hairline divider plus a service-name left accent.
 - The Matrix container has a visible bottom edge so the last row does not visually hang in empty space.
 
+### Swimlanes node structure
+
+- A Swimlanes node has a single top row that spans the full card width (colspan=2). `version` is flush to the card's left edge; `happened_at` is flush to the card's right edge.
+- The remaining rows of a Swimlanes node form a 2-column grid: left content sits in column 1, right content in column 2.
+- Column 1 of the body holds (top-to-bottom): `ref`, `sha`. Column 2 of the body holds (top-to-bottom): the run cluster (`run_url` + `run_number` + `actor`), `environment`.
+- The horizontal gap between body columns is a single uniform value applied to every body row.
+- `sha` sits at the bottom-left corner of the node; `environment` sits at the bottom-right corner on the same row.
+- Rows scroll horizontally inside the node when their content exceeds the node's width, rather than overflowing the lane.
+- Inter-row vertical distance inside a Swimlanes node is uniform across every node regardless of card height; long-version cards may grow taller but the inter-row distance itself does not vary.
+
 ## Behavior
 
 ### Responsive sizing
 
 - Deployment elements size to their currently visible content.
 - Tiles and node cards shrink when attribute fields are toggled off.
-- The Visualisation layout recomputes lane heights, rank-column positions, and total canvas size on every attribute toggle.
+- The Swimlanes layout recomputes lane heights, rank-column positions, and total canvas size on every attribute toggle.
 - Tiles and node cards stretch horizontally to fit their widest content.
 - The `version` field may be up to 50 characters and must render fully on tiles and nodes as a single line, without truncation and without wrap.
 - The Matrix grid columns expand to consume available viewport width when content allows.
-- The Matrix and Visualisation containers scroll horizontally when total content width exceeds viewport.
+- The Matrix and Swimlanes containers scroll horizontally when total content width exceeds viewport.
 - The Matrix service column remains sticky during horizontal scroll so service names stay visible.
-- The Visualisation lanes pack densely with minimal inter-lane and inter-track gaps.
+- The Swimlanes lanes pack densely with minimal inter-lane and inter-track gaps.
 - Tile content distributes vertically across the available cell height (no large empty middle).
 
 ### Layout integrity
 
 - No deployment element overlaps another in either view, regardless of content variance.
-- Per-rank column spacing in the Visualisation equals the maximum card width in that rank plus a fixed gap.
+- Per-rank column spacing in the Swimlanes equals the maximum card width in that rank plus a fixed gap.
 - DAG edges never cross node bounding boxes.
 - All elements remain accessible — nothing is clipped, hidden, or rendered behind other surfaces unreachably.
 - Split-tile bottom content remains contained within its cell and never visually bleeds into adjacent rows.
