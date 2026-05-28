@@ -12,10 +12,10 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - The Swimlanes view stacks multiple disconnected DAGs within a service's lane vertically (top-to-bottom), not horizontally.
 - The Swimlanes view uses rank-based 2D layout where each node's rank equals its max parent-distance from a root.
 - The Swimlanes view places parallel branches at the same rank on different vertical tracks.
-- The Swimlanes view derives edges from each node's `parrent_deployments` field.
+- The Swimlanes view derives edges from each node's `parent_deployments` field.
 - The Swimlanes view places no cross-service edges — each lane is fully self-contained.
 - The Swimlanes view time axis flows left-to-right within each DAG based on `happened_at`.
-- The Swimlanes view does NOT render `parrent_deployments` as text on nodes — graph edges already convey parent relationships, so the text would duplicate information.
+- The Swimlanes view does NOT render `parent_deployments` as text on nodes — graph edges already convey parent relationships, so the text would duplicate information.
 
 ### Filtering and correlation
 
@@ -28,8 +28,8 @@ Requirements distilled from design-iteration conversations. One requirement per 
 ### Attribute visibility
 
 - Both views provide an attribute visibility picker that lets the user choose which fields render on deployment elements.
-- The Matrix attribute picker exposes 8 toggles: `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`, `parrent_deployments`.
-- The Swimlanes attribute picker exposes 8 toggles: `environment`, `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`. `parrent_deployments` is intentionally absent — the graph edges convey it.
+- The Matrix attribute picker exposes 8 toggles: `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`, `parent_deployments`.
+- The Swimlanes attribute picker exposes 8 toggles: `environment`, `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`. `parent_deployments` is intentionally absent — the graph edges convey it.
 - Both attribute pickers default to all options ON.
 
 ### Details surfaces
@@ -134,7 +134,7 @@ Requirements distilled from design-iteration conversations. One requirement per 
 
 ### Visible-field whitelist
 
-- The visible-field whitelist contains 11 fields: `component`, `environment`, `version`, `status`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`, `parrent_deployments`.
+- The visible-field whitelist contains 11 fields: `service`, `environment`, `version`, `status`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`, `parent_deployments`.
 - The `id` field is synthetic and never appears in any visible UI surface.
 - No fields outside the visible-field whitelist may appear in the UI.
 

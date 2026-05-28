@@ -37,8 +37,8 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 
 - **Single live version.** No `/v1` segment — internal-only tooling (NFR-04), one tenant, one consumer.
 - **Evolution is additive only.** New optional fields, new endpoints, new enum values appended at the tail.
-- **Breaking change ⇒ new path prefix.** A v2 surface lives at `/api/v2/...` side-by-side with `/api/...` until the SPA + notify action + fetcher are all migrated.
-- Servers MUST ignore unknown JSON fields on write (forward-compat with newer clients).
+- **Breaking change ⇒ new path prefix.** A v2 surface lives at `/api/v2/...` side-by-side with `/api/...` until the SPA + notify step + fetcher are all migrated.
+- **Write bodies are closed.** `openapi.yaml` sets `additionalProperties: false` on `DeploymentEventIngest` / `FetcherStateUpsert`; **`openapi.yaml` is the source of truth**, so the server **rejects unknown JSON fields on write with `422`** (it does NOT silently ignore them). Forward-compat for clients is achieved by additive evolution (new optional fields), not by lenient parsing.
 - Clients MUST ignore unknown JSON fields on read (forward-compat with newer servers).
 
 ---
@@ -154,7 +154,7 @@ Implementers SHOULD NOT add these headers until a real limit is in force.
 - **Internal-only.** The API has no public ingress; only the App Gateway is reachable (NFR-04).
 - **No CORS config.** Single origin via the gateway eliminates CORS surface entirely.
 - **No PII.** `actor` is a CI/CD identifier (login / service principal), not an end user. No emails, no tokens.
-- **No secret echo.** `X-Api-Key` MUST NOT appear in any response body, problem detail, or log line — the notify action masks it with `::add-mask::` on the CI side; the server masks on the storage side.
+- **No secret echo.** `X-Api-Key` MUST NOT appear in any response body, problem detail, or log line — the CI caller masks it on its side (e.g. `::add-mask::` in GitHub Actions); the server masks on the storage side.
 - **Opaque cursors.** Fetcher cursors are stored verbatim; the server MUST NOT parse, log, or inspect them.
 
 ---
@@ -278,10 +278,11 @@ HTTP/1.1 204 No Content
 
 ## 12. Known carry-over for implementers
 
-| Item | Source | Action |
-|---|---|---|
-| `.github/actions/notify/action.yml` does not currently emit `happened_at` in the POST body. | Read of `action.yml` — payload assembly omits the field. | The action MUST be updated to send `happened_at` (e.g. `(Get-Date).ToUniversalTime().ToString("o")` at the moment the step runs). Without it the server returns `422`. |
-| `action.yml` still has CR-0003 comments + a 409 hint branch referencing a uniqueness rule that no longer exists. | Read of `action.yml` lines 16-20, 43-50, 179, 283. | Strip the CR-0003 comment block and the `409 { … }` branch in the response-hint switch. |
-| `service` (wire) vs `component` (SAD §11). | Compare SAD §11 to `action.yml`. | Reconcile SAD §11 to match the deployed wire name. |
-| `parent_deployments` (wire correct) vs `parrent_deployments` (SAD §11, FRONTEND_REQUIREMENTS typo'd). | Same. | Fix the typo in the two docs. |
-| `run_number` is `integer` on the wire vs `STRING` in SAD §11. | Same. | Reconcile SAD §11 to `integer`. |
+All previously-tracked discrepancies are now **reconciled** against `openapi.yaml` (the source of truth). History retained for traceability:
+
+| Item | Resolution |
+|---|---|
+| `service` (wire) vs `component` (SAD domain model). | ✅ Fixed — SAD domain model renamed to `service`. |
+| `parent_deployments` (wire) vs `parrent_deployments` (SAD + FRONTEND_REQUIREMENTS typo). | ✅ Fixed — typo corrected in both docs; type is `STRING[]` (correlation keys), not `GUID[]`. |
+| `run_number` is `integer` on the wire vs `STRING` in SAD. | ✅ Fixed — SAD reconciled to `INTEGER`. |
+| Surrogate row id named `event_id` (GUID) in SAD vs `id` (uuid) on the wire. | ✅ Fixed — SAD renamed to `id`; type is a time-ordered **UUIDv7** (unique + sortable, doubles as SSE resume cursor). |

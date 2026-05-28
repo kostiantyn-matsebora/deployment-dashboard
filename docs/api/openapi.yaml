@@ -10,7 +10,6 @@ info:
     Authoritative sources:
       - `docs/SAD.md`            — architecture, domain model, NFRs.
       - `docs/FRONTEND_REQUIREMENTS.md` — read-side consumer (Matrix + Swimlanes).
-      - `.github/actions/notify/action.yml` — deployed CI/CD wire contract for `POST /api/deployments`.
 
     Surfaces:
       - **Write** — append-only ingest of deployment **events**; gated by `X-Api-Key`.
@@ -439,8 +438,7 @@ components:
     DeploymentEventIngest:
       type: object
       description: |
-        Request body for `POST /api/deployments`. Matches the wire contract
-        emitted by `.github/actions/notify` (the deployed source of truth).
+        Request body for `POST /api/deployments`.
 
         Every accepted body appends exactly one row. Multiple rows MAY share
         `deployment_id`, `version`, `sha`, etc. — the store does not deduplicate.
