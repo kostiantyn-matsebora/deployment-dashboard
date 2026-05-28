@@ -1,6 +1,7 @@
 ---
 description: Revise an existing doc or author a new one against host authoring rules. Extract over compact for files >200 lines. Mode B of document-writer.
 argument-hint: <doc-path> [-- brief]
+model: sonnet
 ---
 
 # /docs-revise
@@ -25,4 +26,4 @@ Inherited from `.claude/agents/document-writer.md`:
 
 ## Report
 
-Use the **Documentation Report** template from `.claude/agents/document-writer.md` § "Output Template". Set Mode = B.
+Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = B.
