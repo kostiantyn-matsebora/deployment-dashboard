@@ -1,0 +1,99 @@
+name: API — Build · Test · Publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/api.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/api.yml'
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-api
+
+jobs:
+  # ── Build & Test ────────────────────────────────────────────────────────────
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore tool manifest
+        working-directory: backend
+        run: dotnet tool restore
+
+      - name: Format gate
+        working-directory: backend
+        run: dotnet format Dashboard.slnx --verify-no-changes
+
+      - name: Build
+        working-directory: backend
+        run: dotnet build Dashboard.slnx -c Release --nologo
+
+      - name: Test
+        working-directory: backend
+        run: dotnet test Dashboard.slnx --settings Dashboard.runsettings --nologo --no-build -c Release
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: backend/**/TestResults/**/coverage.cobertura.xml
+          if-no-files-found: ignore
+
+  # ── Docker ──────────────────────────────────────────────────────────────────
+  # Builds on every run (validates Dockerfile + build context).
+  # Pushes to GHCR only on push to main.
+  docker:
+    name: Docker
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/api/Dashboard.Api/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
