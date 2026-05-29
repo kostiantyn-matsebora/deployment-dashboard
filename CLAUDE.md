@@ -4,7 +4,7 @@
 
 **Index-first navigation (binding).** Read the nearest `index.md` before loading any full document: use `children:` to locate the file, `## Contents` anchor links to reach the section. Load full document content only when the target section is absent from the TOC.
 
-- [docs/index.md](docs/index.md) — Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.
+- `root-index` [docs/index.md](docs/index.md) — Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.
 
 ## Solution directory structure
 
