@@ -109,7 +109,7 @@ export type SwimlaneField = typeof SWIMLANE_FIELDS[number];
 
 /** Correlation predicates for the Swimlanes view. */
 export const CORRELATION_PREDICATES = [
-  'same sha', 'same run_number', 'same actor', 'same version', 'explicit parent',
+  'same sha', 'same run_number', 'same actor', 'same version', 'same ref', 'explicit parent',
 ] as const;
 export type CorrelationPredicate = typeof CORRELATION_PREDICATES[number];
 

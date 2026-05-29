@@ -5,7 +5,6 @@ import { FormsModule } from '@angular/forms';
 import { SelectButton } from 'primeng/selectbutton';
 import { InputText } from 'primeng/inputtext';
 import { Popover } from 'primeng/popover';
-import { Select } from 'primeng/select';
 
 import { AppStateService } from '../../core/services/app-state.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -16,9 +15,7 @@ import {
   MatrixField,
   SWIMLANE_FIELDS,
   SwimlaneField,
-  TIME_WINDOWS,
   Theme,
-  TimeWindow,
 } from '../../core/models/deployment.model';
 
 interface ViewOption {
@@ -54,7 +51,6 @@ interface ThemeOption {
     SelectButton,
     InputText,
     Popover,
-    Select,
   ],
   templateUrl: './topbar.component.html',
   styleUrl: './topbar.component.css',
@@ -170,21 +166,8 @@ export class TopbarComponent {
 
   protected readonly activePredicate = computed(() => this.state.correlationPredicate());
 
-  protected readonly timeWindowOptions: { label: string; value: TimeWindow }[] =
-    TIME_WINDOWS.map((tw) => ({ label: tw, value: tw }));
-
-  protected readonly activeTimeWindow = computed(() => this.state.timeWindow());
-
-  protected readonly timeWindowDisabled = computed(
-    () => this.state.correlationPredicate() === 'explicit parent',
-  );
-
   protected onPredicateChange(pred: CorrelationPredicate): void {
     this.state.correlationPredicate.set(pred);
-  }
-
-  protected onTimeWindowChange(tw: TimeWindow): void {
-    this.state.timeWindow.set(tw);
   }
 
   // ── Popover toggles ───────────────────────────────────────
