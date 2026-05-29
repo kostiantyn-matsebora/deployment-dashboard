@@ -1,0 +1,19 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Demo overrides — hardcoded insecure defaults for local evaluation only.
+# NOT suitable for production or any internet-exposed environment.
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  api:
+    environment:
+      API_KEY: demo-api-key
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=deployment_dashboard;Username=dashboard;Password=changeme"
+
+  postgres:
+    environment:
+      POSTGRES_USER:     dashboard
+      POSTGRES_PASSWORD: changeme

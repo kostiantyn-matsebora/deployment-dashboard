@@ -4,20 +4,19 @@ name: deployment-dashboard
 # Profiles
 #
 #   standalone  — API only; connect to an external PostgreSQL instance.
-#                 Required overrides: POSTGRES_HOST (+ credentials if non-default)
-#                 Required overrides: API_KEY
+#                 Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 #
 #   full        — API + managed PostgreSQL (Docker-volume-backed).
-#                 Required overrides: API_KEY, POSTGRES_PASSWORD
+#                 Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
 #
-#   demo        — API + managed PostgreSQL, zero-config defaults.
-#                 No overrides required. Suitable for local evaluation only.
-#                 Default API key: demo-api-key  |  CORS: open  |  Retention: 30 days
+#   demo        — API + managed PostgreSQL. Suitable for local evaluation only.
+#                 Use docker-compose.demo.yaml override — no vars required.
+#                 CORS: open  |  Retention: 30 days
 #
 # Usage:
 #   docker compose --profile standalone up
 #   docker compose --profile full      up
-#   docker compose --profile demo      up
+#   docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -32,9 +31,9 @@ services:
       # Connection string assembled from individual parts so each can be
       # overridden independently.  Override POSTGRES_HOST for standalone.
       ConnectionStrings__Postgres: >-
-        Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB:-deployment_dashboard};Username=${POSTGRES_USER:-dashboard};Password=${POSTGRES_PASSWORD:-changeme}
-      # Write-endpoint secret.  Override for full/standalone; demo default is intentionally weak.
-      API_KEY: "${API_KEY:-demo-api-key}"
+        Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB:-deployment_dashboard};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Write-endpoint shared secret.  Required — validated on app startup.
+      API_KEY: "${API_KEY}"
       # CSV of allowed CORS origins.  Empty disables CORS (gateway / same-origin).
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-*}"
       # Minimum 90, default 365.  Demo uses a shorter window.
@@ -57,13 +56,13 @@ services:
     profiles: [full, demo]
     environment:
       POSTGRES_DB:       "${POSTGRES_DB:-deployment_dashboard}"
-      POSTGRES_USER:     "${POSTGRES_USER:-dashboard}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-changeme}"
+      POSTGRES_USER:     "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dashboard} -d ${POSTGRES_DB:-deployment_dashboard}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
