@@ -5,10 +5,21 @@ import { FormsModule } from '@angular/forms';
 import { SelectButton } from 'primeng/selectbutton';
 import { InputText } from 'primeng/inputtext';
 import { Popover } from 'primeng/popover';
+import { Select } from 'primeng/select';
 
 import { AppStateService } from '../../core/services/app-state.service';
 import { ThemeService } from '../../core/services/theme.service';
-import { Theme } from '../../core/models/deployment.model';
+import {
+  CORRELATION_PREDICATES,
+  CorrelationPredicate,
+  MATRIX_FIELDS,
+  MatrixField,
+  SWIMLANE_FIELDS,
+  SwimlaneField,
+  TIME_WINDOWS,
+  Theme,
+  TimeWindow,
+} from '../../core/models/deployment.model';
 
 interface ViewOption {
   label: string;
@@ -28,6 +39,8 @@ interface ThemeOption {
  *   brand → tabs → spacer → KPIs → hdr-filter(Matrix) →
  *   theme-switch → hdr-icons(fields+correlation) → live-pill
  *
+ * Phase 3: fields picker + correlation picker wired with real state.
+ *
  * Spec: docs/design/components.md §Topbar
  * position: relative; z-index: 30 — so popovers (z-index:20 inside this
  * stacking context) render above sibling matrix/vis shells that use
@@ -41,22 +54,23 @@ interface ThemeOption {
     SelectButton,
     InputText,
     Popover,
+    Select,
   ],
   templateUrl: './topbar.component.html',
   styleUrl: './topbar.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TopbarComponent {
-  protected readonly state = inject(AppStateService);
+  protected readonly state        = inject(AppStateService);
   protected readonly themeService = inject(ThemeService);
-  protected readonly router = inject(Router);
+  protected readonly router       = inject(Router);
 
   // Popovers
-  protected readonly fieldsPopover = viewChild<Popover>('fieldsPopover');
+  protected readonly fieldsPopover      = viewChild<Popover>('fieldsPopover');
   protected readonly correlationPopover = viewChild<Popover>('correlationPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
-  protected readonly fieldsPopoverOpen = signal(false);
+  protected readonly fieldsPopoverOpen      = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
 
   // ── View tabs ─────────────────────────────────────────────
@@ -109,6 +123,69 @@ export class TopbarComponent {
 
   // ── View helpers ──────────────────────────────────────────
   protected readonly isMatrix = computed(() => this.state.activeView() === 'matrix');
+
+  // ── Fields picker ─────────────────────────────────────────
+  /** All 8 matrix field keys with display labels. */
+  protected readonly matrixFieldDefs: { key: MatrixField; label: string }[] = [
+    { key: 'version',            label: 'version' },
+    { key: 'run_url',            label: 'run url' },
+    { key: 'sha',                label: 'sha' },
+    { key: 'run_number',         label: 'run #' },
+    { key: 'ref',                label: 'ref' },
+    { key: 'actor',              label: 'actor' },
+    { key: 'happened_at',        label: 'time' },
+    { key: 'parent_deployments', label: 'parents' },
+  ];
+
+  /** All 8 swimlane field keys with display labels. */
+  protected readonly swimlaneFieldDefs: { key: SwimlaneField; label: string }[] = [
+    { key: 'environment', label: 'environment' },
+    { key: 'version',     label: 'version' },
+    { key: 'run_url',     label: 'run url' },
+    { key: 'sha',         label: 'sha' },
+    { key: 'run_number',  label: 'run #' },
+    { key: 'ref',         label: 'ref' },
+    { key: 'actor',       label: 'actor' },
+    { key: 'happened_at', label: 'time' },
+  ];
+
+  protected isMatrixFieldOn(key: MatrixField): boolean {
+    return this.state.matrixVisibleFields().has(key);
+  }
+
+  protected isSwimlaneFieldOn(key: SwimlaneField): boolean {
+    return this.state.swimlaneVisibleFields().has(key);
+  }
+
+  protected toggleMatrixField(key: MatrixField): void {
+    this.state.toggleMatrixField(key);
+  }
+
+  protected toggleSwimlaneField(key: SwimlaneField): void {
+    this.state.toggleSwimlaneField(key);
+  }
+
+  // ── Correlation picker ────────────────────────────────────
+  protected readonly correlationPredicates = CORRELATION_PREDICATES;
+
+  protected readonly activePredicate = computed(() => this.state.correlationPredicate());
+
+  protected readonly timeWindowOptions: { label: string; value: TimeWindow }[] =
+    TIME_WINDOWS.map((tw) => ({ label: tw, value: tw }));
+
+  protected readonly activeTimeWindow = computed(() => this.state.timeWindow());
+
+  protected readonly timeWindowDisabled = computed(
+    () => this.state.correlationPredicate() === 'explicit parent',
+  );
+
+  protected onPredicateChange(pred: CorrelationPredicate): void {
+    this.state.correlationPredicate.set(pred);
+  }
+
+  protected onTimeWindowChange(tw: TimeWindow): void {
+    this.state.timeWindow.set(tw);
+  }
 
   // ── Popover toggles ───────────────────────────────────────
   protected toggleFieldsPopover(event: MouseEvent): void {

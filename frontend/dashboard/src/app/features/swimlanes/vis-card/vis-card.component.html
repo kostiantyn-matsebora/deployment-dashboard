@@ -1,0 +1,76 @@
+<!-- VisCardComponent — Swimlane node card.
+     Spec: docs/design/components.md §Swimlane Node Card
+     Layout: flex-column, 3 conditional rows. -->
+
+<div
+  class="vis-card"
+  [class]="statusClass()"
+  [class.is-selected]="isSelected()"
+  (click)="onClick()"
+  role="button"
+  [attr.aria-label]="event().service + ' ' + event().environment + ' ' + (event().version || '')"
+  tabindex="0"
+  (keydown.enter)="onClick()"
+  (keydown.space)="onClick()"
+>
+
+  <!-- Row 1: version (left, demoted) + happened_at (right) -->
+  @if (showTopRow()) {
+    <div class="vc-top">
+      @if (show('version') && event().version) {
+        <span class="vc-ver">{{ event().version }}</span>
+      }
+      @if (show('happened_at')) {
+        <span class="vc-time">{{ event().happened_at | timeAgo }}</span>
+      }
+    </div>
+  }
+
+  <!-- Row 2: ref (col1) | run cluster (col2) -->
+  @if (showBodyRow()) {
+    <div class="vc-body">
+      <!-- Col 1: ref -->
+      <div class="vc-col1">
+        @if (show('ref') && event().ref) {
+          <span class="fld-ref">
+            <span class="glyph">⎇</span>
+            <span class="fld-ref-val">{{ event().ref }}</span>
+          </span>
+        }
+      </div>
+      <!-- Col 2: run cluster -->
+      <div class="vc-col2">
+        @if (show('run_url') && event().run_url) {
+          <a
+            class="fld-runurl"
+            [href]="event().run_url"
+            target="_blank"
+            rel="noopener"
+            (click)="stopProp($event)"
+          ><span class="glyph">↗</span>run</a>
+        }
+        @if (show('run_number') && event().run_number) {
+          <span class="fld-runno"><span class="glyph">#</span>{{ event().run_number }}</span>
+        }
+        @if (show('actor') && event().actor) {
+          <span class="fld-actor">@{{ event().actor }}</span>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Row 3: sha (bottom-left) + environment (bottom-right, PROMOTED) -->
+  @if (showEnvRow()) {
+    <div class="vc-env-row">
+      <span class="vc-sha-cell">
+        @if (show('sha') && event().sha) {
+          <span class="fld-sha">{{ event().sha }}</span>
+        }
+      </span>
+      @if (show('environment')) {
+        <span class="vc-env">{{ event().environment }}</span>
+      }
+    </div>
+  }
+
+</div>

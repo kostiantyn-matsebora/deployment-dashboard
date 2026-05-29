@@ -92,7 +92,7 @@
   <!-- Icon buttons + popovers ────────────────────────────── -->
   <div class="hdr-icons">
 
-    <!-- Correlation picker (Swimlanes only) -->
+    <!-- Correlation picker (Swimlanes only) ─────────────── -->
     @if (!isMatrix()) {
       <div style="position: relative">
         <button
@@ -105,15 +105,47 @@
           <span aria-hidden="true">⇆</span>
         </button>
         <p-popover #correlationPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-          <div class="popover-placeholder">
+          <div class="picker-content">
             <span class="popover-title">CORRELATION</span>
-            <p class="popover-coming">Phase 4</p>
+
+            <!-- Predicate radio list -->
+            <div class="pred-list" role="radiogroup" aria-label="Correlation predicate">
+              @for (pred of correlationPredicates; track pred) {
+                <label
+                  class="pred-opt"
+                  [class.is-on]="activePredicate() === pred"
+                  (click)="onPredicateChange(pred)"
+                >
+                  <span
+                    class="pred-radio"
+                    role="radio"
+                    [attr.aria-checked]="activePredicate() === pred"
+                  ></span>
+                  <span class="pred-label">{{ pred }}</span>
+                </label>
+              }
+            </div>
+
+            <!-- Time window select -->
+            <div class="tw-row" [class.tw-disabled]="timeWindowDisabled()">
+              <span class="tw-label">Window</span>
+              <p-select
+                [options]="timeWindowOptions"
+                optionLabel="label"
+                optionValue="value"
+                [ngModel]="activeTimeWindow()"
+                (onChange)="onTimeWindowChange($event.value)"
+                [disabled]="timeWindowDisabled()"
+                styleClass="tw-select"
+                [appendTo]="'body'"
+              />
+            </div>
           </div>
         </p-popover>
       </div>
     }
 
-    <!-- Fields picker (shared) -->
+    <!-- Fields picker (shared) ──────────────────────────── -->
     <div style="position: relative">
       <button
         class="icon-btn"
@@ -125,12 +157,45 @@
         <span aria-hidden="true">▦</span>
       </button>
       <p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-        <div class="popover-placeholder">
-          <span class="popover-title">VISIBLE FIELDS — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
-          <p class="popover-coming">Phase 4</p>
+        <div class="picker-content">
+          <span class="popover-title">FIELDS — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
+
+          <!-- Matrix field toggles -->
+          @if (isMatrix()) {
+            <div class="field-grid">
+              @for (f of matrixFieldDefs; track f.key) {
+                <label
+                  class="field-toggle"
+                  [class.is-on]="isMatrixFieldOn(f.key)"
+                  (click)="toggleMatrixField(f.key)"
+                >
+                  <span class="field-check" [class.checked]="isMatrixFieldOn(f.key)" aria-hidden="true"></span>
+                  <span class="field-label">{{ f.label }}</span>
+                </label>
+              }
+            </div>
+          }
+
+          <!-- Swimlane field toggles -->
+          @if (!isMatrix()) {
+            <div class="field-grid">
+              @for (f of swimlaneFieldDefs; track f.key) {
+                <label
+                  class="field-toggle"
+                  [class.is-on]="isSwimlaneFieldOn(f.key)"
+                  (click)="toggleSwimlaneField(f.key)"
+                >
+                  <span class="field-check" [class.checked]="isSwimlaneFieldOn(f.key)" aria-hidden="true"></span>
+                  <span class="field-label">{{ f.label }}</span>
+                </label>
+              }
+            </div>
+          }
+
         </div>
       </p-popover>
     </div>
+
   </div>
 
   <!-- Live pill ───────────────────────────────────────────── -->

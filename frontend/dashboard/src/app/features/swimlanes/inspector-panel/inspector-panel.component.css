@@ -1,0 +1,209 @@
+/* InspectorPanelComponent — pixel-matched to docs/design/components.md §Inspector Panel */
+
+/* ── Host ─────────────────────────────────────────────────── */
+:host {
+  display: block;
+  height: 100%;
+}
+
+/* ── Panel surface ────────────────────────────────────────── */
+.insp-panel {
+  height: 100%;
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 24px 64px -28px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Empty state ──────────────────────────────────────────── */
+.insp-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 20px;
+}
+
+.insp-empty-icon {
+  font-size: 28px;
+  color: var(--ink-3);
+  line-height: 1;
+}
+
+.insp-empty-msg {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-align: center;
+  line-height: 1.7;
+}
+
+/* ── Header ───────────────────────────────────────────────── */
+.insp-header {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--glass-edge);
+  flex-shrink: 0;
+}
+
+.insp-breadcrumb {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+  letter-spacing: 0.2px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.insp-sep {
+  margin: 0 5px;
+  color: var(--ink-3);
+}
+
+.insp-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.insp-ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-0);
+  letter-spacing: 0.2px;
+  word-break: break-all;
+}
+
+/* ── Status chip ──────────────────────────────────────────── */
+.insp-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.insp-status.chip-success {
+  background: rgba(52, 210, 154, 0.15);
+  border: 1px solid rgba(52, 210, 154, 0.45);
+  color: var(--emerald);
+}
+
+.insp-status.chip-progress {
+  background: rgba(245, 165, 36, 0.15);
+  border: 1px solid rgba(245, 165, 36, 0.45);
+  color: var(--amber);
+}
+
+.insp-status.chip-failure {
+  background: rgba(255, 93, 93, 0.15);
+  border: 1px solid rgba(255, 93, 93, 0.45);
+  color: var(--coral);
+}
+
+/* ── Field grid ───────────────────────────────────────────── */
+.insp-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: baseline;
+}
+
+/* Scrollbar styling */
+.insp-grid::-webkit-scrollbar { width: 4px; }
+.insp-grid::-webkit-scrollbar-track { background: transparent; }
+.insp-grid::-webkit-scrollbar-thumb {
+  background: var(--glass-edge-2);
+  border-radius: 2px;
+}
+
+.k {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.v {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--ink-0);
+  word-break: break-word;
+  min-width: 0;
+}
+
+.v.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+}
+
+.ref-val {
+  word-break: break-all;
+}
+
+.v-muted {
+  color: var(--ink-3);
+}
+
+.v-time-elapsed {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-0);
+}
+
+.v-time-abs {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-2);
+}
+
+/* ── Run URL link ─────────────────────────────────────────── */
+.insp-link {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: #a8a0ff;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(168, 160, 255, 0.45);
+}
+.insp-link:hover { color: #c8c2ff; }
+
+/* ── Parent deployment chips ──────────────────────────────── */
+.insp-parents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.parent-chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px solid rgba(var(--accent-rgb), 0.30);
+  color: rgba(var(--accent-rgb), 1);
+}

@@ -42,7 +42,8 @@ export class AppStateService {
   readonly swimlaneVisibleFields = signal<Set<SwimlaneField>>(new Set(SWIMLANE_FIELDS));
 
   // ── Swimlanes correlation ─────────────────────────────────
-  readonly correlationPredicate = signal<CorrelationPredicate>(CORRELATION_PREDICATES[0]);
+  /** Default: explicit parent gives the richest DAG for the demo data. */
+  readonly correlationPredicate = signal<CorrelationPredicate>('explicit parent');
   readonly timeWindow = signal<TimeWindow>(TIME_WINDOWS[2]); // '1 day'
 
   // ── Inspector (Swimlanes selected node) ───────────────────

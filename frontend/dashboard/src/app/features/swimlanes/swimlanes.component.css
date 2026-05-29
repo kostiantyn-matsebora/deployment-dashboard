@@ -1,0 +1,118 @@
+/* SwimlanesComponent — pixel-matched to docs/design/views.md §Swimlanes View Layout */
+
+/* ── Host ─────────────────────────────────────────────────── */
+:host {
+  display: block;
+}
+
+/* ── Loading / error states ───────────────────────────────── */
+.swim-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.swim-error { color: var(--coral); }
+
+.swim-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--accent-rgb), 0.20);
+  border-top-color: rgba(var(--accent-rgb), 1);
+  animation: spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+
+.swim-load-label { color: var(--ink-2); }
+
+/* ── Vis shell: canvas | inspector grid ───────────────────── */
+.vis-shell {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+  align-items: start;
+  margin-top: 10px;
+}
+
+/* ── Canvas: stacked service lanes ───────────────────────── */
+.vis-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;         /* dense inter-lane gap per spec */
+  overflow-x: auto;
+  overflow-y: visible;
+  min-width: 0;
+}
+
+/* ── Per-service lane ─────────────────────────────────────── */
+.lane {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 24px 64px -32px rgba(0, 0, 0, 0.60);
+  overflow: hidden;
+}
+
+/* Lane header: service name */
+.lane-head {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--glass-edge);
+  background: rgba(var(--accent-rgb), 0.04);
+}
+
+.lane-svc {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-0);
+  letter-spacing: 0.2px;
+  /* Left accent bar */
+  border-left: 2px solid rgba(var(--accent-rgb), 0.45);
+  padding-left: 10px;
+}
+
+/* Lane graph area: hosts the ngx-graph SVG */
+.lane-graph {
+  padding: 10px 12px;
+  overflow: hidden;
+}
+
+/* Ensure ngx-graph fills the lane-graph area */
+.lane-graph ::ng-deep ngx-graph {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ngx-graph SVG occupies full lane-graph space */
+.lane-graph ::ng-deep .ngx-graph-outer {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Edge paths in the graph */
+.lane-graph ::ng-deep .swim-edge path {
+  transition: stroke 0.2s ease;
+}
+
+/* ── Inspector sidebar ────────────────────────────────────── */
+.vis-side {
+  position: sticky;
+  top: 16px;       /* stays visible during vertical scroll */
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+/* ── @keyframes (spin reused from global styles.css) ─────── */
+/* spin is defined in styles.css — no duplicate needed */

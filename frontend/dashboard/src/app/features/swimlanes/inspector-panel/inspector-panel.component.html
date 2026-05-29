@@ -1,0 +1,102 @@
+<!-- InspectorPanelComponent — 320px right sidebar.
+     Spec: docs/design/components.md §Inspector Panel -->
+
+<div class="insp-panel">
+
+  @if (!event()) {
+    <!-- ── Empty state ──────────────────────────────── -->
+    <div class="insp-empty">
+      <span class="insp-empty-icon" aria-hidden="true">⎇</span>
+      <p class="insp-empty-msg">Select a node<br>to inspect</p>
+    </div>
+  } @else {
+    <!-- ── Header ───────────────────────────────────── -->
+    <div class="insp-header">
+      <span class="insp-breadcrumb">
+        {{ event()!.service }}
+        <span class="insp-sep" aria-hidden="true">·</span>
+        {{ event()!.environment }}
+      </span>
+      <div class="insp-title-row">
+        <span class="insp-status" [class]="statusClass()">{{ statusLabel() }}</span>
+        @if (event()!.version) {
+          <span class="insp-ver">{{ event()!.version }}</span>
+        }
+      </div>
+    </div>
+
+    <!-- ── Field rows ───────────────────────────────── -->
+    <div class="insp-grid">
+
+      <!-- service -->
+      <span class="k">service</span>
+      <span class="v">{{ event()!.service }}</span>
+
+      <!-- environment -->
+      <span class="k">environment</span>
+      <span class="v">{{ event()!.environment }}</span>
+
+      <!-- status -->
+      <span class="k">status</span>
+      <span class="v">
+        <span class="insp-status" [class]="statusClass()">{{ statusLabel() }}</span>
+      </span>
+
+      <!-- version -->
+      <span class="k">version</span>
+      <span class="v mono">{{ event()!.version || '—' }}</span>
+
+      <!-- happened_at: elapsed + absolute UTC -->
+      <span class="k">happened_at</span>
+      <span class="v">
+        <span class="v-time-elapsed">{{ event()!.happened_at | timeAgo }}</span>
+        <br>
+        <span class="v-time-abs">{{ absoluteUtc(event()!.happened_at) }}</span>
+      </span>
+
+      <!-- actor -->
+      <span class="k">actor</span>
+      <span class="v mono">{{ event()!.actor || '—' }}</span>
+
+      <!-- ref -->
+      <span class="k">ref</span>
+      <span class="v mono ref-val">{{ event()!.ref || '—' }}</span>
+
+      <!-- sha -->
+      <span class="k">sha</span>
+      <span class="v mono">{{ event()!.sha || '—' }}</span>
+
+      <!-- run_number -->
+      <span class="k">run_number</span>
+      <span class="v mono">{{ event()!.run_number ? '#' + event()!.run_number : '—' }}</span>
+
+      <!-- run_url -->
+      <span class="k">run_url</span>
+      <span class="v">
+        @if (event()!.run_url) {
+          <a class="insp-link" [href]="event()!.run_url" target="_blank" rel="noopener">
+            ↗ view run
+          </a>
+        } @else {
+          <span class="v-muted">—</span>
+        }
+      </span>
+
+      <!-- parent_deployments -->
+      <span class="k">parent_deps</span>
+      <span class="v">
+        @if (event()!.parent_deployments?.length) {
+          <span class="insp-parents">
+            @for (pid of event()!.parent_deployments!; track pid) {
+              <span class="parent-chip">{{ truncGuid(pid) }}</span>
+            }
+          </span>
+        } @else {
+          <span class="v-muted">—</span>
+        }
+      </span>
+
+    </div>
+    <!-- /insp-grid -->
+  }
+</div>

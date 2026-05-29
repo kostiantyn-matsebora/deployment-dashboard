@@ -1,0 +1,239 @@
+/* VisCardComponent — pixel-matched to docs/design/mockup/index.html §Swimlane Node Card */
+
+/* ── Host ─────────────────────────────────────────────────── */
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Card base ────────────────────────────────────────────── */
+.vis-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 8px 14px;
+  min-height: 64px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  background: var(--vis-card-bg);
+  border: 1px solid var(--glass-edge);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  cursor: pointer;
+  overflow: hidden;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.vis-card:hover {
+  border-color: var(--glass-edge-2);
+}
+
+.vis-card:focus-visible {
+  box-shadow:
+    0 0 0 2px rgba(var(--accent-rgb), 0.55),
+    0 0 14px rgba(var(--accent-rgb), 0.25);
+}
+
+/* 3px left accent bar */
+.vis-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--ink-3);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ── Status variants ──────────────────────────────────────── */
+.vis-card.s-success {
+  background: linear-gradient(180deg, var(--emerald-wash), rgba(52, 210, 154, 0.06));
+  border-color: var(--emerald-edge);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 0 0 1px rgba(52, 210, 154, 0.10),
+    0 8px 22px -10px var(--emerald-glow);
+}
+.vis-card.s-success::before {
+  background: var(--emerald);
+  box-shadow: 0 0 12px var(--emerald-glow);
+}
+
+.vis-card.s-progress {
+  background: linear-gradient(180deg, var(--amber-wash), rgba(245, 165, 36, 0.06));
+  border-color: var(--amber-edge);
+}
+.vis-card.s-progress::before {
+  background: var(--amber);
+  box-shadow: 0 0 12px var(--amber-glow);
+}
+
+.vis-card.s-failure {
+  background: linear-gradient(180deg, var(--coral-wash), rgba(255, 93, 93, 0.06));
+  border-color: var(--coral-edge);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 0 0 1px rgba(255, 93, 93, 0.10),
+    0 8px 22px -10px var(--coral-glow);
+}
+.vis-card.s-failure::before {
+  background: var(--coral);
+  box-shadow: 0 0 12px var(--coral-glow);
+}
+
+/* ── Selected node ring ───────────────────────────────────── */
+.vis-card.is-selected {
+  box-shadow:
+    0 0 0 2px rgba(var(--accent-rgb), 0.75),
+    0 0 18px rgba(var(--accent-rgb), 0.40);
+  border-color: rgba(var(--accent-rgb), 0.70);
+}
+
+/* ── Row 1: version + time ────────────────────────────────── */
+.vc-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 14px;
+  overflow: hidden;
+}
+
+/* version — demoted secondary identifier (top-left) */
+.vc-ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+/* elapsed time */
+.vc-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Row 2: body (ref | run cluster) ─────────────────────── */
+.vc-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 14px;
+  align-items: start;
+  overflow: hidden;
+}
+
+.vc-col1,
+.vc-col2 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── Row 3: sha + environment ─────────────────────────────── */
+.vc-env-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: auto;
+  overflow: hidden;
+}
+
+.vc-sha-cell {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* environment — PROMOTED primary identifier (bottom-right) */
+.vc-env {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-0);
+  letter-spacing: 0.2px;
+  text-transform: lowercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Field glyphs ─────────────────────────────────────────── */
+.glyph {
+  color: var(--ink-3);
+  font-size: 9px;
+}
+
+.fld-ref {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  color: var(--ink-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  max-width: 100%;
+}
+.fld-ref-val {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fld-sha {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fld-runurl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  color: #a8a0ff;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(168, 160, 255, 0.45);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.fld-runurl:hover { color: #c8c2ff; }
+
+.fld-runno {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.fld-actor {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
