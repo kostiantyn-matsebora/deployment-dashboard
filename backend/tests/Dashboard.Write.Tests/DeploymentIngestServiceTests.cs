@@ -146,7 +146,7 @@ public sealed class DeploymentIngestServiceTests : IDisposable
             HappenedAt = DateTimeOffset.UtcNow,
             Version = "1.2.3",
             RunUrl = "https://ci.example.com/runs/42",
-            RunNumber = 42,
+            RunNumber = "42",
             Actor = "bot",
             Ref = "refs/heads/main",
             Sha = "abc123",

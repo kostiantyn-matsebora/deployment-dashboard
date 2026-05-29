@@ -59,7 +59,8 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .HasMaxLength(2048);
 
             entity.Property(e => e.RunNumber)
-                  .HasColumnName("run_number");
+                  .HasColumnName("run_number")
+                  .HasMaxLength(128);
 
             entity.Property(e => e.Actor)
                   .HasColumnName("actor")

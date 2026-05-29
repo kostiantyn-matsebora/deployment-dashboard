@@ -23,7 +23,7 @@ namespace Dashboard.Shared.Migrations
                     status = table.Column<string>(type: "text", nullable: false),
                     happened_at = table.Column<DateTimeOffset>(type: "timestamptz", nullable: false),
                     run_url = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
-                    run_number = table.Column<int>(type: "integer", nullable: true),
+                    run_number = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     actor = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     @ref = table.Column<string>(name: "ref", type: "character varying(256)", maxLength: 256, nullable: true),
                     sha = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),

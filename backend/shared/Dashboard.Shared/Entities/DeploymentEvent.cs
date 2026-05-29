@@ -28,8 +28,8 @@ public sealed class DeploymentEvent
     /// <summary>Link to the CI/CD run. Max 2048 chars.</summary>
     public string? RunUrl { get; set; }
 
-    /// <summary>Numeric CI/CD run identifier. Non-negative.</summary>
-    public int? RunNumber { get; set; }
+    /// <summary>CI/CD run identifier. Tool-specific format; stored verbatim, never parsed. Max 128 chars.</summary>
+    public string? RunNumber { get; set; }
 
     /// <summary>Identity of the actor who triggered the deployment. Max 128 chars.</summary>
     public string? Actor { get; set; }
