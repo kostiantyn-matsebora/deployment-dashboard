@@ -8,9 +8,9 @@
 3. Use `## Contents` anchor links to reach the section.
 4. Load full document content only when the target section is absent from the TOC.
 
-<!-- registry:start -->
+---
 - `root-index` [docs/index.md](docs/index.md) — Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.
-<!-- registry:end -->
+---
 
 ## Solution directory structure
 
