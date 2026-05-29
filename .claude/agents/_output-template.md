@@ -1,6 +1,6 @@
 ---
 name: output-template
-description: Fill-in Documentation Report template used by all documentation-architect commands. Emit every applicable slot; omit empty slots — do not invent.
+description: Fill-in Documentation Report template used by all docs-keeper commands. Emit every applicable slot; omit empty slots — do not invent.
 ---
 
 ## Documentation Report

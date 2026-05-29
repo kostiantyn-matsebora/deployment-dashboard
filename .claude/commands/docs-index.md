@@ -1,5 +1,5 @@
 ---
-description: Build or refresh a directory's index.md (github/docs-style — recursive-descent children list with sub-index boundaries, hierarchical, minimum-footprint at the root prompt). One invocation produces a full index for the target subtree; sub-indexes added later automatically shrink the parent's footprint. Walks UP the directory tree on completion. Body retains a ## Contents H2 TOC for the descent scope. Mode A of documentation-architect.
+description: Build or refresh a directory's index.md (github/docs-style — recursive-descent children list with sub-index boundaries, hierarchical, minimum-footprint at the root prompt). One invocation produces a full index for the target subtree; sub-indexes added later automatically shrink the parent's footprint. Walks UP the directory tree on completion. Body retains a ## Contents H2 TOC for the descent scope. Mode A of docs-keeper.
 argument-hint: <directory-path>
 model: sonnet
 ---
@@ -10,7 +10,7 @@ Build or refresh the `index.md` index for `$ARGUMENTS`, performing a recursive d
 
 ## Pre-flight (binding)
 
-Inherited from `.claude/agents/documentation-architect.md`:
+Inherited from `.claude/agents/docs-keeper.md`:
 
 1. **Non-overwrite policy** § — every `Write` / `Edit` goes through the gate table (applies per-file across the walk-up, not just to the target).
 2. **Hard rules — project authoring conventions** § — load host rules first; honor them over any default.
@@ -154,7 +154,7 @@ The descent yields a flat sorted list. Sub-indexes act as opaque boundaries — 
 
 8. **Respect host metadata.** Merge with existing front-matter — never clobber owner-set keys. Preserve `Version` / `Status` / `Owner` / `Last reviewed` / `redirect_from` / `versions` / similar verbatim. Structural keys (`title`, `intro`, `shortTitle`, `children`) may be added or refreshed.
 
-9. **Sibling README.md classification.** For every `README.md` encountered during the descent (target dir or any descended sub-dir without `index.md`), apply the binding classification from `.claude/agents/documentation-architect.md` § "README.md classification":
+9. **Sibling README.md classification.** For every `README.md` encountered during the descent (target dir or any descended sub-dir without `index.md`), apply the binding classification from `.claude/agents/docs-keeper.md` § "README.md classification":
 
    - **Content-bearing** → include in `children:` at the appropriate nesting (`/README` for the target dir, `/<sub>/README` for a nested location). NOT a deprecation candidate.
    - **Legacy-navigation** → exclude from `children:`. Surface as a deprecation candidate in the report. Do NOT delete.
