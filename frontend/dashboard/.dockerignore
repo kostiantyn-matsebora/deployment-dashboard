@@ -1,0 +1,13 @@
+# Build context = frontend/dashboard. Keep it lean and reproducible:
+# the image installs deps via `npm ci` and builds inside the build stage,
+# so host artefacts must never leak in (and would clobber the clean install).
+node_modules
+dist
+.angular
+.git
+.gitignore
+*.log
+npm-debug.log*
+Dockerfile
+.dockerignore
+README.md
