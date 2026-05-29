@@ -6,23 +6,20 @@ import { TopbarComponent } from './shared/topbar/topbar.component';
 import { AppStateService } from './core/services/app-state.service';
 import { DeploymentApiService } from './core/services/deployment-api.service';
 
-/** Re-fetch the full matrix snapshot every 5 minutes as a drift safety-net. */
-const MATRIX_REFRESH_MS = 5 * 60_000;
-
 /**
  * Root application shell.
  *
- * Owns the single matrix snapshot load, SSE subscription, and periodic
- * full refresh for the entire app lifetime. Both Matrix and Swimlanes views
- * are pure presentation — they read from AppStateService.matrixData and
- * never open their own connections.
+ * Owns the single matrix snapshot load and SSE subscription for the entire
+ * app lifetime. Both Matrix and Swimlanes views are pure presentation —
+ * they read from AppStateService.matrixData and never open their own
+ * connections. Switching views costs zero extra calls.
  *
  * Data flow:
  *   ngOnInit → GET /api/matrix → state.matrixData.set(snapshot)
  *            → subscribe /api/events/stream
- *              → each event: state.applyDeploymentEvent(ev)   // patch existing slots only
- *              → error:      state.sseConnected.set(false)
- *   setInterval(5 min) → GET /api/matrix                      // drift safety-net
+ *              → each event:  state.applyDeploymentEvent(ev)
+ *              → reconnect:   browser EventSource sends Last-Event-ID automatically;
+ *                             server replays missed events (spec §7); no poll needed.
  */
 @Component({
   selector: 'app-root',
@@ -35,20 +32,14 @@ export class App implements OnInit, OnDestroy {
   private readonly api   = inject(DeploymentApiService);
 
   private subs: Subscription[] = [];
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   ngOnInit(): void {
     this.loadMatrix();
     this.connectSSE();
-
-    // Periodic full refresh — bounded discovery of new services/environments
-    // and safety-net against incremental-update drift.
-    this.refreshTimer = setInterval(() => this.loadMatrix(), MATRIX_REFRESH_MS);
   }
 
   ngOnDestroy(): void {
     this.subs.forEach((s) => s.unsubscribe());
-    if (this.refreshTimer !== null) clearInterval(this.refreshTimer);
   }
 
   private loadMatrix(): void {
