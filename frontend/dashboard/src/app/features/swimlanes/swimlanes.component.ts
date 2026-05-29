@@ -16,6 +16,7 @@ import { DeploymentApiService } from '../../core/services/deployment-api.service
 import {
   CorrelationPredicate,
   DeploymentEvent,
+  MatrixSlot,
   SwimlaneField,
   TIME_WINDOWS,
   TimeWindow,
@@ -55,14 +56,17 @@ export interface SwimLane {
 /**
  * SwimlanesComponent — per-service DAG visualisation shell (Phase 3).
  *
+ * Data source: `AppStateService.matrixData()` — the same matrix snapshot used
+ * by the Matrix view. Swimlanes is a graph representation of the matrix, not an
+ * independent data source. Events are extracted from each slot's `current` and
+ * `last_successful` fields. If `matrixData` is already populated (user switched
+ * from Matrix), the component reuses it directly; otherwise it loads the matrix
+ * itself (direct `/swimlanes` navigation).
+ *
  * Layout:
  *   `.vis-shell { display: grid; grid-template-columns: 1fr 320px; }` — canvas | inspector.
  *   One `<ngx-graph>` per service lane (dagre, orientation: LR).
  *   Inspector panel (320px) updated on node click.
- *
- * Data:
- *   GET /api/deployments (limit 500) on init + on each SSE event.
- *   Client-side DAG correlation via `correlationPredicate` + `timeWindow` signals.
  *
  * Spec: docs/design/views.md §Swimlanes View Layout
  *       docs/design/components.md §Swimlane Node Card + §Inspector Panel
@@ -82,11 +86,9 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
   // ── Local state ───────────────────────────────────────────
   protected readonly loading   = signal<boolean>(true);
   protected readonly loadErr   = signal<boolean>(false);
-  /** Raw event list fetched from API. */
-  private   readonly allEvents = signal<DeploymentEvent[]>([]);
 
   // ── Layout constants exposed to template ──────────────────
-  protected readonly NODE_W    = NODE_W;
+  protected readonly NODE_W        = NODE_W;
   protected readonly dagreSettings = DAGRE_SETTINGS;
   protected readonly timeWindows   = TIME_WINDOWS;
 
@@ -97,26 +99,61 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
   // ── Subscriptions ─────────────────────────────────────────
   private subs: Subscription[] = [];
 
+  // ── Derived: events per service from matrix snapshot ──────
+  /**
+   * Extracts all unique deployment events from the current matrix snapshot.
+   * Each slot contributes at most 2 events: `current` + `last_successful`.
+   * Deduplication is by event `id` — no double-counting when the same event
+   * appears in multiple slots (shouldn't happen, but defensive).
+   */
+  private readonly eventsFromMatrix = computed<Map<string, DeploymentEvent[]>>(() => {
+    const matrix = this.state.matrixData();
+    const byService = new Map<string, DeploymentEvent[]>();
+    if (!matrix) return byService;
+
+    for (const row of matrix.rows) {
+      const events: DeploymentEvent[] = [];
+      const seen = new Set<string>();
+
+      for (const slot of Object.values(row.slots) as MatrixSlot[]) {
+        if (!seen.has(slot.current.id)) {
+          seen.add(slot.current.id);
+          events.push(slot.current);
+        }
+        if (slot.last_successful && !seen.has(slot.last_successful.id)) {
+          seen.add(slot.last_successful.id);
+          events.push(slot.last_successful);
+        }
+      }
+
+      if (events.length > 0) {
+        byService.set(row.service, events);
+      }
+    }
+
+    return byService;
+  });
+
   // ── Derived: swimlane lanes ────────────────────────────────
   /**
-   * Recomputes whenever events, correlationPredicate, timeWindow, or
+   * Recomputes whenever matrixData, correlationPredicate, timeWindow, or
    * swimlaneVisibleFields change. Each recompute emits on updateTrigger$
    * so ngx-graph re-runs dagre layout.
    */
   protected readonly lanes = computed<SwimLane[]>(() => {
-    const events = this.allEvents();
-    if (!events.length) return [];
+    const byService = this.eventsFromMatrix();
+    if (!byService.size) return [];
 
     const predicate = this.state.correlationPredicate();
     const tw        = this.state.timeWindow();
     const fields    = this.state.swimlaneVisibleFields();
 
-    return this.buildLanes(events, predicate, tw, fields);
+    return this.buildLanes(byService, predicate, tw, fields);
   });
 
   // ── Lifecycle ─────────────────────────────────────────────
   constructor() {
-    // Fire update$ whenever lanes recompute (fields/predicate/timeWindow changes).
+    // Fire update$ whenever lanes recompute so ngx-graph re-runs dagre.
     effect(() => {
       this.lanes(); // track
       queueMicrotask(() => this._updateSubject$.next());
@@ -124,7 +161,13 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.loadAll();
+    // Reuse already-loaded matrix data (e.g. user switched from Matrix view).
+    // Load fresh only when matrixData is absent (direct /swimlanes navigation).
+    if (this.state.matrixData()) {
+      this.loading.set(false);
+    } else {
+      this.loadMatrix();
+    }
     this.connectSSE();
   }
 
@@ -133,12 +176,12 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
   }
 
   // ── Data loading ──────────────────────────────────────────
-  private loadAll(): void {
+  private loadMatrix(): void {
     this.loading.set(true);
     this.loadErr.set(false);
-    const sub = this.api.listDeployments({ limit: 500 }).subscribe({
-      next: (page) => {
-        this.allEvents.set(page.items);
+    const sub = this.api.getMatrix().subscribe({
+      next: (m) => {
+        this.state.matrixData.set(m);
         this.loading.set(false);
       },
       error: () => {
@@ -153,7 +196,7 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
     const sub = this.api.streamEvents().subscribe({
       next: () => {
         this.state.sseConnected.set(true);
-        this.loadAll();
+        this.loadMatrix();
       },
       error: () => {
         this.state.sseConnected.set(false);
@@ -165,20 +208,13 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
   // ── Lane building ─────────────────────────────────────────
 
   private buildLanes(
-    events: DeploymentEvent[],
+    byService: Map<string, DeploymentEvent[]>,
     predicate: CorrelationPredicate,
     timeWindow: TimeWindow,
     fields: Set<SwimlaneField>,
   ): SwimLane[] {
-    const twMs   = TIME_WINDOW_MS[timeWindow];
-    const nodeH  = this.calcNodeHeight(fields);
-
-    // Group events by service, preserving demo data's alpha ordering.
-    const byService = new Map<string, DeploymentEvent[]>();
-    for (const ev of events) {
-      if (!byService.has(ev.service)) byService.set(ev.service, []);
-      byService.get(ev.service)!.push(ev);
-    }
+    const twMs  = TIME_WINDOW_MS[timeWindow];
+    const nodeH = this.calcNodeHeight(fields);
 
     return [...byService.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
@@ -197,15 +233,13 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
           depIdToNodeId.set(ev.deployment_id, ev.id);
         }
 
-        // Build edge map for status lookups (source event by node id).
+        // Event lookup by node id (for edge status).
         const nodeById = new Map<string, DeploymentEvent>();
         for (const ev of svcEvents) {
           nodeById.set(ev.id, ev);
         }
 
-        const links = this.buildEdges(
-          svcEvents, predicate, twMs, depIdToNodeId, nodeById,
-        );
+        const links = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
 
         // Estimate lane height: max nodes per rank × (nodeH + nodePad) + margin.
         const rowsEst = Math.max(1, Math.ceil(svcEvents.length / 3));
@@ -221,7 +255,7 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
    * Outer padding: 20px.
    */
   private calcNodeHeight(fields: Set<SwimlaneField>): number {
-    let h = 20; // top + bottom padding
+    let h = 20;
     if (fields.has('version') || fields.has('happened_at')) h += 22;
     if (
       fields.has('ref') ||
@@ -253,20 +287,18 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
       for (const ev of events) {
         for (const parentDepId of (ev.parent_deployments ?? [])) {
           const sourceId = depIdToNodeId.get(parentDepId);
-          if (!sourceId) continue; // cross-service or unknown — skip
-          const srcStatus = nodeById.get(sourceId)?.status;
+          if (!sourceId) continue; // cross-service or not in matrix snapshot — skip
           edges.push({
             id:     `${sourceId}--${ev.id}`,
             source: sourceId,
             target: ev.id,
-            data:   { status: srcStatus ?? 'success' },
+            data:   { status: nodeById.get(sourceId)?.status ?? 'success' },
           });
         }
       }
       return edges;
     }
 
-    // Field-based correlation predicates.
     const fieldMap: Partial<Record<CorrelationPredicate, keyof DeploymentEvent>> = {
       'same sha':        'sha',
       'same run_number': 'run_number',
@@ -282,12 +314,11 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
 
     const edges: NgxEdge[] = [];
     for (let i = 0; i < sorted.length; i++) {
-      const node      = sorted[i];
-      const nodeTime  = new Date(node.happened_at).getTime();
-      const fieldVal  = node[field] as string | undefined;
+      const node     = sorted[i];
+      const nodeTime = new Date(node.happened_at).getTime();
+      const fieldVal = node[field] as string | undefined;
       if (!fieldVal) continue;
 
-      // Scan backwards for the most recent predecessor with the same field value.
       for (let j = i - 1; j >= 0; j--) {
         const pred     = sorted[j];
         const predTime = new Date(pred.happened_at).getTime();
@@ -299,7 +330,7 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
             target: node.id,
             data:   { status: pred.status },
           });
-          break; // connect to immediate predecessor only
+          break;
         }
       }
     }
