@@ -6,6 +6,7 @@ import {
   MATRIX_FIELDS,
   Matrix,
   MatrixField,
+  MatrixRow,
   MatrixSlot,
   SWIMLANE_FIELDS,
   SwimlaneField,
@@ -100,10 +101,10 @@ export class AppStateService {
   /**
    * Apply a single SSE DeploymentEvent to the matrix snapshot in-place.
    *
-   * Intentionally only patches EXISTING (service, environment) slots.
-   * Unknown combos are silently dropped — new services and environments are
-   * discovered exclusively via the periodic full re-fetch in App, keeping the
-   * matrix size bounded to what was shown at the last snapshot.
+   * New (service, environment) combinations are inserted immediately — appearing
+   * in both views as soon as the event arrives. Each slot holds at most two
+   * events (current + last_successful), so growth is proportional to the number
+   * of distinct (service, env) pairs seen, which is bounded in any real system.
    *
    * Slot update rules:
    *   success     → current = ev;  last_successful = undefined
@@ -115,22 +116,20 @@ export class AppStateService {
     const matrix = this.matrixData();
     if (!matrix) return;
 
-    const existingRow = matrix.rows.find((r) => r.service === ev.service);
-    // Unknown service or environment — skip. Discovered on next full refresh.
-    if (!existingRow || !(ev.environment in existingRow.slots)) return;
+    const existingRow  = matrix.rows.find((r) => r.service === ev.service);
+    const existingSlot = existingRow?.slots[ev.environment] as MatrixSlot | undefined;
 
-    const existingSlot = existingRow.slots[ev.environment];
-
+    // ── Derive slot fields ────────────────────────────────
     const prevLastSuccessful =
-      existingSlot.current.status === 'success'
+      existingSlot?.current.status === 'success'
         ? existingSlot.current
-        : existingSlot.last_successful;
+        : existingSlot?.last_successful;
 
     const lastSuccessful = ev.status === 'success' ? undefined : prevLastSuccessful;
 
     const prevFailed =
       ev.status === 'in-progress' &&
-      (existingSlot.current.status === 'failure' || existingSlot.prev_failed === true);
+      (existingSlot?.current.status === 'failure' || existingSlot?.prev_failed === true);
 
     const newSlot: MatrixSlot = {
       current: ev,
@@ -138,13 +137,25 @@ export class AppStateService {
       ...(prevFailed     ? { prev_failed: true }               : {}),
     };
 
-    const rows = matrix.rows.map((r) =>
-      r.service === ev.service
-        ? { ...r, slots: { ...r.slots, [ev.environment]: newSlot } }
-        : r,
-    );
+    // ── Patch or insert row ───────────────────────────────
+    let rows = matrix.rows;
+    if (existingRow) {
+      rows = rows.map((r) =>
+        r.service === ev.service
+          ? { ...r, slots: { ...r.slots, [ev.environment]: newSlot } }
+          : r,
+      );
+    } else {
+      const newRow: MatrixRow = { service: ev.service, slots: { [ev.environment]: newSlot } };
+      rows = [...rows, newRow].sort((a, b) => a.service.localeCompare(b.service));
+    }
 
-    this.matrixData.set({ ...matrix, generated_at: new Date().toISOString(), rows });
+    // ── Track new environment ─────────────────────────────
+    const environments = matrix.environments.includes(ev.environment)
+      ? matrix.environments
+      : sortEnvs([...matrix.environments, ev.environment]);
+
+    this.matrixData.set({ ...matrix, generated_at: new Date().toISOString(), environments, rows });
   }
 
   // ── Field toggle helpers ──────────────────────────────────
