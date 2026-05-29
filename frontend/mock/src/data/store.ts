@@ -127,7 +127,7 @@ class EventStore {
     });
 
     const matrixRows = services.map((service) => {
-      const slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent }> = {};
+      const slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent; prev_failed?: boolean }> = {};
       for (const env of environments) {
         const slotEvents = rows
           .filter((e) => e.service === service && e.environment === env)
@@ -135,7 +135,20 @@ class EventStore {
         if (slotEvents.length === 0) continue;
         const current = slotEvents[0];
         const lastSuccessful = current.status === 'success' ? undefined : slotEvents.find((e) => e.status === 'success');
-        slots[env] = lastSuccessful ? { current, last_successful: lastSuccessful } : { current };
+
+        // Detect prev_failed: is there a failure between current and last_successful (or anywhere
+        // after current when no success exists)? Distinguishes S2↔S3 and S5↔S6.
+        let prevFailed = false;
+        if (current.status !== 'success') {
+          const searchUntil = lastSuccessful ? slotEvents.indexOf(lastSuccessful) : slotEvents.length;
+          prevFailed = slotEvents.slice(1, searchUntil).some((e) => e.status === 'failure');
+        }
+
+        slots[env] = {
+          current,
+          ...(lastSuccessful ? { last_successful: lastSuccessful } : {}),
+          ...(prevFailed ? { prev_failed: true } : {}),
+        };
       }
       return { service, slots };
     });

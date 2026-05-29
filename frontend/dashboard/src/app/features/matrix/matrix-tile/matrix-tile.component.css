@@ -1,0 +1,395 @@
+/* MatrixTileComponent — pixel-matched to docs/design/mockup/index.html §Matrix Tile */
+
+/* ── Slot base ─────────────────────────────────────────────── */
+.slot {
+  position: relative;
+  min-height: 56px;
+  height: auto;
+  padding: 6px 8px 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--slot-bg);
+  border: 1px solid var(--glass-edge);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  cursor: pointer;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.25s ease;
+  outline: none;
+}
+
+.slot:hover { transform: translateY(-1px); border-color: var(--glass-edge-2); }
+.slot:focus-visible {
+  box-shadow:
+    0 0 0 2px rgba(var(--accent-rgb), 0.55),
+    0 0 14px rgba(var(--accent-rgb), 0.25);
+}
+
+/* Left-edge accent bar */
+.slot::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background: var(--ink-3);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Tile-attrs shrinks to nothing when empty */
+.slot .tile-attrs:empty { display: none; }
+
+/* ── S1: success ───────────────────────────────────────────── */
+.slot.s-success {
+  background: linear-gradient(180deg, var(--emerald-wash), rgba(52, 210, 154, 0.06));
+  border-color: var(--emerald-edge);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 0 0 1px rgba(52, 210, 154, 0.10),
+    0 12px 32px -16px var(--emerald-glow);
+}
+.slot.s-success::before {
+  background: var(--emerald);
+  box-shadow: 0 0 14px var(--emerald-glow);
+}
+
+/* ── S5: running only — full amber ─────────────────────────── */
+.slot.s-running-only {
+  background: linear-gradient(180deg, var(--amber-wash), rgba(245, 165, 36, 0.06));
+  border-color: var(--amber-edge);
+  animation: breathe 3.6s ease-in-out infinite;
+}
+.slot.s-running-only::before {
+  background: var(--amber);
+  box-shadow: 0 0 14px var(--amber-glow);
+}
+
+/* ── S2, S3: running split — amber animated ────────────────── */
+.slot.s-run-last,
+.slot.s-run-fail-last {
+  border-color: var(--amber-edge);
+  animation: breathe 3.6s ease-in-out infinite;
+}
+.slot.s-run-last::before,
+.slot.s-run-fail-last::before {
+  background: var(--amber);
+  box-shadow: 0 0 14px var(--amber-glow);
+}
+
+/* ── S6: running + failed only — full amber ────────────────── */
+.slot.s-run-fail-only {
+  background: linear-gradient(180deg, var(--amber-wash), rgba(245, 165, 36, 0.06));
+  border-color: var(--amber-edge);
+  animation: breathe 3.6s ease-in-out infinite;
+}
+.slot.s-run-fail-only::before {
+  background: var(--amber);
+  box-shadow: 0 0 14px var(--amber-glow);
+}
+
+/* ── S4: failed + last successful — coral split ────────────── */
+.slot.s-fail-last {
+  border-color: var(--coral-edge);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 0 0 1px rgba(255, 93, 93, 0.10),
+    0 12px 32px -16px var(--coral-glow);
+}
+.slot.s-fail-last::before {
+  background: var(--coral);
+  box-shadow: 0 0 14px var(--coral-glow);
+}
+
+/* ── Version hover — amber cross-matrix highlight ──────────── */
+.slot.highlighted-slot {
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 0 0 1px var(--amber-edge),
+    0 0 22px var(--amber-glow);
+}
+
+/* ── Split tile structure ──────────────────────────────────── */
+.slot.split {
+  padding: 0;
+}
+.slot.split .sec-top,
+.slot.split .sec-bot {
+  padding: 5px 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.slot.split .sec-top { min-height: 28px; padding-left: 12px; }
+.slot.split .sec-bot { min-height: 0; }
+.slot.split .sec-bot:empty { display: none; }
+.slot.split .divider {
+  border-top: 1.5px dashed var(--divider-dash);
+  margin: 0 12px;
+}
+
+/* Top-section tints */
+.sec-top.is-running {
+  background: linear-gradient(180deg, var(--amber-wash), rgba(245, 165, 36, 0.05));
+}
+.sec-top.is-failed {
+  background: linear-gradient(180deg, var(--coral-wash), rgba(255, 93, 93, 0.05));
+}
+.sec-bot {
+  background: var(--neutral-wash);
+}
+
+/* ── Version span ──────────────────────────────────────────── */
+.ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--ink-0);
+  cursor: default;
+  display: inline-block;
+  padding: 1px 6px;
+  margin-left: -6px;
+  border-radius: 5px;
+  white-space: nowrap;
+  line-height: 1.25;
+  vertical-align: top;
+  transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+.ver:hover,
+.ver.highlighted {
+  background: rgba(245, 165, 36, 0.20);
+  color: var(--amber);
+  box-shadow:
+    0 0 0 1px rgba(245, 165, 36, 0.45),
+    0 0 14px rgba(245, 165, 36, 0.35);
+}
+
+/* ── Headline row ──────────────────────────────────────────── */
+.ver-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ver-row .ver { flex: 0 1 auto; min-width: 0; }
+.ver-row .ver-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* ── Spinner ───────────────────────────────────────────────── */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(245, 165, 36, 0.18);
+  border-top-color: var(--amber);
+  animation: spin 0.9s linear infinite;
+  filter: drop-shadow(0 0 4px var(--amber-glow));
+  flex-shrink: 0;
+}
+
+/* ── Running / failed lines ────────────────────────────────── */
+.running-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.running-line .ver-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.failed-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.failed-line .ver-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* ── Warning badge ─────────────────────────────────────────── */
+.warn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 93, 93, 0.15);
+  border: 1px solid rgba(255, 93, 93, 0.45);
+  color: var(--coral);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.warn-icon { font-size: 10px; }
+
+/* ── Failed tag ────────────────────────────────────────────── */
+.failed-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--coral);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* ── Tile-attrs block ──────────────────────────────────────── */
+.tile-attrs {
+  margin-top: auto;
+  padding-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  min-width: 0;
+}
+.ta-bl {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.ta-br {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px 8px;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
+.ta-full {
+  flex-basis: 100%;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+/* ── Field glyphs / typography ─────────────────────────────── */
+.glyph { color: var(--ink-3); }
+
+.fld-sha {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-1);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.fld-runno {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+.fld-runno .glyph { margin-right: 1px; }
+
+.fld-runurl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+}
+.fld-runurl a {
+  color: #a8a0ff;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(168, 160, 255, 0.45);
+  white-space: nowrap;
+}
+.fld-runurl a:hover { color: #c8c2ff; }
+.fld-runurl .glyph { margin-right: 2px; }
+
+.fld-actor {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fld-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ink-2);
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+}
+
+.fld-ref {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.fld-ref > :not(.glyph) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.fld-ref .glyph { font-size: 11px; line-height: 1; }
+
+.fld-parents {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ink-2);
+}
+.fld-parents .glyph { margin-right: 2px; }
+
+/* ── Split-tile bottom identifier ──────────────────────────── */
+.lastline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-1);
+}
+.lastline .glyph { color: var(--ink-3); }
+
+/* ── ver-meta (actor + time alongside version/spinner) ─────── */
+.ver-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}

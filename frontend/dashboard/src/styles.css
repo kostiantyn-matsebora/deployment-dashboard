@@ -76,8 +76,18 @@ body::after {
 }
 
 @keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 1px var(--amber-edge), 0 0 28px -8px var(--amber-glow); }
-  50%       { box-shadow: 0 0 0 1px var(--amber-edge), 0 0 40px -4px var(--amber-glow); }
+  0%, 100% {
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 0 0 1px rgba(245, 165, 36, 0.10),
+      0 10px 28px -16px var(--amber-glow);
+  }
+  50% {
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 0 0 1px rgba(245, 165, 36, 0.22),
+      0 18px 40px -16px rgba(245, 165, 36, 0.55);
+  }
 }
 
 @keyframes pulseRing {

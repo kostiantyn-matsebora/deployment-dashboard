@@ -1,0 +1,69 @@
+<!-- MatrixComponent — services × environments deployment grid
+     Spec: docs/design/views.md §Matrix View Layout -->
+
+<!-- ── Loading state ──────────────────────────────────────── -->
+@if (loading() && !state.matrixData()) {
+  <div class="matrix-loading">
+    <span class="load-spinner"></span>
+    <span class="load-label">Loading matrix…</span>
+  </div>
+}
+
+<!-- ── Error state ────────────────────────────────────────── -->
+@if (loadErr() && !state.matrixData()) {
+  <div class="matrix-loading matrix-error">
+    Failed to load matrix data.
+  </div>
+}
+
+<!-- ── Matrix grid ────────────────────────────────────────── -->
+@if (state.matrixData()) {
+  <div class="matrix-shell fields-rich">
+    <div
+      class="matrix"
+      [style.grid-template-columns]="gridColumns()"
+    >
+
+      <!-- Header row: empty service-column corner + env tags -->
+      <div class="col-head col-corner"></div>
+      @for (env of environments(); track env) {
+        <div class="col-head"><span class="env-tag">{{ env }}</span></div>
+      }
+
+      <!-- Service rows -->
+      @for (row of filteredRows(); track row.service) {
+
+        <!-- Row header — sticky left column -->
+        <div class="row-head row" [attr.data-svc]="row.service">{{ row.service }}</div>
+
+        <!-- Slot tiles for each environment -->
+        @for (env of environments(); track env) {
+          <div class="row" [attr.data-svc]="row.service">
+            @if (row.slots[env]) {
+              <app-matrix-tile
+                [slot]="row.slots[env]!"
+                [visibleFields]="state.matrixVisibleFields()"
+                [highlightedVersion]="highlightedVersion()"
+                (tileClick)="openDrawer(row.service, env)"
+                (versionHover)="onVersionHover($event)"
+              />
+            } @else {
+              <div class="slot empty" aria-label="No deployment">
+                <div class="empty-mark" aria-hidden="true">—</div>
+              </div>
+            }
+          </div>
+        }
+
+      }
+    </div>
+  </div>
+}
+
+<!-- ── History drawer (position: fixed — outside flow) ────── -->
+<app-history-drawer
+  [open]="drawerOpen()"
+  [service]="drawerSvc()"
+  [environment]="drawerEnv()"
+  (closed)="closeDrawer()"
+/>

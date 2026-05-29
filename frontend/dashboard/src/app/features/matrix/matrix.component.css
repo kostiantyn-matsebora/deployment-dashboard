@@ -1,0 +1,131 @@
+/* MatrixComponent — pixel-matched to docs/design/mockup/index.html §Matrix */
+
+/* ── Host ─────────────────────────────────────────────────── */
+:host {
+  display: block;
+}
+
+/* ── Loading / error states ───────────────────────────────── */
+.matrix-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.matrix-error { color: var(--coral); }
+
+.load-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--accent-rgb), 0.20);
+  border-top-color: rgba(var(--accent-rgb), 1);
+  animation: spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+.load-label { color: var(--ink-2); }
+
+/* ── Matrix shell ─────────────────────────────────────────── */
+.matrix-shell {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 30px 80px -40px rgba(0, 0, 0, 0.7);
+  /* Horizontal scroll when a long version forces a column to expand */
+  overflow-x: auto;
+  overflow-y: visible;
+  /* Closing bottom edge so last service row doesn't hang in empty space */
+  border-bottom: 1px solid var(--glass-edge-2);
+}
+
+/* ── Matrix grid ─────────────────────────────────────────── */
+.matrix {
+  display: grid;
+  /* grid-template-columns set inline via [style.grid-template-columns] */
+  column-gap: 6px;
+  row-gap: 9px;
+}
+
+/* ── Header row ───────────────────────────────────────────── */
+.col-corner {
+  /* empty top-left corner aligns with sticky service column */
+  min-width: 180px;
+}
+
+.col-head {
+  padding: 2px 8px 6px;
+  text-align: center;
+  border-bottom: 1px solid var(--glass-edge);
+}
+
+.env-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--env-tag-bg);
+  border: 1px solid var(--glass-edge);
+  color: var(--ink-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-transform: lowercase;
+}
+
+/* ── Row header (sticky service name column) ──────────────── */
+.row-head {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  color: var(--ink-0);
+  letter-spacing: 0.2px;
+  /* Sticky left — service names stay visible during horizontal scroll */
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--glass-strong);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  /* Left accent bar */
+  border-left: 2px solid rgba(var(--accent-rgb), 0.35);
+}
+
+/* ── Row wrapper cells (grid cells wrapping each tile) ──────── */
+.row {
+  /* Hairline divider below each row-group for visual separation */
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--glass-edge);
+  /* Row cells are transparent containers — actual content is the .slot tile */
+  min-width: 0;
+}
+
+/* ── Empty slot ───────────────────────────────────────────── */
+.slot.empty {
+  min-height: 56px;
+  padding: 6px 8px 6px 12px;
+  border-radius: var(--radius-md);
+  background: var(--slot-empty-bg);
+  border: 1px solid var(--glass-edge);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  height: 100%;
+}
+
+.empty-mark {
+  color: var(--ink-3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
