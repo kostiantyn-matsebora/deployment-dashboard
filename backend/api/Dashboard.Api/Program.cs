@@ -31,6 +31,13 @@ builder.Services.AddWriteServices();
 
 var app = builder.Build();
 
+// ── Migrations ────────────────────────────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 app.UseExceptionHandler();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
