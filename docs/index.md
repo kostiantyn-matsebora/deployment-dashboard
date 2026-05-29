@@ -8,6 +8,7 @@ children:
   - /BACKEND_SPECIFICATION
   - /GATEWAY_SPECIFICATION
   - /FETCHER_SPECIFICATION
+  - /MOCK_SPECIFICATION
   - /api
   - /design
 ---
@@ -70,3 +71,17 @@ children:
 - [6. Configuration (env)](./FETCHER_SPECIFICATION.md#6-configuration-env)
 - [7. Testing](./FETCHER_SPECIFICATION.md#7-testing)
 - [8. Out of scope](./FETCHER_SPECIFICATION.md#8-out-of-scope)
+
+### `MOCK_SPECIFICATION.md`
+
+- [Sources of truth](./MOCK_SPECIFICATION.md#sources-of-truth)
+- [1. Stack](./MOCK_SPECIFICATION.md#1-stack)
+- [2. Solution layout](./MOCK_SPECIFICATION.md#2-solution-layout)
+- [3. In-memory store](./MOCK_SPECIFICATION.md#3-in-memory-store)
+- [4. Configuration](./MOCK_SPECIFICATION.md#4-configuration)
+- [5. Application API — `/api/`](./MOCK_SPECIFICATION.md#5-application-api----api)
+- [6. Control surface — `/_mock/`](./MOCK_SPECIFICATION.md#6-control-surface----mock)
+- [7. Startup defaults](./MOCK_SPECIFICATION.md#7-startup-defaults)
+- [8. Control panel](./MOCK_SPECIFICATION.md#8-control-panel)
+- [9. Typical E2E usage](./MOCK_SPECIFICATION.md#9-typical-e2e-usage)
+- [10. Running](./MOCK_SPECIFICATION.md#10-running)
