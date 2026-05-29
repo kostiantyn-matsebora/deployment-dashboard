@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { Subscription, filter } from 'rxjs';
 
 import { TopbarComponent } from './shared/topbar/topbar.component';
 import { AppStateService } from './core/services/app-state.service';
@@ -28,18 +28,32 @@ import { DeploymentApiService } from './core/services/deployment-api.service';
   styleUrl: './app.css',
 })
 export class App implements OnInit, OnDestroy {
-  private readonly state = inject(AppStateService);
-  private readonly api   = inject(DeploymentApiService);
+  private readonly state  = inject(AppStateService);
+  private readonly api    = inject(DeploymentApiService);
+  private readonly router = inject(Router);
 
   private subs: Subscription[] = [];
 
   ngOnInit(): void {
+    this.syncActiveView();
     this.loadMatrix();
     this.connectSSE();
   }
 
   ngOnDestroy(): void {
     this.subs.forEach((s) => s.unsubscribe());
+  }
+
+  /** Keep activeView in sync with the router — covers hard refresh and back/forward. */
+  private syncActiveView(): void {
+    const sub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe((e) => {
+        this.state.activeView.set(
+          e.urlAfterRedirects.startsWith('/swimlanes') ? 'swimlanes' : 'matrix',
+        );
+      });
+    this.subs.push(sub);
   }
 
   private loadMatrix(): void {
