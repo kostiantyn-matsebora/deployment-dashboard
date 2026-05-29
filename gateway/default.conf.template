@@ -1,0 +1,65 @@
+# API upstream — always resolvable before gateway starts (depends_on: api).
+upstream api { server ${API_UPSTREAM}; }
+
+server {
+    listen 8080;
+    server_tokens off;
+    client_max_body_size 256k;
+
+    # Docker's embedded DNS resolver — enables lazy resolution of $fe (frontend).
+    # Gateway starts cleanly even when the frontend container is not yet running;
+    # requests to / return 502 until a frontend is available.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # Inherited by every proxy_pass location that declares no proxy_set_header
+    # of its own (nginx resets the inherited set the moment a location defines any
+    # proxy_set_header directive — see the SSE block which re-declares all four).
+    proxy_http_version 1.1;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+
+    # ── Gateway liveness ────────────────────────────────────────────────────────
+    # Served locally; never forwarded to an upstream (routing matrix §4).
+    location = /health {
+        return       200 "ok\n";
+        access_log   off;
+        default_type text/plain;
+    }
+
+    # ── SSE stream ──────────────────────────────────────────────────────────────
+    # Every buffering / batching layer is disabled (spec §5, NFR-03: 5 s delivery).
+    # proxy_set_header is re-declared in full because any declaration in a location
+    # block cancels the server-level inheritance.
+    location = /api/events/stream {
+        proxy_pass                 http://api;
+        proxy_http_version         1.1;
+        proxy_set_header           Host              $host;
+        proxy_set_header           X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header           X-Forwarded-Proto $scheme;
+        proxy_set_header           Connection        '';
+        proxy_buffering            off;
+        proxy_cache                off;
+        gzip                       off;
+        proxy_read_timeout         3600s;
+        chunked_transfer_encoding  on;
+    }
+
+    # ── API — JSON read/write; default buffering ────────────────────────────────
+    location /api/ {
+        proxy_pass http://api;
+    }
+
+    # ── Ops probes — proxied to API (GW4) ──────────────────────────────────────
+    location = /healthz { proxy_pass http://api; }
+    location = /readyz  { proxy_pass http://api; }
+
+    # ── Frontend SPA ────────────────────────────────────────────────────────────
+    # try_files fallback is owned by the frontend container (GW3).
+    # Variable-based proxy_pass defers DNS resolution so the gateway starts
+    # cleanly before the frontend service exists (resolver directive above).
+    location / {
+        set        $fe http://${FRONTEND_UPSTREAM};
+        proxy_pass $fe;
+    }
+}
