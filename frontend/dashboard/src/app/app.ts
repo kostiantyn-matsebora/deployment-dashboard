@@ -6,7 +6,7 @@ import { TopbarComponent } from './shared/topbar/topbar.component';
 import { AppStateService } from './core/services/app-state.service';
 import { DeploymentApiService } from './core/services/deployment-api.service';
 
-/** Re-fetch the full matrix snapshot every 5 minutes to pick up new services / environments. */
+/** Re-fetch the full matrix snapshot every 5 minutes as a drift safety-net. */
 const MATRIX_REFRESH_MS = 5 * 60_000;
 
 /**
@@ -22,8 +22,7 @@ const MATRIX_REFRESH_MS = 5 * 60_000;
  *            → subscribe /api/events/stream
  *              → each event: state.applyDeploymentEvent(ev)   // patch existing slots only
  *              → error:      state.sseConnected.set(false)
- *   setInterval(5 min) → GET /api/matrix                      // discovers new services/envs,
- *                                                             // acts as drift safety-net
+ *   setInterval(5 min) → GET /api/matrix                      // drift safety-net
  */
 @Component({
   selector: 'app-root',
