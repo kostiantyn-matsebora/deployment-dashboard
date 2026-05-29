@@ -10,7 +10,7 @@ Sync the host's "Sources of truth" registry to the current set of per-directory 
 
 ## Pre-flight (binding)
 
-Inherited from `.claude/agents/document-writer.md`:
+Inherited from `.claude/agents/documentation-architect.md`:
 
 1. **Non-overwrite policy** § — surgical writes to the host root prompt file: `Edit` preferred; `Write` surgical fallback when `Edit` is unavailable (read full file → apply diff in memory → write back; every byte outside the targeted bullet preserved). NEVER reorder unrelated bullets; NEVER touch other sections.
 2. **Hard rules — project authoring conventions** § — load and honor.
@@ -25,7 +25,7 @@ A path is eligible to appear in the registry **only** if it satisfies exactly on
 | Class | Eligibility |
 |---|---|
 | **ROOT index entry** | Path is a per-directory `index.md` AND is NOT resolved from any other index's `children:` front-matter array. Registered as its `index.md` file, e.g. `docs/index.md`. |
-| **Unique-doc entry** | Path is NOT an `index.md` AND is NOT resolved from any index's `children:` array anywhere. Legacy-navigation `README.md` (per document-writer.md § README.md classification) is NOT eligible. Content-bearing `README.md` IS eligible. |
+| **Unique-doc entry** | Path is NOT an `index.md` AND is NOT resolved from any index's `children:` array anywhere. Legacy-navigation `README.md` (per documentation-architect.md § README.md classification) is NOT eligible. Content-bearing `README.md` IS eligible. |
 
 Any path that IS resolved from some index's `children:` is **covered** and MUST NOT appear as its own registry entry — it is already reachable via the index chain. If a covered path is found in the registry, classify it as **REMOVE** with reason `covered-by-index:<path-of-covering-index>`.
 
@@ -52,7 +52,7 @@ If none exist: **halt and ask** the user where the registry lives.
 2. **Build the coverage map.**
    - `Glob` every `**/index.md` under candidate doc roots (`docs/**` plus any owner-registered roots).
    - For each `index.md`, parse the YAML front-matter and extract `children:` (array of github/docs-style path strings — possibly nested).
-   - For each child path, resolve to a repo-root-relative path per `.claude/agents/document-writer.md` § "Children path resolution".
+   - For each child path, resolve to a repo-root-relative path per `.claude/agents/documentation-architect.md` § "Children path resolution".
    - Aggregate into **CoverageSet** = `{ <relative-path> → <covering-index> }`.
 
 3. **Identify ROOT indexes.** An `index.md` is a ROOT iff it is NOT in CoverageSet. All other `index.md` files are nested.
@@ -62,7 +62,7 @@ If none exist: **halt and ask** the user where the registry lives.
    | Class | Source |
    |---|---|
    | ROOT index candidates | Every `index.md` from step 3 (registered as its directory). |
-   | Unique-doc candidates | All authoritative-doc-shaped files (`.md`, `.yaml`, `.html`, `.json` under candidate doc roots) that are NOT `index.md` AND NOT in CoverageSet. Classify any `README.md` per document-writer.md § README.md classification before including: content-bearing IS eligible; legacy-navigation IS NOT. |
+   | Unique-doc candidates | All authoritative-doc-shaped files (`.md`, `.yaml`, `.html`, `.json` under candidate doc roots) that are NOT `index.md` AND NOT in CoverageSet. Classify any `README.md` per documentation-architect.md § README.md classification before including: content-bearing IS eligible; legacy-navigation IS NOT. |
 
 5. **Compose desired entries.**
 

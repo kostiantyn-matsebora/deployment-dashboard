@@ -1,5 +1,5 @@
 ---
-description: Revise an existing doc or author a new one against host authoring rules. Extract over compact for files >200 lines. Mode B of document-writer. Without a path, targets all uncommitted doc files.
+description: Revise an existing doc or author a new one against host authoring rules. Extract over compact for files >200 lines. Mode B of documentation-architect. Without a path, targets all uncommitted doc files.
 argument-hint: [doc-path] [-- brief]
 model: sonnet
 ---
@@ -17,7 +17,7 @@ Revise or author the resolved target doc(s).
 
 ## Pre-flight (binding)
 
-Inherited from `.claude/agents/document-writer.md`:
+Inherited from `.claude/agents/documentation-architect.md`:
 
 1. **Non-overwrite policy** § — every `Write` / `Edit` goes through the gate table.
 2. **Hard rules — project authoring conventions** § — load host rules first; honor them over any default.
