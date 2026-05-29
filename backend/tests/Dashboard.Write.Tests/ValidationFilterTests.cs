@@ -78,9 +78,9 @@ public sealed class IngestValidatorTests
     }
 
     [Fact]
-    public void Validate_NegativeRunNumber_ReturnsRunNumberFailure()
+    public void Validate_RunNumberExceedsMaxLength_ReturnsRunNumberFailure()
     {
-        var body = ValidBody() with { RunNumber = -1 };
+        var body = ValidBody() with { RunNumber = new string('x', 129) };
         Assert.Contains(_validator.Validate(body), f => f.Pointer == "/run_number");
     }
 

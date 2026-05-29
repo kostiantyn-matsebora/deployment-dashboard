@@ -47,9 +47,9 @@ public sealed record DeploymentEventIngest
     [JsonPropertyName("run_url")]
     public string? RunUrl { get; init; }
 
-    [Range(0, int.MaxValue)]
+    [MaxLength(128)]
     [JsonPropertyName("run_number")]
-    public int? RunNumber { get; init; }
+    public string? RunNumber { get; init; }
 
     [MaxLength(128)]
     [JsonPropertyName("actor")]

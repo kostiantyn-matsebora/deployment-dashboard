@@ -60,8 +60,9 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("ref");
 
-                    b.Property<int?>("RunNumber")
-                        .HasColumnType("integer")
+                    b.Property<string>("RunNumber")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
                         .HasColumnName("run_number");
 
                     b.Property<string>("RunUrl")
