@@ -1,5 +1,17 @@
 /* MatrixTileComponent — pixel-matched to docs/design/mockup/index.html §Matrix Tile */
 
+/* ── Host: transparent to layout ─────────────────────────────
+   display: contents makes <app-matrix-tile> invisible to the CSS grid's
+   intrinsic-size measurement. The .slot div becomes a direct logical child
+   of the .row grid cell, exactly replicating the mockup's DOM structure
+   (where .slot IS the direct grid-cell child). Without this, the custom
+   element defaults to display:inline and the column can't measure the
+   white-space:nowrap .ver text width for max-content track sizing.
+   ──────────────────────────────────────────────────────────── */
+:host {
+  display: contents;
+}
+
 /* ── Slot base ─────────────────────────────────────────────── */
 .slot {
   position: relative;

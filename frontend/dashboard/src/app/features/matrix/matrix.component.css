@@ -106,8 +106,9 @@
   /* Hairline divider below each row-group for visual separation */
   padding-bottom: 4px;
   border-bottom: 1px solid var(--glass-edge);
-  /* Row cells are transparent containers — actual content is the .slot tile */
-  min-width: 0;
+  /* Do NOT set min-width:0 here — grid items need min-width:auto so the
+     max-content track sizing can measure the .slot (via display:contents
+     on app-matrix-tile) and expand the column to fit long version strings. */
 }
 
 /* ── Empty slot ───────────────────────────────────────────── */
