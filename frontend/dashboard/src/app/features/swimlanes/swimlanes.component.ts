@@ -140,7 +140,7 @@ export class SwimlanesComponent {
           id:        ev.id,
           label:     ev.version ?? ev.environment,
           data:      ev,
-          dimension: { width: NODE_W, height: nodeH },
+          dimension: { width: this.calcNodeWidth(ev, fields), height: nodeH },
         }));
 
         const depIdToNodeId = new Map<string, string>(
@@ -150,20 +150,76 @@ export class SwimlanesComponent {
           svcEvents.map((ev) => [ev.id, ev]),
         );
 
-        const links  = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
-        const rowsEst = Math.max(1, Math.ceil(svcEvents.length / 3));
-        const graphH  = rowsEst * (nodeH + DAGRE_SETTINGS.nodePadding) + 60;
+        const links   = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
+        // Height: most services form single-row chains in LR layout.
+        // Estimate 2 parallel tracks max; add padding for dagre margins.
+        const rowsEst = Math.max(1, Math.ceil(svcEvents.length / 4));
+        const graphH  = rowsEst * (nodeH + DAGRE_SETTINGS.nodePadding) + 40;
 
         return { service, nodes, links, graphH };
       });
   }
 
+  /**
+   * Estimate node card height (px) from visible fields.
+   * Mirrors mockup padding (5px top, 6px bottom) + row-gap 2px + per-row line heights:
+   *   ver-row:  ceil(10.5 × 1.2) = 13px
+   *   body-row: ceil(9.5  × 1.2) = 12px
+   *   env-row:  ceil(11   × 1.2) = 14px  (always rendered)
+   */
   private calcNodeHeight(fields: Set<SwimlaneField>): number {
-    let h = 20;
-    if (fields.has('version') || fields.has('happened_at'))                              h += 22;
-    if (fields.has('ref') || fields.has('run_url') || fields.has('run_number') || fields.has('actor')) h += 20;
-    h += 22; // sha + env row
-    return Math.max(h, 64);
+    const TOP = 5, BOT = 6, GAP = 2;
+    const VER = 13, MID = 12, ENV = 14;
+
+    let h = TOP + BOT + ENV; // env-row always present
+    let gaps = 0;
+
+    if (fields.has('version') || fields.has('happened_at'))        { h += VER; gaps++; }
+    if (fields.has('ref') || fields.has('run_url') ||
+        fields.has('run_number') || fields.has('actor'))           { h += MID; gaps++; }
+    h += GAP * gaps;
+    return h;
+  }
+
+  /**
+   * Estimate node card width (px) from event content + visible fields.
+   * Character width approximations: JetBrains Mono 10.5px ≈ 7px/char;
+   * from mockup: 50-char version ≈ 360–400px → ~7.2px/char; use 7.5 for safety.
+   * Inter 11px 600 (env label): ≈ 7.5px/char.
+   * Padding: 12px left + 10px right = 22px. Column-gap: 20px.
+   */
+  private calcNodeWidth(ev: DeploymentEvent, fields: Set<SwimlaneField>): number {
+    const M  = 7.5;   // JetBrains Mono 10.5px (generous estimate)
+    const I  = 7.5;   // Inter 11px 600
+    const PAD = 22;   // horizontal padding
+    const GAP = 20;   // column-gap between col1 and col2
+    const MIN = 120;
+
+    // Row 1: version + time
+    const verW  = fields.has('version') && ev.version    ? ev.version.length * M : 0;
+    const timeW = fields.has('happened_at')               ? 42 : 0; // "just now" max ~42px
+    const row1  = verW && timeW ? verW + GAP + timeW : verW || timeW;
+
+    // Row 2: ref (col1) | run cluster (col2) — run cluster is widest single item
+    const refW  = fields.has('ref') && ev.ref
+                  ? (1 + ev.ref.length) * M : 0;         // ⎇ glyph ≈ 1 char
+    const runW  = Math.max(
+      fields.has('run_url')    && ev.run_url    ? 32  : 0,            // "↗ run"
+      fields.has('run_number') && ev.run_number
+                  ? (1 + ev.run_number.length) * M : 0,               // "#XXXX"
+      fields.has('actor')      && ev.actor
+                  ? ev.actor.length * M : 0,
+    );
+    const row2 = refW && runW ? refW + GAP + runW : refW || runW;
+
+    // Row 3: sha (col1) | env (col2)
+    const shaW = fields.has('sha') && ev.sha
+                 ? ev.sha.length * M : 0;
+    const envW = fields.has('environment')
+                 ? ev.environment.length * I : 0;
+    const row3 = shaW && envW ? shaW + GAP + envW : shaW || envW;
+
+    return Math.max(MIN, Math.max(row1, row2, row3) + PAD);
   }
 
   private buildEdges(
