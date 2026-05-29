@@ -24,12 +24,12 @@ A path is eligible to appear in the registry **only** if it satisfies exactly on
 
 | Class | Eligibility |
 |---|---|
-| **ROOT index entry** | Path is a per-directory `index.md` AND is NOT resolved from any other index's `children:` front-matter array. Registered as its directory, e.g. `docs/`. |
-| **Unique-doc entry** | Path is NOT an `index.md` / `README.md` AND is NOT resolved from any index's `children:` array anywhere. |
+| **ROOT index entry** | Path is a per-directory `index.md` AND is NOT resolved from any other index's `children:` front-matter array. Registered as its `index.md` file, e.g. `docs/index.md`. |
+| **Unique-doc entry** | Path is NOT an `index.md` AND is NOT resolved from any index's `children:` array anywhere. Legacy-navigation `README.md` (per document-writer.md § README.md classification) is NOT eligible. Content-bearing `README.md` IS eligible. |
 
 Any path that IS resolved from some index's `children:` is **covered** and MUST NOT appear as its own registry entry — it is already reachable via the index chain. If a covered path is found in the registry, classify it as **REMOVE** with reason `covered-by-index:<path-of-covering-index>`.
 
-**Hierarchical collapse (the explicit goal).** A single root index that recursively covers every doc under it via `children:` (with sub-indexes acting as boundaries) collapses the registry to one bullet (`docs/`). Adding sub-indexes shrinks the top index's `children:` but does NOT change the registry — sub-indexes stay covered by their parent. This is the minimum-footprint property.
+**Hierarchical collapse (the explicit goal).** A single root index that recursively covers every doc under it via `children:` (with sub-indexes acting as boundaries) collapses the registry to one bullet (`docs/index.md`). Adding sub-indexes shrinks the top index's `children:` but does NOT change the registry — sub-indexes stay covered by their parent. This is the minimum-footprint property.
 
 ## Locate the host registry
 
@@ -62,7 +62,7 @@ If none exist: **halt and ask** the user where the registry lives.
    | Class | Source |
    |---|---|
    | ROOT index candidates | Every `index.md` from step 3 (registered as its directory). |
-   | Unique-doc candidates | All authoritative-doc-shaped files (`.md`, `.yaml`, `.html`, `.json` under candidate doc roots) that are NOT `index.md` / `README.md` AND NOT in CoverageSet. |
+   | Unique-doc candidates | All authoritative-doc-shaped files (`.md`, `.yaml`, `.html`, `.json` under candidate doc roots) that are NOT `index.md` AND NOT in CoverageSet. Classify any `README.md` per document-writer.md § README.md classification before including: content-bearing IS eligible; legacy-navigation IS NOT. |
 
 5. **Compose desired entries.**
 

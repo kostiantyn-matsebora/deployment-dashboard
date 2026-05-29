@@ -2,7 +2,7 @@
 
 ## Sources of truth
 
-- [docs/](docs/) — Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.
+- [docs/index.md](docs/index.md) — Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.
 
 ## Solution directory structure
 

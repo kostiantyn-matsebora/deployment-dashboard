@@ -9,7 +9,7 @@ children:
   - /GATEWAY_SPECIFICATION
   - /FETCHER_SPECIFICATION
   - /api
-  - /design
+  - /design/README
 ---
 
 ## Contents
