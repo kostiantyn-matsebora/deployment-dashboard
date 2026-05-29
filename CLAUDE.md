@@ -8,9 +8,9 @@
 3. Use `## Contents` anchor links to reach the section.
 4. Load full document content only when the target section is absent from the TOC.
 
----
-- `root-index` [docs/index.md](docs/index.md) — Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.
----
+| Type | Source | Role |
+|---|---|---|
+| `root-index` | [docs/index.md](docs/index.md) | Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees. |
 
 ## Solution directory structure
 
