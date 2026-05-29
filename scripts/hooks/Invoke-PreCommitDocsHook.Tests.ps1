@@ -388,7 +388,7 @@ Describe 'Format-BlockMessage' {
     }
     It 'references the binding-gates source' {
         $msg = Format-BlockMessage -Queue @(@{ Command = '/docs-registry-sync'; Args = '' })
-        $msg | Should -Match 'document-writer\.md'
+        $msg | Should -Match 'documentation-architect\.md'
     }
 }
 
