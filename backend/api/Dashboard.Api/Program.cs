@@ -32,7 +32,16 @@ builder.Services.AddWriteServices();
 builder.Services.AddReadServices();
 
 // ── OpenAPI ───────────────────────────────────────────────────────────────────
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((doc, _, _) =>
+    {
+        doc.Info.Title = "Deployment Dashboard API";
+        doc.Info.Version = "v1";
+        doc.Info.Description = "Write and read deployment events.";
+        return Task.CompletedTask;
+    });
+});
 
 var app = builder.Build();
 

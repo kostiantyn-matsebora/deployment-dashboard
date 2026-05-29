@@ -7,7 +7,7 @@ namespace Dashboard.Read.Models;
 /// Serialised with the global snake_case policy:
 /// <c>generated_at</c>, <c>environments</c>, <c>rows</c>.
 /// </summary>
-internal sealed record MatrixResponse(
+public sealed record MatrixResponse(
     DateTimeOffset GeneratedAt,
     IReadOnlyList<string> Environments,
     IReadOnlyList<MatrixRow> Rows);
@@ -15,7 +15,7 @@ internal sealed record MatrixResponse(
 /// <summary>
 /// One row in the matrix — one service and its deployment slots per environment.
 /// </summary>
-internal sealed record MatrixRow(
+public sealed record MatrixRow(
     string Service,
     IReadOnlyDictionary<string, MatrixSlot> Slots);
 
@@ -23,6 +23,6 @@ internal sealed record MatrixRow(
 /// One cell in the matrix — the current event and (when applicable) the last successful event.
 /// <see cref="LastSuccessful"/> is omitted from JSON when <c>null</c> (global WhenWritingNull policy).
 /// </summary>
-internal sealed record MatrixSlot(
+public sealed record MatrixSlot(
     DeploymentEvent Current,
     DeploymentEvent? LastSuccessful);
