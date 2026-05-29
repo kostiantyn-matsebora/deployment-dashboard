@@ -414,7 +414,13 @@
   padding: 14px 14px 12px;
 }
 
-.popover-placeholder { }
+/* ── Picker content wrapper ──────────────────────────────── */
+.picker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
 
 .popover-title {
   font-size: 11px;
@@ -423,12 +429,164 @@
   letter-spacing: 0.7px;
   font-weight: 600;
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 2px;
 }
 
-.popover-coming {
+/* ── Fields picker grid ──────────────────────────────────── */
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+
+.field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.field-toggle:hover {
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--ink-1);
+}
+
+.field-toggle.is-on {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--ink-0);
+  border: 1px solid rgba(var(--accent-rgb), 0.30);
+}
+
+/* Custom checkbox dot */
+.field-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1.5px solid var(--glass-edge-2);
+  background: transparent;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.field-check.checked {
+  background: rgba(var(--accent-rgb), 0.85);
+  border-color: rgba(var(--accent-rgb), 0.85);
+}
+
+.field-check.checked::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.field-label {
+  letter-spacing: 0.2px;
+}
+
+/* ── Correlation predicate list ──────────────────────────── */
+.pred-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pred-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  user-select: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+  transition: background 0.12s ease;
+}
+
+.pred-opt:hover { background: rgba(var(--accent-rgb), 0.08); color: var(--ink-1); }
+
+.pred-opt.is-on {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--ink-0);
+  border: 1px solid rgba(var(--accent-rgb), 0.30);
+}
+
+/* Radio dot */
+.pred-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--glass-edge-2);
+  background: transparent;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.pred-opt.is-on .pred-radio {
+  border-color: rgba(var(--accent-rgb), 0.85);
+}
+
+.pred-opt.is-on .pred-radio::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 1);
+}
+
+/* ── Time window row ─────────────────────────────────────── */
+.tw-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--glass-edge);
+  margin-top: 4px;
+}
+
+.tw-label {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 10.5px;
-  color: var(--ink-3);
-  margin: 0;
-  font-style: italic;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tw-disabled { opacity: 0.45; pointer-events: none; }
+
+/* PrimeNG Select override inside popover */
+:host ::ng-deep .tw-select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+:host ::ng-deep .tw-select .p-select-label {
+  padding: 4px 8px;
+  color: var(--ink-0);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+:host ::ng-deep .tw-select .p-select {
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge-2);
+  border-radius: 7px;
 }
