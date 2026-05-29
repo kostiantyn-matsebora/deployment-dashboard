@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Direct dependency: DeploymentEventBroadcaster opens a NpgsqlConnection for LISTEN/NOTIFY. -->
+    <PackageReference Include="Npgsql" Version="9.*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\shared\Dashboard.Shared\Dashboard.Shared.csproj" />
   </ItemGroup>
 
