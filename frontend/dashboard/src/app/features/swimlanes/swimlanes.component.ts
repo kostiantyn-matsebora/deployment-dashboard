@@ -194,9 +194,11 @@ export class SwimlanesComponent implements OnInit, OnDestroy {
 
   private connectSSE(): void {
     const sub = this.api.streamEvents().subscribe({
-      next: () => {
+      next: (ev) => {
+        // Apply the incoming event directly to the shared matrix signal —
+        // no /api/matrix round-trip needed.
         this.state.sseConnected.set(true);
-        this.loadMatrix();
+        this.state.applyDeploymentEvent(ev);
       },
       error: () => {
         this.state.sseConnected.set(false);

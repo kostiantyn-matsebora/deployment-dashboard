@@ -117,10 +117,11 @@ export class MatrixComponent implements OnInit, OnDestroy {
 
   private connectSSE(): void {
     const sub = this.api.streamEvents().subscribe({
-      next: () => {
-        // Mark live connection on first event; reload snapshot
+      next: (ev) => {
+        // Apply the incoming event directly to the in-memory matrix signal —
+        // no /api/matrix round-trip needed.
         this.state.sseConnected.set(true);
-        this.loadMatrix();
+        this.state.applyDeploymentEvent(ev);
       },
       error: () => {
         this.state.sseConnected.set(false);
