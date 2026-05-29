@@ -1,21 +1,19 @@
-/* TopbarComponent — Spec: docs/design/components.md §Topbar */
+/* TopbarComponent — pixel-matched to docs/design/mockup/index.html */
 
 :host {
   display: block;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 30;
-  /* Topbar must be z-index 30 so popovers render above sibling backdrop-filter contexts */
 }
 
 /* ── Main bar ─────────────────────────────────────────────── */
 .topbar {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 12px 12px 0;
-  padding: 10px 16px;
+  gap: 14px;
+  padding: 14px 20px;
   background: var(--glass);
   backdrop-filter: blur(18px) saturate(135%);
   -webkit-backdrop-filter: blur(18px) saturate(135%);
@@ -26,113 +24,128 @@
     0 24px 64px -28px rgba(0, 0, 0, 0.55);
 }
 
+/* ── Spacer ──────────────────────────────────────────────── */
+.topbar-spacer { flex: 1; }
+
 /* ── Brand ───────────────────────────────────────────────── */
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding-right: 18px;
+  border-right: 1px solid var(--glass-edge);
+  margin-right: 4px;
   flex-shrink: 0;
 }
 
-/* 32×32 radial-gradient square per spec */
+/* 32×32 radial-gradient square — exact mockup gradient + shadow */
 .brand-mark {
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: radial-gradient(
-    circle at 35% 35%,
-    rgba(var(--accent-rgb), 0.95),
-    rgba(var(--accent-rgb), 0.25) 72%
-  );
+  background: radial-gradient(circle at 30% 30%, #8e88ff 0%, #4d49b8 60%, #1d1a55 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 6px 20px -6px rgba(120, 110, 255, 0.6);
   flex-shrink: 0;
 }
 
 .brand-name {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-
-.brand-line1,
-.brand-line2 {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14.5px;
   font-weight: 600;
+  letter-spacing: 0.2px;
+  font-size: 14.5px;
   color: var(--ink-0);
-  letter-spacing: 0.5px;
-  white-space: nowrap;
 }
 
-.brand-line2 {
+.brand-sub {
+  font-size: 11px;
   color: var(--ink-2);
-  font-size: 10px;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
 }
 
-/* ── View tabs — p-selectButton ─────────────────────────── */
-.topbar-tabs {
+/* ── Tabs — p-selectButton ───────────────────────────────── */
+.tabs {
   display: flex;
   align-items: center;
 }
 
-:host ::ng-deep .view-tabs {
+/* Override PrimeNG SelectButton wrapper */
+:host ::ng-deep .tabs p-selectbutton {
   display: flex;
   background: var(--tabs-bg);
   border: 1px solid var(--glass-edge);
   border-radius: 999px;
-  padding: 3px;
+  padding: 4px;
   gap: 2px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
-:host ::ng-deep .view-tabs .p-togglebutton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 5px 18px;
-  border-radius: 999px;
-  border: none;
+/* Each option — PrimeNG 21 renders <p-togglebutton> custom element,
+   no .p-togglebutton class on any DOM node. Active state keyed by
+   data-p-checked="true" attribute on the host element. */
+:host ::ng-deep .tabs p-togglebutton {
+  appearance: none;
+  border: 0;
   background: transparent;
+  color: var(--ink-1);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
   font-weight: 500;
-  color: var(--ink-2);
+  padding: 8px 18px;
+  border-radius: 999px;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  letter-spacing: 0.15px;
   white-space: nowrap;
   outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-:host ::ng-deep .view-tabs .p-togglebutton .p-togglebutton-label {
+:host ::ng-deep .tabs p-togglebutton:hover {
+  color: var(--ink-0);
+}
+
+:host ::ng-deep .tabs p-togglebutton [data-pc-section="label"] {
   pointer-events: none;
 }
 
-:host ::ng-deep .view-tabs .p-togglebutton-checked {
+:host ::ng-deep .tabs p-togglebutton[data-p-checked="true"] {
+  color: #fff;
   background: linear-gradient(
-    135deg,
-    rgba(var(--accent-rgb), 0.65),
-    rgba(var(--accent-rgb), 0.35)
+    180deg,
+    rgba(var(--accent-rgb), 0.35),
+    rgba(var(--accent-rgb), 0.18)
   );
-  color: var(--ink-0);
-  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.45) inset,
+    0 6px 18px -8px rgba(var(--accent-rgb), 0.7);
 }
 
 /* ── KPI strip ───────────────────────────────────────────── */
-.kpi-strip {
+.kpis {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
-.kpi-card {
+.kpi {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  padding: 5px 11px;
+  border-radius: 10px;
   background: var(--kpi-bg);
   border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-sm);
-  padding: 4px 10px;
-  min-width: 54px;
+  min-width: 72px;
+}
+
+.kpi-label {
+  font-size: 10.5px;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
 }
 
 .kpi-value {
@@ -140,260 +153,272 @@
   font-size: 18px;
   font-weight: 600;
   color: var(--ink-0);
-  line-height: 1.3;
+  margin-top: 2px;
 }
 
-.kpi-label {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 10.5px;
-  font-weight: 400;
-  color: var(--ink-2);
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  white-space: nowrap;
-}
+.kpi.is-warn .kpi-value { color: var(--amber); }
+.kpi.is-bad  .kpi-value { color: var(--coral); }
 
-.kpi-card.is-warn .kpi-value { color: var(--amber); }
-.kpi-card.is-bad .kpi-value  { color: var(--coral); }
-
-/* ── Filter section (Matrix-only) ──────────────────────── */
-.filter-section {
+/* ── Inline header filter (Matrix-only) ─────────────────── */
+.hdr-filter {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-left: 10px;
+  margin-left: 2px;
+  border-left: 1px solid var(--glass-edge);
 }
 
 .hdr-filter-input {
   background: var(--input-bg);
   border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
+  padding: 7px 10px;
   color: var(--ink-0);
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  padding: 5px 10px;
-  outline: none;
-  width: 160px;
-  transition: border-color 0.15s;
+  width: 200px;
+  min-width: 180px;
+  max-width: 220px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.hdr-filter-input::placeholder { color: var(--ink-3); }
+.hdr-filter-input::placeholder {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-family: 'JetBrains Mono', monospace;
+}
 
 .hdr-filter-input:focus {
-  border-color: rgba(var(--accent-rgb), 0.5);
+  outline: 0;
+  border-color: rgba(var(--accent-rgb), 0.6);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
 }
 
-/* Failures toggle pill */
-.failures-toggle-wrap {
-  display: flex;
+/* Failures-only toggle — custom .toggle pattern per mockup */
+.toggle {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
+  padding: 7px 13px;
   background: var(--input-bg);
   border: 1px solid var(--glass-edge);
   border-radius: 999px;
-  padding: 4px 10px;
   cursor: pointer;
-  transition: border-color 0.15s;
+  font-size: 12.5px;
+  color: var(--ink-1);
   user-select: none;
-}
-
-.failures-toggle-wrap.is-on {
-  border-color: var(--coral-edge);
-}
-
-.toggle-label {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ink-2);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
-.failures-toggle-wrap.is-on .toggle-label {
-  color: var(--coral);
-}
+.toggle:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
 
-/* p-toggleSwitch unstyled overrides */
-:host ::ng-deep .failures-toggle-wrap .p-toggleswitch {
-  display: inline-flex;
-  align-items: center;
-  width: 28px;
-  height: 16px;
-}
-
-:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-slider {
-  display: block;
-  width: 28px;
+.toggle .switch {
+  width: 30px;
   height: 16px;
   border-radius: 999px;
   background: var(--switch-off-bg);
-  border: 1px solid var(--glass-edge);
   position: relative;
-  transition: background 0.2s, border-color 0.2s;
-  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 
-:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-slider::after {
+.toggle .switch::after {
   content: '';
   position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
   top: 2px;
   left: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
   background: var(--switch-knob);
-  transition: transform 0.2s;
+  transition: transform 0.15s ease, background 0.15s ease;
 }
 
-:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-checked .p-toggleswitch-slider {
-  background: var(--coral-wash);
-  border-color: var(--coral-edge);
+.toggle.is-on {
+  color: var(--coral);
+  border-color: rgba(255, 93, 93, 0.45);
+  background: rgba(255, 93, 93, 0.10);
 }
 
-:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-checked .p-toggleswitch-slider::after {
-  transform: translateX(12px);
-  background: var(--coral);
-}
+.toggle.is-on .switch { background: var(--coral); }
+.toggle.is-on .switch::after { transform: translateX(14px); background: #fff; }
 
-/* ── Controls (right side) ──────────────────────────────── */
-.topbar-controls {
-  display: flex;
+/* ── Theme switcher ─────────────────────────────────────── */
+.theme-switch {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-/* Icon buttons — ▦ fields + ⚙ correlation */
-.icon-btn {
-  width: 30px;
-  height: 30px;
+  padding: 3px;
   background: var(--input-bg);
   border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.theme-switch .ts-opt {
+  appearance: none;
+  border: 0;
+  background: transparent;
   color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 999px;
   cursor: pointer;
-  display: flex;
+  line-height: 1.2;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  min-width: 26px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-  flex-shrink: 0;
+}
+
+.theme-switch .ts-opt:hover { color: var(--ink-0); }
+
+.theme-switch .ts-opt.is-on {
+  color: var(--ink-0);
+  background: rgba(var(--accent-rgb), 0.20);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.45) inset,
+    0 4px 12px -6px rgba(var(--accent-rgb), 0.6);
+}
+
+.theme-switch .ts-opt[data-theme-pick="auto"] {
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* ── Header icon buttons ─────────────────────────────────── */
+.hdr-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1px solid var(--glass-edge);
+}
+
+.icon-btn {
+  appearance: none;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  color: var(--ink-1);
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  position: relative;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .icon-btn:hover {
   color: var(--ink-0);
   border-color: var(--glass-edge-2);
-  background: var(--glass-strong);
 }
 
-/* Theme switcher — 3-state p-selectButton */
-:host ::ng-deep .theme-switcher {
-  display: flex;
-  background: var(--input-bg);
-  border: 1px solid var(--glass-edge);
-  border-radius: 999px;
-  padding: 2px;
-  gap: 1px;
-}
-
-:host ::ng-deep .theme-switcher .p-togglebutton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 24px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 12px;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-  outline: none;
-}
-
-:host ::ng-deep .theme-switcher .p-togglebutton-checked {
-  background: rgba(var(--accent-rgb), 0.25);
+.icon-btn.is-active {
   color: var(--ink-0);
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.18);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.35),
+    0 0 14px rgba(var(--accent-rgb), 0.25);
 }
 
-/* ── Live indicator ─────────────────────────────────────── */
-.live-indicator {
-  display: flex;
+/* ── Live pill ───────────────────────────────────────────── */
+.live-pill {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: var(--input-bg);
-  border: 1px solid var(--glass-edge);
+  gap: 8px;
+  padding: 6px 14px 6px 12px;
   border-radius: 999px;
-  padding: 5px 11px;
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
   flex-shrink: 0;
 }
 
-.live-label {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.live-pill.is-live {
+  background: rgba(52, 210, 154, 0.12);
+  border-color: rgba(52, 210, 154, 0.40);
+  color: var(--emerald);
 }
 
-.pulse-dot {
-  width: 7px;
-  height: 7px;
+.live-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--ink-3);
   flex-shrink: 0;
 }
 
-.live-indicator.is-live {
-  border-color: var(--emerald-edge);
-}
-
-.live-indicator.is-live .live-label {
-  color: var(--emerald);
-}
-
-.live-indicator.is-live .pulse-dot {
+.live-pill.is-live .live-dot {
   background: var(--emerald);
-  animation: pulseRing 1.8s ease-out infinite;
+  box-shadow: 0 0 10px var(--emerald-glow);
 }
 
-/* ── Popover (placeholder content, full content in P4) ──── */
+.live-pill.is-live .live-dot::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--emerald);
+  animation: livePulse 1.8s ease-out infinite;
+}
+
+@keyframes livePulse {
+  0%   { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.7); opacity: 0;   }
+}
+
+/* ── Popover glass surface ───────────────────────────────── */
 :host ::ng-deep .glass-popover {
   background: var(--popover-bg);
   border: 1px solid var(--glass-edge-2);
   border-radius: var(--radius-md);
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
-  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.45);
-  min-width: 200px;
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 24px 60px -22px rgba(0, 0, 0, 0.45);
+  min-width: 260px;
 }
 
 :host ::ng-deep .glass-popover .p-popover-content {
-  padding: 0;
+  padding: 14px 14px 12px;
 }
 
-.popover-placeholder {
-  padding: 14px 16px;
-}
+.popover-placeholder { }
 
 .popover-title {
-  font-family: 'Inter', system-ui, sans-serif;
   font-size: 11px;
-  font-weight: 600;
   color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.7px;
+  font-weight: 600;
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .popover-coming {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 12px;
+  font-size: 10.5px;
   color: var(--ink-3);
   margin: 0;
+  font-style: italic;
 }

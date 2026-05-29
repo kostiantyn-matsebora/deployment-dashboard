@@ -3,14 +3,14 @@
   <!-- Brand ─────────────────────────────────────────────── -->
   <div class="brand">
     <div class="brand-mark" aria-hidden="true"></div>
-    <div class="brand-name">
-      <span class="brand-line1">DEPLOYMENT</span>
-      <span class="brand-line2">DASHBOARD</span>
+    <div>
+      <div class="brand-name">Deployment Dashboard</div>
+      <div class="brand-sub">Monitoring · Live</div>
     </div>
   </div>
 
   <!-- View tabs ──────────────────────────────────────────── -->
-  <div class="topbar-tabs">
+  <nav class="tabs" role="tablist">
     <p-selectButton
       [options]="viewOptions"
       optionLabel="label"
@@ -19,119 +19,129 @@
       (onChange)="onViewChange($event.value)"
       [allowEmpty]="false"
       [unstyled]="true"
-      styleClass="view-tabs"
     />
-  </div>
+  </nav>
+
+  <!-- Spacer — pushes KPIs + controls to the right -->
+  <div class="topbar-spacer"></div>
 
   <!-- KPI strip ──────────────────────────────────────────── -->
-  <div class="kpi-strip" role="group" aria-label="Deployment KPIs">
-    <div class="kpi-card">
+  <div class="kpis" role="group" aria-label="Deployment KPIs">
+    <div class="kpi">
+      <span class="kpi-label">Services</span>
       <span class="kpi-value">{{ kpi().services }}</span>
-      <span class="kpi-label">SERVICES</span>
     </div>
-    <div class="kpi-card">
+    <div class="kpi">
+      <span class="kpi-label">Envs</span>
       <span class="kpi-value">{{ kpi().environments }}</span>
-      <span class="kpi-label">ENVIRONMENTS</span>
     </div>
-    <div class="kpi-card" [class.is-warn]="kpi().inFlight > 0">
+    <div class="kpi" [class.is-warn]="kpi().inFlight > 0">
+      <span class="kpi-label">In-flight</span>
       <span class="kpi-value">{{ kpi().inFlight }}</span>
-      <span class="kpi-label">IN-FLIGHT</span>
     </div>
-    <div class="kpi-card" [class.is-bad]="kpi().failed > 0">
+    <div class="kpi" [class.is-bad]="kpi().failed > 0">
+      <span class="kpi-label">Failed</span>
       <span class="kpi-value">{{ kpi().failed }}</span>
-      <span class="kpi-label">FAILED</span>
     </div>
   </div>
 
-  <!-- Matrix-only controls: filter + failures toggle ──────── -->
+  <!-- Matrix-only: filter input + failures toggle ─────────── -->
   @if (isMatrix()) {
-    <div class="filter-section">
+    <div class="hdr-filter">
       <input
         pInputText
         type="text"
-        placeholder="Filter services…"
         class="hdr-filter-input"
+        placeholder="filter services…"
+        autocomplete="off"
+        spellcheck="false"
         [ngModel]="serviceFilter()"
         (ngModelChange)="onFilterChange($event)"
         aria-label="Filter services by name"
       />
-      <label class="failures-toggle-wrap" [class.is-on]="failuresOnly()">
-        <p-toggleSwitch
-          [ngModel]="failuresOnly()"
-          (ngModelChange)="onFailuresOnlyChange($event)"
-          [unstyled]="true"
-          aria-label="Show failures only"
-        />
-        <span class="toggle-label">Failures</span>
+      <label
+        class="toggle hdr-fail-toggle"
+        [class.is-on]="failuresOnly()"
+        (click)="onFailuresOnlyChange(!failuresOnly())"
+        role="switch"
+        [attr.aria-checked]="failuresOnly()"
+        aria-label="Show failures only"
+      >
+        <span class="switch"></span>
+        <span>Failures only</span>
       </label>
     </div>
   }
 
-  <!-- Controls: icon buttons + theme + live ──────────────── -->
-  <div class="topbar-controls">
-
-    <!-- Fields picker button (shared across views) -->
-    <button
-      class="icon-btn"
-      title="Toggle visible fields"
-      aria-label="Toggle visible fields"
-      (click)="toggleFieldsPopover($event)"
-    >
-      <svg lucideLayoutGrid [size]="15" aria-hidden="true"></svg>
-    </button>
-
-    <!-- Correlation picker button (Swimlanes only) -->
-    @if (!isMatrix()) {
+  <!-- Theme switcher: ☾ / ☼ / Auto ──────────────────────── -->
+  <div class="theme-switch" role="radiogroup" aria-label="Theme">
+    @for (opt of themeOptions; track opt.value) {
       <button
-        class="icon-btn"
-        title="Correlation settings"
-        aria-label="Correlation settings"
-        (click)="toggleCorrelationPopover($event)"
-      >
-        <svg lucideSettings2 [size]="15" aria-hidden="true"></svg>
-      </button>
+        class="ts-opt"
+        [class.is-on]="activeTheme() === opt.value"
+        [attr.data-theme-pick]="opt.value"
+        [attr.aria-checked]="activeTheme() === opt.value"
+        role="radio"
+        [title]="opt.title"
+        [attr.aria-label]="opt.title"
+        (click)="onThemeChange(opt.value)"
+      >{{ opt.label }}</button>
+    }
+  </div>
+
+  <!-- Icon buttons + popovers ────────────────────────────── -->
+  <div class="hdr-icons">
+
+    <!-- Correlation picker (Swimlanes only) -->
+    @if (!isMatrix()) {
+      <div style="position: relative">
+        <button
+          class="icon-btn"
+          [class.is-active]="correlationPopoverOpen()"
+          title="Correlation &amp; time window"
+          aria-label="Correlation"
+          (click)="toggleCorrelationPopover($event)"
+        >
+          <span aria-hidden="true">⇆</span>
+        </button>
+        <p-popover #correlationPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="popover-placeholder">
+            <span class="popover-title">CORRELATION</span>
+            <p class="popover-coming">Phase 4</p>
+          </div>
+        </p-popover>
+      </div>
     }
 
-    <!-- Theme switcher — p-selectButton 3-state -->
-    <p-selectButton
-      [options]="themeOptions"
-      optionLabel="label"
-      optionValue="value"
-      [ngModel]="activeTheme()"
-      (onChange)="onThemeChange($event.value)"
-      [allowEmpty]="false"
-      [unstyled]="true"
-      styleClass="theme-switcher"
-      aria-label="Theme"
-    />
-
-    <!-- Live / SSE indicator -->
-    <div
-      class="live-indicator"
-      [class.is-live]="sseConnected()"
-      [title]="sseConnected() ? 'Live updates connected' : 'Connecting…'"
-      role="status"
-      [attr.aria-label]="sseConnected() ? 'Live updates connected' : 'Connecting to live updates'"
-    >
-      <span class="pulse-dot" aria-hidden="true"></span>
-      <span class="live-label">LIVE</span>
+    <!-- Fields picker (shared) -->
+    <div style="position: relative">
+      <button
+        class="icon-btn"
+        [class.is-active]="fieldsPopoverOpen()"
+        title="Fields"
+        aria-label="Fields"
+        (click)="toggleFieldsPopover($event)"
+      >
+        <span aria-hidden="true">▦</span>
+      </button>
+      <p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+        <div class="popover-placeholder">
+          <span class="popover-title">VISIBLE FIELDS — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
+          <p class="popover-coming">Phase 4</p>
+        </div>
+      </p-popover>
     </div>
   </div>
 
+  <!-- Live pill ───────────────────────────────────────────── -->
+  <div
+    class="live-pill"
+    [class.is-live]="sseConnected()"
+    role="status"
+    [attr.aria-label]="sseConnected() ? 'Live updates connected' : 'Connecting to live updates'"
+  >
+    <span class="live-dot" aria-hidden="true"></span>
+    <span>SSE live</span>
+  </div>
+
 </header>
-
-<!-- Fields picker popover (content implemented in P4) ────── -->
-<p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-  <div class="popover-placeholder">
-    <span class="popover-title">VISIBLE FIELDS</span>
-    <p class="popover-coming">Field picker — Phase 4</p>
-  </div>
-</p-popover>
-
-<!-- Correlation picker popover (content implemented in P4) ── -->
-<p-popover #correlationPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-  <div class="popover-placeholder">
-    <span class="popover-title">CORRELATION</span>
-    <p class="popover-coming">Correlation picker — Phase 4</p>
-  </div>
-</p-popover>
