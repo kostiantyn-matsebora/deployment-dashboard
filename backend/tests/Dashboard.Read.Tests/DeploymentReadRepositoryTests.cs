@@ -1,0 +1,422 @@
+using Dashboard.Read.Queries;
+using Dashboard.Read.Repositories;
+using Dashboard.Shared.Contracts;
+using Dashboard.Shared.Data;
+using Dashboard.Shared.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace Dashboard.Read.Tests;
+
+public sealed class DeploymentReadRepositoryTests : IDisposable
+{
+    private readonly DashboardDbContext _ctx;
+    private readonly DeploymentReadRepository _repo;
+
+    public DeploymentReadRepositoryTests()
+    {
+        var options = new DbContextOptionsBuilder<DashboardDbContext>()
+            .UseSqlite("DataSource=:memory:")
+            .Options;
+        _ctx = new DashboardDbContext(options);
+        _ctx.Database.OpenConnection();
+        _ctx.Database.EnsureCreated();
+        _repo = new DeploymentReadRepository(_ctx);
+    }
+
+    public void Dispose()
+    {
+        _ctx.Database.CloseConnection();
+        _ctx.Dispose();
+    }
+
+    // ── Seed helper ───────────────────────────────────────────────────────────
+
+    private async Task<DeploymentEvent> SeedAsync(
+        string service = "svc-a",
+        string environment = "prod",
+        string status = DeploymentStatus.Success,
+        DateTimeOffset? happenedAt = null,
+        string? deploymentId = null)
+    {
+        var ev = new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = deploymentId ?? $"dep-{Guid.NewGuid():N}",
+            Service = service,
+            Environment = environment,
+            Status = status,
+            HappenedAt = happenedAt ?? DateTimeOffset.UtcNow,
+        };
+        _ctx.DeploymentEvents.Add(ev);
+        await _ctx.SaveChangesAsync();
+        return ev;
+    }
+
+    // ── GetByIdAsync ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetByIdAsync_ExistingId_ReturnsMatchingEvent()
+    {
+        var seeded = await SeedAsync();
+
+        var result = await _repo.GetByIdAsync(seeded.Id, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(seeded.Id, result.Id);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_NonExistentId_ReturnsNull()
+    {
+        var result = await _repo.GetByIdAsync(Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    // ── GetDistinctServicesAsync ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetDistinctServicesAsync_NoEvents_ReturnsEmpty()
+    {
+        var result = await _repo.GetDistinctServicesAsync(CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetDistinctServicesAsync_WithDuplicates_ReturnsDistinctSorted()
+    {
+        await SeedAsync(service: "svc-z");
+        await SeedAsync(service: "svc-a");
+        await SeedAsync(service: "svc-a"); // duplicate
+
+        var result = await _repo.GetDistinctServicesAsync(CancellationToken.None);
+
+        Assert.Equal(["svc-a", "svc-z"], result);
+    }
+
+    // ── GetDistinctEnvironmentsAsync ──────────────────────────────────────────
+
+    [Fact]
+    public async Task GetDistinctEnvironmentsAsync_NoEvents_ReturnsEmpty()
+    {
+        var result = await _repo.GetDistinctEnvironmentsAsync(CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetDistinctEnvironmentsAsync_WithDuplicates_ReturnsDistinctSorted()
+    {
+        await SeedAsync(environment: "prod");
+        await SeedAsync(environment: "dev");
+        await SeedAsync(environment: "dev"); // duplicate
+
+        var result = await _repo.GetDistinctEnvironmentsAsync(CancellationToken.None);
+
+        Assert.Equal(["dev", "prod"], result);
+    }
+
+    // ── GetCurrentPerSlotAsync ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetCurrentPerSlotAsync_NoEvents_ReturnsEmpty()
+    {
+        var result = await _repo.GetCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetCurrentPerSlotAsync_SingleEvent_ReturnsThatEvent()
+    {
+        var seeded = await SeedAsync();
+
+        var result = await _repo.GetCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(seeded.Id, result[0].Id);
+    }
+
+    [Fact]
+    public async Task GetCurrentPerSlotAsync_MultipleEventsInSlot_ReturnsLatestByHappenedAt()
+    {
+        var baseTime = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        await SeedAsync(happenedAt: baseTime);
+        var latest = await SeedAsync(happenedAt: baseTime.AddHours(1));
+
+        var result = await _repo.GetCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(latest.Id, result[0].Id);
+    }
+
+    [Fact]
+    public async Task GetCurrentPerSlotAsync_WithServiceFilter_ReturnsOnlyThatService()
+    {
+        await SeedAsync(service: "svc-a");
+        await SeedAsync(service: "svc-b");
+
+        var result = await _repo.GetCurrentPerSlotAsync("svc-a", CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("svc-a", result[0].Service);
+    }
+
+    [Fact]
+    public async Task GetCurrentPerSlotAsync_MultipleSlots_ReturnsOnePerSlot()
+    {
+        await SeedAsync(service: "svc-a", environment: "dev");
+        await SeedAsync(service: "svc-a", environment: "prod");
+        await SeedAsync(service: "svc-b", environment: "prod");
+
+        var result = await _repo.GetCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Equal(3, result.Count);
+    }
+
+    // ── GetLastSuccessfulPerSlotAsync ─────────────────────────────────────────
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_NoEvents_ReturnsEmpty()
+    {
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_OnlyNonSuccessEvents_ReturnsEmpty()
+    {
+        await SeedAsync(status: DeploymentStatus.InProgress);
+        await SeedAsync(status: DeploymentStatus.Failure);
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_SuccessEvent_ReturnsThatEvent()
+    {
+        var seeded = await SeedAsync(status: DeploymentStatus.Success);
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(seeded.Id, result[0].Id);
+    }
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_MultipleSuccessEvents_ReturnsLatest()
+    {
+        var baseTime = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        await SeedAsync(status: DeploymentStatus.Success, happenedAt: baseTime);
+        var latest = await SeedAsync(status: DeploymentStatus.Success, happenedAt: baseTime.AddHours(1));
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(latest.Id, result[0].Id);
+    }
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_WithServiceFilter_ReturnsOnlyThatService()
+    {
+        await SeedAsync(service: "svc-a", status: DeploymentStatus.Success);
+        await SeedAsync(service: "svc-b", status: DeploymentStatus.Success);
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync("svc-a", CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("svc-a", result[0].Service);
+    }
+
+    // ── ListAsync — basic ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListAsync_NoEvents_ReturnsEmptyPageNoNextCursor()
+    {
+        var (items, nextCursor) = await _repo.ListAsync(DefaultQuery(), CancellationToken.None);
+
+        Assert.Empty(items);
+        Assert.Null(nextCursor);
+    }
+
+    [Fact]
+    public async Task ListAsync_SingleEvent_ReturnsThatEvent()
+    {
+        var seeded = await SeedAsync();
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery(), CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_MultipleEvents_OrderedByHappenedAtDescending()
+    {
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        var ev1 = await SeedAsync(happenedAt: t0);
+        var ev2 = await SeedAsync(happenedAt: t0.AddHours(2));
+        var ev3 = await SeedAsync(happenedAt: t0.AddHours(1));
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery(), CancellationToken.None);
+
+        Assert.Equal(ev2.Id, items[0].Id);
+        Assert.Equal(ev3.Id, items[1].Id);
+        Assert.Equal(ev1.Id, items[2].Id);
+    }
+
+    // ── ListAsync — filters ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListAsync_ServiceFilter_ReturnsOnlyMatchingRows()
+    {
+        await SeedAsync(service: "svc-a");
+        await SeedAsync(service: "svc-b");
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Service = "svc-a" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal("svc-a", items[0].Service);
+    }
+
+    [Fact]
+    public async Task ListAsync_EnvironmentFilter_ReturnsOnlyMatchingRows()
+    {
+        await SeedAsync(environment: "dev");
+        await SeedAsync(environment: "prod");
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Environment = "dev" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal("dev", items[0].Environment);
+    }
+
+    [Fact]
+    public async Task ListAsync_StatusFilter_ReturnsOnlyMatchingRows()
+    {
+        await SeedAsync(status: DeploymentStatus.Success);
+        await SeedAsync(status: DeploymentStatus.Failure);
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Status = DeploymentStatus.Success }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(DeploymentStatus.Success, items[0].Status);
+    }
+
+    [Fact]
+    public async Task ListAsync_DeploymentIdFilter_ReturnsOnlyMatchingRows()
+    {
+        var ev1 = await SeedAsync(deploymentId: "dep-001");
+        await SeedAsync(deploymentId: "dep-002");
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { DeploymentId = "dep-001" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(ev1.DeploymentId, items[0].DeploymentId);
+    }
+
+    [Fact]
+    public async Task ListAsync_SinceFilter_ExcludesEventsBefore()
+    {
+        var t0 = new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
+        await SeedAsync(happenedAt: t0.AddHours(-1));
+        var late = await SeedAsync(happenedAt: t0.AddHours(1));
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Since = t0 }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(late.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_UntilFilter_ExcludesEventsAtOrAfterUntil()
+    {
+        var t0 = new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
+        var early = await SeedAsync(happenedAt: t0.AddHours(-1));
+        await SeedAsync(happenedAt: t0);       // exactly at Until — excluded
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Until = t0 }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(early.Id, items[0].Id);
+    }
+
+    // ── ListAsync — pagination ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListAsync_LimitLessThanTotal_SetsNextCursor()
+    {
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 5; i++)
+            await SeedAsync(happenedAt: t0.AddHours(i));
+
+        var (items, nextCursor) = await _repo.ListAsync(
+            DefaultQuery() with { Limit = 3 }, CancellationToken.None);
+
+        Assert.Equal(3, items.Count);
+        Assert.NotNull(nextCursor);
+    }
+
+    [Fact]
+    public async Task ListAsync_LimitEqualToTotal_NextCursorIsNull()
+    {
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 3; i++)
+            await SeedAsync(happenedAt: t0.AddHours(i));
+
+        var (items, nextCursor) = await _repo.ListAsync(
+            DefaultQuery() with { Limit = 3 }, CancellationToken.None);
+
+        Assert.Equal(3, items.Count);
+        Assert.Null(nextCursor);
+    }
+
+    [Fact]
+    public async Task ListAsync_WithCursor_ReturnsContinuationWithNoOverlap()
+    {
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        // Seed with strictly distinct happened_at values (one per hour) so the
+        // cursor seek using happened_at alone gives exact page boundaries.
+        for (var i = 0; i < 5; i++)
+            await SeedAsync(happenedAt: t0.AddHours(5 - i));
+
+        var (page1, cursor) = await _repo.ListAsync(
+            DefaultQuery() with { Limit = 2 }, CancellationToken.None);
+        Assert.NotNull(cursor);
+
+        var (page2, _) = await _repo.ListAsync(
+            DefaultQuery() with { Limit = 2, Cursor = cursor }, CancellationToken.None);
+
+        var page1Ids = page1.Select(e => e.Id).ToHashSet();
+        Assert.True(page2.All(e => !page1Ids.Contains(e.Id)),
+            "Page 2 must not overlap with page 1.");
+        Assert.Equal(2, page2.Count);
+    }
+
+    [Fact]
+    public async Task ListAsync_InvalidCursor_IgnoredReturnsFromStart()
+    {
+        await SeedAsync();
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Cursor = "this-is-not-a-valid-cursor" }, CancellationToken.None);
+
+        Assert.Single(items);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static DeploymentListQuery DefaultQuery() =>
+        new(Service: null, Environment: null, Status: null, DeploymentId: null,
+            Since: null, Until: null, Cursor: null, Limit: 100);
+}

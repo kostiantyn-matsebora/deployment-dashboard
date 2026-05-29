@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dashboard.Api.Extensions;
+using Dashboard.Read;
 using Dashboard.Shared.Data;
 using Dashboard.Write;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +28,7 @@ builder.Services.AddDbContext<DashboardDbContext>(options =>
 builder.Services.AddWriteServices();
 
 // ── Read services ─────────────────────────────────────────────────────────────
-// Phase 4: builder.Services.AddReadServices();
+builder.Services.AddReadServices();
 
 var app = builder.Build();
 
@@ -42,8 +43,8 @@ app.UseExceptionHandler();
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapWriteEndpoints();
+app.MapReadEndpoints();
 
-// Phase 4: app.MapReadEndpoints();
 // Phase 5: SSE stream
 // Phase 6: Fetcher state + ops
 
