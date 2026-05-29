@@ -1,18 +1,11 @@
 <!-- SwimlanesComponent — per-service DAG visualisation.
      Spec: docs/design/views.md §Swimlanes View Layout -->
 
-<!-- ── Loading state ──────────────────────────────────────── -->
-@if (loading() && !lanes().length) {
+<!-- ── Loading state (matrix not yet populated by App shell) ── -->
+@if (!lanes().length) {
   <div class="swim-loading">
     <span class="swim-spinner"></span>
     <span class="swim-load-label">Loading swimlanes…</span>
-  </div>
-}
-
-<!-- ── Error state ────────────────────────────────────────── -->
-@if (loadErr() && !lanes().length) {
-  <div class="swim-loading swim-error">
-    Failed to load deployment data.
   </div>
 }
 

@@ -1,18 +1,11 @@
 <!-- MatrixComponent — services × environments deployment grid
      Spec: docs/design/views.md §Matrix View Layout -->
 
-<!-- ── Loading state ──────────────────────────────────────── -->
-@if (loading() && !state.matrixData()) {
+<!-- ── Loading state (matrix not yet populated by App shell) ── -->
+@if (!state.matrixData()) {
   <div class="matrix-loading">
     <span class="load-spinner"></span>
     <span class="load-label">Loading matrix…</span>
-  </div>
-}
-
-<!-- ── Error state ────────────────────────────────────────── -->
-@if (loadErr() && !state.matrixData()) {
-  <div class="matrix-loading matrix-error">
-    Failed to load matrix data.
   </div>
 }
 
