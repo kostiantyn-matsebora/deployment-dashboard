@@ -346,11 +346,16 @@ function Resolve-CommandQueue {
 
 function Format-BlockMessage {
     [CmdletBinding()]
-    param([array]$Queue)
+    param(
+        [array]$Queue,
+        [bool]$Standalone = $false
+    )
     if (-not $Queue -or $Queue.Count -eq 0) { return '' }
+    $followUp = if ($Standalone) { 'Run the following commands to fix:' } `
+                else { 'Run the following commands in order, re-stage modified files, then re-commit:' }
     $lines = @(
         'Documentation drift detected in the working tree.',
-        'Run the following commands in order, re-stage modified files, then re-commit:',
+        $followUp,
         ''
     )
     for ($i = 0; $i -lt $Queue.Count; $i++) {
@@ -465,7 +470,7 @@ function Invoke-PreCommitDocsHook {
         if ($queue.Count -eq 0) {
             return @{ ExitCode = 0; Message = ''; Reason = 'no-docs-drift'; Queue = @() }
         }
-        $msg = Format-BlockMessage -Queue $queue
+        $msg = Format-BlockMessage -Queue $queue -Standalone $true
         return @{ ExitCode = 2; Message = $msg; Reason = 'docs-drift-detected'; Queue = $queue }
     }
 
