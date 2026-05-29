@@ -6,6 +6,8 @@ import {
   MATRIX_FIELDS,
   Matrix,
   MatrixField,
+  MatrixRow,
+  MatrixSlot,
   SWIMLANE_FIELDS,
   SwimlaneField,
   TIME_WINDOWS,
@@ -17,6 +19,19 @@ export interface Kpi {
   environments: number;
   inFlight: number;
   failed: number;
+}
+
+/** Canonical environment sort order; unknowns sort alphabetically after. */
+const ENV_ORDER = ['dev', 'staging', 'qa', 'preprod', 'prod'];
+
+function sortEnvs(envs: string[]): string[] {
+  return [...envs].sort((a, b) => {
+    const ia = ENV_ORDER.indexOf(a), ib = ENV_ORDER.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
 }
 
 /**
@@ -32,72 +47,118 @@ export class AppStateService {
   readonly activeView = signal<'matrix' | 'swimlanes'>('matrix');
 
   // ── Matrix filters ────────────────────────────────────────
-  /** Substring filter against service name (case-insensitive). */
-  readonly serviceFilter = signal<string>('');
-  /** When true, hide service rows with no failed states. */
-  readonly failuresOnly = signal<boolean>(false);
+  readonly serviceFilter   = signal<string>('');
+  readonly failuresOnly    = signal<boolean>(false);
 
   // ── Field visibility (all ON by default per spec) ─────────
-  readonly matrixVisibleFields = signal<Set<MatrixField>>(new Set(MATRIX_FIELDS));
+  readonly matrixVisibleFields   = signal<Set<MatrixField>>(new Set(MATRIX_FIELDS));
   readonly swimlaneVisibleFields = signal<Set<SwimlaneField>>(new Set(SWIMLANE_FIELDS));
 
   // ── Swimlanes correlation ─────────────────────────────────
-  /** Default: explicit parent gives the richest DAG for the demo data. */
   readonly correlationPredicate = signal<CorrelationPredicate>('explicit parent');
-  readonly timeWindow = signal<TimeWindow>(TIME_WINDOWS[2]); // '1 day'
+  readonly timeWindow           = signal<TimeWindow>(TIME_WINDOWS[2]); // '1 day'
 
-  // ── Inspector (Swimlanes selected node) ───────────────────
+  // ── Inspector ─────────────────────────────────────────────
   readonly selectedNodeId = signal<string | null>(null);
-  readonly selectedEvent = signal<DeploymentEvent | null>(null);
+  readonly selectedEvent  = signal<DeploymentEvent | null>(null);
 
   // ── SSE live status ───────────────────────────────────────
   readonly sseConnected = signal<boolean>(false);
 
-  // ── Matrix data (populated by MatrixComponent in P2) ──────
+  // ── Matrix data ───────────────────────────────────────────
+  /**
+   * Loaded once via GET /api/matrix; subsequently updated in-place by
+   * `applyDeploymentEvent()` as SSE events arrive — no further HTTP calls.
+   */
   readonly matrixData = signal<Matrix | null>(null);
 
-  // ── KPIs — derived from matrix data ───────────────────────
-  /**
-   * Per docs/design/data-model.md §KPIs & Derived Values:
-   * - services:    distinct service count
-   * - environments: distinct environment count
-   * - inFlight:    slots where current.status === 'in-progress'
-   * - failed:      slots where current.status === 'failure'
-   */
+  // ── KPIs ─────────────────────────────────────────────────
   readonly kpi = computed<Kpi>(() => {
     const matrix = this.matrixData();
     if (!matrix) return { services: 0, environments: 0, inFlight: 0, failed: 0 };
 
-    let inFlight = 0;
-    let failed = 0;
-
+    let inFlight = 0, failed = 0;
     for (const row of matrix.rows) {
       for (const slot of Object.values(row.slots)) {
         if (slot.current.status === 'in-progress') inFlight++;
-        else if (slot.current.status === 'failure') failed++;
+        else if (slot.current.status === 'failure')  failed++;
       }
     }
-
-    return {
-      services: matrix.rows.length,
-      environments: matrix.environments.length,
-      inFlight,
-      failed,
-    };
+    return { services: matrix.rows.length, environments: matrix.environments.length, inFlight, failed };
   });
 
-  // ── Helpers ───────────────────────────────────────────────
+  // ── SSE incremental update ────────────────────────────────
+  /**
+   * Apply a single incoming SSE DeploymentEvent to the matrix snapshot
+   * without re-fetching /api/matrix.
+   *
+   * Slot update rules (mirrors mock store.matrix() logic):
+   *   success     → current = ev;  last_successful = undefined;   prev_failed = false
+   *   failure     → current = ev;  last_successful promoted from previous current/slot
+   *   in-progress → current = ev;  last_successful carried forward;
+   *                 prev_failed = (previous current was failure) OR (prev slot had prev_failed)
+   */
+  applyDeploymentEvent(ev: DeploymentEvent): void {
+    const matrix = this.matrixData();
+    if (!matrix) return; // initial load not yet complete — guard
+
+    const existingRow  = matrix.rows.find((r) => r.service === ev.service);
+    const existingSlot = existingRow?.slots[ev.environment] as MatrixSlot | undefined;
+
+    // ── Derive last_successful ────────────────────────────
+    // If the previous current was a success it becomes the new last_successful.
+    const prevLastSuccessful =
+      existingSlot?.current.status === 'success'
+        ? existingSlot.current
+        : existingSlot?.last_successful;
+
+    const lastSuccessful = ev.status === 'success' ? undefined : prevLastSuccessful;
+
+    // ── Derive prev_failed (in-progress only) ─────────────
+    // True when there is a failure between the new current and last_successful
+    // — detectable from the previous slot's current status or its own prev_failed.
+    const prevFailed =
+      ev.status === 'in-progress' &&
+      (existingSlot?.current.status === 'failure' ||
+       existingSlot?.prev_failed === true);
+
+    const newSlot: MatrixSlot = {
+      current: ev,
+      ...(lastSuccessful ? { last_successful: lastSuccessful } : {}),
+      ...(prevFailed     ? { prev_failed: true }               : {}),
+    };
+
+    // ── Patch rows ────────────────────────────────────────
+    let rows = matrix.rows;
+    if (existingRow) {
+      rows = rows.map((r) =>
+        r.service === ev.service
+          ? { ...r, slots: { ...r.slots, [ev.environment]: newSlot } }
+          : r,
+      );
+    } else {
+      const newRow: MatrixRow = { service: ev.service, slots: { [ev.environment]: newSlot } };
+      rows = [...rows, newRow].sort((a, b) => a.service.localeCompare(b.service));
+    }
+
+    // ── Track new environment ─────────────────────────────
+    const environments = matrix.environments.includes(ev.environment)
+      ? matrix.environments
+      : sortEnvs([...matrix.environments, ev.environment]);
+
+    this.matrixData.set({ ...matrix, generated_at: new Date().toISOString(), environments, rows });
+  }
+
+  // ── Field toggle helpers ──────────────────────────────────
   toggleMatrixField(field: MatrixField): void {
-    const current = new Set(this.matrixVisibleFields());
-    if (current.has(field)) current.delete(field);
-    else current.add(field);
-    this.matrixVisibleFields.set(current);
+    const s = new Set(this.matrixVisibleFields());
+    s.has(field) ? s.delete(field) : s.add(field);
+    this.matrixVisibleFields.set(s);
   }
 
   toggleSwimlaneField(field: SwimlaneField): void {
-    const current = new Set(this.swimlaneVisibleFields());
-    if (current.has(field)) current.delete(field);
-    else current.add(field);
-    this.swimlaneVisibleFields.set(current);
+    const s = new Set(this.swimlaneVisibleFields());
+    s.has(field) ? s.delete(field) : s.add(field);
+    this.swimlaneVisibleFields.set(s);
   }
 }
