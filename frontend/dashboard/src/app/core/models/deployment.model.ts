@@ -38,6 +38,13 @@ export interface MatrixSlot {
    * (i.e. current.status === 'success').
    */
   last_successful?: DeploymentEvent;
+  /**
+   * True when there is at least one failure event between `current` and
+   * `last_successful` (for in-progress current) or before the first event
+   * (for in-progress with no success history).
+   * Distinguishes S2 vs S3 and S5 vs S6.
+   */
+  prev_failed?: boolean;
 }
 
 /** One service row in the Matrix view. */
@@ -75,16 +82,17 @@ export type BoxState =
 
 /**
  * Derive the box state from a matrix slot.
- * S3 (run-fail-last) cannot be distinguished from S2 (run-last) from slot
- * data alone — both have in-progress + last_successful. That distinction is
- * resolved from slot history in the P2 full Matrix implementation.
+ * Uses `prev_failed` (populated by the server/mock) to distinguish:
+ *   S2 vs S3 (both in-progress + last_successful)
+ *   S5 vs S6 (both in-progress, no success history)
  */
 export function deriveBoxState(slot: MatrixSlot): BoxState {
-  const { current, last_successful } = slot;
+  const { current, last_successful, prev_failed } = slot;
   if (current.status === 'success') return 's-success';
-  if (current.status === 'failure') return last_successful ? 's-fail-last' : 's-running-only'; // fallback
+  if (current.status === 'failure') return last_successful ? 's-fail-last' : 's-running-only';
   // in-progress
-  return last_successful ? 's-run-last' : 's-running-only';
+  if (last_successful) return prev_failed ? 's-run-fail-last' : 's-run-last';
+  return prev_failed ? 's-run-fail-only' : 's-running-only';
 }
 
 /** Matrix visible field names (8 toggles, all ON by default). */

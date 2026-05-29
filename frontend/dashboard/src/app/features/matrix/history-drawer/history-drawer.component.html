@@ -1,0 +1,112 @@
+<!-- HistoryDrawerComponent — per-slot deployment history timeline -->
+
+<!-- Overlay backdrop — click to dismiss -->
+<div
+  class="drawer-overlay"
+  [class.is-open]="open()"
+  (click)="onOverlayClick()"
+  aria-hidden="true"
+></div>
+
+<!-- Drawer panel -->
+<aside
+  class="drawer"
+  [class.is-open]="open()"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Deployment history"
+  [attr.aria-hidden]="!open()"
+>
+  <!-- Header -->
+  <header class="drawer-head">
+    <div class="drawer-title-block">
+      <div class="crumbs">{{ crumbs() }}</div>
+      <div class="title">history</div>
+    </div>
+    <button
+      class="drawer-close"
+      (click)="onClose()"
+      aria-label="Close history drawer"
+    >×</button>
+  </header>
+
+  <!-- Body -->
+  <div class="drawer-body">
+
+    @if (loading()) {
+      <div class="drawer-state">
+        <span class="spinner-sm"></span>
+        <span>Loading…</span>
+      </div>
+    }
+
+    @if (error() && !loading()) {
+      <div class="drawer-state is-error">
+        Failed to load history.
+      </div>
+    }
+
+    @if (!loading() && !error()) {
+      <div class="hist">
+
+        @for (ev of events(); track ev.id) {
+          <div class="hist-entry" [class]="statusClass(ev.status)">
+
+            <!-- Timeline pip -->
+            <div class="pip"></div>
+
+            <!-- Main content -->
+            <div class="hist-main">
+
+              <!-- L1: version + run link -->
+              <div class="l1">
+                @if (ev.version) { <span>{{ ev.version }}</span> }
+                @if (ev.run_url) {
+                  <a class="hist-link" [href]="ev.run_url" target="_blank" rel="noopener">
+                    ↗ run{{ ev.run_number ? ' #' + ev.run_number : '' }}
+                  </a>
+                } @else if (ev.run_number) {
+                  <span class="sha">#{{ ev.run_number }}</span>
+                }
+              </div>
+
+              <!-- L2: status chip + actor + sha -->
+              <div class="l2">
+                <span class="status-chip" [class]="statusClass(ev.status)">{{ statusLabel(ev.status) }}</span>
+                @if (ev.actor) { <span>@{{ ev.actor }}</span> }
+                @if (ev.sha) { <span class="sha">{{ ev.sha.slice(0, 7) }}</span> }
+                @if (ev.ref) { <span>⎇ {{ ev.ref }}</span> }
+              </div>
+
+              <!-- L3: happened_at elapsed + absolute -->
+              <div class="l3">
+                <span class="ts">
+                  {{ ev.happened_at | timeAgo }}
+                  <span class="abs">({{ formatAbsolute(ev.happened_at) }})</span>
+                </span>
+              </div>
+
+              <!-- L4: parent_deployments -->
+              @if (ev.parent_deployments?.length) {
+                <div class="parents-line">
+                  <span class="pk">parents</span>
+                  @for (pid of ev.parent_deployments!; track pid) {
+                    <span class="pid">{{ truncateId(pid) }}</span>
+                  }
+                </div>
+              }
+
+            </div>
+
+          </div>
+        }
+
+        @if (events().length === 0) {
+          <div class="drawer-state">No events found for this slot.</div>
+        }
+
+      </div>
+    }
+
+  </div>
+</aside>
