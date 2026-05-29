@@ -1,6 +1,6 @@
 # Fetcher Specification — `Dashboard.Fetcher`
 
-**Status:** Draft · **Date:** 2026-05-28
+**Status:** Draft · **Date:** 2026-05-29
 
 Implementation contract for **`Dashboard.Fetcher`** — the optional, separately-deployed pull-mode adapter that translates a CI/CD tool's **pull** API into the dashboard's **push** ingest. Its defining requirement is a **tool-agnostic abstraction layer**: the polling host knows nothing about any specific CI/CD system; all tool-specifics live behind one interface. This spec defines that abstraction and ships a concrete **GitHub** implementation of it.
 
@@ -47,6 +47,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F12 | **Service identity = workflow YAML `name:` field** (how the workflow appears in the GitHub UI). `GITHUB__SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Requires zero config for the common case (workflow name = service name); SERVICE_MAP handles edge cases without restructuring the pipeline. |
 | F13 | **Backfill fills the most recent deployment per `(service, environment)` slot.** Enumerates active workflows (services) and environments per repo; paginates deployments per environment newest-first, stopping when all services are covered or `deployment.created_at < now − BACKFILL_MAX_AGE`. | Per-environment pagination + early-exit on full coverage minimises API calls. Guarantees every service is represented regardless of deployment frequency — fixes the gap where last-N-per-env misses rarely-deployed services. |
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
+| F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
 
 ---
 
@@ -129,6 +130,8 @@ while (!ct.IsCancellationRequested)
 | Workflow file contents | `GET /repos/{owner}/{repo}/contents/{path}?ref={sha}` |
 | List active workflows (backfill) | `GET /repos/{owner}/{repo}/actions/workflows?per_page=100` |
 | List environments (backfill) | `GET /repos/{owner}/{repo}/environments` |
+| List artifacts for a run | `GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts` |
+| Download artifact archive | `GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip` |
 
 Auth: `Authorization: Bearer <token>` + `Accept: application/vnd.github+json` + `X-GitHub-Api-Version`. Base URL from config (`https://api.github.com` default; overridable for the integration mock).
 
@@ -137,11 +140,11 @@ Auth: `Authorization: Bearer <token>` + `Accept: application/vnd.github+json` + 
 | Contract field | GitHub source |
 |---|---|
 | `deployment_id` | `gh-deploy-{deployment.id}` (correlation key; all status rows of one deployment share it) |
-| `service` | workflow YAML `name:` field from run metadata (§5.6.2 cache); resolved via `ResolveService` (§5.7.3) |
+| `service` | workflow YAML `name:` field from run metadata (§5.6.2 cache); resolved via `ResolveService` (§5.8.3) |
 | `environment` | `deployment.environment` |
 | `status` | mapped from `status.state` (§5.3) |
 | `happened_at` | `status.created_at` (UTC) |
-| `version` | configurable source: `deployment.payload.version` → `sha[..7]` (default) |
+| `version` | resolved via §5.8 — `null` when source yields nothing |
 | `sha` | `deployment.sha` |
 | `ref` | `deployment.ref` |
 | `actor` | `status.creator.login` ?? `deployment.creator.login` |
@@ -178,6 +181,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit:
 - `403`/`429` with rate-limit headers → honour `Retry-After` / `X-RateLimit-Reset`, back off.
 - `304 Not Modified` → no events, cursor unchanged.
 - Workflow run or file fetch non-2xx, YAML parse error, or missing `target_url` → `parent_deployments = []` for the affected events; never throw / never block ingest (F10).
+- Artifact list or download non-2xx, or artifact name not found → `version = null`; never throw / never block ingest (F15).
 
 ### 5.6 Parent deployment derivation (F10)
 
@@ -250,11 +254,36 @@ For each event `E` (environment `ENV`, run_id `R`):
 4. Omit unresolved entries — a parent deployment not yet observed is a forward reference; the Swimlanes view tolerates dangling `parent_deployments` values and resolves them at render time.
 5. `E.parent_deployments ← [resolved ids]` (unique; order not significant).
 
-### 5.7 Backfill (F13, F14)
+### 5.7 Version resolution (F15)
+
+Determines the `version` field for a deployment event. Returns `null` when the source yields nothing — no fallback, no truncation except for the `sha` attribute.
+
+#### 5.7.1 Source types
+
+| Type | Reads | `null` conditions |
+|---|---|---|
+| `attribute` | `deployment.<key>` — `sha` key truncated to 7 chars; all other attributes used as-is | attribute absent or null on the deployment object |
+| `payload` | `deployment.payload.<key>` (payload is free-form JSON) | payload absent, not a JSON object, or field absent/null |
+| `artifact` | plain-text content of the GitHub Actions artifact archive named `<key>` | `run_id` absent (non-Actions deployment), artifact not found, list or download non-2xx |
+
+#### 5.7.2 Artifact resolution steps *(type = `artifact` only)*
+
+1. Extract `run_id` from `status.target_url` (§5.6.1). If absent → `version = null`.
+2. `GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts` → find artifact where `name == <key>`.
+3. If not found → `version = null`.
+4. `GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip` → download archive.
+5. Extract the single file; trim whitespace → `version`.
+6. Non-2xx on either call → `version = null`.
+
+Artifact content is **LRU-cached per `(repo, run_id, artifact_name)`** alongside the workflow graph cache (F11, same ≤ 200-entry bound). Artifact archives are immutable once uploaded, so no invalidation is needed.
+
+---
+
+### 5.8 Backfill (F13, F14)
 
 Fills the store with the most recent deployment per `(service, environment)` slot on first run or explicit reset. Runs once before the normal poll loop; the poll loop then resumes from the advanced cursor.
 
-#### 5.7.1 Trigger and lifecycle
+#### 5.8.1 Trigger and lifecycle
 
 | Condition | Behaviour |
 |---|---|
@@ -262,7 +291,7 @@ Fills the store with the most recent deployment per `(service, environment)` slo
 | `BACKFILL=true` env var set | Backfill runs unconditionally, regardless of existing cursor. Existing cursor is overwritten on completion. |
 | Normal run (cursor present, `BACKFILL` unset) | Backfill skipped entirely. |
 
-#### 5.7.2 Per-repo procedure
+#### 5.8.2 Per-repo procedure
 
 ```
 services ← GET /repos/{owner}/{repo}/actions/workflows?per_page=100
@@ -284,7 +313,7 @@ for each env E in envs:
       statuses ← fetch D's statuses                              // also needed for event data
       run_id   ← extract from any status.target_url (§5.6.1)
       wf_name  ← run_id != null ? GetWorkflowName(repo, run_id) : null   // §5.6.2 LRU cache
-      service  ← ResolveService(wf_name, repo)                  // §5.7.3
+      service  ← ResolveService(wf_name, repo)                  // §5.8.3
 
       if service ∈ services AND service ∉ filled:
         events.AddAll(BuildEvents(D, statuses))   // §5.3 status mapping + §5.6 parent derivation
@@ -296,7 +325,7 @@ for each env E in envs:
 Sort collected `events` by `happened_at` ascending before posting (preserves append-only log ordering).
 Advance cursor to `max(status.created_at)` across all events.
 
-#### 5.7.3 Service resolution
+#### 5.8.3 Service resolution
 
 ```
 ResolveService(workflowName, repo):
@@ -308,7 +337,9 @@ ResolveService(workflowName, repo):
 
 `GITHUB__SERVICE_MAP` keys are workflow-level when they contain no `/`; repo-level when they match `owner/repo` format. GitHub workflow names cannot contain `/`, so there is no ambiguity.
 
-#### 5.7.4 Rate-limit profile *(5 repos × 10 workflows × 4 environments, first page covers all services)*
+---
+
+#### 5.8.4 Rate-limit profile *(5 repos × 10 workflows × 4 environments, first page covers all services)*
 
 | Call type | Count |
 |---|---|
@@ -332,8 +363,8 @@ ResolveService(workflowName, repo):
 | `GITHUB__BASE_URL` | `https://api.github.com` | overridable for the integration mock |
 | `GITHUB__TOKEN` | *(secret)* | PAT / GitHub App token |
 | `GITHUB__REPOS` | `acme/api,acme/web` | repos to poll |
-| `GITHUB__SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.7.3) |
-| `GITHUB__VERSION_SOURCE` | `sha` | `sha` \| `payload.version` |
+| `GITHUB__SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
+| `GITHUB__VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
 
 Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `JENKINS__…`) drops in without collision.
 
@@ -343,10 +374,31 @@ Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `
 
 | Layer | Project | Scope |
 |---|---|---|
-| Unit | `Dashboard.Fetcher.Tests` | GitHub JSON fixture → `DeploymentEventIngest` mapping; status table; cursor advance / first-run lookback; orchestrator loop (mock `ICiCdAdapter` + mock ingest/state clients); at-least-once on mid-batch failure. **Parent derivation:** linear chain (`dev → staging → prod`), parallel branches (two envs with shared root), non-deployment intermediary job (BFS look-through), matrix collision (two deployments same env same run → latest wins), `environment` as object vs string, `needs` as string vs array, no matching deployment job (→ `[]`), non-Actions `target_url` (→ `[]`), workflow fetch non-2xx (→ `[]`), YAML parse error (→ `[]`). **Service resolution:** workflow-level SERVICE_MAP hit, repo-level hit, default (workflow name as-is), non-Actions fallback (repo short name). **Backfill:** all services covered on first page (early exit), rarely-deployed service found on page 2 (pagination), service not deployed to env within BACKFILL_MAX_AGE (skipped), BACKFILL=true overwrites existing cursor, events posted oldest-first. |
-| Integration | cross-stack suite | Real host against a **mock GitHub API** (serves deployments, statuses, workflow-run metadata, workflow YAML, workflow list, and environment list fixtures) + real API + Postgres; asserts wire shape (FR-06), the opaque-cursor round-trip, populated `parent_deployments` on a two-environment chain, backfill populates `(service, environment)` slots correctly, and the NFR-03 latency envelope. |
+| Unit | `Dashboard.Fetcher.Tests` | §7.1 |
+| Integration | cross-stack suite | §7.2 |
 
 `Dashboard.Fetcher.Tests` is **excluded from the API test run** and exercised on the fetcher's own pipeline.
+
+### 7.1 Unit test cases
+
+**Mapping:** GitHub JSON fixture → `DeploymentEventIngest`; status table (§5.3); cursor advance / first-run lookback; orchestrator loop (mock `ICiCdAdapter` + mock ingest/state clients); at-least-once on mid-batch failure.
+
+**Parent derivation:** linear chain (`dev → staging → prod`); parallel branches (two envs with shared root); non-deployment intermediary job (BFS look-through); matrix collision (two deployments same env same run → latest wins); `environment` as object vs string; `needs` as string vs array; no matching deployment job (→ `[]`); non-Actions `target_url` (→ `[]`); workflow fetch non-2xx (→ `[]`); YAML parse error (→ `[]`).
+
+**Service resolution:** workflow-level SERVICE_MAP hit; repo-level hit; default (workflow name as-is); non-Actions fallback (repo short name).
+
+**Version resolution:** `attribute:sha` → 7-char truncation; `attribute:ref` → value as-is; `payload:version` → field value; payload field absent → `null`; payload not a JSON object → `null`; `artifact:version.txt` → trimmed file content; artifact not found → `null`; artifact list non-2xx → `null`; artifact download non-2xx → `null`; `artifact` source + no `run_id` → `null`; artifact result LRU-cached for same `(repo, run_id, artifact_name)`.
+
+**Backfill:** all services covered on first page (early exit); rarely-deployed service found on page 2 (pagination); service not deployed to env within `BACKFILL_MAX_AGE` (skipped); `BACKFILL=true` overwrites existing cursor; events posted oldest-first.
+
+### 7.2 Integration test cases
+
+Real host against a **mock GitHub API** (serves deployments, statuses, workflow-run metadata, workflow YAML, workflow list, environment list, and artifact fixtures) + real API + Postgres. Asserts:
+
+- Wire shape (FR-06) and opaque-cursor round-trip.
+- Populated `parent_deployments` on a two-environment chain.
+- Backfill populates `(service, environment)` slots correctly.
+- NFR-03 latency envelope.
 
 ---
 
