@@ -35,4 +35,11 @@ internal interface IDeploymentReadRepository
 
     /// <summary>Returns all distinct environment identifiers, sorted ascending.</summary>
     Task<IReadOnlyList<string>> GetDistinctEnvironmentsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Returns all events with <c>id &gt; lastId</c>, ordered by <c>id</c> ascending.
+    /// Used for SSE <c>Last-Event-ID</c> resume replay (D3: the row <c>id</c> is the stream cursor).
+    /// </summary>
+    Task<IReadOnlyList<DeploymentEvent>> GetSinceAsync(
+        Guid lastId, string? serviceFilter, CancellationToken ct);
 }

@@ -109,4 +109,19 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
             .Distinct()
             .OrderBy(e => e)
             .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<DeploymentEvent>> GetSinceAsync(
+        Guid lastId, string? serviceFilter, CancellationToken ct)
+    {
+        // EF Core cannot express `uuid > @lastId` via LINQ (Guid has no > operator).
+        // FromSqlInterpolated produces a safe parameterised query; Postgres uuid > operator
+        // orders UUIDv7 by insertion time, matching the spec D3 resume semantics.
+        var q = db.DeploymentEvents
+            .FromSqlInterpolated($"SELECT * FROM deployment_events WHERE id > {lastId}");
+
+        if (serviceFilter is not null)
+            q = q.Where(e => e.Service == serviceFilter);
+
+        return await q.OrderBy(e => e.Id).ToListAsync(ct);
+    }
 }
