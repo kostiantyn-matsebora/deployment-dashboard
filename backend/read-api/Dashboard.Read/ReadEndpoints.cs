@@ -160,6 +160,10 @@ public static class ReadEndpoints
         httpContext.Response.Headers.Connection = "keep-alive";
         httpContext.Response.Headers["X-Accel-Buffering"] = "no";
 
+        // Flush headers immediately so clients using HttpCompletionOption.ResponseHeadersRead
+        // receive the 200 + Content-Type before any events arrive (or before the 15 s ping fires).
+        await httpContext.Response.Body.FlushAsync(ct);
+
         // Replay missed events when client reconnects with Last-Event-ID.
         if (Guid.TryParse(lastEventId, out var resumeId))
         {

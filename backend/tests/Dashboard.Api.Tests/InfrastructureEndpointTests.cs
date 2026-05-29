@@ -36,6 +36,56 @@ public sealed class InfrastructureEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
     }
 
+    [Fact]
+    public async Task GetHealthz_BodyContainsStatusOk()
+    {
+        var res = await _client.GetAsync("/healthz");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("ok", body.GetProperty("status").GetString());
+    }
+
+    // ── GET /readyz ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetReadyz_DbReachable_Returns200()
+    {
+        // Allow the broadcaster to establish the LISTEN connection.
+        await Task.Delay(1000);
+
+        var res = await _client.GetAsync("/readyz");
+
+        // DB is reachable via Testcontainers → always 200 (ready or degraded).
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetReadyz_Returns200WithStatusAndChecks()
+    {
+        await Task.Delay(1000);
+
+        var res = await _client.GetAsync("/readyz");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        var status = body.GetProperty("status").GetString();
+        Assert.True(status is "ready" or "degraded",
+            $"status must be 'ready' or 'degraded', got '{status}'");
+
+        var checks = body.GetProperty("checks");
+        Assert.Equal("ok", checks.GetProperty("db").GetString());
+    }
+
+    [Fact]
+    public async Task GetReadyz_WhenListenerConnected_StatusIsReady()
+    {
+        // Give the broadcaster enough time to establish LISTEN on the Testcontainers Postgres.
+        await Task.Delay(2000);
+
+        var res = await _client.GetAsync("/readyz");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal("ready", body.GetProperty("status").GetString());
+    }
+
     // ── GET /openapi/v1.json ──────────────────────────────────────────────────
 
     [Fact]

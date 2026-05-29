@@ -20,11 +20,14 @@ namespace Dashboard.Read.Sse;
 /// The LISTEN loop and the broadcast loop run concurrently via an internal
 /// <see cref="Channel{T}"/> that decouples notification receipt from DB access.
 /// </summary>
-internal sealed class DeploymentEventBroadcaster : BackgroundService, IDeploymentEventBroadcaster
+internal sealed class DeploymentEventBroadcaster : BackgroundService, IDeploymentEventBroadcaster, IReadinessIndicator
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DeploymentEventBroadcaster> _logger;
+
+    // Volatile: written by the background LISTEN loop, read by the /readyz handler.
+    private volatile bool _isListening;
 
     // Notification ids queued by the LISTEN callback; consumed by BroadcastAsync.
     private readonly Channel<Guid> _pending =
@@ -43,6 +46,10 @@ internal sealed class DeploymentEventBroadcaster : BackgroundService, IDeploymen
         _configuration = configuration;
         _logger = logger;
     }
+
+    // ── IReadinessIndicator ───────────────────────────────────────────────────
+
+    public bool IsListenerConnected => _isListening;
 
     // ── IDeploymentEventBroadcaster ───────────────────────────────────────────
 
@@ -126,10 +133,18 @@ internal sealed class DeploymentEventBroadcaster : BackgroundService, IDeploymen
         await using (var cmd = new NpgsqlCommand("LISTEN deployment_events", conn))
             await cmd.ExecuteNonQueryAsync(ct);
 
+        _isListening = true;
         _logger.LogInformation("SSE broadcaster: LISTEN deployment_events active.");
 
-        while (!ct.IsCancellationRequested)
-            await conn.WaitAsync(ct);
+        try
+        {
+            while (!ct.IsCancellationRequested)
+                await conn.WaitAsync(ct);
+        }
+        finally
+        {
+            _isListening = false;
+        }
     }
 
     // ── Broadcast loop ────────────────────────────────────────────────────────

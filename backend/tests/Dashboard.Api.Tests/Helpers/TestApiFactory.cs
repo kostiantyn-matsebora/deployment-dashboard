@@ -19,6 +19,13 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
 {
     public const string TestApiKey = "test-key";
 
+    /// <summary>
+    /// When <c>true</c> the real <see cref="Dashboard.Write.Notifiers.PostgresDeploymentNotifier"/>
+    /// is used, enabling end-to-end LISTEN/NOTIFY fan-out for SSE live-stream tests.
+    /// Defaults to <c>false</c> (no-op notifier) for all other test classes.
+    /// </summary>
+    public bool UseRealNotifier { get; init; }
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
@@ -44,9 +51,13 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
         builder.ConfigureServices(services =>
         {
-            // Replace Postgres notifier with no-op (LISTEN/NOTIFY is Phase 5).
-            services.RemoveAll<IDeploymentNotifier>();
-            services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
+            if (!UseRealNotifier)
+            {
+                // Replace Postgres notifier with no-op so tests that don't need SSE fan-out
+                // don't depend on the LISTEN connection being established.
+                services.RemoveAll<IDeploymentNotifier>();
+                services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
+            }
         });
     }
 

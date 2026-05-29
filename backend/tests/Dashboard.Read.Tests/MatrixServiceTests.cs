@@ -45,6 +45,10 @@ public sealed class MatrixServiceTests
 
         public Task<IReadOnlyList<string>> GetDistinctEnvironmentsAsync(CancellationToken ct)
             => throw new NotImplementedException();
+
+        public Task<IReadOnlyList<DeploymentEvent>> GetSinceAsync(
+            Guid lastId, string? serviceFilter, CancellationToken ct)
+            => throw new NotImplementedException();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
