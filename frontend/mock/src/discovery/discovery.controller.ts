@@ -1,17 +1,19 @@
 import { Controller, Get } from '@nestjs/common';
-import type { DemoData } from '../data/demo-types';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { services, environments }: DemoData = require('../../../../demo/data/events.json');
+import { store } from '../data/store';
 
+/**
+ * Derives distinct services / environments from the visible store so that
+ * disabling demo data also removes demo-only values from discovery.
+ */
 @Controller('api')
 export class DiscoveryController {
   @Get('services')
   listServices() {
-    return { items: services };
+    return { items: store.services() };
   }
 
   @Get('environments')
   listEnvironments() {
-    return { items: environments };
+    return { items: store.environments() };
   }
 }

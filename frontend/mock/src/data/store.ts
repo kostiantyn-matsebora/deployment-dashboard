@@ -1,12 +1,28 @@
 /**
  * In-memory event store — shared singleton across all NestJS request handlers.
  *
- * Data source: demo-data/events.json (project root).
+ * Data source: demo/data/events.json (project root).
  * The store resolves elapsed_minutes → happened_at at startup so that
  * displayed elapsed labels match the dataset values immediately after boot.
+ *
+ * Demo data control:
+ *   store.setDemoEnabled(false) hides all pre-loaded events from every read
+ *   surface (list, findById, matrix, discovery). User-posted events (via
+ *   POST /api/deployments or the SSE emitter) are never tagged as demo and
+ *   always remain visible.
  */
 import { Subject } from 'rxjs';
 import type { DemoData, DemoEvent as DemoEventShape, DemoSseTemplate } from './demo-types';
+
+// ── Feed entry (control panel + /_mock/stream) ────────────────────────────────
+
+export type IngestSource = 'write-api' | 'sse-emitter';
+
+export interface FeedEntry {
+  event:       DeploymentEvent;
+  source:      IngestSource;
+  received_at: string;          // server wall-clock at time of append
+}
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const demoData: DemoData = require('../../../../demo/data/events.json');
@@ -29,6 +45,12 @@ export interface DeploymentEvent {
   parent_deployments?: string[];
 }
 
+// ── Internal stored type — _demo never leaves the server ─────────────────────
+
+interface StoredEvent extends DeploymentEvent {
+  readonly _demo?: true;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeUuid(): string {
@@ -42,33 +64,68 @@ function resolveHappenedAt(elapsed_minutes: number, baseMs: number): string {
   return new Date(baseMs - elapsed_minutes * 60_000).toISOString();
 }
 
-function toWireEvent(demo: DemoEventShape, baseMs: number): DeploymentEvent {
+function toDemoEvent(demo: DemoEventShape, baseMs: number): StoredEvent {
   const { elapsed_minutes, ...fields } = demo;
-  return { id: makeUuid(), happened_at: resolveHappenedAt(elapsed_minutes, baseMs), ...fields };
+  return { id: makeUuid(), happened_at: resolveHappenedAt(elapsed_minutes, baseMs), _demo: true, ...fields };
+}
+
+/** Strip the internal _demo tag before returning to a caller. */
+function wire({ _demo: _ignored, ...e }: StoredEvent): DeploymentEvent {
+  return e;
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
 class EventStore {
   private readonly baseMs: number;
-  private events: DeploymentEvent[];
+  private events: StoredEvent[];
+  private _demoEnabled = true;
 
   readonly live$ = new Subject<DeploymentEvent>();
+  readonly feed$ = new Subject<FeedEntry>();
 
   constructor() {
     this.baseMs = Date.now();
     // Sort newest-first (smallest elapsed_minutes = most recent).
     this.events = [...demoData.events]
       .sort((a, b) => a.elapsed_minutes - b.elapsed_minutes)
-      .map((d) => toWireEvent(d, this.baseMs));
+      .map((d) => toDemoEvent(d, this.baseMs));
   }
 
+  // ── Demo-data control ───────────────────────────────────────────────────────
+
+  get isDemoEnabled(): boolean {
+    return this._demoEnabled;
+  }
+
+  setDemoEnabled(val: boolean): void {
+    this._demoEnabled = val;
+  }
+
+  /**
+   * Reset to demo state:
+   * - Removes all user-posted / SSE-emitted events (anything without _demo).
+   * - Re-enables demo data visibility.
+   */
+  reset(): void {
+    this.events = this.events.filter((e) => e._demo === true);
+    this._demoEnabled = true;
+  }
+
+  /** Events currently visible to callers (respects demo flag). */
+  private visible(): StoredEvent[] {
+    return this._demoEnabled ? this.events : this.events.filter((e) => !e._demo);
+  }
+
+  // ── Read methods ────────────────────────────────────────────────────────────
+
   all(): DeploymentEvent[] {
-    return [...this.events];
+    return this.visible().map(wire);
   }
 
   findById(id: string): DeploymentEvent | undefined {
-    return this.events.find((e) => e.id === id);
+    const e = this.visible().find((e) => e.id === id);
+    return e ? wire(e) : undefined;
   }
 
   list(params: {
@@ -82,7 +139,7 @@ class EventStore {
     limit?: number;
   }): { items: DeploymentEvent[]; next_cursor: string | null } {
     const limit = Math.min(params.limit ?? 100, 500);
-    let rows = this.events;
+    let rows = this.visible();
 
     if (params.service)       rows = rows.filter((e) => e.service === params.service);
     if (params.environment)   rows = rows.filter((e) => e.environment === params.environment);
@@ -101,7 +158,7 @@ class EventStore {
         ? Buffer.from(String(offset + limit)).toString('base64')
         : null;
 
-    return { items: page, next_cursor };
+    return { items: page.map(wire), next_cursor };
   }
 
   matrix(serviceFilter?: string): {
@@ -109,7 +166,7 @@ class EventStore {
     environments: string[];
     rows: Array<{ service: string; slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent }> }>;
   } {
-    let rows = this.events;
+    let rows = this.visible();
     if (serviceFilter) rows = rows.filter((e) => e.service === serviceFilter);
 
     const serviceSet = new Set<string>();
@@ -133,14 +190,13 @@ class EventStore {
           .filter((e) => e.service === service && e.environment === env)
           .sort((a, b) => new Date(b.happened_at).getTime() - new Date(a.happened_at).getTime());
         if (slotEvents.length === 0) continue;
-        const current = slotEvents[0];
-        const lastSuccessful = current.status === 'success' ? undefined : slotEvents.find((e) => e.status === 'success');
+        const current = wire(slotEvents[0]);
+        const lastSuccessfulRaw = current.status === 'success' ? undefined : slotEvents.find((e) => e.status === 'success');
+        const lastSuccessful = lastSuccessfulRaw ? wire(lastSuccessfulRaw) : undefined;
 
-        // Detect prev_failed: is there a failure between current and last_successful (or anywhere
-        // after current when no success exists)? Distinguishes S2↔S3 and S5↔S6.
         let prevFailed = false;
         if (current.status !== 'success') {
-          const searchUntil = lastSuccessful ? slotEvents.indexOf(lastSuccessful) : slotEvents.length;
+          const searchUntil = lastSuccessfulRaw ? slotEvents.indexOf(lastSuccessfulRaw) : slotEvents.length;
           prevFailed = slotEvents.slice(1, searchUntil).some((e) => e.status === 'failure');
         }
 
@@ -156,11 +212,32 @@ class EventStore {
     return { generated_at: new Date().toISOString(), environments, rows: matrixRows };
   }
 
-  append(event: Omit<DeploymentEvent, 'id'>): DeploymentEvent {
-    const row: DeploymentEvent = { id: makeUuid(), ...event };
+  /** Distinct sorted services derived from visible events. */
+  services(): string[] {
+    return [...new Set(this.visible().map((e) => e.service))].sort();
+  }
+
+  /** Distinct sorted environments derived from visible events. */
+  environments(): string[] {
+    const ENV_ORDER = ['dev', 'staging', 'qa', 'preprod', 'prod'];
+    const envs = [...new Set(this.visible().map((e) => e.environment))];
+    return envs.sort((a, b) => {
+      const ia = ENV_ORDER.indexOf(a), ib = ENV_ORDER.indexOf(b);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }
+
+  append(event: Omit<DeploymentEvent, 'id'>, source: IngestSource = 'write-api'): DeploymentEvent {
+    // User-posted events are never tagged as demo — always visible.
+    const row: StoredEvent = { id: makeUuid(), ...event };
     this.events.unshift(row);
-    this.live$.next(row);
-    return row;
+    const wired = wire(row);
+    this.live$.next(wired);
+    this.feed$.next({ event: wired, source, received_at: new Date().toISOString() });
+    return wired;
   }
 }
 
@@ -174,5 +251,5 @@ let _sseIdx = 0;
 export function nextSseEvent(): DeploymentEvent {
   const tpl = sseTemplates[_sseIdx % sseTemplates.length];
   _sseIdx++;
-  return store.append({ happened_at: new Date().toISOString(), ...tpl });
+  return store.append({ happened_at: new Date().toISOString(), ...tpl }, 'sse-emitter');
 }

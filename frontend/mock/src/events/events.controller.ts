@@ -1,25 +1,20 @@
 import { Controller, Get, Query, Res, OnModuleDestroy } from '@nestjs/common';
 import { Response } from 'express';
-import { store, nextSseEvent } from '../data/store';
+import { store } from '../data/store';
+import { emitService } from './emit.service';
 import { Subscription } from 'rxjs';
 
 /**
- * SSE controller — GET /api/events/stream
+ * GET /api/events/stream — application SSE stream.
  *
- * Uses raw Express response to emit named events ("event: deployment") required
- * by the Angular client's addEventListener('deployment', …) subscription.
- * Heartbeat comment ": ping" every 15 s keeps intermediaries alive.
+ * Emit control has moved to /_mock/emit (MockController).
  */
 @Controller('api/events')
 export class EventsController implements OnModuleDestroy {
   private readonly connections = new Set<Response>();
 
-  private readonly emitTimer = setInterval(() => {
-    nextSseEvent(); // appends to store and broadcasts via store.live$
-  }, 8_000);
-
   onModuleDestroy() {
-    clearInterval(this.emitTimer);
+    emitService.destroy();
     for (const res of this.connections) {
       try { res.end(); } catch {}
     }

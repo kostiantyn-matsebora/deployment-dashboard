@@ -4,6 +4,8 @@ import { MatrixController } from './matrix/matrix.controller';
 import { DeploymentsController } from './deployments/deployments.controller';
 import { DiscoveryController } from './discovery/discovery.controller';
 import { EventsController } from './events/events.controller';
+import { FetcherController } from './fetcher/fetcher.controller';
+import { MockController } from './mock/mock.controller';
 
 @Module({
   controllers: [
@@ -12,6 +14,8 @@ import { EventsController } from './events/events.controller';
     DeploymentsController,
     DiscoveryController,
     EventsController,
+    FetcherController,
+    MockController,
   ],
 })
 export class AppModule {}
