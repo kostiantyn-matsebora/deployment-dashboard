@@ -2,6 +2,8 @@
 
 ## Sources of truth
 
+**How to use indexes.** Every `index.md` carries a `children:` front-matter array listing every file and sub-index in its tree. To find information without loading full documents: (1) read the nearest `index.md`, (2) follow the `children:` entry for the relevant file, (3) use the `## Contents` anchor links to jump to the exact section. Never load a full spec unless the section you need is not in the TOC.
+
 - [docs/index.md](docs/index.md) — Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.
 
 ## Solution directory structure
