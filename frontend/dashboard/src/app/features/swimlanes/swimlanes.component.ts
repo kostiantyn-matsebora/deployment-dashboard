@@ -183,43 +183,57 @@ export class SwimlanesComponent {
 
   /**
    * Estimate node card width (px) from event content + visible fields.
-   * Character width approximations: JetBrains Mono 10.5px ≈ 7px/char;
-   * from mockup: 50-char version ≈ 360–400px → ~7.2px/char; use 7.5 for safety.
-   * Inter 11px 600 (env label): ≈ 7.5px/char.
-   * Padding: 12px left + 10px right = 22px. Column-gap: 20px.
+   *
+   * Font metrics:
+   *   JetBrains Mono 10.5px → ~7px/char (empirical: 50-char ver ≈ 350px content)
+   *   Inter 11px 600 → ~7.5px/char
+   * Padding: 12px left + 10px right = 22px.  Column-gap (subgrid): 20px.
+   *
+   * Row 1 — .vc-ver-row (display:flex, fld-time has margin-left:auto):
+   *   natural max-content width = verW + timeW  (no extra gap in max-content).
+   *
+   * Row 2 — .tile-attrs (subgrid col1 + col2):
+   *   ta-bl: ref (single item)
+   *   ta-br: run_url + run_number + actor — inline-flex with item-gap 5px → SUM not MAX.
+   *
+   * Row 3 — .vc-env-row (subgrid col1 + col2):
+   *   col1: sha   col2: env
    */
   private calcNodeWidth(ev: DeploymentEvent, fields: Set<SwimlaneField>): number {
-    const M  = 7.5;   // JetBrains Mono 10.5px (generous estimate)
-    const I  = 7.5;   // Inter 11px 600
-    const PAD = 22;   // horizontal padding
-    const GAP = 20;   // column-gap between col1 and col2
-    const MIN = 120;
+    const M       = 7.0;  // JetBrains Mono 10.5px char advance
+    const I       = 7.5;  // Inter 11px 600 char advance
+    const H_PAD   = 22;   // left 12 + right 10
+    const COL_GAP = 20;   // subgrid column-gap
+    const ITEM_G  = 5;    // ta-br inline-flex gap between items
+    const BUF     = 8;    // safety buffer for sub-pixel rendering
+    const MIN     = 120;
 
-    // Row 1: version + time
-    const verW  = fields.has('version') && ev.version    ? ev.version.length * M : 0;
-    const timeW = fields.has('happened_at')               ? 42 : 0; // "just now" max ~42px
-    const row1  = verW && timeW ? verW + GAP + timeW : verW || timeW;
+    // ── Row 1: version (left) + time (right, no forced gap) ──────────
+    const verW  = fields.has('version') && ev.version    ? ev.version.length * M   : 0;
+    const timeW = fields.has('happened_at')               ? 44                      : 0; // "just now" ≈ 44px
+    const row1  = verW + timeW;
 
-    // Row 2: ref (col1) | run cluster (col2) — run cluster is widest single item
-    const refW  = fields.has('ref') && ev.ref
-                  ? (1 + ev.ref.length) * M : 0;         // ⎇ glyph ≈ 1 char
-    const runW  = Math.max(
-      fields.has('run_url')    && ev.run_url    ? 32  : 0,            // "↗ run"
-      fields.has('run_number') && ev.run_number
-                  ? (1 + ev.run_number.length) * M : 0,               // "#XXXX"
-      fields.has('actor')      && ev.actor
-                  ? ev.actor.length * M : 0,
-    );
-    const row2 = refW && runW ? refW + GAP + runW : refW || runW;
+    // ── Row 2: ref col1 | run cluster col2 (SUM of inline-flex items) ─
+    const refW = fields.has('ref') && ev.ref
+      ? (1 + ev.ref.length) * M : 0;                                 // ⎇ + text
 
-    // Row 3: sha (col1) | env (col2)
-    const shaW = fields.has('sha') && ev.sha
-                 ? ev.sha.length * M : 0;
-    const envW = fields.has('environment')
-                 ? ev.environment.length * I : 0;
-    const row3 = shaW && envW ? shaW + GAP + envW : shaW || envW;
+    const runItems: number[] = [];
+    if (fields.has('run_url')    && ev.run_url)    runItems.push(34);  // "↗ run"
+    if (fields.has('run_number') && ev.run_number) runItems.push((1 + ev.run_number.length) * M);
+    if (fields.has('actor')      && ev.actor)      runItems.push(ev.actor.length * M);
+    const runW = runItems.length
+      ? runItems.reduce((a, b) => a + b, 0) + ITEM_G * (runItems.length - 1)
+      : 0;
+    const row2 = (refW && runW) ? refW + COL_GAP + runW
+               : refW ? refW : runW;
 
-    return Math.max(MIN, Math.max(row1, row2, row3) + PAD);
+    // ── Row 3: sha col1 | env col2 ──────────────────────────────────
+    const shaW = fields.has('sha') && ev.sha ? ev.sha.length * M * 0.9 : 0;
+    const envW = fields.has('environment') ? ev.environment.length * I : 0;
+    const row3 = (shaW && envW) ? shaW + COL_GAP + envW
+               : shaW ? shaW : envW;
+
+    return Math.max(MIN, Math.max(row1, row2, row3) + H_PAD + BUF);
   }
 
   private buildEdges(
