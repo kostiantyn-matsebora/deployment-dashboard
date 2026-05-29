@@ -70,6 +70,26 @@ body::after {
 /* Typography utilities */
 .mono { font-family: 'JetBrains Mono', monospace; }
 
+/* Header pickers (correlation / fields) — PrimeNG popover is appendTo="body",
+   so it must be styled globally (component :host ::ng-deep can't reach it).
+   PrimeNG v21 puts only the styleClass on the root (no `.p-popover` class),
+   tagged with data-pc-* attributes — so target `.glass-popover` directly.
+   Near-opaque so the content is readable over the busy canvas. */
+.glass-popover[data-pc-name='popover'] {
+  background: var(--popover-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--glass-edge-2);
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 64px -28px rgba(0, 0, 0, 0.6);
+}
+.glass-popover [data-pc-section='content'] { background: transparent !important; }
+/* Arrow tip matches the surface */
+.glass-popover [data-pc-section='arrow']::before,
+.glass-popover [data-pc-section='arrow']::after {
+  background: var(--popover-bg) !important;
+}
+
 /* Keyframe animations shared across components */
 @keyframes spin {
   to { transform: rotate(360deg); }

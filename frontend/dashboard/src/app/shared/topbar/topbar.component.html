@@ -125,21 +125,6 @@
                 </label>
               }
             </div>
-
-            <!-- Time window select -->
-            <div class="tw-row" [class.tw-disabled]="timeWindowDisabled()">
-              <span class="tw-label">Window</span>
-              <p-select
-                [options]="timeWindowOptions"
-                optionLabel="label"
-                optionValue="value"
-                [ngModel]="activeTimeWindow()"
-                (onChange)="onTimeWindowChange($event.value)"
-                [disabled]="timeWindowDisabled()"
-                styleClass="tw-select"
-                [appendTo]="'body'"
-              />
-            </div>
           </div>
         </p-popover>
       </div>

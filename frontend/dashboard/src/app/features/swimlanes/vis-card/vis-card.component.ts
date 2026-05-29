@@ -1,13 +1,24 @@
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  ElementRef,
+  inject,
   input,
   output,
 } from '@angular/core';
 
 import { DeploymentEvent, SwimlaneField } from '../../../core/models/deployment.model';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
+
+/** Real rendered size of a node card, reported to the swimlane layout. */
+export interface CardDims {
+  id: string;
+  width: number;
+  height: number;
+}
 
 /**
  * VisCardComponent — DAG node card for the Swimlanes view.
@@ -42,6 +53,38 @@ export class VisCardComponent {
 
   /** Emitted when the card is clicked — parent handles inspector state. */
   readonly nodeClick = output<DeploymentEvent>();
+
+  /**
+   * Emitted with the card's real rendered px size whenever it changes.
+   *
+   * This is the single bridge that lets ngx-graph size the node correctly:
+   * SVG `<foreignObject>` does not auto-grow to its HTML content, so the
+   * swimlane feeds this measured size back as the node `dimension`. The same
+   * ResizeObserver fires on first paint AND on any later live change (an SSE
+   * event mutating this card's content) — no per-event sizing logic needed.
+   */
+  readonly dims = output<CardDims>();
+
+  // ── DOM measurement ──────────────────────────────────────────
+  private readonly host = inject(ElementRef<HTMLElement>);
+
+  constructor() {
+    let ro: ResizeObserver | undefined;
+    afterNextRender(() => {
+      const card = this.host.nativeElement.querySelector('.vis-card') as HTMLElement | null;
+      if (!card) return;
+      const emit = () => {
+        // offsetWidth/Height = layout box, unaffected by any SVG zoom transform.
+        const width = card.offsetWidth;
+        const height = card.offsetHeight;
+        if (width && height) this.dims.emit({ id: this.event().id, width, height });
+      };
+      ro = new ResizeObserver(emit);
+      ro.observe(card);
+      emit();
+    });
+    inject(DestroyRef).onDestroy(() => ro?.disconnect());
+  }
 
   // ── Derived ─────────────────────────────────────────────────
 
