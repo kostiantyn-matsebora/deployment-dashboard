@@ -1,4 +1,5 @@
 using Dashboard.Shared.Contracts;
+using Dashboard.Shared.Entities;
 using Dashboard.Write.Filters;
 using Dashboard.Write.Services;
 using Microsoft.AspNetCore.Builder;
@@ -15,7 +16,12 @@ public static class WriteEndpoints
         app.MapPost("/api/deployments", HandleIngestAsync)
            .AddEndpointFilter<ApiKeyEndpointFilter>()
            .AddEndpointFilter<ValidationEndpointFilter>()
-           .WithName("IngestDeployment");
+           .WithName("IngestDeployment")
+           .WithTags("Deployments")
+           .WithSummary("Ingest a deployment event")
+           .Produces<DeploymentEvent>(StatusCodes.Status201Created)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
         return app;
     }

@@ -24,6 +24,7 @@ services:
   # ── API ─────────────────────────────────────────────────────────────────────
   api:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:latest
+    pull_policy: always
     profiles: [standalone, full, demo]
     ports:
       - "${API_PORT:-8080}:8080"
@@ -62,7 +63,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5

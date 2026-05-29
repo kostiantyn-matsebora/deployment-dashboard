@@ -2,6 +2,7 @@ using Dashboard.Read.Models;
 using Dashboard.Read.Queries;
 using Dashboard.Read.Repositories;
 using Dashboard.Read.Services;
+using Dashboard.Shared.Entities;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,11 +14,37 @@ public static class ReadEndpoints
 {
     public static IEndpointRouteBuilder MapReadEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/deployments", HandleListAsync).WithName("ListDeployments");
-        app.MapGet("/api/deployments/{id:guid}", HandleGetByIdAsync).WithName("GetDeployment");
-        app.MapGet("/api/matrix", HandleMatrixAsync).WithName("GetMatrix");
-        app.MapGet("/api/services", HandleListServicesAsync).WithName("ListServices");
-        app.MapGet("/api/environments", HandleListEnvironmentsAsync).WithName("ListEnvironments");
+        app.MapGet("/api/deployments", HandleListAsync)
+           .WithName("ListDeployments")
+           .WithTags("Deployments")
+           .WithSummary("List deployment events")
+           .Produces<DeploymentEventPage>(StatusCodes.Status200OK);
+
+        app.MapGet("/api/deployments/{id:guid}", HandleGetByIdAsync)
+           .WithName("GetDeployment")
+           .WithTags("Deployments")
+           .WithSummary("Get a deployment event by ID")
+           .Produces<DeploymentEvent>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapGet("/api/matrix", HandleMatrixAsync)
+           .WithName("GetMatrix")
+           .WithTags("Matrix")
+           .WithSummary("Get the deployment matrix")
+           .Produces<MatrixResponse>(StatusCodes.Status200OK)
+           .Produces(StatusCodes.Status304NotModified);
+
+        app.MapGet("/api/services", HandleListServicesAsync)
+           .WithName("ListServices")
+           .WithTags("Discovery")
+           .WithSummary("List all known services")
+           .Produces<DiscoveryResponse>(StatusCodes.Status200OK);
+
+        app.MapGet("/api/environments", HandleListEnvironmentsAsync)
+           .WithName("ListEnvironments")
+           .WithTags("Discovery")
+           .WithSummary("List all known environments")
+           .Produces<DiscoveryResponse>(StatusCodes.Status200OK);
         return app;
     }
 
