@@ -1,11 +1,7 @@
+/* Root app shell — matches mockup .app wrapper */
 :host {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.app-main {
-  flex: 1;
-  padding: 12px;
-  overflow: hidden;
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 14px 18px 24px;
 }
