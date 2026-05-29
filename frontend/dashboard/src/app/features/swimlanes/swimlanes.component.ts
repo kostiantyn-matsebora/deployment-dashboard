@@ -4,6 +4,7 @@ import {
   computed,
   effect,
   inject,
+  signal,
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { NgxGraphModule, Node as NgxNode, Edge as NgxEdge } from '@swimlane/ngx-graph';
@@ -17,7 +18,7 @@ import {
   TIME_WINDOWS,
   TimeWindow,
 } from '../../core/models/deployment.model';
-import { VisCardComponent } from './vis-card/vis-card.component';
+import { CardDims, VisCardComponent } from './vis-card/vis-card.component';
 import { InspectorPanelComponent } from './inspector-panel/inspector-panel.component';
 
 /** Time-window string → milliseconds. */
@@ -28,21 +29,61 @@ const TIME_WINDOW_MS: Record<TimeWindow, number> = {
   '7 days': 7 * 24 * 60 * 60_000,
 };
 
-const NODE_W = 200;
-
+/**
+ * dagre layout settings handed verbatim to ngx-graph. We do NOT compute any
+ * positions/sizes ourselves — ngx-graph + dagre own layout and edge routing.
+ *   - orientation LR  → left-to-right rank flow.
+ *   - align 'UL'      → nodes align to the upper-left of their rank, so roots
+ *                       and same-rank cards line up by their left edge instead
+ *                       of being centre-justified (ragged) within the column.
+ */
 const DAGRE_SETTINGS = {
   orientation: 'LR',
+  align: 'UL',
   rankPadding: 60,
   nodePadding: 12,
   edgePadding: 8,
   multigraph: true,
+  // Pin the layout to the (0,0) origin so the content has no leading offset;
+  // the view is then exactly the content size (see GRAPH_DIMS_PAD below).
+  marginX: 0,
+  marginY: 0,
 };
+
+/**
+ * ngx-graph pads its reported `graphDims` by 100px on EVERY side (for minimap /
+ * zoom room) — see GraphComponent.updateGraphDims. `graphDims` is therefore
+ * `content + 200` in each axis, not the drawable size. We strip that padding to
+ * recover the true content box and use it as the [view].
+ */
+const GRAPH_DIMS_PAD = 100;
+
+/** Seed size for a node before its card has been measured (avoids 0×0 layout). */
+const SEED_DIMS = { width: 200, height: 70 };
+
+/**
+ * Measured card sizes, keyed by node id, persisted for the whole app session
+ * (module scope — survives view switches, so returning to Swimlanes seeds nodes
+ * at their real size and the first layout is already correct → no re-measure
+ * churn). Cleared only on a full page reload.
+ */
+const DIM_CACHE = new Map<string, { width: number; height: number }>();
+
+/**
+ * One independent deployment chain (connected component) within a service.
+ * Each renders as its own ngx-graph so disconnected chains are laid out
+ * independently and every chain's root sits flush at the left (the mockup's
+ * per-DAG model) — instead of dagre centre-justifying unrelated roots.
+ */
+export interface SwimDag {
+  id: string;
+  nodes: NgxNode[];
+  links: NgxEdge[];
+}
 
 export interface SwimLane {
   service: string;
-  nodes: NgxNode[];
-  links: NgxEdge[];
-  graphH: number;
+  dags: SwimDag[];
 }
 
 /**
@@ -68,7 +109,6 @@ export interface SwimLane {
 export class SwimlanesComponent {
   protected readonly state = inject(AppStateService);
 
-  protected readonly NODE_W        = NODE_W;
   protected readonly dagreSettings = DAGRE_SETTINGS;
   protected readonly timeWindows   = TIME_WINDOWS;
 
@@ -76,11 +116,71 @@ export class SwimlanesComponent {
   private  readonly _update$ = new Subject<void>();
   readonly updateTrigger$    = this._update$.asObservable();
 
+  /**
+   * Per-DAG content size as reported by ngx-graph's own `graphDims` after each
+   * layout (keyed by dag id). Drives each graph's `[view]`. We read ngx-graph's
+   * output here — we never compute graph geometry ourselves.
+   */
+  private readonly dagContent = signal<Map<string, { width: number; height: number }>>(new Map());
+
+  /**
+   * Uniform stage width = the widest laid-out chain across ALL lanes (mockup
+   * parity: one shared stage, narrower chains get uniform right-hand whitespace
+   * rather than ragged widths). Height stays per-chain.
+   */
+  protected readonly stageW = computed<number>(() => {
+    const sizes = [...this.dagContent().values()];
+    return sizes.length ? Math.max(...sizes.map((s) => s.width)) : SEED_DIMS.width;
+  });
+
   constructor() {
+    // Relayout whenever the lane set changes (matrix update / view switch).
     effect(() => {
-      this.lanes(); // track — fire relayout when lanes recompute
+      this.lanes(); // track
       queueMicrotask(() => this._update$.next());
     });
+  }
+
+  /** ngx-graph [view] for a chain: uniform stage width × that chain's own height. */
+  protected viewFor(dagId: string): [number, number] {
+    const h = this.dagContent().get(dagId)?.height ?? SEED_DIMS.height;
+    return [this.stageW(), h];
+  }
+
+  /**
+   * A card reported its real rendered size. Update the cache + the live node's
+   * dimension and ask ngx-graph to relayout. Fires on first paint and on every
+   * later change (e.g. an SSE event mutating the card) via the same observer.
+   */
+  protected onCardDims(d: CardDims): void {
+    const prev = DIM_CACHE.get(d.id);
+    if (prev && prev.width === d.width && prev.height === d.height) return;
+    DIM_CACHE.set(d.id, { width: d.width, height: d.height });
+
+    // Patch the live node object in place so dagre sees the true size; mutating
+    // here (not in the computed) avoids a measure→recompute→measure loop.
+    outer:
+    for (const lane of this.lanes()) {
+      for (const dag of lane.dags) {
+        const node = dag.nodes.find((n) => n.id === d.id);
+        if (node) { node.dimension = { width: d.width, height: d.height }; break outer; }
+      }
+    }
+    this._update$.next();
+  }
+
+  /** ngx-graph finished a layout — record its computed content size for this chain. */
+  protected onDraw(dagId: string, graph: { graphDims?: { width: number; height: number } }): void {
+    const g = graph.graphDims;
+    if (!g || !g.width || !g.height) return;
+    // Strip ngx-graph's 100px-per-side minimap padding to get the true content box.
+    const width  = Math.max(1, Math.round(g.width  - 2 * GRAPH_DIMS_PAD));
+    const height = Math.max(1, Math.round(g.height - 2 * GRAPH_DIMS_PAD));
+    const cur = this.dagContent().get(dagId);
+    if (cur && cur.width === width && cur.height === height) return;
+    const next = new Map(this.dagContent());
+    next.set(dagId, { width, height });
+    this.dagContent.set(next);
   }
 
   // ── Events extracted from shared matrix snapshot ──────────
@@ -130,8 +230,11 @@ export class SwimlanesComponent {
     timeWindow: TimeWindow,
     fields: Set<SwimlaneField>,
   ): SwimLane[] {
-    const twMs  = TIME_WINDOW_MS[timeWindow];
-    const nodeH = this.calcNodeHeight(fields);
+    const twMs = TIME_WINDOW_MS[timeWindow];
+    // `fields` is intentionally unused for layout: card content (and therefore
+    // size) is driven by the template; ngx-graph measures it via the card's
+    // ResizeObserver. No field-based width/height math here.
+    void fields;
 
     return [...byService.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
@@ -140,7 +243,9 @@ export class SwimlanesComponent {
           id:        ev.id,
           label:     ev.version ?? ev.environment,
           data:      ev,
-          dimension: { width: this.calcNodeWidth(ev, fields), height: nodeH },
+          // Seed from last measured size (or a neutral default). ngx-graph
+          // overwrites this with the real card size on measure / relayout.
+          dimension: { ...(DIM_CACHE.get(ev.id) ?? SEED_DIMS) },
         }));
 
         const depIdToNodeId = new Map<string, string>(
@@ -150,90 +255,46 @@ export class SwimlanesComponent {
           svcEvents.map((ev) => [ev.id, ev]),
         );
 
-        const links   = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
-        // Height: most services form single-row chains in LR layout.
-        // Estimate 2 parallel tracks max; add padding for dagre margins.
-        const rowsEst = Math.max(1, Math.ceil(svcEvents.length / 4));
-        const graphH  = rowsEst * (nodeH + DAGRE_SETTINGS.nodePadding) + 40;
-
-        return { service, nodes, links, graphH };
+        const links = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
+        const dags = this.partitionDags(service, nodes, links);
+        return { service, dags };
       });
   }
 
   /**
-   * Estimate node card height (px) from visible fields.
-   * Mirrors mockup padding (5px top, 6px bottom) + row-gap 2px + per-row line heights:
-   *   ver-row:  ceil(10.5 × 1.2) = 13px
-   *   body-row: ceil(9.5  × 1.2) = 12px
-   *   env-row:  ceil(11   × 1.2) = 14px  (always rendered)
+   * Split a service's nodes into connected components (independent deployment
+   * chains) using the correlation edges as undirected connectivity. Each
+   * component becomes its own ngx-graph so unrelated chains lay out
+   * independently and their roots align flush-left.
    */
-  private calcNodeHeight(fields: Set<SwimlaneField>): number {
-    const TOP = 5, BOT = 6, GAP = 2;
-    const VER = 13, MID = 12, ENV = 14;
+  private partitionDags(service: string, nodes: NgxNode[], links: NgxEdge[]): SwimDag[] {
+    const adj = new Map<string, Set<string>>(nodes.map((n) => [n.id, new Set<string>()]));
+    for (const e of links) {
+      adj.get(e.source)?.add(e.target);
+      adj.get(e.target)?.add(e.source);
+    }
 
-    let h = TOP + BOT + ENV; // env-row always present
-    let gaps = 0;
-
-    if (fields.has('version') || fields.has('happened_at'))        { h += VER; gaps++; }
-    if (fields.has('ref') || fields.has('run_url') ||
-        fields.has('run_number') || fields.has('actor'))           { h += MID; gaps++; }
-    h += GAP * gaps;
-    return h;
-  }
-
-  /**
-   * Estimate node card width (px) from event content + visible fields.
-   *
-   * Font metrics:
-   *   JetBrains Mono 10.5px → ~7px/char (empirical: 50-char ver ≈ 350px content)
-   *   Inter 11px 600 → ~7.5px/char
-   * Padding: 12px left + 10px right = 22px.  Column-gap (subgrid): 20px.
-   *
-   * Row 1 — .vc-ver-row (display:flex, fld-time has margin-left:auto):
-   *   natural max-content width = verW + timeW  (no extra gap in max-content).
-   *
-   * Row 2 — .tile-attrs (subgrid col1 + col2):
-   *   ta-bl: ref (single item)
-   *   ta-br: run_url + run_number + actor — inline-flex with item-gap 5px → SUM not MAX.
-   *
-   * Row 3 — .vc-env-row (subgrid col1 + col2):
-   *   col1: sha   col2: env
-   */
-  private calcNodeWidth(ev: DeploymentEvent, fields: Set<SwimlaneField>): number {
-    const M       = 7.0;  // JetBrains Mono 10.5px char advance
-    const I       = 7.5;  // Inter 11px 600 char advance
-    const H_PAD   = 22;   // left 12 + right 10
-    const COL_GAP = 20;   // subgrid column-gap
-    const ITEM_G  = 5;    // ta-br inline-flex gap between items
-    const BUF     = 8;    // safety buffer for sub-pixel rendering
-    const MIN     = 120;
-
-    // ── Row 1: version (left) + time (right, no forced gap) ──────────
-    const verW  = fields.has('version') && ev.version    ? ev.version.length * M   : 0;
-    const timeW = fields.has('happened_at')               ? 44                      : 0; // "just now" ≈ 44px
-    const row1  = verW + timeW;
-
-    // ── Row 2: ref col1 | run cluster col2 (SUM of inline-flex items) ─
-    const refW = fields.has('ref') && ev.ref
-      ? (1 + ev.ref.length) * M : 0;                                 // ⎇ + text
-
-    const runItems: number[] = [];
-    if (fields.has('run_url')    && ev.run_url)    runItems.push(34);  // "↗ run"
-    if (fields.has('run_number') && ev.run_number) runItems.push((1 + ev.run_number.length) * M);
-    if (fields.has('actor')      && ev.actor)      runItems.push(ev.actor.length * M);
-    const runW = runItems.length
-      ? runItems.reduce((a, b) => a + b, 0) + ITEM_G * (runItems.length - 1)
-      : 0;
-    const row2 = (refW && runW) ? refW + COL_GAP + runW
-               : refW ? refW : runW;
-
-    // ── Row 3: sha col1 | env col2 ──────────────────────────────────
-    const shaW = fields.has('sha') && ev.sha ? ev.sha.length * M * 0.9 : 0;
-    const envW = fields.has('environment') ? ev.environment.length * I : 0;
-    const row3 = (shaW && envW) ? shaW + COL_GAP + envW
-               : shaW ? shaW : envW;
-
-    return Math.max(MIN, Math.max(row1, row2, row3) + H_PAD + BUF);
+    const seen = new Set<string>();
+    const dags: SwimDag[] = [];
+    let idx = 0;
+    for (const start of nodes) {
+      if (seen.has(start.id)) continue;
+      // BFS over undirected adjacency to collect one component.
+      const compIds = new Set<string>();
+      const queue = [start.id];
+      seen.add(start.id);
+      while (queue.length) {
+        const cur = queue.shift()!;
+        compIds.add(cur);
+        for (const nb of adj.get(cur) ?? []) {
+          if (!seen.has(nb)) { seen.add(nb); queue.push(nb); }
+        }
+      }
+      const compNodes = nodes.filter((n) => compIds.has(n.id));
+      const compLinks = links.filter((l) => compIds.has(l.source) && compIds.has(l.target));
+      dags.push({ id: `${service}#${idx++}`, nodes: compNodes, links: compLinks });
+    }
+    return dags;
   }
 
   private buildEdges(
@@ -262,7 +323,7 @@ export class SwimlanesComponent {
 
     const fieldMap: Partial<Record<CorrelationPredicate, keyof DeploymentEvent>> = {
       'same sha': 'sha', 'same run_number': 'run_number',
-      'same actor': 'actor', 'same version': 'version',
+      'same actor': 'actor', 'same version': 'version', 'same ref': 'ref',
     };
     const field = fieldMap[predicate];
     if (!field) return [];
