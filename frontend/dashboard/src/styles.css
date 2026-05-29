@@ -1,0 +1,81 @@
+/* Global styles — Deployment Dashboard
+   Spec: docs/design/design-tokens.md + docs/design/behavior.md */
+
+@import 'styles/tokens.css';
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--ink-0);
+  background: var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Two radial accent washes behind all content.
+   Spec: docs/design/design-tokens.md §Background Canvas */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(900px 700px at 8% -10%, var(--indigo-wash), transparent 60%),
+    radial-gradient(1100px 800px at 110% 110%, var(--teal-wash), transparent 60%),
+    linear-gradient(180deg, var(--bg-0), var(--bg-1) 100%);
+  z-index: -2;
+  pointer-events: none;
+}
+
+/* Hairline grid masked to soft center ellipse.
+   Spec: docs/design/design-tokens.md §Background Canvas */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 30%, transparent 100%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* Typography utilities */
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Keyframe animations shared across components */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 1px var(--amber-edge), 0 0 28px -8px var(--amber-glow); }
+  50%       { box-shadow: 0 0 0 1px var(--amber-edge), 0 0 40px -4px var(--amber-glow); }
+}
+
+@keyframes pulseRing {
+  0%   { box-shadow: 0 0 0 0 var(--emerald-glow); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}

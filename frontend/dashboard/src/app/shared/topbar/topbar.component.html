@@ -1,0 +1,137 @@
+<header class="topbar">
+
+  <!-- Brand ─────────────────────────────────────────────── -->
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true"></div>
+    <div class="brand-name">
+      <span class="brand-line1">DEPLOYMENT</span>
+      <span class="brand-line2">DASHBOARD</span>
+    </div>
+  </div>
+
+  <!-- View tabs ──────────────────────────────────────────── -->
+  <div class="topbar-tabs">
+    <p-selectButton
+      [options]="viewOptions"
+      optionLabel="label"
+      optionValue="value"
+      [ngModel]="activeView()"
+      (onChange)="onViewChange($event.value)"
+      [allowEmpty]="false"
+      [unstyled]="true"
+      styleClass="view-tabs"
+    />
+  </div>
+
+  <!-- KPI strip ──────────────────────────────────────────── -->
+  <div class="kpi-strip" role="group" aria-label="Deployment KPIs">
+    <div class="kpi-card">
+      <span class="kpi-value">{{ kpi().services }}</span>
+      <span class="kpi-label">SERVICES</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-value">{{ kpi().environments }}</span>
+      <span class="kpi-label">ENVIRONMENTS</span>
+    </div>
+    <div class="kpi-card" [class.is-warn]="kpi().inFlight > 0">
+      <span class="kpi-value">{{ kpi().inFlight }}</span>
+      <span class="kpi-label">IN-FLIGHT</span>
+    </div>
+    <div class="kpi-card" [class.is-bad]="kpi().failed > 0">
+      <span class="kpi-value">{{ kpi().failed }}</span>
+      <span class="kpi-label">FAILED</span>
+    </div>
+  </div>
+
+  <!-- Matrix-only controls: filter + failures toggle ──────── -->
+  @if (isMatrix()) {
+    <div class="filter-section">
+      <input
+        pInputText
+        type="text"
+        placeholder="Filter services…"
+        class="hdr-filter-input"
+        [ngModel]="serviceFilter()"
+        (ngModelChange)="onFilterChange($event)"
+        aria-label="Filter services by name"
+      />
+      <label class="failures-toggle-wrap" [class.is-on]="failuresOnly()">
+        <p-toggleSwitch
+          [ngModel]="failuresOnly()"
+          (ngModelChange)="onFailuresOnlyChange($event)"
+          [unstyled]="true"
+          aria-label="Show failures only"
+        />
+        <span class="toggle-label">Failures</span>
+      </label>
+    </div>
+  }
+
+  <!-- Controls: icon buttons + theme + live ──────────────── -->
+  <div class="topbar-controls">
+
+    <!-- Fields picker button (shared across views) -->
+    <button
+      class="icon-btn"
+      title="Toggle visible fields"
+      aria-label="Toggle visible fields"
+      (click)="toggleFieldsPopover($event)"
+    >
+      <svg lucideLayoutGrid [size]="15" aria-hidden="true"></svg>
+    </button>
+
+    <!-- Correlation picker button (Swimlanes only) -->
+    @if (!isMatrix()) {
+      <button
+        class="icon-btn"
+        title="Correlation settings"
+        aria-label="Correlation settings"
+        (click)="toggleCorrelationPopover($event)"
+      >
+        <svg lucideSettings2 [size]="15" aria-hidden="true"></svg>
+      </button>
+    }
+
+    <!-- Theme switcher — p-selectButton 3-state -->
+    <p-selectButton
+      [options]="themeOptions"
+      optionLabel="label"
+      optionValue="value"
+      [ngModel]="activeTheme()"
+      (onChange)="onThemeChange($event.value)"
+      [allowEmpty]="false"
+      [unstyled]="true"
+      styleClass="theme-switcher"
+      aria-label="Theme"
+    />
+
+    <!-- Live / SSE indicator -->
+    <div
+      class="live-indicator"
+      [class.is-live]="sseConnected()"
+      [title]="sseConnected() ? 'Live updates connected' : 'Connecting…'"
+      role="status"
+      [attr.aria-label]="sseConnected() ? 'Live updates connected' : 'Connecting to live updates'"
+    >
+      <span class="pulse-dot" aria-hidden="true"></span>
+      <span class="live-label">LIVE</span>
+    </div>
+  </div>
+
+</header>
+
+<!-- Fields picker popover (content implemented in P4) ────── -->
+<p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+  <div class="popover-placeholder">
+    <span class="popover-title">VISIBLE FIELDS</span>
+    <p class="popover-coming">Field picker — Phase 4</p>
+  </div>
+</p-popover>
+
+<!-- Correlation picker popover (content implemented in P4) ── -->
+<p-popover #correlationPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+  <div class="popover-placeholder">
+    <span class="popover-title">CORRELATION</span>
+    <p class="popover-coming">Correlation picker — Phase 4</p>
+  </div>
+</p-popover>

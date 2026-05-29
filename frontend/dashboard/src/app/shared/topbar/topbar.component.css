@@ -1,0 +1,399 @@
+/* TopbarComponent — Spec: docs/design/components.md §Topbar */
+
+:host {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  /* Topbar must be z-index 30 so popovers render above sibling backdrop-filter contexts */
+}
+
+/* ── Main bar ─────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 12px 0;
+  padding: 10px 16px;
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 24px 64px -28px rgba(0, 0, 0, 0.55);
+}
+
+/* ── Brand ───────────────────────────────────────────────── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 32×32 radial-gradient square per spec */
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: radial-gradient(
+    circle at 35% 35%,
+    rgba(var(--accent-rgb), 0.95),
+    rgba(var(--accent-rgb), 0.25) 72%
+  );
+  flex-shrink: 0;
+}
+
+.brand-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brand-line1,
+.brand-line2 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink-0);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.brand-line2 {
+  color: var(--ink-2);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+}
+
+/* ── View tabs — p-selectButton ─────────────────────────── */
+.topbar-tabs {
+  display: flex;
+  align-items: center;
+}
+
+:host ::ng-deep .view-tabs {
+  display: flex;
+  background: var(--tabs-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+:host ::ng-deep .view-tabs .p-togglebutton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 18px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  outline: none;
+}
+
+:host ::ng-deep .view-tabs .p-togglebutton .p-togglebutton-label {
+  pointer-events: none;
+}
+
+:host ::ng-deep .view-tabs .p-togglebutton-checked {
+  background: linear-gradient(
+    135deg,
+    rgba(var(--accent-rgb), 0.65),
+    rgba(var(--accent-rgb), 0.35)
+  );
+  color: var(--ink-0);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+}
+
+/* ── KPI strip ───────────────────────────────────────────── */
+.kpi-strip {
+  display: flex;
+  gap: 6px;
+}
+
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--kpi-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  min-width: 54px;
+}
+
+.kpi-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink-0);
+  line-height: 1.3;
+}
+
+.kpi-label {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  white-space: nowrap;
+}
+
+.kpi-card.is-warn .kpi-value { color: var(--amber); }
+.kpi-card.is-bad .kpi-value  { color: var(--coral); }
+
+/* ── Filter section (Matrix-only) ──────────────────────── */
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hdr-filter-input {
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  color: var(--ink-0);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+  width: 160px;
+  transition: border-color 0.15s;
+}
+
+.hdr-filter-input::placeholder { color: var(--ink-3); }
+
+.hdr-filter-input:focus {
+  border-color: rgba(var(--accent-rgb), 0.5);
+}
+
+/* Failures toggle pill */
+.failures-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  user-select: none;
+}
+
+.failures-toggle-wrap.is-on {
+  border-color: var(--coral-edge);
+}
+
+.toggle-label {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.failures-toggle-wrap.is-on .toggle-label {
+  color: var(--coral);
+}
+
+/* p-toggleSwitch unstyled overrides */
+:host ::ng-deep .failures-toggle-wrap .p-toggleswitch {
+  display: inline-flex;
+  align-items: center;
+  width: 28px;
+  height: 16px;
+}
+
+:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-slider {
+  display: block;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--switch-off-bg);
+  border: 1px solid var(--glass-edge);
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+  cursor: pointer;
+}
+
+:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--switch-knob);
+  transition: transform 0.2s;
+}
+
+:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-checked .p-toggleswitch-slider {
+  background: var(--coral-wash);
+  border-color: var(--coral-edge);
+}
+
+:host ::ng-deep .failures-toggle-wrap .p-toggleswitch-checked .p-toggleswitch-slider::after {
+  transform: translateX(12px);
+  background: var(--coral);
+}
+
+/* ── Controls (right side) ──────────────────────────────── */
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Icon buttons — ▦ fields + ⚙ correlation */
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  color: var(--ink-0);
+  border-color: var(--glass-edge-2);
+  background: var(--glass-strong);
+}
+
+/* Theme switcher — 3-state p-selectButton */
+:host ::ng-deep .theme-switcher {
+  display: flex;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 1px;
+}
+
+:host ::ng-deep .theme-switcher .p-togglebutton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  outline: none;
+}
+
+:host ::ng-deep .theme-switcher .p-togglebutton-checked {
+  background: rgba(var(--accent-rgb), 0.25);
+  color: var(--ink-0);
+}
+
+/* ── Live indicator ─────────────────────────────────────── */
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  padding: 5px 11px;
+  flex-shrink: 0;
+}
+
+.live-label {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.live-indicator.is-live {
+  border-color: var(--emerald-edge);
+}
+
+.live-indicator.is-live .live-label {
+  color: var(--emerald);
+}
+
+.live-indicator.is-live .pulse-dot {
+  background: var(--emerald);
+  animation: pulseRing 1.8s ease-out infinite;
+}
+
+/* ── Popover (placeholder content, full content in P4) ──── */
+:host ::ng-deep .glass-popover {
+  background: var(--popover-bg);
+  border: 1px solid var(--glass-edge-2);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.45);
+  min-width: 200px;
+}
+
+:host ::ng-deep .glass-popover .p-popover-content {
+  padding: 0;
+}
+
+.popover-placeholder {
+  padding: 14px 16px;
+}
+
+.popover-title {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.popover-coming {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin: 0;
+}
