@@ -12,7 +12,8 @@
   z-index: 30;
   display: flex;
   align-items: center;
-  gap: 14px;
+  flex-wrap: wrap;           /* wrap to new line instead of overlapping */
+  gap: 10px 14px;            /* row-gap 10px so wrapped rows breathe */
   padding: 14px 20px;
   background: var(--glass);
   backdrop-filter: blur(18px) saturate(135%);
@@ -25,7 +26,8 @@
 }
 
 /* ── Spacer ──────────────────────────────────────────────── */
-.topbar-spacer { flex: 1; }
+/* grows on line 1 to push controls right; collapses on wrapped lines */
+.topbar-spacer { flex: 1 1 0; min-width: 0; }
 
 /* ── Brand ───────────────────────────────────────────────── */
 .brand {
@@ -36,6 +38,7 @@
   border-right: 1px solid var(--glass-edge);
   margin-right: 4px;
   flex-shrink: 0;
+  flex-grow: 0;
 }
 
 /* 32×32 radial-gradient square — exact mockup gradient + shadow */
@@ -68,6 +71,7 @@
 .tabs {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 /* Override PrimeNG SelectButton wrapper */
@@ -138,7 +142,8 @@
   border-radius: 10px;
   background: var(--kpi-bg);
   border: 1px solid var(--glass-edge);
-  min-width: 72px;
+  min-width: 0;              /* allow shrinking below 72px */
+  flex-shrink: 1;
 }
 
 .kpi-label {
@@ -146,6 +151,7 @@
   color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.7px;
+  white-space: nowrap;       /* prevent "IN-FLIGHT" from wrapping inside card */
 }
 
 .kpi-value {
@@ -154,6 +160,7 @@
   font-weight: 600;
   color: var(--ink-0);
   margin-top: 2px;
+  white-space: nowrap;
 }
 
 .kpi.is-warn .kpi-value { color: var(--amber); }
@@ -177,8 +184,8 @@
   color: var(--ink-0);
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  width: 200px;
-  min-width: 180px;
+  width: 180px;
+  min-width: 80px;           /* allow aggressive compression before wrapping */
   max-width: 220px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -255,6 +262,7 @@
   border-radius: 999px;
   margin-left: 6px;
   flex-shrink: 0;
+  flex-grow: 0;
 }
 
 .theme-switch .ts-opt {
@@ -301,6 +309,7 @@
   padding-left: 10px;
   margin-left: 4px;
   border-left: 1px solid var(--glass-edge);
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -351,6 +360,7 @@
   letter-spacing: 0.4px;
   text-transform: uppercase;
   flex-shrink: 0;
+  flex-grow: 0;
 }
 
 .live-pill.is-live {
