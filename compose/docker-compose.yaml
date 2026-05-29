@@ -3,18 +3,21 @@ name: deployment-dashboard
 # ─────────────────────────────────────────────────────────────────────────────
 # Profiles
 #
-#   standalone  — Gateway + API only; connect to an external PostgreSQL instance.
+#   standalone  — Gateway + Frontend + API; connect to an external PostgreSQL instance.
 #                 Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 #
-#   full        — Gateway + API + managed PostgreSQL (Docker-volume-backed).
+#   full        — Gateway + Frontend + API + managed PostgreSQL (Docker-volume-backed).
 #                 Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
 #
-#   demo        — Gateway + API + managed PostgreSQL. Suitable for local evaluation only.
+#   demo        — Gateway + Frontend + API + managed PostgreSQL. Local evaluation only.
 #                 Use docker-compose.demo.yaml override — no vars required.
 #                 CORS: off (gateway mode)  |  Retention: 30 days
 #
+# Per-service profiles (gateway / frontend / api / postgres) allow a single
+# service to be targeted in isolation, e.g. `--profile frontend`.
+#
 # The gateway is the single public surface (SAD §7, GW1).
-# The API and PostgreSQL are internal-only; only the gateway exposes a port.
+# The frontend, API and PostgreSQL are internal-only; only the gateway exposes a port.
 #
 # Usage:
 #   docker compose --profile standalone up
@@ -34,15 +37,34 @@ services:
     environment:
       # Internal API upstream — fixed to the api service name in this network.
       API_UPSTREAM: "api:8080"
-      # Internal frontend upstream.  Requests to / return 502 until a frontend
-      # container is running; all /api/* and probe routes work without it.
-      FRONTEND_UPSTREAM: "${FRONTEND_UPSTREAM:-frontend:8080}"
+      # Internal frontend upstream.  The frontend image (nginx:alpine) listens
+      # on :80.  Requests to / return 502 until the frontend container is
+      # running; all /api/* and probe routes work without it.
+      FRONTEND_UPSTREAM: "${FRONTEND_UPSTREAM:-frontend:80}"
     depends_on:
       api:
         condition: service_healthy
+      frontend:
+        condition: service_healthy
+        required: false   # frontend may be omitted (gateway serves /api/* alone)
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Frontend (Angular SPA, nginx-served) ─────────────────────────────────────
+  frontend:
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-spa:latest
+    pull_policy: always
+    profiles: [frontend, standalone, full, demo]
+    # Internal-only — the gateway proxies / to this service; no published port.
+    restart: unless-stopped
+    healthcheck:
+      # nginx:alpine ships busybox wget (no curl); 200 on / means the SPA serves.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -52,7 +74,7 @@ services:
   api:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:latest
     pull_policy: always
-    profiles: [standalone, full, demo]
+    profiles: [api, standalone, full, demo]
     environment:
       # Connection string assembled from individual parts so each can be
       # overridden independently.  Override POSTGRES_HOST for standalone.
