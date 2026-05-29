@@ -3,7 +3,6 @@
 
 BeforeAll {
     $script:HookPath = (Resolve-Path (Join-Path $PSScriptRoot 'Invoke-PreCommitDocsHook.ps1')).Path
-    # Dot-source in library mode — defines functions, skips entry block.
     . $script:HookPath -AsLibrary
 
     # ----- Fake filesystem helpers -----
@@ -35,9 +34,19 @@ BeforeAll {
         }.GetNewClosure()
     }
 
-    # Consistent docs/ tree matching the live repo layout.
+    # Consistent tree rooted at '.' — mirrors a real repo layout.
+    # node_modules is listed under '.' to verify ExcludeDirs skips it.
     function Get-ConsistentTree {
         return @{
+            '.'                  = @(
+                @{ Name = 'docs'; IsDir = $true },
+                @{ Name = 'backend'; IsDir = $true },
+                @{ Name = 'scripts'; IsDir = $true },
+                @{ Name = 'node_modules'; IsDir = $true }
+            )
+            'backend'            = @()
+            'scripts'            = @()
+            # node_modules excluded by default ExcludeDirs — not traversed, not in tree
             'docs'               = @(
                 @{ Name = 'SAD.md'; IsDir = $false },
                 @{ Name = 'FRONTEND_REQUIREMENTS.md'; IsDir = $false },
@@ -135,37 +144,72 @@ Describe 'ConvertFrom-GitNameStatus' {
     It 'returns empty array on whitespace-only input' { @(ConvertFrom-GitNameStatus -NameStatus "   `n`n  ").Count | Should -Be 0 }
 }
 
-Describe 'Test-IsDocsPath' {
-    It 'matches docs/ subpath' { Test-IsDocsPath -Path 'docs/api/README.md' | Should -BeTrue }
-    It 'matches docs/ deep subpath' { Test-IsDocsPath -Path 'docs/design/mockup/index.html' | Should -BeTrue }
-    It 'matches CLAUDE.md exactly' { Test-IsDocsPath -Path 'CLAUDE.md' | Should -BeTrue }
-    It 'rejects src/ path' { Test-IsDocsPath -Path 'src/Program.cs' | Should -BeFalse }
-    It 'rejects mockup/ path' { Test-IsDocsPath -Path 'mockup/variant-c/index.html' | Should -BeFalse }
-    It 'rejects empty string' { Test-IsDocsPath -Path '' | Should -BeFalse }
-    It 'rejects null' { Test-IsDocsPath -Path $null | Should -BeFalse }
-    It 'rejects "doc/" (singular) lookalike' { Test-IsDocsPath -Path 'doc/foo.md' | Should -BeFalse }
+Describe 'Test-IsMarkdownPath' {
+    It 'matches any .md file in docs/' { Test-IsMarkdownPath -Path 'docs/api/README.md' | Should -BeTrue }
+    It 'matches CLAUDE.md' { Test-IsMarkdownPath -Path 'CLAUDE.md' | Should -BeTrue }
+    It 'matches AGENTS.md' { Test-IsMarkdownPath -Path 'AGENTS.md' | Should -BeTrue }
+    It 'matches .md file in any directory' { Test-IsMarkdownPath -Path 'src/notes.md' | Should -BeTrue }
+    It 'matches nested .md path' { Test-IsMarkdownPath -Path 'a/b/c/file.md' | Should -BeTrue }
+    It 'rejects .cs file' { Test-IsMarkdownPath -Path 'src/Program.cs' | Should -BeFalse }
+    It 'rejects .html file' { Test-IsMarkdownPath -Path 'docs/design/mockup/index.html' | Should -BeFalse }
+    It 'rejects .yaml file' { Test-IsMarkdownPath -Path 'docs/api/openapi.yaml' | Should -BeFalse }
+    It 'rejects empty string' { Test-IsMarkdownPath -Path '' | Should -BeFalse }
+    It 'rejects null' { Test-IsMarkdownPath -Path $null | Should -BeFalse }
 }
 
-Describe 'Test-TouchesDocs' {
-    It 'true when a Path is under docs/' {
-        Test-TouchesDocs -Changes @(@{ Status = 'M'; Path = 'docs/SAD.md'; OldPath = $null }) | Should -BeTrue
+Describe 'Test-TouchesIndexedContent' {
+    It 'true when a Path is a .md file' {
+        Test-TouchesIndexedContent -Changes @(@{ Status = 'M'; Path = 'docs/SAD.md'; OldPath = $null }) | Should -BeTrue
     }
     It 'true when CLAUDE.md changed' {
-        Test-TouchesDocs -Changes @(@{ Status = 'M'; Path = 'CLAUDE.md'; OldPath = $null }) | Should -BeTrue
+        Test-TouchesIndexedContent -Changes @(@{ Status = 'M'; Path = 'CLAUDE.md'; OldPath = $null }) | Should -BeTrue
     }
-    It 'true when only an OldPath (rename source) is under docs/' {
-        Test-TouchesDocs -Changes @(@{ Status = 'R'; Path = 'mockup/x.html'; OldPath = 'docs/design/mockup/x.html' }) | Should -BeTrue
+    It 'true when .md file in any directory added' {
+        Test-TouchesIndexedContent -Changes @(@{ Status = 'A'; Path = 'notes/meeting.md'; OldPath = $null }) | Should -BeTrue
     }
-    It 'false when no change touches docs' {
-        Test-TouchesDocs -Changes @(@{ Status = 'M'; Path = 'src/foo.cs'; OldPath = $null }) | Should -BeFalse
+    It 'true when OldPath is a .md file (rename source)' {
+        Test-TouchesIndexedContent -Changes @(@{ Status = 'R'; Path = 'docs/api/new.md'; OldPath = 'docs/api/old.md' }) | Should -BeTrue
     }
-    It 'false on empty change set' { Test-TouchesDocs -Changes @() | Should -BeFalse }
+    It 'false when no .md file touched' {
+        Test-TouchesIndexedContent -Changes @(@{ Status = 'M'; Path = 'src/foo.cs'; OldPath = $null }) | Should -BeFalse
+    }
+    It 'false when only a non-markdown file in docs/ touched' {
+        Test-TouchesIndexedContent -Changes @(@{ Status = 'M'; Path = 'docs/api/openapi.yaml'; OldPath = $null }) | Should -BeFalse
+    }
+    It 'false on empty change set' { Test-TouchesIndexedContent -Changes @() | Should -BeFalse }
 }
 
 Describe 'Test-IsHiddenName' {
     It 'flags dot-prefixed' { Test-IsHiddenName -Name '.git' | Should -BeTrue }
     It 'flags underscore-prefixed (Jekyll)' { Test-IsHiddenName -Name '_drafts' | Should -BeTrue }
     It 'passes a normal name' { Test-IsHiddenName -Name 'api' | Should -BeFalse }
+}
+
+Describe 'Find-HostRootPromptFile' {
+    It 'returns CLAUDE.md when present' {
+        $reader = New-FileReader -Files @{ 'CLAUDE.md' = '## Sources of truth' }
+        Find-HostRootPromptFile -FileReader $reader | Should -Be 'CLAUDE.md'
+    }
+    It 'falls back to AGENTS.md when CLAUDE.md absent' {
+        $reader = New-FileReader -Files @{ 'AGENTS.md' = '## Sources of truth' }
+        Find-HostRootPromptFile -FileReader $reader | Should -Be 'AGENTS.md'
+    }
+    It 'falls back to .agent/INDEX.md when both absent' {
+        $reader = New-FileReader -Files @{ '.agent/INDEX.md' = '## Sources of truth' }
+        Find-HostRootPromptFile -FileReader $reader | Should -Be '.agent/INDEX.md'
+    }
+    It 'returns empty string when none found' {
+        $reader = New-FileReader -Files @{}
+        Find-HostRootPromptFile -FileReader $reader | Should -Be ''
+    }
+    It 'prefers CLAUDE.md over AGENTS.md when both present' {
+        $reader = New-FileReader -Files @{ 'CLAUDE.md' = 'x'; 'AGENTS.md' = 'y' }
+        Find-HostRootPromptFile -FileReader $reader | Should -Be 'CLAUDE.md'
+    }
+    It 'skips whitespace-only files' {
+        $reader = New-FileReader -Files @{ 'CLAUDE.md' = "   `n`t  "; 'AGENTS.md' = 'content' }
+        Find-HostRootPromptFile -FileReader $reader | Should -Be 'AGENTS.md'
+    }
 }
 
 Describe 'Get-DeclaredChildren' {
@@ -232,7 +276,7 @@ Describe 'Get-ExpectedChildren' {
     }
     It 'descends into a sub-dir WITHOUT index.md and nests the entries' {
         $tree = @{
-            'docs'       = @(@{ Name = 'index.md'; IsDir = $false }, @{ Name = 'guides'; IsDir = $true })
+            'docs'        = @(@{ Name = 'index.md'; IsDir = $false }, @{ Name = 'guides'; IsDir = $true })
             'docs/guides' = @(@{ Name = 'intro.md'; IsDir = $false })
         }
         $lister = New-DirLister -Tree $tree
@@ -249,7 +293,7 @@ Describe 'Get-ExpectedChildren' {
 }
 
 Describe 'Get-IndexDirs' {
-    It 'finds every directory holding an index.md' {
+    It 'finds every directory holding an index.md under docs/' {
         $lister = New-DirLister -Tree (Get-ConsistentTree)
         $result = Get-IndexDirs -Dir 'docs' -DirLister $lister
         $result | Should -Contain 'docs'
@@ -257,6 +301,32 @@ Describe 'Get-IndexDirs' {
         $result | Should -Contain 'docs/design'
         $result | Should -Contain 'docs/design/mockup'
         @($result).Count | Should -Be 4
+    }
+    It 'finds index dirs when scanning from repo root' {
+        $lister = New-DirLister -Tree (Get-ConsistentTree)
+        $result = Get-IndexDirs -Dir '.' -DirLister $lister -ExcludeDirs @('node_modules')
+        $result | Should -Contain 'docs'
+        $result | Should -Contain 'docs/api'
+        $result | Should -Contain 'docs/design'
+        $result | Should -Contain 'docs/design/mockup'
+        $result | Should -Not -Contain 'backend'
+        $result | Should -Not -Contain 'scripts'
+        @($result).Count | Should -Be 4
+    }
+    It 'does not recurse into excluded directories' {
+        $tree = @{
+            '.'              = @(
+                @{ Name = 'docs'; IsDir = $true },
+                @{ Name = 'node_modules'; IsDir = $true }
+            )
+            'docs'           = @(@{ Name = 'index.md'; IsDir = $false })
+            'node_modules'   = @(@{ Name = 'index.md'; IsDir = $false })
+        }
+        $lister = New-DirLister -Tree $tree
+        $result = Get-IndexDirs -Dir '.' -DirLister $lister -ExcludeDirs @('node_modules')
+        $result | Should -Contain 'docs'
+        $result | Should -Not -Contain 'node_modules'
+        $result | Should -Not -Contain './node_modules'
     }
     It 'returns empty when root has no index.md anywhere' {
         $lister = New-DirLister -Tree @{ 'docs' = @(@{ Name = 'loose.md'; IsDir = $false }) }
@@ -329,7 +399,6 @@ Describe 'Get-DocsDriftQueue' {
         @(Get-DocsDriftQueue -DirLister $lister -FileReader $reader).Count | Should -Be 0
     }
     It 'does not flag drift for hand-curated children ordering' {
-        # design/index.md uses a non-alphabetical order; set comparison must pass.
         $lister = New-DirLister -Tree (Get-ConsistentTree)
         $reader = New-FileReader -Files (Get-ConsistentFiles)
         $queue = Get-DocsDriftQueue -DirLister $lister -FileReader $reader
@@ -337,7 +406,7 @@ Describe 'Get-DocsDriftQueue' {
     }
     It 'queues /docs-index when an index omits a present file' {
         $files = Get-ConsistentFiles
-        $files['docs/api/index.md'] = New-IndexMd @('/openapi.yaml')   # dropped /api-guidelines
+        $files['docs/api/index.md'] = New-IndexMd @('/openapi.yaml')
         $lister = New-DirLister -Tree (Get-ConsistentTree)
         $reader = New-FileReader -Files $files
         $queue = Get-DocsDriftQueue -DirLister $lister -FileReader $reader
@@ -359,9 +428,35 @@ Describe 'Get-DocsDriftQueue' {
         $queue = Get-DocsDriftQueue -DirLister $lister -FileReader $reader
         @($queue | Where-Object { $_.Command -eq '/docs-registry-sync' }).Count | Should -Be 1
     }
-    It 'returns empty when nothing under docs is indexed' {
-        $lister = New-DirLister -Tree @{ 'docs' = @(@{ Name = 'loose.md'; IsDir = $false }) }
+    It 'queues /docs-registry-sync when AGENTS.md is the host file and omits a ROOT' {
+        $files = Get-ConsistentFiles
+        $files.Remove('CLAUDE.md')
+        $files['AGENTS.md'] = "## Sources of truth`n`n- nothing here`n"
+        $lister = New-DirLister -Tree (Get-ConsistentTree)
+        $reader = New-FileReader -Files $files
+        $queue = Get-DocsDriftQueue -DirLister $lister -FileReader $reader
+        @($queue | Where-Object { $_.Command -eq '/docs-registry-sync' }).Count | Should -Be 1
+    }
+    It 'returns empty when nothing under the scan root is indexed' {
+        $lister = New-DirLister -Tree @{ '.' = @(@{ Name = 'docs'; IsDir = $true }); 'docs' = @(@{ Name = 'loose.md'; IsDir = $false }) }
         $reader = New-FileReader -Files @{}
+        @(Get-DocsDriftQueue -DirLister $lister -FileReader $reader).Count | Should -Be 0
+    }
+    It 'does not recurse into excluded dirs even when scanning from root' {
+        $tree = @{
+            '.'            = @(
+                @{ Name = 'docs'; IsDir = $true },
+                @{ Name = 'node_modules'; IsDir = $true }
+            )
+            'docs'         = @(@{ Name = 'index.md'; IsDir = $false }, @{ Name = 'page.md'; IsDir = $false })
+            'node_modules' = @(@{ Name = 'index.md'; IsDir = $false })
+        }
+        $files = @{
+            'docs/index.md'         = New-IndexMd @('/page')
+            'CLAUDE.md'             = "## Sources of truth`n`n- [docs/](docs/) — root.`n"
+        }
+        $lister = New-DirLister -Tree $tree
+        $reader = New-FileReader -Files $files
         @(Get-DocsDriftQueue -DirLister $lister -FileReader $reader).Count | Should -Be 0
     }
 }
@@ -417,9 +512,16 @@ Describe 'Invoke-PreCommitDocsHook integration' {
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'not-git-commit'
     }
-    It 'exits 0 with reason no-docs-change when commit avoids docs' {
+    It 'exits 0 with reason no-docs-change when commit avoids .md files' {
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "M`tsrc/Program.cs" }
+        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader
+        $result.ExitCode | Should -Be 0
+        $result.Reason | Should -Be 'no-docs-change'
+    }
+    It 'exits 0 with reason no-docs-change when only non-markdown docs file staged' {
+        $json = '{"tool_input":{"command":"git commit -m foo"}}'
+        $runner = { param($Argv) "M`tdocs/api/openapi.yaml" }
         $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'no-docs-change'
@@ -431,12 +533,19 @@ Describe 'Invoke-PreCommitDocsHook integration' {
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'no-docs-drift'
     }
+    It 'exits 0 (no-docs-drift) when .md file outside docs/ staged and tree is consistent' {
+        $json = '{"tool_input":{"command":"git commit -m foo"}}'
+        $runner = { param($Argv) "M`tREADME.md" }
+        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader
+        $result.ExitCode | Should -Be 0
+        $result.Reason | Should -Be 'no-docs-drift'
+    }
     It 'exits 2 with a queue when an index is drifted' {
         $files = Get-ConsistentFiles
         $files['docs/api/index.md'] = New-IndexMd @('/openapi.yaml')
         $reader = New-FileReader -Files $files
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
-        $runner = { param($Argv) "M`tdocs/api/openapi.yaml" }
+        $runner = { param($Argv) "M`tdocs/api/api-guidelines.md" }
         $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader
         $result.ExitCode | Should -Be 2
         $result.Reason | Should -Be 'docs-drift-detected'
@@ -455,11 +564,29 @@ Describe 'Invoke-PreCommitDocsHook integration' {
     }
     It 'message surfaces the queue contents' {
         $files = Get-ConsistentFiles
-        $files['docs/design/index.md'] = New-IndexMd @('/README')   # drifted
+        $files['docs/design/index.md'] = New-IndexMd @('/README')
         $reader = New-FileReader -Files $files
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "A`tdocs/design/components.md" }
         $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader
         $result.Message | Should -Match '/docs-index docs/design/'
+    }
+    It 'exits 0 in standalone mode when tree is consistent' {
+        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -DirLister $script:lister -FileReader $script:reader
+        $result.ExitCode | Should -Be 0
+        $result.Reason | Should -Be 'no-docs-drift'
+    }
+    It 'exits 2 in standalone mode when drift detected' {
+        $files = Get-ConsistentFiles
+        $files['docs/api/index.md'] = New-IndexMd @('/openapi.yaml')
+        $reader = New-FileReader -Files $files
+        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -DirLister $script:lister -FileReader $reader
+        $result.ExitCode | Should -Be 2
+        $result.Reason | Should -Be 'docs-drift-detected'
+        @($result.Queue | Where-Object { $_.Args -eq 'docs/api/' }).Count | Should -Be 1
+    }
+    It 'standalone mode does not require HookInputJson or GitCommandRunner' {
+        # No exception should be thrown when neither is provided.
+        { Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -DirLister $script:lister -FileReader $script:reader } | Should -Not -Throw
     }
 }
