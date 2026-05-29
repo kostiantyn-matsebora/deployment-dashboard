@@ -5,6 +5,7 @@ using Dashboard.Read;
 using Dashboard.Shared.Data;
 using Dashboard.Write;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +31,9 @@ builder.Services.AddWriteServices();
 // ── Read services ─────────────────────────────────────────────────────────────
 builder.Services.AddReadServices();
 
+// ── OpenAPI ───────────────────────────────────────────────────────────────────
+builder.Services.AddOpenApi();
+
 var app = builder.Build();
 
 // ── Migrations ────────────────────────────────────────────────────────────────
@@ -41,7 +45,12 @@ using (var scope = app.Services.CreateScope())
 
 app.UseExceptionHandler();
 
+// ── OpenAPI / Scalar ──────────────────────────────────────────────────────────
+app.MapOpenApi();
+app.MapScalarApiReference();
+
 // ── Endpoints ─────────────────────────────────────────────────────────────────
+app.MapGet("/healthz", () => Results.Ok()).ExcludeFromDescription();
 app.MapWriteEndpoints();
 app.MapReadEndpoints();
 
