@@ -330,7 +330,7 @@ function Format-BlockMessage {
         $lines += "  $($i + 1). $cmd"
     }
     $lines += ''
-    $lines += 'Binding gates: `.claude/agents/documentation-architect.md` §§ Non-overwrite policy + Hard rules.'
+    $lines += 'Binding gates: `.claude/agents/docs-keeper.md` §§ Non-overwrite policy + Hard rules.'
     return ($lines -join "`n")
 }
 
