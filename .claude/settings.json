@@ -17,6 +17,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\" -Standalone",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   }
 }

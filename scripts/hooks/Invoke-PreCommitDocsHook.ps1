@@ -2,14 +2,25 @@
 
 <#
 .SYNOPSIS
-    Claude Code PreToolUse hook — blocks `git commit` ONLY when the docs tree
-    has REAL index / registry drift, and prints the remediation command queue.
+    Claude Code PreToolUse / Standalone docs integrity check — blocks `git commit`
+    or surfaces remediation when the docs index tree has drift, and prints the
+    remediation command queue.
 
 .DESCRIPTION
-    Wired via `.claude/settings.json` as a PreToolUse hook matched on the
-    `Bash` tool. Reads the hook JSON payload from stdin, filters for
-    `git commit` invocations, and — when the commit touches docs paths —
-    runs deterministic drift detection against the working tree:
+    Two modes:
+
+    PreToolUse mode (default):
+      Wired via `.claude/settings.json` as a PreToolUse hook matched on the
+      `Bash` tool. Reads the hook JSON payload from stdin, filters for
+      `git commit` invocations that touch any `.md` file, and runs deterministic
+      drift detection against the working tree.
+
+    Standalone mode (-Standalone switch):
+      Skips stdin parsing and the git-commit filter. Runs the drift check
+      directly against the working tree. Used by CI and the Claude Code
+      `Stop` hook to surface drift after each session.
+
+    Drift detection (project-agnostic — works for any docs-keeper index tree):
 
       * Index drift — for every directory holding an `index.md`, recompute
         the EXPECTED `children:` set from the filesystem (same discovery
@@ -17,53 +28,62 @@
         into index-less sub-dirs, hidden/underscore skipped, `index.md` itself
         skipped) and compare — as a SET, order-insensitive — against the
         DECLARED `children:` in that `index.md`'s front-matter. A mismatch is
-        drift → queue `/docs-index <dir>`.
+        drift -> queue `/docs-index <dir>`.
 
       * Registry drift — every ROOT index directory (an index dir whose parent
-        has no `index.md`) must be referenced in CLAUDE.md's "Sources of truth"
-        section. A missing ROOT is drift → queue `/docs-registry-sync`.
+        has no `index.md`) must be referenced in the host root prompt file's
+        "Sources of truth" section. A missing ROOT is drift ->
+        queue `/docs-registry-sync`.
 
-    This makes the hook SATISFIABLE: when the docs tree is consistent it exits 0
-    regardless of what is staged; when it is drifted, running the queued
-    `/docs-*` commands brings it back to consistency and the next commit passes.
-    Set comparison means hand-curated `children:` ORDER never triggers drift.
+    Generalization (reusable across any project):
+      - Triggers on ANY staged `.md` file change, not a hardcoded path prefix.
+      - Discovers indexed trees by scanning from repo root (default), skipping
+        common build / dependency directories.
+      - Host root prompt file auto-discovered: probes `CLAUDE.md` -> `AGENTS.md`
+        -> `.agent/INDEX.md`. No hardcoded filename.
 
-    Scope note — the gate keys off STRUCTURE (`children:` membership) and the
-    registry, not body `## Contents` anchors. Heading-only edits inside a doc
-    do not block; the `/docs-*` skills still refresh anchors when run.
+    Satisfiability: when the docs tree is consistent the hook exits 0 regardless
+    of what is staged. Running the queued `/docs-*` commands brings it back to
+    consistency and the next commit passes. Set comparison means hand-curated
+    `children:` ORDER never triggers drift.
 
     Pure functions live above `Invoke-PreCommitDocsHook` for Pester coverage
     (see sibling `Invoke-PreCommitDocsHook.Tests.ps1`). Filesystem access is
-    injected via the `-DirLister` / `-FileReader` scriptblocks so the pure
-    functions are testable without touching disk. Pass `-AsLibrary` to
-    dot-source the file without executing the entry block.
+    injected via `-DirLister` / `-FileReader` scriptblocks so the pure functions
+    are testable without touching disk. Pass `-AsLibrary` to dot-source the file
+    without executing the entry block.
 
 .PARAMETER HookInputJson
-    Hook stdin payload (JSON). When omitted in normal invocation, the
-    script reads from `[Console]::In`. Tests pass it directly.
+    Hook stdin payload (JSON). Ignored in Standalone mode. When omitted in
+    normal invocation the script reads from `[Console]::In`. Tests pass it
+    directly.
 
 .PARAMETER RepoRoot
     Git working tree root. Defaults to `$env:CLAUDE_PROJECT_DIR`, falling
     back to `git rev-parse --show-toplevel`.
 
 .PARAMETER GitCommandRunner
-    Injectable scriptblock that takes a `[string[]]` argv and returns
-    stdout lines. Lets tests stub `git` without spawning processes.
+    Injectable scriptblock — takes `[string[]]` argv, returns stdout lines.
+    Lets tests stub `git` without spawning processes.
 
 .PARAMETER DirLister
     Injectable scriptblock: `& $DirLister <repo-relative-dir>` returns an array
-    of `@{ Name = <string>; IsDir = <bool> }` for the directory's direct
-    entries (empty array if the dir does not exist). Defaults to a
-    `Get-ChildItem`-backed lister rooted at `RepoRoot`.
+    of `@{ Name = <string>; IsDir = <bool> }` for the directory's direct entries
+    (empty array if the dir does not exist). Defaults to `Get-ChildItem` rooted
+    at `RepoRoot`.
 
 .PARAMETER FileReader
     Injectable scriptblock: `& $FileReader <repo-relative-path>` returns the
-    file's raw content (empty string if absent). Defaults to a
-    `Get-Content -Raw` reader rooted at `RepoRoot`.
+    file's raw content (empty string if absent). Defaults to `Get-Content -Raw`
+    rooted at `RepoRoot`.
+
+.PARAMETER Standalone
+    Skip stdin parsing and the git-commit / touched-paths filter. Run the drift
+    check directly. Used for CI (`pwsh ... -Standalone`) and the `Stop` hook.
 
 .PARAMETER AsLibrary
-    When set, helper + entry functions are defined but the entry block is
-    skipped. Used by Pester to dot-source the file.
+    Define helper + entry functions but skip the entry block. Used by Pester to
+    dot-source the file.
 #>
 
 [CmdletBinding()]
@@ -73,6 +93,7 @@ param(
     [scriptblock]$GitCommandRunner,
     [scriptblock]$DirLister,
     [scriptblock]$FileReader,
+    [switch]$Standalone,
     [switch]$AsLibrary
 )
 
@@ -90,8 +111,6 @@ function Test-IsGitCommit {
     [CmdletBinding()]
     param([string]$Command)
     if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
-    # Match `git ... commit` with optional flags between (e.g. `git -C /repo commit`).
-    # Exclude lookalikes (`commit-tree`, `commit-graph`) by requiring word boundary or end.
     return $Command -match '(^|[\s;&|])git(\s+-[A-Za-z]+(\s+\S+)?)*\s+commit($|[\s])'
 }
 
@@ -105,37 +124,34 @@ function ConvertFrom-GitNameStatus {
         $parts = $line -split "`t"
         $rawStatus = $parts[0]
         if ($rawStatus -match '^[RC]\d*$' -and $parts.Count -ge 3) {
-            $changes += @{
-                Status  = $rawStatus.Substring(0, 1)
-                OldPath = $parts[1]
-                Path    = $parts[2]
-            }
+            $changes += @{ Status = $rawStatus.Substring(0, 1); OldPath = $parts[1]; Path = $parts[2] }
         }
         elseif ($parts.Count -ge 2) {
-            $changes += @{
-                Status  = $rawStatus
-                Path    = $parts[1]
-                OldPath = $null
-            }
+            $changes += @{ Status = $rawStatus; Path = $parts[1]; OldPath = $null }
         }
     }
     if ($changes.Count -eq 0) { return @() }
     return ,$changes
 }
 
-function Test-IsDocsPath {
+function Test-IsMarkdownPath {
+    <#
+        True for any path ending in `.md`. Triggers the drift check for any
+        Markdown file change, regardless of directory — keeping the hook
+        project-agnostic.
+    #>
     [CmdletBinding()]
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
-    return ($Path -match '^docs/') -or ($Path -eq 'CLAUDE.md')
+    return $Path -like '*.md'
 }
 
-function Test-TouchesDocs {
+function Test-TouchesIndexedContent {
     [CmdletBinding()]
     param([array]$Changes)
     foreach ($change in $Changes) {
         foreach ($p in @($change.Path, $change.OldPath)) {
-            if (Test-IsDocsPath -Path $p) { return $true }
+            if (Test-IsMarkdownPath -Path $p) { return $true }
         }
     }
     return $false
@@ -149,11 +165,26 @@ function Test-IsHiddenName {
     return $Name.StartsWith('.') -or $Name.StartsWith('_')
 }
 
+function Find-HostRootPromptFile {
+    <#
+        Auto-discovers the host project's root prompt file using the same probe
+        order as docs-keeper. Returns the first filename whose content is
+        non-empty, or '' if none found. Makes registry checks project-agnostic.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][scriptblock]$FileReader)
+    foreach ($candidate in @('CLAUDE.md', 'AGENTS.md', '.agent/INDEX.md')) {
+        $content = & $FileReader $candidate
+        if (-not [string]::IsNullOrWhiteSpace($content)) { return $candidate }
+    }
+    return ''
+}
+
 function Get-ExpectedChildren {
     <#
         Recursive descent under $Dir (repo-relative, NO trailing slash).
-        Mirrors the `/docs-index` discovery algorithm and returns the
-        children entries it would emit (leading `/`, possibly nested).
+        Mirrors the `/docs-index` discovery algorithm and returns the children
+        entries it would emit (leading `/`, possibly nested).
     #>
     [CmdletBinding()]
     param(
@@ -167,11 +198,10 @@ function Get-ExpectedChildren {
         if (Test-IsHiddenName -Name $name) { continue }
 
         if ($entry.IsDir) {
-            $childDir = "$Dir/$name"
+            $childDir = if ($Dir -eq '.') { $name } else { "$Dir/$name" }
             $childListing = & $DirLister $childDir
             $hasIndex = @($childListing | Where-Object { $_.Name -eq 'index.md' }).Count -gt 0
             if ($hasIndex) {
-                # BOUNDARY — sub-index owns its subtree.
                 $entries += "/$Prefix$name"
             }
             else {
@@ -210,12 +240,12 @@ function Get-DeclaredChildren {
             if ($fmDelimiters -ge 2) { break }
             continue
         }
-        if ($fmDelimiters -ne 1) { continue }      # only inside the first front-matter block
+        if ($fmDelimiters -ne 1) { continue }
 
         if ($line -match '^children:\s*$') { $inChildren = $true; continue }
         if ($inChildren) {
             if ($line -match '^\s*-\s*(\S+)\s*$') { $children += $matches[1] }
-            elseif ($line -match '^\S') { $inChildren = $false }   # next top-level key
+            elseif ($line -match '^\S') { $inChildren = $false }
         }
     }
     return $children
@@ -234,11 +264,13 @@ function Get-IndexDirs {
     <#
         Walk $Dir (repo-relative, NO trailing slash) and return every directory
         that contains an `index.md`, including $Dir itself if applicable.
+        Directories whose name appears in $ExcludeDirs are not recursed into.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Dir,
-        [Parameter(Mandatory)][scriptblock]$DirLister
+        [Parameter(Mandatory)][scriptblock]$DirLister,
+        [string[]]$ExcludeDirs = @()
     )
     $result = @()
     $listing = & $DirLister $Dir
@@ -246,9 +278,11 @@ function Get-IndexDirs {
         $result += $Dir
     }
     foreach ($entry in $listing) {
-        if ($entry.IsDir -and -not (Test-IsHiddenName -Name $entry.Name)) {
-            $result += @(Get-IndexDirs -Dir "$Dir/$($entry.Name)" -DirLister $DirLister)
-        }
+        if (-not $entry.IsDir) { continue }
+        if (Test-IsHiddenName -Name $entry.Name) { continue }
+        if ($ExcludeDirs.Count -gt 0 -and $entry.Name -in $ExcludeDirs) { continue }
+        $childPath = if ($Dir -eq '.') { $entry.Name } else { "$Dir/$($entry.Name)" }
+        $result += @(Get-IndexDirs -Dir $childPath -DirLister $DirLister -ExcludeDirs $ExcludeDirs)
     }
     return $result
 }
@@ -256,7 +290,7 @@ function Get-IndexDirs {
 function Get-RootIndexDirs {
     <#
         A ROOT index dir is one whose parent directory holds no `index.md`
-        (i.e. it is not covered by a higher index). Minimum-footprint registry.
+        (not covered by a higher index). Minimum-footprint registry.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][array]$IndexDirs)
@@ -271,8 +305,8 @@ function Get-RootIndexDirs {
 
 function Test-RegistryHasEntry {
     <#
-        True if CLAUDE.md's "Sources of truth" section references $DirPath
-        (matched with a trailing slash, e.g. `docs/`).
+        True if the host root prompt file's "Sources of truth" section references
+        $DirPath (matched with a trailing slash, e.g. `docs/`).
     #>
     [CmdletBinding()]
     param([string]$Content, [Parameter(Mandatory)][string]$DirPath)
@@ -293,11 +327,6 @@ function Test-RegistryHasEntry {
 # ---------- Pure function: queue assembly ----------
 
 function Resolve-CommandQueue {
-    <#
-        Given pre-computed drift signals, assemble the ordered remediation
-        queue: one `/docs-index <dir>` per drifted index dir (lexical), then a
-        single `/docs-registry-sync` if the registry is drifted.
-    #>
     [CmdletBinding()]
     param(
         [array]$DriftedIndexDirs = @(),
@@ -338,32 +367,43 @@ function Format-BlockMessage {
 
 function Get-DocsDriftQueue {
     <#
-        Detect index + registry drift under `docs/` using the injected
-        filesystem accessors. Returns the remediation queue (possibly empty).
+        Detect index + registry drift starting from $DocsRoot (default: repo
+        root '.') using injected filesystem accessors. Returns the remediation
+        queue (possibly empty).
+
+        Scans for all `index.md` files from $DocsRoot, skipping common build /
+        dependency directories. Host root prompt file is auto-discovered via
+        Find-HostRootPromptFile rather than hardcoded.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][scriptblock]$DirLister,
         [Parameter(Mandatory)][scriptblock]$FileReader,
-        [string]$DocsRoot = 'docs'
+        [string]$DocsRoot = '.',
+        [string[]]$ExcludeDirs = @(
+            'node_modules', 'dist', 'build', 'bin', 'obj',
+            'vendor', 'out', '.next', '.nuxt', 'coverage', 'target'
+        )
     )
-    $indexDirs = @(Get-IndexDirs -Dir $DocsRoot -DirLister $DirLister)
-    if ($indexDirs.Count -eq 0) {
-        return @()   # nothing indexed → nothing to enforce
-    }
+    $indexDirs = @(Get-IndexDirs -Dir $DocsRoot -DirLister $DirLister -ExcludeDirs $ExcludeDirs)
+    if ($indexDirs.Count -eq 0) { return @() }
 
     $drifted = @()
     foreach ($dir in $indexDirs) {
         $expected = @(Get-ExpectedChildren -Dir $dir -DirLister $DirLister)
-        $declared = @(Get-DeclaredChildren -Content (& $FileReader "$dir/index.md"))
+        $indexPath = if ($dir -eq '.') { 'index.md' } else { "$dir/index.md" }
+        $declared = @(Get-DeclaredChildren -Content (& $FileReader $indexPath))
         if (-not (Test-SetsEqual -A $expected -B $declared)) { $drifted += $dir }
     }
 
     $roots = @(Get-RootIndexDirs -IndexDirs $indexDirs)
-    $claude = & $FileReader 'CLAUDE.md'
+    $hostFile = Find-HostRootPromptFile -FileReader $FileReader
+    $hostContent = if ($hostFile) { & $FileReader $hostFile } else { '' }
     $registryDrift = $false
     foreach ($root in $roots) {
-        if (-not (Test-RegistryHasEntry -Content $claude -DirPath $root)) { $registryDrift = $true }
+        if (-not (Test-RegistryHasEntry -Content $hostContent -DirPath $root)) {
+            $registryDrift = $true
+        }
     }
 
     return (Resolve-CommandQueue -DriftedIndexDirs $drifted -RegistryDrift $registryDrift)
@@ -376,7 +416,8 @@ function Invoke-PreCommitDocsHook {
         [string]$RepoRoot,
         [scriptblock]$GitCommandRunner,
         [scriptblock]$DirLister,
-        [scriptblock]$FileReader
+        [scriptblock]$FileReader,
+        [switch]$Standalone
     )
 
     if (-not $RepoRoot) {
@@ -418,6 +459,16 @@ function Invoke-PreCommitDocsHook {
         }.GetNewClosure()
     }
 
+    # Standalone: skip stdin parsing + git-commit filter; run drift check directly.
+    if ($Standalone) {
+        $queue = @(Get-DocsDriftQueue -DirLister $DirLister -FileReader $FileReader)
+        if ($queue.Count -eq 0) {
+            return @{ ExitCode = 0; Message = ''; Reason = 'no-docs-drift'; Queue = @() }
+        }
+        $msg = Format-BlockMessage -Queue $queue
+        return @{ ExitCode = 2; Message = $msg; Reason = 'docs-drift-detected'; Queue = $queue }
+    }
+
     $payload = Read-HookPayload -Json $HookInputJson
     if (-not $payload) {
         return @{ ExitCode = 0; Message = ''; Reason = 'no-payload'; Queue = @() }
@@ -435,7 +486,7 @@ function Invoke-PreCommitDocsHook {
     $nameStatus = if ($nameStatusRaw -is [array]) { $nameStatusRaw -join "`n" } else { [string]$nameStatusRaw }
     $changes = ConvertFrom-GitNameStatus -NameStatus $nameStatus
 
-    if (-not (Test-TouchesDocs -Changes $changes)) {
+    if (-not (Test-TouchesIndexedContent -Changes $changes)) {
         return @{ ExitCode = 0; Message = ''; Reason = 'no-docs-change'; Queue = @() }
     }
 
@@ -452,7 +503,7 @@ function Invoke-PreCommitDocsHook {
 # ---------- Entry block ----------
 
 if (-not $AsLibrary) {
-    if (-not $HookInputJson) {
+    if (-not $HookInputJson -and -not $Standalone) {
         try { $HookInputJson = [Console]::In.ReadToEnd() } catch { $HookInputJson = '' }
     }
 
@@ -461,7 +512,8 @@ if (-not $AsLibrary) {
         -RepoRoot $RepoRoot `
         -GitCommandRunner $GitCommandRunner `
         -DirLister $DirLister `
-        -FileReader $FileReader
+        -FileReader $FileReader `
+        -Standalone:$Standalone
 
     if ($result.ExitCode -ne 0 -and $result.Message) {
         [Console]::Error.WriteLine($result.Message)
