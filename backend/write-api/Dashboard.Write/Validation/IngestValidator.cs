@@ -43,6 +43,12 @@ internal sealed class IngestValidator : IIngestValidator
             failures.Add(new ValidationFailure(
                 "/parent_deployments",
                 "Must contain at most 32 items."));
+
+        if (body.ParentDeployments is { Length: > 1 } parents &&
+            parents.Length != parents.Distinct(StringComparer.Ordinal).Count())
+            failures.Add(new ValidationFailure(
+                "/parent_deployments",
+                "Items must be unique."));
     }
 
     private static string ToJsonPointer(string memberName) => memberName switch

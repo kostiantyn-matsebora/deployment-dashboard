@@ -64,6 +64,27 @@ public sealed class IngestValidatorTests
     }
 
     [Fact]
+    public void Validate_ParentDeploymentsDuplicateItems_ReturnsParentFailure()
+    {
+        // spec: uniqueItems:true — duplicate entries must produce a 422.
+        var body = ValidBody() with
+        {
+            ParentDeployments = ["gh-001", "gh-002", "gh-001"],
+        };
+        Assert.Contains(_validator.Validate(body), f => f.Pointer == "/parent_deployments");
+    }
+
+    [Fact]
+    public void Validate_ParentDeployments_AllUniqueItems_NoFailure()
+    {
+        var body = ValidBody() with
+        {
+            ParentDeployments = ["gh-001", "gh-002", "gh-003"],
+        };
+        Assert.DoesNotContain(_validator.Validate(body), f => f.Pointer == "/parent_deployments");
+    }
+
+    [Fact]
     public void Validate_ServiceExceedsMaxLength_ReturnsServiceFailure()
     {
         var body = ValidBody() with { Service = new string('x', 129) };

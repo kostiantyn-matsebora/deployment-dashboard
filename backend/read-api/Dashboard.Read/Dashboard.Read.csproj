@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <!-- Direct dependency: DeploymentEventBroadcaster opens a NpgsqlConnection for LISTEN/NOTIFY. -->
-    <PackageReference Include="Npgsql" Version="9.*" />
+    <PackageReference Include="Npgsql" Version="10.0.*" />
   </ItemGroup>
 
   <ItemGroup>

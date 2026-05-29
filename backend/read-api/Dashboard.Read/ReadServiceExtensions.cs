@@ -17,6 +17,8 @@ public static class ReadServiceExtensions
         services.AddSingleton<DeploymentEventBroadcaster>();
         services.AddSingleton<IDeploymentEventBroadcaster>(
             sp => sp.GetRequiredService<DeploymentEventBroadcaster>());
+        services.AddSingleton<IReadinessIndicator>(
+            sp => sp.GetRequiredService<DeploymentEventBroadcaster>());
         services.AddHostedService(
             sp => sp.GetRequiredService<DeploymentEventBroadcaster>());
 
