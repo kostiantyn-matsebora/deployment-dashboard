@@ -485,6 +485,15 @@ Describe 'Format-BlockMessage' {
         $msg = Format-BlockMessage -Queue @(@{ Command = '/docs-registry-sync'; Args = '' })
         $msg | Should -Match 'docs-keeper\.md'
     }
+    It 'uses re-commit language in pre-commit mode' {
+        $msg = Format-BlockMessage -Queue @(@{ Command = '/docs-index'; Args = 'docs/' }) -Standalone $false
+        $msg | Should -Match 're-commit'
+    }
+    It 'uses fix language in standalone mode, no re-commit mention' {
+        $msg = Format-BlockMessage -Queue @(@{ Command = '/docs-index'; Args = 'docs/' }) -Standalone $true
+        $msg | Should -Match 'Run the following commands to fix'
+        $msg | Should -Not -Match 're-commit'
+    }
 }
 
 Describe 'Read-HookPayload' {
