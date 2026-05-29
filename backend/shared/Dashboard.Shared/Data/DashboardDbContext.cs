@@ -10,11 +10,14 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        ConfigureDeploymentEvents(modelBuilder);
-        ConfigureFetcherState(modelBuilder);
+        // SQLite (unit tests) cannot ORDER BY or compare DateTimeOffset columns stored as TEXT.
+        // Serialise to Unix milliseconds (long) so date arithmetic works on all providers.
+        var isSqlite = Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite";
+        ConfigureDeploymentEvents(modelBuilder, isSqlite);
+        ConfigureFetcherState(modelBuilder, isSqlite);
     }
 
-    private static void ConfigureDeploymentEvents(ModelBuilder modelBuilder)
+    private static void ConfigureDeploymentEvents(ModelBuilder modelBuilder, bool isSqlite)
     {
         modelBuilder.Entity<DeploymentEvent>(entity =>
         {
@@ -53,6 +56,16 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .HasColumnName("happened_at")
                   .HasColumnType("timestamptz")
                   .IsRequired();
+
+            // SQLite cannot compare or order DateTimeOffset as TEXT.
+            // Store as Unix milliseconds so ordering and comparisons work correctly in tests.
+            if (isSqlite)
+            {
+                entity.Property(e => e.HappenedAt)
+                      .HasConversion<long>(
+                          v => v.ToUnixTimeMilliseconds(),
+                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
+            }
 
             entity.Property(e => e.RunUrl)
                   .HasColumnName("run_url")
@@ -99,7 +112,7 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
         });
     }
 
-    private static void ConfigureFetcherState(ModelBuilder modelBuilder)
+    private static void ConfigureFetcherState(ModelBuilder modelBuilder, bool isSqlite)
     {
         modelBuilder.Entity<FetcherState>(entity =>
         {
@@ -118,6 +131,14 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .HasColumnName("updated_at")
                   .HasColumnType("timestamptz")
                   .IsRequired();
+
+            if (isSqlite)
+            {
+                entity.Property(e => e.UpdatedAt)
+                      .HasConversion<long>(
+                          v => v.ToUnixTimeMilliseconds(),
+                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
+            }
         });
     }
 }
