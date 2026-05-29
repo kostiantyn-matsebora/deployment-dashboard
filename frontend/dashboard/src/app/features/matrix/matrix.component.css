@@ -54,6 +54,15 @@
   /* grid-template-columns set inline via [style.grid-template-columns] */
   column-gap: 6px;
   row-gap: 9px;
+  /*
+   * width: max-content  — grid sizes to the max of its track max-content
+   *   contributions instead of being capped at the shell's available width.
+   *   A 50-char version makes a column ~475px wide; .matrix-shell
+   *   (overflow-x: auto) scrolls horizontally to reveal it.
+   * min-width: 100%     — never narrower than the shell when content is short.
+   */
+  width: max-content;
+  min-width: 100%;
 }
 
 /* ── Header row ───────────────────────────────────────────── */
