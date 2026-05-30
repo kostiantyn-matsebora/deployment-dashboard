@@ -82,10 +82,6 @@
     Injectable scriptblock: `& $FileReader <repo-relative-path>` returns the
     file's raw content (empty string if absent).
 
-.PARAMETER SnapshotReader
-    Injectable scriptblock returning the session snapshot `@{ Head; Dirty }` (or
-    $null). Used by SessionStart mode.
-
 .PARAMETER SnapshotWriter
     Injectable scriptblock `& $SnapshotWriter <snapshot-hashtable>` used by
     SessionStart mode.
@@ -131,7 +127,6 @@ param(
     [scriptblock]$GitCommandRunner,
     [scriptblock]$DirLister,
     [scriptblock]$FileReader,
-    [scriptblock]$SnapshotReader,
     [scriptblock]$SnapshotWriter,
     [scriptblock]$SessionReader,
     [string]$EnforcementMode,
@@ -801,7 +796,7 @@ function Invoke-DocsKeeperMaintenance {
             $detected = (& git rev-parse --show-toplevel 2>$null) | Select-Object -First 1
             if ($detected) { $RepoRoot = $detected.Trim() }
         }
-        catch { }
+        catch { $null = $_ }
     }
 
     if (-not $GitCommandRunner) {
@@ -1082,7 +1077,7 @@ function Invoke-SessionSnapshot {
     }
 
     $head = ''
-    try { $head = ((& $GitCommandRunner @('rev-parse', 'HEAD')) | Select-Object -First 1) } catch { }
+    try { $head = ((& $GitCommandRunner @('rev-parse', 'HEAD')) | Select-Object -First 1) } catch { $null = $_ }
     $dirtyRaw = & $GitCommandRunner @('status', '--porcelain')
     $dirtyJoined = if ($dirtyRaw -is [array]) { $dirtyRaw -join "`n" } else { [string]$dirtyRaw }
     $dirty = @(ConvertFrom-GitPorcelain -Porcelain $dirtyJoined)
@@ -1114,7 +1109,7 @@ function Invoke-SessionSnapshot {
                 $unrevisedByFile += , [string[]]$pair
             }
         }
-        catch { }
+        catch { $null = $_ }
     }
     if ($unrevisedByFile.Count -gt 0) {
         $proposal = Format-SessionStartProposal -UnrevisedByFile $unrevisedByFile
@@ -1132,7 +1127,7 @@ if (-not $AsLibrary) {
                 $detected = (& git rev-parse --show-toplevel 2>$null) | Select-Object -First 1
                 if ($detected) { $RepoRoot = $detected.Trim() }
             }
-            catch { }
+            catch { $null = $_ }
         }
     }
 
@@ -1194,7 +1189,7 @@ if (-not $AsLibrary) {
                 }
             }
         }
-        catch { }
+        catch { $null = $_ }
         exit 0
     }
 
@@ -1237,7 +1232,7 @@ if (-not $AsLibrary) {
                 Write-DocsKeeperSession -RepoRoot $RepoRoot -SessionId $SessionId -Session $session
             }
         }
-        catch { }
+        catch { $null = $_ }
         exit 0
     }
 
@@ -1261,7 +1256,7 @@ if (-not $AsLibrary) {
                 Write-DocsCapture -Path $capturePath -CaptureFile $captureFile
             }
         }
-        catch { }
+        catch { $null = $_ }
         exit 0
     }
 
@@ -1286,14 +1281,14 @@ if (-not $AsLibrary) {
                 Write-DocsCapture -Path $capturePath -CaptureFile $captureFile
             }
         }
-        catch { }
+        catch { $null = $_ }
         exit 0
     }
 
     # -SnapshotSession: capture the per-session baseline, then exit cleanly.
     if ($SnapshotSession) {
         try { Invoke-SessionSnapshot -RepoRoot $RepoRoot -SessionId $SessionId -GitCommandRunner $GitCommandRunner -SnapshotWriter $SnapshotWriter }
-        catch { }
+        catch { $null = $_ }
 
         # Surface pending captures from prior sessions.
         try {
@@ -1324,13 +1319,13 @@ if (-not $AsLibrary) {
                 }
             }
         }
-        catch { }
+        catch { $null = $_ }
         exit 0
     }
 
     # -SessionEnd: delete this session's per-session state files, then exit.
     if ($SessionEnd) {
-        try { Remove-DocsSessionState -RepoRoot $RepoRoot -SessionId $SessionId } catch { }
+        try { Remove-DocsSessionState -RepoRoot $RepoRoot -SessionId $SessionId } catch { $null = $_ }
 
         # Surface captured docs as a systemMessage.
         try {
@@ -1343,7 +1338,7 @@ if (-not $AsLibrary) {
                 }
             }
         }
-        catch { }
+        catch { $null = $_ }
         exit 0
     }
 

@@ -338,7 +338,7 @@ function Invoke-WorktreeCleanup {
                             }
                         }
                     }
-                    catch { }
+                    catch { $null = $_ }
                 }
             }
             $action = 'pruned'
@@ -376,7 +376,7 @@ if (-not $AsLibrary) {
                 $detected = (& git rev-parse --show-toplevel 2>$null) | Select-Object -First 1
                 if ($detected) { $RepoRoot = $detected.Trim() }
             }
-            catch { }
+            catch { $null = $_ }
         }
     }
 
@@ -390,7 +390,7 @@ if (-not $AsLibrary) {
             $payload = $hookInputJson | ConvertFrom-Json -ErrorAction Stop
             if ($payload -and $payload.session_id) { $SessionId = [string]$payload.session_id }
         }
-        catch { }
+        catch { $null = $_ }
     }
 
     # Build default injectable scriptblocks (closures capturing $RepoRoot).
@@ -433,7 +433,7 @@ if (-not $AsLibrary) {
     }
 
     try {
-        $result = Invoke-WorktreeCleanup `
+        Invoke-WorktreeCleanup `
             -RepoRoot $RepoRoot `
             -SessionId $SessionId `
             -GitRunner $GitRunner `
@@ -444,7 +444,7 @@ if (-not $AsLibrary) {
             -SessionEnd:$SessionEnd `
             -SnapshotSession:$SnapshotSession
     }
-    catch { }
+    catch { $null = $_ }
 
     exit 0
 }
