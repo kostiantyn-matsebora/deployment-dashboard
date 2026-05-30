@@ -967,8 +967,11 @@ function Invoke-PreCommitDocsHook {
     }
 
     # Record asked content hashes so a settled doc is not re-flagged (satisfiability).
-    if ($reviseCandidates.Count -gt 0) {
-        foreach ($p in $reviseCandidates) { $seen[$p] = Get-ContentSha -Content (& $FileReader $p) }
+    # Exhausted files are included: the attempt cap IS the acceptance signal — their
+    # current hash is recorded so PreToolUse commits are not permanently blocked.
+    $toRecord = @($reviseCandidates) + @($exhausted)
+    if ($toRecord.Count -gt 0) {
+        foreach ($p in $toRecord) { $seen[$p] = Get-ContentSha -Content (& $FileReader $p) }
         & $SeenStateWriter $seen
     }
 

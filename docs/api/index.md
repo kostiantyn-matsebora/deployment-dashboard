@@ -5,9 +5,12 @@ intro: 'HTTP API contract for `Dashboard.Api` — OpenAPI 3.1 spec plus human-re
 children:
   - /openapi.yaml
   - /api-guidelines
+  - /api-examples
 ---
 
-## Contents — `api-guidelines.md`
+## Contents
+
+### `api-guidelines.md`
 
 - [1. Naming](./api-guidelines.md#1-naming)
 - [2. Required headers](./api-guidelines.md#2-required-headers)
@@ -19,5 +22,9 @@ children:
 - [8. Append-only semantics](./api-guidelines.md#8-append-only-semantics)
 - [9. Rate limiting](./api-guidelines.md#9-rate-limiting)
 - [10. Security notes](./api-guidelines.md#10-security-notes)
-- [11. Examples — copy-paste minimum viable calls](./api-guidelines.md#11-examples--copy-paste-minimum-viable-calls)
+- [11. Examples](./api-guidelines.md#11-examples--copy-paste-minimum-viable-calls) → [`api-examples.md`](./api-examples.md)
 - [12. Known carry-over for implementers](./api-guidelines.md#12-known-carry-over-for-implementers)
+
+### `api-examples.md`
+
+HTTP examples — ingest (success, in-progress), matrix snapshot, SSE, fetcher cursor, control reset.
