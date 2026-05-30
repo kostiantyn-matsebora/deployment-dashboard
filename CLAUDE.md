@@ -37,6 +37,12 @@ Architecture-only baseline — no service code committed yet (per commit `d0045c
 | `infrastructure/` | Terraform modules — Azure-only per NFR-01 / NFR-06. |
 | `dev_env/` | Local-dev compose / fixtures. |
 
+## Git
+
+**Never push directly to `main`.** Always branch → commit → PR, regardless of change size.
+- Exception: user explicitly instructs a direct push to `main`.
+- Default when user says "push": push the current branch, not `main`.
+
 ## Scripts
 
 Following rules MUST be followed for every script in this repository (build / install / dev tooling / CI helpers / one-off automation):
