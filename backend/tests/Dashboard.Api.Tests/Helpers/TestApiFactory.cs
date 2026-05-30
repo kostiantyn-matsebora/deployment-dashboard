@@ -18,6 +18,7 @@ namespace Dashboard.Api.Tests.Helpers;
 internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string TestApiKey = "test-key";
+    public const string TestControlApiKey = "test-control-key";
 
     /// <summary>
     /// When <c>true</c> the real <see cref="Dashboard.Write.Notifiers.PostgresDeploymentNotifier"/>
@@ -25,6 +26,13 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// Defaults to <c>false</c> (no-op notifier) for all other test classes.
     /// </summary>
     public bool UseRealNotifier { get; init; }
+
+    /// <summary>
+    /// When <c>false</c>, <c>CONTROL_API_KEY</c> is omitted from configuration so that
+    /// the control surface behaves as if the key was never set (returns <c>404</c>).
+    /// Defaults to <c>true</c>.
+    /// </summary>
+    public bool IncludeControlKey { get; init; } = true;
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
@@ -42,11 +50,16 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
     {
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+            var values = new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Postgres"] = _postgres.GetConnectionString(),
                 ["API_KEY"] = TestApiKey,
-            });
+            };
+
+            if (IncludeControlKey)
+                values["CONTROL_API_KEY"] = TestControlApiKey;
+
+            config.AddInMemoryCollection(values);
         });
 
         builder.ConfigureServices(services =>

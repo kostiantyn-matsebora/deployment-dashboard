@@ -2,6 +2,9 @@
   <Folder Name="/api/">
     <Project Path="api/Dashboard.Api/Dashboard.Api.csproj" />
   </Folder>
+  <Folder Name="/control-api/">
+    <Project Path="control-api/Dashboard.Control/Dashboard.Control.csproj" />
+  </Folder>
   <Folder Name="/fetcher/">
     <Project Path="fetcher/Dashboard.Fetcher/Dashboard.Fetcher.csproj" />
     <Project Path="fetcher-github/Dashboard.Fetcher.GitHub/Dashboard.Fetcher.GitHub.csproj" />
@@ -15,6 +18,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Dashboard.Api.Tests/Dashboard.Api.Tests.csproj" />
+    <Project Path="tests/Dashboard.Control.Tests/Dashboard.Control.Tests.csproj" />
     <Project Path="tests/Dashboard.Fetcher.Tests/Dashboard.Fetcher.Tests.csproj" />
     <Project Path="tests/Dashboard.Read.Tests/Dashboard.Read.Tests.csproj" />
     <Project Path="tests/Dashboard.Shared.Tests/Dashboard.Shared.Tests.csproj" />

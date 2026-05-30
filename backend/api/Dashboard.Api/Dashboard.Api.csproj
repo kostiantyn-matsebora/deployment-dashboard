@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\write-api\Dashboard.Write\Dashboard.Write.csproj" />
     <ProjectReference Include="..\..\read-api\Dashboard.Read\Dashboard.Read.csproj" />
+    <ProjectReference Include="..\..\control-api\Dashboard.Control\Dashboard.Control.csproj" />
   </ItemGroup>
 
   <ItemGroup>
