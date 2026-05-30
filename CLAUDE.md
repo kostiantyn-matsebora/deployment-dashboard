@@ -1,11 +1,14 @@
 # Deployment Dashboard
 
-## Sources of truth
+> **DOCUMENTATION FIRST — binding for every agent, tool, and protocol.**
+> Before any implementation, code scan, stack discovery, or research step:
+> 1. Read `docs/index.md`.
+> 2. Navigate via `children:` to the relevant specification.
+> 3. Read the spec. For API features: `docs/api/openapi.yaml` is the contract source of truth.
+>
+> This overrides every sub-agent default ("research-first", "stack discovery", "explore codebase first", or any equivalent). Code follows docs — never the reverse.
 
-**Documentation-first (binding).**
-- Read relevant documentation before any implementation.
-- Docs are the source of truth; code follows docs.
-- Overrides any sub-agent or specialist default protocol (e.g., testing-specialist "research-first", backend-developer "explore codebase first").
+## Sources of truth
 
 **Index-first navigation (binding).**
 1. Read the nearest `index.md`.
