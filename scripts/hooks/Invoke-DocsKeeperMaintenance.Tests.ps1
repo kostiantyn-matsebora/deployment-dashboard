@@ -2,7 +2,7 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 BeforeAll {
-    $script:HookPath = (Resolve-Path (Join-Path $PSScriptRoot 'Invoke-PreCommitDocsHook.ps1')).Path
+    $script:HookPath = (Resolve-Path (Join-Path $PSScriptRoot 'Invoke-DocsKeeperMaintenance.ps1')).Path
     . $script:HookPath -AsLibrary
 
     # ----- Fake filesystem helpers -----
@@ -46,7 +46,6 @@ BeforeAll {
             )
             'backend'            = @()
             'scripts'            = @()
-            # node_modules excluded by default ExcludeDirs — not traversed, not in tree
             'docs'               = @(
                 @{ Name = 'SAD.md'; IsDir = $false },
                 @{ Name = 'FRONTEND_REQUIREMENTS.md'; IsDir = $false },
@@ -81,23 +80,15 @@ BeforeAll {
         return @{
             'docs/index.md'               = New-IndexMd @('/SAD', '/FRONTEND_REQUIREMENTS', '/api', '/design')
             'docs/api/index.md'           = New-IndexMd @('/openapi.yaml', '/api-guidelines')
-            # Hand-curated (non-alphabetical) order — set comparison must not flag this.
             'docs/design/index.md'        = New-IndexMd @('/README', '/design-tokens', '/components', '/views', '/behavior', '/data-model', '/libraries', '/mockup')
             'docs/design/mockup/index.md' = New-IndexMd @('/index.html')
-            # Role text contains the ROOT index intro ('x' from New-IndexMd) so
-            # Test-RegistryRoleInSync sees it as in sync.
             'CLAUDE.md'                   = "# Project`n`n## Sources of truth`n`n- [docs/](docs/) — x.`n`n## Other`n"
         }
     }
 
-    # No-op session/seen-state injections — keep integration tests off the real
-    # filesystem and force every staged/edited .md to count as a fresh revise
-    # candidate (empty seen-state).
-    $script:EmptySeenReader = { @{} }
-    $script:NoopSeenWriter = { param($State) }
-    $script:NullSnapshotReader = { $null }
-    $script:EmptyAttemptsReader = { @{} }
-    $script:NoopAttemptsWriter = { param($A) }
+    # Session reader injections.
+    $script:NullSessionReader = { $null }
+    $script:EmptySessionReader = { @{ Head = ''; Dirty = @(); TrackedMd = @{} } }
 }
 
 Describe 'Test-IsGitCommit' {
@@ -515,83 +506,58 @@ Describe 'Read-HookPayload' {
     It 'returns $null on invalid JSON' { Read-HookPayload -Json 'not-json' | Should -BeNullOrEmpty }
 }
 
-Describe 'Invoke-PreCommitDocsHook integration' {
+Describe 'Invoke-DocsKeeperMaintenance integration' {
     BeforeEach {
         $script:lister = New-DirLister -Tree (Get-ConsistentTree)
         $script:reader = New-FileReader -Files (Get-ConsistentFiles)
-        # Common state-I/O injections: empty seen-state (every staged/edited .md
-        # is a fresh revise candidate), no-op writer (stays off disk), and no
-        # session snapshot (Standalone degrades to git status).
-        $script:io = @{
-            SeenStateReader = $script:EmptySeenReader
-            SeenStateWriter = $script:NoopSeenWriter
-            SnapshotReader  = $script:NullSnapshotReader
-            AttemptsReader  = $script:EmptyAttemptsReader
-            AttemptsWriter  = $script:NoopAttemptsWriter
-        }
     }
 
     It 'exits 0 with reason no-payload when stdin empty' {
-        $result = Invoke-PreCommitDocsHook -HookInputJson '' -RepoRoot '.' -GitCommandRunner { @() } -DirLister $script:lister -FileReader $script:reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson '' -RepoRoot '.' -GitCommandRunner { @() } -DirLister $script:lister -FileReader $script:reader -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'no-payload'
     }
     It 'exits 0 with reason not-git-commit when bash is unrelated' {
         $json = '{"tool_input":{"command":"npm test"}}'
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner { @() } -DirLister $script:lister -FileReader $script:reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner { @() } -DirLister $script:lister -FileReader $script:reader -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'not-git-commit'
     }
     It 'exits 0 with reason no-docs-change when commit avoids .md files' {
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "M`tsrc/Program.cs" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'no-docs-change'
     }
     It 'exits 0 with reason no-docs-change when only non-markdown docs file staged' {
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "M`tdocs/api/openapi.yaml" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'no-docs-change'
     }
     It 'queues /docs-revise on a docs commit even when index + registry are consistent' {
-        # Mode B: a staged .md is always a revise candidate (ask-once), so the
-        # commit gate fires with a revise-only queue.
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "M`tdocs/SAD.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 2
         $result.Reason | Should -Be 'docs-drift-detected'
         $result.Queue[0].Command | Should -Be '/docs-revise'
         $result.Queue[0].Args | Should -Match 'docs/SAD.md'
     }
-    It 'queues /docs-revise for a staged .md outside docs/ when tree is consistent' {
-        $json = '{"tool_input":{"command":"git commit -m foo"}}'
-        $runner = { param($Argv) "M`tREADME.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader @script:io
-        $result.ExitCode | Should -Be 2
-        @($result.Queue | Where-Object { $_.Command -eq '/docs-revise' }).Count | Should -Be 1
-    }
-    It 'suppresses the revise candidate when its content hash was already seen (ask-once)' {
-        $files = Get-ConsistentFiles
-        $files['docs/SAD.md'] = "# SAD`nbody`n"
-        $reader = New-FileReader -Files $files
-        $seenSha = Get-ContentSha -Content $files['docs/SAD.md']
+    It 'skips revise for staged .md already marked revised: true in session tracker' {
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "M`tdocs/SAD.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner `
-            -DirLister $script:lister -FileReader $reader `
-            -SeenStateReader ([scriptblock]::Create("@{ 'docs/SAD.md' = '$seenSha' }")) `
-            -SeenStateWriter $script:NoopSeenWriter -SnapshotReader $script:NullSnapshotReader
+        $sessionReader = { @{ Head = 'H'; Dirty = @(); TrackedMd = @{ 'docs/SAD.md' = @{ revised = $true } } } }
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader -SessionReader $sessionReader
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'no-docs-drift'
     }
     It 'warn mode exits 0 but still surfaces the queue' {
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "M`tdocs/SAD.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader -EnforcementMode 'warn' @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader -EnforcementMode 'warn' -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 0
         $result.Reason | Should -Be 'docs-action-suggested'
         @($result.Queue).Count | Should -BeGreaterThan 0
@@ -602,7 +568,7 @@ Describe 'Invoke-PreCommitDocsHook integration' {
         $reader = New-FileReader -Files $files
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "M`tdocs/api/api-guidelines.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 2
         $result.Reason | Should -Be 'docs-drift-detected'
         $result.Queue[0].Command | Should -Be '/docs-revise'
@@ -614,7 +580,7 @@ Describe 'Invoke-PreCommitDocsHook integration' {
         $reader = New-FileReader -Files $files
         $json = '{"tool_input":{"command":"git commit -am wip"}}'
         $runner = { param($Argv) "M`tCLAUDE.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader -SessionReader $script:NullSessionReader
         $result.ExitCode | Should -Be 2
         @($result.Queue | Where-Object { $_.Command -eq '/docs-registry-sync' }).Count | Should -Be 1
     }
@@ -624,120 +590,8 @@ Describe 'Invoke-PreCommitDocsHook integration' {
         $reader = New-FileReader -Files $files
         $json = '{"tool_input":{"command":"git commit -m foo"}}'
         $runner = { param($Argv) "A`tdocs/design/components.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader @script:io
+        $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader -SessionReader $script:NullSessionReader
         $result.Message | Should -Match '/docs-index docs/design/'
-    }
-    It 'exits 0 in standalone mode when tree is consistent and no session edits' {
-        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner { @() } -DirLister $script:lister -FileReader $script:reader @script:io
-        $result.ExitCode | Should -Be 0
-        $result.Reason | Should -Be 'no-docs-drift'
-    }
-    It 'exits 2 in standalone mode when drift detected' {
-        $files = Get-ConsistentFiles
-        $files['docs/api/index.md'] = New-IndexMd @('/openapi.yaml')
-        $reader = New-FileReader -Files $files
-        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner { @() } -DirLister $script:lister -FileReader $reader @script:io
-        $result.ExitCode | Should -Be 2
-        $result.Reason | Should -Be 'docs-drift-detected'
-        @($result.Queue | Where-Object { $_.Args -eq 'docs/api/' }).Count | Should -Be 1
-    }
-    It 'standalone mode queues /docs-revise for session-edited markdown' {
-        # Snapshot at an old HEAD; SAD.md committed since then -> session edit.
-        $snapReader = { @{ Head = 'OLDSHA'; Dirty = @() } }
-        $runner = {
-            param($Argv)
-            if ($Argv -contains 'diff' -and $Argv -contains '--name-only') { return @('docs/SAD.md') }
-            return @()   # git status --porcelain -> clean
-        }
-        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner $runner `
-            -DirLister $script:lister -FileReader $script:reader `
-            -SnapshotReader $snapReader -SeenStateReader $script:EmptySeenReader -SeenStateWriter $script:NoopSeenWriter `
-            -AttemptsReader $script:EmptyAttemptsReader -AttemptsWriter $script:NoopAttemptsWriter
-        $result.ExitCode | Should -Be 2
-        @($result.Queue | Where-Object { $_.Command -eq '/docs-revise' }).Count | Should -Be 1
-    }
-    It 'standalone mode does not throw when optional injections are omitted' {
-        { Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner { @() } -DirLister $script:lister -FileReader $script:reader -SnapshotReader $script:NullSnapshotReader -SeenStateReader $script:EmptySeenReader -SeenStateWriter $script:NoopSeenWriter -AttemptsReader $script:EmptyAttemptsReader -AttemptsWriter $script:NoopAttemptsWriter } | Should -Not -Throw
-    }
-
-    It 'auto-revise toggle returns an AutoInvoke directive instead of blocking' {
-        $snapReader = { @{ Head = 'OLD'; Dirty = @() } }
-        $runner = {
-            param($Argv)
-            if ($Argv -contains 'diff' -and $Argv -contains '--name-only') { return @('docs/SAD.md') }
-            return @()
-        }
-        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner $runner `
-            -DirLister $script:lister -FileReader $script:reader -AutoReviseMode 'on' `
-            -SnapshotReader $snapReader -SeenStateReader $script:EmptySeenReader -SeenStateWriter $script:NoopSeenWriter `
-            -AttemptsReader $script:EmptyAttemptsReader -AttemptsWriter $script:NoopAttemptsWriter
-        $result.ExitCode | Should -Be 0
-        $result.AutoInvoke | Should -BeTrue
-        $result.Directive | Should -Match '/docs-revise'
-        $result.Reason | Should -Be 'docs-auto-revise'
-    }
-    It 'auto-revise OFF (default) blocks passively per EnforcementMode' {
-        $snapReader = { @{ Head = 'OLD'; Dirty = @() } }
-        $runner = {
-            param($Argv)
-            if ($Argv -contains 'diff' -and $Argv -contains '--name-only') { return @('docs/SAD.md') }
-            return @()
-        }
-        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner $runner `
-            -DirLister $script:lister -FileReader $script:reader -EnforcementMode 'block' `
-            -SnapshotReader $snapReader -SeenStateReader $script:EmptySeenReader -SeenStateWriter $script:NoopSeenWriter `
-            -AttemptsReader $script:EmptyAttemptsReader -AttemptsWriter $script:NoopAttemptsWriter
-        $result.ExitCode | Should -Be 2
-        $result.AutoInvoke | Should -Not -BeTrue
-        $result.Reason | Should -Be 'docs-drift-detected'
-    }
-
-    It 'increments the attempt counter on each Standalone revise flag' {
-        $captured = $null
-        $writer = { param($A) $script:capturedAtt = $A }
-        $snapReader = { @{ Head = 'OLD'; Dirty = @() } }
-        $runner = {
-            param($Argv)
-            if ($Argv -contains 'diff' -and $Argv -contains '--name-only') { return @('docs/SAD.md') }
-            return @()
-        }
-        $script:capturedAtt = $null
-        Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner $runner `
-            -DirLister $script:lister -FileReader $script:reader `
-            -SnapshotReader $snapReader -SeenStateReader $script:EmptySeenReader -SeenStateWriter $script:NoopSeenWriter `
-            -AttemptsReader { @{ 'docs/SAD.md' = 1 } } -AttemptsWriter $writer | Out-Null
-        $script:capturedAtt['docs/SAD.md'] | Should -Be 2
-    }
-
-    It 'breaks the loop: a revise candidate at the cap is dropped and the session may stop' {
-        $snapReader = { @{ Head = 'OLD'; Dirty = @() } }
-        $runner = {
-            param($Argv)
-            if ($Argv -contains 'diff' -and $Argv -contains '--name-only') { return @('docs/SAD.md') }
-            return @()
-        }
-        # docs/SAD.md already at the cap (3); only it is a candidate, tree otherwise consistent.
-        $result = Invoke-PreCommitDocsHook -Standalone -RepoRoot '.' -GitCommandRunner $runner `
-            -DirLister $script:lister -FileReader $script:reader -EnforcementMode 'block' `
-            -SnapshotReader $snapReader -SeenStateReader $script:EmptySeenReader -SeenStateWriter $script:NoopSeenWriter `
-            -AttemptsReader { @{ 'docs/SAD.md' = 3 } } -AttemptsWriter $script:NoopAttemptsWriter
-        $result.ExitCode | Should -Be 0
-        $result.Reason | Should -Be 'revise-cap-reached'
-        @($result.Queue).Count | Should -Be 0
-        $result.Exhausted | Should -Contain 'docs/SAD.md'
-    }
-
-    It 'PreToolUse commit path ignores the attempt cap (no loop there)' {
-        # Even with a maxed attempt count, a staged-commit revise still queues.
-        $json = '{"tool_input":{"command":"git commit -m foo"}}'
-        $runner = { param($Argv) "M`tdocs/SAD.md" }
-        $result = Invoke-PreCommitDocsHook -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner `
-            -DirLister $script:lister -FileReader $script:reader `
-            -SeenStateReader $script:EmptySeenReader -SeenStateWriter $script:NoopSeenWriter `
-            -SnapshotReader $script:NullSnapshotReader `
-            -AttemptsReader { @{ 'docs/SAD.md' = 99 } } -AttemptsWriter $script:NoopAttemptsWriter
-        $result.ExitCode | Should -Be 2
-        @($result.Queue | Where-Object { $_.Command -eq '/docs-revise' }).Count | Should -Be 1
     }
 }
 
@@ -832,28 +686,6 @@ Describe 'Select-MarkdownPaths' {
     }
 }
 
-Describe 'Resolve-ReviseCandidates' {
-    It 'keeps a doc whose hash is unseen' {
-        $reader = New-FileReader -Files @{ 'docs/a.md' = 'new' }
-        $r = Resolve-ReviseCandidates -MdPaths @('docs/a.md') -SeenState @{} -FileReader $reader
-        $r | Should -Contain 'docs/a.md'
-    }
-    It 'drops a doc whose current hash equals the seen hash' {
-        $reader = New-FileReader -Files @{ 'docs/a.md' = 'same' }
-        $seen = @{ 'docs/a.md' = (Get-ContentSha -Content 'same') }
-        @(Resolve-ReviseCandidates -MdPaths @('docs/a.md') -SeenState $seen -FileReader $reader).Count | Should -Be 0
-    }
-    It 're-flags a doc whose content changed since last seen' {
-        $reader = New-FileReader -Files @{ 'docs/a.md' = 'changed' }
-        $seen = @{ 'docs/a.md' = (Get-ContentSha -Content 'old') }
-        @(Resolve-ReviseCandidates -MdPaths @('docs/a.md') -SeenState $seen -FileReader $reader).Count | Should -Be 1
-    }
-    It 'returns empty for an empty path set' {
-        $reader = New-FileReader -Files @{}
-        @(Resolve-ReviseCandidates -MdPaths @() -SeenState @{} -FileReader $reader).Count | Should -Be 0
-    }
-}
-
 Describe 'Resolve-ReviseQueue' {
     It 'emits one /docs-revise entry carrying all paths, sorted' {
         $q = @(Resolve-ReviseQueue -Paths @('docs/b.md', 'docs/a.md'))
@@ -871,79 +703,6 @@ Describe 'Resolve-EnforcementMode' {
     It 'is case-insensitive for warn' { Resolve-EnforcementMode -EnvValue 'WARN' | Should -Be 'warn' }
     It 'returns block for explicit "block"' { Resolve-EnforcementMode -EnvValue 'block' | Should -Be 'block' }
     It 'maps the retired "auto" value to block (auto is now a separate toggle)' { Resolve-EnforcementMode -EnvValue 'auto' | Should -Be 'block' }
-}
-
-Describe 'Resolve-AutoReviseMode' {
-    It 'is off when unset' { Resolve-AutoReviseMode -EnvValue '' | Should -BeFalse }
-    It 'is off for falsey/unknown values' {
-        Resolve-AutoReviseMode -EnvValue '0' | Should -BeFalse
-        Resolve-AutoReviseMode -EnvValue 'off' | Should -BeFalse
-        Resolve-AutoReviseMode -EnvValue 'nope' | Should -BeFalse
-    }
-    It 'is on for 1/true/on/yes (case-insensitive)' {
-        Resolve-AutoReviseMode -EnvValue '1' | Should -BeTrue
-        Resolve-AutoReviseMode -EnvValue 'true' | Should -BeTrue
-        Resolve-AutoReviseMode -EnvValue 'ON' | Should -BeTrue
-        Resolve-AutoReviseMode -EnvValue 'Yes' | Should -BeTrue
-    }
-}
-
-Describe 'Resolve-MaxReviseAttempts' {
-    It 'defaults to 3 when unset' { Resolve-MaxReviseAttempts -EnvValue '' | Should -Be 3 }
-    It 'parses a numeric value' { Resolve-MaxReviseAttempts -EnvValue '5' | Should -Be 5 }
-    It 'clamps to a minimum of 1' { Resolve-MaxReviseAttempts -EnvValue '0' | Should -Be 1 }
-    It 'clamps negatives to 1' { Resolve-MaxReviseAttempts -EnvValue '-4' | Should -Be 1 }
-    It 'falls back to default on non-numeric' { Resolve-MaxReviseAttempts -EnvValue 'lots' | Should -Be 3 }
-}
-
-Describe 'Split-ByAttemptCap' {
-    It 'includes a fresh path and increments its count to 1' {
-        $r = Split-ByAttemptCap -Paths @('docs/a.md') -Attempts @{} -Max 3
-        $r.ToInvoke | Should -Contain 'docs/a.md'
-        $r.Exhausted.Count | Should -Be 0
-        $r.NextAttempts['docs/a.md'] | Should -Be 1
-    }
-    It 'increments an existing under-cap count' {
-        $r = Split-ByAttemptCap -Paths @('docs/a.md') -Attempts @{ 'docs/a.md' = 2 } -Max 3
-        $r.ToInvoke | Should -Contain 'docs/a.md'
-        $r.NextAttempts['docs/a.md'] | Should -Be 3
-    }
-    It 'exhausts a path at the cap and does not increment past it' {
-        $r = Split-ByAttemptCap -Paths @('docs/a.md') -Attempts @{ 'docs/a.md' = 3 } -Max 3
-        $r.ToInvoke.Count | Should -Be 0
-        $r.Exhausted | Should -Contain 'docs/a.md'
-        $r.NextAttempts['docs/a.md'] | Should -Be 3
-    }
-    It 'does not mutate the input attempts hashtable' {
-        $att = @{ 'docs/a.md' = 1 }
-        $null = Split-ByAttemptCap -Paths @('docs/a.md') -Attempts $att -Max 3
-        $att['docs/a.md'] | Should -Be 1
-    }
-}
-
-Describe 'Format-AutoReviseDirective' {
-    It 'lists the chain commands in order' {
-        $q = @(@{ Command = '/docs-revise'; Args = 'docs/a.md' }, @{ Command = '/docs-registry-sync'; Args = '' })
-        $msg = Format-AutoReviseDirective -Queue $q -Max 3
-        $msg | Should -Match '1\. /docs-revise docs/a.md'
-        $msg | Should -Match '2\. /docs-registry-sync'
-        $msg | Should -Match 'capped at 3'
-    }
-    It 'notes exhausted files' {
-        $q = @(@{ Command = '/docs-registry-sync'; Args = '' })
-        $msg = Format-AutoReviseDirective -Queue $q -Exhausted @('docs/stuck.md') -Max 2
-        $msg | Should -Match 'docs/stuck.md'
-    }
-    It 'returns empty for an empty queue' { Format-AutoReviseDirective -Queue @() | Should -Be '' }
-}
-
-Describe 'ConvertTo-StopBlockJson' {
-    It 'produces a decision:block payload carrying the reason' {
-        $json = ConvertTo-StopBlockJson -Reason 'do the thing'
-        $o = $json | ConvertFrom-Json
-        $o.decision | Should -Be 'block'
-        $o.reason | Should -Be 'do the thing'
-    }
 }
 
 Describe 'Test-RegistryRoleInSync' {
@@ -1031,69 +790,136 @@ Describe 'Get-SafeSessionId' {
     }
 }
 
+Describe 'Get-DocsKeeperSessionPath' {
+    It 'uses .docs-keeper-session.json suffix when no session id' {
+        Get-DocsKeeperSessionPath -RepoRoot '/repo' | Should -Match '\.docs-keeper-session\.json$'
+    }
+    It 'namespaces by session id' {
+        Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'abc' | Should -Match '\.docs-keeper-session\.abc\.json$'
+    }
+}
+
 Describe 'Per-session state path namespacing' {
-    It 'uses the global path when no session id' {
-        (Get-DocsSessionPath -RepoRoot '/repo') | Should -Match '\.docs-session\.json$'
-        (Get-DocsReviseAttemptsPath -RepoRoot '/repo') | Should -Match '\.docs-keeper-attempts\.json$'
+    It 'uses the global .docs-keeper-session path when no session id' {
+        (Get-DocsKeeperSessionPath -RepoRoot '/repo') | Should -Match '\.docs-keeper-session\.json$'
     }
     It 'namespaces by session id when provided' {
-        (Get-DocsSessionPath -RepoRoot '/repo' -SessionId 'sess9') | Should -Match '\.docs-session\.sess9\.json$'
-        (Get-DocsReviseAttemptsPath -RepoRoot '/repo' -SessionId 'sess9') | Should -Match '\.docs-keeper-attempts\.sess9\.json$'
+        (Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'sess9') | Should -Match '\.docs-keeper-session\.sess9\.json$'
     }
-    It 'two sessions resolve to different attempt files' {
-        $a = Get-DocsReviseAttemptsPath -RepoRoot '/repo' -SessionId 'A'
-        $b = Get-DocsReviseAttemptsPath -RepoRoot '/repo' -SessionId 'B'
+    It 'two sessions resolve to different session files' {
+        $a = Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'A'
+        $b = Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'B'
         $a | Should -Not -Be $b
     }
 }
 
-Describe 'Per-session attempt counters are isolated (real round-trip)' {
-    It 'session A and session B keep independent counts' {
-        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("dk-" + [System.IO.Path]::GetRandomFileName())
-        New-Item -ItemType Directory -Path (Join-Path $tmp '.claude') -Force | Out-Null
-        try {
-            Write-DocsReviseAttempts -RepoRoot $tmp -SessionId 'A' -Attempts @{ 'docs/x.md' = 2 }
-            Write-DocsReviseAttempts -RepoRoot $tmp -SessionId 'B' -Attempts @{ 'docs/x.md' = 99 }
-            (Read-DocsReviseAttempts -RepoRoot $tmp -SessionId 'A')['docs/x.md'] | Should -Be 2
-            (Read-DocsReviseAttempts -RepoRoot $tmp -SessionId 'B')['docs/x.md'] | Should -Be 99
-        }
-        finally { Remove-Item -LiteralPath $tmp -Recurse -Force }
+Describe 'Add-TrackedMdFiles' {
+    It 'adds new files with revised: false' {
+        $session = @{ Head = ''; Dirty = @(); TrackedMd = @{} }
+        $result = Add-TrackedMdFiles -Session $session -Paths @('docs/a.md')
+        $result.TrackedMd['docs/a.md'].revised | Should -BeFalse
+    }
+    It 'does not overwrite an existing revised: true entry' {
+        $session = @{ Head = ''; Dirty = @(); TrackedMd = @{ 'docs/a.md' = @{ revised = $true } } }
+        $result = Add-TrackedMdFiles -Session $session -Paths @('docs/a.md')
+        $result.TrackedMd['docs/a.md'].revised | Should -BeTrue
+    }
+    It 'does not overwrite an existing revised: false entry' {
+        $session = @{ Head = ''; Dirty = @(); TrackedMd = @{ 'docs/a.md' = @{ revised = $false } } }
+        $result = Add-TrackedMdFiles -Session $session -Paths @('docs/a.md')
+        $result.TrackedMd['docs/a.md'].revised | Should -BeFalse
+    }
+    It 'handles empty paths gracefully' {
+        $session = @{ Head = ''; Dirty = @(); TrackedMd = @{} }
+        $result = Add-TrackedMdFiles -Session $session -Paths @()
+        $result.TrackedMd.Count | Should -Be 0
     }
 }
 
-Describe 'Remove-DocsSessionState' {
-    It 'deletes the session snapshot and attempt files, leaves seen-state' {
+Describe 'Set-TrackedMdRevised' {
+    It 'marks existing file revised: true' {
+        $session = @{ Head = ''; Dirty = @(); TrackedMd = @{ 'docs/a.md' = @{ revised = $false } } }
+        $result = Set-TrackedMdRevised -Session $session -Paths @('docs/a.md')
+        $result.TrackedMd['docs/a.md'].revised | Should -BeTrue
+    }
+    It 'adds file with revised: true if not present' {
+        $session = @{ Head = ''; Dirty = @(); TrackedMd = @{} }
+        $result = Set-TrackedMdRevised -Session $session -Paths @('docs/new.md')
+        $result.TrackedMd['docs/new.md'].revised | Should -BeTrue
+    }
+    It 'handles multiple paths' {
+        $session = @{ Head = ''; Dirty = @(); TrackedMd = @{} }
+        $result = Set-TrackedMdRevised -Session $session -Paths @('a.md', 'b.md')
+        $result.TrackedMd['a.md'].revised | Should -BeTrue
+        $result.TrackedMd['b.md'].revised | Should -BeTrue
+    }
+}
+
+Describe 'Format-SessionStartProposal' {
+    It 'lists tracker file and unrevised files' {
+        $msg = Format-SessionStartProposal -UnrevisedByFile @(,@('.claude/.docs-keeper-session.abc.json', @('README.md', 'docs/foo.md')))
+        $msg | Should -Match 'README.md'
+        $msg | Should -Match 'docs/foo.md'
+        $msg | Should -Match '.docs-keeper-session.abc.json'
+    }
+    It 'mentions revise, snooze, dismiss options' {
+        $msg = Format-SessionStartProposal -UnrevisedByFile @(,@('.claude/.docs-keeper-session.abc.json', @('README.md')))
+        $msg | Should -Match 'revise'
+        $msg | Should -Match 'snooze'
+        $msg | Should -Match 'dismiss'
+    }
+}
+
+Describe 'Remove-DocsSessionState updated behaviour' {
+    It 'keeps the session file when TrackedMd has revised: false entries' {
         $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("dk-" + [System.IO.Path]::GetRandomFileName())
         New-Item -ItemType Directory -Path (Join-Path $tmp '.claude') -Force | Out-Null
-        $sid = 'sx'
-        $snap = Get-DocsSessionPath -RepoRoot $tmp -SessionId $sid
-        $att = Get-DocsReviseAttemptsPath -RepoRoot $tmp -SessionId $sid
-        $seen = Get-DocsSeenStatePath -RepoRoot $tmp
-        Set-Content -LiteralPath $snap -Value '{}' -Encoding utf8
-        Set-Content -LiteralPath $att -Value '{}' -Encoding utf8
-        Set-Content -LiteralPath $seen -Value '{}' -Encoding utf8
-        Remove-DocsSessionState -RepoRoot $tmp -SessionId $sid
-        Test-Path -LiteralPath $snap | Should -BeFalse
-        Test-Path -LiteralPath $att | Should -BeFalse
-        Test-Path -LiteralPath $seen | Should -BeTrue
-        Remove-Item -LiteralPath $tmp -Recurse -Force
+        try {
+            $sid = 'sx'
+            $f = Get-DocsKeeperSessionPath -RepoRoot $tmp -SessionId $sid
+            @{ Head = 'H'; Dirty = @(); TrackedMd = @{ 'README.md' = @{ revised = $false } } } | ConvertTo-Json -Compress | Set-Content -LiteralPath $f -Encoding utf8
+            Remove-DocsSessionState -RepoRoot $tmp -SessionId $sid
+            Test-Path -LiteralPath $f | Should -BeTrue
+        } finally { Remove-Item -LiteralPath $tmp -Recurse -Force }
+    }
+    It 'deletes the session file when all TrackedMd entries are revised: true' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("dk-" + [System.IO.Path]::GetRandomFileName())
+        New-Item -ItemType Directory -Path (Join-Path $tmp '.claude') -Force | Out-Null
+        try {
+            $sid = 'sy'
+            $f = Get-DocsKeeperSessionPath -RepoRoot $tmp -SessionId $sid
+            @{ Head = 'H'; Dirty = @(); TrackedMd = @{ 'README.md' = @{ revised = $true } } } | ConvertTo-Json -Compress | Set-Content -LiteralPath $f -Encoding utf8
+            Remove-DocsSessionState -RepoRoot $tmp -SessionId $sid
+            Test-Path -LiteralPath $f | Should -BeFalse
+        } finally { Remove-Item -LiteralPath $tmp -Recurse -Force }
+    }
+    It 'deletes the session file when TrackedMd is empty' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("dk-" + [System.IO.Path]::GetRandomFileName())
+        New-Item -ItemType Directory -Path (Join-Path $tmp '.claude') -Force | Out-Null
+        try {
+            $sid = 'sz'
+            $f = Get-DocsKeeperSessionPath -RepoRoot $tmp -SessionId $sid
+            @{ Head = 'H'; Dirty = @(); TrackedMd = @{} } | ConvertTo-Json -Compress | Set-Content -LiteralPath $f -Encoding utf8
+            Remove-DocsSessionState -RepoRoot $tmp -SessionId $sid
+            Test-Path -LiteralPath $f | Should -BeFalse
+        } finally { Remove-Item -LiteralPath $tmp -Recurse -Force }
     }
 }
 
 Describe 'Invoke-SessionSnapshot' {
-    It 'writes a snapshot with HEAD and the dirty set, and resets attempts' {
+    It 'writes a snapshot with HEAD, dirty set, and empty TrackedMd when no prior session' {
         $script:captured = $null
-        $script:attemptsReset = $null
         $writer = { param($Snap) $script:captured = $Snap }
-        $attWriter = { param($A) $script:attemptsReset = $A }
         $runner = {
             param($Argv)
             if ($Argv -contains 'rev-parse') { return 'abc123' }
+            if ($Argv -contains 'diff') { return @() }
             return ' M docs/pre.md'   # porcelain
         }
-        Invoke-SessionSnapshot -RepoRoot '.' -GitCommandRunner $runner -SnapshotWriter $writer -AttemptsWriter $attWriter
+        Invoke-SessionSnapshot -RepoRoot '.' -GitCommandRunner $runner -SnapshotWriter $writer
         $script:captured.Head | Should -Be 'abc123'
         $script:captured.Dirty | Should -Contain 'docs/pre.md'
-        @($script:attemptsReset.Keys).Count | Should -Be 0
+        $script:captured.ContainsKey('TrackedMd') | Should -BeTrue -Because 'TrackedMd key must be present'
+        $script:captured.TrackedMd.Count | Should -Be 0
     }
 }

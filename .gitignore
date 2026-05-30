@@ -87,13 +87,10 @@ testing/e2e/captures/head-*.png
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
-# docs-keeper hook state: per-session snapshot (SessionStart baseline), the
-# ask-once Mode B marker, and the per-session auto/blocking revise attempt
-# counter (loop backstop). All per-machine runtime, never source. The wildcard
-# forms cover the per-session_id files (e.g. .docs-session.<sid>.json).
-.claude/.docs-session*.json
-.claude/.docs-keeper-seen.json
-.claude/.docs-keeper-attempts*.json
+# docs-keeper hook state: per-session tracker (SessionStart baseline + TrackedMd).
+# All per-machine runtime, never source. The wildcard form covers the
+# per-session_id files (e.g. .docs-keeper-session.<sid>.json).
+.claude/.docs-keeper-session*.json
 
 # ---- dotnet format / analyzer scratch -----------------------------------
 # `dotnet format --report` writes this at repo root when invoked manually
