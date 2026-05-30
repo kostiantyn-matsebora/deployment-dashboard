@@ -24,13 +24,27 @@ Inherited from `.claude/agents/docs-keeper.md`:
 
 ## Steps
 
-1. **Read each target + its surrounding doc graph.** Identify owning craft and consumers. Escalate ambiguous contracts — do not invent.
+1. **Read each target + its surrounding doc graph.**
+   - Identify owning craft and consumers.
+   - Escalate ambiguous contracts — do not invent.
 2. **Audit against loaded host rules.** Tag every violation; fix structurally (table / numbered list / extracted sub-doc), not cosmetically.
-3. **Extract over compact** for any doc > ~200 lines. Pull generic guidance to a referenced companion (e.g. `_glossary.md`, `_conventions.md`); leave the host doc to its specifics.
+3. **Extract over compact** for any doc > ~200 lines.
+   - Pull generic guidance to a referenced companion (e.g. `_glossary.md`, `_conventions.md`).
+   - Leave the host doc to its specifics.
 4. **Preserve every binding rule.** Compression drops style / filler / preamble only.
-5. **Apply the non-overwrite policy.** `Edit` with the minimum diff for revisions; propose first for full rewrites.
+5. **Apply the non-overwrite policy.**
+   - `Edit` with the minimum diff for revisions.
+   - Propose first for full rewrites.
 6. **Refresh indexes.** After structural changes in a doc tree (added / removed / renamed / role-changed files), invoke `/docs-index <affected-directory>` — that command produces / refreshes the directory's `index.md` and chains onward to `/docs-registry-sync` as needed.
 
 ## Report (binding)
 
-Structured-only — no freeform prose (`.claude/agents/docs-keeper.md` § Output format). Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = B.
+Minimal structured format — no freeform prose. Omit all slots except:
+
+```
+### Files touched
+- <path> ➜ Edit / no-op — <one-line reason>
+
+### Open questions  (omit section if none)
+- <item>
+```

@@ -1,8 +1,8 @@
 # Backend Specification — `Dashboard.Api`
 
-**Status:** Draft · **Date:** 2026-05-28
+**Status:** Draft · **Date:** 2026-05-30
 
-Implementation contract for the Deployment Dashboard backend (co-located Write + Read API). Captures the technical specification and the decisions locked during planning.
+Implementation contract for `Dashboard.Api` (co-located Write + Read API).
 
 ## Sources of truth
 
@@ -43,12 +43,13 @@ Implementation contract for the Deployment Dashboard backend (co-located Write +
 | D5 | **Unknown write fields → `422`** (not ignored). | `openapi.yaml` sets `additionalProperties: false`; D1 makes openapi authoritative. |
 | D6 | **Configurable CORS** via `CORS_ALLOWED_ORIGINS` (default off). | Gateway is optional; backend + frontend may live on different domains. With the gateway (same origin), CORS stays off. |
 | D7 | **No Snowflake** for `id`. | A 64-bit int violates `format: uuid`; UUIDv7 gives the same time-ordering, contract-compliant. |
+| D8 | **Control API gated by `X-Control-API-Key`** — a key distinct from `X-Api-Key`. | Least-privilege: ingest/fetcher credentials cannot trigger destructive control operations. |
 
 ---
 
 ## 3. Solution layout
 
-Component layout follows the agreed convention below — one host image composed from endpoint-group libraries.
+One host image composed from endpoint-group libraries:
 
 ```
 backend/
@@ -58,15 +59,17 @@ backend/
   shared/      Dashboard.Shared/      # domain entities, DbContext, problem-details, contracts
   write-api/   Dashboard.Write/       # ingest endpoint group (library)
   read-api/    Dashboard.Read/        # matrix / history / discovery / SSE (library)
+  control-api/ Dashboard.Control/     # control endpoint group (library)
   api/         Dashboard.Api/         # composition host (Program.cs) + Dockerfile
   tests/
     Dashboard.Shared.Tests/
     Dashboard.Write.Tests/
     Dashboard.Read.Tests/
+    Dashboard.Control.Tests/
     Dashboard.Api.Tests/             # WebApplicationFactory end-to-end
 ```
 
-- **Co-location.** Write & Read are distinct microservices *by concern*, implemented as two endpoint-group libraries (`MapWriteEndpoints` / `MapReadEndpoints`) composed by one `Dashboard.Api` host → one image. Preserves the future-split seam without splitting the container.
+- **Co-location.** Write & Read are distinct endpoint-group libraries (`MapWriteEndpoints` / `MapReadEndpoints`) composed by one `Dashboard.Api` host — one image, future-split seam preserved.
 - **Test scoping** — fetcher tests live with the fetcher component, not in these projects; the API test run excludes `Dashboard.Fetcher.Tests`.
 
 ---
@@ -123,6 +126,7 @@ Daily `IHostedService` deletes `WHERE happened_at < NOW() - HISTORY_RETENTION_DA
 | discovery | `GET /api/services`, `GET /api/environments` | none | distinct, sorted |
 | stream | `GET /api/events/stream` | none | SSE; `event: deployment`; `id:` = row id; `Last-Event-ID` replay; `: ping`/15 s |
 | fetcher | `GET/PUT /api/fetcher/state/{adapter}` | `X-Api-Key` | opaque upsert; `413` > 8 KiB |
+| control | `POST /api/control/reset` | `X-Control-API-Key` | delete all rows from `deployment_events` + `fetcher_state` → `204` (D8) |
 | ops | `GET /healthz`, `GET /readyz` | none | liveness / readiness (DB reachable + LISTEN attached) |
 
 ---
@@ -131,12 +135,12 @@ Daily `IHostedService` deletes `WHERE happened_at < NOW() - HISTORY_RETENTION_DA
 
 | Concern | Spec |
 |---|---|
-| **Auth** | `X-Api-Key` endpoint filter on write + fetcher. Missing/invalid → `401` (FR-10). Key from env; never logged or echoed. |
+| **Auth** | `X-Api-Key` endpoint filter on write + fetcher. `X-Control-API-Key` endpoint filter on control surface (D8). Both: missing/invalid → `401` (FR-10). Keys from env; never logged or echoed. |
 | **Validation** | Closed bodies (`additionalProperties:false`). Failures → `422` `application/problem+json` with `errors[]` (JSON-Pointer + message). |
 | **Errors** | RFC 9457 everywhere. No `409` on ingest (append-only). `Retry-After` reserved for `429`/`503`. |
 | **CORS** | `CORS_ALLOWED_ORIGINS` (CSV). Empty → no CORS (gateway/same-origin). Set → policy over read GETs **and** the SSE stream (EventSource is CORS-gated cross-origin). No credentials. |
 | **Statelessness (NFR-05)** | No in-memory cache of state; every read hits the DB. SSE fan-out only via per-instance `LISTEN`. No sticky sessions. |
-| **Secrets** | `X-Api-Key` never appears in any body, problem detail, or log line. Cursors stored verbatim, never parsed/logged. |
+| **Secrets** | `X-Api-Key` and `X-Control-API-Key` never appear in any body, problem detail, or log line. Cursors stored verbatim, never parsed/logged. |
 
 ---
 
@@ -168,7 +172,8 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 | Var | Default | Purpose |
 |---|---|---|
 | `ConnectionStrings__Postgres` | — | DB connection |
-| `API_KEY` | — | shared write secret |
+| `API_KEY` | — | shared write/fetcher secret (`X-Api-Key`) |
+| `CONTROL_API_KEY` | — | control surface secret (`X-Control-API-Key`, D8) |
 | `CORS_ALLOWED_ORIGINS` | *(empty)* | CSV of allowed origins; empty disables CORS |
 | `HISTORY_RETENTION_DAYS` | `365` | retention window (≥ 90) |
 
@@ -184,6 +189,7 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 6. **Fetcher state + Ops** — upsert + `/healthz` + `/readyz`.
 7. **Retention job.**
 8. **CORS + Dockerfile + integration tests** green.
+9. **Control API** — `Dashboard.Control` library; `POST /api/control/reset`; control-key filter; `Dashboard.Control.Tests`.
 
 ---
 

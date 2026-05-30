@@ -16,6 +16,7 @@ info:
       - **Read**  — matrix + per-slot history + raw event listings + discovery; unauthenticated.
       - **Stream** — SSE fan-out of newly-ingested events; unauthenticated.
       - **Fetcher** — opaque per-adapter cursor state for `Dashboard.Fetcher`; gated by `X-Api-Key`.
+      - **Control** — destructive administrative operations (reset); gated by `X-Control-API-Key`.
       - **Ops** — `/healthz`, `/readyz`.
 
     **Event-store semantics.** The persistence model (SAD §11) is an append-only
@@ -58,6 +59,8 @@ tags:
     description: Real-time SSE fan-out.
   - name: fetcher
     description: Opaque per-adapter cursor state for `Dashboard.Fetcher`.
+  - name: control
+    description: Control surface — destructive administrative operations. Requires `X-Control-API-Key`.
   - name: ops
     description: Liveness + readiness probes.
 
@@ -346,6 +349,26 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  # ───── Control surface ───────────────────────────────────────────────────
+  /api/control/reset:
+    post:
+      tags: [control]
+      operationId: resetState
+      summary: Delete all stored data (deployment events and fetcher state).
+      description: |
+        Truncates `deployment_events` and `fetcher_state` — all rows, no filters.
+
+        Intended for test-environment teardown and local-dev resets.
+        **Not safe in production.**
+
+        Gated by `X-Control-API-Key` (D8) — a distinct secret from `X-Api-Key`
+        so that regular ingest/fetcher credentials cannot trigger destructive operations.
+      security:
+        - controlApiKey: []
+      responses:
+        '204': { description: All data deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   # ───── Ops ────────────────────────────────────────────────────────────────
   /healthz:
     get:
@@ -394,6 +417,15 @@ components:
         Static, server-side-configured shared secret. Required on every write call.
         Missing or invalid → `401`. The dev fake key is never embedded in the SPA
         bundle (NFR-04).
+    controlApiKey:
+      type: apiKey
+      in: header
+      name: X-Control-API-Key
+      description: |
+        Static, server-side-configured shared secret for control operations (D8).
+        Distinct from `X-Api-Key` — least-privilege separation; ingest/fetcher callers
+        cannot trigger destructive operations.
+        Missing or invalid → `401`.
 
   parameters:
     XProgressReporter:
@@ -409,7 +441,7 @@ components:
 
   responses:
     Unauthorized:
-      description: Missing or invalid `X-Api-Key`.
+      description: Missing or invalid API key.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }

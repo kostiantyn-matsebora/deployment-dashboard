@@ -15,7 +15,11 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | Enum values | lower kebab-case | `in-progress`, `success`, `failure` |
 | Headers | `Train-Case` | `X-Api-Key`, `X-Progress-Reporter`, `Last-Event-ID` |
 
-**Verb mapping.** Side-effecting writes → `POST` (append-only ingest) or `PUT` (idempotent upsert, fetcher cursor). Reads → `GET`. No `PATCH`. No `DELETE` on the public API — retention is owned by the backend background job per SAD §11 Retention.
+**Verb mapping.**
+- Side-effecting writes → `POST` (append-only ingest) or `PUT` (idempotent upsert, fetcher cursor).
+- Named destructive actions on the control surface → `POST` (e.g. `reset`).
+- Reads → `GET`. No `PATCH`.
+- No `DELETE` on the public API — retention is owned by the backend background job per SAD §11 Retention.
 
 ---
 
@@ -24,6 +28,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | Header | Direction | When | Value |
 |---|---|---|---|
 | `X-Api-Key` | request | every write call (`POST /api/deployments`, `GET/PUT /api/fetcher/state/*`) | Static shared secret. |
+| `X-Control-API-Key` | request | every control call (`POST /api/control/*`) | Static shared secret, distinct from `X-Api-Key` (D8). |
 | `Content-Type` | request | every body-bearing call | `application/json; charset=utf-8` |
 | `Accept` | request | optional | `application/json`, or `text/event-stream` for the SSE endpoint. |
 | `X-Progress-Reporter` | request | optional, ingest only | `<emitter>/<adapter>`, e.g. `dashboard-fetcher/github-actions`. |
@@ -38,8 +43,11 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 - **Single live version.** No `/v1` segment — internal-only tooling (NFR-04), one tenant, one consumer.
 - **Evolution is additive only.** New optional fields, new endpoints, new enum values appended at the tail.
 - **Breaking change ⇒ new path prefix.** A v2 surface lives at `/api/v2/...` side-by-side with `/api/...` until the SPA + notify step + fetcher are all migrated.
-- **Write bodies are closed.** `openapi.yaml` sets `additionalProperties: false` on `DeploymentEventIngest` / `FetcherStateUpsert`; **`openapi.yaml` is the source of truth**, so the server **rejects unknown JSON fields on write with `422`** (it does NOT silently ignore them). Forward-compat for clients is achieved by additive evolution (new optional fields), not by lenient parsing.
-- Clients MUST ignore unknown JSON fields on read (forward-compat with newer servers).
+- **Write bodies are closed.**
+  - `openapi.yaml` sets `additionalProperties: false` on ingest + fetcher-upsert bodies.
+  - Unknown fields on write → `422` (not silently ignored).
+  - Forward-compat: additive evolution (new optional fields only); never lenient parsing.
+- **Read responses are open.** Clients MUST ignore unknown JSON fields (forward-compat with newer servers).
 
 ---
 
@@ -49,6 +57,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 |---|---|---|
 | `POST /api/deployments` | `X-Api-Key` | FR-10 — every write rejected with `401` on missing/invalid key. |
 | `GET/PUT /api/fetcher/state/{adapter}` | `X-Api-Key` | Mutates persistent state; same trust tier as ingest. |
+| `POST /api/control/*` | `X-Control-API-Key` | Destructive operations require a distinct secret (D8); ingest key grants no control access. |
 | `GET /api/matrix`, `GET /api/deployments`, `GET /api/services`, `GET /api/environments` | none | Internal-only network (NFR-04); SPA never holds a secret. |
 | `GET /api/events/stream` | none | Same as other reads; auth would defeat browser EventSource. |
 | `GET /healthz`, `GET /readyz` | none | Probe surfaces. |
@@ -60,7 +69,8 @@ The dev/local fake key is configured in the API container's environment and is *
 ## 5. Pagination, filtering, sorting
 
 - **Cursor pagination only.** Endpoints that paginate accept `cursor` + `limit`; response carries `next_cursor` (nullable).
-- **No `offset` / `page`.** Cursors are opaque base64 blobs — clients MUST NOT parse them.
+- **No `offset` / `page`.**
+- **Cursors are opaque** base64 blobs — clients MUST NOT parse them.
 - **Default `limit` = 100, max = 500.** Out-of-range → `422`.
 - **Default sort** for `GET /api/deployments` is `happened_at DESC` then `id DESC` as a tiebreaker (stable for cursor resume).
 - **Filtering** is via flat query params (`?service=…&environment=…&status=…&deployment_id=…&since=…&until=…`). No JSON filter DSL.
@@ -102,7 +112,7 @@ For `422` payload-validation failures, the body additionally carries an `errors[
 | Status | Trigger |
 |---|---|
 | `201 Created` | Event appended. `Location` header carries `/api/deployments/{id}`. |
-| `401 Unauthorized` | `X-Api-Key` missing or invalid. |
+| `401 Unauthorized` | API key (`X-Api-Key` or `X-Control-API-Key`) missing or invalid. |
 | `413 Payload Too Large` | Fetcher cursor over 8 KiB. |
 | `422 Unprocessable Entity` | Schema-level validation failed (missing required field, malformed `happened_at`, bad enum, non-integer `run_number`, oversized array, …). |
 | `429 Too Many Requests` | Future rate-limit slot. `Retry-After` always present. |
@@ -144,8 +154,7 @@ MVP does not enforce rate limits — internal-only network, single SPA, predicta
 
 - `429 Too Many Requests` + `Retry-After` for the ingest path.
 - `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `X-RateLimit-Reset` for a future budget-based limiter.
-
-Implementers SHOULD NOT add these headers until a real limit is in force.
+- Implementers SHOULD NOT add these headers until a real limit is in force.
 
 ---
 
@@ -154,131 +163,20 @@ Implementers SHOULD NOT add these headers until a real limit is in force.
 - **Internal-only.** The API has no public ingress; only the App Gateway is reachable (NFR-04).
 - **No CORS config.** Single origin via the gateway eliminates CORS surface entirely.
 - **No PII.** `actor` is a CI/CD identifier (login / service principal), not an end user. No emails, no tokens.
-- **No secret echo.** `X-Api-Key` MUST NOT appear in any response body, problem detail, or log line — the CI caller masks it on its side (e.g. `::add-mask::` in GitHub Actions); the server masks on the storage side.
+- **No secret echo.** `X-Api-Key` and `X-Control-API-Key` MUST NOT appear in any response body, problem detail, or log line — the CI caller masks on its side (e.g. `::add-mask::` in GitHub Actions); the server masks on the storage side.
 - **Opaque cursors.** Fetcher cursors are stored verbatim; the server MUST NOT parse, log, or inspect them.
 
 ---
 
 ## 11. Examples — copy-paste minimum viable calls
 
-### Ingest (terminal success)
-
-```http
-POST /api/deployments HTTP/1.1
-Host: dashboard.internal
-Content-Type: application/json
-X-Api-Key: ********
-X-Progress-Reporter: dashboard-fetcher/github-actions
-
-{
-  "deployment_id":      "gh-9482-1",
-  "service":            "service-a",
-  "environment":        "dev",
-  "version":            "1.4.2",
-  "status":             "success",
-  "happened_at":        "2026-05-28T09:42:17Z",
-  "run_url":            "https://github.com/acme/repo/actions/runs/9482",
-  "run_number":         9482,
-  "actor":              "alice",
-  "ref":                "refs/heads/main",
-  "sha":                "3f2c1a9",
-  "parent_deployments": []
-}
-```
-
-```http
-HTTP/1.1 201 Created
-Location: /api/deployments/0d3e4f9a-2b1c-4f7e-9a12-7b6e5c2d8f01
-Content-Type: application/json
-
-{ "id": "0d3e4f9a-...", "deployment_id": "gh-9482-1", "happened_at": "2026-05-28T09:42:17Z", ... }
-```
-
-### Ingest (in-progress, same logical deployment as a later terminal row)
-
-```http
-POST /api/deployments HTTP/1.1
-Content-Type: application/json
-X-Api-Key: ********
-
-{
-  "deployment_id":      "gh-9491-1",
-  "service":            "service-a",
-  "environment":        "prod",
-  "version":            "1.4.2",
-  "status":             "in-progress",
-  "happened_at":        "2026-05-28T10:14:02Z",
-  "parent_deployments": ["gh-9482-1"]
-}
-```
-
-A subsequent `POST` with `deployment_id=gh-9491-1`, `status=success`, and a later `happened_at` appends a second row. Both rows persist; the Matrix shows the latest by `happened_at`.
-
-### Matrix snapshot
-
-```http
-GET /api/matrix HTTP/1.1
-Accept: application/json
-```
-
-```http
-HTTP/1.1 200 OK
-ETag: W/"m-2026-05-28T10:14:02Z-482"
-Content-Type: application/json
-
-{
-  "generated_at": "2026-05-28T10:14:02Z",
-  "environments": ["dev","qa","uat","prod"],
-  "rows": [
-    {
-      "service": "service-a",
-      "slots": {
-        "dev":  { "current": { ... status:"success" ... } },
-        "prod": {
-          "current":         { ... status:"failure", version:"1.4.3" ... },
-          "last_successful": { ... status:"success", version:"1.4.2" ... }
-        }
-      }
-    }
-  ]
-}
-```
-
-### SSE
-
-```http
-GET /api/events/stream HTTP/1.1
-Accept: text/event-stream
-Last-Event-ID: 01J9F4WZK3W9G2T6X4QH3DKQF4
-```
-
-```
-: ping
-
-id: 01J9F4WZK3W9G2T6X4QH3DKQF5
-event: deployment
-data: {"id":"01J9F4WZ...","deployment_id":"gh-9491-1","service":"service-a","environment":"prod","status":"success","happened_at":"2026-05-28T10:14:02Z",...}
-```
-
-### Fetcher cursor
-
-```http
-PUT /api/fetcher/state/github-actions HTTP/1.1
-Content-Type: application/json
-X-Api-Key: ********
-
-{ "cursor": "eyJyZXBvIjoiYWNtZS9hcGkiLCJzaW5jZSI6Ijk0ODIifQ==" }
-```
-
-```http
-HTTP/1.1 204 No Content
-```
+See [`api-examples.md`](./api-examples.md) — ingest, matrix snapshot, SSE, fetcher cursor, control reset.
 
 ---
 
 ## 12. Known carry-over for implementers
 
-All previously-tracked discrepancies are now **reconciled** against `openapi.yaml` (the source of truth). History retained for traceability:
+Discrepancies reconciled against `openapi.yaml` (D1). History:
 
 | Item | Resolution |
 |---|---|
