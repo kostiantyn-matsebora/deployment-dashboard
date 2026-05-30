@@ -8,7 +8,7 @@
     (configurable) and prints the ordered remediation queue.
 
 .DESCRIPTION
-    Four invocation surfaces:
+    Six invocation surfaces:
 
     PreToolUse mode (default):
       Wired via `.claude/settings.json` as a PreToolUse hook matched on the
@@ -33,8 +33,15 @@
     SessionStart mode (-SnapshotSession switch):
       Captures HEAD + the already-dirty path set to
       `.claude/.docs-keeper-session.<sid>.json` so Track can isolate THIS
-      session's doc edits. Also surfaces unrevised files from prior sessions.
-      Never blocks.
+      session's doc edits. Also surfaces unrevised files and pending captures
+      from prior sessions. Never blocks.
+
+    SessionEnd mode (-SessionEnd switch):
+      Deletes this session's per-session state files. Surfaces any captured
+      docs as a systemMessage. Never blocks.
+
+    Capture write operations (AddCapture / CaptureFromSummary) live in the
+    sibling script Invoke-DocsKeeperCapture.ps1.
 
     Registry drift also covers ROLE drift: a present "Sources of truth" entry
     whose text no longer contains the ROOT index's `intro` queues
@@ -136,8 +143,6 @@ param(
     [switch]$MarkRevised,
     [string]$Dismiss,
     [switch]$DriftOnly,
-    [switch]$AddCapture,
-    [switch]$CaptureFromSummary,
     [switch]$AsLibrary
 )
 
@@ -591,41 +596,6 @@ function Get-DocsCaptureFilePath {
     return (Join-Path $dir $name)
 }
 
-function New-DocsCaptureEntry {
-    [CmdletBinding()]
-    param(
-        [string]$Content,
-        [string]$SuggestedDoc,
-        [string]$Source,
-        [string]$CapturedAt
-    )
-    $safeSource = if ($Source -in @('manual', 'compaction')) { $Source } else { 'manual' }
-    return @{
-        content      = $Content
-        suggestedDoc = $SuggestedDoc
-        source       = $safeSource
-        capturedAt   = $CapturedAt
-    }
-}
-
-function Add-DocsCaptureEntry {
-    <#
-        Pure. Returns updated capture hashtable with $Entry appended to captures.
-        Does not mutate the input.
-    #>
-    [CmdletBinding()]
-    param([hashtable]$CaptureFile, [hashtable]$Entry)
-    $result = @{}
-    foreach ($k in $CaptureFile.Keys) { $result[$k] = $CaptureFile[$k] }
-    $existing = [System.Collections.Generic.List[object]]::new()
-    if ($result.ContainsKey('captures') -and $result['captures']) {
-        foreach ($item in @($result['captures'])) { $existing.Add($item) }
-    }
-    $existing.Add($Entry)
-    $result['captures'] = $existing.ToArray()
-    return $result
-}
-
 function Format-CaptureReport {
     <#
         Pure. Returns a concise structured string for systemMessage (SessionEnd).
@@ -1033,19 +1003,6 @@ function Read-DocsCapture {
     catch { return $null }
 }
 
-function Write-DocsCapture {
-    <#
-        Writes the capture hashtable as JSON. Creates .claude/ dir if absent.
-    #>
-    [CmdletBinding()]
-    param([string]$Path, [hashtable]$CaptureFile)
-    $dir = Split-Path -Parent $Path
-    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
-    $CaptureFile | ConvertTo-Json -Compress -Depth 5 | Set-Content -LiteralPath $Path -Encoding utf8
-}
-
 function Invoke-SessionSnapshot {
     <#
         SessionStart hook: capture HEAD + the already-dirty path set so the Track
@@ -1230,55 +1187,6 @@ if (-not $AsLibrary) {
             if ($mdPaths.Count -gt 0) {
                 $session = Add-TrackedMdFiles -Session $session -Paths $mdPaths
                 Write-DocsKeeperSession -RepoRoot $RepoRoot -SessionId $SessionId -Session $session
-            }
-        }
-        catch { $null = $_ }
-        exit 0
-    }
-
-    # -AddCapture: append a manual capture entry from a /docs-capture skill pipe.
-    if ($AddCapture) {
-        try {
-            $payload = Read-HookPayload -Json $HookInputJson
-            $content     = ''
-            $suggestedDoc = ''
-            if ($payload) {
-                $src = if ($payload.tool_input) { $payload.tool_input } else { $payload }
-                if ($src.content)      { $content      = [string]$src.content }
-                if ($src.suggestedDoc) { $suggestedDoc = [string]$src.suggestedDoc }
-            }
-            if ($content) {
-                $capturePath = Get-DocsCaptureFilePath -RepoRoot $RepoRoot -SessionId $SessionId
-                $captureFile = Read-DocsCapture -Path $capturePath
-                if (-not $captureFile) { $captureFile = @{ sessionId = $SessionId; captures = @() } }
-                $entry = New-DocsCaptureEntry -Content $content -SuggestedDoc $suggestedDoc -Source 'manual' -CapturedAt ([DateTime]::UtcNow.ToString('o'))
-                $captureFile = Add-DocsCaptureEntry -CaptureFile $captureFile -Entry $entry
-                Write-DocsCapture -Path $capturePath -CaptureFile $captureFile
-            }
-        }
-        catch { $null = $_ }
-        exit 0
-    }
-
-    # -CaptureFromSummary: record a compaction summary as a capture entry.
-    if ($CaptureFromSummary) {
-        try {
-            $payload = Read-HookPayload -Json $HookInputJson
-            $summary = ''
-            if ($payload) {
-                if ($payload.summary)                        { $summary = [string]$payload.summary }
-                elseif ($payload.compaction_summary)         { $summary = [string]$payload.compaction_summary }
-                elseif ($payload.tool_response -and $payload.tool_response.summary) {
-                    $summary = [string]$payload.tool_response.summary
-                }
-            }
-            if ($summary) {
-                $capturePath = Get-DocsCaptureFilePath -RepoRoot $RepoRoot -SessionId $SessionId
-                $captureFile = Read-DocsCapture -Path $capturePath
-                if (-not $captureFile) { $captureFile = @{ sessionId = $SessionId; captures = @() } }
-                $entry = New-DocsCaptureEntry -Content $summary -SuggestedDoc '' -Source 'compaction' -CapturedAt ([DateTime]::UtcNow.ToString('o'))
-                $captureFile = Add-DocsCaptureEntry -CaptureFile $captureFile -Entry $entry
-                Write-DocsCapture -Path $capturePath -CaptureFile $captureFile
             }
         }
         catch { $null = $_ }
