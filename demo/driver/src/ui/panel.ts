@@ -1,0 +1,359 @@
+/** Browser control panel — served at GET /demo/ (inline, no bundler). */
+export const PANEL_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo Driver</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f13;
+      color: #d4d4d8;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 1.25rem; font-weight: 600; color: #f4f4f5;
+      margin-bottom: 20px; letter-spacing: 0.03em;
+    }
+    h1 span { color: #6366f1; }
+
+    /* Layout */
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+    .full { grid-column: 1 / -1; }
+
+    /* Card */
+    .card {
+      background: #18181b; border: 1px solid #27272a;
+      border-radius: 10px; padding: 18px;
+    }
+    .card-title {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: #71717a; margin-bottom: 14px;
+    }
+
+    /* Form controls */
+    select, input[type="number"] {
+      background: #0f0f13; border: 1px solid #3f3f46; color: #d4d4d8;
+      padding: 5px 9px; border-radius: 6px; font-size: 0.85rem; outline: none;
+    }
+    select { min-width: 180px; }
+    input[type="number"] { width: 90px; }
+    select:focus, input:focus { border-color: #6366f1; }
+
+    /* Buttons */
+    button {
+      padding: 5px 14px; border-radius: 6px; border: none;
+      font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none;
+      transition: background 0.15s;
+    }
+    .btn-run  { background: #6366f1; color: #fff; }
+    .btn-run:hover:not(:disabled)  { background: #4f46e5; }
+    .btn-stop { background: #ef4444; color: #fff; }
+    .btn-stop:hover:not(:disabled) { background: #dc2626; }
+    .btn-sm   { background: #27272a; color: #a1a1aa; padding: 3px 10px; font-size: 0.76rem; }
+    .btn-sm:hover { background: #3f3f46; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .lbl { font-size: 0.75rem; color: #71717a; white-space: nowrap; }
+
+    /* State badge */
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 99px;
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    }
+    .badge-idle     { background: #27272a; color: #a1a1aa; }
+    .badge-running  { background: #1e3a5f; color: #60a5fa; }
+    .badge-done     { background: #14532d; color: #86efac; }
+    .badge-failed   { background: #450a0a; color: #f87171; }
+
+    /* Progress */
+    .progress-row { margin-top: 12px; }
+    .progress-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+    .progress-lbl  { font-size: 0.78rem; color: #a1a1aa; }
+    .progress-pct  { font-size: 0.72rem; color: #71717a; }
+    .progress-bg   { background: #27272a; border-radius: 4px; height: 5px; overflow: hidden; }
+    .progress-fill { background: #6366f1; height: 100%; width: 0%; border-radius: 4px; transition: width 0.4s; }
+
+    /* Stats row */
+    .stats { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
+    .stat-lbl { font-size: 0.7rem; color: #71717a; margin-bottom: 2px; }
+    .stat-val { font-size: 0.9rem; color: #d4d4d8; font-weight: 500; }
+    .stat-val.err { color: #f87171; }
+
+    /* Feed */
+    .feed-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .feed-header .card-title { margin-bottom: 0; }
+    .live-badge {
+      font-size: 0.7rem; font-weight: 700; padding: 2px 9px;
+      border-radius: 99px; letter-spacing: 0.05em;
+    }
+    .live-connecting  { background: #27272a; color: #a1a1aa; }
+    .live-live        { background: #14532d; color: #86efac; }
+    .live-reconnecting{ background: #451a03; color: #fb923c; }
+
+    .feed-list {
+      max-height: 280px; overflow-y: auto;
+      font-size: 0.76rem; font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
+    }
+    .feed-item { padding: 5px 0; border-bottom: 1px solid #1f1f23; line-height: 1.5; }
+    .feed-item:last-child { border-bottom: none; }
+    .fi-posted .fi-icon { color: #86efac; }
+    .fi-error  .fi-icon { color: #f87171; }
+    .fi-time  { color: #52525b; font-size: 0.7rem; margin-right: 6px; }
+    .fi-id    { color: #d4d4d8; font-weight: 600; }
+    .fi-meta  { color: #71717a; }
+    .feed-empty { color: #52525b; text-align: center; padding: 24px 0; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <h1>Demo <span>Driver</span></h1>
+
+  <div class="grid">
+
+    <!-- Scenarios card -->
+    <div class="card">
+      <div class="card-title">Scenarios</div>
+      <div class="controls">
+        <select id="scenario-select"><option value="">Loading…</option></select>
+        <span class="lbl">Delay (ms)</span>
+        <input type="number" id="delay-input" value="0" min="0" step="100">
+        <button class="btn-run"  id="run-btn"  disabled>Run</button>
+        <button class="btn-stop" id="stop-btn" disabled>Stop</button>
+      </div>
+    </div>
+
+    <!-- Status card -->
+    <div class="card">
+      <div class="card-title">Status</div>
+      <span class="badge badge-idle" id="state-badge">idle</span>
+      <div class="progress-row">
+        <div class="progress-meta">
+          <span class="progress-lbl" id="progress-lbl">0 / 0 events</span>
+          <span class="progress-pct" id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bg"><div class="progress-fill" id="progress-fill"></div></div>
+      </div>
+      <div class="stats">
+        <div>
+          <div class="stat-lbl">Errors</div>
+          <div class="stat-val err" id="error-count">0</div>
+        </div>
+        <div>
+          <div class="stat-lbl">Started</div>
+          <div class="stat-val" id="started-at">—</div>
+        </div>
+        <div>
+          <div class="stat-lbl">Finished</div>
+          <div class="stat-val" id="finished-at">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post feed card -->
+    <div class="card full">
+      <div class="feed-header">
+        <div class="card-title">Post Feed</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="live-badge live-connecting" id="live-badge">● CONNECTING</span>
+          <button class="btn-sm" id="clear-btn">Clear</button>
+        </div>
+      </div>
+      <div class="feed-list" id="feed-list">
+        <div class="feed-empty" id="feed-empty">No events posted yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    'use strict';
+    const $ = id => document.getElementById(id);
+
+    const scenarioSelect = $('scenario-select');
+    const delayInput     = $('delay-input');
+    const runBtn         = $('run-btn');
+    const stopBtn        = $('stop-btn');
+    const stateBadge     = $('state-badge');
+    const progressLbl    = $('progress-lbl');
+    const progressPct    = $('progress-pct');
+    const progressFill   = $('progress-fill');
+    const errorCount     = $('error-count');
+    const startedAt      = $('started-at');
+    const finishedAt     = $('finished-at');
+    const liveBadge      = $('live-badge');
+    const clearBtn       = $('clear-btn');
+    const feedList       = $('feed-list');
+    const feedEmpty      = $('feed-empty');
+
+    let pollTimer = null;
+    let eventSource = null;
+
+    // ── Boot ─────────────────────────────────────────────────────────────────
+    (async () => {
+      await Promise.all([loadScenarios(), refreshStatus()]);
+      connectStream();
+    })();
+
+    // ── Data loaders ──────────────────────────────────────────────────────────
+    async function loadScenarios() {
+      try {
+        const { items } = await apiFetch('/demo/scenarios');
+        scenarioSelect.innerHTML = '';
+        if (items && items.length) {
+          items.forEach(name => {
+            const o = document.createElement('option');
+            o.value = o.textContent = name;
+            scenarioSelect.appendChild(o);
+          });
+          runBtn.disabled = false;
+        } else {
+          scenarioSelect.innerHTML = '<option value="">No scenarios</option>';
+        }
+      } catch {
+        scenarioSelect.innerHTML = '<option value="">Error</option>';
+      }
+    }
+
+    async function refreshStatus() {
+      try {
+        const data = await apiFetch('/demo/status');
+        applyStatus(data);
+      } catch {}
+    }
+
+    function applyStatus(d) {
+      const state = d.state || 'idle';
+      stateBadge.textContent  = state;
+      stateBadge.className    = 'badge badge-' + state;
+
+      const total = d.events_total || 0;
+      const sent  = d.events_sent  || 0;
+      const pct   = total > 0 ? (sent / total * 100) : 0;
+
+      progressLbl.textContent     = sent + ' / ' + total + ' events';
+      progressPct.textContent     = pct.toFixed(0) + '%';
+      progressFill.style.width    = pct.toFixed(1) + '%';
+      errorCount.textContent      = d.errors || 0;
+      startedAt.textContent       = d.started_at  ? fmt(d.started_at)  : '—';
+      finishedAt.textContent      = d.finished_at ? fmt(d.finished_at) : '—';
+
+      runBtn.disabled  = state === 'running';
+      stopBtn.disabled = state !== 'running';
+
+      if (state === 'running') schedulePoll();
+      else clearTimeout(pollTimer);
+    }
+
+    function schedulePoll() {
+      clearTimeout(pollTimer);
+      pollTimer = setTimeout(async () => { await refreshStatus(); }, 600);
+    }
+
+    // ── Button handlers ───────────────────────────────────────────────────────
+    runBtn.addEventListener('click', async () => {
+      const name = scenarioSelect.value;
+      if (!name) return;
+      const delay = parseInt(delayInput.value, 10) || 0;
+      try {
+        const data = await apiFetch(
+          '/demo/scenarios/' + encodeURIComponent(name) + '/run',
+          { method: 'POST', body: JSON.stringify({ delay_ms: delay }) }
+        );
+        applyStatus(data);
+      } catch {}
+    });
+
+    stopBtn.addEventListener('click', async () => {
+      const name = scenarioSelect.value;
+      if (!name) return;
+      try {
+        const data = await apiFetch(
+          '/demo/scenarios/' + encodeURIComponent(name) + '/stop',
+          { method: 'POST' }
+        );
+        applyStatus(data);
+      } catch {}
+    });
+
+    clearBtn.addEventListener('click', () => {
+      feedList.innerHTML = '';
+      feedList.appendChild(feedEmpty);
+    });
+
+    // ── SSE stream ────────────────────────────────────────────────────────────
+    function connectStream() {
+      if (eventSource) { try { eventSource.close(); } catch {} }
+      setLiveBadge('connecting');
+      eventSource = new EventSource('/demo/stream');
+
+      eventSource.onopen = () => setLiveBadge('live');
+
+      eventSource.addEventListener('posted', e => {
+        const d = JSON.parse(e.data);
+        addFeedItem('posted', d);
+        refreshStatus();
+      });
+
+      eventSource.addEventListener('error', e => {
+        if (e.data) {
+          addFeedItem('error', JSON.parse(e.data));
+        } else {
+          setLiveBadge('reconnecting');
+          // browser auto-reconnects EventSource
+        }
+      });
+    }
+
+    function setLiveBadge(mode) {
+      const labels = { connecting: '● CONNECTING', live: '● LIVE', reconnecting: '● RECONNECTING' };
+      liveBadge.textContent = labels[mode] || mode;
+      liveBadge.className   = 'live-badge live-' + mode;
+    }
+
+    function addFeedItem(type, d) {
+      if (feedEmpty.parentNode === feedList) feedList.removeChild(feedEmpty);
+      const item = document.createElement('div');
+      item.className = 'feed-item fi-' + type;
+      const time = fmt(d.posted_at || new Date().toISOString());
+      if (type === 'posted') {
+        item.innerHTML =
+          '<span class="fi-icon">✓</span> ' +
+          '<span class="fi-time">' + esc(time) + '</span>' +
+          '<span class="fi-id">'  + esc(d.deployment_id) + '</span> ' +
+          '<span class="fi-meta">' + esc(d.service) + ' / ' + esc(d.environment) + ' → ' + esc(d.status) + '</span>';
+      } else {
+        item.innerHTML =
+          '<span class="fi-icon">✗</span> ' +
+          '<span class="fi-time">' + esc(time) + '</span>' +
+          '<span class="fi-id">ERROR</span> ' +
+          '<span class="fi-meta">' + esc(d.deployment_id) + ' · HTTP ' + d.http_status + ' · attempt ' + d.attempt + '</span>';
+      }
+      feedList.insertBefore(item, feedList.firstChild);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    async function apiFetch(url, opts = {}) {
+      const res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      return res.json();
+    }
+
+    function fmt(iso) {
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>`;

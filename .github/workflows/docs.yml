@@ -1,4 +1,4 @@
-name: Docs — Index & Registry Integrity
+name: _docs
 
 on:
   push:
