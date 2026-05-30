@@ -194,6 +194,11 @@ Describe 'Get-SessionWorktreePath' {
         )
     }
 
+    It 'handles single-component absolute path (e.g. /repo on Linux)' {
+        $path = Get-SessionWorktreePath -RepoRoot '/repo' -SessionId 'abc123'
+        $path | Should -Match 'repo-wt-abc123'
+    }
+
     It 'returns empty for empty sid' {
         Get-SessionWorktreePath -RepoRoot '/repo' -SessionId '' | Should -Be ''
     }

@@ -119,8 +119,11 @@ function Get-SessionWorktreePath {
     param([string]$RepoRoot, [string]$SessionId)
     $safe = Get-SafeWorktreeSessionId -SessionId $SessionId
     if (-not $safe -or -not $RepoRoot) { return '' }
-    $parent   = Split-Path -Parent $RepoRoot
-    $repoName = Split-Path -Leaf   $RepoRoot
+    # Use GetDirectoryName — Split-Path -Parent returns '' for single-component
+    # absolute paths (e.g. '/repo') on Linux, which Join-Path rejects.
+    $parent   = [System.IO.Path]::GetDirectoryName($RepoRoot)
+    $repoName = [System.IO.Path]::GetFileName($RepoRoot)
+    if ([string]::IsNullOrWhiteSpace($parent) -or [string]::IsNullOrWhiteSpace($repoName)) { return '' }
     return (Join-Path $parent "${repoName}-wt-${safe}")
 }
 
