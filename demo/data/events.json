@@ -12,7 +12,8 @@
       "catalog-edge":        "PARTIAL — run 5160 (v5.0.0-rc2) dev→staging→qa(in-progress, first-ever to qa, no actor); older run 5145 (v4.18.7) holds preprod→prod.",
       "ledger-projector":    "PARTIAL — run 1830 (v2.0.1) dev→staging; qa is a lone in-progress retry (run 1828) after a failure; older run 1802 (v1.9.8) holds preprod→prod.",
       "notification-worker": "PARTIAL — run 3110 (v1.9.1) dev→staging(FAILURE) with staging last_successful (run 3081, sha-only fallback) as a lone node; older run 3076 (v1.8.4) holds qa→preprod; prod (run 3041) is a lone node.",
-      "platform-proxy":     "LONG VERSIONS — run 6200 (v2.0.0-beta.3+build.20250530) promoted dev→staging→qa(in-progress); older run 6100 (v1.99.0-hotfix.csrf-protection) holds preprod→prod. Both version strings are intentionally long to stress-test matrix tile and swimlane card layout."
+      "platform-proxy":     "LONG VERSION (early stages) — run 6200 (v2.0.0-beta.3+build.20250530) on dev(success) + staging(in-progress) only; no qa/preprod/prod yet.",
+      "data-pipeline":      "LONG VERSION (late stages) — run 7100 (v1.99.0-hotfix.csrf-protection) on preprod(success) + prod(in-progress) only; earlier stages already gone."
     },
     "fallback_fields": {
       "description": "Cells that omit version/actor/sha to exercise the matrix tile fallback chain (version→sha→ref→run_number) and missing-actor rendering. Do NOT add the omitted fields.",
@@ -30,6 +31,7 @@
     "auth-bff",
     "billing-webhook",
     "catalog-edge",
+    "data-pipeline",
     "ledger-projector",
     "notification-worker",
     "order-svc",
@@ -103,10 +105,10 @@
     { "deployment_id": "gh-notif-prod-3041",     "service": "notification-worker", "environment": "prod",    "status": "success",     "elapsed_minutes": 4320, "version": "v1.8.3",  "sha": "8e7d6c5", "ref": "release/1.8",        "actor": "release-bot", "run_number": "3041", "run_url": "https://ci.internal/runs/3041", "parent_deployments": [] },
 
     { "deployment_id": "gh-proxy-dev-6200",      "service": "platform-proxy",      "environment": "dev",     "status": "success",     "elapsed_minutes": 55,   "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": [] },
-    { "deployment_id": "gh-proxy-staging-6200",  "service": "platform-proxy",      "environment": "staging", "status": "success",     "elapsed_minutes": 35,   "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": ["gh-proxy-dev-6200"] },
-    { "deployment_id": "gh-proxy-qa-6200",       "service": "platform-proxy",      "environment": "qa",      "status": "in-progress", "elapsed_minutes": 6,    "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": ["gh-proxy-staging-6200"] },
-    { "deployment_id": "gh-proxy-preprod-6100",  "service": "platform-proxy",      "environment": "preprod", "status": "success",     "elapsed_minutes": 2160, "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "6100", "run_url": "https://ci.internal/runs/6100", "parent_deployments": [] },
-    { "deployment_id": "gh-proxy-prod-6100",     "service": "platform-proxy",      "environment": "prod",    "status": "success",     "elapsed_minutes": 1440, "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "6100", "run_url": "https://ci.internal/runs/6100", "parent_deployments": ["gh-proxy-preprod-6100"] }
+    { "deployment_id": "gh-proxy-staging-6200",  "service": "platform-proxy",      "environment": "staging", "status": "in-progress", "elapsed_minutes": 8,    "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": ["gh-proxy-dev-6200"] },
+
+    { "deployment_id": "gh-pipeline-preprod-7100","service": "data-pipeline",       "environment": "preprod", "status": "success",     "elapsed_minutes": 120,  "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": [] },
+    { "deployment_id": "gh-pipeline-prod-7100",   "service": "data-pipeline",       "environment": "prod",    "status": "in-progress", "elapsed_minutes": 10,   "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": ["gh-pipeline-preprod-7100"] }
 
   ],
 
@@ -117,6 +119,7 @@
     { "deployment_id": "gh-ledger-qa-1828",      "service": "ledger-projector",    "environment": "qa",      "status": "success",     "version": "v2.0.2",  "sha": "5b6c7d8", "ref": "fix/skew-projection","actor": "r.iyer",      "run_number": "1828", "run_url": "https://ci.internal/runs/1828", "parent_deployments": [] },
     { "deployment_id": "gh-pay-dev-4840",        "service": "payments-api",        "environment": "dev",     "status": "in-progress", "version": "v2.16.0", "sha": "0b1c2d3", "ref": "release/2.16",       "actor": "mreyes",      "run_number": "4840", "run_url": "https://ci.internal/runs/4840", "parent_deployments": [] },
     { "deployment_id": "gh-notif-dev-3120",      "service": "notification-worker", "environment": "dev",     "status": "in-progress", "version": "v1.9.2",  "sha": "c3d4e5f", "ref": "main",               "actor": "akhan",       "run_number": "3120", "run_url": "https://ci.internal/runs/3120", "parent_deployments": [] },
-    { "deployment_id": "gh-proxy-qa-6200",       "service": "platform-proxy",      "environment": "qa",      "status": "success",     "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": ["gh-proxy-staging-6200"] }
+    { "deployment_id": "gh-proxy-staging-6200",  "service": "platform-proxy",      "environment": "staging", "status": "success",     "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": ["gh-proxy-dev-6200"] },
+    { "deployment_id": "gh-pipeline-prod-7100",   "service": "data-pipeline",       "environment": "prod",    "status": "success",     "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": ["gh-pipeline-preprod-7100"] }
   ]
 }
