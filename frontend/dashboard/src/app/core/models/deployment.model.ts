@@ -95,9 +95,9 @@ export function deriveBoxState(slot: MatrixSlot): BoxState {
   return prev_failed ? 's-run-fail-only' : 's-running-only';
 }
 
-/** Matrix visible field names (8 toggles, all ON by default). */
+/** Matrix visible field names (7 toggles, all ON by default). */
 export const MATRIX_FIELDS = [
-  'version', 'run_url', 'sha', 'run_number', 'ref', 'actor', 'happened_at', 'parent_deployments',
+  'version', 'run_url', 'sha', 'run_number', 'ref', 'actor', 'happened_at',
 ] as const;
 export type MatrixField = typeof MATRIX_FIELDS[number];
 

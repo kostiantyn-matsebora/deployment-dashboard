@@ -115,14 +115,24 @@
   /* Hairline divider below each row-group for visual separation */
   padding-bottom: 4px;
   border-bottom: 1px solid var(--glass-edge);
-  /* Do NOT set min-width:0 here — grid items need min-width:auto so the
+  /* flex column — lets the child .slot (or .slot.empty) use flex:1 to
+     stretch to the full grid-row height. The grid already makes all cells
+     in a row the same height (= tallest tile); flex drives the slot to fill
+     that height so every tile has a consistent visual footprint.
+     Do NOT set min-width:0 here — grid items need min-width:auto so the
      max-content track sizing can measure the .slot (via display:contents
      on app-matrix-tile) and expand the column to fit long version strings. */
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Empty slot ───────────────────────────────────────────── */
 .slot.empty {
-  min-height: 56px;
+  /* flex: 1 1 auto — mirrors .slot in tile CSS; fills the .row flex column
+     so empty cells always match the height of filled tiles.  See .slot
+     comment in matrix-tile.component.css for why flex-basis must be auto. */
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 6px 8px 6px 12px;
   border-radius: var(--radius-md);
   background: var(--slot-empty-bg);
@@ -131,7 +141,6 @@
   align-items: center;
   justify-content: center;
   cursor: default;
-  height: 100%;
 }
 
 .empty-mark {

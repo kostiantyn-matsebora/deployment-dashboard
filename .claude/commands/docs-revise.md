@@ -31,6 +31,6 @@ Inherited from `.claude/agents/docs-keeper.md`:
 5. **Apply the non-overwrite policy.** `Edit` with the minimum diff for revisions; propose first for full rewrites.
 6. **Refresh indexes.** After structural changes in a doc tree (added / removed / renamed / role-changed files), invoke `/docs-index <affected-directory>` — that command produces / refreshes the directory's `index.md` and chains onward to `/docs-registry-sync` as needed.
 
-## Report
+## Report (binding)
 
-Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = B.
+Structured-only — no freeform prose (`.claude/agents/docs-keeper.md` § Output format). Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = B.

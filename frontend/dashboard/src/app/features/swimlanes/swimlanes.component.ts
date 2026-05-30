@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { NgxGraphModule, Node as NgxNode, Edge as NgxEdge } from '@swimlane/ngx-graph';
+import { NgxGraphModule, Node as NgxNode, Edge as NgxEdge, NgxGraphStates } from '@swimlane/ngx-graph';
 
 import { AppStateService } from '../../core/services/app-state.service';
 import {
@@ -169,8 +169,22 @@ export class SwimlanesComponent {
     this._update$.next();
   }
 
-  /** ngx-graph finished a layout — record its computed content size for this chain. */
-  protected onDraw(dagId: string, graph: { graphDims?: { width: number; height: number } }): void {
+  /**
+   * ngx-graph finished a layout — record its computed content size for this chain.
+   *
+   * Bound to `(stateChange)` (not `drawComplete`): `drawComplete` is a one-shot
+   * event that fires only on the first successful `hasDims()` poll; it does NOT
+   * fire on subsequent re-layouts triggered by `update$` or `ngOnChanges`.
+   * `stateChange` with `NgxGraphStates.Output` fires after every layout cycle
+   * (via `finalizeTickOutput`), so it is the correct hook for keeping `dagContent`
+   * in sync after card-dimension changes (e.g. field-visibility toggles).
+   */
+  protected onStateChange(
+    dagId: string,
+    event: { state: NgxGraphStates },
+    graph: { graphDims?: { width: number; height: number } },
+  ): void {
+    if (event.state !== NgxGraphStates.Output) return;
     const g = graph.graphDims;
     if (!g || !g.width || !g.height) return;
     // Strip ngx-graph's 100px-per-side minimap padding to get the true content box.
