@@ -21,10 +21,10 @@ Architecture-only baseline — no service code committed yet (per commit `d0045c
 | Path | Role |
 |---|---|
 | `docs/` | All design + contract documentation (see *Sources of truth*). |
-| `backend/[service]` | Backend services
-| `frontend/[application]` | Frontend application
-| `testing\[type]` | Testing solutions
- 
+| `backend/[service]` | Backend services |
+| `frontend/[application]` | Frontend application |
+| `testing/[type]` | Testing solutions |
+
 **Reserved (planned, not present).** Slots referenced by `.dockerignore` and SAD §7 awaiting implementation:
 
 | Path | Future role |
