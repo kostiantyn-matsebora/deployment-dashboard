@@ -46,6 +46,10 @@ Architecture-only baseline — no service code committed yet (per commit `d0045c
 - Exception: user explicitly instructs a direct push to `main`.
 - Default when user says "push": push the current branch, not `main`.
 
+**Session worktree.** When the `SessionStart` hook emits `additionalContext` containing an `EnterWorktree` instruction with a worktree path, call `EnterWorktree` with that path immediately — before reading or responding to the user's first message.
+
+**Lazy branching.** Session worktrees start in detached HEAD. Before any `git commit`, first run `git checkout -b <conventional-name>` to create a properly named branch. The `Invoke-BranchGuard.ps1` hook enforces this mechanically and will block the commit if HEAD is still detached.
+
 ## Scripts
 
 Following rules MUST be followed for every script in this repository (build / install / dev tooling / CI helpers / one-off automation):
