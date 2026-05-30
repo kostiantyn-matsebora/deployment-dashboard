@@ -2,15 +2,16 @@
 
 **Status:** Draft · **Date:** 2026-05-28
 
-Implementation contract for the **App Gateway** — the nginx reverse proxy that is the single public surface in front of the Frontend SPA and the `Dashboard.Api`.
+Implementation contract for the **App Gateway** — the nginx reverse proxy that is the single public surface in front of the Frontend SPA, the `Dashboard.Api`, and the Demo Driver.
 
 ## Sources of truth
 
 | Source | Owns |
 |---|---|
-| [`docs/SAD.md`](SAD.md) §7 | Architecture — gateway as sole public surface, two internal upstreams. |
+| [`docs/SAD.md`](SAD.md) §7 | Architecture — gateway as sole public surface, internal upstreams. |
 | [`docs/api/openapi.yaml`](api/openapi.yaml) | API paths the gateway routes (`/api/*`, `/healthz`, `/readyz`). |
 | [`docs/BACKEND_SPECIFICATION.md`](BACKEND_SPECIFICATION.md) | Backend CORS / SSE behaviour the gateway pairs with (D3, D6). |
+| [`docs/DEMO_DRIVER_SPECIFICATION.md`](DEMO_DRIVER_SPECIFICATION.md) | Demo driver paths (`/demo/*`) and SSE stream the gateway proxies. |
 
 > `CR-####` / `ADR-####` documents referenced elsewhere **do not exist** — ignore those citations.
 
@@ -18,7 +19,10 @@ Implementation contract for the **App Gateway** — the nginx reverse proxy that
 
 ## 1. Role
 
-A thin nginx reverse proxy — **routing + SSE plumbing only**. No auth, no business logic, no API response caching, no rate limiting, no request rewriting beyond path routing. All state stays in the API. The image is **config-only** (nginx + a replacement conf template) and avoids a second component that knows the contract.
+Thin nginx reverse proxy — **routing + SSE plumbing only**:
+- No auth, business logic, API response caching, rate limiting, or request rewriting beyond path routing.
+- All state stays in the API.
+- **Config-only image** — nginx + a replacement conf template; no second component that knows the contract.
 
 ---
 
@@ -26,7 +30,7 @@ A thin nginx reverse proxy — **routing + SSE plumbing only**. No auth, no busi
 
 | # | Decision | Rationale |
 |---|---|---|
-| GW1 | **Single public surface**; fronts two internal-only upstreams (frontend SPA, API). | SAD §7, NFR-04. |
+| GW1 | **Single public surface**; fronts three internal-only upstreams (frontend SPA, API, demo-driver). | SAD §7, NFR-04. |
 | GW2 | **Config-only image** — nginx + a replacement conf template. No unit tests. | Config-only by design; behaviour coverage via the integration suite. |
 | GW3 | **SPA fallback (`try_files … /index.html`) is owned by the *frontend* container**, not the gateway. | Gateway proxies `/` blindly → stays contract-agnostic. (G-Q1) |
 | GW4 | `/healthz` + `/readyz` **are proxied** to the API. | Ops reachability through the single surface. (G-Q2) |
@@ -58,6 +62,8 @@ The official nginx entrypoint renders `*.template` from `/etc/nginx/templates/` 
 |---|---|---|
 | `/api/events/stream` | `api` | **Dedicated SSE block** — see §5 |
 | `/api/` | `api` | JSON read/write; default buffering |
+| `/demo/stream` | `demo-driver` | **Dedicated SSE block** — same settings as `/api/events/stream` |
+| `/demo/` | `demo-driver` | Demo driver control API + panel; default buffering |
 | `/healthz`, `/readyz` | `api` | API probes, proxied (GW4) |
 | `/health` | **gateway-local** | `return 200` — gateway liveness (integration + platform probe) |
 | `/` (all else) | `frontend` | SPA assets + Angular routes; **frontend owns `try_files` fallback** (GW3) |
@@ -83,13 +89,16 @@ location /api/events/stream {
 
 The API additionally emits `X-Accel-Buffering: no` (belt-and-braces).
 
+The same block applies verbatim to `location /demo/stream` — replace `proxy_pass http://api` with `proxy_pass http://demo-driver`.
+
 ---
 
 ## 6. Config template (shape)
 
 ```nginx
-upstream frontend { server ${FRONTEND_UPSTREAM}; }
-upstream api      { server ${API_UPSTREAM}; }
+upstream frontend    { server ${FRONTEND_UPSTREAM}; }
+upstream api         { server ${API_UPSTREAM}; }
+upstream demo-driver { server ${DEMO_DRIVER_UPSTREAM}; }
 
 server {
     listen 8080;
@@ -99,7 +108,9 @@ server {
     location = /health { return 200 "ok\n"; access_log off; default_type text/plain; }
 
     location /api/events/stream { ... }   # §5
+    location /demo/stream       { ... }   # §5 — same SSE block, upstream = demo-driver
     location /api/    { proxy_pass http://api; }
+    location /demo/   { proxy_pass http://demo-driver; }
     location /healthz { proxy_pass http://api; }
     location /readyz  { proxy_pass http://api; }
     location /        { proxy_pass http://frontend; }
@@ -116,7 +127,8 @@ Standard proxy headers (`Host`, `X-Forwarded-For`, `X-Forwarded-Proto`) set on t
 |---|---|---|
 | `FRONTEND_UPSTREAM` | `frontend:8080` | frontend upstream `host:port` |
 | `API_UPSTREAM` | `api:8080` | API upstream `host:port` |
-| `NGINX_ENVSUBST_FILTER` | `^(FRONTEND_UPSTREAM\|API_UPSTREAM)$` | restrict `envsubst` to our vars so nginx's own `$host`/`$uri` survive |
+| `DEMO_DRIVER_UPSTREAM` | `demo-driver:3001` | demo driver upstream `host:port` |
+| `NGINX_ENVSUBST_FILTER` | `^(FRONTEND_UPSTREAM\|API_UPSTREAM\|DEMO_DRIVER_UPSTREAM)$` | restrict `envsubst` to our vars so nginx's own `$host`/`$uri` survive |
 
 Examples are illustrative; actual upstream `host:port` come from the frontend / API deployment specs per environment.
 
