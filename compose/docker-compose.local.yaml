@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local-build overrides — swap published API image for a locally built one.
+#
+# Usage:
+#   docker compose -f compose/docker-compose.yaml \
+#                  -f compose/docker-compose.demo.yaml \
+#                  -f compose/docker-compose.local.yaml \
+#                  --profile demo up
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  api:
+    image: deployment-dashboard-api:local
+    pull_policy: never
+    build:
+      context: ../backend
+      dockerfile: api/Dashboard.Api/Dockerfile
+
+  frontend:
+    image: deployment-dashboard-frontend:local
+    pull_policy: never
+    build:
+      context: ../frontend/dashboard
+      dockerfile: Dockerfile

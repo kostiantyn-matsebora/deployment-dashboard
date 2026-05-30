@@ -24,5 +24,6 @@ RUN dotnet publish "api/Dashboard.Api/Dashboard.Api.csproj" \
 
 FROM base AS final
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "Dashboard.Api.dll"]
