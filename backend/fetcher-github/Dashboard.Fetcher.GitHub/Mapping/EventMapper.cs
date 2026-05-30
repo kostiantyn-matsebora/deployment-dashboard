@@ -28,17 +28,17 @@ public static partial class EventMapper
 
         return new DeploymentEventIngest
         {
-            DeploymentId      = $"gh-deploy-{deployment.Id}",
-            Service           = service,
-            Environment       = deployment.Environment,
-            Version           = version,
-            Status            = contractStatus,
-            HappenedAt        = status.CreatedAt,
-            RunUrl            = status.TargetUrl,
-            RunNumber         = runId?.ToString(),
-            Actor             = status.Creator?.Login ?? deployment.Creator?.Login,
-            Ref               = deployment.Ref,
-            Sha               = deployment.Sha,
+            DeploymentId = $"gh-deploy-{deployment.Id}",
+            Service = service,
+            Environment = deployment.Environment,
+            Version = version,
+            Status = contractStatus,
+            HappenedAt = status.CreatedAt,
+            RunUrl = status.TargetUrl,
+            RunNumber = runId?.ToString(),
+            Actor = status.Creator?.Login ?? deployment.Creator?.Login,
+            Ref = deployment.Ref,
+            Sha = deployment.Sha,
             ParentDeployments = parentDeployments.Length > 0 ? parentDeployments : null,
         };
     }

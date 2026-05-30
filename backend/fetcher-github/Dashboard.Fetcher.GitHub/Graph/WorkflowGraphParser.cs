@@ -59,9 +59,9 @@ public static class WorkflowGraphParser
 
         return envNode switch
         {
-            YamlScalarNode scalar   => scalar.Value,
+            YamlScalarNode scalar => scalar.Value,
             YamlMappingNode mapping => GetScalar(mapping, "name"),
-            _                      => null
+            _ => null
         };
     }
 

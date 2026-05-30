@@ -24,7 +24,7 @@ public sealed class ServiceResolverTests
         var map = new Dictionary<string, string>
         {
             ["Deploy API"] = "workflow-override",
-            ["acme/api"]   = "repo-override",
+            ["acme/api"] = "repo-override",
         };
         Assert.Equal("workflow-override", ServiceResolver.Resolve("Deploy API", "acme/api", map));
     }

@@ -25,9 +25,9 @@ public sealed class VersionResolver(
             return config.Type switch
             {
                 VersionSourceType.Attribute => ResolveAttribute(deployment),
-                VersionSourceType.Payload   => ResolvePayload(deployment),
-                VersionSourceType.Artifact  => await ResolveArtifactAsync(owner, repo, status, ct),
-                _                           => null
+                VersionSourceType.Payload => ResolvePayload(deployment),
+                VersionSourceType.Artifact => await ResolveArtifactAsync(owner, repo, status, ct),
+                _ => null
             };
         }
         catch
@@ -40,10 +40,10 @@ public sealed class VersionResolver(
     {
         var value = config.Key switch
         {
-            "sha"         => deployment.Sha,
-            "ref"         => deployment.Ref,
+            "sha" => deployment.Sha,
+            "ref" => deployment.Ref,
             "environment" => deployment.Environment,
-            _             => null
+            _ => null
         };
 
         if (value is null) return null;

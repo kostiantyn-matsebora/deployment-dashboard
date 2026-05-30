@@ -101,7 +101,7 @@ public sealed class BackfillRunner(
                     continue;
 
                 var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(
-                    [( deployment.Id, deployment.Environment, deployment.CreatedAt, runId )]);
+                    [(deployment.Id, deployment.Environment, deployment.CreatedAt, runId)]);
 
                 foreach (var status in statuses)
                 {

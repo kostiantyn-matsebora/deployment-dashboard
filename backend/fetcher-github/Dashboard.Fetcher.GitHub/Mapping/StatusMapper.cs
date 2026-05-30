@@ -12,8 +12,8 @@ public static class StatusMapper
     public static string? Map(string githubState) => githubState switch
     {
         "queued" or "pending" or "in_progress" => DeploymentStatus.InProgress,
-        "success"                               => DeploymentStatus.Success,
-        "failure" or "error"                    => DeploymentStatus.Failure,
-        _                                       => null
+        "success" => DeploymentStatus.Success,
+        "failure" or "error" => DeploymentStatus.Failure,
+        _ => null
     };
 }

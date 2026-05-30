@@ -136,7 +136,9 @@ public sealed class VersionResolverTests
         JsonElement? payload = null) =>
         new()
         {
-            Id = 1, Sha = sha, Ref = refValue,
+            Id = 1,
+            Sha = sha,
+            Ref = refValue,
             Environment = "prod",
             Payload = payload,
             CreatedAt = DateTimeOffset.UtcNow
@@ -146,7 +148,8 @@ public sealed class VersionResolverTests
         string targetUrl = "https://github.com/acme/api/actions/runs/5/jobs/1") =>
         new()
         {
-            Id = 1, State = "success",
+            Id = 1,
+            State = "success",
             TargetUrl = targetUrl,
             CreatedAt = DateTimeOffset.UtcNow
         };

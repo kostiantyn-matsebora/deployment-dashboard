@@ -5,10 +5,10 @@ namespace Dashboard.Fetcher.Tests.Version;
 public sealed class VersionSourceConfigTests
 {
     [Theory]
-    [InlineData("attribute:sha",   VersionSourceType.Attribute, "sha")]
-    [InlineData("attribute:ref",   VersionSourceType.Attribute, "ref")]
-    [InlineData("payload:version", VersionSourceType.Payload,   "version")]
-    [InlineData("artifact:v.txt",  VersionSourceType.Artifact,  "v.txt")]
+    [InlineData("attribute:sha", VersionSourceType.Attribute, "sha")]
+    [InlineData("attribute:ref", VersionSourceType.Attribute, "ref")]
+    [InlineData("payload:version", VersionSourceType.Payload, "version")]
+    [InlineData("artifact:v.txt", VersionSourceType.Artifact, "v.txt")]
     public void Parse_ValidInput_ReturnsCorrectTypeAndKey(string raw, VersionSourceType type, string key)
     {
         var config = VersionSourceConfig.Parse(raw);

@@ -13,10 +13,10 @@ public sealed class PollLoopTests
     private static DeploymentEventIngest MakeEvent() => new()
     {
         DeploymentId = "gh-deploy-1",
-        Service      = "api",
-        Environment  = "prod",
-        Status       = DeploymentStatus.Success,
-        HappenedAt   = DateTimeOffset.UtcNow,
+        Service = "api",
+        Environment = "prod",
+        Status = DeploymentStatus.Success,
+        HappenedAt = DateTimeOffset.UtcNow,
     };
 
     [Fact]

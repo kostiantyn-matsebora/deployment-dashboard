@@ -13,9 +13,9 @@ public sealed record VersionSourceConfig(VersionSourceType Type, string Key)
 
         var type = parts[0].ToLowerInvariant() switch
         {
-            "payload"  => VersionSourceType.Payload,
+            "payload" => VersionSourceType.Payload,
             "artifact" => VersionSourceType.Artifact,
-            _          => VersionSourceType.Attribute
+            _ => VersionSourceType.Attribute
         };
 
         return new VersionSourceConfig(type, parts[1]);

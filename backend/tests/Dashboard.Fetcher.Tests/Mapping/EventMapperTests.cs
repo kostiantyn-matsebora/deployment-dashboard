@@ -74,7 +74,8 @@ public sealed class EventMapperTests
     {
         var deployment = new GhDeployment
         {
-            Id = 1, Environment = "prod",
+            Id = 1,
+            Environment = "prod",
             Creator = new GhActor { Login = "deploy-bot" }
         };
         var status = new GhDeploymentStatus
@@ -94,12 +95,14 @@ public sealed class EventMapperTests
     {
         var deployment = new GhDeployment
         {
-            Id = 1, Environment = "prod",
+            Id = 1,
+            Environment = "prod",
             Creator = new GhActor { Login = "deploy-bot" }
         };
         var status = new GhDeploymentStatus
         {
-            State = "success", Creator = null,
+            State = "success",
+            Creator = null,
             CreatedAt = DateTimeOffset.UtcNow
         };
         var ev = EventMapper.Map(deployment, status, "acme/api",
@@ -112,7 +115,7 @@ public sealed class EventMapperTests
 
     [Theory]
     [InlineData("https://github.com/acme/api/actions/runs/12345/jobs/1", 12345L)]
-    [InlineData("https://github.com/acme/api/actions/runs/99",           99L)]
+    [InlineData("https://github.com/acme/api/actions/runs/99", 99L)]
     public void ExtractRunId_ValidUrl_ReturnsRunId(string url, long expected)
     {
         Assert.Equal(expected, EventMapper.ExtractRunId(url));
@@ -132,13 +135,17 @@ public sealed class EventMapperTests
     {
         var deployment = new GhDeployment
         {
-            Id = 42, Sha = "abc1234", Ref = "main", Environment = "prod",
+            Id = 42,
+            Sha = "abc1234",
+            Ref = "main",
+            Environment = "prod",
             Creator = new GhActor { Login = "bot" },
             CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-5)
         };
         var status = new GhDeploymentStatus
         {
-            Id = 1, State = "success",
+            Id = 1,
+            State = "success",
             TargetUrl = targetUrl,
             Creator = new GhActor { Login = "ci" },
             CreatedAt = DateTimeOffset.UtcNow
