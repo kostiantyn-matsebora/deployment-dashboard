@@ -56,8 +56,10 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
                 ["API_KEY"] = TestApiKey,
             };
 
-            if (IncludeControlKey)
-                values["CONTROL_API_KEY"] = TestControlApiKey;
+            // Explicitly null out the key when not included so that any value from
+            // appsettings.Development.json (which WebApplicationFactory loads by default)
+            // does not leak through.
+            values["CONTROL_API_KEY"] = IncludeControlKey ? TestControlApiKey : null;
 
             config.AddInMemoryCollection(values);
         });

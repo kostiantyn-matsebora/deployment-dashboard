@@ -129,13 +129,13 @@ public sealed class ControlEndpointTests : IAsyncLifetime
         // Confirm the event is present before reset.
         var before = await _client.GetAsync("/api/deployments?service=reset-svc-de");
         var beforeBody = await before.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(beforeBody.GetProperty("data").GetArrayLength() > 0);
+        Assert.True(beforeBody.GetProperty("items").GetArrayLength() > 0);
 
         await _client.SendAsync(ResetRequest());
 
         var after = await _client.GetAsync("/api/deployments?service=reset-svc-de");
         var afterBody = await after.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(0, afterBody.GetProperty("data").GetArrayLength());
+        Assert.Equal(0, afterBody.GetProperty("items").GetArrayLength());
     }
 
     [Fact]
