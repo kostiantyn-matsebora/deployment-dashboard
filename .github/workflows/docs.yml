@@ -16,4 +16,4 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check index and registry integrity
-        run: pwsh scripts/hooks/Invoke-PreCommitDocsHook.ps1 -Standalone
+        run: pwsh scripts/hooks/Invoke-DocsKeeperMaintenance.ps1 -DriftOnly

@@ -140,6 +140,7 @@ param(
     [switch]$Track,
     [switch]$MarkRevised,
     [string]$Dismiss,
+    [switch]$DriftOnly,
     [switch]$AsLibrary
 )
 
@@ -942,6 +943,31 @@ if (-not $AsLibrary) {
     }
     if (-not $SessionId) {
         $SessionId = Get-SessionIdFromPayload -Payload (Read-HookPayload -Json $HookInputJson)
+    }
+
+    # -DriftOnly: CI path — index + registry drift check only, no session/revise logic.
+    if ($DriftOnly) {
+        $capturedRoot = $RepoRoot
+        $dl = if ($DirLister) { $DirLister } else {
+            { param([string]$RelDir)
+              $base = if ($capturedRoot) { Join-Path $capturedRoot $RelDir } else { $RelDir }
+              if (-not (Test-Path -LiteralPath $base)) { return @() }
+              @(Get-ChildItem -LiteralPath $base -Force -ErrorAction SilentlyContinue | ForEach-Object { @{ Name = $_.Name; IsDir = $_.PSIsContainer } })
+            }.GetNewClosure()
+        }
+        $fr = if ($FileReader) { $FileReader } else {
+            { param([string]$RelPath)
+              $abs = if ($capturedRoot) { Join-Path $capturedRoot $RelPath } else { $RelPath }
+              if (Test-Path -LiteralPath $abs) { return (Get-Content -LiteralPath $abs -Raw) }
+              return ''
+            }.GetNewClosure()
+        }
+        $mode = Resolve-EnforcementMode -EnvValue $EnforcementMode
+        $driftQueue = @(Get-DocsDriftQueue -DirLister $dl -FileReader $fr)
+        if ($driftQueue.Count -eq 0) { exit 0 }
+        $msg = Format-BlockMessage -Queue $driftQueue -Standalone $true -Mode $mode
+        [Console]::Error.WriteLine($msg)
+        exit $(if ($mode -eq 'warn') { 0 } else { 2 })
     }
 
     # -Dismiss: delete the specified tracker file.
