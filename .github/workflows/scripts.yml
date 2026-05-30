@@ -1,0 +1,51 @@
+name: _scripts
+
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/**/*.ps1', '.github/workflows/scripts.yml']
+  pull_request:
+    branches: [main]
+    paths: ['scripts/**/*.ps1', '.github/workflows/scripts.yml']
+
+jobs:
+  scripts-check:
+    name: Lint and test PowerShell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install modules
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          Install-Module Pester -MinimumVersion 5.0.0 -Force -Scope CurrentUser
+
+      - name: Lint
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path scripts/ -Recurse -Severity Error
+          if ($results) {
+            $results | Format-Table -AutoSize
+            exit 1
+          }
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path = 'scripts/'
+          $cfg.TestResult.Enabled = $true
+          $cfg.TestResult.OutputPath = 'pester-results.xml'
+          $cfg.TestResult.OutputFormat = 'NUnitXml'
+          $cfg.Output.Verbosity = 'Detailed'
+          $result = Invoke-Pester -Configuration $cfg
+          exit $result.FailedCount
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pester-results
+          path: pester-results.xml
