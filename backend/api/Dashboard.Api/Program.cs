@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dashboard.Api.Extensions;
+using Dashboard.Control;
 using Dashboard.Read;
 using Dashboard.Shared.Data;
 using Dashboard.Write;
@@ -30,6 +31,9 @@ builder.Services.AddWriteServices();
 
 // ── Read services ─────────────────────────────────────────────────────────────
 builder.Services.AddReadServices();
+
+// ── Control services ──────────────────────────────────────────────────────────
+builder.Services.AddControlServices();
 
 // ── CORS (D6) ─────────────────────────────────────────────────────────────────
 // Enabled only when CORS_ALLOWED_ORIGINS is set; empty/absent = off (gateway / same-origin).
@@ -117,6 +121,7 @@ app.MapGet("/readyz", async (DashboardDbContext db, IReadinessIndicator readines
 app.MapWriteEndpoints();
 app.MapFetcherStateEndpoints();
 app.MapReadEndpoints();
+app.MapControlEndpoints();
 
 app.Run();
 

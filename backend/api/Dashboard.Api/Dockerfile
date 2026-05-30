@@ -6,10 +6,11 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
-COPY ["api/Dashboard.Api/Dashboard.Api.csproj",         "api/Dashboard.Api/"]
-COPY ["write-api/Dashboard.Write/Dashboard.Write.csproj", "write-api/Dashboard.Write/"]
-COPY ["read-api/Dashboard.Read/Dashboard.Read.csproj",   "read-api/Dashboard.Read/"]
-COPY ["shared/Dashboard.Shared/Dashboard.Shared.csproj", "shared/Dashboard.Shared/"]
+COPY ["api/Dashboard.Api/Dashboard.Api.csproj",                   "api/Dashboard.Api/"]
+COPY ["write-api/Dashboard.Write/Dashboard.Write.csproj",         "write-api/Dashboard.Write/"]
+COPY ["read-api/Dashboard.Read/Dashboard.Read.csproj",            "read-api/Dashboard.Read/"]
+COPY ["control-api/Dashboard.Control/Dashboard.Control.csproj",   "control-api/Dashboard.Control/"]
+COPY ["shared/Dashboard.Shared/Dashboard.Shared.csproj",          "shared/Dashboard.Shared/"]
 
 RUN dotnet restore "api/Dashboard.Api/Dashboard.Api.csproj"
 

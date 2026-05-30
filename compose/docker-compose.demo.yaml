@@ -11,6 +11,8 @@ services:
   api:
     environment:
       API_KEY: demo-api-key
+      # Insecure demo default — enables POST /api/control/reset for local evaluation.
+      CONTROL_API_KEY: demo-control-key
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=deployment_dashboard;Username=dashboard;Password=changeme"
 
   demo-driver:
