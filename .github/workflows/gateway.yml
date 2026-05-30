@@ -1,4 +1,4 @@
-name: Gateway — Build · Publish
+name: gateway
 
 on:
   push:

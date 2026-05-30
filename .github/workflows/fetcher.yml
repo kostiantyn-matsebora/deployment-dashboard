@@ -1,4 +1,4 @@
-name: Fetcher — Build · Test · Publish
+name: fetcher
 
 on:
   push:
