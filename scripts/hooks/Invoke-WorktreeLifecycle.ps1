@@ -6,7 +6,7 @@
     isolated worktree at SessionStart and cleans up at SessionEnd.
 
 .DESCRIPTION
-    Two invocation surfaces:
+    Four invocation surfaces:
 
     SessionEnd mode (-SessionEnd switch):
       Wired as a Claude Code SessionEnd hook. When run inside a git worktree:
@@ -22,10 +22,21 @@
       Wired as a Claude Code SessionStart hook.
       1. When CLAUDE_AUTO_WORKTREE=1: creates a new git worktree for the
          current session on a fresh `session/<session-id>` branch, then emits
-         an EnterWorktree instruction via additionalContext.
+         an EnterWorktree instruction via additionalContext, and writes a
+         pending-entry marker so CheckEntry can gate subsequent tool calls.
       2. Scans all `.claude/.worktree-state.*.json` markers for ended-dirty
          worktrees and proposes continue/discard per entry.
       Both results are combined into a single additionalContext output.
+
+    CheckEntry mode (-CheckEntry switch):
+      Wired as a Claude Code PreToolUse hook (all tools).
+      Blocks any tool other than EnterWorktree while a pending-entry marker
+      exists for this session. Cost: one Test-Path per tool call; becomes a
+      no-op once ClearEntry removes the marker.
+
+    ClearEntry mode (-ClearEntry switch):
+      Wired as a Claude Code PostToolUse hook on EnterWorktree.
+      Deletes the pending-entry marker, unblocking all subsequent tool calls.
 
     Marker file: `.claude/.worktree-state.<sanitized-sid>.json`
     Schema: { sessionId, worktreePath, branch, status:"ended-dirty" }
@@ -68,6 +79,12 @@
 .PARAMETER SnapshotSession
     Run the SessionStart lifecycle path.
 
+.PARAMETER CheckEntry
+    PreToolUse mode — block tool use until EnterWorktree is called.
+
+.PARAMETER ClearEntry
+    PostToolUse mode (EnterWorktree) — delete the pending-entry marker.
+
 .PARAMETER AsLibrary
     Define helper functions but skip the entry block (used by Pester).
 #>
@@ -82,6 +99,8 @@ param(
     [scriptblock]$WorktreeCreator,
     [switch]$SessionEnd,
     [switch]$SnapshotSession,
+    [switch]$CheckEntry,
+    [switch]$ClearEntry,
     [switch]$AsLibrary
 )
 
@@ -103,6 +122,15 @@ function Get-WorktreeStateFilePath {
     $dir  = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
     $sid  = Get-SafeWorktreeSessionId -SessionId $SessionId
     $name = if ($sid) { ".worktree-state.$sid.json" } else { '.worktree-state.json' }
+    return (Join-Path $dir $name)
+}
+
+function Get-WorktreePendingFilePath {
+    [CmdletBinding()]
+    param([string]$RepoRoot, [string]$SessionId)
+    $dir  = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $sid  = Get-SafeWorktreeSessionId -SessionId $SessionId
+    $name = if ($sid) { ".worktree-pending.$sid.json" } else { '.worktree-pending.json' }
     return (Join-Path $dir $name)
 }
 
@@ -262,6 +290,28 @@ function Format-WorktreeCreatedContext {
     ) -join "`n"
 }
 
+# ---------- Pure function: entry guard ----------
+
+function Get-WorktreeEntryDecision {
+    [CmdletBinding()]
+    param(
+        [string]$ToolName,
+        [string]$PendingPath,
+        [Parameter(Mandatory)][scriptblock]$FileReader
+    )
+    $raw = & $FileReader $PendingPath
+    if ([string]::IsNullOrWhiteSpace($raw)) { return @{ Block = $false } }
+    if ($ToolName -eq 'EnterWorktree') { return @{ Block = $false } }
+    $wtPath = ''
+    try {
+        $obj    = $raw | ConvertFrom-Json -ErrorAction Stop
+        $wtPath = [string]$obj.worktreePath
+    }
+    catch { }
+    $hint = if ($wtPath) { " Call EnterWorktree with path `"$wtPath`"." } else { '' }
+    return @{ Block = $true; Reason = "A session worktree is pending entry.$hint" }
+}
+
 # ---------- Impure I/O helpers ----------
 
 function Read-WorktreeMarker {
@@ -391,6 +441,8 @@ function Invoke-WorktreeLifecycle {
                 if ($path) {
                     & $WorktreeCreator $path
                     $parts += Format-WorktreeCreatedContext -Path $path
+                    $pendingPath = Get-WorktreePendingFilePath -RepoRoot $RepoRoot -SessionId $SessionId
+                    & $MarkerWriter $pendingPath @{ sessionId = $SessionId; worktreePath = $path }
                 }
             }
         }
@@ -431,12 +483,37 @@ if (-not $AsLibrary) {
     if ([Console]::IsInputRedirected) {
         try { $hookInputJson = [Console]::In.ReadToEnd() } catch { $hookInputJson = '' }
     }
-    if (-not $SessionId -and -not [string]::IsNullOrWhiteSpace($hookInputJson)) {
+    $toolName = ''
+    if (-not [string]::IsNullOrWhiteSpace($hookInputJson)) {
         try {
             $payload = $hookInputJson | ConvertFrom-Json -ErrorAction Stop
-            if ($payload -and $payload.session_id) { $SessionId = [string]$payload.session_id }
+            if ($payload -and $payload.session_id -and -not $SessionId) { $SessionId = [string]$payload.session_id }
+            if ($payload -and $payload.tool_name)                        { $toolName  = [string]$payload.tool_name }
         }
         catch { $null = $_ }
+    }
+
+    if ($CheckEntry) {
+        $pendingPath     = Get-WorktreePendingFilePath -RepoRoot $RepoRoot -SessionId $SessionId
+        $entryFileReader = {
+            param([string]$AbsPath)
+            if ($AbsPath -and (Test-Path -LiteralPath $AbsPath)) {
+                return (Get-Content -LiteralPath $AbsPath -Raw)
+            }
+            return ''
+        }
+        $decision = Get-WorktreeEntryDecision -ToolName $toolName -PendingPath $pendingPath -FileReader $entryFileReader
+        if ($decision.Block) {
+            $json = @{ decision = 'block'; reason = $decision.Reason } | ConvertTo-Json -Compress
+            [Console]::Out.WriteLine($json)
+        }
+        exit 0
+    }
+
+    if ($ClearEntry) {
+        $pendingPath = Get-WorktreePendingFilePath -RepoRoot $RepoRoot -SessionId $SessionId
+        Remove-WorktreeMarker -Path $pendingPath
+        exit 0
     }
 
     $capturedRoot = $RepoRoot
