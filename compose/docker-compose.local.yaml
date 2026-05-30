@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Local-build overrides — swap all published images for locally built ones.
+# Postgres uses the official image and is not listed here.
+#
+# pull_policy: never prevents docker compose up from pulling or rebuilding;
+# images are only (re)built when you run docker compose ... build explicitly.
+#
+# Usage:
+#   docker compose -f compose/docker-compose.yaml \
+#                  -f compose/docker-compose.demo.yaml \
+#                  -f compose/docker-compose.local.yaml \
+#                  --profile demo up
+#
+# To build all images up front:
+#   docker compose -f compose/docker-compose.yaml \
+#                  -f compose/docker-compose.demo.yaml \
+#                  -f compose/docker-compose.local.yaml \
+#                  --profile demo build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  gateway:
+    image: deployment-dashboard-gateway:local
+    pull_policy: never
+    build:
+      context: ../gateway
+
+  frontend:
+    image: deployment-dashboard-frontend:local
+    pull_policy: never
+    build:
+      context: ../frontend/dashboard
+      dockerfile: Dockerfile
+
+  api:
+    image: deployment-dashboard-api:local
+    pull_policy: never
+    build:
+      context: ../backend
+      dockerfile: api/Dashboard.Api/Dockerfile
+
+  demo-driver:
+    image: deployment-dashboard-demo-driver:local
+    pull_policy: never
+    build:
+      context: ../demo
+      dockerfile: driver/Dockerfile
