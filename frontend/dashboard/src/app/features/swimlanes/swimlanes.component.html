@@ -54,7 +54,7 @@
                 [enableDrag]="false"
                 [animate]="false"
                 [update$]="updateTrigger$"
-                (drawComplete)="onDraw(dag.id, g)"
+                (stateChange)="onStateChange(dag.id, $event, g)"
               >
                 <!-- ── Node template ─────────────────────── -->
                 <ng-template #nodeTemplate let-node>

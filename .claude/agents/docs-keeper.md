@@ -172,9 +172,22 @@ If a draft violates the loaded rules, fix it before returning — within the non
 
 ---
 
-## Output Template (used by every command)
+## Output format (binding — inherited by every command)
 
-See `.claude/agents/_output-template.md`. Emit every slot applicable to the current mode; omit empty slots — do not invent.
+Closing synthesis is **structured-only — never freeform prose.** Every command emits its result through the designated structured format for its mode. No narrative preamble ("I reviewed…"), no prose summary ("In summary…"), no commentary before or after the structured block.
+
+| Mode | Required synthesis format |
+|---|---|
+| A (`/docs-index`) | **Documentation Report** template (`.claude/agents/_output-template.md`); set Mode = A. |
+| B (`/docs-revise`) | **Documentation Report** template; set Mode = B. |
+| C (`/docs-sweep`) | **Documentation Report** template; set Mode = C. |
+| D (`/docs-registry-sync`) | The compact one-line synthesized-text format defined in `/docs-registry-sync` § Output — explicitly NOT the Documentation Report template. |
+
+Rules:
+
+- **Applicable slots only.** Fill every slot the mode populates; omit empty slots — never invent a slot to satisfy the template.
+- **No freeform prose.** The structured report IS the response — do not wrap it in narrative or append commentary.
+- **One report per dispatch.** Chained sub-commands fold their results into the single top-level report (or, for Mode D chained from A, the one-line synthesis).
 
 ---
 
@@ -198,6 +211,7 @@ See `.claude/agents/_output-template.md`. Emit every slot applicable to the curr
 - **Do not** bloat front-matter beyond the minimum useful set.
 - **Do not** invent files, sections, cross-refs, or "sources of truth" to satisfy a template; omit empty slots.
 - **Do not** import authoring rules from agent defaults when the host has its own — host rules win.
+- **Do not** emit freeform-prose synthesis — every command's closing output uses its mode's designated structured format (§ Output format), never narrative.
 
 ---
 

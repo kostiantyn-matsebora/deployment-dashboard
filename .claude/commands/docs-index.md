@@ -193,6 +193,6 @@ The descent yields a flat sorted list. Sub-indexes act as opaque boundaries — 
 
 11. **Chain to `/docs-registry-sync` (single, after walk-up completes).** Invoke ONCE at the end of the walk-up — not per ancestor. The registry sync sees the final, fully-propagated state after every ancestor's `children:` has settled.
 
-## Report
+## Report (binding)
 
-Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = A. Include a `Walk-up trace` block listing every ancestor visited and the per-ancestor action (Edit / Write / propose-only / idempotent-no-op). Include a `Descent summary` block stating (a) the deepest path the descent reached, (b) the count of files surfaced, (c) the count of boundaries encountered. Surface any **legacy-navigation** `README.md` siblings as deprecation candidates in the Open questions block; surface any **content-bearing** `README.md` newly added to a `children:` array as an additive walk-up event.
+Structured-only — no freeform prose (`.claude/agents/docs-keeper.md` § Output format). Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = A. Include a `Walk-up trace` block listing every ancestor visited and the per-ancestor action (Edit / Write / propose-only / idempotent-no-op). Include a `Descent summary` block stating (a) the deepest path the descent reached, (b) the count of files surfaced, (c) the count of boundaries encountered. Surface any **legacy-navigation** `README.md` siblings as deprecation candidates in the Open questions block; surface any **content-bearing** `README.md` newly added to a `children:` array as an additive walk-up event.

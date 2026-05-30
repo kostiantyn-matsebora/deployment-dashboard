@@ -2,7 +2,7 @@
 
 **Status:** Draft · **Date:** 2026-05-29
 
-Implementation contract for **`Dashboard.Fetcher`** — the optional, separately-deployed pull-mode adapter that translates a CI/CD tool's **pull** API into the dashboard's **push** ingest. Its defining requirement is a **tool-agnostic abstraction layer**: the polling host knows nothing about any specific CI/CD system; all tool-specifics live behind one interface. This spec defines that abstraction and ships a concrete **GitHub** implementation of it.
+Implementation contract for **`Dashboard.Fetcher`** — the optional, separately-deployed pull-mode adapter that translates a CI/CD tool's **pull** API into the dashboard's **push** ingest. Its defining requirement is a **tool-agnostic abstraction layer**: the polling host knows nothing about any specific CI/CD system; all tool-specifics live behind one interface.
 
 ## Sources of truth
 
@@ -48,6 +48,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F13 | **Backfill fills the most recent deployment per `(service, environment)` slot.** Enumerates active workflows (services) and environments per repo; paginates deployments per environment newest-first, stopping when all services are covered or `deployment.created_at < now − BACKFILL_MAX_AGE`. | Per-environment pagination + early-exit on full coverage minimises API calls. Guarantees every service is represented regardless of deployment frequency — fixes the gap where last-N-per-env misses rarely-deployed services. |
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
+| F16 | **Rate-limit budget.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). When the consumed-request count reaches the budget, the adapter waits until `X-RateLimit-Reset`. | Prevents crowding out other consumers of the same PAT; the fetcher is a background process and must not monopolise a shared token. |
 
 ---
 
@@ -256,7 +257,7 @@ For each event `E` (environment `ENV`, run_id `R`):
 
 ### 5.7 Version resolution (F15)
 
-Determines the `version` field for a deployment event. Returns `null` when the source yields nothing — no fallback, no truncation except for the `sha` attribute.
+Determines the `version` field for a deployment event. Returns `null` when the source yields nothing — no fallback. Only `sha` truncates (to 7 chars); all other keys used as-is.
 
 #### 5.7.1 Source types
 
@@ -322,8 +323,8 @@ for each env E in envs:
     if filled.keys == services.keys: break        // all services covered for this env
 ```
 
-Sort collected `events` by `happened_at` ascending before posting (preserves append-only log ordering).
-Advance cursor to `max(status.created_at)` across all events.
+- Sort collected `events` by `happened_at` ascending before posting (preserves append-only log ordering).
+- Advance cursor to `max(status.created_at)` across all events.
 
 #### 5.8.3 Service resolution
 
@@ -335,7 +336,8 @@ ResolveService(workflowName, repo):
   return repo.Split("/").Last()                                        // non-Actions fallback
 ```
 
-`GITHUB__SERVICE_MAP` keys are workflow-level when they contain no `/`; repo-level when they match `owner/repo` format. GitHub workflow names cannot contain `/`, so there is no ambiguity.
+- Keys without `/` → workflow-level; keys matching `owner/repo` → repo-level.
+- GitHub workflow names cannot contain `/` — no key ambiguity.
 
 ---
 
@@ -347,6 +349,39 @@ ResolveService(workflowName, repo):
 | Deployment list pages (1 per env per repo) | ~20 |
 | Status fetches (one per filled slot max) | ≤ 200 |
 | Workflow graph calls (run metadata + YAML) | nearly all absorbed by F11 LRU cache |
+
+---
+
+### 5.9 Rate-limit budget (F16)
+
+#### Discovery (startup)
+
+1. If `GITHUB__RATE_LIMIT` is set → `total_limit = GITHUB__RATE_LIMIT`.
+2. Else → `GET /rate_limit` (same auth headers as §5.1); read `resources.core.limit` → `total_limit`.
+3. On non-2xx or parse error → log warning; `total_limit = 5000` (GitHub authenticated PAT default).
+4. `budget = floor(total_limit × GITHUB__RATE_LIMIT_BUDGET_PCT / 100)`.
+
+#### Per-request enforcement
+
+After every HTTP call to the GitHub API, read response headers:
+
+- `X-RateLimit-Used` — requests consumed since the window opened (preferred).
+- `X-RateLimit-Remaining` + `X-RateLimit-Limit` — fallback: `used = limit − remaining`.
+
+If `used ≥ budget`:
+
+1. Read `X-RateLimit-Reset` → Unix epoch → `reset_at` (UTC).
+2. `wait_until = reset_at + 1 s` (margin to let GitHub's counter roll over).
+3. Log: `[GithubActionsAdapter] rate-limit budget exhausted; sleeping until {wait_until}`.
+4. Pause until `wait_until`.
+5. Reset internal `used` counter to 0.
+
+#### Notes
+
+- `total_limit` is constant for the process lifetime — PAT limits do not change without token rotation.
+- Budget enforcement applies uniformly — backfill and normal poll share the same counter.
+- `GET /rate_limit` costs 1 request against the quota (startup only).
+- Existing `403`/`429` + `Retry-After` handling (§5.5) remains the last-resort fallback for unexpected limit hits.
 
 ---
 
@@ -365,6 +400,8 @@ ResolveService(workflowName, repo):
 | `GITHUB__REPOS` | `acme/api,acme/web` | repos to poll |
 | `GITHUB__SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
 | `GITHUB__VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
+| `GITHUB__RATE_LIMIT` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
+| `GITHUB__RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
 
 Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `JENKINS__…`) drops in without collision.
 
@@ -390,6 +427,8 @@ Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `
 **Version resolution:** `attribute:sha` → 7-char truncation; `attribute:ref` → value as-is; `payload:version` → field value; payload field absent → `null`; payload not a JSON object → `null`; `artifact:version.txt` → trimmed file content; artifact not found → `null`; artifact list non-2xx → `null`; artifact download non-2xx → `null`; `artifact` source + no `run_id` → `null`; artifact result LRU-cached for same `(repo, run_id, artifact_name)`.
 
 **Backfill:** all services covered on first page (early exit); rarely-deployed service found on page 2 (pagination); service not deployed to env within `BACKFILL_MAX_AGE` (skipped); `BACKFILL=true` overwrites existing cursor; events posted oldest-first.
+
+**Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB__RATE_LIMIT` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
 
 ### 7.2 Integration test cases
 

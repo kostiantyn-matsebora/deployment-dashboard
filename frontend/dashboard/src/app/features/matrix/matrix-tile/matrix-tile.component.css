@@ -1,23 +1,28 @@
-/* MatrixTileComponent — pixel-matched to docs/design/mockup/index.html §Matrix Tile */
+/* MatrixTileComponent — layout mirrors vis-card (2-column CSS grid).
+   Spec: docs/design/components.md §Matrix Tile + §6 Box States      */
 
 /* ── Host: transparent to layout ─────────────────────────────
-   display: contents makes <app-matrix-tile> invisible to the CSS grid's
-   intrinsic-size measurement. The .slot div becomes a direct logical child
-   of the .row grid cell, exactly replicating the mockup's DOM structure
-   (where .slot IS the direct grid-cell child). Without this, the custom
-   element defaults to display:inline and the column can't measure the
-   white-space:nowrap .ver text width for max-content track sizing.
-   ──────────────────────────────────────────────────────────── */
+   display: contents keeps the custom element invisible to the CSS
+   grid track-sizing so .slot is the direct logical grid child.    */
 :host {
   display: contents;
 }
 
-/* ── Slot base ─────────────────────────────────────────────── */
+/* ── Slot: 2-column grid (mirrors .vis-card) ──────────────────
+   column 1 = left-aligned content (version, ref, sha)
+   column 2 = right-aligned content (time, run+actor, parents)
+   flex: 1 1 auto — fills the .row flex cell so tiles in the same
+   service row all share the same height (CSS Grid + flex co-op).  */
 .slot {
   position: relative;
-  min-height: 56px;
-  height: auto;
-  padding: 6px 8px 6px 12px;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 20px;
+  row-gap: 2px;
+  align-items: baseline;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 5px 10px 6px 12px;
   border-radius: var(--radius-md);
   background: var(--slot-bg);
   border: 1px solid var(--glass-edge);
@@ -25,8 +30,6 @@
   -webkit-backdrop-filter: blur(14px) saturate(130%);
   cursor: pointer;
   overflow: visible;
-  display: flex;
-  flex-direction: column;
   transition:
     transform 0.18s ease,
     border-color 0.18s ease,
@@ -53,9 +56,6 @@
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Tile-attrs shrinks to nothing when empty */
-.slot .tile-attrs:empty { display: none; }
-
 /* ── S1: success ───────────────────────────────────────────── */
 .slot.s-success {
   background: linear-gradient(180deg, var(--emerald-wash), rgba(52, 210, 154, 0.06));
@@ -70,7 +70,7 @@
   box-shadow: 0 0 14px var(--emerald-glow);
 }
 
-/* ── S5: running only — full amber ─────────────────────────── */
+/* ── S5: running only ──────────────────────────────────────── */
 .slot.s-running-only {
   background: linear-gradient(180deg, var(--amber-wash), rgba(245, 165, 36, 0.06));
   border-color: var(--amber-edge);
@@ -81,7 +81,7 @@
   box-shadow: 0 0 14px var(--amber-glow);
 }
 
-/* ── S2, S3: running split — amber animated ────────────────── */
+/* ── S2, S3: running split ─────────────────────────────────── */
 .slot.s-run-last,
 .slot.s-run-fail-last {
   border-color: var(--amber-edge);
@@ -93,7 +93,7 @@
   box-shadow: 0 0 14px var(--amber-glow);
 }
 
-/* ── S6: running + failed only — full amber ────────────────── */
+/* ── S6: running + failed only ─────────────────────────────── */
 .slot.s-run-fail-only {
   background: linear-gradient(180deg, var(--amber-wash), rgba(245, 165, 36, 0.06));
   border-color: var(--amber-edge);
@@ -104,7 +104,7 @@
   box-shadow: 0 0 14px var(--amber-glow);
 }
 
-/* ── S4: failed + last successful — coral split ────────────── */
+/* ── S4: failed + last successful ──────────────────────────── */
 .slot.s-fail-last {
   border-color: var(--coral-edge);
   box-shadow:
@@ -125,37 +125,18 @@
     0 0 22px var(--amber-glow);
 }
 
-/* ── Split tile structure ──────────────────────────────────── */
-.slot.split {
-  padding: 0;
-}
-.slot.split .sec-top,
-.slot.split .sec-bot {
-  padding: 5px 10px;
-  flex: 1;
+/* ── Row 1: tile-ver-row (spans both columns) ─────────────────
+   Mirrors .vc-ver-row in vis-card.
+   version/status left; .fld-time pushed right via margin-left:auto. */
+.tile-ver-row {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
+  align-items: baseline;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
-.slot.split .sec-top { min-height: 28px; padding-left: 12px; }
-.slot.split .sec-bot { min-height: 0; }
-.slot.split .sec-bot:empty { display: none; }
-.slot.split .divider {
-  border-top: 1.5px dashed var(--divider-dash);
-  margin: 0 12px;
-}
-
-/* Top-section tints */
-.sec-top.is-running {
-  background: linear-gradient(180deg, var(--amber-wash), rgba(245, 165, 36, 0.05));
-}
-.sec-top.is-failed {
-  background: linear-gradient(180deg, var(--coral-wash), rgba(255, 93, 93, 0.05));
-}
-.sec-bot {
-  background: var(--neutral-wash);
-}
+.tile-ver-row .fld-time { margin-left: auto; }
 
 /* ── Version span ──────────────────────────────────────────── */
 .ver {
@@ -183,24 +164,6 @@
     0 0 14px rgba(245, 165, 36, 0.35);
 }
 
-/* ── Headline row ──────────────────────────────────────────── */
-.ver-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px 10px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.ver-row .ver { flex: 0 1 auto; min-width: 0; }
-.ver-row .ver-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px 8px;
-  flex-wrap: wrap;
-  margin-left: auto;
-  min-width: 0;
-}
-
 /* ── Spinner ───────────────────────────────────────────────── */
 .spinner {
   width: 14px;
@@ -211,39 +174,7 @@
   animation: spin 0.9s linear infinite;
   filter: drop-shadow(0 0 4px var(--amber-glow));
   flex-shrink: 0;
-}
-
-/* ── Running / failed lines ────────────────────────────────── */
-.running-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  row-gap: 4px;
-}
-.running-line .ver-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px 8px;
-  flex-wrap: wrap;
-  margin-left: auto;
-  min-width: 0;
-}
-
-.failed-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  row-gap: 4px;
-}
-.failed-line .ver-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px 8px;
-  flex-wrap: wrap;
-  margin-left: auto;
-  min-width: 0;
+  align-self: center;
 }
 
 /* ── Warning badge ─────────────────────────────────────────── */
@@ -273,45 +204,60 @@
   letter-spacing: 0.6px;
 }
 
-/* ── Tile-attrs block ──────────────────────────────────────── */
+/* ── Rows 2-3: tile-attrs subgrid (mirrors vis-card) ──────────
+   grid-column: 1/-1 + subgrid inherits the slot's two columns.  */
 .tile-attrs {
-  margin-top: auto;
-  padding-top: 4px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 8px;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
   row-gap: 2px;
-  min-width: 0;
-}
-.ta-bl {
-  display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 2px 8px;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-.ta-br {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 2px 8px;
-  min-width: 0;
-  max-width: 100%;
-  margin-left: auto;
-}
-.ta-full {
-  flex-basis: 100%;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 8px;
 }
 
-/* ── Field glyphs / typography ─────────────────────────────── */
+/* col 1 — left-aligned */
+.ta-bl {
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* col 2 — right-aligned */
+.ta-br {
+  grid-column: 2;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* ── Split: divider + last-successful ─────────────────────── */
+.tile-divider {
+  grid-column: 1 / -1;
+  border-top: 1.5px dashed var(--divider-dash);
+  margin: 2px 0;
+}
+
+.tile-last-succ {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-1);
+  background: var(--neutral-wash);
+  padding: 3px 10px;
+  margin: 0 -10px -6px;
+}
+.tile-last-succ .glyph { color: var(--ink-3); }
+
+/* ── Field glyphs & typography ────────────────────────────── */
 .glyph { color: var(--ink-3); }
 
 .fld-sha {
@@ -385,23 +331,3 @@
   color: var(--ink-2);
 }
 .fld-parents .glyph { margin-right: 2px; }
-
-/* ── Split-tile bottom identifier ──────────────────────────── */
-.lastline {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11.5px;
-  color: var(--ink-1);
-}
-.lastline .glyph { color: var(--ink-3); }
-
-/* ── ver-meta (actor + time alongside version/spinner) ─────── */
-.ver-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
