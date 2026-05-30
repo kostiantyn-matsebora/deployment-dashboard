@@ -28,7 +28,8 @@ jobs:
           $files = Get-ChildItem -Path scripts/ -Recurse -Filter '*.ps1' |
             Where-Object { $_.Name -notlike '*.Tests.ps1' }
           $results = $files | ForEach-Object {
-            Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error,Warning
+            Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error,Warning `
+              -Settings scripts/PSScriptAnalyzerSettings.psd1
           }
           if ($results) {
             $results | Format-Table -AutoSize
