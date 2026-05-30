@@ -8,6 +8,9 @@
   "env": {
     "DOCS_KEEPER_ENFORCE": "block"
   },
+  "worktree": {
+    "bgIsolation": "worktree"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -16,6 +19,16 @@
           {
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\" -SnapshotSession",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeCleanup.ps1\" -SnapshotSession",
             "timeout": 30
           }
         ]
@@ -64,6 +77,16 @@
           {
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\" -SessionEnd",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeCleanup.ps1\" -SessionEnd",
             "timeout": 30
           }
         ]

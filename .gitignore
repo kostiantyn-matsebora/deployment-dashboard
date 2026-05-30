@@ -91,6 +91,9 @@ testing/e2e/captures/head-*.png
 # All per-machine runtime, never source. The wildcard form covers the
 # per-session_id files (e.g. .docs-keeper-session.<sid>.json).
 .claude/.docs-keeper-session*.json
+# worktree lifecycle markers: written by Invoke-WorktreeCleanup.ps1 at SessionEnd
+# when a worktree has uncommitted changes. Keyed by session id.
+.claude/.worktree-state*.json
 
 # ---- dotnet format / analyzer scratch -----------------------------------
 # `dotnet format --report` writes this at repo root when invoked manually
