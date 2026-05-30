@@ -81,8 +81,8 @@ BeforeAll {
         $list = [System.Collections.Generic.List[hashtable]]::new()
         $script:CreatorCalls = $list
         return {
-            param([string]$Path, [string]$Branch)
-            $list.Add(@{ Path = $Path; Branch = $Branch })
+            param([string]$Path)
+            $list.Add(@{ Path = $Path })
         }.GetNewClosure()
     }
 
@@ -212,11 +212,7 @@ Describe 'Get-SessionWorktreePath' {
 Describe 'Format-WorktreeCreatedContext' {
 
     BeforeAll {
-        $script:Created = Format-WorktreeCreatedContext -Path '/projects/myrepo-wt-abc' -Branch 'session/abc'
-    }
-
-    It 'contains branch name' {
-        $script:Created | Should -Match 'session/abc'
+        $script:Created = Format-WorktreeCreatedContext -Path '/projects/myrepo-wt-abc'
     }
 
     It 'contains path' {
@@ -315,23 +311,55 @@ Describe 'Test-WorktreeClean' {
 Describe 'Test-WorktreeHasUnpushedCommits' {
 
     It 'false when rev-list count is 0 (all pushed)' {
-        $runner = New-GitRunner @{ 'rev-list --count @{u}..HEAD' = '0' }
+        $runner = New-GitRunner @{
+            'rev-parse --abbrev-ref HEAD'    = 'main'
+            'rev-list --count @{u}..HEAD'    = '0'
+        }
         Test-WorktreeHasUnpushedCommits -GitRunner $runner | Should -BeFalse
     }
 
     It 'true when rev-list count is non-zero' {
-        $runner = New-GitRunner @{ 'rev-list --count @{u}..HEAD' = '3' }
+        $runner = New-GitRunner @{
+            'rev-parse --abbrev-ref HEAD'    = 'feat'
+            'rev-list --count @{u}..HEAD'    = '3'
+        }
         Test-WorktreeHasUnpushedCommits -GitRunner $runner | Should -BeTrue
     }
 
     It 'true when git returns empty (no upstream configured)' {
-        $runner = New-GitRunner @{}   # no response -> empty -> no upstream
+        $runner = New-GitRunner @{ 'rev-parse --abbrev-ref HEAD' = 'feat' }
         Test-WorktreeHasUnpushedCommits -GitRunner $runner | Should -BeTrue
     }
 
     It 'true when git returns whitespace only' {
-        $runner = New-GitRunner @{ 'rev-list --count @{u}..HEAD' = '   ' }
+        $runner = New-GitRunner @{
+            'rev-parse --abbrev-ref HEAD'    = 'feat'
+            'rev-list --count @{u}..HEAD'    = '   '
+        }
         Test-WorktreeHasUnpushedCommits -GitRunner $runner | Should -BeTrue
+    }
+
+    It 'true when detached HEAD and no MainGitRunner' {
+        $runner = New-GitRunner @{ 'rev-parse --abbrev-ref HEAD' = 'HEAD' }
+        Test-WorktreeHasUnpushedCommits -GitRunner $runner | Should -BeTrue
+    }
+
+    It 'false when detached HEAD and HEAD equals main HEAD (no new commits)' {
+        $runner = New-GitRunner @{
+            'rev-parse --abbrev-ref HEAD'   = 'HEAD'
+            'rev-list --count abc123..HEAD' = '0'
+        }
+        $mainRunner = New-GitRunner @{ 'rev-parse HEAD' = 'abc123' }
+        Test-WorktreeHasUnpushedCommits -GitRunner $runner -MainGitRunner $mainRunner | Should -BeFalse
+    }
+
+    It 'true when detached HEAD and commits exist beyond main HEAD' {
+        $runner = New-GitRunner @{
+            'rev-parse --abbrev-ref HEAD'   = 'HEAD'
+            'rev-list --count abc123..HEAD' = '2'
+        }
+        $mainRunner = New-GitRunner @{ 'rev-parse HEAD' = 'abc123' }
+        Test-WorktreeHasUnpushedCommits -GitRunner $runner -MainGitRunner $mainRunner | Should -BeTrue
     }
 }
 
@@ -549,6 +577,71 @@ Describe 'Invoke-WorktreeLifecycle -SessionEnd' {
         }
     }
 
+    Context 'in worktree + detached HEAD + clean + no new commits' {
+        It 'removes worktree and returns Action=removed' {
+            $spyGit = {
+                param([string[]]$Argv)
+                $script:GitCalls.Add(($Argv -join ' '))
+                switch ($Argv -join ' ') {
+                    'rev-parse --show-toplevel'        { return '/repo/wt/feat' }
+                    'worktree list --porcelain'        { return @('worktree /repo') }
+                    'rev-parse --abbrev-ref HEAD'      { return 'HEAD' }
+                    'status --porcelain'               { return '' }
+                    'rev-list --count abc123..HEAD'    { return '0' }
+                    default                            { return @() }
+                }
+            }
+            $mainGit = New-GitRunner @{ 'rev-parse HEAD' = 'abc123' }
+            $lister  = New-DirLister @{ '/repo/.claude' = @() }
+            $reader  = New-FileReader @{}
+            $writer  = { param([string]$P, [hashtable]$M) $script:WriterCalls.Add(@{ Path = $P; Marker = $M }) }
+            $deleter = { param([string]$P) $script:DeleterCalls.Add($P) }
+
+            $result = Invoke-WorktreeLifecycle `
+                -RepoRoot '/repo' -SessionId 'sid-1' `
+                -GitRunner $spyGit -MainGitRunner $mainGit `
+                -DirLister $lister -FileReader $reader `
+                -MarkerWriter $writer -MarkerDeleter $deleter `
+                -SessionEnd
+
+            $result.Action     | Should -Be 'removed'
+            $result.IsWorktree | Should -BeTrue
+            $result.WasClean   | Should -BeTrue
+        }
+    }
+
+    Context 'in worktree + detached HEAD + clean + new commits exist' {
+        It 'marks dirty and returns Action=marked-dirty' {
+            $spyGit = {
+                param([string[]]$Argv)
+                switch ($Argv -join ' ') {
+                    'rev-parse --show-toplevel'        { return '/repo/wt/feat' }
+                    'worktree list --porcelain'        { return @('worktree /repo') }
+                    'rev-parse --abbrev-ref HEAD'      { return 'HEAD' }
+                    'status --porcelain'               { return '' }
+                    'rev-list --count abc123..HEAD'    { return '1' }
+                    default                            { return @() }
+                }
+            }
+            $mainGit = New-GitRunner @{ 'rev-parse HEAD' = 'abc123' }
+            $lister  = New-DirLister @{ '/repo/.claude' = @() }
+            $reader  = New-FileReader @{}
+            $writer  = { param([string]$P, [hashtable]$M) $script:WriterCalls.Add(@{ Path = $P; Marker = $M }) }
+            $deleter = { param([string]$P) $script:DeleterCalls.Add($P) }
+
+            $result = Invoke-WorktreeLifecycle `
+                -RepoRoot '/repo' -SessionId 'sid-1' `
+                -GitRunner $spyGit -MainGitRunner $mainGit `
+                -DirLister $lister -FileReader $reader `
+                -MarkerWriter $writer -MarkerDeleter $deleter `
+                -SessionEnd
+
+            $result.Action   | Should -Be 'marked-dirty'
+            $result.WasClean | Should -BeFalse
+            $script:WriterCalls.Count | Should -Be 1
+        }
+    }
+
     Context 'in worktree + dirty' {
         BeforeEach {
             $script:DirtyGit = {
@@ -702,7 +795,7 @@ Describe 'Invoke-WorktreeLifecycle -SnapshotSession -AutoWorktree' {
         }
 
         $script:CreatorCalls.Count          | Should -Be 1
-        $script:CreatorCalls[0].Branch      | Should -Match 'abc123'
+        $script:CreatorCalls[0].Path        | Should -Match 'abc123'
         $out.Result.ProposalEmitted         | Should -BeTrue
         $out.Result.AutoWorktree            | Should -BeTrue
     }

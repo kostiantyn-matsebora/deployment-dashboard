@@ -58,8 +58,8 @@
     raw content as a string. Used to read marker JSON files.
 
 .PARAMETER WorktreeCreator
-    Injectable scriptblock: `& $WorktreeCreator <path> <branch>` — creates a
-    new git worktree at `path` on a new `branch`. Only invoked when
+    Injectable scriptblock: `& $WorktreeCreator <path>` — creates a new git
+    worktree at `path` in detached HEAD mode. Only invoked when
     CLAUDE_AUTO_WORKTREE=1. Tests pass a spy.
 
 .PARAMETER SessionEnd
@@ -163,16 +163,34 @@ function Test-WorktreeClean {
 
 function Test-WorktreeHasUnpushedCommits {
     <#
-        Returns $true when the branch has commits not yet pushed to its upstream,
-        OR when no upstream is configured (branch is entirely local).
-        Empty output from git (upstream missing or command error) is treated as
-        "has unpushed" so the worktree is preserved rather than silently dropped.
+        Returns $true when the worktree has commits that have not been pushed.
+        Detached HEAD: compares against main worktree HEAD via $MainGitRunner.
+          - No $MainGitRunner supplied → return $true (preserve, cannot assess).
+        Named branch: checks @{u}..HEAD; empty output (no upstream) → $true.
     #>
     [CmdletBinding()]
-    param([Parameter(Mandatory)][scriptblock]$GitRunner)
+    param(
+        [Parameter(Mandatory)][scriptblock]$GitRunner,
+        [scriptblock]$MainGitRunner
+    )
+
+    $headRef = (& $GitRunner @('rev-parse', '--abbrev-ref', 'HEAD')) | Select-Object -First 1
+    $headRef = if ($headRef) { ([string]$headRef).Trim() } else { '' }
+
+    if ($headRef -eq 'HEAD') {
+        if (-not $MainGitRunner) { return $true }
+        $mainSha = (& $MainGitRunner @('rev-parse', 'HEAD')) | Select-Object -First 1
+        $mainSha = if ($mainSha) { ([string]$mainSha).Trim() } else { '' }
+        if ([string]::IsNullOrWhiteSpace($mainSha)) { return $true }
+        $raw = & $GitRunner @('rev-list', '--count', "$mainSha..HEAD")
+        $str = if ($raw) { "$($raw | Select-Object -First 1)".Trim() } else { '' }
+        if ([string]::IsNullOrWhiteSpace($str)) { return $true }
+        return ($str -ne '0')
+    }
+
     $raw = & $GitRunner @('rev-list', '--count', '@{u}..HEAD')
     $str = if ($raw) { "$($raw | Select-Object -First 1)".Trim() } else { '' }
-    if ([string]::IsNullOrWhiteSpace($str)) { return $true }   # no upstream → preserve
+    if ([string]::IsNullOrWhiteSpace($str)) { return $true }
     return ($str -ne '0')
 }
 
@@ -235,10 +253,9 @@ function Format-WorktreeProposal {
 
 function Format-WorktreeCreatedContext {
     [CmdletBinding()]
-    param([string]$Path, [string]$Branch)
+    param([string]$Path)
     return @(
         'Session worktree created for isolation.',
-        "  Branch : $Branch",
         "  Path   : $Path",
         '',
         "Call EnterWorktree with path `"$Path`" to switch to it before doing any work."
@@ -289,6 +306,7 @@ function Invoke-WorktreeLifecycle {
         [Parameter(Mandatory)][scriptblock]$MarkerWriter,
         [Parameter(Mandatory)][scriptblock]$MarkerDeleter,
         [scriptblock]$WorktreeCreator,
+        [scriptblock]$MainGitRunner,
         [switch]$AutoWorktree,
         [switch]$SessionEnd,
         [switch]$SnapshotSession
@@ -300,8 +318,12 @@ function Invoke-WorktreeLifecycle {
         $action = 'pruned'
 
         if ($info.IsWorktree) {
+            $mainGitForUnpushed = if ($MainGitRunner) { $MainGitRunner } else {
+                $mainPath = $info.Main
+                { param([string[]]$Argv) & git -C $mainPath @Argv 2>$null }.GetNewClosure()
+            }
             $clean = (Test-WorktreeClean -GitRunner $GitRunner) -and
-                     (-not (Test-WorktreeHasUnpushedCommits -GitRunner $GitRunner))
+                     (-not (Test-WorktreeHasUnpushedCommits -GitRunner $GitRunner -MainGitRunner $mainGitForUnpushed))
             if ($clean) {
                 & $GitRunner @('-C', $info.Main, 'worktree', 'remove', '--force', $info.Current) 2>$null
 
@@ -365,11 +387,10 @@ function Invoke-WorktreeLifecycle {
         if ($AutoWorktree -and $SessionId -and $WorktreeCreator) {
             $info = Get-WorktreeInfo -GitRunner $GitRunner
             if (-not $info.IsWorktree) {
-                $branch = Get-SessionBranchName   -SessionId $SessionId
-                $path   = Get-SessionWorktreePath -RepoRoot $RepoRoot -SessionId $SessionId
-                if ($branch -and $path) {
-                    & $WorktreeCreator $path $branch
-                    $parts += Format-WorktreeCreatedContext -Path $path -Branch $branch
+                $path = Get-SessionWorktreePath -RepoRoot $RepoRoot -SessionId $SessionId
+                if ($path) {
+                    & $WorktreeCreator $path
+                    $parts += Format-WorktreeCreatedContext -Path $path
                 }
             }
         }
@@ -449,9 +470,9 @@ if (-not $AsLibrary) {
 
     if (-not $WorktreeCreator) {
         $WorktreeCreator = {
-            param([string]$Path, [string]$Branch)
-            if ($capturedRoot) { & git -C $capturedRoot worktree add $Path -b $Branch 2>$null }
-            else               { & git worktree add $Path -b $Branch 2>$null }
+            param([string]$Path)
+            if ($capturedRoot) { & git -C $capturedRoot worktree add --detach $Path 2>$null }
+            else               { & git worktree add --detach $Path 2>$null }
         }.GetNewClosure()
     }
 
