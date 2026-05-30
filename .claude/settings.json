@@ -5,7 +5,24 @@
       "Edit(.claude/agents/*)"
     ]
   },
+  "env": {
+    "DOCS_KEEPER_ENFORCE": "block",
+    "DOCS_KEEPER_AUTO_REVISE": "off",
+    "DOCS_KEEPER_MAX_REVISE_ATTEMPTS": "3"
+  },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\" -SnapshotSession",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
@@ -25,6 +42,18 @@
           {
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\" -Standalone",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\" -SessionEnd",
             "timeout": 30
           }
         ]
