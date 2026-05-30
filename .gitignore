@@ -94,6 +94,9 @@ testing/e2e/captures/head-*.png
 # worktree lifecycle markers: written by Invoke-WorktreeCleanup.ps1 at SessionEnd
 # when a worktree has uncommitted changes. Keyed by session id.
 .claude/.worktree-state*.json
+# docs-capture entries: pending documentation items captured during sessions.
+# Persist across session end until applied or dismissed.
+.claude/.docs-capture*.json
 
 # ---- dotnet format / analyzer scratch -----------------------------------
 # `dotnet format --report` writes this at repo root when invoked manually

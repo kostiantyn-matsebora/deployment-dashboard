@@ -923,3 +923,207 @@ Describe 'Invoke-SessionSnapshot' {
         $script:captured.TrackedMd.Count | Should -Be 0
     }
 }
+
+# ---------- Docs-capture pure functions ----------
+
+Describe 'Get-DocsCaptureFilePath' {
+    It 'no sid -> path ends in .docs-capture.json' {
+        $result = Get-DocsCaptureFilePath -RepoRoot '/repo' -SessionId ''
+        $result | Should -Match '\.docs-capture\.json$'
+        $result | Should -Not -Match '\.docs-capture\.\.'
+    }
+    It 'with sid "abc" -> path ends in .docs-capture.abc.json' {
+        $result = Get-DocsCaptureFilePath -RepoRoot '/repo' -SessionId 'abc'
+        $result | Should -Match '\.docs-capture\.abc\.json$'
+    }
+}
+
+Describe 'New-DocsCaptureEntry' {
+    It 'returns hashtable with correct fields' {
+        $e = New-DocsCaptureEntry -Content 'Fix the auth flow docs.' -SuggestedDoc 'docs/SAD.md' -Source 'manual' -CapturedAt '2026-05-30T18:00:00Z'
+        $e.content      | Should -Be 'Fix the auth flow docs.'
+        $e.suggestedDoc | Should -Be 'docs/SAD.md'
+        $e.source       | Should -Be 'manual'
+        $e.capturedAt   | Should -Be '2026-05-30T18:00:00Z'
+    }
+    It 'unknown source defaults to manual' {
+        $e = New-DocsCaptureEntry -Content 'x' -SuggestedDoc '' -Source 'bogus' -CapturedAt '2026-01-01T00:00:00Z'
+        $e.source | Should -Be 'manual'
+    }
+    It 'valid source manual passes through' {
+        $e = New-DocsCaptureEntry -Content 'x' -SuggestedDoc '' -Source 'manual' -CapturedAt '2026-01-01T00:00:00Z'
+        $e.source | Should -Be 'manual'
+    }
+    It 'valid source compaction passes through' {
+        $e = New-DocsCaptureEntry -Content 'x' -SuggestedDoc '' -Source 'compaction' -CapturedAt '2026-01-01T00:00:00Z'
+        $e.source | Should -Be 'compaction'
+    }
+}
+
+Describe 'Add-DocsCaptureEntry' {
+    It 'appends entry to existing captures array' {
+        $file = @{ sessionId = 's1'; captures = @(@{ content = 'first'; suggestedDoc = ''; source = 'manual'; capturedAt = 'T1' }) }
+        $entry = @{ content = 'second'; suggestedDoc = ''; source = 'compaction'; capturedAt = 'T2' }
+        $result = Add-DocsCaptureEntry -CaptureFile $file -Entry $entry
+        @($result.captures).Count | Should -Be 2
+        @($result.captures)[1].content | Should -Be 'second'
+    }
+    It 'creates captures array when absent' {
+        $file = @{ sessionId = 's1' }
+        $entry = @{ content = 'only'; suggestedDoc = ''; source = 'manual'; capturedAt = 'T1' }
+        $result = Add-DocsCaptureEntry -CaptureFile $file -Entry $entry
+        @($result.captures).Count | Should -Be 1
+    }
+    It 'does not mutate input' {
+        $file = @{ sessionId = 's1'; captures = @() }
+        $entry = @{ content = 'x'; suggestedDoc = ''; source = 'manual'; capturedAt = 'T1' }
+        $null = Add-DocsCaptureEntry -CaptureFile $file -Entry $entry
+        @($file.captures).Count | Should -Be 0
+    }
+}
+
+Describe 'Format-CaptureReport' {
+    It 'empty captures key -> empty string' {
+        $file = @{ sessionId = 's'; captures = @() }
+        Format-CaptureReport -CaptureFile $file | Should -Be ''
+    }
+    It 'null/absent captures -> empty string' {
+        $file = @{ sessionId = 's' }
+        Format-CaptureReport -CaptureFile $file | Should -Be ''
+    }
+    It 'one manual entry with suggestedDoc -> contains [manual], ->, doc path' {
+        $file = @{
+            sessionId = 's'
+            captures  = @(@{ content = 'Update the auth section.'; suggestedDoc = 'docs/SAD.md'; source = 'manual'; capturedAt = 'T' })
+        }
+        $result = Format-CaptureReport -CaptureFile $file
+        $result | Should -Match '\[manual\]'
+        $result | Should -Match '->'
+        $result | Should -Match 'docs/SAD\.md'
+    }
+    It 'one compaction entry with no suggestedDoc -> contains [compaction], no ->' {
+        $file = @{
+            sessionId = 's'
+            captures  = @(@{ content = 'Session summary text.'; suggestedDoc = ''; source = 'compaction'; capturedAt = 'T' })
+        }
+        $result = Format-CaptureReport -CaptureFile $file
+        $result | Should -Match '\[compaction\]'
+        $result | Should -Not -Match '->'
+    }
+    It 'content > 80 chars is truncated with ellipsis' {
+        $longText = 'A' * 90
+        $file = @{
+            sessionId = 's'
+            captures  = @(@{ content = $longText; suggestedDoc = ''; source = 'manual'; capturedAt = 'T' })
+        }
+        $result = Format-CaptureReport -CaptureFile $file
+        $result | Should -Match ([char]0x2026)
+        $result | Should -Not -Match ('A' * 90)
+    }
+    It 'N in header matches capture count' {
+        $file = @{
+            sessionId = 's'
+            captures  = @(
+                @{ content = 'One.'; suggestedDoc = ''; source = 'manual'; capturedAt = 'T' },
+                @{ content = 'Two.'; suggestedDoc = ''; source = 'manual'; capturedAt = 'T' },
+                @{ content = 'Three.'; suggestedDoc = ''; source = 'manual'; capturedAt = 'T' }
+            )
+        }
+        $result = Format-CaptureReport -CaptureFile $file
+        $result | Should -Match 'this session \(3\)'
+    }
+}
+
+Describe 'Format-CaptureProposal' {
+    It 'empty array -> empty string' {
+        Format-CaptureProposal -CaptureFiles @() | Should -Be ''
+    }
+    It 'all files have empty captures -> empty string' {
+        $files = @(@{ sessionId = 's1'; captures = @() }, @{ sessionId = 's2'; captures = @() })
+        Format-CaptureProposal -CaptureFiles $files | Should -Be ''
+    }
+    It 'one file one entry -> contains entry details and reply instructions' {
+        $files = @(@{
+            sessionId = 's1'
+            captures  = @(@{ content = 'Auth flow change.'; suggestedDoc = 'docs/SAD.md'; source = 'manual'; capturedAt = 'T' })
+        })
+        $result = Format-CaptureProposal -CaptureFiles $files
+        $result | Should -Match '\[manual\]'
+        $result | Should -Match 'docs/SAD\.md'
+        $result | Should -Match 'apply'
+        $result | Should -Match 'dismiss'
+    }
+    It 'multiple entries across files -> all listed, total count correct' {
+        $files = @(
+            @{ sessionId = 's1'; captures = @(
+                @{ content = 'Entry A.'; suggestedDoc = ''; source = 'manual'; capturedAt = 'T' },
+                @{ content = 'Entry B.'; suggestedDoc = ''; source = 'compaction'; capturedAt = 'T' }
+            )},
+            @{ sessionId = 's2'; captures = @(
+                @{ content = 'Entry C.'; suggestedDoc = 'docs/X.md'; source = 'manual'; capturedAt = 'T' }
+            )}
+        )
+        $result = Format-CaptureProposal -CaptureFiles $files
+        $result | Should -Match 'total\) \(3 total\)|3 total'
+        $result | Should -Match 'Entry A'
+        $result | Should -Match 'Entry B'
+        $result | Should -Match 'Entry C'
+    }
+    It 'content truncation same as report (> 80 chars)' {
+        $longText = 'B' * 90
+        $files = @(@{
+            sessionId = 's1'
+            captures  = @(@{ content = $longText; suggestedDoc = ''; source = 'manual'; capturedAt = 'T' })
+        })
+        $result = Format-CaptureProposal -CaptureFiles $files
+        $result | Should -Match ([char]0x2026)
+        $result | Should -Not -Match ('B' * 90)
+    }
+}
+
+Describe 'Find-PendingCaptureFiles' {
+    It 'skips file matching current session id' {
+        $dl = {
+            param([string]$Dir)
+            @(@{ Name = '.docs-capture.abc.json'; IsDir = $false })
+        }
+        $fr = {
+            param([string]$Path)
+            '{"sessionId":"abc","captures":[{"content":"x","suggestedDoc":"","source":"manual","capturedAt":"T"}]}'
+        }
+        $result = @(Find-PendingCaptureFiles -RepoRoot '/repo' -CurrentSessionId 'abc' -DirLister $dl -FileReader $fr)
+        $result.Count | Should -Be 0
+    }
+    It 'returns parsed files from other sessions that have captures' {
+        $dl = {
+            param([string]$Dir)
+            @(@{ Name = '.docs-capture.xyz.json'; IsDir = $false })
+        }
+        $fr = {
+            param([string]$Path)
+            '{"sessionId":"xyz","captures":[{"content":"y","suggestedDoc":"docs/A.md","source":"manual","capturedAt":"T"}]}'
+        }
+        $result = @(Find-PendingCaptureFiles -RepoRoot '/repo' -CurrentSessionId 'abc' -DirLister $dl -FileReader $fr)
+        $result.Count | Should -Be 1
+        @($result[0].captures).Count | Should -Be 1
+        @($result[0].captures)[0].content | Should -Be 'y'
+    }
+    It 'skips files with empty captures array' {
+        $dl = {
+            param([string]$Dir)
+            @(@{ Name = '.docs-capture.xyz.json'; IsDir = $false })
+        }
+        $fr = {
+            param([string]$Path)
+            '{"sessionId":"xyz","captures":[]}'
+        }
+        $result = @(Find-PendingCaptureFiles -RepoRoot '/repo' -CurrentSessionId 'abc' -DirLister $dl -FileReader $fr)
+        $result.Count | Should -Be 0
+    }
+    It 'returns empty when no matching files' {
+        $dl = { param([string]$Dir) @() }
+        $fr = { param([string]$Path) '' }
+        $result = @(Find-PendingCaptureFiles -RepoRoot '/repo' -CurrentSessionId 'abc' -DirLister $dl -FileReader $fr)
+        $result.Count | Should -Be 0
+    }
+}

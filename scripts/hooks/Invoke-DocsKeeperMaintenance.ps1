@@ -141,6 +141,8 @@ param(
     [switch]$MarkRevised,
     [string]$Dismiss,
     [switch]$DriftOnly,
+    [switch]$AddCapture,
+    [switch]$CaptureFromSummary,
     [switch]$AsLibrary
 )
 
@@ -583,6 +585,161 @@ function Format-SessionStartProposal {
     return ($lines -join "`n")
 }
 
+# ---------- Pure functions: docs-capture ----------
+
+function Get-DocsCaptureFilePath {
+    [CmdletBinding()]
+    param([string]$RepoRoot, [string]$SessionId)
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $sid = Get-SafeSessionId -SessionId $SessionId
+    $name = if ($sid) { ".docs-capture.$sid.json" } else { '.docs-capture.json' }
+    return (Join-Path $dir $name)
+}
+
+function New-DocsCaptureEntry {
+    [CmdletBinding()]
+    param(
+        [string]$Content,
+        [string]$SuggestedDoc,
+        [string]$Source,
+        [string]$CapturedAt
+    )
+    $safeSource = if ($Source -in @('manual', 'compaction')) { $Source } else { 'manual' }
+    return @{
+        content      = $Content
+        suggestedDoc = $SuggestedDoc
+        source       = $safeSource
+        capturedAt   = $CapturedAt
+    }
+}
+
+function Add-DocsCaptureEntry {
+    <#
+        Pure. Returns updated capture hashtable with $Entry appended to captures.
+        Does not mutate the input.
+    #>
+    [CmdletBinding()]
+    param([hashtable]$CaptureFile, [hashtable]$Entry)
+    $result = @{}
+    foreach ($k in $CaptureFile.Keys) { $result[$k] = $CaptureFile[$k] }
+    $existing = [System.Collections.Generic.List[object]]::new()
+    if ($result.ContainsKey('captures') -and $result['captures']) {
+        foreach ($item in @($result['captures'])) { $existing.Add($item) }
+    }
+    $existing.Add($Entry)
+    $result['captures'] = $existing.ToArray()
+    return $result
+}
+
+function Format-CaptureReport {
+    <#
+        Pure. Returns a concise structured string for systemMessage (SessionEnd).
+        Returns empty string when captures is absent or empty.
+    #>
+    [CmdletBinding()]
+    param([hashtable]$CaptureFile)
+    if (-not $CaptureFile -or -not $CaptureFile.ContainsKey('captures')) { return '' }
+    $captures = @($CaptureFile['captures'])
+    if ($captures.Count -eq 0) { return '' }
+
+    $lines = @("Docs captured this session ($($captures.Count)):")
+    for ($i = 0; $i -lt $captures.Count; $i++) {
+        $entry = $captures[$i]
+        $text  = [string]$entry.content
+        if ($text.Length -gt 80) { $text = $text.Substring(0, 80) + ([char]0x2026) }
+        $src   = [string]$entry.source
+        $doc   = [string]$entry.suggestedDoc
+        $line  = "  $($i + 1). [$src] $text"
+        if ($doc) { $line += " -> $doc" }
+        $lines += $line
+    }
+    return ($lines -join "`n")
+}
+
+function Format-CaptureProposal {
+    <#
+        Pure. $CaptureFiles is an array of parsed capture hashtables (one per prior
+        session). Returns a concise structured string for additionalContext
+        (SessionStart). Returns empty string when empty or all have no captures.
+    #>
+    [CmdletBinding()]
+    param([array]$CaptureFiles)
+    if (-not $CaptureFiles -or $CaptureFiles.Count -eq 0) { return '' }
+
+    $allEntries = @()
+    foreach ($cf in $CaptureFiles) {
+        if (-not $cf -or -not $cf.ContainsKey('captures')) { continue }
+        $allEntries += @($cf['captures'])
+    }
+    if ($allEntries.Count -eq 0) { return '' }
+
+    $lines = @("Pending doc captures from previous session(s) ($($allEntries.Count) total):")
+    for ($i = 0; $i -lt $allEntries.Count; $i++) {
+        $entry = $allEntries[$i]
+        $text  = [string]$entry.content
+        if ($text.Length -gt 80) { $text = $text.Substring(0, 80) + ([char]0x2026) }
+        $src   = [string]$entry.source
+        $doc   = [string]$entry.suggestedDoc
+        $line  = "  $($i + 1). [$src] $text"
+        if ($doc) { $line += " -> $doc" }
+        $lines += $line
+    }
+    $lines += ''
+    $lines += 'Reply "apply" to update the suggested docs now, or "dismiss" to discard.'
+    return ($lines -join "`n")
+}
+
+function Find-PendingCaptureFiles {
+    <#
+        Pure. Scans .claude/ for .docs-capture.*.json files whose session id does
+        NOT match $CurrentSessionId. Returns array of parsed capture hashtables
+        that have at least one entry in captures.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$RepoRoot,
+        [string]$CurrentSessionId,
+        [scriptblock]$DirLister,
+        [scriptblock]$FileReader
+    )
+    $claudeDir = if ($RepoRoot) { '.claude' } else { '.claude' }
+    $safeCurrent = Get-SafeSessionId -SessionId $CurrentSessionId
+
+    $dirEntries = @(& $DirLister $claudeDir)
+    $results = @()
+    foreach ($entry in $dirEntries) {
+        if ($entry.IsDir) { continue }
+        $name = [string]$entry.Name
+        if ($name -notmatch '^\.docs-capture\.(.+)\.json$') { continue }
+        $fileSid = $matches[1]
+        if ($fileSid -eq $safeCurrent) { continue }
+
+        $relPath = "$claudeDir/$name"
+        $raw = & $FileReader $relPath
+        if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+        try {
+            $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
+            $captures = @()
+            if ($parsed.captures) { $captures = @($parsed.captures) }
+            if ($captures.Count -eq 0) { continue }
+
+            # Convert PSCustomObject captures to hashtables.
+            $captureList = @()
+            foreach ($c in $captures) {
+                $captureList += @{
+                    content      = [string]$c.content
+                    suggestedDoc = [string]$c.suggestedDoc
+                    source       = [string]$c.source
+                    capturedAt   = [string]$c.capturedAt
+                }
+            }
+            $results += @{ sessionId = [string]$parsed.sessionId; captures = $captureList }
+        }
+        catch { continue }
+    }
+    return $results
+}
+
 # ---------- Orchestration ----------
 
 function Get-DocsDriftQueue {
@@ -852,6 +1009,48 @@ function Remove-DocsSessionState {
     }
 }
 
+function Read-DocsCapture {
+    <#
+        Reads and parses the capture JSON file. Returns $null on missing/error.
+        Guarantees captures key defaults to @() if absent.
+    #>
+    [CmdletBinding()]
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    try {
+        $o = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -ErrorAction Stop
+        $captures = @()
+        if ($o.captures) {
+            foreach ($c in @($o.captures)) {
+                $captures += @{
+                    content      = [string]$c.content
+                    suggestedDoc = [string]$c.suggestedDoc
+                    source       = [string]$c.source
+                    capturedAt   = [string]$c.capturedAt
+                }
+            }
+        }
+        return @{
+            sessionId = [string]$o.sessionId
+            captures  = $captures
+        }
+    }
+    catch { return $null }
+}
+
+function Write-DocsCapture {
+    <#
+        Writes the capture hashtable as JSON. Creates .claude/ dir if absent.
+    #>
+    [CmdletBinding()]
+    param([string]$Path, [hashtable]$CaptureFile)
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    $CaptureFile | ConvertTo-Json -Compress -Depth 5 | Set-Content -LiteralPath $Path -Encoding utf8
+}
+
 function Invoke-SessionSnapshot {
     <#
         SessionStart hook: capture HEAD + the already-dirty path set so the Track
@@ -1042,9 +1241,89 @@ if (-not $AsLibrary) {
         exit 0
     }
 
+    # -AddCapture: append a manual capture entry from a /docs-capture skill pipe.
+    if ($AddCapture) {
+        try {
+            $payload = Read-HookPayload -Json $HookInputJson
+            $content     = ''
+            $suggestedDoc = ''
+            if ($payload) {
+                $src = if ($payload.tool_input) { $payload.tool_input } else { $payload }
+                if ($src.content)      { $content      = [string]$src.content }
+                if ($src.suggestedDoc) { $suggestedDoc = [string]$src.suggestedDoc }
+            }
+            if ($content) {
+                $capturePath = Get-DocsCaptureFilePath -RepoRoot $RepoRoot -SessionId $SessionId
+                $captureFile = Read-DocsCapture -Path $capturePath
+                if (-not $captureFile) { $captureFile = @{ sessionId = $SessionId; captures = @() } }
+                $entry = New-DocsCaptureEntry -Content $content -SuggestedDoc $suggestedDoc -Source 'manual' -CapturedAt ([DateTime]::UtcNow.ToString('o'))
+                $captureFile = Add-DocsCaptureEntry -CaptureFile $captureFile -Entry $entry
+                Write-DocsCapture -Path $capturePath -CaptureFile $captureFile
+            }
+        }
+        catch { }
+        exit 0
+    }
+
+    # -CaptureFromSummary: record a compaction summary as a capture entry.
+    if ($CaptureFromSummary) {
+        try {
+            $payload = Read-HookPayload -Json $HookInputJson
+            $summary = ''
+            if ($payload) {
+                if ($payload.summary)                        { $summary = [string]$payload.summary }
+                elseif ($payload.compaction_summary)         { $summary = [string]$payload.compaction_summary }
+                elseif ($payload.tool_response -and $payload.tool_response.summary) {
+                    $summary = [string]$payload.tool_response.summary
+                }
+            }
+            if ($summary) {
+                $capturePath = Get-DocsCaptureFilePath -RepoRoot $RepoRoot -SessionId $SessionId
+                $captureFile = Read-DocsCapture -Path $capturePath
+                if (-not $captureFile) { $captureFile = @{ sessionId = $SessionId; captures = @() } }
+                $entry = New-DocsCaptureEntry -Content $summary -SuggestedDoc '' -Source 'compaction' -CapturedAt ([DateTime]::UtcNow.ToString('o'))
+                $captureFile = Add-DocsCaptureEntry -CaptureFile $captureFile -Entry $entry
+                Write-DocsCapture -Path $capturePath -CaptureFile $captureFile
+            }
+        }
+        catch { }
+        exit 0
+    }
+
     # -SnapshotSession: capture the per-session baseline, then exit cleanly.
     if ($SnapshotSession) {
         try { Invoke-SessionSnapshot -RepoRoot $RepoRoot -SessionId $SessionId -GitCommandRunner $GitCommandRunner -SnapshotWriter $SnapshotWriter }
+        catch { }
+
+        # Surface pending captures from prior sessions.
+        try {
+            $capturedRoot2 = $RepoRoot
+            $dl = if ($DirLister) { $DirLister } else {
+                {
+                    param([string]$RelDir)
+                    $base = if ($capturedRoot2) { Join-Path $capturedRoot2 $RelDir } else { $RelDir }
+                    if (-not (Test-Path -LiteralPath $base)) { return @() }
+                    @(Get-ChildItem -LiteralPath $base -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                        @{ Name = $_.Name; IsDir = $_.PSIsContainer }
+                    })
+                }.GetNewClosure()
+            }
+            $fr = if ($FileReader) { $FileReader } else {
+                {
+                    param([string]$RelPath)
+                    $abs = if ($capturedRoot2) { Join-Path $capturedRoot2 $RelPath } else { $RelPath }
+                    if (Test-Path -LiteralPath $abs) { return (Get-Content -LiteralPath $abs -Raw) }
+                    return ''
+                }.GetNewClosure()
+            }
+            $pendingCaptures = @(Find-PendingCaptureFiles -RepoRoot $RepoRoot -CurrentSessionId $SessionId -DirLister $dl -FileReader $fr)
+            if ($pendingCaptures.Count -gt 0) {
+                $proposal = Format-CaptureProposal -CaptureFiles $pendingCaptures
+                if ($proposal) {
+                    [Console]::Out.WriteLine((@{ additionalContext = $proposal } | ConvertTo-Json -Compress))
+                }
+            }
+        }
         catch { }
         exit 0
     }
@@ -1052,6 +1331,19 @@ if (-not $AsLibrary) {
     # -SessionEnd: delete this session's per-session state files, then exit.
     if ($SessionEnd) {
         try { Remove-DocsSessionState -RepoRoot $RepoRoot -SessionId $SessionId } catch { }
+
+        # Surface captured docs as a systemMessage.
+        try {
+            $capturePath = Get-DocsCaptureFilePath -RepoRoot $RepoRoot -SessionId $SessionId
+            $captureFile = Read-DocsCapture -Path $capturePath
+            if ($captureFile -and @($captureFile.captures).Count -gt 0) {
+                $report = Format-CaptureReport -CaptureFile $captureFile
+                if ($report) {
+                    [Console]::Out.WriteLine((@{ systemMessage = $report } | ConvertTo-Json -Compress))
+                }
+            }
+        }
+        catch { }
         exit 0
     }
 
