@@ -36,6 +36,16 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeLifecycle.ps1\" -CheckEntry",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -57,6 +67,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeLifecycle.ps1\" -ClearEntry",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "matcher": "Skill",
         "hooks": [
