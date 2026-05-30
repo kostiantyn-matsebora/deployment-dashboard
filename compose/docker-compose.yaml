@@ -9,12 +9,12 @@ name: deployment-dashboard
 #   full        — Gateway + Frontend + API + managed PostgreSQL (Docker-volume-backed).
 #                 Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
 #
-#   demo        — Gateway + Frontend + API + managed PostgreSQL. Local evaluation only.
+#   demo        — Gateway + Frontend + API + Demo Driver + managed PostgreSQL. Local evaluation only.
 #                 Use docker-compose.demo.yaml override — no vars required.
 #                 CORS: off (gateway mode)  |  Retention: 30 days
 #
-# Per-service profiles (gateway / frontend / api / postgres) allow a single
-# service to be targeted in isolation, e.g. `--profile frontend`.
+# Per-service profiles (gateway / frontend / api / postgres / demo-driver) allow
+# a single service to be targeted in isolation, e.g. `--profile demo-driver`.
 #
 # The gateway is the single public surface (SAD §7, GW1).
 # The frontend, API and PostgreSQL are internal-only; only the gateway exposes a port.
@@ -31,7 +31,7 @@ services:
   gateway:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest
     pull_policy: always
-    profiles: [standalone, full, demo]
+    profiles: [gateway, standalone, full, demo]
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
@@ -41,12 +41,18 @@ services:
       # on :80.  Requests to / return 502 until the frontend container is
       # running; all /api/* and probe routes work without it.
       FRONTEND_UPSTREAM: "${FRONTEND_UPSTREAM:-frontend:80}"
+      # Internal demo-driver upstream.  Optional — gateway starts cleanly when
+      # the demo-driver container is absent; /demo/* returns 502 in that case.
+      DEMO_DRIVER_UPSTREAM: "${DEMO_DRIVER_UPSTREAM:-demo-driver:3001}"
     depends_on:
       api:
         condition: service_healthy
       frontend:
         condition: service_healthy
         required: false   # frontend may be omitted (gateway serves /api/* alone)
+      demo-driver:
+        condition: service_healthy
+        required: false   # demo-driver is opt-in (demo profile only)
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
@@ -101,10 +107,36 @@ services:
       retries: 5
       start_period: 20s
 
+  # ── Demo Driver (opt-in, demo profile only) ──────────────────────────────────
+  demo-driver:
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:latest
+    pull_policy: always
+    profiles: [demo-driver, demo]
+    environment:
+      # Target Write API — must match the api service name in this network.
+      WRITE_API_URL: "http://api:8080"
+      # Must match the API_KEY configured on the api service.
+      API_KEY: "${API_KEY}"
+      # Scenario JSON files are baked into the image at /app/data (Dockerfile).
+      # Override to mount a custom scenarios directory.
+      SCENARIOS_DIR: /app/data
+      EMIT_DELAY_MS: "${EMIT_DELAY_MS:-0}"
+      PORT: "3001"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3001/demo/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
   postgres:
     image: postgres:17-alpine
-    profiles: [full, demo]
+    profiles: [db, full, demo]
     environment:
       POSTGRES_DB:       "${POSTGRES_DB:-deployment_dashboard}"
       POSTGRES_USER:     "${POSTGRES_USER}"

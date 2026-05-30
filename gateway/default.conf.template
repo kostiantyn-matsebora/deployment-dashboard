@@ -6,9 +6,9 @@ server {
     server_tokens off;
     client_max_body_size 256k;
 
-    # Docker's embedded DNS resolver — enables lazy resolution of $fe (frontend).
-    # Gateway starts cleanly even when the frontend container is not yet running;
-    # requests to / return 502 until a frontend is available.
+    # Docker's embedded DNS resolver — enables lazy resolution of $fe (frontend)
+    # and $dd (demo-driver).  Gateway starts cleanly even when those optional
+    # containers are not yet running; requests return 502 until they are available.
     resolver 127.0.0.11 valid=10s ipv6=off;
 
     # Inherited by every proxy_pass location that declares no proxy_set_header
@@ -27,7 +27,7 @@ server {
         default_type text/plain;
     }
 
-    # ── SSE stream ──────────────────────────────────────────────────────────────
+    # ── API SSE stream ──────────────────────────────────────────────────────────
     # Every buffering / batching layer is disabled (spec §5, NFR-03: 5 s delivery).
     # proxy_set_header is re-declared in full because any declaration in a location
     # block cancels the server-level inheritance.
@@ -45,9 +45,33 @@ server {
         chunked_transfer_encoding  on;
     }
 
+    # ── Demo driver SSE stream (spec §5 — same settings, upstream = demo-driver) ─
+    location = /demo/stream {
+        set                        $dd http://${DEMO_DRIVER_UPSTREAM};
+        proxy_pass                 $dd;
+        proxy_http_version         1.1;
+        proxy_set_header           Host              $host;
+        proxy_set_header           X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header           X-Forwarded-Proto $scheme;
+        proxy_set_header           Connection        '';
+        proxy_buffering            off;
+        proxy_cache                off;
+        gzip                       off;
+        proxy_read_timeout         3600s;
+        chunked_transfer_encoding  on;
+    }
+
     # ── API — JSON read/write; default buffering ────────────────────────────────
     location /api/ {
         proxy_pass http://api;
+    }
+
+    # ── Demo driver — control API + panel (§4, D9) ──────────────────────────────
+    # Variable-based proxy_pass defers DNS resolution so the gateway starts
+    # cleanly when the demo-driver container is not running (opt-in service).
+    location /demo/ {
+        set        $dd http://${DEMO_DRIVER_UPSTREAM};
+        proxy_pass $dd;
     }
 
     # ── Ops probes — proxied to API (GW4) ──────────────────────────────────────

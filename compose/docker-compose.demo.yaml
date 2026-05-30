@@ -13,6 +13,11 @@ services:
       API_KEY: demo-api-key
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=deployment_dashboard;Username=dashboard;Password=changeme"
 
+  demo-driver:
+    environment:
+      # Must match the demo api key above.
+      API_KEY: demo-api-key
+
   postgres:
     environment:
       POSTGRES_USER:     dashboard
