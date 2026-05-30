@@ -1,5 +1,10 @@
 <!-- ============================================================
-     MatrixTileComponent — renders one (service × environment) cell.
+     MatrixTileComponent — one (service × environment) cell.
+     Layout mirrors vis-card (swimlane): 2-column CSS grid.
+       Row 1 (tile-ver-row, span 2): status+version left · time right
+       Row 2 (tile-attrs subgrid):   ref left · run+actor right
+       Row 3 (tile-attrs subgrid):   sha left · parents   right
+       [split states only] divider + last-successful row
      Spec: docs/design/components.md §Matrix Tile + §6 Box States
      ============================================================ -->
 
@@ -11,7 +16,6 @@
   [class.s-fail-last]="boxState() === 's-fail-last'"
   [class.s-running-only]="boxState() === 's-running-only'"
   [class.s-run-fail-only]="boxState() === 's-run-fail-only'"
-  [class.split]="isSplit()"
   [class.highlighted-slot]="isHighlighted()"
   role="button"
   tabindex="0"
@@ -20,169 +24,59 @@
   (keydown.space)="tileClick.emit()"
 >
 
-  <!-- ── S1: success — full green ──────────────────────────── -->
-  @if (boxState() === 's-success') {
-    <!-- ver-row: version (left) + ver-meta actor+time (right) -->
-    @if ((show('version') && current().version) || showMeta(current())) {
-      <div class="ver-row">
-        @if (show('version') && current().version) {
-          <span
-            class="ver"
-            [class.highlighted]="isHighlighted()"
-            (mouseenter)="onVerHover(current().version!)"
-            (mouseleave)="onVerLeave()"
-          >{{ current().version }}</span>
-        }
-        @if (showMeta(current())) {
-          <span class="ver-meta">
-            @if (show('actor') && current().actor) {
-              <span class="fld-actor"><span class="glyph">&#64;</span>{{ current().actor }}</span>
-            }
-            @if (show('happened_at')) {
-              <span class="fld-time">{{ current().happened_at | timeAgo }}</span>
-            }
-          </span>
-        }
-      </div>
+  <!-- ── Row 1: status indicators + version (left) · time (right) ── -->
+  <div class="tile-ver-row">
+
+    <!-- Spinner — all in-progress states -->
+    @if (isRunning()) { <span class="spinner"></span> }
+
+    <!-- Failed badge — S4 -->
+    @if (boxState() === 's-fail-last') {
+      <span class="failed-tag">Failed</span>
     }
-    <!-- tile-attrs: ref+sha (left), run_url+run_number (right), parents (full) -->
-    <ng-container *ngTemplateOutlet="tileAttrs; context: { $implicit: current() }"></ng-container>
-  }
 
-  <!-- ── S5: running only — full amber, spinner + version ─── -->
-  @if (boxState() === 's-running-only') {
-    <div class="running-line">
-      <span class="spinner"></span>
-      @if (show('version') && current().version) {
-        <span
-          class="ver"
-          [class.highlighted]="isHighlighted()"
-          (mouseenter)="onVerHover(current().version!)"
-          (mouseleave)="onVerLeave()"
-        >{{ current().version }}</span>
-      } @else {
-        <span class="failed-tag">Running</span>
-      }
-      @if (showMeta(current())) {
-        <span class="ver-meta">
-          @if (show('actor') && current().actor) {
-            <span class="fld-actor"><span class="glyph">&#64;</span>{{ current().actor }}</span>
-          }
-          @if (show('happened_at')) {
-            <span class="fld-time">{{ current().happened_at | timeAgo }}</span>
-          }
-        </span>
-      }
-    </div>
-    <ng-container *ngTemplateOutlet="tileAttrs; context: { $implicit: current() }"></ng-container>
-  }
-
-  <!-- ── S6: running + failed only — spinner + ⚠ badge, no version, no bottom ── -->
-  @if (boxState() === 's-run-fail-only') {
-    <div class="running-line">
-      <span class="spinner"></span>
+    <!-- Prev-failed badge — S3, S6 -->
+    @if (boxState() === 's-run-fail-last' || boxState() === 's-run-fail-only') {
       <span class="warn-badge"><span class="warn-icon">⚠</span><span>prev. failed</span></span>
-      @if (showMeta(current())) {
-        <span class="ver-meta">
-          @if (show('actor') && current().actor) {
-            <span class="fld-actor"><span class="glyph">&#64;</span>{{ current().actor }}</span>
-          }
-          @if (show('happened_at')) {
-            <span class="fld-time">{{ current().happened_at | timeAgo }}</span>
-          }
+    }
+
+    <!-- Version -->
+    @if (show('version') && current().version) {
+      <span
+        class="ver"
+        [class.highlighted]="isHighlighted()"
+        (mouseenter)="onVerHover(current().version!)"
+        (mouseleave)="onVerLeave()"
+      >{{ current().version }}</span>
+    } @else if (boxState() === 's-running-only') {
+      <span class="failed-tag">Running</span>
+    }
+
+    <!-- Time — right side via margin-left: auto -->
+    @if (show('happened_at')) {
+      <span class="fld-time">{{ current().happened_at | timeAgo }}</span>
+    }
+
+  </div>
+
+  <!-- ── Rows 2-3: tile-attrs subgrid ──────────────────────── -->
+  <ng-container *ngTemplateOutlet="tileAttrs; context: { $implicit: current() }"></ng-container>
+
+  <!-- ── Split: divider + last-successful run link + number ── -->
+  @if (isSplit() && lastSucc() && (lastSucc()!.run_url || lastSucc()!.run_number)) {
+    <div class="tile-divider"></div>
+    <span class="tile-last-succ">
+      @if (lastSucc()!.run_url) {
+        <span class="fld-runurl">
+          <a [href]="lastSucc()!.run_url" target="_blank" rel="noopener" (click)="$event.stopPropagation()">
+            <span class="glyph">↗</span>run
+          </a>
         </span>
       }
-    </div>
-    <ng-container *ngTemplateOutlet="tileAttrs; context: { $implicit: current() }"></ng-container>
-  }
-
-  <!-- ── S2: running + last successful — split ─────────────── -->
-  @if (boxState() === 's-run-last') {
-    <div class="sec-top is-running">
-      <div class="running-line">
-        <span class="spinner"></span>
-        @if (show('version') && current().version) {
-          <span
-            class="ver"
-            [class.highlighted]="isHighlighted()"
-            (mouseenter)="onVerHover(current().version!)"
-            (mouseleave)="onVerLeave()"
-          >{{ current().version }}</span>
-        }
-        @if (showMeta(current())) {
-          <span class="ver-meta">
-            @if (show('actor') && current().actor) {
-              <span class="fld-actor"><span class="glyph">&#64;</span>{{ current().actor }}</span>
-            }
-            @if (show('happened_at')) {
-              <span class="fld-time">{{ current().happened_at | timeAgo }}</span>
-            }
-          </span>
-        }
-      </div>
-      <ng-container *ngTemplateOutlet="tileAttrs; context: { $implicit: current() }"></ng-container>
-    </div>
-    <div class="divider"></div>
-    <div class="sec-bot">
-      <ng-container *ngTemplateOutlet="lastLine"></ng-container>
-    </div>
-  }
-
-  <!-- ── S3: running + failed + last successful — split, no version ── -->
-  @if (boxState() === 's-run-fail-last') {
-    <div class="sec-top is-running">
-      <div class="running-line">
-        <span class="spinner"></span>
-        <span class="warn-badge"><span class="warn-icon">⚠</span><span>prev. failed</span></span>
-        @if (showMeta(current())) {
-          <span class="ver-meta">
-            @if (show('actor') && current().actor) {
-              <span class="fld-actor"><span class="glyph">&#64;</span>{{ current().actor }}</span>
-            }
-            @if (show('happened_at')) {
-              <span class="fld-time">{{ current().happened_at | timeAgo }}</span>
-            }
-          </span>
-        }
-      </div>
-      <ng-container *ngTemplateOutlet="tileAttrs; context: { $implicit: current() }"></ng-container>
-    </div>
-    <div class="divider"></div>
-    <div class="sec-bot">
-      <ng-container *ngTemplateOutlet="lastLine"></ng-container>
-    </div>
-  }
-
-  <!-- ── S4: failed + last successful — split, red top ──────── -->
-  @if (boxState() === 's-fail-last') {
-    <div class="sec-top is-failed">
-      <div class="failed-line">
-        <span class="failed-tag">Failed</span>
-        @if (show('version') && current().version) {
-          <span
-            class="ver"
-            [class.highlighted]="isHighlighted()"
-            (mouseenter)="onVerHover(current().version!)"
-            (mouseleave)="onVerLeave()"
-          >{{ current().version }}</span>
-        }
-        @if (showMeta(current())) {
-          <span class="ver-meta">
-            @if (show('actor') && current().actor) {
-              <span class="fld-actor"><span class="glyph">&#64;</span>{{ current().actor }}</span>
-            }
-            @if (show('happened_at')) {
-              <span class="fld-time">{{ current().happened_at | timeAgo }}</span>
-            }
-          </span>
-        }
-      </div>
-      <ng-container *ngTemplateOutlet="tileAttrs; context: { $implicit: current() }"></ng-container>
-    </div>
-    <div class="divider"></div>
-    <div class="sec-bot">
-      <ng-container *ngTemplateOutlet="lastLine"></ng-container>
-    </div>
+      @if (lastSucc()!.run_number) {
+        <span class="fld-runno"><span class="glyph">#</span>{{ lastSucc()!.run_number }}</span>
+      }
+    </span>
   }
 
 </div>
@@ -191,22 +85,29 @@
      Shared sub-templates
      ============================================================ -->
 
-<!-- tile-attrs: ref+sha left, run_url+run_number right, parents full-width -->
+<!-- tile-attrs: 2-column subgrid.
+     Row 1 — ref (left) | run_url + run_number + actor (right)
+     Row 2 — sha (left) | parents                      (right) -->
 <ng-template #tileAttrs let-ev>
   @if (hasAttrs(ev)) {
     <div class="tile-attrs">
-      @if ((show('ref') && ev.ref) || (show('sha') && ev.sha)) {
-        <div class="ta-bl">
-          @if (show('ref') && ev.ref) {
-            <span class="fld-ref"><span class="glyph">⎇</span><span>{{ ev.ref }}</span></span>
-          }
-          @if (show('sha') && ev.sha) {
-            <span class="fld-sha">{{ ev.sha.slice(0, 7) }}</span>
-          }
-        </div>
+      @if (show('ref') && ev.ref) {
+        <span class="ta-bl">
+          <span class="fld-ref"><span class="glyph">⎇</span><span>{{ ev.ref }}</span></span>
+        </span>
+      }
+      @if (show('actor') && ev.actor) {
+        <span class="ta-br">
+          <span class="fld-actor"><span class="glyph">&#64;</span>{{ ev.actor }}</span>
+        </span>
+      }
+      @if (show('sha') && ev.sha) {
+        <span class="ta-bl">
+          <span class="fld-sha">{{ ev.sha.slice(0, 7) }}</span>
+        </span>
       }
       @if ((show('run_url') && ev.run_url) || (show('run_number') && ev.run_number)) {
-        <div class="ta-br">
+        <span class="ta-br">
           @if (show('run_url') && ev.run_url) {
             <span class="fld-runurl">
               <a [href]="ev.run_url" target="_blank" rel="noopener" (click)="$event.stopPropagation()">
@@ -217,30 +118,8 @@
           @if (show('run_number') && ev.run_number) {
             <span class="fld-runno"><span class="glyph">#</span>{{ ev.run_number }}</span>
           }
-        </div>
-      }
-      @if (show('parent_deployments') && (ev.parent_deployments?.length ?? 0) > 0) {
-        <div class="ta-full">
-          <span class="fld-parents">
-            <span class="glyph">⟵</span>{{ ev.parent_deployments.length }}&nbsp;parent{{ ev.parent_deployments.length > 1 ? 's' : '' }}
-          </span>
-        </div>
+        </span>
       }
     </div>
-  }
-</ng-template>
-
-<!-- lastLine: single identifier for split-tile bottom section -->
-<ng-template #lastLine>
-  @if (lastIdInfo()) {
-    <span
-      class="lastline"
-      [style.font-weight]="lastIdInfo()!.field === 'version' ? '600' : '400'"
-      [style.color]="lastIdInfo()!.field === 'version' ? 'var(--ink-0)' : ''"
-    >
-      @if (lastIdInfo()!.glyph) {
-        <span class="glyph">{{ lastIdInfo()!.glyph }}</span>
-      }{{ lastIdInfo()!.value }}
-    </span>
   }
 </ng-template>

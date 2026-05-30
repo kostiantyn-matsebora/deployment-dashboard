@@ -11,12 +11,6 @@ import {
   deriveBoxState,
 } from '../../../core/models/deployment.model';
 
-/** Info for rendering the split-tile bottom-section identifier. */
-interface LastIdInfo {
-  field: 'version' | 'sha' | 'ref' | 'run_number';
-  glyph: string;
-  value: string;
-}
 
 /**
  * MatrixTileComponent — one (service × environment) cell in the matrix grid.
@@ -62,34 +56,25 @@ export class MatrixTileComponent {
     return !!(hv && ver && hv === ver);
   });
 
-  /** Info for the split-tile bottom section. Fallback chain: version → sha → ref → run_number. */
-  protected readonly lastIdInfo = computed<LastIdInfo | null>(() => {
-    const last = this.lastSucc();
-    if (!last) return null;
-    if (last.version)     return { field: 'version',    glyph: '',  value: last.version };
-    if (last.sha)         return { field: 'sha',        glyph: '',  value: last.sha.slice(0, 7) };
-    if (last.ref)         return { field: 'ref',        glyph: '⎇', value: last.ref };
-    if (last.run_number)  return { field: 'run_number', glyph: '#', value: last.run_number };
-    return null;
-  });
-
   // ── Field visibility helpers ─────────────────────────────
   protected show(field: MatrixField): boolean {
     return this.visibleFields().has(field);
   }
 
-  /** True when actor OR happened_at is visible and the event has relevant data. */
-  protected showMeta(ev: DeploymentEvent): boolean {
-    return (this.show('actor') && !!ev.actor) || this.show('happened_at');
+  /** True for all in-progress states (spinner shown on row 1). */
+  protected isRunning(): boolean {
+    const s = this.boxState();
+    return s === 's-running-only' || s === 's-run-last' ||
+           s === 's-run-fail-last' || s === 's-run-fail-only';
   }
 
-  /** True when at least one of ref/sha/run_url/run_number/parents is visible. */
+  /** True when at least one tile-attrs field is visible. */
   protected hasAttrs(ev: DeploymentEvent): boolean {
-    return (this.show('ref')              && !!ev.ref)                          ||
-           (this.show('sha')              && !!ev.sha)                          ||
-           (this.show('run_url')          && !!ev.run_url)                      ||
-           (this.show('run_number')       && !!ev.run_number)                   ||
-           (this.show('parent_deployments') && (ev.parent_deployments?.length ?? 0) > 0);
+    return (this.show('ref')        && !!ev.ref)        ||
+           (this.show('sha')        && !!ev.sha)        ||
+           (this.show('run_url')    && !!ev.run_url)    ||
+           (this.show('run_number') && !!ev.run_number) ||
+           (this.show('actor')      && !!ev.actor);
   }
 
   // ── Event handlers ────────────────────────────────────────

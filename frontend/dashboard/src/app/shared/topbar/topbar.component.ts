@@ -121,16 +121,15 @@ export class TopbarComponent {
   protected readonly isMatrix = computed(() => this.state.activeView() === 'matrix');
 
   // ── Fields picker ─────────────────────────────────────────
-  /** All 8 matrix field keys with display labels. */
+  /** Matrix field keys with display labels (parent_deployments removed — not shown in tiles). */
   protected readonly matrixFieldDefs: { key: MatrixField; label: string }[] = [
-    { key: 'version',            label: 'version' },
-    { key: 'run_url',            label: 'run url' },
-    { key: 'sha',                label: 'sha' },
-    { key: 'run_number',         label: 'run #' },
-    { key: 'ref',                label: 'ref' },
-    { key: 'actor',              label: 'actor' },
-    { key: 'happened_at',        label: 'time' },
-    { key: 'parent_deployments', label: 'parents' },
+    { key: 'version',     label: 'version' },
+    { key: 'run_url',     label: 'run url' },
+    { key: 'sha',         label: 'sha' },
+    { key: 'run_number',  label: 'run #' },
+    { key: 'ref',         label: 'ref' },
+    { key: 'actor',       label: 'actor' },
+    { key: 'happened_at', label: 'time' },
   ];
 
   /** All 8 swimlane field keys with display labels. */
