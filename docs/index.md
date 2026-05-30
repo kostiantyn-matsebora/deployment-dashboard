@@ -9,6 +9,7 @@ children:
   - /GATEWAY_SPECIFICATION
   - /FETCHER_SPECIFICATION
   - /MOCK_SPECIFICATION
+  - /DEMO_DRIVER_SPECIFICATION
   - /api
   - /design
 ---
@@ -85,3 +86,19 @@ children:
 - [8. Control panel](./MOCK_SPECIFICATION.md#8-control-panel)
 - [9. Typical E2E usage](./MOCK_SPECIFICATION.md#9-typical-e2e-usage)
 - [10. Running](./MOCK_SPECIFICATION.md#10-running)
+
+### `DEMO_DRIVER_SPECIFICATION.md`
+
+- [Sources of truth](./DEMO_DRIVER_SPECIFICATION.md#sources-of-truth)
+- [1. Role](./DEMO_DRIVER_SPECIFICATION.md#1-role)
+- [2. Decisions](./DEMO_DRIVER_SPECIFICATION.md#2-decisions)
+- [3. Solution layout](./DEMO_DRIVER_SPECIFICATION.md#3-solution-layout)
+- [4. Control API — `/demo/`](./DEMO_DRIVER_SPECIFICATION.md#4-control-api----demo)
+- [5. Scenarios](./DEMO_DRIVER_SPECIFICATION.md#5-scenarios)
+- [6. Write API integration](./DEMO_DRIVER_SPECIFICATION.md#6-write-api-integration)
+- [7. Control panel](./DEMO_DRIVER_SPECIFICATION.md#7-control-panel)
+- [8. Configuration (env)](./DEMO_DRIVER_SPECIFICATION.md#8-configuration-env)
+- [9. Testing](./DEMO_DRIVER_SPECIFICATION.md#9-testing)
+- [10. Running](./DEMO_DRIVER_SPECIFICATION.md#10-running)
+- [11. Deployment](./DEMO_DRIVER_SPECIFICATION.md#11-deployment)
+- [12. Out of scope](./DEMO_DRIVER_SPECIFICATION.md#12-out-of-scope)

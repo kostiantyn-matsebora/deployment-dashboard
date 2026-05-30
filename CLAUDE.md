@@ -2,6 +2,11 @@
 
 ## Sources of truth
 
+**Documentation-first (binding).**
+- Read relevant documentation before any implementation.
+- Docs are the source of truth; code follows docs.
+- Overrides any sub-agent or specialist default protocol (e.g., testing-specialist "research-first", backend-developer "explore codebase first").
+
 **Index-first navigation (binding).**
 1. Read the nearest `index.md`.
 2. Use `children:` to locate the target file.
@@ -21,13 +26,14 @@ Architecture-only baseline — no service code committed yet (per commit `d0045c
 | Path | Role |
 |---|---|
 | `docs/` | All design + contract documentation (see *Sources of truth*). |
-| `backend/[service]` | Backend services
-| `frontend/[application]` | Frontend application
-| `testing\[type]` | Testing solutions
- 
+| `backend/[service]` | Backend services |
+| `frontend/[application]` | Frontend application |
+| `testing/[type]` | Testing solutions |
+
 **Reserved (planned, not present).** Slots referenced by `.dockerignore` and SAD §7 awaiting implementation:
 
 | Path | Future role |
+|---|---|
 | `infrastructure/` | Terraform modules — Azure-only per NFR-01 / NFR-06. |
 | `dev_env/` | Local-dev compose / fixtures. |
 
