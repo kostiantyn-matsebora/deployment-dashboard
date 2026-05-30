@@ -25,7 +25,7 @@ jobs:
       - name: Lint
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path scripts/ -Recurse -Severity Error
+          $results = Invoke-ScriptAnalyzer -Path scripts/ -Recurse -Severity Error,Warning
           if ($results) {
             $results | Format-Table -AutoSize
             exit 1
