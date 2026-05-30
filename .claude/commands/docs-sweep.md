@@ -34,9 +34,9 @@ Apply the binding classification from `.claude/agents/docs-keeper.md` § "README
     - Index drift (missing `index.md` in directories that should have one; broken/ambiguous `children:` entries from steps 2, 6; un-listed content READMEs from step 4) → propose `/docs-index <directory>` per affected directory.
     - Never silently edit.
 
-## Report
+## Report (binding)
 
-Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = C. Include a dedicated `Findings` block:
+Structured-only — no freeform prose (`.claude/agents/docs-keeper.md` § Output format). Use the **Documentation Report** template from `.claude/agents/_output-template.md`. Set Mode = C. Include a dedicated `Findings` block:
 
 ```markdown
 ### Findings

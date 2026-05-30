@@ -168,6 +168,8 @@ If none exist: **halt and ask** the user where the registry lives.
 
 ## Output (binding — synthesized text only)
 
+This is Mode D's designated structured format per `.claude/agents/docs-keeper.md` § Output format — the compact synthesized line, NOT the Documentation Report template, and never freeform prose.
+
 **Default output is ONE line of synthesized text** describing what happened. In propose-only mode, the line is followed by ready-to-paste Edit-call blocks. NO Documentation Report template. NO coverage map block. NO rule-compliance checklist. NO Open questions block. NO Next steps narrative.
 
 ### Output shapes
