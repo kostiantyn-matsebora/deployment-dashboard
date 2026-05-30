@@ -6,9 +6,7 @@
     ]
   },
   "env": {
-    "DOCS_KEEPER_ENFORCE": "block",
-    "DOCS_KEEPER_AUTO_REVISE": "on",
-    "DOCS_KEEPER_MAX_REVISE_ATTEMPTS": "3"
+    "DOCS_KEEPER_ENFORCE": "block"
   },
   "hooks": {
     "SessionStart": [
@@ -17,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\" -SnapshotSession",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\" -SnapshotSession",
             "timeout": 30
           }
         ]
@@ -29,8 +27,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\"",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\"",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\" -MarkRevised",
+            "timeout": 10
           }
         ]
       }
@@ -41,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\" -Standalone",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\" -Track",
             "timeout": 30
           }
         ]
@@ -53,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-PreCommitDocsHook.ps1\" -SessionEnd",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\" -SessionEnd",
             "timeout": 30
           }
         ]
