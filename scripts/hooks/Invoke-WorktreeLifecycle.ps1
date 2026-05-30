@@ -307,7 +307,7 @@ function Get-WorktreeEntryDecision {
         $obj    = $raw | ConvertFrom-Json -ErrorAction Stop
         $wtPath = [string]$obj.worktreePath
     }
-    catch { }
+    catch { $null = $_ }
     $hint = if ($wtPath) { " Call EnterWorktree with path `"$wtPath`"." } else { '' }
     return @{ Block = $true; Reason = "A session worktree is pending entry.$hint" }
 }
