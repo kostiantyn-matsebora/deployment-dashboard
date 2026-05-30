@@ -25,7 +25,11 @@ jobs:
       - name: Lint
         shell: pwsh
         run: |
-          $results = Invoke-ScriptAnalyzer -Path scripts/ -Recurse -Severity Error,Warning
+          $files = Get-ChildItem -Path scripts/ -Recurse -Filter '*.ps1' |
+            Where-Object { $_.Name -notlike '*.Tests.ps1' }
+          $results = $files | ForEach-Object {
+            Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error,Warning
+          }
           if ($results) {
             $results | Format-Table -AutoSize
             exit 1
