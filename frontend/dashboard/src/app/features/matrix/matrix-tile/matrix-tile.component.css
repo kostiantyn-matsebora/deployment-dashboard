@@ -15,8 +15,17 @@
 /* ── Slot base ─────────────────────────────────────────────── */
 .slot {
   position: relative;
-  min-height: 56px;
-  height: auto;
+  /* min-height: 0 — tiles size to content; .row (flex column) drives uniform
+     row height via flex: 1 below. The tallest tile in the row determines the
+     row height; all others stretch to match (CSS Grid + flex co-operation). */
+  min-height: 0;
+  /* flex: 1 1 auto — fills the flex column .row cell so the tile always
+     occupies the full row height.  flex-basis: auto (NOT 0%) is critical:
+     with flex-basis: 0 the grid uses min-content for row height measurement,
+     undersizing the row and causing split-tile content to overflow.  With
+     flex-basis: auto the grid measures the tile's actual content height,
+     so every row is at least as tall as its tallest tile. */
+  flex: 1 1 auto;
   padding: 6px 8px 6px 12px;
   border-radius: var(--radius-md);
   background: var(--slot-bg);
@@ -138,7 +147,13 @@
   justify-content: center;
   gap: 2px;
 }
-.slot.split .sec-top { min-height: 28px; padding-left: 12px; }
+/* sec-top: flex: 0 0 auto overrides the shared flex: 1 above.
+   Reason: when the slot is stretched (via flex: 1 1 auto inside .row),
+   flex: 1 (basis 0) would divide the slot 50/50 between sec-top and sec-bot.
+   sec-top has the most content (spinner/failed + attrs) and gets squished
+   below its content height, causing overflow: visible bleed.
+   flex: 0 0 auto lets sec-top size to its content; sec-bot fills the rest. */
+.slot.split .sec-top { flex: 0 0 auto; min-height: 28px; padding-left: 12px; }
 .slot.split .sec-bot { min-height: 0; }
 .slot.split .sec-bot:empty { display: none; }
 .slot.split .divider {
