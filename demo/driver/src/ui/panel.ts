@@ -152,9 +152,9 @@ export const PANEL_HTML = `<!DOCTYPE html>
           <option value="random">random</option>
         </select>
 
-        <span class="lbl" id="count-lbl" style="display:none">Events</span>
-        <input type="number" id="count-input" value="100" min="1" step="1"
-               style="width:70px;display:none">
+        <span class="lbl" id="count-lbl" style="display:none">Services</span>
+        <input type="number" id="count-input" value="10" min="1" max="10" step="1"
+               style="width:60px;display:none">
 
         <label class="chk-label">
           <input type="checkbox" id="reset-check" checked> Reset
@@ -332,7 +332,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const dataset  = datasetSelect.value;
       const reset    = resetCheck.checked;
       const delay    = parseInt(delayInput.value, 10) || 0;
-      const count    = parseInt(countInput.value, 10) || 100;
+      const count    = Math.min(parseInt(countInput.value, 10) || 10, 10);
       const body     = { dataset, reset, delay_ms: delay };
       if (dataset === 'random') body.count = count;
       try {

@@ -3,7 +3,7 @@ import { Subject, Subscription } from 'rxjs';
 import { ScenarioRunner, RunnerStatus, StreamFrame } from '../scenarios/scenario-runner';
 import { WriteApiClient } from '../write-api/write-api.client';
 import { ControlApiClient, ResetResult } from '../write-api/control-api.client';
-import { generateRandomEvents } from '../scenarios/random-event-generator';
+import { generateRandomEvents, SERVICE_COUNT } from '../scenarios/random-event-generator';
 import { Scenario, loadScenarios } from '../scenarios/scenario-loader';
 import { EmitService } from './emit.service';
 import { getConfig } from '../config/configuration';
@@ -11,7 +11,7 @@ import { getConfig } from '../config/configuration';
 export interface IngestOptions {
   dataset?:  string;   // 'demo' | 'random'  (default 'demo')
   reset?:    boolean;  // call POST /api/control/reset first
-  count?:    number;   // random only — target event count; chains generated until total ≥ count (default 100)
+  count?:    number;   // random only — number of service scenarios (1–10, default 10 = all services)
   delay_ms?: number;   // overrides EMIT_DELAY_MS
 }
 
@@ -74,7 +74,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
    * Idempotent: returns current status when already running.
    */
   async startIngest(opts: IngestOptions): Promise<RunnerStatus> {
-    const { dataset = 'demo', reset = false, count = 100, delay_ms } = opts;
+    const { dataset = 'demo', reset = false, count = 10, delay_ms } = opts;
 
     if (reset) {
       const config = getConfig();
@@ -96,7 +96,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
     );
 
     if (dataset === 'random') {
-      const events = generateRandomEvents(Math.max(1, count));
+      const events = generateRandomEvents(Math.min(Math.max(1, count), SERVICE_COUNT));
       this.runner.runWire('random', events, client, effectiveDelay).catch(err => {
         console.error('[demo-driver] runner error:', err);
       });

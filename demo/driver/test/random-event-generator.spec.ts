@@ -2,6 +2,7 @@ import {
   generateRandomEvent,
   generateRandomChain,
   generateRandomEvents,
+  SERVICE_COUNT,
 } from '../src/scenarios/random-event-generator';
 
 // ── generateRandomEvent (EmitService one-shot, no parents) ────────────────────
@@ -46,7 +47,6 @@ describe('generateRandomEvent', () => {
 // ── generateRandomChain ────────────────────────────────────────────────────────
 
 describe('generateRandomChain', () => {
-  // Run each structural test over many samples to cover all topology types.
   const SAMPLES = 60;
 
   it('returns at least 2 events (minimum chain length)', () => {
@@ -77,14 +77,14 @@ describe('generateRandomChain', () => {
     const ORDER = ['dev', 'staging', 'qa', 'preprod', 'prod'];
     for (let i = 0; i < SAMPLES; i++) {
       const chain = generateRandomChain();
-      const idxs = chain.map(ev => ORDER.indexOf(ev.environment as string));
+      const idxs  = chain.map(ev => ORDER.indexOf(ev.environment as string));
       for (let j = 1; j < idxs.length; j++) {
         expect(idxs[j]).toBeGreaterThan(idxs[j - 1]);
       }
     }
   });
 
-  it('root event (index 0) has empty parent_deployments', () => {
+  it('root event has empty parent_deployments', () => {
     for (let i = 0; i < SAMPLES; i++) {
       expect(generateRandomChain()[0].parent_deployments).toEqual([]);
     }
@@ -112,7 +112,7 @@ describe('generateRandomChain', () => {
     }
   });
 
-  it('each child has happened_at strictly greater than every parent (time flows root→tip)', () => {
+  it('each child has happened_at strictly greater than every parent (correct DAG time flow)', () => {
     for (let i = 0; i < SAMPLES; i++) {
       const chain = generateRandomChain();
       const byId  = new Map(chain.map(ev => [ev.deployment_id as string, ev]));
@@ -142,10 +142,9 @@ describe('generateRandomChain', () => {
   });
 
   it('produces fan-out (one-to-many) topology in at least some chains', () => {
-    // A node is a fan-out source when 2+ events list it as a parent.
     let found = false;
     for (let i = 0; i < 200 && !found; i++) {
-      const chain     = generateRandomChain();
+      const chain      = generateRandomChain();
       const childCount = new Map<string, number>();
       for (const ev of chain) {
         for (const p of ev.parent_deployments as string[]) {
@@ -158,52 +157,56 @@ describe('generateRandomChain', () => {
   });
 
   it('produces fan-in (many-to-one) topology in at least some chains', () => {
-    // A node is a fan-in sink when it lists 2+ parent_deployments.
     let found = false;
     for (let i = 0; i < 200 && !found; i++) {
-      const chain = generateRandomChain();
-      if (chain.some(ev => (ev.parent_deployments as string[]).length >= 2)) found = true;
+      if (generateRandomChain().some(ev => (ev.parent_deployments as string[]).length >= 2)) {
+        found = true;
+      }
     }
     expect(found).toBe(true);
-  });
-
-  it('all events have required DeploymentEventIngest fields', () => {
-    for (const ev of generateRandomChain()) {
-      expect(ev.deployment_id).toBeTruthy();
-      expect(ev.service).toBeTruthy();
-      expect(ev.environment).toBeTruthy();
-      expect(ev.status).toBeTruthy();
-      expect(ev.happened_at).toBeTruthy();
-    }
   });
 });
 
 // ── generateRandomEvents ──────────────────────────────────────────────────────
 
 describe('generateRandomEvents', () => {
-  it('returns at least count events (chains never split)', () => {
-    for (const n of [1, 10, 50]) {
-      expect(generateRandomEvents(n).length).toBeGreaterThanOrEqual(n);
-    }
-  });
-
-  it('does not overshoot by more than chain-max-length − 1 (4)', () => {
-    const events = generateRandomEvents(20);
-    expect(events.length).toBeLessThanOrEqual(24);
-  });
-
   it('returns empty array for count=0', () => {
     expect(generateRandomEvents(0)).toHaveLength(0);
   });
 
+  it('generates at least 2 × count events (one scenario per service, each scenario ≥ 2 events)', () => {
+    for (const n of [1, 3, SERVICE_COUNT]) {
+      expect(generateRandomEvents(n).length).toBeGreaterThanOrEqual(n * 2);
+    }
+  });
+
+  it('generates exactly count service scenarios', () => {
+    // Each scenario shares a run_number within its chain.
+    // Count distinct run_numbers = count distinct scenarios.
+    for (const n of [1, 3, 5]) {
+      const events = generateRandomEvents(n);
+      const runs   = new Set(events.map(ev => ev.run_number as string));
+      expect(runs.size).toBe(n);
+    }
+  });
+
+  it('cycles through all services — no (service, env) duplicate within a single pass', () => {
+    // One pass = SERVICE_COUNT scenarios.  Each service should appear at most once per pass.
+    const events = generateRandomEvents(SERVICE_COUNT);
+    const slots  = events.map(ev => `${ev.service as string}|${ev.environment as string}`);
+    const unique = new Set(slots);
+    // All (service, env) combos must be unique within the batch.
+    expect(unique.size).toBe(slots.length);
+  });
+
   it('contains events with non-empty parent_deployments (chains are linked)', () => {
-    const events      = generateRandomEvents(5);
-    const withParents = events.filter(ev => (ev.parent_deployments as string[]).length > 0);
+    const withParents = generateRandomEvents(3)
+      .filter(ev => (ev.parent_deployments as string[]).length > 0);
     expect(withParents.length).toBeGreaterThan(0);
   });
 
   it('every event has required fields', () => {
-    for (const ev of generateRandomEvents(10)) {
+    for (const ev of generateRandomEvents(3)) {
       expect(ev.deployment_id).toBeTruthy();
       expect(ev.service).toBeTruthy();
       expect(ev.environment).toBeTruthy();

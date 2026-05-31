@@ -4,6 +4,9 @@ const SERVICES = [
   'payments-api', 'platform-proxy', 'search-indexer',
 ];
 
+/** Total number of available services. */
+export const SERVICE_COUNT = SERVICES.length;
+
 /**
  * Canonical promotion order.  All topologies advance left-to-right so that
  * happened_at and parent_deployments form a valid swimlane DAG.
@@ -23,18 +26,16 @@ const VERSIONS = [
 /**
  * Topology shapes for the chain generator.
  *
- * linear  — A → B → C → D         (simple chain)
- * fork    — A → B                  (one-to-many fan-out from A)
+ * linear  — A → B → C → D
+ * fork    — A → B            one-to-many: A fans out to two independent branches
  *           A → C → D
- * diamond — A → B → D              (fan-out from A, many-to-one merge at D)
+ * diamond — A → B → D        fan-out from A, many-to-one merge at D
  *           A → C → D
  */
 type Topology = 'linear' | 'fork' | 'diamond';
 
-// Equal mix of branching topologies, linear kept for variety.
-const TOPOLOGY_POOL: Topology[] = [
-  'linear', 'fork', 'fork', 'diamond', 'diamond',
-];
+// Favour branching topologies so the swimlane shows interesting graphs.
+const BRANCHING_TOPOLOGIES: readonly Topology[] = ['fork', 'fork', 'diamond', 'diamond', 'fork'];
 
 let _runCounter = 5000;
 
@@ -48,34 +49,30 @@ function hex7(): string {
 
 /**
  * Returns a parent-index map for `n` nodes under the requested topology.
- * parentMap[i] = array of indices j < i that are direct parents of node i.
- * Guarantees topological order: every parent index < child index.
+ * parentMap[i] = indices j < i that are direct parents of node i.
+ * Topological order is guaranteed (every parent index < child index).
  */
 function buildParentMap(n: number, topology: Topology): number[][] {
   if (n < 2) return [[]];
-
-  // Branching topologies require ≥ 3 nodes; fall back for shorter chains.
   const topo: Topology = (topology !== 'linear' && n < 3) ? 'linear' : topology;
 
   switch (topo) {
     case 'fork':
-      // Node 0 forks to nodes 1 and 2.  Each branch continues linearly.
+      // Node 0 forks to nodes 1 and 2; each branch continues linearly.
       // n=3: 0→1, 0→2
       // n=4: 0→1→3, 0→2
       // n=5: 0→1→3, 0→2→4
       return Array.from({ length: n }, (_, i) => {
         if (i === 0) return [];
         if (i === 1) return [0];
-        if (i === 2) return [0];   // fork: second child of root
-        return [i - 2];            // each subsequent node continues 2 steps back,
-                                   // alternating between the two branches
+        if (i === 2) return [0];  // second child of root — the fork
+        return [i - 2];           // alternates between the two branches
       });
 
     case 'diamond':
       // Nodes 1 and 2 both come from node 0 (fan-out).
-      // Node 3 merges nodes 1 and 2 (fan-in / many-to-one).
-      // Remaining nodes continue linearly from the merge point.
-      // n=3: 0→1→2 with 2 also having 0 as parent (mini fan-in)
+      // Node 3 merges 1 and 2 (fan-in / many-to-one).
+      // n=3: mini fan-in — 0→1→2, 0→2 as well
       // n=4: 0→1, 0→2, 1+2→3
       // n=5: 0→1, 0→2, 1+2→3, 3→4
       if (n === 3) return [[], [0], [1, 0]];
@@ -83,8 +80,8 @@ function buildParentMap(n: number, topology: Topology): number[][] {
         if (i === 0) return [];
         if (i === 1) return [0];
         if (i === 2) return [0];
-        if (i === 3) return [1, 2]; // merge node: two parents
-        return [i - 1];             // tail after merge: linear continuation
+        if (i === 3) return [1, 2];  // merge node: two parents
+        return [i - 1];               // tail continues linearly
       });
 
     default: // linear
@@ -93,43 +90,31 @@ function buildParentMap(n: number, topology: Topology): number[][] {
 }
 
 /**
- * Generates one promotion chain for a single service/run.
- *
- * The chain uses one of three topology shapes (linear / fork / diamond) so
- * the Swimlanes view renders both fan-out (one-to-many) and fan-in
- * (many-to-one / merge) edges.
+ * Core chain builder.  Generates one promotion run for a specific service
+ * using the given topology.
  *
  * Swimlane invariants upheld:
  *  - All events share `run_number` + `sha`  →  "same run_number" predicate works.
  *  - `parent_deployments` carries valid sibling deployment_ids  →  "explicit parent" works.
- *  - `happened_at` strictly increases from root to children  →  left-to-right time axis correct.
+ *  - `happened_at` strictly increases root → children  →  left-to-right time axis correct.
  *  - Only leaf nodes (no children) carry non-success status.
  */
-export function generateRandomChain(): Record<string, unknown>[] {
-  const run      = ++_runCounter;
-  const service  = pick(SERVICES);
-  const version  = pick(VERSIONS);
-  const actor    = pick(ACTORS);
-  const sha      = hex7();
-  const topology = pick(TOPOLOGY_POOL);
+function buildChain(service: string, topology: Topology): Record<string, unknown>[] {
+  const run     = ++_runCounter;
+  const version = pick(VERSIONS);
+  const actor   = pick(ACTORS);
+  const sha     = hex7();
 
-  // Pick start position and chain length.
-  const maxStart = ENV_ORDER.length - 2;                          // 0–3
+  const maxStart = ENV_ORDER.length - 2;
   const startIdx = Math.floor(Math.random() * (maxStart + 1));
-  const maxLen   = ENV_ORDER.length - startIdx;                   // 2–5
-  const chainLen = Math.floor(Math.random() * (maxLen - 1)) + 2; // 2..maxLen
+  const maxLen   = ENV_ORDER.length - startIdx;
+  const chainLen = Math.floor(Math.random() * (maxLen - 1)) + 2;
 
-  const envs = Array.from(ENV_ORDER).slice(startIdx, startIdx + chainLen);
-  const n    = envs.length;
-
+  const envs      = Array.from(ENV_ORDER).slice(startIdx, startIdx + chainLen);
+  const n         = envs.length;
   const parentMap = buildParentMap(n, topology);
+  const ids       = envs.map((env) => `rnd-${service.slice(0, 6)}-${env.slice(0, 3)}-${run}`);
 
-  // Stable deployment IDs — env slice is unique within a chain.
-  const ids = envs.map(
-    (env) => `rnd-${service.slice(0, 6)}-${env.slice(0, 3)}-${run}`,
-  );
-
-  // Compute node depth (longest path from root) for happened_at ordering.
   const depth = new Array<number>(n).fill(0);
   for (let i = 1; i < n; i++) {
     if (parentMap[i].length > 0) {
@@ -138,58 +123,78 @@ export function generateRandomChain(): Record<string, unknown>[] {
   }
   const maxDepth = Math.max(...depth);
 
-  // Mark nodes that have at least one child — they must be 'success'.
   const hasChild = new Array<boolean>(n).fill(false);
   for (let i = 0; i < n; i++) {
     for (const p of parentMap[i]) hasChild[p] = true;
   }
 
-  const events: Record<string, unknown>[] = [];
-  for (let i = 0; i < n; i++) {
-    // Root is oldest; each depth increment is ~20 min more recent.
+  return envs.map((env, i) => {
     const baseMs   = (maxDepth - depth[i]) * 20 * 60_000;
     const jitterMs = Math.floor(Math.random() * 5 * 60_000);
+    const isLeaf   = !hasChild[i];
 
-    const isLeaf = !hasChild[i];
-    const status = isLeaf
-      ? pick(['success', 'success', 'in-progress', 'failure'] as const)
-      : 'success';
-
-    events.push({
+    return {
       deployment_id:      ids[i],
       service,
-      environment:        envs[i],
-      status,
+      environment:        env,
+      status:             isLeaf
+        ? pick(['success', 'success', 'in-progress', 'failure'] as const)
+        : 'success',
       happened_at:        new Date(Date.now() - baseMs - jitterMs).toISOString(),
       version,
       actor,
       run_number:         String(run),
       sha,
       parent_deployments: parentMap[i].map(p => ids[p]),
-    });
-  }
+    };
+  });
+}
 
-  return events;
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Generates one promotion chain for a RANDOM service (random topology).
+ * Used by tests and EmitService is NOT affected (it uses generateRandomEvent).
+ */
+export function generateRandomChain(): Record<string, unknown>[] {
+  return buildChain(pick(SERVICES), pick(BRANCHING_TOPOLOGIES));
 }
 
 /**
- * Generates promotion chains until at least `count` events have been produced,
- * then returns all events flattened in chain order (root-first within each chain).
+ * Generates `count` service scenarios — **one per service**, cycling through
+ * the full service list if count > SERVICE_COUNT.
  *
- * Total may slightly exceed `count` (by up to chain-length − 1) because chains
- * are never split — every parent_deployments reference is always complete.
+ * WHY one-per-service matters for the swimlane:
+ *   The swimlane derives edges from parent_deployments of the CURRENT event
+ *   per (service, env) slot.  If the same service gets two chains in one batch,
+ *   the later chain's events become the new "current" slots — orphaning the
+ *   earlier chain's parent_deployments links.  By emitting exactly one chain per
+ *   service per batch-pass, every (service, env) slot has exactly one event, so
+ *   parent_deployments always points at the same-run events that ARE current.
+ *
+ * count = number of service scenarios (default 10 = all services).
  */
 export function generateRandomEvents(count: number): Record<string, unknown>[] {
+  if (count <= 0) return [];
+
   const result: Record<string, unknown>[] = [];
-  while (result.length < count) {
-    result.push(...generateRandomChain());
+  // Shuffle once; cycle through the same order on each pass so that within
+  // a pass each service appears exactly once.
+  const shuffled = [...SERVICES].sort(() => Math.random() - 0.5);
+
+  for (let i = 0; i < count; i++) {
+    const service  = shuffled[i % shuffled.length];
+    const topology = pick(BRANCHING_TOPOLOGIES);
+    result.push(...buildChain(service, topology));
   }
+
   return result;
 }
 
 /**
- * Generates a single random deployment event in DeploymentEventIngest wire shape.
- * No parent_deployments — used by EmitService for periodic one-shot emission.
+ * Generates a single standalone event (no parent_deployments).
+ * Used by EmitService for periodic one-shot emission — individual live events
+ * do not need DAG links.
  */
 export function generateRandomEvent(): Record<string, unknown> {
   const run       = ++_runCounter;
