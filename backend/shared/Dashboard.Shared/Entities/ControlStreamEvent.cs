@@ -11,11 +11,20 @@ public sealed class ControlStreamEvent
     /// <summary>Server-assigned UUIDv7 — surrogate <b>and</b> SSE resume cursor (D2, D3).</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Open event type; current known value is <c>reset</c>. Unknown values are no-ops for components.</summary>
+    /// <summary>
+    /// Event type: <c>reset-initiated</c> | <c>reset-started</c> | <c>reset-completed</c>.
+    /// Open string — unknown values are no-ops for components.
+    /// </summary>
     public required string Type { get; set; }
 
     /// <summary>Target component id, or <c>"*"</c> meaning all components.</summary>
     public required string Component { get; set; }
+
+    /// <summary>
+    /// Correlates <c>reset-started</c> / <c>reset-completed</c> back to the id of the
+    /// initiating <c>reset-initiated</c> event. <c>null</c> on <c>reset-initiated</c> itself.
+    /// </summary>
+    public Guid? ResetId { get; set; }
 
     /// <summary>Server-assigned UTC timestamp at emit time.</summary>
     public required DateTimeOffset OccurredAt { get; set; }
