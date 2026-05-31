@@ -10,7 +10,7 @@ Implementation contract for **`Dashboard.Fetcher`** — the optional, separately
 |---|---|
 | [`docs/SAD.md`](SAD.md) §3, §7 | Fetcher as opt-in pull→push edge; backend stays CI-agnostic. |
 | [`docs/api/openapi.yaml`](api/openapi.yaml) | `POST /api/deployments`, `GET/PUT /api/fetcher/state/{adapter}`, `X-Progress-Reporter`. |
-| [`docs/BACKEND_SPECIFICATION.md`](BACKEND_SPECIFICATION.md) | Wire DTO (`DeploymentEventIngest`), cursor + append-only semantics. |
+| [`docs/API_SPECIFICATION.md`](API_SPECIFICATION.md) | Wire DTO (`DeploymentEventIngest`), cursor + append-only semantics. |
 
 > `CR-####` / `ADR-####` documents referenced elsewhere **do not exist** — ignore those citations.
 

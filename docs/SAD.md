@@ -122,13 +122,15 @@ The project is a **microservices architecture** — Write API, Read API, Fetcher
                    ▼                           ▼
         ┌──────────────────┐    ┌──────────────────────────────────┐
         │  Dashboard       │    │  API (.NET 10)                   │
-        │  Frontend        │    │  single host, two endpoint       │
+        │  Frontend        │    │  single host, three endpoint     │
         │  (nginx +        │    │  groups composed from libraries: │
         │   Angular static)│    │   • Write — POST → INSERT+NOTIFY │
         │   internal-only  │    │     API-key gated                │
         │                  │    │   • Read — matrix/history/       │
         │                  │    │     discovery/SSE/LISTEN         │
         │                  │    │     unauthenticated              │
+        │                  │    │   • Control — stream/events      │
+        │                  │    │     mixed auth (D8/D9)           │
         │                  │    │  internal-only                   │
         └──────────────────┘    └──────────────┬───────────────────┘
                                                │
@@ -233,9 +235,9 @@ The diagram below shows the logical components.
 A pipeline step that pushes deployment state to the API (see Summary row for context).
 
 
-#### Dashboard Backend — Write and Read API services (co-located)
+#### Dashboard Backend — Write, Read, and Control API services (co-located)
 
-Write and Read are **distinct microservices** with distinct concerns, **co-located** in one stateless ASP.NET Core container.
+Write, Read, and Control are **distinct microservices** with distinct concerns, **co-located** in one stateless ASP.NET Core container.
 
 | Attribute | Value |
 |---|---|
@@ -251,14 +253,15 @@ Write and Read are **distinct microservices** with distinct concerns, **co-locat
 | Concern | How the API host satisfies it |
 |---|---|
 | Caching | No in-memory cache of deployment state between requests — every read hits the database. |
-| Real-time fan-out | No in-process fan-out across instances — events brokered via PostgreSQL `LISTEN/NOTIFY`. Each API instance independently `LISTEN`s on the `deployments` channel and forwards events to its own connected SSE clients. |
+| Real-time fan-out | No in-process fan-out across instances — events brokered via PostgreSQL `LISTEN/NOTIFY`. Each API instance independently `LISTEN`s on the `deployment_events` channel (browser SSE) and `control_events` channel (component control stream), forwarding events to its own connected clients. |
 | Session affinity | No sticky sessions — load balancer may route any request to any instance. SSE connections are long-lived but reconnect transparently via `Last-Event-ID`. |
 
 **Responsibilities:**
 
 - Write surface — accept and persist deployment events; NOTIFY the PostgreSQL `deployment_events` channel on every successful ingest.
 - Read surface — serve the unique services and feeds of events per service.
-- Read surface — stream real-time slot-update events via SSE using PostgreSQL `LISTEN`.
+- Read surface — stream real-time deployment slot-update events to browser clients via SSE (`LISTEN deployment_events`).
+- Control surface — orchestrate internal components; emit events on `GET /api/control/stream` via `NOTIFY control_events`; accept component status reports at `POST /api/control/events`; list events at `GET /api/control/events`.
 
 **Why a gateway (vs. CORS + multiple origins):**
 - Eliminates CORS entirely — the browser only ever sees one origin.
