@@ -52,14 +52,14 @@ function toWireShape(event: ScenarioEvent): Record<string, unknown> {
  * Drives scenarios by POSTing events sequentially through WriteApiClient.
  */
 export class ScenarioRunner {
-  private _state:        RunnerState = 'idle';
-  private _scenario:     string | null = null;
-  private _eventsTotal:  number = 0;
-  private _eventsSent:   number = 0;
-  private _errors:       number = 0;
-  private _startedAt:    string | null = null;
-  private _finishedAt:   string | null = null;
-  private _stopRequested = false;
+  private _state:         RunnerState = 'idle';
+  private _scenario:      string | null = null;
+  private _eventsTotal:   number = 0;
+  private _eventsSent:    number = 0;
+  private _errors:        number = 0;
+  private _startedAt:     string | null = null;
+  private _finishedAt:    string | null = null;
+  private _stopRequested  = false;
 
   /** SSE fan-out — subscribers receive posted / error frames. */
   readonly stream$ = new Subject<StreamFrame>();
@@ -87,80 +87,116 @@ export class ScenarioRunner {
 
   /** Reset all counters + state to idle. */
   reset(): void {
-    this._state        = 'idle';
-    this._scenario     = null;
-    this._eventsTotal  = 0;
-    this._eventsSent   = 0;
-    this._errors       = 0;
-    this._startedAt    = null;
-    this._finishedAt   = null;
+    this._state         = 'idle';
+    this._scenario      = null;
+    this._eventsTotal   = 0;
+    this._eventsSent    = 0;
+    this._errors        = 0;
+    this._startedAt     = null;
+    this._finishedAt    = null;
     this._stopRequested = false;
   }
 
   /**
-   * Run a scenario: convert events, POST sequentially, track counters.
+   * Run a scenario: convert events (elapsed_minutes → happened_at), POST
+   * sequentially, track counters.
    * Resolves when done (all events attempted) or failed (stop requested).
    * State transitions: idle/done/failed → running → done | failed
    */
   async run(
     scenarioName: string,
-    events: ScenarioEvent[],
-    client: WriteApiClient,
-    delayMs: number,
+    events:       ScenarioEvent[],
+    client:       WriteApiClient,
+    delayMs:      number,
   ): Promise<void> {
-    this._state        = 'running';
-    this._scenario     = scenarioName;
-    this._eventsTotal  = events.length;
-    this._eventsSent   = 0;
-    this._errors       = 0;
-    this._startedAt    = new Date().toISOString();
-    this._finishedAt   = null;
-    this._stopRequested = false;
-
+    this._initRun(scenarioName, events.length);
     for (let i = 0; i < events.length; i++) {
-      if (this._stopRequested) {
-        this._state      = 'failed';
-        this._finishedAt = new Date().toISOString();
-        return;
-      }
-
-      const event  = events[i];
-      const wire   = toWireShape(event);
-      const result = await client.postDeployment(wire);
-      const posted_at = new Date().toISOString();
-
-      if (result.ok) {
-        this._eventsSent++;
-        this.stream$.next({
-          type: 'posted',
-          data: {
-            deployment_id: event.deployment_id,
-            service:       event.service,
-            environment:   event.environment,
-            status:        event.status,
-            happened_at:   wire.happened_at as string,
-            posted_at,
-          },
-        });
-      } else {
-        this._errors++;
-        this.stream$.next({
-          type: 'error',
-          data: {
-            deployment_id: event.deployment_id,
-            http_status:   result.status,
-            attempt:       3,
-            posted_at,
-          },
-        });
-      }
-
-      if (delayMs > 0 && i < events.length - 1) {
-        await new Promise<void>(resolve => setTimeout(resolve, delayMs));
-      }
+      if (this._stopRequested) { return this._markFailed(); }
+      const wire = toWireShape(events[i]);
+      await this._postAndTrack(wire, client, i, events.length, delayMs);
     }
+    this._markDone();
+  }
 
+  /**
+   * Run pre-computed wire events (happened_at already set; no elapsed_minutes
+   * conversion).  Used for random-dataset ingests.
+   */
+  async runWire(
+    scenarioName: string,
+    wireEvents:   Record<string, unknown>[],
+    client:       WriteApiClient,
+    delayMs:      number,
+  ): Promise<void> {
+    this._initRun(scenarioName, wireEvents.length);
+    for (let i = 0; i < wireEvents.length; i++) {
+      if (this._stopRequested) { return this._markFailed(); }
+      await this._postAndTrack(wireEvents[i], client, i, wireEvents.length, delayMs);
+    }
+    this._markDone();
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────
+
+  private _initRun(scenarioName: string, total: number): void {
+    this._state         = 'running';
+    this._scenario      = scenarioName;
+    this._eventsTotal   = total;
+    this._eventsSent    = 0;
+    this._errors        = 0;
+    this._startedAt     = new Date().toISOString();
+    this._finishedAt    = null;
+    this._stopRequested = false;
+  }
+
+  private _markFailed(): void {
+    this._state      = 'failed';
+    this._finishedAt = new Date().toISOString();
+  }
+
+  private _markDone(): void {
     this._state      = 'done';
     this._finishedAt = new Date().toISOString();
+  }
+
+  private async _postAndTrack(
+    wire:    Record<string, unknown>,
+    client:  WriteApiClient,
+    index:   number,
+    total:   number,
+    delayMs: number,
+  ): Promise<void> {
+    const result    = await client.postDeployment(wire);
+    const posted_at = new Date().toISOString();
+
+    if (result.ok) {
+      this._eventsSent++;
+      this.stream$.next({
+        type: 'posted',
+        data: {
+          deployment_id: wire.deployment_id as string,
+          service:       wire.service       as string,
+          environment:   wire.environment   as string,
+          status:        wire.status        as string,
+          happened_at:   wire.happened_at   as string,
+          posted_at,
+        },
+      });
+    } else {
+      this._errors++;
+      this.stream$.next({
+        type: 'error',
+        data: {
+          deployment_id: wire.deployment_id as string,
+          http_status:   result.status,
+          attempt:       3,
+          posted_at,
+        },
+      });
+    }
+
+    if (delayMs > 0 && index < total - 1) {
+      await new Promise<void>(resolve => setTimeout(resolve, delayMs));
+    }
   }
 }

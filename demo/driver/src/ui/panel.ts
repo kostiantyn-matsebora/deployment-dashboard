@@ -40,9 +40,17 @@ export const PANEL_HTML = `<!DOCTYPE html>
       background: #0f0f13; border: 1px solid #3f3f46; color: #d4d4d8;
       padding: 5px 9px; border-radius: 6px; font-size: 0.85rem; outline: none;
     }
-    select { min-width: 180px; }
-    input[type="number"] { width: 90px; }
+    select { min-width: 120px; }
+    input[type="number"] { width: 80px; }
     select:focus, input:focus { border-color: #6366f1; }
+    input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Checkbox */
+    .chk-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.8rem; color: #a1a1aa; cursor: pointer; user-select: none;
+    }
+    .chk-label input[type="checkbox"] { accent-color: #6366f1; width: 14px; height: 14px; cursor: pointer; }
 
     /* Buttons */
     button {
@@ -50,11 +58,13 @@ export const PANEL_HTML = `<!DOCTYPE html>
       font-size: 0.82rem; font-weight: 500; cursor: pointer; outline: none;
       transition: background 0.15s;
     }
-    .btn-run  { background: #6366f1; color: #fff; }
-    .btn-run:hover:not(:disabled)  { background: #4f46e5; }
-    .btn-stop { background: #ef4444; color: #fff; }
-    .btn-stop:hover:not(:disabled) { background: #dc2626; }
-    .btn-sm   { background: #27272a; color: #a1a1aa; padding: 3px 10px; font-size: 0.76rem; }
+    .btn-run    { background: #6366f1; color: #fff; }
+    .btn-run:hover:not(:disabled)    { background: #4f46e5; }
+    .btn-stop   { background: #ef4444; color: #fff; }
+    .btn-stop:hover:not(:disabled)   { background: #dc2626; }
+    .btn-enable { background: #16a34a; color: #fff; }
+    .btn-enable:hover:not(:disabled) { background: #15803d; }
+    .btn-sm     { background: #27272a; color: #a1a1aa; padding: 3px 10px; font-size: 0.76rem; }
     .btn-sm:hover { background: #3f3f46; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -70,6 +80,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .badge-running  { background: #1e3a5f; color: #60a5fa; }
     .badge-done     { background: #14532d; color: #86efac; }
     .badge-failed   { background: #450a0a; color: #f87171; }
+    .badge-on       { background: #14532d; color: #86efac; }
+    .badge-off      { background: #27272a; color: #a1a1aa; }
 
     /* Progress */
     .progress-row { margin-top: 12px; }
@@ -85,6 +97,17 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .stat-val { font-size: 0.9rem; color: #d4d4d8; font-weight: 500; }
     .stat-val.err { color: #f87171; }
 
+    /* Emit card row */
+    .emit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .emit-info { display: flex; flex-direction: column; gap: 6px; }
+    .emit-title { font-size: 0.88rem; color: #d4d4d8; }
+
+    /* API card */
+    .api-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .api-msg { font-size: 0.75rem; }
+    .api-msg.ok  { color: #86efac; }
+    .api-msg.err { color: #f87171; }
+
     /* Feed */
     .feed-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .feed-header .card-title { margin-bottom: 0; }
@@ -92,9 +115,9 @@ export const PANEL_HTML = `<!DOCTYPE html>
       font-size: 0.7rem; font-weight: 700; padding: 2px 9px;
       border-radius: 99px; letter-spacing: 0.05em;
     }
-    .live-connecting  { background: #27272a; color: #a1a1aa; }
-    .live-live        { background: #14532d; color: #86efac; }
-    .live-reconnecting{ background: #451a03; color: #fb923c; }
+    .live-connecting   { background: #27272a; color: #a1a1aa; }
+    .live-live         { background: #14532d; color: #86efac; }
+    .live-reconnecting { background: #451a03; color: #fb923c; }
 
     .feed-list {
       max-height: 280px; overflow-y: auto;
@@ -107,6 +130,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .fi-time  { color: #52525b; font-size: 0.7rem; margin-right: 6px; }
     .fi-id    { color: #d4d4d8; font-weight: 600; }
     .fi-meta  { color: #71717a; }
+    .fi-src   { font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+                margin-right: 4px; letter-spacing: 0.04em; }
+    .fi-src-ingest { background: #1a2744; color: #60a5fa; }
+    .fi-src-emit   { background: #271d00; color: #f59e0b; }
     .feed-empty { color: #52525b; text-align: center; padding: 24px 0; font-size: 0.8rem; }
   </style>
 </head>
@@ -115,19 +142,33 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
   <div class="grid">
 
-    <!-- Scenarios card -->
-    <div class="card">
-      <div class="card-title">Scenarios</div>
+    <!-- ── Ingest card (full row) ─────────────────────────────────────────── -->
+    <div class="card full">
+      <div class="card-title">Ingest</div>
       <div class="controls">
-        <select id="scenario-select"><option value="">Loading…</option></select>
+        <span class="lbl">Data set</span>
+        <select id="dataset-select">
+          <option value="demo">demo</option>
+          <option value="random">random</option>
+        </select>
+
+        <span class="lbl" id="count-lbl" style="display:none">Count</span>
+        <input type="number" id="count-input" value="20" min="1" step="1"
+               style="width:70px;display:none">
+
+        <label class="chk-label">
+          <input type="checkbox" id="reset-check" checked> Reset
+        </label>
+
         <span class="lbl">Delay (ms)</span>
         <input type="number" id="delay-input" value="0" min="0" step="100">
-        <button class="btn-run"  id="run-btn"  disabled>Run</button>
-        <button class="btn-stop" id="stop-btn" disabled>Stop</button>
+
+        <button class="btn-run"  id="ingest-btn">Ingest</button>
+        <button class="btn-stop" id="ingest-stop-btn" disabled>Stop</button>
       </div>
     </div>
 
-    <!-- Status card -->
+    <!-- ── Status card ────────────────────────────────────────────────────── -->
     <div class="card">
       <div class="card-title">Status</div>
       <span class="badge badge-idle" id="state-badge">idle</span>
@@ -154,7 +195,28 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Post feed card -->
+    <!-- ── Live Emission card ─────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-title">Live Emission</div>
+      <div class="emit-row">
+        <div class="emit-info">
+          <span class="emit-title">Random event stream</span>
+          <span class="badge badge-off" id="emit-badge">OFF</span>
+        </div>
+        <button class="btn-enable" id="emit-toggle-btn" onclick="toggleEmit()">Enable</button>
+      </div>
+    </div>
+
+    <!-- ── API card (full row, compact) ──────────────────────────────────── -->
+    <div class="card full">
+      <div class="card-title">API</div>
+      <div class="api-row">
+        <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset State</button>
+        <span class="api-msg" id="reset-api-msg"></span>
+      </div>
+    </div>
+
+    <!-- ── Post Feed card (full row) ─────────────────────────────────────── -->
     <div class="card full">
       <div class="feed-header">
         <div class="card-title">Post Feed</div>
@@ -174,51 +236,47 @@ export const PANEL_HTML = `<!DOCTYPE html>
     'use strict';
     const $ = id => document.getElementById(id);
 
-    const scenarioSelect = $('scenario-select');
-    const delayInput     = $('delay-input');
-    const runBtn         = $('run-btn');
-    const stopBtn        = $('stop-btn');
-    const stateBadge     = $('state-badge');
-    const progressLbl    = $('progress-lbl');
-    const progressPct    = $('progress-pct');
-    const progressFill   = $('progress-fill');
-    const errorCount     = $('error-count');
-    const startedAt      = $('started-at');
-    const finishedAt     = $('finished-at');
-    const liveBadge      = $('live-badge');
-    const clearBtn       = $('clear-btn');
-    const feedList       = $('feed-list');
-    const feedEmpty      = $('feed-empty');
+    const datasetSelect   = $('dataset-select');
+    const countLbl        = $('count-lbl');
+    const countInput      = $('count-input');
+    const resetCheck      = $('reset-check');
+    const delayInput      = $('delay-input');
+    const ingestBtn       = $('ingest-btn');
+    const ingestStopBtn   = $('ingest-stop-btn');
+    const stateBadge      = $('state-badge');
+    const progressLbl     = $('progress-lbl');
+    const progressPct     = $('progress-pct');
+    const progressFill    = $('progress-fill');
+    const errorCount      = $('error-count');
+    const startedAt       = $('started-at');
+    const finishedAt      = $('finished-at');
+    const emitBadge       = $('emit-badge');
+    const emitToggleBtn   = $('emit-toggle-btn');
+    const resetApiBtn     = $('reset-api-btn');
+    const resetApiMsg     = $('reset-api-msg');
+    const liveBadge       = $('live-badge');
+    const clearBtn        = $('clear-btn');
+    const feedList        = $('feed-list');
+    const feedEmpty       = $('feed-empty');
 
-    let pollTimer = null;
+    let pollTimer   = null;
     let eventSource = null;
+    let emitting    = false;
+
+    // ── Dataset toggle ────────────────────────────────────────────────────────
+    datasetSelect.addEventListener('change', () => {
+      const isRandom = datasetSelect.value === 'random';
+      countLbl.style.display   = isRandom ? '' : 'none';
+      countInput.style.display = isRandom ? '' : 'none';
+    });
 
     // ── Boot ─────────────────────────────────────────────────────────────────
     (async () => {
-      await Promise.all([loadScenarios(), refreshStatus()]);
+      await Promise.all([refreshStatus(), refreshEmit()]);
       connectStream();
     })();
 
     // ── Data loaders ──────────────────────────────────────────────────────────
-    async function loadScenarios() {
-      try {
-        const { items } = await apiFetch('/demo/scenarios');
-        scenarioSelect.innerHTML = '';
-        if (items && items.length) {
-          items.forEach(name => {
-            const o = document.createElement('option');
-            o.value = o.textContent = name;
-            scenarioSelect.appendChild(o);
-          });
-          runBtn.disabled = false;
-        } else {
-          scenarioSelect.innerHTML = '<option value="">No scenarios</option>';
-        }
-      } catch {
-        scenarioSelect.innerHTML = '<option value="">Error</option>';
-      }
-    }
-
     async function refreshStatus() {
       try {
         const data = await apiFetch('/demo/status');
@@ -226,27 +284,42 @@ export const PANEL_HTML = `<!DOCTYPE html>
       } catch {}
     }
 
+    async function refreshEmit() {
+      try {
+        const data = await apiFetch('/demo/emit');
+        applyEmit(data);
+      } catch {}
+    }
+
     function applyStatus(d) {
       const state = d.state || 'idle';
-      stateBadge.textContent  = state;
-      stateBadge.className    = 'badge badge-' + state;
+      stateBadge.textContent = state;
+      stateBadge.className   = 'badge badge-' + state;
 
       const total = d.events_total || 0;
       const sent  = d.events_sent  || 0;
       const pct   = total > 0 ? (sent / total * 100) : 0;
 
-      progressLbl.textContent     = sent + ' / ' + total + ' events';
-      progressPct.textContent     = pct.toFixed(0) + '%';
-      progressFill.style.width    = pct.toFixed(1) + '%';
-      errorCount.textContent      = d.errors || 0;
-      startedAt.textContent       = d.started_at  ? fmt(d.started_at)  : '—';
-      finishedAt.textContent      = d.finished_at ? fmt(d.finished_at) : '—';
+      progressLbl.textContent  = sent + ' / ' + total + ' events';
+      progressPct.textContent  = pct.toFixed(0) + '%';
+      progressFill.style.width = pct.toFixed(1) + '%';
+      errorCount.textContent   = d.errors || 0;
+      startedAt.textContent    = d.started_at  ? fmt(d.started_at)  : '—';
+      finishedAt.textContent   = d.finished_at ? fmt(d.finished_at) : '—';
 
-      runBtn.disabled  = state === 'running';
-      stopBtn.disabled = state !== 'running';
+      ingestBtn.disabled     = state === 'running';
+      ingestStopBtn.disabled = state !== 'running';
 
       if (state === 'running') schedulePoll();
       else clearTimeout(pollTimer);
+    }
+
+    function applyEmit(d) {
+      emitting = d.emitting;
+      emitBadge.textContent = emitting ? 'LIVE' : 'OFF';
+      emitBadge.className   = 'badge ' + (emitting ? 'badge-on' : 'badge-off');
+      emitToggleBtn.textContent = emitting ? 'Disable' : 'Enable';
+      emitToggleBtn.className   = emitting ? 'btn-stop' : 'btn-enable';
     }
 
     function schedulePoll() {
@@ -254,31 +327,62 @@ export const PANEL_HTML = `<!DOCTYPE html>
       pollTimer = setTimeout(async () => { await refreshStatus(); }, 600);
     }
 
-    // ── Button handlers ───────────────────────────────────────────────────────
-    runBtn.addEventListener('click', async () => {
-      const name = scenarioSelect.value;
-      if (!name) return;
-      const delay = parseInt(delayInput.value, 10) || 0;
+    // ── Ingest controls ───────────────────────────────────────────────────────
+    ingestBtn.addEventListener('click', async () => {
+      const dataset  = datasetSelect.value;
+      const reset    = resetCheck.checked;
+      const delay    = parseInt(delayInput.value, 10) || 0;
+      const count    = parseInt(countInput.value, 10) || 20;
+      const body     = { dataset, reset, delay_ms: delay };
+      if (dataset === 'random') body.count = count;
       try {
-        const data = await apiFetch(
-          '/demo/scenarios/' + encodeURIComponent(name) + '/run',
-          { method: 'POST', body: JSON.stringify({ delay_ms: delay }) }
-        );
+        const data = await apiFetch('/demo/ingest', {
+          method: 'POST',
+          body:   JSON.stringify(body),
+        });
         applyStatus(data);
       } catch {}
     });
 
-    stopBtn.addEventListener('click', async () => {
-      const name = scenarioSelect.value;
-      if (!name) return;
+    ingestStopBtn.addEventListener('click', async () => {
       try {
-        const data = await apiFetch(
-          '/demo/scenarios/' + encodeURIComponent(name) + '/stop',
-          { method: 'POST' }
-        );
+        const data = await apiFetch('/demo/ingest/stop', { method: 'POST' });
         applyStatus(data);
       } catch {}
     });
+
+    // ── Live emission ─────────────────────────────────────────────────────────
+    function toggleEmit() {
+      emitToggleBtn.disabled = true;
+      apiFetch('/demo/emit', {
+        method: 'POST',
+        body:   JSON.stringify({ enabled: !emitting }),
+      }).then(applyEmit)
+        .catch(() => {})
+        .finally(() => { emitToggleBtn.disabled = false; });
+    }
+
+    // ── API reset ─────────────────────────────────────────────────────────────
+    function resetApi() {
+      resetApiBtn.disabled = true;
+      resetApiMsg.textContent = '';
+      resetApiMsg.className   = 'api-msg';
+      apiFetch('/demo/api-reset', { method: 'POST' })
+        .then(d => {
+          if (d.ok) {
+            resetApiMsg.textContent = '✓ Reset OK (' + d.http_status + ')';
+            resetApiMsg.className   = 'api-msg ok';
+          } else {
+            resetApiMsg.textContent = '✗ HTTP ' + (d.http_status || '—');
+            resetApiMsg.className   = 'api-msg err';
+          }
+        })
+        .catch(() => {
+          resetApiMsg.textContent = '✗ Network error';
+          resetApiMsg.className   = 'api-msg err';
+        })
+        .finally(() => { resetApiBtn.disabled = false; });
+    }
 
     clearBtn.addEventListener('click', () => {
       feedList.innerHTML = '';
@@ -304,7 +408,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
           addFeedItem('error', JSON.parse(e.data));
         } else {
           setLiveBadge('reconnecting');
-          // browser auto-reconnects EventSource
         }
       });
     }
@@ -317,19 +420,24 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     function addFeedItem(type, d) {
       if (feedEmpty.parentNode === feedList) feedList.removeChild(feedEmpty);
-      const item = document.createElement('div');
+      const item    = document.createElement('div');
       item.className = 'feed-item fi-' + type;
-      const time = fmt(d.posted_at || new Date().toISOString());
+      const time    = fmt(d.posted_at || new Date().toISOString());
+      const srcTag  = d.from_emit
+        ? '<span class="fi-src fi-src-emit">emit</span>'
+        : '<span class="fi-src fi-src-ingest">ingest</span>';
       if (type === 'posted') {
         item.innerHTML =
           '<span class="fi-icon">✓</span> ' +
-          '<span class="fi-time">' + esc(time) + '</span>' +
-          '<span class="fi-id">'  + esc(d.deployment_id) + '</span> ' +
+          '<span class="fi-time">'  + esc(time)             + '</span>' +
+          srcTag +
+          '<span class="fi-id">'   + esc(d.deployment_id)  + '</span> ' +
           '<span class="fi-meta">' + esc(d.service) + ' / ' + esc(d.environment) + ' → ' + esc(d.status) + '</span>';
       } else {
         item.innerHTML =
           '<span class="fi-icon">✗</span> ' +
-          '<span class="fi-time">' + esc(time) + '</span>' +
+          '<span class="fi-time">'  + esc(time)             + '</span>' +
+          srcTag +
           '<span class="fi-id">ERROR</span> ' +
           '<span class="fi-meta">' + esc(d.deployment_id) + ' · HTTP ' + d.http_status + ' · attempt ' + d.attempt + '</span>';
       }
