@@ -7,6 +7,8 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
 {
     public DbSet<DeploymentEvent> DeploymentEvents => Set<DeploymentEvent>();
     public DbSet<FetcherState> FetcherStates => Set<FetcherState>();
+    public DbSet<ControlStreamEvent> ControlStreamEvents => Set<ControlStreamEvent>();
+    public DbSet<ComponentEvent> ComponentEvents => Set<ComponentEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -15,6 +17,8 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
         var isSqlite = Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite";
         ConfigureDeploymentEvents(modelBuilder, isSqlite);
         ConfigureFetcherState(modelBuilder, isSqlite);
+        ConfigureControlStreamEvents(modelBuilder, isSqlite);
+        ConfigureComponentEvents(modelBuilder, isSqlite);
     }
 
     private static void ConfigureDeploymentEvents(ModelBuilder modelBuilder, bool isSqlite)
@@ -139,6 +143,115 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                           v => v.ToUnixTimeMilliseconds(),
                           v => DateTimeOffset.FromUnixTimeMilliseconds(v));
             }
+        });
+    }
+
+    private static void ConfigureControlStreamEvents(ModelBuilder modelBuilder, bool isSqlite)
+    {
+        modelBuilder.Entity<ControlStreamEvent>(entity =>
+        {
+            entity.ToTable("control_stream_events");
+
+            // PK — UUIDv7, application-assigned. Doubles as the SSE resume cursor (D2, D3).
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                  .HasColumnName("id")
+                  .HasColumnType("uuid")
+                  .ValueGeneratedNever();
+
+            entity.Property(e => e.Type)
+                  .HasColumnName("type")
+                  .IsRequired();
+
+            entity.Property(e => e.Component)
+                  .HasColumnName("component")
+                  .IsRequired();
+
+            entity.Property(e => e.OccurredAt)
+                  .HasColumnName("occurred_at")
+                  .HasColumnType("timestamptz")
+                  .IsRequired();
+
+            if (isSqlite)
+            {
+                entity.Property(e => e.OccurredAt)
+                      .HasConversion<long>(
+                          v => v.ToUnixTimeMilliseconds(),
+                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
+            }
+
+            // Index: optional filter by component on replay.
+            entity.HasIndex(e => new { e.Component, e.Id })
+                  .HasDatabaseName("ix_cse_component_id");
+        });
+    }
+
+    private static void ConfigureComponentEvents(ModelBuilder modelBuilder, bool isSqlite)
+    {
+        modelBuilder.Entity<ComponentEvent>(entity =>
+        {
+            entity.ToTable("component_events");
+
+            // PK — UUIDv7, application-assigned; sort key.
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                  .HasColumnName("id")
+                  .HasColumnType("uuid")
+                  .ValueGeneratedNever();
+
+            entity.Property(e => e.ComponentId)
+                  .HasColumnName("component_id")
+                  .IsRequired();
+
+            entity.Property(e => e.EventType)
+                  .HasColumnName("event_type")
+                  .IsRequired();
+
+            entity.Property(e => e.State)
+                  .HasColumnName("state")
+                  .IsRequired();
+
+            entity.Property(e => e.Detail)
+                  .HasColumnName("detail")
+                  .HasMaxLength(512);
+
+            // occurred_at is component-supplied (mirrors happened_at); received_at is server-assigned.
+            entity.Property(e => e.OccurredAt)
+                  .HasColumnName("occurred_at")
+                  .HasColumnType("timestamptz")
+                  .IsRequired();
+
+            entity.Property(e => e.ReceivedAt)
+                  .HasColumnName("received_at")
+                  .HasColumnType("timestamptz")
+                  .IsRequired();
+
+            // Opaque blob, stored verbatim. jsonb on Postgres; plain text on SQLite (no jsonb type).
+            entity.Property(e => e.Payload)
+                  .HasColumnName("payload")
+                  .HasColumnType(isSqlite ? "TEXT" : "jsonb");
+
+            if (isSqlite)
+            {
+                entity.Property(e => e.OccurredAt)
+                      .HasConversion<long>(
+                          v => v.ToUnixTimeMilliseconds(),
+                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
+                entity.Property(e => e.ReceivedAt)
+                      .HasConversion<long>(
+                          v => v.ToUnixTimeMilliseconds(),
+                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
+            }
+
+            // Index: per-component listing + filter.
+            entity.HasIndex(e => new { e.ComponentId, e.ReceivedAt, e.Id })
+                  .IsDescending(false, true, true)
+                  .HasDatabaseName("ix_ce_component_received_id");
+
+            // Index: global listing + cursor pagination.
+            entity.HasIndex(e => new { e.ReceivedAt, e.Id })
+                  .IsDescending(true, true)
+                  .HasDatabaseName("ix_ce_received_id");
         });
     }
 }
