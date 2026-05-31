@@ -1,5 +1,6 @@
 using Dashboard.Fetcher.Abstractions;
 using Dashboard.Fetcher.Configuration;
+using Dashboard.Fetcher.Control;
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Graph;
@@ -7,6 +8,7 @@ using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Fetcher.Host.Workers;
 using Dashboard.Fetcher.Ingest;
+using Dashboard.Fetcher.Orchestration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,10 +19,14 @@ var builder = Host.CreateApplicationBuilder(args);
 var fetcherOptions = new FetcherOptions();
 builder.Configuration.Bind(fetcherOptions);
 
+// Allow env-var overrides for control-plane keys (§6).
+fetcherOptions.ControlApiKey = builder.Configuration["CONTROL_API_KEY"] ?? fetcherOptions.ControlApiKey;
+fetcherOptions.ComponentId = builder.Configuration["COMPONENT_ID"] ?? fetcherOptions.ComponentId;
+
 var githubOptions = new GithubAdapterOptions();
 builder.Configuration.GetSection("GitHub").Bind(githubOptions);
 
-// Resolve BackfillMaxAge from InitialLookback when not explicitly set
+// Resolve BackfillMaxAge from InitialLookback when not explicitly set.
 if (githubOptions.BackfillMaxAge == TimeSpan.Zero)
     githubOptions.BackfillMaxAge = fetcherOptions.EffectiveBackfillMaxAge;
 
@@ -40,7 +46,24 @@ builder.Services.AddHttpClient<IFetcherStateClient, FetcherStateClient>(c =>
     c.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
 });
 
-// GitHub raw HttpClient (for RateLimitBudget.CreateAsync + GithubClient)
+// Control-stream subscriber — X-Control-API-Key (§5.10.2).
+builder.Services.AddHttpClient<IControlStreamClient, ControlStreamClient>(c =>
+{
+    c.BaseAddress = new Uri(apiBaseUrl);
+    c.DefaultRequestHeaders.Add("X-Control-API-Key", fetcherOptions.ControlApiKey);
+    // Infinite timeout — the stream is long-lived; reconnect is handled inside the listener.
+    c.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+});
+
+// Component-event poster — X-Api-Key + X-Component-Id (§5.10.4).
+builder.Services.AddHttpClient<IComponentEventClient, ComponentEventClient>(c =>
+{
+    c.BaseAddress = new Uri(apiBaseUrl);
+    c.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+    c.DefaultRequestHeaders.Add("X-Component-Id", fetcherOptions.ComponentId);
+});
+
+// GitHub raw HttpClient (for RateLimitBudget.CreateAsync + GithubClient).
 builder.Services.AddHttpClient("github", c =>
 {
     c.BaseAddress = new Uri(githubOptions.BaseUrl);
@@ -85,7 +108,28 @@ builder.Services.AddSingleton<BackfillRunner>();
 builder.Services.AddSingleton<GithubActionsAdapter>();
 builder.Services.AddSingleton<ICiCdAdapter>(sp => sp.GetRequiredService<GithubActionsAdapter>());
 
-// ── Worker ────────────────────────────────────────────────────────────────────
+// PollLoop instances are shared singletons — FetcherWorker runs them; ControlStreamListener
+// pauses/resumes them on reset events (F17).
+builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
+{
+    var adapters = sp.GetRequiredService<IEnumerable<ICiCdAdapter>>();
+    var ingest = sp.GetRequiredService<IIngestClient>();
+    var state = sp.GetRequiredService<IFetcherStateClient>();
+    var logFactory = sp.GetRequiredService<ILoggerFactory>();
+
+    return adapters
+        .Select(adapter => new PollLoop(
+            adapter,
+            ingest,
+            state,
+            fetcherOptions.PollInterval,
+            logFactory.CreateLogger<PollLoop>()))
+        .ToList()
+        .AsReadOnly();
+});
+
+// ── Workers ───────────────────────────────────────────────────────────────────
 builder.Services.AddHostedService<FetcherWorker>();
+builder.Services.AddHostedService<ControlStreamListener>();
 
 await builder.Build().RunAsync();

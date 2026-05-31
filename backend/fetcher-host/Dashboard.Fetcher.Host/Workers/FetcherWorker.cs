@@ -1,32 +1,21 @@
-using Dashboard.Fetcher.Abstractions;
-using Dashboard.Fetcher.Configuration;
-using Dashboard.Fetcher.Ingest;
 using Dashboard.Fetcher.Orchestration;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace Dashboard.Fetcher.Host.Workers;
 
 /// <summary>
-/// BackgroundService that starts one PollLoop per registered ICiCdAdapter (§3).
+/// BackgroundService that runs every registered <see cref="PollLoop"/> concurrently (§3).
 /// Single replica per adapter — no leader election (F6).
+/// Loops are shared singletons so <see cref="ControlStreamListener"/> can pause / resume them.
 /// </summary>
-public sealed class FetcherWorker(
-    IEnumerable<ICiCdAdapter> adapters,
-    IIngestClient ingestClient,
-    IFetcherStateClient stateClient,
-    FetcherOptions options,
-    ILoggerFactory loggerFactory) : BackgroundService
+public sealed class FetcherWorker(IReadOnlyList<PollLoop> pollLoops) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var loops = adapters.Select(adapter =>
-        {
-            var logger = loggerFactory.CreateLogger<PollLoop>();
-            var loop = new PollLoop(adapter, ingestClient, stateClient, options.PollInterval, logger);
-            return loop.RunAsync(stoppingToken);
-        }).ToList();
+        var tasks = pollLoops
+            .Select(loop => loop.RunAsync(stoppingToken))
+            .ToList();
 
-        await Task.WhenAll(loops);
+        return Task.WhenAll(tasks);
     }
 }
