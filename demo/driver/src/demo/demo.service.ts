@@ -11,7 +11,7 @@ import { getConfig } from '../config/configuration';
 export interface IngestOptions {
   dataset?:  string;   // 'demo' | 'random'  (default 'demo')
   reset?:    boolean;  // call POST /api/control/reset first
-  count?:    number;   // random only (default 20)
+  count?:    number;   // random only — target event count; chains generated until total ≥ count (default 100)
   delay_ms?: number;   // overrides EMIT_DELAY_MS
 }
 
@@ -74,7 +74,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
    * Idempotent: returns current status when already running.
    */
   async startIngest(opts: IngestOptions): Promise<RunnerStatus> {
-    const { dataset = 'demo', reset = false, count = 20, delay_ms } = opts;
+    const { dataset = 'demo', reset = false, count = 100, delay_ms } = opts;
 
     if (reset) {
       const config = getConfig();

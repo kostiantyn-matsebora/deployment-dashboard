@@ -139,7 +139,7 @@ No authentication required (internal dev/demo tooling only).
 |---|---|---|---|
 | `dataset` | `"demo"` \| `"random"` | `"demo"` | `"demo"` = events from `demo-set` scenario file; `"random"` = generated events |
 | `reset` | boolean | `false` | When `true`, calls `POST /api/control/reset` on the write-API target before ingesting |
-| `count` | integer | `20` | Number of events to generate; `"random"` only — ignored for `"demo"` |
+| `count` | integer | `100` | Target event count; `"random"` only — chains are generated until total events ≥ count (may exceed by up to 4); ignored for `"demo"` |
 | `delay_ms` | integer | `EMIT_DELAY_MS` | Per-event delay (ms); `0` = bulk load |
 
 **Idempotency:** `POST /demo/ingest` while `state == running` returns current status; does not double-start.

@@ -152,8 +152,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
           <option value="random">random</option>
         </select>
 
-        <span class="lbl" id="count-lbl" style="display:none">Count</span>
-        <input type="number" id="count-input" value="20" min="1" step="1"
+        <span class="lbl" id="count-lbl" style="display:none">Events</span>
+        <input type="number" id="count-input" value="100" min="1" step="1"
                style="width:70px;display:none">
 
         <label class="chk-label">
@@ -332,7 +332,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const dataset  = datasetSelect.value;
       const reset    = resetCheck.checked;
       const delay    = parseInt(delayInput.value, 10) || 0;
-      const count    = parseInt(countInput.value, 10) || 20;
+      const count    = parseInt(countInput.value, 10) || 100;
       const body     = { dataset, reset, delay_ms: delay };
       if (dataset === 'random') body.count = count;
       try {
