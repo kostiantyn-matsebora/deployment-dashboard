@@ -86,9 +86,13 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
    .WithTags("ops")
    .WithSummary("Liveness probe");
 
-// Readiness probe: DB reachable + LISTEN attached.
+// Readiness probe: DB reachable + BOTH LISTEN channels attached (D10).
 // Returns 200 ready/degraded or 503 when the DB is not reachable.
-app.MapGet("/readyz", async (DashboardDbContext db, IReadinessIndicator readiness, CancellationToken ct) =>
+app.MapGet("/readyz", async (
+    DashboardDbContext db,
+    IReadinessIndicator deploymentReadiness,
+    IControlReadinessIndicator controlReadiness,
+    CancellationToken ct) =>
 {
     var dbOk = false;
     try
@@ -98,11 +102,13 @@ app.MapGet("/readyz", async (DashboardDbContext db, IReadinessIndicator readines
     }
     catch { /* db unreachable */ }
 
-    var listenOk = readiness.IsListenerConnected;
+    var deploymentListenOk = deploymentReadiness.IsListenerConnected;
+    var controlListenOk = controlReadiness.IsControlListenerConnected;
     var checks = new Dictionary<string, string>
     {
         ["db"] = dbOk ? "ok" : "fail",
-        ["listen"] = listenOk ? "ok" : "fail",
+        ["listen_deployment"] = deploymentListenOk ? "ok" : "fail",
+        ["listen_control"] = controlListenOk ? "ok" : "fail",
     };
 
     if (!dbOk)
@@ -112,7 +118,8 @@ app.MapGet("/readyz", async (DashboardDbContext db, IReadinessIndicator readines
             statusCode: StatusCodes.Status503ServiceUnavailable,
             extensions: new Dictionary<string, object?> { ["checks"] = checks });
 
-    var status = listenOk ? "ready" : "degraded";
+    // Both LISTEN channels must be attached for full readiness (D10); either missing → degraded.
+    var status = deploymentListenOk && controlListenOk ? "ready" : "degraded";
     return Results.Ok(new { status, checks });
 })
    .WithTags("ops")
