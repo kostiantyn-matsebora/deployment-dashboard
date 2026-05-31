@@ -34,6 +34,13 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// </summary>
     public bool IncludeControlKey { get; init; } = true;
 
+    /// <summary>
+    /// When set, replaces the real <see cref="IResetStateProvider"/> singleton with this
+    /// controllable stub so tests can force the ingest gate without triggering NOTIFY/LISTEN.
+    /// Used by <see cref="ResetChoreographyTests"/> for the 503 gate test (Fix C).
+    /// </summary>
+    public ForcedResetStateProvider? ForcedResetState { get; init; }
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
@@ -72,6 +79,14 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
                 // don't depend on the LISTEN connection being established.
                 services.RemoveAll<IDeploymentNotifier>();
                 services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
+            }
+
+            if (ForcedResetState is not null)
+            {
+                // Replace the real ResetStateListener singleton with a controllable stub.
+                // This lets tests verify the 503 gate path without going through NOTIFY/LISTEN.
+                services.RemoveAll<IResetStateProvider>();
+                services.AddSingleton<IResetStateProvider>(ForcedResetState);
             }
         });
     }

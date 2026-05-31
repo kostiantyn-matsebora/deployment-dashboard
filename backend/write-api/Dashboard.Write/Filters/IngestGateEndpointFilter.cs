@@ -1,6 +1,6 @@
-using Dashboard.Shared.Data;
+using Dashboard.Shared.Abstractions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Dashboard.Write.Filters;
@@ -8,27 +8,34 @@ namespace Dashboard.Write.Filters;
 /// <summary>
 /// Returns <c>503 Service Unavailable</c> with <c>Retry-After</c> while the reset state machine
 /// is in the <c>resetting</c> phase (ingest gate ON, §5, NFR-05).
-/// Reads the current phase directly from the DB so the gate works across all stateless replicas.
+///
+/// Reads the per-instance cached flag from <see cref="IResetStateProvider"/> (updated via
+/// <c>LISTEN reset_state</c> NOTIFY) — no DB round-trip on the hot ingest path (Fix C).
+///
+/// Eventual-consistency note: between a state-transition NOTIFY and this instance receiving it
+/// there is a sub-millisecond window where a racing ingest might slip through. This is an
+/// inherent TOCTOU that the previous per-request DB-SELECT version also had; the truncation
+/// itself is atomic at the database level so no data is lost in that window.
+///
+/// <c>Retry-After</c> is derived from <c>Reset:GateMaxTtlSeconds</c> configuration
+/// (the upper bound on how long the gate can remain open before the reconciler forcibly aborts it).
 /// </summary>
 internal sealed class IngestGateEndpointFilter : IEndpointFilter
 {
-    private const string ResettingState = "resetting";
-    private const int RetryAfterSeconds = 5;
+    private const int DefaultRetryAfterSeconds = 60;
+    private const string GateMaxTtlConfigKey = "Reset:GateMaxTtlSeconds";
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var db = context.HttpContext.RequestServices.GetRequiredService<DashboardDbContext>();
+        var provider = context.HttpContext.RequestServices.GetService<IResetStateProvider>();
 
-        // Single-row query; PK = 1. Returns null if no reset has ever run (idle implicitly).
-        var cycleState = await db.ResetCycles
-            .Where(r => r.Id == 1)
-            .Select(r => r.State)
-            .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
-
-        if (cycleState == ResettingState)
+        if (provider?.IsResetting == true)
         {
+            var config = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
+            var retryAfter = config.GetValue<int?>(GateMaxTtlConfigKey) ?? DefaultRetryAfterSeconds;
+
             var response = context.HttpContext.Response;
-            response.Headers["Retry-After"] = RetryAfterSeconds.ToString();
+            response.Headers["Retry-After"] = retryAfter.ToString();
             return Results.Problem(
                 title: "Service temporarily unavailable.",
                 detail: "A system-state reset is in progress. Retry after the indicated delay.",

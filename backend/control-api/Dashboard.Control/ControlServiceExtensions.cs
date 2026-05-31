@@ -4,6 +4,7 @@ using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
 using Dashboard.Control.Sse;
 using Dashboard.Control.Validation;
+using Dashboard.Shared.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -26,6 +27,8 @@ public static class ControlServiceExtensions
         // ── Notifiers ─────────────────────────────────────────────────────────
         services.AddScoped<IControlEventNotifier, PostgresControlEventNotifier>();
         services.AddScoped<IComponentAckNotifier, PostgresComponentAckNotifier>();
+        // Fix C: state-change notifier NOTIFY reset_state on every transition.
+        services.AddScoped<IResetStateNotifier, PostgresResetStateNotifier>();
 
         // ── Reset orchestrator (singleton — holds advisory lock per cycle) ─────
         services.AddSingleton<ResetOrchestrator>();
@@ -33,6 +36,9 @@ public static class ControlServiceExtensions
 
         // ── Reset service (scoped — per-request) ──────────────────────────────
         services.AddScoped<IResetService, ResetService>();
+
+        // ── Fix A: Reconciler background service ──────────────────────────────
+        services.AddHostedService<ResetReconciler>();
 
         // ── Control SSE broadcaster: LISTEN control_events ────────────────────
         // One singleton serves as IControlEventBroadcaster (injected into stream handler),
@@ -51,6 +57,14 @@ public static class ControlServiceExtensions
             sp => sp.GetRequiredService<ComponentAcksBroadcaster>());
         services.AddHostedService(
             sp => sp.GetRequiredService<ComponentAcksBroadcaster>());
+
+        // ── Fix C: per-instance reset-state LISTEN listener ───────────────────
+        // Seeds IsResetting from DB at startup; updates on NOTIFY reset_state.
+        services.AddSingleton<ResetStateListener>();
+        services.AddSingleton<IResetStateProvider>(
+            sp => sp.GetRequiredService<ResetStateListener>());
+        services.AddHostedService(
+            sp => sp.GetRequiredService<ResetStateListener>());
 
         return services;
     }

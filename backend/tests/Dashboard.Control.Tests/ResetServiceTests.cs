@@ -274,9 +274,13 @@ public sealed class ResetServiceTests : IDisposable
 
         var claimed = new ResetCycle
         {
-            Id = 1, State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(), ExpectedComponents = ["x"], AcksReceived = [],
-            StartedAt = DateTimeOffset.UtcNow, DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(10),
+            Id = 1,
+            State = ResetState.Draining,
+            ResetId = Guid.CreateVersion7(),
+            ExpectedComponents = ["x"],
+            AcksReceived = [],
+            StartedAt = DateTimeOffset.UtcNow,
+            DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(10),
         };
 
         var result = await _cycleRepo.TryClaimIdleAsync(claimed, CancellationToken.None);
@@ -291,9 +295,13 @@ public sealed class ResetServiceTests : IDisposable
         // fresh db context (same in-memory DB) to simulate the second instance.
         var firstClaimed = new ResetCycle
         {
-            Id = 1, State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(), ExpectedComponents = ["x"], AcksReceived = [],
-            StartedAt = DateTimeOffset.UtcNow, DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(10),
+            Id = 1,
+            State = ResetState.Draining,
+            ResetId = Guid.CreateVersion7(),
+            ExpectedComponents = ["x"],
+            AcksReceived = [],
+            StartedAt = DateTimeOffset.UtcNow,
+            DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(10),
         };
         var firstResult = await _cycleRepo.TryClaimIdleAsync(firstClaimed, CancellationToken.None);
         Assert.True(firstResult, "First claim must succeed.");
@@ -303,9 +311,13 @@ public sealed class ResetServiceTests : IDisposable
         // Second call on the same repo (state is now draining) — must return false.
         var secondClaimed = new ResetCycle
         {
-            Id = 1, State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(), ExpectedComponents = ["x"], AcksReceived = [],
-            StartedAt = DateTimeOffset.UtcNow, DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(10),
+            Id = 1,
+            State = ResetState.Draining,
+            ResetId = Guid.CreateVersion7(),
+            ExpectedComponents = ["x"],
+            AcksReceived = [],
+            StartedAt = DateTimeOffset.UtcNow,
+            DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(10),
         };
         var secondResult = await _cycleRepo.TryClaimIdleAsync(secondClaimed, CancellationToken.None);
         Assert.False(secondResult, "Second concurrent claim must return false (0 affected rows).");

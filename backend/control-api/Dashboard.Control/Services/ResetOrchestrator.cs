@@ -21,14 +21,16 @@ namespace Dashboard.Control.Services;
 /// Advisory lock (fixed key <c>7654321</c>) is held on a <b>dedicated, always-open</b>
 /// Npgsql connection for the duration of the cycle — session-level lock semantics require
 /// the Postgres session to stay alive (D12, NFR-05).
+///
+/// On every state transition, emits <c>NOTIFY reset_state &lt;state&gt;</c> so all instances
+/// update their cached ingest-gate flag without a DB round-trip (Fix C).
 /// </summary>
 internal sealed class ResetOrchestrator(
     IServiceProvider services,
     ComponentAcksBroadcaster acksBroadcaster,
     ILogger<ResetOrchestrator> logger) : IResetOrchestrator
 {
-    // Fixed Postgres advisory lock key — unique to the reset choreography.
-    private const long AdvisoryLockKey = 7_654_321L;
+    internal const long AdvisoryLockKey = 7_654_321L;
 
     public async Task DriveAsync(
         Guid resetId,
@@ -44,8 +46,6 @@ internal sealed class ResetOrchestrator(
             return;
         }
 
-        // Hold a dedicated connection open for the entire cycle — session-level advisory lock
-        // requires the Postgres session to remain alive.
         await using var lockConn = new NpgsqlConnection(connectionString);
         await lockConn.OpenAsync(appStopping);
 
@@ -94,6 +94,7 @@ internal sealed class ResetOrchestrator(
         var db = sp.GetRequiredService<DashboardDbContext>();
         var controlStream = sp.GetRequiredService<IControlStreamRepository>();
         var notifier = sp.GetRequiredService<IControlEventNotifier>();
+        var stateNotifier = sp.GetService<IResetStateNotifier>();
 
         // ── Phase: draining — wait for acks or AckTimeout ────────────────────
         var cycle = await LoadCycleAsync(db, appStopping);
@@ -119,13 +120,17 @@ internal sealed class ResetOrchestrator(
         // Check GateMaxTtl before proceeding to resetting.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
         {
-            await AbortCycleAsync(db, cycle, appStopping);
+            await AbortCycleAsync(db, cycle, stateNotifier, appStopping);
             return;
         }
 
         // ── Draining → Resetting ──────────────────────────────────────────────
         machine.Fire(ResetTrigger.AcksIn);
         await SaveCycleAsync(db, cycle, appStopping);
+
+        // Notify all instances that the gate is now ON (Fix C).
+        if (stateNotifier is not null)
+            await stateNotifier.NotifyStateAsync(ResetState.Resetting, appStopping);
 
         var resetStartedEvent = BuildControlEvent("reset-started", resetId);
         await controlStream.InsertAsync(resetStartedEvent, appStopping);
@@ -136,7 +141,7 @@ internal sealed class ResetOrchestrator(
         // Check GateMaxTtl before clearing.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
         {
-            await AbortCycleAsync(db, cycle, appStopping);
+            await AbortCycleAsync(db, cycle, stateNotifier, appStopping);
             return;
         }
 
@@ -148,6 +153,10 @@ internal sealed class ResetOrchestrator(
         machine.Fire(ResetTrigger.Complete);
         ClearCycleFields(cycle);
         await SaveCycleAsync(db, cycle, appStopping);
+
+        // Notify all instances that the gate is now OFF (Fix C).
+        if (stateNotifier is not null)
+            await stateNotifier.NotifyStateAsync(ResetState.Idle, appStopping);
 
         var resetCompletedEvent = BuildControlEvent("reset-completed", resetId);
         await controlStream.InsertAsync(resetCompletedEvent, appStopping);
@@ -168,7 +177,7 @@ internal sealed class ResetOrchestrator(
         var acksReceived = new HashSet<string>(cycle.AcksReceived ?? [], StringComparer.Ordinal);
 
         if (acksReceived.IsSupersetOf(expectedComponents))
-            return; // Already have all acks.
+            return;
 
         var ackWait = TimeSpan.FromMilliseconds(
             Math.Max(0, (ackDeadline - DateTimeOffset.UtcNow).TotalMilliseconds));
@@ -186,7 +195,7 @@ internal sealed class ResetOrchestrator(
                 while (acksBroadcaster.AckReader.TryRead(out var ack))
                 {
                     if (!Guid.TryParse(ack.ResetId, out var ackResetId) || ackResetId != cycle.ResetId)
-                        continue; // Stale or mismatched ack — ignore.
+                        continue;
 
                     if (acksReceived.Add(ack.ComponentId))
                     {
@@ -198,20 +207,23 @@ internal sealed class ResetOrchestrator(
                     }
 
                     if (acksReceived.IsSupersetOf(expectedComponents))
-                        return; // All expected acks received.
+                        return;
                 }
             }
         }
         catch (OperationCanceledException) when (!appStopping.IsCancellationRequested)
         {
-            // Ack timeout or GateMaxTtl elapsed — proceed (D13: components are optional).
             logger.LogInformation(
                 "Reset orchestrator: ack timeout elapsed for reset {ResetId}; proceeding with {Count}/{Total} acks.",
                 cycle.ResetId, acksReceived.Count, expectedComponents.Length);
         }
     }
 
-    private async Task AbortCycleAsync(DashboardDbContext db, ResetCycle cycle, CancellationToken ct)
+    private async Task AbortCycleAsync(
+        DashboardDbContext db,
+        ResetCycle cycle,
+        IResetStateNotifier? stateNotifier,
+        CancellationToken ct)
     {
         logger.LogWarning("Reset orchestrator: GateMaxTtl exceeded; aborting reset {ResetId}.", cycle.ResetId);
         var machine = new ResetStateMachine(cycle);
@@ -219,6 +231,10 @@ internal sealed class ResetOrchestrator(
             machine.Fire(ResetTrigger.Abort);
         ClearCycleFields(cycle);
         await SaveCycleAsync(db, cycle, ct);
+
+        // Release the gate flag on all instances (Fix C).
+        if (stateNotifier is not null)
+            await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
     }
 
     private async Task TryAbortAsync(CancellationToken ct)
@@ -226,10 +242,12 @@ internal sealed class ResetOrchestrator(
         try
         {
             await using var abortScope = services.CreateAsyncScope();
-            var abortDb = abortScope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+            var sp = abortScope.ServiceProvider;
+            var abortDb = sp.GetRequiredService<DashboardDbContext>();
+            var stateNotifier = sp.GetService<IResetStateNotifier>();
             var cycle = await LoadCycleAsync(abortDb, ct);
             if (cycle.State != ResetState.Idle)
-                await AbortCycleAsync(abortDb, cycle, ct);
+                await AbortCycleAsync(abortDb, cycle, stateNotifier, ct);
         }
         catch (Exception ex)
         {
@@ -245,7 +263,7 @@ internal sealed class ResetOrchestrator(
         await db.FetcherStates.ExecuteDeleteAsync(ct);
     }
 
-    // ── Advisory lock helpers (dedicated open connection) ─────────────────────
+    // ── Advisory lock helpers ─────────────────────────────────────────────────
 
     private static async Task<bool> TryAcquireAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)
     {
@@ -270,7 +288,6 @@ internal sealed class ResetOrchestrator(
 
     private static async Task<ResetCycle> LoadCycleAsync(DashboardDbContext db, CancellationToken ct)
     {
-        // Clear tracker before loading to ensure fresh read from DB.
         db.ChangeTracker.Clear();
         return await db.ResetCycles.FindAsync([(short)1], ct)
                ?? new ResetCycle { Id = 1, State = ResetState.Idle };

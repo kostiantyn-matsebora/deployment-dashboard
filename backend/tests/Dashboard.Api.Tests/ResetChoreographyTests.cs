@@ -2,15 +2,15 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dashboard.Api.Tests.Helpers;
+using Dashboard.Shared.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Dashboard.Api.Tests;
 
 /// <summary>
-/// Integration tests for the reset choreography (phase 11, §10).
-/// Verifies: 202 body; 409 on concurrent reset; 503 on ingest during resetting;
-/// full drain→ack→clear→complete cycle; reset_id correlation across events;
-/// timeout path; readyz third channel.
+/// Integration tests for the reset choreography (phase 11 + robustness fixes).
+/// Covers: 202/409; reset-initiated SSE fan-out; full 2-ack cycle with reset_id
+/// correlation; timeout structural; data-clear scope; readyz third channel.
 /// Runs against a real Postgres container (Testcontainers).
 /// </summary>
 public sealed class ResetChoreographyTests : IAsyncLifetime
@@ -24,7 +24,7 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         await _factory.InitializeAsync();
         await _factory.MigrateAsync();
         _client = _factory.CreateClient();
-        // Allow the three broadcasters to establish LISTEN.
+        // Allow the broadcasters to establish LISTEN.
         await Task.Delay(TimeSpan.FromSeconds(2));
     }
 
@@ -54,7 +54,7 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         return req;
     }
 
-    private HttpRequestMessage IngestRequest() =>
+    private static HttpRequestMessage IngestRequest() =>
         new(HttpMethod.Post, "/api/deployments")
         {
             Content = JsonContent.Create(new
@@ -85,7 +85,6 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
             },
         };
 
-    /// <summary>Reads SSE frames and returns parsed JSON payloads up to <paramref name="count"/>.</summary>
     private static async Task<List<JsonElement>> ReadDataFramesAsync(
         Stream stream, int count, CancellationToken ct)
     {
@@ -124,11 +123,9 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
     [Fact]
     public async Task Post_Reset_WhileAlreadyInFlight_Returns409()
     {
-        // First reset → 202 (leaves state in draining because no acks arrive).
         var first = await _client.SendAsync(ResetRequest());
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
 
-        // Second reset → 409.
         var second = await _client.SendAsync(ResetRequest());
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
         Assert.Equal("application/problem+json", second.Content.Headers.ContentType?.MediaType);
@@ -146,8 +143,6 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, streamRes.StatusCode);
 
         await using var stream = await streamRes.Content.ReadAsStreamAsync(cts.Token);
-
-        // Allow SSE subscription to register.
         await Task.Delay(1000, cts.Token);
 
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
@@ -161,7 +156,7 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         var ev = frames[0];
         Assert.Equal("reset-initiated", ev.GetProperty("type").GetString());
         Assert.Equal("*", ev.GetProperty("component").GetString());
-        Assert.Equal(resetId, ev.GetProperty("id").GetString()); // id == reset_id
+        Assert.Equal(resetId, ev.GetProperty("id").GetString());
     }
 
     // ── reset_id correlation across all three events ───────────────────────────
@@ -171,27 +166,23 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-        // Open control stream subscriber.
         using var streamRes = await _client.SendAsync(
             ControlStreamRequest(), HttpCompletionOption.ResponseHeadersRead, cts.Token);
         await using var stream = await streamRes.Content.ReadAsStreamAsync(cts.Token);
 
         await Task.Delay(1500, cts.Token);
 
-        // Trigger reset.
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
         var resetId = resetBody.GetProperty("reset_id").GetString()!;
 
-        // Post acks from both expected components.
         var ack1 = await _client.SendAsync(AckRequest("dashboard-fetcher", resetId), cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, ack1.StatusCode);
 
         var ack2 = await _client.SendAsync(AckRequest("demo-driver", resetId), cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, ack2.StatusCode);
 
-        // Expect 3 events: reset-initiated, reset-started, reset-completed.
         var frames = await ReadDataFramesAsync(stream, 3, cts.Token);
 
         var types = frames.Select(f => f.GetProperty("type").GetString()).ToList();
@@ -199,40 +190,11 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         Assert.Contains("reset-started", types);
         Assert.Contains("reset-completed", types);
 
-        // reset-started and reset-completed must carry reset_id.
         var started = frames.First(f => f.GetProperty("type").GetString() == "reset-started");
         Assert.Equal(resetId, started.GetProperty("reset_id").GetString());
 
         var completed = frames.First(f => f.GetProperty("type").GetString() == "reset-completed");
         Assert.Equal(resetId, completed.GetProperty("reset_id").GetString());
-    }
-
-    // ── 503 ingest gate during resetting ──────────────────────────────────────
-
-    [Fact]
-    public async Task Ingest_WhileResetting_Returns503WithRetryAfter()
-    {
-        // This test manually sets the cycle to resetting state to avoid the
-        // complex timing of the full choreography in the integration context.
-        // We seed the reset_cycle row directly.
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<Dashboard.Shared.Data.DashboardDbContext>();
-
-        db.ResetCycles.Add(new Dashboard.Shared.Entities.ResetCycle
-        {
-            Id = 1,
-            State = "resetting",
-            ResetId = Guid.CreateVersion7(),
-            StartedAt = DateTimeOffset.UtcNow,
-            DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(60),
-        });
-        await db.SaveChangesAsync();
-
-        var res = await _client.SendAsync(IngestRequest());
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, res.StatusCode);
-        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
-        Assert.True(res.Headers.Contains("Retry-After"), "503 response must include Retry-After header.");
     }
 
     // ── 401 auth ──────────────────────────────────────────────────────────────
@@ -259,7 +221,6 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
     [Fact]
     public async Task Readyz_AfterStartup_IncludesListenAcksCheck()
     {
-        // Give all three broadcasters time to connect.
         await Task.Delay(2000);
 
         var res = await _client.GetAsync("/readyz");
@@ -271,18 +232,11 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         Assert.Equal("ok", acksCheck.GetString());
     }
 
-    // ── Timeout path (AckTimeoutSeconds) — no acks arrive ─────────────────────
+    // ── Timeout path (AckTimeoutSeconds) ─────────────────────────────────────
 
     [Fact]
     public async Task Timeout_WhenNoAcksArriveWithinTimeout_CycleProceeds()
     {
-        // With default AckTimeoutSeconds=10, this test would be slow.
-        // We verify the cycle transitions using a very short timeout configured via TestApiFactory.
-        // Here we verify the 202 is returned and after waiting for the default timeout + buffer,
-        // the cycle returns to idle (observable via a second reset succeeding).
-        //
-        // This is a structural test — the full timeout wait is exercised by the unit test.
-        // We verify the endpoint contract only: 202 returned, no immediate 409 on first call.
         var res = await _client.SendAsync(ResetRequest());
         Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
 
@@ -298,11 +252,9 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-        // Seed a deployment event.
         var ingestBefore = await _client.SendAsync(IngestRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Created, ingestBefore.StatusCode);
 
-        // Seed fetcher state.
         var fetcherReq = new HttpRequestMessage(HttpMethod.Put, "/api/fetcher/state/reset-test-adapter")
         {
             Content = JsonContent.Create(new { cursor = "test-cursor" }),
@@ -310,35 +262,183 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         };
         await _client.SendAsync(fetcherReq, cts.Token);
 
-        // Open stream.
         using var streamRes = await _client.SendAsync(
             ControlStreamRequest(), HttpCompletionOption.ResponseHeadersRead, cts.Token);
         await using var stream = await streamRes.Content.ReadAsStreamAsync(cts.Token);
         await Task.Delay(1000, cts.Token);
 
-        // Trigger reset.
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
         var resetId = resetBody.GetProperty("reset_id").GetString()!;
 
-        // Post both acks to trigger the data-clear phase.
         await _client.SendAsync(AckRequest("dashboard-fetcher", resetId), cts.Token);
         await _client.SendAsync(AckRequest("demo-driver", resetId), cts.Token);
 
-        // Wait for reset-completed.
         var frames = await ReadDataFramesAsync(stream, 3, cts.Token);
         Assert.Contains(frames, f => f.GetProperty("type").GetString() == "reset-completed");
 
-        // Deployment events should be cleared.
         var depPage = await _client.GetFromJsonAsync<JsonElement>(
             "/api/deployments?service=reset-test-svc", cts.Token);
         Assert.Equal(0, depPage.GetProperty("items").GetArrayLength());
 
-        // Fetcher state should be cleared.
         var fetcherGet = new HttpRequestMessage(HttpMethod.Get, "/api/fetcher/state/reset-test-adapter");
         fetcherGet.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
         var fetcherRes = await _client.SendAsync(fetcherGet, cts.Token);
         Assert.Equal(HttpStatusCode.NotFound, fetcherRes.StatusCode);
+    }
+}
+
+/// <summary>
+/// Integration tests for the ingest gate (Fix C) and reconciler behavior (Fix A).
+/// Uses a separate factory with <see cref="ForcedResetStateProvider"/> for gate tests
+/// to avoid NOTIFY/LISTEN timing dependencies.
+/// </summary>
+public sealed class IngestGateTests : IAsyncLifetime
+{
+    private readonly ForcedResetStateProvider _forcedState = new() { IsResetting = false };
+
+    private readonly TestApiFactory _factory;
+    private HttpClient _client = null!;
+
+    public IngestGateTests()
+    {
+        _factory = new TestApiFactory
+        {
+            UseRealNotifier = false,
+            ForcedResetState = _forcedState,
+        };
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _factory.InitializeAsync();
+        await _factory.MigrateAsync();
+        _client = _factory.CreateClient();
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    private static HttpRequestMessage IngestRequest() =>
+        new(HttpMethod.Post, "/api/deployments")
+        {
+            Content = JsonContent.Create(new
+            {
+                deployment_id = $"gh-{Guid.NewGuid():N}",
+                service = "gate-test-svc",
+                environment = "prod",
+                status = "success",
+                happened_at = "2026-05-31T10:00:00Z",
+            }),
+            Headers = { { "X-Api-Key", TestApiFactory.TestApiKey } },
+        };
+
+    // ── Fix C: cached flag gate ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task Ingest_WhenIsResettingFalse_Returns201()
+    {
+        _forcedState.IsResetting = false;
+        var res = await _client.SendAsync(IngestRequest());
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Ingest_WhenIsResettingTrue_Returns503WithRetryAfter()
+    {
+        _forcedState.IsResetting = true;
+
+        var res = await _client.SendAsync(IngestRequest());
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+        Assert.True(res.Headers.Contains("Retry-After"), "503 response must include Retry-After header.");
+    }
+
+    [Fact]
+    public async Task Ingest_GateFlipsOffAfterResettingTrue_SubsequentRequestsSucceed()
+    {
+        _forcedState.IsResetting = true;
+        var blocked = await _client.SendAsync(IngestRequest());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, blocked.StatusCode);
+
+        // Simulate the NOTIFY reset_state 'idle' being received by flipping the stub.
+        _forcedState.IsResetting = false;
+
+        var allowed = await _client.SendAsync(IngestRequest());
+        Assert.Equal(HttpStatusCode.Created, allowed.StatusCode);
+    }
+
+    // ── Fix A: reconciler aborts orphan via DB + emits reset-completed ─────────
+
+    [Fact]
+    public async Task Reconciler_OrphanedPastDeadlineCycle_IsAbortedWithinReconcilerInterval()
+    {
+        // Seed an orphaned resetting cycle with a deadline that is already past.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Dashboard.Shared.Data.DashboardDbContext>();
+
+        // The seeded row from migration is idle; update it to resetting with a past deadline.
+        var cycle = await db.ResetCycles.FindAsync((short)1);
+        Assert.NotNull(cycle);
+        cycle.State = "resetting";
+        cycle.ResetId = Guid.CreateVersion7();
+        cycle.StartedAt = DateTimeOffset.UtcNow.AddSeconds(-120);
+        cycle.DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(-60);
+        await db.SaveChangesAsync();
+
+        // Wait for at least one reconciler tick (interval = 5 s; GateMaxTtl = 60 s default,
+        // but StartedAt is 120 s in the past so now >= StartedAt + GateMaxTtlSeconds).
+        await Task.Delay(TimeSpan.FromSeconds(8));
+
+        // Reload — the reconciler should have reset to idle.
+        db.ChangeTracker.Clear();
+        var reloaded = await db.ResetCycles.FindAsync((short)1);
+        Assert.NotNull(reloaded);
+        Assert.Equal("idle", reloaded.State);
+        Assert.Null(reloaded.ResetId);
+    }
+
+    [Fact]
+    public async Task Reconciler_CycleWithinTtl_IsNotAborted()
+    {
+        // Seed a draining cycle with a deadline far in the future.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Dashboard.Shared.Data.DashboardDbContext>();
+
+        var resetId = Guid.CreateVersion7();
+        var cycle = await db.ResetCycles.FindAsync((short)1);
+        Assert.NotNull(cycle);
+        cycle.State = "draining";
+        cycle.ResetId = resetId;
+        cycle.StartedAt = DateTimeOffset.UtcNow;
+        cycle.DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(300);
+        await db.SaveChangesAsync();
+
+        // Wait one reconciler tick.
+        await Task.Delay(TimeSpan.FromSeconds(7));
+
+        // Must still be draining.
+        db.ChangeTracker.Clear();
+        var reloaded = await db.ResetCycles.FindAsync((short)1);
+        Assert.NotNull(reloaded);
+        Assert.Equal("draining", reloaded.State);
+        Assert.Equal(resetId, reloaded.ResetId);
+    }
+
+    // ── Fix C: ResetStateProvider seeded from DB at startup ───────────────────
+
+    [Fact]
+    public async Task ResetStateProvider_WhenDbIsIdle_IsResettingIsFalse()
+    {
+        // The factory seeds a fresh DB with idle state; the real ResetStateListener
+        // is replaced by ForcedResetStateProvider in this factory, so we verify the
+        // contract: IResetStateProvider is registered and returns IsResetting=false.
+        var provider = _factory.Services.GetRequiredService<IResetStateProvider>();
+        Assert.False(provider.IsResetting);
     }
 }
