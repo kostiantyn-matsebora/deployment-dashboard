@@ -180,16 +180,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     /* Control card dim — applied to interactive cards while reset_state == blocked */
     .card-blocked { opacity: 0.45; pointer-events: none; }
-
-    /* GitHub Store card counters */
-    .gh-counters { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 10px; }
-    .gh-counter  { display: flex; flex-direction: column; align-items: center; }
-    .gh-counter-val  { font-size: 1.2rem; font-weight: 700; color: #f4f4f5; line-height: 1; }
-    .gh-counter-lbl  { font-size: 0.65rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
-    .gh-meta { font-size: 0.72rem; color: #52525b; margin-top: 4px; }
-    .gh-dataset-badge { display: inline-block; padding: 1px 7px; border-radius: 3px;
-                        font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
-                        background: #1a2744; color: #60a5fa; margin-left: 4px; }
   </style>
 </head>
 <body>
@@ -291,73 +281,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- ── GitHub Seed card ───────────────────────────────────────────────── -->
-    <!-- GitHub cards are hidden until the emulator answers the liveness probe (GET /demo/github/status). -->
-    <div class="card" id="gh-seed-card" style="display:none">
-      <div class="card-title">GitHub Seed</div>
-      <div class="controls">
-        <span class="lbl">Data set</span>
-        <select id="gh-dataset-select">
-          <option value="demo">demo</option>
-          <option value="random">random</option>
-        </select>
-
-        <span class="lbl" id="gh-count-lbl" style="display:none">Count</span>
-        <input type="number" id="gh-count-input" value="5" min="1" max="100" step="1"
-               style="width:60px;display:none">
-
-        <label class="chk-label">
-          <input type="checkbox" id="gh-reset-check"> Reset
-        </label>
-
-        <button class="btn-run"  id="gh-seed-btn">Seed</button>
-        <button class="btn-stop" id="gh-clear-btn">Clear</button>
-      </div>
-      <div class="api-msg-row">
-        <span class="api-msg" id="gh-seed-msg"></span>
-      </div>
-    </div>
-
-    <!-- ── GitHub Live card ───────────────────────────────────────────────── -->
-    <div class="card" id="gh-live-card" style="display:none">
-      <div class="card-title">GitHub Live</div>
-      <div class="emit-row">
-        <div class="emit-info">
-          <span class="emit-title">Periodic emit</span>
-          <span class="badge badge-off" id="gh-emit-badge">OFF</span>
-        </div>
-        <button class="btn-enable" id="gh-emit-toggle-btn">Enable</button>
-      </div>
-    </div>
-
-    <!-- ── GitHub Store card ──────────────────────────────────────────────── -->
-    <div class="card" id="gh-store-card" style="display:none">
-      <div class="card-title">GitHub Store</div>
-      <div class="gh-counters">
-        <div class="gh-counter">
-          <span class="gh-counter-val" id="gh-cnt-repos">—</span>
-          <span class="gh-counter-lbl">Repos</span>
-        </div>
-        <div class="gh-counter">
-          <span class="gh-counter-val" id="gh-cnt-deployments">—</span>
-          <span class="gh-counter-lbl">Deployments</span>
-        </div>
-        <div class="gh-counter">
-          <span class="gh-counter-val" id="gh-cnt-statuses">—</span>
-          <span class="gh-counter-lbl">Statuses</span>
-        </div>
-        <div class="gh-counter">
-          <span class="gh-counter-val" id="gh-cnt-workflows">—</span>
-          <span class="gh-counter-lbl">Workflows</span>
-        </div>
-        <div class="gh-counter">
-          <span class="gh-counter-val" id="gh-cnt-environments">—</span>
-          <span class="gh-counter-lbl">Environments</span>
-        </div>
-      </div>
-      <div class="gh-meta" id="gh-store-meta">Not seeded</div>
-    </div>
-
   </div>
 
   <!-- ── Status bar (fixed footer) ────────────────────────────────────────── -->
@@ -412,8 +335,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const sbResetBadge    = $('sb-reset-badge');
 
     // Interactive control cards — dimmed while reset_state == blocked.
-    // GitHub Seed + GitHub Live are interactive (mutators); GitHub Store is a data surface.
-    const interactiveCards = [$('ingest-card'), $('emit-card'), $('control-api-card'), $('gh-seed-card'), $('gh-live-card')];
+    const interactiveCards = [$('ingest-card'), $('emit-card'), $('control-api-card')];
 
     // Control API Events card refs (data feed — exempt from card-blocked dimming).
     const ctrlLiveBadge  = $('ctrl-live-badge');
@@ -429,17 +351,13 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const interactiveControls = [
       ingestBtn, ingestStopBtn, emitToggleBtn, resetApiBtn,
       datasetSelect, countInput, delayInput, resetCheck,
-      $('gh-seed-btn'), $('gh-clear-btn'), $('gh-emit-toggle-btn'),
-      $('gh-dataset-select'), $('gh-count-input'), $('gh-reset-check'),
     ];
 
     let pollTimer        = null;
     let eventSource      = null;
     let ctrlEventSource  = null;
     let compPollTimer    = null;
-    let ghStatusPollTimer = null;
     let emitting         = false;
-    let ghEmitting       = false;
     let isBlocked        = false;
 
     // ── Dataset toggle ────────────────────────────────────────────────────────
@@ -449,20 +367,12 @@ export const PANEL_HTML = `<!DOCTYPE html>
       countInput.style.display = isRandom ? '' : 'none';
     });
 
-    // ── GitHub dataset toggle ─────────────────────────────────────────────────
-    $('gh-dataset-select').addEventListener('change', () => {
-      const isRandom = $('gh-dataset-select').value === 'random';
-      $('gh-count-lbl').style.display   = isRandom ? '' : 'none';
-      $('gh-count-input').style.display = isRandom ? '' : 'none';
-    });
-
     // ── Boot ─────────────────────────────────────────────────────────────────
     (async () => {
-      await Promise.all([refreshStatus(), refreshEmit(), refreshGithubEmit(), refreshGithubStatus()]);
+      await Promise.all([refreshStatus(), refreshEmit()]);
       connectStream();
       connectControlStream();
       startCompEventsPoll();
-      startGithubStatusPoll();
     })();
 
     // ── Data loaders ──────────────────────────────────────────────────────────
@@ -478,39 +388,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
         const data = await apiFetch('/demo/emit');
         applyEmit(data);
       } catch {}
-    }
-
-    async function refreshGithubEmit() {
-      try {
-        const data = await apiFetch('/demo/github/emit');
-        applyGithubEmit(data);
-      } catch {}
-    }
-
-    // GitHub Source cards are shown only while the github-emulator answers the
-    // liveness probe (GET /demo/github/status → 2xx). When the emulator is absent
-    // the driver proxy returns a non-2xx (502) and the cards stay hidden; the poll
-    // re-checks every 5 s so they appear/disappear as the emulator comes and goes.
-    let githubAvailable = false;
-    function setGithubAvailable(avail) {
-      if (avail === githubAvailable) return;
-      githubAvailable = avail;
-      const disp = avail ? '' : 'none';
-      ['gh-seed-card', 'gh-live-card', 'gh-store-card'].forEach(id => {
-        const el = $(id);
-        if (el) el.style.display = disp;
-      });
-    }
-
-    async function refreshGithubStatus() {
-      try {
-        const res = await fetch('/demo/github/status', { headers: { 'Content-Type': 'application/json' } });
-        if (!res.ok) { setGithubAvailable(false); return; }
-        setGithubAvailable(true);
-        applyGithubStatus(await res.json());
-      } catch {
-        setGithubAvailable(false);
-      }
     }
 
     function applyStatus(d) {
@@ -575,37 +452,9 @@ export const PANEL_HTML = `<!DOCTYPE html>
       emitToggleBtn.className   = emitting ? 'btn-stop' : 'btn-enable';
     }
 
-    function applyGithubEmit(d) {
-      ghEmitting = !!(d && d.emitting);
-      const badge  = $('gh-emit-badge');
-      const btn    = $('gh-emit-toggle-btn');
-      badge.textContent = ghEmitting ? 'LIVE' : 'OFF';
-      badge.className   = 'badge ' + (ghEmitting ? 'badge-on' : 'badge-off');
-      btn.textContent   = ghEmitting ? 'Disable' : 'Enable';
-      btn.className     = ghEmitting ? 'btn-stop' : 'btn-enable';
-    }
-
-    function applyGithubStatus(d) {
-      if (!d) return;
-      $('gh-cnt-repos').textContent        = d.repos         !== undefined ? String(d.repos)         : '—';
-      $('gh-cnt-deployments').textContent  = d.deployments   !== undefined ? String(d.deployments)   : '—';
-      $('gh-cnt-statuses').textContent     = d.statuses      !== undefined ? String(d.statuses)       : '—';
-      $('gh-cnt-workflows').textContent    = d.workflows      !== undefined ? String(d.workflows)     : '—';
-      $('gh-cnt-environments').textContent = d.environments   !== undefined ? String(d.environments)  : '—';
-
-      const datasetText  = d.dataset   ? '<span class="gh-dataset-badge">' + esc(d.dataset) + '</span>' : '';
-      const seededText   = d.seeded_at ? ' · seeded ' + fmt(d.seeded_at) : '';
-      $('gh-store-meta').innerHTML = datasetText + seededText || 'Not seeded';
-    }
-
     function schedulePoll() {
       clearTimeout(pollTimer);
       pollTimer = setTimeout(async () => { await refreshStatus(); }, 600);
-    }
-
-    function startGithubStatusPoll() {
-      refreshGithubStatus();
-      ghStatusPollTimer = setInterval(refreshGithubStatus, 5000);
     }
 
     // ── Ingest controls ───────────────────────────────────────────────────────
@@ -710,78 +559,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     ctrlClearBtn.addEventListener('click', () => {
       ctrlFeedList.innerHTML = '';
       ctrlFeedList.appendChild(ctrlFeedEmpty);
-    });
-
-    // ── GitHub Seed / Clear ───────────────────────────────────────────────────
-    $('gh-seed-btn').addEventListener('click', async () => {
-      if (isBlocked) return;
-      const dataset = $('gh-dataset-select').value;
-      const doReset = $('gh-reset-check').checked;
-      const body    = { dataset, reset: doReset };
-      if (dataset === 'random') {
-        body.count = Math.max(1, parseInt($('gh-count-input').value, 10) || 5);
-      }
-      const msg = $('gh-seed-msg');
-      msg.textContent = '';
-      msg.className   = 'api-msg';
-      try {
-        const res = await fetch('/demo/github/seed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          msg.textContent = '\\u2713 Seeded';
-          msg.className   = 'api-msg ok';
-          applyGithubStatus(data);
-        } else {
-          msg.textContent = '\\u2717 HTTP ' + res.status;
-          msg.className   = 'api-msg err';
-        }
-      } catch {
-        msg.textContent = '\\u2717 Network error';
-        msg.className   = 'api-msg err';
-      }
-      refreshGithubStatus();
-    });
-
-    $('gh-clear-btn').addEventListener('click', async () => {
-      if (isBlocked) return;
-      const msg = $('gh-seed-msg');
-      msg.textContent = '';
-      msg.className   = 'api-msg';
-      try {
-        const res = await fetch('/demo/github/clear', { method: 'POST',
-          headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        if (res.ok) {
-          msg.textContent = '\\u2713 Cleared';
-          msg.className   = 'api-msg ok';
-        } else {
-          msg.textContent = '\\u2717 HTTP ' + res.status;
-          msg.className   = 'api-msg err';
-        }
-      } catch {
-        msg.textContent = '\\u2717 Network error';
-        msg.className   = 'api-msg err';
-      }
-      refreshGithubStatus();
-    });
-
-    // ── GitHub Live emission ───────────────────────────────────────────────────
-    $('gh-emit-toggle-btn').addEventListener('click', () => {
-      if (isBlocked) return;
-      const btn = $('gh-emit-toggle-btn');
-      btn.disabled = true;
-      fetch('/demo/github/emit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !ghEmitting }),
-      })
-        .then(r => r.json())
-        .then(applyGithubEmit)
-        .catch(() => {})
-        .finally(() => { btn.disabled = isBlocked; });
     });
 
     // ── SSE stream ────────────────────────────────────────────────────────────
