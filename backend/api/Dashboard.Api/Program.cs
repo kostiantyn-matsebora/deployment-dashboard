@@ -22,6 +22,12 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
 // ── Problem details ───────────────────────────────────────────────────────────
 builder.Services.AddDashboardProblemDetails();
 
+// Binding-level body failures (malformed JSON, unknown/missing fields) must surface as a
+// JsonException so the problem-details handler maps them to 422 (D5 / §6). Minimal APIs only
+// throw on bad requests in Development by default; force it on in every environment so the
+// deployed API returns the contract-mandated 422 instead of a silent 400.
+builder.Services.Configure<RouteHandlerOptions>(opts => opts.ThrowOnBadRequest = true);
+
 // ── Data ──────────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<DashboardDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
