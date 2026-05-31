@@ -223,23 +223,62 @@ describe('generateRandomEvents', () => {
     }
   });
 
-  it('generates exactly count service scenarios', () => {
-    // Each scenario shares a run_number within its chain.
-    // Count distinct run_numbers = count distinct scenarios.
+  it('generates exactly count primary-chain scenarios', () => {
+    // Each scenario's primary chain shares one run_number (0–40 min old).
+    // Historical events (2 h / 4 h old) have their own run_numbers — exclude them.
+    const oneHourAgo = Date.now() - 60 * 60_000;
     for (const n of [1, 3, 5]) {
-      const events = generateRandomEvents(n);
-      const runs   = new Set(events.map(ev => ev.run_number as string));
-      expect(runs.size).toBe(n);
+      const events      = generateRandomEvents(n);
+      const primaryRuns = new Set(
+        events
+          .filter(ev => new Date(ev.happened_at as string).getTime() > oneHourAgo)
+          .map(ev => ev.run_number as string),
+      );
+      expect(primaryRuns.size).toBe(n);
     }
   });
 
-  it('cycles through all services — no (service, env) duplicate within a single pass', () => {
-    // One pass = SERVICE_COUNT scenarios.  Each service should appear at most once per pass.
-    const events = generateRandomEvents(SERVICE_COUNT);
-    const slots  = events.map(ev => `${ev.service as string}|${ev.environment as string}`);
-    const unique = new Set(slots);
-    // All (service, env) combos must be unique within the batch.
-    expect(unique.size).toBe(slots.length);
+  it('each (service, env) slot has exactly 3 events covering all statuses', () => {
+    const events  = generateRandomEvents(SERVICE_COUNT);
+    const bySlot  = new Map<string, string[]>();
+    for (const ev of events) {
+      const key = `${ev.service as string}|${ev.environment as string}`;
+      if (!bySlot.has(key)) bySlot.set(key, []);
+      bySlot.get(key)!.push(ev.status as string);
+    }
+    for (const [, statuses] of bySlot) {
+      expect(statuses).toHaveLength(3);
+      expect(new Set(statuses)).toEqual(new Set(['in-progress', 'success', 'failure']));
+    }
+  });
+
+  it('the most recent event per slot is the primary (< 1 h old); historical events are ≥ 1 h old', () => {
+    const events  = generateRandomEvents(3);
+    const bySlot  = new Map<string, number[]>();
+    for (const ev of events) {
+      const key = `${ev.service as string}|${ev.environment as string}`;
+      if (!bySlot.has(key)) bySlot.set(key, []);
+      bySlot.get(key)!.push(new Date(ev.happened_at as string).getTime());
+    }
+    const oneHourAgo = Date.now() - 60 * 60_000;
+    for (const [, timestamps] of bySlot) {
+      timestamps.sort((a, b) => b - a); // newest first
+      expect(timestamps[0]).toBeGreaterThan(oneHourAgo);   // primary: fresh
+      expect(timestamps[1]).toBeLessThan(oneHourAgo);       // historical: old
+      expect(timestamps[2]).toBeLessThan(oneHourAgo);       // historical: older
+    }
+  });
+
+  it('historical events have empty parent_deployments', () => {
+    const events    = generateRandomEvents(3);
+    const oneHourAgo = Date.now() - 60 * 60_000;
+    const historical = events.filter(
+      ev => new Date(ev.happened_at as string).getTime() < oneHourAgo,
+    );
+    expect(historical.length).toBeGreaterThan(0);
+    for (const ev of historical) {
+      expect(ev.parent_deployments).toEqual([]);
+    }
   });
 
   it('contains events with non-empty parent_deployments (chains are linked)', () => {

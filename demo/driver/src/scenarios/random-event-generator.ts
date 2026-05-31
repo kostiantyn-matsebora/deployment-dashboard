@@ -161,11 +161,61 @@ function buildChain(service: string, topology: Topology): Record<string, unknown
   });
 }
 
+const ALL_STATUSES = ['in-progress', 'success', 'failure'] as const;
+
+/**
+ * Appends two historical standalone events for each environment in `primaryChain`,
+ * one for each status the primary event does NOT carry.
+ *
+ * Historical events are:
+ *  - 4 h old (oldest) and 2 h old (middle) — always older than the primary chain
+ *    (0–40 min old), so the primary events remain definitively "current" per slot.
+ *  - `parent_deployments: []` — independent older runs; they stack as
+ *    disconnected nodes in the swimlane and populate the history drawer.
+ *
+ * Together with the primary event, every (service, env) slot gets exactly
+ * three events covering in-progress, success, and failure.
+ */
+function appendHistory(
+  service:      string,
+  primaryChain: Record<string, unknown>[],
+  out:          Record<string, unknown>[],
+): void {
+  for (const primary of primaryChain) {
+    const primaryStatus   = primary.status as string;
+    const missingStatuses = ALL_STATUSES.filter(s => s !== primaryStatus);
+    // missingStatuses is always length 2
+
+    missingStatuses.forEach((status, idx) => {
+      const run     = ++_runCounter;
+      // idx=0 → 4 h ago (older), idx=1 → 2 h ago (newer)
+      const ageMs   = (missingStatuses.length - idx) * 2 * 60 * 60_000;
+      const jitter  = Math.floor(Math.random() * 10 * 60_000);
+      const env     = primary.environment as string;
+
+      out.push({
+        deployment_id:      `rnd-${service.slice(0, 6)}-${env.slice(0, 3)}-${run}`,
+        service,
+        environment:        env,
+        status,
+        happened_at:        new Date(Date.now() - ageMs - jitter).toISOString(),
+        version:            pick(VERSIONS),
+        actor:              pick(ACTORS),
+        run_number:         String(run),
+        run_url:            `https://ci.example/runs/${run}`,
+        ref:                pick(REFS),
+        sha:                hex7(),
+        parent_deployments: [],
+      });
+    });
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
  * Generates one promotion chain for a RANDOM service (random topology).
- * Used by tests and EmitService is NOT affected (it uses generateRandomEvent).
+ * Used by tests; EmitService uses generateRandomEvent instead.
  */
 export function generateRandomChain(): Record<string, unknown>[] {
   return buildChain(pick(SERVICES), pick(BRANCHING_TOPOLOGIES));
@@ -175,28 +225,29 @@ export function generateRandomChain(): Record<string, unknown>[] {
  * Generates `count` service scenarios — **one per service**, cycling through
  * the full service list if count > SERVICE_COUNT.
  *
- * WHY one-per-service matters for the swimlane:
- *   The swimlane derives edges from parent_deployments of the CURRENT event
- *   per (service, env) slot.  If the same service gets two chains in one batch,
- *   the later chain's events become the new "current" slots — orphaning the
- *   earlier chain's parent_deployments links.  By emitting exactly one chain per
- *   service per batch-pass, every (service, env) slot has exactly one event, so
- *   parent_deployments always points at the same-run events that ARE current.
+ * Each scenario emits **3 events per (service, env) slot**:
+ *  1. Primary event  — part of the branching-topology chain (0–40 min old);
+ *     this becomes the "current" event for the matrix/swimlane.
+ *  2. Historical ×2  — standalone events (2 h and 4 h old) carrying the two
+ *     statuses the primary event does not have, so every slot has full
+ *     in-progress / success / failure coverage for the history drawer.
  *
- * count = number of service scenarios (default 10 = all services).
+ * One-per-service invariant is preserved: every (service, env) slot has
+ * exactly one PRIMARY event, so parent_deployments links are never orphaned.
  */
 export function generateRandomEvents(count: number): Record<string, unknown>[] {
   if (count <= 0) return [];
 
-  const result: Record<string, unknown>[] = [];
-  // Shuffle once; cycle through the same order on each pass so that within
-  // a pass each service appears exactly once.
+  const result:   Record<string, unknown>[] = [];
   const shuffled = [...SERVICES].sort(() => Math.random() - 0.5);
 
   for (let i = 0; i < count; i++) {
-    const service  = shuffled[i % shuffled.length];
-    const topology = pick(BRANCHING_TOPOLOGIES);
-    result.push(...buildChain(service, topology));
+    const service      = shuffled[i % shuffled.length];
+    const topology     = pick(BRANCHING_TOPOLOGIES);
+    const primaryChain = buildChain(service, topology);
+
+    result.push(...primaryChain);
+    appendHistory(service, primaryChain, result);
   }
 
   return result;
