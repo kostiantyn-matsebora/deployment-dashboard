@@ -238,29 +238,28 @@ describe('generateRandomEvents', () => {
     }
   });
 
-  it('each (service, env) slot has exactly 3 events covering all statuses', () => {
-    const events  = generateRandomEvents(SERVICE_COUNT);
-    const bySlot  = new Map<string, string[]>();
+  it('each service has all 3 statuses (in-progress, success, failure) across its events', () => {
+    const events    = generateRandomEvents(SERVICE_COUNT);
+    const byService = new Map<string, Set<string>>();
     for (const ev of events) {
-      const key = `${ev.service as string}|${ev.environment as string}`;
-      if (!bySlot.has(key)) bySlot.set(key, []);
-      bySlot.get(key)!.push(ev.status as string);
+      const svc = ev.service as string;
+      if (!byService.has(svc)) byService.set(svc, new Set());
+      byService.get(svc)!.add(ev.status as string);
     }
-    for (const [, statuses] of bySlot) {
-      expect(statuses).toHaveLength(3);
-      expect(new Set(statuses)).toEqual(new Set(['in-progress', 'success', 'failure']));
+    for (const [, statuses] of byService) {
+      expect(statuses).toEqual(new Set(['in-progress', 'success', 'failure']));
     }
   });
 
   it('the most recent event per slot is the primary (< 1 h old); historical events are ≥ 1 h old', () => {
-    const events  = generateRandomEvents(3);
-    const bySlot  = new Map<string, number[]>();
+    const events     = generateRandomEvents(3);
+    const bySlot     = new Map<string, number[]>();
+    const oneHourAgo = Date.now() - 60 * 60_000;
     for (const ev of events) {
       const key = `${ev.service as string}|${ev.environment as string}`;
       if (!bySlot.has(key)) bySlot.set(key, []);
       bySlot.get(key)!.push(new Date(ev.happened_at as string).getTime());
     }
-    const oneHourAgo = Date.now() - 60 * 60_000;
     for (const [, timestamps] of bySlot) {
       timestamps.sort((a, b) => b - a); // newest first
       expect(timestamps[0]).toBeGreaterThan(oneHourAgo);   // primary: fresh
@@ -269,15 +268,63 @@ describe('generateRandomEvents', () => {
     }
   });
 
-  it('historical events have empty parent_deployments', () => {
-    const events    = generateRandomEvents(3);
+  it('historical events form linear chains — non-root events have parent_deployments within the same run', () => {
+    const events     = generateRandomEvents(3);
     const oneHourAgo = Date.now() - 60 * 60_000;
     const historical = events.filter(
       ev => new Date(ev.happened_at as string).getTime() < oneHourAgo,
     );
     expect(historical.length).toBeGreaterThan(0);
+
+    // Group historical events by run_number.
+    const byRun = new Map<string, Record<string, unknown>[]>();
     for (const ev of historical) {
-      expect(ev.parent_deployments).toEqual([]);
+      const run = ev.run_number as string;
+      if (!byRun.has(run)) byRun.set(run, []);
+      byRun.get(run)!.push(ev);
+    }
+
+    // Each run with > 1 event: non-root events must have a non-empty parent_deployments.
+    for (const [, runEvents] of byRun) {
+      if (runEvents.length <= 1) continue;
+      // Sort oldest first (root first in the chain).
+      runEvents.sort((a, b) =>
+        new Date(a.happened_at as string).getTime() - new Date(b.happened_at as string).getTime(),
+      );
+      // Root: no parents.
+      expect(runEvents[0].parent_deployments).toEqual([]);
+      // Non-root: must have exactly one parent pointing to an event in the same run.
+      const runIds = new Set(runEvents.map(ev => ev.deployment_id as string));
+      for (let i = 1; i < runEvents.length; i++) {
+        const parents = runEvents[i].parent_deployments as string[];
+        expect(parents.length).toBe(1);
+        expect(runIds.has(parents[0])).toBe(true);
+      }
+    }
+  });
+
+  it('historical events within a run share run_number, sha, version, ref, run_url', () => {
+    const events     = generateRandomEvents(3);
+    const oneHourAgo = Date.now() - 60 * 60_000;
+    const historical = events.filter(
+      ev => new Date(ev.happened_at as string).getTime() < oneHourAgo,
+    );
+    const byRun = new Map<string, Record<string, unknown>[]>();
+    for (const ev of historical) {
+      const run = ev.run_number as string;
+      if (!byRun.has(run)) byRun.set(run, []);
+      byRun.get(run)!.push(ev);
+    }
+    for (const [run, runEvents] of byRun) {
+      if (runEvents.length <= 1) continue;
+      const first = runEvents[0];
+      for (const ev of runEvents) {
+        expect(ev.run_number).toBe(run);
+        expect(ev.sha).toBe(first.sha);
+        expect(ev.version).toBe(first.version);
+        expect(ev.ref).toBe(first.ref);
+        expect(ev.run_url).toBe(first.run_url);
+      }
     }
   });
 

@@ -164,51 +164,68 @@ function buildChain(service: string, topology: Topology): Record<string, unknown
 const ALL_STATUSES = ['in-progress', 'success', 'failure'] as const;
 
 /**
- * Appends two historical standalone events for each environment in `primaryChain`,
- * one for each status the primary event does NOT carry.
+ * Appends two historical promotion chains for a service, one per missing status.
  *
- * Historical events are:
- *  - 4 h old (oldest) and 2 h old (middle) — always older than the primary chain
- *    (0–40 min old), so the primary events remain definitively "current" per slot.
- *  - `parent_deployments: []` — independent older runs; they stack as
- *    disconnected nodes in the swimlane and populate the history drawer.
+ * Each historical chain:
+ *  - Covers the same environments as the primary chain (in order).
+ *  - Is its own pipeline run: shared `run_number`, `sha`, `version`, `ref`, `run_url`.
+ *  - Is a LINEAR chain: each env's event carries `parent_deployments: [prev_env_id]`
+ *    (except the root, which has `[]`).  This reflects a real older promotion run.
+ *  - All non-last envs are `success` (they promoted successfully before the tip).
+ *  - The LAST env carries the missing status (tip of this older run).
+ *  - Timestamps: layer 0 → ~4 h old, layer 1 → ~2 h old.  Always older than the
+ *    primary chain (0–40 min), so primary events remain definitively "current".
  *
- * Together with the primary event, every (service, env) slot gets exactly
- * three events covering in-progress, success, and failure.
+ * Together with the primary chain, every service's dataset covers all three
+ * statuses at least at the tip environment.
  */
 function appendHistory(
   service:      string,
   primaryChain: Record<string, unknown>[],
   out:          Record<string, unknown>[],
 ): void {
-  for (const primary of primaryChain) {
-    const primaryStatus   = primary.status as string;
-    const missingStatuses = ALL_STATUSES.filter(s => s !== primaryStatus);
-    // missingStatuses is always length 2
+  const envs = primaryChain.map(ev => ev.environment as string);
+  if (envs.length === 0) return;
 
-    missingStatuses.forEach((status, idx) => {
-      const run     = ++_runCounter;
-      // idx=0 → 4 h ago (older), idx=1 → 2 h ago (newer)
-      const ageMs   = (missingStatuses.length - idx) * 2 * 60 * 60_000;
-      const jitter  = Math.floor(Math.random() * 10 * 60_000);
-      const env     = primary.environment as string;
+  // Base missing statuses on the tip (last event) of the primary chain.
+  const tipStatus      = primaryChain[primaryChain.length - 1].status as string;
+  const missingStatuses = ALL_STATUSES.filter(s => s !== tipStatus);
+
+  missingStatuses.forEach((histTipStatus, layerIdx) => {
+    const run    = ++_runCounter;
+    const sha    = hex7();
+    const version = pick(VERSIONS);
+    const actor  = pick(ACTORS);
+    const ref    = pick(REFS);
+    const runUrl = `https://ci.example/runs/${run}`;
+    // Layer 0 → ~4 h ago, layer 1 → ~2 h ago
+    const baseAgeMs = (missingStatuses.length - layerIdx) * 2 * 60 * 60_000;
+
+    // Pre-compute IDs so downstream events can reference upstream ones.
+    const ids = envs.map(env => `rnd-${service.slice(0, 6)}-${env.slice(0, 3)}-${run}`);
+
+    envs.forEach((env, i) => {
+      const jitter   = Math.floor(Math.random() * 10 * 60_000);
+      // Earlier envs in the chain are a bit older within the layer.
+      const envOffset = (envs.length - i) * 5 * 60_000;
+      const isLast   = i === envs.length - 1;
 
       out.push({
-        deployment_id:      `rnd-${service.slice(0, 6)}-${env.slice(0, 3)}-${run}`,
+        deployment_id:      ids[i],
         service,
         environment:        env,
-        status,
-        happened_at:        new Date(Date.now() - ageMs - jitter).toISOString(),
-        version:            pick(VERSIONS),
-        actor:              pick(ACTORS),
+        status:             isLast ? histTipStatus : 'success',
+        happened_at:        new Date(Date.now() - baseAgeMs - envOffset - jitter).toISOString(),
+        version,
+        actor,
         run_number:         String(run),
-        run_url:            `https://ci.example/runs/${run}`,
-        ref:                pick(REFS),
-        sha:                hex7(),
-        parent_deployments: [],
+        run_url:            runUrl,
+        ref,
+        sha,
+        parent_deployments: i === 0 ? [] : [ids[i - 1]],
       });
     });
-  }
+  });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
