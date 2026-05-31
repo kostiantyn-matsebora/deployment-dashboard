@@ -97,8 +97,8 @@ services:
       # Set only when running the API without the gateway (split-domain mode,
       # API_SPECIFICATION.md D6); the two modes are mutually exclusive.
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-}"
-      # Minimum 90, default 365.  Demo uses a shorter window.
-      HISTORY_RETENTION_DAYS: "${HISTORY_RETENTION_DAYS:-30}"
+      # Minimum 90, default 365.  The demo profile overrides this to a shorter window.
+      HISTORY_RETENTION_DAYS: "${HISTORY_RETENTION_DAYS:-365}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -183,17 +183,17 @@ services:
       CONTROL_API_KEY: "${CONTROL_API_KEY:-}"
       COMPONENT_ID: "dashboard-fetcher"
       POLL_INTERVAL_SECONDS: "${POLL_INTERVAL_SECONDS:-30}"
-      GITHUB__BASE_URL: "http://github-emulator:3100"
-      GITHUB__REPOS: "demo-org/payments-api,demo-org/search-indexer"
-      GITHUB__TOKEN: "demo-token"
-      GITHUB__VERSION_SOURCE: "artifact:version.txt"
-      GITHUB__RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
-      GITHUB__RATE_LIMIT_BUDGET_PCT: "80"
-      BACKFILL: "false"
+      # GitHub source — points at REAL GitHub by default. The demo override
+      # (docker-compose.demo.yaml) repoints this at the in-stack github-emulator.
+      GITHUB__BASE_URL: "${GITHUB_BASE_URL:-https://api.github.com}"
+      GITHUB__TOKEN: "${GITHUB_TOKEN:-}"
+      GITHUB__REPOS: "${GITHUB_REPOS:-}"
+      GITHUB__VERSION_SOURCE: "${GITHUB_VERSION_SOURCE:-attribute:sha}"
+      # Unset GITHUB__RATE_LIMIT → discovered from GitHub /rate_limit on startup (F16).
+      GITHUB__RATE_LIMIT_BUDGET_PCT: "${GITHUB_RATE_LIMIT_BUDGET_PCT:-30}"
+      BACKFILL: "${BACKFILL:-false}"
     depends_on:
       api:
-        condition: service_healthy
-      github-emulator:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
