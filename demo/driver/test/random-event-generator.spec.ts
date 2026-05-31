@@ -7,6 +7,28 @@ import {
 
 // ── generateRandomEvent (EmitService one-shot, no parents) ────────────────────
 
+/** Asserts every DeploymentEventIngest field that the generator must populate. */
+function assertWireShape(ev: Record<string, unknown>): void {
+  // Required fields
+  expect(typeof ev.deployment_id).toBe('string');
+  expect(typeof ev.service).toBe('string');
+  expect(typeof ev.environment).toBe('string');
+  expect(typeof ev.status).toBe('string');
+  expect(typeof ev.happened_at).toBe('string');
+  // Optional fields the generator MUST always populate
+  expect(typeof ev.version).toBe('string');
+  expect(typeof ev.actor).toBe('string');
+  expect(typeof ev.run_number).toBe('string');
+  expect(typeof ev.run_url).toBe('string');
+  expect(typeof ev.ref).toBe('string');
+  expect(typeof ev.sha).toBe('string');
+  expect(Array.isArray(ev.parent_deployments)).toBe(true);
+  // run_url must be a plausible URI
+  expect(ev.run_url as string).toMatch(/^https?:\/\//);
+  // run_url must embed the same run identifier as run_number
+  expect(ev.run_url as string).toContain(ev.run_number as string);
+}
+
 describe('generateRandomEvent', () => {
   it('returns an object with all required DeploymentEventIngest fields', () => {
     const ev = generateRandomEvent();
@@ -17,6 +39,10 @@ describe('generateRandomEvent', () => {
       status:        expect.any(String),
       happened_at:   expect.any(String),
     });
+  });
+
+  it('populates all optional wire fields (run_url, ref, run_number, version, actor, sha)', () => {
+    for (let i = 0; i < 10; i++) assertWireShape(generateRandomEvent());
   });
 
   it('status is a valid enum value', () => {
@@ -164,6 +190,23 @@ describe('generateRandomChain', () => {
       }
     }
     expect(found).toBe(true);
+  });
+
+  it('all events comply with the full DeploymentEventIngest wire shape (incl. run_url, ref)', () => {
+    for (let i = 0; i < 10; i++) {
+      for (const ev of generateRandomChain()) assertWireShape(ev);
+    }
+  });
+
+  it('all events in a chain share the same run_url and ref (same pipeline run)', () => {
+    for (let i = 0; i < 20; i++) {
+      const chain = generateRandomChain();
+      const { run_url, ref } = chain[0];
+      for (const ev of chain) {
+        expect(ev.run_url).toBe(run_url);
+        expect(ev.ref).toBe(ref);
+      }
+    }
   });
 });
 

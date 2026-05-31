@@ -23,6 +23,13 @@ const VERSIONS = [
   '0.8.4', '3.1.2', '0.42.0', '2.15.0',
 ];
 
+const REFS = [
+  'refs/heads/main', 'refs/heads/develop',
+  'release/1.0', 'release/2.0',
+  'feat/auth-refresh', 'feat/retry-logic',
+  'fix/timeout-handling', 'chore/deps-update',
+];
+
 /**
  * Topology shapes for the chain generator.
  *
@@ -104,6 +111,8 @@ function buildChain(service: string, topology: Topology): Record<string, unknown
   const version = pick(VERSIONS);
   const actor   = pick(ACTORS);
   const sha     = hex7();
+  const ref     = pick(REFS);
+  const runUrl  = `https://ci.example/runs/${run}`;
 
   const maxStart = ENV_ORDER.length - 2;
   const startIdx = Math.floor(Math.random() * (maxStart + 1));
@@ -144,6 +153,8 @@ function buildChain(service: string, topology: Topology): Record<string, unknown
       version,
       actor,
       run_number:         String(run),
+      run_url:            runUrl,
+      ref,
       sha,
       parent_deployments: parentMap[i].map(p => ids[p]),
     };
@@ -211,6 +222,8 @@ export function generateRandomEvent(): Record<string, unknown> {
     version:            pick(VERSIONS),
     actor:              pick(ACTORS),
     run_number:         String(run),
+    run_url:            `https://ci.example/runs/${run}`,
+    ref:                pick(REFS),
     sha:                hex7(),
     parent_deployments: [],
   };
