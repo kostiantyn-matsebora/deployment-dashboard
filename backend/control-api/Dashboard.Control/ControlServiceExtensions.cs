@@ -1,3 +1,4 @@
+using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
 using Dashboard.Control.Sse;
 using Dashboard.Control.Validation;
@@ -11,6 +12,8 @@ public static class ControlServiceExtensions
     public static IServiceCollection AddControlServices(this IServiceCollection services)
     {
         services.AddScoped<IResetService, ResetService>();
+        services.AddScoped<IComponentEventRepository, ComponentEventRepository>();
+        services.AddScoped<IControlStreamRepository, ControlStreamRepository>();
         services.AddSingleton<IComponentEventValidator, ComponentEventValidator>();
 
         // Control SSE broadcaster: one singleton serves as both IControlEventBroadcaster
