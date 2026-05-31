@@ -37,7 +37,7 @@ export class ControlController {
     }
 
     const status = this.storeService.seed(dataset, count, reset);
-    res.json(status);
+    res.status(200).json(status);
   }
 
   // ── POST /_github/clear ───────────────────────────────────────────────────
@@ -45,7 +45,7 @@ export class ControlController {
   @Post('clear')
   clear(@Res() res: Response): void {
     const status = this.storeService.clear();
-    res.json(status);
+    res.status(200).json(status);
   }
 
   // ── GET /_github/emit ─────────────────────────────────────────────────────
@@ -67,6 +67,6 @@ export class ControlController {
       result = this.storeService.toggleEmit();
     }
 
-    res.json(result);
+    res.status(200).json(result);
   }
 }
