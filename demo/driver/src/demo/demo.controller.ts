@@ -1,11 +1,13 @@
 import {
-  Controller, Get, Post, Param, Body,
+  Controller, Get, Post, Param, Body, Query,
   Res, HttpCode, HttpStatus, NotFoundException, OnModuleDestroy,
   HttpException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Subscription } from 'rxjs';
 import { DemoService, IngestOptions } from './demo.service';
+import { ControlFeed } from '../control/control-feed';
+import { ControlEventsReadClient, ControlEventsQuery } from '../control/control-events-read.client';
 import { PANEL_HTML } from '../ui/panel';
 
 /** RFC 9457 problem detail for reset-in-progress (§4.7). */
@@ -20,12 +22,20 @@ function resetInProgressProblem(retryAfterSeconds: number): Record<string, unkno
 
 @Controller('demo')
 export class DemoController implements OnModuleDestroy {
-  private readonly sseConnections = new Set<Response>();
+  private readonly sseConnections        = new Set<Response>();
+  private readonly controlSseConnections = new Set<Response>();
 
-  constructor(private readonly demoService: DemoService) {}
+  constructor(
+    private readonly demoService:               DemoService,
+    private readonly controlFeed:               ControlFeed,
+    private readonly controlEventsReadClient:   ControlEventsReadClient,
+  ) {}
 
   onModuleDestroy() {
     for (const res of this.sseConnections) {
+      try { res.end(); } catch {}
+    }
+    for (const res of this.controlSseConnections) {
       try { res.end(); } catch {}
     }
   }
@@ -225,5 +235,63 @@ export class DemoController implements OnModuleDestroy {
       sub.unsubscribe();
       this.sseConnections.delete(res);
     });
+  }
+
+  // ── Control API event feed (SSE) ──────────────────────────────────────────
+
+  /**
+   * GET /demo/control-stream — SSE fan-out of upstream control-stream frames.
+   *
+   * Re-broadcasts every frame received from GET /api/control/stream via the
+   * in-process ControlFeed subject.  Never blocked during reset (§4.8).
+   * No history replay — only frames received after the panel connects.
+   * Wire format mirrors /demo/stream: named events + 15 s heartbeat.
+   */
+  @Get('control-stream')
+  controlStream(@Res() res: Response): void {
+    res.setHeader('Content-Type',      'text/event-stream');
+    res.setHeader('Cache-Control',     'no-cache, no-transform');
+    res.setHeader('Connection',        'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    this.controlSseConnections.add(res);
+
+    const heartbeat = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch {}
+    }, 15_000);
+
+    const sub: Subscription = this.controlFeed.frames$.subscribe(frame => {
+      try {
+        if (frame.type) {
+          res.write(`event: ${frame.type}\n`);
+        }
+        res.write(`data: ${frame.data ?? ''}\n\n`);
+      } catch {}
+    });
+
+    res.on('close', () => {
+      clearInterval(heartbeat);
+      sub.unsubscribe();
+      this.controlSseConnections.delete(res);
+    });
+  }
+
+  // ── Component event feed (proxy) ──────────────────────────────────────────
+
+  /**
+   * GET /demo/control-events — proxy for GET /api/control/events.
+   *
+   * Forwards whitelisted query params and returns the upstream ComponentEventPage
+   * verbatim.  Non-2xx upstream responses are mirrored to the caller.
+   * Never blocked during reset (§4.9).
+   */
+  @Get('control-events')
+  async controlEvents(
+    @Query() query: ControlEventsQuery,
+    @Res({ passthrough: false }) res: Response,
+  ): Promise<void> {
+    const { status, body } = await this.controlEventsReadClient.list(query);
+    res.status(status).json(body);
   }
 }

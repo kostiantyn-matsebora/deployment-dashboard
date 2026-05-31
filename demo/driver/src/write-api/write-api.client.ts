@@ -26,12 +26,17 @@ export class WriteApiClient {
   constructor(
     private readonly writeApiUrl: string,
     private readonly apiKey: string,
-    private readonly progressReporter: string,
+    private readonly _progressReporter: string,
     fetchFn?: FetchFn,
     sleepFn?: SleepFn,
   ) {
     this._fetch = fetchFn ?? ((url, init) => globalThis.fetch(url, init));
     this._sleep = sleepFn ?? defaultSleep;
+  }
+
+  /** The value sent as the `X-Progress-Reporter` header on every POST. */
+  get progressReporter(): string {
+    return this._progressReporter;
   }
 
   async postDeployment(event: WireEvent): Promise<PostResult> {
@@ -46,7 +51,7 @@ export class WriteApiClient {
           headers: {
             'Content-Type':       'application/json',
             'X-Api-Key':          this.apiKey,
-            'X-Progress-Reporter': this.progressReporter,
+            'X-Progress-Reporter': this._progressReporter,
           },
           body: JSON.stringify(event),
         });

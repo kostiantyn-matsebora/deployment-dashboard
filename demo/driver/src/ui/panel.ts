@@ -134,57 +134,62 @@ export const PANEL_HTML = `<!DOCTYPE html>
       max-height: 280px; overflow-y: auto;
       font-size: 0.76rem; font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
     }
-    .feed-item { padding: 5px 0; border-bottom: 1px solid #1f1f23; line-height: 1.5; }
+    .feed-item { padding: 4px 0; border-bottom: 1px solid #1f1f23; line-height: 1.4; }
     .feed-item:last-child { border-bottom: none; }
-    .fi-posted .fi-icon { color: #86efac; }
-    .fi-error  .fi-icon { color: #f87171; }
-    .fi-time  { color: #52525b; font-size: 0.7rem; margin-right: 6px; }
-    .fi-id    { color: #d4d4d8; font-weight: 600; }
-    .fi-meta  { color: #71717a; }
-    .fi-src   { font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px;
-                margin-right: 4px; letter-spacing: 0.04em; }
-    .fi-src-ingest { background: #1a2744; color: #60a5fa; }
-    .fi-src-emit   { background: #271d00; color: #f59e0b; }
     .feed-empty { color: #52525b; text-align: center; padding: 24px 0; font-size: 0.8rem; }
 
-    /* Reset blocking overlay */
-    #reset-overlay {
-      display: none;
-      position: fixed; inset: 0; z-index: 900;
-      background: rgba(10,8,6,0.88);
-      align-items: center; justify-content: center;
-      flex-direction: column; gap: 16px;
-      backdrop-filter: blur(4px);
+    /* Unified five-column row grid — shared by all three feed cards. */
+    .feed-row {
+      display: grid;
+      grid-template-columns: 6.5rem 8rem 10rem 11rem 1fr;
+      gap: 0 8px;
+      align-items: baseline;
     }
-    #reset-overlay.visible { display: flex; }
-    .overlay-title {
-      font-size: 1.4rem; font-weight: 700; color: #fb923c;
-      letter-spacing: 0.05em;
+    /* Responsive: collapse to wrapped flex on narrow viewports. */
+    @media (max-width: 860px) {
+      .feed-row { display: flex; flex-wrap: wrap; gap: 3px 6px; }
     }
-    .overlay-sub {
-      font-size: 0.85rem; color: #a1a1aa;
-    }
-    .overlay-id {
-      font-size: 0.72rem; color: #71717a;
-      font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
-    }
+
+    /* Column cells */
+    .fi-time    { color: #52525b; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fi-source  { font-size: 0.62rem; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+                  letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fi-source-ingest { background: #1a2744; color: #60a5fa; }
+    .fi-source-emit   { background: #271d00; color: #f59e0b; }
+    .fi-source-comp   { background: #1d1d30; color: #a78bfa; }
+    .fi-source-ctrl   { background: #1a2744; color: #60a5fa; }
+    .fi-event   { display: inline-block; font-size: 0.62rem; font-weight: 700;
+                  padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em;
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fi-event-posted    { background: #14532d; color: #86efac; }
+    .fi-event-error     { background: #450a0a; color: #f87171; }
+    .fi-event-neutral   { background: #27272a; color: #a1a1aa; }
+    /* Control stream type classes — reused from former fi-type-* naming. */
+    .fi-type-initiated  { background: #451a03; color: #fb923c; }
+    .fi-type-started    { background: #1a2744; color: #60a5fa; }
+    .fi-type-completed  { background: #14532d; color: #86efac; }
+    .fi-type-unknown    { background: #27272a; color: #a1a1aa; }
+    .fi-id      { color: #d4d4d8; font-weight: 600; font-size: 0.72rem;
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fi-details { color: #71717a; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Component Events feed — state colour coding within .fi-details */
+    .fi-state-running   { color: #86efac; }
+    .fi-state-error     { color: #f87171; }
+    .fi-state-neutral   { color: #a1a1aa; }
+
+    /* Control card dim — applied to interactive cards while reset_state == blocked */
+    .card-blocked { opacity: 0.45; pointer-events: none; }
   </style>
 </head>
 <body>
-
-  <!-- ── Reset blocking overlay (§7) ──────────────────────────────────────── -->
-  <div id="reset-overlay">
-    <div class="overlay-title">System reset in progress&hellip;</div>
-    <div class="overlay-sub">All controls are disabled. The panel will restore automatically.</div>
-    <div class="overlay-id" id="overlay-reset-id"></div>
-  </div>
 
   <h1>Demo <span>Driver</span></h1>
 
   <div class="grid">
 
     <!-- ── Ingest card ───────────────────────────────────────────────────── -->
-    <div class="card">
+    <div class="card" id="ingest-card">
       <div class="card-title">Ingest</div>
       <div class="controls">
         <span class="lbl">Data set</span>
@@ -210,7 +215,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     </div>
 
     <!-- ── Live Emission card ─────────────────────────────────────────────── -->
-    <div class="card">
+    <div class="card" id="emit-card">
       <div class="card-title">Live Emission</div>
       <div class="emit-row">
         <div class="emit-info">
@@ -222,7 +227,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     </div>
 
     <!-- ── Control API card ─────────────────────────────────────────────── -->
-    <div class="card">
+    <div class="card" id="control-api-card">
       <div class="card-title">Control API</div>
       <div class="emit-row">
         <div class="emit-info">
@@ -248,6 +253,31 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
       <div class="feed-list" id="feed-list">
         <div class="feed-empty" id="feed-empty">No events posted yet.</div>
+      </div>
+    </div>
+
+    <!-- ── Control API Events card (full row) ────────────────────────────── -->
+    <div class="card full">
+      <div class="feed-header">
+        <div class="card-title">Control API Events</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="live-badge live-connecting" id="ctrl-live-badge">● CONNECTING</span>
+          <button class="btn-sm" id="ctrl-clear-btn">Clear</button>
+        </div>
+      </div>
+      <div class="feed-list" id="ctrl-feed-list">
+        <div class="feed-empty" id="ctrl-feed-empty">No control events received yet.</div>
+      </div>
+    </div>
+
+    <!-- ── Component Events card (full row) ──────────────────────────────── -->
+    <div class="card full">
+      <div class="feed-header">
+        <div class="card-title">Component Events</div>
+        <span class="live-badge live-live" id="comp-poll-badge">● POLLING</span>
+      </div>
+      <div class="feed-list" id="comp-feed-list">
+        <div class="feed-empty" id="comp-feed-empty">No component events yet.</div>
       </div>
     </div>
 
@@ -300,11 +330,22 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const clearBtn        = $('clear-btn');
     const feedList        = $('feed-list');
     const feedEmpty       = $('feed-empty');
-    const resetOverlay    = $('reset-overlay');
-    const overlayResetId  = $('overlay-reset-id');
     const resetStateBadge = $('reset-state-badge');
     const resetIdDisplay  = $('reset-id-display');
     const sbResetBadge    = $('sb-reset-badge');
+
+    // Interactive control cards — dimmed while reset_state == blocked.
+    const interactiveCards = [$('ingest-card'), $('emit-card'), $('control-api-card')];
+
+    // Control API Events card refs (data feed — exempt from card-blocked dimming).
+    const ctrlLiveBadge  = $('ctrl-live-badge');
+    const ctrlClearBtn   = $('ctrl-clear-btn');
+    const ctrlFeedList   = $('ctrl-feed-list');
+    const ctrlFeedEmpty  = $('ctrl-feed-empty');
+
+    // Component Events card refs (data feed — exempt from card-blocked dimming).
+    const compFeedList   = $('comp-feed-list');
+    const compFeedEmpty  = $('comp-feed-empty');
 
     // Interactive controls blocked during reset.
     const interactiveControls = [
@@ -312,10 +353,12 @@ export const PANEL_HTML = `<!DOCTYPE html>
       datasetSelect, countInput, delayInput, resetCheck,
     ];
 
-    let pollTimer   = null;
-    let eventSource = null;
-    let emitting    = false;
-    let isBlocked   = false;
+    let pollTimer        = null;
+    let eventSource      = null;
+    let ctrlEventSource  = null;
+    let compPollTimer    = null;
+    let emitting         = false;
+    let isBlocked        = false;
 
     // ── Dataset toggle ────────────────────────────────────────────────────────
     datasetSelect.addEventListener('change', () => {
@@ -328,6 +371,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     (async () => {
       await Promise.all([refreshStatus(), refreshEmit()]);
       connectStream();
+      connectControlStream();
+      startCompEventsPoll();
     })();
 
     // ── Data loaders ──────────────────────────────────────────────────────────
@@ -369,16 +414,14 @@ export const PANEL_HTML = `<!DOCTYPE html>
         sbResetBadge.className      = 'badge badge-reset-idle';
       }
 
-      // Full-panel blocking overlay + interactive control state.
-      const wasBlocked = isBlocked;
+      // Card-dim + interactive control state (no full-panel overlay).
       isBlocked = (resetState === 'blocked');
 
       if (isBlocked) {
-        overlayResetId.textContent = resetId ? 'reset_id: ' + resetId : '';
-        resetOverlay.classList.add('visible');
+        interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
         interactiveControls.forEach(el => { el.disabled = true; });
       } else {
-        resetOverlay.classList.remove('visible');
+        interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
         // Restore interactive controls based on ingest state.
         interactiveControls.forEach(el => { el.disabled = false; });
         ingestBtn.disabled     = state === 'running';
@@ -425,13 +468,12 @@ export const PANEL_HTML = `<!DOCTYPE html>
       if (dataset === 'random') body.count = count;
 
       // When reset is checked the server blocks until the full reset cycle
-      // completes before responding.  Show the blocking overlay immediately so
+      // completes before responding.  Dim the control cards immediately so
       // the user sees feedback during the wait; applyStatus will clear it once
       // the response arrives with reset_state back to idle.
       if (reset) {
         isBlocked = true;
-        overlayResetId.textContent = '';
-        resetOverlay.classList.add('visible');
+        interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
         interactiveControls.forEach(el => { el.disabled = true; });
         resetStateBadge.textContent = 'RESET IN PROGRESS';
         resetStateBadge.className   = 'badge badge-reset-blocked';
@@ -446,11 +488,11 @@ export const PANEL_HTML = `<!DOCTYPE html>
         });
         applyStatus(data);
       } catch {
-        // On network error: clear the optimistic overlay so the UI is not
+        // On network error: revert the optimistic card-dim so the UI is not
         // permanently stuck.
         if (reset) {
           isBlocked = false;
-          resetOverlay.classList.remove('visible');
+          interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
           interactiveControls.forEach(el => { el.disabled = false; });
           ingestBtn.disabled     = false;
           ingestStopBtn.disabled = true;
@@ -514,6 +556,11 @@ export const PANEL_HTML = `<!DOCTYPE html>
       feedList.appendChild(feedEmpty);
     });
 
+    ctrlClearBtn.addEventListener('click', () => {
+      ctrlFeedList.innerHTML = '';
+      ctrlFeedList.appendChild(ctrlFeedEmpty);
+    });
+
     // ── SSE stream ────────────────────────────────────────────────────────────
     function connectStream() {
       if (eventSource) { try { eventSource.close(); } catch {} }
@@ -543,30 +590,178 @@ export const PANEL_HTML = `<!DOCTYPE html>
       liveBadge.className   = 'live-badge live-' + mode;
     }
 
+    // ── Shared unified row renderer ───────────────────────────────────────────
+    // Returns a div.feed-item.feed-row with five aligned columns:
+    //   time | source | event | id | details
+    // All server-interpolated values are passed through esc().
+    // eventClass: one of fi-event-posted / fi-event-error / fi-event-neutral /
+    //             fi-type-initiated / fi-type-started / fi-type-completed / fi-type-unknown
+    // sourceClass: one of fi-source-ingest / fi-source-emit / fi-source-comp / fi-source-ctrl
+    // detailsHtml: pre-escaped HTML string for the details cell (caller builds it).
+    function feedRow({ time, source, sourceClass, event: evtLabel, eventClass, id, detailsHtml }) {
+      const row = document.createElement('div');
+      row.className = 'feed-item feed-row';
+      const srcHtml = source
+        ? '<span class="fi-source ' + (sourceClass || 'fi-source-ctrl') + '">' + esc(source) + '</span>'
+        : '<span class="fi-source fi-source-ctrl" style="visibility:hidden">\\u2013</span>';
+      const idHtml = id
+        ? '<span class="fi-id">' + esc(id) + '</span>'
+        : '<span class="fi-id" style="visibility:hidden">\\u2013</span>';
+      row.innerHTML =
+        '<span class="fi-time">'    + esc(time)                                    + '</span>' +
+        srcHtml                                                                                +
+        '<span class="fi-event ' + (eventClass || 'fi-event-neutral') + '">' + esc(evtLabel) + '</span>' +
+        idHtml                                                                                 +
+        '<span class="fi-details">' + (detailsHtml || '')                          + '</span>';
+      return row;
+    }
+
     function addFeedItem(type, d) {
       if (feedEmpty.parentNode === feedList) feedList.removeChild(feedEmpty);
-      const item    = document.createElement('div');
-      item.className = 'feed-item fi-' + type;
-      const time    = fmt(d.posted_at || new Date().toISOString());
-      const srcTag  = d.from_emit
-        ? '<span class="fi-src fi-src-emit">emit</span>'
-        : '<span class="fi-src fi-src-ingest">ingest</span>';
+
+      const time   = fmt(d.posted_at || new Date().toISOString());
+      // Source: use reporter field per §4.6; derive colour from trailing segment.
+      const reporter    = d.reporter || '';
+      const isEmit      = reporter.endsWith('/emit');
+      const sourceClass = isEmit ? 'fi-source-emit' : 'fi-source-ingest';
+
+      let detailsHtml;
+      let eventClass;
       if (type === 'posted') {
-        item.innerHTML =
-          '<span class="fi-icon">\\u2713</span> ' +
-          '<span class="fi-time">'  + esc(time)             + '</span>' +
-          srcTag +
-          '<span class="fi-id">'   + esc(d.deployment_id)  + '</span> ' +
-          '<span class="fi-meta">' + esc(d.service) + ' / ' + esc(d.environment) + ' \\u2192 ' + esc(d.status) + '</span>';
+        eventClass   = 'fi-event-posted';
+        detailsHtml  = esc(d.service) + ' / ' + esc(d.environment) + ' \\u2192 ' + esc(d.status);
       } else {
-        item.innerHTML =
-          '<span class="fi-icon">\\u2717</span> ' +
-          '<span class="fi-time">'  + esc(time)             + '</span>' +
-          srcTag +
-          '<span class="fi-id">ERROR</span> ' +
-          '<span class="fi-meta">' + esc(d.deployment_id) + ' · HTTP ' + d.http_status + ' · attempt ' + d.attempt + '</span>';
+        eventClass   = 'fi-event-error';
+        detailsHtml  = 'HTTP ' + esc(String(d.http_status)) + ' \\u00b7 attempt ' + esc(String(d.attempt));
       }
-      feedList.insertBefore(item, feedList.firstChild);
+
+      const row = feedRow({
+        time,
+        source:      reporter,
+        sourceClass,
+        event:       type,
+        eventClass,
+        id:          d.deployment_id || '',
+        detailsHtml,
+      });
+      feedList.insertBefore(row, feedList.firstChild);
+    }
+
+    // ── Control API Events SSE (GET /demo/control-stream) ────────────────────
+    function connectControlStream() {
+      if (ctrlEventSource) { try { ctrlEventSource.close(); } catch {} }
+      setCtrlLiveBadge('connecting');
+      ctrlEventSource = new EventSource('/demo/control-stream');
+
+      ctrlEventSource.onopen = () => setCtrlLiveBadge('live');
+
+      // Named events for known reset lifecycle types.
+      ctrlEventSource.addEventListener('reset-initiated', e => {
+        addCtrlFeedItem('reset-initiated', e.data);
+      });
+      ctrlEventSource.addEventListener('reset-started', e => {
+        addCtrlFeedItem('reset-started', e.data);
+      });
+      ctrlEventSource.addEventListener('reset-completed', e => {
+        addCtrlFeedItem('reset-completed', e.data);
+      });
+
+      // Default message handler: frames with no event: field (e.g. plain
+      // data-only frames) and a forward-compat catch for any unknown named type
+      // that the server sends without a dedicated listener.  Named events that
+      // don't match a listener above will NOT fire onmessage — they are silently
+      // dropped by EventSource.  That is acceptable per §4.8 forward-compat note
+      // ("unknown named types are best-effort").
+      ctrlEventSource.onmessage = e => {
+        // Ignore ": ping" heartbeats — they arrive as comment frames with no data.
+        if (!e.data) return;
+        addCtrlFeedItem('unknown', e.data);
+      };
+
+      ctrlEventSource.onerror = () => setCtrlLiveBadge('reconnecting');
+    }
+
+    function setCtrlLiveBadge(mode) {
+      const labels = { connecting: '● CONNECTING', live: '● LIVE', reconnecting: '● RECONNECTING' };
+      ctrlLiveBadge.textContent = labels[mode] || mode;
+      ctrlLiveBadge.className   = 'live-badge live-' + mode;
+    }
+
+    function addCtrlFeedItem(type, rawData) {
+      let d = {};
+      try { d = JSON.parse(rawData); } catch {}
+
+      if (ctrlFeedEmpty.parentNode === ctrlFeedList) ctrlFeedList.removeChild(ctrlFeedEmpty);
+
+      const eventClass = type === 'reset-initiated' ? 'fi-type-initiated'
+                       : type === 'reset-started'   ? 'fi-type-started'
+                       : type === 'reset-completed'  ? 'fi-type-completed'
+                       :                               'fi-type-unknown';
+
+      const time       = d.occurred_at ? fmt(d.occurred_at) : fmt(new Date().toISOString());
+      const detailsHtml = d.reset_id
+        ? 'reset_id: <span class="fi-id">' + esc(d.reset_id) + '</span>'
+        : '';
+
+      const row = feedRow({
+        time,
+        source:      d.component || '',
+        sourceClass: 'fi-source-ctrl',
+        event:       type,
+        eventClass,
+        id:          d.id || '',
+        detailsHtml,
+      });
+      ctrlFeedList.insertBefore(row, ctrlFeedList.firstChild);
+    }
+
+    // ── Component Events poll (GET /demo/control-events, 5 s cadence) ─────────
+    function startCompEventsPoll() {
+      // Immediate first fetch, then schedule repeating interval.
+      fetchCompEvents();
+      compPollTimer = setInterval(fetchCompEvents, 5000);
+    }
+
+    async function fetchCompEvents() {
+      try {
+        const page = await apiFetch('/demo/control-events');
+        renderCompEvents(page.items || []);
+      } catch {
+        // Network error: keep existing list; badge stays POLLING.
+      }
+    }
+
+    function renderCompEvents(items) {
+      compFeedList.innerHTML = '';
+      if (!items.length) {
+        compFeedList.appendChild(compFeedEmpty);
+        return;
+      }
+      // items arrive received_at DESC (newest first) per spec — render as-is.
+      items.forEach(rec => {
+        const stateCls = rec.state === 'running' ? 'fi-state-running'
+                       : rec.state === 'error'   ? 'fi-state-error'
+                       :                           'fi-state-neutral';
+
+        const time     = rec.received_at ? fmt(rec.received_at) : '';
+        // Details: coloured state first, then detail when present.
+        const detailPart = rec.detail
+          ? ' \\u00b7 <span class="fi-details">' + esc(rec.detail) + '</span>'
+          : '';
+        const detailsHtml =
+          '<span class="' + stateCls + '">' + esc(rec.state || '') + '</span>' + detailPart;
+
+        const row = feedRow({
+          time,
+          source:      rec.component_id || '',
+          sourceClass: 'fi-source-comp',
+          event:       rec.event_type   || '',
+          eventClass:  'fi-event-neutral',
+          id:          rec.id           || '',
+          detailsHtml,
+        });
+        compFeedList.appendChild(row);
+      });
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

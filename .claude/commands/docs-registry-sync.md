@@ -1,7 +1,6 @@
 ---
 description: Update the "Sources of truth" section.
 argument-hint: [--propose-only]
-model: sonnet
 ---
 
 # /docs-registry-sync

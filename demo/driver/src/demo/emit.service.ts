@@ -36,6 +36,7 @@ export class EmitService implements OnModuleDestroy {
       config.apiKey,
       'demo-driver/emit',
     );
+    const reporter = client.progressReporter;
     this.timer = setInterval(async () => {
       const event     = generateRandomEvent();
       const result    = await client.postDeployment(event);
@@ -51,6 +52,7 @@ export class EmitService implements OnModuleDestroy {
             status:        event.status        as string,
             happened_at:   event.happened_at   as string,
             posted_at,
+            reporter,
           },
         });
       } else {
@@ -61,6 +63,7 @@ export class EmitService implements OnModuleDestroy {
             http_status:   result.status,
             attempt:       1,
             posted_at,
+            reporter,
           },
         });
       }

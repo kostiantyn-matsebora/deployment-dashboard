@@ -1,7 +1,6 @@
 ---
 description: Build or refresh a directory's index.md (github/docs-style — recursive-descent children list with sub-index boundaries, hierarchical, minimum-footprint at the root prompt). One invocation produces a full index for the target subtree; sub-indexes added later automatically shrink the parent's footprint. Walks UP the directory tree on completion. Body retains a ## Contents H2 TOC for the descent scope. Mode A of docs-keeper.
 argument-hint: <directory-path>
-model: sonnet
 ---
 
 # /docs-index

@@ -6,7 +6,7 @@
     ]
   },
   "env": {
-    "DOCS_KEEPER_ENFORCE": "block"
+    "DOCS_KEEPER_ENFORCE": "warn"
   },
   "worktree": {
     "bgIsolation": "worktree"

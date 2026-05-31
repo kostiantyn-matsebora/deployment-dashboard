@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ResetCoordinator } from './reset-coordinator';
+import { ControlFeed } from './control-feed';
 import { getConfig } from '../config/configuration';
 
 interface SseEvent {
@@ -34,7 +35,10 @@ export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
   private _backoffMs     = INITIAL_BACKOFF_MS;
   private _currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-  constructor(private readonly coordinator: ResetCoordinator) {}
+  constructor(
+    private readonly coordinator:  ResetCoordinator,
+    private readonly controlFeed:  ControlFeed,
+  ) {}
 
   onModuleInit(): void {
     // Start the subscriber loop asynchronously — never await, never crash.
@@ -156,6 +160,10 @@ export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
     if (evt.id) {
       this._lastEventId = evt.id;
     }
+
+    // Publish every parsed frame — including unknown types — to the in-process
+    // fan-out so GET /demo/control-stream panel connections receive it.
+    this.controlFeed.publish(evt);
 
     switch (evt.type) {
       case 'reset-initiated': {
