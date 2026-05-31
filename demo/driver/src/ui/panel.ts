@@ -113,6 +113,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .api-msg { font-size: 0.75rem; }
     .api-msg.ok  { color: #86efac; }
     .api-msg.err { color: #f87171; }
+    .api-msg-row { margin-top: 8px; min-height: 1.1em; }
 
     /* Reset card */
     .reset-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -223,13 +224,16 @@ export const PANEL_HTML = `<!DOCTYPE html>
     <!-- ── Control API card ─────────────────────────────────────────────── -->
     <div class="card">
       <div class="card-title">Control API</div>
-      <div class="api-row">
+      <div class="emit-row">
+        <div class="emit-info">
+          <span class="lbl">Reset state</span>
+          <span class="badge badge-reset-idle" id="reset-state-badge">IDLE</span>
+          <div class="reset-id" id="reset-id-display"></div>
+        </div>
         <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset System</button>
-        <span class="api-msg" id="reset-api-msg"></span>
       </div>
-      <div class="reset-row" style="margin-top:10px">
-        <span class="badge badge-reset-idle" id="reset-state-badge">IDLE</span>
-        <div class="reset-id" id="reset-id-display"></div>
+      <div class="api-msg-row">
+        <span class="api-msg" id="reset-api-msg"></span>
       </div>
     </div>
 
@@ -468,7 +472,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
           resetApiMsg.textContent = '\\u2717 Network error';
           resetApiMsg.className   = 'api-msg err';
         })
-        .finally(() => { resetApiBtn.disabled = isBlocked; });
+        .finally(() => { resetApiBtn.disabled = isBlocked; refreshStatus(); });
     }
 
     clearBtn.addEventListener('click', () => {
