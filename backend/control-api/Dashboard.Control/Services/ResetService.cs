@@ -1,35 +1,69 @@
 using Dashboard.Control.Notifiers;
+using Dashboard.Control.Options;
 using Dashboard.Control.Repositories;
-using Dashboard.Shared.Data;
+using Dashboard.Control.StateMachine;
 using Dashboard.Shared.Entities;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Dashboard.Control.Services;
 
+/// <summary>
+/// Handles <c>POST /api/control/reset</c>:
+/// <list type="bullet">
+///   <item>Checks for an in-flight cycle; returns <c>null</c> (→ 409) if one exists.</item>
+///   <item>Transitions idle → draining, persists the cycle row, emits <c>reset-initiated</c>.</item>
+///   <item>Returns <see cref="ResetAcceptance"/> (→ 202) immediately.</item>
+///   <item>Fires the background orchestrator on the thread pool (non-blocking).</item>
+/// </list>
+/// </summary>
 internal sealed class ResetService(
-    DashboardDbContext db,
+    IResetCycleRepository cycleRepository,
     IControlStreamRepository controlStream,
-    IControlEventNotifier notifier) : IResetService
+    IControlEventNotifier notifier,
+    IResetOrchestrator orchestrator,
+    IOptions<ResetOptions> options,
+    ILogger<ResetService> logger) : IResetService
 {
-    public async Task ResetAsync(CancellationToken ct = default)
+    public async Task<ResetAcceptance?> TryInitiateAsync(CancellationToken ct = default)
     {
-        // Truncate all stored data (spec §5 / openapi resetState): the two durable tables
-        // plus the two control-plane tables.
-        await db.DeploymentEvents.ExecuteDeleteAsync(ct);
-        await db.FetcherStates.ExecuteDeleteAsync(ct);
-        await db.ComponentEvents.ExecuteDeleteAsync(ct);
-        await db.ControlStreamEvents.ExecuteDeleteAsync(ct);
-
-        // Persist + announce a reset event so connected components reinitialise (§7 ch.2).
-        // The row is inserted AFTER the truncation so it survives for Last-Event-ID replay.
-        var resetEvent = new ControlStreamEvent
+        var cycle = await cycleRepository.LoadAsync(ct);
+        if (cycle.State != ResetState.Idle)
         {
-            Id = Guid.CreateVersion7(),
-            Type = "reset",
+            logger.LogInformation("Reset already in flight (state={State}); returning 409.", cycle.State);
+            return null;
+        }
+
+        var opts = options.Value;
+        var resetId = Guid.CreateVersion7();
+        var now = DateTimeOffset.UtcNow;
+
+        cycle.State = ResetState.Draining;
+        cycle.ResetId = resetId;
+        cycle.ExpectedComponents = opts.ExpectedComponents;
+        cycle.AcksReceived = [];
+        cycle.StartedAt = now;
+        cycle.DeadlineAt = now.AddSeconds(opts.AckTimeoutSeconds);
+
+        // Persist draining state + emit reset-initiated before returning 202.
+        await cycleRepository.SaveAsync(cycle, ct);
+
+        var initiatedEvent = new ControlStreamEvent
+        {
+            Id = resetId, // Per spec: the id of reset-initiated IS the reset_id correlated by others.
+            Type = "reset-initiated",
             Component = "*",
-            OccurredAt = DateTimeOffset.UtcNow,
+            OccurredAt = now,
         };
-        await controlStream.InsertAsync(resetEvent, ct);
-        await notifier.NotifyAsync(resetEvent, ct);
+        await controlStream.InsertAsync(initiatedEvent, ct);
+        await notifier.NotifyAsync(initiatedEvent, ct);
+
+        logger.LogInformation("Reset initiated: reset_id={ResetId}.", resetId);
+
+        // Fire-and-forget the orchestrator on the thread pool.
+        // AppStopping cancellation is handled inside the orchestrator.
+        _ = Task.Run(() => orchestrator.DriveAsync(resetId, opts, CancellationToken.None));
+
+        return new ResetAcceptance(resetId, ResetState.Draining, now);
     }
 }
