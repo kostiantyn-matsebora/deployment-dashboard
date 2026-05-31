@@ -10,6 +10,7 @@ children:
   - /FETCHER_SPECIFICATION
   - /MOCK_SPECIFICATION
   - /DEMO_DRIVER_SPECIFICATION
+  - /GITHUB_EMULATOR_SPECIFICATION
   - /api
   - /design
   - /diagrams
@@ -98,14 +99,33 @@ children:
 - [4. Control API — `/demo/`](./DEMO_DRIVER_SPECIFICATION.md#4-control-api----demo)
 - [4.8 Control API event feed (SSE) — `GET /demo/control-stream`](./DEMO_DRIVER_SPECIFICATION.md#48-control-api-event-feed-sse--get-democontrol-stream)
 - [4.9 Component event feed (proxy) — `GET /demo/control-events`](./DEMO_DRIVER_SPECIFICATION.md#49-component-event-feed-proxy--get-democontrol-events)
-- [5. Scenarios](./DEMO_DRIVER_SPECIFICATION.md#5-scenarios)
-- [6. Write API integration](./DEMO_DRIVER_SPECIFICATION.md#6-write-api-integration)
-- [7. Control panel](./DEMO_DRIVER_SPECIFICATION.md#7-control-panel)
-- [8. Configuration (env)](./DEMO_DRIVER_SPECIFICATION.md#8-configuration-env)
-- [9. Testing](./DEMO_DRIVER_SPECIFICATION.md#9-testing)
-- [10. Running](./DEMO_DRIVER_SPECIFICATION.md#10-running)
-- [11. Deployment](./DEMO_DRIVER_SPECIFICATION.md#11-deployment)
-- [12. Out of scope](./DEMO_DRIVER_SPECIFICATION.md#12-out-of-scope)
+- [5. GitHub source (emulator proxy)](./DEMO_DRIVER_SPECIFICATION.md#5-github-source-emulator-proxy)
+- [5.1 Proxy routes](./DEMO_DRIVER_SPECIFICATION.md#51-proxy-routes)
+- [6. Scenarios](./DEMO_DRIVER_SPECIFICATION.md#6-scenarios)
+- [7. Write API integration](./DEMO_DRIVER_SPECIFICATION.md#7-write-api-integration)
+- [8. Control panel](./DEMO_DRIVER_SPECIFICATION.md#8-control-panel)
+- [9. Configuration (env)](./DEMO_DRIVER_SPECIFICATION.md#9-configuration-env)
+- [10. Testing](./DEMO_DRIVER_SPECIFICATION.md#10-testing)
+- [11. Running](./DEMO_DRIVER_SPECIFICATION.md#11-running)
+- [12. Deployment](./DEMO_DRIVER_SPECIFICATION.md#12-deployment)
+- [13. Out of scope](./DEMO_DRIVER_SPECIFICATION.md#13-out-of-scope)
+
+### `GITHUB_EMULATOR_SPECIFICATION.md`
+
+- [Sources of truth](./GITHUB_EMULATOR_SPECIFICATION.md#sources-of-truth)
+- [1. Stack](./GITHUB_EMULATOR_SPECIFICATION.md#1-stack)
+- [2. Solution layout](./GITHUB_EMULATOR_SPECIFICATION.md#2-solution-layout)
+- [3. In-memory store](./GITHUB_EMULATOR_SPECIFICATION.md#3-in-memory-store)
+- [4. Configuration](./GITHUB_EMULATOR_SPECIFICATION.md#4-configuration)
+- [5. Emulated GitHub REST surface — `/`](./GITHUB_EMULATOR_SPECIFICATION.md#5-emulated-github-rest-surface--)
+- [6. Control surface — `/_github/`](./GITHUB_EMULATOR_SPECIFICATION.md#6-control-surface----github)
+- [7. Curated demo set](./GITHUB_EMULATOR_SPECIFICATION.md#7-curated-demo-set-demodatagithub)
+- [8. Random set + periodic emit](./GITHUB_EMULATOR_SPECIFICATION.md#8-random-set--periodic-emit)
+- [9. Startup defaults](./GITHUB_EMULATOR_SPECIFICATION.md#9-startup-defaults)
+- [10. Testing](./GITHUB_EMULATOR_SPECIFICATION.md#10-testing)
+- [11. Running](./GITHUB_EMULATOR_SPECIFICATION.md#11-running)
+- [12. Deployment](./GITHUB_EMULATOR_SPECIFICATION.md#12-deployment)
+- [13. Out of scope](./GITHUB_EMULATOR_SPECIFICATION.md#13-out-of-scope)
 
 ### `engineering-process.md`
 

@@ -32,7 +32,7 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 | `docs/` | All design + contract documentation (see *Sources of truth*). |
 | `backend/[service]` | Backend services (`Dashboard.Api` + endpoint-group libs, `Dashboard.Fetcher` + host, shared, tests). |
 | `frontend/[application]` | Angular SPA (`dashboard`) + `mock` server. |
-| `demo/` | `driver` (demo-orchestration service) + `data` (scenario seeds). |
+| `demo/` | `driver` (demo-orchestration service) + `github-emulator` (GitHub REST emulator for fetcher demo/CI) + `data` (scenario seeds). |
 | `gateway/` | nginx App Gateway config. |
 | `testing/[type]` | Testing solutions (`api`, `e2e`). |
 | `compose/` | Local-dev Docker Compose stack. |

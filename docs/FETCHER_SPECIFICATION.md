@@ -11,6 +11,8 @@ Implementation contract for **`Dashboard.Fetcher`** — the optional, separately
 | [`docs/SAD.md`](SAD.md) §3, §7 | Fetcher as opt-in pull→push edge; backend stays CI-agnostic. |
 | [`docs/api/openapi.yaml`](api/openapi.yaml) | `POST /api/deployments`, `GET/PUT /api/fetcher/state/{adapter}`, `X-Progress-Reporter`. |
 | [`docs/API_SPECIFICATION.md`](API_SPECIFICATION.md) | Wire DTO (`DeploymentEventIngest`), cursor + append-only semantics. |
+| [`docs/GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md) | GitHub emulator service — the test mock and demo data source the fetcher polls in demo/CI mode. |
+| [`docs/diagrams/github-emulation.md`](diagrams/github-emulation.md) | Visual reference for demo-mode topology and seed→backfill→poll sequence. |
 
 > `CR-####` / `ADR-####` documents referenced elsewhere **do not exist** — ignore those citations.
 
@@ -484,6 +486,8 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `JENKINS__…`) drops in without collision.
 
+**Demo mode.** Set `GITHUB__BASE_URL=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB__TOKEN` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed. The fetcher-host must be added to the demo compose profile (currently absent).
+
 ---
 
 ## 7. Testing
@@ -521,7 +525,9 @@ Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `
 
 ### 7.2 Integration test cases
 
-Real host against a **mock GitHub API** (serves deployments, statuses, workflow-run metadata, workflow YAML, workflow list, environment list, and artifact fixtures) + real API + Postgres. Asserts:
+The **mock GitHub API** referenced in this section is the **`github-emulator` service** ([`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)). Integration tests seed it via `POST /_github/seed {dataset:"demo"}` and run the real fetcher-host against `http://github-emulator:3100`. See [`docs/diagrams/github-emulation.md`](diagrams/github-emulation.md) for the topology.
+
+Real fetcher-host against the `github-emulator` + real `Dashboard.Api` + Postgres. Asserts:
 
 - Wire shape (FR-06) and opaque-cursor round-trip.
 - Populated `parent_deployments` on a two-environment chain.

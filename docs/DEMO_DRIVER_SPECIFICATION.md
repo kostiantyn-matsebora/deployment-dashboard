@@ -16,6 +16,8 @@ Standalone demo-orchestration service:
 | [`docs/MOCK_SPECIFICATION.md`](MOCK_SPECIFICATION.md) | Control-panel reference pattern. |
 | [`docs/api/api-guidelines.md`](api/api-guidelines.md) §11 | Control-plane contract — `GET /api/control/stream` event vocabulary + `POST /api/control/events` ack contract + `GET /api/control/events` listing contract (FROZEN; consumed, not redefined). |
 | [`docs/diagrams/reset-choreography.md`](diagrams/reset-choreography.md) | Visual reference for the reset choreography; the driver is the "Demo Driver" participant. |
+| [`docs/GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md) | GitHub emulator service — in-memory store, emulated REST surface, fixture/generator, config. |
+| [`docs/diagrams/github-emulation.md`](diagrams/github-emulation.md) | Visual reference for demo-mode topology and seed→backfill→poll sequence (§5). |
 
 ---
 
@@ -47,6 +49,12 @@ The mock server is unchanged. The demo driver supplements it for cases where a b
 | D8 | Default port **`3001`**. | Avoids collision with mock at `:3000`. |
 | D9 | **Panel path `GET /demo/`** — NestJS serves everything under `/demo/*`. | No nginx path-stripping required; gateway proxies `location /demo/` without a trailing-slash rewrite. |
 | D10 | **Demo-driver participates in the API-driven reset choreography** as the `demo-driver` component — subscribes to `GET /api/control/stream`, acks `reset-initiated`, blocks its own `/demo/` surface, reports `running` on `reset-completed`. | The API orchestrates a system-wide reset (see [`reset-choreography.md`](diagrams/reset-choreography.md)); the driver is a first-class participant ("Demo Driver" in the choreography), distinct from the existing operator-triggered `POST /demo/api-reset` proxy (§4.5). Component id `demo-driver` matches the API's default `Reset:ExpectedComponents`. Degrades gracefully: against a target with no control stream (e.g. the mock) the subscriber fails to connect, logs, and retries — it never crashes the driver. |
+| G1 | **GitHub emulation lives in a SEPARATE `github-emulator` service** (`demo/github-emulator/`), not in the driver. | Per-adapter isolation — future ADO/Jenkins emulators become sibling services, each at its own root, with no path-prefix or port collision and no fetcher change required. |
+| G2 | **No fetcher code change** — fetcher is config-driven (FETCHER_SPEC F9); demo mode sets `GITHUB__BASE_URL=http://github-emulator:3100`. The fetcher-host is wired into the demo compose profile (currently absent from all compose files). | Config-only change; fetcher adapter is unmodified. |
+| G3 | **Demo set = curated `demo/data/github/` fixture** (owned by the emulator — GITHUB_EMULATOR_SPEC §7) — workflow YAML + dev→staging→prod `needs` chain + one artifact-sourced version — coherent with existing demo service/env names. | Proves the headline fetcher features `parent_deployments` (F10) + artifact version (F15). |
+| G4 | **Random set / periodic emit = GitHub-shaped generator in the emulator** (GITHUB_EMULATOR_SPEC §8). | Symmetric with the existing write-path random set; lives alongside the fixture loader, not in the driver. |
+| G5 | **Emulated REST emits `X-RateLimit-*` headers + `Link` pagination + serves `/rate_limit`** (owned by the emulator — GITHUB_EMULATOR_SPEC §5); ETag/`304` deferred. | Exercises the fetcher's F8/F16 paths. |
+| G6 | **The emulator IS the test mock for fetcher integration coverage** — tests seed it via `POST /_github/seed` then assert the fetcher's output (realizes FETCHER_SPEC §7.2 — GITHUB_EMULATOR_SPEC §10). | Dedicated service means no driver-restart needed for integration test isolation. |
 
 ---
 
@@ -77,6 +85,9 @@ demo/driver/
     write-api/
       write-api.client.ts            POST /api/deployments (with retry)
       control-api.client.ts          POST /api/control/reset (single attempt)
+    github/
+      github-proxy.controller.ts     GET|POST /demo/github/* → proxy → GITHUB_EMULATOR_URL/_github/*
+      github-proxy.client.ts         HTTP client for GITHUB_EMULATOR_URL/_github/* calls
     ui/
       panel.ts                       browser control panel (inline, no bundler)
   test/
@@ -90,6 +101,8 @@ demo/driver/
     reset-coordinator.spec.ts
     control-events.client.spec.ts
     random-event-generator.spec.ts
+    github-proxy.controller.spec.ts
+    github-proxy.client.spec.ts
   Dockerfile                         multi-stage: build → node:lts-alpine runtime
   package.json
   tsconfig.json
@@ -227,7 +240,7 @@ data: {
 }
 ```
 
-`reporter` mirrors the `X-Progress-Reporter` attribution header sent on the deployment POST (§6): `demo-driver/<dataset>` for ingest runs (e.g. `demo-driver/demo`, `demo-driver/random`) and `demo-driver/emit` for periodic live emission.
+`reporter` mirrors the `X-Progress-Reporter` attribution header sent on the deployment POST (§7): `demo-driver/<dataset>` for ingest runs (e.g. `demo-driver/demo`, `demo-driver/random`) and `demo-driver/emit` for periodic live emission.
 
 No history replay — only events posted after the stream opens are delivered.
 
@@ -249,7 +262,7 @@ The driver is a participant in the API-driven reset choreography (D10; visual: [
 1. Stop any running ingest / scenario run; disable live emission.
 2. Enter `reset_state = blocked`, record `reset_id` from the event id; scenario `state` reflects `blocked`.
 3. Block the `/demo/` control API — incoming control calls (`ingest` / `ingest/stop` / `scenarios/*/run`/`stop` / `emit` / `api-reset`) return **`503`** while blocked. Body is **RFC 9457 `application/problem+json`** (consistent with the API surface, [`api-guidelines.md §6`](api/api-guidelines.md#6-error-envelope-rfc-9457)) — `type` `.../errors/reset-in-progress`, `title` `Reset in progress`, `status` 503. `Retry-After` (seconds) is set from the remaining local gate window (`RESET_GATE_MAX_TTL_MS`, §8). `GET /demo/status` is **never** blocked — it reports the blocked state. `GET /demo/stream` stays open.
-4. Disable + dim the interactive control cards (Ingest, Live Emission, Reset-System trigger) on the `GET /demo/` panel; the data feeds (Status, Post Feed, Control API Events, Component Events) stay live so the operator can watch the reset choreography (§7). No full-panel overlay.
+4. Disable + dim the interactive control cards (Ingest, Live Emission, Reset-System trigger) on the `GET /demo/` panel; the data feeds (Status, Post Feed, Control API Events, Component Events) stay live so the operator can watch the reset choreography (§8). No full-panel overlay.
 5. POST a `reset-ack` via the component-event client:
 
 ```
@@ -271,7 +284,7 @@ Content-Type:    application/json; charset=utf-8
 **On `reset-completed`** (recover):
 1. Unblock the `/demo/` control API.
 2. Clear `reset_state` back to `idle`; clear `reset_id`; scenario `state` returns to `idle` (counters as left by §4.2 `reset` semantics).
-3. Re-enable the interactive control cards (§7).
+3. Re-enable the interactive control cards (§8).
 4. POST a component event reusing the existing `event_type: status` (NOT a new type), `state: running`, `payload.reset_id` = the completed reset's id.
 5. **Do NOT auto-restart** any scenario or re-enable emission — return to idle; the operator resumes manually.
 
@@ -334,16 +347,38 @@ Returns the upstream `ComponentEventPage` body verbatim: `{ items: ComponentEven
 
 ---
 
-## 5. Scenarios
+## 5. GitHub source (emulator proxy)
 
-### 5.1 Discovery
+The driver exposes `/demo/github/*` as a **same-origin proxy** to the `github-emulator` service's `/_github/*` control surface. The emulated GitHub REST surface (`/repos/…`, `/rate_limit`) and all store/fixture/generator logic are owned by the emulator — see [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md).
+
+**Rationale.** The proxy exists solely for browser reachability — the panel must call same-origin to avoid CORS issues in gateway mode. The emulator has no secret; this is not an auth boundary.
+
+### 5.1 Proxy routes
+
+| Method | Driver path | Forwards to | Notes |
+|---|---|---|---|
+| `GET` | `/demo/github/status` | `GET {GITHUB_EMULATOR_URL}/_github/status` | Read-only; forwarded verbatim; **never blocked** during reset (data surface). |
+| `POST` | `/demo/github/seed` | `POST {GITHUB_EMULATOR_URL}/_github/seed` | Interactive mutator — returns `503` while `reset_state == blocked` (§4.7). |
+| `POST` | `/demo/github/clear` | `POST {GITHUB_EMULATOR_URL}/_github/clear` | Interactive mutator — `503` while blocked. |
+| `GET` | `/demo/github/emit` | `GET {GITHUB_EMULATOR_URL}/_github/emit` | Read-only; forwarded verbatim; never blocked. |
+| `POST` | `/demo/github/emit` | `POST {GITHUB_EMULATOR_URL}/_github/emit` | Interactive mutator — `503` while blocked. |
+
+Request body and response body are forwarded verbatim. Non-2xx upstream responses surfaced to the caller as-is.
+
+**Reset participation.** Mutator proxy routes (`POST /demo/github/seed`, `POST /demo/github/clear`, `POST /demo/github/emit`) return `503 application/problem+json` while `reset_state == blocked` (same gate as `POST /demo/ingest` — §4.7). The two read routes (`GET /demo/github/status`, `GET /demo/github/emit`) are data surfaces and bypass the gate, consistent with the §4.9 control-events proxy pattern.
+
+---
+
+## 6. Scenarios
+
+### 6.1 Discovery
 
 At startup the driver:
 - Scans `SCENARIOS_DIR` for `*.json` files matching the `events.json` schema.
 - Names each scenario by filename (without extension).
 - Always includes `demo-set` (sourced from `demo/data/events.json`).
 
-### 5.2 Built-in scenario: `demo-set`
+### 6.2 Built-in scenario: `demo-set`
 
 Source: `demo/data/events.json#events` (47 events).
 
@@ -363,7 +398,7 @@ Source: `demo/data/events.json#events` (47 events).
 
 ---
 
-## 6. Write API integration
+## 7. Write API integration
 
 | Concern | Spec |
 |---|---|
@@ -376,7 +411,7 @@ Source: `demo/data/events.json#events` (47 events).
 
 ---
 
-## 7. Control panel
+## 8. Control panel
 
 `GET /demo/` serves a browser control panel (`text/html`). No bundler — inline HTML/CSS/JS (NFR-08 spirit; tooling consistency with mock).
 
@@ -389,7 +424,12 @@ Source: `demo/data/events.json#events` (47 events).
 | **Post Feed** | Real-time `GET /demo/stream` SSE feed; `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); Source = full `reporter` value (e.g. `demo-driver/demo`, `demo-driver/emit`) — colour-coding by source kind derivable from the trailing segment (`/emit` vs `/<dataset>`); **Clear** button. Stays live during reset. |
 | **Reset (system)** | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows the active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only; operator-triggered reset still lives in the **API** card's Reset State button. |
 | **Control API Events** | Live SSE feed from `GET /demo/control-stream` (§4.8); `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format — Event = `type` (colour-coded: `reset-initiated` = amber, `reset-started` = blue, `reset-completed` = green, unknown = default), ID = event `id`, Details = `reset_id` when present; **Clear** button. Stays live during reset. |
-| **Component Events** | Polled feed from `GET /demo/control-events` (§4.9); fixed 5 s cadence; rows follow unified Time·Source·Event·ID·Details format — Source = `component_id`, Event = `event_type`, ID = record `id`, Details = `state` (colour-coded) + `detail` when present + notable payload keys; newest-first. Filter inputs out of scope (§12). Stays live during reset. |
+| **Component Events** | Polled feed from `GET /demo/control-events` (§4.9); fixed 5 s cadence; rows follow unified Time·Source·Event·ID·Details format — Source = `component_id`, Event = `event_type`, ID = record `id`, Details = `state` (colour-coded) + `detail` when present + notable payload keys; newest-first. Filter inputs out of scope (§13). Stays live during reset. |
+| **GitHub Seed** | Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); **Reset** checkbox; **Seed** / **Clear** buttons → `POST /demo/github/seed` \| `POST /demo/github/clear`. |
+| **GitHub Live** | `OFF` / `LIVE` badge; **Enable** / **Disable** button → `POST /demo/github/emit` (same pattern as the Live Emission card). |
+| **GitHub Store** | Counters from `GET /demo/github/status`: repos / deployments / statuses / workflows / environments; dataset badge; `seeded_at`. |
+
+**GitHub source card group.** The GitHub Seed, GitHub Live, and GitHub Store cards are symmetric with the Ingest + Live Emission group. All panel calls go to `/demo/github/*` (the proxy — §5). The GitHub Seed and GitHub Live cards are interactive controls — dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; §5.1). The GitHub Store card polls `GET /demo/github/status`, which is a data surface and stays live. The panel polls `GET /demo/github/status` alongside the existing `GET /demo/status` poll.
 
 **Unified feed row format.** All three feed cards (Post Feed, Control API Events, Component Events) use the same column order; columns align across all three feeds:
 
@@ -428,7 +468,7 @@ Panel behaviour:
 
 ---
 
-## 8. Configuration (env)
+## 9. Configuration (env)
 
 | Var | Default | Purpose |
 |---|---|---|
@@ -441,10 +481,13 @@ Panel behaviour:
 | `SCENARIOS_DIR` | `../../demo/data` | Path to scenario JSON files |
 | `EMIT_DELAY_MS` | `0` | Per-event delay for ingest runs (ms); `0` = bulk load |
 | `EMIT_INTERVAL_MS` | `8000` | Interval between periodic random events when Live Emission is enabled |
+| `GITHUB_EMULATOR_URL` | `http://localhost:3100` | Base URL of the `github-emulator` service; used by the `/demo/github/*` proxy (§5). |
+
+> The emulated GitHub REST surface and its config (e.g. `GITHUB_SIM_RATE_LIMIT`) are owned by the emulator — see [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md) §4. The fetcher's own demo-mode config (`GITHUB__BASE_URL`, `GITHUB__TOKEN`, etc.) is fetcher config — see FETCHER_SPEC §6.
 
 ---
 
-## 9. Testing
+## 10. Testing
 
 | Layer | File | Scope |
 |---|---|---|
@@ -460,10 +503,12 @@ Panel behaviour:
 | Unit | `reset-coordinator.spec.ts` | On `reset-initiated`: stops ingest/run, disables emit, enters `blocked`, acks (`paused` + `reset_id`); `reset-started` = no-op; on `reset-completed`: unblocks, posts `status`/`running` with `reset_id`, returns to idle, does NOT auto-restart; local `RESET_GATE_MAX_TTL_MS` safety unblock fires when no `reset-completed` arrives (no `running` posted) |
 | Integration | `demo.e2e.spec.ts` | Start driver against mock; `POST /demo/ingest { dataset: "demo" }`; poll until `state == done`; assert `GET /api/services` returns ≥ 1 service |
 | Integration | `reset-cycle.e2e.spec.ts` | Full reset cycle against a **real** `Dashboard.Api`: trigger `POST /api/control/reset`; assert the driver acks `reset-initiated` (component event visible via `GET /api/control/events`), `/demo/` calls return `503` while blocked, and on `reset-completed` the driver unblocks + posts `status`/`running` and returns to idle |
+| Unit | `github-proxy.controller.spec.ts` | All five proxy routes (`status`, `seed`, `clear`, `emit` GET, `emit` POST) forward request body + response body verbatim to `GITHUB_EMULATOR_URL/_github/*`; `POST` mutator routes return `503` while `reset_state == blocked`; `GET` routes are NOT blocked; non-2xx upstream responses surfaced as-is |
+| Unit | `github-proxy.client.spec.ts` | HTTP client constructs correct upstream URL; passes body through; surfaces upstream status code |
 
 ---
 
-## 10. Running
+## 11. Running
 
 ```powershell
 cd demo/driver
@@ -482,7 +527,7 @@ npm run start:dev
 
 ---
 
-## 11. Deployment
+## 12. Deployment
 
 | Aspect | Spec |
 |---|---|
@@ -494,7 +539,7 @@ npm run start:dev
 
 ---
 
-## 12. Out of scope
+## 13. Out of scope
 
 - Scenario authoring or editing (read-only against `demo/data/`).
 - Scenario scheduling / cron.
@@ -504,3 +549,4 @@ npm run start:dev
 - Initiating its own reset choreography beyond the §4.5 proxy (the driver is a reactor, not the orchestrator).
 - Component-event filtering UI (component_id / event_type filter inputs) on the Component Events panel card.
 - Persistence or replay of control-stream feed frames beyond live (post-connect) delivery — history is not stored in the driver.
+- Emulated GitHub REST surface, store, fixture, and generator logic (owned by `github-emulator` — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)).
