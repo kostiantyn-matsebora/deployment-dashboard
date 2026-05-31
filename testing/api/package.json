@@ -6,7 +6,7 @@
     "test":             "jest --forceExit",
     "test:watch":       "jest --watch",
     "test:mock":        "jest api-mock --forceExit",
-    "test:integration": "jest api-demo-driver --forceExit"
+    "test:integration": "jest --runInBand --forceExit tests/integration"
   },
   "devDependencies": {
     "@types/jest":  "^29.5.0",
