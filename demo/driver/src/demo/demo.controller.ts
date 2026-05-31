@@ -1,11 +1,22 @@
 import {
   Controller, Get, Post, Param, Body,
   Res, HttpCode, HttpStatus, NotFoundException, OnModuleDestroy,
+  HttpException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Subscription } from 'rxjs';
 import { DemoService, IngestOptions } from './demo.service';
 import { PANEL_HTML } from '../ui/panel';
+
+/** RFC 9457 problem detail for reset-in-progress (§4.7). */
+function resetInProgressProblem(retryAfterSeconds: number): Record<string, unknown> {
+  return {
+    type:   'https://deployment-dashboard/errors/reset-in-progress',
+    title:  'Reset in progress',
+    status: 503,
+    detail: 'A system reset is in progress. Retry after the indicated interval.',
+  };
+}
 
 @Controller('demo')
 export class DemoController implements OnModuleDestroy {
@@ -19,6 +30,23 @@ export class DemoController implements OnModuleDestroy {
     }
   }
 
+  // ── Guard ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Throws 503 with RFC 9457 body + Retry-After when a reset is in progress.
+   * GET /demo/status and GET /demo/stream are exempt (§4.7).
+   */
+  private guardNotBlocked(res: Response): void {
+    if (!this.demoService.isBlocked()) return;
+
+    const retryAfter = this.demoService.getRetryAfterSeconds();
+    res.setHeader('Retry-After', String(retryAfter));
+    res.setHeader('Content-Type', 'application/problem+json');
+    res
+      .status(HttpStatus.SERVICE_UNAVAILABLE)
+      .json(resetInProgressProblem(retryAfter));
+  }
+
   // ── Control panel ─────────────────────────────────────────────────────────
 
   /** GET /demo/ — browser control panel. */
@@ -29,7 +57,7 @@ export class DemoController implements OnModuleDestroy {
 
   // ── Status ────────────────────────────────────────────────────────────────
 
-  /** GET /demo/status */
+  /** GET /demo/status — always answers, even while blocked (§4.7). */
   @Get('status')
   status() {
     return this.demoService.getStatus();
@@ -46,15 +74,20 @@ export class DemoController implements OnModuleDestroy {
   /**
    * POST /demo/scenarios/:name/run
    * Idempotent: returns current status if already running.
+   * Blocked during reset.
    */
   @Post('scenarios/:name/run')
   @HttpCode(HttpStatus.OK)
   async run(
     @Param('name') name: string,
     @Body() body: { delay_ms?: number } = {},
+    @Res({ passthrough: false }) res: Response,
   ) {
+    this.guardNotBlocked(res);
+    if (res.headersSent) return;
     try {
-      return await this.demoService.start(name, body?.delay_ms);
+      const result = await this.demoService.start(name, body?.delay_ms);
+      res.json(result);
     } catch (err: unknown) {
       throw new NotFoundException({
         type:   'about:blank',
@@ -65,26 +98,34 @@ export class DemoController implements OnModuleDestroy {
     }
   }
 
-  /** POST /demo/scenarios/:name/stop */
+  /** POST /demo/scenarios/:name/stop — blocked during reset. */
   @Post('scenarios/:name/stop')
   @HttpCode(HttpStatus.OK)
-  stop(@Param('name') name: string) {
-    return this.demoService.stop(name);
+  stop(
+    @Param('name') name: string,
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    this.guardNotBlocked(res);
+    if (res.headersSent) return;
+    res.json(this.demoService.stop(name));
   }
 
   // ── Ingest ────────────────────────────────────────────────────────────────
 
   /**
-   * POST /demo/ingest
-   * Unified ingest: dataset='demo'|'random', optional pre-ingest reset,
-   * optional event count (random only), optional per-event delay.
-   * Idempotent when already running.
+   * POST /demo/ingest — blocked during reset.
    */
   @Post('ingest')
   @HttpCode(HttpStatus.OK)
-  async ingest(@Body() body: IngestOptions = {}) {
+  async ingest(
+    @Body() body: IngestOptions = {},
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    this.guardNotBlocked(res);
+    if (res.headersSent) return;
     try {
-      return await this.demoService.startIngest(body);
+      const result = await this.demoService.startIngest(body);
+      res.json(result);
     } catch (err: unknown) {
       throw new NotFoundException({
         type:   'about:blank',
@@ -95,11 +136,13 @@ export class DemoController implements OnModuleDestroy {
     }
   }
 
-  /** POST /demo/ingest/stop */
+  /** POST /demo/ingest/stop — blocked during reset. */
   @Post('ingest/stop')
   @HttpCode(HttpStatus.OK)
-  ingestStop() {
-    return this.demoService.stopIngest();
+  ingestStop(@Res({ passthrough: false }) res: Response) {
+    this.guardNotBlocked(res);
+    if (res.headersSent) return;
+    res.json(this.demoService.stopIngest());
   }
 
   // ── Live Emission ─────────────────────────────────────────────────────────
@@ -111,26 +154,33 @@ export class DemoController implements OnModuleDestroy {
   }
 
   /**
-   * POST /demo/emit
+   * POST /demo/emit — blocked during reset.
    * { "enabled": true|false } — omit to toggle.
    */
   @Post('emit')
   @HttpCode(HttpStatus.OK)
-  postEmit(@Body() body: { enabled?: boolean } = {}) {
-    return this.demoService.setEmit(body?.enabled);
+  postEmit(
+    @Body() body: { enabled?: boolean } = {},
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    this.guardNotBlocked(res);
+    if (res.headersSent) return;
+    res.json(this.demoService.setEmit(body?.enabled));
   }
 
   // ── API Reset ─────────────────────────────────────────────────────────────
 
   /**
-   * POST /demo/api-reset
+   * POST /demo/api-reset — blocked during reset.
    * Proxies POST /api/control/reset to the configured write-API target.
    * Returns { ok, http_status }.
    */
   @Post('api-reset')
   @HttpCode(HttpStatus.OK)
-  async apiReset() {
-    return this.demoService.resetApi();
+  async apiReset(@Res({ passthrough: false }) res: Response) {
+    this.guardNotBlocked(res);
+    if (res.headersSent) return;
+    res.json(await this.demoService.resetApi());
   }
 
   // ── Reset (driver state only) ─────────────────────────────────────────────
@@ -145,7 +195,7 @@ export class DemoController implements OnModuleDestroy {
   // ── SSE stream ────────────────────────────────────────────────────────────
 
   /**
-   * GET /demo/stream — SSE fan-out.
+   * GET /demo/stream — SSE fan-out. Never blocked (§4.7).
    * Events: posted | error.  Heartbeat ping every 15 s.
    * No history — only events emitted after connection opens.
    */
