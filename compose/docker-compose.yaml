@@ -121,10 +121,16 @@ services:
       WRITE_API_URL: "http://api:8080"
       # Must match the API_KEY configured on the api service.
       API_KEY: "${API_KEY}"
+      # Must match CONTROL_API_KEY on the api service to allow POST /demo/api-reset.
+      # Empty disables the API reset button in the control panel (returns non-2xx).
+      CONTROL_API_KEY: "${CONTROL_API_KEY:-}"
       # Scenario JSON files are baked into the image at /app/data (Dockerfile).
       # Override to mount a custom scenarios directory.
       SCENARIOS_DIR: /app/data
+      # Per-event delay for ingest runs (ms); 0 = bulk load.
       EMIT_DELAY_MS: "${EMIT_DELAY_MS:-0}"
+      # Interval between periodic random events when Live Emission is enabled (ms).
+      EMIT_INTERVAL_MS: "${EMIT_INTERVAL_MS:-8000}"
       PORT: "3001"
     depends_on:
       api:
