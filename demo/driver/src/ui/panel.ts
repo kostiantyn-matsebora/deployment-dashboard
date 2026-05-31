@@ -11,7 +11,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
       font-family: system-ui, -apple-system, sans-serif;
       background: #0f0f13;
       color: #d4d4d8;
-      padding: 24px;
+      padding: 24px 24px 56px;
       min-height: 100vh;
     }
     h1 {
@@ -21,8 +21,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     h1 span { color: #6366f1; }
 
     /* Layout */
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+    .grid { display: grid; grid-template-columns: 3fr 1fr 1fr; gap: 14px; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
     .full { grid-column: 1 / -1; }
 
     /* Card */
@@ -83,24 +83,27 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .badge-on       { background: #14532d; color: #86efac; }
     .badge-off      { background: #27272a; color: #a1a1aa; }
 
-    /* Progress */
-    .progress-row { margin-top: 12px; }
-    .progress-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
-    .progress-lbl  { font-size: 0.78rem; color: #a1a1aa; }
-    .progress-pct  { font-size: 0.72rem; color: #71717a; }
+    /* Progress bar (reused in status bar) */
     .progress-bg   { background: #27272a; border-radius: 4px; height: 5px; overflow: hidden; }
     .progress-fill { background: #6366f1; height: 100%; width: 0%; border-radius: 4px; transition: width 0.4s; }
-
-    /* Stats row */
-    .stats { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
-    .stat-lbl { font-size: 0.7rem; color: #71717a; margin-bottom: 2px; }
-    .stat-val { font-size: 0.9rem; color: #d4d4d8; font-weight: 500; }
-    .stat-val.err { color: #f87171; }
 
     /* Emit card row */
     .emit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .emit-info { display: flex; flex-direction: column; gap: 6px; }
     .emit-title { font-size: 0.88rem; color: #d4d4d8; }
+
+    /* Status bar (fixed footer) */
+    .status-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      background: #111115; border-top: 1px solid #27272a;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 7px 24px;
+    }
+    .sb-prog { flex: 1 1 100px; max-width: 160px; }
+    .sb-lbl  { font-size: 0.7rem; color: #52525b; white-space: nowrap; }
+    .sb-val  { font-size: 0.78rem; color: #a1a1aa; }
+    .sb-val.err { color: #f87171; }
+    .sb-sep  { color: #3f3f46; user-select: none; }
 
     /* API card */
     .api-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -142,8 +145,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
   <div class="grid">
 
-    <!-- ── Ingest card (full row) ─────────────────────────────────────────── -->
-    <div class="card full">
+    <!-- ── Ingest card ───────────────────────────────────────────────────── -->
+    <div class="card">
       <div class="card-title">Ingest</div>
       <div class="controls">
         <span class="lbl">Data set</span>
@@ -168,47 +171,20 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- ── Status card ────────────────────────────────────────────────────── -->
-    <div class="card">
-      <div class="card-title">Status</div>
-      <span class="badge badge-idle" id="state-badge">idle</span>
-      <div class="progress-row">
-        <div class="progress-meta">
-          <span class="progress-lbl" id="progress-lbl">0 / 0 events</span>
-          <span class="progress-pct" id="progress-pct">0%</span>
-        </div>
-        <div class="progress-bg"><div class="progress-fill" id="progress-fill"></div></div>
-      </div>
-      <div class="stats">
-        <div>
-          <div class="stat-lbl">Errors</div>
-          <div class="stat-val err" id="error-count">0</div>
-        </div>
-        <div>
-          <div class="stat-lbl">Started</div>
-          <div class="stat-val" id="started-at">—</div>
-        </div>
-        <div>
-          <div class="stat-lbl">Finished</div>
-          <div class="stat-val" id="finished-at">—</div>
-        </div>
-      </div>
-    </div>
-
     <!-- ── Live Emission card ─────────────────────────────────────────────── -->
     <div class="card">
       <div class="card-title">Live Emission</div>
       <div class="emit-row">
         <div class="emit-info">
-          <span class="emit-title">Random event stream</span>
+          <span class="emit-title">Random events</span>
           <span class="badge badge-off" id="emit-badge">OFF</span>
         </div>
         <button class="btn-enable" id="emit-toggle-btn" onclick="toggleEmit()">Enable</button>
       </div>
     </div>
 
-    <!-- ── API card (full row, compact) ──────────────────────────────────── -->
-    <div class="card full">
+    <!-- ── API card ───────────────────────────────────────────────────────── -->
+    <div class="card">
       <div class="card-title">API</div>
       <div class="api-row">
         <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset State</button>
@@ -230,6 +206,25 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
+  </div>
+
+  <!-- ── Status bar (fixed footer) ────────────────────────────────────────── -->
+  <div class="status-bar">
+    <span class="badge badge-idle" id="state-badge">idle</span>
+    <div class="sb-prog">
+      <div class="progress-bg"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+    <span class="sb-val" id="progress-lbl">0 / 0 events</span>
+    <span class="sb-lbl" id="progress-pct">0%</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-lbl">Errors</span>
+    <span class="sb-val err" id="error-count">0</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-lbl">Started</span>
+    <span class="sb-val" id="started-at">—</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-lbl">Finished</span>
+    <span class="sb-val" id="finished-at">—</span>
   </div>
 
   <script>
