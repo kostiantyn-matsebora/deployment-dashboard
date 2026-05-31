@@ -72,6 +72,7 @@ function makeCoordinator(): jest.Mocked<ResetCoordinator> {
     onResetInitiated:     jest.fn().mockResolvedValue(undefined),
     onResetStarted:       jest.fn(),
     onResetCompleted:     jest.fn().mockResolvedValue(undefined),
+    expectCycle:          jest.fn(),
     awaitCycleComplete:   jest.fn().mockResolvedValue(undefined),
     onModuleDestroy:      jest.fn(),
   } as unknown as jest.Mocked<ResetCoordinator>;
@@ -104,19 +105,20 @@ describe('DemoService.startIngest', () => {
   });
 
   describe('reset:false (default)', () => {
-    it('does not call resetApi or awaitCycleComplete', async () => {
+    it('does not call resetApi, expectCycle, or awaitCycleComplete', async () => {
       const coord = makeCoordinator();
       const svc   = makeService(coord, makeEmitService());
 
       await svc.startIngest({ dataset: 'demo', reset: false });
 
       expect(mockResetApi).not.toHaveBeenCalled();
+      expect(coord.expectCycle).not.toHaveBeenCalled();
       expect(coord.awaitCycleComplete).not.toHaveBeenCalled();
     });
   });
 
   describe('reset:true — happy path', () => {
-    it('calls resetApi() before awaitCycleComplete and both before the runner starts', async () => {
+    it('calls resetApi() → expectCycle() → awaitCycleComplete() → runner.run in order', async () => {
       const callOrder: string[] = [];
 
       mockResetApi.mockImplementation(async () => {
@@ -125,6 +127,9 @@ describe('DemoService.startIngest', () => {
       });
 
       const coord = makeCoordinator();
+      coord.expectCycle.mockImplementation(() => {
+        callOrder.push('expectCycle');
+      });
       coord.awaitCycleComplete.mockImplementation(async () => {
         callOrder.push('awaitCycleComplete');
       });
@@ -141,7 +146,18 @@ describe('DemoService.startIngest', () => {
 
       await svc.startIngest({ dataset: 'demo', reset: true });
 
-      expect(callOrder).toEqual(['resetApi', 'awaitCycleComplete', 'runner.run']);
+      expect(callOrder).toEqual(['resetApi', 'expectCycle', 'awaitCycleComplete', 'runner.run']);
+    });
+
+    it('passes the reset_id from resetApi() to expectCycle()', async () => {
+      mockResetApi.mockResolvedValue({ ok: true, http_status: 202, reset_id: RESET_ID });
+
+      const coord = makeCoordinator();
+      const svc   = makeService(coord, makeEmitService());
+
+      await svc.startIngest({ dataset: 'demo', reset: true });
+
+      expect(coord.expectCycle).toHaveBeenCalledWith(RESET_ID);
     });
 
     it('passes the reset_id from resetApi() to awaitCycleComplete()', async () => {
@@ -169,7 +185,7 @@ describe('DemoService.startIngest', () => {
   });
 
   describe('reset:true — resetApi() failure', () => {
-    it('proceeds to ingest without calling awaitCycleComplete when resetApi ok=false', async () => {
+    it('proceeds to ingest without calling expectCycle or awaitCycleComplete when resetApi ok=false', async () => {
       mockResetApi.mockResolvedValue({ ok: false, http_status: 500 });
 
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -178,6 +194,7 @@ describe('DemoService.startIngest', () => {
 
       await svc.startIngest({ dataset: 'demo', reset: true });
 
+      expect(coord.expectCycle).not.toHaveBeenCalled();
       expect(coord.awaitCycleComplete).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('pre-ingest API reset returned HTTP'),
@@ -188,7 +205,7 @@ describe('DemoService.startIngest', () => {
   });
 
   describe('reset:true — resetApi() returns ok but no reset_id', () => {
-    it('proceeds to ingest without calling awaitCycleComplete and logs a warning', async () => {
+    it('proceeds to ingest without calling expectCycle or awaitCycleComplete and logs a warning', async () => {
       mockResetApi.mockResolvedValue({ ok: true, http_status: 202, reset_id: undefined });
 
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -197,6 +214,7 @@ describe('DemoService.startIngest', () => {
 
       await svc.startIngest({ dataset: 'demo', reset: true });
 
+      expect(coord.expectCycle).not.toHaveBeenCalled();
       expect(coord.awaitCycleComplete).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('no reset_id'),

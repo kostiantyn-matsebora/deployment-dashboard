@@ -42,6 +42,14 @@ export class ResetCoordinator implements OnModuleDestroy {
   private _lastCompletedResetId: string | null = null;
 
   /**
+   * A reset_id that the driver has explicitly declared it expects to see.
+   * Set via expectCycle() immediately after POST /api/control/reset returns,
+   * before the SSE reset-initiated event has arrived.  Prevents the idle
+   * fast-path in awaitCycleComplete() from resolving prematurely for that id.
+   */
+  private _expectedResetId: string | null = null;
+
+  /**
    * Pending awaitCycleComplete() subscribers, keyed by reset_id.
    * Each entry is an array of callbacks that resolve/reject the caller's Promise.
    */
@@ -49,6 +57,24 @@ export class ResetCoordinator implements OnModuleDestroy {
 
   get resetState(): ResetState { return this._resetState; }
   get resetId():    string | null { return this._resetId; }
+
+  /**
+   * Declares that the driver has initiated cycle `resetId` and expects the
+   * corresponding SSE events to arrive shortly.
+   *
+   * Must be called immediately after POST /api/control/reset returns a
+   * reset_id and BEFORE awaitCycleComplete() is called for that id.  This
+   * prevents awaitCycleComplete() from fast-resolving on the idle fast-path
+   * during the window between the HTTP response and the SSE reset-initiated
+   * event.
+   *
+   * A no-op when `resetId` matches `_lastCompletedResetId` (cycle already
+   * done — awaitCycleComplete will take the race-safe fast path anyway).
+   */
+  expectCycle(resetId: string): void {
+    if (resetId === this._lastCompletedResetId) return;
+    this._expectedResetId = resetId;
+  }
 
   /** Wired by the demo module after construction. */
   registerParticipant(p: ResetParticipant): void {
@@ -74,6 +100,11 @@ export class ResetCoordinator implements OnModuleDestroy {
 
     this._resetState = 'blocked';
     this._resetId    = resetId;
+
+    // Clear any pending expectation now that the cycle is officially tracked.
+    if (this._expectedResetId === resetId) {
+      this._expectedResetId = null;
+    }
 
     // 1. Stop work; the participant disables ingest/emission.
     this._participant?.stopWork();
@@ -122,7 +153,12 @@ export class ResetCoordinator implements OnModuleDestroy {
     // If the coordinator is idle and this reset_id was never tracked, the
     // cycle either completed before this instance started tracking, or the
     // reset_id is stale. Resolve immediately rather than hanging.
-    if (this._resetState === 'idle' && this._resetId !== resetId) {
+    //
+    // Exception: when expectCycle() has been called for this id the driver
+    // knows the SSE reset-initiated event has not arrived yet.  Skip the
+    // fast-path and register a waiter so we block until the full cycle
+    // completes (or the timeout fires).
+    if (this._resetState === 'idle' && this._resetId !== resetId && this._expectedResetId !== resetId) {
       return Promise.resolve();
     }
 
@@ -222,6 +258,11 @@ export class ResetCoordinator implements OnModuleDestroy {
     // Record the completed reset_id for the race-safe fast path in awaitCycleComplete.
     if (resetId) {
       this._lastCompletedResetId = resetId;
+    }
+
+    // Clear any lingering expectation for this cycle.
+    if (this._expectedResetId === resetId) {
+      this._expectedResetId = null;
     }
 
     // Notify any callers awaiting this specific cycle.

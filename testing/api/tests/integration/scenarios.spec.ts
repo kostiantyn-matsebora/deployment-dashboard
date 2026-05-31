@@ -3,15 +3,23 @@
  * assertion targets the **Dashboard API** read surface that results.
  *
  * The demo-driver is the fixture (DEMO_DRIVER_SPECIFICATION.md §4):
- *   - demo dataset   — POST /demo/ingest { dataset: "demo" }
- *   - random dataset — POST /demo/ingest { dataset: "random", count }
+ *   - demo dataset   — POST /demo/ingest { dataset: "demo", reset: true }
+ *   - random dataset — POST /demo/ingest { dataset: "random", reset: true, count }
  *   - live emission  — POST /demo/emit  { enabled: true }
+ *
+ * Each describe block runs waitForDemoReady() in beforeEach as a settling
+ * precondition: ensures the demo-driver is idle (no reset cycle in flight, no
+ * ingest running) before each test starts.  This guards against cross-test and
+ * cross-file reset settling even when reset:true exercises the full choreography
+ * path end-to-end.
  */
 import {
-  getJson, resetAll, demoPost, waitForIngest, sleep, EMIT_INTERVAL_MS, STATUSES,
+  getJson, resetAll, demoPost, waitForIngest, waitForDemoReady, sleep, EMIT_INTERVAL_MS, STATUSES,
 } from './helpers';
 
 describe('Scenario: demo dataset', () => {
+  beforeEach(() => waitForDemoReady());
+
   it('seeds the API so discovery, listing and matrix are populated', async () => {
     const res = await demoPost('/ingest', { dataset: 'demo', reset: true });
     expect(res.status).toBe(200);
@@ -30,6 +38,8 @@ describe('Scenario: demo dataset', () => {
 
 describe('Scenario: random dataset', () => {
   const COUNT = 5;
+
+  beforeEach(() => waitForDemoReady());
 
   it(`materialises ${COUNT} services with full per-slot status coverage`, async () => {
     const res = await demoPost('/ingest', { dataset: 'random', reset: true, count: COUNT });
@@ -59,6 +69,8 @@ describe('Scenario: random dataset', () => {
 });
 
 describe('Scenario: live emission', () => {
+  beforeEach(() => waitForDemoReady());
+
   it('periodic random emission appends well-formed deployments to the API', async () => {
     await resetAll();
     expect((await getJson('/api/deployments?limit=1')).items.length).toBe(0);

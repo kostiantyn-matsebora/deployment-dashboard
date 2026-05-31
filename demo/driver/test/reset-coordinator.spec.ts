@@ -298,6 +298,21 @@ describe('ResetCoordinator', () => {
       await expect(coord.awaitCycleComplete('unknown-reset-id')).resolves.toBeUndefined();
     });
 
+    it('resolves immediately when coordinator is idle and reset_id is unknown and no expectCycle was called', async () => {
+      // Explicit regression guard: the stale-id fast-path must still fire when
+      // expectCycle() has NOT been called for the id.
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      // Deliberately do NOT call expectCycle for 'stale-id'.
+      const resolved = await Promise.race([
+        coord.awaitCycleComplete('stale-id').then(() => 'resolved'),
+        Promise.resolve('immediate'),
+      ]);
+      expect(resolved).toBe('immediate');
+    });
+
     it('does not block reset-participant stopWork / unblockWork (no deadlock)', async () => {
       // awaitCycleComplete must not call stopWork or unblockWork itself.
       process.env.RESET_GATE_MAX_TTL_MS = '10000';
@@ -340,6 +355,125 @@ describe('ResetCoordinator', () => {
 
       await expect(Promise.all([p1, p2, p3])).resolves.toBeDefined();
 
+      delete process.env.RESET_GATE_MAX_TTL_MS;
+    });
+  });
+
+  describe('expectCycle', () => {
+    /**
+     * Regression test for the race between POST /api/control/reset returning
+     * reset_id=Y and the SSE reset-initiated(Y) event arriving.
+     *
+     * Without expectCycle the sequence is:
+     *   1. resetApi() → reset_id=Y
+     *   2. awaitCycleComplete(Y)  → coordinator is idle, _resetId !== Y → fast-resolve
+     *   3. runner starts
+     *   4. SSE reset-initiated(Y) arrives → stopWork() kills the runner mid-flight
+     *
+     * With expectCycle the sequence must be:
+     *   1. resetApi() → reset_id=Y
+     *   2. expectCycle(Y)          → records _expectedResetId=Y
+     *   3. awaitCycleComplete(Y)   → idle fast-path is suppressed → waiter registered
+     *   4. [await still pending]   → runner has NOT started yet
+     *   5. onResetInitiated(Y)     → _expectedResetId cleared, coordinator blocks
+     *   6. onResetCompleted(Y)     → waiter resolved
+     *   7. runner starts safely
+     */
+    it('prevents idle fast-resolve: awaitCycleComplete is still pending after a tick when expectCycle was called', async () => {
+      process.env.RESET_GATE_MAX_TTL_MS = '10000';
+
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      // Coordinator is idle; SSE event has NOT arrived yet.
+      coord.expectCycle(RESET_ID);
+
+      let resolved = false;
+      const waitPromise = coord.awaitCycleComplete(RESET_ID).then(() => {
+        resolved = true;
+      });
+
+      // Yield to the microtask queue — the promise must still be pending.
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      // Now simulate the SSE events arriving.
+      await coord.onResetInitiated(RESET_ID);
+      await coord.onResetCompleted(RESET_ID);
+
+      await waitPromise;
+      expect(resolved).toBe(true);
+
+      delete process.env.RESET_GATE_MAX_TTL_MS;
+    });
+
+    it('resolves correctly once the full cycle completes after expectCycle', async () => {
+      process.env.RESET_GATE_MAX_TTL_MS = '10000';
+
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      coord.expectCycle(RESET_ID);
+      const waitPromise = coord.awaitCycleComplete(RESET_ID);
+
+      await coord.onResetInitiated(RESET_ID);
+      await coord.onResetCompleted(RESET_ID);
+
+      await expect(waitPromise).resolves.toBeUndefined();
+
+      delete process.env.RESET_GATE_MAX_TTL_MS;
+    });
+
+    it('is a no-op when the cycle already completed (_lastCompletedResetId match)', async () => {
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      // Complete a cycle first.
+      await coord.onResetInitiated(RESET_ID);
+      await coord.onResetCompleted(RESET_ID);
+
+      // expectCycle on an already-completed id must be a no-op; awaitCycleComplete
+      // should still take the race-safe fast path.
+      coord.expectCycle(RESET_ID);
+
+      const resolved = await Promise.race([
+        coord.awaitCycleComplete(RESET_ID).then(() => 'resolved'),
+        Promise.resolve('immediate'),
+      ]);
+      expect(resolved).toBe('immediate');
+    });
+
+    it('does not affect awaitCycleComplete for a different reset_id', async () => {
+      const coord = makeCoordinator();
+      // Expect cycle A.
+      coord.expectCycle(RESET_ID);
+
+      // awaitCycleComplete for an entirely different (unknown) id must still fast-resolve.
+      await expect(coord.awaitCycleComplete('other-reset-id')).resolves.toBeUndefined();
+    });
+
+    it('times out via the awaitCycleComplete timer when SSE events never arrive', async () => {
+      process.env.RESET_GATE_MAX_TTL_MS = '30000';
+
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      coord.expectCycle(RESET_ID);
+      const waitPromise = coord.awaitCycleComplete(RESET_ID, 1000);
+
+      // Advance past the caller-supplied timeout (1000 ms).
+      await jest.advanceTimersByTimeAsync(1001);
+
+      await expect(waitPromise).resolves.toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('awaitCycleComplete'));
+
+      warnSpy.mockRestore();
       delete process.env.RESET_GATE_MAX_TTL_MS;
     });
   });

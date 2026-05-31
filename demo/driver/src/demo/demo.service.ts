@@ -131,6 +131,10 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
       if (!result.ok) {
         console.warn(`[demo-driver] pre-ingest API reset returned HTTP ${result.http_status}`);
       } else if (result.reset_id) {
+        // Declare the expected cycle immediately so the coordinator does not
+        // fast-resolve awaitCycleComplete in the window before reset-initiated
+        // arrives via SSE (which is the race that causes mid-flight stopWork).
+        this.resetCoordinator.expectCycle(result.reset_id);
         // Wait for the reset cycle to complete before ingesting.  The coordinator
         // will be blocked by its own reset-initiated handler during this window;
         // awaitCycleComplete only reads state and registers a waiter — it does

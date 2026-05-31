@@ -167,6 +167,29 @@ export async function waitForIngest(timeoutMs = 60_000): Promise<any> {
   }
 }
 
+/**
+ * Poll GET /demo/status until the demo-driver is fully settled:
+ *   - reset_state === 'idle'  (no reset cycle in flight)
+ *   - state !== 'running'     (no ingest in progress)
+ *
+ * Safe to call even while the demo-driver is blocked (§4.7 — /demo/status is
+ * exempt from the 503 guard). Use as a precondition before any reset:true ingest
+ * to prevent consecutive tests from colliding on global reset state.
+ */
+export async function waitForDemoReady(timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const status = await (await fetch(`${DEMO}/status`)).json();
+    if (status.reset_state === 'idle' && status.state !== 'running') return;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `waitForDemoReady timed out: reset_state=${status.reset_state} state=${status.state}`,
+      );
+    }
+    await sleep(500);
+  }
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
