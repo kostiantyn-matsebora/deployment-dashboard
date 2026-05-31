@@ -1,0 +1,73 @@
+name: _api-tests
+
+# End-to-end API integration tests.
+#
+# Spins up the real stack (PostgreSQL + Dashboard.Api + demo-driver + gateway)
+# from branch source via docker compose, then drives the API through the
+# demo-driver's control surface across several scenarios (demo dataset, random
+# dataset, live event emission, control reset) and asserts the resulting
+# real-API state.
+#
+# All test traffic routes through the gateway (the single public surface):
+#   /api/*  -> Dashboard.Api      /demo/* -> demo-driver
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/api-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/api-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  api-tests:
+    name: API integration (demo-driver scenarios)
+    runs-on: ubuntu-latest
+    env:
+      # docker compose reads these automatically — every `docker compose` call
+      # below needs no -f / --profile flags and stays in sync.
+      #   base      — service definitions + gateway port :8080
+      #   demo      — insecure demo credentials (API_KEY / CONTROL_API_KEY / pg)
+      #   local     — build images from branch source instead of pulling GHCR
+      COMPOSE_FILE: compose/docker-compose.yaml:compose/docker-compose.demo.yaml:compose/docker-compose.local.yaml
+      # Minimal stack: db + api + demo-driver + gateway (no frontend).
+      COMPOSE_PROFILES: db,api,demo-driver,gateway
+      # Fast live-emission cadence so the emission scenario doesn't wait 8s/tick.
+      # Consumed by the demo-driver container AND read by the test for its wait.
+      EMIT_INTERVAL_MS: '1000'
+      # All test traffic goes through the gateway (single public surface).
+      BASE_URL: http://localhost:8080
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: testing/api/package-lock.json
+
+      - name: Install test deps
+        working-directory: testing/api
+        run: npm ci
+
+      - name: Build & start stack (db + api + demo-driver + gateway)
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - name: Run API tests (demo-driver scenarios)
+        working-directory: testing/api
+        run: npm run test:integration
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

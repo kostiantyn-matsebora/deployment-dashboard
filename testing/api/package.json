@@ -3,8 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test":       "jest --forceExit",
-    "test:watch": "jest --watch"
+    "test":             "jest --forceExit",
+    "test:watch":       "jest --watch",
+    "test:mock":        "jest api-mock --forceExit",
+    "test:integration": "jest --runInBand --forceExit tests/integration"
   },
   "devDependencies": {
     "@types/jest":  "^29.5.0",
