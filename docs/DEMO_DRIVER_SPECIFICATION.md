@@ -49,28 +49,33 @@ The mock server is unchanged. The demo driver supplements it for cases where a b
 ## 3. Solution layout
 
 ```
-frontend/demo-driver/
+demo/driver/
   src/
-    main.ts                      bootstrap (port, config)
-    app.module.ts                NestJS root module
+    main.ts                          bootstrap (port, config)
+    app.module.ts                    NestJS root module
     config/
-      configuration.ts           ConfigModule factory (env vars → typed config)
+      configuration.ts               env vars → typed config
     demo/
       demo.module.ts
-      demo.controller.ts         GET|POST /demo/* control surface + panel
-      demo.service.ts            scenario orchestration (start / stop / status)
+      demo.controller.ts             GET|POST /demo/* control surface + panel
+      demo.service.ts                orchestration (ingest / emit / reset)
+      emit.service.ts                periodic random-event emitter
     scenarios/
-      scenario-loader.ts         load + validate scenario JSON files
-      scenario-runner.ts         elapsed_minutes → happened_at; sequential POST loop
+      scenario-loader.ts             load + validate scenario JSON files
+      scenario-runner.ts             elapsed_minutes → happened_at; sequential POST loop
+      random-event-generator.ts      random DeploymentEventIngest event factory
     write-api/
-      write-api.client.ts        HTTP client — POST /api/deployments (with retry)
+      write-api.client.ts            POST /api/deployments (with retry)
+      control-api.client.ts          POST /api/control/reset (single attempt)
     ui/
-      panel.html                 browser control panel (inline, no bundler)
+      panel.ts                       browser control panel (inline, no bundler)
   test/
     demo.controller.spec.ts
     scenario-runner.spec.ts
     write-api.client.spec.ts
-  Dockerfile                     multi-stage: build → node:lts-alpine runtime
+    control-api.client.spec.ts
+    random-event-generator.spec.ts
+  Dockerfile                         multi-stage: build → node:lts-alpine runtime
   package.json
   tsconfig.json
 ```
@@ -102,7 +107,7 @@ No authentication required (internal dev/demo tooling only).
 
 `state` enum: `idle` | `running` | `done` | `failed`
 
-### 4.2 Scenarios
+### 4.2 Scenarios (legacy — backwards compat)
 
 | Method · Path | Request | Response |
 |---|---|---|
@@ -113,7 +118,54 @@ No authentication required (internal dev/demo tooling only).
 
 **Idempotency:** `POST /demo/scenarios/{name}/run` while `state == running` returns current status; does not double-start.
 
-### 4.3 Event feed (SSE)
+### 4.3 Ingest
+
+| Method · Path | Request | Response |
+|---|---|---|
+| `POST /demo/ingest` | `IngestRequest` | `DemoStatus` |
+| `POST /demo/ingest/stop` | — | `DemoStatus` |
+
+`IngestRequest`:
+```json
+{
+  "dataset":  "demo",
+  "reset":    true,
+  "count":    20,
+  "delay_ms": 0
+}
+```
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `dataset` | `"demo"` \| `"random"` | `"demo"` | `"demo"` = events from `demo-set` scenario file; `"random"` = generated events |
+| `reset` | boolean | `false` | When `true`, calls `POST /api/control/reset` on the write-API target before ingesting |
+| `count` | integer | `10` | Number of service scenarios to generate (1–10); `"random"` only — one chain per service so `parent_deployments` of current env-slots always reference same-run siblings; ignored for `"demo"` |
+| `delay_ms` | integer | `EMIT_DELAY_MS` | Per-event delay (ms); `0` = bulk load |
+
+**Idempotency:** `POST /demo/ingest` while `state == running` returns current status; does not double-start.
+
+### 4.4 Live Emission
+
+Periodic random-event emission — mirrors `/_mock/emit` pattern from the mock.
+
+| Method · Path | Request | Response |
+|---|---|---|
+| `GET /demo/emit` | — | `{ emitting: boolean }` |
+| `POST /demo/emit` | `{ enabled?: boolean }` — omit to toggle | `{ emitting: boolean }` |
+
+When enabled, fires every `EMIT_INTERVAL_MS` (default 8 s): generates one random event, POSTs it to `WRITE_API_URL/api/deployments`, and emits a `posted` / `error` frame on `/demo/stream`.
+
+### 4.5 API Reset
+
+| Method · Path | Response |
+|---|---|
+| `POST /demo/api-reset` | `{ ok: boolean, http_status: number }` |
+
+Proxies `POST {WRITE_API_URL}/api/control/reset` with `X-Control-API-Key: CONTROL_API_KEY`.
+Returns `{ ok: true, http_status: 204 }` on success; `{ ok: false, http_status: N }` on failure; `{ ok: false, http_status: 0 }` on network error.
+No retry — destructive operation, single attempt.
+
+### 4.6 Event feed (SSE)
 
 | Method · Path | Response |
 |---|---|
@@ -186,7 +238,7 @@ Source: `demo/data/events.json#events` (47 events).
 |---|---|
 | Endpoint | `POST {WRITE_API_URL}/api/deployments` |
 | Auth | `X-Api-Key: <API_KEY>` on every request |
-| Attribution | `X-Progress-Reporter: demo-driver/demo-set` (scenario name in the adapter segment) |
+| Attribution | `X-Progress-Reporter: demo-driver/{dataset}` — dataset name in the adapter segment; `demo-driver/emit` for periodic emission |
 | Retry | 3 attempts, exponential backoff: 100 ms → 200 ms → 400 ms; applies on network error or `5xx` |
 | Non-2xx (final) | Log `{ http_status, deployment_id, service, environment }`; increment `errors`; continue |
 | `4xx` (client error) | No retry; log immediately; increment `errors`; continue |
@@ -199,13 +251,17 @@ Source: `demo/data/events.json#events` (47 events).
 
 | Card | Controls |
 |---|---|
-| Scenarios | Dropdown to select scenario; **Run** / **Stop** buttons; delay (ms) input |
-| Status | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
-| Post Feed | Real-time `GET /demo/stream` SSE feed; `● LIVE` / `● RECONNECTING` badge; `posted` and `error` frames rendered inline; Clear button |
+| **Ingest** | Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); **Reset** checkbox (checked by default); delay (ms) input; **Ingest** / **Stop** buttons |
+| **Status** | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
+| **Live Emission** | `OFF` / `LIVE` badge; **Enable** / **Disable** button — same pattern as mock SSE Emission card |
+| **API** | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
+| **Post Feed** | Real-time `GET /demo/stream` SSE feed; `● LIVE` / `● RECONNECTING` badge; `posted` and `error` frames with source tag (`ingest` / `emit`); Clear button |
 
 Panel behaviour:
-- Calls `GET /demo/status` + `GET /demo/scenarios` on load.
-- Calls `POST /demo/scenarios/{name}/run` and `POST /demo/scenarios/{name}/stop` on button click.
+- Calls `GET /demo/status` + `GET /demo/emit` on load.
+- Calls `POST /demo/ingest` / `POST /demo/ingest/stop` on Ingest/Stop buttons.
+- Calls `POST /demo/emit` on Enable/Disable button.
+- Calls `POST /demo/api-reset` on Reset State button.
 - Subscribes to `GET /demo/stream` for the live feed.
 
 ---
@@ -216,27 +272,31 @@ Panel behaviour:
 |---|---|---|
 | `PORT` | `3001` | HTTP listen port |
 | `WRITE_API_URL` | `http://localhost:3000` | Base URL of the Write API target |
-| `API_KEY` | `dev-secret` | Shared secret; sent as `X-Api-Key` |
+| `API_KEY` | `dev-secret` | Shared secret; sent as `X-Api-Key` on every ingest request |
+| `CONTROL_API_KEY` | `dev-secret` | Secret for `X-Control-API-Key` on `POST /api/control/reset` |
 | `SCENARIOS_DIR` | `../../demo/data` | Path to scenario JSON files |
-| `EMIT_DELAY_MS` | `0` | Inter-event delay (ms); `0` = bulk load |
+| `EMIT_DELAY_MS` | `0` | Per-event delay for ingest runs (ms); `0` = bulk load |
+| `EMIT_INTERVAL_MS` | `8000` | Interval between periodic random events when Live Emission is enabled |
 
 ---
 
 ## 9. Testing
 
-| Layer | Project | Scope |
+| Layer | File | Scope |
 |---|---|---|
-| Unit | `scenario-runner.spec.ts` | `elapsed_minutes → happened_at` conversion; sequential POST order; `events_sent` / `errors` counter accuracy; stop-mid-run sets `state = failed` |
-| Unit | `write-api.client.spec.ts` | Retry on `5xx` (3 attempts); no retry on `4xx`; `X-Api-Key` header present; `X-Progress-Reporter` header present |
-| Unit | `demo.controller.spec.ts` | `idle → running → done` state transitions; idempotent double-start; stop from running |
-| Integration | `demo.e2e.spec.ts` | Start driver against mock (`WRITE_API_URL=http://localhost:3000`); `POST /demo/scenarios/demo-set/run`; poll `GET /demo/status` until `state == done`; assert `GET http://localhost:3000/api/services` returns ≥ 1 service |
+| Unit | `scenario-runner.spec.ts` | `elapsed_minutes → happened_at` conversion; `runWire` posts pre-computed events; sequential POST order; counter accuracy; stop-mid-run sets `state = failed` |
+| Unit | `write-api.client.spec.ts` | Retry on `5xx` (3 attempts); no retry on `4xx`; `X-Api-Key` + `X-Progress-Reporter` headers |
+| Unit | `control-api.client.spec.ts` | Single attempt (no retry); `X-Control-API-Key` header; `ok=true` on 2xx; `ok=false` on 4xx/5xx/network |
+| Unit | `random-event-generator.spec.ts` | All required wire fields present; status in valid enum; `happened_at` in the past; unique `deployment_id`s; correct count |
+| Unit | `demo.controller.spec.ts` | All endpoints: status, scenarios, ingest, ingest/stop, emit GET/POST, api-reset, reset; state transitions; NotFoundException on missing scenario |
+| Integration | `demo.e2e.spec.ts` | Start driver against mock; `POST /demo/ingest { dataset: "demo" }`; poll until `state == done`; assert `GET /api/services` returns ≥ 1 service |
 
 ---
 
 ## 10. Running
 
 ```powershell
-cd frontend/demo-driver
+cd demo/driver
 npm install          # first time only
 npm run start:dev    # ts-node, hot-reload
 ```
@@ -256,7 +316,7 @@ npm run start:dev
 
 | Aspect | Spec |
 |---|---|
-| Image | Multi-stage Dockerfile in `frontend/demo-driver/`. Stage 1: `node:lts-alpine` builds TypeScript. Stage 2: `node:lts-alpine` runs the compiled output. |
+| Image | Multi-stage Dockerfile in `demo/driver/`. Stage 1: `node:lts-alpine` builds TypeScript. Stage 2: `node:lts-alpine` runs the compiled output. |
 | Gateway path | Proxied by App Gateway at `location /demo/` → `DEMO_DRIVER_UPSTREAM` (see [`GATEWAY_SPECIFICATION.md`](GATEWAY_SPECIFICATION.md)). |
 | SSE | `/demo/stream` requires the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). |
 | Port | Container listens on `PORT` (default `3001`); `DEMO_DRIVER_UPSTREAM` in the gateway is `demo-driver:3001`. |
@@ -271,4 +331,3 @@ npm run start:dev
 - Concurrent multi-scenario execution.
 - Authentication on the control API or control panel.
 - Clearing the target backend (Write API is append-only; reset is a mock `/_mock/reset` concern for mock targets).
-- `sse_templates` emission (periodic live-event driver — scoped to a future scenario, e.g. `live-demo`).

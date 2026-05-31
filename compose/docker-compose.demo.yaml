@@ -19,6 +19,8 @@ services:
     environment:
       # Must match the demo api key above.
       API_KEY: demo-api-key
+      # Must match the demo control key above — enables POST /demo/api-reset.
+      CONTROL_API_KEY: demo-control-key
 
   postgres:
     environment:

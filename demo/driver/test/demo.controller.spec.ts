@@ -48,6 +48,11 @@ describe('DemoController', () => {
             start:        jest.fn(),
             stop:         jest.fn(),
             reset:        jest.fn(),
+            startIngest:  jest.fn(),
+            stopIngest:   jest.fn(),
+            getEmitStatus: jest.fn(),
+            setEmit:      jest.fn(),
+            resetApi:     jest.fn(),
             stream$:      new Subject(),
           },
         },
@@ -67,7 +72,7 @@ describe('DemoController', () => {
     });
   });
 
-  // ── Scenarios list ────────────────────────────────────────────────────────
+  // ── Scenarios list (legacy) ───────────────────────────────────────────────
 
   describe('GET /demo/scenarios', () => {
     it('wraps scenario names in items array', () => {
@@ -76,7 +81,7 @@ describe('DemoController', () => {
     });
   });
 
-  // ── Run ───────────────────────────────────────────────────────────────────
+  // ── Run / Stop (legacy) ───────────────────────────────────────────────────
 
   describe('POST /demo/scenarios/:name/run', () => {
     it('transitions idle → running', async () => {
@@ -105,8 +110,6 @@ describe('DemoController', () => {
     });
   });
 
-  // ── Stop ──────────────────────────────────────────────────────────────────
-
   describe('POST /demo/scenarios/:name/stop', () => {
     it('returns failed state after stop', () => {
       const failed = idle({ state: 'failed', scenario: 'demo-set' });
@@ -117,13 +120,118 @@ describe('DemoController', () => {
     });
   });
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
+  // ── Reset (driver state) ──────────────────────────────────────────────────
 
   describe('POST /demo/reset', () => {
     it('returns idle status with zeroed counters', () => {
       service.reset.mockReturnValue(idle());
       const result = controller.reset();
       expect(result).toEqual(idle());
+    });
+  });
+
+  // ── Ingest ────────────────────────────────────────────────────────────────
+
+  describe('POST /demo/ingest', () => {
+    it('calls service.startIngest with the request body', async () => {
+      service.startIngest.mockResolvedValue(running());
+      const result = await controller.ingest({ dataset: 'demo', reset: false });
+      expect(service.startIngest).toHaveBeenCalledWith({ dataset: 'demo', reset: false });
+      expect(result.state).toBe('running');
+    });
+
+    it('passes random dataset options', async () => {
+      service.startIngest.mockResolvedValue(running());
+      await controller.ingest({ dataset: 'random', count: 30, delay_ms: 100 });
+      expect(service.startIngest).toHaveBeenCalledWith({ dataset: 'random', count: 30, delay_ms: 100 });
+    });
+
+    it('accepts empty body (all defaults)', async () => {
+      service.startIngest.mockResolvedValue(idle());
+      await controller.ingest({});
+      expect(service.startIngest).toHaveBeenCalledWith({});
+    });
+
+    it('throws NotFoundException when no demo scenario is available', async () => {
+      service.startIngest.mockRejectedValue(new Error('No demo scenario available'));
+      await expect(controller.ingest({ dataset: 'demo' })).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('is idempotent — returns running status when already running', async () => {
+      service.startIngest.mockResolvedValue(running());
+      const first  = await controller.ingest({ dataset: 'demo' });
+      const second = await controller.ingest({ dataset: 'demo' });
+      expect(first.state).toBe('running');
+      expect(second.state).toBe('running');
+    });
+  });
+
+  describe('POST /demo/ingest/stop', () => {
+    it('calls service.stopIngest and returns updated status', () => {
+      const failed = idle({ state: 'failed', scenario: 'demo-set' });
+      service.stopIngest.mockReturnValue(failed);
+      const result = controller.ingestStop();
+      expect(service.stopIngest).toHaveBeenCalled();
+      expect(result.state).toBe('failed');
+    });
+  });
+
+  // ── Live Emission ─────────────────────────────────────────────────────────
+
+  describe('GET /demo/emit', () => {
+    it('returns emit status from service', () => {
+      service.getEmitStatus.mockReturnValue({ emitting: false });
+      expect(controller.getEmit()).toEqual({ emitting: false });
+    });
+
+    it('reflects live state when enabled', () => {
+      service.getEmitStatus.mockReturnValue({ emitting: true });
+      expect(controller.getEmit()).toEqual({ emitting: true });
+    });
+  });
+
+  describe('POST /demo/emit', () => {
+    it('enables emission when enabled=true', () => {
+      service.setEmit.mockReturnValue({ emitting: true });
+      const result = controller.postEmit({ enabled: true });
+      expect(service.setEmit).toHaveBeenCalledWith(true);
+      expect(result).toEqual({ emitting: true });
+    });
+
+    it('disables emission when enabled=false', () => {
+      service.setEmit.mockReturnValue({ emitting: false });
+      const result = controller.postEmit({ enabled: false });
+      expect(service.setEmit).toHaveBeenCalledWith(false);
+      expect(result).toEqual({ emitting: false });
+    });
+
+    it('passes undefined (toggle) when enabled is omitted', () => {
+      service.setEmit.mockReturnValue({ emitting: true });
+      controller.postEmit({});
+      expect(service.setEmit).toHaveBeenCalledWith(undefined);
+    });
+  });
+
+  // ── API Reset ─────────────────────────────────────────────────────────────
+
+  describe('POST /demo/api-reset', () => {
+    it('returns ok=true on successful reset', async () => {
+      service.resetApi.mockResolvedValue({ ok: true, http_status: 204 });
+      const result = await controller.apiReset();
+      expect(result).toEqual({ ok: true, http_status: 204 });
+    });
+
+    it('returns ok=false when target returns 401', async () => {
+      service.resetApi.mockResolvedValue({ ok: false, http_status: 401 });
+      const result = await controller.apiReset();
+      expect(result.ok).toBe(false);
+      expect(result.http_status).toBe(401);
+    });
+
+    it('returns ok=false with http_status=0 on network error', async () => {
+      service.resetApi.mockResolvedValue({ ok: false, http_status: 0 });
+      const result = await controller.apiReset();
+      expect(result.ok).toBe(false);
     });
   });
 
@@ -142,7 +250,6 @@ describe('DemoController', () => {
       const afterRun = await controller.run('demo-set', {});
       expect(afterRun.state).toBe('running');
 
-      // Simulate polling until done
       expect(controller.status().state).toBe('running');
       expect(controller.status().state).toBe('done');
     });

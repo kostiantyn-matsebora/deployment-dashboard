@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Subscription } from 'rxjs';
-import { DemoService } from './demo.service';
+import { DemoService, IngestOptions } from './demo.service';
 import { PANEL_HTML } from '../ui/panel';
 
 @Controller('demo')
@@ -35,7 +35,7 @@ export class DemoController implements OnModuleDestroy {
     return this.demoService.getStatus();
   }
 
-  // ── Scenarios ─────────────────────────────────────────────────────────────
+  // ── Scenarios (legacy, backwards compat) ──────────────────────────────────
 
   /** GET /demo/scenarios */
   @Get('scenarios')
@@ -57,8 +57,8 @@ export class DemoController implements OnModuleDestroy {
       return await this.demoService.start(name, body?.delay_ms);
     } catch (err: unknown) {
       throw new NotFoundException({
-        type: 'about:blank',
-        title: 'Not Found',
+        type:   'about:blank',
+        title:  'Not Found',
         status: 404,
         detail: err instanceof Error ? err.message : String(err),
       });
@@ -72,9 +72,70 @@ export class DemoController implements OnModuleDestroy {
     return this.demoService.stop(name);
   }
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
+  // ── Ingest ────────────────────────────────────────────────────────────────
 
-  /** POST /demo/reset */
+  /**
+   * POST /demo/ingest
+   * Unified ingest: dataset='demo'|'random', optional pre-ingest reset,
+   * optional event count (random only), optional per-event delay.
+   * Idempotent when already running.
+   */
+  @Post('ingest')
+  @HttpCode(HttpStatus.OK)
+  async ingest(@Body() body: IngestOptions = {}) {
+    try {
+      return await this.demoService.startIngest(body);
+    } catch (err: unknown) {
+      throw new NotFoundException({
+        type:   'about:blank',
+        title:  'Not Found',
+        status: 404,
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /** POST /demo/ingest/stop */
+  @Post('ingest/stop')
+  @HttpCode(HttpStatus.OK)
+  ingestStop() {
+    return this.demoService.stopIngest();
+  }
+
+  // ── Live Emission ─────────────────────────────────────────────────────────
+
+  /** GET /demo/emit */
+  @Get('emit')
+  getEmit() {
+    return this.demoService.getEmitStatus();
+  }
+
+  /**
+   * POST /demo/emit
+   * { "enabled": true|false } — omit to toggle.
+   */
+  @Post('emit')
+  @HttpCode(HttpStatus.OK)
+  postEmit(@Body() body: { enabled?: boolean } = {}) {
+    return this.demoService.setEmit(body?.enabled);
+  }
+
+  // ── API Reset ─────────────────────────────────────────────────────────────
+
+  /**
+   * POST /demo/api-reset
+   * Proxies POST /api/control/reset to the configured write-API target.
+   * Returns { ok, http_status }.
+   */
+  @Post('api-reset')
+  @HttpCode(HttpStatus.OK)
+  async apiReset() {
+    return this.demoService.resetApi();
+  }
+
+  // ── Reset (driver state only) ─────────────────────────────────────────────
+
+  /** POST /demo/reset — resets the driver's own state counters to idle. */
   @Post('reset')
   @HttpCode(HttpStatus.OK)
   reset() {
@@ -90,9 +151,9 @@ export class DemoController implements OnModuleDestroy {
    */
   @Get('stream')
   stream(@Res() res: Response): void {
-    res.setHeader('Content-Type',  'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection',    'keep-alive');
+    res.setHeader('Content-Type',      'text/event-stream');
+    res.setHeader('Cache-Control',     'no-cache, no-transform');
+    res.setHeader('Connection',        'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 

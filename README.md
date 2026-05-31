@@ -59,6 +59,42 @@ Compose files live in [`compose/`](compose/). Copy `compose/.env.example` to `co
 
 > The gateway is the only published port (default `:8080`). Frontend, API, and PostgreSQL are internal-only.
 
+### Running from local source
+
+`compose/docker-compose.local.yaml` swaps all published images for locally built ones (`pull_policy: never`). Stack it on top of the base + demo overrides.
+
+**1. Build all images:**
+
+```powershell
+docker compose `
+  -f compose/docker-compose.yaml `
+  -f compose/docker-compose.demo.yaml `
+  -f compose/docker-compose.local.yaml `
+  --profile demo build
+```
+
+**2. Run:**
+
+```powershell
+docker compose `
+  -f compose/docker-compose.yaml `
+  -f compose/docker-compose.demo.yaml `
+  -f compose/docker-compose.local.yaml `
+  --profile demo up
+```
+
+Or build and start in one step:
+
+```powershell
+docker compose `
+  -f compose/docker-compose.yaml `
+  -f compose/docker-compose.demo.yaml `
+  -f compose/docker-compose.local.yaml `
+  --profile demo up --build
+```
+
+Open `http://localhost:8080` for the dashboard and `http://localhost:8080/demo/` for the Demo Driver control panel.
+
 ## Docs
 
 Full specification in [`docs/`](docs/index.md) — architecture (SAD), API contracts, frontend requirements, fetcher, mock server, and demo driver.
