@@ -220,19 +220,14 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- ── API card ───────────────────────────────────────────────────────── -->
+    <!-- ── Control API card ─────────────────────────────────────────────── -->
     <div class="card">
-      <div class="card-title">API</div>
+      <div class="card-title">Control API</div>
       <div class="api-row">
-        <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset State</button>
+        <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset System</button>
         <span class="api-msg" id="reset-api-msg"></span>
       </div>
-    </div>
-
-    <!-- ── Reset card (system reset state, read-only) ─────────────────────── -->
-    <div class="card full">
-      <div class="card-title">Reset (system)</div>
-      <div class="reset-row">
+      <div class="reset-row" style="margin-top:10px">
         <span class="badge badge-reset-idle" id="reset-state-badge">IDLE</span>
         <div class="reset-id" id="reset-id-display"></div>
       </div>
@@ -271,6 +266,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     <span class="sb-sep">·</span>
     <span class="sb-lbl">Finished</span>
     <span class="sb-val" id="finished-at">—</span>
+    <span class="sb-sep">·</span>
+    <span class="badge badge-reset-idle" id="sb-reset-badge">RESET: IDLE</span>
   </div>
 
   <script>
@@ -303,6 +300,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const overlayResetId  = $('overlay-reset-id');
     const resetStateBadge = $('reset-state-badge');
     const resetIdDisplay  = $('reset-id-display');
+    const sbResetBadge    = $('sb-reset-badge');
 
     // Interactive controls blocked during reset.
     const interactiveControls = [
@@ -352,15 +350,19 @@ export const PANEL_HTML = `<!DOCTYPE html>
       stateBadge.textContent = state;
       stateBadge.className   = 'badge badge-' + state;
 
-      // Reset-state card (§7 — read-only indicator).
+      // Reset-state indicators (card badge + footer chip).
       if (resetState === 'blocked') {
         resetStateBadge.textContent = 'RESET IN PROGRESS';
         resetStateBadge.className   = 'badge badge-reset-blocked';
         resetIdDisplay.textContent  = resetId ? 'reset_id: ' + resetId : '';
+        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
+        sbResetBadge.className      = 'badge badge-reset-blocked';
       } else {
         resetStateBadge.textContent = 'IDLE';
         resetStateBadge.className   = 'badge badge-reset-idle';
         resetIdDisplay.textContent  = '';
+        sbResetBadge.textContent    = 'RESET: IDLE';
+        sbResetBadge.className      = 'badge badge-reset-idle';
       }
 
       // Full-panel blocking overlay + interactive control state.
