@@ -1,7 +1,6 @@
 ---
 description: Revise an existing doc or author a new one against host authoring rules. Extract over compact for files >200 lines. Mode B of docs-keeper. Without a path, targets all uncommitted doc files.
 argument-hint: [doc-path] [-- brief]
-model: sonnet
 ---
 
 # /docs-revise

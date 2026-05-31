@@ -1,7 +1,6 @@
 ---
 description: Cross-doc consistency sweep — verify every sources-of-truth entry, walk every index.md children list (supports nested paths from recursive descent), flag orphans + broken links + legacy-navigation READMEs, hand off drift to /docs-registry-sync. Content-bearing READMEs are regular files, not legacy. Mode C of docs-keeper.
 argument-hint: [optional-scope-path]
-model: sonnet
 ---
 
 # /docs-sweep
