@@ -77,9 +77,6 @@
     Gate hardness: `block` (default) or `warn`. Falls back to
     `$env:DOCS_KEEPER_ENFORCE`.
 
-.PARAMETER SessionId
-    Claude session id (from the hook stdin payload's `session_id`). Namespaces
-    the per-session files so concurrent sessions do not share state.
 
 .PARAMETER DriftOnly
     CI path — drift check only, no session/revise logic.
@@ -479,7 +476,6 @@ function Invoke-DocsKeeperMaintenance {
     param(
         [string]$HookInputJson,
         [string]$RepoRoot,
-        [string]$SessionId,
         [scriptblock]$GitCommandRunner,
         [scriptblock]$DirLister,
         [scriptblock]$FileReader,
@@ -744,7 +740,6 @@ if (-not $AsLibrary) {
     $result = Invoke-DocsKeeperMaintenance `
         -HookInputJson $HookInputJson `
         -RepoRoot $RepoRoot `
-        -SessionId $SessionId `
         -GitCommandRunner $GitCommandRunner `
         -DirLister $DirLister `
         -FileReader $FileReader `
