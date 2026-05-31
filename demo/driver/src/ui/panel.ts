@@ -423,13 +423,43 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const count    = Math.min(parseInt(countInput.value, 10) || 10, 10);
       const body     = { dataset, reset, delay_ms: delay };
       if (dataset === 'random') body.count = count;
+
+      // When reset is checked the server blocks until the full reset cycle
+      // completes before responding.  Show the blocking overlay immediately so
+      // the user sees feedback during the wait; applyStatus will clear it once
+      // the response arrives with reset_state back to idle.
+      if (reset) {
+        isBlocked = true;
+        overlayResetId.textContent = '';
+        resetOverlay.classList.add('visible');
+        interactiveControls.forEach(el => { el.disabled = true; });
+        resetStateBadge.textContent = 'RESET IN PROGRESS';
+        resetStateBadge.className   = 'badge badge-reset-blocked';
+        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
+        sbResetBadge.className      = 'badge badge-reset-blocked';
+      }
+
       try {
         const data = await apiFetch('/demo/ingest', {
           method: 'POST',
           body:   JSON.stringify(body),
         });
         applyStatus(data);
-      } catch {}
+      } catch {
+        // On network error: clear the optimistic overlay so the UI is not
+        // permanently stuck.
+        if (reset) {
+          isBlocked = false;
+          resetOverlay.classList.remove('visible');
+          interactiveControls.forEach(el => { el.disabled = false; });
+          ingestBtn.disabled     = false;
+          ingestStopBtn.disabled = true;
+          resetStateBadge.textContent = 'IDLE';
+          resetStateBadge.className   = 'badge badge-reset-idle';
+          sbResetBadge.textContent    = 'RESET: IDLE';
+          sbResetBadge.className      = 'badge badge-reset-idle';
+        }
+      }
     });
 
     ingestStopBtn.addEventListener('click', async () => {
@@ -463,6 +493,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
           if (d.ok) {
             resetApiMsg.textContent = '\\u2713 Reset OK (' + d.http_status + ')';
             resetApiMsg.className   = 'api-msg ok';
+            // Reset was accepted — the backend transitions to blocked via SSE,
+            // which arrives after this HTTP response.  Start polling immediately
+            // so applyStatus catches the blocked→idle cycle.
+            schedulePoll();
           } else {
             resetApiMsg.textContent = '\\u2717 HTTP ' + (d.http_status || '—');
             resetApiMsg.className   = 'api-msg err';
