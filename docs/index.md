@@ -5,7 +5,7 @@ intro: 'Project documentation root — architecture spec, frontend requirements,
 children:
   - /SAD
   - /FRONTEND_REQUIREMENTS
-  - /BACKEND_SPECIFICATION
+  - /API_SPECIFICATION
   - /GATEWAY_SPECIFICATION
   - /FETCHER_SPECIFICATION
   - /MOCK_SPECIFICATION
@@ -33,20 +33,20 @@ children:
 - [Behavior](./FRONTEND_REQUIREMENTS.md#behavior)
 - [Data](./FRONTEND_REQUIREMENTS.md#data)
 
-### `BACKEND_SPECIFICATION.md`
+### `API_SPECIFICATION.md`
 
-- [Sources of truth](./BACKEND_SPECIFICATION.md#sources-of-truth)
-- [1. Stack](./BACKEND_SPECIFICATION.md#1-stack)
-- [2. Decisions](./BACKEND_SPECIFICATION.md#2-decisions)
-- [3. Solution layout](./BACKEND_SPECIFICATION.md#3-solution-layout)
-- [4. Data model](./BACKEND_SPECIFICATION.md#4-data-model)
-- [5. Endpoints](./BACKEND_SPECIFICATION.md#5-endpoints)
-- [6. Cross-cutting](./BACKEND_SPECIFICATION.md#6-cross-cutting)
-- [7. SSE + LISTEN/NOTIFY](./BACKEND_SPECIFICATION.md#7-sse--listennotify)
-- [8. Testing](./BACKEND_SPECIFICATION.md#8-testing)
-- [9. Configuration (env)](./BACKEND_SPECIFICATION.md#9-configuration-env)
-- [10. Implementation phases (atomic commits)](./BACKEND_SPECIFICATION.md#10-implementation-phases-atomic-commits)
-- [11. Out of scope](./BACKEND_SPECIFICATION.md#11-out-of-scope)
+- [Sources of truth](./API_SPECIFICATION.md#sources-of-truth)
+- [1. Stack](./API_SPECIFICATION.md#1-stack)
+- [2. Decisions](./API_SPECIFICATION.md#2-decisions)
+- [3. Solution layout](./API_SPECIFICATION.md#3-solution-layout)
+- [4. Data model](./API_SPECIFICATION.md#4-data-model)
+- [5. Endpoints](./API_SPECIFICATION.md#5-endpoints)
+- [6. Cross-cutting](./API_SPECIFICATION.md#6-cross-cutting)
+- [7. SSE + LISTEN/NOTIFY](./API_SPECIFICATION.md#7-sse--listennotify)
+- [8. Testing](./API_SPECIFICATION.md#8-testing)
+- [9. Configuration (env)](./API_SPECIFICATION.md#9-configuration-env)
+- [10. Implementation phases (atomic commits)](./API_SPECIFICATION.md#10-implementation-phases-atomic-commits)
+- [11. Out of scope](./API_SPECIFICATION.md#11-out-of-scope)
 
 ### `GATEWAY_SPECIFICATION.md`
 

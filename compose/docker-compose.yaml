@@ -88,14 +88,14 @@ services:
         Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB:-deployment_dashboard};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       # Write-endpoint shared secret.  Required — validated on app startup.
       API_KEY: "${API_KEY}"
-      # Control-surface shared secret (BACKEND_SPECIFICATION.md D8).
+      # Control-surface shared secret (API_SPECIFICATION.md D8).
       # Optional — absent (empty) hides POST /api/control/reset entirely (returns 404).
       # Set to enable the reset surface; keep distinct from API_KEY (least-privilege).
       CONTROL_API_KEY: "${CONTROL_API_KEY:-}"
       # CSV of allowed CORS origins.  Empty disables CORS (gateway / same-origin).
       # Default is empty — gateway mode is the standard deployment (GW6).
       # Set only when running the API without the gateway (split-domain mode,
-      # BACKEND_SPECIFICATION.md D6); the two modes are mutually exclusive.
+      # API_SPECIFICATION.md D6); the two modes are mutually exclusive.
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-}"
       # Minimum 90, default 365.  Demo uses a shorter window.
       HISTORY_RETENTION_DAYS: "${HISTORY_RETENTION_DAYS:-30}"

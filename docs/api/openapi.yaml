@@ -14,10 +14,27 @@ info:
     Surfaces:
       - **Write** — append-only ingest of deployment **events**; gated by `X-Api-Key`.
       - **Read**  — matrix + per-slot history + raw event listings + discovery; unauthenticated.
-      - **Stream** — SSE fan-out of newly-ingested events; unauthenticated.
+      - **Stream** — SSE fan-out of newly-ingested deployment events; unauthenticated.
       - **Fetcher** — opaque per-adapter cursor state for `Dashboard.Fetcher`; gated by `X-Api-Key`.
-      - **Control** — destructive administrative operations (reset); gated by `X-Control-API-Key`.
+      - **Control** — administrative operations + orchestration; gated by `X-Control-API-Key`.
+        - `POST /api/control/reset` — destructive data reset; emits `reset` event on control stream.
+        - `GET  /api/control/stream` — SSE channel; API emits orchestration events; `Last-Event-ID` replay within 2 h window.
+        - `POST /api/control/events` — single inbound endpoint; all components post their events here. Gated by `X-Api-Key`; component identified by `X-Component-Id` header.
+        - `GET  /api/control/events` — read-only listing of component-posted events (2 h retention).
       - **Ops** — `/healthz`, `/readyz`.
+
+    **Communication model (Kubernetes-style).**
+    The API is the single source of truth for state and orchestration.
+    Components (fetcher, demo-driver, …) are always the callers — they never receive
+    inbound connections from the API:
+
+    ```
+    Component ──GET /api/control/stream──► API   subscribe; receive orchestration events
+    Component ──POST /api/control/events─► API   report;    post status / operational events
+    ```
+
+    Every arrow originates at the component. The SSE stream is a response to a
+    component-initiated GET — the API emits into it, but the connection is inbound.
 
     **Event-store semantics.** The persistence model (SAD §11) is an append-only
     log of deployment **events** — every `POST /api/deployments` appends one row.
@@ -56,11 +73,15 @@ tags:
   - name: discovery
     description: Distinct services and environments derived from stored data.
   - name: stream
-    description: Real-time SSE fan-out.
+    description: Real-time SSE fan-out of deployment events.
   - name: fetcher
     description: Opaque per-adapter cursor state for `Dashboard.Fetcher`.
   - name: control
-    description: Control surface — destructive administrative operations. Requires `X-Control-API-Key`.
+    description: |
+      Control surface — administrative operations and component orchestration.
+      `POST /api/control/reset` and `GET /api/control/stream` require `X-Control-API-Key`.
+      `POST /api/control/events` requires `X-Api-Key` + `X-Component-Id`.
+      `GET /api/control/events` is unauthenticated.
   - name: ops
     description: Liveness + readiness probes.
 
@@ -151,8 +172,8 @@ paths:
         - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
         - { name: status,        in: query, schema: { $ref: '#/components/schemas/Status' }, description: Filter by status. }
         - { name: deployment_id, in: query, schema: { type: string }, description: Filter to all rows of a single logical deployment. }
-        - { name: since,         in: query, schema: { type: string, format: date-time }, description: Only events with `happened_at >= since`. }
-        - { name: until,         in: query, schema: { type: string, format: date-time }, description: Only events with `happened_at <  until`. }
+        - { name: since,         in: query, schema: { type: string, format: date-time }, description: "Only events with `happened_at >= since`." }
+        - { name: until,         in: query, schema: { type: string, format: date-time }, description: "Only events with `happened_at <  until`." }
         - { name: cursor,        in: query, schema: { type: string }, description: Opaque pagination cursor from a previous page. }
         - { name: limit,         in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
       responses:
@@ -250,7 +271,7 @@ paths:
                 examples:
                   - { items: ["dev", "qa", "uat", "prod"] }
 
-  # ───── Stream ─────────────────────────────────────────────────────────────
+  # ───── Stream — deployment events (browser / SPA) ─────────────────────────
   /api/events/stream:
     get:
       tags: [stream]
@@ -349,14 +370,19 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
-  # ───── Control surface ───────────────────────────────────────────────────
+  # ───── Control — destructive reset ────────────────────────────────────────
   /api/control/reset:
     post:
       tags: [control]
       operationId: resetState
-      summary: Delete all stored data (deployment events and fetcher state).
+      summary: Delete all stored data (deployment events, fetcher state, component events, control stream events).
       description: |
-        Truncates `deployment_events` and `fetcher_state` — all rows, no filters.
+        Truncates `deployment_events`, `fetcher_state`, `component_events`, and
+        `control_stream_events` — all rows, no filters.
+
+        Also `NOTIFY`s the `control_events` PostgreSQL channel with a `reset`
+        event so that all connected components hear the reset immediately via
+        `GET /api/control/stream`.
 
         Intended for test-environment teardown and local-dev resets.
         **Not safe in production.**
@@ -366,8 +392,204 @@ paths:
       security:
         - controlApiKey: []
       responses:
-        '204': { description: All data deleted. }
+        '204': { description: All data deleted; reset event emitted on control stream. }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ───── Control — orchestration SSE stream (API → components) ──────────────
+  /api/control/stream:
+    get:
+      tags: [control]
+      operationId: watchControlStream
+      summary: SSE stream of orchestration events emitted by the API to components.
+      description: |
+        Long-lived `text/event-stream` connection **for internal service components**
+        (fetcher, demo-driver, …) — not for browser clients.
+
+        The API emits named events on this stream whenever system state changes.
+        Components subscribe, react to each event, and report back via
+        `POST /api/control/events`.
+
+        **Communication direction.** Components always initiate the connection (GET).
+        The API never calls components — this stream is the only outbound channel,
+        and it is still a response to a component-initiated request.
+
+        **`Last-Event-ID` replay.** Control stream events are persisted for **2 hours**
+        in the `control_stream_events` table. A component that reconnects with
+        `Last-Event-ID` receives all events with a strictly greater `id` still within
+        the retention window. This mirrors the pattern of `GET /api/events/stream`.
+        Events older than 2 hours are purged and will not be replayed.
+
+        Backed by PostgreSQL `NOTIFY control_events` + `control_stream_events`
+        persistence — consistent with the deployment-events fan-out and stateless
+        across API instances (NFR-05).
+
+        **Auth note.** Components MUST use `fetch()` + `ReadableStream` to supply
+        the `X-Control-API-Key` header. The browser `EventSource` constructor cannot
+        send custom headers and MUST NOT be used for this endpoint.
+
+        **Current event type (`reset`):**
+        ```
+        event: reset
+        id: 01J9F4WZK3W9G2T6X4QH3DKQF6
+        data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+
+        : ping
+        ```
+      security:
+        - controlApiKey: []
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+          description: |
+            Resume cursor. The server replays all persisted control events with
+            `id` strictly greater than this value, then attaches to the live
+            channel. Events older than 2 hours may no longer be available.
+        - name: component
+          in: query
+          schema: { type: string }
+          description: |
+            Optional component id filter. When set, only events whose `component`
+            field equals this id or `"*"` (applies to all) are delivered.
+            Components SHOULD always set this to their own id.
+      responses:
+        '200':
+          description: Control stream opened.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                examples:
+                  - |
+                    : ping
+
+                    event: reset
+                    id: 01J9F4WZK3W9G2T6X4QH3DKQF6
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ───── Control — component event ingest (components → API) ────────────────
+  /api/control/events:
+    post:
+      tags: [control]
+      operationId: postComponentEvent
+      summary: A component posts an operational event to the API.
+      description: |
+        Single inbound endpoint for **all** components. Component identity is
+        carried in the **`X-Component-Id` header** (required), not the body.
+        The server stores the header value as `component_id` on the persisted row.
+
+        Components call this endpoint to report status transitions, heartbeats,
+        and operational events. The API stores each call as an append-only row in
+        `component_events`, queryable via `GET /api/control/events`.
+
+        **Retention: 2 hours.** Rows older than 2 hours are purged by the
+        background retention job. Do not use this endpoint as a durable audit log.
+
+        **Expected call patterns:**
+        - On every meaningful state transition (`idle → running`, `running → error`, …).
+        - As a periodic heartbeat while in a stable state (≤ 30 s cadence recommended).
+        - Immediately after reacting to an event from `GET /api/control/stream`
+          (e.g. after completing a reset, post `state: idle`).
+      security:
+        - apiKey: []
+      parameters:
+        - name: X-Component-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9][a-z0-9.-]{0,127}$'
+          description: |
+            **Required.** Component identifier. Lowercase kebab/dot.
+            Examples: `dashboard-fetcher`, `dashboard-fetcher.github-actions`, `demo-driver`.
+            The server stores this value as `component_id` on the persisted row.
+            Missing or pattern-invalid → `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComponentEvent'
+            examples:
+              fetcher_running:
+                summary: Fetcher reporting normal poll-loop status.
+                value:
+                  event_type: status
+                  state: running
+                  detail: "Polling github-actions adapter at 30 s interval"
+                  occurred_at: "2026-05-31T10:00:00Z"
+                  payload:
+                    adapter: github-actions
+                    last_poll_at: "2026-05-31T10:00:00Z"
+                    events_this_hour: 42
+              fetcher_reset_ack:
+                summary: Fetcher acknowledging a reset event from the control stream.
+                value:
+                  event_type: status
+                  state: idle
+                  detail: "Reset acknowledged; cursor cleared"
+                  occurred_at: "2026-05-31T10:00:05Z"
+                  payload:
+                    trigger: reset
+                    control_event_id: "01J9F4WZK3W9G2T6X4QH3DKQF6"
+              demo_driver_error:
+                summary: Demo driver reporting an error.
+                value:
+                  event_type: error
+                  state: error
+                  detail: "Write API unreachable: connection refused"
+                  occurred_at: "2026-05-31T10:01:00Z"
+                  payload:
+                    http_status: 0
+                    attempt: 3
+              heartbeat:
+                summary: Periodic heartbeat (no state change).
+                value:
+                  event_type: heartbeat
+                  state: running
+                  occurred_at: "2026-05-31T10:00:30Z"
+      responses:
+        '204': { description: Event recorded. }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: Payload field exceeds 8 KiB.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Validation failure (body) or missing/invalid `X-Component-Id` header.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+    # ───── Control — component event listing (read) ──────────────────────────
+    get:
+      tags: [control]
+      operationId: listComponentEvents
+      summary: List component-posted events with cursor pagination.
+      description: |
+        Returns component events newest-first by `received_at`. Supports filtering
+        by `component_id` and `event_type`. Unauthenticated — same trust tier as
+        other read endpoints.
+
+        **Retention: 2 hours.** Only events from the last 2 hours are available.
+        Useful for live health monitoring and debugging; not a durable audit trail.
+      parameters:
+        - { name: component_id, in: query, schema: { type: string }, description: Filter to a specific component. }
+        - { name: event_type,   in: query, schema: { type: string }, description: "Filter by event type (`status`, `error`, `heartbeat`, …)." }
+        - { name: since,        in: query, schema: { type: string, format: date-time }, description: "Only events with `occurred_at >= since`." }
+        - { name: cursor,       in: query, schema: { type: string }, description: Opaque pagination cursor from a previous page. }
+        - { name: limit,        in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: A page of component events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentEventPage'
 
   # ───── Ops ────────────────────────────────────────────────────────────────
   /healthz:
@@ -393,7 +615,9 @@ paths:
       summary: Readiness probe (dependencies reachable).
       responses:
         '200':
-          description: Ready (DB reachable, LISTEN attached).
+          description: |
+            Ready. Checks: DB reachable; `deployment_events` channel LISTEN attached;
+            `control_events` channel LISTEN attached.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Readiness' }
@@ -414,7 +638,8 @@ components:
       in: header
       name: X-Api-Key
       description: |
-        Static, server-side-configured shared secret. Required on every write call.
+        Static, server-side-configured shared secret. Required on ingest, fetcher
+        state, and component event reporting.
         Missing or invalid → `401`. The dev fake key is never embedded in the SPA
         bundle (NFR-04).
     controlApiKey:
@@ -424,7 +649,7 @@ components:
       description: |
         Static, server-side-configured shared secret for control operations (D8).
         Distinct from `X-Api-Key` — least-privilege separation; ingest/fetcher callers
-        cannot trigger destructive operations.
+        cannot trigger destructive operations or subscribe to the control stream.
         Missing or invalid → `401`.
 
   parameters:
@@ -435,9 +660,9 @@ components:
         type: string
         pattern: '^[a-z0-9][a-z0-9./-]{0,127}$'
       description: |
-        Optional attribution header. Format: `<emitter>/<adapter>`, e.g.
-        `dashboard-fetcher/github-actions`. Stored alongside the event; never
-        rendered as an authoritative actor.
+        Optional attribution header on deployment ingest (`POST /api/deployments`).
+        Format: `<emitter>/<adapter>`, e.g. `dashboard-fetcher/github-actions`.
+        Stored alongside the deployment event row; never rendered as an authoritative actor.
 
   responses:
     Unauthorized:
@@ -461,6 +686,8 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
 
   schemas:
+
+    # ── Deployment domain ────────────────────────────────────────────────────
 
     Status:
       type: string
@@ -626,6 +853,8 @@ components:
             successful). Also omitted when no successful deployment has ever
             occurred in this slot.
 
+    # ── Fetcher ──────────────────────────────────────────────────────────────
+
     FetcherState:
       type: object
       required: [adapter, cursor, updated_at]
@@ -643,6 +872,142 @@ components:
           type: string
           maxLength: 8192
           description: Opaque cursor blob; max 8 KiB.
+
+    # ── Control plane ─────────────────────────────────────────────────────────
+
+    ComponentState:
+      type: string
+      enum: [running, idle, paused, error]
+      description: |
+        Operational state self-reported by a component.
+        - `running` — actively doing work (polling, emitting events, …).
+        - `idle`    — connected and healthy; no active task.
+        - `paused`  — work intentionally suspended; component is connected but not processing.
+        - `error`   — unhealthy; `detail` SHOULD carry the reason.
+
+    ControlStreamEvent:
+      type: object
+      required: [id, type, component, occurred_at]
+      description: |
+        Data payload of a named event frame on `GET /api/control/stream`.
+        Also the row type stored in `control_stream_events` (enables `Last-Event-ID` replay).
+
+        `type` is an open string — components MUST treat unknown values as no-ops
+        (forward-compatibility). Current known type: `reset`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: |
+            Server-assigned UUIDv7 for this control event. Also the `id:` field of
+            the SSE frame — used as `Last-Event-ID` by reconnecting components.
+        type:
+          type: string
+          description: |
+            Event type. Currently known value: `reset` — system data was cleared;
+            all components should reinitialise from scratch.
+            Treat unknown values as no-op.
+        component:
+          type: string
+          description: |
+            Target component id, or `"*"` meaning all components.
+            Components SHOULD ignore events where `component` neither matches
+            their own id nor equals `"*"`.
+        occurred_at:
+          type: string
+          format: date-time
+          description: Server-assigned UTC timestamp when the event was generated.
+
+    ComponentEvent:
+      type: object
+      required: [event_type, state, occurred_at]
+      additionalProperties: false
+      description: |
+        Request body for `POST /api/control/events`.
+
+        **Component identity is NOT in the body.** It is carried by the required
+        `X-Component-Id` header and stored as `component_id` on the persisted
+        row by the server.
+
+        `payload` is an opaque JSON object for component-specific observability data
+        (counters, cursors, error details). The API stores it verbatim; never parsed.
+      properties:
+        event_type:
+          type: string
+          description: |
+            Event category. Known values (not exhaustive — new types are additive):
+            - `status`    — a state transition or periodic status report.
+            - `heartbeat` — periodic liveness ping; no state change.
+            - `error`     — component encountered an error; `state` will be `error`.
+        state:
+          $ref: '#/components/schemas/ComponentState'
+        detail:
+          type: string
+          maxLength: 512
+          description: Human-readable description of the current activity or error. Optional on heartbeats.
+        occurred_at:
+          type: string
+          format: date-time
+          description: |
+            **Component-supplied** UTC wall-clock at which this event occurred.
+            Mirrors the `happened_at` semantics of deployment events — the
+            component is the authority on when the state transition happened.
+        payload:
+          type: object
+          additionalProperties: true
+          description: |
+            Opaque key-value pairs for observability (e.g. `last_poll_at`,
+            `events_this_hour`, `adapter`, `http_status`, `control_event_id`).
+            Serialised size ≤ 8 KiB — else `413`.
+
+    ComponentEventRecord:
+      type: object
+      required: [id, component_id, event_type, state, occurred_at, received_at]
+      description: |
+        Stored row returned by `GET /api/control/events`. Retained for 2 hours.
+        `component_id` is the value of the `X-Component-Id` header from the
+        originating POST request.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Server-assigned UUIDv7 row identifier (time-ordered; doubles as sort key).
+        component_id:
+          type: string
+          description: Value of the `X-Component-Id` header from the originating POST.
+        event_type:
+          type: string
+        state:
+          $ref: '#/components/schemas/ComponentState'
+        detail:
+          type: string
+          nullable: true
+        occurred_at:
+          type: string
+          format: date-time
+          description: Component-supplied timestamp (as submitted).
+        received_at:
+          type: string
+          format: date-time
+          description: Server-assigned timestamp when the row was inserted.
+        payload:
+          type: object
+          nullable: true
+
+    ComponentEventPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ComponentEventRecord' }
+          description: Component events, ordered by `received_at` descending.
+        next_cursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page. `null` when the page is final.
+
+    # ── Ops ───────────────────────────────────────────────────────────────────
 
     Readiness:
       type: object

@@ -10,7 +10,7 @@ Implementation contract for the **App Gateway** — the nginx reverse proxy that
 |---|---|
 | [`docs/SAD.md`](SAD.md) §7 | Architecture — gateway as sole public surface, internal upstreams. |
 | [`docs/api/openapi.yaml`](api/openapi.yaml) | API paths the gateway routes (`/api/*`, `/healthz`, `/readyz`). |
-| [`docs/BACKEND_SPECIFICATION.md`](BACKEND_SPECIFICATION.md) | Backend CORS / SSE behaviour the gateway pairs with (D3, D6). |
+| [`docs/API_SPECIFICATION.md`](API_SPECIFICATION.md) | API CORS / SSE behaviour the gateway pairs with (D3, D6). |
 | [`docs/DEMO_DRIVER_SPECIFICATION.md`](DEMO_DRIVER_SPECIFICATION.md) | Demo driver paths (`/demo/*`) and SSE stream the gateway proxies. |
 
 > `CR-####` / `ADR-####` documents referenced elsewhere **do not exist** — ignore those citations.
