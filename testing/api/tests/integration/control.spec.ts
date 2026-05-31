@@ -1,10 +1,13 @@
 /**
  * Control surface (openapi.yaml §control):
  *   POST /api/control/reset     — X-Control-API-Key, destructive
+ *   GET  /api/control/stream    — X-Control-API-Key, SSE orchestration stream
  *   POST /api/control/events    — X-Api-Key + X-Component-Id
  *   GET  /api/control/events    — unauthenticated listing
  */
-import { get, post, getJson, ingestEvent, resetAll, API_KEY, CONTROL_KEY } from './helpers';
+import {
+  get, post, getJson, ingestEvent, resetAll, readSseUntil, sleep, API_KEY, CONTROL_KEY,
+} from './helpers';
 
 describe('POST /api/control/reset', () => {
   it('401 without a control key', async () => {
@@ -29,11 +32,66 @@ describe('POST /api/control/reset', () => {
   });
 });
 
-// TODO: PENDING — API_SPECIFICATION Phase 10 (control plane) not implemented yet.
-// ControlEndpoints.cs maps only POST /api/control/reset; the component-events
-// endpoints (and control_stream_events / component_events tables, second LISTEN
-// channel) do not exist, so these return 404. Enable when Phase 10 lands.
-describe.skip('POST /api/control/events', () => {
+describe('GET /api/control/stream', () => {
+  it('401 without a control key', async () => {
+    const res = await get('/api/control/stream', { Accept: 'text/event-stream' });
+    expect(res.status).toBe(401);
+  });
+
+  it('401 when the write key is presented as the control key (least privilege)', async () => {
+    const res = await get('/api/control/stream', { Accept: 'text/event-stream', 'X-Control-API-Key': API_KEY });
+    expect(res.status).toBe(401);
+  });
+
+  it('pushes a `reset` frame when the control reset is invoked', async () => {
+    // Open the stream, then reset once the subscription + LISTEN are attached.
+    const framePromise = readSseUntil(
+      '/api/control/stream',
+      f => f.event === 'reset',
+      { headers: { 'X-Control-API-Key': CONTROL_KEY }, timeoutMs: 20_000 },
+    );
+    await sleep(1_000);
+    await resetAll();
+
+    const frame = await framePromise;
+    expect(frame.id).toBeTruthy();
+    const data = JSON.parse(frame.data as string);
+    expect(data.type).toBe('reset');
+    expect(data.component).toBe('*');
+    expect(data.id).toBe(frame.id);
+  });
+
+  it('replays a persisted reset event after Last-Event-ID', async () => {
+    // resetAll persists one control_stream_events row; replaying from the zero
+    // UUID returns every event with a strictly greater id — at least this reset.
+    await resetAll();
+    const frame = await readSseUntil(
+      '/api/control/stream',
+      f => f.event === 'reset',
+      {
+        headers: { 'X-Control-API-Key': CONTROL_KEY, 'Last-Event-ID': '00000000-0000-0000-0000-000000000000' },
+        timeoutMs: 15_000,
+      },
+    );
+    expect(JSON.parse(frame.data as string).type).toBe('reset');
+  });
+
+  it('delivers wildcard ("*") events regardless of the ?component filter', async () => {
+    // The reset event targets "*", so a component-scoped subscriber still receives it.
+    const framePromise = readSseUntil(
+      '/api/control/stream?component=demo-driver',
+      f => f.event === 'reset',
+      { headers: { 'X-Control-API-Key': CONTROL_KEY }, timeoutMs: 20_000 },
+    );
+    await sleep(1_000);
+    await resetAll();
+
+    const frame = await framePromise;
+    expect(JSON.parse(frame.data as string).component).toBe('*');
+  });
+});
+
+describe('POST /api/control/events', () => {
   const validBody = () => ({
     event_type: 'status',
     state:      'running',
@@ -74,8 +132,7 @@ describe.skip('POST /api/control/events', () => {
   });
 });
 
-// TODO: PENDING — see Phase 10 note above. Enable when GET /api/control/events lands.
-describe.skip('GET /api/control/events', () => {
+describe('GET /api/control/events', () => {
   it('returns posted component events, filterable by component_id', async () => {
     const cid = `it-cmp-${Date.now()}`;
     await post('/api/control/events',

@@ -16,11 +16,13 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'testing/api/**'
       - '.github/workflows/api-tests.yml'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'testing/api/**'
       - '.github/workflows/api-tests.yml'
   workflow_dispatch:
 
