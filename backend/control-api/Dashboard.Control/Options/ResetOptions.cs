@@ -16,9 +16,17 @@ public sealed class ResetOptions
 
     /// <summary>
     /// Component ids whose acks are awaited; snapshotted into <c>reset_cycle.expected_components</c>
-    /// at cycle start. Default: <c>["dashboard-fetcher", "demo-driver"]</c> (D13).
+    /// at cycle start. The effective default (<c>["dashboard-fetcher", "demo-driver"]</c>, D13) is
+    /// supplied by <c>appsettings.json</c>, NOT a C# initializer here.
+    ///
+    /// This MUST stay empty. The .NET configuration binder <b>appends</b> config-bound array
+    /// elements onto the property's existing value rather than replacing it. A non-empty
+    /// initializer would therefore survive every config/env override (e.g.
+    /// <c>Reset__ExpectedComponents__0=…</c>), leaving phantom entries in the bound array and
+    /// making the ack gate wait on components that never ack. Keeping it empty lets
+    /// <c>appsettings.json</c> / environment fully define the set.
     /// </summary>
-    public string[] ExpectedComponents { get; set; } = ["dashboard-fetcher", "demo-driver"];
+    public string[] ExpectedComponents { get; set; } = [];
 
     /// <summary>
     /// Safety abort: if a cycle exceeds this duration, gates are released and state is forced

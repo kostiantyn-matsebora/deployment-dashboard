@@ -1,3 +1,4 @@
+using Dashboard.Control.Options;
 using Dashboard.Shared.Abstractions;
 using Dashboard.Shared.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -41,6 +42,12 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// </summary>
     public ForcedResetStateProvider? ForcedResetState { get; init; }
 
+    /// <summary>
+    /// When set, overrides the <c>Reset</c> configuration section so tests can control
+    /// <c>AckTimeoutSeconds</c> and <c>ExpectedComponents</c> without relying on defaults.
+    /// </summary>
+    public ResetConfigOverride? ResetConfig { get; init; }
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
@@ -73,6 +80,26 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
         builder.ConfigureServices(services =>
         {
+            if (ResetConfig is { } rc)
+            {
+                // Apply Reset overrides imperatively via PostConfigure rather than through
+                // configuration keys. The .NET configuration binder MERGES array indices onto
+                // the ResetOptions default initializer (["dashboard-fetcher","demo-driver"])
+                // instead of replacing the array, so a config-key override of ExpectedComponents
+                // would leave stale default entries (and empty slots) in the bound array — the
+                // orchestrator would then wait on acks the test never sends. PostConfigure runs
+                // after binding and lets us replace the array wholesale, deterministically.
+                services.PostConfigure<ResetOptions>(o =>
+                {
+                    if (rc.AckTimeoutSeconds.HasValue)
+                        o.AckTimeoutSeconds = rc.AckTimeoutSeconds.Value;
+                    if (rc.ExpectedComponents is { } components)
+                        o.ExpectedComponents = components;
+                    if (rc.GateMaxTtlSeconds.HasValue)
+                        o.GateMaxTtlSeconds = rc.GateMaxTtlSeconds.Value;
+                });
+            }
+
             if (!UseRealNotifier)
             {
                 // Replace Postgres notifier with no-op so tests that don't need SSE fan-out
@@ -99,3 +126,12 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
         await ctx.Database.MigrateAsync();
     }
 }
+
+/// <summary>
+/// Carries overrides for the <c>Reset</c> appsettings section used in
+/// <see cref="TestApiFactory.ResetConfig"/>.
+/// </summary>
+internal sealed record ResetConfigOverride(
+    int? AckTimeoutSeconds = null,
+    string[]? ExpectedComponents = null,
+    int? GateMaxTtlSeconds = null);

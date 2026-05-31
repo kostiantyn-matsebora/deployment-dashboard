@@ -290,6 +290,178 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
 }
 
 /// <summary>
+/// Regression guard for ack-driven early completion of the reset choreography.
+///
+/// The original symptom (in the <c>testing/api</c> black-box suite) was that a single
+/// reset-ack from the expected component never shortened the drain — the cycle always ran
+/// to <c>AckTimeoutSeconds</c>. The root cause was NOT the notify path: it was the
+/// <c>ExpectedComponents</c> array binding. The .NET configuration binder <b>appends</b>
+/// config/env array elements onto the property's existing value rather than replacing it,
+/// so the old non-empty <c>ResetOptions.ExpectedComponents</c> C# initializer
+/// (<c>["dashboard-fetcher","demo-driver"]</c>) survived every override. The ack gate then
+/// waited on components that never acked (e.g. an absent <c>dashboard-fetcher</c>) and could
+/// only ever complete via timeout. The fix empties that initializer (appsettings/env now
+/// fully define the set); this harness applies the per-test override via
+/// <c>PostConfigure&lt;ResetOptions&gt;</c> for the same reason (see <see cref="Helpers.TestApiFactory"/>).
+///
+/// This test sets <c>AckTimeoutSeconds = 30</c> (far longer than any realistic delivery
+/// latency) so that an early completion observed within 5 s is provably ack-driven, not
+/// timeout-driven.
+/// </summary>
+public sealed class AckFanInTests : IAsyncLifetime
+{
+    private const string TestComponent = "ack-fan-in-test";
+
+    // Long AckTimeout so early completion is unambiguously ack-driven.
+    // GateMaxTtl must be larger than AckTimeout; 120 s is safe.
+    private readonly TestApiFactory _factory = new()
+    {
+        UseRealNotifier = true,
+        ResetConfig = new ResetConfigOverride(
+            AckTimeoutSeconds: 30,
+            ExpectedComponents: [TestComponent],
+            GateMaxTtlSeconds: 120),
+    };
+
+    private HttpClient _client = null!;
+
+    public async Task InitializeAsync()
+    {
+        await _factory.InitializeAsync();
+        await _factory.MigrateAsync();
+        _client = _factory.CreateClient();
+        // Allow all three LISTEN channels (component_acks, control_events, reset_state) to connect.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private HttpRequestMessage ResetRequest()
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/control/reset");
+        req.Headers.Add("X-Control-API-Key", TestApiFactory.TestControlApiKey);
+        return req;
+    }
+
+    private HttpRequestMessage ControlStreamRequest(string? lastEventId = null)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, "/api/control/stream");
+        req.Headers.Add("X-Control-API-Key", TestApiFactory.TestControlApiKey);
+        if (lastEventId is not null)
+            req.Headers.Add("Last-Event-ID", lastEventId);
+        return req;
+    }
+
+    private HttpRequestMessage AckRequest(string componentId, string resetId) =>
+        new(HttpMethod.Post, "/api/control/events")
+        {
+            Content = JsonContent.Create(new
+            {
+                event_type = "reset-ack",
+                state = "paused",
+                occurred_at = DateTimeOffset.UtcNow.ToString("o"),
+                payload = new { reset_id = resetId },
+            }),
+            Headers =
+            {
+                { "X-Api-Key", TestApiFactory.TestApiKey },
+                { "X-Component-Id", componentId },
+            },
+        };
+
+    private static async Task<List<JsonElement>> ReadDataFramesAsync(
+        Stream stream, int count, CancellationToken ct)
+    {
+        using var reader = new StreamReader(stream, leaveOpen: true);
+        var events = new List<JsonElement>();
+
+        while (events.Count < count && !ct.IsCancellationRequested)
+        {
+            string? line;
+            try { line = await reader.ReadLineAsync(ct); }
+            catch (OperationCanceledException) { break; }
+
+            if (line is null) break;
+            if (!line.StartsWith("data: ")) continue;
+
+            events.Add(JsonSerializer.Deserialize<JsonElement>(line[6..]));
+        }
+
+        return events;
+    }
+
+    // ── Reproducing test ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Asserts that posting a reset-ack from the single expected component drives
+    /// the orchestrator to emit <c>reset-started</c> promptly — well before the
+    /// 30-second AckTimeout expires.
+    ///
+    /// This fails if <c>ExpectedComponents</c> contains anything beyond the one component
+    /// this test acks (the original bug: the binder left stale defaults in the array), since
+    /// the gate would then wait on an ack that never arrives and complete only via timeout.
+    /// </summary>
+    [Fact]
+    public async Task AckDrivenEarlyCompletion_SendsAckForExpectedComponent_ResetStartedArrivesWithin5Seconds()
+    {
+        // Use a generous total budget that is well below AckTimeoutSeconds (30 s).
+        // If the cycle completes in < 5 s it is ack-driven; if it took 30 s it is timeout-driven.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        using var streamRes = await _client.SendAsync(
+            ControlStreamRequest(), HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        Assert.Equal(HttpStatusCode.OK, streamRes.StatusCode);
+
+        await using var stream = await streamRes.Content.ReadAsStreamAsync(cts.Token);
+
+        // Give the SSE connection a moment to attach before triggering the reset.
+        await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
+
+        // --- T₀: trigger reset ---
+        var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
+        Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
+        var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
+        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+
+        // Record the moment the ack is sent.
+        var ackSentAt = DateTimeOffset.UtcNow;
+
+        // --- Post the ack that should drive early completion ---
+        var ackRes = await _client.SendAsync(AckRequest(TestComponent, resetId), cts.Token);
+        Assert.Equal(HttpStatusCode.NoContent, ackRes.StatusCode);
+
+        // --- Read SSE until reset-started (or 15 s total) ---
+        // We need reset-initiated (1) + reset-started (2) = 2 frames at minimum.
+        var frames = await ReadDataFramesAsync(stream, 2, cts.Token);
+
+        var startedFrame = frames.FirstOrDefault(
+            f => f.TryGetProperty("type", out var t) && t.GetString() == "reset-started");
+
+        Assert.True(startedFrame.ValueKind != JsonValueKind.Undefined,
+            "reset-started must appear within the 15-second window.");
+
+        // Verify it carries the correct reset_id correlation.
+        Assert.Equal(resetId, startedFrame.GetProperty("reset_id").GetString());
+
+        // Measure elapsed time: reset-started.occurred_at must be within 5 s of when
+        // the ack was sent.  AckTimeoutSeconds = 30, so anything under 5 s is ack-driven.
+        var occurredAt = startedFrame.GetProperty("occurred_at").GetDateTimeOffset();
+        var elapsed = occurredAt - ackSentAt;
+
+        Assert.True(elapsed.TotalSeconds < 5.0,
+            $"reset-started arrived {elapsed.TotalSeconds:F1} s after the ack — " +
+            $"expected < 5 s (ack-driven); got > 5 s means timeout-driven (bug). " +
+            $"AckTimeoutSeconds = 30.");
+    }
+}
+
+/// <summary>
 /// Integration tests for the ingest gate (Fix C) and reconciler behavior (Fix A).
 /// Uses a separate factory with <see cref="ForcedResetStateProvider"/> for gate tests
 /// to avoid NOTIFY/LISTEN timing dependencies.
