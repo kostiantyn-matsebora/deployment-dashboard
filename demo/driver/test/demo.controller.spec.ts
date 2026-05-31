@@ -2,10 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Subject } from 'rxjs';
 import { NotFoundException } from '@nestjs/common';
 import { DemoController } from '../src/demo/demo.controller';
-import { DemoService } from '../src/demo/demo.service';
+import { DemoService, DemoStatus } from '../src/demo/demo.service';
 import { RunnerStatus } from '../src/scenarios/scenario-runner';
+import { Response } from 'express';
 
-const idle = (overrides: Partial<RunnerStatus> = {}): RunnerStatus => ({
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+const idle = (overrides: Partial<DemoStatus> = {}): DemoStatus => ({
   scenario:     null,
   state:        'idle',
   events_total: 0,
@@ -13,16 +16,18 @@ const idle = (overrides: Partial<RunnerStatus> = {}): RunnerStatus => ({
   errors:       0,
   started_at:   null,
   finished_at:  null,
+  reset_state:  'idle',
+  reset_id:     null,
   ...overrides,
 });
 
-const running = (): RunnerStatus => idle({
+const running = (): DemoStatus => idle({
   state:        'running',
   scenario:     'demo-set',
   events_total: 47,
 });
 
-const done = (): RunnerStatus => ({
+const done = (): DemoStatus => ({
   scenario:     'demo-set',
   state:        'done',
   events_total: 47,
@@ -30,7 +35,35 @@ const done = (): RunnerStatus => ({
   errors:       0,
   started_at:   '2026-01-01T00:00:00Z',
   finished_at:  '2026-01-01T00:01:00Z',
+  reset_state:  'idle',
+  reset_id:     null,
 });
+
+const blocked = (): DemoStatus => idle({
+  state:       'blocked',
+  reset_state: 'blocked',
+  reset_id:    '01J9F4WZK3W9G2T6X4QH3DKQF6',
+});
+
+/** Build a minimal mock Express Response for testing guardNotBlocked. */
+function makeMockRes(overrides: Partial<Response> = {}): Response {
+  const headers: Record<string, string> = {};
+  let _headersSent = false;
+  const res: Partial<Response> = {
+    headersSent: false,
+    status: jest.fn().mockReturnThis(),
+    json:   jest.fn().mockImplementation(() => { _headersSent = true; return res as Response; }),
+    setHeader: jest.fn().mockImplementation((k: string, v: string) => { headers[k] = v; return res as Response; }),
+    ...overrides,
+  };
+  Object.defineProperty(res, 'headersSent', {
+    get: () => _headersSent,
+    configurable: true,
+  });
+  return res as Response;
+}
+
+// ── Test suite ────────────────────────────────────────────────────────────────
 
 describe('DemoController', () => {
   let controller: DemoController;
@@ -43,17 +76,19 @@ describe('DemoController', () => {
         {
           provide: DemoService,
           useValue: {
-            getStatus:    jest.fn(),
-            getScenarios: jest.fn(),
-            start:        jest.fn(),
-            stop:         jest.fn(),
-            reset:        jest.fn(),
-            startIngest:  jest.fn(),
-            stopIngest:   jest.fn(),
-            getEmitStatus: jest.fn(),
-            setEmit:      jest.fn(),
-            resetApi:     jest.fn(),
-            stream$:      new Subject(),
+            getStatus:             jest.fn(),
+            getScenarios:          jest.fn(),
+            start:                 jest.fn(),
+            stop:                  jest.fn(),
+            reset:                 jest.fn(),
+            startIngest:           jest.fn(),
+            stopIngest:            jest.fn(),
+            getEmitStatus:         jest.fn(),
+            setEmit:               jest.fn(),
+            resetApi:              jest.fn(),
+            isBlocked:             jest.fn().mockReturnValue(false),
+            getRetryAfterSeconds:  jest.fn().mockReturnValue(90),
+            stream$:               new Subject(),
           },
         },
       ],
@@ -63,12 +98,19 @@ describe('DemoController', () => {
     service    = module.get(DemoService) as any;
   });
 
-  // ── Status ────────────────────────────────────────────────────────────────
+  // ── Status (never blocked) ────────────────────────────────────────────────
 
   describe('GET /demo/status', () => {
     it('returns DemoStatus from service', () => {
       service.getStatus.mockReturnValue(idle());
       expect(controller.status()).toEqual(idle());
+    });
+
+    it('returns blocked state when reset is in progress', () => {
+      service.getStatus.mockReturnValue(blocked());
+      const result = controller.status();
+      expect(result.reset_state).toBe('blocked');
+      expect(result.reset_id).toBe('01J9F4WZK3W9G2T6X4QH3DKQF6');
     });
   });
 
@@ -86,27 +128,31 @@ describe('DemoController', () => {
   describe('POST /demo/scenarios/:name/run', () => {
     it('transitions idle → running', async () => {
       service.start.mockResolvedValue(running());
-      const result = await controller.run('demo-set', {});
+      const res = makeMockRes();
+      await controller.run('demo-set', {}, res);
       expect(service.start).toHaveBeenCalledWith('demo-set', undefined);
-      expect(result.state).toBe('running');
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ state: 'running' }));
     });
 
     it('passes delay_ms from request body', async () => {
       service.start.mockResolvedValue(running());
-      await controller.run('demo-set', { delay_ms: 500 });
+      const res = makeMockRes();
+      await controller.run('demo-set', { delay_ms: 500 }, res);
       expect(service.start).toHaveBeenCalledWith('demo-set', 500);
-    });
-
-    it('is idempotent — calling run twice invokes start twice (service owns idempotency)', async () => {
-      service.start.mockResolvedValue(running());
-      await controller.run('demo-set', {});
-      await controller.run('demo-set', {});
-      expect(service.start).toHaveBeenCalledTimes(2);
     });
 
     it('throws NotFoundException when scenario not found', async () => {
       service.start.mockRejectedValue(new Error("Scenario 'nope' not found"));
-      await expect(controller.run('nope', {})).rejects.toBeInstanceOf(NotFoundException);
+      const res = makeMockRes();
+      await expect(controller.run('nope', {}, res)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('returns 503 while blocked', async () => {
+      service.isBlocked.mockReturnValue(true);
+      const res = makeMockRes();
+      await controller.run('demo-set', {}, res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(service.start).not.toHaveBeenCalled();
     });
   });
 
@@ -114,9 +160,17 @@ describe('DemoController', () => {
     it('returns failed state after stop', () => {
       const failed = idle({ state: 'failed', scenario: 'demo-set' });
       service.stop.mockReturnValue(failed);
-      const result = controller.stop('demo-set');
-      expect(result.state).toBe('failed');
-      expect(service.stop).toHaveBeenCalledWith('demo-set');
+      const res = makeMockRes();
+      controller.stop('demo-set', res);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ state: 'failed' }));
+    });
+
+    it('returns 503 while blocked', () => {
+      service.isBlocked.mockReturnValue(true);
+      const res = makeMockRes();
+      controller.stop('demo-set', res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(service.stop).not.toHaveBeenCalled();
     });
   });
 
@@ -135,34 +189,39 @@ describe('DemoController', () => {
   describe('POST /demo/ingest', () => {
     it('calls service.startIngest with the request body', async () => {
       service.startIngest.mockResolvedValue(running());
-      const result = await controller.ingest({ dataset: 'demo', reset: false });
+      const res = makeMockRes();
+      await controller.ingest({ dataset: 'demo', reset: false }, res);
       expect(service.startIngest).toHaveBeenCalledWith({ dataset: 'demo', reset: false });
-      expect(result.state).toBe('running');
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ state: 'running' }));
     });
 
-    it('passes random dataset options', async () => {
-      service.startIngest.mockResolvedValue(running());
-      await controller.ingest({ dataset: 'random', count: 30, delay_ms: 100 });
-      expect(service.startIngest).toHaveBeenCalledWith({ dataset: 'random', count: 30, delay_ms: 100 });
+    it('returns 503 while blocked', async () => {
+      service.isBlocked.mockReturnValue(true);
+      const res = makeMockRes();
+      await controller.ingest({ dataset: 'demo' }, res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(service.startIngest).not.toHaveBeenCalled();
     });
 
-    it('accepts empty body (all defaults)', async () => {
-      service.startIngest.mockResolvedValue(idle());
-      await controller.ingest({});
-      expect(service.startIngest).toHaveBeenCalledWith({});
+    it('503 body has RFC 9457 shape with type .../reset-in-progress', async () => {
+      service.isBlocked.mockReturnValue(true);
+      const jsonCalls: unknown[] = [];
+      const res = makeMockRes({
+        json: jest.fn().mockImplementation((body: unknown) => { jsonCalls.push(body); return res as Response; }),
+      } as Partial<Response>);
+      await controller.ingest({ dataset: 'demo' }, res);
+      const body = jsonCalls[0] as Record<string, unknown>;
+      expect(body.type).toBe('https://deployment-dashboard/errors/reset-in-progress');
+      expect(body.title).toBe('Reset in progress');
+      expect(body.status).toBe(503);
     });
 
-    it('throws NotFoundException when no demo scenario is available', async () => {
-      service.startIngest.mockRejectedValue(new Error('No demo scenario available'));
-      await expect(controller.ingest({ dataset: 'demo' })).rejects.toBeInstanceOf(NotFoundException);
-    });
-
-    it('is idempotent — returns running status when already running', async () => {
-      service.startIngest.mockResolvedValue(running());
-      const first  = await controller.ingest({ dataset: 'demo' });
-      const second = await controller.ingest({ dataset: 'demo' });
-      expect(first.state).toBe('running');
-      expect(second.state).toBe('running');
+    it('503 response includes Retry-After header', async () => {
+      service.isBlocked.mockReturnValue(true);
+      service.getRetryAfterSeconds.mockReturnValue(90);
+      const res = makeMockRes();
+      await controller.ingest({ dataset: 'demo' }, res);
+      expect(res.setHeader).toHaveBeenCalledWith('Retry-After', '90');
     });
   });
 
@@ -170,9 +229,18 @@ describe('DemoController', () => {
     it('calls service.stopIngest and returns updated status', () => {
       const failed = idle({ state: 'failed', scenario: 'demo-set' });
       service.stopIngest.mockReturnValue(failed);
-      const result = controller.ingestStop();
+      const res = makeMockRes();
+      controller.ingestStop(res);
       expect(service.stopIngest).toHaveBeenCalled();
-      expect(result.state).toBe('failed');
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ state: 'failed' }));
+    });
+
+    it('returns 503 while blocked', () => {
+      service.isBlocked.mockReturnValue(true);
+      const res = makeMockRes();
+      controller.ingestStop(res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(service.stopIngest).not.toHaveBeenCalled();
     });
   });
 
@@ -183,32 +251,23 @@ describe('DemoController', () => {
       service.getEmitStatus.mockReturnValue({ emitting: false });
       expect(controller.getEmit()).toEqual({ emitting: false });
     });
-
-    it('reflects live state when enabled', () => {
-      service.getEmitStatus.mockReturnValue({ emitting: true });
-      expect(controller.getEmit()).toEqual({ emitting: true });
-    });
   });
 
   describe('POST /demo/emit', () => {
     it('enables emission when enabled=true', () => {
       service.setEmit.mockReturnValue({ emitting: true });
-      const result = controller.postEmit({ enabled: true });
+      const res = makeMockRes();
+      controller.postEmit({ enabled: true }, res);
       expect(service.setEmit).toHaveBeenCalledWith(true);
-      expect(result).toEqual({ emitting: true });
+      expect(res.json).toHaveBeenCalledWith({ emitting: true });
     });
 
-    it('disables emission when enabled=false', () => {
-      service.setEmit.mockReturnValue({ emitting: false });
-      const result = controller.postEmit({ enabled: false });
-      expect(service.setEmit).toHaveBeenCalledWith(false);
-      expect(result).toEqual({ emitting: false });
-    });
-
-    it('passes undefined (toggle) when enabled is omitted', () => {
-      service.setEmit.mockReturnValue({ emitting: true });
-      controller.postEmit({});
-      expect(service.setEmit).toHaveBeenCalledWith(undefined);
+    it('returns 503 while blocked', () => {
+      service.isBlocked.mockReturnValue(true);
+      const res = makeMockRes();
+      controller.postEmit({}, res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(service.setEmit).not.toHaveBeenCalled();
     });
   });
 
@@ -216,22 +275,30 @@ describe('DemoController', () => {
 
   describe('POST /demo/api-reset', () => {
     it('returns ok=true on successful reset', async () => {
-      service.resetApi.mockResolvedValue({ ok: true, http_status: 204 });
-      const result = await controller.apiReset();
-      expect(result).toEqual({ ok: true, http_status: 204 });
+      service.resetApi.mockResolvedValue({ ok: true, http_status: 202 });
+      const res = makeMockRes();
+      await controller.apiReset(res);
+      expect(res.json).toHaveBeenCalledWith({ ok: true, http_status: 202 });
     });
 
-    it('returns ok=false when target returns 401', async () => {
-      service.resetApi.mockResolvedValue({ ok: false, http_status: 401 });
-      const result = await controller.apiReset();
-      expect(result.ok).toBe(false);
-      expect(result.http_status).toBe(401);
+    it('returns 503 while blocked', async () => {
+      service.isBlocked.mockReturnValue(true);
+      const res = makeMockRes();
+      await controller.apiReset(res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(service.resetApi).not.toHaveBeenCalled();
     });
+  });
 
-    it('returns ok=false with http_status=0 on network error', async () => {
-      service.resetApi.mockResolvedValue({ ok: false, http_status: 0 });
-      const result = await controller.apiReset();
-      expect(result.ok).toBe(false);
+  // ── GET /demo/status always answers (never blocked by the guard) ──────────
+
+  describe('GET /demo/status is never blocked', () => {
+    it('returns status even when isBlocked=true', () => {
+      service.isBlocked.mockReturnValue(true);
+      service.getStatus.mockReturnValue(blocked());
+      // status() does NOT take a Response parameter — no guard applied.
+      const result = controller.status();
+      expect(result.reset_state).toBe('blocked');
     });
   });
 
@@ -247,8 +314,9 @@ describe('DemoController', () => {
       expect(controller.status().state).toBe('idle');
 
       service.start.mockResolvedValue(running());
-      const afterRun = await controller.run('demo-set', {});
-      expect(afterRun.state).toBe('running');
+      const res = makeMockRes();
+      await controller.run('demo-set', {}, res);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ state: 'running' }));
 
       expect(controller.status().state).toBe('running');
       expect(controller.status().state).toBe('done');

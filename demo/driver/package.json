@@ -7,7 +7,7 @@
     "start":     "node dist/main",
     "start:dev": "ts-node -r tsconfig-paths/register src/main.ts",
     "build":     "tsc -p tsconfig.json",
-    "test":      "jest",
+    "test":      "jest --forceExit",
     "test:e2e":  "jest --config jest.e2e.config.js --forceExit --testTimeout=60000"
   },
   "dependencies": {
