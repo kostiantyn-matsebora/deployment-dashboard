@@ -132,6 +132,12 @@ services:
       # Interval between periodic random events when Live Emission is enabled (ms).
       EMIT_INTERVAL_MS: "${EMIT_INTERVAL_MS:-8000}"
       PORT: "3001"
+      # GitHub emulator base URL — used by the driver's /demo/health aggregator
+      # to probe the emulator's /_github/status endpoint (DEMO_DRIVER_SPEC §9).
+      GITHUB_EMULATOR_URL: "http://github-emulator:3100"
+      # Fetcher host base URL — used by the driver's /demo/health aggregator
+      # to probe the fetcher's /health endpoint (FETCHER_SPECIFICATION §3, §6).
+      FETCHER_URL: "http://fetcher-host:8080"
     depends_on:
       api:
         condition: service_healthy
@@ -170,6 +176,7 @@ services:
       context: ../backend
       dockerfile: fetcher-host/Dashboard.Fetcher.Host/Dockerfile
     profiles: [fetcher-host, demo]
+    # Internal-only — no published port, no gateway route (FETCHER_SPECIFICATION §3, §6).
     environment:
       DASHBOARD_API_BASE_URL: "http://api:8080"
       API_KEY: "${API_KEY}"
@@ -189,6 +196,12 @@ services:
       github-emulator:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
   postgres:

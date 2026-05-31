@@ -10,10 +10,9 @@ using Dashboard.Fetcher.Host.Workers;
 using Dashboard.Fetcher.Ingest;
 using Dashboard.Fetcher.Orchestration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 // ── Options ───────────────────────────────────────────────────────────────────
 var fetcherOptions = new FetcherOptions();
@@ -132,4 +131,12 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
 builder.Services.AddHostedService<FetcherWorker>();
 builder.Services.AddHostedService<ControlStreamListener>();
 
-await builder.Build().RunAsync();
+var app = builder.Build();
+
+// ── Health endpoints ──────────────────────────────────────────────────────────
+// Host-level liveness only (FETCHER_SPECIFICATION §3, §6). No adapter/ingest
+// logic is consulted — returns 200 while the process is running.
+app.MapGet("/health",  () => Results.Ok(new { status = "ok" }));
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+
+await app.RunAsync();
