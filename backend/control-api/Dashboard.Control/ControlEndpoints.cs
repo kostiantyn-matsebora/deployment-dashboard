@@ -81,10 +81,14 @@ public static class ControlEndpoints
 
     private static async Task<IResult> HandlePostEventAsync(
         [FromBody] ComponentEventIngest body,
-        [FromHeader(Name = "X-Component-Id")] string componentId,
+        [FromHeader(Name = "X-Component-Id")] string? componentId,
         IComponentEventRepository repository,
         CancellationToken ct)
     {
+        // The validation filter has already guaranteed a valid X-Component-Id before this runs;
+        // the parameter is nullable only so a missing header reaches the filter (→ 422, not 400).
+        ArgumentException.ThrowIfNullOrEmpty(componentId);
+
         // Payload is stored verbatim; reject when its serialised size exceeds the limit (413).
         string? payloadJson = null;
         if (body.Payload is { } payload)
