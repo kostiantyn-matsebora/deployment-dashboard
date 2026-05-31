@@ -93,8 +93,9 @@ export interface SwimLane {
  * which is loaded once and kept live by the root App component.
  * No HTTP calls here — the App shell owns the matrix load + SSE stream.
  *
- * Events are extracted from each matrix slot's `current` + `last_successful`
- * fields; the DAG is derived client-side via the correlation predicate.
+ * Events are extracted from each matrix slot's `current` field only —
+ * `last_successful` drives box-state in the matrix view and is not a swimlane
+ * node. The DAG is derived client-side via the correlation predicate.
  *
  * Spec: docs/design/views.md §Swimlanes View Layout
  */
@@ -208,13 +209,13 @@ export class SwimlanesComponent {
       const seen = new Set<string>();
 
       for (const slot of Object.values(row.slots) as MatrixSlot[]) {
+        // Only `current` events become swimlane nodes.
+        // `last_successful` drives box-state in the matrix view only —
+        // it belongs to a different run so its parent_deployments would
+        // reference events not present in the matrix, producing orphan nodes.
         if (!seen.has(slot.current.id)) {
           seen.add(slot.current.id);
           events.push(slot.current);
-        }
-        if (slot.last_successful && !seen.has(slot.last_successful.id)) {
-          seen.add(slot.last_successful.id);
-          events.push(slot.last_successful);
         }
       }
 
