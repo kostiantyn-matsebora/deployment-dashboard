@@ -1,0 +1,286 @@
+{
+  "_doc": {
+    "repos": "Two repos coherent with demo/data/events.json service + environment names.",
+    "parent_chain": "payments-api workflow has dev→staging→qa→preprod→prod needs chain (F10).",
+    "artifact_version": "search-indexer uses artifact:version.txt for F15 exercice.",
+    "status_spread": "Covers success, failure, in-progress lifecycles across deployments.",
+    "target_url": "Every status target_url embeds /actions/runs/{run_id} for fetcher run-id extraction (§5.6.1)."
+  },
+  "repos": [
+    {
+      "owner": "demo-org",
+      "repo": "payments-api",
+      "workflows": [
+        {
+          "id": 1001,
+          "name": "payments-api",
+          "path": ".github/workflows/deploy.yml",
+          "yaml": "name: payments-api\non:\n  push:\n    branches: [main]\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci && npm run build\n\n  deploy-dev:\n    needs: build\n    runs-on: ubuntu-latest\n    environment: dev\n    steps:\n      - run: echo deploying to dev\n\n  deploy-staging:\n    needs: deploy-dev\n    runs-on: ubuntu-latest\n    environment: staging\n    steps:\n      - run: echo deploying to staging\n\n  deploy-qa:\n    needs: deploy-staging\n    runs-on: ubuntu-latest\n    environment: qa\n    steps:\n      - run: echo deploying to qa\n\n  deploy-preprod:\n    needs: deploy-qa\n    runs-on: ubuntu-latest\n    environment: preprod\n    steps:\n      - run: echo deploying to preprod\n\n  deploy-prod:\n    needs: deploy-preprod\n    runs-on: ubuntu-latest\n    environment: prod\n    steps:\n      - run: echo deploying to prod\n"
+        }
+      ],
+      "environments": ["dev", "staging", "qa", "preprod", "prod"],
+      "deployments": [
+        {
+          "id": 4830001,
+          "sha": "9a8b7c6",
+          "ref": "release/2.15",
+          "environment": "dev",
+          "payload": { "version": "v2.15.0" },
+          "creator": "mreyes",
+          "created_at": "2026-05-31T06:55:00Z",
+          "run_id": 4830,
+          "statuses": [
+            { "id": 48301001, "state": "in_progress", "created_at": "2026-05-31T06:55:30Z" },
+            { "id": 48301002, "state": "success",     "created_at": "2026-05-31T06:58:00Z" }
+          ]
+        },
+        {
+          "id": 4830002,
+          "sha": "9a8b7c6",
+          "ref": "release/2.15",
+          "environment": "staging",
+          "payload": { "version": "v2.15.0" },
+          "creator": "mreyes",
+          "created_at": "2026-05-31T07:00:00Z",
+          "run_id": 4830,
+          "statuses": [
+            { "id": 48302001, "state": "in_progress", "created_at": "2026-05-31T07:00:30Z" },
+            { "id": 48302002, "state": "success",     "created_at": "2026-05-31T07:02:30Z" }
+          ]
+        },
+        {
+          "id": 4830003,
+          "sha": "9a8b7c6",
+          "ref": "release/2.15",
+          "environment": "qa",
+          "payload": { "version": "v2.15.0" },
+          "creator": "mreyes",
+          "created_at": "2026-05-31T07:05:00Z",
+          "run_id": 4830,
+          "statuses": [
+            { "id": 48303001, "state": "in_progress", "created_at": "2026-05-31T07:05:30Z" },
+            { "id": 48303002, "state": "success",     "created_at": "2026-05-31T07:08:00Z" }
+          ]
+        },
+        {
+          "id": 4830004,
+          "sha": "9a8b7c6",
+          "ref": "release/2.15",
+          "environment": "preprod",
+          "payload": { "version": "v2.15.0" },
+          "creator": "release-bot",
+          "created_at": "2026-05-31T07:10:00Z",
+          "run_id": 4830,
+          "statuses": [
+            { "id": 48304001, "state": "in_progress", "created_at": "2026-05-31T07:10:30Z" },
+            { "id": 48304002, "state": "success",     "created_at": "2026-05-31T07:13:00Z" }
+          ]
+        },
+        {
+          "id": 4830005,
+          "sha": "9a8b7c6",
+          "ref": "release/2.15",
+          "environment": "prod",
+          "payload": { "version": "v2.15.0" },
+          "creator": "release-bot",
+          "created_at": "2026-05-31T07:15:00Z",
+          "run_id": 4830,
+          "statuses": [
+            { "id": 48305001, "state": "in_progress", "created_at": "2026-05-31T07:15:30Z" },
+            { "id": 48305002, "state": "success",     "created_at": "2026-05-31T07:18:00Z" }
+          ]
+        },
+        {
+          "id": 4820001,
+          "sha": "8b7c6d5",
+          "ref": "release/2.14",
+          "environment": "dev",
+          "payload": { "version": "v2.14.0" },
+          "creator": "mreyes",
+          "created_at": "2026-05-30T08:00:00Z",
+          "run_id": 4820,
+          "statuses": [
+            { "id": 48201001, "state": "in_progress", "created_at": "2026-05-30T08:00:30Z" },
+            { "id": 48201002, "state": "success",     "created_at": "2026-05-30T08:03:00Z" }
+          ]
+        },
+        {
+          "id": 4820002,
+          "sha": "8b7c6d5",
+          "ref": "release/2.14",
+          "environment": "staging",
+          "payload": { "version": "v2.14.0" },
+          "creator": "mreyes",
+          "created_at": "2026-05-30T08:10:00Z",
+          "run_id": 4820,
+          "statuses": [
+            { "id": 48202001, "state": "in_progress", "created_at": "2026-05-30T08:10:30Z" },
+            { "id": 48202002, "state": "failure",     "created_at": "2026-05-30T08:13:00Z" }
+          ]
+        },
+        {
+          "id": 4810001,
+          "sha": "7c6d5e4",
+          "ref": "release/2.13",
+          "environment": "qa",
+          "payload": { "version": "v2.13.5" },
+          "creator": "s.harper",
+          "created_at": "2026-05-29T10:00:00Z",
+          "run_id": 4810,
+          "statuses": [
+            { "id": 48101001, "state": "in_progress", "created_at": "2026-05-29T10:00:30Z" },
+            { "id": 48101002, "state": "success",     "created_at": "2026-05-29T10:04:00Z" }
+          ]
+        }
+      ]
+    },
+    {
+      "owner": "demo-org",
+      "repo": "search-indexer",
+      "workflows": [
+        {
+          "id": 1002,
+          "name": "search-indexer",
+          "path": ".github/workflows/deploy.yml",
+          "yaml": "name: search-indexer\non:\n  push:\n    branches: [main]\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci && npm run build\n\n  upload-version:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - name: Upload version artifact\n        uses: actions/upload-artifact@v4\n        with:\n          name: version.txt\n          path: version.txt\n\n  deploy-dev:\n    needs: upload-version\n    runs-on: ubuntu-latest\n    environment: dev\n    steps:\n      - run: echo deploying to dev\n\n  deploy-staging:\n    needs: deploy-dev\n    runs-on: ubuntu-latest\n    environment: staging\n    steps:\n      - run: echo deploying to staging\n\n  deploy-qa:\n    needs: deploy-staging\n    runs-on: ubuntu-latest\n    environment: qa\n    steps:\n      - run: echo deploying to qa\n\n  deploy-preprod:\n    needs: deploy-qa\n    runs-on: ubuntu-latest\n    environment: preprod\n    steps:\n      - run: echo deploying to preprod\n\n  deploy-prod:\n    needs: deploy-preprod\n    runs-on: ubuntu-latest\n    environment: prod\n    steps:\n      - run: echo deploying to prod\n"
+        }
+      ],
+      "environments": ["dev", "staging", "qa", "preprod", "prod"],
+      "deployments": [
+        {
+          "id": 1410001,
+          "sha": "7e8f9a0",
+          "ref": "release/0.8",
+          "environment": "dev",
+          "payload": null,
+          "creator": "mreyes",
+          "created_at": "2026-05-31T05:30:00Z",
+          "run_id": 1410,
+          "statuses": [
+            { "id": 14101001, "state": "in_progress", "created_at": "2026-05-31T05:30:30Z" },
+            { "id": 14101002, "state": "success",     "created_at": "2026-05-31T05:33:00Z" }
+          ],
+          "artifact": {
+            "id": 99001,
+            "name": "version.txt",
+            "content": "v0.8.0"
+          }
+        },
+        {
+          "id": 1410002,
+          "sha": "7e8f9a0",
+          "ref": "release/0.8",
+          "environment": "staging",
+          "payload": null,
+          "creator": "mreyes",
+          "created_at": "2026-05-31T05:35:00Z",
+          "run_id": 1410,
+          "statuses": [
+            { "id": 14102001, "state": "in_progress", "created_at": "2026-05-31T05:35:30Z" },
+            { "id": 14102002, "state": "success",     "created_at": "2026-05-31T05:38:00Z" }
+          ],
+          "artifact": {
+            "id": 99002,
+            "name": "version.txt",
+            "content": "v0.8.0"
+          }
+        },
+        {
+          "id": 1410003,
+          "sha": "7e8f9a0",
+          "ref": "release/0.8",
+          "environment": "qa",
+          "payload": null,
+          "creator": "mreyes",
+          "created_at": "2026-05-31T05:40:00Z",
+          "run_id": 1410,
+          "statuses": [
+            { "id": 14103001, "state": "in_progress", "created_at": "2026-05-31T05:40:30Z" },
+            { "id": 14103002, "state": "success",     "created_at": "2026-05-31T05:43:00Z" }
+          ],
+          "artifact": {
+            "id": 99003,
+            "name": "version.txt",
+            "content": "v0.8.0"
+          }
+        },
+        {
+          "id": 1410004,
+          "sha": "7e8f9a0",
+          "ref": "release/0.8",
+          "environment": "preprod",
+          "payload": null,
+          "creator": "release-bot",
+          "created_at": "2026-05-31T05:45:00Z",
+          "run_id": 1410,
+          "statuses": [
+            { "id": 14104001, "state": "in_progress", "created_at": "2026-05-31T05:45:30Z" },
+            { "id": 14104002, "state": "success",     "created_at": "2026-05-31T05:48:00Z" }
+          ],
+          "artifact": {
+            "id": 99004,
+            "name": "version.txt",
+            "content": "v0.8.0"
+          }
+        },
+        {
+          "id": 1410005,
+          "sha": "7e8f9a0",
+          "ref": "release/0.8",
+          "environment": "prod",
+          "payload": null,
+          "creator": "release-bot",
+          "created_at": "2026-05-31T05:50:00Z",
+          "run_id": 1410,
+          "statuses": [
+            { "id": 14105001, "state": "in_progress", "created_at": "2026-05-31T05:50:30Z" },
+            { "id": 14105002, "state": "success",     "created_at": "2026-05-31T05:53:00Z" }
+          ],
+          "artifact": {
+            "id": 99005,
+            "name": "version.txt",
+            "content": "v0.8.0"
+          }
+        },
+        {
+          "id": 1400001,
+          "sha": "6d7e8f9",
+          "ref": "release/0.7",
+          "environment": "dev",
+          "payload": null,
+          "creator": "mreyes",
+          "created_at": "2026-05-28T09:00:00Z",
+          "run_id": 1400,
+          "statuses": [
+            { "id": 14001001, "state": "in_progress", "created_at": "2026-05-28T09:00:30Z" },
+            { "id": 14001002, "state": "success",     "created_at": "2026-05-28T09:04:00Z" }
+          ],
+          "artifact": {
+            "id": 98001,
+            "name": "version.txt",
+            "content": "v0.7.9"
+          }
+        },
+        {
+          "id": 1400002,
+          "sha": "6d7e8f9",
+          "ref": "release/0.7",
+          "environment": "staging",
+          "payload": null,
+          "creator": "mreyes",
+          "created_at": "2026-05-28T09:10:00Z",
+          "run_id": 1400,
+          "statuses": [
+            { "id": 14002001, "state": "in_progress", "created_at": "2026-05-28T09:10:30Z" },
+            { "id": 14002002, "state": "failure",     "created_at": "2026-05-28T09:14:00Z" }
+          ],
+          "artifact": {
+            "id": 98002,
+            "name": "version.txt",
+            "content": "v0.7.9"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -22,6 +22,15 @@ services:
       # Must match the demo control key above — enables POST /demo/api-reset.
       CONTROL_API_KEY: demo-control-key
 
+  fetcher-host:
+    environment:
+      # Must match the demo api key above.
+      API_KEY: demo-api-key
+      # Must match the demo control key — fetcher participates in reset choreography.
+      CONTROL_API_KEY: demo-control-key
+      # Short poll interval for demo responsiveness.
+      POLL_INTERVAL_SECONDS: "10"
+
   postgres:
     environment:
       POSTGRES_USER:     dashboard

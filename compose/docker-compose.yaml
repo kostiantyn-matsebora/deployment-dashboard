@@ -143,6 +143,53 @@ services:
       retries: 5
       start_period: 15s
 
+  # ── GitHub Emulator (opt-in, demo profile only) ──────────────────────────────
+  github-emulator:
+    build:
+      context: ../demo
+      dockerfile: github-emulator/Dockerfile
+    profiles: [github-emulator, demo]
+    # Internal-only — no gateway route; the fetcher reaches it directly.
+    environment:
+      PORT: "3100"
+      GITHUB_SIM_RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
+      SEED_ON_STARTUP: "true"
+      SCENARIOS_DIR: /app/data
+      EMIT_INTERVAL_MS: "${EMIT_INTERVAL_MS:-8000}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3100/_github/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Fetcher Host (opt-in, demo profile only) ──────────────────────────────────
+  fetcher-host:
+    build:
+      context: ../backend
+      dockerfile: fetcher-host/Dashboard.Fetcher.Host/Dockerfile
+    profiles: [fetcher-host, demo]
+    environment:
+      DASHBOARD_API_BASE_URL: "http://api:8080"
+      API_KEY: "${API_KEY}"
+      CONTROL_API_KEY: "${CONTROL_API_KEY:-}"
+      COMPONENT_ID: "dashboard-fetcher"
+      POLL_INTERVAL_SECONDS: "${POLL_INTERVAL_SECONDS:-30}"
+      GITHUB__BASE_URL: "http://github-emulator:3100"
+      GITHUB__REPOS: "demo-org/payments-api,demo-org/search-indexer"
+      GITHUB__TOKEN: "demo-token"
+      GITHUB__VERSION_SOURCE: "artifact:version.txt"
+      GITHUB__RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
+      GITHUB__RATE_LIMIT_BUDGET_PCT: "80"
+      BACKFILL: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+      github-emulator:
+        condition: service_healthy
+    restart: unless-stopped
+
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
   postgres:
     image: postgres:17-alpine
