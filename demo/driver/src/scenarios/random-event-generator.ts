@@ -161,11 +161,79 @@ function buildChain(service: string, topology: Topology): Record<string, unknown
   });
 }
 
+const ALL_STATUSES = ['in-progress', 'success', 'failure'] as const;
+
+/**
+ * Appends two historical promotion chains for a service, one per missing status.
+ *
+ * Each historical chain:
+ *  - Covers the same environments as the primary chain (in order).
+ *  - Is its own pipeline run: shared `run_number`, `sha`, `version`, `ref`, `run_url`.
+ *  - Is a LINEAR chain: each env's event carries `parent_deployments: [prev_env_id]`
+ *    (except the root, which has `[]`).  This reflects a real older promotion run.
+ *  - All non-last envs are `success` (they promoted successfully before the tip).
+ *  - The LAST env carries the missing status (tip of this older run).
+ *  - Timestamps: layer 0 → ~4 h old, layer 1 → ~2 h old.  Always older than the
+ *    primary chain (0–40 min), so primary events remain definitively "current".
+ *
+ * Together with the primary chain, every service's dataset covers all three
+ * statuses at least at the tip environment.
+ */
+function appendHistory(
+  service:      string,
+  primaryChain: Record<string, unknown>[],
+  out:          Record<string, unknown>[],
+): void {
+  const envs = primaryChain.map(ev => ev.environment as string);
+  if (envs.length === 0) return;
+
+  // Base missing statuses on the tip (last event) of the primary chain.
+  const tipStatus      = primaryChain[primaryChain.length - 1].status as string;
+  const missingStatuses = ALL_STATUSES.filter(s => s !== tipStatus);
+
+  missingStatuses.forEach((histTipStatus, layerIdx) => {
+    const run    = ++_runCounter;
+    const sha    = hex7();
+    const version = pick(VERSIONS);
+    const actor  = pick(ACTORS);
+    const ref    = pick(REFS);
+    const runUrl = `https://ci.example/runs/${run}`;
+    // Layer 0 → ~4 h ago, layer 1 → ~2 h ago
+    const baseAgeMs = (missingStatuses.length - layerIdx) * 2 * 60 * 60_000;
+
+    // Pre-compute IDs so downstream events can reference upstream ones.
+    const ids = envs.map(env => `rnd-${service.slice(0, 6)}-${env.slice(0, 3)}-${run}`);
+
+    envs.forEach((env, i) => {
+      const jitter   = Math.floor(Math.random() * 10 * 60_000);
+      // Earlier envs are older. Step (15 min) intentionally exceeds max jitter
+      // (10 min) so timestamps always increase root→tip regardless of jitter values.
+      const envOffset = (envs.length - i) * 15 * 60_000;
+      const isLast   = i === envs.length - 1;
+
+      out.push({
+        deployment_id:      ids[i],
+        service,
+        environment:        env,
+        status:             isLast ? histTipStatus : 'success',
+        happened_at:        new Date(Date.now() - baseAgeMs - envOffset - jitter).toISOString(),
+        version,
+        actor,
+        run_number:         String(run),
+        run_url:            runUrl,
+        ref,
+        sha,
+        parent_deployments: i === 0 ? [] : [ids[i - 1]],
+      });
+    });
+  });
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
  * Generates one promotion chain for a RANDOM service (random topology).
- * Used by tests and EmitService is NOT affected (it uses generateRandomEvent).
+ * Used by tests; EmitService uses generateRandomEvent instead.
  */
 export function generateRandomChain(): Record<string, unknown>[] {
   return buildChain(pick(SERVICES), pick(BRANCHING_TOPOLOGIES));
@@ -175,28 +243,29 @@ export function generateRandomChain(): Record<string, unknown>[] {
  * Generates `count` service scenarios — **one per service**, cycling through
  * the full service list if count > SERVICE_COUNT.
  *
- * WHY one-per-service matters for the swimlane:
- *   The swimlane derives edges from parent_deployments of the CURRENT event
- *   per (service, env) slot.  If the same service gets two chains in one batch,
- *   the later chain's events become the new "current" slots — orphaning the
- *   earlier chain's parent_deployments links.  By emitting exactly one chain per
- *   service per batch-pass, every (service, env) slot has exactly one event, so
- *   parent_deployments always points at the same-run events that ARE current.
+ * Each scenario emits **3 events per (service, env) slot**:
+ *  1. Primary event  — part of the branching-topology chain (0–40 min old);
+ *     this becomes the "current" event for the matrix/swimlane.
+ *  2. Historical ×2  — standalone events (2 h and 4 h old) carrying the two
+ *     statuses the primary event does not have, so every slot has full
+ *     in-progress / success / failure coverage for the history drawer.
  *
- * count = number of service scenarios (default 10 = all services).
+ * One-per-service invariant is preserved: every (service, env) slot has
+ * exactly one PRIMARY event, so parent_deployments links are never orphaned.
  */
 export function generateRandomEvents(count: number): Record<string, unknown>[] {
   if (count <= 0) return [];
 
-  const result: Record<string, unknown>[] = [];
-  // Shuffle once; cycle through the same order on each pass so that within
-  // a pass each service appears exactly once.
+  const result:   Record<string, unknown>[] = [];
   const shuffled = [...SERVICES].sort(() => Math.random() - 0.5);
 
   for (let i = 0; i < count; i++) {
-    const service  = shuffled[i % shuffled.length];
-    const topology = pick(BRANCHING_TOPOLOGIES);
-    result.push(...buildChain(service, topology));
+    const service      = shuffled[i % shuffled.length];
+    const topology     = pick(BRANCHING_TOPOLOGIES);
+    const primaryChain = buildChain(service, topology);
+
+    result.push(...primaryChain);
+    appendHistory(service, primaryChain, result);
   }
 
   return result;

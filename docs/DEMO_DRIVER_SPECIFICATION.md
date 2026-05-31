@@ -139,7 +139,7 @@ No authentication required (internal dev/demo tooling only).
 |---|---|---|---|
 | `dataset` | `"demo"` \| `"random"` | `"demo"` | `"demo"` = events from `demo-set` scenario file; `"random"` = generated events |
 | `reset` | boolean | `false` | When `true`, calls `POST /api/control/reset` on the write-API target before ingesting |
-| `count` | integer | `10` | Number of service scenarios to generate (1–10); `"random"` only — one chain per service so `parent_deployments` of current env-slots always reference same-run siblings; ignored for `"demo"` |
+| `count` | integer | `10` | Number of service scenarios to generate (1–10); `"random"` only — each scenario emits 3 events per `(service, env)` slot: one primary (current state, branching topology) + two historical (2 h and 4 h old) covering the remaining statuses so every slot has full `in-progress`/`success`/`failure` coverage; ignored for `"demo"` |
 | `delay_ms` | integer | `EMIT_DELAY_MS` | Per-event delay (ms); `0` = bulk load |
 
 **Idempotency:** `POST /demo/ingest` while `state == running` returns current status; does not double-start.

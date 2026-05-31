@@ -223,23 +223,110 @@ describe('generateRandomEvents', () => {
     }
   });
 
-  it('generates exactly count service scenarios', () => {
-    // Each scenario shares a run_number within its chain.
-    // Count distinct run_numbers = count distinct scenarios.
+  it('generates exactly count primary-chain scenarios', () => {
+    // Each scenario's primary chain shares one run_number (0–40 min old).
+    // Historical events (2 h / 4 h old) have their own run_numbers — exclude them.
+    const oneHourAgo = Date.now() - 60 * 60_000;
     for (const n of [1, 3, 5]) {
-      const events = generateRandomEvents(n);
-      const runs   = new Set(events.map(ev => ev.run_number as string));
-      expect(runs.size).toBe(n);
+      const events      = generateRandomEvents(n);
+      const primaryRuns = new Set(
+        events
+          .filter(ev => new Date(ev.happened_at as string).getTime() > oneHourAgo)
+          .map(ev => ev.run_number as string),
+      );
+      expect(primaryRuns.size).toBe(n);
     }
   });
 
-  it('cycles through all services — no (service, env) duplicate within a single pass', () => {
-    // One pass = SERVICE_COUNT scenarios.  Each service should appear at most once per pass.
-    const events = generateRandomEvents(SERVICE_COUNT);
-    const slots  = events.map(ev => `${ev.service as string}|${ev.environment as string}`);
-    const unique = new Set(slots);
-    // All (service, env) combos must be unique within the batch.
-    expect(unique.size).toBe(slots.length);
+  it('each service has all 3 statuses (in-progress, success, failure) across its events', () => {
+    const events    = generateRandomEvents(SERVICE_COUNT);
+    const byService = new Map<string, Set<string>>();
+    for (const ev of events) {
+      const svc = ev.service as string;
+      if (!byService.has(svc)) byService.set(svc, new Set());
+      byService.get(svc)!.add(ev.status as string);
+    }
+    for (const [, statuses] of byService) {
+      expect(statuses).toEqual(new Set(['in-progress', 'success', 'failure']));
+    }
+  });
+
+  it('the most recent event per slot is the primary (< 2 h old); historical events are ≥ 2 h old', () => {
+    // Boundary is 2 h, not 1 h: a diamond-5 chain has maxDepth=3, so its root
+    // sits at 3×20min = 60min; with up to 5min jitter it can reach ~65min.
+    // Historical events always start at 2h + 15min (layer age + min envOffset).
+    const events      = generateRandomEvents(3);
+    const bySlot      = new Map<string, number[]>();
+    const twoHoursAgo = Date.now() - 2 * 60 * 60_000;
+    for (const ev of events) {
+      const key = `${ev.service as string}|${ev.environment as string}`;
+      if (!bySlot.has(key)) bySlot.set(key, []);
+      bySlot.get(key)!.push(new Date(ev.happened_at as string).getTime());
+    }
+    for (const [, timestamps] of bySlot) {
+      timestamps.sort((a, b) => b - a); // newest first
+      expect(timestamps[0]).toBeGreaterThan(twoHoursAgo);  // primary: < 2 h
+      expect(timestamps[1]).toBeLessThan(twoHoursAgo);      // historical: ≥ 2 h
+      expect(timestamps[2]).toBeLessThan(twoHoursAgo);      // historical: ≥ 4 h
+    }
+  });
+
+  it('historical events form linear chains — non-root events have parent_deployments within the same run', () => {
+    const events     = generateRandomEvents(3);
+    const oneHourAgo = Date.now() - 60 * 60_000;
+    const historical = events.filter(
+      ev => new Date(ev.happened_at as string).getTime() < oneHourAgo,
+    );
+    expect(historical.length).toBeGreaterThan(0);
+
+    // Group historical events by run_number.
+    const byRun = new Map<string, Record<string, unknown>[]>();
+    for (const ev of historical) {
+      const run = ev.run_number as string;
+      if (!byRun.has(run)) byRun.set(run, []);
+      byRun.get(run)!.push(ev);
+    }
+
+    // Each run with > 1 event: exactly one root (parent_deployments=[]),
+    // every other event has exactly one parent within the same run.
+    for (const [, runEvents] of byRun) {
+      if (runEvents.length <= 1) continue;
+      const runIds  = new Set(runEvents.map(ev => ev.deployment_id as string));
+      const roots   = runEvents.filter(ev => (ev.parent_deployments as string[]).length === 0);
+      const nonRoots = runEvents.filter(ev => (ev.parent_deployments as string[]).length > 0);
+      // Structural check — not relying on timestamp order (jitter can reorder adjacents).
+      expect(roots).toHaveLength(1);
+      for (const ev of nonRoots) {
+        const parents = ev.parent_deployments as string[];
+        expect(parents).toHaveLength(1);
+        expect(runIds.has(parents[0])).toBe(true);
+      }
+    }
+  });
+
+  it('historical events within a run share run_number, sha, version, ref, run_url', () => {
+    const events     = generateRandomEvents(3);
+    const oneHourAgo = Date.now() - 60 * 60_000;
+    const historical = events.filter(
+      ev => new Date(ev.happened_at as string).getTime() < oneHourAgo,
+    );
+    const byRun = new Map<string, Record<string, unknown>[]>();
+    for (const ev of historical) {
+      const run = ev.run_number as string;
+      if (!byRun.has(run)) byRun.set(run, []);
+      byRun.get(run)!.push(ev);
+    }
+    for (const [run, runEvents] of byRun) {
+      if (runEvents.length <= 1) continue;
+      const first = runEvents[0];
+      for (const ev of runEvents) {
+        expect(ev.run_number).toBe(run);
+        expect(ev.sha).toBe(first.sha);
+        expect(ev.version).toBe(first.version);
+        expect(ev.ref).toBe(first.ref);
+        expect(ev.run_url).toBe(first.run_url);
+      }
+    }
   });
 
   it('contains events with non-empty parent_deployments (chains are linked)', () => {
