@@ -2,7 +2,7 @@ import { Subject } from 'rxjs';
 import { ScenarioEvent } from './scenario-loader';
 import { WriteApiClient } from '../write-api/write-api.client';
 
-export type RunnerState = 'idle' | 'running' | 'done' | 'failed';
+export type RunnerState = 'idle' | 'running' | 'done' | 'failed' | 'blocked';
 
 export interface RunnerStatus {
   scenario:     string | null;
@@ -95,6 +95,15 @@ export class ScenarioRunner {
     this._startedAt     = null;
     this._finishedAt    = null;
     this._stopRequested = false;
+  }
+
+  /**
+   * Enter the `blocked` state — used by ResetCoordinator when a reset-initiated
+   * event arrives.  The runner loop will also stop (stopRequested flag set by
+   * the coordinator calling stop() first).
+   */
+  setBlocked(): void {
+    this._state = 'blocked';
   }
 
   /**
