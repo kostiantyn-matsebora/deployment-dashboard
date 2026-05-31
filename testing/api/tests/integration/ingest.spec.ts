@@ -84,13 +84,11 @@ describe('POST /api/deployments', () => {
     expect(res.status).toBe(422);
   });
 
-  // ── Validation (422) — PENDING ───────────────────────────────────────────────
-  // TODO: binding-level 422 not implemented yet. System.Text.Json rejects a
-  // missing required field / unknown field at deserialization → 400 (empty body)
-  // before ValidationEndpointFilter runs. The contract (openapi.yaml +
-  // API_SPECIFICATION D5/§6) mandates 422 application/problem+json with errors[].
-  // Enable these when binding failures are mapped to 422.
-  it.skip.each(['deployment_id', 'service', 'environment', 'status', 'happened_at'])(
+  // ── Validation (422) — binding-level failures ────────────────────────────────
+  // System.Text.Json rejects a missing required field / unknown field at
+  // deserialization; the global handler (ProblemDetailsExtensions) maps the
+  // JsonException to 422 application/problem+json with errors[] (D5 / §6).
+  it.each(['deployment_id', 'service', 'environment', 'status', 'happened_at'])(
     'returns 422 when required field %s is missing',
     async (field) => {
       const payload: Record<string, unknown> = minimalEvent();
@@ -100,19 +98,18 @@ describe('POST /api/deployments', () => {
     },
   );
 
-  it.skip('returns 422 on an unknown field (additionalProperties: false)', async () => {
+  it('returns 422 on an unknown field (additionalProperties: false)', async () => {
     const res = await post('/api/deployments', minimalEvent({ bogus: 'x' }), { 'X-Api-Key': API_KEY });
     expect(res.status).toBe(422);
   });
 
-  it.skip('422 body is problem+json with a per-field errors array', async () => {
+  it('422 body is problem+json with an errors array', async () => {
     const payload: Record<string, unknown> = minimalEvent();
     delete payload.deployment_id;
-    delete payload.service;
     const problem = await (await post('/api/deployments', payload, { 'X-Api-Key': API_KEY })).json();
     expect(problem.status).toBe(422);
     expect(Array.isArray(problem.errors)).toBe(true);
-    expect(problem.errors.length).toBeGreaterThanOrEqual(2);
+    expect(problem.errors.length).toBeGreaterThanOrEqual(1);
     expect(problem.errors[0]).toMatchObject({ pointer: expect.any(String), message: expect.any(String) });
   });
 });

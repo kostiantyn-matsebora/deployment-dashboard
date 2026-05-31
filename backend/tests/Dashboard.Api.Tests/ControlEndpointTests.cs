@@ -70,6 +70,23 @@ public sealed class ControlEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
     }
 
+    private async Task PostComponentEventAsync(string componentId = "ctrl-component")
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
+        {
+            Content = JsonContent.Create(new
+            {
+                event_type = "status",
+                state = "running",
+                occurred_at = "2026-05-28T10:00:00Z",
+            }),
+        };
+        req.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
+        req.Headers.Add("X-Component-Id", componentId);
+        var res = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+    }
+
     // ── Authentication ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -134,6 +151,22 @@ public sealed class ControlEndpointTests : IAsyncLifetime
         await _client.SendAsync(ResetRequest());
 
         var after = await _client.GetAsync("/api/deployments?service=reset-svc-de");
+        var afterBody = await after.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, afterBody.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Post_AfterComponentEvent_ComponentEventsAreCleared()
+    {
+        await PostComponentEventAsync("reset-component");
+
+        var before = await _client.GetAsync("/api/control/events?component_id=reset-component");
+        var beforeBody = await before.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(beforeBody.GetProperty("items").GetArrayLength() > 0);
+
+        await _client.SendAsync(ResetRequest());
+
+        var after = await _client.GetAsync("/api/control/events?component_id=reset-component");
         var afterBody = await after.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(0, afterBody.GetProperty("items").GetArrayLength());
     }

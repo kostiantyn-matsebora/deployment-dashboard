@@ -21,4 +21,12 @@ describe('GET /readyz', () => {
     expect(body.checks && typeof body.checks === 'object').toBe(true);
     expect(Object.values(body.checks).every((v) => v === 'ok' || v === 'fail')).toBe(true);
   });
+
+  it('reports both LISTEN channels attached (D10)', async () => {
+    // Full readiness requires DB + both deployment_events and control_events channels.
+    const body = await (await get('/readyz')).json();
+    expect(body.checks.db).toBe('ok');
+    expect(body.checks.listen_deployment).toBe('ok');
+    expect(body.checks.listen_control).toBe('ok');
+  });
 });
