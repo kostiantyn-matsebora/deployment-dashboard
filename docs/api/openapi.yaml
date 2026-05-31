@@ -17,8 +17,9 @@ info:
       - **Stream** — SSE fan-out of newly-ingested deployment events; unauthenticated.
       - **Fetcher** — opaque per-adapter cursor state for `Dashboard.Fetcher`; gated by `X-Api-Key`.
       - **Control** — administrative operations + orchestration; gated by `X-Control-API-Key`.
-        - `POST /api/control/reset` — destructive data reset; emits `reset` event on control stream.
-        - `GET  /api/control/stream` — SSE channel; API emits orchestration events; `Last-Event-ID` replay within 2 h window.
+        - `POST /api/control/reset` — initiates an asynchronous, multi-phase system-state reset; returns `202` immediately.
+          Progress is signalled on the control stream as `reset-initiated` → `reset-started` → `reset-completed`.
+        - `GET  /api/control/stream` — SSE channel; API emits orchestration events (incl. the reset phases); `Last-Event-ID` replay within 2 h window.
         - `POST /api/control/events` — single inbound endpoint; all components post their events here. Gated by `X-Api-Key`; component identified by `X-Component-Id` header.
         - `GET  /api/control/events` — read-only listing of component-posted events (2 h retention).
       - **Ops** — `/healthz`, `/readyz`.
@@ -79,6 +80,10 @@ tags:
   - name: control
     description: |
       Control surface — administrative operations and component orchestration.
+      `POST /api/control/reset` triggers an **asynchronous, multi-phase reset**: the API
+      drives components through `reset-initiated` → `reset-started` → `reset-completed` on
+      the control stream, draining components first, then briefly gating ingest while data
+      is cleared. There is no status endpoint — progress is observable on the stream only.
       `POST /api/control/reset` and `GET /api/control/stream` require `X-Control-API-Key`.
       `POST /api/control/events` requires `X-Api-Key` + `X-Component-Id`.
       `GET /api/control/events` is unauthenticated.
@@ -111,6 +116,11 @@ paths:
 
         On success the backend `NOTIFY`s the PostgreSQL `deployment_events` channel,
         which fans out to every connected SSE client across all API instances.
+
+        **Reset window.** During the brief data-clearing phase of a system-state reset
+        ingest is unavailable and returns `503` with `Retry-After`; clients retry after
+        the indicated delay. The window closes when `reset-completed` is emitted on the
+        control stream.
       security:
         - apiKey: []
       parameters:
@@ -150,6 +160,8 @@ paths:
               schema: { $ref: '#/components/schemas/Problem' }
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 
     # ───── Read surface — raw event listing ─────────────────────────────────
     get:
@@ -375,14 +387,20 @@ paths:
     post:
       tags: [control]
       operationId: resetState
-      summary: Delete all stored data (deployment events, fetcher state, component events, control stream events).
+      summary: Initiate an asynchronous system-state reset.
       description: |
-        Truncates `deployment_events`, `fetcher_state`, `component_events`, and
-        `control_stream_events` — all rows, no filters.
+        Initiates an asynchronous system-state reset. Returns `202` immediately;
+        progress is signalled on the control stream as
+        `reset-initiated` → `reset-started` → `reset-completed`. On completion,
+        deployment history and fetcher cursors are cleared.
 
-        Also `NOTIFY`s the `control_events` PostgreSQL channel with a `reset`
-        event so that all connected components hear the reset immediately via
-        `GET /api/control/stream`.
+        The reset runs as a choreography: the API first drains connected components
+        (they pause and acknowledge), then briefly gates ingest while it clears data,
+        then releases the gate. During the clearing window `POST /api/deployments`
+        returns `503`. There is **no status endpoint** — observe the control stream.
+
+        Only one reset may be in flight at a time; a second `POST` while a reset is
+        already draining or running returns `409`.
 
         Intended for test-environment teardown and local-dev resets.
         **Not safe in production.**
@@ -392,8 +410,18 @@ paths:
       security:
         - controlApiKey: []
       responses:
-        '204': { description: All data deleted; reset event emitted on control stream. }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+        '202':
+          description: Reset accepted; the choreography has started. Watch the control stream for progress.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResetAccepted' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: A reset is already in progress (draining or resetting).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   # ───── Control — orchestration SSE stream (API → components) ──────────────
   /api/control/stream:
@@ -427,11 +455,28 @@ paths:
         the `X-Control-API-Key` header. The browser `EventSource` constructor cannot
         send custom headers and MUST NOT be used for this endpoint.
 
-        **Current event type (`reset`):**
+        **Current event types — reset choreography (`component: "*"`):**
+        - `reset-initiated` — reset accepted; components drain (stop work, block their
+          own surfaces) and ack via `POST /api/control/events`.
+        - `reset-started` — all acks in (or the ack timeout elapsed); data is being
+          cleared, ingest briefly returns `503`.
+        - `reset-completed` — data cleared and gates released; components recover.
+
+        `reset-started` / `reset-completed` carry `reset_id` correlating back to the
+        initiating `reset-initiated` event id.
+
         ```
-        event: reset
+        event: reset-initiated
         id: 01J9F4WZK3W9G2T6X4QH3DKQF6
-        data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+        data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset-initiated","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+
+        event: reset-started
+        id: 01J9F4X0M5A1B2C3D4E5F6G7H8
+        data: {"id":"01J9F4X0M5A1B2C3D4E5F6G7H8","type":"reset-started","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:10Z"}
+
+        event: reset-completed
+        id: 01J9F4X1N6B2C3D4E5F6G7H8J9
+        data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
 
         : ping
         ```
@@ -463,9 +508,17 @@ paths:
                   - |
                     : ping
 
-                    event: reset
+                    event: reset-initiated
                     id: 01J9F4WZK3W9G2T6X4QH3DKQF6
-                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset-initiated","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+
+                    event: reset-started
+                    id: 01J9F4X0M5A1B2C3D4E5F6G7H8
+                    data: {"id":"01J9F4X0M5A1B2C3D4E5F6G7H8","type":"reset-started","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:10Z"}
+
+                    event: reset-completed
+                    id: 01J9F4X1N6B2C3D4E5F6G7H8J9
+                    data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -504,6 +557,9 @@ paths:
           description: |
             **Required.** Component identifier. Lowercase kebab/dot.
             Examples: `dashboard-fetcher`, `dashboard-fetcher.github-actions`, `demo-driver`.
+            The dotted variant (`.github-actions`) is illustrative of the pattern,
+            not a registered component — reset acks MUST use the exact id in the
+            server's `ExpectedComponents` (`dashboard-fetcher`, `demo-driver`).
             The server stores this value as `component_id` on the persisted row.
             Missing or pattern-invalid → `422`.
       requestBody:
@@ -525,15 +581,14 @@ paths:
                     last_poll_at: "2026-05-31T10:00:00Z"
                     events_this_hour: 42
               fetcher_reset_ack:
-                summary: Fetcher acknowledging a reset event from the control stream.
+                summary: Fetcher acking a reset-initiated event (drain complete; paused).
                 value:
-                  event_type: status
-                  state: idle
-                  detail: "Reset acknowledged; cursor cleared"
+                  event_type: reset-ack
+                  state: paused
+                  detail: "Drained; poll loop + ingestion stopped"
                   occurred_at: "2026-05-31T10:00:05Z"
                   payload:
-                    trigger: reset
-                    control_event_id: "01J9F4WZK3W9G2T6X4QH3DKQF6"
+                    reset_id: "01J9F4WZK3W9G2T6X4QH3DKQF6"
               demo_driver_error:
                 summary: Demo driver reporting an error.
                 value:
@@ -681,6 +736,17 @@ components:
         Retry-After:
           schema: { type: integer }
           description: Seconds until the next request is permitted.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ServiceUnavailable:
+      description: |
+        Temporarily unavailable. On `POST /api/deployments` this signals the brief
+        data-clearing window of a system-state reset; clients retry after `Retry-After`.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds until the request may be retried.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -875,6 +941,36 @@ components:
 
     # ── Control plane ─────────────────────────────────────────────────────────
 
+    ResetState:
+      type: string
+      enum: [idle, draining, resetting]
+      description: |
+        Phase of the system-state reset choreography.
+        - `idle`      — no reset in flight; `POST /api/control/reset` accepted.
+        - `draining`  — `reset-initiated` emitted; awaiting component acks or ack timeout.
+        - `resetting` — `reset-started` emitted; data being cleared, ingest briefly `503`.
+        `draining` and `resetting` both reject a new reset with `409`.
+
+    ResetAccepted:
+      type: object
+      required: [reset_id, state]
+      description: Acknowledgement body for an accepted `POST /api/control/reset` (`202`).
+      properties:
+        reset_id:
+          type: string
+          format: uuid
+          description: |
+            Id of the emitted `reset-initiated` control event. Correlates the
+            subsequent `reset-started` / `reset-completed` frames and the components'
+            `reset-ack` payloads.
+        state:
+          $ref: '#/components/schemas/ResetState'
+          description: Phase entered by accepting the reset (always `draining`).
+        accepted_at:
+          type: string
+          format: date-time
+          description: Server timestamp when the reset was accepted.
+
     ComponentState:
       type: string
       enum: [running, idle, paused, error]
@@ -893,7 +989,8 @@ components:
         Also the row type stored in `control_stream_events` (enables `Last-Event-ID` replay).
 
         `type` is an open string — components MUST treat unknown values as no-ops
-        (forward-compatibility). Current known type: `reset`.
+        (forward-compatibility). Known values: `reset-initiated` | `reset-started` |
+        `reset-completed`.
       properties:
         id:
           type: string
@@ -904,9 +1001,17 @@ components:
         type:
           type: string
           description: |
-            Event type. Currently known value: `reset` — system data was cleared;
-            all components should reinitialise from scratch.
+            Event type. Known values (reset choreography):
+            - `reset-initiated` — reset accepted; components drain and ack `paused`.
+            - `reset-started`   — acks in or timeout elapsed; data being cleared.
+            - `reset-completed` — data cleared, gates released; components recover.
             Treat unknown values as no-op.
+        reset_id:
+          type: string
+          format: uuid
+          description: |
+            Present on `reset-started` / `reset-completed`. Correlates the frame back
+            to the `id` of the initiating `reset-initiated` event.
         component:
           type: string
           description: |
@@ -939,6 +1044,8 @@ components:
             - `status`    — a state transition or periodic status report.
             - `heartbeat` — periodic liveness ping; no state change.
             - `error`     — component encountered an error; `state` will be `error`.
+            - `reset-ack` — drain-complete ack for a `reset-initiated` event; sent with
+              `state: paused` and `payload.reset_id` set to the initiating event id.
         state:
           $ref: '#/components/schemas/ComponentState'
         detail:
