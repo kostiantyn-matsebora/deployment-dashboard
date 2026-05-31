@@ -11,7 +11,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
       font-family: system-ui, -apple-system, sans-serif;
       background: #0f0f13;
       color: #d4d4d8;
-      padding: 24px 24px 72px;
+      padding: 24px 24px 56px;
       min-height: 100vh;
     }
     h1 {
@@ -21,17 +21,12 @@ export const PANEL_HTML = `<!DOCTYPE html>
     h1 span { color: #6366f1; }
 
     /* Layout */
-    /* Top row: flex row of exactly three cards, proportional grow */
-    .top-row {
-      display: flex; flex-wrap: wrap; gap: 14px;
-      align-items: stretch;
-    }
-    .top-row .card-ingest    { flex: 2.2 1 260px; min-width: 260px; }
-    .top-row .card-gh-emulator { flex: 1.6 1 260px; min-width: 260px; }
-    .top-row .card-control-api { flex: 1 1 260px; min-width: 260px; }
-
-    /* Full-width feed cards stack below */
-    .full { width: 100%; }
+    .top-row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+    .top-row .card { flex-grow: 1; flex-shrink: 1; flex-basis: 0; min-width: 260px; }
+    .top-row .card-ingest  { flex-grow: 2.2; }
+    .top-row .card-github  { flex-grow: 1.6; }
+    .top-row .card-control { flex-grow: 1; }
+    .feeds-col { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
 
     /* Card */
     .card {
@@ -41,17 +36,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .card-title {
       font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.1em; color: #71717a; margin-bottom: 14px;
-    }
-
-    /* Sub-section inside a card */
-    .sub-section {
-      border-top: 1px solid #27272a;
-      margin-top: 14px;
-      padding-top: 12px;
-    }
-    .sub-section-title {
-      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.09em; color: #52525b; margin-bottom: 10px;
     }
 
     /* Form controls */
@@ -105,30 +89,44 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .badge-reset-idle    { background: #27272a; color: #a1a1aa; }
     .badge-reset-blocked { background: #451a03; color: #fb923c; }
 
-    /* Liveness chip (status bar) */
-    .chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 3px 10px; border-radius: 99px;
-      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em;
-    }
-    .chip-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-    .chip-up      { background: #14532d; color: #86efac; }
-    .chip-down    { background: #450a0a; color: #f87171; }
-    .chip-checking { background: #451a03; color: #fb923c; }
-
-    /* Progress bar */
+    /* Progress bar (reused in status bar) */
     .progress-bg   { background: #27272a; border-radius: 4px; height: 5px; overflow: hidden; }
     .progress-fill { background: #6366f1; height: 100%; width: 0%; border-radius: 4px; transition: width 0.4s; }
 
-    /* Emit-style row (used in sub-sections) */
-    .emit-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    /* Emit / badge-button inline rows */
+    .emit-row { display: flex; align-items: center; gap: 10px; justify-content: flex-start; }
     .emit-info { display: flex; flex-direction: column; gap: 6px; }
     .emit-title { font-size: 0.88rem; color: #d4d4d8; }
 
-    /* Status bar (fixed top) */
+    /* Ingest sub-section separator */
+    .sub-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid #27272a; }
+    .sub-section-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+                         letter-spacing: 0.1em; color: #52525b; margin-bottom: 8px; }
+
+    /* GitHub card title row */
+    .gh-title-row { display: flex; justify-content: space-between; align-items: baseline;
+                    margin-bottom: 14px; }
+    .gh-store-info { font-size: 0.65rem; color: #52525b; white-space: nowrap; }
+    .gh-store-info span { color: #71717a; }
+
+    /* GitHub card hidden by default */
+    #gh-emulator-card { display: none; }
+
+    /* Liveness chips (status bar) */
+    .lv-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em;
+      padding: 2px 7px; border-radius: 99px; white-space: nowrap;
+    }
+    .lv-chip::before { content: '●'; font-size: 0.6rem; }
+    .lv-up      { background: #14532d; color: #86efac; }
+    .lv-down    { background: #450a0a; color: #f87171; }
+    .lv-checking { background: #27272a; color: #a1a1aa; }
+
+    /* Status bar (fixed footer) */
     .status-bar {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      background: #111115; border-bottom: 1px solid #27272a;
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      background: #111115; border-top: 1px solid #27272a;
       display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
       padding: 7px 24px;
     }
@@ -137,9 +135,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .sb-val  { font-size: 0.78rem; color: #a1a1aa; }
     .sb-val.err { color: #f87171; }
     .sb-sep  { color: #3f3f46; user-select: none; }
-
-    /* Push page content below the status bar */
-    body { padding-top: 60px; }
 
     /* API card */
     .api-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -164,20 +159,20 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .live-reconnecting { background: #451a03; color: #fb923c; }
 
     .feed-list {
-      max-height: 280px; overflow-y: auto;
       font-size: 0.76rem; font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
     }
     .feed-item { padding: 4px 0; border-bottom: 1px solid #1f1f23; line-height: 1.4; }
     .feed-item:last-child { border-bottom: none; }
     .feed-empty { color: #52525b; text-align: center; padding: 24px 0; font-size: 0.8rem; }
 
-    /* Unified five-column row grid */
+    /* Unified five-column row grid — shared by all three feed cards. */
     .feed-row {
       display: grid;
-      grid-template-columns: 8rem 8rem 10rem 11rem 1fr;
+      grid-template-columns: 6.5rem 8rem 10rem 11rem 1fr;
       gap: 0 8px;
       align-items: baseline;
     }
+    /* Responsive: collapse to wrapped flex on narrow viewports. */
     @media (max-width: 860px) {
       .feed-row { display: flex; flex-wrap: wrap; gap: 3px 6px; }
     }
@@ -196,6 +191,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .fi-event-posted    { background: #14532d; color: #86efac; }
     .fi-event-error     { background: #450a0a; color: #f87171; }
     .fi-event-neutral   { background: #27272a; color: #a1a1aa; }
+    /* Control stream type classes — reused from former fi-type-* naming. */
     .fi-type-initiated  { background: #451a03; color: #fb923c; }
     .fi-type-started    { background: #1a2744; color: #60a5fa; }
     .fi-type-completed  { background: #14532d; color: #86efac; }
@@ -204,59 +200,25 @@ export const PANEL_HTML = `<!DOCTYPE html>
                   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .fi-details { color: #71717a; overflow: hidden; text-overflow: ellipsis; }
 
-    /* Component Events — state colour coding within .fi-details */
+    /* Component Events feed — state colour coding within .fi-details */
     .fi-state-running   { color: #86efac; }
     .fi-state-error     { color: #f87171; }
     .fi-state-neutral   { color: #a1a1aa; }
 
-    /* Card dim — applied to interactive cards while reset_state == blocked */
+    /* Control card dim — applied to interactive cards while reset_state == blocked */
     .card-blocked { opacity: 0.45; pointer-events: none; }
-
-    /* GitHub store one-liner */
-    .gh-store-line { font-size: 0.72rem; color: #71717a; margin-top: 10px; padding-top: 10px; border-top: 1px solid #27272a; }
-    .gh-dataset-badge { display: inline-block; padding: 1px 7px; border-radius: 3px;
-                        font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
-                        background: #1a2744; color: #60a5fa; margin-right: 4px; }
   </style>
 </head>
 <body>
 
-  <!-- ── Status bar (fixed top) ─────────────────────────────────────────────── -->
-  <div class="status-bar">
-    <span class="chip chip-checking" id="chip-driver"><span class="chip-dot"></span>Driver</span>
-    <span class="chip chip-checking" id="chip-api"><span class="chip-dot"></span>API</span>
-    <span class="chip chip-checking" id="chip-emulator"><span class="chip-dot"></span>Emulator</span>
-    <span class="chip chip-checking" id="chip-fetcher"><span class="chip-dot"></span>Fetcher</span>
-    <span class="sb-sep">·</span>
-    <span class="badge badge-idle" id="state-badge">idle</span>
-    <div class="sb-prog">
-      <div class="progress-bg"><div class="progress-fill" id="progress-fill"></div></div>
-    </div>
-    <span class="sb-val" id="progress-lbl">0 / 0 events</span>
-    <span class="sb-lbl" id="progress-pct">0%</span>
-    <span class="sb-sep">·</span>
-    <span class="sb-lbl">Errors</span>
-    <span class="sb-val err" id="error-count">0</span>
-    <span class="sb-sep">·</span>
-    <span class="sb-lbl">Started</span>
-    <span class="sb-val" id="started-at">—</span>
-    <span class="sb-sep">·</span>
-    <span class="sb-lbl">Finished</span>
-    <span class="sb-val" id="finished-at">—</span>
-    <span class="sb-sep">·</span>
-    <span class="badge badge-reset-idle" id="sb-reset-badge">RESET: IDLE</span>
-  </div>
-
   <h1>Demo <span>Driver</span></h1>
 
-  <!-- ── Top row: Ingest · GitHub Emulator · Control API ───────────────────── -->
+  <!-- ── Top card row ────────────────────────────────────────────────────── -->
   <div class="top-row">
 
-    <!-- ── Ingest card ────────────────────────────────────────────────────────── -->
+    <!-- ── Ingest card ───────────────────────────────────────────────────── -->
     <div class="card card-ingest" id="ingest-card">
       <div class="card-title">Ingest</div>
-
-      <!-- Ingest sub-section -->
       <div class="controls">
         <span class="lbl">Data set</span>
         <select id="dataset-select">
@@ -279,24 +241,25 @@ export const PANEL_HTML = `<!DOCTYPE html>
         <button class="btn-stop" id="ingest-stop-btn" disabled>Stop</button>
       </div>
 
-      <!-- Live Emission sub-section -->
-      <div class="sub-section" id="live-emission-section">
+      <!-- Live Emission sub-section folded in -->
+      <div class="sub-section">
         <div class="sub-section-title">Live Emission</div>
         <div class="emit-row">
-          <div class="emit-info">
-            <span class="emit-title">Random events</span>
-            <span class="badge badge-off" id="emit-badge">OFF</span>
-          </div>
-          <button class="btn-enable" id="emit-toggle-btn">Enable</button>
+          <span class="badge badge-off" id="emit-badge">OFF</span>
+          <button class="btn-enable" id="emit-toggle-btn" onclick="toggleEmit()">Enable</button>
         </div>
       </div>
     </div>
 
-    <!-- ── GitHub Emulator card (hidden until emulator=="up") ───────────────── -->
-    <div class="card card-gh-emulator" id="gh-emulator-card" style="display:none">
-      <div class="card-title">GitHub Emulator</div>
+    <!-- ── GitHub Emulator card ───────────────────────────────────────────── -->
+    <div class="card card-github" id="gh-emulator-card">
+      <div class="gh-title-row">
+        <div class="card-title" style="margin-bottom:0">GitHub Emulator</div>
+        <span class="gh-store-info" id="gh-store-info">demo · 2 repos · seeded —</span>
+      </div>
 
-      <!-- Seed sub-section (interactive — dims on reset) -->
+      <!-- Seed sub-section -->
+      <div class="sub-section-title" style="margin-top:0">Seed</div>
       <div class="controls">
         <span class="lbl">Data set</span>
         <select id="gh-dataset-select">
@@ -305,57 +268,50 @@ export const PANEL_HTML = `<!DOCTYPE html>
         </select>
 
         <span class="lbl" id="gh-count-lbl" style="display:none">Count</span>
-        <input type="number" id="gh-count-input" value="5" min="1" max="100" step="1"
+        <input type="number" id="gh-count-input" value="5" min="1" max="20" step="1"
                style="width:60px;display:none">
 
         <label class="chk-label">
-          <input type="checkbox" id="gh-reset-check"> Reset
+          <input type="checkbox" id="gh-reset-check" checked> Reset
         </label>
 
-        <button class="btn-run"  id="gh-seed-btn">Seed</button>
-        <button class="btn-stop" id="gh-clear-btn">Clear</button>
+        <button class="btn-run"  id="gh-seed-btn"  onclick="ghSeed()">Seed</button>
+        <button class="btn-stop" id="gh-clear-btn" onclick="ghClear()">Clear</button>
       </div>
       <div class="api-msg-row">
         <span class="api-msg" id="gh-seed-msg"></span>
       </div>
 
-      <!-- Live sub-section (interactive — dims on reset) -->
-      <div class="sub-section" id="gh-live-section">
+      <!-- Live sub-section -->
+      <div class="sub-section">
         <div class="sub-section-title">Live</div>
         <div class="emit-row">
-          <div class="emit-info">
-            <span class="emit-title">Periodic emit</span>
-            <span class="badge badge-off" id="gh-emit-badge">OFF</span>
-          </div>
-          <button class="btn-enable" id="gh-emit-toggle-btn">Enable</button>
+          <span class="badge badge-off" id="gh-emit-badge">OFF</span>
+          <button class="btn-enable" id="gh-emit-btn" onclick="ghToggleEmit()">Enable</button>
         </div>
       </div>
-
-      <!-- Store one-liner (data surface — never dimmed) -->
-      <div class="gh-store-line" id="gh-store-line">Not seeded</div>
     </div>
 
-    <!-- ── Control API card ──────────────────────────────────────────────────── -->
-    <div class="card card-control-api" id="control-api-card">
+    <!-- ── Control API card ──────────────────────────────────────────────── -->
+    <div class="card card-control" id="control-api-card">
       <div class="card-title">Control API</div>
       <div class="emit-row">
-        <div class="emit-info">
-          <span class="lbl">Reset state</span>
-          <span class="badge badge-reset-idle" id="reset-state-badge">IDLE</span>
-          <div class="reset-id" id="reset-id-display"></div>
-        </div>
-        <button class="btn-stop" id="reset-api-btn">Reset System</button>
+        <span class="badge badge-reset-idle" id="reset-state-badge">IDLE</span>
+        <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset System</button>
       </div>
+      <div class="reset-id" id="reset-id-display"></div>
       <div class="api-msg-row">
         <span class="api-msg" id="reset-api-msg"></span>
       </div>
     </div>
 
-  </div><!-- /.top-row -->
+  </div>
 
-  <!-- ── Feed cards (full width) ────────────────────────────────────────────── -->
-    <!-- ── Post Feed card ────────────────────────────────────────────────────── -->
-    <div class="card full" style="margin-top:14px">
+  <!-- ── Feed cards (full width, stacked) ─────────────────────────────────── -->
+  <div class="feeds-col">
+
+    <!-- ── Post Feed card ────────────────────────────────────────────────── -->
+    <div class="card">
       <div class="feed-header">
         <div class="card-title">Post Feed</div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -368,25 +324,52 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- ── Events card (full row) — merged control-stream + component events ── -->
-    <div class="card full" id="events-card" style="margin-top:14px">
+    <!-- ── Events card (merged control-stream + component-events) ────────── -->
+    <div class="card" id="events-card">
       <div class="feed-header">
         <div class="card-title">Events</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <span class="live-badge live-connecting" id="evt-live-badge">● CONNECTING</span>
-          <button class="btn-sm" id="evt-clear-btn">Clear</button>
+          <span class="live-badge live-connecting" id="events-live-badge">● CONNECTING</span>
+          <button class="btn-sm" id="events-clear-btn">Clear</button>
         </div>
       </div>
-      <div class="feed-list" id="evt-feed-list">
-        <div class="feed-empty" id="evt-feed-empty">No events yet.</div>
+      <div class="feed-list" id="events-feed-list">
+        <div class="feed-empty" id="events-feed-empty">No events received yet.</div>
       </div>
     </div>
+
+  </div>
+
+  <!-- ── Status bar (fixed footer) ────────────────────────────────────────── -->
+  <div class="status-bar">
+    <span class="lv-chip lv-checking" id="lv-driver">Driver</span>
+    <span class="lv-chip lv-checking" id="lv-api">API</span>
+    <span class="lv-chip lv-checking" id="lv-emulator">Emulator</span>
+    <span class="lv-chip lv-checking" id="lv-fetcher">Fetcher</span>
+    <span class="sb-sep">·</span>
+    <span class="badge badge-idle" id="state-badge">idle</span>
+    <div class="sb-prog">
+      <div class="progress-bg"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+    <span class="sb-val" id="progress-lbl">0 / 0 events</span>
+    <span class="sb-lbl" id="progress-pct">0%</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-lbl">Errors</span>
+    <span class="sb-val err" id="error-count">0</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-lbl">Started</span>
+    <span class="sb-val" id="started-at">—</span>
+    <span class="sb-sep">·</span>
+    <span class="sb-lbl">Finished</span>
+    <span class="sb-val" id="finished-at">—</span>
+    <span class="sb-sep">·</span>
+    <span class="badge badge-reset-idle" id="sb-reset-badge">RESET: IDLE</span>
+  </div>
 
   <script>
     'use strict';
     const $ = id => document.getElementById(id);
 
-    // ── Element refs ─────────────────────────────────────────────────────────────
     const datasetSelect   = $('dataset-select');
     const countLbl        = $('count-lbl');
     const countInput      = $('count-input');
@@ -413,132 +396,80 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const resetIdDisplay  = $('reset-id-display');
     const sbResetBadge    = $('sb-reset-badge');
 
-    // Events card refs (merged feed — data surface, never dimmed)
-    const evtLiveBadge = $('evt-live-badge');
-    const evtClearBtn  = $('evt-clear-btn');
-    const evtFeedList  = $('evt-feed-list');
-    const evtFeedEmpty = $('evt-feed-empty');
+    // Liveness chips (status bar).
+    const lvDriver   = $('lv-driver');
+    const lvApi      = $('lv-api');
+    const lvEmulator = $('lv-emulator');
+    const lvFetcher  = $('lv-fetcher');
 
-    // Liveness chip refs
-    const chipDriver   = $('chip-driver');
-    const chipApi      = $('chip-api');
-    const chipEmulator = $('chip-emulator');
-    const chipFetcher  = $('chip-fetcher');
+    // GitHub Emulator card refs.
+    const ghEmulatorCard  = $('gh-emulator-card');
+    const ghDatasetSelect = $('gh-dataset-select');
+    const ghCountLbl      = $('gh-count-lbl');
+    const ghCountInput    = $('gh-count-input');
+    const ghResetCheck    = $('gh-reset-check');
+    const ghSeedBtn       = $('gh-seed-btn');
+    const ghClearBtn2     = $('gh-clear-btn');
+    const ghSeedMsg       = $('gh-seed-msg');
+    const ghEmitBadge     = $('gh-emit-badge');
+    const ghEmitBtn       = $('gh-emit-btn');
+    const ghStoreInfo     = $('gh-store-info');
+
+    // Merged Events feed refs (data feed — exempt from card-blocked dimming).
+    const eventsLiveBadge = $('events-live-badge');
+    const eventsClearBtn  = $('events-clear-btn');
+    const eventsFeedList  = $('events-feed-list');
+    const eventsFeedEmpty = $('events-feed-empty');
 
     // Interactive control cards — dimmed while reset_state == blocked.
     const interactiveCards = [$('ingest-card'), $('gh-emulator-card'), $('control-api-card')];
 
-    // Individual interactive controls disabled during reset.
+    // Interactive controls blocked during reset.
     const interactiveControls = [
       ingestBtn, ingestStopBtn, emitToggleBtn, resetApiBtn,
       datasetSelect, countInput, delayInput, resetCheck,
-      $('gh-seed-btn'), $('gh-clear-btn'), $('gh-emit-toggle-btn'),
-      $('gh-dataset-select'), $('gh-count-input'), $('gh-reset-check'),
+      ghSeedBtn, ghClearBtn2, ghEmitBtn, ghDatasetSelect, ghCountInput, ghResetCheck,
     ];
 
     let pollTimer        = null;
-    let healthPollTimer  = null;
-    let ghStatusPollTimer = null;
     let eventSource      = null;
     let ctrlEventSource  = null;
     let compPollTimer    = null;
+    let ghPollTimer      = null;
+    let healthPollTimer  = null;
     let emitting         = false;
     let ghEmitting       = false;
     let isBlocked        = false;
 
-    // ── localStorage keys & caps ───────────────────────────────────────────────
-    const LS_POSTS  = 'dd.posts';   // cap: 10 rows
-    const LS_EVENTS = 'dd.events';  // cap: 20 rows
-    const CAP_POSTS  = 10;
-    const CAP_EVENTS = 20;
-
-    // ── Merged events in-memory store ─────────────────────────────────────────
-    // Each entry: { _ts: ISO string (sortable), id: string, kind: 'control'|'component', ...original fields }
+    // Merged events store: dedup by id, sorted datetime DESC.
     let eventsStore = [];
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-    async function apiFetch(url, opts = {}) {
-      const res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json' },
-        ...opts,
-      });
-      return res.json();
-    }
+    // Post Feed store: latest 10, newest first; each entry is the raw SSE data obj.
+    let postsStore = [];
 
-    function fmtMs(iso) {
-      // Format with milliseconds: HH:MM:SS.mmm
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return String(iso);
-      const hh  = String(d.getHours()).padStart(2, '0');
-      const mm  = String(d.getMinutes()).padStart(2, '0');
-      const ss  = String(d.getSeconds()).padStart(2, '0');
-      const ms  = String(d.getMilliseconds()).padStart(3, '0');
-      return hh + ':' + mm + ':' + ss + '.' + ms;
-    }
-
-    // Legacy fmt used by status bar (no ms required there)
-    function fmt(iso) {
-      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    }
-
-    function esc(s) {
-      return String(s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    // ── Dataset toggle ────────────────────────────────────────────────────────
+    // ── Dataset toggles ───────────────────────────────────────────────────────
     datasetSelect.addEventListener('change', () => {
       const isRandom = datasetSelect.value === 'random';
       countLbl.style.display   = isRandom ? '' : 'none';
       countInput.style.display = isRandom ? '' : 'none';
     });
 
-    $('gh-dataset-select').addEventListener('change', () => {
-      const isRandom = $('gh-dataset-select').value === 'random';
-      $('gh-count-lbl').style.display   = isRandom ? '' : 'none';
-      $('gh-count-input').style.display = isRandom ? '' : 'none';
+    ghDatasetSelect.addEventListener('change', () => {
+      const isRandom = ghDatasetSelect.value === 'random';
+      ghCountLbl.style.display   = isRandom ? '' : 'none';
+      ghCountInput.style.display = isRandom ? '' : 'none';
     });
 
-    // ── Boot ──────────────────────────────────────────────────────────────────
+    // ── Boot ─────────────────────────────────────────────────────────────────
     (async () => {
       hydrateFromStorage();
-      await Promise.all([refreshStatus(), refreshEmit(), refreshGithubEmit()]);
+      await Promise.all([refreshStatus(), refreshEmit()]);
       connectStream();
       connectControlStream();
       startCompEventsPoll();
+      startGhPoll();
       startHealthPoll();
-      startGithubStatusPoll();
     })();
-
-    // ── Health poll → liveness chips + emulator card visibility ──────────────
-    function startHealthPoll() {
-      refreshHealth();
-      healthPollTimer = setInterval(refreshHealth, 5000);
-    }
-
-    async function refreshHealth() {
-      try {
-        const h = await apiFetch('/demo/health');
-        setChip(chipDriver,   h.driver   || 'down');
-        setChip(chipApi,      h.api      || 'down');
-        setChip(chipEmulator, h.emulator || 'down');
-        setChip(chipFetcher,  h.fetcher  || 'down');
-        // Emulator card visibility driven exclusively by /demo/health emulator field.
-        setEmulatorCardVisible(h.emulator === 'up');
-      } catch {
-        // Network error: mark all non-driver chips as checking.
-        setChip(chipApi,      'checking');
-        setChip(chipEmulator, 'checking');
-        setChip(chipFetcher,  'checking');
-      }
-    }
-
-    function setChip(el, status) {
-      // status: 'up' | 'down' | 'checking'
-      const cls = status === 'up' ? 'chip-up' : status === 'down' ? 'chip-down' : 'chip-checking';
-      el.className = 'chip ' + cls;
-    }
 
     // ── Data loaders ──────────────────────────────────────────────────────────
     async function refreshStatus() {
@@ -555,46 +486,16 @@ export const PANEL_HTML = `<!DOCTYPE html>
       } catch {}
     }
 
-    async function refreshGithubEmit() {
-      try {
-        const data = await apiFetch('/demo/github/emit');
-        applyGithubEmit(data);
-      } catch {}
-    }
-
-    // Emulator card visibility is controlled solely by /demo/health emulator field.
-    let emulatorCardVisible = false;
-    function setEmulatorCardVisible(visible) {
-      if (visible === emulatorCardVisible) return;
-      emulatorCardVisible = visible;
-      const card = $('gh-emulator-card');
-      if (card) card.style.display = visible ? '' : 'none';
-    }
-
-    // GitHub Store data (counters) is still sourced from GET /demo/github/status.
-    function startGithubStatusPoll() {
-      refreshGithubStatus();
-      ghStatusPollTimer = setInterval(refreshGithubStatus, 5000);
-    }
-
-    async function refreshGithubStatus() {
-      try {
-        const res = await fetch('/demo/github/status', { headers: { 'Content-Type': 'application/json' } });
-        if (!res.ok) return;
-        applyGithubStatus(await res.json());
-      } catch {}
-    }
-
     function applyStatus(d) {
       const state      = d.state      || 'idle';
       const resetState = d.reset_state || 'idle';
       const resetId    = d.reset_id   || null;
 
-      // Scenario state badge — status bar.
+      // Scenario state badge.
       stateBadge.textContent = state;
       stateBadge.className   = 'badge badge-' + state;
 
-      // Reset-state indicators.
+      // Reset-state indicators (card badge + footer chip).
       if (resetState === 'blocked') {
         resetStateBadge.textContent = 'RESET IN PROGRESS';
         resetStateBadge.className   = 'badge badge-reset-blocked';
@@ -617,6 +518,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
         interactiveControls.forEach(el => { el.disabled = true; });
       } else {
         interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
+        // Restore interactive controls based on ingest state.
         interactiveControls.forEach(el => { el.disabled = false; });
         ingestBtn.disabled     = state === 'running';
         ingestStopBtn.disabled = state !== 'running';
@@ -626,7 +528,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const sent  = d.events_sent  || 0;
       const pct   = total > 0 ? (sent / total * 100) : 0;
 
-      // Update status bar.
       progressLbl.textContent  = sent + ' / ' + total + ' events';
       progressPct.textContent  = pct.toFixed(0) + '%';
       progressFill.style.width = pct.toFixed(1) + '%';
@@ -647,31 +548,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
       emitToggleBtn.className   = emitting ? 'btn-stop' : 'btn-enable';
     }
 
-    function applyGithubEmit(d) {
-      ghEmitting = !!(d && d.emitting);
-      const badge  = $('gh-emit-badge');
-      const btn    = $('gh-emit-toggle-btn');
-      badge.textContent = ghEmitting ? 'LIVE' : 'OFF';
-      badge.className   = 'badge ' + (ghEmitting ? 'badge-on' : 'badge-off');
-      btn.textContent   = ghEmitting ? 'Disable' : 'Enable';
-      btn.className     = ghEmitting ? 'btn-stop' : 'btn-enable';
-    }
-
-    function applyGithubStatus(d) {
-      if (!d) return;
-      // One-liner: dataset · N repos · seeded HH:MM
-      const line = $('gh-store-line');
-      if (!line) return;
-      if (!d.seeded_at && d.repos === undefined) { line.innerHTML = 'Not seeded'; return; }
-      const datasetBadge = d.dataset
-        ? '<span class="gh-dataset-badge">' + esc(d.dataset) + '</span>'
-        : '';
-      const reposText  = d.repos !== undefined ? String(d.repos) + ' repos' : '';
-      const seededText = d.seeded_at ? 'seeded ' + fmt(d.seeded_at) : '';
-      const parts = [reposText, seededText].filter(Boolean).join(' · ');
-      line.innerHTML = datasetBadge + parts;
-    }
-
     function schedulePoll() {
       clearTimeout(pollTimer);
       pollTimer = setTimeout(async () => { await refreshStatus(); }, 600);
@@ -687,6 +563,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const body     = { dataset, reset, delay_ms: delay };
       if (dataset === 'random') body.count = count;
 
+      // When reset is checked the server blocks until the full reset cycle
+      // completes before responding.  Dim the control cards immediately so
+      // the user sees feedback during the wait; applyStatus will clear it once
+      // the response arrives with reset_state back to idle.
       if (reset) {
         isBlocked = true;
         interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
@@ -704,6 +584,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
         });
         applyStatus(data);
       } catch {
+        // On network error: revert the optimistic card-dim so the UI is not
+        // permanently stuck.
         if (reset) {
           isBlocked = false;
           interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
@@ -727,7 +609,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     });
 
     // ── Live emission ─────────────────────────────────────────────────────────
-    emitToggleBtn.addEventListener('click', () => {
+    function toggleEmit() {
       if (isBlocked) return;
       emitToggleBtn.disabled = true;
       apiFetch('/demo/emit', {
@@ -736,10 +618,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
       }).then(applyEmit)
         .catch(() => {})
         .finally(() => { emitToggleBtn.disabled = isBlocked; });
-    });
+    }
 
     // ── API reset ─────────────────────────────────────────────────────────────
-    resetApiBtn.addEventListener('click', () => {
+    function resetApi() {
       if (isBlocked) return;
       resetApiBtn.disabled = true;
       resetApiMsg.textContent = '';
@@ -749,6 +631,9 @@ export const PANEL_HTML = `<!DOCTYPE html>
           if (d.ok) {
             resetApiMsg.textContent = '\\u2713 Reset OK (' + d.http_status + ')';
             resetApiMsg.className   = 'api-msg ok';
+            // Reset was accepted — the backend transitions to blocked via SSE,
+            // which arrives after this HTTP response.  Start polling immediately
+            // so applyStatus catches the blocked→idle cycle.
             schedulePoll();
           } else {
             resetApiMsg.textContent = '\\u2717 HTTP ' + (d.http_status || '—');
@@ -760,92 +645,22 @@ export const PANEL_HTML = `<!DOCTYPE html>
           resetApiMsg.className   = 'api-msg err';
         })
         .finally(() => { resetApiBtn.disabled = isBlocked; refreshStatus(); });
-    });
+    }
 
-    // ── Post Feed clear ───────────────────────────────────────────────────────
     clearBtn.addEventListener('click', () => {
-      feedRows = [];
-      localStorage.removeItem(LS_POSTS);
+      postsStore = [];
+      localStorage.removeItem('dd.posts');
       feedList.innerHTML = '';
       feedList.appendChild(feedEmpty);
     });
 
-    // ── GitHub Seed / Clear ───────────────────────────────────────────────────
-    $('gh-seed-btn').addEventListener('click', async () => {
-      if (isBlocked) return;
-      const dataset = $('gh-dataset-select').value;
-      const doReset = $('gh-reset-check').checked;
-      const body    = { dataset, reset: doReset };
-      if (dataset === 'random') {
-        body.count = Math.max(1, parseInt($('gh-count-input').value, 10) || 5);
-      }
-      const msg = $('gh-seed-msg');
-      msg.textContent = '';
-      msg.className   = 'api-msg';
-      try {
-        const res = await fetch('/demo/github/seed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          msg.textContent = '\\u2713 Seeded';
-          msg.className   = 'api-msg ok';
-          applyGithubStatus(data);
-        } else {
-          msg.textContent = '\\u2717 HTTP ' + res.status;
-          msg.className   = 'api-msg err';
-        }
-      } catch {
-        msg.textContent = '\\u2717 Network error';
-        msg.className   = 'api-msg err';
-      }
-      refreshGithubStatus();
+    eventsClearBtn.addEventListener('click', () => {
+      eventsStore = [];
+      localStorage.removeItem('dd.events');
+      renderEventsStore();
     });
 
-    $('gh-clear-btn').addEventListener('click', async () => {
-      if (isBlocked) return;
-      const msg = $('gh-seed-msg');
-      msg.textContent = '';
-      msg.className   = 'api-msg';
-      try {
-        const res = await fetch('/demo/github/clear', { method: 'POST',
-          headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        if (res.ok) {
-          msg.textContent = '\\u2713 Cleared';
-          msg.className   = 'api-msg ok';
-        } else {
-          msg.textContent = '\\u2717 HTTP ' + res.status;
-          msg.className   = 'api-msg err';
-        }
-      } catch {
-        msg.textContent = '\\u2717 Network error';
-        msg.className   = 'api-msg err';
-      }
-      refreshGithubStatus();
-    });
-
-    // ── GitHub Live emission ───────────────────────────────────────────────────
-    $('gh-emit-toggle-btn').addEventListener('click', () => {
-      if (isBlocked) return;
-      const btn = $('gh-emit-toggle-btn');
-      btn.disabled = true;
-      fetch('/demo/github/emit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !ghEmitting }),
-      })
-        .then(r => r.json())
-        .then(applyGithubEmit)
-        .catch(() => {})
-        .finally(() => { btn.disabled = isBlocked; });
-    });
-
-    // ── SSE stream (Post Feed) ─────────────────────────────────────────────────
-    // In-memory ordered list of post-feed rows (newest-first, capped at CAP_POSTS).
-    let feedRows = [];
-
+    // ── SSE stream ────────────────────────────────────────────────────────────
     function connectStream() {
       if (eventSource) { try { eventSource.close(); } catch {} }
       setLiveBadge('connecting');
@@ -855,13 +670,13 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
       eventSource.addEventListener('posted', e => {
         const d = JSON.parse(e.data);
-        prependFeedRow(d, 'posted');
+        addFeedItem('posted', d);
         refreshStatus();
       });
 
       eventSource.addEventListener('error', e => {
         if (e.data) {
-          prependFeedRow(JSON.parse(e.data), 'error');
+          addFeedItem('error', JSON.parse(e.data));
         } else {
           setLiveBadge('reconnecting');
         }
@@ -874,48 +689,14 @@ export const PANEL_HTML = `<!DOCTYPE html>
       liveBadge.className   = 'live-badge live-' + mode;
     }
 
-    // Prepend a post-feed row, persist to localStorage (cap CAP_POSTS).
-    function prependFeedRow(d, type) {
-      const entry = Object.assign({ _type: type }, d);
-      feedRows.unshift(entry);
-      if (feedRows.length > CAP_POSTS) feedRows = feedRows.slice(0, CAP_POSTS);
-      persistPosts();
-      renderFeed();
-    }
-
-    function persistPosts() {
-      try { localStorage.setItem(LS_POSTS, JSON.stringify(feedRows)); } catch {}
-    }
-
-    function renderFeed() {
-      feedList.innerHTML = '';
-      if (!feedRows.length) { feedList.appendChild(feedEmpty); return; }
-      feedRows.forEach(d => {
-        const type   = d._type || 'posted';
-        const time   = fmtMs(d.posted_at || new Date().toISOString());
-        const reporter    = d.reporter || '';
-        const isEmit      = reporter.endsWith('/emit');
-        const sourceClass = isEmit ? 'fi-source-emit' : 'fi-source-ingest';
-
-        let detailsHtml, eventClass;
-        if (type === 'posted') {
-          eventClass  = 'fi-event-posted';
-          detailsHtml = esc(d.service) + ' / ' + esc(d.environment) + ' \\u2192 ' + esc(d.status);
-        } else {
-          eventClass  = 'fi-event-error';
-          detailsHtml = 'HTTP ' + esc(String(d.http_status)) + ' \\u00b7 attempt ' + esc(String(d.attempt));
-        }
-
-        feedList.appendChild(feedRow({
-          time, source: reporter, sourceClass,
-          event: type, eventClass,
-          id: d.deployment_id || '',
-          detailsHtml,
-        }));
-      });
-    }
-
     // ── Shared unified row renderer ───────────────────────────────────────────
+    // Returns a div.feed-item.feed-row with five aligned columns:
+    //   time | source | event | id | details
+    // All server-interpolated values are passed through esc().
+    // eventClass: one of fi-event-posted / fi-event-error / fi-event-neutral /
+    //             fi-type-initiated / fi-type-started / fi-type-completed / fi-type-unknown
+    // sourceClass: one of fi-source-ingest / fi-source-emit / fi-source-comp / fi-source-ctrl
+    // detailsHtml: pre-escaped HTML string for the details cell (caller builds it).
     function feedRow({ time, source, sourceClass, event: evtLabel, eventClass, id, detailsHtml }) {
       const row = document.createElement('div');
       row.className = 'feed-item feed-row';
@@ -926,134 +707,133 @@ export const PANEL_HTML = `<!DOCTYPE html>
         ? '<span class="fi-id">' + esc(id) + '</span>'
         : '<span class="fi-id" style="visibility:hidden">\\u2013</span>';
       row.innerHTML =
-        '<span class="fi-time">'    + esc(time)                                        + '</span>' +
-        srcHtml                                                                                    +
+        '<span class="fi-time">'    + esc(time)                                    + '</span>' +
+        srcHtml                                                                                +
         '<span class="fi-event ' + (eventClass || 'fi-event-neutral') + '">' + esc(evtLabel) + '</span>' +
-        idHtml                                                                                     +
-        '<span class="fi-details">' + (detailsHtml || '')                              + '</span>';
+        idHtml                                                                                 +
+        '<span class="fi-details">' + (detailsHtml || '')                          + '</span>';
       return row;
     }
 
-    // ── Merged Events feed ────────────────────────────────────────────────────
-    // Single in-memory array deduped by id, sorted by _ts DESC (newest first).
-    // Sourced from: control-stream SSE (kind='control') + component-events poll (kind='component').
+    function addFeedItem(type, d) {
+      // Dedup by deployment_id (prevents duplicates on SSE reconnect).
+      const uid = (d.deployment_id || '') + '|' + (d.posted_at || '') + '|' + type;
+      if (postsStore.some(p => p._uid === uid)) return;
 
-    // Events clear button
-    evtClearBtn.addEventListener('click', () => {
-      eventsStore = [];
-      localStorage.removeItem(LS_EVENTS);
-      evtFeedList.innerHTML = '';
-      evtFeedList.appendChild(evtFeedEmpty);
-    });
+      const reporter    = d.reporter || '';
+      const isEmit      = reporter.endsWith('/emit');
+      const sourceClass = isEmit ? 'fi-source-emit' : 'fi-source-ingest';
+      const ts          = d.posted_at || new Date().toISOString();
 
-    function mergeEvents(newRows) {
-      // Merge new rows into eventsStore, dedup by id.
-      newRows.forEach(r => {
-        const idx = eventsStore.findIndex(x => x.id === r.id);
-        if (idx >= 0) {
-          eventsStore[idx] = r; // update in place
-        } else {
-          eventsStore.push(r);
-        }
+      let detailsHtml;
+      let eventClass;
+      if (type === 'posted') {
+        eventClass   = 'fi-event-posted';
+        detailsHtml  = esc(d.service) + ' / ' + esc(d.environment) + ' \\u2192 ' + esc(d.status);
+      } else {
+        eventClass   = 'fi-event-error';
+        detailsHtml  = 'HTTP ' + esc(String(d.http_status)) + ' \\u00b7 attempt ' + esc(String(d.attempt));
+      }
+
+      postsStore.unshift({
+        _uid: uid, _ts: ts,
+        time: fmt(ts), reporter, sourceClass, type, eventClass,
+        id: d.deployment_id || '', detailsHtml,
       });
-      // Sort datetime DESC.
-      eventsStore.sort((a, b) => {
-        const ta = new Date(a._ts || 0).getTime();
-        const tb = new Date(b._ts || 0).getTime();
-        return tb - ta;
-      });
-      // Trim to cap.
-      if (eventsStore.length > CAP_EVENTS) eventsStore = eventsStore.slice(0, CAP_EVENTS);
-      persistEvents();
-      renderEventsStore();
+      // Cap at 10.
+      if (postsStore.length > 10) postsStore.length = 10;
+      persistPosts();
+      renderPostFeed();
     }
 
-    function persistEvents() {
-      try { localStorage.setItem(LS_EVENTS, JSON.stringify(eventsStore)); } catch {}
-    }
-
-    function renderEventsStore() {
-      evtFeedList.innerHTML = '';
-      if (!eventsStore.length) { evtFeedList.appendChild(evtFeedEmpty); return; }
-      eventsStore.forEach(r => {
-        let time, source, sourceClass, evtLabel, eventClass, id, detailsHtml;
-
-        if (r.kind === 'control') {
-          time        = fmtMs(r._ts || new Date().toISOString());
-          source      = 'control-api';
-          sourceClass = 'fi-source-ctrl';
-          evtLabel    = r.type || 'unknown';
-          eventClass  = r.type === 'reset-initiated' ? 'fi-type-initiated'
-                      : r.type === 'reset-started'   ? 'fi-type-started'
-                      : r.type === 'reset-completed'  ? 'fi-type-completed'
-                      :                                 'fi-type-unknown';
-          id          = r.id || '';
-          detailsHtml = r.reset_id
-            ? 'reset_id: <span class="fi-id">' + esc(r.reset_id) + '</span>'
-            : '';
-        } else {
-          // kind === 'component'
-          time        = fmtMs(r._ts || new Date().toISOString());
-          source      = r.component_id || '';
-          sourceClass = 'fi-source-comp';
-          evtLabel    = r.event_type || '';
-          eventClass  = 'fi-event-neutral';
-          id          = r.id || '';
-          const stateCls = r.state === 'running' ? 'fi-state-running'
-                         : r.state === 'error'   ? 'fi-state-error'
-                         :                         'fi-state-neutral';
-          const detailPart = r.detail
-            ? ' \\u00b7 <span class="fi-details">' + esc(r.detail) + '</span>'
-            : '';
-          detailsHtml =
-            '<span class="' + stateCls + '">' + esc(r.state || '') + '</span>' + detailPart;
-        }
-
-        evtFeedList.appendChild(feedRow({ time, source, sourceClass, event: evtLabel, eventClass, id, detailsHtml }));
+    function renderPostFeed() {
+      feedList.innerHTML = '';
+      if (!postsStore.length) { feedList.appendChild(feedEmpty); return; }
+      postsStore.forEach(p => {
+        const row = feedRow({
+          time: p.time, source: p.reporter, sourceClass: p.sourceClass,
+          event: p.type, eventClass: p.eventClass, id: p.id, detailsHtml: p.detailsHtml,
+        });
+        feedList.appendChild(row);
       });
     }
 
-    // ── Control-stream SSE → Events feed ────────────────────────────────────
+    function persistPosts() {
+      try { localStorage.setItem('dd.posts', JSON.stringify(postsStore)); } catch {}
+    }
+
+    // ── Control API Events SSE (GET /demo/control-stream) ────────────────────
     function connectControlStream() {
       if (ctrlEventSource) { try { ctrlEventSource.close(); } catch {} }
-      setEvtLiveBadge('connecting');
+      setEventsLiveBadge('connecting');
       ctrlEventSource = new EventSource('/demo/control-stream');
 
-      ctrlEventSource.onopen = () => setEvtLiveBadge('live');
+      ctrlEventSource.onopen = () => setEventsLiveBadge('live');
 
-      const handleCtrlFrame = (type, rawData) => {
-        let d = {};
-        try { d = JSON.parse(rawData); } catch {}
-        const row = Object.assign({}, d, {
-          kind: 'control',
-          type: type === 'unknown' ? (d.type || 'unknown') : type,
-          _ts:  d.occurred_at || new Date().toISOString(),
-          id:   d.id || (Date.now() + '-' + Math.random()), // fallback id for dedup
-        });
-        mergeEvents([row]);
-      };
+      // Named events for known reset lifecycle types.
+      ctrlEventSource.addEventListener('reset-initiated', e => {
+        mergeCtrlEvent('reset-initiated', e.data);
+      });
+      ctrlEventSource.addEventListener('reset-started', e => {
+        mergeCtrlEvent('reset-started', e.data);
+      });
+      ctrlEventSource.addEventListener('reset-completed', e => {
+        mergeCtrlEvent('reset-completed', e.data);
+      });
 
-      ctrlEventSource.addEventListener('reset-initiated', e => handleCtrlFrame('reset-initiated', e.data));
-      ctrlEventSource.addEventListener('reset-started',   e => handleCtrlFrame('reset-started',   e.data));
-      ctrlEventSource.addEventListener('reset-completed', e => handleCtrlFrame('reset-completed',  e.data));
-
-      // Forward unnamed frames (forward-compat).
+      // Default message handler: frames with no event: field (e.g. plain
+      // data-only frames) and a forward-compat catch for any unknown named type
+      // that the server sends without a dedicated listener.  Named events that
+      // don't match a listener above will NOT fire onmessage — they are silently
+      // dropped by EventSource.  That is acceptable per §4.8 forward-compat note
+      // ("unknown named types are best-effort").
       ctrlEventSource.onmessage = e => {
+        // Ignore ": ping" heartbeats — they arrive as comment frames with no data.
         if (!e.data) return;
-        handleCtrlFrame('unknown', e.data);
+        mergeCtrlEvent('unknown', e.data);
       };
 
-      ctrlEventSource.onerror = () => setEvtLiveBadge('reconnecting');
+      ctrlEventSource.onerror = () => setEventsLiveBadge('reconnecting');
     }
 
-    function setEvtLiveBadge(mode) {
+    function setEventsLiveBadge(mode) {
       const labels = { connecting: '● CONNECTING', live: '● LIVE', reconnecting: '● RECONNECTING' };
-      evtLiveBadge.textContent = labels[mode] || mode;
-      evtLiveBadge.className   = 'live-badge live-' + mode;
+      eventsLiveBadge.textContent = labels[mode] || mode;
+      eventsLiveBadge.className   = 'live-badge live-' + mode;
     }
 
-    // ── Component events poll → Events feed ──────────────────────────────────
+    function mergeCtrlEvent(type, rawData) {
+      let d = {};
+      try { d = JSON.parse(rawData); } catch {}
+
+      const eventClass = type === 'reset-initiated' ? 'fi-type-initiated'
+                       : type === 'reset-started'   ? 'fi-type-started'
+                       : type === 'reset-completed'  ? 'fi-type-completed'
+                       :                               'fi-type-unknown';
+
+      const ts          = d.occurred_at || new Date().toISOString();
+      const detailsHtml = d.reset_id
+        ? 'reset_id: <span class="fi-id">' + esc(d.reset_id) + '</span>'
+        : '';
+
+      const entry = {
+        _kind:      'ctrl',
+        _ts:        ts,
+        id:         d.id || ('ctrl-' + ts),
+        time:       fmtMs(ts),
+        source:     'control-api',
+        sourceClass:'fi-source-ctrl',
+        event:      type,
+        eventClass,
+        rowId:      d.id || '',
+        detailsHtml,
+      };
+      mergeIntoStore(entry);
+    }
+
+    // ── Component Events poll (GET /demo/control-events, 5 s cadence) ─────────
     function startCompEventsPoll() {
+      // Immediate first fetch, then schedule repeating interval.
       fetchCompEvents();
       compPollTimer = setInterval(fetchCompEvents, 5000);
     }
@@ -1061,44 +841,270 @@ export const PANEL_HTML = `<!DOCTYPE html>
     async function fetchCompEvents() {
       try {
         const page = await apiFetch('/demo/control-events');
-        const items = page.items || [];
-        const rows = items.map(rec => ({
-          kind:         'component',
-          _ts:          rec.received_at || new Date().toISOString(),
-          id:           rec.id           || '',
-          component_id: rec.component_id || '',
-          event_type:   rec.event_type   || '',
-          state:        rec.state        || '',
-          detail:       rec.detail       || '',
-          received_at:  rec.received_at  || '',
-        }));
-        mergeEvents(rows);
-      } catch {}
+        mergeCompEvents(page.items || []);
+      } catch {
+        // Network error: keep existing list.
+      }
+    }
+
+    function mergeCompEvents(items) {
+      items.forEach(rec => {
+        const stateCls = rec.state === 'running' ? 'fi-state-running'
+                       : rec.state === 'error'   ? 'fi-state-error'
+                       :                           'fi-state-neutral';
+        const ts       = rec.received_at || new Date().toISOString();
+        const detailPart = rec.detail
+          ? ' \\u00b7 <span class="fi-details">' + esc(rec.detail) + '</span>'
+          : '';
+        const detailsHtml =
+          '<span class="' + stateCls + '">' + esc(rec.state || '') + '</span>' + detailPart;
+
+        const entry = {
+          _kind:      'comp',
+          _ts:        ts,
+          id:         rec.id || ('comp-' + ts + '-' + (rec.component_id || '')),
+          time:       fmtMs(ts),
+          source:     rec.component_id || '',
+          sourceClass:'fi-source-comp',
+          event:      rec.event_type   || '',
+          eventClass: 'fi-event-neutral',
+          rowId:      rec.id           || '',
+          detailsHtml,
+        };
+        mergeIntoStore(entry);
+      });
+    }
+
+    // ── Merged events store helpers ───────────────────────────────────────────
+    function mergeIntoStore(entry) {
+      const exists = eventsStore.some(e => e.id === entry.id);
+      if (!exists) {
+        eventsStore.push(entry);
+        // Sort by timestamp DESC.
+        eventsStore.sort((a, b) => b._ts.localeCompare(a._ts));
+        // Cap at 20.
+        if (eventsStore.length > 20) eventsStore.length = 20;
+        persistEvents();
+        renderEventsStore();
+      }
+    }
+
+    function renderEventsStore() {
+      eventsFeedList.innerHTML = '';
+      if (!eventsStore.length) {
+        eventsFeedList.appendChild(eventsFeedEmpty);
+        return;
+      }
+      eventsStore.forEach(entry => {
+        const row = feedRow({
+          time:        entry.time,
+          source:      entry.source,
+          sourceClass: entry.sourceClass,
+          event:       entry.event,
+          eventClass:  entry.eventClass,
+          id:          entry.rowId,
+          detailsHtml: entry.detailsHtml,
+        });
+        eventsFeedList.appendChild(row);
+      });
+    }
+
+    function persistEvents() {
+      try { localStorage.setItem('dd.events', JSON.stringify(eventsStore)); } catch {}
+    }
+
+    // ── GitHub Emulator controls ──────────────────────────────────────────────
+    async function ghSeed() {
+      if (isBlocked) return;
+      ghSeedBtn.disabled  = true;
+      ghClearBtn2.disabled = true;
+      ghSeedMsg.textContent = '';
+      ghSeedMsg.className   = 'api-msg';
+      try {
+        const dataset = ghDatasetSelect.value;
+        const reset   = ghResetCheck.checked;
+        const body    = { dataset, reset };
+        if (dataset === 'random') body.count = parseInt(ghCountInput.value, 10) || 5;
+        const d = await apiFetch('/demo/github/seed', {
+          method: 'POST',
+          body:   JSON.stringify(body),
+        });
+        applyGithubStatus(d);
+        ghSeedMsg.textContent = '\\u2713 Seeded';
+        ghSeedMsg.className   = 'api-msg ok';
+      } catch {
+        ghSeedMsg.textContent = '\\u2717 Network error';
+        ghSeedMsg.className   = 'api-msg err';
+      } finally {
+        ghSeedBtn.disabled   = isBlocked;
+        ghClearBtn2.disabled = isBlocked;
+      }
+    }
+
+    async function ghClear() {
+      if (isBlocked) return;
+      ghSeedBtn.disabled   = true;
+      ghClearBtn2.disabled = true;
+      ghSeedMsg.textContent = '';
+      try {
+        const d = await apiFetch('/demo/github/clear', { method: 'POST' });
+        applyGithubStatus(d);
+        ghSeedMsg.textContent = '\\u2713 Cleared';
+        ghSeedMsg.className   = 'api-msg ok';
+      } catch {
+        ghSeedMsg.textContent = '\\u2717 Network error';
+        ghSeedMsg.className   = 'api-msg err';
+      } finally {
+        ghSeedBtn.disabled   = isBlocked;
+        ghClearBtn2.disabled = isBlocked;
+      }
+    }
+
+    function ghToggleEmit() {
+      if (isBlocked) return;
+      ghEmitBtn.disabled = true;
+      apiFetch('/demo/github/emit', {
+        method: 'POST',
+        body:   JSON.stringify({ enabled: !ghEmitting }),
+      }).then(applyGhEmit)
+        .catch(() => {})
+        .finally(() => { ghEmitBtn.disabled = isBlocked; });
+    }
+
+    function applyGhEmit(d) {
+      ghEmitting = d.emitting;
+      ghEmitBadge.textContent = ghEmitting ? 'LIVE' : 'OFF';
+      ghEmitBadge.className   = 'badge ' + (ghEmitting ? 'badge-on' : 'badge-off');
+      ghEmitBtn.textContent   = ghEmitting ? 'Disable' : 'Enable';
+      ghEmitBtn.className     = ghEmitting ? 'btn-stop' : 'btn-enable';
+    }
+
+    function applyGithubStatus(d) {
+      // Show the card if this is a 2xx response (called from poll or seed/clear).
+      ghEmulatorCard.style.display = 'flex';
+      ghEmulatorCard.style.flexDirection = 'column';
+
+      // Update the title one-liner.
+      const repos     = d.repos != null ? d.repos : '?';
+      const dataset   = d.dataset || '?';
+      const seededAt  = d.seeded_at ? fmtMs(d.seeded_at) : '—';
+      ghStoreInfo.innerHTML =
+        esc(dataset) + ' · ' + esc(String(repos)) + ' repos · seeded ' + esc(seededAt);
+
+      // Sync emit state if present.
+      if (typeof d.emitting === 'boolean') applyGhEmit(d);
+    }
+
+    // ── GitHub Emulator poll (5 s cadence, shows/hides card on 2xx/error) ─────
+    function startGhPoll() {
+      fetchGhStatus();
+      ghPollTimer = setInterval(fetchGhStatus, 5000);
+    }
+
+    async function fetchGhStatus() {
+      try {
+        const res = await fetch('/demo/github/status', { headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) { ghEmulatorCard.style.display = 'none'; return; }
+        applyGithubStatus(await res.json());
+        // Sync emit toggle separately; ignore non-2xx / network error.
+        try {
+          const er = await fetch('/demo/github/emit', { headers: { 'Content-Type': 'application/json' } });
+          if (er.ok) applyGhEmit(await er.json());
+        } catch {}
+      } catch {
+        // Network error — hide the card.
+        ghEmulatorCard.style.display = 'none';
+      }
     }
 
     // ── localStorage hydration ────────────────────────────────────────────────
     function hydrateFromStorage() {
-      // Post Feed
+      // Hydrate Events feed.
       try {
-        const raw = localStorage.getItem(LS_POSTS);
+        const raw = localStorage.getItem('dd.events');
         if (raw) {
-          feedRows = JSON.parse(raw);
-          if (!Array.isArray(feedRows)) feedRows = [];
-          renderFeed();
+          const rows = JSON.parse(raw);
+          if (Array.isArray(rows)) {
+            rows.forEach(entry => {
+              // Merge without re-persisting (already persisted).
+              if (!eventsStore.some(e => e.id === entry.id)) eventsStore.push(entry);
+            });
+            eventsStore.sort((a, b) => b._ts.localeCompare(a._ts));
+            if (eventsStore.length > 20) eventsStore.length = 20;
+            renderEventsStore();
+          }
         }
-      } catch { feedRows = []; }
+      } catch {}
 
-      // Events feed
+      // Hydrate Post Feed.
       try {
-        const raw = localStorage.getItem(LS_EVENTS);
+        const raw = localStorage.getItem('dd.posts');
         if (raw) {
-          eventsStore = JSON.parse(raw);
-          if (!Array.isArray(eventsStore)) eventsStore = [];
-          // Restore kind field for any migrated rows.
-          eventsStore.forEach(r => { if (!r.kind) r.kind = 'component'; });
-          renderEventsStore();
+          const rows = JSON.parse(raw);
+          if (Array.isArray(rows)) {
+            rows.forEach(p => {
+              if (!postsStore.some(q => q._uid === p._uid)) postsStore.push(p);
+            });
+            postsStore.sort((a, b) => b._ts.localeCompare(a._ts));
+            if (postsStore.length > 10) postsStore.length = 10;
+            renderPostFeed();
+          }
         }
-      } catch { eventsStore = []; }
+      } catch {}
+    }
+
+    // ── Health poll (liveness chips) ──────────────────────────────────────────
+    function startHealthPoll() {
+      fetchHealth();
+      healthPollTimer = setInterval(fetchHealth, 5000);
+    }
+
+    async function fetchHealth() {
+      // Driver chip is always up if the panel loaded.
+      applyHealthChip(lvDriver, 'up');
+      try {
+        const res = await fetch('/demo/health', { headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) throw new Error('non-2xx');
+        const d = await res.json();
+        applyHealthChip(lvApi,      d.api      || 'down');
+        applyHealthChip(lvEmulator, d.emulator || 'down');
+        applyHealthChip(lvFetcher,  d.fetcher  || 'down');
+      } catch {
+        applyHealthChip(lvApi,      'down');
+        applyHealthChip(lvEmulator, 'down');
+        applyHealthChip(lvFetcher,  'down');
+      }
+    }
+
+    function applyHealthChip(el, status) {
+      const cls = status === 'up' ? 'lv-up' : status === 'down' ? 'lv-down' : 'lv-checking';
+      el.className = 'lv-chip ' + cls;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    async function apiFetch(url, opts = {}) {
+      const res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      return res.json();
+    }
+
+    function fmt(iso) {
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function fmtMs(iso) {
+      const d = new Date(iso);
+      const hms = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const ms  = String(d.getMilliseconds()).padStart(3, '0');
+      return hms + '.' + ms;
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
   </script>
 </body>
