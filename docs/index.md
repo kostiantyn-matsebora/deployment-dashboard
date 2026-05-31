@@ -99,6 +99,7 @@ children:
 - [4. Control API — `/demo/`](./DEMO_DRIVER_SPECIFICATION.md#4-control-api----demo)
 - [4.8 Control API event feed (SSE) — `GET /demo/control-stream`](./DEMO_DRIVER_SPECIFICATION.md#48-control-api-event-feed-sse--get-democontrol-stream)
 - [4.9 Component event feed (proxy) — `GET /demo/control-events`](./DEMO_DRIVER_SPECIFICATION.md#49-component-event-feed-proxy--get-democontrol-events)
+- [4.10 Liveness aggregate — `GET /demo/health`](./DEMO_DRIVER_SPECIFICATION.md#410-liveness-aggregate--get-demohealth)
 - [5. GitHub source (emulator proxy)](./DEMO_DRIVER_SPECIFICATION.md#5-github-source-emulator-proxy)
 - [5.1 Proxy routes](./DEMO_DRIVER_SPECIFICATION.md#51-proxy-routes)
 - [6. Scenarios](./DEMO_DRIVER_SPECIFICATION.md#6-scenarios)

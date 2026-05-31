@@ -66,6 +66,7 @@ backend/
     Control/        ControlStreamSubscriber, ComponentEventClient   (§5.10)
     Orchestration/  PollLoop / per-adapter runner
   fetcher-host/  Dashboard.Fetcher.Host/   # BackgroundService worker(s) + DI + config + Dockerfile
+                                           # also hosts a minimal HTTP listener for GET /health
   tests/
     Dashboard.Fetcher.Tests/               # owned here, excluded from the API test run
 ```
@@ -73,6 +74,7 @@ backend/
 - `Control/ControlStreamSubscriber` — the long-lived control-stream reader (`fetch()`+`ReadableStream` equivalent: `HttpClient` + `HttpCompletionOption.ResponseHeadersRead` streaming the body; **not** `EventSource`). Parses SSE frames, tracks `Last-Event-ID`, honours `: ping` heartbeat, dispatches reset events to the poll-loop runner.
 - `Control/ComponentEventClient` — HTTP client for `POST /api/control/events` (the `reset-ack` and `status` posts). Distinct from `Ingest/IngestClient`; both target the API but carry different headers (`X-Component-Id` vs `X-Progress-Reporter`).
 - The host runs **two concurrent tasks**: the existing per-adapter poll loop (§4) and the `ControlStreamSubscriber`. The subscriber signals the runner to pause/resume; it never fetches or posts deployment events itself.
+- **`GET /health`** — host-level liveness endpoint served by the ASP.NET web listener in `Dashboard.Fetcher.Host`. Returns `200 OK` while the host process is running (no body required). This is host-level observability only; the `ICiCdAdapter`/ingest/control-plane logic is **unchanged** (F1, G2). The web listener uses the standard ASP.NET `ASPNETCORE_URLS` / port mechanism; no adapter or library change.
 
 Reuses **`Dashboard.Shared`** for the `DeploymentEventIngest` DTO — the fetcher emits the exact same wire type the contract defines. Stack = **.NET 10** (SAD §6), packaged as a standard container.
 
@@ -485,6 +487,8 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | `GITHUB__RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
 
 Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `JENKINS__…`) drops in without collision.
+
+**Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
 **Demo mode.** Set `GITHUB__BASE_URL=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB__TOKEN` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed. The fetcher-host must be added to the demo compose profile (currently absent).
 

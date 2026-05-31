@@ -262,7 +262,7 @@ The driver is a participant in the API-driven reset choreography (D10; visual: [
 1. Stop any running ingest / scenario run; disable live emission.
 2. Enter `reset_state = blocked`, record `reset_id` from the event id; scenario `state` reflects `blocked`.
 3. Block the `/demo/` control API — incoming control calls (`ingest` / `ingest/stop` / `scenarios/*/run`/`stop` / `emit` / `api-reset`) return **`503`** while blocked. Body is **RFC 9457 `application/problem+json`** (consistent with the API surface, [`api-guidelines.md §6`](api/api-guidelines.md#6-error-envelope-rfc-9457)) — `type` `.../errors/reset-in-progress`, `title` `Reset in progress`, `status` 503. `Retry-After` (seconds) is set from the remaining local gate window (`RESET_GATE_MAX_TTL_MS`, §8). `GET /demo/status` is **never** blocked — it reports the blocked state. `GET /demo/stream` stays open.
-4. Disable + dim the interactive control cards (Ingest, Live Emission, Reset-System trigger) on the `GET /demo/` panel; the data feeds (Status, Post Feed, Control API Events, Component Events) stay live so the operator can watch the reset choreography (§8). No full-panel overlay.
+4. Disable + dim the interactive control cards (Ingest, GitHub Emulator, Reset-System trigger) on the `GET /demo/` panel; the data feeds (Status, Post Feed, Events) stay live so the operator can watch the reset choreography (§8). No full-panel overlay.
 5. POST a `reset-ack` via the component-event client:
 
 ```
@@ -284,7 +284,7 @@ Content-Type:    application/json; charset=utf-8
 **On `reset-completed`** (recover):
 1. Unblock the `/demo/` control API.
 2. Clear `reset_state` back to `idle`; clear `reset_id`; scenario `state` returns to `idle` (counters as left by §4.2 `reset` semantics).
-3. Re-enable the interactive control cards (§8).
+3. Re-enable the interactive control cards (Ingest, GitHub Emulator — §8).
 4. POST a component event reusing the existing `event_type: status` (NOT a new type), `state: running`, `payload.reset_id` = the completed reset's id.
 5. **Do NOT auto-restart** any scenario or re-enable emission — return to idle; the operator resumes manually.
 
@@ -344,6 +344,31 @@ Returns the upstream `ComponentEventPage` body verbatim: `{ items: ComponentEven
 - Non-2xx upstream responses are surfaced to the caller as-is.
 
 **Rationale.** The driver has no push channel for other components' events; the panel polls this proxy. Mirrors the upstream listing's 2 h retention + filters. Consistent proxying avoids cross-origin / gateway-path issues.
+
+### 4.10 Liveness aggregate — `GET /demo/health`
+
+| Method · Path | Response |
+|---|---|
+| `GET /demo/health` | `HealthStatus` — read-only; never blocked by reset gate |
+
+`HealthStatus`:
+```json
+{
+  "driver":   "up",
+  "api":      "up" | "down",
+  "emulator": "up" | "down",
+  "fetcher":  "up" | "down"
+}
+```
+
+| Component | Probe | `"up"` condition |
+|---|---|---|
+| `driver` | n/a | Always `"up"` — if the panel can call this endpoint, the driver is running. |
+| `api` | `GET {WRITE_API_URL}/healthz` | 2xx response. |
+| `emulator` | `GET {GITHUB_EMULATOR_URL}/_github/status` | 2xx response. |
+| `fetcher` | `GET {FETCHER_URL}/health` | 2xx response. |
+
+Any non-2xx or unreachable → `"down"`. Probes are issued in parallel, with a short timeout (≤ 2 s per component); a slow component does not block the others. The panel polls this endpoint every 5 s to drive the status-bar liveness chips (§8).
 
 ---
 
@@ -415,58 +440,62 @@ Source: `demo/data/events.json#events` (47 events).
 
 `GET /demo/` serves a browser control panel (`text/html`). No bundler — inline HTML/CSS/JS (NFR-08 spirit; tooling consistency with mock).
 
-| Card | Controls |
-|---|---|
-| **Ingest** | Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); **Reset** checkbox (checked by default); delay (ms) input; **Ingest** / **Stop** buttons |
-| **Status** | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
-| **Live Emission** | `OFF` / `LIVE` badge; **Enable** / **Disable** button — same pattern as mock SSE Emission card |
-| **API** | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
-| **Post Feed** | Real-time `GET /demo/stream` SSE feed; `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); Source = full `reporter` value (e.g. `demo-driver/demo`, `demo-driver/emit`) — colour-coding by source kind derivable from the trailing segment (`/emit` vs `/<dataset>`); **Clear** button. Stays live during reset. |
-| **Reset (system)** | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows the active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only; operator-triggered reset still lives in the **API** card's Reset State button. |
-| **Control API Events** | Live SSE feed from `GET /demo/control-stream` (§4.8); `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format — Event = `type` (colour-coded: `reset-initiated` = amber, `reset-started` = blue, `reset-completed` = green, unknown = default), ID = event `id`, Details = `reset_id` when present; **Clear** button. Stays live during reset. |
-| **Component Events** | Polled feed from `GET /demo/control-events` (§4.9); fixed 5 s cadence; rows follow unified Time·Source·Event·ID·Details format — Source = `component_id`, Event = `event_type`, ID = record `id`, Details = `state` (colour-coded) + `detail` when present + notable payload keys; newest-first. Filter inputs out of scope (§13). Stays live during reset. |
-| **GitHub Seed** | Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); **Reset** checkbox; **Seed** / **Clear** buttons → `POST /demo/github/seed` \| `POST /demo/github/clear`. |
-| **GitHub Live** | `OFF` / `LIVE` badge; **Enable** / **Disable** button → `POST /demo/github/emit` (same pattern as the Live Emission card). |
-| **GitHub Store** | Counters from `GET /demo/github/status`: repos / deployments / statuses / workflows / environments; dataset badge; `seeded_at`. |
+**Status bar.** A persistent bar at the top of the panel shows four liveness chips — **Driver** · **API** · **Emulator** · **Fetcher** — each green=up / red=down / amber=checking. Driven by `GET /demo/health` (§4.10) polled every 5 s. Driver is always green if the panel loaded.
 
-**GitHub source card group.** The GitHub Seed, GitHub Live, and GitHub Store cards are symmetric with the Ingest + Live Emission group. All panel calls go to `/demo/github/*` (the proxy — §5). The GitHub Seed and GitHub Live cards are interactive controls — dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; §5.1). The GitHub Store card polls `GET /demo/github/status`, which is a data surface and stays live. The panel polls `GET /demo/github/status` alongside the existing `GET /demo/status` poll.
+| Card | Position | Controls |
+|---|---|---|
+| **Ingest** | 1 | *Ingest sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); **Reset** checkbox (checked by default); delay (ms) input; **Ingest** / **Stop** buttons. *Live Emission sub-section:* Random events `OFF` / `LIVE` badge; **Enable** / **Disable** toggle → `GET\|POST /demo/emit`. |
+| **GitHub Emulator** | 2 (between Ingest and Status) | *Seed sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only); **Reset** checkbox; **Seed** / **Clear** buttons → `POST /demo/github/seed` \| `POST /demo/github/clear`. *Live sub-section:* `OFF` / `LIVE` badge; **Enable** / **Disable** toggle → `POST /demo/github/emit`. *Store sub-section:* counters (repos / deployments / statuses / workflows / environments), dataset badge, `seeded_at` — from `GET /demo/github/status`. |
+| **Status** | 3 | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
+| **API** | 4 | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
+| **Post Feed** | 5 | Real-time `GET /demo/stream` SSE feed; `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); Source = full `reporter` value; colour-coding by trailing segment (`/emit` vs `/<dataset>`); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
+| **Reset (system)** | 6 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only. |
+| **Events** | 7 | Merged feed sourced from BOTH `GET /demo/control-stream` (§4.8 SSE) AND `GET /demo/control-events` (§4.9 poll); rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `● LIVE` / `● RECONNECTING` badge; **Clear** button. Persists latest 20 rows to `localStorage`; hydrates on page load (control-stream has no server replay — localStorage restores those rows; hydrated component rows dedup-by-id against the re-poll); **Clear** empties localStorage. Stays live during reset. |
 
-- **Emulator-liveness gating.** The GitHub source cards are **hidden unless the github-emulator answers the liveness probe** — `GET /demo/github/status` returning `2xx`. When the emulator is absent (e.g. non-demo deployments) the proxy returns a non-`2xx` (`502`) and the cards stay hidden; the 5 s poll re-evaluates, so the cards appear/disappear as the emulator comes and goes.
+**GitHub Emulator card.** All panel calls go to `/demo/github/*` (the proxy — §5). The Seed sub-section and Live sub-section are interactive controls — dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; §5.1). The Store sub-section is a data surface and stays live.
 
-**Unified feed row format.** All three feed cards (Post Feed, Control API Events, Component Events) use the same column order; columns align across all three feeds:
+- **Emulator-liveness gating.** The GitHub Emulator card is **hidden unless the emulator answers the liveness probe** — `emulator == "up"` in the `GET /demo/health` response. When the emulator is absent (e.g. non-demo deployments) the card stays hidden; the 5 s health poll re-evaluates, so the card appears/disappears as the emulator comes and goes.
+
+**Unified feed row format.** Both feed cards (Post Feed, Events) use the same column order:
 
 | Column | Content |
 |---|---|
-| **Time** | Timestamp field for the row (feed-specific, see mapping below) |
-| **Source** | Reporter / origin, when applicable |
+| **Time** | Timestamp (with milliseconds) |
+| **Source** | Reporter / origin |
 | **Event** | Event name or type |
-| **ID** | Correlation identifier, when applicable |
-| **Details** | Event-specific fields rendered in a single cell |
+| **ID** | Correlation identifier |
+| **Details** | Event-specific fields in a single cell |
 
-Per-feed field mapping:
+Per-feed row mapping:
 
-| Feed | Time | Source | Event | ID | Details |
-|---|---|---|---|---|---|
-| Post Feed (`/demo/stream`) | `posted_at` | `reporter` field (e.g. `demo-driver/demo`, `demo-driver/emit`) | `posted` / `error` | `deployment_id` | posted → `service / env → status`; error → `HTTP <status> · attempt <n>` |
-| Control API Events (`/demo/control-stream`) | `occurred_at` | `component` (e.g. `*`) | `type` (`reset-initiated` / `reset-started` / `reset-completed` / unknown) | event `id` | `reset_id: <id>` when present |
-| Component Events (`/demo/control-events`) | `received_at` | `component_id` | `event_type` | record `id` | `state` (colour-coded) · `detail` when present · notable payload keys |
+| Feed | Row kind | Time | Source | Event | ID | Details |
+|---|---|---|---|---|---|---|
+| Post Feed (`/demo/stream`) | — | `posted_at` (ms) | `reporter` (e.g. `demo-driver/demo`) | `posted` / `error` | `deployment_id` | posted → `service / env → status`; error → `HTTP <status> · attempt <n>` |
+| Events (merged) | control-stream row | `occurred_at` (ms) | `control-api` (literal) | `type` (reset-initiated=amber / reset-started=blue / reset-completed=green / unknown=default) | event `id` | `reset_id: <id>` when present |
+| Events (merged) | component row | `received_at` (ms) | `component_id` | `event_type` | record `id` | `state` (colour-coded) · `detail` when present · notable payload keys |
+
+**localStorage persistence.**
+- Post Feed: latest **10** rows (by `posted_at` DESC); trimmed on every append.
+- Events: latest **20** rows (by timestamp DESC, across both kinds); trimmed on every merge+sort.
+- Hydration on page load: both feeds restore from `localStorage` before the first network response arrives. Hydrated component rows (Events feed) are deduped-by-id against the initial `GET /demo/control-events` poll result. Hydrated control-stream rows have no server counterpart to dedup against (no replay) — they are kept as-is.
+- **Clear** on a feed card: empties the in-memory list AND removes that feed's `localStorage` key; the feed stays empty after refresh.
 
 **Reset blocking (controls only — no overlay).** While `reset_state == blocked` (§4.7):
-- The interactive control cards (Ingest / Live Emission / Reset-System trigger) are disabled and visually dimmed — their controls would return `503` anyway.
-- The data feeds — Status, Post Feed, Control API Events, Component Events — stay fully live and visible so the operator can watch the reset choreography unfold (the reason the feeds exist).
-- Reset state is signalled by the inline `RESET IN PROGRESS` badges (Control API Events card + footer chip), not a blocking overlay.
-- The dim/disable clears automatically when `reset_state` returns to `idle` (`reset-completed` or local safety unblock).
+- Interactive control cards (Ingest, GitHub Emulator) are disabled and visually dimmed — their controls would return `503` anyway.
+- Data feeds — Status, Post Feed, Events — stay fully live so the operator can watch the reset choreography.
+- Reset state is signalled by the inline `RESET IN PROGRESS` badge (Reset (system) card), not a blocking overlay.
+- Dim/disable clears automatically when `reset_state` returns to `idle`.
 
 Panel behaviour:
-- Calls `GET /demo/status` + `GET /demo/emit` on load; polls `GET /demo/status` to surface `reset_state` changes (the panel does NOT subscribe to the **upstream** `GET /api/control/stream` directly — that is the backend subscriber's job, §4.7; the panel consumes the driver's proxied `GET /demo/control-stream` instead, see below).
+- Polls `GET /demo/health` every 5 s → drives status-bar chips; `emulator == "up"` shows/hides the GitHub Emulator card.
+- Calls `GET /demo/status` + `GET /demo/emit` on load; polls `GET /demo/status` to surface `reset_state` changes.
+- The panel does NOT subscribe to the upstream `GET /api/control/stream` directly — that is the backend subscriber's job (§4.7); the panel consumes `GET /demo/control-stream` for the Events feed.
 - Calls `POST /demo/ingest` / `POST /demo/ingest/stop` on Ingest/Stop buttons.
-- Calls `POST /demo/emit` on Enable/Disable button.
+- Calls `POST /demo/emit` on Live Emission Enable/Disable.
 - Calls `POST /demo/api-reset` on Reset State button.
-- Subscribes to `GET /demo/stream` for the live feed.
-- Subscribes to `GET /demo/control-stream` for the Control API Events card; displays each frame in real time.
-- Polls `GET /demo/control-events` (5 s cadence) for the Component Events card.
-- Both `GET /demo/control-stream` and `GET /demo/control-events` are data feeds — they stay live throughout reset and are exempt from reset control-dimming.
-- Dims + disables the interactive control cards whenever `reset_state == blocked`; the data feeds keep updating throughout.
+- Subscribes to `GET /demo/stream` for the Post Feed.
+- Subscribes to `GET /demo/control-stream` AND polls `GET /demo/control-events` (5 s cadence) for the merged Events feed; merges and deduplicates by `id`, sorts datetime DESC.
+- Both `GET /demo/control-stream` and `GET /demo/control-events` are data feeds — live throughout reset and exempt from reset control-dimming.
 
 ---
 
@@ -483,7 +512,8 @@ Panel behaviour:
 | `SCENARIOS_DIR` | `../../demo/data` | Path to scenario JSON files |
 | `EMIT_DELAY_MS` | `0` | Per-event delay for ingest runs (ms); `0` = bulk load |
 | `EMIT_INTERVAL_MS` | `8000` | Interval between periodic random events when Live Emission is enabled |
-| `GITHUB_EMULATOR_URL` | `http://localhost:3100` | Base URL of the `github-emulator` service; used by the `/demo/github/*` proxy (§5). |
+| `GITHUB_EMULATOR_URL` | `http://localhost:3100` | Base URL of the `github-emulator` service; used by the `/demo/github/*` proxy (§5) and the emulator liveness probe (§4.10). |
+| `FETCHER_URL` | `http://localhost:8080` | Base URL of the fetcher-host; used by the fetcher liveness probe `GET {FETCHER_URL}/health` (§4.10). |
 
 > The emulated GitHub REST surface and its config (e.g. `GITHUB_SIM_RATE_LIMIT`) are owned by the emulator — see [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md) §4. The fetcher's own demo-mode config (`GITHUB__BASE_URL`, `GITHUB__TOKEN`, etc.) is fetcher config — see FETCHER_SPEC §6.
 
@@ -507,6 +537,7 @@ Panel behaviour:
 | Integration | `reset-cycle.e2e.spec.ts` | Full reset cycle against a **real** `Dashboard.Api`: trigger `POST /api/control/reset`; assert the driver acks `reset-initiated` (component event visible via `GET /api/control/events`), `/demo/` calls return `503` while blocked, and on `reset-completed` the driver unblocks + posts `status`/`running` and returns to idle |
 | Unit | `github-proxy.controller.spec.ts` | All five proxy routes (`status`, `seed`, `clear`, `emit` GET, `emit` POST) forward request body + response body verbatim to `GITHUB_EMULATOR_URL/_github/*`; `POST` mutator routes return `503` while `reset_state == blocked`; `GET` routes are NOT blocked; non-2xx upstream responses surfaced as-is |
 | Unit | `github-proxy.client.spec.ts` | HTTP client constructs correct upstream URL; passes body through; surfaces upstream status code |
+| Unit | `health.controller.spec.ts` | `GET /demo/health` returns `{ driver:"up", api, emulator, fetcher }`; probes run in parallel; `2xx` upstream → `"up"`, non-2xx/unreachable → `"down"`; never blocked by reset gate; `FETCHER_URL` used for fetcher probe |
 
 ---
 
@@ -549,6 +580,6 @@ npm run start:dev
 - Authentication on the control API or control panel.
 - **Clearing the target backend data.** The driver never truncates backend state itself — the Write API is append-only and data-clearing is owned by the API's reset orchestrator (or `/_mock/reset` for mock targets). The driver only *participates* in the API-driven reset choreography (§4.7, D10): it reacts to control-stream reset events (drain → ack → block → recover) but performs no data deletion. The operator-triggered `POST /demo/api-reset` proxy (§4.5) merely forwards the trigger to the API; the API does the clearing.
 - Initiating its own reset choreography beyond the §4.5 proxy (the driver is a reactor, not the orchestrator).
-- Component-event filtering UI (component_id / event_type filter inputs) on the Component Events panel card.
-- Persistence or replay of control-stream feed frames beyond live (post-connect) delivery — history is not stored in the driver.
+- Component-event filtering UI (component_id / event_type filter inputs) on the Events panel card.
+- Server-side replay of control-stream frames — history is not stored in the driver (localStorage provides client-side persistence; §8).
 - Emulated GitHub REST surface, store, fixture, and generator logic (owned by `github-emulator` — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)).

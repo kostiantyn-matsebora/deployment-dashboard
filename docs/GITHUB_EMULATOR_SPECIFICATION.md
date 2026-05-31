@@ -120,6 +120,8 @@ Intended for the demo driver proxy, test harnesses, and manual operation. No aut
 |---|---|
 | `GET /_github/status` | `GithubStoreStatus` |
 
+`GET /_github/status` is also consumed by the demo driver's `GET /demo/health` aggregator (DEMO_DRIVER_SPEC §4.10) as the emulator liveness probe — a `2xx` response marks the emulator as `"up"`.
+
 `GithubStoreStatus`:
 ```json
 {
