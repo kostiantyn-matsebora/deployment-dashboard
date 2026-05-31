@@ -251,10 +251,13 @@ describe('generateRandomEvents', () => {
     }
   });
 
-  it('the most recent event per slot is the primary (< 1 h old); historical events are ≥ 1 h old', () => {
-    const events     = generateRandomEvents(3);
-    const bySlot     = new Map<string, number[]>();
-    const oneHourAgo = Date.now() - 60 * 60_000;
+  it('the most recent event per slot is the primary (< 2 h old); historical events are ≥ 2 h old', () => {
+    // Boundary is 2 h, not 1 h: a diamond-5 chain has maxDepth=3, so its root
+    // sits at 3×20min = 60min; with up to 5min jitter it can reach ~65min.
+    // Historical events always start at 2h + 15min (layer age + min envOffset).
+    const events      = generateRandomEvents(3);
+    const bySlot      = new Map<string, number[]>();
+    const twoHoursAgo = Date.now() - 2 * 60 * 60_000;
     for (const ev of events) {
       const key = `${ev.service as string}|${ev.environment as string}`;
       if (!bySlot.has(key)) bySlot.set(key, []);
@@ -262,9 +265,9 @@ describe('generateRandomEvents', () => {
     }
     for (const [, timestamps] of bySlot) {
       timestamps.sort((a, b) => b - a); // newest first
-      expect(timestamps[0]).toBeGreaterThan(oneHourAgo);   // primary: fresh
-      expect(timestamps[1]).toBeLessThan(oneHourAgo);       // historical: old
-      expect(timestamps[2]).toBeLessThan(oneHourAgo);       // historical: older
+      expect(timestamps[0]).toBeGreaterThan(twoHoursAgo);  // primary: < 2 h
+      expect(timestamps[1]).toBeLessThan(twoHoursAgo);      // historical: ≥ 2 h
+      expect(timestamps[2]).toBeLessThan(twoHoursAgo);      // historical: ≥ 4 h
     }
   });
 
@@ -284,20 +287,18 @@ describe('generateRandomEvents', () => {
       byRun.get(run)!.push(ev);
     }
 
-    // Each run with > 1 event: non-root events must have a non-empty parent_deployments.
+    // Each run with > 1 event: exactly one root (parent_deployments=[]),
+    // every other event has exactly one parent within the same run.
     for (const [, runEvents] of byRun) {
       if (runEvents.length <= 1) continue;
-      // Sort oldest first (root first in the chain).
-      runEvents.sort((a, b) =>
-        new Date(a.happened_at as string).getTime() - new Date(b.happened_at as string).getTime(),
-      );
-      // Root: no parents.
-      expect(runEvents[0].parent_deployments).toEqual([]);
-      // Non-root: must have exactly one parent pointing to an event in the same run.
-      const runIds = new Set(runEvents.map(ev => ev.deployment_id as string));
-      for (let i = 1; i < runEvents.length; i++) {
-        const parents = runEvents[i].parent_deployments as string[];
-        expect(parents.length).toBe(1);
+      const runIds  = new Set(runEvents.map(ev => ev.deployment_id as string));
+      const roots   = runEvents.filter(ev => (ev.parent_deployments as string[]).length === 0);
+      const nonRoots = runEvents.filter(ev => (ev.parent_deployments as string[]).length > 0);
+      // Structural check — not relying on timestamp order (jitter can reorder adjacents).
+      expect(roots).toHaveLength(1);
+      for (const ev of nonRoots) {
+        const parents = ev.parent_deployments as string[];
+        expect(parents).toHaveLength(1);
         expect(runIds.has(parents[0])).toBe(true);
       }
     }

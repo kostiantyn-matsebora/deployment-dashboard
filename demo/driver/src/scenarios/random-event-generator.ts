@@ -206,8 +206,9 @@ function appendHistory(
 
     envs.forEach((env, i) => {
       const jitter   = Math.floor(Math.random() * 10 * 60_000);
-      // Earlier envs in the chain are a bit older within the layer.
-      const envOffset = (envs.length - i) * 5 * 60_000;
+      // Earlier envs are older. Step (15 min) intentionally exceeds max jitter
+      // (10 min) so timestamps always increase root→tip regardless of jitter values.
+      const envOffset = (envs.length - i) * 15 * 60_000;
       const isLast   = i === envs.length - 1;
 
       out.push({
