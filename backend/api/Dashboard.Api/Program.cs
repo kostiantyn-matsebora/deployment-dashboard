@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dashboard.Api.Extensions;
 using Dashboard.Control;
+using Dashboard.Control.Sse;
 using Dashboard.Read;
 using Dashboard.Shared.Data;
 using Dashboard.Write;
@@ -92,12 +93,13 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
    .WithTags("ops")
    .WithSummary("Liveness probe");
 
-// Readiness probe: DB reachable + BOTH LISTEN channels attached (D10).
+// Readiness probe: DB reachable + ALL THREE LISTEN channels attached (D10, D12).
 // Returns 200 ready/degraded or 503 when the DB is not reachable.
 app.MapGet("/readyz", async (
     DashboardDbContext db,
     IReadinessIndicator deploymentReadiness,
     IControlReadinessIndicator controlReadiness,
+    IAckReadinessIndicator ackReadiness,
     CancellationToken ct) =>
 {
     var dbOk = false;
@@ -110,11 +112,14 @@ app.MapGet("/readyz", async (
 
     var deploymentListenOk = deploymentReadiness.IsListenerConnected;
     var controlListenOk = controlReadiness.IsControlListenerConnected;
+    var ackListenOk = ackReadiness.IsAckListenerConnected;
+
     var checks = new Dictionary<string, string>
     {
         ["db"] = dbOk ? "ok" : "fail",
         ["listen_deployment"] = deploymentListenOk ? "ok" : "fail",
         ["listen_control"] = controlListenOk ? "ok" : "fail",
+        ["listen_acks"] = ackListenOk ? "ok" : "fail",
     };
 
     if (!dbOk)
@@ -124,8 +129,8 @@ app.MapGet("/readyz", async (
             statusCode: StatusCodes.Status503ServiceUnavailable,
             extensions: new Dictionary<string, object?> { ["checks"] = checks });
 
-    // Both LISTEN channels must be attached for full readiness (D10); either missing → degraded.
-    var status = deploymentListenOk && controlListenOk ? "ready" : "degraded";
+    // All three LISTEN channels must be attached for full readiness (D10, D12); any missing → degraded.
+    var status = deploymentListenOk && controlListenOk && ackListenOk ? "ready" : "degraded";
     return Results.Ok(new { status, checks });
 })
    .WithTags("ops")

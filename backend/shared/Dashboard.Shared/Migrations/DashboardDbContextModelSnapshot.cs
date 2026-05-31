@@ -88,6 +88,10 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("occurred_at");
 
+                    b.Property<Guid?>("ResetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reset_id");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text")
@@ -205,6 +209,42 @@ namespace Dashboard.Shared.Migrations
                     b.HasKey("Adapter");
 
                     b.ToTable("fetcher_state", (string)null);
+                });
+
+            modelBuilder.Entity("Dashboard.Shared.Entities.ResetCycle", b =>
+                {
+                    b.Property<short>("Id")
+                        .HasColumnType("smallint")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<string[]>("AcksReceived")
+                        .HasColumnType("text[]")
+                        .HasColumnName("acks_received");
+
+                    b.Property<DateTimeOffset?>("DeadlineAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("deadline_at");
+
+                    b.PrimitiveCollection<string[]>("ExpectedComponents")
+                        .HasColumnType("text[]")
+                        .HasColumnName("expected_components");
+
+                    b.Property<Guid?>("ResetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reset_id");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("reset_cycle", (string)null);
                 });
 #pragma warning restore 612, 618
         }

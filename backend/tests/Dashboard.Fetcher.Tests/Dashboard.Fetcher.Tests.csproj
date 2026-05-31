@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\fetcher\Dashboard.Fetcher\Dashboard.Fetcher.csproj" />
     <ProjectReference Include="..\..\fetcher-github\Dashboard.Fetcher.GitHub\Dashboard.Fetcher.GitHub.csproj" />
+    <ProjectReference Include="..\..\fetcher-host\Dashboard.Fetcher.Host\Dashboard.Fetcher.Host.csproj" />
   </ItemGroup>
 
 </Project>

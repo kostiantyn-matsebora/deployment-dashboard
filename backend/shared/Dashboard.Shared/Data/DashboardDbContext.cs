@@ -9,6 +9,7 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
     public DbSet<FetcherState> FetcherStates => Set<FetcherState>();
     public DbSet<ControlStreamEvent> ControlStreamEvents => Set<ControlStreamEvent>();
     public DbSet<ComponentEvent> ComponentEvents => Set<ComponentEvent>();
+    public DbSet<ResetCycle> ResetCycles => Set<ResetCycle>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -19,6 +20,7 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
         ConfigureFetcherState(modelBuilder, isSqlite);
         ConfigureControlStreamEvents(modelBuilder, isSqlite);
         ConfigureComponentEvents(modelBuilder, isSqlite);
+        ConfigureResetCycle(modelBuilder, isSqlite);
     }
 
     private static void ConfigureDeploymentEvents(ModelBuilder modelBuilder, bool isSqlite)
@@ -167,6 +169,11 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .HasColumnName("component")
                   .IsRequired();
 
+            // Nullable: present on reset-started / reset-completed; absent on reset-initiated.
+            entity.Property(e => e.ResetId)
+                  .HasColumnName("reset_id")
+                  .HasColumnType("uuid");
+
             entity.Property(e => e.OccurredAt)
                   .HasColumnName("occurred_at")
                   .HasColumnType("timestamptz")
@@ -183,6 +190,69 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
             // Index: optional filter by component on replay.
             entity.HasIndex(e => new { e.Component, e.Id })
                   .HasDatabaseName("ix_cse_component_id");
+        });
+    }
+
+    private static void ConfigureResetCycle(ModelBuilder modelBuilder, bool isSqlite)
+    {
+        modelBuilder.Entity<ResetCycle>(entity =>
+        {
+            entity.ToTable("reset_cycle");
+
+            // Fixed PK = 1; enforces single-row semantics.
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                  .HasColumnName("id")
+                  .HasColumnType("smallint")
+                  .ValueGeneratedNever();
+
+            entity.Property(e => e.State)
+                  .HasColumnName("state")
+                  .IsRequired();
+
+            entity.Property(e => e.ResetId)
+                  .HasColumnName("reset_id")
+                  .HasColumnType("uuid");
+
+            entity.Property(e => e.ExpectedComponents)
+                  .HasColumnName("expected_components")
+                  .HasColumnType("text[]");
+
+            entity.Property(e => e.AcksReceived)
+                  .HasColumnName("acks_received")
+                  .HasColumnType("text[]");
+
+            entity.Property(e => e.StartedAt)
+                  .HasColumnName("started_at")
+                  .HasColumnType("timestamptz");
+
+            entity.Property(e => e.DeadlineAt)
+                  .HasColumnName("deadline_at")
+                  .HasColumnType("timestamptz");
+
+            if (isSqlite)
+            {
+                entity.Property(e => e.StartedAt)
+                      .HasConversion<long?>(
+                          v => v == null ? (long?)null : v.Value.ToUnixTimeMilliseconds(),
+                          v => v == null ? (DateTimeOffset?)null : DateTimeOffset.FromUnixTimeMilliseconds(v.Value));
+
+                entity.Property(e => e.DeadlineAt)
+                      .HasConversion<long?>(
+                          v => v == null ? (long?)null : v.Value.ToUnixTimeMilliseconds(),
+                          v => v == null ? (DateTimeOffset?)null : DateTimeOffset.FromUnixTimeMilliseconds(v.Value));
+
+                // SQLite has no native array type; store as comma-delimited text.
+                entity.Property(e => e.ExpectedComponents)
+                      .HasConversion(
+                          v => v == null ? null : string.Join(',', v),
+                          v => v == null ? null : v.Split(',', StringSplitOptions.None));
+
+                entity.Property(e => e.AcksReceived)
+                      .HasConversion(
+                          v => v == null ? null : string.Join(',', v),
+                          v => v == null ? null : v.Split(',', StringSplitOptions.None));
+            }
         });
     }
 

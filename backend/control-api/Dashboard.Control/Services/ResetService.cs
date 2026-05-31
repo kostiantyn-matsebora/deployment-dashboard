@@ -1,35 +1,74 @@
 using Dashboard.Control.Notifiers;
+using Dashboard.Control.Options;
 using Dashboard.Control.Repositories;
-using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Dashboard.Control.Services;
 
+/// <summary>
+/// Handles <c>POST /api/control/reset</c>:
+/// <list type="bullet">
+///   <item>Atomically claims the idle row via a conditional UPDATE (Fix B); returns <c>null</c> (→ 409) if not idle.</item>
+///   <item>Emits <c>reset-initiated</c> after a successful claim.</item>
+///   <item>Returns <see cref="ResetAcceptance"/> (→ 202) immediately.</item>
+///   <item>Fires the background orchestrator on the thread pool with the host's ApplicationStopping token (Fix D).</item>
+/// </list>
+/// </summary>
 internal sealed class ResetService(
-    DashboardDbContext db,
+    IResetCycleRepository cycleRepository,
     IControlStreamRepository controlStream,
-    IControlEventNotifier notifier) : IResetService
+    IControlEventNotifier notifier,
+    IResetOrchestrator orchestrator,
+    IHostApplicationLifetime lifetime,
+    IOptions<ResetOptions> options,
+    ILogger<ResetService> logger) : IResetService
 {
-    public async Task ResetAsync(CancellationToken ct = default)
+    public async Task<ResetAcceptance?> TryInitiateAsync(CancellationToken ct = default)
     {
-        // Truncate all stored data (spec §5 / openapi resetState): the two durable tables
-        // plus the two control-plane tables.
-        await db.DeploymentEvents.ExecuteDeleteAsync(ct);
-        await db.FetcherStates.ExecuteDeleteAsync(ct);
-        await db.ComponentEvents.ExecuteDeleteAsync(ct);
-        await db.ControlStreamEvents.ExecuteDeleteAsync(ct);
+        var opts = options.Value;
+        var resetId = Guid.CreateVersion7();
+        var now = DateTimeOffset.UtcNow;
 
-        // Persist + announce a reset event so connected components reinitialise (§7 ch.2).
-        // The row is inserted AFTER the truncation so it survives for Last-Event-ID replay.
-        var resetEvent = new ControlStreamEvent
+        // Build the draining row up-front; TryClaimIdleAsync writes it atomically only if
+        // the current row is idle (affected-rows == 0 → 409, no separate read needed).
+        var claimedCycle = new ResetCycle
         {
-            Id = Guid.CreateVersion7(),
-            Type = "reset",
-            Component = "*",
-            OccurredAt = DateTimeOffset.UtcNow,
+            Id = 1,
+            State = ResetState.Draining,
+            ResetId = resetId,
+            ExpectedComponents = opts.ExpectedComponents,
+            AcksReceived = [],
+            StartedAt = now,
+            DeadlineAt = now.AddSeconds(opts.AckTimeoutSeconds),
         };
-        await controlStream.InsertAsync(resetEvent, ct);
-        await notifier.NotifyAsync(resetEvent, ct);
+
+        var claimed = await cycleRepository.TryClaimIdleAsync(claimedCycle, ct);
+        if (!claimed)
+        {
+            logger.LogInformation("Reset already in flight; conditional UPDATE matched 0 rows → 409.");
+            return null;
+        }
+
+        var initiatedEvent = new ControlStreamEvent
+        {
+            Id = resetId, // Per spec: reset-initiated event id IS the reset_id correlated by others.
+            Type = "reset-initiated",
+            Component = "*",
+            OccurredAt = now,
+        };
+        await controlStream.InsertAsync(initiatedEvent, ct);
+        await notifier.NotifyAsync(initiatedEvent, ct);
+
+        logger.LogInformation("Reset initiated: reset_id={ResetId}.", resetId);
+
+        // Fire-and-forget the orchestrator on the thread pool.
+        // Pass ApplicationStopping so the drive aborts cleanly on graceful shutdown (Fix D).
+        var appStopping = lifetime.ApplicationStopping;
+        _ = Task.Run(() => orchestrator.DriveAsync(resetId, opts, appStopping), appStopping);
+
+        return new ResetAcceptance(resetId, ResetState.Draining, now);
     }
 }

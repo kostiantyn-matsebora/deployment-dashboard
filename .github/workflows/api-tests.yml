@@ -36,7 +36,7 @@ jobs:
       #   base      — service definitions + gateway port :8080
       #   demo      — insecure demo credentials (API_KEY / CONTROL_API_KEY / pg)
       #   local     — build images from branch source instead of pulling GHCR
-      COMPOSE_FILE: compose/docker-compose.yaml:compose/docker-compose.demo.yaml:compose/docker-compose.local.yaml
+      COMPOSE_FILE: compose/docker-compose.yaml:compose/docker-compose.demo.yaml:compose/docker-compose.local.yaml:compose/docker-compose.test.yaml
       # Minimal stack: db + api + demo-driver + gateway (no frontend).
       COMPOSE_PROFILES: db,api,demo-driver,gateway
       # Fast live-emission cadence so the emission scenario doesn't wait 8s/tick.

@@ -35,7 +35,7 @@ public sealed class ControlStreamTests : IAsyncLifetime
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>Seeds one persisted control-stream row directly via a DI scope.</summary>
-    private async Task<Guid> SeedAsync(string component, string type = "reset")
+    private async Task<Guid> SeedAsync(string component, string type = "reset-initiated")
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
@@ -165,7 +165,7 @@ public sealed class ControlStreamTests : IAsyncLifetime
     // ── Live reset fan-out (LISTEN/NOTIFY) ───────────────────────────────────────
 
     [Fact]
-    public async Task Stream_LiveReset_ReceivesResetEvent()
+    public async Task Stream_LiveReset_ReceivesResetInitiatedEvent()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
 
@@ -196,14 +196,14 @@ public sealed class ControlStreamTests : IAsyncLifetime
         // Allow the SSE subscription to register and the broadcaster LISTEN to attach.
         await Task.Delay(2000, cts.Token);
 
-        // Trigger a reset → NOTIFY control_events → broadcaster → SSE fan-out.
+        // Trigger a reset → 202; emits reset-initiated → NOTIFY control_events → broadcaster → SSE.
         var resetReq = new HttpRequestMessage(HttpMethod.Post, "/api/control/reset");
         resetReq.Headers.Add("X-Control-API-Key", TestApiFactory.TestControlApiKey);
         var resetRes = await _client.SendAsync(resetReq, cts.Token);
-        Assert.Equal(HttpStatusCode.NoContent, resetRes.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
 
         var ev = await received.Task.WaitAsync(cts.Token);
-        Assert.Equal("reset", ev.GetProperty("type").GetString());
+        Assert.Equal("reset-initiated", ev.GetProperty("type").GetString());
         Assert.Equal("*", ev.GetProperty("component").GetString());
 
         cts.Cancel();

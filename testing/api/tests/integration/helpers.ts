@@ -85,10 +85,64 @@ export async function ingestEvent(overrides: Record<string, unknown> = {}): Prom
 
 // ── Clean slate ───────────────────────────────────────────────────────────────
 
-/** Truncate all data via the control surface; assert 204. */
+/**
+ * Drive a full reset cycle to completion, leaving the API in a clean state.
+ *
+ * Updated for the choreography-driven reset (phase 11):
+ *   1. POST /api/control/reset → 202 (async, state: draining).
+ *   2. Post a reset-ack from the synthetic test component ("api-test-reset")
+ *      so the orchestrator does not have to wait the full AckTimeoutSeconds.
+ *   3. Read the control stream until reset-completed arrives, confirming the
+ *      API is back in idle state and data has been cleared.
+ *
+ * If a reset is already in flight (409), wait briefly and retry once — this
+ * handles teardown races between sequential tests when run with --runInBand.
+ *
+ * Callers that previously relied on resetAll() for a clean slate continue to
+ * work: the function returns only after reset-completed, so the next test
+ * starts with an empty deployment_events + fetcher_state.
+ */
 export async function resetAll(): Promise<void> {
-  const res = await post('/api/control/reset', undefined, { 'X-Control-API-Key': CONTROL_KEY });
-  if (res.status !== 204) throw new Error(`control reset -> ${res.status}`);
+  // Open the control stream BEFORE posting the reset to avoid a race where
+  // reset-completed arrives before we start listening.
+  const completedPromise = readControlSseUntil(
+    f => f.event === 'reset-completed',
+    { timeoutMs: 20_000 },
+  );
+
+  let res = await post('/api/control/reset', undefined, { 'X-Control-API-Key': CONTROL_KEY });
+
+  if (res.status === 409) {
+    // Another reset is in flight — wait for it to complete, then retry.
+    await completedPromise;
+    await sleep(200);
+    return resetAll();
+  }
+
+  if (res.status !== 202) {
+    throw new Error(`control reset -> ${res.status}: ${await res.text()}`);
+  }
+
+  const body = await res.json() as { reset_id: string };
+  const resetId = body.reset_id;
+
+  // Acknowledge from the synthetic test component so the gate closes promptly.
+  const ackRes = await post(
+    '/api/control/events',
+    {
+      event_type:  'reset-ack',
+      state:       'paused',
+      occurred_at: new Date().toISOString(),
+      payload:     { reset_id: resetId },
+    },
+    { 'X-Api-Key': API_KEY, 'X-Component-Id': 'api-test-reset' },
+  );
+  if (ackRes.status !== 204) {
+    throw new Error(`reset-ack -> ${ackRes.status}: ${await ackRes.text()}`);
+  }
+
+  // Block until the cycle finishes so callers start with a clean slate.
+  await completedPromise;
 }
 
 // ── Demo-driver fixtures (scenario provisioning) ──────────────────────────────
@@ -109,6 +163,29 @@ export async function waitForIngest(timeoutMs = 60_000): Promise<any> {
     if (status.state === 'done')   return status;
     if (status.state === 'failed') throw new Error(`ingest failed: ${JSON.stringify(status)}`);
     if (Date.now() > deadline)     throw new Error(`ingest timed out in state=${status.state}`);
+    await sleep(500);
+  }
+}
+
+/**
+ * Poll GET /demo/status until the demo-driver is fully settled:
+ *   - reset_state === 'idle'  (no reset cycle in flight)
+ *   - state !== 'running'     (no ingest in progress)
+ *
+ * Safe to call even while the demo-driver is blocked (§4.7 — /demo/status is
+ * exempt from the 503 guard). Use as a precondition before any reset:true ingest
+ * to prevent consecutive tests from colliding on global reset state.
+ */
+export async function waitForDemoReady(timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const status = await (await fetch(`${DEMO}/status`)).json();
+    if (status.reset_state === 'idle' && status.state !== 'running') return;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `waitForDemoReady timed out: reset_state=${status.reset_state} state=${status.state}`,
+      );
+    }
     await sleep(500);
   }
 }
@@ -153,6 +230,75 @@ export async function readSseUntil(
       }
     }
     throw new Error(`SSE ${path} closed before a matching frame`);
+  } finally {
+    clearTimeout(timer);
+    ctrl.abort();
+  }
+}
+
+// ── Control-stream SSE helpers ────────────────────────────────────────────────
+
+/**
+ * Open GET /api/control/stream and read frames until `match` returns true or
+ * timeout. Returns the matched frame; aborts before resolving.
+ *
+ * Uses X-Control-API-Key automatically.  Pass `lastEventId` to replay from a
+ * known cursor (Last-Event-ID header).
+ */
+export function readControlSseUntil(
+  match: (frame: SseFrame) => boolean,
+  opts: { timeoutMs?: number; lastEventId?: string; component?: string } = {},
+): Promise<SseFrame> {
+  const { timeoutMs = 20_000, lastEventId, component } = opts;
+  const path = component ? `/api/control/stream?component=${component}` : '/api/control/stream';
+  const headers: Headers = { 'X-Control-API-Key': CONTROL_KEY };
+  if (lastEventId) headers['Last-Event-ID'] = lastEventId;
+  return readSseUntil(path, match, { headers, timeoutMs });
+}
+
+/**
+ * Open GET /api/control/stream and collect ALL frames emitted until the
+ * `stopWhen` predicate returns true (inclusive — the matching frame is the
+ * last element of the returned array) or timeout is reached.
+ *
+ * Useful for asserting ordering: e.g. collect until reset-completed and then
+ * inspect the full sequence [reset-initiated, reset-started, reset-completed].
+ */
+export async function collectControlSseUntil(
+  stopWhen: (frame: SseFrame) => boolean,
+  opts: { timeoutMs?: number; lastEventId?: string; component?: string } = {},
+): Promise<SseFrame[]> {
+  const { timeoutMs = 20_000, lastEventId, component } = opts;
+  const path = component ? `/api/control/stream?component=${component}` : '/api/control/stream';
+  const headers: Headers = { 'X-Control-API-Key': CONTROL_KEY };
+  if (lastEventId) headers['Last-Event-ID'] = lastEventId;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const frames: SseFrame[] = [];
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { Accept: 'text/event-stream', ...headers },
+      signal: ctrl.signal,
+    });
+    if (!res.ok || !res.body) throw new Error(`SSE ${path} -> ${res.status}`);
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf('\n\n')) !== -1) {
+        const raw = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const frame = parseFrame(raw);
+        if (frame.event) frames.push(frame);   // skip ping-only frames
+        if (stopWhen(frame)) return frames;
+      }
+    }
+    throw new Error(`SSE ${path} closed before stop condition was met`);
   } finally {
     clearTimeout(timer);
     ctrl.abort();

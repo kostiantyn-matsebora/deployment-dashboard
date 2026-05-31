@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dashboard.Control.Filters;
 using Dashboard.Control.Models;
+using Dashboard.Control.Notifiers;
 using Dashboard.Control.Queries;
 using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
@@ -35,10 +36,10 @@ public static class ControlEndpoints
            .AddEndpointFilter<ControlApiKeyEndpointFilter>()
            .WithName("Reset")
            .WithTags("Control")
-           .WithSummary("Delete all stored data and emit a reset event")
-           .Produces(StatusCodes.Status204NoContent)
+           .WithSummary("Initiate an asynchronous system-state reset")
+           .Produces<ResetAcceptedResponse>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status401Unauthorized)
-           .Produces(StatusCodes.Status404NotFound);
+           .ProducesProblem(StatusCodes.Status409Conflict);
 
         app.MapGet("/api/control/stream", HandleStreamAsync)
            .AddEndpointFilter<ControlApiKeyEndpointFilter>()
@@ -46,8 +47,7 @@ public static class ControlEndpoints
            .WithTags("Control")
            .WithSummary("SSE stream of orchestration events emitted to components")
            .Produces(StatusCodes.Status200OK)
-           .ProducesProblem(StatusCodes.Status401Unauthorized)
-           .Produces(StatusCodes.Status404NotFound);
+           .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         app.MapPost("/api/control/events", HandlePostEventAsync)
            .AddEndpointFilter<ApiKeyEndpointFilter>()
@@ -69,20 +69,33 @@ public static class ControlEndpoints
         return app;
     }
 
+    // ── POST /api/control/reset ───────────────────────────────────────────────
+
     private static async Task<IResult> HandleResetAsync(
         IResetService resetService,
         CancellationToken ct)
     {
-        await resetService.ResetAsync(ct);
-        return Results.NoContent();
+        var acceptance = await resetService.TryInitiateAsync(ct);
+
+        if (acceptance is null)
+            return Results.Problem(
+                title: "A reset is already in progress.",
+                detail: "Only one reset may be in flight at a time. Wait for the current reset to complete.",
+                statusCode: StatusCodes.Status409Conflict);
+
+        return Results.Accepted(value: new ResetAcceptedResponse(
+            acceptance.ResetId,
+            acceptance.State,
+            acceptance.AcceptedAt));
     }
 
-    // ── POST /api/control/events ────────────────────────────────────────────────
+    // ── POST /api/control/events ──────────────────────────────────────────────
 
     private static async Task<IResult> HandlePostEventAsync(
         [FromBody] ComponentEventIngest body,
         [FromHeader(Name = "X-Component-Id")] string? componentId,
         IComponentEventRepository repository,
+        IComponentAckNotifier ackNotifier,
         CancellationToken ct)
     {
         // The validation filter has already guaranteed a valid X-Component-Id before this runs;
@@ -114,10 +127,16 @@ public static class ControlEndpoints
         };
 
         await repository.InsertAsync(entity, ct);
+
+        // For reset-ack events, NOTIFY the component_acks channel so the driving reset instance
+        // can count this ack for the active cycle (§7 ch.3, D16).
+        if (body.EventType == "reset-ack" && ExtractResetId(body) is { } resetId)
+            await ackNotifier.NotifyAsync(componentId, resetId, ct);
+
         return Results.NoContent();
     }
 
-    // ── GET /api/control/events ─────────────────────────────────────────────────
+    // ── GET /api/control/events ───────────────────────────────────────────────
 
     private static async Task<IResult> HandleListEventsAsync(
         [FromQuery(Name = "component_id")] string? componentId,
@@ -139,7 +158,7 @@ public static class ControlEndpoints
         return Results.Ok(new ComponentEventPage(items, nextCursor));
     }
 
-    // ── GET /api/control/stream (SSE) ────────────────────────────────────────────
+    // ── GET /api/control/stream (SSE) ─────────────────────────────────────────
 
     /// <summary>
     /// Streams control orchestration events as Server-Sent Events.
@@ -204,6 +223,8 @@ public static class ControlEndpoints
         }
     }
 
+    // ── Private helpers ───────────────────────────────────────────────────────
+
     private static async Task WriteSseEventAsync(
         HttpContext httpContext,
         ControlStreamEvent ev,
@@ -219,5 +240,25 @@ public static class ControlEndpoints
     {
         await httpContext.Response.WriteAsync(": ping\n\n", ct);
         await httpContext.Response.Body.FlushAsync(ct);
+    }
+
+    /// <summary>
+    /// Extracts <c>reset_id</c> from the opaque payload of a <c>reset-ack</c> event.
+    /// The payload is an already-serialised JSON string stored verbatim; parse it minimally.
+    /// </summary>
+    private static string? ExtractResetId(ComponentEventIngest body)
+    {
+        if (body.Payload is not { } payload) return null;
+
+        try
+        {
+            return payload.TryGetProperty("reset_id", out var prop)
+                ? prop.GetString()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

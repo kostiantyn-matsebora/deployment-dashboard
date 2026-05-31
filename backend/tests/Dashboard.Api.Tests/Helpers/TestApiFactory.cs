@@ -1,3 +1,4 @@
+using Dashboard.Control.Options;
 using Dashboard.Shared.Abstractions;
 using Dashboard.Shared.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -34,6 +35,19 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// </summary>
     public bool IncludeControlKey { get; init; } = true;
 
+    /// <summary>
+    /// When set, replaces the real <see cref="IResetStateProvider"/> singleton with this
+    /// controllable stub so tests can force the ingest gate without triggering NOTIFY/LISTEN.
+    /// Used by <see cref="ResetChoreographyTests"/> for the 503 gate test (Fix C).
+    /// </summary>
+    public ForcedResetStateProvider? ForcedResetState { get; init; }
+
+    /// <summary>
+    /// When set, overrides the <c>Reset</c> configuration section so tests can control
+    /// <c>AckTimeoutSeconds</c> and <c>ExpectedComponents</c> without relying on defaults.
+    /// </summary>
+    public ResetConfigOverride? ResetConfig { get; init; }
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
@@ -66,12 +80,40 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
         builder.ConfigureServices(services =>
         {
+            if (ResetConfig is { } rc)
+            {
+                // Apply Reset overrides imperatively via PostConfigure rather than through
+                // configuration keys. The .NET configuration binder MERGES array indices onto
+                // the ResetOptions default initializer (["dashboard-fetcher","demo-driver"])
+                // instead of replacing the array, so a config-key override of ExpectedComponents
+                // would leave stale default entries (and empty slots) in the bound array — the
+                // orchestrator would then wait on acks the test never sends. PostConfigure runs
+                // after binding and lets us replace the array wholesale, deterministically.
+                services.PostConfigure<ResetOptions>(o =>
+                {
+                    if (rc.AckTimeoutSeconds.HasValue)
+                        o.AckTimeoutSeconds = rc.AckTimeoutSeconds.Value;
+                    if (rc.ExpectedComponents is { } components)
+                        o.ExpectedComponents = components;
+                    if (rc.GateMaxTtlSeconds.HasValue)
+                        o.GateMaxTtlSeconds = rc.GateMaxTtlSeconds.Value;
+                });
+            }
+
             if (!UseRealNotifier)
             {
                 // Replace Postgres notifier with no-op so tests that don't need SSE fan-out
                 // don't depend on the LISTEN connection being established.
                 services.RemoveAll<IDeploymentNotifier>();
                 services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
+            }
+
+            if (ForcedResetState is not null)
+            {
+                // Replace the real ResetStateListener singleton with a controllable stub.
+                // This lets tests verify the 503 gate path without going through NOTIFY/LISTEN.
+                services.RemoveAll<IResetStateProvider>();
+                services.AddSingleton<IResetStateProvider>(ForcedResetState);
             }
         });
     }
@@ -84,3 +126,12 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
         await ctx.Database.MigrateAsync();
     }
 }
+
+/// <summary>
+/// Carries overrides for the <c>Reset</c> appsettings section used in
+/// <see cref="TestApiFactory.ResetConfig"/>.
+/// </summary>
+internal sealed record ResetConfigOverride(
+    int? AckTimeoutSeconds = null,
+    string[]? ExpectedComponents = null,
+    int? GateMaxTtlSeconds = null);

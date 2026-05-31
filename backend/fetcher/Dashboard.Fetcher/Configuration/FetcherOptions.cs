@@ -17,6 +17,19 @@ public sealed class FetcherOptions
     /// </summary>
     public TimeSpan BackfillMaxAge { get; set; } = TimeSpan.Zero;
 
+    /// <summary>
+    /// <c>X-Control-API-Key</c> for <c>GET /api/control/stream</c>.
+    /// Distinct from <c>API_KEY</c> per §5.10.2 / api-guidelines §4 (D8).
+    /// </summary>
+    public string ControlApiKey { get; set; } = "";
+
+    /// <summary>
+    /// <c>X-Component-Id</c> sent on <c>POST /api/control/events</c>.
+    /// MUST match the API's <c>ExpectedComponents</c> for acks to be counted — default is
+    /// <c>dashboard-fetcher</c> (§5.10.1).
+    /// </summary>
+    public string ComponentId { get; set; } = "dashboard-fetcher";
+
     public TimeSpan EffectiveBackfillMaxAge =>
         BackfillMaxAge > TimeSpan.Zero ? BackfillMaxAge : InitialLookback;
 

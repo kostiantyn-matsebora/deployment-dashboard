@@ -6,8 +6,8 @@ using Dashboard.Api.Tests.Helpers;
 namespace Dashboard.Api.Tests;
 
 /// <summary>
-/// Integration tests for <c>POST /api/control/reset</c>.
-/// Verifies authentication, the 204 happy path, and that both tables are cleared.
+/// Integration tests for <c>POST /api/control/reset</c> authentication.
+/// Data-clearing and choreography behaviour are covered by <see cref="ResetChoreographyTests"/>.
 /// Runs against a real Postgres container (Testcontainers).
 /// </summary>
 public sealed class ControlEndpointTests : IAsyncLifetime
@@ -41,52 +41,6 @@ public sealed class ControlEndpointTests : IAsyncLifetime
         return req;
     }
 
-    private async Task IngestAsync(string service = "ctrl-svc", string environment = "prod")
-    {
-        var req = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
-        {
-            Content = JsonContent.Create(new
-            {
-                deployment_id = $"gh-{Guid.NewGuid():N}",
-                service,
-                environment,
-                status = "success",
-                happened_at = "2026-05-28T10:00:00Z",
-            }),
-        };
-        req.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var res = await _client.SendAsync(req);
-        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
-    }
-
-    private async Task PutFetcherStateAsync(string adapter = "ctrl-adapter")
-    {
-        var req = new HttpRequestMessage(HttpMethod.Put, $"/api/fetcher/state/{adapter}")
-        {
-            Content = JsonContent.Create(new { cursor = "opaque-cursor" }),
-        };
-        req.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var res = await _client.SendAsync(req);
-        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
-    }
-
-    private async Task PostComponentEventAsync(string componentId = "ctrl-component")
-    {
-        var req = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
-        {
-            Content = JsonContent.Create(new
-            {
-                event_type = "status",
-                state = "running",
-                occurred_at = "2026-05-28T10:00:00Z",
-            }),
-        };
-        req.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        req.Headers.Add("X-Component-Id", componentId);
-        var res = await _client.SendAsync(req);
-        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
-    }
-
     // ── Authentication ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -111,83 +65,32 @@ public sealed class ControlEndpointTests : IAsyncLifetime
     {
         // X-Api-Key must NOT be accepted on the control surface (D8: least-privilege).
         var req = new HttpRequestMessage(HttpMethod.Post, "/api/control/reset");
-        req.Headers.Add("X-Control-API-Key", TestApiFactory.TestApiKey); // write key, wrong header name value
+        req.Headers.Add("X-Control-API-Key", TestApiFactory.TestApiKey);
         var res = await _client.SendAsync(req);
 
         Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
     }
 
-    // ── Happy path ─────────────────────────────────────────────────────────────
+    // ── Happy path — 202 ──────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Post_ValidControlApiKey_Returns204()
+    public async Task Post_ValidControlApiKey_Returns202()
     {
         var res = await _client.SendAsync(ResetRequest());
 
-        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
     }
 
     [Fact]
-    public async Task Post_ValidControlApiKey_EmptyStore_Returns204()
+    public async Task Post_ValidControlApiKey_BodyContainsResetIdStateAndAcceptedAt()
     {
-        // Idempotent: succeeds even when tables are already empty.
         var res = await _client.SendAsync(ResetRequest());
 
-        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
-    }
-
-    // ── Table clearing ─────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task Post_AfterIngest_DeploymentEventsAreCleared()
-    {
-        await IngestAsync("reset-svc-de", "prod");
-
-        // Confirm the event is present before reset.
-        var before = await _client.GetAsync("/api/deployments?service=reset-svc-de");
-        var beforeBody = await before.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(beforeBody.GetProperty("items").GetArrayLength() > 0);
-
-        await _client.SendAsync(ResetRequest());
-
-        var after = await _client.GetAsync("/api/deployments?service=reset-svc-de");
-        var afterBody = await after.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(0, afterBody.GetProperty("items").GetArrayLength());
-    }
-
-    [Fact]
-    public async Task Post_AfterComponentEvent_ComponentEventsAreCleared()
-    {
-        await PostComponentEventAsync("reset-component");
-
-        var before = await _client.GetAsync("/api/control/events?component_id=reset-component");
-        var beforeBody = await before.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(beforeBody.GetProperty("items").GetArrayLength() > 0);
-
-        await _client.SendAsync(ResetRequest());
-
-        var after = await _client.GetAsync("/api/control/events?component_id=reset-component");
-        var afterBody = await after.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(0, afterBody.GetProperty("items").GetArrayLength());
-    }
-
-    [Fact]
-    public async Task Post_AfterFetcherStateWrite_FetcherStateIsCleared()
-    {
-        await PutFetcherStateAsync("reset-adapter");
-
-        // Confirm state is present before reset.
-        var req = new HttpRequestMessage(HttpMethod.Get, "/api/fetcher/state/reset-adapter");
-        req.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var before = await _client.SendAsync(req);
-        Assert.Equal(HttpStatusCode.OK, before.StatusCode);
-
-        await _client.SendAsync(ResetRequest());
-
-        var req2 = new HttpRequestMessage(HttpMethod.Get, "/api/fetcher/state/reset-adapter");
-        req2.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var after = await _client.SendAsync(req2);
-        Assert.Equal(HttpStatusCode.NotFound, after.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("draining", body.GetProperty("state").GetString());
+        Assert.NotEqual(Guid.Empty, Guid.Parse(body.GetProperty("reset_id").GetString()!));
+        Assert.True(body.TryGetProperty("accepted_at", out _));
     }
 }
 

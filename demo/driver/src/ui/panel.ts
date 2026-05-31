@@ -80,8 +80,11 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .badge-running  { background: #1e3a5f; color: #60a5fa; }
     .badge-done     { background: #14532d; color: #86efac; }
     .badge-failed   { background: #450a0a; color: #f87171; }
+    .badge-blocked  { background: #451a03; color: #fb923c; }
     .badge-on       { background: #14532d; color: #86efac; }
     .badge-off      { background: #27272a; color: #a1a1aa; }
+    .badge-reset-idle    { background: #27272a; color: #a1a1aa; }
+    .badge-reset-blocked { background: #451a03; color: #fb923c; }
 
     /* Progress bar (reused in status bar) */
     .progress-bg   { background: #27272a; border-radius: 4px; height: 5px; overflow: hidden; }
@@ -110,6 +113,11 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .api-msg { font-size: 0.75rem; }
     .api-msg.ok  { color: #86efac; }
     .api-msg.err { color: #f87171; }
+    .api-msg-row { margin-top: 8px; min-height: 1.1em; }
+
+    /* Reset card */
+    .reset-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .reset-id  { font-size: 0.7rem; color: #71717a; font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace; word-break: break-all; margin-top: 6px; }
 
     /* Feed */
     .feed-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -138,9 +146,39 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .fi-src-ingest { background: #1a2744; color: #60a5fa; }
     .fi-src-emit   { background: #271d00; color: #f59e0b; }
     .feed-empty { color: #52525b; text-align: center; padding: 24px 0; font-size: 0.8rem; }
+
+    /* Reset blocking overlay */
+    #reset-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 900;
+      background: rgba(10,8,6,0.88);
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+      backdrop-filter: blur(4px);
+    }
+    #reset-overlay.visible { display: flex; }
+    .overlay-title {
+      font-size: 1.4rem; font-weight: 700; color: #fb923c;
+      letter-spacing: 0.05em;
+    }
+    .overlay-sub {
+      font-size: 0.85rem; color: #a1a1aa;
+    }
+    .overlay-id {
+      font-size: 0.72rem; color: #71717a;
+      font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
+    }
   </style>
 </head>
 <body>
+
+  <!-- ── Reset blocking overlay (§7) ──────────────────────────────────────── -->
+  <div id="reset-overlay">
+    <div class="overlay-title">System reset in progress&hellip;</div>
+    <div class="overlay-sub">All controls are disabled. The panel will restore automatically.</div>
+    <div class="overlay-id" id="overlay-reset-id"></div>
+  </div>
+
   <h1>Demo <span>Driver</span></h1>
 
   <div class="grid">
@@ -183,11 +221,18 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- ── API card ───────────────────────────────────────────────────────── -->
+    <!-- ── Control API card ─────────────────────────────────────────────── -->
     <div class="card">
-      <div class="card-title">API</div>
-      <div class="api-row">
-        <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset State</button>
+      <div class="card-title">Control API</div>
+      <div class="emit-row">
+        <div class="emit-info">
+          <span class="lbl">Reset state</span>
+          <span class="badge badge-reset-idle" id="reset-state-badge">IDLE</span>
+          <div class="reset-id" id="reset-id-display"></div>
+        </div>
+        <button class="btn-stop" id="reset-api-btn" onclick="resetApi()">Reset System</button>
+      </div>
+      <div class="api-msg-row">
         <span class="api-msg" id="reset-api-msg"></span>
       </div>
     </div>
@@ -225,6 +270,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     <span class="sb-sep">·</span>
     <span class="sb-lbl">Finished</span>
     <span class="sb-val" id="finished-at">—</span>
+    <span class="sb-sep">·</span>
+    <span class="badge badge-reset-idle" id="sb-reset-badge">RESET: IDLE</span>
   </div>
 
   <script>
@@ -253,10 +300,22 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const clearBtn        = $('clear-btn');
     const feedList        = $('feed-list');
     const feedEmpty       = $('feed-empty');
+    const resetOverlay    = $('reset-overlay');
+    const overlayResetId  = $('overlay-reset-id');
+    const resetStateBadge = $('reset-state-badge');
+    const resetIdDisplay  = $('reset-id-display');
+    const sbResetBadge    = $('sb-reset-badge');
+
+    // Interactive controls blocked during reset.
+    const interactiveControls = [
+      ingestBtn, ingestStopBtn, emitToggleBtn, resetApiBtn,
+      datasetSelect, countInput, delayInput, resetCheck,
+    ];
 
     let pollTimer   = null;
     let eventSource = null;
     let emitting    = false;
+    let isBlocked   = false;
 
     // ── Dataset toggle ────────────────────────────────────────────────────────
     datasetSelect.addEventListener('change', () => {
@@ -287,9 +346,44 @@ export const PANEL_HTML = `<!DOCTYPE html>
     }
 
     function applyStatus(d) {
-      const state = d.state || 'idle';
+      const state      = d.state      || 'idle';
+      const resetState = d.reset_state || 'idle';
+      const resetId    = d.reset_id   || null;
+
+      // Scenario state badge.
       stateBadge.textContent = state;
       stateBadge.className   = 'badge badge-' + state;
+
+      // Reset-state indicators (card badge + footer chip).
+      if (resetState === 'blocked') {
+        resetStateBadge.textContent = 'RESET IN PROGRESS';
+        resetStateBadge.className   = 'badge badge-reset-blocked';
+        resetIdDisplay.textContent  = resetId ? 'reset_id: ' + resetId : '';
+        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
+        sbResetBadge.className      = 'badge badge-reset-blocked';
+      } else {
+        resetStateBadge.textContent = 'IDLE';
+        resetStateBadge.className   = 'badge badge-reset-idle';
+        resetIdDisplay.textContent  = '';
+        sbResetBadge.textContent    = 'RESET: IDLE';
+        sbResetBadge.className      = 'badge badge-reset-idle';
+      }
+
+      // Full-panel blocking overlay + interactive control state.
+      const wasBlocked = isBlocked;
+      isBlocked = (resetState === 'blocked');
+
+      if (isBlocked) {
+        overlayResetId.textContent = resetId ? 'reset_id: ' + resetId : '';
+        resetOverlay.classList.add('visible');
+        interactiveControls.forEach(el => { el.disabled = true; });
+      } else {
+        resetOverlay.classList.remove('visible');
+        // Restore interactive controls based on ingest state.
+        interactiveControls.forEach(el => { el.disabled = false; });
+        ingestBtn.disabled     = state === 'running';
+        ingestStopBtn.disabled = state !== 'running';
+      }
 
       const total = d.events_total || 0;
       const sent  = d.events_sent  || 0;
@@ -302,10 +396,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
       startedAt.textContent    = d.started_at  ? fmt(d.started_at)  : '—';
       finishedAt.textContent   = d.finished_at ? fmt(d.finished_at) : '—';
 
-      ingestBtn.disabled     = state === 'running';
-      ingestStopBtn.disabled = state !== 'running';
-
-      if (state === 'running') schedulePoll();
+      // Poll while running or blocked (to detect unblock).
+      if (state === 'running' || isBlocked) schedulePoll();
       else clearTimeout(pollTimer);
     }
 
@@ -324,22 +416,54 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     // ── Ingest controls ───────────────────────────────────────────────────────
     ingestBtn.addEventListener('click', async () => {
+      if (isBlocked) return;
       const dataset  = datasetSelect.value;
       const reset    = resetCheck.checked;
       const delay    = parseInt(delayInput.value, 10) || 0;
       const count    = Math.min(parseInt(countInput.value, 10) || 10, 10);
       const body     = { dataset, reset, delay_ms: delay };
       if (dataset === 'random') body.count = count;
+
+      // When reset is checked the server blocks until the full reset cycle
+      // completes before responding.  Show the blocking overlay immediately so
+      // the user sees feedback during the wait; applyStatus will clear it once
+      // the response arrives with reset_state back to idle.
+      if (reset) {
+        isBlocked = true;
+        overlayResetId.textContent = '';
+        resetOverlay.classList.add('visible');
+        interactiveControls.forEach(el => { el.disabled = true; });
+        resetStateBadge.textContent = 'RESET IN PROGRESS';
+        resetStateBadge.className   = 'badge badge-reset-blocked';
+        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
+        sbResetBadge.className      = 'badge badge-reset-blocked';
+      }
+
       try {
         const data = await apiFetch('/demo/ingest', {
           method: 'POST',
           body:   JSON.stringify(body),
         });
         applyStatus(data);
-      } catch {}
+      } catch {
+        // On network error: clear the optimistic overlay so the UI is not
+        // permanently stuck.
+        if (reset) {
+          isBlocked = false;
+          resetOverlay.classList.remove('visible');
+          interactiveControls.forEach(el => { el.disabled = false; });
+          ingestBtn.disabled     = false;
+          ingestStopBtn.disabled = true;
+          resetStateBadge.textContent = 'IDLE';
+          resetStateBadge.className   = 'badge badge-reset-idle';
+          sbResetBadge.textContent    = 'RESET: IDLE';
+          sbResetBadge.className      = 'badge badge-reset-idle';
+        }
+      }
     });
 
     ingestStopBtn.addEventListener('click', async () => {
+      if (isBlocked) return;
       try {
         const data = await apiFetch('/demo/ingest/stop', { method: 'POST' });
         applyStatus(data);
@@ -348,35 +472,41 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     // ── Live emission ─────────────────────────────────────────────────────────
     function toggleEmit() {
+      if (isBlocked) return;
       emitToggleBtn.disabled = true;
       apiFetch('/demo/emit', {
         method: 'POST',
         body:   JSON.stringify({ enabled: !emitting }),
       }).then(applyEmit)
         .catch(() => {})
-        .finally(() => { emitToggleBtn.disabled = false; });
+        .finally(() => { emitToggleBtn.disabled = isBlocked; });
     }
 
     // ── API reset ─────────────────────────────────────────────────────────────
     function resetApi() {
+      if (isBlocked) return;
       resetApiBtn.disabled = true;
       resetApiMsg.textContent = '';
       resetApiMsg.className   = 'api-msg';
       apiFetch('/demo/api-reset', { method: 'POST' })
         .then(d => {
           if (d.ok) {
-            resetApiMsg.textContent = '✓ Reset OK (' + d.http_status + ')';
+            resetApiMsg.textContent = '\\u2713 Reset OK (' + d.http_status + ')';
             resetApiMsg.className   = 'api-msg ok';
+            // Reset was accepted — the backend transitions to blocked via SSE,
+            // which arrives after this HTTP response.  Start polling immediately
+            // so applyStatus catches the blocked→idle cycle.
+            schedulePoll();
           } else {
-            resetApiMsg.textContent = '✗ HTTP ' + (d.http_status || '—');
+            resetApiMsg.textContent = '\\u2717 HTTP ' + (d.http_status || '—');
             resetApiMsg.className   = 'api-msg err';
           }
         })
         .catch(() => {
-          resetApiMsg.textContent = '✗ Network error';
+          resetApiMsg.textContent = '\\u2717 Network error';
           resetApiMsg.className   = 'api-msg err';
         })
-        .finally(() => { resetApiBtn.disabled = false; });
+        .finally(() => { resetApiBtn.disabled = isBlocked; refreshStatus(); });
     }
 
     clearBtn.addEventListener('click', () => {
@@ -423,14 +553,14 @@ export const PANEL_HTML = `<!DOCTYPE html>
         : '<span class="fi-src fi-src-ingest">ingest</span>';
       if (type === 'posted') {
         item.innerHTML =
-          '<span class="fi-icon">✓</span> ' +
+          '<span class="fi-icon">\\u2713</span> ' +
           '<span class="fi-time">'  + esc(time)             + '</span>' +
           srcTag +
           '<span class="fi-id">'   + esc(d.deployment_id)  + '</span> ' +
-          '<span class="fi-meta">' + esc(d.service) + ' / ' + esc(d.environment) + ' → ' + esc(d.status) + '</span>';
+          '<span class="fi-meta">' + esc(d.service) + ' / ' + esc(d.environment) + ' \\u2192 ' + esc(d.status) + '</span>';
       } else {
         item.innerHTML =
-          '<span class="fi-icon">✗</span> ' +
+          '<span class="fi-icon">\\u2717</span> ' +
           '<span class="fi-time">'  + esc(time)             + '</span>' +
           srcTag +
           '<span class="fi-id">ERROR</span> ' +

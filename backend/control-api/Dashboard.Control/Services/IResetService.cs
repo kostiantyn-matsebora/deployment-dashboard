@@ -1,11 +1,18 @@
 namespace Dashboard.Control.Services;
 
-/// <summary>Clears all deployment data from the store.</summary>
+/// <summary>
+/// Accepts an async reset request and kicks off the choreography.
+/// Returns immediately with the accepted reset's id and current state
+/// (<c>202</c> semantics); the orchestration continues on a background thread.
+/// </summary>
 public interface IResetService
 {
     /// <summary>
-    /// Deletes all rows from <c>deployment_events</c> and <c>fetcher_state</c>.
-    /// Idempotent: safe to call on an already-empty store.
+    /// Tries to initiate a reset. Returns <c>(resetId, "draining")</c> when accepted
+    /// or <c>null</c> when a reset is already in flight (<c>409</c> path).
     /// </summary>
-    Task ResetAsync(CancellationToken ct = default);
+    Task<ResetAcceptance?> TryInitiateAsync(CancellationToken ct = default);
 }
+
+/// <summary>202 response body for an accepted reset.</summary>
+public sealed record ResetAcceptance(Guid ResetId, string State, DateTimeOffset AcceptedAt);

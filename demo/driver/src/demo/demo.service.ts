@@ -7,6 +7,8 @@ import { generateRandomEvents, SERVICE_COUNT } from '../scenarios/random-event-g
 import { Scenario, loadScenarios } from '../scenarios/scenario-loader';
 import { EmitService } from './emit.service';
 import { getConfig } from '../config/configuration';
+import { ResetCoordinator, ResetParticipant } from '../control/reset-coordinator';
+import { ControlEventsClient } from '../control/control-events.client';
 
 export interface IngestOptions {
   dataset?:  string;   // 'demo' | 'random'  (default 'demo')
@@ -15,8 +17,14 @@ export interface IngestOptions {
   delay_ms?: number;   // overrides EMIT_DELAY_MS
 }
 
+/** Extended status including reset-participation fields (§4.1). */
+export interface DemoStatus extends RunnerStatus {
+  reset_state: 'idle' | 'blocked';
+  reset_id:    string | null;
+}
+
 @Injectable()
-export class DemoService implements OnModuleInit, OnModuleDestroy {
+export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticipant {
   private readonly runner = new ScenarioRunner();
   private scenarios: Scenario[] = [];
   private streamSub:     Subscription | null = null;
@@ -25,10 +33,23 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
   /** SSE fan-out re-exported for controller subscriptions. */
   readonly stream$ = new Subject<StreamFrame>();
 
-  constructor(private readonly emitService: EmitService) {}
+  constructor(
+    private readonly emitService:       EmitService,
+    private readonly resetCoordinator:  ResetCoordinator,
+  ) {}
 
   onModuleInit(): void {
     const config = getConfig();
+
+    // Wire the coordinator with participant + events client.
+    this.resetCoordinator.registerParticipant(this);
+    const eventsClient = new ControlEventsClient(
+      config.writeApiUrl,
+      config.apiKey,
+      config.componentId,
+    );
+    this.resetCoordinator.registerEventsClient(eventsClient);
+
     try {
       this.scenarios = loadScenarios(config.scenariosDir);
       console.log(
@@ -50,10 +71,37 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
     this.stream$.complete();
   }
 
+  // ── ResetParticipant ─────────────────────────────────────────────────────
+
+  /** Called by ResetCoordinator on reset-initiated: stop work, enter blocked state. */
+  stopWork(): void {
+    this.runner.stop();
+    this.emitService.disable();
+    this.runner.setBlocked();
+  }
+
+  /** Called by ResetCoordinator on reset-completed (or safety unblock): restore idle. */
+  unblockWork(): void {
+    this.runner.reset();
+  }
+
   // ── Queries ───────────────────────────────────────────────────────────────
 
-  getStatus(): RunnerStatus {
-    return this.runner.status;
+  getStatus(): DemoStatus {
+    return {
+      ...this.runner.status,
+      reset_state: this.resetCoordinator.resetState,
+      reset_id:    this.resetCoordinator.resetId,
+    };
+  }
+
+  isBlocked(): boolean {
+    return this.resetCoordinator.resetState === 'blocked';
+  }
+
+  getRetryAfterSeconds(): number {
+    const config = getConfig();
+    return Math.ceil(config.resetGateMaxTtlMs / 1000);
   }
 
   getScenarios(): string[] {
@@ -73,7 +121,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
    * - dataset='random': generates and posts `count` random events.
    * Idempotent: returns current status when already running.
    */
-  async startIngest(opts: IngestOptions): Promise<RunnerStatus> {
+  async startIngest(opts: IngestOptions): Promise<DemoStatus> {
     const { dataset = 'demo', reset = false, count = 10, delay_ms } = opts;
 
     if (reset) {
@@ -82,10 +130,22 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
       const result = await ctrl.resetApi();
       if (!result.ok) {
         console.warn(`[demo-driver] pre-ingest API reset returned HTTP ${result.http_status}`);
+      } else if (result.reset_id) {
+        // Declare the expected cycle immediately so the coordinator does not
+        // fast-resolve awaitCycleComplete in the window before reset-initiated
+        // arrives via SSE (which is the race that causes mid-flight stopWork).
+        this.resetCoordinator.expectCycle(result.reset_id);
+        // Wait for the reset cycle to complete before ingesting.  The coordinator
+        // will be blocked by its own reset-initiated handler during this window;
+        // awaitCycleComplete only reads state and registers a waiter — it does
+        // not call stopWork/unblockWork, so there is no deadlock risk.
+        await this.resetCoordinator.awaitCycleComplete(result.reset_id);
+      } else {
+        console.warn('[demo-driver] API reset accepted but returned no reset_id — proceeding without waiting');
       }
     }
 
-    if (this.runner.state === 'running') return this.runner.status;
+    if (this.runner.state === 'running') return this.getStatus();
 
     const config        = getConfig();
     const effectiveDelay = delay_ms !== undefined ? delay_ms : config.emitDelayMs;
@@ -108,13 +168,13 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    return this.runner.status;
+    return this.getStatus();
   }
 
   /** Stop the running ingest (scenario or random). */
-  stopIngest(): RunnerStatus {
+  stopIngest(): DemoStatus {
     this.runner.stop();
-    return this.runner.status;
+    return this.getStatus();
   }
 
   // ── Live Emission ─────────────────────────────────────────────────────────
@@ -149,8 +209,8 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
    * Idempotent: returns current status when already running (§4.2).
    * delayMs overrides EMIT_DELAY_MS if provided.
    */
-  async start(scenarioName: string, delayMs?: number): Promise<RunnerStatus> {
-    if (this.runner.state === 'running') return this.runner.status;
+  async start(scenarioName: string, delayMs?: number): Promise<DemoStatus> {
+    if (this.runner.state === 'running') return this.getStatus();
 
     const scenario = this.scenarios.find(s => s.name === scenarioName);
     if (!scenario) throw new Error(`Scenario '${scenarioName}' not found`);
@@ -167,16 +227,16 @@ export class DemoService implements OnModuleInit, OnModuleDestroy {
       console.error('[demo-driver] runner error:', err);
     });
 
-    return this.runner.status;
+    return this.getStatus();
   }
 
-  stop(_scenarioName: string): RunnerStatus {
+  stop(_scenarioName: string): DemoStatus {
     this.runner.stop();
-    return this.runner.status;
+    return this.getStatus();
   }
 
-  reset(): RunnerStatus {
+  reset(): DemoStatus {
     this.runner.reset();
-    return this.runner.status;
+    return this.getStatus();
   }
 }

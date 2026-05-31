@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Test overrides — deterministic reset choreography for the API integration
+# test suite (testing/api/tests/integration/reset-choreography.spec.ts).
+#
+# Appended last in COMPOSE_FILE so these values win over demo defaults.
+#
+# Key choices:
+#   AckTimeoutSeconds = 3   Short window so timeout-backstop tests finish fast.
+#   ExpectedComponents = [api-test-reset]
+#                           A single synthetic component id the test suite
+#                           controls via POST /api/control/events.  The real
+#                           demo-driver stays in the compose stack but is NOT
+#                           in ExpectedComponents, so its acks are ignored by
+#                           the gate (it still reacts to reset-initiated — that
+#                           is fine; the test drives completion independently).
+#                           dashboard-fetcher is absent from the stack entirely,
+#                           so it must not appear in ExpectedComponents either.
+#
+#   IMPORTANT — .NET array binding does NOT replace the whole array. Config
+#   children are bound by INDEX over the keys present across providers (env wins
+#   over appsettings at a shared index), and the result is APPENDED onto the
+#   ResetOptions.ExpectedComponents property default. That default is therefore
+#   kept EMPTY ([]) in code so this override fully defines the set; were it the
+#   old ["dashboard-fetcher","demo-driver"] initializer, those two would survive
+#   here as phantom expected components the gate would wait on forever.
+#   appsettings.json seeds ["dashboard-fetcher","demo-driver"] at indices 0,1, so
+#   we pin BOTH __0 and __1 to "api-test-reset" (env wins at both) → the bound
+#   array is ["api-test-reset","api-test-reset"], which dedups to {api-test-reset}.
+#   GateMaxTtlSeconds = 15  Enough headroom for the longest test scenario
+#                           (timeout backstop at ~3 s + overhead) without
+#                           wedging ingest during teardown.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  api:
+    environment:
+      Reset__AckTimeoutSeconds: "3"
+      Reset__ExpectedComponents__0: "api-test-reset"
+      Reset__ExpectedComponents__1: "api-test-reset"
+      Reset__GateMaxTtlSeconds: "15"

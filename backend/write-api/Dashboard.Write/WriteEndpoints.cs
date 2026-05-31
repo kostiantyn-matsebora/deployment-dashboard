@@ -15,13 +15,15 @@ public static class WriteEndpoints
     {
         app.MapPost("/api/deployments", HandleIngestAsync)
            .AddEndpointFilter<ApiKeyEndpointFilter>()
+           .AddEndpointFilter<IngestGateEndpointFilter>()
            .AddEndpointFilter<ValidationEndpointFilter>()
            .WithName("IngestDeployment")
            .WithTags("Deployments")
            .WithSummary("Ingest a deployment event")
            .Produces<DeploymentEvent>(StatusCodes.Status201Created)
            .ProducesProblem(StatusCodes.Status401Unauthorized)
-           .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         return app;
     }

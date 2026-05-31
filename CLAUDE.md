@@ -23,16 +23,20 @@
 
 ## Solution directory structure
 
-Architecture-only baseline — no service code committed yet (per commit `d0045c6`). The tree below is authoritative; reserved slots are listed separately.
+Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway). The tree below is authoritative; reserved slots are listed separately.
 
 **Present today:**
 
 | Path | Role |
 |---|---|
 | `docs/` | All design + contract documentation (see *Sources of truth*). |
-| `backend/[service]` | Backend services |
-| `frontend/[application]` | Frontend application |
-| `testing/[type]` | Testing solutions |
+| `backend/[service]` | Backend services (`Dashboard.Api` + endpoint-group libs, `Dashboard.Fetcher` + host, shared, tests). |
+| `frontend/[application]` | Angular SPA (`dashboard`) + `mock` server. |
+| `demo/` | `driver` (demo-orchestration service) + `data` (scenario seeds). |
+| `gateway/` | nginx App Gateway config. |
+| `testing/[type]` | Testing solutions (`api`, `e2e`). |
+| `compose/` | Local-dev Docker Compose stack. |
+| `scripts/` | PowerShell tooling + hooks. |
 
 **Reserved (planned, not present).** Slots referenced by `.dockerignore` and SAD §7 awaiting implementation:
 
