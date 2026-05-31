@@ -15,6 +15,12 @@
 #                           is fine; the test drives completion independently).
 #                           dashboard-fetcher is absent from the stack entirely,
 #                           so it must not appear in ExpectedComponents either.
+#
+#   IMPORTANT — .NET array binding overlays by INDEX; it does not replace the
+#   whole array.  appsettings.json seeds ["dashboard-fetcher","demo-driver"]
+#   (indices 0,1).  Setting only __0 would leave __1="demo-driver" in place,
+#   making the gate wait on the demo-driver too.  We therefore pin BOTH indices
+#   to "api-test-reset" so the effective set dedups to {api-test-reset}.
 #   GateMaxTtlSeconds = 15  Enough headroom for the longest test scenario
 #                           (timeout backstop at ~3 s + overhead) without
 #                           wedging ingest during teardown.
@@ -25,4 +31,5 @@ services:
     environment:
       Reset__AckTimeoutSeconds: "3"
       Reset__ExpectedComponents__0: "api-test-reset"
+      Reset__ExpectedComponents__1: "api-test-reset"
       Reset__GateMaxTtlSeconds: "15"
