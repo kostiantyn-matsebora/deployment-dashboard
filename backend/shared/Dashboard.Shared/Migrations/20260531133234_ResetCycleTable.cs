@@ -33,6 +33,13 @@ namespace Dashboard.Shared.Migrations
                 {
                     table.PrimaryKey("PK_reset_cycle", x => x.id);
                 });
+
+            // Seed the single row (PK=1, state='idle') so the conditional UPDATE in
+            // TryClaimIdleAsync always targets an existing row rather than an INSERT race.
+            migrationBuilder.InsertData(
+                table: "reset_cycle",
+                columns: ["id", "state"],
+                values: new object[] { (short)1, "idle" });
         }
 
         /// <inheritdoc />
