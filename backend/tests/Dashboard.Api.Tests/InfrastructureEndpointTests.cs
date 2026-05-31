@@ -77,13 +77,26 @@ public sealed class InfrastructureEndpointTests : IAsyncLifetime
     [Fact]
     public async Task GetReadyz_WhenListenerConnected_StatusIsReady()
     {
-        // Give the broadcaster enough time to establish LISTEN on the Testcontainers Postgres.
-        await Task.Delay(2000);
+        // Give all three broadcasters enough time to establish LISTEN on the Testcontainers Postgres.
+        await Task.Delay(3000);
 
         var res = await _client.GetAsync("/readyz");
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal("ready", body.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task GetReadyz_IncludesListenAcksCheck()
+    {
+        await Task.Delay(3000);
+
+        var res = await _client.GetAsync("/readyz");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var checks = body.GetProperty("checks");
+
+        Assert.True(checks.TryGetProperty("listen_acks", out _),
+            "readyz checks must include 'listen_acks' for the component_acks channel (D10).");
     }
 
     // ── GET /openapi/v1.json ──────────────────────────────────────────────────

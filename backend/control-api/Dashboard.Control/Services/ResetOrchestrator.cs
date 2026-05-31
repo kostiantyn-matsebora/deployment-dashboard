@@ -6,9 +6,9 @@ using Dashboard.Control.StateMachine;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace Dashboard.Control.Services;
@@ -16,10 +16,11 @@ namespace Dashboard.Control.Services;
 /// <summary>
 /// Drives the reset choreography state machine from <c>draining</c> through <c>resetting</c>
 /// back to <c>idle</c>. Runs on a dedicated background thread started by
-/// <see cref="ResetService.StartChoreographyAsync"/> after the endpoint returns <c>202</c>.
+/// <see cref="ResetService.TryInitiateAsync"/> after the endpoint returns <c>202</c>.
 ///
-/// Advisory lock (fixed key <c>7654321</c>) ensures only one instance drives the cycle
-/// at a time across horizontally-scaled replicas (D12, NFR-05).
+/// Advisory lock (fixed key <c>7654321</c>) is held on a <b>dedicated, always-open</b>
+/// Npgsql connection for the duration of the cycle — session-level lock semantics require
+/// the Postgres session to stay alive (D12, NFR-05).
 /// </summary>
 internal sealed class ResetOrchestrator(
     IServiceProvider services,
@@ -34,15 +35,24 @@ internal sealed class ResetOrchestrator(
         ResetOptions options,
         CancellationToken appStopping)
     {
-        // Try to acquire the non-blocking advisory lock. If another instance already holds it,
-        // this instance yields — the holder is driving the cycle.
-        await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        var connectionString = services.GetService<IConfiguration>()
+            ?.GetConnectionString("Postgres");
+
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            logger.LogWarning("Reset orchestrator: Postgres connection string not available; skipping.");
+            return;
+        }
+
+        // Hold a dedicated connection open for the entire cycle — session-level advisory lock
+        // requires the Postgres session to remain alive.
+        await using var lockConn = new NpgsqlConnection(connectionString);
+        await lockConn.OpenAsync(appStopping);
 
         bool lockAcquired;
         try
         {
-            lockAcquired = await TryAcquireAdvisoryLockAsync(db, appStopping);
+            lockAcquired = await TryAcquireAdvisoryLockAsync(lockConn, appStopping);
         }
         catch (Exception ex)
         {
@@ -60,27 +70,28 @@ internal sealed class ResetOrchestrator(
 
         try
         {
-            await RunCycleAsync(db, scope.ServiceProvider, resetId, options, appStopping);
+            await RunCycleAsync(resetId, options, appStopping);
         }
         catch (Exception ex) when (!appStopping.IsCancellationRequested)
         {
             logger.LogError(ex, "Reset orchestrator: unhandled error; forcing abort for reset {ResetId}.", resetId);
-            await TryAbortAsync(scope.ServiceProvider, appStopping);
+            await TryAbortAsync(appStopping);
         }
         finally
         {
-            await ReleaseAdvisoryLockAsync(db, appStopping);
+            await ReleaseAdvisoryLockAsync(lockConn, appStopping);
             logger.LogInformation("Reset orchestrator: advisory lock released for reset {ResetId}.", resetId);
         }
     }
 
     private async Task RunCycleAsync(
-        DashboardDbContext db,
-        IServiceProvider sp,
         Guid resetId,
         ResetOptions options,
         CancellationToken appStopping)
     {
+        await using var scope = services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var db = sp.GetRequiredService<DashboardDbContext>();
         var controlStream = sp.GetRequiredService<IControlStreamRepository>();
         var notifier = sp.GetRequiredService<IControlEventNotifier>();
 
@@ -100,18 +111,10 @@ internal sealed class ResetOrchestrator(
             return;
         }
 
-        var ackTimeout = cycle.DeadlineAt ?? DateTimeOffset.UtcNow.AddSeconds(options.AckTimeoutSeconds);
-        var gateMaxDeadline = cycle.StartedAt?.AddSeconds(options.GateMaxTtlSeconds) ?? ackTimeout;
+        var ackDeadline = cycle.DeadlineAt ?? DateTimeOffset.UtcNow.AddSeconds(options.AckTimeoutSeconds);
+        var gateMaxDeadline = (cycle.StartedAt ?? DateTimeOffset.UtcNow).AddSeconds(options.GateMaxTtlSeconds);
 
-        await WaitForAcksOrTimeoutAsync(db, cycle, machine, ackTimeout, gateMaxDeadline, options, appStopping);
-
-        // Reload to ensure we are still the driver (another instance might have taken over after a crash).
-        cycle = await LoadCycleAsync(db, appStopping);
-        if (cycle.ResetId != resetId || !machine.IsInState(ResetState.Draining))
-        {
-            logger.LogWarning("Reset orchestrator: state changed unexpectedly after ack wait. Aborting.");
-            return;
-        }
+        await WaitForAcksOrTimeoutAsync(db, cycle, ackDeadline, gateMaxDeadline, options, appStopping);
 
         // Check GateMaxTtl before proceeding to resetting.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
@@ -130,8 +133,6 @@ internal sealed class ResetOrchestrator(
 
         logger.LogInformation("Reset orchestrator: entered resetting phase for {ResetId}.", resetId);
 
-        // ── Phase: resetting — clear data ─────────────────────────────────────
-
         // Check GateMaxTtl before clearing.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
         {
@@ -139,6 +140,7 @@ internal sealed class ResetOrchestrator(
             return;
         }
 
+        // ── Phase: resetting — clear data ─────────────────────────────────────
         await ClearDataTablesAsync(db, appStopping);
         logger.LogInformation("Reset orchestrator: data cleared for reset {ResetId}.", resetId);
 
@@ -157,7 +159,6 @@ internal sealed class ResetOrchestrator(
     private async Task WaitForAcksOrTimeoutAsync(
         DashboardDbContext db,
         ResetCycle cycle,
-        ResetStateMachine machine,
         DateTimeOffset ackDeadline,
         DateTimeOffset gateMaxDeadline,
         ResetOptions options,
@@ -166,15 +167,17 @@ internal sealed class ResetOrchestrator(
         var expectedComponents = cycle.ExpectedComponents ?? options.ExpectedComponents;
         var acksReceived = new HashSet<string>(cycle.AcksReceived ?? [], StringComparer.Ordinal);
 
-        if (acksReceived.Count >= expectedComponents.Length)
+        if (acksReceived.IsSupersetOf(expectedComponents))
             return; // Already have all acks.
 
-        using var ackTimeoutCts = new CancellationTokenSource(
-            TimeSpan.FromMilliseconds(Math.Max(0, (ackDeadline - DateTimeOffset.UtcNow).TotalMilliseconds)));
-        using var gateMaxCts = new CancellationTokenSource(
-            TimeSpan.FromMilliseconds(Math.Max(0, (gateMaxDeadline - DateTimeOffset.UtcNow).TotalMilliseconds)));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            appStopping, ackTimeoutCts.Token, gateMaxCts.Token);
+        var ackWait = TimeSpan.FromMilliseconds(
+            Math.Max(0, (ackDeadline - DateTimeOffset.UtcNow).TotalMilliseconds));
+        var gateWait = TimeSpan.FromMilliseconds(
+            Math.Max(0, (gateMaxDeadline - DateTimeOffset.UtcNow).TotalMilliseconds));
+        var waitCap = ackWait < gateWait ? ackWait : gateWait;
+
+        using var timeoutCts = new CancellationTokenSource(waitCap);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(appStopping, timeoutCts.Token);
 
         try
         {
@@ -203,7 +206,7 @@ internal sealed class ResetOrchestrator(
         {
             // Ack timeout or GateMaxTtl elapsed — proceed (D13: components are optional).
             logger.LogInformation(
-                "Reset orchestrator: ack timeout/gate-max elapsed for reset {ResetId}; proceeding with {Count}/{Total} acks.",
+                "Reset orchestrator: ack timeout elapsed for reset {ResetId}; proceeding with {Count}/{Total} acks.",
                 cycle.ResetId, acksReceived.Count, expectedComponents.Length);
         }
     }
@@ -212,12 +215,13 @@ internal sealed class ResetOrchestrator(
     {
         logger.LogWarning("Reset orchestrator: GateMaxTtl exceeded; aborting reset {ResetId}.", cycle.ResetId);
         var machine = new ResetStateMachine(cycle);
-        machine.Fire(ResetTrigger.Abort);
+        if (!machine.IsInState(ResetState.Idle))
+            machine.Fire(ResetTrigger.Abort);
         ClearCycleFields(cycle);
         await SaveCycleAsync(db, cycle, ct);
     }
 
-    private async Task TryAbortAsync(IServiceProvider sp, CancellationToken ct)
+    private async Task TryAbortAsync(CancellationToken ct)
     {
         try
         {
@@ -241,33 +245,40 @@ internal sealed class ResetOrchestrator(
         await db.FetcherStates.ExecuteDeleteAsync(ct);
     }
 
-    // ── Advisory lock helpers ─────────────────────────────────────────────────
+    // ── Advisory lock helpers (dedicated open connection) ─────────────────────
 
-    private static async Task<bool> TryAcquireAdvisoryLockAsync(DashboardDbContext db, CancellationToken ct)
+    private static async Task<bool> TryAcquireAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)
     {
-        // pg_try_advisory_lock is non-blocking; returns false if the lock is held by another session.
-        var result = await db.Database
-            .SqlQueryRaw<bool>($"SELECT pg_try_advisory_lock({AdvisoryLockKey})")
-            .FirstAsync(ct);
-        return result;
+        await using var cmd = new NpgsqlCommand(
+            $"SELECT pg_try_advisory_lock({AdvisoryLockKey})", conn);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is true;
     }
 
-    private static async Task ReleaseAdvisoryLockAsync(DashboardDbContext db, CancellationToken ct)
+    private static async Task ReleaseAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)
     {
-        await db.Database.ExecuteSqlRawAsync(
-            $"SELECT pg_advisory_unlock({AdvisoryLockKey})", ct);
+        try
+        {
+            await using var cmd = new NpgsqlCommand(
+                $"SELECT pg_advisory_unlock({AdvisoryLockKey})", conn);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch { /* Best-effort: connection may already be closed. */ }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static async Task<ResetCycle> LoadCycleAsync(DashboardDbContext db, CancellationToken ct)
     {
+        // Clear tracker before loading to ensure fresh read from DB.
+        db.ChangeTracker.Clear();
         return await db.ResetCycles.FindAsync([(short)1], ct)
                ?? new ResetCycle { Id = 1, State = ResetState.Idle };
     }
 
     private static async Task SaveCycleAsync(DashboardDbContext db, ResetCycle cycle, CancellationToken ct)
     {
+        db.ChangeTracker.Clear();
         var existing = await db.ResetCycles.FindAsync([(short)1], ct);
         if (existing is null)
         {
@@ -284,7 +295,7 @@ internal sealed class ResetOrchestrator(
         }
 
         await db.SaveChangesAsync(ct);
-        db.ChangeTracker.Clear(); // Detach so subsequent FindAsync loads fresh from DB.
+        db.ChangeTracker.Clear();
     }
 
     private static ControlStreamEvent BuildControlEvent(string type, Guid resetId) =>
@@ -299,6 +310,7 @@ internal sealed class ResetOrchestrator(
 
     private static void ClearCycleFields(ResetCycle cycle)
     {
+        cycle.State = ResetState.Idle;
         cycle.ResetId = null;
         cycle.ExpectedComponents = null;
         cycle.AcksReceived = null;
