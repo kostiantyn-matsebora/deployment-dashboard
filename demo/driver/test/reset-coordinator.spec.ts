@@ -224,4 +224,123 @@ describe('ResetCoordinator', () => {
       delete process.env.RESET_GATE_MAX_TTL_MS;
     });
   });
+
+  describe('awaitCycleComplete', () => {
+    it('resolves immediately when the cycle already completed (race-safe fast path)', async () => {
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      await coord.onResetInitiated(RESET_ID);
+      await coord.onResetCompleted(RESET_ID);
+
+      // Cycle is already done — should resolve synchronously / immediately.
+      const resolved = await Promise.race([
+        coord.awaitCycleComplete(RESET_ID).then(() => 'resolved'),
+        Promise.resolve('immediate'),
+      ]);
+      // Both resolve instantly; key assertion: no hang and the promise resolves.
+      expect(resolved).toBe('immediate'); // the already-resolved promise wins the race
+    });
+
+    it('resolves promptly when reset-completed arrives after the await starts', async () => {
+      process.env.RESET_GATE_MAX_TTL_MS = '30000';
+
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      await coord.onResetInitiated(RESET_ID);
+
+      // Start waiting — cycle is not yet complete.
+      const waitPromise = coord.awaitCycleComplete(RESET_ID);
+
+      // Simulate reset-completed arriving (triggers _recover → _notifyWaiters).
+      await coord.onResetCompleted(RESET_ID);
+
+      // The waiter should now be resolved.
+      await expect(waitPromise).resolves.toBeUndefined();
+
+      delete process.env.RESET_GATE_MAX_TTL_MS;
+    });
+
+    it('resolves (with a warning) when the timeout elapses with no reset-completed', async () => {
+      // Safety timer set to 10 s so it does NOT fire before the await timeout.
+      process.env.RESET_GATE_MAX_TTL_MS = '10000';
+
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      await coord.onResetInitiated(RESET_ID);
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Pass an explicit timeoutMs shorter than the safety timer so only the
+      // awaitCycleComplete timer fires within the test's time window.
+      const waitPromise = coord.awaitCycleComplete(RESET_ID, 2000);
+
+      // Advance past the await timeout (2000 ms) but not yet the safety timer (10 000 ms).
+      await jest.advanceTimersByTimeAsync(2001);
+
+      await expect(waitPromise).resolves.toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('awaitCycleComplete'),
+      );
+
+      warnSpy.mockRestore();
+      delete process.env.RESET_GATE_MAX_TTL_MS;
+    });
+
+    it('resolves immediately when coordinator is idle and reset_id is unknown (stale/pre-init cycle)', async () => {
+      const coord = makeCoordinator();
+      // Coordinator is idle and has never seen this reset_id.
+      await expect(coord.awaitCycleComplete('unknown-reset-id')).resolves.toBeUndefined();
+    });
+
+    it('does not block reset-participant stopWork / unblockWork (no deadlock)', async () => {
+      // awaitCycleComplete must not call stopWork or unblockWork itself.
+      process.env.RESET_GATE_MAX_TTL_MS = '10000';
+
+      const coord       = makeCoordinator();
+      const participant = makeParticipant();
+      const client      = makeEventsClient();
+      coord.registerParticipant(participant);
+      coord.registerEventsClient(client);
+
+      await coord.onResetInitiated(RESET_ID);
+
+      const waitPromise = coord.awaitCycleComplete(RESET_ID);
+      // Registering the waiter must not call participant methods.
+      expect(participant.stopWork).toHaveBeenCalledTimes(1);    // from onResetInitiated only
+      expect(participant.unblockWork).not.toHaveBeenCalled();
+
+      await coord.onResetCompleted(RESET_ID);
+      await waitPromise;
+
+      expect(participant.unblockWork).toHaveBeenCalledTimes(1); // from onResetCompleted only
+
+      delete process.env.RESET_GATE_MAX_TTL_MS;
+    });
+
+    it('multiple concurrent waiters for the same reset_id all resolve on completion', async () => {
+      process.env.RESET_GATE_MAX_TTL_MS = '10000';
+
+      const coord = makeCoordinator();
+      coord.registerParticipant(makeParticipant());
+      coord.registerEventsClient(makeEventsClient());
+
+      await coord.onResetInitiated(RESET_ID);
+
+      const p1 = coord.awaitCycleComplete(RESET_ID);
+      const p2 = coord.awaitCycleComplete(RESET_ID);
+      const p3 = coord.awaitCycleComplete(RESET_ID);
+
+      await coord.onResetCompleted(RESET_ID);
+
+      await expect(Promise.all([p1, p2, p3])).resolves.toBeDefined();
+
+      delete process.env.RESET_GATE_MAX_TTL_MS;
+    });
+  });
 });

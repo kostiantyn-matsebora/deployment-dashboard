@@ -130,6 +130,14 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
       const result = await ctrl.resetApi();
       if (!result.ok) {
         console.warn(`[demo-driver] pre-ingest API reset returned HTTP ${result.http_status}`);
+      } else if (result.reset_id) {
+        // Wait for the reset cycle to complete before ingesting.  The coordinator
+        // will be blocked by its own reset-initiated handler during this window;
+        // awaitCycleComplete only reads state and registers a waiter — it does
+        // not call stopWork/unblockWork, so there is no deadlock risk.
+        await this.resetCoordinator.awaitCycleComplete(result.reset_id);
+      } else {
+        console.warn('[demo-driver] API reset accepted but returned no reset_id — proceeding without waiting');
       }
     }
 
