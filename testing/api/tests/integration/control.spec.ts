@@ -1,12 +1,15 @@
 /**
  * Control surface (openapi.yaml §control):
- *   POST /api/control/reset     — X-Control-API-Key, destructive
+ *   POST /api/control/reset     — X-Control-API-Key, destructive (async 202)
  *   GET  /api/control/stream    — X-Control-API-Key, SSE orchestration stream
  *   POST /api/control/events    — X-Api-Key + X-Component-Id
  *   GET  /api/control/events    — unauthenticated listing
+ *
+ * Full reset-choreography coverage lives in reset-choreography.spec.ts.
+ * This file covers auth gates, component-event rules, and GET /api/control/events.
  */
 import {
-  get, post, getJson, ingestEvent, resetAll, readSseUntil, sleep, API_KEY, CONTROL_KEY,
+  get, post, getJson, ingestEvent, resetAll, readControlSseUntil, sleep, API_KEY, CONTROL_KEY,
 } from './helpers';
 
 describe('POST /api/control/reset', () => {
@@ -19,12 +22,16 @@ describe('POST /api/control/reset', () => {
     expect(res.status).toBe(401);
   });
 
-  it('204 with the control key and truncates all deployment data', async () => {
+  // Full choreography coverage (202 body shape, SSE sequence, ack-driven
+  // completion, timeout backstop, 409 reentry, data cleared) lives in
+  // reset-choreography.spec.ts.  Here we only verify the basic happy-path
+  // smoke via resetAll() which drives the full async cycle internally.
+  it('202 with the control key and clears all deployment data after completion', async () => {
     await ingestEvent();
     expect((await getJson('/api/services')).items.length).toBeGreaterThanOrEqual(1);
 
-    const res = await post('/api/control/reset', undefined, { 'X-Control-API-Key': CONTROL_KEY });
-    expect(res.status).toBe(204);
+    // resetAll() posts reset (202), acks, waits for reset-completed.
+    await resetAll();
 
     expect((await getJson('/api/services')).items.length).toBe(0);
     expect((await getJson('/api/matrix')).rows.length).toBe(0);
@@ -43,47 +50,41 @@ describe('GET /api/control/stream', () => {
     expect(res.status).toBe(401);
   });
 
-  it('pushes a `reset` frame when the control reset is invoked', async () => {
-    // Open the stream, then reset once the subscription + LISTEN are attached.
-    const framePromise = readSseUntil(
-      '/api/control/stream',
-      f => f.event === 'reset',
-      { headers: { 'X-Control-API-Key': CONTROL_KEY }, timeoutMs: 20_000 },
+  it('pushes a reset-completed frame when a reset cycle finishes', async () => {
+    // Open the stream BEFORE triggering resetAll so we do not miss early frames.
+    const framePromise = readControlSseUntil(
+      f => f.event === 'reset-completed',
+      { timeoutMs: 20_000 },
     );
-    await sleep(1_000);
+    await sleep(500);
     await resetAll();
 
     const frame = await framePromise;
     expect(frame.id).toBeTruthy();
     const data = JSON.parse(frame.data as string);
-    expect(data.type).toBe('reset');
+    expect(data.type).toBe('reset-completed');
     expect(data.component).toBe('*');
-    expect(data.id).toBe(frame.id);
+    expect(data.reset_id).toBeTruthy();
   });
 
-  it('replays a persisted reset event after Last-Event-ID', async () => {
-    // resetAll persists one control_stream_events row; replaying from the zero
-    // UUID returns every event with a strictly greater id — at least this reset.
+  it('replays persisted control-stream events after Last-Event-ID', async () => {
+    // resetAll persists reset-initiated / reset-started / reset-completed rows.
+    // Replaying from the zero UUID returns every row — at least reset-completed.
     await resetAll();
-    const frame = await readSseUntil(
-      '/api/control/stream',
-      f => f.event === 'reset',
-      {
-        headers: { 'X-Control-API-Key': CONTROL_KEY, 'Last-Event-ID': '00000000-0000-0000-0000-000000000000' },
-        timeoutMs: 15_000,
-      },
+    const frame = await readControlSseUntil(
+      f => f.event === 'reset-completed',
+      { lastEventId: '00000000-0000-0000-0000-000000000000', timeoutMs: 15_000 },
     );
-    expect(JSON.parse(frame.data as string).type).toBe('reset');
+    expect(JSON.parse(frame.data as string).type).toBe('reset-completed');
   });
 
   it('delivers wildcard ("*") events regardless of the ?component filter', async () => {
-    // The reset event targets "*", so a component-scoped subscriber still receives it.
-    const framePromise = readSseUntil(
-      '/api/control/stream?component=demo-driver',
-      f => f.event === 'reset',
-      { headers: { 'X-Control-API-Key': CONTROL_KEY }, timeoutMs: 20_000 },
+    // Reset events target "*"; a component-scoped subscriber still receives them.
+    const framePromise = readControlSseUntil(
+      f => f.event === 'reset-completed',
+      { component: 'demo-driver', timeoutMs: 20_000 },
     );
-    await sleep(1_000);
+    await sleep(500);
     await resetAll();
 
     const frame = await framePromise;
@@ -164,13 +165,16 @@ describe('GET /api/control/events', () => {
     expect(body.items[0].event_type).toBe('error');
   });
 
-  it('reset purges component events too', async () => {
+  it('reset does NOT purge component events (D14: only deployment_events + fetcher_state are cleared)', async () => {
+    // API_SPECIFICATION.md D14: reset clears only deployment_events + fetcher_state.
+    // component_events are left to the 2-hour retention job.
     const cid = `it-rst-${Date.now()}`;
     await post('/api/control/events',
       { event_type: 'status', state: 'running', occurred_at: new Date().toISOString() },
       { 'X-Api-Key': API_KEY, 'X-Component-Id': cid });
     await resetAll();
     const body = await getJson(`/api/control/events?component_id=${cid}`);
-    expect(body.items.length).toBe(0);
+    // Component events survive a reset — they are purged only by the 2h retention job.
+    expect(body.items.length).toBeGreaterThanOrEqual(1);
   });
 });
