@@ -528,8 +528,16 @@ function Invoke-DocsKeeperMaintenance {
 
     if (-not $SessionReader) {
         $capturedRoot = $RepoRoot
-        $capturedSid = $SessionId
-        $SessionReader = { Read-DocsKeeperSession -RepoRoot $capturedRoot -SessionId $capturedSid }.GetNewClosure()
+        $capturedGcr = $GitCommandRunner
+        $capturedMerger = ${function:Read-MergedDocsKeeperSessions}
+        $SessionReader = {
+            $head = ''
+            try {
+                $headRaw = & $capturedGcr @('rev-parse', 'HEAD')
+                if ($headRaw) { $head = ($headRaw -join '').Trim() }
+            } catch { $null = $_ }
+            & $capturedMerger -RepoRoot $capturedRoot -CurrentHead $head
+        }.GetNewClosure()
     }
 
     $mode = Resolve-EnforcementMode -EnvValue $EnforcementMode
@@ -623,6 +631,65 @@ function Read-DocsKeeperSession {
         }
     }
     catch { return $null }
+}
+
+function Read-MergedDocsKeeperSessions {
+    <#
+        Returns @{ Head; Dirty; TrackedMd } where TrackedMd is the union of
+        revised:true entries across ALL session files whose Head matches
+        $CurrentHead. Returns $null when no matching sessions exist.
+
+        Accepts injectable scriptblocks for Pester coverage without disk I/O.
+        $SessionFileLister — returns an array of absolute file paths.
+        $SessionFileReader — takes a path, returns raw JSON string.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$RepoRoot,
+        [string]$CurrentHead,
+        [scriptblock]$SessionFileLister,
+        [scriptblock]$SessionFileReader
+    )
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+
+    if (-not $SessionFileLister) {
+        $capturedDir = $dir
+        $SessionFileLister = {
+            if (-not (Test-Path -LiteralPath $capturedDir)) { return @() }
+            @(Get-ChildItem -LiteralPath $capturedDir -Filter '.docs-keeper-session*.json' -ErrorAction SilentlyContinue |
+              ForEach-Object { $_.FullName })
+        }.GetNewClosure()
+    }
+
+    if (-not $SessionFileReader) {
+        $SessionFileReader = {
+            param([string]$Path)
+            if (Test-Path -LiteralPath $Path) { return (Get-Content -LiteralPath $Path -Raw) }
+            return ''
+        }
+    }
+
+    $merged = @{}
+    $found = $false
+    foreach ($filePath in (& $SessionFileLister)) {
+        try {
+            $raw = & $SessionFileReader $filePath
+            if ([string]::IsNullOrWhiteSpace($raw)) { continue }
+            $o = $raw | ConvertFrom-Json
+            if (-not $CurrentHead -or -not $o.Head -or $o.Head -ne $CurrentHead) { continue }
+            $found = $true
+            if ($o.TrackedMd) {
+                foreach ($prop in $o.TrackedMd.PSObject.Properties) {
+                    if ([bool]$prop.Value.revised) {
+                        $merged[$prop.Name] = @{ revised = $true }
+                    }
+                }
+            }
+        }
+        catch { continue }
+    }
+    if (-not $found) { return $null }
+    return @{ Head = $CurrentHead; Dirty = @(); TrackedMd = $merged }
 }
 
 # ---------- Entry block ----------

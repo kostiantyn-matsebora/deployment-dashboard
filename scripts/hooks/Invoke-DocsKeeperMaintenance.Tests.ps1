@@ -593,9 +593,92 @@ Describe 'Invoke-DocsKeeperMaintenance integration' {
         $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner -DirLister $script:lister -FileReader $reader -SessionReader $script:NullSessionReader
         $result.Message | Should -Match '/docs-index docs/design/'
     }
+    It 'default SessionReader merges revised: true from a cross-session file' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("dk-" + [System.IO.Path]::GetRandomFileName())
+        New-Item -ItemType Directory -Path (Join-Path $tmp '.claude') -Force | Out-Null
+        try {
+            $head = 'abc123deadbeef000'
+            $sessionFile = Join-Path $tmp '.claude' '.docs-keeper-session.other-session.json'
+            @{ Head = $head; Dirty = @(); TrackedMd = @{ 'docs/SAD.md' = @{ revised = $true } } } |
+                ConvertTo-Json -Compress | Set-Content -LiteralPath $sessionFile -Encoding utf8
+            $json = '{"tool_input":{"command":"git commit -m foo"},"session_id":"main-session"}'
+            $runner = {
+                param([string[]]$Argv)
+                if ($Argv[0] -eq 'rev-parse') { return 'abc123deadbeef000' }
+                return "M`tdocs/SAD.md"
+            }
+            $result = Invoke-DocsKeeperMaintenance -HookInputJson $json -RepoRoot $tmp -GitCommandRunner $runner -DirLister $script:lister -FileReader $script:reader
+            $result.ExitCode | Should -Be 0
+            $result.Reason | Should -Be 'no-docs-drift'
+        } finally { Remove-Item -LiteralPath $tmp -Recurse -Force }
+    }
 }
 
 # ---------- Mode B (docs-revise) + registry role drift ----------
+
+Describe 'Read-MergedDocsKeeperSessions' {
+    It 'returns null when no session files listed' {
+        $result = Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @() } `
+            -SessionFileReader { param($p) '' }
+        $result | Should -BeNullOrEmpty
+    }
+    It 'returns null when no session matches CurrentHead' {
+        $result = Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @('/fake/s.json') } `
+            -SessionFileReader { param($p) '{"Head":"different","Dirty":[],"TrackedMd":{"a.md":{"revised":true}}}' }
+        $result | Should -BeNullOrEmpty
+    }
+    It 'returns merged TrackedMd for a single matching session with revised: true' {
+        $result = Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @('/fake/s.json') } `
+            -SessionFileReader { param($p) '{"Head":"abc123","Dirty":[],"TrackedMd":{"docs/a.md":{"revised":true}}}' }
+        $result | Should -Not -BeNullOrEmpty
+        $result.TrackedMd['docs/a.md'].revised | Should -BeTrue
+    }
+    It 'excludes entry where revised: false' {
+        $result = Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @('/fake/s.json') } `
+            -SessionFileReader { param($p) '{"Head":"abc123","Dirty":[],"TrackedMd":{"docs/a.md":{"revised":false}}}' }
+        $result | Should -Not -BeNullOrEmpty
+        $result.TrackedMd.ContainsKey('docs/a.md') | Should -BeFalse
+    }
+    It 'merges TrackedMd from two sessions with the same Head' {
+        $files = @{
+            '/fake/s1.json' = '{"Head":"abc123","Dirty":[],"TrackedMd":{"docs/a.md":{"revised":true}}}'
+            '/fake/s2.json' = '{"Head":"abc123","Dirty":[],"TrackedMd":{"docs/b.md":{"revised":true}}}'
+        }
+        $result = Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @('/fake/s1.json', '/fake/s2.json') } `
+            -SessionFileReader { param($p) $files[$p] }.GetNewClosure()
+        $result.TrackedMd['docs/a.md'].revised | Should -BeTrue
+        $result.TrackedMd['docs/b.md'].revised | Should -BeTrue
+    }
+    It 'ignores session whose Head does not match CurrentHead' {
+        $files = @{
+            '/fake/s1.json' = '{"Head":"abc123","Dirty":[],"TrackedMd":{"docs/a.md":{"revised":true}}}'
+            '/fake/s2.json' = '{"Head":"other","Dirty":[],"TrackedMd":{"docs/b.md":{"revised":true}}}'
+        }
+        $result = Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @('/fake/s1.json', '/fake/s2.json') } `
+            -SessionFileReader { param($p) $files[$p] }.GetNewClosure()
+        $result.TrackedMd.ContainsKey('docs/a.md') | Should -BeTrue
+        $result.TrackedMd.ContainsKey('docs/b.md') | Should -BeFalse
+    }
+    It 'skips malformed JSON without throwing' {
+        $files = @{
+            '/fake/bad.json' = 'not-json'
+            '/fake/good.json' = '{"Head":"abc123","Dirty":[],"TrackedMd":{"docs/a.md":{"revised":true}}}'
+        }
+        { Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @('/fake/bad.json', '/fake/good.json') } `
+            -SessionFileReader { param($p) $files[$p] }.GetNewClosure() } | Should -Not -Throw
+        $result = Read-MergedDocsKeeperSessions -RepoRoot '.' -CurrentHead 'abc123' `
+            -SessionFileLister { @('/fake/bad.json', '/fake/good.json') } `
+            -SessionFileReader { param($p) $files[$p] }.GetNewClosure()
+        $result.TrackedMd['docs/a.md'].revised | Should -BeTrue
+    }
+}
 
 Describe 'Get-ContentSha' {
     It 'is deterministic for identical content' {
