@@ -431,6 +431,8 @@ Source: `demo/data/events.json#events` (47 events).
 
 **GitHub source card group.** The GitHub Seed, GitHub Live, and GitHub Store cards are symmetric with the Ingest + Live Emission group. All panel calls go to `/demo/github/*` (the proxy — §5). The GitHub Seed and GitHub Live cards are interactive controls — dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; §5.1). The GitHub Store card polls `GET /demo/github/status`, which is a data surface and stays live. The panel polls `GET /demo/github/status` alongside the existing `GET /demo/status` poll.
 
+- **Emulator-liveness gating.** The GitHub source cards are **hidden unless the github-emulator answers the liveness probe** — `GET /demo/github/status` returning `2xx`. When the emulator is absent (e.g. non-demo deployments) the proxy returns a non-`2xx` (`502`) and the cards stay hidden; the 5 s poll re-evaluates, so the cards appear/disappear as the emulator comes and goes.
+
 **Unified feed row format.** All three feed cards (Post Feed, Control API Events, Component Events) use the same column order; columns align across all three feeds:
 
 | Column | Content |

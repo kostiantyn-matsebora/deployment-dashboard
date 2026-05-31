@@ -292,7 +292,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     </div>
 
     <!-- ── GitHub Seed card ───────────────────────────────────────────────── -->
-    <div class="card" id="gh-seed-card">
+    <!-- GitHub cards are hidden until the emulator answers the liveness probe (GET /demo/github/status). -->
+    <div class="card" id="gh-seed-card" style="display:none">
       <div class="card-title">GitHub Seed</div>
       <div class="controls">
         <span class="lbl">Data set</span>
@@ -318,7 +319,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     </div>
 
     <!-- ── GitHub Live card ───────────────────────────────────────────────── -->
-    <div class="card" id="gh-live-card">
+    <div class="card" id="gh-live-card" style="display:none">
       <div class="card-title">GitHub Live</div>
       <div class="emit-row">
         <div class="emit-info">
@@ -330,7 +331,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     </div>
 
     <!-- ── GitHub Store card ──────────────────────────────────────────────── -->
-    <div class="card" id="gh-store-card">
+    <div class="card" id="gh-store-card" style="display:none">
       <div class="card-title">GitHub Store</div>
       <div class="gh-counters">
         <div class="gh-counter">
@@ -486,11 +487,30 @@ export const PANEL_HTML = `<!DOCTYPE html>
       } catch {}
     }
 
+    // GitHub Source cards are shown only while the github-emulator answers the
+    // liveness probe (GET /demo/github/status → 2xx). When the emulator is absent
+    // the driver proxy returns a non-2xx (502) and the cards stay hidden; the poll
+    // re-checks every 5 s so they appear/disappear as the emulator comes and goes.
+    let githubAvailable = false;
+    function setGithubAvailable(avail) {
+      if (avail === githubAvailable) return;
+      githubAvailable = avail;
+      const disp = avail ? '' : 'none';
+      ['gh-seed-card', 'gh-live-card', 'gh-store-card'].forEach(id => {
+        const el = $(id);
+        if (el) el.style.display = disp;
+      });
+    }
+
     async function refreshGithubStatus() {
       try {
-        const data = await apiFetch('/demo/github/status');
-        applyGithubStatus(data);
-      } catch {}
+        const res = await fetch('/demo/github/status', { headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) { setGithubAvailable(false); return; }
+        setGithubAvailable(true);
+        applyGithubStatus(await res.json());
+      } catch {
+        setGithubAvailable(false);
+      }
     }
 
     function applyStatus(d) {
