@@ -122,7 +122,7 @@ For `422` payload-validation failures, the body additionally carries an `errors[
 | `413 Payload Too Large` | Fetcher cursor or component event payload over 8 KiB. |
 | `422 Unprocessable Entity` | Schema-level validation failed; or missing/invalid `X-Component-Id` on `POST /api/control/events`. |
 | `429 Too Many Requests` | Future rate-limit slot. `Retry-After` always present. |
-| `503 Service Unavailable` | DB unreachable; either LISTEN channel not attached. |
+| `503 Service Unavailable` | DB unreachable; any LISTEN channel not attached (`deployment_events`, `control_events`, `component_acks`). |
 
 **No `409 Conflict` on ingest.** The store is append-only — duplicates are not a server-side concern.
 
@@ -183,7 +183,7 @@ The API is the **single source of truth** for system state. Components (fetcher,
 ```
 Component ──GET /api/control/stream──────► API   X-Control-API-Key  subscribe; receive orchestration events
 Component ──POST /api/control/events─────► API   X-Api-Key          report;    post status / operational events
-Operator  ──POST /api/control/reset──────► API   X-Control-API-Key  admin;     triggers reset event on stream
+Operator  ──POST /api/control/reset──────► API   X-Control-API-Key  admin;     starts reset choreography (202) → reset-initiated/started/completed on stream
 Anyone    ──GET  /api/control/events─────► API   (none)             observe;   read component-posted events (2 h)
 ```
 
@@ -196,7 +196,7 @@ Every arrow originates at the caller. The SSE stream is a **response to a compon
 | Auth | `X-Control-API-Key` (header required) |
 | Client type | Backend service components only — NOT browser clients |
 | HTTP client | Components MUST use `fetch()` + `ReadableStream`; browser `EventSource` cannot send custom headers |
-| Event names | `reset` (current); forward-compatible — unknown types are no-ops |
+| Event names | `reset-initiated` \| `reset-started` \| `reset-completed` (reset choreography); forward-compatible — unknown types are no-ops |
 | **`Last-Event-ID` replay** | Supported; backed by `control_stream_events` table (2 h retention) |
 | Heartbeat | `: ping` comment every 15 s |
 | Filter | `?component=<id>` — server delivers only events where `component` equals the id or `"*"` |
@@ -207,21 +207,32 @@ Every arrow originates at the caller. The SSE stream is a **response to a compon
 - Server replays `WHERE id > @last ORDER BY id` from `control_stream_events`, then attaches to live channel.
 - Events older than 2 h are purged; replay is bounded to the retention window.
 
-**Current event type:**
+**Current event types — reset choreography** (see [`reset-choreography.md`](../diagrams/reset-choreography.md)):
 
-| `type` | When emitted | Scope |
-|---|---|---|
-| `reset` | On `POST /api/control/reset` | `component: "*"` (all components) |
+| `type` | When emitted | Scope | Component action |
+|---|---|---|---|
+| `reset-initiated` | `POST /api/control/reset` accepted (`idle → draining`) | `*` | Drain: stop work, block own surfaces, then ack (`reset-ack` / `paused` / `reset_id`). |
+| `reset-started` | All acks in OR `AckTimeoutSeconds` elapsed (`draining → resetting`) | `*` | Reset window open; ingest briefly returns `503`. |
+| `reset-completed` | Data cleared, gates released (`resetting → idle`) | `*` | Recover: clear state, re-ingest/backfill, report `running`. |
 
+`reset-started` / `reset-completed` carry `reset_id` correlating back to the `reset-initiated` event id.
 Components MUST ignore unknown `type` values (forward-compatibility).
 
 **Wire example:**
 ```
 : ping
 
-event: reset
+event: reset-initiated
 id: 01J9F4WZK3W9G2T6X4QH3DKQF6
-data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset-initiated","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+
+event: reset-started
+id: 01J9F4X0M5A1B2C3D4E5F6G7H8
+data: {"id":"01J9F4X0M5A1B2C3D4E5F6G7H8","type":"reset-started","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:10Z"}
+
+event: reset-completed
+id: 01J9F4X1N6B2C3D4E5F6G7H8J9
+data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
 ```
 
 ### Component event reporting (`POST /api/control/events`)
@@ -242,6 +253,7 @@ data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset","component":"*","occurre
 - Pattern: `^[a-z0-9][a-z0-9.-]{0,127}$` — lowercase kebab/dot.
 - Examples: `dashboard-fetcher`, `dashboard-fetcher.github-actions`, `demo-driver`.
 - Dot separates family from variant (e.g. `.github-actions`); no slashes.
+- **Variant form is illustrative only** — `dashboard-fetcher.github-actions` shows the pattern's expressiveness, not a registered component. **Control-plane reset acks MUST use the exact id listed in `ExpectedComponents`** (`dashboard-fetcher`, `demo-driver`); a dotted variant would not be counted by the ack-gate. Variants may still appear on non-reset `status`/`heartbeat` posts.
 
 **Known `event_type` values** (not exhaustive — new types are additive):
 
@@ -250,13 +262,15 @@ data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset","component":"*","occurre
 | `status` | State transition or periodic status report |
 | `heartbeat` | Periodic liveness ping; no state change |
 | `error` | Component encountered an error; `state` will be `error` |
+| `reset-ack` | Drain-complete ack for a `reset-initiated` event; sent with `state: paused` and `payload.reset_id` = the initiating event id |
 
 ### Readiness probe
 
-`GET /readyz` checks all three conditions:
+`GET /readyz` checks all four conditions:
 1. DB reachable.
 2. `deployment_events` LISTEN channel attached.
 3. `control_events` LISTEN channel attached.
+4. `component_acks` LISTEN channel attached (reset ack fan-in — D12).
 
 Any failing check → `503 Service Unavailable`.
 
@@ -280,21 +294,34 @@ fetch("GET /api/control/stream?component=dashboard-fetcher", {
   }
 })
 
-on event "reset":
-  clear local state / cursor
-  fetch("POST /api/control/events", {
+// Reset choreography — three phases (see reset-choreography.md)
+
+on event "reset-initiated":
+  drain: stop poll loop / ingestion, block own API + UI
+  fetch("POST /api/control/events", {           // ack: paused, carry reset_id
     headers: {
       "X-Api-Key":       API_KEY,
-      "X-Component-Id":  "dashboard-fetcher.github-actions",
+      "X-Component-Id":  "dashboard-fetcher",   // MUST match ExpectedComponents — NOT "dashboard-fetcher.github-actions"
       "Content-Type":    "application/json"
     },
     body: JSON.stringify({
-      event_type:  "status",
-      state:       "idle",
-      detail:      "Reset acknowledged; cursor cleared",
+      event_type:  "reset-ack",
+      state:       "paused",
+      detail:      "Drained; poll loop + ingestion stopped",
       occurred_at: new Date().toISOString(),
-      payload:     { trigger: "reset", control_event_id: event.data.id }
+      payload:     { reset_id: event.data.id }   // reset_id = reset-initiated event id
     })
+  })
+
+on event "reset-started":
+  hold — data is being cleared; expect 503 on any ingest attempt
+
+on event "reset-completed":
+  clear local state / cursor → backfill (initial ingestion), resume poll
+  fetch("POST /api/control/events", {            // recovered: running
+    headers: { "X-Api-Key": API_KEY, "X-Component-Id": "dashboard-fetcher", "Content-Type": "application/json" },
+    body: JSON.stringify({ event_type: "status", state: "running", occurred_at: new Date().toISOString(),
+                           payload: { reset_id: event.data.reset_id } })
   })
 
 // Periodic heartbeat (every ≤ 30 s)

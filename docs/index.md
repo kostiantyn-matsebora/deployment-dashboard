@@ -12,6 +12,7 @@ children:
   - /DEMO_DRIVER_SPECIFICATION
   - /api
   - /design
+  - /diagrams
   - /engineering-process
 ---
 

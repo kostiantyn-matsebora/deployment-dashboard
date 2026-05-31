@@ -49,6 +49,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
 | F16 | **Rate-limit budget.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). When the consumed-request count reaches the budget, the adapter waits until `X-RateLimit-Reset`. | Prevents crowding out other consumers of the same PAT; the fetcher is a background process and must not monopolise a shared token. |
+| F17 | **Control-plane participant.** A second long-lived task subscribes to `GET /api/control/stream` and reacts to the reset choreography: drain + ack on `reset-initiated`, drop cursor + backfill + report `running` on `reset-completed`. Still **just a consumer** of the existing control-plane contract — no backend change (F1, SAD §3). | Lets the API orchestrate a system-wide data reset (API_SPECIFICATION §5/§7); the fetcher must pause cleanly and re-seed afterwards rather than fight the data-clearing window. |
 
 ---
 
@@ -60,11 +61,16 @@ backend/
     Abstractions/   ICiCdAdapter, FetchResult
     Adapters/GitHub/  GithubActionsAdapter, GithubClient, mapping, cursor
     Ingest/         IngestClient, FetcherStateClient   (HTTP clients to the API)
+    Control/        ControlStreamSubscriber, ComponentEventClient   (§5.10)
     Orchestration/  PollLoop / per-adapter runner
-  fetcher-host/  Dashboard.Fetcher.Host/   # BackgroundService worker + DI + config + Dockerfile
+  fetcher-host/  Dashboard.Fetcher.Host/   # BackgroundService worker(s) + DI + config + Dockerfile
   tests/
     Dashboard.Fetcher.Tests/               # owned here, excluded from the API test run
 ```
+
+- `Control/ControlStreamSubscriber` — the long-lived control-stream reader (`fetch()`+`ReadableStream` equivalent: `HttpClient` + `HttpCompletionOption.ResponseHeadersRead` streaming the body; **not** `EventSource`). Parses SSE frames, tracks `Last-Event-ID`, honours `: ping` heartbeat, dispatches reset events to the poll-loop runner.
+- `Control/ComponentEventClient` — HTTP client for `POST /api/control/events` (the `reset-ack` and `status` posts). Distinct from `Ingest/IngestClient`; both target the API but carry different headers (`X-Component-Id` vs `X-Progress-Reporter`).
+- The host runs **two concurrent tasks**: the existing per-adapter poll loop (§4) and the `ControlStreamSubscriber`. The subscriber signals the runner to pause/resume; it never fetches or posts deployment events itself.
 
 Reuses **`Dashboard.Shared`** for the `DeploymentEventIngest` DTO — the fetcher emits the exact same wire type the contract defines. Stack = **.NET 10** (SAD §6), packaged as a standard container.
 
@@ -385,12 +391,85 @@ If `used ≥ budget`:
 
 ---
 
+### 5.10 Control-plane participation (F17)
+
+The fetcher joins the reset choreography as the **`dashboard-fetcher`** participant. Visual reference: [`reset-choreography.md`](diagrams/reset-choreography.md). Contract source: [`api-guidelines.md`](api/api-guidelines.md) §11 + [`API_SPECIFICATION.md`](API_SPECIFICATION.md) §5/§7. The fetcher only **consumes** this contract — no backend change (F1).
+
+#### 5.10.1 Component identity
+
+- **Component id = `dashboard-fetcher`** (fixed; matches the API's default `ExpectedComponents`, so the orchestrator's ack fan-in counts this component).
+- Sent as `X-Component-Id: dashboard-fetcher` on every `POST /api/control/events`.
+- Configurable via `COMPONENT_ID` (default `dashboard-fetcher`); the default MUST NOT be changed without also changing the API's `ExpectedComponents`, or the orchestrator will time out waiting for an ack that never matches.
+
+#### 5.10.2 Subscriber
+
+A second long-lived task (alongside the poll loop) holds an open control stream:
+
+| Property | Value |
+|---|---|
+| Request | `GET /api/control/stream?component=dashboard-fetcher` |
+| Auth | `X-Control-API-Key: <CONTROL_API_KEY>` (distinct from `API_KEY`; new config key) |
+| HTTP client | `HttpClient` streaming the response body (`ResponseHeadersRead`); **not** `EventSource` — custom headers required |
+| Heartbeat | server emits `: ping` every 15 s — treat as liveness; reset the read-idle timer, no other action |
+| Reconnect | on drop, reconnect sending `Last-Event-ID: <last-seen-event-id>`; server replays `id > last` within the 2 h window |
+| Unknown `event:` | **no-op** (forward-compat; new orchestration types may appear) |
+| Filter scope | server delivers only `component == dashboard-fetcher` OR `component == "*"`; all three reset events are `*` |
+
+#### 5.10.3 Event handling
+
+| Event | Fetcher action |
+|---|---|
+| `reset-initiated` | 1. Pause the poll loop + any in-flight ingestion (stop the `FetchAsync` → `POST /api/deployments` → cursor-`PUT` cycle; let the current POST finish, then hold). 2. `POST /api/control/events` `reset-ack` (§5.10.4). |
+| `reset-started` | **No action.** The fetcher already paused on `reset-initiated`; do not add redundant handling. (The API briefly returns `503` on ingest here — the paused fetcher never sees it.) |
+| `reset-completed` | Recover (§5.10.5): drop the in-memory cursor, resume, and report `running`. |
+| *(unknown type)* | No-op (forward-compat). |
+
+#### 5.10.4 Ack on `reset-initiated`
+
+`POST /api/control/events`:
+
+| Part | Value |
+|---|---|
+| Headers | `X-Api-Key: <API_KEY>`, `X-Component-Id: dashboard-fetcher`, `Content-Type: application/json; charset=utf-8` |
+| Body | `{ "event_type": "reset-ack", "state": "paused", "occurred_at": "<now UTC RFC 3339>", "payload": { "reset_id": "<reset-initiated event id>" } }` |
+
+- `reset_id` = the `id` of the received `reset-initiated` event (the orchestrator correlates the ack to the in-flight cycle by this value).
+- Expected response `204`. Treat `4xx`/`5xx`/transport error as non-fatal: log, stay paused, await `reset-completed` (the orchestrator proceeds on `AckTimeoutSeconds` regardless — the reset is not blocked by a lost ack).
+
+#### 5.10.5 Recovery on `reset-completed`
+
+1. **Drop the in-memory cursor** (set to `null`). Do **not** `PUT` a cursor.
+2. Resume the poll loop.
+3. The next iteration calls `GET /api/fetcher/state/{adapter}`. Because the API cleared `fetcher_state` during the reset window (API_SPECIFICATION §5/§7), this returns **`404` → null cursor**.
+4. A null cursor is exactly the **backfill trigger** (F14, §5.8.1): the runner performs the bounded backfill (F13) as the initial ingestion, advances the cursor to `max(status.created_at)`, then normal polling continues.
+5. After the poll loop has resumed, `POST /api/control/events` a `status` event (reuse the existing `status` type — **not** a new type):
+
+| Part | Value |
+|---|---|
+| Headers | `X-Api-Key`, `X-Component-Id: dashboard-fetcher`, `Content-Type` |
+| Body | `{ "event_type": "status", "state": "running", "occurred_at": "<now UTC>", "payload": { "reset_id": "<reset-completed reset_id>" } }` |
+
+> The reset linkage to backfill is **implicit by design**: the fetcher does not call a "backfill" API: it simply drops the cursor and lets the existing F14 null-cursor path do the work. This keeps the reset handler tiny and reuses the tested backfill flow.
+
+#### 5.10.6 Resilience and self-heal
+
+| Scenario | Behaviour |
+|---|---|
+| Subscriber connection drops mid-cycle | Reconnect with `Last-Event-ID`; the server replays any missed events (including a missed `reset-completed`) within the 2 h window — recovery still fires. |
+| Fetcher down for the entire reset cycle | On next startup the poll loop sees an empty store + `404` cursor and **backfills anyway** (F14) — no event needed; the reset self-heals via the same null-cursor path. |
+| Ack POST fails | Stay paused; orchestrator proceeds on `AckTimeoutSeconds`. Recovery still triggers on the eventual `reset-completed`. |
+| `reset-completed` arrives while already running (duplicate/replay) | Idempotent: dropping an already-advanced cursor and re-checking state at worst re-backfills the most-recent slot per `(service, environment)` — duplicates are acceptable (F5, append-only). |
+
+---
+
 ## 6. Configuration (env)
 
 | Var | Example | Purpose |
 |---|---|---|
-| `DASHBOARD_API_BASE_URL` | `http://gateway:8080` | where to POST events + read/write state |
-| `API_KEY` | *(secret)* | `X-Api-Key` for ingest + state |
+| `DASHBOARD_API_BASE_URL` | `http://gateway:8080` | where to POST events + read/write state + open the control stream |
+| `API_KEY` | *(secret)* | `X-Api-Key` for ingest + state + `POST /api/control/events` |
+| `CONTROL_API_KEY` | *(secret)* | `X-Control-API-Key` for the control stream subscription (`GET /api/control/stream`); distinct from `API_KEY` (§5.10.2) |
+| `COMPONENT_ID` | `dashboard-fetcher` | `X-Component-Id` on component-event posts; MUST match the API's `ExpectedComponents` (§5.10.1) |
 | `POLL_INTERVAL_SECONDS` | `30` | loop cadence (integration uses `1`) |
 | `INITIAL_LOOKBACK` | `7.00:00:00` | normal poll first-run window (F7); also the default for `BACKFILL_MAX_AGE` when unset |
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
@@ -430,6 +509,16 @@ Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `
 
 **Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB__RATE_LIMIT` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
 
+**Control-plane participation (F17, §5.10):**
+- `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at, payload.reset_id}` where `reset_id` = the `reset-initiated` event id.
+- `reset-completed` received → in-memory cursor dropped; next `GET /api/fetcher/state` mock returns `404` → backfill (F14) triggered; `status`/`running` event posted afterwards with `payload.reset_id` = the `reset-completed` reset_id.
+- `reset-started` received → **no** ack, no extra POST, poll loop stays paused (asserts no redundant handling).
+- Unknown `event:` type → no-op (no POST, poll loop unaffected).
+- Reconnect after a dropped stream sends `Last-Event-ID` = last seen event id.
+- `: ping` frame → treated as heartbeat, no event dispatched.
+- Ack POST returns non-2xx → subscriber stays paused, does not throw, still recovers on subsequent `reset-completed`.
+- Component id overridden via `COMPONENT_ID` → header reflects the override.
+
 ### 7.2 Integration test cases
 
 Real host against a **mock GitHub API** (serves deployments, statuses, workflow-run metadata, workflow YAML, workflow list, environment list, and artifact fixtures) + real API + Postgres. Asserts:
@@ -438,6 +527,7 @@ Real host against a **mock GitHub API** (serves deployments, statuses, workflow-
 - Populated `parent_deployments` on a two-environment chain.
 - Backfill populates `(service, environment)` slots correctly.
 - NFR-03 latency envelope.
+- **Full reset cycle (F17, §5.10)** against the **real** API + Postgres: fetcher subscribes to `GET /api/control/stream`; operator triggers `POST /api/control/reset`; assert the fetcher (a) receives `reset-initiated` and posts a `reset-ack` (`paused`, correct `reset_id`) visible via `GET /api/control/events`; (b) on `reset-completed` drops its cursor, re-backfills against the mock GitHub API after the store + `fetcher_state` were cleared, and posts a `status`/`running` event. Confirms the orchestrator counts the `dashboard-fetcher` ack and the store is re-populated post-reset.
 
 ---
 

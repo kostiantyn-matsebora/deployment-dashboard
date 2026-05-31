@@ -14,6 +14,8 @@ Standalone demo-orchestration service:
 | [`demo/data/events.json`](../demo/data/events.json) | Built-in scenario seed data. |
 | [`docs/SAD.md`](SAD.md) | Domain model, `happened_at` semantics, Write API auth. |
 | [`docs/MOCK_SPECIFICATION.md`](MOCK_SPECIFICATION.md) | Control-panel reference pattern. |
+| [`docs/api/api-guidelines.md`](api/api-guidelines.md) §11 | Control-plane contract — control-stream event vocabulary + `POST /api/control/events` ack contract (FROZEN; consumed, not redefined). |
+| [`docs/diagrams/reset-choreography.md`](diagrams/reset-choreography.md) | Visual reference for the reset choreography; the driver is the "Demo Driver" participant. |
 
 ---
 
@@ -24,6 +26,7 @@ The demo driver is a **separate, opt-in service** that:
 - Drives them by POSTing events sequentially to `POST /api/deployments`.
 - Exposes a **control API** (`/demo/`) for starting, stopping, and querying scenarios.
 - Serves a **browser control panel** at `GET /` for manual operation.
+- **Participates in the API-driven reset choreography** as the `demo-driver` component (D10, §4.7) — drains + acks on `reset-initiated`, blocks its own surface, recovers on `reset-completed`. Degrades gracefully when the target has no control stream (e.g. the mock).
 - Is **target-agnostic** — works against the mock or a real backend; the Write API URL is an env var.
 
 The mock server is unchanged. The demo driver supplements it for cases where a backend (mock or real) needs seeding with realistic demo data via the canonical write path.
@@ -43,6 +46,7 @@ The mock server is unchanged. The demo driver supplements it for cases where a b
 | D7 | **Sequential POST** with configurable inter-event delay (`EMIT_DELAY_MS`, default `0`). | `0` = bulk load (seed); `> 0` = paced emission for live demo effect. |
 | D8 | Default port **`3001`**. | Avoids collision with mock at `:3000`. |
 | D9 | **Panel path `GET /demo/`** — NestJS serves everything under `/demo/*`. | No nginx path-stripping required; gateway proxies `location /demo/` without a trailing-slash rewrite. |
+| D10 | **Demo-driver participates in the API-driven reset choreography** as the `demo-driver` component — subscribes to `GET /api/control/stream`, acks `reset-initiated`, blocks its own `/demo/` surface, reports `running` on `reset-completed`. | The API orchestrates a system-wide reset (see [`reset-choreography.md`](diagrams/reset-choreography.md)); the driver is a first-class participant ("Demo Driver" in the choreography), distinct from the existing operator-triggered `POST /demo/api-reset` proxy (§4.5). Component id `demo-driver` matches the API's default `Reset:ExpectedComponents`. Degrades gracefully: against a target with no control stream (e.g. the mock) the subscriber fails to connect, logs, and retries — it never crashes the driver. |
 
 ---
 
@@ -60,6 +64,10 @@ demo/driver/
       demo.controller.ts             GET|POST /demo/* control surface + panel
       demo.service.ts                orchestration (ingest / emit / reset)
       emit.service.ts                periodic random-event emitter
+    control/
+      control-stream.subscriber.ts   long-lived GET /api/control/stream subscriber (fetch + ReadableStream; Last-Event-ID + heartbeat); dispatches events to the reset-coordinator
+      reset-coordinator.ts           reset state machine: on reset-initiated → block /demo/ + stop work + ack; on reset-completed → unblock + post running; local GateMaxTtl safety unblock
+      control-events.client.ts       POST /api/control/events (X-Api-Key + X-Component-Id: demo-driver) — reset-ack + status component events
     scenarios/
       scenario-loader.ts             load + validate scenario JSON files
       scenario-runner.ts             elapsed_minutes → happened_at; sequential POST loop
@@ -74,6 +82,9 @@ demo/driver/
     scenario-runner.spec.ts
     write-api.client.spec.ts
     control-api.client.spec.ts
+    control-stream.subscriber.spec.ts
+    reset-coordinator.spec.ts
+    control-events.client.spec.ts
     random-event-generator.spec.ts
   Dockerfile                         multi-stage: build → node:lts-alpine runtime
   package.json
@@ -101,11 +112,22 @@ No authentication required (internal dev/demo tooling only).
   "events_sent":  0,
   "errors":       0,
   "started_at":   null,
-  "finished_at":  null
+  "finished_at":  null,
+  "reset_state":  "idle",
+  "reset_id":     null
 }
 ```
 
-`state` enum: `idle` | `running` | `done` | `failed`
+`state` enum: `idle` | `running` | `done` | `failed` | `blocked`
+
+- **`blocked`.** Set while an API-driven reset is in progress (between `reset-initiated` and `reset-completed`); the `/demo/` control surface is blocked (§4.7). `GET /demo/status` still answers (returns the blocked state) — it is never blocked.
+
+**Reset-participation fields** (§4.7):
+
+| Field | Type | Notes |
+|---|---|---|
+| `reset_state` | `idle` \| `blocked` | Driver's reset-participation state, independent of scenario `state`. `blocked` = a reset is in progress. |
+| `reset_id` | string \| null | The `reset_id` of the in-progress reset; `null` when `reset_state == idle`. |
 
 ### 4.2 Scenarios (legacy — backwards compat)
 
@@ -201,6 +223,56 @@ data: {
 
 No history replay — only events posted after the stream opens are delivered.
 
+### 4.7 Reset participation (control-stream subscriber)
+
+The driver is a participant in the API-driven reset choreography (D10; visual: [`reset-choreography.md`](diagrams/reset-choreography.md)). This is **distinct** from `POST /demo/api-reset` (§4.5):
+
+- **§4.5 `/demo/api-reset`** — outbound, operator-triggered. The driver *initiates* a reset by proxying `POST /api/control/reset`. Unchanged.
+- **§4.7 subscriber** — inbound, API-driven. The driver *reacts* to reset events the API broadcasts (whoever triggered them). New.
+
+**Subscriber.**
+- A long-lived service holds an open `GET /api/control/stream?component=demo-driver` with `X-Control-API-Key: CONTROL_API_KEY`.
+- Uses `fetch()` + `ReadableStream` (NOT browser `EventSource` — custom headers required), parsing the SSE frames.
+- Honors `Last-Event-ID` on reconnect and the `: ping` heartbeat (15 s).
+- Component id is fixed at `demo-driver` (matches the API's default `Reset:ExpectedComponents`).
+- **Graceful degradation.** If the target exposes no control stream (e.g. the mock) the connect attempt fails; the subscriber logs and retries with backoff — it never crashes the driver. The rest of the driver (ingest / emit / panel) stays fully functional.
+
+**On `reset-initiated`** (drain):
+1. Stop any running ingest / scenario run; disable live emission.
+2. Enter `reset_state = blocked`, record `reset_id` from the event id; scenario `state` reflects `blocked`.
+3. Block the `/demo/` control API — incoming control calls (`ingest` / `ingest/stop` / `scenarios/*/run`/`stop` / `emit` / `api-reset`) return **`503`** while blocked. Body is **RFC 9457 `application/problem+json`** (consistent with the API surface, [`api-guidelines.md §6`](api/api-guidelines.md#6-error-envelope-rfc-9457)) — `type` `.../errors/reset-in-progress`, `title` `Reset in progress`, `status` 503. `Retry-After` (seconds) is set from the remaining local gate window (`RESET_GATE_MAX_TTL_MS`, §8). `GET /demo/status` is **never** blocked — it reports the blocked state. `GET /demo/stream` stays open.
+4. Show a blocking banner/overlay on the `GET /demo/` panel (§7).
+5. POST a `reset-ack` via the component-event client:
+
+```
+POST {WRITE_API_URL}/api/control/events
+X-Api-Key:       <API_KEY>
+X-Component-Id:  demo-driver
+Content-Type:    application/json; charset=utf-8
+
+{
+  "event_type":  "reset-ack",
+  "state":       "paused",
+  "occurred_at": "<now, RFC 3339 UTC>",
+  "payload":     { "reset_id": "<reset-initiated event id>" }
+}
+```
+
+**On `reset-started`:** no action — the driver is already blocked from `reset-initiated`. State this explicitly so no double-handling is implemented.
+
+**On `reset-completed`** (recover):
+1. Unblock the `/demo/` control API.
+2. Clear `reset_state` back to `idle`; clear `reset_id`; scenario `state` returns to `idle` (counters as left by §4.2 `reset` semantics).
+3. Clear the panel banner/overlay (§7).
+4. POST a component event reusing the existing `event_type: status` (NOT a new type), `state: running`, `payload.reset_id` = the completed reset's id.
+5. **Do NOT auto-restart** any scenario or re-enable emission — return to idle; the operator resumes manually.
+
+**Unknown `event_type`:** no-op (forward-compatibility, per control-stream contract).
+
+**Resilience.**
+- Subscriber reconnects with `Last-Event-ID`; a missed `reset-completed` is recovered on replay (2 h `control_stream_events` window).
+- **Local safety unblock.** If the driver is `blocked` and sees no `reset-completed` within a sane bound, it auto-unblocks locally rather than staying wedged forever. The bound mirrors the API's `GateMaxTtl` concept (the API forces `→ idle` on `GateMaxTtlSeconds`); the driver's bound is configurable (`RESET_GATE_MAX_TTL_MS`, §8) and SHOULD be ≥ the API's `GateMaxTtlSeconds` plus margin. On safety unblock: unblock `/demo/`, clear the banner, set `reset_state = idle`, and log a warning. No `running` event is posted (none was confirmed).
+
 ---
 
 ## 5. Scenarios
@@ -256,13 +328,20 @@ Source: `demo/data/events.json#events` (47 events).
 | **Live Emission** | `OFF` / `LIVE` badge; **Enable** / **Disable** button — same pattern as mock SSE Emission card |
 | **API** | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
 | **Post Feed** | Real-time `GET /demo/stream` SSE feed; `● LIVE` / `● RECONNECTING` badge; `posted` and `error` frames with source tag (`ingest` / `emit`); Clear button |
+| **Reset (system)** | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows the active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only; operator-triggered reset still lives in the **API** card's Reset State button. |
+
+**Blocking banner/overlay.** While `reset_state == blocked` (§4.7):
+- A full-panel blocking banner/overlay appears: "System reset in progress…" (with the active `reset_id`).
+- Interactive controls (Ingest / Stop / emit toggle / api-reset) are disabled — they would return `503` anyway.
+- The banner clears automatically when `reset_state` returns to `idle` (`reset-completed` or local safety unblock).
 
 Panel behaviour:
-- Calls `GET /demo/status` + `GET /demo/emit` on load.
+- Calls `GET /demo/status` + `GET /demo/emit` on load; polls `GET /demo/status` to surface `reset_state` changes (the panel does NOT subscribe to the control stream — that is the backend subscriber's job, §4.7).
 - Calls `POST /demo/ingest` / `POST /demo/ingest/stop` on Ingest/Stop buttons.
 - Calls `POST /demo/emit` on Enable/Disable button.
 - Calls `POST /demo/api-reset` on Reset State button.
 - Subscribes to `GET /demo/stream` for the live feed.
+- Shows the blocking banner/overlay whenever `GET /demo/status.reset_state == blocked`.
 
 ---
 
@@ -272,8 +351,10 @@ Panel behaviour:
 |---|---|---|
 | `PORT` | `3001` | HTTP listen port |
 | `WRITE_API_URL` | `http://localhost:3000` | Base URL of the Write API target |
-| `API_KEY` | `dev-secret` | Shared secret; sent as `X-Api-Key` on every ingest request |
-| `CONTROL_API_KEY` | `dev-secret` | Secret for `X-Control-API-Key` on `POST /api/control/reset` |
+| `API_KEY` | `dev-secret` | Shared secret; sent as `X-Api-Key` on every ingest request **and** on `POST /api/control/events` (reset-ack / status) — §4.7. No new key needed. |
+| `CONTROL_API_KEY` | `dev-secret` | Secret for `X-Control-API-Key` on `POST /api/control/reset` (§4.5) **and** on the `GET /api/control/stream` subscriber (§4.7). No new key needed. |
+| `COMPONENT_ID` | `demo-driver` | Component identity sent as `X-Component-Id` on `POST /api/control/events` and as `?component=` on the control-stream subscription. Default matches the API's `Reset:ExpectedComponents`; overriding it will exclude the driver from ack-counting — change only with intent. |
+| `RESET_GATE_MAX_TTL_MS` | `90000` | Local safety-unblock bound (§4.7). If `blocked` this long with no `reset-completed`, the driver auto-unblocks. SHOULD be ≥ the API's `Reset:GateMaxTtlSeconds` (default 60 s) plus margin. |
 | `SCENARIOS_DIR` | `../../demo/data` | Path to scenario JSON files |
 | `EMIT_DELAY_MS` | `0` | Per-event delay for ingest runs (ms); `0` = bulk load |
 | `EMIT_INTERVAL_MS` | `8000` | Interval between periodic random events when Live Emission is enabled |
@@ -288,8 +369,12 @@ Panel behaviour:
 | Unit | `write-api.client.spec.ts` | Retry on `5xx` (3 attempts); no retry on `4xx`; `X-Api-Key` + `X-Progress-Reporter` headers |
 | Unit | `control-api.client.spec.ts` | Single attempt (no retry); `X-Control-API-Key` header; `ok=true` on 2xx; `ok=false` on 4xx/5xx/network |
 | Unit | `random-event-generator.spec.ts` | All required wire fields present; status in valid enum; `happened_at` in the past; unique `deployment_id`s; correct count |
-| Unit | `demo.controller.spec.ts` | All endpoints: status, scenarios, ingest, ingest/stop, emit GET/POST, api-reset, reset; state transitions; NotFoundException on missing scenario |
+| Unit | `demo.controller.spec.ts` | All endpoints: status, scenarios, ingest, ingest/stop, emit GET/POST, api-reset, reset; state transitions; NotFoundException on missing scenario; `/demo/` control calls return `503` + `Retry-After` while `reset_state == blocked`, while `GET /demo/status` still answers (blocked state) |
+| Unit | `control-events.client.spec.ts` | `reset-ack` POST carries `X-Api-Key` + `X-Component-Id: demo-driver` + correct body (`event_type: reset-ack`, `state: paused`, `payload.reset_id`); `status`/`running` POST shape; component id from `COMPONENT_ID` |
+| Unit | `control-stream.subscriber.spec.ts` | Parses SSE frames from `fetch()`+ReadableStream; reconnects with `Last-Event-ID`; connect failure (no control stream, e.g. mock) logs + retries and does NOT crash; unknown `event_type` is a no-op; dispatches `reset-initiated`/`reset-completed` to the coordinator |
+| Unit | `reset-coordinator.spec.ts` | On `reset-initiated`: stops ingest/run, disables emit, enters `blocked`, acks (`paused` + `reset_id`); `reset-started` = no-op; on `reset-completed`: unblocks, posts `status`/`running` with `reset_id`, returns to idle, does NOT auto-restart; local `RESET_GATE_MAX_TTL_MS` safety unblock fires when no `reset-completed` arrives (no `running` posted) |
 | Integration | `demo.e2e.spec.ts` | Start driver against mock; `POST /demo/ingest { dataset: "demo" }`; poll until `state == done`; assert `GET /api/services` returns ≥ 1 service |
+| Integration | `reset-cycle.e2e.spec.ts` | Full reset cycle against a **real** `Dashboard.Api`: trigger `POST /api/control/reset`; assert the driver acks `reset-initiated` (component event visible via `GET /api/control/events`), `/demo/` calls return `503` while blocked, and on `reset-completed` the driver unblocks + posts `status`/`running` and returns to idle |
 
 ---
 
@@ -330,4 +415,5 @@ npm run start:dev
 - Scenario scheduling / cron.
 - Concurrent multi-scenario execution.
 - Authentication on the control API or control panel.
-- Clearing the target backend (Write API is append-only; reset is a mock `/_mock/reset` concern for mock targets).
+- **Clearing the target backend data.** The driver never truncates backend state itself — the Write API is append-only and data-clearing is owned by the API's reset orchestrator (or `/_mock/reset` for mock targets). The driver only *participates* in the API-driven reset choreography (§4.7, D10): it reacts to control-stream reset events (drain → ack → block → recover) but performs no data deletion. The operator-triggered `POST /demo/api-reset` proxy (§4.5) merely forwards the trigger to the API; the API does the clearing.
+- Initiating its own reset choreography beyond the §4.5 proxy (the driver is a reactor, not the orchestrator).
