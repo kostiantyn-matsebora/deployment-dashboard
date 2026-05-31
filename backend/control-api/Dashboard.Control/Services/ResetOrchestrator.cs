@@ -30,8 +30,6 @@ internal sealed class ResetOrchestrator(
     ComponentAcksBroadcaster acksBroadcaster,
     ILogger<ResetOrchestrator> logger) : IResetOrchestrator
 {
-    internal const long AdvisoryLockKey = 7_654_321L;
-
     public async Task DriveAsync(
         Guid resetId,
         ResetOptions options,
@@ -268,7 +266,7 @@ internal sealed class ResetOrchestrator(
     private static async Task<bool> TryAcquireAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)
     {
         await using var cmd = new NpgsqlCommand(
-            $"SELECT pg_try_advisory_lock({AdvisoryLockKey})", conn);
+            $"SELECT pg_try_advisory_lock({ResetCoordination.AdvisoryLockKey})", conn);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is true;
     }
@@ -278,7 +276,7 @@ internal sealed class ResetOrchestrator(
         try
         {
             await using var cmd = new NpgsqlCommand(
-                $"SELECT pg_advisory_unlock({AdvisoryLockKey})", conn);
+                $"SELECT pg_advisory_unlock({ResetCoordination.AdvisoryLockKey})", conn);
             await cmd.ExecuteNonQueryAsync(ct);
         }
         catch { /* Best-effort: connection may already be closed. */ }

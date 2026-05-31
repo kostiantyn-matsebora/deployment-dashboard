@@ -1,6 +1,5 @@
 using Dashboard.Shared.Abstractions;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Dashboard.Write.Filters;
@@ -17,13 +16,12 @@ namespace Dashboard.Write.Filters;
 /// inherent TOCTOU that the previous per-request DB-SELECT version also had; the truncation
 /// itself is atomic at the database level so no data is lost in that window.
 ///
-/// <c>Retry-After</c> is derived from <c>Reset:GateMaxTtlSeconds</c> configuration
-/// (the upper bound on how long the gate can remain open before the reconciler forcibly aborts it).
+/// <c>Retry-After</c> is a short fixed delay reflecting the brief truncate window; the reconciler's
+/// <c>GateMaxTtl</c> is the worst-case upper bound on the gate, not this client hint.
 /// </summary>
 internal sealed class IngestGateEndpointFilter : IEndpointFilter
 {
-    private const int DefaultRetryAfterSeconds = 60;
-    private const string GateMaxTtlConfigKey = "Reset:GateMaxTtlSeconds";
+    private const int RetryAfterSeconds = 2;
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -31,11 +29,8 @@ internal sealed class IngestGateEndpointFilter : IEndpointFilter
 
         if (provider?.IsResetting == true)
         {
-            var config = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
-            var retryAfter = config.GetValue<int?>(GateMaxTtlConfigKey) ?? DefaultRetryAfterSeconds;
-
             var response = context.HttpContext.Response;
-            response.Headers["Retry-After"] = retryAfter.ToString();
+            response.Headers["Retry-After"] = RetryAfterSeconds.ToString();
             return Results.Problem(
                 title: "Service temporarily unavailable.",
                 detail: "A system-state reset is in progress. Retry after the indicated delay.",

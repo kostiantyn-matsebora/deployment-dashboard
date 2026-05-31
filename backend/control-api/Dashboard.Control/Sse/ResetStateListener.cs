@@ -44,7 +44,8 @@ internal sealed class ResetStateListener(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await SeedFromDatabaseAsync(stoppingToken);
+        // Seeding happens inside ListenAsync (after LISTEN attaches), so every (re)connect
+        // re-establishes the baseline and a dropped connection cannot leave the flag stale.
         await ListenWithRetryAsync(stoppingToken);
     }
 
@@ -61,12 +62,12 @@ internal sealed class ResetStateListener(
 
             _isResetting = state == "resetting";
             logger.LogInformation(
-                "ResetStateListener: seeded from DB at startup — IsResetting={IsResetting}.", _isResetting);
+                "ResetStateListener: seeded reset state from DB — IsResetting={IsResetting}.", _isResetting);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "ResetStateListener: could not seed from DB at startup; defaulting to false.");
-            _isResetting = false;
+            // Leave the flag unchanged on failure — do not clobber a known state during a reconnect.
+            logger.LogWarning(ex, "ResetStateListener: could not seed reset state from DB; leaving IsResetting unchanged.");
         }
     }
 
@@ -109,6 +110,10 @@ internal sealed class ResetStateListener(
             await cmd.ExecuteNonQueryAsync(ct);
 
         logger.LogInformation("ResetStateListener: LISTEN reset_state active.");
+
+        // Seed AFTER LISTEN is attached: a transition NOTIFY arriving post-attach is queued and
+        // applied by the handler, while this read establishes the committed baseline — no gap.
+        await SeedFromDatabaseAsync(ct);
 
         while (!ct.IsCancellationRequested)
             await conn.WaitAsync(ct);

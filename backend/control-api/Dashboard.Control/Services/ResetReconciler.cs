@@ -38,7 +38,6 @@ internal sealed class ResetReconciler(
     IOptions<ResetOptions> resetOptions,
     ILogger<ResetReconciler> logger) : BackgroundService
 {
-    private const long AdvisoryLockKey = 7_654_321L;
     internal const int TickIntervalSeconds = 5;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -171,7 +170,7 @@ internal sealed class ResetReconciler(
     private static async Task<bool> TryAcquireAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)
     {
         await using var cmd = new NpgsqlCommand(
-            $"SELECT pg_try_advisory_lock({AdvisoryLockKey})", conn);
+            $"SELECT pg_try_advisory_lock({ResetCoordination.AdvisoryLockKey})", conn);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is true;
     }
@@ -181,7 +180,7 @@ internal sealed class ResetReconciler(
         try
         {
             await using var cmd = new NpgsqlCommand(
-                $"SELECT pg_advisory_unlock({AdvisoryLockKey})", conn);
+                $"SELECT pg_advisory_unlock({ResetCoordination.AdvisoryLockKey})", conn);
             await cmd.ExecuteNonQueryAsync();
         }
         catch { /* Best-effort: connection may already be closing. */ }
