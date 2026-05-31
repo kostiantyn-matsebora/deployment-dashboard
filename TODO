@@ -1,0 +1,10 @@
+✔ Create choreography for reset state functionality @done(26-05-31 22:09)
+☐ Add event emission for every control API calls of every component
+☐ Implement emulation of github API in demo driver and add scenarios covering fetcher
+☐ Fetcher after each cycle of fetching must report event to control API containimg CI/CD api limits, own limits and own usage of ci/cd API
+✔ Add views of control api and components event streams @done(26-05-31 22:40)
+☐ Create adopter documentation and gh pages
+☐ Expose scalar UI via gateway
+☐ Add logo wherever its suitable
+☐ Make component events stream instead of polling
+☐ Add corellation ID to the events to corellate them with command and each other

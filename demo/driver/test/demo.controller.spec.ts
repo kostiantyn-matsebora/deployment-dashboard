@@ -5,6 +5,8 @@ import { DemoController } from '../src/demo/demo.controller';
 import { DemoService, DemoStatus } from '../src/demo/demo.service';
 import { RunnerStatus } from '../src/scenarios/scenario-runner';
 import { Response } from 'express';
+import { ControlFeed } from '../src/control/control-feed';
+import { ControlEventsReadClient } from '../src/control/control-events-read.client';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -63,13 +65,51 @@ function makeMockRes(overrides: Partial<Response> = {}): Response {
   return res as Response;
 }
 
+/**
+ * Build a minimal mock SSE Express Response for testing streaming endpoints.
+ * Captures write() calls so tests can inspect emitted chunks.
+ */
+function makeSseRes(): Response & { _written: string[]; _closed: boolean; _closeHandler?: () => void } {
+  const written: string[] = [];
+  let closed = false;
+  let closeHandler: (() => void) | undefined;
+
+  const res: any = {
+    _written: written,
+    _closed: closed,
+    setHeader:     jest.fn().mockReturnThis(),
+    flushHeaders:  jest.fn(),
+    write:         jest.fn().mockImplementation((chunk: string) => { written.push(chunk); }),
+    end:           jest.fn().mockImplementation(() => { closed = true; }),
+    on:            jest.fn().mockImplementation((event: string, cb: () => void) => {
+      if (event === 'close') closeHandler = cb;
+    }),
+    // Expose close trigger for tests.
+    simulateClose: () => { if (closeHandler) closeHandler(); },
+  };
+  Object.defineProperty(res, '_closeHandler', {
+    get: () => closeHandler,
+    configurable: true,
+  });
+  return res as Response & { _written: string[]; _closed: boolean; _closeHandler?: () => void };
+}
+
 // ── Test suite ────────────────────────────────────────────────────────────────
 
 describe('DemoController', () => {
   let controller: DemoController;
   let service: jest.Mocked<Omit<DemoService, 'stream$'>> & { stream$: Subject<unknown> };
+  let controlFeed: ControlFeed;
+  let eventsReadClient: jest.Mocked<ControlEventsReadClient>;
 
   beforeEach(async () => {
+    // Use a real ControlFeed (real RxJS Subject) — no mock.
+    controlFeed = new ControlFeed();
+
+    eventsReadClient = {
+      list: jest.fn(),
+    } as unknown as jest.Mocked<ControlEventsReadClient>;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DemoController],
       providers: [
@@ -90,6 +130,14 @@ describe('DemoController', () => {
             getRetryAfterSeconds:  jest.fn().mockReturnValue(90),
             stream$:               new Subject(),
           },
+        },
+        {
+          provide: ControlFeed,
+          useValue: controlFeed,
+        },
+        {
+          provide: ControlEventsReadClient,
+          useValue: eventsReadClient,
         },
       ],
     }).compile();
@@ -320,6 +368,141 @@ describe('DemoController', () => {
 
       expect(controller.status().state).toBe('running');
       expect(controller.status().state).toBe('done');
+    });
+  });
+
+  // ── GET /demo/control-stream ───────────────────────────────────────────────
+
+  describe('GET /demo/control-stream', () => {
+    it('sets SSE headers and calls flushHeaders', () => {
+      const res = makeSseRes();
+      controller.controlStream(res as unknown as Response);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream');
+      expect(res.flushHeaders).toHaveBeenCalled();
+    });
+
+    it('writes frames published to ControlFeed after the connection opens', () => {
+      const res = makeSseRes();
+      controller.controlStream(res as unknown as Response);
+
+      controlFeed.publish({ type: 'reset-initiated', data: '{"id":"reset-1","component":"*"}' });
+
+      expect(res.write).toHaveBeenCalledWith('event: reset-initiated\n');
+      expect(res.write).toHaveBeenCalledWith(
+        expect.stringContaining('{"id":"reset-1","component":"*"}'),
+      );
+    });
+
+    it('writes the data line for frames without a type', () => {
+      const res = makeSseRes();
+      controller.controlStream(res as unknown as Response);
+
+      controlFeed.publish({ data: '{"ping":true}' });
+
+      // No event: line; only data: line.
+      const written = (res.write as jest.Mock).mock.calls.map((c: any[]) => c[0] as string);
+      expect(written.some((s: string) => s.startsWith('data:'))).toBe(true);
+    });
+
+    it('writes frames for unknown types (forward-compat)', () => {
+      const res = makeSseRes();
+      controller.controlStream(res as unknown as Response);
+
+      controlFeed.publish({ type: 'future-type', data: '{"custom":true}' });
+
+      expect(res.write).toHaveBeenCalledWith('event: future-type\n');
+    });
+
+    it('does NOT block when reset_state == blocked', () => {
+      // Simulate blocked state — the guard should NOT apply to control-stream.
+      service.isBlocked.mockReturnValue(true);
+
+      const res = makeSseRes();
+      // controlStream does not call guardNotBlocked — invoking it must NOT send a 503.
+      expect(() => controller.controlStream(res as unknown as Response)).not.toThrow();
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream');
+      // status(503) must never be called.
+      expect(res.status).toBeUndefined();
+    });
+
+    it('unsubscribes and removes the connection on client close', () => {
+      const res = makeSseRes() as any;
+      controller.controlStream(res as unknown as Response);
+
+      // Publish once — received.
+      controlFeed.publish({ type: 'reset-initiated', data: '{}' });
+      const countBefore = (res.write as jest.Mock).mock.calls.length;
+
+      // Simulate client disconnect.
+      res.simulateClose();
+
+      // Publish again — should NOT reach the closed connection.
+      controlFeed.publish({ type: 'reset-completed', data: '{}' });
+      expect((res.write as jest.Mock).mock.calls.length).toBe(countBefore);
+    });
+  });
+
+  // ── GET /demo/control-events ───────────────────────────────────────────────
+
+  describe('GET /demo/control-events', () => {
+    it('proxies the read client and returns its body with the upstream status', async () => {
+      const page = { items: [], next_cursor: null };
+      eventsReadClient.list.mockResolvedValue({ status: 200, body: page });
+
+      const res = makeMockRes();
+      await controller.controlEvents({}, res as unknown as Response);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(page);
+    });
+
+    it('mirrors a non-2xx upstream status to the caller', async () => {
+      eventsReadClient.list.mockResolvedValue({
+        status: 422,
+        body: { type: 'about:blank', title: 'Unprocessable', status: 422 },
+      });
+
+      const res = makeMockRes();
+      await controller.controlEvents({}, res as unknown as Response);
+
+      expect(res.status).toHaveBeenCalledWith(422);
+    });
+
+    it('forwards whitelisted query params to the read client', async () => {
+      eventsReadClient.list.mockResolvedValue({ status: 200, body: { items: [], next_cursor: null } });
+
+      const res = makeMockRes();
+      await controller.controlEvents(
+        { component_id: 'demo-driver', event_type: 'reset-ack', limit: '10' },
+        res as unknown as Response,
+      );
+
+      expect(eventsReadClient.list).toHaveBeenCalledWith(
+        expect.objectContaining({ component_id: 'demo-driver', event_type: 'reset-ack', limit: '10' }),
+      );
+    });
+
+    it('mirrors 502 (network error from read client) to the caller', async () => {
+      eventsReadClient.list.mockResolvedValue({
+        status: 502,
+        body: { error: 'upstream network error' },
+      });
+
+      const res = makeMockRes();
+      await controller.controlEvents({}, res as unknown as Response);
+
+      expect(res.status).toHaveBeenCalledWith(502);
+    });
+
+    it('does NOT block when reset_state == blocked', async () => {
+      service.isBlocked.mockReturnValue(true);
+      eventsReadClient.list.mockResolvedValue({ status: 200, body: { items: [], next_cursor: null } });
+
+      const res = makeMockRes();
+      await controller.controlEvents({}, res as unknown as Response);
+
+      // Should proxy normally — no 503 guard.
+      expect(res.status).toHaveBeenCalledWith(200);
     });
   });
 });

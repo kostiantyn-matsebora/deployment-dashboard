@@ -1,9 +1,12 @@
 import { ScenarioRunner } from '../src/scenarios/scenario-runner';
 import { WriteApiClient } from '../src/write-api/write-api.client';
 
-function makeClient(okResult = true): jest.Mocked<Pick<WriteApiClient, 'postDeployment'>> {
+const TEST_REPORTER = 'demo-driver/test';
+
+function makeClient(okResult = true): jest.Mocked<Pick<WriteApiClient, 'postDeployment' | 'progressReporter'>> {
   return {
-    postDeployment: jest.fn().mockResolvedValue({ ok: okResult, status: okResult ? 201 : 422 }),
+    postDeployment:   jest.fn().mockResolvedValue({ ok: okResult, status: okResult ? 201 : 422 }),
+    progressReporter: TEST_REPORTER,
   };
 }
 
@@ -116,27 +119,31 @@ describe('ScenarioRunner', () => {
   // ── SSE stream frames ──────────────────────────────────────────────────────
 
   it('emits a posted frame for each successful POST', async () => {
-    const frames: Array<{ type: string }> = [];
-    runner.stream$.subscribe(f => frames.push(f));
+    const frames: Array<{ type: string; data: Record<string, unknown> }> = [];
+    runner.stream$.subscribe(f => frames.push(f as any));
 
     const client = makeClient(true);
     await runner.run('test', twoEvents, client as any, 0);
 
     expect(frames).toHaveLength(2);
     expect(frames[0].type).toBe('posted');
+    expect(frames[0].data.reporter).toBe(TEST_REPORTER);
     expect(frames[1].type).toBe('posted');
+    expect(frames[1].data.reporter).toBe(TEST_REPORTER);
   });
 
   it('emits an error frame for each failed POST', async () => {
-    const frames: Array<{ type: string }> = [];
-    runner.stream$.subscribe(f => frames.push(f));
+    const frames: Array<{ type: string; data: Record<string, unknown> }> = [];
+    runner.stream$.subscribe(f => frames.push(f as any));
 
     const client = makeClient(false);
     await runner.run('test', twoEvents, client as any, 0);
 
     expect(frames).toHaveLength(2);
     expect(frames[0].type).toBe('error');
+    expect(frames[0].data.reporter).toBe(TEST_REPORTER);
     expect(frames[1].type).toBe('error');
+    expect(frames[1].data.reporter).toBe(TEST_REPORTER);
   });
 
   // ── Reset ────────────────────────────────────────────────────────────────

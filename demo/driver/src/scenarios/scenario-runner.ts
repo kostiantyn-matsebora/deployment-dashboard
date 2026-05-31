@@ -21,6 +21,7 @@ export interface PostedStreamEvent {
   status:        string;
   happened_at:   string;
   posted_at:     string;
+  reporter:      string;
 }
 
 export interface ErrorStreamEvent {
@@ -28,6 +29,7 @@ export interface ErrorStreamEvent {
   http_status:   number;
   attempt:       number;
   posted_at:     string;
+  reporter:      string;
 }
 
 export type StreamFrame =
@@ -177,6 +179,7 @@ export class ScenarioRunner {
   ): Promise<void> {
     const result    = await client.postDeployment(wire);
     const posted_at = new Date().toISOString();
+    const reporter  = client.progressReporter;
 
     if (result.ok) {
       this._eventsSent++;
@@ -189,6 +192,7 @@ export class ScenarioRunner {
           status:        wire.status        as string,
           happened_at:   wire.happened_at   as string,
           posted_at,
+          reporter,
         },
       });
     } else {
@@ -200,6 +204,7 @@ export class ScenarioRunner {
           http_status:   result.status,
           attempt:       3,
           posted_at,
+          reporter,
         },
       });
     }

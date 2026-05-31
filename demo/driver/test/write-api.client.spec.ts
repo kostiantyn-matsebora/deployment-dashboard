@@ -19,6 +19,12 @@ function makeClient(mockFetch: jest.Mock) {
 
 describe('WriteApiClient', () => {
 
+  it('exposes progressReporter via the public getter', () => {
+    const mockFetch = jest.fn();
+    const client = makeClient(mockFetch);
+    expect(client.progressReporter).toBe(REPORTER);
+  });
+
   it('POSTs to {WRITE_API_URL}/api/deployments', async () => {
     const mockFetch = jest.fn().mockResolvedValue({ status: 201 });
     await makeClient(mockFetch).postDeployment(sample);

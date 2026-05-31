@@ -7,6 +7,7 @@
 
 import { ControlStreamSubscriber } from '../src/control/control-stream.subscriber';
 import { ResetCoordinator } from '../src/control/reset-coordinator';
+import { ControlFeed, ControlFrame } from '../src/control/control-feed';
 
 const RESET_ID = '01J9F4WZK3W9G2T6X4QH3DKQF6';
 
@@ -47,10 +48,13 @@ function makeCoordinator(): jest.Mocked<ResetCoordinator> {
   } as unknown as jest.Mocked<ResetCoordinator>;
 }
 
-function makeSubscriber(coord: jest.Mocked<ResetCoordinator>): ControlStreamSubscriber {
-  // ControlStreamSubscriber constructor takes one argument: the coordinator.
+function makeSubscriber(
+  coord: jest.Mocked<ResetCoordinator>,
+  feed?: ControlFeed,
+): ControlStreamSubscriber {
+  // ControlStreamSubscriber constructor takes two arguments: coordinator + controlFeed.
   // Bypass NestJS DI — instantiate directly.
-  return new (ControlStreamSubscriber as any)(coord);
+  return new (ControlStreamSubscriber as any)(coord, feed ?? new ControlFeed());
 }
 
 /**
@@ -258,5 +262,70 @@ describe('ControlStreamSubscriber', () => {
     await driveOneIteration();
 
     expect(() => sub.onModuleDestroy()).not.toThrow();
+  });
+
+  // ── ControlFeed publish — every parsed frame reaches the feed ─────────────
+
+  describe('publishes every parsed frame to ControlFeed', () => {
+    it('publishes a known reset-* frame to ControlFeed AND dispatches to coordinator', async () => {
+      const sseText =
+        `event: reset-initiated\nid: ${RESET_ID}\ndata: {"id":"${RESET_ID}","component":"*"}\n\n`;
+      globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+      const coord = makeCoordinator();
+      const feed  = new ControlFeed();
+      const published: ControlFrame[] = [];
+      feed.frames$.subscribe(f => published.push(f));
+
+      const sub = track(makeSubscriber(coord, feed));
+      sub.onModuleInit();
+      await driveOneIteration();
+
+      // Frame reached ControlFeed.
+      expect(published).toHaveLength(1);
+      expect(published[0].type).toBe('reset-initiated');
+      expect(published[0].id).toBe(RESET_ID);
+
+      // reset-* still dispatched to coordinator.
+      expect(coord.onResetInitiated).toHaveBeenCalledWith(RESET_ID);
+    });
+
+    it('publishes an unknown-type frame to ControlFeed (forward-compat)', async () => {
+      const sseText = `event: future-type\nid: xyz\ndata: {"field":"value"}\n\n`;
+      globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+      const coord = makeCoordinator();
+      const feed  = new ControlFeed();
+      const published: ControlFrame[] = [];
+      feed.frames$.subscribe(f => published.push(f));
+
+      const sub = track(makeSubscriber(coord, feed));
+      sub.onModuleInit();
+      await driveOneIteration();
+
+      // Unknown frame still published to ControlFeed.
+      expect(published).toHaveLength(1);
+      expect(published[0].type).toBe('future-type');
+
+      // No coordinator dispatch for unknown types.
+      expect(coord.onResetInitiated).not.toHaveBeenCalled();
+      expect(coord.onResetStarted).not.toHaveBeenCalled();
+      expect(coord.onResetCompleted).not.toHaveBeenCalled();
+    });
+
+    it('publishes reset-completed frame to ControlFeed and dispatches to coordinator', async () => {
+      const sseText = `event: reset-completed\nid: other\ndata: {"reset_id":"${RESET_ID}"}\n\n`;
+      globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+      const coord = makeCoordinator();
+      const feed  = new ControlFeed();
+      const published: ControlFrame[] = [];
+      feed.frames$.subscribe(f => published.push(f));
+
+      const sub = track(makeSubscriber(coord, feed));
+      sub.onModuleInit();
+      await driveOneIteration();
+
+      expect(published).toHaveLength(1);
+      expect(published[0].type).toBe('reset-completed');
+      expect(coord.onResetCompleted).toHaveBeenCalledWith(RESET_ID);
+    });
   });
 });

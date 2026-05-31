@@ -54,8 +54,9 @@ jest.mock('../src/scenarios/scenario-loader', () => ({
 
 // Mock WriteApiClient so no network calls happen during runner.run().
 jest.mock('../src/write-api/write-api.client', () => ({
-  WriteApiClient: jest.fn().mockImplementation(() => ({
-    postDeployment: jest.fn().mockResolvedValue({ ok: true, status: 201 }),
+  WriteApiClient: jest.fn().mockImplementation((_url: string, _key: string, reporter: string) => ({
+    postDeployment:   jest.fn().mockResolvedValue({ ok: true, status: 201 }),
+    progressReporter: reporter,
   })),
 }));
 

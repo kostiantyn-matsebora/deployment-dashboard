@@ -63,6 +63,7 @@ The official nginx entrypoint renders `*.template` from `/etc/nginx/templates/` 
 | `/api/events/stream` | `api` | **Dedicated SSE block** — see §5 |
 | `/api/` | `api` | JSON read/write; default buffering |
 | `/demo/stream` | `demo-driver` | **Dedicated SSE block** — same settings as `/api/events/stream` |
+| `/demo/control-stream` | `demo-driver` | **Dedicated SSE block** — same settings as `/api/events/stream` |
 | `/demo/` | `demo-driver` | Demo driver control API + panel; default buffering |
 | `/healthz`, `/readyz` | `api` | API probes, proxied (GW4) |
 | `/health` | **gateway-local** | `return 200` — gateway liveness (integration + platform probe) |
@@ -89,7 +90,7 @@ location /api/events/stream {
 
 The API additionally emits `X-Accel-Buffering: no` (belt-and-braces).
 
-The same block applies verbatim to `location /demo/stream` — replace `proxy_pass http://api` with `proxy_pass http://demo-driver`.
+The same block applies verbatim to `location /demo/stream` and `location /demo/control-stream` — replace `proxy_pass http://api` with `proxy_pass http://demo-driver`.
 
 ---
 
@@ -108,7 +109,8 @@ server {
     location = /health { return 200 "ok\n"; access_log off; default_type text/plain; }
 
     location /api/events/stream { ... }   # §5
-    location /demo/stream       { ... }   # §5 — same SSE block, upstream = demo-driver
+    location /demo/stream           { ... }   # §5 — same SSE block, upstream = demo-driver
+    location /demo/control-stream   { ... }   # §5 — same SSE block, upstream = demo-driver
     location /api/    { proxy_pass http://api; }
     location /demo/   { proxy_pass http://demo-driver; }
     location /healthz { proxy_pass http://api; }
