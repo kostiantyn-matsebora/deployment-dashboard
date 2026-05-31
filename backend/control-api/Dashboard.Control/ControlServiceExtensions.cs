@@ -1,3 +1,4 @@
+using Dashboard.Control.Notifiers;
 using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
 using Dashboard.Control.Sse;
@@ -14,6 +15,7 @@ public static class ControlServiceExtensions
         services.AddScoped<IResetService, ResetService>();
         services.AddScoped<IComponentEventRepository, ComponentEventRepository>();
         services.AddScoped<IControlStreamRepository, ControlStreamRepository>();
+        services.AddScoped<IControlEventNotifier, PostgresControlEventNotifier>();
         services.AddSingleton<IComponentEventValidator, ComponentEventValidator>();
 
         // Control SSE broadcaster: one singleton serves as both IControlEventBroadcaster
