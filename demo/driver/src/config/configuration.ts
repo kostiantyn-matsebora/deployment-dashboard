@@ -8,6 +8,7 @@ export interface AppConfig {
   scenariosDir:       string;
   emitDelayMs:        number;
   emitIntervalMs:     number;
+  githubEmulatorUrl:  string;
 }
 
 export function getConfig(): AppConfig {
@@ -21,5 +22,6 @@ export function getConfig(): AppConfig {
     scenariosDir:       process.env.SCENARIOS_DIR                ?? '../../demo/data',
     emitDelayMs:        parseInt(process.env.EMIT_DELAY_MS       ?? '0',    10),
     emitIntervalMs:     parseInt(process.env.EMIT_INTERVAL_MS    ?? '8000', 10),
+    githubEmulatorUrl:  process.env.GITHUB_EMULATOR_URL          ?? 'http://localhost:3100',
   };
 }
