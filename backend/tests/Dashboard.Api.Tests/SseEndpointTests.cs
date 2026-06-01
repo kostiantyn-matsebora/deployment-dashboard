@@ -16,19 +16,24 @@ namespace Dashboard.Api.Tests;
 ///     configured with <c>UseRealNotifier = true</c> so that ingest → pg_notify → broadcaster
 ///     → SSE client path is fully exercised.</item>
 /// </list>
+/// Both classes share the assembly-scoped Postgres container via <see cref="PostgresFixture"/>.
 /// </summary>
 
 // ── Replay (NullNotifier) ─────────────────────────────────────────────────────
 
+[Collection("api-postgres")]
 public sealed class SseReplayTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public SseReplayTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 
@@ -192,17 +197,21 @@ public sealed class SseReplayTests : IAsyncLifetime
 
 // ── Live stream (real notifier + LISTEN/NOTIFY) ───────────────────────────────
 
+[Collection("api-postgres")]
 public sealed class SseLiveStreamTests : IAsyncLifetime
 {
+    private readonly PostgresFixture _fixture;
     // UseRealNotifier = true: PostgresDeploymentNotifier issues pg_notify on ingest,
     // and DeploymentEventBroadcaster's LISTEN loop receives and fans out the event.
-    private readonly TestApiFactory _factory = new() { UseRealNotifier = true };
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public SseLiveStreamTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString) { UseRealNotifier = true };
         _client = _factory.CreateClient();
     }
 

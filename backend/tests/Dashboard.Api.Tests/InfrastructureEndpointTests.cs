@@ -8,16 +8,21 @@ namespace Dashboard.Api.Tests;
 /// <summary>
 /// Integration tests for infrastructure endpoints:
 /// <c>GET /healthz</c>, <c>GET /openapi/v1.json</c>, <c>GET /scalar/v1</c>.
+/// Runs against the shared Postgres container (via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class InfrastructureEndpointTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public InfrastructureEndpointTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 

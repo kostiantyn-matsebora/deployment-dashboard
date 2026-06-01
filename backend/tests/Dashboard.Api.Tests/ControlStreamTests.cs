@@ -12,17 +12,21 @@ namespace Dashboard.Api.Tests;
 /// Integration tests for <c>GET /api/control/stream</c>:
 /// auth, <c>Last-Event-ID</c> replay from <c>control_stream_events</c>, the <c>?component=</c>
 /// filter (matches the id or <c>"*"</c>), and live reset fan-out via LISTEN/NOTIFY.
-/// Runs against a real Postgres container (Testcontainers).
+/// Runs against the shared Postgres container (via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class ControlStreamTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public ControlStreamTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 

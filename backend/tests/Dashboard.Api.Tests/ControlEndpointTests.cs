@@ -8,17 +8,21 @@ namespace Dashboard.Api.Tests;
 /// <summary>
 /// Integration tests for <c>POST /api/control/reset</c> authentication.
 /// Data-clearing and choreography behaviour are covered by <see cref="ResetChoreographyTests"/>.
-/// Runs against a real Postgres container (Testcontainers).
+/// Runs against the shared Postgres container (via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class ControlEndpointTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public ControlEndpointTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 
@@ -98,16 +102,20 @@ public sealed class ControlEndpointTests : IAsyncLifetime
 /// Tests the control surface when <c>CONTROL_API_KEY</c> is absent from configuration.
 /// The endpoint must be completely hidden — returns <c>404</c> regardless of the header sent.
 /// </summary>
+[Collection("api-postgres")]
 public sealed class ControlEndpointUnconfiguredTests : IAsyncLifetime
 {
+    private readonly PostgresFixture _fixture;
     // Factory with IncludeControlKey = false simulates a deployment where the key was never set.
-    private readonly TestApiFactory _factory = new() { IncludeControlKey = false };
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public ControlEndpointUnconfiguredTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString) { IncludeControlKey = false };
         _client = _factory.CreateClient();
     }
 

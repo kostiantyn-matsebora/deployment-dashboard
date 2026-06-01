@@ -7,17 +7,21 @@ namespace Dashboard.Api.Tests;
 
 /// <summary>
 /// Integration tests for <c>POST /api/deployments</c>.
-/// Runs against a real Postgres container (Testcontainers); SQLite is not used here.
+/// Runs against a real Postgres container (shared via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class IngestEndpointTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public IngestEndpointTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 
