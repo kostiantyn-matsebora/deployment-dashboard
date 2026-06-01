@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.1.0] - 2026-06-02
+
 ### Added
 
 - Release workflow (`.github/workflows/release.yml`): fires on a pushed `v*.*.*` tag; builds and pushes six versioned images to GHCR (`api`, `spa`, `gateway`, `fetcher`, `demo-driver`, `github-emulator`) under tags `X.Y.Z`, `X.Y`, and `latest`; creates a GitHub Release with CHANGELOG-extracted notes and a bundled compose zip.
