@@ -4,9 +4,8 @@ on:
   push:
     branches: [main]
     paths: ['scripts/**/*.ps1', '.github/workflows/scripts.yml']
-  pull_request:
-    branches: [main]
-    paths: ['scripts/**/*.ps1', '.github/workflows/scripts.yml']
+  # Called by ci.yml (the _ci-green orchestrator) for PR checks.
+  workflow_call:
 
 jobs:
   scripts-check:

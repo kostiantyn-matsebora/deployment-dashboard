@@ -15,6 +15,7 @@ name: _api-tests
 #   /demo/github/* -> demo-driver → github-emulator proxy
 
 on:
+  # Push to main: runs on relevant path changes.
   push:
     branches: [main]
     paths:
@@ -23,14 +24,10 @@ on:
       - 'compose/**'
       - 'testing/api/**'
       - '.github/workflows/api-tests.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'backend/**'
-      - 'demo/**'
-      - 'compose/**'
-      - 'testing/api/**'
-      - '.github/workflows/api-tests.yml'
+  # Called by ci.yml (the _ci-green orchestrator) for PR checks.
+  # workflow_call carries no path filter — the orchestrator's paths-filter decides
+  # whether to invoke this workflow.
+  workflow_call:
   workflow_dispatch:
 
 jobs:

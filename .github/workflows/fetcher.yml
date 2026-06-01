@@ -1,6 +1,7 @@
 name: fetcher
 
 on:
+  # Push to main: runs test + Docker publish.
   push:
     branches: [main]
     paths:
@@ -10,15 +11,11 @@ on:
       - 'backend/shared/**'
       - 'backend/tests/Dashboard.Fetcher.Tests/**'
       - '.github/workflows/fetcher.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'backend/fetcher/**'
-      - 'backend/fetcher-github/**'
-      - 'backend/fetcher-host/**'
-      - 'backend/shared/**'
-      - 'backend/tests/Dashboard.Fetcher.Tests/**'
-      - '.github/workflows/fetcher.yml'
+  # Called by ci.yml (the _ci-green orchestrator) for PR checks.
+  # workflow_call carries no path filter — the orchestrator's paths-filter decides
+  # whether to invoke this workflow. Docker publish is already gated by
+  # `github.event_name == 'push'`, so workflow_call never triggers a publish.
+  workflow_call:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-fetcher

@@ -4,9 +4,8 @@ on:
   push:
     branches: [main]
     paths: ['**/*.md']
-  pull_request:
-    branches: [main]
-    paths: ['**/*.md']
+  # Called by ci.yml (the _ci-green orchestrator) for PR checks.
+  workflow_call:
 
 jobs:
   docs-check:
