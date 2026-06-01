@@ -26,13 +26,17 @@ on:
     # NO path filter here — this workflow must run on every PR to main,
     # regardless of which files were changed.
 
-# Least-privilege default for the gate jobs. A called reusable workflow's
-# GITHUB_TOKEN is capped by the CALLER's permissions, so the six service caller
-# jobs (whose workflows include a Docker job declaring packages: write) widen to
-# packages: write below. Docker push itself stays gated by event_name == 'push',
-# so nothing is published on PRs regardless of the granted scope.
+# Least-privilege default for the gate jobs:
+#   - contents: read       — checkout
+#   - pull-requests: read  — dorny/paths-filter calls the PR listFiles API
+# A called reusable workflow's GITHUB_TOKEN is capped by the CALLER's
+# permissions, so the six service caller jobs (whose workflows include a Docker
+# job declaring packages: write) widen to packages: write below. Docker push
+# itself stays gated by event_name == 'push', so nothing is published on PRs
+# regardless of the granted scope.
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   # ── Path detection ───────────────────────────────────────────────────────────
