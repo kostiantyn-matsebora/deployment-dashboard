@@ -1,3 +1,6 @@
+/** Flat SVG mark — served at GET /demo/favicon.svg. */
+export const FAVICON_SVG = `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="62" height="62" rx="14" fill="#1d1a55"></rect><path d="M 23 29.4 C 31 29.4, 29 18, 37 18" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.8" stroke-linecap="round"></path><path d="M 37.5 15 L 40.5 18 L 37.5 21 Z" fill="rgba(255,255,255,0.85)"></path><path d="M 23 32 C 31 32, 29 32, 37 32" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.8" stroke-linecap="round"></path><path d="M 37.5 29 L 40.5 32 L 37.5 35 Z" fill="rgba(255,255,255,0.85)"></path><path d="M 23 34.6 C 31 34.6, 29 46, 37 46" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="1.8" stroke-linecap="round"></path><path d="M 37.5 43 L 40.5 46 L 37.5 49 Z" fill="rgba(255,255,255,0.85)"></path><rect x="10" y="27" width="13" height="10" rx="2.8" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect><rect x="10" y="27" width="2.8" height="10" rx="1.3" fill="#fff"></rect><rect x="42" y="13" width="13" height="10" rx="2.8" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect><rect x="42" y="13" width="2.8" height="10" rx="1.3" fill="#fff"></rect><rect x="42" y="27" width="13" height="10" rx="2.8" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect><rect x="42" y="27" width="2.8" height="10" rx="1.3" fill="#fff"></rect><rect x="42" y="41" width="13" height="10" rx="2.8" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect><rect x="42" y="41" width="2.8" height="10" rx="1.3" fill="#fff"></rect></svg>`;
+
 /** Browser control panel — served at GET /demo/ (inline, no bundler). */
 export const PANEL_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -5,6 +8,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Demo Driver</title>
+  <link rel="icon" type="image/svg+xml" href="/demo/favicon.svg">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -211,7 +215,40 @@ export const PANEL_HTML = `<!DOCTYPE html>
 </head>
 <body>
 
-  <h1>Demo <span>Driver</span></h1>
+  <h1 style="display:flex;align-items:center;gap:10px">
+    <svg width="28" height="28" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="border-radius:7px;flex-shrink:0">
+      <defs>
+        <linearGradient id="ddbg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#2a2770"></stop>
+          <stop offset="0.55" stop-color="#1b1850"></stop>
+          <stop offset="1" stop-color="#121038"></stop>
+        </linearGradient>
+        <radialGradient id="ddsheen" cx="30%" cy="22%" r="90%">
+          <stop offset="0" stop-color="rgba(150,142,255,0.55)"></stop>
+          <stop offset="0.4" stop-color="rgba(120,110,255,0.12)"></stop>
+          <stop offset="1" stop-color="rgba(120,110,255,0)"></stop>
+        </radialGradient>
+      </defs>
+      <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#ddbg)"></rect>
+      <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#ddsheen)"></rect>
+      <rect x="1.5" y="1.5" width="61" height="61" rx="13.5" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="1"></rect>
+      <path d="M 23 29.4 C 31 29.4, 29 18, 37 18" fill="none" stroke="#34d29a" stroke-width="1.8" stroke-linecap="round"></path>
+      <path d="M 37.5 15 L 40.5 18 L 37.5 21 Z" fill="#34d29a"></path>
+      <path d="M 23 32 C 31 32, 29 32, 37 32" fill="none" stroke="#f5a524" stroke-width="1.8" stroke-linecap="round"></path>
+      <path d="M 37.5 29 L 40.5 32 L 37.5 35 Z" fill="#f5a524"></path>
+      <path d="M 23 34.6 C 31 34.6, 29 46, 37 46" fill="none" stroke="#ff5d5d" stroke-width="1.8" stroke-linecap="round"></path>
+      <path d="M 37.5 43 L 40.5 46 L 37.5 49 Z" fill="#ff5d5d"></path>
+      <rect x="10" y="27" width="13" height="10" rx="2.8" fill="rgba(180,175,255,0.15)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect>
+      <rect x="10" y="27" width="2.8" height="10" rx="1.3" fill="#34d29a"></rect>
+      <rect x="42" y="13" width="13" height="10" rx="2.8" fill="rgba(180,175,255,0.15)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect>
+      <rect x="42" y="13" width="2.8" height="10" rx="1.3" fill="#34d29a"></rect>
+      <rect x="42" y="27" width="13" height="10" rx="2.8" fill="rgba(180,175,255,0.15)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect>
+      <rect x="42" y="27" width="2.8" height="10" rx="1.3" fill="#f5a524"></rect>
+      <rect x="42" y="41" width="13" height="10" rx="2.8" fill="rgba(180,175,255,0.15)" stroke="rgba(255,255,255,0.22)" stroke-width="0.9"></rect>
+      <rect x="42" y="41" width="2.8" height="10" rx="1.3" fill="#ff5d5d"></rect>
+    </svg>
+    <span style="white-space:nowrap;color:#f4f4f5">Demo <span style="color:#6366f1">Driver</span></span>
+  </h1>
 
   <!-- ── Top card row ────────────────────────────────────────────────────── -->
   <div class="top-row">

@@ -10,6 +10,7 @@ children:
   - /behavior
   - /data-model
   - /libraries
+  - /logo
   - /mockup
 ---
 
@@ -61,3 +62,13 @@ children:
 - [Feature → PrimeNG Component Mapping](./libraries.md#feature--primeng-component-mapping)
 - [Full Dependency Inventory](./libraries.md#full-dependency-inventory)
 - [package.json Summary](./libraries.md#packagejson-summary)
+
+### `logo.md`
+
+- [Concept](./logo.md#concept)
+- [Assets](./logo.md#assets)
+- [Color](./logo.md#color)
+- [Geometry](./logo.md#geometry)
+- [Clear space & minimum size](./logo.md#clear-space--minimum-size)
+- [Do / Don't](./logo.md#do--dont)
+- [Integration](./logo.md#integration)

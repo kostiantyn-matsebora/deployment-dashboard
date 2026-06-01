@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Subject } from 'rxjs';
 import { NotFoundException } from '@nestjs/common';
 import { DemoController } from '../src/demo/demo.controller';
+import { FAVICON_SVG } from '../src/ui/panel';
 import { DemoService, DemoStatus } from '../src/demo/demo.service';
 import { RunnerStatus } from '../src/scenarios/scenario-runner';
 import { Response } from 'express';
@@ -144,6 +145,39 @@ describe('DemoController', () => {
 
     controller = module.get(DemoController);
     service    = module.get(DemoService) as any;
+  });
+
+  // ── Favicon ───────────────────────────────────────────────────────────────
+
+  describe('GET /demo/favicon.svg', () => {
+    it('sets Content-Type to image/svg+xml', () => {
+      const headers: Record<string, string> = {};
+      const res: Partial<Response> = {
+        setHeader: jest.fn().mockImplementation((k: string, v: string) => { headers[k] = v; return res as Response; }),
+        send: jest.fn().mockReturnThis(),
+      };
+      controller.favicon(res as Response);
+      expect(headers['Content-Type']).toBe('image/svg+xml');
+    });
+
+    it('sets Cache-Control header', () => {
+      const headers: Record<string, string> = {};
+      const res: Partial<Response> = {
+        setHeader: jest.fn().mockImplementation((k: string, v: string) => { headers[k] = v; return res as Response; }),
+        send: jest.fn().mockReturnThis(),
+      };
+      controller.favicon(res as Response);
+      expect(headers['Cache-Control']).toBe('public, max-age=86400');
+    });
+
+    it('sends FAVICON_SVG as the response body', () => {
+      const res: Partial<Response> = {
+        setHeader: jest.fn().mockReturnThis(),
+        send: jest.fn().mockReturnThis(),
+      };
+      controller.favicon(res as Response);
+      expect(res.send).toHaveBeenCalledWith(FAVICON_SVG);
+    });
   });
 
   // ── Status (never blocked) ────────────────────────────────────────────────

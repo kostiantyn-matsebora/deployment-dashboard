@@ -41,15 +41,12 @@
   flex-grow: 0;
 }
 
-/* 32×32 radial-gradient square — exact mockup gradient + shadow */
+/* 32×32 SVG brand mark — gradient/sheen/edge baked into the SVG */
 .brand-mark {
+  display: block;
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: radial-gradient(circle at 30% 30%, #8e88ff 0%, #4d49b8 60%, #1d1a55 100%);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-    0 6px 20px -6px rgba(120, 110, 255, 0.6);
   flex-shrink: 0;
 }
 
