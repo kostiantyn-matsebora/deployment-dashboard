@@ -3,9 +3,8 @@
 version: 2
 updates:
   # ── JavaScript / TypeScript (npm) ─────────────────────────────────────────────
-  # npm version-update PRs are disabled (open-pull-requests-limit: 0) — the JS
-  # dependency churn was too noisy. Config is kept so it can be re-enabled by
-  # setting the limit back to a positive number (e.g. 10).
+  # npm PRs are capped at 3 open at a time to keep JS dependency churn manageable
+  # (minor/patch updates are grouped, so a cap of 3 still covers most updates).
   - package-ecosystem: npm
     directories:
       - /frontend/dashboard
@@ -16,7 +15,7 @@ updates:
       - /testing/e2e
     schedule:
       interval: weekly
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 3
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
