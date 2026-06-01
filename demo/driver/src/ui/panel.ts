@@ -258,26 +258,29 @@ export const PANEL_HTML = `<!DOCTYPE html>
         <span class="gh-store-info" id="gh-store-info">demo · 2 repos · seeded —</span>
       </div>
 
-      <!-- Seed controls + Live toggle; flex-wrap keeps them on one row when space allows -->
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px">
-        <span class="lbl">Data set</span>
-        <select id="gh-dataset-select">
-          <option value="demo">demo</option>
-          <option value="random">random</option>
-        </select>
+      <!-- Seed group left · Live group right (space-between, no outer wrap) -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:8px;margin-top:10px">
+        <!-- Seed group wraps internally on very narrow viewports -->
+        <div style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:1;min-width:0">
+          <span class="lbl">Data set</span>
+          <select id="gh-dataset-select">
+            <option value="demo">demo</option>
+            <option value="random">random</option>
+          </select>
 
-        <span class="lbl" id="gh-count-lbl" style="display:none">Count</span>
-        <input type="number" id="gh-count-input" value="5" min="1" max="20" step="1"
-               style="width:60px;display:none">
+          <span class="lbl" id="gh-count-lbl" style="display:none">Count</span>
+          <input type="number" id="gh-count-input" value="5" min="1" max="20" step="1"
+                 style="width:60px;display:none">
 
-        <label class="chk-label">
-          <input type="checkbox" id="gh-reset-check" checked> Reset
-        </label>
+          <label class="chk-label">
+            <input type="checkbox" id="gh-reset-check" checked> Reset
+          </label>
 
-        <button class="btn-run" id="gh-seed-btn" onclick="ghSeed()">Seed</button>
+          <button class="btn-run" id="gh-seed-btn" onclick="ghSeedOrStop()">Seed</button>
+        </div>
 
-        <!-- Live group — left-border acts as separator whether inline or wrapped -->
-        <div style="display:inline-flex;align-items:center;gap:8px;padding-left:10px;border-left:1px solid #3f3f46">
+        <!-- Live group — left-border separator; anchored to right by space-between -->
+        <div style="display:inline-flex;align-items:center;gap:8px;flex-shrink:0;padding-left:10px;border-left:1px solid #3f3f46">
           <span class="lbl">Live</span>
           <span class="badge badge-off" id="gh-emit-badge">OFF</span>
           <button class="btn-enable" id="gh-emit-btn" onclick="ghToggleEmit()">Enable</button>
@@ -909,7 +912,13 @@ export const PANEL_HTML = `<!DOCTYPE html>
     }
 
     // ── GitHub Emulator controls ──────────────────────────────────────────────
-    async function ghSeed() {
+    // Dispatcher: routes to ghDoSeed() or ghDoStop() based on current button label.
+    function ghSeedOrStop() {
+      if (ghSeedBtn.textContent === 'Stop') ghDoStop();
+      else ghDoSeed();
+    }
+
+    async function ghDoSeed() {
       if (isBlocked) return;
       const doReset = ghResetCheck.checked;
       ghSeedBtn.disabled    = true;
@@ -978,6 +987,24 @@ export const PANEL_HTML = `<!DOCTYPE html>
       }
     }
 
+    async function ghDoStop() {
+      if (isBlocked) return;
+      ghSeedBtn.disabled    = true;
+      ghSeedMsg.textContent = '';
+      ghSeedMsg.className   = 'api-msg';
+      try {
+        const d = await apiFetch('/demo/github/clear', { method: 'POST' });
+        applyGithubStatus(d);
+        ghSeedMsg.textContent = '\\u2713 Cleared';
+        ghSeedMsg.className   = 'api-msg ok';
+      } catch {
+        ghSeedMsg.textContent = '\\u2717 Clear error';
+        ghSeedMsg.className   = 'api-msg err';
+      } finally {
+        ghSeedBtn.disabled = isBlocked;
+      }
+    }
+
     function ghToggleEmit() {
       if (isBlocked) return;
       ghEmitBtn.disabled = true;
@@ -1008,6 +1035,11 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const seededAt  = d.seeded_at ? fmtMs(d.seeded_at) : '—';
       ghStoreInfo.innerHTML =
         esc(dataset) + ' · ' + esc(String(repos)) + ' repos · seeded ' + esc(seededAt);
+
+      // Seed/Stop toggle: non-empty store → Stop; empty store → Seed.
+      const hasData = ((d.deployments || 0) > 0) || ((d.repos || 0) > 0);
+      ghSeedBtn.textContent = hasData ? 'Stop' : 'Seed';
+      ghSeedBtn.className   = hasData ? 'btn-stop' : 'btn-run';
 
       // Sync emit state if present.
       if (typeof d.emitting === 'boolean') applyGhEmit(d);
