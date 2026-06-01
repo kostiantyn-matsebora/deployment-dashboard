@@ -127,7 +127,7 @@ DASHBOARD_VERSION=0.1.0
 
 Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`) containing all `compose/*.yaml` files and `compose/.env.example` — a clone-free way to deploy a specific version without checking out the repo.
 
-For the full release process, see [RELEASING.md](../../RELEASING.md).
+For the full release process, see [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
 
 ## Hosting notes
 
