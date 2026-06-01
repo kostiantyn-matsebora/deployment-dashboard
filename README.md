@@ -108,4 +108,17 @@ Open `http://localhost:8080` for the dashboard and `http://localhost:8080/demo/`
 
 ## Docs
 
-Full specification in [`docs/`](docs/index.md) — architecture (SAD), API contracts, frontend requirements, fetcher, mock server, and demo driver.
+📖 **Documentation site:** <https://kostiantyn-matsebora.github.io/deployment-dashboard/>
+
+New here? Start with the adopter guides:
+
+- [Quickstart](docs/guide/quickstart.md) — run the whole stack locally, zero config.
+- [Install & deploy](docs/guide/install.md) · [Configuration](docs/guide/configuration.md)
+- [Integrate your CI/CD](docs/guide/send-events.md) — send deployments from any pipeline (one step).
+- [Architecture overview](docs/guide/architecture-overview.md) · [FAQ & troubleshooting](docs/guide/faq.md)
+
+Development & reference (the full specification) lives under [`docs/`](docs/index.md) — architecture (SAD), API contract, frontend requirements, fetcher, mock server, and demo driver.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, the branch → PR workflow, and the conventions CI enforces. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: follow the [Security policy](SECURITY.md).

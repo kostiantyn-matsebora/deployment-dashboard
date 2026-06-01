@@ -1,0 +1,124 @@
+site_name: Deployment Dashboard
+site_description: >-
+  Real-time services × environments deployment matrix sourced from CI/CD pipeline
+  events. Documentation for adopters and contributors.
+site_url: https://kostiantyn-matsebora.github.io/deployment-dashboard/
+site_author: Kostiantyn Matsebora
+
+repo_name: kostiantyn-matsebora/deployment-dashboard
+repo_url: https://github.com/kostiantyn-matsebora/deployment-dashboard
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+
+# Pre-existing spec docs use relative cross-links and anchors that predate this
+# site; build is intentionally non-strict so they don't block a deploy.
+strict: false
+
+theme:
+  name: material
+  logo: design/logo/logo-mark-transparent.svg
+  favicon: design/logo/favicon-32.png
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.tracking
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      # Match the repo's GFM/kramdown anchor convention (docs-keeper index TOCs
+      # use it) so generated index links resolve on the published site.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Using the Dashboard:
+      - guide/index.md
+      - Quickstart: guide/quickstart.md
+      - Install & deploy: guide/install.md
+      - Configuration: guide/configuration.md
+      - Integrate your CI/CD: guide/send-events.md
+      - Architecture overview: guide/architecture-overview.md
+      - FAQ & troubleshooting: guide/faq.md
+  - Development & reference:
+      - Architecture (SAD): SAD.md
+      - Engineering process: engineering-process.md
+      - API contract:
+          - Overview: api/index.md
+          - Guidelines: api/api-guidelines.md
+          - Examples: api/api-examples.md
+      - Services:
+          - API: API_SPECIFICATION.md
+          - Gateway: GATEWAY_SPECIFICATION.md
+          - Fetcher: FETCHER_SPECIFICATION.md
+          - Demo Driver: DEMO_DRIVER_SPECIFICATION.md
+          - GitHub Emulator: GITHUB_EMULATOR_SPECIFICATION.md
+          - Mock server: MOCK_SPECIFICATION.md
+      - Frontend:
+          - Requirements: FRONTEND_REQUIREMENTS.md
+          - Design:
+              - design/index.md
+              - Design tokens: design/design-tokens.md
+              - Components: design/components.md
+              - Views: design/views.md
+              - Behavior: design/behavior.md
+              - Data model: design/data-model.md
+              - Libraries: design/libraries.md
+              - Logo: design/logo/index.md
+              - Mockup: design/mockup/index.md
+      - Diagrams:
+          - Overview: diagrams/index.md
+          - GitHub emulation: diagrams/github-emulation.md
+          - Reset choreography: diagrams/reset-choreography.md
+  - Contributing: https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CONTRIBUTING.md
+  - Changelog: https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CHANGELOG.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kostiantyn-matsebora/deployment-dashboard

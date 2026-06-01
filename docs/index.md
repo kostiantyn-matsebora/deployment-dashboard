@@ -3,6 +3,7 @@ title: Documentation
 shortTitle: Docs
 intro: 'Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.'
 children:
+  - /guide
   - /SAD
   - /FRONTEND_REQUIREMENTS
   - /API_SPECIFICATION
@@ -18,6 +19,17 @@ children:
 ---
 
 ## Contents
+
+### `guide/` — Using the Dashboard
+
+Adopter guides — run, deploy, configure, and feed the dashboard from any CI/CD. See [`guide/index.md`](./guide/index.md).
+
+- [Quickstart](./guide/quickstart.md)
+- [Install & deploy](./guide/install.md)
+- [Configuration](./guide/configuration.md)
+- [Integrate your CI/CD](./guide/send-events.md)
+- [Architecture overview](./guide/architecture-overview.md)
+- [FAQ & troubleshooting](./guide/faq.md)
 
 ### `SAD.md`
 

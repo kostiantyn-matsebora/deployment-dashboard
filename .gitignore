@@ -104,6 +104,11 @@ testing/e2e/captures/head-*.png
 # report file), so this guard only matters for local invocations.
 format-report.json
 
+# ---- MkDocs (docs site) --------------------------------------------------
+# `mkdocs build` output; CI builds and deploys it to Pages, never committed.
+site/
+.mkdocs-site-tmp/
+
 # ---- Misc ----------------------------------------------------------------
 *.log
 
