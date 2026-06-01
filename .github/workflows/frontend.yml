@@ -1,16 +1,17 @@
 name: frontend
 
 on:
+  # Push to main: runs test + Docker publish.
   push:
     branches: [main]
     paths:
       - 'frontend/dashboard/**'
       - '.github/workflows/frontend.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'frontend/dashboard/**'
-      - '.github/workflows/frontend.yml'
+  # Called by ci.yml (the _ci-green orchestrator) for PR checks.
+  # workflow_call carries no path filter — the orchestrator's paths-filter decides
+  # whether to invoke this workflow. Docker publish is already gated by
+  # `github.event_name == 'push'`, so workflow_call never triggers a publish.
+  workflow_call:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-spa
