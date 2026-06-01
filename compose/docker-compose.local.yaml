@@ -39,9 +39,23 @@ services:
       context: ../backend
       dockerfile: api/Dashboard.Api/Dockerfile
 
+  fetcher-host:
+    image: deployment-dashboard-fetcher:local
+    pull_policy: never
+    build:
+      context: ../backend
+      dockerfile: fetcher-host/Dashboard.Fetcher.Host/Dockerfile
+
   demo-driver:
     image: deployment-dashboard-demo-driver:local
     pull_policy: never
     build:
       context: ../demo
       dockerfile: driver/Dockerfile
+
+  github-emulator:
+    image: deployment-dashboard-github-emulator:local
+    pull_policy: never
+    build:
+      context: ../demo
+      dockerfile: github-emulator/Dockerfile

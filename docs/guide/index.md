@@ -37,10 +37,12 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Minimal production start](./install.md#minimal-production-start)
 - [Running from local source](./install.md#running-from-local-source)
 - [Production checklist](./install.md#production-checklist)
+- [Pinning a release version](./install.md#pinning-a-release-version)
 - [Hosting notes](./install.md#hosting-notes)
 
 ### `configuration.md`
 
+- [Stack version](./configuration.md#stack-version)
 - [Which vars does my profile need?](./configuration.md#which-vars-does-my-profile-need)
 - [API](./configuration.md#api)
 - [PostgreSQL: bundled profiles](./configuration.md#postgresql-bundled-profiles)

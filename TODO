@@ -8,4 +8,4 @@
 ☐ Add logo wherever its suitable
 ☐ Make component events stream instead of polling
 ☐ Add corellation ID to the events to corellate them with command and each other
-☐ Create release lifecycle for solution
+✔ Create release lifecycle for solution @done(26-06-01 22:27)
