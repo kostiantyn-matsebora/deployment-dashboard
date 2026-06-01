@@ -179,8 +179,10 @@ jobs:
   # ── Required gate ────────────────────────────────────────────────────────────
   # THIS job's name is the required status-check context registered in branch protection.
   # `if: always()` ensures it runs even when callers are skipped or failed.
-  # re-actors/alls-green passes when all needed jobs are success or skipped;
-  # it fails when any needed job failed or was cancelled.
+  # alls-green treats SKIPPED as a failure unless the job is in `allowed-skips`.
+  # The area jobs skip whenever their paths are untouched, so all nine are listed
+  # as allowed-skips; `changes` is not (it must always run and succeed). A real
+  # FAILURE in any area still fails the gate — allowed-skips only tolerates skips.
   _ci-green:
     name: _ci-green
     runs-on: ubuntu-latest
@@ -201,3 +203,13 @@ jobs:
         uses: re-actors/alls-green@release/v1
         with:
           jobs: ${{ toJSON(needs) }}
+          allowed-skips: |
+            ci-api
+            ci-frontend
+            ci-gateway
+            ci-fetcher
+            ci-demo-driver
+            ci-github-emulator
+            ci-api-tests
+            ci-docs
+            ci-scripts
