@@ -138,13 +138,12 @@ jobs:
           Write-Host $notes
 
       - name: Assemble compose bundle
-        shell: pwsh
+        # Plain `zip` (bash) — no PowerShell dot-file/hidden-item semantics, so the
+        # .env.example dot-file is included reliably. -j flattens paths (files at the
+        # zip root), matching the curl-into-cwd deploy flow in the docs.
         run: |
-          $zip = "deployment-dashboard-compose-${{ github.ref_name }}.zip"
-          # -Force: .env.example is a dot-file, which PowerShell treats as hidden on Linux.
-          $files = @(Get-ChildItem -Force -Path compose -Filter *.yaml) + @(Get-Item -Force compose/.env.example)
-          Compress-Archive -Path $files.FullName -DestinationPath $zip -Force
-          Write-Host "Bundled $($files.Count) files into $zip"
+          zip -j "deployment-dashboard-compose-${{ github.ref_name }}.zip" compose/*.yaml compose/.env.example
+          unzip -l "deployment-dashboard-compose-${{ github.ref_name }}.zip"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
