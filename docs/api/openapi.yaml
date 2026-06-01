@@ -865,6 +865,15 @@ components:
               type: string
               format: uuid
               description: Server-assigned surrogate row identifier (event-row primary key).
+            progress_reporter:
+              type: string
+              maxLength: 128
+              description: |
+                Attribution captured from the `X-Progress-Reporter` header at ingest
+                (e.g. `dashboard-fetcher/github-actions`, `demo-driver/demo`). Returned on
+                `GET /api/deployments` items and the `GET /api/events/stream` `deployment`
+                frame. Absent when the header was not supplied.
+              examples: [dashboard-fetcher/github-actions]
 
     DeploymentEventPage:
       type: object
