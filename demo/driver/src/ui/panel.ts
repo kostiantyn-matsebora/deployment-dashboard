@@ -258,9 +258,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
         <span class="gh-store-info" id="gh-store-info">demo · 2 repos · seeded —</span>
       </div>
 
-      <!-- Seed sub-section -->
-      <div class="sub-section-title" style="margin-top:0">Seed</div>
-      <div class="controls">
+      <!-- Seed controls + Live toggle; flex-wrap keeps them on one row when space allows -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px">
         <span class="lbl">Data set</span>
         <select id="gh-dataset-select">
           <option value="demo">demo</option>
@@ -275,20 +274,17 @@ export const PANEL_HTML = `<!DOCTYPE html>
           <input type="checkbox" id="gh-reset-check" checked> Reset
         </label>
 
-        <button class="btn-run"  id="gh-seed-btn"  onclick="ghSeed()">Seed</button>
-        <button class="btn-stop" id="gh-clear-btn" onclick="ghClear()">Clear</button>
-      </div>
-      <div class="api-msg-row">
-        <span class="api-msg" id="gh-seed-msg"></span>
-      </div>
+        <button class="btn-run" id="gh-seed-btn" onclick="ghSeed()">Seed</button>
 
-      <!-- Live sub-section -->
-      <div class="sub-section">
-        <div class="sub-section-title">Live</div>
-        <div class="emit-row">
+        <!-- Live group — left-border acts as separator whether inline or wrapped -->
+        <div style="display:inline-flex;align-items:center;gap:8px;padding-left:10px;border-left:1px solid #3f3f46">
+          <span class="lbl">Live</span>
           <span class="badge badge-off" id="gh-emit-badge">OFF</span>
           <button class="btn-enable" id="gh-emit-btn" onclick="ghToggleEmit()">Enable</button>
         </div>
+      </div>
+      <div class="api-msg-row">
+        <span class="api-msg" id="gh-seed-msg"></span>
       </div>
     </div>
 
@@ -409,7 +405,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const ghCountInput    = $('gh-count-input');
     const ghResetCheck    = $('gh-reset-check');
     const ghSeedBtn       = $('gh-seed-btn');
-    const ghClearBtn2     = $('gh-clear-btn');
     const ghSeedMsg       = $('gh-seed-msg');
     const ghEmitBadge     = $('gh-emit-badge');
     const ghEmitBtn       = $('gh-emit-btn');
@@ -428,7 +423,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const interactiveControls = [
       ingestBtn, ingestStopBtn, emitToggleBtn, resetApiBtn,
       datasetSelect, countInput, delayInput, resetCheck,
-      ghSeedBtn, ghClearBtn2, ghEmitBtn, ghDatasetSelect, ghCountInput, ghResetCheck,
+      ghSeedBtn, ghEmitBtn, ghDatasetSelect, ghCountInput, ghResetCheck,
     ];
 
     let pollTimer        = null;
@@ -916,14 +911,16 @@ export const PANEL_HTML = `<!DOCTYPE html>
     // ── GitHub Emulator controls ──────────────────────────────────────────────
     async function ghSeed() {
       if (isBlocked) return;
-      ghSeedBtn.disabled  = true;
-      ghClearBtn2.disabled = true;
+      const doReset = ghResetCheck.checked;
+      ghSeedBtn.disabled    = true;
       ghSeedMsg.textContent = '';
       ghSeedMsg.className   = 'api-msg';
+
+      // Step 1: seed the emulator.
+      let seedOk = false;
       try {
         const dataset = ghDatasetSelect.value;
-        const reset   = ghResetCheck.checked;
-        const body    = { dataset, reset };
+        const body    = { dataset, reset: doReset };
         if (dataset === 'random') body.count = parseInt(ghCountInput.value, 10) || 5;
         const d = await apiFetch('/demo/github/seed', {
           method: 'POST',
@@ -932,31 +929,52 @@ export const PANEL_HTML = `<!DOCTYPE html>
         applyGithubStatus(d);
         ghSeedMsg.textContent = '\\u2713 Seeded';
         ghSeedMsg.className   = 'api-msg ok';
+        seedOk = true;
       } catch {
-        ghSeedMsg.textContent = '\\u2717 Network error';
+        ghSeedMsg.textContent = '\\u2717 Seed error';
         ghSeedMsg.className   = 'api-msg err';
-      } finally {
-        ghSeedBtn.disabled   = isBlocked;
-        ghClearBtn2.disabled = isBlocked;
+        ghSeedBtn.disabled = isBlocked;
+        return;
       }
-    }
 
-    async function ghClear() {
-      if (isBlocked) return;
-      ghSeedBtn.disabled   = true;
-      ghClearBtn2.disabled = true;
-      ghSeedMsg.textContent = '';
-      try {
-        const d = await apiFetch('/demo/github/clear', { method: 'POST' });
-        applyGithubStatus(d);
-        ghSeedMsg.textContent = '\\u2713 Cleared';
-        ghSeedMsg.className   = 'api-msg ok';
-      } catch {
-        ghSeedMsg.textContent = '\\u2717 Network error';
-        ghSeedMsg.className   = 'api-msg err';
-      } finally {
-        ghSeedBtn.disabled   = isBlocked;
-        ghClearBtn2.disabled = isBlocked;
+      // Step 2: if Reset was checked, also trigger the system reset — mirrors
+      // the ingest handler's optimistic-dim pattern exactly.
+      if (seedOk && doReset) {
+        // Optimistic dim — same block as ingest handler.
+        isBlocked = true;
+        interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
+        interactiveControls.forEach(el => { el.disabled = true; });
+        resetStateBadge.textContent = 'RESET IN PROGRESS';
+        resetStateBadge.className   = 'badge badge-reset-blocked';
+        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
+        sbResetBadge.className      = 'badge badge-reset-blocked';
+
+        try {
+          const r = await apiFetch('/demo/api-reset', { method: 'POST' });
+          if (r.ok) {
+            schedulePoll();
+          } else {
+            // Non-OK response: revert optimistic dim.
+            isBlocked = false;
+            interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
+            interactiveControls.forEach(el => { el.disabled = false; });
+            resetStateBadge.textContent = 'IDLE';
+            resetStateBadge.className   = 'badge badge-reset-idle';
+            sbResetBadge.textContent    = 'RESET: IDLE';
+            sbResetBadge.className      = 'badge badge-reset-idle';
+          }
+        } catch {
+          // Network error: revert optimistic dim.
+          isBlocked = false;
+          interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
+          interactiveControls.forEach(el => { el.disabled = false; });
+          resetStateBadge.textContent = 'IDLE';
+          resetStateBadge.className   = 'badge badge-reset-idle';
+          sbResetBadge.textContent    = 'RESET: IDLE';
+          sbResetBadge.className      = 'badge badge-reset-idle';
+        }
+      } else {
+        ghSeedBtn.disabled = isBlocked;
       }
     }
 
