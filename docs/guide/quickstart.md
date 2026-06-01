@@ -16,14 +16,16 @@ The `demo` profile starts everything — Gateway, Frontend, API, PostgreSQL — 
 Pull the Compose project directly from GHCR — no clone, no curl, no local files:
 
 ```bash
-docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:latest --profile demo up
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:latest --profile demo up
 ```
 
 To pin to a specific release version:
 
 ```bash
-docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.1.0 --profile demo up
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.1.0 --profile demo up
 ```
+
+> **Why `--project-directory .`?** It points Compose at the current directory for `.env`/variable resolution. Without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` "CreateFile/no such file" error.
 
 > **Availability.** The OCI artifact is published automatically on each release. The `:latest` tag exists once the first release (`v0.1.0`) is cut. Until then, use the curl alternative below.
 
