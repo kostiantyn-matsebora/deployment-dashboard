@@ -14,7 +14,7 @@
     <!-- Direct dependency: ControlEventBroadcaster opens a NpgsqlConnection for LISTEN/NOTIFY. -->
     <PackageReference Include="Npgsql" Version="10.0.*" />
     <!-- State machine for the reset choreography (D12). -->
-    <PackageReference Include="Stateless" Version="5.16.0" />
+    <PackageReference Include="Stateless" Version="5.20.1" />
   </ItemGroup>
 
   <ItemGroup>
