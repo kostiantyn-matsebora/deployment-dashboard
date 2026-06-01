@@ -1,0 +1,53 @@
+# Dependabot — automated dependency update PRs.
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates
+version: 2
+updates:
+  # ── JavaScript / TypeScript (npm) ─────────────────────────────────────────────
+  - package-ecosystem: npm
+    directories:
+      - /frontend/dashboard
+      - /frontend/mock
+      - /demo/driver
+      - /demo/github-emulator
+      - /testing/api
+      - /testing/e2e
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  # ── .NET (NuGet) — backend solution ───────────────────────────────────────────
+  - package-ecosystem: nuget
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      nuget-minor-patch:
+        update-types: [minor, patch]
+
+  # ── GitHub Actions ────────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
+
+  # ── Docker base images (one dir per Dockerfile) ───────────────────────────────
+  - package-ecosystem: docker
+    directories:
+      - /backend/api/Dashboard.Api
+      - /backend/fetcher-host/Dashboard.Fetcher.Host
+      - /frontend/dashboard
+      - /demo/driver
+      - /demo/github-emulator
+      - /gateway
+    schedule:
+      interval: weekly
+    groups:
+      docker:
+        patterns: ['*']
