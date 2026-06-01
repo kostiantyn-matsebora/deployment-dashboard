@@ -18,6 +18,8 @@ Two shapes, each with a pull-mode variant:
 
 > Pick **`standalone`** when your database is managed (e.g. Azure Database for PostgreSQL). Pick **`full`** for a single box that owns its data volume.
 
+> ⚠️ **Required secrets — set these before deploying.** Production profiles require `API_KEY`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` (plus `POSTGRES_HOST` for `standalone`). Compose does **not** refuse to start when they're missing — it substitutes empty strings, so the stack comes up and then the API / database containers **crash-loop** (the API validates these on startup). Set them in `.env` (or your environment) first. The `demo` profile needs none.
+
 ### Get the compose project
 
 Two options — OCI artifact (recommended) or curl.
