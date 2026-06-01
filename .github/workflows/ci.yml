@@ -179,10 +179,9 @@ jobs:
   # ── Required gate ────────────────────────────────────────────────────────────
   # THIS job's name is the required status-check context registered in branch protection.
   # `if: always()` ensures it runs even when callers are skipped or failed.
-  # alls-green treats SKIPPED as a failure unless the job is in `allowed-skips`.
-  # The area jobs skip whenever their paths are untouched, so all nine are listed
-  # as allowed-skips; `changes` is not (it must always run and succeed). A real
-  # FAILURE in any area still fails the gate — allowed-skips only tolerates skips.
+  # Self-contained gate: pass when every needed job is success or skipped
+  # (area jobs skip when their paths are untouched), fail only on a real
+  # failure or cancellation. Avoids third-party action quirks around skips.
   _ci-green:
     name: _ci-green
     runs-on: ubuntu-latest
@@ -199,17 +198,19 @@ jobs:
       - ci-docs
       - ci-scripts
     steps:
-      - name: All checks passed or skipped
-        uses: re-actors/alls-green@release/v1
-        with:
-          jobs: ${{ toJSON(needs) }}
-          allowed-skips: |
-            ci-api
-            ci-frontend
-            ci-gateway
-            ci-fetcher
-            ci-demo-driver
-            ci-github-emulator
-            ci-api-tests
-            ci-docs
-            ci-scripts
+      - name: Verify no required job failed
+        shell: pwsh
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          $needs = $env:NEEDS | ConvertFrom-Json
+          $failed = $needs.PSObject.Properties |
+            Where-Object { $_.Value.result -in @('failure', 'cancelled') }
+          foreach ($p in $needs.PSObject.Properties) {
+            Write-Host ("{0,-22} {1}" -f $p.Name, $p.Value.result)
+          }
+          if ($failed) {
+            Write-Host "::error::Failed jobs: $($failed.Name -join ', ')"
+            exit 1
+          }
+          Write-Host "All required jobs passed or were skipped."
