@@ -10,16 +10,21 @@ namespace Dashboard.Api.Tests;
 /// <c>GET /api/fetcher/state/{adapter}</c> and <c>PUT /api/fetcher/state/{adapter}</c>.
 ///
 /// Both endpoints require <c>X-Api-Key</c>.
+/// Runs against the shared Postgres container (via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class FetcherStateEndpointTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public FetcherStateEndpointTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 

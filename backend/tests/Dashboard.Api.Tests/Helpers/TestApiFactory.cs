@@ -7,19 +7,29 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Testcontainers.PostgreSql;
 
 namespace Dashboard.Api.Tests.Helpers;
 
 /// <summary>
-/// <see cref="WebApplicationFactory{TEntryPoint}"/> backed by a real Postgres container
-/// (Testcontainers). Replaces <see cref="IDeploymentNotifier"/> with a no-op and injects
-/// a known <c>API_KEY</c> so authentication tests have a stable key.
+/// <see cref="WebApplicationFactory{TEntryPoint}"/> backed by a caller-supplied Postgres
+/// connection string (provided by <see cref="PostgresFixture"/>). The factory is cheap
+/// to construct — it does not own or start a container.
+///
+/// Per-class configuration knobs (<see cref="UseRealNotifier"/>, <see cref="IncludeControlKey"/>,
+/// <see cref="ForcedResetState"/>, <see cref="ResetConfig"/>) configure the in-process
+/// ASP.NET Core host and remain unchanged from the previous design.
 /// </summary>
-internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+internal sealed class TestApiFactory : WebApplicationFactory<Program>
 {
     public const string TestApiKey = "test-key";
     public const string TestControlApiKey = "test-control-key";
+
+    private readonly string _connectionString;
+
+    /// <param name="connectionString">
+    /// Postgres connection string from the shared <see cref="PostgresFixture"/>.
+    /// </param>
+    public TestApiFactory(string connectionString) => _connectionString = connectionString;
 
     /// <summary>
     /// When <c>true</c> the real <see cref="Dashboard.Write.Notifiers.PostgresDeploymentNotifier"/>
@@ -48,25 +58,13 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// </summary>
     public ResetConfigOverride? ResetConfig { get; init; }
 
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
-        .Build();
-
-    // IAsyncLifetime — start the container before any test uses the factory.
-    public async Task InitializeAsync() => await _postgres.StartAsync();
-
-    public new async Task DisposeAsync()
-    {
-        await base.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
-
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, config) =>
         {
             var values = new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Postgres"] = _postgres.GetConnectionString(),
+                ["ConnectionStrings:Postgres"] = _connectionString,
                 ["API_KEY"] = TestApiKey,
             };
 
@@ -118,7 +116,7 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>, IAsyncLif
         });
     }
 
-    /// <summary>Applies EF migrations. Call once per test class / collection fixture.</summary>
+    /// <summary>Applies EF migrations against the shared Postgres instance.</summary>
     public async Task MigrateAsync()
     {
         using var scope = Services.CreateScope();

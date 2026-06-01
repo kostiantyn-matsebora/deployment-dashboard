@@ -9,17 +9,21 @@ namespace Dashboard.Api.Tests;
 /// Integration tests for <c>POST /api/control/events</c> and <c>GET /api/control/events</c>.
 /// Verifies X-Api-Key auth, X-Component-Id validation (422), body validation (422),
 /// the 8 KiB payload limit (413), the 204 happy path, and listing + filters + paging.
-/// Runs against a real Postgres container (Testcontainers).
+/// Runs against the shared Postgres container (via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class ComponentEventTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public ComponentEventTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 

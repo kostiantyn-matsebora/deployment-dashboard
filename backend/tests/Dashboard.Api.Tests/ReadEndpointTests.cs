@@ -10,19 +10,23 @@ namespace Dashboard.Api.Tests;
 /// <c>GET /api/deployments</c>, <c>GET /api/deployments/{id}</c>,
 /// <c>GET /api/matrix</c>, <c>GET /api/services</c>, <c>GET /api/environments</c>.
 ///
-/// Each test class gets its own Postgres container (Testcontainers via <see cref="TestApiFactory"/>),
-/// so data seeded by individual tests accumulates across methods within the class.
+/// The class uses a single factory (and thus a single DB state reset at class init).
+/// Data seeded by individual tests accumulates across methods within the class.
 /// Tests that need an empty result use a service/environment name that no other test seeds.
 /// </summary>
+[Collection("api-postgres")]
 public sealed class ReadEndpointTests : IAsyncLifetime
 {
-    private readonly TestApiFactory _factory = new();
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public ReadEndpointTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString);
         _client = _factory.CreateClient();
     }
 

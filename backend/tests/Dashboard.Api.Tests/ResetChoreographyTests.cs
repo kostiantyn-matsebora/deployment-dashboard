@@ -11,18 +11,22 @@ namespace Dashboard.Api.Tests;
 /// Integration tests for the reset choreography (phase 11 + robustness fixes).
 /// Covers: 202/409; reset-initiated SSE fan-out; full 2-ack cycle with reset_id
 /// correlation; timeout structural; data-clear scope; readyz third channel.
-/// Runs against a real Postgres container (Testcontainers).
+/// Runs against the shared Postgres container (via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class ResetChoreographyTests : IAsyncLifetime
 {
+    private readonly PostgresFixture _fixture;
     // Use real broadcaster so LISTEN/NOTIFY fan-out reaches the stream.
-    private readonly TestApiFactory _factory = new() { UseRealNotifier = true };
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public ResetChoreographyTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString) { UseRealNotifier = true };
         _client = _factory.CreateClient();
         // Allow the broadcasters to establish LISTEN.
         await Task.Delay(TimeSpan.FromSeconds(2));
@@ -308,27 +312,30 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
 /// latency) so that an early completion observed within 5 s is provably ack-driven, not
 /// timeout-driven.
 /// </summary>
+[Collection("api-postgres")]
 public sealed class AckFanInTests : IAsyncLifetime
 {
     private const string TestComponent = "ack-fan-in-test";
 
+    private readonly PostgresFixture _fixture;
     // Long AckTimeout so early completion is unambiguously ack-driven.
     // GateMaxTtl must be larger than AckTimeout; 120 s is safe.
-    private readonly TestApiFactory _factory = new()
-    {
-        UseRealNotifier = true,
-        ResetConfig = new ResetConfigOverride(
-            AckTimeoutSeconds: 30,
-            ExpectedComponents: [TestComponent],
-            GateMaxTtlSeconds: 120),
-    };
-
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
+
+    public AckFanInTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            UseRealNotifier = true,
+            ResetConfig = new ResetConfigOverride(
+                AckTimeoutSeconds: 30,
+                ExpectedComponents: [TestComponent],
+                GateMaxTtlSeconds: 120),
+        };
         _client = _factory.CreateClient();
         // Allow all three LISTEN channels (component_acks, control_events, reset_state) to connect.
         await Task.Delay(TimeSpan.FromSeconds(2));
@@ -465,27 +472,26 @@ public sealed class AckFanInTests : IAsyncLifetime
 /// Integration tests for the ingest gate (Fix C) and reconciler behavior (Fix A).
 /// Uses a separate factory with <see cref="ForcedResetStateProvider"/> for gate tests
 /// to avoid NOTIFY/LISTEN timing dependencies.
+/// Runs against the shared Postgres container (via <see cref="PostgresFixture"/>).
 /// </summary>
+[Collection("api-postgres")]
 public sealed class IngestGateTests : IAsyncLifetime
 {
+    private readonly PostgresFixture _fixture;
     private readonly ForcedResetStateProvider _forcedState = new() { IsResetting = false };
-
-    private readonly TestApiFactory _factory;
+    private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
 
-    public IngestGateTests()
+    public IngestGateTests(PostgresFixture fixture) => _fixture = fixture;
+
+    public async Task InitializeAsync()
     {
-        _factory = new TestApiFactory
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString)
         {
             UseRealNotifier = false,
             ForcedResetState = _forcedState,
         };
-    }
-
-    public async Task InitializeAsync()
-    {
-        await _factory.InitializeAsync();
-        await _factory.MigrateAsync();
         _client = _factory.CreateClient();
     }
 
