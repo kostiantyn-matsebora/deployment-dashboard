@@ -40,6 +40,10 @@ public sealed class PostgresFixture : IAsyncLifetime
         {
             DbAdapter = DbAdapter.Postgres,
             SchemasToInclude = ["public"],
+            // Preserve EF's migration history: the API auto-migrates on startup
+            // (Dashboard.Api/Program.cs), so wiping it would make every
+            // WebApplicationFactory boot re-create the (already-present) tables → 42P07.
+            TablesToIgnore = [new Respawn.Graph.Table("public", "__EFMigrationsHistory")],
         });
     }
 
