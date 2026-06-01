@@ -101,8 +101,8 @@ jobs:
 
   # ── Area callers ─────────────────────────────────────────────────────────────
   # Each job calls the corresponding reusable workflow only when its area changed.
-  # When skipped (if condition false), GitHub marks the job as skipped — which
-  # alls-green treats as success by default.
+  # When the `if` is false the job result is `skipped`, which the `_ci-green`
+  # gate below treats as a pass.
 
   ci-api:
     name: CI / api
