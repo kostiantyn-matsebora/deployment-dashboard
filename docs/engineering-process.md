@@ -1,6 +1,6 @@
 # Engineering Process — Agent Dispatch Convention
 
-**Status:** Draft · **Date:** 2026-05-31
+**Status:** Draft · **Date:** 2026-06-01
 
 Defines specialist-routing for every change in this repo. Stack-agnostic; suitable for extraction to a shared engineering-team framework.
 
@@ -17,6 +17,7 @@ Route each change to the specialist that owns it:
 | Contract / API shape (endpoint, verb, payload, wire format) | `api-architect` |
 | Server-side / backend code | `backend-developer` |
 | Frontend / SPA / UI | `frontend-developer` |
+| CI/CD workflows, containers (Docker/Compose), release lifecycle, infrastructure (IaC) | `deployment-engineer` |
 | Tests + verification | `testing-specialist` |
 | Markdown docs / `index.md` / sources-of-truth | `docs-keeper` |
 
