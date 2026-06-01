@@ -4,6 +4,7 @@ site_description: >-
   events. Documentation for adopters and contributors.
 site_url: https://kostiantyn-matsebora.github.io/deployment-dashboard/
 site_author: Kostiantyn Matsebora
+copyright: 'Copyright &copy; 2026 Kostiantyn Matsebora · <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE">MIT License</a>'
 
 repo_name: kostiantyn-matsebora/deployment-dashboard
 repo_url: https://github.com/kostiantyn-matsebora/deployment-dashboard
