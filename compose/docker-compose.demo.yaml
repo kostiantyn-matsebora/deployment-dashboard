@@ -32,7 +32,7 @@ services:
 
   # ── Demo Driver (demo-only simulator — defined here, not in the base) ────────
   demo-driver:
-    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:latest
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:${DASHBOARD_VERSION:-latest}
     pull_policy: always
     profiles: [demo-driver, demo]
     environment:
@@ -63,9 +63,8 @@ services:
   # ── GitHub Emulator (demo-only simulator — defined here, not in the base) ────
   # Internal-only — no gateway route; the fetcher reaches it directly.
   github-emulator:
-    build:
-      context: ../demo
-      dockerfile: github-emulator/Dockerfile
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-github-emulator:${DASHBOARD_VERSION:-latest}
+    pull_policy: always
     profiles: [github-emulator, demo]
     environment:
       PORT: "3100"

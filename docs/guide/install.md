@@ -62,6 +62,21 @@ docker compose \
 
 See [Configuration](./configuration.md) for every environment variable.
 
+## Pinning a release version
+
+By default the stack pulls `latest`, which tracks the most recent push to `main`. For a reproducible deployment, pin to a published release version:
+
+```dotenv
+# compose/.env
+DASHBOARD_VERSION=0.1.0
+```
+
+**No leading `v`.** The git tag is `v0.1.0`; the published image tag is `0.1.0`. See `compose/.env.example` for the full note.
+
+Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`) containing all `compose/*.yaml` files and `compose/.env.example` — a clone-free way to deploy a specific version without checking out the repo.
+
+For the full release process, see [RELEASING.md](../../RELEASING.md).
+
 ## Hosting notes
 
 The reference target is **Azure** (≤ $30/month, container-based — see [SAD §5–6](../SAD.md#5-non-functional-requirements)), but nothing is Azure-specific: every backend component is a standard OCI container deployable on any container host. Terraform modules for Azure are planned (`infrastructure/`, not yet present).

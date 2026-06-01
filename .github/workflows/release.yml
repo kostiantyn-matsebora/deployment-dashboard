@@ -1,0 +1,155 @@
+name: release
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Release workflow — fires on an annotated SemVer tag push (e.g. v0.1.0).
+#
+# A maintainer cuts a release by tagging main manually:
+#   git tag -a vX.Y.Z && git push origin vX.Y.Z
+# That tag push (and only that) triggers this workflow.
+#
+# UNIFIED stack version: one tag drives ALL six service images, which share it.
+# metadata-action strips the leading `v`, so a tag `vX.Y.Z` publishes images as
+# `X.Y.Z`, `X.Y` and `latest`. A pre-release tag (e.g. v0.1.0-rc.1) publishes
+# only the full version — never `latest` or the major.minor short tag.
+# The release job then assembles release notes + a compose bundle and creates
+# the GitHub Release.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  # ── Images ────────────────────────────────────────────────────────────────────
+  # Build & push all six service images under the shared release tag.
+  images:
+    name: Image (${{ matrix.key }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: api
+            image: deployment-dashboard-api
+            context: backend
+            dockerfile: backend/api/Dashboard.Api/Dockerfile
+          - key: spa
+            image: deployment-dashboard-spa
+            context: frontend/dashboard
+            dockerfile: frontend/dashboard/Dockerfile
+          - key: gateway
+            image: deployment-dashboard-gateway
+            context: gateway
+            dockerfile: gateway/Dockerfile
+          - key: fetcher
+            image: deployment-dashboard-fetcher
+            context: backend
+            dockerfile: backend/fetcher-host/Dashboard.Fetcher.Host/Dockerfile
+          - key: demo-driver
+            image: deployment-dashboard-demo-driver
+            context: demo
+            dockerfile: demo/driver/Dockerfile
+          - key: github-emulator
+            image: deployment-dashboard-github-emulator
+            context: demo
+            dockerfile: demo/github-emulator/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Release ────────────────────────────────────────────────────────────────────
+  # Runs once after all images are pushed: extract release notes, bundle the
+  # compose stack, and publish the GitHub Release.
+  release:
+    name: GitHub Release
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release notes
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $changelog = 'CHANGELOG.md'
+          $notes = $null
+          if (Test-Path $changelog) {
+            $lines = Get-Content $changelog
+            $start = $null
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+              if ($lines[$i] -match "^## \[$([regex]::Escape($version))\]") {
+                $start = $i + 1
+                break
+              }
+            }
+            if ($null -ne $start) {
+              $body = New-Object System.Collections.Generic.List[string]
+              for ($j = $start; $j -lt $lines.Count; $j++) {
+                if ($lines[$j] -match '^## \[') { break }
+                $body.Add($lines[$j])
+              }
+              $notes = ($body -join "`n").Trim()
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($notes)) {
+            $notes = "Release ${{ github.ref_name }}"
+          }
+          $notes | Out-File -FilePath release-notes.md -Encoding utf8
+          Write-Host "Release notes for $version:"
+          Write-Host $notes
+
+      - name: Assemble compose bundle
+        shell: pwsh
+        run: |
+          $zip = "deployment-dashboard-compose-${{ github.ref_name }}.zip"
+          $files = @(Get-ChildItem -Path compose -Filter *.yaml) + @(Get-Item compose/.env.example)
+          Compress-Archive -Path $files.FullName -DestinationPath $zip -Force
+          Write-Host "Bundled $($files.Count) files into $zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: deployment-dashboard-compose-${{ github.ref_name }}.zip

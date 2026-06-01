@@ -85,6 +85,10 @@ Docs follow an **index-first** convention: every directory under `docs/` has an 
 
 Authoring rules (binding): concise and LLM-optimized, structure over prose — steps as numbered lists, mappings as tables, "X means Y" as `**X.** Y`. See [`CLAUDE.md`](CLAUDE.md).
 
+## Releasing
+
+To cut a release (maintainers only), follow the end-to-end flow in [RELEASING.md](RELEASING.md): run `New-Release.ps1` to open a changelog PR, merge it, then manually push the annotated tag to trigger the release workflow.
+
 ## Reporting bugs & requesting features
 
 Use the issue templates: [bug report](.github/ISSUE_TEMPLATE/bug-report.md) · [feature request](.github/ISSUE_TEMPLATE/feature-request.md).

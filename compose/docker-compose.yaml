@@ -59,7 +59,7 @@ services:
 
   # ── Gateway (single public surface) ─────────────────────────────────────────
   gateway:
-    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:${DASHBOARD_VERSION:-latest}
     pull_policy: always
     profiles: [gateway, standalone, standalone-pull, full, full-pull, demo]
     ports:
@@ -91,7 +91,7 @@ services:
 
   # ── Frontend (Angular SPA, nginx-served) ─────────────────────────────────────
   frontend:
-    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-spa:latest
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-spa:${DASHBOARD_VERSION:-latest}
     pull_policy: always
     profiles: [frontend, standalone, standalone-pull, full, full-pull, demo]
     # Internal-only — the gateway proxies / to this service; no published port.
@@ -106,7 +106,7 @@ services:
 
   # ── API ─────────────────────────────────────────────────────────────────────
   api:
-    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:latest
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:${DASHBOARD_VERSION:-latest}
     pull_policy: always
     profiles: [api, standalone, standalone-pull, full, full-pull, demo]
     environment:
@@ -141,9 +141,8 @@ services:
 
   # ── Fetcher Host (pull-mode adapter — standalone-pull / full-pull / demo) ─────
   fetcher-host:
-    build:
-      context: ../backend
-      dockerfile: fetcher-host/Dashboard.Fetcher.Host/Dockerfile
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-fetcher:${DASHBOARD_VERSION:-latest}
+    pull_policy: always
     profiles: [fetcher-host, standalone-pull, full-pull, demo]
     # Internal-only — no published port, no gateway route (FETCHER_SPECIFICATION §3, §6).
     environment:
