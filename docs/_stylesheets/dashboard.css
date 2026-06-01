@@ -110,8 +110,11 @@ body {
 /* ----------------------------  Links / buttons  -------------------------- */
 .md-typeset .md-button {
   border-radius: var(--dd-radius-sm);
-  border-color: var(--dd-glass-edge);
-  transition: border-color .2s ease, background-color .2s ease, transform .2s ease;
+  /* Outline buttons: explicit readable color (Material's default is
+     --md-primary-fg-color, which is deep indigo here and vanishes on dark). */
+  color: var(--md-default-fg-color);
+  border-color: var(--dd-accent-edge);
+  transition: border-color .2s ease, background-color .2s ease, color .2s ease, transform .2s ease;
 }
 .md-typeset .md-button:hover {
   border-color: var(--dd-accent-edge);
@@ -119,6 +122,7 @@ body {
   color: var(--md-default-fg-color);
   transform: translateY(-1px);
 }
+.md-typeset .md-button .twemoji { color: var(--dd-accent); }
 .md-typeset .md-button--primary {
   background-image: linear-gradient(135deg, #6e64ff, #5a52e0);
   border-color: transparent;

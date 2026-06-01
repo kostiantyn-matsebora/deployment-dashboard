@@ -17,6 +17,7 @@ strict: false
 
 theme:
   name: material
+  custom_dir: overrides
   logo: design/logo/logo-mark-transparent.svg
   favicon: design/logo/favicon-32.png
   icon:

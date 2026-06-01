@@ -9,12 +9,14 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'overrides/**'
       - '.github/workflows/pages.yml'
   pull_request:
     branches: [main]
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'overrides/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
