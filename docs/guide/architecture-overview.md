@@ -29,6 +29,41 @@ The Fetcher is an **optional** pull-mode adapter: it polls a CI/CD API and posts
 4. Each instance pushes it to its connected browsers via **SSE** — no reload, no sticky sessions.
 5. The **Read API** reduces the log into the matrix (latest per slot), swimlanes, and history.
 
+## Component diagram
+
+How the logical components fit together. All external traffic enters through the gateway — the only published surface; the API tier is a single stateless .NET container you can scale horizontally.
+
+```mermaid
+flowchart TB
+    CI["CI/CD pipeline"]
+    FETCH["Fetcher<br/>optional · pull-mode"]
+    BROWSER["Browser"]
+
+    GW{{"App Gateway · nginx<br/>only public surface · :8080"}}
+    FE["Frontend<br/>Angular SPA on nginx<br/>(static, no secrets)"]
+
+    subgraph APIC["API container · .NET 10 · stateless (scale freely)"]
+        WRITE["Write API<br/>POST /api/deployments<br/>X-Api-Key"]
+        READ["Read API + SSE<br/>matrix · history · /events/stream<br/>(no auth)"]
+        CTRL["Control API<br/>reset · control stream<br/>X-Control-API-Key"]
+    end
+
+    PG[("PostgreSQL<br/>append-only event store<br/>LISTEN / NOTIFY")]
+
+    CI -->|"POST /api/deployments"| GW
+    FETCH -.->|"POST /api/deployments"| GW
+    BROWSER <-->|"SPA · REST · SSE"| GW
+    GW -->|"serves SPA"| FE
+    GW --> WRITE
+    GW --> READ
+    GW --> CTRL
+    WRITE -->|"append"| PG
+    READ -->|"query"| PG
+    CTRL --> PG
+    PG -. "NOTIFY (fan-out)" .-> READ
+    READ -. "SSE live updates" .-> BROWSER
+```
+
 ## Components
 
 | Component | Stack | Role |
