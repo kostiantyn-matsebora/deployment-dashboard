@@ -134,7 +134,7 @@ jobs:
             $notes = "Release ${{ github.ref_name }}"
           }
           $notes | Out-File -FilePath release-notes.md -Encoding utf8
-          Write-Host "Release notes for $version:"
+          Write-Host "Release notes for ${version}:"
           Write-Host $notes
 
       - name: Assemble compose bundle
