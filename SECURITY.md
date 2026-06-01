@@ -4,8 +4,9 @@
 
 | Version | Supported |
 |---|---|
-| `main` (HEAD) | Yes |
-| Tagged pre-1.0 releases | No — upgrade to latest `main` |
+| Latest tagged release | Yes |
+| `main` (HEAD) | Yes (development) |
+| Older tagged releases | No — upgrade to the latest release |
 | LTS branches | None — no LTS policy pre-1.0 |
 
 Pre-1.0 caveat: APIs, wire contracts, and configuration surfaces may change between minor versions per the project's [README warning](README.md).

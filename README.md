@@ -37,8 +37,12 @@ CI/CD tool  ──POST /api/deployments──►  App Gateway (nginx)
 
 | Path | Role |
 |---|---|
-| `backend/` | .NET 10 API — Write (API-key gated) + Read (unauthenticated) endpoints, SSE fan-out |
-| `frontend/` | Angular 20 SPA — static files served by nginx, no build step required at runtime |
+| `backend/` | .NET 10 API — Write (API-key gated) + Read (unauthenticated) endpoints, SSE fan-out, plus the optional Fetcher |
+| `frontend/` | Angular 20 SPA — static files served by nginx, no build step required at runtime (+ a mock API server) |
+| `gateway/` | nginx App Gateway — the single public surface |
+| `demo/` | Demo Driver + GitHub Emulator + scenario data (zero-config evaluation / CI) |
+| `compose/` | Docker Compose stack (profiles) + `.env.example` |
+| `scripts/` | PowerShell tooling, git hooks, and the release helper |
 | `testing/` | E2E and integration test suites |
 | `docs/` | Architecture spec, API contracts, frontend requirements |
 
@@ -118,6 +122,12 @@ New here? Start with the adopter guides:
 - [Architecture overview](docs/guide/architecture-overview.md) · [FAQ & troubleshooting](docs/guide/faq.md)
 
 Development & reference (the full specification) lives under [`docs/`](docs/index.md) — architecture (SAD), API contract, frontend requirements, fetcher, mock server, and demo driver.
+
+## Releases
+
+Each tagged release publishes versioned images for all services to GHCR (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-*`). Pin a deployment by setting `DASHBOARD_VERSION` in `compose/.env` (e.g. `0.1.0` — no leading `v`); it defaults to `latest`.
+
+See [RELEASING.md](RELEASING.md) for the release process and [Install & deploy](docs/guide/install.md#pinning-a-release-version) for pinning a version.
 
 ## Contributing
 
