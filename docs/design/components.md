@@ -2,13 +2,24 @@
 
 ## Topbar
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ [Brand mark]  Brand Name  │  [Matrix] [Swimlanes]  │  KPIs×4  │  Filter + │ │
-│              DASHBOARD    │    (segmented tabs)     │          │  ⚠ toggle │ │
-│                           │                         │          │           │ │
-│  [≡Fields] [⚙Correlation] │  Theme: [☀] [☾] [Auto] │          │ [SSE Live]│ │
-└──────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Topbar["Topbar"]
+        direction LR
+        subgraph Brand["Brand region"]
+            B["[Brand mark]<br/>Brand Name<br/>DASHBOARD"]
+            Icons["[≡ Fields]&nbsp;&nbsp;[⚙ Correlation]"]
+        end
+        subgraph Tabs["View tabs"]
+            T["[Matrix] [Swimlanes]<br/>(segmented tabs)"]
+            Theme["Theme: [☀] [☾] [Auto]"]
+        end
+        KPIs["KPIs × 4"]
+        subgraph Right["Filter region"]
+            F["Filter + ⚠ toggle"]
+            SSE["[SSE Live]"]
+        end
+    end
 ```
 
 ### Sub-components
@@ -32,15 +43,15 @@ Topbar must be `position: relative; z-index: 30` so popovers render above siblin
 
 Each cell in the services × environments grid. Tile sizing is **content-driven** — grows/shrinks with toggled fields.
 
-```
-┌─ .slot ──────────────────────────────────┐
-│▌ .ver-row                                │  ← version + actor + time
-│▌   version          @actor  3h ago       │
-│▌ .tile-attrs                             │  ← packed mid-row
-│▌   .ta-bl: ⎇ref  sha    .ta-br: ↗run #N │
-│▌ .ta-full: ⟵ N parents                  │  ← full-width tail
-└──────────────────────────────────────────┘
-▌ = 3px left accent bar (status-colored)
+```mermaid
+flowchart TB
+    subgraph Slot[".slot — 3px left accent bar (status-colored)"]
+        direction TB
+        VerRow[".ver-row → version + actor + time<br/>version&nbsp;&nbsp;&nbsp;@actor&nbsp;&nbsp;3h ago"]
+        Attrs[".tile-attrs → packed mid-row<br/>.ta-bl: ⎇ ref  sha&nbsp;&nbsp;&nbsp;&nbsp;.ta-br: ↗ run #N"]
+        Full[".ta-full → full-width tail<br/>N parents"]
+        VerRow --> Attrs --> Full
+    end
 ```
 
 ### Key Rules
@@ -99,17 +110,17 @@ Pill shape (999px radius). Coral bg at 15% + coral 45% border. "⚠ prev. failed
 
 DAG nodes in the Swimlanes view. Each node is rendered via an ngx-graph `#nodeTemplate` custom template. Internal layout uses a **2-column CSS grid**.
 
-```
-┌─ .vis-card ─────────────────────────────────┐
-│▌ .vc-ver-row (colspan=2, full width)        │
-│▌   version (left)              3h ago (right)│
-│▌ .tile-attrs (subgrid 2-col)                │
-│▌   col1: ⎇ref              col2: ↗run #N @x │
-│▌ .vc-env-row (subgrid 2-col)               │
-│▌   sha (bottom-left)     environment (bot-R) │
-└─────────────────────────────────────────────┘
-▌ = 3px left accent bar (status-colored)
-Grid: grid-template-columns: auto auto; column-gap: 20px; row-gap: 2px
+```mermaid
+flowchart TB
+    subgraph Card[".vis-card — 3px left accent bar (status-colored)"]
+        direction TB
+        VerRow[".vc-ver-row (colspan=2, full width)<br/>version (left)&nbsp;&nbsp;&nbsp;&nbsp;3h ago (right)"]
+        Attrs[".tile-attrs (subgrid 2-col)<br/>col1: ⎇ ref&nbsp;&nbsp;&nbsp;&nbsp;col2: ↗ run #N @x"]
+        EnvRow[".vc-env-row (subgrid 2-col)<br/>sha (bottom-left)&nbsp;&nbsp;&nbsp;&nbsp;environment (bottom-right)"]
+        VerRow --> Attrs --> EnvRow
+    end
+
+    Grid["Grid: grid-template-columns: auto auto;<br/>column-gap: 20px; row-gap: 2px"]
 ```
 
 ### Key Differences from Matrix Tile

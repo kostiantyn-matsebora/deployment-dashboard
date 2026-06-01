@@ -1,8 +1,9 @@
 ---
-title: Documentation
-shortTitle: Docs
+title: Deployment Dashboard
+shortTitle: Home
 intro: 'Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.'
 children:
+  - /guide
   - /SAD
   - /FRONTEND_REQUIREMENTS
   - /API_SPECIFICATION
@@ -15,121 +16,156 @@ children:
   - /design
   - /diagrams
   - /engineering-process
+hide:
+  - navigation
+  - toc
 ---
 
-## Contents
+<div class="dd-hero" align="center" markdown>
 
-### `SAD.md`
+![Deployment Dashboard](design/logo/logo.svg){ width="104" }
 
-- [1. Problem Statement](./SAD.md#1-problem-statement)
-- [2. Goals](./SAD.md#2-goals)
-- [3. Non-Goals](./SAD.md#3-non-goals)
-- [4. Functional Requirements](./SAD.md#4-functional-requirements)
-- [5. Non-Functional Requirements](./SAD.md#5-non-functional-requirements)
-- [6. Constraints](./SAD.md#6-constraints)
-- [7. Target Architecture](./SAD.md#7-target-architecture)
+# Deployment Dashboard
 
-### `FRONTEND_REQUIREMENTS.md`
+<p class="dd-tagline">A real-time <strong>services × environments</strong> deployment matrix, sourced straight from your CI/CD pipeline events.</p>
 
-- [Functional](./FRONTEND_REQUIREMENTS.md#functional)
-- [Visual](./FRONTEND_REQUIREMENTS.md#visual)
-- [Behavior](./FRONTEND_REQUIREMENTS.md#behavior)
-- [Data](./FRONTEND_REQUIREMENTS.md#data)
+[:material-rocket-launch-outline: Get started](guide/quickstart.md){ .md-button .md-button--primary }
+[:material-pipe: Integrate your CI/CD](guide/send-events.md){ .md-button }
+[:fontawesome-brands-github: GitHub](https://github.com/kostiantyn-matsebora/deployment-dashboard){ .md-button }
 
-### `API_SPECIFICATION.md`
+</div>
 
-- [Sources of truth](./API_SPECIFICATION.md#sources-of-truth)
-- [1. Stack](./API_SPECIFICATION.md#1-stack)
-- [2. Decisions](./API_SPECIFICATION.md#2-decisions)
-- [3. Solution layout](./API_SPECIFICATION.md#3-solution-layout)
-- [4. Data model](./API_SPECIFICATION.md#4-data-model)
-- [5. Endpoints](./API_SPECIFICATION.md#5-endpoints)
-- [6. Cross-cutting](./API_SPECIFICATION.md#6-cross-cutting)
-- [7. SSE + LISTEN/NOTIFY](./API_SPECIFICATION.md#7-sse--listennotify)
-- [8. Testing](./API_SPECIFICATION.md#8-testing)
-- [9. Configuration (env)](./API_SPECIFICATION.md#9-configuration-env)
-- [10. Implementation phases (atomic commits)](./API_SPECIFICATION.md#10-implementation-phases-atomic-commits)
-- [11. Out of scope](./API_SPECIFICATION.md#11-out-of-scope)
+![The live deployment matrix](_assets/screenshots/matrix-dark.png#only-dark){ .dd-shot }
+![The live deployment matrix](_assets/screenshots/matrix-light.png#only-light){ .dd-shot }
 
-### `GATEWAY_SPECIFICATION.md`
+!!! quote ""
+    **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
 
-- [Sources of truth](./GATEWAY_SPECIFICATION.md#sources-of-truth)
-- [1. Role](./GATEWAY_SPECIFICATION.md#1-role)
-- [2. Decisions](./GATEWAY_SPECIFICATION.md#2-decisions)
-- [3. Solution layout](./GATEWAY_SPECIFICATION.md#3-solution-layout)
-- [4. Routing matrix](./GATEWAY_SPECIFICATION.md#4-routing-matrix)
-- [5. SSE handling (the one critical block)](./GATEWAY_SPECIFICATION.md#5-sse-handling-the-one-critical-block)
-- [6. Config template (shape)](./GATEWAY_SPECIFICATION.md#6-config-template-shape)
-- [7. Configuration (env)](./GATEWAY_SPECIFICATION.md#7-configuration-env)
-- [8. Testing](./GATEWAY_SPECIFICATION.md#8-testing)
-- [9. Out of scope](./GATEWAY_SPECIFICATION.md#9-out-of-scope)
+## Why Deployment Dashboard?
 
-### `FETCHER_SPECIFICATION.md`
+<div class="grid cards" markdown>
 
-- [Sources of truth](./FETCHER_SPECIFICATION.md#sources-of-truth)
-- [1. Role](./FETCHER_SPECIFICATION.md#1-role)
-- [2. Decisions](./FETCHER_SPECIFICATION.md#2-decisions)
-- [3. Solution layout](./FETCHER_SPECIFICATION.md#3-solution-layout)
-- [4. The abstraction (F2)](./FETCHER_SPECIFICATION.md#4-the-abstraction-f2)
-- [5. GitHub implementation (`GithubActionsAdapter`)](./FETCHER_SPECIFICATION.md#5-github-implementation-githubactionsadapter)
-- [6. Configuration (env)](./FETCHER_SPECIFICATION.md#6-configuration-env)
-- [7. Testing](./FETCHER_SPECIFICATION.md#7-testing)
-- [8. Out of scope](./FETCHER_SPECIFICATION.md#8-out-of-scope)
+-   :material-pipe-wrench:{ .lg .middle .dd-indigo } **No pipeline rewrite**
 
-### `MOCK_SPECIFICATION.md`
+    ---
 
-- [Sources of truth](./MOCK_SPECIFICATION.md#sources-of-truth)
-- [1. Stack](./MOCK_SPECIFICATION.md#1-stack)
-- [2. Solution layout](./MOCK_SPECIFICATION.md#2-solution-layout)
-- [3. In-memory store](./MOCK_SPECIFICATION.md#3-in-memory-store)
-- [4. Configuration](./MOCK_SPECIFICATION.md#4-configuration)
-- [5. Application API — `/api/`](./MOCK_SPECIFICATION.md#5-application-api----api)
-- [6. Control surface — `/_mock/`](./MOCK_SPECIFICATION.md#6-control-surface----mock)
-- [7. Startup defaults](./MOCK_SPECIFICATION.md#7-startup-defaults)
-- [8. Control panel](./MOCK_SPECIFICATION.md#8-control-panel)
-- [9. Typical E2E usage](./MOCK_SPECIFICATION.md#9-typical-e2e-usage)
-- [10. Running](./MOCK_SPECIFICATION.md#10-running)
+    Integration is a single HTTP `POST` step. No plugins, no agent to install, no migration — drop one step into the pipeline you already have.
 
-### `DEMO_DRIVER_SPECIFICATION.md`
+-   :material-source-branch:{ .lg .middle .dd-indigo } **Tool-agnostic**
 
-- [Sources of truth](./DEMO_DRIVER_SPECIFICATION.md#sources-of-truth)
-- [1. Role](./DEMO_DRIVER_SPECIFICATION.md#1-role)
-- [2. Decisions](./DEMO_DRIVER_SPECIFICATION.md#2-decisions)
-- [3. Solution layout](./DEMO_DRIVER_SPECIFICATION.md#3-solution-layout)
-- [4. Control API — `/demo/`](./DEMO_DRIVER_SPECIFICATION.md#4-control-api----demo)
-- [4.8 Control API event feed (SSE) — `GET /demo/control-stream`](./DEMO_DRIVER_SPECIFICATION.md#48-control-api-event-feed-sse--get-democontrol-stream)
-- [4.9 Component event feed (proxy) — `GET /demo/control-events`](./DEMO_DRIVER_SPECIFICATION.md#49-component-event-feed-proxy--get-democontrol-events)
-- [4.10 Liveness aggregate — `GET /demo/health`](./DEMO_DRIVER_SPECIFICATION.md#410-liveness-aggregate--get-demohealth)
-- [4.11 Deployments feed (proxy) — `GET /demo/deployments-stream`](./DEMO_DRIVER_SPECIFICATION.md#411-deployments-feed-proxy--get-demodeployments-stream)
-- [5. GitHub source (emulator proxy)](./DEMO_DRIVER_SPECIFICATION.md#5-github-source-emulator-proxy)
-- [5.1 Proxy routes](./DEMO_DRIVER_SPECIFICATION.md#51-proxy-routes)
-- [6. Scenarios](./DEMO_DRIVER_SPECIFICATION.md#6-scenarios)
-- [7. Write API integration](./DEMO_DRIVER_SPECIFICATION.md#7-write-api-integration)
-- [8. Control panel](./DEMO_DRIVER_SPECIFICATION.md#8-control-panel)
-- [9. Configuration (env)](./DEMO_DRIVER_SPECIFICATION.md#9-configuration-env)
-- [10. Testing](./DEMO_DRIVER_SPECIFICATION.md#10-testing)
-- [11. Running](./DEMO_DRIVER_SPECIFICATION.md#11-running)
-- [12. Deployment](./DEMO_DRIVER_SPECIFICATION.md#12-deployment)
-- [13. Out of scope](./DEMO_DRIVER_SPECIFICATION.md#13-out-of-scope)
+    ---
 
-### `GITHUB_EMULATOR_SPECIFICATION.md`
+    GitHub Actions, Azure DevOps, Jenkins, GitLab CI — or a shell script. If it can call a URL, it can feed the dashboard. The backend never knows which tool you use.
 
-- [Sources of truth](./GITHUB_EMULATOR_SPECIFICATION.md#sources-of-truth)
-- [1. Stack](./GITHUB_EMULATOR_SPECIFICATION.md#1-stack)
-- [2. Solution layout](./GITHUB_EMULATOR_SPECIFICATION.md#2-solution-layout)
-- [3. In-memory store](./GITHUB_EMULATOR_SPECIFICATION.md#3-in-memory-store)
-- [4. Configuration](./GITHUB_EMULATOR_SPECIFICATION.md#4-configuration)
-- [5. Emulated GitHub REST surface — `/`](./GITHUB_EMULATOR_SPECIFICATION.md#5-emulated-github-rest-surface--)
-- [6. Control surface — `/_github/`](./GITHUB_EMULATOR_SPECIFICATION.md#6-control-surface----github)
-- [7. Curated demo set](./GITHUB_EMULATOR_SPECIFICATION.md#7-curated-demo-set-demodatagithub)
-- [8. Random set + periodic emit](./GITHUB_EMULATOR_SPECIFICATION.md#8-random-set--periodic-emit)
-- [9. Startup defaults](./GITHUB_EMULATOR_SPECIFICATION.md#9-startup-defaults)
-- [10. Testing](./GITHUB_EMULATOR_SPECIFICATION.md#10-testing)
-- [11. Running](./GITHUB_EMULATOR_SPECIFICATION.md#11-running)
-- [12. Deployment](./GITHUB_EMULATOR_SPECIFICATION.md#12-deployment)
-- [13. Out of scope](./GITHUB_EMULATOR_SPECIFICATION.md#13-out-of-scope)
+-   :material-help-circle-outline:{ .lg .middle .dd-amber } **Answers one question, instantly**
 
-### `engineering-process.md`
+    ---
 
-- [Routing](./engineering-process.md#routing)
-- [Rules](./engineering-process.md#rules)
+    What's running in prod right now, and did it succeed? One screen — every service across every environment, no clicking through pipelines and logs.
+
+-   :material-lightning-bolt:{ .lg .middle .dd-emerald } **Live, not polled**
+
+    ---
+
+    Server-Sent Events push every state change to every open browser within seconds. The matrix updates itself — no refresh, no stale tab.
+
+-   :material-history:{ .lg .middle .dd-indigo } **Full history, append-only**
+
+    ---
+
+    Every deployment is kept per slot (≥ 90 days, configurable). Nothing is overwritten; the history drawer shows the entire timeline of a slot.
+
+-   :material-auto-fix:{ .lg .middle .dd-amber } **Auto-discovers your topology**
+
+    ---
+
+    Services and environments are derived from the events you send. No registration, no config file, no hardcoded lists — post a new service and it appears.
+
+-   :material-server-network:{ .lg .middle .dd-emerald } **Stateless & cheap to run**
+
+    ---
+
+    Scale API instances behind the gateway with no sticky sessions. Runs on any OCI container host; the reference Azure target fits in ~$30/month.
+
+-   :material-shield-lock-outline:{ .lg .middle .dd-coral } **Secure by design**
+
+    ---
+
+    Writes are API-key gated; reads are internal-only and the SPA holds no secrets. You own the network boundary — nothing is public by default.
+
+-   :material-cloud-download-outline:{ .lg .middle .dd-indigo } **Pull mode when you can't push**
+
+    ---
+
+    Can't touch the pipeline? The optional Fetcher polls your CI/CD API and posts on your behalf — through the very same contract.
+
+</div>
+
+## Send your first deployment
+
+One HTTP call from your pipeline — that's the whole integration:
+
+```bash
+curl -X POST "$DASHBOARD_URL/api/deployments" \
+  -H "X-Api-Key: $DASHBOARD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deployment_id": "build-42",
+    "service":       "checkout",
+    "environment":   "prod",
+    "version":       "1.4.2",
+    "status":        "success",
+    "happened_at":   "2026-06-01T10:00:00Z"
+  }'
+```
+
+[:octicons-arrow-right-24: GitHub Actions, Azure DevOps, GitLab & Jenkins examples](guide/send-events.md)
+
+## Two views of the same truth
+
+=== "Matrix"
+
+    One row per service, one column per environment. Each tile shows version, status, actor, elapsed time, and a link to the CI/CD run.
+
+    ![Matrix view](_assets/screenshots/matrix-dark.png#only-dark){ .dd-shot }
+    ![Matrix view](_assets/screenshots/matrix-light.png#only-light){ .dd-shot }
+
+=== "Swimlanes"
+
+    Per-service deployment graphs — see how a version flows from `dev` through to `prod`, with branching topology and status-colored edges.
+
+    ![Swimlanes view](_assets/screenshots/swimlanes-dark.png){ .dd-shot }
+
+## Explore the docs
+
+<div class="grid cards" markdown>
+
+-   :material-rocket-launch:{ .lg .middle } &nbsp; **[Quickstart](guide/quickstart.md)**
+
+    Run the whole stack locally in two minutes, zero config.
+
+-   :material-server-network:{ .lg .middle } &nbsp; **[Install & deploy](guide/install.md)**
+
+    Compose profiles, production checklist, hosting notes.
+
+-   :material-cog:{ .lg .middle } &nbsp; **[Configuration](guide/configuration.md)**
+
+    Every environment variable, grouped by concern.
+
+-   :material-sitemap:{ .lg .middle } &nbsp; **[Architecture](guide/architecture-overview.md)**
+
+    How the pieces fit, and the security model.
+
+-   :material-api:{ .lg .middle } &nbsp; **[API contract](api/index.md)**
+
+    OpenAPI spec + human-readable guidelines.
+
+-   :material-hammer-wrench:{ .lg .middle } &nbsp; **[Contributing](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CONTRIBUTING.md)**
+
+    Local setup, branch → PR workflow, conventions.
+
+</div>
+
+---
+
+Looking for the full specification? The **Development & reference** tab covers the [architecture (SAD)](SAD.md), [API contract](api/index.md), [frontend design](design/index.md), services, and [diagrams](diagrams/index.md).

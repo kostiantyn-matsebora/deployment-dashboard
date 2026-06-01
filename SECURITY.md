@@ -18,7 +18,7 @@ Pre-1.0 caveat: APIs, wire contracts, and configuration surfaces may change betw
 
 ## Scope
 
-- Internal read-only tooling per NFR-04 in [`docs/architecture.md`](docs/architecture.md) — no public ingress is required.
+- Internal read-only tooling per NFR-04 in [`docs/SAD.md`](docs/SAD.md) — no public ingress is required.
 - Write API (`POST /api/deployments` and related write endpoints) requires the static `X-Api-Key` header.
 - Read API and SSE stream are unauthenticated by design — intended for trusted internal networks only.
 - **Out of scope**: any deployment that exposes the Read API to the public internet. That is a deployer-side configuration choice, not a project defect.
