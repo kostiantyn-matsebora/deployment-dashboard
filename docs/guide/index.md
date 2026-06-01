@@ -35,7 +35,7 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Concepts in one minute](./install.md#concepts-in-one-minute)
 - [Deployment shapes (Compose profiles)](./install.md#deployment-shapes-compose-profiles)
 - [Minimal production start](./install.md#minimal-production-start)
-- [Running from local source](./install.md#running-from-local-source)
+- [Running from local source](./install.md#running-from-local-source-contributors--building-from-a-clone)
 - [Production checklist](./install.md#production-checklist)
 - [Pinning a release version](./install.md#pinning-a-release-version)
 - [Hosting notes](./install.md#hosting-notes)
