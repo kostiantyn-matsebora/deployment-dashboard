@@ -72,8 +72,15 @@ public sealed class BackfillRunner(
             $"/repos/{owner}/{repoName}/environments", ct);
         var environments = envList?.Environments.Select(e => e.Name).ToList() ?? [];
 
-        var events = new List<DeploymentEventIngest>();
-        DateTimeOffset? maxSince = null;
+        // Pass 1: accumulate chosen deployments with their fetched data.
+        // Parent derivation is deferred to pass 2 so the full cross-environment
+        // envToDeploymentId map (§5.6.4) can be built before resolving any edges.
+        var chosen = new List<(
+            GhDeployment Deployment,
+            List<GhDeploymentStatus> Statuses,
+            long? RunId,
+            WorkflowGraph? Graph,
+            string? WorkflowName)>();
 
         foreach (var env in environments)
         {
@@ -100,30 +107,41 @@ public sealed class BackfillRunner(
                 if (!allServiceNames.Contains(service) || filled.Contains(service))
                     continue;
 
-                var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(
-                    [(deployment.Id, deployment.Environment, deployment.CreatedAt, runId)]);
-
-                foreach (var status in statuses)
-                {
-                    var contractStatus = StatusMapper.Map(status.State);
-                    if (contractStatus is null) continue;
-
-                    var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
-                    var version = await versionResolver.ResolveAsync(
-                        owner, repoName, deployment, status, ct);
-
-                    events.Add(EventMapper.Map(
-                        deployment, status, repo, contractStatus,
-                        workflowName, version, parentDeployments, serviceMap));
-
-                    if (status.CreatedAt > maxSince)
-                        maxSince = status.CreatedAt;
-                }
-
+                chosen.Add((deployment, statuses, runId, graph, workflowName));
                 filled.Add(service);
 
                 if (filled.Count == allServiceNames.Count)
                     break;
+            }
+        }
+
+        // Pass 2: build the full cross-environment envToDeploymentId map from ALL chosen
+        // deployments (§5.6.4), then derive parents and build events.
+        // This mirrors PollRepoAsync — a single-element map (the bug) can never resolve
+        // cross-environment edges (e.g. staging's parent dev deployment).
+        var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(
+            chosen.Select(c => (c.Deployment.Id, c.Deployment.Environment, c.Deployment.CreatedAt, c.RunId)));
+
+        var events = new List<DeploymentEventIngest>();
+        DateTimeOffset? maxSince = null;
+
+        foreach (var (deployment, statuses, runId, graph, workflowName) in chosen)
+        {
+            foreach (var status in statuses)
+            {
+                var contractStatus = StatusMapper.Map(status.State);
+                if (contractStatus is null) continue;
+
+                var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
+                var version = await versionResolver.ResolveAsync(
+                    owner, repoName, deployment, status, ct);
+
+                events.Add(EventMapper.Map(
+                    deployment, status, repo, contractStatus,
+                    workflowName, version, parentDeployments, serviceMap));
+
+                if (status.CreatedAt > maxSince)
+                    maxSince = status.CreatedAt;
             }
         }
 

@@ -73,6 +73,11 @@ describe('Scenario: live emission', () => {
 
   it('periodic random emission appends well-formed deployments to the API', async () => {
     await resetAll();
+    // resetAll() returns on the API's reset-completed, but the demo-driver unblocks
+    // its /demo/ surface a beat later. Wait for it before the emit mutator, else
+    // POST /demo/emit can hit the 503 reset gate (a latent race surfaced once the
+    // fetcher was added to the stack and shifted reset-cycle timing).
+    await waitForDemoReady();
     expect((await getJson('/api/deployments?limit=1')).items.length).toBe(0);
 
     const on = await (await demoPost('/emit', { enabled: true })).json();
