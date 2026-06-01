@@ -44,11 +44,11 @@ jobs:
       docs:            ${{ steps.filter.outputs.docs }}
       scripts:         ${{ steps.filter.outputs.scripts }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Detect changes
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             api:
