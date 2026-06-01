@@ -22,30 +22,31 @@ theme:
   icon:
     repo: fontawesome/brands/github
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
     - navigation.indexes
     - navigation.tracking
+    - navigation.footer
     - content.code.copy
     - content.action.edit
     - search.suggest
     - search.highlight
     - toc.follow
+  font:
+    text: Inter
+    code: JetBrains Mono
+  # Dark-first to match the product (the dashboard defaults to dark glass).
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      accent: indigo
+    - scheme: slate
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
 
 markdown_extensions:
   - admonition
@@ -64,6 +65,9 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.superfences:
@@ -75,11 +79,15 @@ markdown_extensions:
 plugins:
   - search
 
+extra_css:
+  - _stylesheets/dashboard.css
+
 nav:
   - Home: index.md
   - Using the Dashboard:
       - guide/index.md
       - Quickstart: guide/quickstart.md
+      - Screenshots: guide/screenshots.md
       - Install & deploy: guide/install.md
       - Configuration: guide/configuration.md
       - Integrate your CI/CD: guide/send-events.md

@@ -94,137 +94,77 @@ The project is a **microservices architecture** — Write API, Read API, Fetcher
 
 #### High-Level Overview
 
-```
+```mermaid
+flowchart TD
+    subgraph GitHub["GitHub"]
+        CW["CI/CD Workflow<br/>(existing)"]
+        NS["Notify Step<br/>(new, ~5 lines)"]
+    end
 
-┌──────────────────────────────────────────────────────────────────────┐
-│                          GitHub                                       │
-│                                                                      │
-│  ┌────────────────────┐      deployment_status event                 │
-│  │  CI/CD Workflow     │ ─────────────────────────────────────────►  │
-│  │  (existing)         │                                             │
-│  └────────────────────┘                                             │
-│                                                                      │
-│  ┌────────────────────┐                                             │
-│  │  Notify Step        │ ──── POST /api/deployments ──────────────► │
-│  │  (new, ~5 lines)    │                                             │
-│  └────────────────────┘                                             │
-└──────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-              ┌─────────────────────────────────────────────────┐
-              │            App Gateway (nginx)                  │
-              │              ▲ ONLY PUBLIC SURFACE              │
-              │                                                 │
-              │  routes per §7 Components → App Gateway         │
-              │                          → Routing matrix       │
-              └────┬───────────────────────────┬────────────────┘
-                   │                           │
-                   ▼                           ▼
-        ┌──────────────────┐    ┌──────────────────────────────────┐
-        │  Dashboard       │    │  API (.NET 10)                   │
-        │  Frontend        │    │  single host, three endpoint     │
-        │  (nginx +        │    │  groups composed from libraries: │
-        │   Angular static)│    │   • Write — POST → INSERT+NOTIFY │
-        │   internal-only  │    │     API-key gated                │
-        │                  │    │   • Read — matrix/history/       │
-        │                  │    │     discovery/SSE/LISTEN         │
-        │                  │    │     unauthenticated              │
-        │                  │    │   • Control — stream/events      │
-        │                  │    │     mixed auth (D8/D9)           │
-        │                  │    │  internal-only                   │
-        └──────────────────┘    └──────────────┬───────────────────┘
-                                               │
-                                               ▼
-                                  ┌───────────────────────┐
-                                  │      PostgreSQL       │
-                                  │  LISTEN/NOTIFY        │
-                                  └───────────────────────┘
+    CW -->|"deployment_status event"| NS
+    NS -->|"POST /api/deployments"| GW
 
-                        ▲                              ▲
-        Browser + CI/CD │       one origin, no CORS    │
-                        └──────────────┬───────────────┘
-                                       ▼
-                          (App Gateway, internal-only)
-                                       │
-                                       ▼
-                          ┌────────────────────────────┐
-                          │   Notification Client      │
-                          │   (desktop tray, v2.0)     │
-                          │                            │
-                          │  Polls GET /api/deployments│
-                          │  (via the gateway)         │
-                          │  OS notification on change │
-                          │  Click → open gateway URL  │
-                          └────────────────────────────┘
+    subgraph Gateway["App Gateway (nginx) — ONLY PUBLIC SURFACE"]
+        GW["routes per §7 Components<br/>App Gateway → Routing matrix"]
+    end
+
+    subgraph Internal["Internal-only"]
+        FE["Dashboard Frontend<br/>(nginx + Angular static)"]
+        API["API (.NET 10)<br/>single host, three endpoint groups composed from libraries:<br/>• Write — POST → INSERT+NOTIFY (API-key gated)<br/>• Read — matrix/history/discovery/SSE/LISTEN (unauthenticated)<br/>• Control — stream/events (mixed auth D8/D9)"]
+        PG[("PostgreSQL<br/>LISTEN/NOTIFY")]
+    end
+
+    GW --> FE
+    GW --> API
+    API --> PG
+
+    Clients["Browser + CI/CD"] -->|"one origin, no CORS"| GW
+
+    GW -.->|"via the gateway (internal-only)"| NC
+    NC["Notification Client<br/>(desktop tray, v2.0)<br/>Polls GET /api/deployments (via the gateway)<br/>OS notification on change<br/>Click → open gateway URL"]
 ```
 
 **Optional pull-mode ingest edge** — When push-mode integration is not available, an opt-in fetcher component polls a CI/CD tool's API and pushes events through the same gateway like any other pusher:
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  Optional — when push-mode integration is not available              │
-│                                                                      │
-│  ┌────────────────────┐      poll CI/CD API on interval             │
-│  │  CI/CD Tool API     │ ◄─────────────────────────────────────┐    │
-│  │  (e.g. GitHub)      │                                       │    │
-│  └────────────────────┘                                       │    │
-│                                                               │    │
-│           ┌───────────────────────────────────────────────────┘    │
-│           ▼                                                        │
-│  ┌────────────────────────────────┐                                │
-│  │  Dashboard.Fetcher.Host         │                               │
-│  │  (separate container, opt-in)   │                               │
-│  │                                 │                               │
-│  │   • Polls CI/CD API             │                               │
-│  │   • POSTs /api/deployments      │ ── same X-Api-Key ──────► gw  │
-│  │     with X-Progress-Reporter:   │                               │
-│  │     dashboard-fetcher/<adapter> │                               │
-│  │   • GET/PUT /api/fetcher/state  │ ── for opaque cursor ──► gw   │
-│  └────────────────────────────────┘                                │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Optional["Optional — when push-mode integration is not available"]
+        API["CI/CD Tool API<br/>(e.g. GitHub)"]
+        Fetcher["Dashboard.Fetcher.Host<br/>(separate container, opt-in)<br/>• Polls CI/CD API<br/>• POSTs /api/deployments with X-Progress-Reporter: dashboard-fetcher/&lt;adapter&gt;<br/>• GET/PUT /api/fetcher/state"]
+    end
+
+    Fetcher -->|"poll CI/CD API on interval"| API
+    Fetcher -->|"same X-Api-Key"| GW["gw"]
+    Fetcher -->|"for opaque cursor"| GW
 ```
 
 #### C4 Component Diagram
 
 The diagram below shows the logical components.
 
-```
-╔══════════════════════════════════════════════════════════════════════════╗
-║  Deployment Dashboard System                                             ║
-║                                                                          ║
-║  ┌─────────────────┐   deployment event   ┌──────────────────────────┐  ║
-║  │                 │◄─────────────────────│   GitHub Actions         │  ║
-║  │   Ingest API    │                      │   [External System]      │  ║
-║  │                 │                      └──────────────────────────┘  ║
-║  └────────┬────────┘                                                     ║
-║           │                                                              ║
-║     persists │                 broadcasts                                ║
-║           ▼                         ▼                                   ║
-║  ┌─────────────────┐     ┌──────────────────────┐                       ║
-║  │                 │     │                      │                        ║
-║  │  Deployment     │     │  Real-time Hub        │                       ║
-║  │  Store          │     │                      │                        ║
-║  │                 │     └──────────┬───────────┘                       ║
-║  └────────▲────────┘               │ pushes events                      ║
-║           │                        │                                     ║
-║       queries │                    │                                     ║
-║           │                        │                                     ║
-║  ┌────────┴────────┐               │                                     ║
-║  │                 │               │                                     ║
-║  │  Read API       │               │                                     ║
-║  │                 │               │                                     ║
-║  └────────┬────────┘               │                                     ║
-║           │                        │                                     ║
-║    REST   │           live updates │                                     ║
-║           └──────────┬─────────────┘                                     ║
-║                      ▼                                                   ║
-║           ┌──────────────────────┐       ┌──────────────────────────┐   ║
-║           │  Dashboard Frontend  │       │  Notification Client      │   ║
-║           │  (browser)           │       │  (desktop tray)           │   ║
-║           └──────────────────────┘       └──────────┬───────────────┘   ║
-║                                                     │ polls REST        ║
-║                                                     └──► Read API       ║
-╚══════════════════════════════════════════════════════════════════════════╝
+> Expressed as a flowchart with a `subgraph` boundary standing in for the C4 system boundary; external systems sit outside it.
+
+```mermaid
+flowchart TD
+    GHA["GitHub Actions<br/>[External System]"]
+
+    subgraph System["Deployment Dashboard System"]
+        Ingest["Ingest API"]
+        Store[("Deployment Store")]
+        Hub["Real-time Hub"]
+        ReadAPI["Read API"]
+        FE["Dashboard Frontend<br/>(browser)"]
+    end
+
+    NC["Notification Client<br/>(desktop tray)"]
+
+    GHA -->|"deployment event"| Ingest
+    Ingest -->|"persists"| Store
+    Ingest -->|"broadcasts"| Hub
+    ReadAPI -->|"queries"| Store
+    ReadAPI -->|"REST"| FE
+    Hub -->|"pushes events / live updates"| FE
+    NC -->|"polls REST"| ReadAPI
 ```
 
 ---

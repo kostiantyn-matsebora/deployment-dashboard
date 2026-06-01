@@ -4,6 +4,7 @@ shortTitle: Using
 intro: 'Adopter guides — run, deploy, configure, and feed the dashboard from any CI/CD, plus an architecture overview and FAQ.'
 children:
   - /quickstart
+  - /screenshots
   - /install
   - /configuration
   - /send-events
@@ -21,6 +22,13 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Run the demo](./quickstart.md#run-the-demo)
 - [What you're looking at](./quickstart.md#what-youre-looking-at)
 - [Next steps](./quickstart.md#next-steps)
+
+### `screenshots.md`
+
+- [Deployment matrix](./screenshots.md#deployment-matrix)
+- [Swimlanes](./screenshots.md#swimlanes)
+- [History drawer](./screenshots.md#history-drawer)
+- [Demo control panel](./screenshots.md#demo-control-panel)
 
 ### `install.md`
 

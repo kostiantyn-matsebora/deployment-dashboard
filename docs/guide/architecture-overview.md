@@ -10,20 +10,18 @@ Deployment Dashboard is a **read-only** view of deployment state, fed by CI/CD p
 
 ## Data flow
 
-```
-CI/CD tool  ──POST /api/deployments──►  App Gateway (nginx)
-                                              │
-                              ┌───────────────┼───────────────┐
-                              ▼               ▼               ▼
-                         Frontend         API (.NET 10)    Fetcher*
-                      (Angular + nginx)  Write + Read     (optional)
-                                              │
-                                              ▼
-                                         PostgreSQL
-                                        LISTEN/NOTIFY
+```mermaid
+flowchart TD
+    CI["CI/CD tool"] -->|"POST /api/deployments"| GW["App Gateway<br/>(nginx)"]
+    FETCH["Fetcher<br/>(optional, pull-mode)"] -.->|"POST /api/deployments"| GW
+    GW --> FE["Frontend<br/>(Angular + nginx)"]
+    GW --> API["API (.NET 10)<br/>Write + Read"]
+    API --> PG[("PostgreSQL<br/>LISTEN / NOTIFY")]
+    PG -. "fan-out" .-> API
+    API -. "SSE (live updates)" .-> FE
 ```
 
-`*` The Fetcher is an **optional** pull-mode adapter: it polls a CI/CD API and posts events through the same `POST /api/deployments` endpoint as any other pusher.
+The Fetcher is an **optional** pull-mode adapter: it polls a CI/CD API and posts events through the same `POST /api/deployments` endpoint as any other pusher.
 
 1. A pipeline (or the Fetcher) posts a deployment event to the gateway.
 2. The **Write API** validates and **appends** it to PostgreSQL (append-only log).

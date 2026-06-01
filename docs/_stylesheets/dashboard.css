@@ -1,0 +1,224 @@
+/* ===========================================================================
+   Deployment Dashboard — docs theme
+   Maps the product's design tokens (docs/design/design-tokens.md) onto Material
+   for MkDocs: indigo glass surfaces, emerald/amber/coral status palette,
+   Inter + JetBrains Mono. Dark-first, with a light variant.
+   =========================================================================== */
+
+/* ---- Status / accent custom props (shared component styles read these) ---- */
+:root {
+  --dd-emerald: #34d29a;
+  --dd-amber:   #f5a524;
+  --dd-coral:   #ff5d5d;
+  --dd-radius-lg: 16px;
+  --dd-radius-md: 12px;
+  --dd-radius-sm: 8px;
+}
+
+/* ===========================  DARK (default)  ============================= */
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color:            #0b0d14;
+  --md-default-fg-color:            #e9ecf4;
+  --md-default-fg-color--light:     #b8bdcc;
+  --md-default-fg-color--lighter:   #7c829a;
+  --md-default-fg-color--lightest:  #555b73;
+
+  --md-primary-fg-color:            #14123a;
+  --md-primary-fg-color--light:     #1b1850;
+  --md-primary-fg-color--dark:      #0c0a26;
+  --md-primary-bg-color:            #e9ecf4;
+  --md-primary-bg-color--light:     #b8bdcc;
+
+  --md-accent-fg-color:             #8a82ff;
+  --md-typeset-a-color:             #8a82ff;
+
+  --md-code-bg-color:               rgba(10, 12, 20, 0.66);
+  --md-code-fg-color:               #c7ccdc;
+
+  --dd-accent:        #786eff;
+  --dd-accent-soft:   rgba(120, 110, 255, 0.14);
+  --dd-accent-edge:   rgba(120, 110, 255, 0.45);
+  --dd-glass:         rgba(22, 26, 38, 0.55);
+  --dd-glass-strong:  rgba(28, 33, 48, 0.72);
+  --dd-glass-edge:    rgba(255, 255, 255, 0.09);
+  --dd-grid-line:     rgba(255, 255, 255, 0.045);
+  --dd-wash-indigo:   rgba(120, 110, 255, 0.18);
+  --dd-wash-teal:     rgba(36, 200, 196, 0.12);
+  --dd-header-bg:     rgba(18, 16, 56, 0.70);
+}
+
+/* ===========================  LIGHT  ===================================== */
+[data-md-color-scheme="default"] {
+  --md-default-bg-color:            #f6f4f0;
+  --md-default-fg-color:            #1a1c28;
+  --md-default-fg-color--light:     #3a3f55;
+  --md-default-fg-color--lighter:   #6a7088;
+  --md-default-fg-color--lightest:  #99a0b3;
+
+  --md-primary-fg-color:            #1b1850;
+  --md-primary-fg-color--dark:      #121038;
+  --md-primary-bg-color:            #f6f4f0;
+
+  --md-accent-fg-color:             #5a52e0;
+  --md-typeset-a-color:             #5048c8;
+
+  --md-code-bg-color:               rgba(20, 24, 40, 0.05);
+  --md-code-fg-color:               #3a3f55;
+
+  --dd-accent:        #625cdc;
+  --dd-accent-soft:   rgba(98, 92, 220, 0.10);
+  --dd-accent-edge:   rgba(98, 92, 220, 0.40);
+  --dd-glass:         rgba(255, 255, 255, 0.62);
+  --dd-glass-strong:  rgba(255, 255, 255, 0.78);
+  --dd-glass-edge:    rgba(20, 24, 40, 0.10);
+  --dd-grid-line:     rgba(20, 24, 40, 0.05);
+  --dd-wash-indigo:   rgba(98, 92, 220, 0.08);
+  --dd-wash-teal:     rgba(36, 160, 156, 0.07);
+  --dd-header-bg:     rgba(27, 24, 80, 0.92);
+
+  --dd-emerald: #1ea676;
+  --dd-amber:   #b97400;
+  --dd-coral:   #c83c3c;
+}
+
+/* ----------------------------  Background canvas  ------------------------- */
+/* Radial indigo (top-left) + teal (bottom-right) washes over a vertical
+   gradient, plus a faint 56px hairline grid — mirrors the app body canvas. */
+body {
+  background-color: var(--md-default-bg-color);
+  background-image:
+    linear-gradient(var(--dd-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--dd-grid-line) 1px, transparent 1px),
+    radial-gradient(900px 700px at 8% -10%, var(--dd-wash-indigo), transparent 60%),
+    radial-gradient(1100px 800px at 110% 110%, var(--dd-wash-teal), transparent 60%);
+  background-size: 56px 56px, 56px 56px, 100% 100%, 100% 100%;
+  background-attachment: fixed;
+}
+
+/* ----------------------------  Header + tabs  ---------------------------- */
+.md-header {
+  background-color: var(--dd-header-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 24px -16px rgba(0, 0, 0, 0.6);
+}
+.md-tabs {
+  background-color: transparent;
+}
+.md-header__title { font-weight: 600; }
+
+/* ----------------------------  Links / buttons  -------------------------- */
+.md-typeset .md-button {
+  border-radius: var(--dd-radius-sm);
+  border-color: var(--dd-glass-edge);
+  transition: border-color .2s ease, background-color .2s ease, transform .2s ease;
+}
+.md-typeset .md-button:hover {
+  border-color: var(--dd-accent-edge);
+  background-color: var(--dd-accent-soft);
+  color: var(--md-default-fg-color);
+  transform: translateY(-1px);
+}
+.md-typeset .md-button--primary {
+  background-image: linear-gradient(135deg, #6e64ff, #5a52e0);
+  border-color: transparent;
+  color: #fff;
+}
+.md-typeset .md-button--primary:hover {
+  background-image: linear-gradient(135deg, #7d74ff, #6a62ef);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* ----------------------------  Grid cards (glass)  ----------------------- */
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid.cards > :is(ul, ol) > li {
+  border: 1px solid var(--dd-glass-edge);
+  border-radius: var(--dd-radius-md);
+  background-color: var(--dd-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  backdrop-filter: blur(14px) saturate(135%);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid.cards > :is(ul, ol) > li:hover {
+  border-color: var(--dd-accent-edge);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.10) inset,
+    0 14px 36px -18px rgba(120, 110, 255, 0.55);
+  transform: translateY(-2px);
+}
+/* Card heading icons — indigo accent by default */
+.md-typeset .grid.cards .twemoji,
+.md-typeset .grid.cards .twemoji svg {
+  color: var(--dd-accent);
+  fill: currentColor;
+}
+/* Status-colored icons (opt-in via { .dd-emerald } etc. on the icon) */
+.md-typeset .dd-emerald, .md-typeset .dd-emerald svg { color: var(--dd-emerald); }
+.md-typeset .dd-amber,   .md-typeset .dd-amber svg   { color: var(--dd-amber); }
+.md-typeset .dd-coral,   .md-typeset .dd-coral svg   { color: var(--dd-coral); }
+.md-typeset .dd-indigo,  .md-typeset .dd-indigo svg  { color: var(--dd-accent); }
+
+/* ----------------------------  Code / admonitions  ----------------------- */
+.md-typeset pre > code {
+  border-radius: var(--dd-radius-sm);
+  border: 1px solid var(--dd-glass-edge);
+}
+.md-typeset code { border-radius: 5px; }
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: var(--dd-radius-md);
+  border-color: var(--dd-glass-edge);
+  background-color: var(--dd-glass);
+}
+
+/* ----------------------------  Tables  ----------------------------------- */
+.md-typeset table:not([class]) {
+  border-radius: var(--dd-radius-md);
+  overflow: hidden;
+  border: 1px solid var(--dd-glass-edge);
+  background-color: var(--dd-glass);
+}
+.md-typeset table:not([class]) th {
+  background-color: var(--dd-glass-strong);
+}
+
+/* ----------------------------  Hero (home)  ------------------------------ */
+.dd-hero { margin: 1.2rem 0 2.2rem; }
+.dd-hero img { filter: drop-shadow(0 8px 28px rgba(120, 110, 255, 0.35)); }
+.dd-hero h1 {
+  font-weight: 700;
+  margin-bottom: .35em;
+  background: linear-gradient(180deg, var(--md-default-fg-color), var(--md-default-fg-color--light));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.dd-hero .dd-tagline {
+  font-size: 1.15rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 40rem;
+  margin: 0 auto 1.4rem;
+}
+
+/* ----------------------------  Product screenshots  ---------------------- */
+.md-typeset .dd-shot {
+  display: block;
+  width: 100%;
+  margin: 1.2rem auto;
+  border-radius: var(--dd-radius-lg);
+  border: 1px solid var(--dd-glass-edge);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 28px 70px -32px rgba(0, 0, 0, 0.7),
+    0 0 0 1px var(--dd-accent-soft);
+}
+.dd-shotframe {
+  margin: 1.4rem 0 2rem;
+}
+.dd-shotframe .dd-cap {
+  text-align: center;
+  font-size: .8rem;
+  color: var(--md-default-fg-color--lighter);
+  margin-top: .4rem;
+}

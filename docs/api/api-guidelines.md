@@ -180,11 +180,17 @@ MVP does not enforce rate limits — internal-only network, single SPA, predicta
 
 The API is the **single source of truth** for system state. Components (fetcher, demo-driver, …) always initiate calls to the API — the API never initiates calls to components.
 
-```
-Component ──GET /api/control/stream──────► API   X-Control-API-Key  subscribe; receive orchestration events
-Component ──POST /api/control/events─────► API   X-Api-Key          report;    post status / operational events
-Operator  ──POST /api/control/reset──────► API   X-Control-API-Key  admin;     starts reset choreography (202) → reset-initiated/started/completed on stream
-Anyone    ──GET  /api/control/events─────► API   (none)             observe;   read component-posted events (2 h)
+```mermaid
+flowchart LR
+    Component["Component<br/>(fetcher, demo-driver, …)"]
+    Operator["Operator"]
+    Anyone["Anyone"]
+    API(["API<br/>(single source of truth)"])
+
+    Component -->|"GET /api/control/stream · X-Control-API-Key<br/>subscribe: receive orchestration events"| API
+    Component -->|"POST /api/control/events · X-Api-Key<br/>report: post status / operational events"| API
+    Operator -->|"POST /api/control/reset · X-Control-API-Key<br/>admin: start reset choreography (202)"| API
+    Anyone -->|"GET /api/control/events · (no auth)<br/>observe: read component events (2 h)"| API
 ```
 
 Every arrow originates at the caller. The SSE stream is a **response to a component-initiated GET** — the API emits into it, but the connection is inbound.

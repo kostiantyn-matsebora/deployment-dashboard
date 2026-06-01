@@ -31,6 +31,9 @@ The gateway (`:8080`) is the **only** published port. Frontend, API, and Postgre
 
 ## What you're looking at
 
+![The deployment matrix, populated by the demo](../_assets/screenshots/matrix-dark.png#only-dark){ .dd-shot }
+![The deployment matrix, populated by the demo](../_assets/screenshots/matrix-light.png#only-light){ .dd-shot }
+
 - **Matrix view** — one row per service, one column per environment. Each slot shows version, status (success / in-progress / failure), actor, elapsed time, and a link to the CI/CD run.
 - **Live updates** — new deployment events stream to the browser over SSE. No reload.
 - **History** — every slot keeps its full deployment history; open the drawer to see it.
