@@ -14,6 +14,8 @@
  *   • docker-compose.test.yaml sets SEED_ON_STARTUP=false → emulator starts empty.
  *     The real fetcher backfills nothing on startup, so demo-driver and
  *     reset-choreography specs see no phantom fetcher data.
+ *   • beforeAll runs one-time setup: resetAll → waitForDemoReady → seed → wait
+ *     for backfill. All it-blocks are independent reads against the settled state.
  *   • afterAll (and on-failure path) clears the emulator and calls resetAll(),
  *     leaving an empty store + empty API for any spec that runs afterwards.
  *     Jest runs --runInBand so this ordering is deterministic.
@@ -32,7 +34,7 @@
  *     returned in the DeploymentEvent read response body).
  */
 
-import { getJson, post, resetAll, sleep } from './helpers';
+import { getJson, post, resetAll, sleep, waitForDemoReady } from './helpers';
 
 const DEMO_GITHUB_SEED   = '/demo/github/seed';
 const DEMO_GITHUB_CLEAR  = '/demo/github/clear';
@@ -103,41 +105,55 @@ const FETCHER_REPORTER = 'dashboard-fetcher/github-actions';
 
 describe('Scenario: GitHub emulator → fetcher backfill → API state', () => {
 
-  afterAll(async () => {
-    // Clean up regardless of pass/fail so subsequent specs see no stale data.
-    // Order: clear emulator first (stops fetcher from re-posting), then reset
-    // the API to empty state.
-    try { await clearEmulator(); } catch { /* best-effort */ }
+  // One-time setup: reset → wait for demo-driver ready → seed → wait for
+  // backfill to complete. All it-blocks are independent reads against this
+  // already-settled state, so a single setup failure does not cascade into
+  // spurious assertion failures in subsequent tests.
+  //
+  // waitForDemoReady() is the critical guard: resetAll() resolves when the API
+  // emits reset-completed, but the demo-driver unblocks its /demo/* surface
+  // slightly later (async). Seeding immediately after resetAll() races this
+  // unblock and hits the 503 reset gate. waitForDemoReady() polls /demo/status
+  // until reset_state==idle && state!=='running', ensuring the /demo/* surface
+  // is fully open before any mutator call.
+  beforeAll(async () => {
     await resetAll();
-  });
+    await waitForDemoReady();
 
-  it('seeds the emulator and verifies repos are present', async () => {
-    // Step 1: clean slate.
-    await resetAll();
-
-    // Step 2: seed the emulator with the curated demo fixture.
+    // Seed the emulator and verify repos are visible.
     const seedStatus = await seedEmulator('demo');
     expect(seedStatus).toBeDefined();
 
-    // Step 3: confirm the emulator reports repos > 0.
     const status = await emulatorStatus();
     expect(typeof status.repos).toBe('number');
     expect(status.repos).toBeGreaterThan(0);
-  });
 
-  it('fetcher backfills all 10 demo services into the API', async () => {
+    // Wait for the fetcher to backfill all 10 services into the API.
     // The fetcher polls every POLL_INTERVAL_SECONDS=2s (test override) and
     // triggers a full backfill on its first cycle (null cursor → F14).
-    // With 10 repos × ~1-2 poll cycles each, 90 s is a generous upper bound.
-    const services = await waitFor(
+    // 120 s gives headroom for 10 repos × ~1-2 poll cycles each.
+    await waitFor(
       async () => {
         const body = await getJson('/api/services');
         return body.items.length >= EXPECTED_SERVICE_COUNT ? body.items : null;
       },
-      { timeoutMs: 90_000, intervalMs: 2_000, label: `services count >= ${EXPECTED_SERVICE_COUNT}` },
+      { timeoutMs: 120_000, intervalMs: 2_000, label: `services count >= ${EXPECTED_SERVICE_COUNT}` },
     );
+  }, 150_000);
 
-    expect(services.length).toBe(EXPECTED_SERVICE_COUNT);
+  afterAll(async () => {
+    // Clean up regardless of pass/fail so subsequent specs see no stale data.
+    // waitForDemoReady() guards the clear call against the same 503 race that
+    // originally caused the seed failure; suppress errors so afterAll always
+    // proceeds to resetAll().
+    await waitForDemoReady().catch(() => {});
+    try { await clearEmulator(); } catch { /* best-effort */ }
+    await resetAll();
+  });
+
+  it('API has exactly 10 services after backfill', async () => {
+    const body = await getJson('/api/services');
+    expect(body.items.length).toBe(EXPECTED_SERVICE_COUNT);
   });
 
   it('payments-api staging deployment has a non-empty parent_deployments (F10)', async () => {
