@@ -145,21 +145,24 @@ describe('Scenario: GitHub emulator → fetcher backfill → API state', () => {
     // payments-api workflow: deploy-staging needs deploy-dev.
     // deployment_id format: "gh-deploy-{GitHub deployment id}".
     // Staging → parent = dev deployment ("gh-deploy-4830001").
+    //
+    // Contract: DeploymentEventIngest.required does NOT include parent_deployments.
+    // Sending [] and omitting the field are semantically equivalent; the API
+    // serialises with null-omission so the field is ABSENT (undefined) when empty —
+    // NOT []. Use `?? []` to handle the absent-when-empty case correctly.
     const page = await getJson(`/api/deployments?service=payments-api&environment=staging&limit=50`);
     expect(page.items.length).toBeGreaterThan(0);
 
-    // Find the staging event with the expected deployment_id.
+    // Find the specific staging event by deployment_id.
     const stagingEvent = page.items.find(
       (e: any) => e.deployment_id === PAYMENTS_STAGING_DEPLOYMENT_ID,
     );
     expect(stagingEvent).toBeDefined();
 
-    // parent_deployments must be a non-empty array (F10 confirmed).
-    expect(Array.isArray(stagingEvent.parent_deployments)).toBe(true);
-    expect(stagingEvent.parent_deployments.length).toBeGreaterThan(0);
-
-    // The first (and only) parent must be the dev deployment.
-    expect(stagingEvent.parent_deployments).toContain(PAYMENTS_DEV_DEPLOYMENT_ID);
+    // The dev parent must be present in parent_deployments once the backfill
+    // fix lands. `?? []` is contract-correct: if the field is absent (empty),
+    // toContain on [] fails and surfaces the regression.
+    expect(stagingEvent.parent_deployments ?? []).toContain(PAYMENTS_DEV_DEPLOYMENT_ID);
   });
 
   it('search-indexer deployments carry version resolved from artifact (F15)', async () => {
