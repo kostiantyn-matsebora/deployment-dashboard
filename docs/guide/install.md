@@ -11,38 +11,90 @@ How to run Deployment Dashboard for a real team. For a zero-config local trial, 
 
 ## Deployment shapes (Compose profiles)
 
-Compose files live in [`compose/`](https://github.com/kostiantyn-matsebora/deployment-dashboard/tree/main/compose). Copy `compose/.env.example` to `compose/.env` and fill in the vars for your profile (see [Configuration](./configuration.md)).
-
 Two shapes, each with a pull-mode variant:
 
 - **`standalone`** — cloud / distributed. PostgreSQL is an external managed service; the app tier scales horizontally behind the gateway.
 - **`full`** — single-VM / all-in-one. The stack owns its PostgreSQL (Docker volume) on the same host.
 
+> Pick **`standalone`** when your database is managed (e.g. Azure Database for PostgreSQL). Pick **`full`** for a single box that owns its data volume.
+
+### Get the compose project
+
+Two options — OCI artifact (recommended) or curl.
+
+#### Option A: OCI artifact (recommended)
+
+No local compose files needed. Fetch only the env template, fill in your secrets, then reference the artifact directly:
+
+```bash
+# 1. Fetch the env template — this is the only file you need locally
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
+cp .env.example .env
+# edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
+#   (+ POSTGRES_HOST for standalone)
+
+# 2. Start — Compose fetches the project from GHCR; .env in the working directory
+#    is auto-loaded for variable interpolation
+docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.1.0 --profile full up -d
+```
+
+Replace `0.1.0` with the release you want to pin. A `.env` in the working directory is auto-loaded; alternatively pass `--env-file ./your.env` explicitly.
+
+> **First run prompt.** The first `oci://` pull shows an interactive confirmation listing the interpolation variables and their sources before proceeding — this is expected. Preview resolution without starting the stack: `docker compose --env-file ./.env -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.1.0 config --environment`
+
+> **Availability.** The OCI artifact is published automatically on each release. It does not exist until the first release (`v0.1.0`) is cut — use the curl alternative below until then.
+
+Image references inside the artifact are pinned to exact digests at publish time — every `up` on a given tag pulls the exact images from that release. Environment variable placeholders (`${API_KEY}`, `${POSTGRES_USER}`, etc.) are resolved client-side at `up` time, not baked into the artifact. See [Pinning a release version](#pinning-a-release-version).
+
+#### Option B: fetch the compose files
+
+Fetch the files you need into a working directory — no clone required, images pull from GHCR.
+
+**Base file (all profiles):**
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
+```
+
+**Demo overlay (demo profile only):**
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.demo.yaml
+```
+
+To pin to a specific release, replace `main` in the URLs with the release tag (e.g. `.../v0.1.0/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
+
+### Profiles
+
 | Profile | What starts | Required env | Command |
 |---|---|---|---|
-| `standalone` | Gateway + Frontend + API. External PostgreSQL, push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` | `docker compose -f compose/docker-compose.yaml --profile standalone up` |
-| `standalone-pull` | `standalone` + Fetcher (pull-mode ingestion). | + `GITHUB_REPOS` / `GITHUB_TOKEN` | `docker compose -f compose/docker-compose.yaml --profile standalone-pull up` |
-| `full` | Gateway + Frontend + API + bundled PostgreSQL (Docker volume). Push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose -f compose/docker-compose.yaml --profile full up` |
-| `full-pull` | `full` + Fetcher (pull-mode ingestion). | + `GITHUB_REPOS` / `GITHUB_TOKEN` | `docker compose -f compose/docker-compose.yaml --profile full-pull up` |
-| `demo` | Everything + Demo Driver + GitHub Emulator + Fetcher. Zero-config evaluation. | _(none — insecure defaults)_ | `docker compose -f compose/docker-compose.yaml -f compose/docker-compose.demo.yaml --profile demo up` |
-
-> Pick **`standalone`** when your database is managed (e.g. Azure Database for PostgreSQL). Pick **`full`** for a single box that owns its data volume.
+| `standalone` | Gateway + Frontend + API. External PostgreSQL, push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` | `docker compose --profile standalone up` |
+| `standalone-pull` | `standalone` + Fetcher (pull-mode ingestion). | + `GITHUB_REPOS` / `GITHUB_TOKEN` | `docker compose --profile standalone-pull up` |
+| `full` | Gateway + Frontend + API + bundled PostgreSQL (Docker volume). Push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose --profile full up` |
+| `full-pull` | `full` + Fetcher (pull-mode ingestion). | + `GITHUB_REPOS` / `GITHUB_TOKEN` | `docker compose --profile full-pull up` |
+| `demo` | Everything + Demo Driver + GitHub Emulator + Fetcher. Zero-config evaluation. | _(none — insecure defaults)_ | `docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up` |
 
 ## Minimal production start
 
 ```bash
-cp compose/.env.example compose/.env
-# edit compose/.env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
+# 1. Fetch only the env template — fill in your secrets
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
+cp .env.example .env
+# edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
 #   (+ POSTGRES_HOST for standalone)
 
-docker compose -f compose/docker-compose.yaml --profile full up -d
+# 2. Start — OCI artifact + images pull from GHCR; .env is auto-loaded from cwd
+docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.1.0 --profile full up -d
 ```
+
+> Substitute `0.1.0` with the release you want. See [Pinning a release version](#pinning-a-release-version). If the first release has not been cut yet, use [Option B](#option-b-fetch-the-compose-files) instead.
 
 Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
 
-## Running from local source
+## Running from local source (contributors / building from a clone)
 
-`compose/docker-compose.local.yaml` swaps every published image for a locally built one (`pull_policy: never`). Stack it on top of the base + demo overrides:
+If you have cloned the repo and want to build images locally, `compose/docker-compose.local.yaml` swaps every published image for a locally built one (`pull_policy: never`). Stack it on top of the base + demo overrides:
 
 ```bash
 docker compose \
@@ -75,7 +127,7 @@ DASHBOARD_VERSION=0.1.0
 
 Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`) containing all `compose/*.yaml` files and `compose/.env.example` — a clone-free way to deploy a specific version without checking out the repo.
 
-For the full release process, see [RELEASING.md](../../RELEASING.md).
+For the full release process, see [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
 
 ## Hosting notes
 

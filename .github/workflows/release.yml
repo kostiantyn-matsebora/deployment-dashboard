@@ -153,3 +153,103 @@ jobs:
           body_path: release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: deployment-dashboard-compose-${{ github.ref_name }}.zip
+
+  # ── Compose OCI artifacts ─────────────────────────────────────────────────────
+  # Publishes TWO Compose projects as OCI artifacts to GHCR so adopters can run
+  # the stack with a single `docker compose -f oci://… up` — no clone, no curl.
+  #
+  # Artifacts:
+  #   deployment-dashboard-compose       — base file only (production profiles)
+  #   deployment-dashboard-compose-demo  — base + demo overlay (demo profile)
+  #
+  # Variable interpolation is CLIENT-SIDE: `publish` ships the templated YAML
+  # source with ${VAR} placeholders intact; resolution happens at `up` time on
+  # the adopter's machine from their CWD .env / host env / --env-file.  The
+  # --with-env flag (intentionally NOT used here) is the opt-in that would bake
+  # values at publish time.  The demo overlay hardcodes insecure defaults for
+  # zero-config evaluation; the production artifact ships raw placeholders that
+  # the adopter fills via a local .env — both are safe to publish.
+  #
+  # Image pinning: DASHBOARD_VERSION is set to the release version (no leading v)
+  # before publish so ${DASHBOARD_VERSION:-latest} resolves to the release images.
+  # --resolve-image-digests pins those image tags to their exact SHA256 digest,
+  # producing a fully reproducible artifact.  (This is the one value that IS
+  # resolved at publish time — image refs only, not env vars.)
+  #
+  # Tagging: each artifact is tagged with both the version string and `latest`.
+  # `latest` is skipped for pre-release tags (those containing `-`), consistent
+  # with the image job above.
+  compose-artifacts:
+    name: Compose OCI artifacts
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version (strip leading v)
+        id: version
+        run: echo "version=$(echo '${{ github.ref_name }}' | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+
+      - name: Publish production Compose artifact (versioned tag)
+        # Base file only — production profiles (standalone / full and their -pull
+        # variants). Ships templated YAML; adopter supplies secrets via .env at
+        # up time. --resolve-image-digests pins image refs to digests; env var
+        # placeholders are preserved for client-side resolution.
+        env:
+          DASHBOARD_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker compose -f compose/docker-compose.yaml publish \
+            --yes \
+            --resolve-image-digests \
+            ghcr.io/${{ github.repository_owner }}/deployment-dashboard-compose:${{ steps.version.outputs.version }}
+
+      - name: Publish production Compose artifact (latest tag)
+        # Skipped for pre-release tags (any tag containing '-').
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          DASHBOARD_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker compose -f compose/docker-compose.yaml publish \
+            --yes \
+            --resolve-image-digests \
+            ghcr.io/${{ github.repository_owner }}/deployment-dashboard-compose:latest
+
+      - name: Publish demo Compose artifact (versioned tag)
+        # Base + demo overlay merged — includes Demo Driver, GitHub Emulator, and
+        # demo-specific gateway routing. The overlay hardcodes insecure defaults
+        # so the demo profile needs no .env at up time (zero-config evaluation).
+        env:
+          DASHBOARD_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker compose \
+            -f compose/docker-compose.yaml \
+            -f compose/docker-compose.demo.yaml \
+            publish \
+            --yes \
+            --resolve-image-digests \
+            ghcr.io/${{ github.repository_owner }}/deployment-dashboard-compose-demo:${{ steps.version.outputs.version }}
+
+      - name: Publish demo Compose artifact (latest tag)
+        # Skipped for pre-release tags (any tag containing '-').
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          DASHBOARD_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker compose \
+            -f compose/docker-compose.yaml \
+            -f compose/docker-compose.demo.yaml \
+            publish \
+            --yes \
+            --resolve-image-digests \
+            ghcr.io/${{ github.repository_owner }}/deployment-dashboard-compose-demo:latest

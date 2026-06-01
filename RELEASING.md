@@ -54,8 +54,32 @@ All images are published to `ghcr.io/kostiantyn-matsebora/<image-name>`.
    - Extracts the matching `CHANGELOG.md` section as release notes.
    - Bundles `compose/*.yaml` + `compose/.env.example` into a zip artifact.
    - Creates the GitHub Release with notes and the compose bundle attached.
+   - Publishes **two OCI Compose artifacts** to GHCR (see below).
 
    Published images appear at: `https://github.com/kostiantyn-matsebora/deployment-dashboard/pkgs/container/<image-name>`
+
+### OCI Compose artifacts
+
+The release workflow publishes two Compose projects as OCI artifacts, enabling adopters to run the stack with a single command — no clone, no curl:
+
+| Artifact | Source files | Profiles |
+|---|---|---|
+| `ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose` | `compose/docker-compose.yaml` | `standalone`, `standalone-pull`, `full`, `full-pull` |
+| `ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo` | `compose/docker-compose.yaml` + `compose/docker-compose.demo.yaml` | `demo` |
+
+Each artifact is tagged with `X.Y.Z` (always) and `latest` (stable releases only — skipped for pre-release tags containing `-`).
+
+Image references are pinned to exact digests at publish time (`--resolve-image-digests`), so every `up` on a given tag pulls the exact images from that release. Environment variable placeholders (`${API_KEY}`, `${POSTGRES_USER}`, etc.) are preserved as-is in the artifact and resolved client-side at `up` time from the adopter's `.env` or host environment — `--with-env` is intentionally not used.
+
+**Consuming the artifacts:**
+
+```bash
+# Production (adopter supplies .env with secrets in cwd)
+docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.1.0 --profile full up -d
+
+# Demo (zero-config — insecure defaults baked into the overlay)
+docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:latest --profile demo up
+```
 
 ---
 
