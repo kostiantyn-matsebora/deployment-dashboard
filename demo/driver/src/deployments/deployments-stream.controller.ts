@@ -113,8 +113,13 @@ export class DeploymentsStreamController {
         console.warn('[demo-driver] deployments-stream read error:', err);
       }
     } finally {
-      try { reader.cancel(); } catch {}
-      try { res.end();       } catch {}
+      // reader.cancel() returns a Promise. On client disconnect (page refresh,
+      // tab close, or navigation) the abort errors the upstream body stream, so
+      // cancel() *rejects* with that AbortError. A synchronous try/catch cannot
+      // catch a rejected Promise — it would float as an unhandledRejection and
+      // crash the process — so we attach a .catch() to swallow it.
+      void reader.cancel().catch(() => {});
+      try { res.end(); } catch {}
     }
   }
 
