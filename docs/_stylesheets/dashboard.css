@@ -188,6 +188,77 @@ body {
   background-color: var(--dd-glass-strong);
 }
 
+/* ----------------------------  Mermaid diagrams  ------------------------- */
+/* Render at natural size and scroll horizontally rather than shrinking text
+   to fit the content column (keeps dense diagrams legible without zooming). */
+.md-typeset .mermaid {
+  margin: 1.4rem 0;
+  text-align: center;
+  overflow-x: auto;
+}
+.md-typeset .mermaid > svg {
+  max-width: none;
+  height: auto;
+}
+
+/* Nodes — on-brand glass fill + indigo border, readable text (both schemes). */
+.md-typeset .mermaid .node rect,
+.md-typeset .mermaid .node polygon,
+.md-typeset .mermaid .node path,
+.md-typeset .mermaid .node circle,
+.md-typeset .mermaid .node ellipse {
+  fill: var(--dd-glass-strong) !important;
+  stroke: var(--dd-accent-edge) !important;
+  stroke-width: 1.2px !important;
+}
+.md-typeset .mermaid .node .nodeLabel,
+.md-typeset .mermaid .node span,
+.md-typeset .mermaid .node .label,
+.md-typeset .mermaid span.nodeLabel,
+.md-typeset .mermaid .node text {
+  color: var(--md-default-fg-color) !important;
+  fill: var(--md-default-fg-color) !important;
+}
+
+/* Subgraph clusters — subtle tinted boundary. */
+.md-typeset .mermaid .cluster rect {
+  fill: var(--dd-accent-soft) !important;
+  stroke: var(--dd-glass-edge) !important;
+  rx: 10px;
+  ry: 10px;
+}
+.md-typeset .mermaid .cluster .nodeLabel,
+.md-typeset .mermaid .cluster span,
+.md-typeset .mermaid .cluster text {
+  color: var(--md-default-fg-color--light) !important;
+  fill: var(--md-default-fg-color--light) !important;
+  font-weight: 600;
+}
+
+/* Edges + arrowheads. */
+.md-typeset .mermaid .edgePath .path,
+.md-typeset .mermaid .flowchart-link,
+.md-typeset .mermaid .relation {
+  stroke: var(--md-default-fg-color--lighter) !important;
+  stroke-width: 1.4px !important;
+}
+.md-typeset .mermaid marker path,
+.md-typeset .mermaid .arrowheadPath,
+.md-typeset .mermaid #arrowhead path {
+  fill: var(--md-default-fg-color--lighter) !important;
+  stroke: none !important;
+}
+
+/* Edge labels — match page background so they sit cleanly over edges. */
+.md-typeset .mermaid .edgeLabel,
+.md-typeset .mermaid .edgeLabel p,
+.md-typeset .mermaid .edgeLabel rect,
+.md-typeset .mermaid .edgeLabel foreignObject div {
+  background-color: var(--md-default-bg-color) !important;
+  color: var(--md-default-fg-color--light) !important;
+  fill: var(--md-default-bg-color) !important;
+}
+
 /* ----------------------------  Hero (home)  ------------------------------ */
 .dd-hero { margin: 1.2rem 0 2.2rem; }
 .dd-hero img { filter: drop-shadow(0 8px 28px rgba(120, 110, 255, 0.35)); }

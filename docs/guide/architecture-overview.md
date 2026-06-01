@@ -34,46 +34,48 @@ The Fetcher is an **optional** pull-mode adapter: it polls a CI/CD API and posts
 A C4 component-level view of the runtime system (demo/eval components omitted). External systems sit outside the boundary; everything inside ships in the production stack. The gateway is the only published surface, and the API tier is a single stateless .NET container you can scale horizontally.
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": true, "nodeSpacing": 38, "rankSpacing": 60}, "themeVariables": {"fontSize": "17px"}}}%%
 flowchart TB
-    CICD["<b>CI/CD pipeline</b><br><i>[External · any tool]</i><br>GitHub Actions, Azure DevOps,<br>Jenkins, GitLab, …"]
-    PROVIDER["<b>CI/CD provider API</b><br><i>[External]</i><br>e.g. GitHub Actions REST"]
-    BROWSER["<b>Operator browser</b><br><i>[External]</i>"]
-    NOTIFY["<b>Notification client</b><br><i>[Component · planned v2]</i><br>desktop tray alerts"]
+    CICD["<b>CI/CD pipeline</b><br>any tool"]
+    PROVIDER["<b>CI/CD provider API</b><br>e.g. GitHub REST"]
+    BROWSER["<b>Operator browser</b>"]
+    NOTIFY["<b>Notification client</b><br>planned · v2"]
 
     subgraph SYS["Deployment Dashboard — system boundary"]
-        GW{{"<b>App Gateway</b><br><i>[Container: nginx]</i><br>only public surface · :8080<br>routing + SSE buffering"}}
-        FE["<b>Frontend SPA</b><br><i>[Container: Angular + nginx]</i><br>static · holds no secrets"]
+        GW{{"<b>App Gateway</b> · nginx<br>:8080 · only public surface"}}
 
-        subgraph APIC["API container · [.NET 10] · stateless (scale freely)"]
-            WRITE["<b>Write API</b><br><i>[Component]</i><br>POST /api/deployments<br>validate + append · X-Api-Key"]
-            READ["<b>Read API</b><br><i>[Component]</i><br>matrix · history · services<br>(no auth)"]
-            SSE["<b>Real-time hub</b><br><i>[Component]</i><br>GET /api/events/stream<br>per-instance SSE fan-out"]
-            CTRL["<b>Control API</b><br><i>[Component]</i><br>reset · control stream<br>X-Control-API-Key"]
+        subgraph APIC["API container · .NET 10 · stateless"]
+            direction LR
+            WRITE["<b>Write API</b><br>X-Api-Key"]
+            READ["<b>Read API</b><br>no auth"]
+            SSE["<b>Real-time hub</b><br>SSE fan-out"]
+            CTRL["<b>Control API</b><br>X-Control-API-Key"]
         end
 
-        FETCH["<b>Fetcher</b><br><i>[Container · optional · pull-mode]</i><br>polls provider → posts events"]
-        PG[("<b>PostgreSQL</b><br><i>[Database]</i><br>append-only event store<br>LISTEN / NOTIFY bus")]
+        FE["<b>Frontend SPA</b><br>Angular · static"]
+        FETCH["<b>Fetcher</b><br>optional · pull-mode"]
+        PG[("<b>PostgreSQL</b><br>append-only · LISTEN/NOTIFY")]
     end
 
     CICD -->|"POST /api/deployments"| GW
     BROWSER -->|"HTTPS"| GW
     GW -->|"serves SPA"| FE
-    GW -->|"/api writes"| WRITE
-    GW -->|"/api reads"| READ
-    GW -->|"/api/events/stream"| SSE
-    GW -->|"/api/control"| CTRL
+    GW -->|"writes"| WRITE
+    GW -->|"reads"| READ
+    GW -->|"/events/stream"| SSE
+    GW -->|"control"| CTRL
 
-    PROVIDER -.->|"polled (REST)"| FETCH
-    FETCH -.->|"POST /api/deployments"| GW
+    PROVIDER -.->|"poll (REST)"| FETCH
+    FETCH -.->|"POST"| GW
 
     WRITE -->|"append"| PG
     READ -->|"query"| PG
-    CTRL -->|"reset / control"| PG
+    CTRL --> PG
     PG -.->|"NOTIFY"| SSE
     SSE -. "SSE live updates" .-> BROWSER
-    NOTIFY -.->|"polls Read API (planned)"| GW
+    NOTIFY -.->|"polls Read API"| GW
 
-    classDef planned stroke-dasharray:5 5,opacity:0.75;
+    classDef planned stroke-dasharray:6 4;
     class NOTIFY planned;
 ```
 
