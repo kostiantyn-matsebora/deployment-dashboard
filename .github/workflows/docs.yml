@@ -13,7 +13,7 @@ jobs:
     name: Docs drift check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check index and registry integrity
         run: pwsh scripts/hooks/Invoke-DocsKeeperMaintenance.ps1 -DriftOnly
