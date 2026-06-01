@@ -1,20 +1,19 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Test overrides — deterministic reset choreography for the API integration
-# test suite (testing/api/tests/integration/reset-choreography.spec.ts).
+# Test overrides — deterministic, isolated environment for the API integration
+# test suite (testing/api/tests/integration/).
 #
 # Appended last in COMPOSE_FILE so these values win over demo defaults.
 #
-# Key choices:
+# ── Reset choreography isolation ─────────────────────────────────────────────
 #   AckTimeoutSeconds = 3   Short window so timeout-backstop tests finish fast.
 #   ExpectedComponents = [api-test-reset]
 #                           A single synthetic component id the test suite
 #                           controls via POST /api/control/events.  The real
-#                           demo-driver stays in the compose stack but is NOT
-#                           in ExpectedComponents, so its acks are ignored by
-#                           the gate (it still reacts to reset-initiated — that
-#                           is fine; the test drives completion independently).
-#                           dashboard-fetcher is absent from the stack entirely,
-#                           so it must not appear in ExpectedComponents either.
+#                           demo-driver and fetcher-host stay in the stack but
+#                           are NOT in ExpectedComponents, so their acks are
+#                           ignored by the reset gate (they still react to
+#                           reset-initiated — that is fine; the test drives
+#                           completion independently via api-test-reset).
 #
 #   IMPORTANT — .NET array binding does NOT replace the whole array. Config
 #   children are bound by INDEX over the keys present across providers (env wins
@@ -29,6 +28,25 @@
 #   GateMaxTtlSeconds = 15  Enough headroom for the longest test scenario
 #                           (timeout backstop at ~3 s + overhead) without
 #                           wedging ingest during teardown.
+#
+# ── GitHub emulator isolation ─────────────────────────────────────────────────
+#   SEED_ON_STARTUP = false  The emulator starts EMPTY. The fetcher therefore
+#                           backfills nothing by default, keeping demo-driver
+#                           and reset-choreography tests unaffected by phantom
+#                           fetcher data. The github-fetcher.spec.ts test
+#                           explicitly seeds the emulator via
+#                           POST /demo/github/seed {dataset:"demo"} and cleans
+#                           up with POST /demo/github/clear + resetAll() in
+#                           afterAll, so subsequent specs see a clean slate.
+#
+# ── Fetcher-host timing ───────────────────────────────────────────────────────
+#   POLL_INTERVAL_SECONDS = 2   Fast poll so the github scenario doesn't wait
+#                           long for backfill to appear.  The reset gate still
+#                           ignores fetcher acks (ExpectedComponents above), so
+#                           reset-choreography tests are unaffected by the
+#                           fetcher's presence.
+#   GITHUB__RateLimitBudgetPct = 100   Use the full simulated budget for speed.
+#
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -38,3 +56,12 @@ services:
       Reset__ExpectedComponents__0: "api-test-reset"
       Reset__ExpectedComponents__1: "api-test-reset"
       Reset__GateMaxTtlSeconds: "15"
+
+  github-emulator:
+    environment:
+      SEED_ON_STARTUP: "false"
+
+  fetcher-host:
+    environment:
+      POLL_INTERVAL_SECONDS: "2"
+      GITHUB__RateLimitBudgetPct: "100"

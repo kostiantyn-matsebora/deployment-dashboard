@@ -2,33 +2,40 @@ name: _api-tests
 
 # End-to-end API integration tests.
 #
-# Spins up the real stack (PostgreSQL + Dashboard.Api + demo-driver + gateway)
-# from branch source via docker compose, then drives the API through the
-# demo-driver's control surface across several scenarios (demo dataset, random
-# dataset, live event emission, control reset) and asserts the resulting
-# real-API state.
+# Spins up the real stack (PostgreSQL + Dashboard.Api + demo-driver + gateway
+# + github-emulator + fetcher-host) from branch source via docker compose, then
+# drives the API through the demo-driver's control surface across several
+# scenarios (demo dataset, random dataset, live event emission, control reset,
+# and a GitHub-sourced backfill via the real fetcher + github-emulator) and
+# asserts the resulting real-API state.
 #
 # All test traffic routes through the gateway (the single public surface):
-#   /api/*  -> Dashboard.Api      /demo/* -> demo-driver
+#   /api/*        -> Dashboard.Api
+#   /demo/*       -> demo-driver
+#   /demo/github/* -> demo-driver → github-emulator proxy
 
 on:
   push:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'demo/**'
+      - 'compose/**'
       - 'testing/api/**'
       - '.github/workflows/api-tests.yml'
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'demo/**'
+      - 'compose/**'
       - 'testing/api/**'
       - '.github/workflows/api-tests.yml'
   workflow_dispatch:
 
 jobs:
   api-tests:
-    name: API integration (demo-driver scenarios)
+    name: API integration (demo-driver scenarios + github fetcher)
     runs-on: ubuntu-latest
     env:
       # docker compose reads these automatically — every `docker compose` call
@@ -37,8 +44,8 @@ jobs:
       #   demo      — insecure demo credentials (API_KEY / CONTROL_API_KEY / pg)
       #   local     — build images from branch source instead of pulling GHCR
       COMPOSE_FILE: compose/docker-compose.yaml:compose/docker-compose.demo.yaml:compose/docker-compose.local.yaml:compose/docker-compose.test.yaml
-      # Minimal stack: db + api + demo-driver + gateway (no frontend).
-      COMPOSE_PROFILES: db,api,demo-driver,gateway
+      # Full stack: db + api + demo-driver + gateway + github-emulator + fetcher-host.
+      COMPOSE_PROFILES: db,api,demo-driver,gateway,github-emulator,fetcher-host
       # Fast live-emission cadence so the emission scenario doesn't wait 8s/tick.
       # Consumed by the demo-driver container AND read by the test for its wait.
       EMIT_INTERVAL_MS: '1000'
@@ -59,10 +66,10 @@ jobs:
         working-directory: testing/api
         run: npm ci
 
-      - name: Build & start stack (db + api + demo-driver + gateway)
+      - name: Build & start stack (db + api + demo-driver + gateway + github-emulator + fetcher-host)
         run: docker compose up -d --build --wait --wait-timeout 300
 
-      - name: Run API tests (demo-driver scenarios)
+      - name: Run API tests (demo-driver scenarios + github fetcher)
         working-directory: testing/api
         run: npm run test:integration
 
