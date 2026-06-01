@@ -34,7 +34,7 @@ services:
       # Key after __ must match the C# property name (PascalCase) — see docker-compose.yaml comment.
       GITHUB__BaseUrl: "http://github-emulator:3100"
       GITHUB__Token: "demo-token"
-      GITHUB__Repos: "demo-org/payments-api,demo-org/search-indexer"
+      GITHUB__Repos: "demo-org/auth-bff,demo-org/billing-webhook,demo-org/catalog-edge,demo-org/data-pipeline,demo-org/ledger-projector,demo-org/notification-worker,demo-org/order-svc,demo-org/payments-api,demo-org/platform-proxy,demo-org/search-indexer"
       GITHUB__VersionSource: "artifact:version.txt"
       GITHUB__RateLimit: "${GITHUB_SIM_RATE_LIMIT:-5000}"
       GITHUB__RateLimitBudgetPct: "80"
