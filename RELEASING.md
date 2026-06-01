@@ -74,6 +74,37 @@ Patch bump from `main` (or a maintenance branch if one exists for that major lin
 
 ---
 
+## Branch protection
+
+Apply once the repo is public (requires admin rights; repo must not be private for the API to accept protection rules on free plans):
+
+```bash
+gh api -X PUT repos/kostiantyn-matsebora/deployment-dashboard/branches/main/protection \
+  --input - <<'EOF'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["_ci-green"]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 0
+  },
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": false,
+  "restrictions": null
+}
+EOF
+```
+
+The single required check `_ci-green` is produced by `.github/workflows/ci.yml` on every PR to `main`, regardless of which paths changed.
+
+---
+
 ## Pinning a deployment to a version
 
 Set `DASHBOARD_VERSION` in `compose/.env`:
