@@ -29,8 +29,11 @@ public sealed class ResetOptions
     public string[] ExpectedComponents { get; set; } = [];
 
     /// <summary>
-    /// Safety abort: if a cycle exceeds this duration, gates are released and state is forced
-    /// back to <c>idle</c>. Prevents a dead driver wedging ingest (D12).
+    /// Hard wall-clock ceiling on the entire orchestrator cycle (draining → resetting → idle),
+    /// including the data-clearing phase. When the ceiling is reached the cycle is force-aborted:
+    /// state is written to <c>idle</c>, a <c>reset-completed</c> control-stream event is emitted
+    /// so connected components can recover, and the Postgres advisory lock is released.
+    /// Prevents a hung DB call (e.g. a blocked TRUNCATE) wedging ingest indefinitely (D12).
     /// Default: 60 s.
     /// </summary>
     public int GateMaxTtlSeconds { get; set; } = 60;

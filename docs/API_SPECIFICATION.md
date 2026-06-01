@@ -282,7 +282,7 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 |---|---|---|---|
 | `Reset:AckTimeoutSeconds` | `Reset__AckTimeoutSeconds` | `10` | Max wait for component acks before forcing `draining → resetting` (D13). |
 | `Reset:ExpectedComponents` | `Reset__ExpectedComponents__0`, `…__1` | `dashboard-fetcher`, `demo-driver` | Component ids whose acks are awaited; snapshotted into `reset_cycle.expected_components` at cycle start. |
-| `Reset:GateMaxTtlSeconds` | `Reset__GateMaxTtlSeconds` | `60` | Safety abort: if a cycle exceeds this, gates are released and state forced back to `idle` (prevents a dead driver wedging ingest). |
+| `Reset:GateMaxTtlSeconds` | `Reset__GateMaxTtlSeconds` | `60` | Hard wall-clock ceiling on the entire orchestrator cycle (draining → resetting → idle), including data clearing. When exceeded: state forced to `idle`, `reset-completed` emitted on the control stream (so components recover), advisory lock released. Prevents a hung DB call wedging ingest indefinitely. |
 
 ---
 
