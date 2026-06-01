@@ -26,6 +26,14 @@ on:
     # NO path filter here — this workflow must run on every PR to main,
     # regardless of which files were changed.
 
+# Least-privilege default for the gate jobs. A called reusable workflow's
+# GITHUB_TOKEN is capped by the CALLER's permissions, so the six service caller
+# jobs (whose workflows include a Docker job declaring packages: write) widen to
+# packages: write below. Docker push itself stays gated by event_name == 'push',
+# so nothing is published on PRs regardless of the granted scope.
+permissions:
+  contents: read
+
 jobs:
   # ── Path detection ───────────────────────────────────────────────────────────
   # Detect which areas changed. Each output is 'true' or 'false'.
@@ -96,36 +104,54 @@ jobs:
     name: CI / api
     needs: changes
     if: needs.changes.outputs.api == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/api.yml
 
   ci-frontend:
     name: CI / frontend
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/frontend.yml
 
   ci-gateway:
     name: CI / gateway
     needs: changes
     if: needs.changes.outputs.gateway == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/gateway.yml
 
   ci-fetcher:
     name: CI / fetcher
     needs: changes
     if: needs.changes.outputs.fetcher == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/fetcher.yml
 
   ci-demo-driver:
     name: CI / demo-driver
     needs: changes
     if: needs.changes.outputs['demo-driver'] == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/demo-driver.yml
 
   ci-github-emulator:
     name: CI / github-emulator
     needs: changes
     if: needs.changes.outputs['github-emulator'] == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/github-emulator.yml
 
   ci-api-tests:
