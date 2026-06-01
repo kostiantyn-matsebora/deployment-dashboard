@@ -1,4 +1,17 @@
-# Logo & Brand Mark
+---
+title: Logo & Brand Mark
+intro: 'Brand mark spec — swimlanes-derived DAG icon, 9 production assets, color, geometry, clear space, and integration snippets.'
+children:
+  - /logo.svg
+  - /logo-flat.svg
+  - /logo-mark-transparent.svg
+  - /logo-lockup.svg
+  - /favicon-16.png
+  - /favicon-32.png
+  - /favicon-48.png
+  - /apple-touch-icon.png
+  - /logo-512.png
+---
 
 **Version:** 1.0
 **Status:** Approved
