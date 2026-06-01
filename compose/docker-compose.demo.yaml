@@ -31,12 +31,13 @@ services:
       # Short poll interval for demo responsiveness.
       POLL_INTERVAL_SECONDS: "10"
       # Repoint the fetcher at the in-stack github-emulator instead of api.github.com.
-      GITHUB__BASE_URL: "http://github-emulator:3100"
-      GITHUB__TOKEN: "demo-token"
-      GITHUB__REPOS: "demo-org/payments-api,demo-org/search-indexer"
-      GITHUB__VERSION_SOURCE: "artifact:version.txt"
-      GITHUB__RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
-      GITHUB__RATE_LIMIT_BUDGET_PCT: "80"
+      # Key after __ must match the C# property name (PascalCase) — see docker-compose.yaml comment.
+      GITHUB__BaseUrl: "http://github-emulator:3100"
+      GITHUB__Token: "demo-token"
+      GITHUB__Repos: "demo-org/payments-api,demo-org/search-indexer"
+      GITHUB__VersionSource: "artifact:version.txt"
+      GITHUB__RateLimit: "${GITHUB_SIM_RATE_LIMIT:-5000}"
+      GITHUB__RateLimitBudgetPct: "80"
     # Demo-only dependency — the emulator does not exist in production.
     depends_on:
       github-emulator:

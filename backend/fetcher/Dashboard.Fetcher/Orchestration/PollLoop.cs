@@ -1,3 +1,4 @@
+using System.Net;
 using Dashboard.Fetcher.Abstractions;
 using Dashboard.Fetcher.Ingest;
 using Microsoft.Extensions.Logging;
@@ -8,13 +9,16 @@ namespace Dashboard.Fetcher.Orchestration;
 /// Tool-agnostic poll loop. One instance per adapter (§4).
 /// Cursor persisted only after all POSTs succeed — guarantees at-least-once delivery (F5).
 /// Supports pause / resume for the reset choreography (F17, §5.10.3).
+/// Updates <see cref="IFetcherReadinessIndicator"/> after every cycle when provided.
 /// </summary>
 public sealed class PollLoop(
     ICiCdAdapter adapter,
     IIngestClient ingest,
     IFetcherStateClient state,
     TimeSpan pollInterval,
-    ILogger<PollLoop> logger)
+    ILogger<PollLoop> logger,
+    IFetcherReadinessIndicator? readiness = null,
+    Func<RateLimitSnapshot?>? rateLimitSnapshotFactory = null)
 {
     // Guards the pause state. Permit is drained when paused so the loop waits on WaitAsync.
     private readonly SemaphoreSlim _resumeGate = new(1, 1);
@@ -36,6 +40,7 @@ public sealed class PollLoop(
         if (_isPaused) return;
         _isPaused = true;
         _resumeGate.Wait(0); // drain the permit so the next gate wait blocks
+        readiness?.SetPausedForReset(true);
         logger.LogInformation("[{Adapter}] poll loop paused for reset", adapter.AdapterId);
     }
 
@@ -48,6 +53,7 @@ public sealed class PollLoop(
         _pendingCursorOverride = null;
         _hasPendingCursorOverride = true;
         _isPaused = false;
+        readiness?.SetPausedForReset(false);
         try { _resumeGate.Release(); } catch (SemaphoreFullException) { /* already at capacity — already running */ }
         logger.LogInformation("[{Adapter}] poll loop resumed with null cursor (backfill will trigger)",
             adapter.AdapterId);
@@ -85,15 +91,24 @@ public sealed class PollLoop(
             try
             {
                 cursor = await PollOnceAsync(cursor, ct);
+                readiness?.RecordSuccess(rateLimitSnapshotFactory?.Invoke());
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break;
             }
+            catch (HttpRequestException ex) when (
+                ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                logger.LogError(ex, "[{Adapter}] poll error (auth failed); retrying next interval",
+                    adapter.AdapterId);
+                readiness?.RecordAuthFailed(ex.Message);
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "[{Adapter}] poll error; retrying next interval",
                     adapter.AdapterId);
+                readiness?.RecordError(ex.Message);
             }
 
             try

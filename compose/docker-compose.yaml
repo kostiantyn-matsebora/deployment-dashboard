@@ -185,12 +185,14 @@ services:
       POLL_INTERVAL_SECONDS: "${POLL_INTERVAL_SECONDS:-30}"
       # GitHub source — points at REAL GitHub by default. The demo override
       # (docker-compose.demo.yaml) repoints this at the in-stack github-emulator.
-      GITHUB__BASE_URL: "${GITHUB_BASE_URL:-https://api.github.com}"
-      GITHUB__TOKEN: "${GITHUB_TOKEN:-}"
-      GITHUB__REPOS: "${GITHUB_REPOS:-}"
-      GITHUB__VERSION_SOURCE: "${GITHUB_VERSION_SOURCE:-attribute:sha}"
-      # Unset GITHUB__RATE_LIMIT → discovered from GitHub /rate_limit on startup (F16).
-      GITHUB__RATE_LIMIT_BUDGET_PCT: "${GITHUB_RATE_LIMIT_BUDGET_PCT:-30}"
+      # Key after __ must match the C# property name (PascalCase); .NET config
+      # maps __ to a section separator and binds by property name, not SCREAMING_SNAKE.
+      GITHUB__BaseUrl: "${GITHUB_BASE_URL:-https://api.github.com}"
+      GITHUB__Token: "${GITHUB_TOKEN:-}"
+      GITHUB__Repos: "${GITHUB_REPOS:-}"
+      GITHUB__VersionSource: "${GITHUB_VERSION_SOURCE:-attribute:sha}"
+      # Unset GITHUB__RateLimit → discovered from GitHub /rate_limit on startup (F16).
+      GITHUB__RateLimitBudgetPct: "${GITHUB_RATE_LIMIT_BUDGET_PCT:-30}"
       BACKFILL: "${BACKFILL:-false}"
     depends_on:
       api:

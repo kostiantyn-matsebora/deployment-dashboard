@@ -75,6 +75,7 @@ backend/
 - `Control/ComponentEventClient` — HTTP client for `POST /api/control/events` (the `reset-ack` and `status` posts). Distinct from `Ingest/IngestClient`; both target the API but carry different headers (`X-Component-Id` vs `X-Progress-Reporter`).
 - The host runs **two concurrent tasks**: the existing per-adapter poll loop (§4) and the `ControlStreamSubscriber`. The subscriber signals the runner to pause/resume; it never fetches or posts deployment events itself.
 - **`GET /health`** — host-level liveness endpoint served by the ASP.NET web listener in `Dashboard.Fetcher.Host`. Returns `200 OK` while the host process is running (no body required). This is host-level observability only; the `ICiCdAdapter`/ingest/control-plane logic is **unchanged** (F1, G2). The web listener uses the standard ASP.NET `ASPNETCORE_URLS` / port mechanism; no adapter or library change.
+- **`GET /readyz`** — functional readiness endpoint. Reflects actual GitHub poll-cycle health via `IFetcherReadinessIndicator` / `FetcherReadinessIndicator`; see §6.1.
 
 Reuses **`Dashboard.Shared`** for the `DeploymentEventIngest` DTO — the fetcher emits the exact same wire type the contract defines. Stack = **.NET 10** (SAD §6), packaged as a standard container.
 
@@ -478,19 +479,56 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | `INITIAL_LOOKBACK` | `7.00:00:00` | normal poll first-run window (F7); also the default for `BACKFILL_MAX_AGE` when unset |
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
 | `BACKFILL_MAX_AGE` | `30.00:00:00` | how far back backfill scans per environment; defaults to `INITIAL_LOOKBACK` |
-| `GITHUB__BASE_URL` | `https://api.github.com` | overridable for the integration mock |
-| `GITHUB__TOKEN` | *(secret)* | PAT / GitHub App token |
-| `GITHUB__REPOS` | `acme/api,acme/web` | repos to poll |
-| `GITHUB__SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
-| `GITHUB__VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
-| `GITHUB__RATE_LIMIT` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
-| `GITHUB__RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
+| `GITHUB__BaseUrl` | `https://api.github.com` | overridable for the integration mock |
+| `GITHUB__Token` | *(secret)* | PAT / GitHub App token |
+| `GITHUB__Repos` | `acme/api,acme/web` | repos to poll |
+| `GITHUB__ServiceMap` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
+| `GITHUB__VersionSource` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
+| `GITHUB__RateLimit` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
+| `GITHUB__RateLimitBudgetPct` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
 
 Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `JENKINS__…`) drops in without collision.
 
+> **Env var binding rule.** The segment after `__` must match the C# property name exactly (PascalCase). .NET config maps `__` to a section separator and binds by property name — not by SCREAMING_SNAKE. Example: `GITHUB__BaseUrl` → section `GitHub`, property `BaseUrl`; `GITHUB__BASE_URL` does NOT bind and the property keeps its default.
+
 **Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
-**Demo mode.** Set `GITHUB__BASE_URL=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB__TOKEN` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed. The fetcher-host must be added to the demo compose profile (currently absent).
+**Demo mode.** Set `GITHUB__BaseUrl=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB__Token` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed.
+
+### 6.1 Functional readiness — `GET /readyz`
+
+Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` which is always `200`.
+
+**Response shape:**
+
+```json
+{
+  "status": "ready" | "degraded",
+  "github": {
+    "reachable": true | false,
+    "last_outcome": "ok" | "auth_failed" | "rate_limited" | "error" | null,
+    "last_success_at": "<RFC 3339 UTC>" | null,
+    "last_error": "<string>" | null,
+    "paused_for_reset": false,
+    "rate_limit": { "used": 150, "budget": 1500, "reset_at": "<RFC 3339 UTC>" } | null
+  }
+}
+```
+
+**Status codes:**
+
+| Condition | HTTP | `status` |
+|---|---|---|
+| Last outcome is `ok` | 200 | `ready` |
+| Last outcome is `rate_limited` or never polled | 200 | `degraded` |
+| Paused for reset (any prior outcome) | 200 | `ready` or `degraded` per outcome |
+| Last outcome is `auth_failed` or `error` AND NOT paused | 503 | `degraded` |
+
+**Paused-for-reset is healthy.** A loop paused during the reset choreography (§5.10.3) never produces a `503` — `paused_for_reset: true` signals the expected transient state regardless of the last recorded outcome.
+
+**Rate-limit snapshot.** `rate_limit` is populated after the first GitHub HTTP response that carries `X-RateLimit-*` headers. `null` before the first response.
+
+**Indicator.** `IFetcherReadinessIndicator` / `FetcherReadinessIndicator` live in `Dashboard.Fetcher.Orchestration`. `PollLoop` calls `RecordSuccess` / `RecordAuthFailed` / `RecordRateLimited` / `RecordError` after every cycle, and `SetPausedForReset(true/false)` on pause / resume events.
 
 ---
 
@@ -515,7 +553,7 @@ Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `
 
 **Backfill:** all services covered on first page (early exit); rarely-deployed service found on page 2 (pagination); service not deployed to env within `BACKFILL_MAX_AGE` (skipped); `BACKFILL=true` overwrites existing cursor; events posted oldest-first.
 
-**Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB__RATE_LIMIT` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
+**Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB__RateLimit` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
 
 **Control-plane participation (F17, §5.10):**
 - `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at, payload.reset_id}` where `reset_id` = the `reset-initiated` event id.
@@ -526,6 +564,20 @@ Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `
 - `: ping` frame → treated as heartbeat, no event dispatched.
 - Ack POST returns non-2xx → subscriber stays paused, does not throw, still recovers on subsequent `reset-completed`.
 - Component id overridden via `COMPONENT_ID` → header reflects the override.
+
+**Functional readiness indicator (§6.1):**
+- Initial state → `LastOutcome = null`, `LastSuccessAt = null`, `IsPausedForReset = false`.
+- `RecordSuccess` → `LastOutcome = ok`, `LastSuccessAt` set, `LastErrorSummary = null`.
+- `RecordSuccess` with snapshot → `RateLimit` populated; without snapshot → existing snapshot retained.
+- `ok → auth_failed → ok` transition: outcome and error summary follow latest record; success clears error.
+- `RecordAuthFailed` → `LastOutcome = auth_failed`, summary populated.
+- `RecordRateLimited` → `LastOutcome = rate_limited`, snapshot and summary populated.
+- `RecordError` → `LastOutcome = error`, summary populated.
+- `SetPausedForReset(true)` → `IsPausedForReset = true`; does NOT change `LastOutcome` (orthogonal flags).
+- `SetPausedForReset(false)` → flag clears.
+- Paused while `auth_failed` → both flags independent; handler applies its own 503 logic.
+- `PollLoop.Pause()` → calls `SetPausedForReset(true)` on indicator.
+- `PollLoop.DropCursorAndResume()` → calls `SetPausedForReset(false)` on indicator.
 
 ### 7.2 Integration test cases
 

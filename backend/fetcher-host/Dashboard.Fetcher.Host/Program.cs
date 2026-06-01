@@ -76,6 +76,9 @@ builder.Services.AddHttpClient("github", c =>
 builder.Services.AddSingleton(fetcherOptions);
 builder.Services.AddSingleton(githubOptions);
 builder.Services.AddSingleton<WorkflowGraphCache>();
+builder.Services.AddSingleton<FetcherReadinessIndicator>();
+builder.Services.AddSingleton<IFetcherReadinessIndicator>(
+    sp => sp.GetRequiredService<FetcherReadinessIndicator>());
 
 builder.Services.AddSingleton<RateLimitBudget>(sp =>
 {
@@ -115,6 +118,11 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
     var ingest = sp.GetRequiredService<IIngestClient>();
     var state = sp.GetRequiredService<IFetcherStateClient>();
     var logFactory = sp.GetRequiredService<ILoggerFactory>();
+    var readiness = sp.GetRequiredService<FetcherReadinessIndicator>();
+    var rateLimitBudget = sp.GetRequiredService<RateLimitBudget>();
+
+    Func<RateLimitSnapshot?> snapshotFactory = () =>
+        new RateLimitSnapshot(rateLimitBudget.Used, rateLimitBudget.Budget, rateLimitBudget.ResetAt);
 
     return adapters
         .Select(adapter => new PollLoop(
@@ -122,7 +130,9 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
             ingest,
             state,
             fetcherOptions.PollInterval,
-            logFactory.CreateLogger<PollLoop>()))
+            logFactory.CreateLogger<PollLoop>(),
+            readiness,
+            snapshotFactory))
         .ToList()
         .AsReadOnly();
 });
@@ -134,9 +144,61 @@ builder.Services.AddHostedService<ControlStreamListener>();
 var app = builder.Build();
 
 // ── Health endpoints ──────────────────────────────────────────────────────────
-// Host-level liveness only (FETCHER_SPECIFICATION §3, §6). No adapter/ingest
-// logic is consulted — returns 200 while the process is running.
+// Liveness: process is alive. No adapter/ingest logic consulted (FETCHER_SPECIFICATION §3, §6).
 app.MapGet("/health",  () => Results.Ok(new { status = "ok" }));
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
+// Functional readiness: reflects actual GitHub poll-cycle health (FETCHER_SPECIFICATION §6).
+// Decision: 503 when last_outcome is auth_failed or error AND the loop is NOT paused for reset.
+//           200 in all other cases (ok, rate_limited, paused-for-reset, never-polled).
+// Paused-for-reset is an expected healthy transient — must NOT read as failed.
+app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
+{
+    var outcome = indicator.LastOutcome;
+    var paused = indicator.IsPausedForReset;
+
+    var isHardFailure = !paused &&
+        outcome is PollOutcome.AuthFailed or PollOutcome.Error;
+
+    var status = outcome is PollOutcome.Ok ? "ready" : "degraded";
+
+    var rl = indicator.RateLimit;
+    object? rateLimitPayload = rl is null ? null : new
+    {
+        used = rl.Used,
+        budget = rl.Budget,
+        reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
+    };
+
+    var body = new
+    {
+        status,
+        github = new
+        {
+            reachable = outcome is PollOutcome.Ok or PollOutcome.RateLimited,
+            last_outcome = OutcomeLabel(outcome),
+            last_success_at = indicator.LastSuccessAt,
+            last_error = indicator.LastErrorSummary,
+            paused_for_reset = paused,
+            rate_limit = rateLimitPayload,
+        },
+    };
+
+    return isHardFailure
+        ? Results.Json(body, statusCode: StatusCodes.Status503ServiceUnavailable)
+        : Results.Ok(body);
+});
+
 await app.RunAsync();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+static string? OutcomeLabel(PollOutcome? outcome) => outcome switch
+{
+    PollOutcome.Ok          => "ok",
+    PollOutcome.AuthFailed  => "auth_failed",
+    PollOutcome.RateLimited => "rate_limited",
+    PollOutcome.Error       => "error",
+    null                    => null,
+    _                       => outcome.ToString()?.ToLowerInvariant(),
+};
