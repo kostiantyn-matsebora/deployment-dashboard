@@ -145,7 +145,7 @@ var app = builder.Build();
 
 // ── Health endpoints ──────────────────────────────────────────────────────────
 // Liveness: process is alive. No adapter/ingest logic consulted (FETCHER_SPECIFICATION §3, §6).
-app.MapGet("/health",  () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 // Functional readiness: reflects actual GitHub poll-cycle health (FETCHER_SPECIFICATION §6).
@@ -195,10 +195,10 @@ await app.RunAsync();
 
 static string? OutcomeLabel(PollOutcome? outcome) => outcome switch
 {
-    PollOutcome.Ok          => "ok",
-    PollOutcome.AuthFailed  => "auth_failed",
+    PollOutcome.Ok => "ok",
+    PollOutcome.AuthFailed => "auth_failed",
     PollOutcome.RateLimited => "rate_limited",
-    PollOutcome.Error       => "error",
-    null                    => null,
-    _                       => outcome.ToString()?.ToLowerInvariant(),
+    PollOutcome.Error => "error",
+    null => null,
+    _ => outcome.ToString()?.ToLowerInvariant(),
 };
