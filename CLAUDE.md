@@ -57,7 +57,7 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 
 ## Agent dispatch
 
-Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
+Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
 
 ## Scripts
 
