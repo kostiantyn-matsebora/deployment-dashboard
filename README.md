@@ -1,4 +1,8 @@
-# Deployment Dashboard
+<p align="center">
+  <img src="docs/design/logo/logo-512.png" alt="Deployment Dashboard" width="120" height="120" />
+</p>
+
+<h1 align="center">Deployment Dashboard</h1>
 
 Real-time services × environments deployment matrix sourced from CI/CD pipeline events.
 
@@ -51,11 +55,18 @@ CI/CD tool  ──POST /api/deployments──►  App Gateway (nginx)
 
 Compose files live in [`compose/`](compose/). Copy `compose/.env.example` to `compose/.env` and fill in the required vars before running.
 
+Two deployment shapes, each with a pull-mode variant. Ingestion is push-first (CI/CD posts to `POST /api/deployments`); the **`-pull`** variants add the optional Fetcher, which polls a source and posts via the same endpoint.
+
+- **`standalone`** — cloud / distributed setup: PostgreSQL is a managed/external service, the app tier scales horizontally behind the gateway.
+- **`full`** — single-VM / all-in-one setup: the stack owns its PostgreSQL (Docker volume) on the same host.
+
 | Profile | What starts | Required env vars | Command |
 |---|---|---|---|
-| `demo` | Gateway + Frontend + API + Demo Driver + PostgreSQL. Zero-config local evaluation. | _(none — insecure defaults applied by the demo override)_ | `docker compose -f compose/docker-compose.yaml -f compose/docker-compose.demo.yaml --profile demo up` |
-| `full` | Gateway + Frontend + API + managed PostgreSQL (Docker volume). | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose -f compose/docker-compose.yaml --profile full up` |
-| `standalone` | Gateway + Frontend + API. Connects to an external PostgreSQL instance. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` | `docker compose -f compose/docker-compose.yaml --profile standalone up` |
+| `standalone` | Gateway + Frontend + API. External PostgreSQL, push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` | `docker compose -f compose/docker-compose.yaml --profile standalone up` |
+| `standalone-pull` | `standalone` + Fetcher (pull-mode ingestion). | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` (+ `GITHUB_REPOS` / `GITHUB_TOKEN` for the Fetcher) | `docker compose -f compose/docker-compose.yaml --profile standalone-pull up` |
+| `full` | Gateway + Frontend + API + managed PostgreSQL (Docker volume). Push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose -f compose/docker-compose.yaml --profile full up` |
+| `full-pull` | `full` + Fetcher (pull-mode ingestion). | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (+ `GITHUB_REPOS` / `GITHUB_TOKEN` for the Fetcher) | `docker compose -f compose/docker-compose.yaml --profile full-pull up` |
+| `demo` | Gateway + Frontend + API + Demo Driver + GitHub Emulator + Fetcher + PostgreSQL. Zero-config local evaluation. | _(none — insecure defaults applied by the demo override)_ | `docker compose -f compose/docker-compose.yaml -f compose/docker-compose.demo.yaml --profile demo up` |
 
 > The gateway is the only published port (default `:8080`). Frontend, API, and PostgreSQL are internal-only.
 

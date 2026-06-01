@@ -10,6 +10,7 @@ children:
   - /behavior
   - /data-model
   - /libraries
+  - /logo
   - /mockup
 ---
 

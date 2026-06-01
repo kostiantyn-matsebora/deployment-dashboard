@@ -8,7 +8,7 @@ import { Subscription } from 'rxjs';
 import { DemoService, IngestOptions } from './demo.service';
 import { ControlFeed } from '../control/control-feed';
 import { ControlEventsReadClient, ControlEventsQuery } from '../control/control-events-read.client';
-import { PANEL_HTML } from '../ui/panel';
+import { PANEL_HTML, FAVICON_SVG } from '../ui/panel';
 
 /** RFC 9457 problem detail for reset-in-progress (§4.7). */
 function resetInProgressProblem(retryAfterSeconds: number): Record<string, unknown> {
@@ -63,6 +63,15 @@ export class DemoController implements OnModuleDestroy {
   @Get()
   panel(@Res() res: Response): void {
     res.type('html').send(PANEL_HTML);
+  }
+
+  /** GET /demo/favicon.svg — flat SVG mark used as browser tab icon. */
+  @Get('favicon.svg')
+  favicon(@Res() res: Response): void {
+    res
+      .setHeader('Content-Type', 'image/svg+xml')
+      .setHeader('Cache-Control', 'public, max-age=86400')
+      .send(FAVICON_SVG);
   }
 
   // ── Status ────────────────────────────────────────────────────────────────

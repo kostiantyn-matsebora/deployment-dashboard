@@ -3,25 +3,55 @@ name: deployment-dashboard
 # ─────────────────────────────────────────────────────────────────────────────
 # Profiles
 #
-#   standalone  — Gateway + Frontend + API; connect to an external PostgreSQL instance.
-#                 Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
+# Ingestion is push-first: CI/CD posts events to POST /api/deployments. The
+# Fetcher is an optional pull-mode adapter (polls a source, posts via the same
+# endpoint) — so the base profiles are push-only and the `-pull` variants add it.
 #
-#   full        — Gateway + Frontend + API + managed PostgreSQL (Docker-volume-backed).
-#                 Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
+#   standalone       — Cloud / distributed setup: PostgreSQL is a managed/external
+#                      service, the app tier scales horizontally behind the gateway.
+#                      Push-only ingestion (default — no Fetcher).
+#                      Services: Gateway + Frontend + API (external PG).
+#                      Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
 #
-#   demo        — Gateway + Frontend + API + Demo Driver + managed PostgreSQL. Local evaluation only.
-#                 Use docker-compose.demo.yaml override — no vars required.
-#                 CORS: off (gateway mode)  |  Retention: 30 days
+#   standalone-pull  — Like standalone (cloud / external DB), plus the Fetcher for
+#                      pull-mode ingestion alongside push.
+#                      Services: Gateway + Frontend + API + Fetcher (external PG).
+#                      Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST
+#                      (+ GITHUB_REPOS / GITHUB_TOKEN for the Fetcher pull source).
 #
-# Per-service profiles (gateway / frontend / api / postgres / demo-driver) allow
-# a single service to be targeted in isolation, e.g. `--profile demo-driver`.
+#   full             — Single-VM / all-in-one setup: the stack owns its PostgreSQL
+#                      (Docker volume) on the same host.
+#                      Push-only ingestion (default — no Fetcher).
+#                      Services: Gateway + Frontend + API + PostgreSQL.
+#                      Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
+#
+#   full-pull        — Like full (single-VM, self-contained DB), plus the Fetcher
+#                      for pull-mode ingestion alongside push.
+#                      Services: Gateway + Frontend + API + Fetcher + PostgreSQL.
+#                      Set: API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
+#                      (+ GITHUB_REPOS / GITHUB_TOKEN for the Fetcher pull source).
+#
+#   demo             — Zero-config local evaluation. The Demo Driver + GitHub
+#                      Emulator simulate deployments and a GitHub pull source, so
+#                      the stack runs with no external dependencies. Both simulators
+#                      are defined in docker-compose.demo.yaml (not here) — that
+#                      overlay is REQUIRED for this profile; no vars to set.
+#                      Services: Gateway + Frontend + API + Fetcher + PostgreSQL
+#                      (this file) + Demo Driver + GitHub Emulator (demo overlay).
+#                      CORS: off (gateway mode)  |  Retention: 30 days
+#
+# Per-service profiles (gateway / frontend / api / db / fetcher-host) allow a
+# single service to be targeted in isolation, e.g. `--profile fetcher-host`.
+# (demo-driver / github-emulator are defined in docker-compose.demo.yaml.)
 #
 # The gateway is the single public surface (SAD §7, GW1).
 # The frontend, API and PostgreSQL are internal-only; only the gateway exposes a port.
 #
 # Usage:
-#   docker compose --profile standalone up
-#   docker compose --profile full      up
+#   docker compose --profile standalone       up
+#   docker compose --profile standalone-pull  up
+#   docker compose --profile full             up
+#   docker compose --profile full-pull        up
 #   docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -31,7 +61,7 @@ services:
   gateway:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest
     pull_policy: always
-    profiles: [gateway, standalone, full, demo]
+    profiles: [gateway, standalone, standalone-pull, full, full-pull, demo]
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     environment:
@@ -41,18 +71,16 @@ services:
       # on :80.  Requests to / return 502 until the frontend container is
       # running; all /api/* and probe routes work without it.
       FRONTEND_UPSTREAM: "${FRONTEND_UPSTREAM:-frontend:80}"
-      # Internal demo-driver upstream.  Optional — gateway starts cleanly when
-      # the demo-driver container is absent; /demo/* returns 502 in that case.
-      DEMO_DRIVER_UPSTREAM: "${DEMO_DRIVER_UPSTREAM:-demo-driver:3001}"
+      # NOTE: DEMO_DRIVER_UPSTREAM (the /demo/* route target) is demo-only and is
+      # set in docker-compose.demo.yaml — not here. The gateway image's nginx
+      # template tolerates its absence: /demo/* simply 502s in production (the
+      # variable+resolver proxy_pass defers DNS, so startup is unaffected).
     depends_on:
       api:
         condition: service_healthy
       frontend:
         condition: service_healthy
         required: false   # frontend may be omitted (gateway serves /api/* alone)
-      demo-driver:
-        condition: service_healthy
-        required: false   # demo-driver is opt-in (demo profile only)
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
@@ -65,7 +93,7 @@ services:
   frontend:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-spa:latest
     pull_policy: always
-    profiles: [frontend, standalone, full, demo]
+    profiles: [frontend, standalone, standalone-pull, full, full-pull, demo]
     # Internal-only — the gateway proxies / to this service; no published port.
     restart: unless-stopped
     healthcheck:
@@ -80,7 +108,7 @@ services:
   api:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:latest
     pull_policy: always
-    profiles: [api, standalone, full, demo]
+    profiles: [api, standalone, standalone-pull, full, full-pull, demo]
     environment:
       # Connection string assembled from individual parts so each can be
       # overridden independently.  Override POSTGRES_HOST for standalone.
@@ -102,7 +130,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-        required: false   # postgres is not started in the standalone profile
+        required: false   # postgres is not started in the standalone / standalone-pull profiles (external DB)
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz || exit 1"]
@@ -111,71 +139,12 @@ services:
       retries: 5
       start_period: 20s
 
-  # ── Demo Driver (opt-in, demo profile only) ──────────────────────────────────
-  demo-driver:
-    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:latest
-    pull_policy: always
-    profiles: [demo-driver, demo]
-    environment:
-      # Target Write API — must match the api service name in this network.
-      WRITE_API_URL: "http://api:8080"
-      # Must match the API_KEY configured on the api service.
-      API_KEY: "${API_KEY}"
-      # Must match CONTROL_API_KEY on the api service to allow POST /demo/api-reset.
-      # Empty disables the API reset button in the control panel (returns non-2xx).
-      CONTROL_API_KEY: "${CONTROL_API_KEY:-}"
-      # Scenario JSON files are baked into the image at /app/data (Dockerfile).
-      # Override to mount a custom scenarios directory.
-      SCENARIOS_DIR: /app/data
-      # Per-event delay for ingest runs (ms); 0 = bulk load.
-      EMIT_DELAY_MS: "${EMIT_DELAY_MS:-0}"
-      # Interval between periodic random events when Live Emission is enabled (ms).
-      EMIT_INTERVAL_MS: "${EMIT_INTERVAL_MS:-8000}"
-      PORT: "3001"
-      # GitHub emulator base URL — used by the driver's /demo/health aggregator
-      # to probe the emulator's /_github/status endpoint (DEMO_DRIVER_SPEC §9).
-      GITHUB_EMULATOR_URL: "http://github-emulator:3100"
-      # Fetcher host base URL — used by the driver's /demo/health aggregator
-      # to probe the fetcher's /health endpoint (FETCHER_SPECIFICATION §3, §6).
-      FETCHER_URL: "http://fetcher-host:8080"
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3001/demo/status || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
-  # ── GitHub Emulator (opt-in, demo profile only) ──────────────────────────────
-  github-emulator:
-    build:
-      context: ../demo
-      dockerfile: github-emulator/Dockerfile
-    profiles: [github-emulator, demo]
-    # Internal-only — no gateway route; the fetcher reaches it directly.
-    environment:
-      PORT: "3100"
-      GITHUB_SIM_RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
-      SEED_ON_STARTUP: "true"
-      SCENARIOS_DIR: /app/data
-      EMIT_INTERVAL_MS: "${EMIT_INTERVAL_MS:-8000}"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3100/_github/status || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
-  # ── Fetcher Host (opt-in, demo profile only) ──────────────────────────────────
+  # ── Fetcher Host (pull-mode adapter — standalone-pull / full-pull / demo) ─────
   fetcher-host:
     build:
       context: ../backend
       dockerfile: fetcher-host/Dashboard.Fetcher.Host/Dockerfile
-    profiles: [fetcher-host, demo]
+    profiles: [fetcher-host, standalone-pull, full-pull, demo]
     # Internal-only — no published port, no gateway route (FETCHER_SPECIFICATION §3, §6).
     environment:
       DASHBOARD_API_BASE_URL: "http://api:8080"
@@ -208,7 +177,7 @@ services:
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
   postgres:
     image: postgres:17-alpine
-    profiles: [db, full, demo]
+    profiles: [db, full, full-pull, demo]
     environment:
       POSTGRES_DB:       "${POSTGRES_DB:-deployment_dashboard}"
       POSTGRES_USER:     "${POSTGRES_USER}"

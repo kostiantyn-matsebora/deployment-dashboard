@@ -2,11 +2,26 @@
 # Demo overrides — hardcoded insecure defaults for local evaluation only.
 # NOT suitable for production or any internet-exposed environment.
 #
+# This overlay also DEFINES the demo-only simulators (demo-driver, github-emulator)
+# and the gateway's /demo/* routing — they are intentionally absent from the base
+# docker-compose.yaml so the base stays production-only. Hence this file is
+# required for the `demo` profile, not merely an override.
+#
 # Usage:
 #   docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
+
+  # Demo-only: route /demo/* to the in-stack demo-driver. The base gateway has no
+  # DEMO_DRIVER_UPSTREAM, so /demo/* 502s in production; this supplies it for demo.
+  gateway:
+    environment:
+      DEMO_DRIVER_UPSTREAM: "demo-driver:3001"
+    depends_on:
+      demo-driver:
+        condition: service_healthy
+        required: false
 
   api:
     environment:
@@ -15,12 +30,56 @@ services:
       CONTROL_API_KEY: demo-control-key
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=deployment_dashboard;Username=dashboard;Password=changeme"
 
+  # ── Demo Driver (demo-only simulator — defined here, not in the base) ────────
   demo-driver:
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:latest
+    pull_policy: always
+    profiles: [demo-driver, demo]
     environment:
-      # Must match the demo api key above.
+      # Target Write API — must match the api service name in this network.
+      WRITE_API_URL: "http://api:8080"
+      # Demo secrets — must match the api service above.
       API_KEY: demo-api-key
-      # Must match the demo control key above — enables POST /demo/api-reset.
       CONTROL_API_KEY: demo-control-key
+      # Scenario JSON files are baked into the image at /app/data (Dockerfile).
+      SCENARIOS_DIR: /app/data
+      EMIT_DELAY_MS: "${EMIT_DELAY_MS:-0}"
+      EMIT_INTERVAL_MS: "${EMIT_INTERVAL_MS:-8000}"
+      PORT: "3001"
+      # Health-aggregator probe targets (DEMO_DRIVER_SPEC §9).
+      GITHUB_EMULATOR_URL: "http://github-emulator:3100"
+      FETCHER_URL: "http://fetcher-host:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3001/demo/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── GitHub Emulator (demo-only simulator — defined here, not in the base) ────
+  # Internal-only — no gateway route; the fetcher reaches it directly.
+  github-emulator:
+    build:
+      context: ../demo
+      dockerfile: github-emulator/Dockerfile
+    profiles: [github-emulator, demo]
+    environment:
+      PORT: "3100"
+      GITHUB_SIM_RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
+      SEED_ON_STARTUP: "true"
+      SCENARIOS_DIR: /app/data
+      EMIT_INTERVAL_MS: "${EMIT_INTERVAL_MS:-8000}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3100/_github/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   fetcher-host:
     environment:
