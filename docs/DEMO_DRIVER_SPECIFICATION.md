@@ -244,6 +244,8 @@ data: {
 
 No history replay — only events posted after the stream opens are delivered.
 
+> **Panel note.** `/demo/stream` is no longer surfaced in the control panel (§8). The panel's Deployments card uses `/demo/deployments-stream` (§4.11) instead. The endpoint itself is unchanged.
+
 ### 4.7 Reset participation (control-stream subscriber)
 
 The driver is a participant in the API-driven reset choreography (D10; visual: [`reset-choreography.md`](diagrams/reset-choreography.md)). This is **distinct** from `POST /demo/api-reset` (§4.5):
@@ -262,7 +264,7 @@ The driver is a participant in the API-driven reset choreography (D10; visual: [
 1. Stop any running ingest / scenario run; disable live emission.
 2. Enter `reset_state = blocked`, record `reset_id` from the event id; scenario `state` reflects `blocked`.
 3. Block the `/demo/` control API — incoming control calls (`ingest` / `ingest/stop` / `scenarios/*/run`/`stop` / `emit` / `api-reset`) return **`503`** while blocked. Body is **RFC 9457 `application/problem+json`** (consistent with the API surface, [`api-guidelines.md §6`](api/api-guidelines.md#6-error-envelope-rfc-9457)) — `type` `.../errors/reset-in-progress`, `title` `Reset in progress`, `status` 503. `Retry-After` (seconds) is set from the remaining local gate window (`RESET_GATE_MAX_TTL_MS`, §8). `GET /demo/status` is **never** blocked — it reports the blocked state. `GET /demo/stream` stays open.
-4. Disable + dim the interactive control cards (Ingest, GitHub Emulator, Reset-System trigger) on the `GET /demo/` panel; the data feeds (Status, Post Feed, Events) stay live so the operator can watch the reset choreography (§8). No full-panel overlay.
+4. Disable + dim the interactive control cards (Ingest, GitHub Emulator, Reset-System trigger) on the `GET /demo/` panel; the data feeds (Status, Deployments, Events) stay live so the operator can watch the reset choreography (§8). No full-panel overlay.
 5. POST a `reset-ack` via the component-event client:
 
 ```
@@ -370,6 +372,35 @@ Returns the upstream `ComponentEventPage` body verbatim: `{ items: ComponentEven
 
 Any non-2xx or unreachable → `"down"`. Probes are issued in parallel, with a short timeout (≤ 2 s per component); a slow component does not block the others. The panel polls this endpoint every 5 s to drive the status-bar liveness chips (§8).
 
+### 4.11 Deployments feed (proxy) — `GET /demo/deployments-stream`
+
+| Method · Path | Response |
+|---|---|
+| `GET /demo/deployments-stream` | `text/event-stream` |
+
+Same-origin SSE passthrough of [`GET /api/events/stream`](api/openapi.yaml) (the API's deployment event stream). The driver opens an upstream connection to `{WRITE_API_URL}/api/events/stream` with `X-Api-Key` and fans out each received frame to every connected browser client.
+
+**Frame pass-through.**
+
+| Upstream frame | Forwarded as-is |
+|---|---|
+| `event: deployment` + `DeploymentEvent` JSON data | yes |
+| `: ping` heartbeat | yes |
+| SSE `id:` field (ULID) | yes |
+
+**Parameter pass-through.**
+
+| Client header / query | Forwarded to upstream | Notes |
+|---|---|---|
+| `Last-Event-ID` (header) | yes | Enables transparent client reconnect + server replay. |
+| `?service` (query) | yes | Server-side filter on `service` identifier (upstream feature). |
+
+- Public — no auth required from the browser client.
+- **Exempt from reset control-dimming** — the feed continues while `reset_state == blocked`; it is a data feed, not an interactive control (same pattern as §4.8 `/demo/control-stream`).
+- No history replay beyond what the upstream provides (upstream replays events newer than `Last-Event-ID`).
+
+**Rationale.** The driver holds the single upstream connection with `X-Api-Key`; browser clients remain same-origin and never see the key. Proxying here means the panel sees events from all pushers — fetcher, demo-driver, any future source — not just what the driver itself posted. Symmetric with the `/demo/control-stream` proxy pattern (§4.8).
+
 ---
 
 ## 5. GitHub source (emulator proxy)
@@ -448,7 +479,7 @@ Source: `demo/data/events.json#events` (47 events).
 | **GitHub Emulator** | 2 (between Ingest and Status) | *Seed sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only); **Reset** checkbox; **Seed** / **Clear** buttons → `POST /demo/github/seed` \| `POST /demo/github/clear`. *Live sub-section:* `OFF` / `LIVE` badge; **Enable** / **Disable** toggle → `POST /demo/github/emit`. *Store sub-section:* counters (repos / deployments / statuses / workflows / environments), dataset badge, `seeded_at` — from `GET /demo/github/status`. |
 | **Status** | 3 | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
 | **API** | 4 | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
-| **Post Feed** | 5 | Real-time `GET /demo/stream` SSE feed; `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); Source = full `reporter` value; colour-coding by trailing segment (`/emit` vs `/<dataset>`); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
+| **Deployments** | 5 | Real-time `GET /demo/deployments-stream` SSE feed (§4.11) — proxies `GET /api/events/stream`; all pushers (demo-driver, fetcher, any); `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
 | **Reset (system)** | 6 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only. |
 | **Events** | 7 | Merged feed sourced from BOTH `GET /demo/control-stream` (§4.8 SSE) AND `GET /demo/control-events` (§4.9 poll); rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `● LIVE` / `● RECONNECTING` badge; **Clear** button. Persists latest 20 rows to `localStorage`; hydrates on page load (control-stream has no server replay — localStorage restores those rows; hydrated component rows dedup-by-id against the re-poll); **Clear** empties localStorage. Stays live during reset. |
 
@@ -456,7 +487,7 @@ Source: `demo/data/events.json#events` (47 events).
 
 - **Emulator-liveness gating.** The GitHub Emulator card is **hidden unless the emulator answers the liveness probe** — `emulator == "up"` in the `GET /demo/health` response. When the emulator is absent (e.g. non-demo deployments) the card stays hidden; the 5 s health poll re-evaluates, so the card appears/disappears as the emulator comes and goes.
 
-**Unified feed row format.** Both feed cards (Post Feed, Events) use the same column order:
+**Unified feed row format.** Both feed cards (Deployments, Events) use the same column order:
 
 | Column | Content |
 |---|---|
@@ -470,19 +501,19 @@ Per-feed row mapping:
 
 | Feed | Row kind | Time | Source | Event | ID | Details |
 |---|---|---|---|---|---|---|
-| Post Feed (`/demo/stream`) | — | `posted_at` (ms) | `reporter` (e.g. `demo-driver/demo`) | `posted` / `error` | `deployment_id` | posted → `service / env → status`; error → `HTTP <status> · attempt <n>` |
+| Deployments (`/demo/deployments-stream`) | — | `happened_at` (ms) | `progress_reporter` (e.g. `dashboard-fetcher/github-actions`, `demo-driver/demo`) | `status` | `deployment_id` | `service / env → status` · `version` |
 | Events (merged) | control-stream row | `occurred_at` (ms) | `control-api` (literal) | `type` (reset-initiated=amber / reset-started=blue / reset-completed=green / unknown=default) | event `id` | `reset_id: <id>` when present |
 | Events (merged) | component row | `received_at` (ms) | `component_id` | `event_type` | record `id` | `state` (colour-coded) · `detail` when present · notable payload keys |
 
 **localStorage persistence.**
-- Post Feed: latest **10** rows (by `posted_at` DESC); trimmed on every append.
+- Deployments: latest **10** rows (by `happened_at` DESC); trimmed on every append.
 - Events: latest **20** rows (by timestamp DESC, across both kinds); trimmed on every merge+sort.
 - Hydration on page load: both feeds restore from `localStorage` before the first network response arrives. Hydrated component rows (Events feed) are deduped-by-id against the initial `GET /demo/control-events` poll result. Hydrated control-stream rows have no server counterpart to dedup against (no replay) — they are kept as-is.
 - **Clear** on a feed card: empties the in-memory list AND removes that feed's `localStorage` key; the feed stays empty after refresh.
 
 **Reset blocking (controls only — no overlay).** While `reset_state == blocked` (§4.7):
 - Interactive control cards (Ingest, GitHub Emulator) are disabled and visually dimmed — their controls would return `503` anyway.
-- Data feeds — Status, Post Feed, Events — stay fully live so the operator can watch the reset choreography.
+- Data feeds — Status, Deployments, Events — stay fully live so the operator can watch the reset choreography.
 - Reset state is signalled by the inline `RESET IN PROGRESS` badge (Reset (system) card), not a blocking overlay.
 - Dim/disable clears automatically when `reset_state` returns to `idle`.
 
@@ -493,9 +524,9 @@ Panel behaviour:
 - Calls `POST /demo/ingest` / `POST /demo/ingest/stop` on Ingest/Stop buttons.
 - Calls `POST /demo/emit` on Live Emission Enable/Disable.
 - Calls `POST /demo/api-reset` on Reset State button.
-- Subscribes to `GET /demo/stream` for the Post Feed.
+- Subscribes to `GET /demo/deployments-stream` (§4.11) for the Deployments feed.
 - Subscribes to `GET /demo/control-stream` AND polls `GET /demo/control-events` (5 s cadence) for the merged Events feed; merges and deduplicates by `id`, sorts datetime DESC.
-- Both `GET /demo/control-stream` and `GET /demo/control-events` are data feeds — live throughout reset and exempt from reset control-dimming.
+- `GET /demo/deployments-stream`, `GET /demo/control-stream`, and `GET /demo/control-events` are data feeds — live throughout reset and exempt from reset control-dimming.
 
 ---
 
@@ -566,7 +597,7 @@ npm run start:dev
 |---|---|
 | Image | Multi-stage Dockerfile in `demo/driver/`. Stage 1: `node:lts-alpine` builds TypeScript. Stage 2: `node:lts-alpine` runs the compiled output. |
 | Gateway path | Proxied by App Gateway at `location /demo/` → `DEMO_DRIVER_UPSTREAM` (see [`GATEWAY_SPECIFICATION.md`](GATEWAY_SPECIFICATION.md)). |
-| SSE | `/demo/stream` requires the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). |
+| SSE | `/demo/stream` and `/demo/deployments-stream` require the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). |
 | Port | Container listens on `PORT` (default `3001`); `DEMO_DRIVER_UPSTREAM` in the gateway is `demo-driver:3001`. |
 | Panel access | Direct: `http://localhost:3001/demo/`. Via gateway: `http://gateway/demo/`. |
 

@@ -309,17 +309,17 @@ export const PANEL_HTML = `<!DOCTYPE html>
   <!-- ── Feed cards (full width, stacked) ─────────────────────────────────── -->
   <div class="feeds-col">
 
-    <!-- ── Post Feed card ────────────────────────────────────────────────── -->
+    <!-- ── Deployments feed card ─────────────────────────────────────────── -->
     <div class="card">
       <div class="feed-header">
-        <div class="card-title">Post Feed</div>
+        <div class="card-title">Deployments</div>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="live-badge live-connecting" id="live-badge">● CONNECTING</span>
           <button class="btn-sm" id="clear-btn">Clear</button>
         </div>
       </div>
       <div class="feed-list" id="feed-list">
-        <div class="feed-empty" id="feed-empty">No events posted yet.</div>
+        <div class="feed-empty" id="feed-empty">No deployments received yet.</div>
       </div>
     </div>
 
@@ -442,8 +442,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     // Merged events store: dedup by id, sorted datetime DESC.
     let eventsStore = [];
 
-    // Post Feed store: latest 10, newest first; each entry is the raw SSE data obj.
-    let postsStore = [];
+    // Deployments feed store: latest 10, newest first; each entry is a rendered row obj.
+    let deploymentsStore = [];
 
     // ── Dataset toggles ───────────────────────────────────────────────────────
     datasetSelect.addEventListener('change', () => {
@@ -646,8 +646,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     }
 
     clearBtn.addEventListener('click', () => {
-      postsStore = [];
-      localStorage.removeItem('dd.posts');
+      deploymentsStore = [];
+      localStorage.removeItem('dd.deployments');
       feedList.innerHTML = '';
       feedList.appendChild(feedEmpty);
     });
@@ -658,27 +658,24 @@ export const PANEL_HTML = `<!DOCTYPE html>
       renderEventsStore();
     });
 
-    // ── SSE stream ────────────────────────────────────────────────────────────
+    // ── Deployments SSE stream (GET /demo/deployments-stream) ────────────────
+    // Re-broadcasts the API's real deployment stream as named "deployment" frames.
+    // Each frame data is a DeploymentEvent JSON.
     function connectStream() {
       if (eventSource) { try { eventSource.close(); } catch {} }
       setLiveBadge('connecting');
-      eventSource = new EventSource('/demo/stream');
+      eventSource = new EventSource('/demo/deployments-stream');
 
       eventSource.onopen = () => setLiveBadge('live');
 
-      eventSource.addEventListener('posted', e => {
-        const d = JSON.parse(e.data);
-        addFeedItem('posted', d);
-        refreshStatus();
+      eventSource.addEventListener('deployment', e => {
+        if (!e.data) return;
+        let d = {};
+        try { d = JSON.parse(e.data); } catch { return; }
+        addDeploymentRow(d);
       });
 
-      eventSource.addEventListener('error', e => {
-        if (e.data) {
-          addFeedItem('error', JSON.parse(e.data));
-        } else {
-          setLiveBadge('reconnecting');
-        }
-      });
+      eventSource.onerror = () => setLiveBadge('reconnecting');
     }
 
     function setLiveBadge(mode) {
@@ -713,51 +710,61 @@ export const PANEL_HTML = `<!DOCTYPE html>
       return row;
     }
 
-    function addFeedItem(type, d) {
-      // Dedup by deployment_id (prevents duplicates on SSE reconnect).
-      const uid = (d.deployment_id || '') + '|' + (d.posted_at || '') + '|' + type;
-      if (postsStore.some(p => p._uid === uid)) return;
-
-      const reporter    = d.reporter || '';
-      const isEmit      = reporter.endsWith('/emit');
-      const sourceClass = isEmit ? 'fi-source-emit' : 'fi-source-ingest';
-      const ts          = d.posted_at || new Date().toISOString();
-
-      let detailsHtml;
-      let eventClass;
-      if (type === 'posted') {
-        eventClass   = 'fi-event-posted';
-        detailsHtml  = esc(d.service) + ' / ' + esc(d.environment) + ' \\u2192 ' + esc(d.status);
-      } else {
-        eventClass   = 'fi-event-error';
-        detailsHtml  = 'HTTP ' + esc(String(d.http_status)) + ' \\u00b7 attempt ' + esc(String(d.attempt));
+    // Maps a deployment status string to a fi-event-* CSS class.
+    // success → green, failure → red, in-progress / running / pending → amber, else neutral.
+    function deploymentEventClass(status) {
+      if (!status) return 'fi-event-neutral';
+      const s = status.toLowerCase();
+      if (s === 'success' || s === 'succeeded') return 'fi-event-posted';       // green
+      if (s === 'failure' || s === 'failed'  || s === 'error') return 'fi-event-error'; // red
+      if (s === 'in-progress' || s === 'in_progress' || s === 'running' || s === 'pending') {
+        return 'fi-type-initiated'; // amber
       }
+      return 'fi-event-neutral';
+    }
 
-      postsStore.unshift({
+    function addDeploymentRow(d) {
+      // Dedup by deployment_id + happened_at to survive SSE reconnects.
+      const uid = (d.deployment_id || '') + '|' + (d.happened_at || '');
+      if (deploymentsStore.some(p => p._uid === uid)) return;
+
+      const ts          = d.happened_at || new Date().toISOString();
+      const source      = d.progress_reporter || '';
+      // Source colour: fetcher-origin → blue (ingest); demo-driver origin → amber (emit).
+      const sourceClass = source.startsWith('demo-driver') ? 'fi-source-emit' : 'fi-source-ingest';
+      const status      = d.status || 'deployment';
+      const eventClass  = deploymentEventClass(status);
+
+      let detailsHtml = esc(d.service || '') + ' / ' + esc(d.environment || '') +
+                        ' \\u2192 ' + esc(status);
+      if (d.version) detailsHtml += ' \\u00b7 ' + esc(d.version);
+
+      deploymentsStore.unshift({
         _uid: uid, _ts: ts,
-        time: fmt(ts), reporter, sourceClass, type, eventClass,
+        time: fmtMs(ts), source, sourceClass,
+        event: status, eventClass,
         id: d.deployment_id || '', detailsHtml,
       });
       // Cap at 10.
-      if (postsStore.length > 10) postsStore.length = 10;
-      persistPosts();
-      renderPostFeed();
+      if (deploymentsStore.length > 10) deploymentsStore.length = 10;
+      persistDeployments();
+      renderDeploymentsStore();
     }
 
-    function renderPostFeed() {
+    function renderDeploymentsStore() {
       feedList.innerHTML = '';
-      if (!postsStore.length) { feedList.appendChild(feedEmpty); return; }
-      postsStore.forEach(p => {
+      if (!deploymentsStore.length) { feedList.appendChild(feedEmpty); return; }
+      deploymentsStore.forEach(p => {
         const row = feedRow({
-          time: p.time, source: p.reporter, sourceClass: p.sourceClass,
-          event: p.type, eventClass: p.eventClass, id: p.id, detailsHtml: p.detailsHtml,
+          time: p.time, source: p.source, sourceClass: p.sourceClass,
+          event: p.event, eventClass: p.eventClass, id: p.id, detailsHtml: p.detailsHtml,
         });
         feedList.appendChild(row);
       });
     }
 
-    function persistPosts() {
-      try { localStorage.setItem('dd.posts', JSON.stringify(postsStore)); } catch {}
+    function persistDeployments() {
+      try { localStorage.setItem('dd.deployments', JSON.stringify(deploymentsStore)); } catch {}
     }
 
     // ── Control API Events SSE (GET /demo/control-stream) ────────────────────
@@ -1086,18 +1093,18 @@ export const PANEL_HTML = `<!DOCTYPE html>
         }
       } catch {}
 
-      // Hydrate Post Feed.
+      // Hydrate Deployments feed.
       try {
-        const raw = localStorage.getItem('dd.posts');
+        const raw = localStorage.getItem('dd.deployments');
         if (raw) {
           const rows = JSON.parse(raw);
           if (Array.isArray(rows)) {
             rows.forEach(p => {
-              if (!postsStore.some(q => q._uid === p._uid)) postsStore.push(p);
+              if (!deploymentsStore.some(q => q._uid === p._uid)) deploymentsStore.push(p);
             });
-            postsStore.sort((a, b) => b._ts.localeCompare(a._ts));
-            if (postsStore.length > 10) postsStore.length = 10;
-            renderPostFeed();
+            deploymentsStore.sort((a, b) => b._ts.localeCompare(a._ts));
+            if (deploymentsStore.length > 10) deploymentsStore.length = 10;
+            renderDeploymentsStore();
           }
         }
       } catch {}
