@@ -11,7 +11,27 @@ Run the whole stack locally with **zero configuration** and watch a live deploym
 
 The `demo` profile starts everything — Gateway, Frontend, API, PostgreSQL — plus a **Demo Driver**, **GitHub Emulator**, and **Fetcher** that generate realistic deployment traffic. Insecure defaults are applied automatically; nothing to fill in. No clone, no build — all images pull from GHCR.
 
-Fetch the two compose files into a working directory, then start the stack:
+### One command via OCI artifact (recommended)
+
+Pull the Compose project directly from GHCR — no clone, no curl, no local files:
+
+```bash
+docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:latest --profile demo up
+```
+
+To pin to a specific release version:
+
+```bash
+docker compose -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.1.0 --profile demo up
+```
+
+> **Availability.** The OCI artifact is published automatically on each release. The `:latest` tag exists once the first release (`v0.1.0`) is cut. Until then, use the curl alternative below.
+
+The demo artifact bundles the merged base + overlay files with image references pinned to exact digests — every `up` on a given tag is fully reproducible.
+
+### Alternative: fetch the compose files
+
+If you prefer explicit local files (or the first release has not been cut yet), fetch the two compose files into a working directory:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.yaml

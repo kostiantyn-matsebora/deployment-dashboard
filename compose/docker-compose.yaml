@@ -63,7 +63,9 @@ services:
     pull_policy: always
     profiles: [gateway, standalone, standalone-pull, full, full-pull, demo]
     ports:
-      - "${GATEWAY_PORT:-8080}:8080"
+      - target: 8080
+        published: "${GATEWAY_PORT:-8080}"
+        protocol: tcp
     environment:
       # Internal API upstream — fixed to the api service name in this network.
       API_UPSTREAM: "api:8080"
