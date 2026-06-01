@@ -33,7 +33,9 @@
 
 .PARAMETER DryRun
     Compute the version and preview the CHANGELOG change + planned commands, but
-    perform NO git/gh/file mutations.
+    perform NO git/gh/file mutations. Because it mutates nothing, the clean-tree
+    and on-main guards are relaxed to warnings, so a preview works from any branch
+    or a dirty working tree.
 
 .PARAMETER AsLibrary
     Define the functions without executing the entry block (for Pester).
@@ -223,20 +225,26 @@ if (-not $AsLibrary) {
     $branchName = "release/$tagName"
 
     # --- Guards -----------------------------------------------------------------
-    $porcelain = @(& git status --porcelain)
-    if ($porcelain.Count -gt 0) {
-        Write-Fail 'Working tree is not clean. Commit or stash changes before releasing.'
-    }
-
-    $branch = (& git rev-parse --abbrev-ref HEAD | Select-Object -First 1)
-    $branch = ([string]$branch).Trim()
-    if ($branch -ne 'main') {
-        Write-Fail "Releases must be cut from 'main' (current branch: '$branch')."
-    }
-
+    # Under -DryRun nothing is mutated, so the clean-tree / on-main preconditions
+    # (which gate the real branch+commit+push) are relaxed to warnings — a preview
+    # must work from any branch or a dirty tree.
     $existingTag = @(& git tag --list $tagName)
     if ($existingTag.Count -gt 0) {
-        Write-Fail "Tag '$tagName' already exists."
+        if ($DryRun) { Write-Warning "Tag '$tagName' already exists." }
+        else { Write-Fail "Tag '$tagName' already exists." }
+    }
+
+    if (-not $DryRun) {
+        $porcelain = @(& git status --porcelain)
+        if ($porcelain.Count -gt 0) {
+            Write-Fail 'Working tree is not clean. Commit or stash changes before releasing.'
+        }
+
+        $branch = (& git rev-parse --abbrev-ref HEAD | Select-Object -First 1)
+        $branch = ([string]$branch).Trim()
+        if ($branch -ne 'main') {
+            Write-Fail "Releases must be cut from 'main' (current branch: '$branch')."
+        }
     }
 
     # --- CHANGELOG transform ----------------------------------------------------
