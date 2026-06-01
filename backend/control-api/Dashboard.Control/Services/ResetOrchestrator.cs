@@ -66,14 +66,35 @@ internal sealed class ResetOrchestrator(
 
         logger.LogInformation("Reset orchestrator: advisory lock acquired for reset {ResetId}.", resetId);
 
+        // Hard wall-clock ceiling on the entire cycle.  If any await inside the cycle
+        // (including ClearDataTablesAsync) hangs past GateMaxTtlSeconds the linked token
+        // fires, the catch below force-aborts with a non-cancelled token, and the finally
+        // releases the advisory lock — guaranteeing the system is never wedged longer than
+        // GateMaxTtlSeconds (D12, §9).
+        using var processCts = new CancellationTokenSource(
+            TimeSpan.FromSeconds(options.GateMaxTtlSeconds));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            appStopping, processCts.Token);
+
         try
         {
-            await RunCycleAsync(resetId, options, appStopping);
+            await RunCycleAsync(resetId, options, linkedCts.Token);
+        }
+        catch (OperationCanceledException) when (
+            processCts.IsCancellationRequested && !appStopping.IsCancellationRequested)
+        {
+            // Wall-clock timeout fired — not a graceful shutdown.  Force the cycle back to
+            // idle and emit reset-completed so components can recover.
+            logger.LogWarning(
+                "Reset orchestrator: GateMaxTtlSeconds ({Ttl}s) wall-clock ceiling reached; " +
+                "force-aborting reset {ResetId}.",
+                options.GateMaxTtlSeconds, resetId);
+            await TryAbortAsync(resetId, appStopping);
         }
         catch (Exception ex) when (!appStopping.IsCancellationRequested)
         {
             logger.LogError(ex, "Reset orchestrator: unhandled error; forcing abort for reset {ResetId}.", resetId);
-            await TryAbortAsync(appStopping);
+            await TryAbortAsync(resetId, appStopping);
         }
         finally
         {
@@ -82,10 +103,13 @@ internal sealed class ResetOrchestrator(
         }
     }
 
+    // ct is the linked token (appStopping ∪ processCts); it is cancelled when either the
+    // application stops or GateMaxTtlSeconds elapses.  Every await here observes it so a
+    // hung DB call is interrupted rather than blocking indefinitely (D12, §9).
     private async Task RunCycleAsync(
         Guid resetId,
         ResetOptions options,
-        CancellationToken appStopping)
+        CancellationToken ct)
     {
         await using var scope = services.CreateAsyncScope();
         var sp = scope.ServiceProvider;
@@ -95,7 +119,7 @@ internal sealed class ResetOrchestrator(
         var stateNotifier = sp.GetService<IResetStateNotifier>();
 
         // ── Phase: draining — wait for acks or AckTimeout ────────────────────
-        var cycle = await LoadCycleAsync(db, appStopping);
+        var cycle = await LoadCycleAsync(db, ct);
         if (cycle.ResetId != resetId)
         {
             logger.LogWarning("Reset orchestrator: reset_id mismatch; expected {Expected}, got {Actual}. Aborting.",
@@ -113,63 +137,65 @@ internal sealed class ResetOrchestrator(
         var ackDeadline = cycle.DeadlineAt ?? DateTimeOffset.UtcNow.AddSeconds(options.AckTimeoutSeconds);
         var gateMaxDeadline = (cycle.StartedAt ?? DateTimeOffset.UtcNow).AddSeconds(options.GateMaxTtlSeconds);
 
-        await WaitForAcksOrTimeoutAsync(db, cycle, ackDeadline, gateMaxDeadline, options, appStopping);
+        await WaitForAcksOrTimeoutAsync(db, cycle, ackDeadline, gateMaxDeadline, options, ct);
 
         // Check GateMaxTtl before proceeding to resetting.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
         {
-            await AbortCycleAsync(db, cycle, stateNotifier, appStopping);
+            await AbortCycleAsync(db, cycle, controlStream, notifier, stateNotifier, ct);
             return;
         }
 
         // ── Draining → Resetting ──────────────────────────────────────────────
         machine.Fire(ResetTrigger.AcksIn);
-        await SaveCycleAsync(db, cycle, appStopping);
+        await SaveCycleAsync(db, cycle, ct);
 
         // Notify all instances that the gate is now ON (Fix C).
         if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Resetting, appStopping);
+            await stateNotifier.NotifyStateAsync(ResetState.Resetting, ct);
 
         var resetStartedEvent = BuildControlEvent("reset-started", resetId);
-        await controlStream.InsertAsync(resetStartedEvent, appStopping);
-        await notifier.NotifyAsync(resetStartedEvent, appStopping);
+        await controlStream.InsertAsync(resetStartedEvent, ct);
+        await notifier.NotifyAsync(resetStartedEvent, ct);
 
         logger.LogInformation("Reset orchestrator: entered resetting phase for {ResetId}.", resetId);
 
         // Check GateMaxTtl before clearing.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
         {
-            await AbortCycleAsync(db, cycle, stateNotifier, appStopping);
+            await AbortCycleAsync(db, cycle, controlStream, notifier, stateNotifier, ct);
             return;
         }
 
         // ── Phase: resetting — clear data ─────────────────────────────────────
-        await ClearDataTablesAsync(db, appStopping);
+        await ClearDataTablesAsync(db, ct);
         logger.LogInformation("Reset orchestrator: data cleared for reset {ResetId}.", resetId);
 
         // ── Resetting → Idle ──────────────────────────────────────────────────
         machine.Fire(ResetTrigger.Complete);
         ClearCycleFields(cycle);
-        await SaveCycleAsync(db, cycle, appStopping);
+        await SaveCycleAsync(db, cycle, ct);
 
         // Notify all instances that the gate is now OFF (Fix C).
         if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Idle, appStopping);
+            await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
 
         var resetCompletedEvent = BuildControlEvent("reset-completed", resetId);
-        await controlStream.InsertAsync(resetCompletedEvent, appStopping);
-        await notifier.NotifyAsync(resetCompletedEvent, appStopping);
+        await controlStream.InsertAsync(resetCompletedEvent, ct);
+        await notifier.NotifyAsync(resetCompletedEvent, ct);
 
         logger.LogInformation("Reset orchestrator: reset {ResetId} completed.", resetId);
     }
 
+    // ct is the linked token (appStopping ∪ processCts) passed down from RunCycleAsync.
+    // The inner ack-wait creates its own sub-deadline capped at min(ackDeadline, gateMaxDeadline).
     private async Task WaitForAcksOrTimeoutAsync(
         DashboardDbContext db,
         ResetCycle cycle,
         DateTimeOffset ackDeadline,
         DateTimeOffset gateMaxDeadline,
         ResetOptions options,
-        CancellationToken appStopping)
+        CancellationToken ct)
     {
         var expectedComponents = cycle.ExpectedComponents ?? options.ExpectedComponents;
         var acksReceived = new HashSet<string>(cycle.AcksReceived ?? [], StringComparer.Ordinal);
@@ -184,7 +210,7 @@ internal sealed class ResetOrchestrator(
         var waitCap = ackWait < gateWait ? ackWait : gateWait;
 
         using var timeoutCts = new CancellationTokenSource(waitCap);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(appStopping, timeoutCts.Token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
 
         try
         {
@@ -198,7 +224,7 @@ internal sealed class ResetOrchestrator(
                     if (acksReceived.Add(ack.ComponentId))
                     {
                         cycle.AcksReceived = [.. acksReceived];
-                        await SaveCycleAsync(db, cycle, appStopping);
+                        await SaveCycleAsync(db, cycle, ct);
                         logger.LogInformation(
                             "Reset orchestrator: ack received from {ComponentId} ({Count}/{Total}).",
                             ack.ComponentId, acksReceived.Count, expectedComponents.Length);
@@ -209,49 +235,96 @@ internal sealed class ResetOrchestrator(
                 }
             }
         }
-        catch (OperationCanceledException) when (!appStopping.IsCancellationRequested)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
+            // Inner ack-wait timeout elapsed; proceed with however many acks arrived.
             logger.LogInformation(
                 "Reset orchestrator: ack timeout elapsed for reset {ResetId}; proceeding with {Count}/{Total} acks.",
                 cycle.ResetId, acksReceived.Count, expectedComponents.Length);
         }
     }
 
+    // abortCt must be a non-cancelled token (appStopping or CancellationToken.None) so the
+    // abort steps (DB write + NOTIFY) can complete even when processCts has already fired.
     private async Task AbortCycleAsync(
         DashboardDbContext db,
         ResetCycle cycle,
+        IControlStreamRepository controlStream,
+        IControlEventNotifier notifier,
         IResetStateNotifier? stateNotifier,
-        CancellationToken ct)
+        CancellationToken abortCt)
     {
         logger.LogWarning("Reset orchestrator: GateMaxTtl exceeded; aborting reset {ResetId}.", cycle.ResetId);
+
+        var abortedResetId = cycle.ResetId ?? Guid.Empty;
+
         var machine = new ResetStateMachine(cycle);
         if (!machine.IsInState(ResetState.Idle))
             machine.Fire(ResetTrigger.Abort);
         ClearCycleFields(cycle);
-        await SaveCycleAsync(db, cycle, ct);
+        await SaveCycleAsync(db, cycle, abortCt);
+
+        // Emit reset-completed so connected components (fetcher, demo-driver) can recover
+        // via the control stream — mirrors the reconciler abort path.
+        if (abortedResetId != Guid.Empty)
+        {
+            var completedEvent = BuildControlEvent("reset-completed", abortedResetId);
+            await controlStream.InsertAsync(completedEvent, abortCt);
+            await notifier.NotifyAsync(completedEvent, abortCt);
+        }
 
         // Release the gate flag on all instances (Fix C).
         if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
+            await stateNotifier.NotifyStateAsync(ResetState.Idle, abortCt);
     }
 
-    private async Task TryAbortAsync(CancellationToken ct)
+    // Fallback abort for unhandled exceptions.  resetId hint is used if the cycle row has
+    // already been cleared or is mismatched.  Uses appStopping (non-cancelled) for all IO.
+    private async Task TryAbortAsync(Guid resetId, CancellationToken appStopping)
     {
         try
         {
             await using var abortScope = services.CreateAsyncScope();
             var sp = abortScope.ServiceProvider;
             var abortDb = sp.GetRequiredService<DashboardDbContext>();
+            var controlStream = sp.GetRequiredService<IControlStreamRepository>();
+            var notifier = sp.GetRequiredService<IControlEventNotifier>();
             var stateNotifier = sp.GetService<IResetStateNotifier>();
-            var cycle = await LoadCycleAsync(abortDb, ct);
+            var cycle = await LoadCycleAsync(abortDb, appStopping);
             if (cycle.State != ResetState.Idle)
-                await AbortCycleAsync(abortDb, cycle, stateNotifier, ct);
+            {
+                await AbortCycleAsync(abortDb, cycle, controlStream, notifier, stateNotifier, appStopping);
+            }
+            else if (resetId != Guid.Empty)
+            {
+                // Cycle already idle (may have been cleaned up), but still emit reset-completed
+                // so any components still waiting on the stream can recover.
+                var completedEvent = BuildControlEvent("reset-completed", resetId);
+                await controlStream.InsertAsync(completedEvent, appStopping);
+                await notifier.NotifyAsync(completedEvent, appStopping);
+            }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Reset orchestrator: error during abort.");
         }
     }
+
+    // ── Internal testing seam ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Executes the abort path (write idle state + emit reset-completed + NOTIFY) using the
+    /// supplied dependencies. Exposed as <c>internal</c> so <c>Dashboard.Control.Tests</c> can
+    /// drive the abort flow with an in-memory SQLite store and a recording notifier without
+    /// requiring a real Postgres advisory lock. Production callers use <see cref="TryAbortAsync"/>.
+    /// </summary>
+    internal async Task ExecuteAbortAsync(
+        DashboardDbContext db,
+        ResetCycle cycle,
+        IControlStreamRepository controlStream,
+        IControlEventNotifier notifier,
+        CancellationToken ct)
+        => await AbortCycleAsync(db, cycle, controlStream, notifier, stateNotifier: null, ct);
 
     // ── Data clearing (D14: only deployment_events + fetcher_state) ───────────
 

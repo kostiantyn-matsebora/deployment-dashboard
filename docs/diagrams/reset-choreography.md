@@ -102,4 +102,6 @@ stateDiagram-v2
 | 5 | Ack = `POST /api/control/events` `{event_type: reset-ack, state: paused, payload.reset_id}`. |
 | 6 | No status endpoint — reset progress is observable via the control-stream events only. |
 
-Config keys (appsettings + env override): `AckTimeoutSeconds` (default 10), `ExpectedComponents` (default `dashboard-fetcher`, `demo-driver`), `GateMaxTtlSeconds`.
+Config keys (appsettings + env override): `AckTimeoutSeconds` (default 10), `ExpectedComponents` (default `dashboard-fetcher`, `demo-driver`), `GateMaxTtlSeconds` (default 60).
+
+**`GateMaxTtlSeconds` enforcement.** This is a hard wall-clock ceiling on the entire orchestrator cycle, not just a checkpoint. A linked `CancellationTokenSource` armed with `GateMaxTtlSeconds` is created when the cycle starts and passed to every await inside the cycle — including `ClearDataTablesAsync`. If the ceiling fires (timeout, not graceful shutdown), the cycle is force-aborted: state written to `idle`, a `reset-completed` event emitted on the control stream so connected components recover, and the advisory lock released. The ack-wait (`AckTimeoutSeconds`) is a separate, inner timeout and is unaffected.

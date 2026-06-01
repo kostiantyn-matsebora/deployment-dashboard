@@ -8,5 +8,6 @@ import { ControlModule } from '../control/control.module';
   imports:     [ControlModule],
   controllers: [DemoController],
   providers:   [DemoService, EmitService],
+  exports:     [DemoService],
 })
 export class DemoModule {}

@@ -22,6 +22,27 @@ services:
       # Must match the demo control key above — enables POST /demo/api-reset.
       CONTROL_API_KEY: demo-control-key
 
+  fetcher-host:
+    environment:
+      # Must match the demo api key above.
+      API_KEY: demo-api-key
+      # Must match the demo control key — fetcher participates in reset choreography.
+      CONTROL_API_KEY: demo-control-key
+      # Short poll interval for demo responsiveness.
+      POLL_INTERVAL_SECONDS: "10"
+      # Repoint the fetcher at the in-stack github-emulator instead of api.github.com.
+      # Key after __ must match the C# property name (PascalCase) — see docker-compose.yaml comment.
+      GITHUB__BaseUrl: "http://github-emulator:3100"
+      GITHUB__Token: "demo-token"
+      GITHUB__Repos: "demo-org/auth-bff,demo-org/billing-webhook,demo-org/catalog-edge,demo-org/data-pipeline,demo-org/ledger-projector,demo-org/notification-worker,demo-org/order-svc,demo-org/payments-api,demo-org/platform-proxy,demo-org/search-indexer"
+      GITHUB__VersionSource: "artifact:version.txt"
+      GITHUB__RateLimit: "${GITHUB_SIM_RATE_LIMIT:-5000}"
+      GITHUB__RateLimitBudgetPct: "80"
+    # Demo-only dependency — the emulator does not exist in production.
+    depends_on:
+      github-emulator:
+        condition: service_healthy
+
   postgres:
     environment:
       POSTGRES_USER:     dashboard

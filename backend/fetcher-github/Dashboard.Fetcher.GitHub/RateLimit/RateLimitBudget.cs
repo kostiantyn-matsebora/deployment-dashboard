@@ -12,6 +12,7 @@ public sealed class RateLimitBudget
 {
     private readonly int _budget;
     private int _used;
+    private DateTimeOffset _resetAt = DateTimeOffset.MinValue;
     private readonly ILogger<RateLimitBudget> _logger;
 
     private RateLimitBudget(int budget, ILogger<RateLimitBudget> logger)
@@ -19,6 +20,15 @@ public sealed class RateLimitBudget
         _budget = budget;
         _logger = logger;
     }
+
+    /// <summary>Maximum budget requests per window.</summary>
+    public int Budget => _budget;
+
+    /// <summary>Requests consumed in the current window (last observed).</summary>
+    public int Used => _used;
+
+    /// <summary>Unix-epoch reset timestamp from the last response; <see cref="DateTimeOffset.MinValue"/> if never received.</summary>
+    public DateTimeOffset ResetAt => _resetAt;
 
     /// <summary>
     /// Initialises the budget: reads GITHUB__RATE_LIMIT when set,
@@ -49,10 +59,11 @@ public sealed class RateLimitBudget
     public async Task RecordAndWaitIfNeededAsync(HttpResponseMessage response, CancellationToken ct)
     {
         _used = ReadUsed(response);
+        _resetAt = ReadResetAt(response);
         if (_used < _budget)
             return;
 
-        var resetAt = ReadResetAt(response);
+        var resetAt = _resetAt;
         var waitUntil = resetAt.AddSeconds(1);
         var delay = waitUntil - DateTimeOffset.UtcNow;
 
