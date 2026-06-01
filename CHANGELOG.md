@@ -9,6 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [0.1.1] - 2026-06-02
 
+### Security
+
+- Bump `multer` to `2.1.1`, resolving 9 high-severity denial-of-service advisories (transitive via `@nestjs/platform-express`) in the demo/mock packages (`frontend/mock`, `demo/driver`, `demo/github-emulator`).
+
+### Fixed
+
+- Release workflow: the GitHub Release job failed on the Linux runner — PowerShell hides dot-files, so the compose-bundle step couldn't find `.env.example`; added `-Force`.
+- OCI deploy: some Compose builds (notably on Windows) misread a bare `-f oci://…` reference as a local path. Documented the required `--project-directory .` flag in the quickstart and install commands.
+
+### Documentation
+
+- Adopter-first README restructure (hero + badges, live matrix screenshot, "why" highlights, 2-minute OCI demo, Mermaid architecture), plus "Built with Claude Code" and static MIT-license badges.
+- Install guide now warns that production secrets (`API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`) are required — Compose starts with blanks and the stack crash-loops if they're unset.
+- Documentation site now shows a footer copyright.
 
 ## [0.1.0] - 2026-06-02
 
