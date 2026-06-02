@@ -35,14 +35,46 @@ cp .env.example .env
 # edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
 #   (+ POSTGRES_HOST for standalone)
 
-# 2. Start — Compose fetches the project from GHCR; .env in the working directory
-#    is auto-loaded for variable interpolation
+# 2. Load your .env into the shell, then start (see known issue below)
+#    Compose reads interpolation variables from the session environment.
 docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
 ```
 
-Replace `0.2.0` with the release you want to pin. A `.env` in the working directory is auto-loaded; alternatively pass `--env-file ./your.env` explicitly. `--project-directory .` points Compose at the current directory for env resolution — without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` path error.
+Replace `0.2.0` with the release you want to pin. `--project-directory .` points Compose at the current directory — without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` path error.
 
-> **First run prompt.** The first `oci://` pull shows an interactive confirmation listing the interpolation variables and their sources before proceeding — this is expected. Preview resolution without starting the stack: `docker compose --project-directory . --env-file ./.env -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 config --environment`
+!!! warning "Known issue: `oci://` flow + env files (Windows / Docker Desktop)"
+    When using `-f oci://…`, Compose extracts the project to a local cache directory (e.g. `AppData\Local\cache\docker-compose\<hash>`). On the `up` path the project context relocates to that cache dir, so `.env` auto-load and `--env-file` (even with an absolute path) silently produce `<unset>` for all interpolation variables.
+
+    **Observed behaviour (verified on Docker Desktop for Windows, `0.2.0`):**
+
+    - `.env` in the working directory → all secret vars `<unset>` (auto-load does not fire).
+    - `--env-file "$PWD\.env"` on the `up` command → still `<unset>`.
+    - `--env-file "$PWD\.env"` on `config --environment` (preview/dry-run) → resolves correctly.
+
+    **Workaround — load variables into the shell session before running `up`:**
+
+    ```powershell
+    # Run from the directory containing your .env
+    Get-Content .\.env | ForEach-Object {
+      if ($_ -match '^\s*([^#][^=]*?)\s*=\s*(.*)$') {
+        [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim())
+      }
+    }
+    # Compose reads interpolation variables from the session environment
+    docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
+    ```
+
+    Shell/process environment takes precedence in Compose interpolation and is not affected by project-dir relocation.
+
+    **To verify variable resolution before starting the stack** (`config --environment` does honour the file):
+
+    ```powershell
+    docker compose --project-directory . --env-file "$PWD\.env" -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 config --environment
+    ```
+
+    This is a current limitation of the `0.2.0` release; a fix may land in a later version.
+
+> **First run prompt.** The first `oci://` pull shows an interactive confirmation listing the interpolation variables and their sources before proceeding — this is expected.
 
 > **Availability.** The OCI artifact is published automatically on each release. It does not exist until the first release (`v0.1.0`) is cut — use the curl alternative below until then.
 
@@ -86,11 +118,12 @@ cp .env.example .env
 # edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
 #   (+ POSTGRES_HOST for standalone)
 
-# 2. Start — OCI artifact + images pull from GHCR; .env is auto-loaded from cwd
+# 2. Load your .env into the shell first (oci:// env-file workaround — see Option A above),
+#    then start:
 docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
 ```
 
-> Substitute `0.2.0` with the release you want. See [Pinning a release version](#pinning-a-release-version). If the first release has not been cut yet, use [Option B](#option-b-fetch-the-compose-files) instead.
+> Substitute `0.2.0` with the release you want. See [Pinning a release version](#pinning-a-release-version). If the first release has not been cut yet, use [Option B](#option-b-fetch-the-compose-files) instead. For env-file behaviour with `oci://`, see the [known issue in Option A](#option-a-oci-artifact-recommended).
 
 Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
 
