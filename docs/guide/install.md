@@ -33,17 +33,6 @@ docker compose --profile full up -d
 
 To pin a release, replace `main` in the URLs with the tag (e.g. `.../v0.2.0/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
 
-## Profiles
-
-| Profile | What starts | Required env | Command |
-|---|---|---|---|
-| `full` | Gateway + Frontend + API + bundled PostgreSQL | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose --profile full up -d` |
-| `standalone` | Gateway + Frontend + API (external PostgreSQL) | + `POSTGRES_HOST` | `docker compose --profile standalone up -d` |
-| `full-pull` | `full` + Fetcher | + `GITHUB_TOKEN`, `GITHUB_REPOS` | `docker compose --profile full-pull up -d` |
-| `standalone-pull` | `standalone` + Fetcher | + `GITHUB_TOKEN`, `GITHUB_REPOS` | `docker compose --profile standalone-pull up -d` |
-
-Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
-
 ## Pull mode (Fetcher)
 
 Use pull mode when you can't add a push step to your pipelines — or when the dashboard runs in a **locked-down network that forbids inbound WAN traffic**. The Fetcher is **outbound-only**: it polls the GitHub Deployments API and posts to the dashboard's internal ingest, so nothing needs to accept inbound connections (unlike push, where CI/CD must reach in). Only the `-pull` profiles start it.
@@ -64,6 +53,17 @@ docker compose --profile full-pull up -d
 
 - **Public repos:** a classic PAT with **no scopes**, or a fine-grained PAT with **Public repositories (read-only)**.
 - **Private repos:** a fine-grained PAT with **Contents · Deployments · Actions: Read** on the target repos (or classic `repo`).
+
+## Profiles
+
+| Profile | What starts | Required env | Command |
+|---|---|---|---|
+| `full` | Gateway + Frontend + API + bundled PostgreSQL | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose --profile full up -d` |
+| `standalone` | Gateway + Frontend + API (external PostgreSQL) | + `POSTGRES_HOST` | `docker compose --profile standalone up -d` |
+| `full-pull` | `full` + Fetcher | + `GITHUB_TOKEN`, `GITHUB_REPOS` | `docker compose --profile full-pull up -d` |
+| `standalone-pull` | `standalone` + Fetcher | + `GITHUB_TOKEN`, `GITHUB_REPOS` | `docker compose --profile standalone-pull up -d` |
+
+Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
 
 ## Running from local source
 
