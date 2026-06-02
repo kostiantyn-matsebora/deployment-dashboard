@@ -8,4 +8,5 @@
 ✔ Add logo wherever its suitable @done(26-06-02 03:27)
 ✔ Make component events stream instead of polling @done(26-06-02)
 ☐ Add corellation ID to the events to corellate them with command and each other
+☐ Split gateway into a separate demo image (FROM production gateway) so the production gateway carries no /demo routes or DEMO_DRIVER_UPSTREAM at all; the demo image layers the demo-driver routes on top
 ✔ Create release lifecycle for solution @done(26-06-01 22:27)
