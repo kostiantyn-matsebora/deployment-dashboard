@@ -2,10 +2,17 @@ import { Module } from '@nestjs/common';
 import { ResetCoordinator } from './reset-coordinator';
 import { ControlStreamSubscriber } from './control-stream.subscriber';
 import { ControlFeed } from './control-feed';
-import { ControlEventsReadClient } from './control-events-read.client';
+import { ComponentEventFeed } from './component-event-feed';
+import { ComponentEventsSubscriber } from './component-events.subscriber';
 
 @Module({
-  providers: [ResetCoordinator, ControlFeed, ControlEventsReadClient, ControlStreamSubscriber],
-  exports:   [ResetCoordinator, ControlFeed, ControlEventsReadClient],
+  providers: [
+    ResetCoordinator,
+    ControlFeed,
+    ControlStreamSubscriber,
+    ComponentEventFeed,
+    ComponentEventsSubscriber,
+  ],
+  exports: [ResetCoordinator, ControlFeed, ComponentEventFeed],
 })
 export class ControlModule {}

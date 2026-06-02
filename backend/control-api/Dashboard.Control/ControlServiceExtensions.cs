@@ -27,6 +27,7 @@ public static class ControlServiceExtensions
         // ── Notifiers ─────────────────────────────────────────────────────────
         services.AddScoped<IControlEventNotifier, PostgresControlEventNotifier>();
         services.AddScoped<IComponentAckNotifier, PostgresComponentAckNotifier>();
+        services.AddScoped<IComponentEventNotifier, PostgresComponentEventNotifier>();
         // Fix C: state-change notifier NOTIFY reset_state on every transition.
         services.AddScoped<IResetStateNotifier, PostgresResetStateNotifier>();
 
@@ -57,6 +58,17 @@ public static class ControlServiceExtensions
             sp => sp.GetRequiredService<ComponentAcksBroadcaster>());
         services.AddHostedService(
             sp => sp.GetRequiredService<ComponentAcksBroadcaster>());
+
+        // ── Component-event SSE broadcaster: LISTEN component_events (fourth channel) ──
+        // Singleton serves as IComponentEventBroadcaster (injected into the SSE handler),
+        // BackgroundService (owns the LISTEN connection), and IComponentEventReadinessIndicator.
+        services.AddSingleton<ComponentEventBroadcaster>();
+        services.AddSingleton<IComponentEventBroadcaster>(
+            sp => sp.GetRequiredService<ComponentEventBroadcaster>());
+        services.AddSingleton<IComponentEventReadinessIndicator>(
+            sp => sp.GetRequiredService<ComponentEventBroadcaster>());
+        services.AddHostedService(
+            sp => sp.GetRequiredService<ComponentEventBroadcaster>());
 
         // ── Fix C: per-instance reset-state LISTEN listener ───────────────────
         // Seeds IsResetting from DB at startup; updates on NOTIFY reset_state.

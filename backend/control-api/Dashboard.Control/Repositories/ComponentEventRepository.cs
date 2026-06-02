@@ -1,6 +1,4 @@
-using Dashboard.Control.Cursors;
 using Dashboard.Control.Models;
-using Dashboard.Control.Queries;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -15,37 +13,19 @@ internal sealed class ComponentEventRepository(DashboardDbContext db) : ICompone
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<(IReadOnlyList<ComponentEventRecord> Items, string? NextCursor)> ListAsync(
-        ComponentEventListQuery query, CancellationToken ct)
+    public async Task<ComponentEvent?> GetByIdAsync(Guid id, CancellationToken ct)
+        => await db.ComponentEvents.FindAsync([id], ct);
+
+    public async Task<IReadOnlyList<ComponentEventRecord>> GetSinceAsync(Guid lastId, CancellationToken ct)
     {
-        var q = db.ComponentEvents.AsQueryable();
+        // EF Core cannot express `uuid > @lastId` via LINQ (Guid has no > operator).
+        // FromSqlInterpolated produces a safe parameterised query; Postgres orders UUIDv7 by
+        // insertion time, matching the D3 resume semantics (same approach as the read side).
+        var items = await db.ComponentEvents
+            .FromSqlInterpolated($"SELECT * FROM component_events WHERE id > {lastId}")
+            .OrderBy(e => e.Id)
+            .ToListAsync(ct);
 
-        if (query.ComponentId is not null) q = q.Where(e => e.ComponentId == query.ComponentId);
-        if (query.EventType is not null) q = q.Where(e => e.EventType == query.EventType);
-        if (query.Since.HasValue) q = q.Where(e => e.OccurredAt >= query.Since.Value);
-
-        if (query.Cursor is not null && ComponentEventCursor.TryDecode(query.Cursor, out var cursor))
-        {
-            // Seek past the cursor in the received_at DESC ordering. received_at is server-assigned;
-            // same-instant ties at a page boundary are an acceptable edge case (mirrors the read side).
-            var cursorAt = cursor.ReceivedAt;
-            q = q.Where(e => e.ReceivedAt < cursorAt);
-        }
-
-        q = q.OrderByDescending(e => e.ReceivedAt).ThenByDescending(e => e.Id);
-
-        // Fetch limit + 1 to detect whether a next page exists.
-        var items = await q.Take(query.Limit + 1).ToListAsync(ct);
-
-        string? nextCursor = null;
-        if (items.Count > query.Limit)
-        {
-            items.RemoveAt(items.Count - 1);
-            var last = items[^1];
-            nextCursor = ComponentEventCursor.Encode(last.ReceivedAt, last.Id);
-        }
-
-        var records = items.Select(ComponentEventRecord.FromEntity).ToList();
-        return (records, nextCursor);
+        return items.Select(ComponentEventRecord.FromEntity).ToList();
     }
 }
