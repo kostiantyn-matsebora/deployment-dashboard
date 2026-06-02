@@ -104,6 +104,20 @@ public sealed class InfrastructureEndpointTests : IAsyncLifetime
             "readyz checks must include 'listen_acks' for the component_acks channel (D10).");
     }
 
+    [Fact]
+    public async Task GetReadyz_IncludesListenComponentEventsCheck()
+    {
+        // Give the ComponentEventBroadcaster time to establish LISTEN component_events.
+        await Task.Delay(3000);
+
+        var res = await _client.GetAsync("/readyz");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var checks = body.GetProperty("checks");
+
+        Assert.True(checks.TryGetProperty("listen_component_events", out _),
+            "readyz checks must include 'listen_component_events' for the component_events channel (§11 ch.4).");
+    }
+
     // ── GET /openapi/v1.json ──────────────────────────────────────────────────
 
     [Fact]

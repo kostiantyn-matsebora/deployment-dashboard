@@ -466,15 +466,15 @@ export const PANEL_HTML = `<!DOCTYPE html>
       ghSeedBtn, ghEmitBtn, ghDatasetSelect, ghCountInput, ghResetCheck,
     ];
 
-    let pollTimer        = null;
-    let eventSource      = null;
-    let ctrlEventSource  = null;
-    let compPollTimer    = null;
-    let ghPollTimer      = null;
-    let healthPollTimer  = null;
-    let emitting         = false;
-    let ghEmitting       = false;
-    let isBlocked        = false;
+    let pollTimer           = null;
+    let eventSource         = null;
+    let ctrlEventSource     = null;
+    let compEventSource     = null;
+    let ghPollTimer         = null;
+    let healthPollTimer     = null;
+    let emitting            = false;
+    let ghEmitting          = false;
+    let isBlocked           = false;
 
     // Merged events store: dedup by id, sorted datetime DESC.
     let eventsStore = [];
@@ -501,7 +501,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
       await Promise.all([refreshStatus(), refreshEmit()]);
       connectStream();
       connectControlStream();
-      startCompEventsPoll();
+      connectComponentEvents();
       startGhPoll();
       startHealthPoll();
     })();
@@ -805,12 +805,35 @@ export const PANEL_HTML = `<!DOCTYPE html>
     }
 
     // ── Control API Events SSE (GET /demo/control-stream) ────────────────────
+    // Per §8: single Events card badge reflects both control-stream and
+    // component-events connections.  Each stream tracks its own state; the badge
+    // shows LIVE only when both are live, RECONNECTING if either is reconnecting.
+    let ctrlStreamState  = 'connecting';
+    let compEventsState  = 'connecting';
+
+    function setEventsLiveBadge(mode) {
+      const labels = { connecting: '● CONNECTING', live: '● LIVE', reconnecting: '● RECONNECTING' };
+      eventsLiveBadge.textContent = labels[mode] || mode;
+      eventsLiveBadge.className   = 'live-badge live-' + mode;
+    }
+
+    function recalcEventsLiveBadge() {
+      if (ctrlStreamState === 'reconnecting' || compEventsState === 'reconnecting') {
+        setEventsLiveBadge('reconnecting');
+      } else if (ctrlStreamState === 'live' && compEventsState === 'live') {
+        setEventsLiveBadge('live');
+      } else {
+        setEventsLiveBadge('connecting');
+      }
+    }
+
     function connectControlStream() {
       if (ctrlEventSource) { try { ctrlEventSource.close(); } catch {} }
-      setEventsLiveBadge('connecting');
+      ctrlStreamState = 'connecting';
+      recalcEventsLiveBadge();
       ctrlEventSource = new EventSource('/demo/control-stream');
 
-      ctrlEventSource.onopen = () => setEventsLiveBadge('live');
+      ctrlEventSource.onopen = () => { ctrlStreamState = 'live'; recalcEventsLiveBadge(); };
 
       // Named events for known reset lifecycle types.
       ctrlEventSource.addEventListener('reset-initiated', e => {
@@ -835,13 +858,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
         mergeCtrlEvent('unknown', e.data);
       };
 
-      ctrlEventSource.onerror = () => setEventsLiveBadge('reconnecting');
-    }
-
-    function setEventsLiveBadge(mode) {
-      const labels = { connecting: '● CONNECTING', live: '● LIVE', reconnecting: '● RECONNECTING' };
-      eventsLiveBadge.textContent = labels[mode] || mode;
-      eventsLiveBadge.className   = 'live-badge live-' + mode;
+      ctrlEventSource.onerror = () => { ctrlStreamState = 'reconnecting'; recalcEventsLiveBadge(); };
     }
 
     function mergeCtrlEvent(type, rawData) {
@@ -873,48 +890,54 @@ export const PANEL_HTML = `<!DOCTYPE html>
       mergeIntoStore(entry);
     }
 
-    // ── Component Events poll (GET /demo/control-events, 5 s cadence) ─────────
-    function startCompEventsPoll() {
-      // Immediate first fetch, then schedule repeating interval.
-      fetchCompEvents();
-      compPollTimer = setInterval(fetchCompEvents, 5000);
-    }
+    // ── Component Events SSE (GET /demo/control-events) ──────────────────────
+    // Per §4.9: EventSource on GET /demo/control-events; each frame carries a
+    // single ComponentEventRecord as event: component + data: <JSON>.
+    function connectComponentEvents() {
+      if (compEventSource) { try { compEventSource.close(); } catch {} }
+      compEventsState = 'connecting';
+      recalcEventsLiveBadge();
+      compEventSource = new EventSource('/demo/control-events');
 
-    async function fetchCompEvents() {
-      try {
-        const page = await apiFetch('/demo/control-events');
-        mergeCompEvents(page.items || []);
-      } catch {
-        // Network error: keep existing list.
-      }
-    }
+      compEventSource.onopen = () => { compEventsState = 'live'; recalcEventsLiveBadge(); };
 
-    function mergeCompEvents(items) {
-      items.forEach(rec => {
-        const stateCls = rec.state === 'running' ? 'fi-state-running'
-                       : rec.state === 'error'   ? 'fi-state-error'
-                       :                           'fi-state-neutral';
-        const ts       = rec.received_at || new Date().toISOString();
-        const detailPart = rec.detail
-          ? ' \\u00b7 <span class="fi-details">' + esc(rec.detail) + '</span>'
-          : '';
-        const detailsHtml =
-          '<span class="' + stateCls + '">' + esc(rec.state || '') + '</span>' + detailPart;
-
-        const entry = {
-          _kind:      'comp',
-          _ts:        ts,
-          id:         rec.id || ('comp-' + ts + '-' + (rec.component_id || '')),
-          time:       fmtMs(ts),
-          source:     rec.component_id || '',
-          sourceClass:'fi-source-comp',
-          event:      rec.event_type   || '',
-          eventClass: 'fi-event-neutral',
-          rowId:      rec.id           || '',
-          detailsHtml,
-        };
-        mergeIntoStore(entry);
+      // Each accepted POST /api/control/events produces one named "component" event frame.
+      compEventSource.addEventListener('component', e => {
+        if (!e.data) return;
+        let rec = {};
+        try { rec = JSON.parse(e.data); } catch { return; }
+        mergeCompEvents(rec);
       });
+
+      compEventSource.onerror = () => { compEventsState = 'reconnecting'; recalcEventsLiveBadge(); };
+    }
+
+    // Renders a single ComponentEventRecord into the merged Events store.
+    // Previously accepted an array (poll response); now called per-frame (SSE).
+    function mergeCompEvents(rec) {
+      const stateCls = rec.state === 'running' ? 'fi-state-running'
+                     : rec.state === 'error'   ? 'fi-state-error'
+                     :                           'fi-state-neutral';
+      const ts       = rec.received_at || new Date().toISOString();
+      const detailPart = rec.detail
+        ? ' \\u00b7 <span class="fi-details">' + esc(rec.detail) + '</span>'
+        : '';
+      const detailsHtml =
+        '<span class="' + stateCls + '">' + esc(rec.state || '') + '</span>' + detailPart;
+
+      const entry = {
+        _kind:      'comp',
+        _ts:        ts,
+        id:         rec.id || ('comp-' + ts + '-' + (rec.component_id || '')),
+        time:       fmtMs(ts),
+        source:     rec.component_id || '',
+        sourceClass:'fi-source-comp',
+        event:      rec.event_type   || '',
+        eventClass: 'fi-event-neutral',
+        rowId:      rec.id           || '',
+        detailsHtml,
+      };
+      mergeIntoStore(entry);
     }
 
     // ── Merged events store helpers ───────────────────────────────────────────

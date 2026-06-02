@@ -343,6 +343,71 @@ describe('DeploymentsStreamController', () => {
 
       expect(capturedSignal?.aborted).toBe(true);
     });
+
+    it('does not emit an unhandled rejection when the abort errors the upstream body stream', async () => {
+      // Reproduces the real undici behaviour: aborting the fetch *errors* the
+      // response body ReadableStream with an AbortError (rather than closing it
+      // cleanly). Both the pending reader.read() AND the finally-block
+      // reader.cancel() then reject with that AbortError. If cancel()'s
+      // rejection is not handled it floats as an unhandledRejection and crashes
+      // the process (observed: demo-driver exiting with code 1 and restarting).
+      let capturedSignal: AbortSignal | undefined;
+      let errorStream: (() => void) | undefined;
+
+      const mockFetch = jest.fn().mockImplementation(
+        (_url: string, opts: { signal?: AbortSignal }) => {
+          capturedSignal = opts?.signal;
+          const stream = new ReadableStream<Uint8Array>({
+            start(streamController) {
+              errorStream = () =>
+                streamController.error(
+                  new DOMException('This operation was aborted', 'AbortError'),
+                );
+            },
+          });
+          return Promise.resolve({ ok: true, status: 200, body: stream });
+        },
+      );
+      globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
+
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+      process.on('unhandledRejection', onUnhandled);
+
+      try {
+        const res = makeSseRes();
+        const req = makeReq() as any;
+
+        const streamPromise = controller.deploymentsStream(
+          undefined,
+          undefined,
+          req,
+          res as unknown as Response,
+        );
+
+        // Let fetch resolve and the read loop reach its first await.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // Simulate client disconnect: abort fires, then undici errors the body.
+        req._emit('close');
+        errorStream?.();
+
+        // The handler must resolve cleanly despite the errored stream.
+        await expect(streamPromise).resolves.toBeUndefined();
+
+        // Flush microtask + macrotask queues so any floating cancel() rejection
+        // would surface to the unhandledRejection listener before we assert.
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+
+        expect(capturedSignal?.aborted).toBe(true);
+        expect(unhandled).toEqual([]);
+        expect(res.end).toHaveBeenCalled();
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+      }
+    });
   });
 
   // ── Upstream unreachable — graceful degradation ────────────────────────────

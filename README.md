@@ -4,131 +4,135 @@
 
 <h1 align="center">Deployment Dashboard</h1>
 
-Real-time services × environments deployment matrix sourced from CI/CD pipeline events.
+<p align="center">
+  A real-time <strong>services × environments</strong> deployment matrix, sourced straight from your CI/CD pipeline events.
+</p>
 
-**Core question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
+<p align="center">
+  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/releases"><img src="https://img.shields.io/github/v/release/kostiantyn-matsebora/deployment-dashboard?display_name=tag&sort=semver" alt="Latest release"></a>
+  <a href="https://kostiantyn-matsebora.github.io/deployment-dashboard/"><img src="https://img.shields.io/badge/docs-online-blue" alt="Docs"></a>
+  <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20with-Claude%20Code-D97757?logo=claude&logoColor=white" alt="Built with Claude Code"></a>
+</p>
 
-## What it does
+<p align="center">
+  <a href="docs/guide/quickstart.md"><strong>Quickstart</strong></a> ·
+  <a href="docs/guide/send-events.md"><strong>Integrate your CI/CD</strong></a> ·
+  <a href="https://kostiantyn-matsebora.github.io/deployment-dashboard/"><strong>Docs</strong></a>
+</p>
 
-- Displays a live deployment matrix — one row per service, one column per environment
-- Each slot shows: version, status (success / in-progress / failure), actor, elapsed time, CI/CD run link
-- Streams live updates to all connected browser clients via SSE — no page reload
-- Stores full deployment history per slot (90-day minimum retention)
-- Accepts events from any CI/CD tool via a single `POST /api/deployments` step — no pipeline changes beyond adding that one step
+---
 
-## Architecture
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/_assets/screenshots/matrix-dark.png">
+  <img src="docs/_assets/screenshots/matrix-light.png" alt="Deployment matrix — services × environments">
+</picture>
 
+> **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
+
+## Why Deployment Dashboard?
+
+- **Single-step integration.** One `POST /api/deployments` call — no plugins, no agent, no pipeline rewrite.
+- **Tool-agnostic.** GitHub Actions, Azure DevOps, GitLab CI, Jenkins, shell scripts — anything that can call a URL.
+- **One screen, instant answer.** Every service across every environment; no clicking through pipelines and logs.
+- **Live via SSE.** State changes push to every open browser within seconds — no refresh, no stale tab.
+- **Full append-only history.** Every deployment kept per slot (≥ 90 days, configurable); nothing overwritten.
+- **Auto-discovers topology.** Services and environments are derived from events you send — no registration, no config file.
+- **Secure by design.** Writes are API-key gated; reads are internal-only; the SPA holds no secrets.
+- **Pull mode when you can't push.** The optional Fetcher polls your CI/CD API and posts through the same contract.
+
+## Try it in 2 minutes
+
+Zero config — no API keys, no database setup, no clone required.
+
+```bash
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:latest --profile demo up
 ```
-CI/CD tool  ──POST /api/deployments──►  App Gateway (nginx)
-                                              │
-                              ┌───────────────┼───────────────┐
-                              ▼               ▼               ▼
-                         Frontend         API (.NET 10)    Fetcher*
-                      (Angular + nginx)  Write + Read     (optional)
-                                              │
-                                              ▼
-                                         PostgreSQL
-                                        LISTEN/NOTIFY
-```
 
-`*` Dashboard.Fetcher is an optional pull-mode adapter that polls a CI/CD API and posts events using the same push endpoint.
+Then open:
 
-## Components
-
-| Path | Role |
+| URL | What you get |
 |---|---|
-| `backend/` | .NET 10 API — Write (API-key gated) + Read (unauthenticated) endpoints, SSE fan-out, plus the optional Fetcher |
-| `frontend/` | Angular 20 SPA — static files served by nginx, no build step required at runtime (+ a mock API server) |
-| `gateway/` | nginx App Gateway — the single public surface |
-| `demo/` | Demo Driver + GitHub Emulator + scenario data (zero-config evaluation / CI) |
-| `compose/` | Docker Compose stack (profiles) + `.env.example` |
-| `scripts/` | PowerShell tooling, git hooks, and the release helper |
-| `testing/` | E2E and integration test suites |
-| `docs/` | Architecture spec, API contracts, frontend requirements |
+| <http://localhost:8080> | Live deployment matrix |
+| <http://localhost:8080/demo/> | Demo Driver control panel |
 
-## Key constraints
+Prefer explicit local files? See the [Quickstart](docs/guide/quickstart.md) for the `curl` alternative.
 
-| Constraint | Detail |
-|---|---|
-| Stack | Angular 20+ frontend · .NET 10 backend · PostgreSQL |
-| Hosting | Azure only · ≤ $30/month |
-| Stateless backend | any number of instances behind a load balancer, no sticky sessions |
-| Internal only | not publicly accessible; SPA contains no secrets |
+## Send your first deployment
 
-## Running with Docker Compose
+One HTTP call from your pipeline — that's the whole integration:
 
-Compose files live in [`compose/`](compose/). Copy `compose/.env.example` to `compose/.env` and fill in the required vars before running.
-
-Two deployment shapes, each with a pull-mode variant. Ingestion is push-first (CI/CD posts to `POST /api/deployments`); the **`-pull`** variants add the optional Fetcher, which polls a source and posts via the same endpoint.
-
-- **`standalone`** — cloud / distributed setup: PostgreSQL is a managed/external service, the app tier scales horizontally behind the gateway.
-- **`full`** — single-VM / all-in-one setup: the stack owns its PostgreSQL (Docker volume) on the same host.
-
-| Profile | What starts | Required env vars | Command |
-|---|---|---|---|
-| `standalone` | Gateway + Frontend + API. External PostgreSQL, push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` | `docker compose -f compose/docker-compose.yaml --profile standalone up` |
-| `standalone-pull` | `standalone` + Fetcher (pull-mode ingestion). | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` (+ `GITHUB_REPOS` / `GITHUB_TOKEN` for the Fetcher) | `docker compose -f compose/docker-compose.yaml --profile standalone-pull up` |
-| `full` | Gateway + Frontend + API + managed PostgreSQL (Docker volume). Push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose -f compose/docker-compose.yaml --profile full up` |
-| `full-pull` | `full` + Fetcher (pull-mode ingestion). | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (+ `GITHUB_REPOS` / `GITHUB_TOKEN` for the Fetcher) | `docker compose -f compose/docker-compose.yaml --profile full-pull up` |
-| `demo` | Gateway + Frontend + API + Demo Driver + GitHub Emulator + Fetcher + PostgreSQL. Zero-config local evaluation. | _(none — insecure defaults applied by the demo override)_ | `docker compose -f compose/docker-compose.yaml -f compose/docker-compose.demo.yaml --profile demo up` |
-
-> The gateway is the only published port (default `:8080`). Frontend, API, and PostgreSQL are internal-only.
-
-### Running from local source
-
-`compose/docker-compose.local.yaml` swaps all published images for locally built ones (`pull_policy: never`). Stack it on top of the base + demo overrides.
-
-**1. Build all images:**
-
-```powershell
-docker compose `
-  -f compose/docker-compose.yaml `
-  -f compose/docker-compose.demo.yaml `
-  -f compose/docker-compose.local.yaml `
-  --profile demo build
+```bash
+curl -X POST "$DASHBOARD_URL/api/deployments" \
+  -H "X-Api-Key: $DASHBOARD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deployment_id": "build-42",
+    "service":       "checkout",
+    "environment":   "prod",
+    "version":       "1.4.2",
+    "status":        "success",
+    "happened_at":   "2026-06-01T10:00:00Z"
+  }'
 ```
 
-**2. Run:**
+[GitHub Actions, Azure DevOps, GitLab & Jenkins examples →](docs/guide/send-events.md)
 
-```powershell
-docker compose `
-  -f compose/docker-compose.yaml `
-  -f compose/docker-compose.demo.yaml `
-  -f compose/docker-compose.local.yaml `
-  --profile demo up
+## Two views
+
+- **Matrix** — one row per service, one column per environment; each tile shows version, status, actor, elapsed time, and a CI/CD run link.
+- **Swimlanes** — per-service deployment graphs showing how a version flows from `dev` through to `prod`, with branching topology and status-colored edges.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/_assets/screenshots/swimlanes-dark.png">
+  <img src="docs/_assets/screenshots/swimlanes-light.png" alt="Swimlanes view">
+</picture>
+
+## Deploy for your team
+
+Fetch the env template, fill in your secrets, then start the stack from the OCI artifact — no clone required:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
+cp .env.example .env
+# edit .env — set API_KEY, POSTGRES_USER, POSTGRES_PASSWORD (+ POSTGRES_HOST for standalone)
+
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
 ```
 
-Or build and start in one step:
+**Shapes:** `standalone` (external PostgreSQL) or `full` (bundled PostgreSQL); add `-pull` to either for the optional Fetcher. `demo` is for evaluation only. The gateway (`:8080`) is the only published port. Pin a version via `DASHBOARD_VERSION=0.2.0` in `.env` (no leading `v`).
 
-```powershell
-docker compose `
-  -f compose/docker-compose.yaml `
-  -f compose/docker-compose.demo.yaml `
-  -f compose/docker-compose.local.yaml `
-  --profile demo up --build
+[Install & deploy →](docs/guide/install.md)
+
+## How it works
+
+```mermaid
+flowchart LR
+    CI[CI/CD tool] -->|POST /api/deployments| GW["Gateway<br/>nginx :8080"]
+    GW --> FE["Frontend<br/>Angular + nginx"]
+    GW --> API["API<br/>.NET 10"]
+    GW -.->|optional| F["Fetcher*"]
+    API <-->|LISTEN/NOTIFY| DB[("PostgreSQL")]
+    F -->|POST /api/deployments| API
 ```
 
-Open `http://localhost:8080` for the dashboard and `http://localhost:8080/demo/` for the Demo Driver control panel.
+`*` Dashboard.Fetcher is the optional pull-mode adapter — polls a CI/CD API and posts events through the same push endpoint.
 
-## Docs
+[Architecture overview →](docs/guide/architecture-overview.md)
 
-📖 **Documentation site:** <https://kostiantyn-matsebora.github.io/deployment-dashboard/>
+## Documentation
 
-New here? Start with the adopter guides:
+**Site:** <https://kostiantyn-matsebora.github.io/deployment-dashboard/>
 
-- [Quickstart](docs/guide/quickstart.md) — run the whole stack locally, zero config.
-- [Install & deploy](docs/guide/install.md) · [Configuration](docs/guide/configuration.md)
-- [Integrate your CI/CD](docs/guide/send-events.md) — send deployments from any pipeline (one step).
-- [Architecture overview](docs/guide/architecture-overview.md) · [FAQ & troubleshooting](docs/guide/faq.md)
+- [Quickstart](docs/guide/quickstart.md) — run the demo locally in 2 minutes.
+- [Install & deploy](docs/guide/install.md) — Compose profiles, production checklist.
+- [Configuration](docs/guide/configuration.md) — every environment variable.
+- [Integrate your CI/CD](docs/guide/send-events.md) — pipeline examples.
+- [Architecture overview](docs/guide/architecture-overview.md) — how the pieces fit.
+- [FAQ & troubleshooting](docs/guide/faq.md)
 
-Development & reference (the full specification) lives under [`docs/`](docs/index.md) — architecture (SAD), API contract, frontend requirements, fetcher, mock server, and demo driver.
+## Contributing · License · Security
 
-## Releases
-
-Each tagged release publishes versioned images for all services to GHCR (`ghcr.io/kostiantyn-matsebora/deployment-dashboard-*`). Pin a deployment by setting `DASHBOARD_VERSION` in `compose/.env` (e.g. `0.1.0` — no leading `v`); it defaults to `latest`.
-
-See [RELEASING.md](RELEASING.md) for the release process and [Install & deploy](docs/guide/install.md#pinning-a-release-version) for pinning a version.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, the branch → PR workflow, and the conventions CI enforces. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: follow the [Security policy](SECURITY.md).
+- **Contributing:** local setup, branch → PR workflow, and project layout are in [CONTRIBUTING.md](CONTRIBUTING.md).
+- **License:** MIT — see [LICENSE](LICENSE).
+- **Security:** follow the [Security policy](SECURITY.md) for vulnerability reports.

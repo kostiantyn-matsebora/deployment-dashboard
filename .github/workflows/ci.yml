@@ -26,6 +26,18 @@ on:
     # NO path filter here — this workflow must run on every PR to main,
     # regardless of which files were changed.
 
+# Least-privilege default for the gate jobs:
+#   - contents: read       — checkout
+#   - pull-requests: read  — dorny/paths-filter calls the PR listFiles API
+# A called reusable workflow's GITHUB_TOKEN is capped by the CALLER's
+# permissions, so the six service caller jobs (whose workflows include a Docker
+# job declaring packages: write) widen to packages: write below. Docker push
+# itself stays gated by event_name == 'push', so nothing is published on PRs
+# regardless of the granted scope.
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   # ── Path detection ───────────────────────────────────────────────────────────
   # Detect which areas changed. Each output is 'true' or 'false'.
@@ -44,11 +56,11 @@ jobs:
       docs:            ${{ steps.filter.outputs.docs }}
       scripts:         ${{ steps.filter.outputs.scripts }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Detect changes
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             api:
@@ -89,43 +101,61 @@ jobs:
 
   # ── Area callers ─────────────────────────────────────────────────────────────
   # Each job calls the corresponding reusable workflow only when its area changed.
-  # When skipped (if condition false), GitHub marks the job as skipped — which
-  # alls-green treats as success by default.
+  # When the `if` is false the job result is `skipped`, which the `_ci-green`
+  # gate below treats as a pass.
 
   ci-api:
     name: CI / api
     needs: changes
     if: needs.changes.outputs.api == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/api.yml
 
   ci-frontend:
     name: CI / frontend
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/frontend.yml
 
   ci-gateway:
     name: CI / gateway
     needs: changes
     if: needs.changes.outputs.gateway == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/gateway.yml
 
   ci-fetcher:
     name: CI / fetcher
     needs: changes
     if: needs.changes.outputs.fetcher == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/fetcher.yml
 
   ci-demo-driver:
     name: CI / demo-driver
     needs: changes
     if: needs.changes.outputs['demo-driver'] == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/demo-driver.yml
 
   ci-github-emulator:
     name: CI / github-emulator
     needs: changes
     if: needs.changes.outputs['github-emulator'] == 'true'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/github-emulator.yml
 
   ci-api-tests:
@@ -149,8 +179,9 @@ jobs:
   # ── Required gate ────────────────────────────────────────────────────────────
   # THIS job's name is the required status-check context registered in branch protection.
   # `if: always()` ensures it runs even when callers are skipped or failed.
-  # re-actors/alls-green passes when all needed jobs are success or skipped;
-  # it fails when any needed job failed or was cancelled.
+  # Self-contained gate: pass when every needed job is success or skipped
+  # (area jobs skip when their paths are untouched), fail only on a real
+  # failure or cancellation. Avoids third-party action quirks around skips.
   _ci-green:
     name: _ci-green
     runs-on: ubuntu-latest
@@ -167,7 +198,19 @@ jobs:
       - ci-docs
       - ci-scripts
     steps:
-      - name: All checks passed or skipped
-        uses: re-actors/alls-green@release/v1
-        with:
-          jobs: ${{ toJSON(needs) }}
+      - name: Verify no required job failed
+        shell: pwsh
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          $needs = $env:NEEDS | ConvertFrom-Json
+          $failed = $needs.PSObject.Properties |
+            Where-Object { $_.Value.result -in @('failure', 'cancelled') }
+          foreach ($p in $needs.PSObject.Properties) {
+            Write-Host ("{0,-22} {1}" -f $p.Name, $p.Value.result)
+          }
+          if ($failed) {
+            Write-Host "::error::Failed jobs: $($failed.Name -join ', ')"
+            exit 1
+          }
+          Write-Host "All required jobs passed or were skipped."

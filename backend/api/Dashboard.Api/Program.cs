@@ -93,13 +93,14 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
    .WithTags("ops")
    .WithSummary("Liveness probe");
 
-// Readiness probe: DB reachable + ALL THREE LISTEN channels attached (D10, D12).
+// Readiness probe: DB reachable + ALL FOUR LISTEN channels attached (D10, D12, §7 ch.4).
 // Returns 200 ready/degraded or 503 when the DB is not reachable.
 app.MapGet("/readyz", async (
     DashboardDbContext db,
     IReadinessIndicator deploymentReadiness,
     IControlReadinessIndicator controlReadiness,
     IAckReadinessIndicator ackReadiness,
+    IComponentEventReadinessIndicator componentEventReadiness,
     CancellationToken ct) =>
 {
     var dbOk = false;
@@ -113,6 +114,7 @@ app.MapGet("/readyz", async (
     var deploymentListenOk = deploymentReadiness.IsListenerConnected;
     var controlListenOk = controlReadiness.IsControlListenerConnected;
     var ackListenOk = ackReadiness.IsAckListenerConnected;
+    var componentEventListenOk = componentEventReadiness.IsComponentEventListenerConnected;
 
     var checks = new Dictionary<string, string>
     {
@@ -120,6 +122,7 @@ app.MapGet("/readyz", async (
         ["listen_deployment"] = deploymentListenOk ? "ok" : "fail",
         ["listen_control"] = controlListenOk ? "ok" : "fail",
         ["listen_acks"] = ackListenOk ? "ok" : "fail",
+        ["listen_component_events"] = componentEventListenOk ? "ok" : "fail",
     };
 
     if (!dbOk)
@@ -129,8 +132,8 @@ app.MapGet("/readyz", async (
             statusCode: StatusCodes.Status503ServiceUnavailable,
             extensions: new Dictionary<string, object?> { ["checks"] = checks });
 
-    // All three LISTEN channels must be attached for full readiness (D10, D12); any missing → degraded.
-    var status = deploymentListenOk && controlListenOk && ackListenOk ? "ready" : "degraded";
+    // All four LISTEN channels must be attached for full readiness (D10, D12, §7 ch.4); any missing → degraded.
+    var status = deploymentListenOk && controlListenOk && ackListenOk && componentEventListenOk ? "ready" : "degraded";
     return Results.Ok(new { status, checks });
 })
    .WithTags("ops")
