@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
-  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/releases"><img src="https://img.shields.io/github/v/release/kostiantyn-matsebora/deployment-dashboard" alt="Latest release"></a>
+  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/releases"><img src="https://img.shields.io/github/v/release/kostiantyn-matsebora/deployment-dashboard?display_name=tag&sort=semver" alt="Latest release"></a>
   <a href="https://kostiantyn-matsebora.github.io/deployment-dashboard/"><img src="https://img.shields.io/badge/docs-online-blue" alt="Docs"></a>
   <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20with-Claude%20Code-D97757?logo=claude&logoColor=white" alt="Built with Claude Code"></a>
 </p>
