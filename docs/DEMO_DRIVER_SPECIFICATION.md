@@ -14,7 +14,7 @@ Standalone demo-orchestration service:
 | [`demo/data/events.json`](../demo/data/events.json) | Built-in scenario seed data. |
 | [`docs/SAD.md`](SAD.md) | Domain model, `happened_at` semantics, Write API auth. |
 | [`docs/MOCK_SPECIFICATION.md`](MOCK_SPECIFICATION.md) | Control-panel reference pattern. |
-| [`docs/api/api-guidelines.md`](api/api-guidelines.md) §11 | Control-plane contract — `GET /api/control/stream` event vocabulary + `POST /api/control/events` ack contract + `GET /api/control/events` listing contract (FROZEN; consumed, not redefined). |
+| [`docs/api/api-guidelines.md`](api/api-guidelines.md) §11 | Control-plane contract — `GET /api/control/stream` event vocabulary + `POST /api/control/events` ack contract + `GET /api/control/events/stream` SSE contract (FROZEN; consumed, not redefined). |
 | [`docs/diagrams/reset-choreography.md`](diagrams/reset-choreography.md) | Visual reference for the reset choreography; the driver is the "Demo Driver" participant. |
 | [`docs/GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md) | GitHub emulator service — in-memory store, emulated REST surface, fixture/generator, config. |
 | [`docs/diagrams/github-emulation.md`](diagrams/github-emulation.md) | Visual reference for demo-mode topology and seed→backfill→poll sequence (§5). |
@@ -75,7 +75,8 @@ demo/driver/
     control/
       control-stream.subscriber.ts   long-lived GET /api/control/stream subscriber (fetch + ReadableStream; Last-Event-ID + heartbeat); dispatches reset-* events to the reset-coordinator AND publishes every parsed frame (including unknown types) to ControlFeed
       control-feed.ts                in-process fan-out (RxJS Subject/observable) — publishes every control-stream frame; GET /demo/control-stream subscribes to it
-      control-events-read.client.ts  GET {WRITE_API_URL}/api/control/events read client with query passthrough (component_id, event_type, since, cursor, limit)
+      component-events.subscriber.ts long-lived GET /api/control/events/stream SSE subscriber (fetch+ReadableStream; Last-Event-ID + exponential backoff); fans frames into ComponentEventFeed
+      component-event-feed.ts        in-process fan-out (RxJS Subject/observable) — publishes every component-event frame; GET /demo/control-events subscribes to it
       reset-coordinator.ts           reset state machine: on reset-initiated → block /demo/ + stop work + ack; on reset-completed → unblock + post running; local GateMaxTtl safety unblock
       control-events.client.ts       POST /api/control/events (X-Api-Key + X-Component-Id: demo-driver) — reset-ack + status component events
     scenarios/
@@ -97,7 +98,8 @@ demo/driver/
     control-api.client.spec.ts
     control-stream.subscriber.spec.ts
     control-feed.spec.ts
-    control-events-read.client.spec.ts
+    component-events.subscriber.spec.ts
+    component-event-feed.spec.ts
     reset-coordinator.spec.ts
     control-events.client.spec.ts
     random-event-generator.spec.ts
@@ -323,29 +325,38 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 
 **Rationale.** The driver holds the single authenticated upstream connection (`X-Control-API-Key`); the browser never sees the key and N panels share one upstream subscription. Degrades gracefully when the upstream has no control stream (e.g. the mock): the feed simply stays empty.
 
-### 4.9 Component event feed (proxy) — `GET /demo/control-events`
+### 4.9 Component event feed (SSE) — `GET /demo/control-events`
 
 | Method · Path | Response |
 |---|---|
-| `GET /demo/control-events` | Upstream `ComponentEventPage` JSON |
+| `GET /demo/control-events` | `text/event-stream` |
 
-Proxies `GET {WRITE_API_URL}/api/control/events`, passing through query params:
+Re-broadcasts every frame the driver's component-events SSE subscriber receives from `GET /api/control/events/stream` (§4.9 subscriber). Mirrors the `GET /demo/control-stream` pattern (§4.8) exactly.
 
-| Param | Forwarded | Notes |
-|---|---|---|
-| `component_id` | yes | Filter by component. |
-| `event_type` | yes | Filter by event type. |
-| `since` | yes | RFC 3339 lower bound. |
-| `cursor` | yes | Cursor pagination. |
-| `limit` | yes | 1–200; default 50 (upstream default). |
+**Subscriber** (`component-events.subscriber.ts`):
+- A long-lived service holds an open `GET {WRITE_API_URL}/api/control/events/stream` using `fetch()` + `ReadableStream` (NOT browser `EventSource` — permits future custom headers and uniform reconnect logic).
+- Honors `Last-Event-ID` on reconnect; exponential backoff on connection failure.
+- Fans each received `ComponentEventRecord` frame into an in-process `ComponentEventFeed` (RxJS Subject/observable).
+- **Graceful degradation.** If the upstream is unreachable, the subscriber logs and retries — never crashes the driver.
 
-Returns the upstream `ComponentEventPage` body verbatim: `{ items: ComponentEventRecord[], next_cursor }`.
+**Re-broadcast** (`GET /demo/control-events`):
+- Each panel `EventSource` connection subscribes to `ComponentEventFeed`.
+- Named frames carry `event: component` and the `ComponentEventRecord` JSON as data; `: ping` heartbeat every 15 s.
+- **No history replay** — fresh panel connect starts empty; fills as events arrive from the live stream.
+- **Exempt from reset control-dimming** — feed continues while `reset_state == blocked`; data surface, not an interactive control (same pattern as §4.8).
 
-- **Read-only** — no state mutation.
-- **Exempt from reset control-dimming** — proxy continues while `reset_state == blocked`; it is a data feed, not an interactive control.
-- Non-2xx upstream responses are surfaced to the caller as-is.
+Wire example:
+```
+: ping
 
-**Rationale.** The driver has no push channel for other components' events; the panel polls this proxy. Mirrors the upstream listing's 2 h retention + filters. Consistent proxying avoids cross-origin / gateway-path issues.
+event: component
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","component_id":"demo-driver","event_type":"reset-ack","state":"paused","occurred_at":"2026-05-31T10:00:01Z"}
+
+event: component
+data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","component_id":"dashboard-fetcher","event_type":"status","state":"running","occurred_at":"2026-05-31T10:00:12Z"}
+```
+
+**Rationale.** The driver holds the single upstream connection; N panels share one upstream subscription. Same-origin re-broadcast avoids cross-origin / gateway-path issues. Symmetric with `GET /demo/control-stream` (§4.8).
 
 ### 4.10 Liveness aggregate — `GET /demo/health`
 
@@ -481,7 +492,7 @@ Source: `demo/data/events.json#events` (47 events).
 | **API** | 4 | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
 | **Deployments** | 5 | Real-time `GET /demo/deployments-stream` SSE feed (§4.11) — proxies `GET /api/events/stream`; all pushers (demo-driver, fetcher, any); `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
 | **Reset (system)** | 6 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only. |
-| **Events** | 7 | Merged feed sourced from BOTH `GET /demo/control-stream` (§4.8 SSE) AND `GET /demo/control-events` (§4.9 poll); rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `● LIVE` / `● RECONNECTING` badge; **Clear** button. Persists latest 20 rows to `localStorage`; hydrates on page load (control-stream has no server replay — localStorage restores those rows; hydrated component rows dedup-by-id against the re-poll); **Clear** empties localStorage. Stays live during reset. |
+| **Events** | 7 | Merged feed sourced from BOTH `GET /demo/control-stream` (§4.8 SSE) AND `GET /demo/control-events` (§4.9 SSE); `EventSource` on each; rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `● LIVE` / `● RECONNECTING` badge; **Clear** button. Fresh connect starts empty — fills as events arrive (no server replay on either feed). Persists latest 20 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
 
 **GitHub Emulator card.** All panel calls go to `/demo/github/*` (the proxy — §5). The Seed sub-section and Live sub-section are interactive controls — dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; §5.1). The Store sub-section is a data surface and stays live.
 
@@ -508,7 +519,7 @@ Per-feed row mapping:
 **localStorage persistence.**
 - Deployments: latest **10** rows (by `happened_at` DESC); trimmed on every append.
 - Events: latest **20** rows (by timestamp DESC, across both kinds); trimmed on every merge+sort.
-- Hydration on page load: both feeds restore from `localStorage` before the first network response arrives. Hydrated component rows (Events feed) are deduped-by-id against the initial `GET /demo/control-events` poll result. Hydrated control-stream rows have no server counterpart to dedup against (no replay) — they are kept as-is.
+- Hydration on page load: both feeds restore from `localStorage` before the first network response arrives. Neither feed has server replay — `localStorage` is the sole source of historical rows on load. Incoming live frames are deduped by `id` on merge.
 - **Clear** on a feed card: empties the in-memory list AND removes that feed's `localStorage` key; the feed stays empty after refresh.
 
 **Reset blocking (controls only — no overlay).** While `reset_state == blocked` (§4.7):
@@ -525,7 +536,7 @@ Panel behaviour:
 - Calls `POST /demo/emit` on Live Emission Enable/Disable.
 - Calls `POST /demo/api-reset` on Reset State button.
 - Subscribes to `GET /demo/deployments-stream` (§4.11) for the Deployments feed.
-- Subscribes to `GET /demo/control-stream` AND polls `GET /demo/control-events` (5 s cadence) for the merged Events feed; merges and deduplicates by `id`, sorts datetime DESC.
+- Subscribes to `GET /demo/control-stream` (§4.8) AND `GET /demo/control-events` (§4.9) via `EventSource` for the merged Events feed; merges and deduplicates by `id`, sorts datetime DESC.
 - `GET /demo/deployments-stream`, `GET /demo/control-stream`, and `GET /demo/control-events` are data feeds — live throughout reset and exempt from reset control-dimming.
 
 ---
@@ -558,14 +569,14 @@ Panel behaviour:
 | Unit | `write-api.client.spec.ts` | Retry on `5xx` (3 attempts); no retry on `4xx`; `X-Api-Key` + `X-Progress-Reporter` headers |
 | Unit | `control-api.client.spec.ts` | Single attempt (no retry); `X-Control-API-Key` header; `ok=true` on 2xx; `ok=false` on 4xx/5xx/network |
 | Unit | `random-event-generator.spec.ts` | All required wire fields present; status in valid enum; `happened_at` in the past; unique `deployment_id`s; correct count |
-| Unit | `demo.controller.spec.ts` | All endpoints: status, scenarios, ingest, ingest/stop, emit GET/POST, api-reset, reset; state transitions; NotFoundException on missing scenario; `/demo/` control calls return `503` + `Retry-After` while `reset_state == blocked`, while `GET /demo/status` still answers (blocked state); `GET /demo/control-stream` emits frames pushed to ControlFeed and is NOT blocked during reset; `GET /demo/control-events` proxies the upstream listing and is NOT blocked during reset |
+| Unit | `demo.controller.spec.ts` | All endpoints: status, scenarios, ingest, ingest/stop, emit GET/POST, api-reset, reset; state transitions; NotFoundException on missing scenario; `/demo/` control calls return `503` + `Retry-After` while `reset_state == blocked`, while `GET /demo/status` still answers (blocked state); `GET /demo/control-stream` emits frames pushed to ControlFeed and is NOT blocked during reset; `GET /demo/control-events` re-broadcasts SSE from ComponentEventFeed and is NOT blocked during reset |
 | Unit | `control-feed.spec.ts` | Every parsed frame (known + unknown type) is published to subscribers; multiple subscribers each receive all frames; late subscriber gets only post-subscription frames (no replay) |
-| Unit | `control-events-read.client.spec.ts` | All five query params passed through verbatim; upstream `ComponentEventPage` body returned verbatim; upstream non-2xx surfaced to caller |
+| Unit | `component-events.subscriber.spec.ts` | Parses SSE frames from `fetch()`+ReadableStream; reconnects with `Last-Event-ID`; connect failure logs + retries and does NOT crash; each received frame published to `ComponentEventFeed`; exponential backoff applied on reconnect |
 | Unit | `control-events.client.spec.ts` | `reset-ack` POST carries `X-Api-Key` + `X-Component-Id: demo-driver` + correct body (`event_type: reset-ack`, `state: paused`, `payload.reset_id`); `status`/`running` POST shape; component id from `COMPONENT_ID` |
 | Unit | `control-stream.subscriber.spec.ts` | Parses SSE frames from `fetch()`+ReadableStream; reconnects with `Last-Event-ID`; connect failure (no control stream, e.g. mock) logs + retries and does NOT crash; unknown `event_type` is a no-op; dispatches `reset-initiated`/`reset-completed` to the coordinator; publishes every parsed frame (known + unknown) to ControlFeed |
 | Unit | `reset-coordinator.spec.ts` | On `reset-initiated`: stops ingest/run, disables emit, enters `blocked`, acks (`paused` + `reset_id`); `reset-started` = no-op; on `reset-completed`: unblocks, posts `status`/`running` with `reset_id`, returns to idle, does NOT auto-restart; local `RESET_GATE_MAX_TTL_MS` safety unblock fires when no `reset-completed` arrives (no `running` posted) |
 | Integration | `demo.e2e.spec.ts` | Start driver against mock; `POST /demo/ingest { dataset: "demo" }`; poll until `state == done`; assert `GET /api/services` returns ≥ 1 service |
-| Integration | `reset-cycle.e2e.spec.ts` | Full reset cycle against a **real** `Dashboard.Api`: trigger `POST /api/control/reset`; assert the driver acks `reset-initiated` (component event visible via `GET /api/control/events`), `/demo/` calls return `503` while blocked, and on `reset-completed` the driver unblocks + posts `status`/`running` and returns to idle |
+| Integration | `reset-cycle.e2e.spec.ts` | Full reset cycle against a **real** `Dashboard.Api`: trigger `POST /api/control/reset`; assert the driver acks `reset-initiated` (component event visible via `GET /api/control/events/stream`), `/demo/` calls return `503` while blocked, and on `reset-completed` the driver unblocks + posts `status`/`running` and returns to idle |
 | Unit | `github-proxy.controller.spec.ts` | All five proxy routes (`status`, `seed`, `clear`, `emit` GET, `emit` POST) forward request body + response body verbatim to `GITHUB_EMULATOR_URL/_github/*`; `POST` mutator routes return `503` while `reset_state == blocked`; `GET` routes are NOT blocked; non-2xx upstream responses surfaced as-is |
 | Unit | `github-proxy.client.spec.ts` | HTTP client constructs correct upstream URL; passes body through; surfaces upstream status code |
 | Unit | `health.controller.spec.ts` | `GET /demo/health` returns `{ driver:"up", api, emulator, fetcher }`; probes run in parallel; `2xx` upstream → `"up"`, non-2xx/unreachable → `"down"`; never blocked by reset gate; `FETCHER_URL` used for fetcher probe |
@@ -597,7 +608,7 @@ npm run start:dev
 |---|---|
 | Image | Multi-stage Dockerfile in `demo/driver/`. Stage 1: `node:lts-alpine` builds TypeScript. Stage 2: `node:lts-alpine` runs the compiled output. |
 | Gateway path | Proxied by App Gateway at `location /demo/` → `DEMO_DRIVER_UPSTREAM` (see [`GATEWAY_SPECIFICATION.md`](GATEWAY_SPECIFICATION.md)). |
-| SSE | `/demo/stream` and `/demo/deployments-stream` require the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). |
+| SSE | `/demo/stream`, `/demo/deployments-stream`, `/demo/control-stream`, and `/demo/control-events` require the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). |
 | Port | Container listens on `PORT` (default `3001`); `DEMO_DRIVER_UPSTREAM` in the gateway is `demo-driver:3001`. |
 | Panel access | Direct: `http://localhost:3001/demo/`. Via gateway: `http://gateway/demo/`. |
 

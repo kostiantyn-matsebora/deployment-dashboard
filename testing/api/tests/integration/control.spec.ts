@@ -1,15 +1,16 @@
 /**
  * Control surface (openapi.yaml §control):
- *   POST /api/control/reset     — X-Control-API-Key, destructive (async 202)
- *   GET  /api/control/stream    — X-Control-API-Key, SSE orchestration stream
- *   POST /api/control/events    — X-Api-Key + X-Component-Id
- *   GET  /api/control/events    — unauthenticated listing
+ *   POST /api/control/reset          — X-Control-API-Key, destructive (async 202)
+ *   GET  /api/control/stream         — X-Control-API-Key, SSE orchestration stream
+ *   POST /api/control/events         — X-Api-Key + X-Component-Id
+ *   GET  /api/control/events/stream  — unauthenticated SSE stream of component events
  *
  * Full reset-choreography coverage lives in reset-choreography.spec.ts.
- * This file covers auth gates, component-event rules, and GET /api/control/events.
+ * This file covers auth gates, component-event rules, and the component-events SSE stream.
  */
 import {
-  get, post, getJson, ingestEvent, resetAll, readControlSseUntil, sleep, API_KEY, CONTROL_KEY,
+  get, post, getJson, ingestEvent, resetAll, readControlSseUntil,
+  readComponentEventSseUntil, sleep, API_KEY, CONTROL_KEY,
 } from './helpers';
 
 describe('POST /api/control/reset', () => {
@@ -133,48 +134,76 @@ describe('POST /api/control/events', () => {
   });
 });
 
-describe('GET /api/control/events', () => {
-  it('returns posted component events, filterable by component_id', async () => {
+describe('GET /api/control/events/stream', () => {
+  it('stream delivers a posted component event as an `event: component` frame', async () => {
+    // Use a unique component_id so client-side matching is unambiguous even if
+    // other events are in flight (the stream has no server-side filter).
     const cid = `it-cmp-${Date.now()}`;
+
+    // Open the stream BEFORE posting so the live NOTIFY reaches us.
+    // Match client-side on event name AND component_id embedded in the data JSON.
+    const framePromise = readComponentEventSseUntil(
+      f => f.event === 'component' && !!f.data && JSON.parse(f.data).component_id === cid,
+      { timeoutMs: 20_000 },
+    );
+    await sleep(750);
+
     await post('/api/control/events',
       { event_type: 'heartbeat', state: 'running', occurred_at: new Date().toISOString() },
       { 'X-Api-Key': API_KEY, 'X-Component-Id': cid });
 
-    const body = await getJson(`/api/control/events?component_id=${cid}`);
-    expect(Array.isArray(body.items)).toBe(true);
-    expect(body.items.length).toBeGreaterThanOrEqual(1);
-    expect(body.items.every((e: any) => e.component_id === cid)).toBe(true);
-    expect(body.items[0]).toMatchObject({
-      id:         expect.any(String),
-      event_type: 'heartbeat',
-      state:      'running',
-    });
-  });
+    const frame = await framePromise;
+    expect(frame.id).toBeTruthy();
 
-  it('event_type filter narrows the listing', async () => {
-    const cid = `it-et-${Date.now()}`;
-    await post('/api/control/events',
-      { event_type: 'status', state: 'idle', occurred_at: new Date().toISOString() },
-      { 'X-Api-Key': API_KEY, 'X-Component-Id': cid });
-    await post('/api/control/events',
-      { event_type: 'error', state: 'error', occurred_at: new Date().toISOString() },
-      { 'X-Api-Key': API_KEY, 'X-Component-Id': cid });
-
-    const body = await getJson(`/api/control/events?component_id=${cid}&event_type=error`);
-    expect(body.items.length).toBe(1);
-    expect(body.items[0].event_type).toBe('error');
+    // data must be a ComponentEventRecord with snake_case fields (§11 wire example).
+    const data = JSON.parse(frame.data as string);
+    expect(data.id).toBeTruthy();
+    expect(data.component_id).toBe(cid);
+    expect(data.event_type).toBe('heartbeat');
+    expect(data.state).toBe('running');
+    expect(data.occurred_at).toBeTruthy();
+    expect(data.received_at).toBeTruthy();
   });
 
   it('reset does NOT purge component events (D14: only deployment_events + fetcher_state are cleared)', async () => {
     // API_SPECIFICATION.md D14: reset clears only deployment_events + fetcher_state.
-    // component_events are left to the 2-hour retention job.
+    // component_events survive a reset and remain in the SSE replay window (2 h retention).
+
+    // Step 1: post a baseline event and capture its frame id as the replay cursor.
+    const baselineFramePromise = readComponentEventSseUntil(
+      f => f.event === 'component' && !!f.id,
+      { timeoutMs: 20_000 },
+    );
+    await sleep(750);
+    await post('/api/control/events',
+      { event_type: 'status', state: 'running', occurred_at: new Date().toISOString() },
+      { 'X-Api-Key': API_KEY, 'X-Component-Id': `it-baseline-${Date.now()}` });
+    const baselineFrame = await baselineFramePromise;
+    const cursorId = baselineFrame.id as string;
+
+    // Step 2: post the event we want to survive the reset, with a unique cid.
     const cid = `it-rst-${Date.now()}`;
+    const eventFramePromise = readComponentEventSseUntil(
+      f => f.event === 'component' && !!f.data && JSON.parse(f.data).component_id === cid,
+      { timeoutMs: 20_000 },
+    );
+    await sleep(750);
     await post('/api/control/events',
       { event_type: 'status', state: 'running', occurred_at: new Date().toISOString() },
       { 'X-Api-Key': API_KEY, 'X-Component-Id': cid });
+    await eventFramePromise;
+
+    // Step 3: drive a full reset cycle.
     await resetAll();
-    const body = await getJson(`/api/control/events?component_id=${cid}`);
-    // Component events survive a reset — they are purged only by the 2h retention job.
-    expect(body.items.length).toBeGreaterThanOrEqual(1);
+
+    // Step 4: reconnect with Last-Event-ID: cursorId — E must be replayed, proving
+    // the component_events row was NOT cleared by the reset (D14).
+    const replayedFrame = await readComponentEventSseUntil(
+      f => f.event === 'component' && !!f.data && JSON.parse(f.data).component_id === cid,
+      { lastEventId: cursorId, timeoutMs: 20_000 },
+    );
+    const data = JSON.parse(replayedFrame.data as string);
+    expect(data.component_id).toBe(cid);
+    expect(data.event_type).toBe('status');
   });
 });

@@ -33,7 +33,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | `X-Progress-Reporter` | request | optional on `POST /api/deployments` | Ingest attribution. Format: `<emitter>/<adapter>`. Stored alongside the deployment event row. |
 | `Content-Type` | request | every body-bearing call | `application/json; charset=utf-8` |
 | `Accept` | request | optional | `application/json`, or `text/event-stream` for SSE endpoints. |
-| `Last-Event-ID` | request | SSE reconnect (deployment stream **and** control stream) | Last seen event id; server replays everything strictly greater within retention window. |
+| `Last-Event-ID` | request | SSE reconnect (deployment stream, control stream, **and** component-events stream) | Last seen event id; server replays everything strictly greater within retention window. |
 | `Retry-After` | response | `429`, `503` | Integer seconds. |
 | `ETag` / `If-None-Match` | both | `GET /api/matrix` | Weak ETag; SPA SHOULD send `If-None-Match` on poll-mode fallback. |
 
@@ -61,7 +61,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | `POST /api/control/events` | `X-Api-Key` | Components share the existing ingest key — no additional credential needed. |
 | `POST /api/control/reset` | `X-Control-API-Key` | Destructive operation (D8); ingest key grants no control access. |
 | `GET /api/control/stream` | `X-Control-API-Key` | Control stream is for trusted internal components; separates subscription privilege from ingest. |
-| `GET /api/control/events` | none | Read-only observability; consistent with other GET endpoints. |
+| `GET /api/control/events/stream` | none | Same as other reads / browser EventSource; observability. |
 | `GET /api/matrix`, `GET /api/deployments`, `GET /api/services`, `GET /api/environments` | none | Internal-only network (NFR-04); SPA never holds a secret. |
 | `GET /api/events/stream` | none | Same as other reads; auth would defeat browser EventSource. |
 | `GET /healthz`, `GET /readyz` | none | Probe surfaces. |
@@ -75,9 +75,8 @@ The dev/local fake key is configured in the API container's environment and is *
 - **Cursor pagination only.** Endpoints that paginate accept `cursor` + `limit`; response carries `next_cursor` (nullable).
 - **No `offset` / `page`.**
 - **Cursors are opaque** base64 blobs — clients MUST NOT parse them.
-- **Default `limit` = 100, max = 500.** Out-of-range → `422`. (`GET /api/control/events` default = 50, max = 200.)
+- **Default `limit` = 100, max = 500.** Out-of-range → `422`.
 - **Default sort** for `GET /api/deployments` is `happened_at DESC` then `id DESC` as a tiebreaker (stable for cursor resume).
-- **Default sort** for `GET /api/control/events` is `received_at DESC` then `id DESC`.
 - **Filtering** is via flat query params. No JSON filter DSL.
 - `since` / `until` are RFC 3339 UTC timestamps; the server treats `[since, until)`.
 
@@ -122,7 +121,7 @@ For `422` payload-validation failures, the body additionally carries an `errors[
 | `413 Payload Too Large` | Fetcher cursor or component event payload over 8 KiB. |
 | `422 Unprocessable Entity` | Schema-level validation failed; or missing/invalid `X-Component-Id` on `POST /api/control/events`. |
 | `429 Too Many Requests` | Future rate-limit slot. `Retry-After` always present. |
-| `503 Service Unavailable` | DB unreachable; any LISTEN channel not attached (`deployment_events`, `control_events`, `component_acks`). |
+| `503 Service Unavailable` | DB unreachable; any LISTEN channel not attached (`deployment_events`, `control_events`, `component_acks`, `component_events`). |
 
 **No `409 Conflict` on ingest.** The store is append-only — duplicates are not a server-side concern.
 
@@ -190,7 +189,7 @@ flowchart LR
     Component -->|"GET /api/control/stream · X-Control-API-Key<br/>subscribe: receive orchestration events"| API
     Component -->|"POST /api/control/events · X-Api-Key<br/>report: post status / operational events"| API
     Operator -->|"POST /api/control/reset · X-Control-API-Key<br/>admin: start reset choreography (202)"| API
-    Anyone -->|"GET /api/control/events · (no auth)<br/>observe: read component events (2 h)"| API
+    Anyone -->|"GET /api/control/events/stream · (no auth)<br/>observe: SSE stream of component events (2 h)"| API
 ```
 
 Every arrow originates at the caller. The SSE stream is a **response to a component-initiated GET** — the API emits into it, but the connection is inbound.
@@ -270,13 +269,39 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 | `error` | Component encountered an error; `state` will be `error` |
 | `reset-ack` | Drain-complete ack for a `reset-initiated` event; sent with `state: paused` and `payload.reset_id` = the initiating event id |
 
+### SSE component-events stream (`GET /api/control/events/stream`)
+
+Carbon copy of the deployment stream (§7) — same SSE pattern, component payload instead of deployment payload.
+
+| Property | Value |
+|---|---|
+| Auth | none — browser/observability read surface, same trust tier as `GET /api/events/stream` |
+| Event name | `component` — each `data:` frame carries one full `ComponentEventRecord` JSON object |
+| `id:` | the record's UUIDv7; clients reconnect with `Last-Event-ID` |
+| **Fresh connect** | no `Last-Event-ID` → live only; **no history replay** |
+| **`Last-Event-ID` replay** | server replays all records with `id` strictly greater than the supplied value within the **2 h** retention window, then attaches live |
+| Heartbeat | `: ping` comment every 15 s |
+| Filter | none — the only request input is the `Last-Event-ID` header |
+| Fan-out | PostgreSQL `LISTEN/NOTIFY`; each API instance broadcasts only to its own connected clients (NFR-05) |
+
+See §7 for the shared SSE pattern.
+
+**Wire example:**
+```
+: ping
+id: 01J9F4WZK3W9G2T6X4QH3DKQF5
+event: component
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","component_id":"dashboard-fetcher","event_type":"status","state":"running","detail":"Polling github-actions adapter at 30 s interval","occurred_at":"2026-05-31T10:00:00Z","received_at":"2026-05-31T10:00:00Z","payload":{"adapter":"github-actions","events_this_hour":42}}
+```
+
 ### Readiness probe
 
-`GET /readyz` checks all four conditions:
+`GET /readyz` checks all five conditions:
 1. DB reachable.
 2. `deployment_events` LISTEN channel attached.
 3. `control_events` LISTEN channel attached.
 4. `component_acks` LISTEN channel attached (reset ack fan-in — D12).
+5. `component_events` LISTEN channel attached (component-events stream broadcaster).
 
 Any failing check → `503 Service Unavailable`.
 
@@ -287,7 +312,7 @@ Any failing check → `503 Service Unavailable`.
 | `deployment_events` | 365 days (configurable, ≥ 90 d) | Audit + history drawer |
 | `fetcher_state` | Permanent (upsert) | Cursor must survive restarts |
 | `control_stream_events` | **2 hours** | Short replay window for reconnecting components |
-| `component_events` | **2 hours** | Live health monitoring only |
+| `component_events` | **2 hours** | SSE replay window + live health monitoring |
 
 ### Reconciliation loop (reference pattern)
 

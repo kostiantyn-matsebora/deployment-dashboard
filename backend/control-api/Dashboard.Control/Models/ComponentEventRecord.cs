@@ -4,7 +4,7 @@ using Dashboard.Shared.Entities;
 namespace Dashboard.Control.Models;
 
 /// <summary>
-/// Response item for <c>GET /api/control/events</c> (OpenAPI <c>ComponentEventRecord</c>).
+/// Payload emitted on the <c>component</c> frame of <c>GET /api/control/events/stream</c> (OpenAPI <c>ComponentEventRecord</c>).
 /// Serialised with the global snake_case policy. <see cref="Payload"/> is emitted as a raw
 /// JSON object (not a quoted string) by reparsing the stored verbatim blob.
 /// </summary>

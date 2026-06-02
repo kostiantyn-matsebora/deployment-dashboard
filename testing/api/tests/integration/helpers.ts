@@ -236,6 +236,26 @@ export async function readSseUntil(
   }
 }
 
+// ── Component-events SSE helper ───────────────────────────────────────────────
+
+/**
+ * Open GET /api/control/events/stream (unauthenticated — no X-Api-Key,
+ * no X-Control-API-Key) and read frames until `match` returns true or timeout.
+ * Returns the matched frame; aborts before resolving.
+ *
+ * Pass `lastEventId` to replay from a known cursor (Last-Event-ID header).
+ * Mirrors readControlSseUntil shape exactly; no auth headers are added.
+ */
+export function readComponentEventSseUntil(
+  match: (frame: SseFrame) => boolean,
+  opts: { timeoutMs?: number; lastEventId?: string } = {},
+): Promise<SseFrame> {
+  const { timeoutMs = 20_000, lastEventId } = opts;
+  const headers: Headers = {};
+  if (lastEventId) headers['Last-Event-ID'] = lastEventId;
+  return readSseUntil('/api/control/events/stream', match, { headers, timeoutMs });
+}
+
 // ── Control-stream SSE helpers ────────────────────────────────────────────────
 
 /**

@@ -5,7 +5,7 @@
 ✔ Add views of control api and components event streams @done(26-05-31 22:40)
 ✔ Create adopter documentation and gh pages @done(26-06-01)
 ☐ Expose scalar UI via gateway
-☐ Add logo wherever its suitable
-☐ Make component events stream instead of polling
+✔ Add logo wherever its suitable @done(26-06-02 03:27)
+✔ Make component events stream instead of polling @done(26-06-02)
 ☐ Add corellation ID to the events to corellate them with command and each other
 ✔ Create release lifecycle for solution @done(26-06-01 22:27)
