@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.2.1] - 2026-06-03
+
+### Fixed
+
+- **Gateway startup in non-demo profiles.** The gateway nginx template references `${DEMO_DRIVER_UPSTREAM}` (listed in `NGINX_ENVSUBST_FILTER`), but the base compose only set it under the `demo` profile — so `full` / `full-pull` / `standalone*` left the literal unsubstituted and nginx refused to start (`unknown variable "demo_driver_upstream"`). The variable is now defaulted in the gateway environment; `/demo/*` still returns 502 in non-demo profiles, as intended.
+- Local build compose (`docker-compose.local.yaml`): `demo-driver` and `github-emulator` are now gated behind their own profiles, so a production-like profile (`full` / `full-pull` / `standalone`) runs locally-built images without starting demo components.
+
+### Documentation
+
+- Install guide reworked for adopters — the local-file (curl) path is now the recommended way to deploy production / secret-bearing profiles (`oci:// up` does not load `.env` or `--env-file`, a Docker Compose limitation); the `oci://` one-liner remains the demo path in the Quickstart.
+- Pull-mode (Fetcher) install elevated with its security rationale — the Fetcher is outbound-only, suited to locked-down networks that forbid inbound WAN traffic — plus GitHub token-scope guidance. The "Why Deployment Dashboard?" highlight notes the same.
+
+
 ## [0.2.0] - 2026-06-02
 
 ### Added
