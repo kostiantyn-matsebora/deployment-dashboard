@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE"><img src="https://img.shields.io/github/license/kostiantyn-matsebora/deployment-dashboard" alt="License"></a>
-  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/releases"><img src="https://img.shields.io/github/v/release/kostiantyn-matsebora/deployment-dashboard" alt="Latest release"></a>
+  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/releases"><img src="https://img.shields.io/github/v/release/kostiantyn-matsebora/deployment-dashboard?display_name=tag&sort=semver" alt="Latest release"></a>
   <a href="https://kostiantyn-matsebora.github.io/deployment-dashboard/"><img src="https://img.shields.io/badge/docs-online-blue" alt="Docs"></a>
   <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20with-Claude%20Code-D97757?logo=claude&logoColor=white" alt="Built with Claude Code"></a>
 </p>
@@ -97,10 +97,10 @@ curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-da
 cp .env.example .env
 # edit .env — set API_KEY, POSTGRES_USER, POSTGRES_PASSWORD (+ POSTGRES_HOST for standalone)
 
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.1.0 --profile full up -d
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
 ```
 
-**Shapes:** `standalone` (external PostgreSQL) or `full` (bundled PostgreSQL); add `-pull` to either for the optional Fetcher. `demo` is for evaluation only. The gateway (`:8080`) is the only published port. Pin a version via `DASHBOARD_VERSION=0.1.0` in `.env` (no leading `v`).
+**Shapes:** `standalone` (external PostgreSQL) or `full` (bundled PostgreSQL); add `-pull` to either for the optional Fetcher. `demo` is for evaluation only. The gateway (`:8080`) is the only published port. Pin a version via `DASHBOARD_VERSION=0.2.0` in `.env` (no leading `v`).
 
 [Install & deploy →](docs/guide/install.md)
 

@@ -1,13 +1,12 @@
 import {
-  Controller, Get, Post, Param, Body, Query,
+  Controller, Get, Post, Param, Body,
   Res, HttpCode, HttpStatus, NotFoundException, OnModuleDestroy,
-  HttpException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Subscription } from 'rxjs';
 import { DemoService, IngestOptions } from './demo.service';
 import { ControlFeed } from '../control/control-feed';
-import { ControlEventsReadClient, ControlEventsQuery } from '../control/control-events-read.client';
+import { ComponentEventFeed } from '../control/component-event-feed';
 import { PANEL_HTML, FAVICON_SVG } from '../ui/panel';
 
 /** RFC 9457 problem detail for reset-in-progress (§4.7). */
@@ -22,13 +21,14 @@ function resetInProgressProblem(retryAfterSeconds: number): Record<string, unkno
 
 @Controller('demo')
 export class DemoController implements OnModuleDestroy {
-  private readonly sseConnections        = new Set<Response>();
-  private readonly controlSseConnections = new Set<Response>();
+  private readonly sseConnections            = new Set<Response>();
+  private readonly controlSseConnections     = new Set<Response>();
+  private readonly compEventSseConnections   = new Set<Response>();
 
   constructor(
-    private readonly demoService:               DemoService,
-    private readonly controlFeed:               ControlFeed,
-    private readonly controlEventsReadClient:   ControlEventsReadClient,
+    private readonly demoService:          DemoService,
+    private readonly controlFeed:          ControlFeed,
+    private readonly componentEventFeed:   ComponentEventFeed,
   ) {}
 
   onModuleDestroy() {
@@ -36,6 +36,9 @@ export class DemoController implements OnModuleDestroy {
       try { res.end(); } catch {}
     }
     for (const res of this.controlSseConnections) {
+      try { res.end(); } catch {}
+    }
+    for (const res of this.compEventSseConnections) {
       try { res.end(); } catch {}
     }
   }
@@ -286,21 +289,44 @@ export class DemoController implements OnModuleDestroy {
     });
   }
 
-  // ── Component event feed (proxy) ──────────────────────────────────────────
+  // ── Component event feed (SSE) ───────────────────────────────────────────
 
   /**
-   * GET /demo/control-events — proxy for GET /api/control/events.
+   * GET /demo/control-events — SSE fan-out of upstream component-event frames.
    *
-   * Forwards whitelisted query params and returns the upstream ComponentEventPage
-   * verbatim.  Non-2xx upstream responses are mirrored to the caller.
-   * Never blocked during reset (§4.9).
+   * Re-broadcasts every frame received from GET /api/control/events/stream via
+   * the in-process ComponentEventFeed subject.  Mirrors the GET /demo/control-stream
+   * pattern (§4.8) exactly.  Never blocked during reset (§4.9).
+   * No history replay — only frames received after the panel connects.
+   * Wire format: named `component` events + 15 s heartbeat (§4.9).
    */
   @Get('control-events')
-  async controlEvents(
-    @Query() query: ControlEventsQuery,
-    @Res({ passthrough: false }) res: Response,
-  ): Promise<void> {
-    const { status, body } = await this.controlEventsReadClient.list(query);
-    res.status(status).json(body);
+  controlEvents(@Res() res: Response): void {
+    res.setHeader('Content-Type',      'text/event-stream');
+    res.setHeader('Cache-Control',     'no-cache, no-transform');
+    res.setHeader('Connection',        'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    this.compEventSseConnections.add(res);
+
+    const heartbeat = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch {}
+    }, 15_000);
+
+    const sub: Subscription = this.componentEventFeed.frames$.subscribe(frame => {
+      try {
+        if (frame.type) {
+          res.write(`event: ${frame.type}\n`);
+        }
+        res.write(`data: ${frame.data ?? ''}\n\n`);
+      } catch {}
+    });
+
+    res.on('close', () => {
+      clearInterval(heartbeat);
+      sub.unsubscribe();
+      this.compEventSseConnections.delete(res);
+    });
   }
 }
