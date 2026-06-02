@@ -109,6 +109,57 @@ To pin to a specific release, replace `main` in the URLs with the release tag (e
 | `full-pull` | `full` + Fetcher (pull-mode ingestion). | + `GITHUB_REPOS` / `GITHUB_TOKEN` | `docker compose --profile full-pull up` |
 | `demo` | Everything + Demo Driver + GitHub Emulator + Fetcher. Zero-config evaluation. | _(none — insecure defaults)_ | `docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up` |
 
+## Deploy with the Fetcher (pull mode)
+
+Pull mode is opt-in. Use it when you can't add a push step to your pipelines. The [Fetcher](../FETCHER_SPECIFICATION.md) polls the GitHub Deployments REST API (read-only against GitHub) and posts events through the same `POST /api/deployments` ingest contract as any CI/CD pipeline step. Only the `-pull` profiles (`full-pull`, `standalone-pull`) start it.
+
+### Required env
+
+| Var | Required | Value |
+|---|---|---|
+| `GITHUB_TOKEN` | **yes** | GitHub PAT or App token — see token-scope guidance below. |
+| `GITHUB_REPOS` | **yes** | Comma-separated `owner/repo` list, e.g. `acme/api,acme/web`. |
+
+All other fetcher knobs (base URL, version source, rate-limit budget, poll interval) are optional with sane defaults — see [Configuration → Fetcher: pull mode](./configuration.md#fetcher-pull-mode).
+
+### Token scope
+
+!!! note "Minimum GitHub token scopes"
+    **Public repos (recommended minimum):**
+
+    - *Classic PAT* — **no scopes selected**. A scopeless token still authenticates and grants read access to public data at 5,000 req/hr. Do **not** select `public_repo` — that grants write.
+    - *Fine-grained PAT* — **Repository access: Public repositories (read-only)**. This bundles Contents, Deployments, and Actions read — everything the fetcher needs.
+
+    **Private repos:**
+
+    - *Fine-grained PAT* — scope to the specific repos with **Contents: Read**, **Deployments: Read**, and **Actions: Read** (Actions read is only required when `GITHUB_VERSION_SOURCE=artifact:…`).
+    - *Classic PAT* — `repo` scope.
+
+    The fetcher is strictly read-only — it never needs write or admin scopes.
+
+### Start with pull mode
+
+Add `GITHUB_TOKEN` and `GITHUB_REPOS` to your `.env`, then use the shell-env workaround from [Option A](#option-a-oci-artifact-recommended) (required on the `oci://` path):
+
+```powershell
+# .env additions
+# GITHUB_TOKEN=github_pat_…
+# GITHUB_REPOS=acme/api,acme/web
+
+# Load .env into the shell session
+Get-Content .\.env | ForEach-Object {
+  if ($_ -match '^\s*([^#][^=]*?)\s*=\s*(.*)$') {
+    [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim())
+  }
+}
+# Start the full stack with the Fetcher
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full-pull up -d
+```
+
+For `standalone-pull` (external PostgreSQL), the flow is identical — replace `--profile full-pull` with `--profile standalone-pull` and ensure `POSTGRES_HOST` is set in `.env`.
+
+> **First poll cycle.** The first start triggers a bounded initial backfill (see [Fetcher Specification §2, F7/F13](../FETCHER_SPECIFICATION.md)), so the matrix populates after a poll cycle or two — not immediately.
+
 ## Minimal production start
 
 ```bash
