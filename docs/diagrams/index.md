@@ -3,9 +3,14 @@ title: Diagrams
 shortTitle: Diagrams
 intro: 'Mermaid process diagrams — visual references for cross-component choreographies; authoritative behaviour stays in the spec docs.'
 children:
+  - /architecture-c4
   - /reset-choreography
   - /github-emulation
 ---
+
+## Contents — `architecture-c4.md`
+
+- [Component diagram (C4)](./architecture-c4.md#component-diagram-c4)
 
 ## Contents — `reset-choreography.md`
 
