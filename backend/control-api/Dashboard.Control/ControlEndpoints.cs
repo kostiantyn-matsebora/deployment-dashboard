@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 using Dashboard.Control.Filters;
 using Dashboard.Control.Models;
 using Dashboard.Control.Notifiers;
-using Dashboard.Control.Queries;
 using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
 using Dashboard.Control.Sse;
@@ -60,11 +59,11 @@ public static class ControlEndpoints
            .ProducesProblem(StatusCodes.Status413RequestEntityTooLarge)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
-        app.MapGet("/api/control/events", HandleListEventsAsync)
-           .WithName("ListComponentEvents")
+        app.MapGet("/api/control/events/stream", HandleComponentEventStreamAsync)
+           .WithName("watchComponentEventStream")
            .WithTags("Control")
-           .WithSummary("List component-posted events with cursor pagination")
-           .Produces<ComponentEventPage>(StatusCodes.Status200OK);
+           .WithSummary("SSE stream of component-reported events")
+           .Produces(StatusCodes.Status200OK);
 
         return app;
     }
@@ -96,6 +95,7 @@ public static class ControlEndpoints
         [FromHeader(Name = "X-Component-Id")] string? componentId,
         IComponentEventRepository repository,
         IComponentAckNotifier ackNotifier,
+        IComponentEventNotifier componentEventNotifier,
         CancellationToken ct)
     {
         // The validation filter has already guaranteed a valid X-Component-Id before this runs;
@@ -128,7 +128,11 @@ public static class ControlEndpoints
 
         await repository.InsertAsync(entity, ct);
 
-        // For reset-ack events, NOTIFY the component_acks channel so the driving reset instance
+        // NOTIFY component_events with the new row id (id-only, §7 ch.4). The ComponentEventBroadcaster
+        // parses the id, fetches the full row, and fans it out to live SSE subscribers.
+        await componentEventNotifier.NotifyAsync(entity.Id, ct);
+
+        // For reset-ack events, also NOTIFY the component_acks channel so the driving reset instance
         // can count this ack for the active cycle (§7 ch.3, D16).
         if (body.EventType == "reset-ack" && ExtractResetId(body) is { } resetId)
             await ackNotifier.NotifyAsync(componentId, resetId, ct);
@@ -136,26 +140,65 @@ public static class ControlEndpoints
         return Results.NoContent();
     }
 
-    // ── GET /api/control/events ───────────────────────────────────────────────
+    // ── GET /api/control/events/stream (SSE) ─────────────────────────────────
 
-    private static async Task<IResult> HandleListEventsAsync(
-        [FromQuery(Name = "component_id")] string? componentId,
-        [FromQuery(Name = "event_type")] string? eventType,
-        [FromQuery] DateTimeOffset? since,
-        [FromQuery] string? cursor,
-        [FromQuery] int? limit,
+    /// <summary>
+    /// Streams component-reported events as Server-Sent Events (§7 ch.4, <c>watchComponentEventStream</c>).
+    /// On <c>Last-Event-ID</c> present: replays <c>id &gt; lastId</c> from <c>component_events</c>
+    /// (2 h window), then attaches live. Fresh connect (no header): live only.
+    /// No auth, no query filters. Event name <c>component</c>. Heartbeat `: ping` every 15 s.
+    /// </summary>
+    private static async Task HandleComponentEventStreamAsync(
+        [FromHeader(Name = "Last-Event-ID")] string? lastEventId,
+        IComponentEventBroadcaster broadcaster,
         IComponentEventRepository repository,
+        HttpContext httpContext,
         CancellationToken ct)
     {
-        var query = new ComponentEventListQuery(
-            ComponentId: componentId,
-            EventType: eventType,
-            Since: since,
-            Cursor: cursor,
-            Limit: Math.Clamp(limit ?? 50, 1, 200));
+        httpContext.Response.ContentType = "text/event-stream";
+        httpContext.Response.Headers.CacheControl = "no-cache";
+        httpContext.Response.Headers.Connection = "keep-alive";
+        httpContext.Response.Headers["X-Accel-Buffering"] = "no";
 
-        var (items, nextCursor) = await repository.ListAsync(query, ct);
-        return Results.Ok(new ComponentEventPage(items, nextCursor));
+        await httpContext.Response.Body.FlushAsync(ct);
+
+        // Replay missed events when a client reconnects with Last-Event-ID.
+        if (Guid.TryParse(lastEventId, out var resumeId))
+        {
+            var missed = await repository.GetSinceAsync(resumeId, ct);
+            foreach (var record in missed)
+                await WriteComponentSseEventAsync(httpContext, record, ct);
+        }
+
+        var reader = broadcaster.Subscribe();
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                using var heartbeatCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, heartbeatCts.Token);
+
+                bool hasData;
+                try
+                {
+                    hasData = await reader.WaitToReadAsync(linked.Token);
+                }
+                catch (OperationCanceledException) when (heartbeatCts.IsCancellationRequested && !ct.IsCancellationRequested)
+                {
+                    await WriteSsePingAsync(httpContext, ct);
+                    continue;
+                }
+
+                if (!hasData) break; // channel completed (broadcaster shutting down)
+
+                while (reader.TryRead(out var record))
+                    await WriteComponentSseEventAsync(httpContext, record, ct);
+            }
+        }
+        finally
+        {
+            broadcaster.Unsubscribe(reader);
+        }
     }
 
     // ── GET /api/control/stream (SSE) ─────────────────────────────────────────
@@ -232,6 +275,17 @@ public static class ControlEndpoints
     {
         var json = JsonSerializer.Serialize(ev, SseJsonOptions);
         var frame = $"id: {ev.Id}\nevent: {ev.Type}\ndata: {json}\n\n";
+        await httpContext.Response.WriteAsync(frame, ct);
+        await httpContext.Response.Body.FlushAsync(ct);
+    }
+
+    private static async Task WriteComponentSseEventAsync(
+        HttpContext httpContext,
+        ComponentEventRecord record,
+        CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(record, SseJsonOptions);
+        var frame = $"id: {record.Id}\nevent: component\ndata: {json}\n\n";
         await httpContext.Response.WriteAsync(frame, ct);
         await httpContext.Response.Body.FlushAsync(ct);
     }

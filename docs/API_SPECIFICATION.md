@@ -153,8 +153,8 @@ Stores operational events posted by components via `POST /api/control/events`.
 
 **Indexes**
 - PK `(id)`.
-- `(component_id, received_at DESC, id DESC)` — per-component listing + filter.
-- `(received_at DESC, id DESC)` — global listing + cursor.
+- `(component_id, received_at DESC, id DESC)` — per-component SSE replay filter.
+- `(received_at DESC, id DESC)` — global SSE replay + cursor.
 
 ### `reset_cycle` (single-row reset state, D12)
 
@@ -197,9 +197,9 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 | fetcher | `GET/PUT /api/fetcher/state/{adapter}` | `X-Api-Key` | opaque upsert; `413` > 8 KiB |
 | control | `POST /api/control/reset` | `X-Control-API-Key` | **async** (D8, D12): emit `reset-initiated` (state `idle→draining`) → `202` + `ResetAccepted{reset_id, state}`; drain + ack-or-timeout → `reset-started` (`draining→resetting`, ingest gate ON) → clear **only `deployment_events` + `fetcher_state`** (D14) → `reset-completed` (`resetting→idle`); `409` if a reset is already in flight |
 | control-stream | `GET /api/control/stream` | `X-Control-API-Key` | SSE; `event:` ∈ `reset-initiated` \| `reset-started` \| `reset-completed` (+ future types); `id:` = row id; `Last-Event-ID` replay from `control_stream_events` (2 h window); `: ping`/15 s; `?component=` filter |
-| control-events | `POST /api/control/events` | `X-Api-Key` + `X-Component-Id` | append 1 row to `component_events`; `component_id` from header (D9); `413` > 8 KiB payload; `422` on missing/invalid header → `204` |
-| control-events | `GET /api/control/events` | none | cursor page, `received_at DESC, id DESC`; filters: component_id/event_type/since; 2 h retention window |
-| ops | `GET /healthz`, `GET /readyz` | none | liveness / readiness (DB reachable + all three LISTEN channels attached: `deployment_events`, `control_events`, `component_acks` — D10, D12) |
+| control-events | `POST /api/control/events` | `X-Api-Key` + `X-Component-Id` | append 1 row to `component_events`; `component_id` from header (D9); `NOTIFY component_events <id>`; `413` > 8 KiB payload; `422` on missing/invalid header → `204` |
+| control-events-stream | `GET /api/control/events/stream` | none | SSE; `event: component`; `id:` = row id (UUIDv7); `Last-Event-ID` replay from `component_events` (2 h window); `: ping`/15 s; fresh connect = live only; no query filters |
+| ops | `GET /healthz`, `GET /readyz` | none | liveness / readiness (DB reachable + all four LISTEN channels attached: `deployment_events`, `control_events`, `component_acks`, `component_events` — D10, D12) |
 
 ---
 
@@ -218,7 +218,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 
 ## 7. SSE + LISTEN/NOTIFY
 
-Two independent channels, each served by a dedicated `IHostedService`:
+Four independent channels, each served by a dedicated `IHostedService`:
 
 ### Channel 1 — `deployment_events` (browser/SPA stream)
 
@@ -247,11 +247,22 @@ The reset orchestrator must learn when a component has drained, across API insta
 
 Only `reset-ack` events trigger the NOTIFY; ordinary `status` / `heartbeat` / `error` events do not. Acks whose `reset_id` does not match the current cycle are ignored (stale/duplicate-safe).
 
+### Channel 4 — `component_events` (component-event SSE stream)
+
+Mirrors Channel 1 (`deployment_events`) exactly, but fans out component-reported events instead of deployment events.
+
+1. `POST /api/control/events` inserts the `component_events` row, then issues `NOTIFY component_events <id>` — **id only** (NOT the full JSON; a `payload` can be up to 8 KiB, exceeding the ~8000-byte Postgres NOTIFY limit).
+2. A singleton background broadcaster `ComponentEventBroadcaster` (`IHostedService`) holds one dedicated Npgsql connection with `LISTEN component_events`. On each notification, it fetches the full row by id from the DB, then fans it out through an in-process `Channel<ComponentEventRecord>` to all open `GET /api/control/events/stream` responses.
+3. This **mirrors `DeploymentEventBroadcaster` exactly** (id-only NOTIFY → DB fetch → fan-out). It differs from `ControlEventBroadcaster` (Channel 2), which carries the whole event in the NOTIFY payload.
+4. Returns `Results.ServerSentEvents(IAsyncEnumerable<SseItem<ComponentEventRecord>>)`; `event: component`; `SseItem.EventId` = row `id`.
+5. On `Last-Event-ID`: replay `WHERE id > @last ORDER BY id` from the existing `component_events` table (already 2 h retention) — **no new table, no new migration** — then attach to the live channel.
+6. No query filters on the stream endpoint.
+
 ### `readyz` dependency
 
-All LISTEN connections must be established before `GET /readyz` returns `200`. Any missing → `503`. The new `component_acks` channel is a third required check (alongside `deployment_events` and `control_events`, D10).
+All LISTEN connections must be established before `GET /readyz` returns `200`. Any missing → `503`. Four required checks: `deployment_events`, `control_events`, `component_acks`, and `component_events` (D10).
 
-> Two intentional orderings across both streams: **listing/pagination** sorts `happened_at DESC` / `received_at DESC` then `id DESC` (guidelines §5); **stream resume** sorts `id` only (insert order, D3).
+> Two intentional orderings across all streams: **listing/pagination** sorts `happened_at DESC` / `received_at DESC` then `id DESC` (guidelines §5); **stream resume** sorts `id` only (insert order, D3).
 
 ---
 
@@ -260,7 +271,7 @@ All LISTEN connections must be established before `GET /readyz` returns `200`. A
 | Layer | Project | Scope · store |
 |---|---|---|
 | Unit | `Shared/Write/Read/Control *.Tests` | validation rules, matrix reduction, cursor codec, problem-details mapping, `X-Component-Id` extraction · **SQLite in-memory** |
-| Integration | `Dashboard.Api.Tests` | `WebApplicationFactory`: auth 401, ingest 201+Location, 422 envelope, matrix shape, pagination, SSE single-event + resume, control stream SSE + Last-Event-ID replay, component event POST/GET, reset → NOTIFY flow · Postgres (Testcontainers) |
+| Integration | `Dashboard.Api.Tests` | `WebApplicationFactory`: auth 401, ingest 201+Location, 422 envelope, matrix shape, pagination, SSE single-event + resume, control stream SSE + Last-Event-ID replay, component event POST + SSE stream + Last-Event-ID replay, reset → NOTIFY flow · Postgres (Testcontainers) |
 
 CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsettings`.
 
@@ -297,8 +308,8 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 7. **Retention job** — deployment events only.
 8. **CORS + Dockerfile + integration tests** green.
 9. **Control reset** — `Dashboard.Control` library; `POST /api/control/reset`; control-key filter; `Dashboard.Control.Tests`.
-10. **Control plane** — `control_stream_events` + `component_events` tables + migrations; second LISTEN `IHostedService`; `GET /api/control/stream` SSE + `Last-Event-ID`; `POST /api/control/events` (`X-Component-Id` extraction); `GET /api/control/events`; extend `readyz` to check both channels; extend retention job for 2 h tables; integration tests.
-11. **Reset choreography** — `reset_cycle` table + migration; Stateless state machine (`idle/draining/resetting`) with DB-persisted state loaded per transition + Postgres advisory-lock single-driver election (D12); `GateMaxTtlSeconds` safety abort; ingest gate (`503` + `Retry-After` while `resetting`); `POST /api/control/reset` reworked to `202`/`409` async, emitting `reset-initiated`/`reset-started`/`reset-completed`; ack fan-in via `component_acks` NOTIFY + third LISTEN `IHostedService` (D16); reset clears **only** `deployment_events` + `fetcher_state` (D14); `Reset:*` config (appsettings + env); extend `readyz` to the third channel; integration tests (drain → ack-or-timeout → clear → recover, `409` reentry, `503` ingest window, `GateMaxTtl` abort). Atomic commit. Canonical visual: [`docs/diagrams/reset-choreography.md`](diagrams/reset-choreography.md).
+10. **Control plane** — `control_stream_events` + `component_events` tables + migrations; second LISTEN `IHostedService` (`ControlEventBroadcaster`); `GET /api/control/stream` SSE + `Last-Event-ID`; `POST /api/control/events` (`X-Component-Id` extraction, `NOTIFY component_events <id>`); fourth LISTEN `IHostedService` (`ComponentEventBroadcaster`): id-only NOTIFY → DB fetch → fan-out → `GET /api/control/events/stream` SSE + `Last-Event-ID`; extend `readyz` to check all four channels; extend retention job for 2 h tables; integration tests.
+11. **Reset choreography** — `reset_cycle` table + migration; Stateless state machine (`idle/draining/resetting`) with DB-persisted state loaded per transition + Postgres advisory-lock single-driver election (D12); `GateMaxTtlSeconds` safety abort; ingest gate (`503` + `Retry-After` while `resetting`); `POST /api/control/reset` reworked to `202`/`409` async, emitting `reset-initiated`/`reset-started`/`reset-completed`; ack fan-in via `component_acks` NOTIFY + third LISTEN `IHostedService` (D16); reset clears **only** `deployment_events` + `fetcher_state` (D14); `Reset:*` config (appsettings + env); `readyz` now checks all four LISTEN channels (`deployment_events`, `control_events`, `component_acks`, `component_events`); integration tests (drain → ack-or-timeout → clear → recover, `409` reentry, `503` ingest window, `GateMaxTtl` abort, component-events SSE + Last-Event-ID). Atomic commit. Canonical visual: [`docs/diagrams/reset-choreography.md`](diagrams/reset-choreography.md).
 
 ---
 
