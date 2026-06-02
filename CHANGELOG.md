@@ -7,6 +7,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.2.0] - 2026-06-02
+
+### Added
+
+- **Control API — component event stream.** `GET /api/control/events/stream` is a live SSE fan-out of component-reported events — event name `component`, `Last-Event-ID` replay within the 2-hour retention window, unauthenticated — mirroring the deployment event stream. Backed by a PostgreSQL `LISTEN/NOTIFY` broadcaster (id-only NOTIFY → DB fetch → fan-out); `/readyz` now covers the `component_events` channel.
+
+### Changed
+
+- Demo Driver now consumes component events over SSE instead of a 5-second poll; `GET /demo/control-events` is an SSE re-broadcast and the driver panel shows a live badge.
+
+### Removed
+
+- **Breaking — Control API.** Removed the paginated `GET /api/control/events` listing and its cursor/page types. Component events are now observed via `GET /api/control/events/stream`.
+
+### Fixed
+
+- Release workflow: build the compose bundle with the runner's `zip` instead of PowerShell, fixing the GitHub Release job on the Linux runner.
+
+### Documentation
+
+- Contributing guide now owns the local-development workflow — running the full stack from source (`docker-compose.local.yaml --build`) and per-component out-of-container debug loops. The install guide stays operator-only and redirects there.
+- README release badge pinned to the semver tag, busting the stale camo image cache.
+
 ## [0.1.1] - 2026-06-02
 
 ### Security
