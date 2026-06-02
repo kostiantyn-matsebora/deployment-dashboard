@@ -3,7 +3,7 @@ namespace Dashboard.Shared.Entities;
 /// <summary>
 /// One row in the append-only <c>component_events</c> log (2 h retention).
 /// Stores operational events posted by components via <c>POST /api/control/events</c>.
-/// Returned by <c>GET /api/control/events</c> (contract schema <c>ComponentEventRecord</c>).
+/// Streamed on <c>GET /api/control/events/stream</c> (contract schema <c>ComponentEventRecord</c>).
 /// </summary>
 public sealed class ComponentEvent
 {

@@ -21,7 +21,7 @@ info:
           Progress is signalled on the control stream as `reset-initiated` → `reset-started` → `reset-completed`.
         - `GET  /api/control/stream` — SSE channel; API emits orchestration events (incl. the reset phases); `Last-Event-ID` replay within 2 h window.
         - `POST /api/control/events` — single inbound endpoint; all components post their events here. Gated by `X-Api-Key`; component identified by `X-Component-Id` header.
-        - `GET  /api/control/events` — read-only listing of component-posted events (2 h retention).
+        - `GET  /api/control/events/stream` — SSE fan-out of component-reported events; `Last-Event-ID` replay within 2 h window. Unauthenticated.
       - **Ops** — `/healthz`, `/readyz`.
 
     **Communication model (Kubernetes-style).**
@@ -86,7 +86,7 @@ tags:
       is cleared. There is no status endpoint — progress is observable on the stream only.
       `POST /api/control/reset` and `GET /api/control/stream` require `X-Control-API-Key`.
       `POST /api/control/events` requires `X-Api-Key` + `X-Component-Id`.
-      `GET /api/control/events` is unauthenticated.
+      `GET /api/control/events/stream` is unauthenticated.
   - name: ops
     description: Liveness + readiness probes.
 
@@ -534,8 +534,8 @@ paths:
         The server stores the header value as `component_id` on the persisted row.
 
         Components call this endpoint to report status transitions, heartbeats,
-        and operational events. The API stores each call as an append-only row in
-        `component_events`, queryable via `GET /api/control/events`.
+        and operational events. The API persists each call as an append-only
+        record and fans it out on `GET /api/control/events/stream`.
 
         **Retention: 2 hours.** Rows older than 2 hours are purged by the
         background retention job. Do not use this endpoint as a durable audit log.
@@ -620,31 +620,60 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
-    # ───── Control — component event listing (read) ──────────────────────────
+  # ───── Stream — component events (browser / observability) ────────────────
+  /api/control/events/stream:
     get:
       tags: [control]
-      operationId: listComponentEvents
-      summary: List component-posted events with cursor pagination.
+      operationId: watchComponentEventStream
+      summary: Server-Sent Events stream of component-reported events.
       description: |
-        Returns component events newest-first by `received_at`. Supports filtering
-        by `component_id` and `event_type`. Unauthenticated — same trust tier as
-        other read endpoints.
+        Long-lived `text/event-stream` connection carrying component-reported
+        events. Each accepted `POST /api/control/events` produces exactly one
+        named event:
 
-        **Retention: 2 hours.** Only events from the last 2 hours are available.
-        Useful for live health monitoring and debugging; not a durable audit trail.
+        ```
+        id: 01J9F4WZK3W9G2T6X4QH3DKQF5
+        event: component
+        data: { ...ComponentEventRecord... }
+        ```
+
+        Mirrors `GET /api/events/stream` exactly, differing only in payload:
+        it carries component events instead of deployment events. Unauthenticated —
+        a browser/observability read surface, same trust tier as the deployment
+        stream. There are no filter query params; the only request input is the
+        `Last-Event-ID` header.
+
+        **Fresh connect (no `Last-Event-ID`)** attaches live only — no history is
+        replayed. Clients reconnect transparently with `Last-Event-ID`: the server
+        replays every record with a strictly greater `id` still within the **2-hour**
+        retention window, then attaches to the live channel. A heartbeat comment
+        (`: ping`) is emitted every 15 s to keep intermediaries from idling the
+        connection.
+
+        Backed by PostgreSQL `LISTEN/NOTIFY` — each API instance fans out only to
+        its own connected clients (NFR-05 statelessness).
       parameters:
-        - { name: component_id, in: query, schema: { type: string }, description: Filter to a specific component. }
-        - { name: event_type,   in: query, schema: { type: string }, description: "Filter by event type (`status`, `error`, `heartbeat`, …)." }
-        - { name: since,        in: query, schema: { type: string, format: date-time }, description: "Only events with `occurred_at >= since`." }
-        - { name: cursor,       in: query, schema: { type: string }, description: Opaque pagination cursor from a previous page. }
-        - { name: limit,        in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+          description: |
+            Resume cursor from a prior connection. The server replays all records
+            with `id` strictly greater than this value within the 2-hour retention
+            window, then attaches to the live channel. Records older than 2 hours
+            may no longer be available.
       responses:
         '200':
-          description: A page of component events.
+          description: SSE stream opened.
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: '#/components/schemas/ComponentEventPage'
+                type: string
+                examples:
+                  - |
+                    : ping
+                    id: 01J9F4WZK3W9G2T6X4QH3DKQF5
+                    event: component
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","component_id":"dashboard-fetcher","event_type":"status","state":"running","detail":"Polling github-actions adapter at 30 s interval","occurred_at":"2026-05-31T10:00:00Z","received_at":"2026-05-31T10:00:00Z","payload":{"adapter":"github-actions","events_this_hour":42}}
 
   # ───── Ops ────────────────────────────────────────────────────────────────
   /healthz:
@@ -1080,7 +1109,8 @@ components:
       type: object
       required: [id, component_id, event_type, state, occurred_at, received_at]
       description: |
-        Stored row returned by `GET /api/control/events`. Retained for 2 hours.
+        Component event record emitted on the `component` frame of
+        `GET /api/control/events/stream`. Retained for 2 hours.
         `component_id` is the value of the `X-Component-Id` header from the
         originating POST request.
       properties:
@@ -1109,19 +1139,6 @@ components:
         payload:
           type: object
           nullable: true
-
-    ComponentEventPage:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: '#/components/schemas/ComponentEventRecord' }
-          description: Component events, ordered by `received_at` descending.
-        next_cursor:
-          type: string
-          nullable: true
-          description: Opaque cursor for the next page. `null` when the page is final.
 
     # ── Ops ───────────────────────────────────────────────────────────────────
 
