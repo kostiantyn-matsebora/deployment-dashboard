@@ -94,17 +94,9 @@ docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deplo
 
 Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
 
-## Running from local source (contributors / building from a clone)
+## Running from local source
 
-If you have cloned the repo and want to build images locally, `compose/docker-compose.local.yaml` swaps every published image for a locally built one (`pull_policy: never`). Stack it on top of the base + demo overrides:
-
-```bash
-docker compose \
-  -f compose/docker-compose.yaml \
-  -f compose/docker-compose.demo.yaml \
-  -f compose/docker-compose.local.yaml \
-  --profile demo up --build
-```
+Building and running from a clone is a **contributor** workflow (local image builds, per-component debug loops) — see [CONTRIBUTING.md → Local setup](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CONTRIBUTING.md#local-setup).
 
 ## Production checklist
 

@@ -19,9 +19,64 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). For sec
 
 ## Local setup
 
-Fastest way to see the whole stack running is the zero-config demo — see the [Quickstart](docs/guide/quickstart.md).
+**Prerequisites.** .NET 10 SDK · Node.js 20+ · Docker (Compose v2) · PowerShell 7+ (for scripts).
 
-Per-area dev loops:
+> **Just want to see it run?** For a quick look at the **released** images (not your local changes), run the zero-config demo — see the [Quickstart](docs/guide/quickstart.md). Everything below runs **your working tree**.
+
+### Run the full stack from your source
+
+`compose/docker-compose.local.yaml` swaps every published image for a local build (`pull_policy: never`), so this runs all of your changes together. Gateway on `http://localhost:8080`; demo panel at `/demo/`.
+
+```bash
+docker compose \
+  -f compose/docker-compose.yaml \
+  -f compose/docker-compose.demo.yaml \
+  -f compose/docker-compose.local.yaml \
+  --profile demo up --build
+```
+
+### Run a component on its own (debug loop)
+
+Run only the part you're changing — outside containers, with native hot-reload and a debugger attached.
+
+**Frontend SPA + mock API — no backend, no database.** The SPA's dev proxy (`frontend/dashboard/proxy.conf.json`) forwards `/api`, `/healthz`, `/readyz` to the **mock server** (`frontend/mock/`, port `3000`) — an in-memory fake of the read API (matrix, deployments, services/environments, fetcher state, the `GET /api/events/stream` SSE feed) with a `/_mock/*` surface to seed data. The SPA runs standalone against realistic data + live SSE; no .NET, no Postgres.
+
+```bash
+# Terminal 1 — mock API on http://localhost:3000
+cd frontend/mock && npm ci && npm run start:dev
+
+# Terminal 2 — SPA on http://localhost:4200 (hot reload; proxy.conf.json auto-loaded)
+cd frontend/dashboard && npm ci && npm start
+```
+
+**Backend Write/Read API (.NET) — needs Postgres.** Runs on `http://localhost:5205`; EF Core migrations apply on startup, so an empty database is fine.
+
+```bash
+# Terminal 1 — a throwaway Postgres
+docker run --rm -p 5432:5432 \
+  -e POSTGRES_DB=deployment_dashboard -e POSTGRES_USER=dev -e POSTGRES_PASSWORD=dev \
+  postgres:17-alpine
+
+# Terminal 2 — the API (Development env comes from launchSettings.json)
+cd backend
+ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=deployment_dashboard;Username=dev;Password=dev" \
+  dotnet run --project api/Dashboard.Api
+```
+> PowerShell: set the env var on its own line first — `$env:ConnectionStrings__Postgres = "Host=localhost;Port=5432;Database=deployment_dashboard;Username=dev;Password=dev"` — then `dotnet run --project api/Dashboard.Api`.
+
+To point the **SPA at the real API** instead of the mock, change the `target` in `frontend/dashboard/proxy.conf.json` from `http://localhost:3000` to `http://localhost:5205`.
+
+**Other components** — NestJS via `npm ci && npm run start:dev`, .NET via `dotnet run`:
+
+| Component | From | Runs on | Key env (dev defaults) |
+|---|---|---|---|
+| Demo Driver | `demo/driver/` | `http://localhost:3001/demo/` | `WRITE_API_URL` (`:3000`), `API_KEY`, `CONTROL_API_KEY`, `GITHUB_EMULATOR_URL` (`:3100`) |
+| GitHub Emulator | `demo/github-emulator/` | `http://localhost:3100` | — |
+| Fetcher (pull mode) | `backend/` → `dotnet run --project fetcher/Dashboard.Fetcher` | worker (no HTTP port) | `GITHUB__*`, `WRITE_API_URL` — see [Configuration](docs/guide/configuration.md) |
+
+Point a component's `WRITE_API_URL` at the mock (`:3000`) or the real API (`:5205`) as needed.
+
+### Test & build (per area)
 
 **Backend (.NET 10)** — from `backend/`:
 ```bash
@@ -31,7 +86,7 @@ dotnet test Dashboard.slnx --settings Dashboard.runsettings
 dotnet format Dashboard.slnx            # apply formatting (CI runs --verify-no-changes)
 ```
 
-**Frontend (Angular 20)** — from `frontend/dashboard/`:
+**Frontend (Angular)** — from `frontend/dashboard/`:
 ```bash
 npm ci
 npm test
