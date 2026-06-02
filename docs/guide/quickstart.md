@@ -25,9 +25,7 @@ To pin to a specific release version:
 docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.2.0 --profile demo up
 ```
 
-> **Why `--project-directory .`?** It points Compose at the current directory. Without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` "CreateFile/no such file" error.
->
-> **No `.env` needed for demo.** The demo profile uses insecure defaults and requires no secrets. For secret-bearing profiles (`full`, `standalone`, and pull variants), use the local-file path — `oci://` up does not load `.env` or `--env-file`. See [Option B: local file (recommended for production)](./install.md#option-b-local-file-recommended-for-production) in the Install guide.
+> **Why `--project-directory .`?** It points Compose at the current directory for `.env`/variable resolution. Without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` "CreateFile/no such file" error.
 
 > **Availability.** The OCI artifact is published automatically on each release. The `:latest` tag exists once the first release (`v0.1.0`) is cut. Until then, use the curl alternative below.
 
