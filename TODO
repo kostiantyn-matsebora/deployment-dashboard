@@ -4,7 +4,7 @@
 ☐ Fetcher after each cycle of fetching must report event to control API containimg CI/CD api limits, own limits and own usage of ci/cd API, information about usage and limits must be shown on dashboard
 ✔ Add views of control api and components event streams @done(26-05-31 22:40)
 ✔ Create adopter documentation and gh pages @done(26-06-01)
-☐ Expose scalar UI via gateway
+✔ Expose scalar UI via gateway @done(26-06-03)
 ✔ Add logo wherever its suitable @done(26-06-02 03:27)
 ✔ Make component events stream instead of polling @done(26-06-02)
 ☐ Add corellation ID to the events to corellate them with command and each other
