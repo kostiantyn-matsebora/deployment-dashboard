@@ -73,10 +73,15 @@ services:
       # on :80.  Requests to / return 502 until the frontend container is
       # running; all /api/* and probe routes work without it.
       FRONTEND_UPSTREAM: "${FRONTEND_UPSTREAM:-frontend:80}"
-      # NOTE: DEMO_DRIVER_UPSTREAM (the /demo/* route target) is demo-only and is
-      # set in docker-compose.demo.yaml — not here. The gateway image's nginx
-      # template tolerates its absence: /demo/* simply 502s in production (the
-      # variable+resolver proxy_pass defers DNS, so startup is unaffected).
+      # The gateway template references ${DEMO_DRIVER_UPSTREAM} for the /demo/*
+      # locations. A default is supplied here so envsubst always produces a
+      # syntactically valid nginx config (no unsubstituted ${...} literal).
+      # In non-demo profiles demo-driver does not exist, so the resolver cannot
+      # resolve the name at request time and /demo/* returns 502 — the intended
+      # production behavior. Startup is unaffected.
+      # docker-compose.demo.yaml overrides this to the same value; that override
+      # is harmless but redundant after this default.
+      DEMO_DRIVER_UPSTREAM: "${DEMO_DRIVER_UPSTREAM:-demo-driver:3001}"
     depends_on:
       api:
         condition: service_healthy
