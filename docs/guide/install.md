@@ -22,28 +22,23 @@ Two shapes, each with a pull-mode variant:
 
 ### Get the compose project
 
-Two options — OCI artifact (recommended) or curl.
+Two options — choose based on your use case:
 
-#### Option A: OCI artifact (recommended)
+- **Option A (`oci://` one-liner)** — best for **demo / quick evaluation**. No local files needed; uses insecure-defaults-safe demo artifact. Secret-bearing profiles (`full`, `standalone`, and pull variants) should use Option B instead (see note below).
+- **Option B (local file)** — **recommended for production and any secret-bearing profile**. Fetch the compose file locally, fill in your `.env`, and run. `.env` auto-loads correctly; `--env-file` also works.
 
-No local compose files needed. Fetch only the env template, fill in your secrets, then reference the artifact directly:
+#### Option A: OCI artifact (demo / quick evaluation)
+
+Pull the Compose project directly from GHCR — no clone, no local files:
 
 ```bash
-# 1. Fetch the env template — this is the only file you need locally
-curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
-cp .env.example .env
-# edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
-#   (+ POSTGRES_HOST for standalone)
-
-# 2. Load your .env into the shell, then start (see known issue below)
-#    Compose reads interpolation variables from the session environment.
 docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
 ```
 
 Replace `0.2.0` with the release you want to pin. `--project-directory .` points Compose at the current directory — without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` path error.
 
-!!! warning "Known issue: `oci://` flow + env files (Windows / Docker Desktop)"
-    When using `-f oci://…`, Compose extracts the project to a local cache directory (e.g. `AppData\Local\cache\docker-compose\<hash>`). On the `up` path the project context relocates to that cache dir, so `.env` auto-load and `--env-file` (even with an absolute path) silently produce `<unset>` for all interpolation variables.
+!!! warning "Limitation: `oci://` up does not load `.env` or `--env-file`"
+    `docker compose -f oci://… up` ignores `.env` auto-load and `--env-file` — Compose relocates the project context to a local cache directory on the `up` path, so all interpolation variables resolve as `<unset>`. This is a Docker Compose limitation on the remote-artifact `up` path; only `config` honours env files.
 
     **Observed behaviour (verified on Docker Desktop for Windows, `0.2.0`):**
 
@@ -51,20 +46,16 @@ Replace `0.2.0` with the release you want to pin. `--project-directory .` points
     - `--env-file "$PWD\.env"` on the `up` command → still `<unset>`.
     - `--env-file "$PWD\.env"` on `config --environment` (preview/dry-run) → resolves correctly.
 
-    **Workaround — load variables into the shell session before running `up`:**
+    **For secret-bearing profiles, use [Option B](#option-b-local-file-recommended-for-production) instead.** If you must use `oci://` for a secret profile, load variables into the shell session before running `up` (advanced fallback only):
 
     ```powershell
-    # Run from the directory containing your .env
     Get-Content .\.env | ForEach-Object {
       if ($_ -match '^\s*([^#][^=]*?)\s*=\s*(.*)$') {
         [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim())
       }
     }
-    # Compose reads interpolation variables from the session environment
     docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
     ```
-
-    Shell/process environment takes precedence in Compose interpolation and is not affected by project-dir relocation.
 
     **To verify variable resolution before starting the stack** (`config --environment` does honour the file):
 
@@ -72,23 +63,27 @@ Replace `0.2.0` with the release you want to pin. `--project-directory .` points
     docker compose --project-directory . --env-file "$PWD\.env" -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 config --environment
     ```
 
-    This is a current limitation of the `0.2.0` release; a fix may land in a later version.
-
 > **First run prompt.** The first `oci://` pull shows an interactive confirmation listing the interpolation variables and their sources before proceeding — this is expected.
 
-> **Availability.** The OCI artifact is published automatically on each release. It does not exist until the first release (`v0.1.0`) is cut — use the curl alternative below until then.
+> **Availability.** The OCI artifact is published automatically on each release. It does not exist until the first release (`v0.1.0`) is cut — use Option B below until then.
 
 Image references inside the artifact are pinned to exact digests at publish time — every `up` on a given tag pulls the exact images from that release. Environment variable placeholders (`${API_KEY}`, `${POSTGRES_USER}`, etc.) are resolved client-side at `up` time, not baked into the artifact. See [Pinning a release version](#pinning-a-release-version).
 
-#### Option B: fetch the compose files
+#### Option B: local file (recommended for production)
 
-Fetch the files you need into a working directory — no clone required, images pull from GHCR.
+Fetch the compose file into a working directory — no clone required, images pull from GHCR. **`.env` auto-loads correctly on `up`; `--env-file ./path` also works.**
 
-**Base file (all profiles):**
+**Base file + env template (all profiles):**
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.yaml
 curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
+cp .env.example .env
+# edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
+#   (+ POSTGRES_HOST for standalone)
+
+# .env auto-loads on up; --env-file ./path also works
+docker compose -f docker-compose.yaml --profile full up -d
 ```
 
 **Demo overlay (demo profile only):**
@@ -111,7 +106,9 @@ To pin to a specific release, replace `main` in the URLs with the release tag (e
 
 ## Deploy with the Fetcher (pull mode)
 
-Pull mode is opt-in. Use it when you can't add a push step to your pipelines. The [Fetcher](../FETCHER_SPECIFICATION.md) polls the GitHub Deployments REST API (read-only against GitHub) and posts events through the same `POST /api/deployments` ingest contract as any CI/CD pipeline step. Only the `-pull` profiles (`full-pull`, `standalone-pull`) start it.
+Pull mode is **recommended for locked-down networks where inbound WAN traffic is forbidden**. The Fetcher is **outbound-only**: it calls the GitHub API and the dashboard's internal ingest — the dashboard never accepts inbound connections from the internet. This is the key difference from push mode, where CI/CD must reach in to POST an event.
+
+Use pull mode when you can't (or don't want to) add a push step to your pipelines. The [Fetcher](../FETCHER_SPECIFICATION.md) polls the GitHub Deployments REST API (read-only against GitHub) and posts events through the same `POST /api/deployments` ingest contract as any CI/CD pipeline step. Only the `-pull` profiles (`full-pull`, `standalone-pull`) start it.
 
 ### Required env
 
@@ -139,21 +136,16 @@ All other fetcher knobs (base URL, version source, rate-limit budget, poll inter
 
 ### Start with pull mode
 
-Add `GITHUB_TOKEN` and `GITHUB_REPOS` to your `.env`, then use the shell-env workaround from [Option A](#option-a-oci-artifact-recommended) (required on the `oci://` path):
+Use the [Option B (local file)](#option-b-local-file-recommended-for-production) path — `.env` auto-loads on `up`, so `GITHUB_TOKEN` and `GITHUB_REPOS` are picked up without any extra steps:
 
-```powershell
-# .env additions
-# GITHUB_TOKEN=github_pat_…
-# GITHUB_REPOS=acme/api,acme/web
+```bash
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.yaml
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
+cp .env.example .env
+# edit .env — set API_KEY, POSTGRES_USER, POSTGRES_PASSWORD, GITHUB_TOKEN, GITHUB_REPOS
+#   (+ POSTGRES_HOST for standalone)
 
-# Load .env into the shell session
-Get-Content .\.env | ForEach-Object {
-  if ($_ -match '^\s*([^#][^=]*?)\s*=\s*(.*)$') {
-    [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim())
-  }
-}
-# Start the full stack with the Fetcher
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full-pull up -d
+docker compose -f docker-compose.yaml --profile full-pull up -d
 ```
 
 For `standalone-pull` (external PostgreSQL), the flow is identical — replace `--profile full-pull` with `--profile standalone-pull` and ensure `POSTGRES_HOST` is set in `.env`.
@@ -163,18 +155,18 @@ For `standalone-pull` (external PostgreSQL), the flow is identical — replace `
 ## Minimal production start
 
 ```bash
-# 1. Fetch only the env template — fill in your secrets
+# 1. Fetch compose file + env template
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.yaml
 curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
 cp .env.example .env
 # edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
 #   (+ POSTGRES_HOST for standalone)
 
-# 2. Load your .env into the shell first (oci:// env-file workaround — see Option A above),
-#    then start:
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
+# 2. Start — .env auto-loads
+docker compose -f docker-compose.yaml --profile full up -d
 ```
 
-> Substitute `0.2.0` with the release you want. See [Pinning a release version](#pinning-a-release-version). If the first release has not been cut yet, use [Option B](#option-b-fetch-the-compose-files) instead. For env-file behaviour with `oci://`, see the [known issue in Option A](#option-a-oci-artifact-recommended).
+> Substitute `main` with the release tag you want to pin (e.g. `.../v0.2.0/compose/...`). See [Pinning a release version](#pinning-a-release-version).
 
 Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
 
