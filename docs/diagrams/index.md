@@ -1,11 +1,13 @@
 ---
 title: Diagrams
 shortTitle: Diagrams
-intro: 'Mermaid process diagrams — visual references for cross-component choreographies; authoritative behaviour stays in the spec docs.'
+intro: 'Architecture and process diagrams — visual references; authoritative behaviour stays in the spec docs.'
 children:
   - /architecture-c4
-  - /reset-choreography
+  - /architecture-c4.drawio
+  - /architecture-c4.svg
   - /github-emulation
+  - /reset-choreography
 ---
 
 ## Contents — `architecture-c4.md`
