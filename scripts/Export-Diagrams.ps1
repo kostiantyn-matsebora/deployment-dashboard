@@ -136,13 +136,17 @@ function Get-DrawioExportArgument {
     .SYNOPSIS
         Build the draw.io CLI argument array for a cropped SVG export.
         Kept pure so the exact invocation is verifiable without launching Electron.
+
+        --embed-svg-images is required: without it the built-in shape-library
+        images (img/lib/azure2/*.svg etc.) are NOT inlined and render as broken
+        placeholders in the standalone SVG.
     #>
     param(
         [Parameter(Mandatory)][string]$InputPath,
         [Parameter(Mandatory)][string]$OutputPath,
         [int]$Border = 12
     )
-    return @('-x', '-f', 'svg', '--crop', '-b', "$Border", '-o', $OutputPath, $InputPath)
+    return @('-x', '-f', 'svg', '--crop', '--embed-svg-images', '-b', "$Border", '-o', $OutputPath, $InputPath)
 }
 
 function Get-DrawioCandidatePath {

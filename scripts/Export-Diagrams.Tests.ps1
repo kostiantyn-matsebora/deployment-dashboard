@@ -89,7 +89,12 @@ Describe 'Get-DrawioExportArgument' {
 
     It 'builds the cropped SVG export argument array in order' {
         $a = Get-DrawioExportArgument -InputPath 'in.drawio' -OutputPath 'out.svg' -Border 12
-        $a | Should -Be @('-x', '-f', 'svg', '--crop', '-b', '12', '-o', 'out.svg', 'in.drawio')
+        $a | Should -Be @('-x', '-f', 'svg', '--crop', '--embed-svg-images', '-b', '12', '-o', 'out.svg', 'in.drawio')
+    }
+
+    It 'always embeds shape-library images (else built-in icons render broken)' {
+        $a = Get-DrawioExportArgument -InputPath 'i' -OutputPath 'o'
+        $a | Should -Contain '--embed-svg-images'
     }
 
     It 'threads a custom border through as a string' {
