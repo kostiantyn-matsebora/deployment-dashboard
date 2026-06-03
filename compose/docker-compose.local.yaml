@@ -47,6 +47,7 @@ services:
       dockerfile: fetcher-host/Dashboard.Fetcher.Host/Dockerfile
 
   demo-driver:
+    profiles: [demo-driver, demo]
     image: deployment-dashboard-demo-driver:local
     pull_policy: never
     build:
@@ -54,6 +55,7 @@ services:
       dockerfile: driver/Dockerfile
 
   github-emulator:
+    profiles: [github-emulator, demo]
     image: deployment-dashboard-github-emulator:local
     pull_policy: never
     build:

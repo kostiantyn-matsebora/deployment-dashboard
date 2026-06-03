@@ -5,7 +5,12 @@ namespace Dashboard.Fetcher.GitHub.Graph;
 /// <summary>Parses a workflow YAML string into a <see cref="WorkflowGraph"/> (§5.6.2).</summary>
 public static class WorkflowGraphParser
 {
-    public static WorkflowGraph Parse(string workflowName, string yaml)
+    /// <summary>
+    /// Parses the workflow YAML into a graph.
+    /// <paramref name="fallbackName"/> is used only when the YAML contains no top-level
+    /// <c>name:</c> field — the YAML name is the stable service-identity source (F2).
+    /// </summary>
+    public static WorkflowGraph Parse(string fallbackName, string yaml)
     {
         try
         {
@@ -14,7 +19,11 @@ public static class WorkflowGraphParser
 
             if (stream.Documents.Count == 0 ||
                 stream.Documents[0].RootNode is not YamlMappingNode root)
-                return Empty(workflowName);
+                return Empty(fallbackName);
+
+            // F2: read the stable workflow name from the YAML `name:` field.
+            // This is the workflow's *definition* name — never overridden by `run-name:`.
+            var workflowName = GetScalar(root, "name") ?? fallbackName;
 
             if (!root.Children.TryGetValue(new YamlScalarNode("jobs"), out var jobsNode) ||
                 jobsNode is not YamlMappingNode jobsMap)
@@ -43,7 +52,7 @@ public static class WorkflowGraphParser
         }
         catch
         {
-            return Empty(workflowName);
+            return Empty(fallbackName);
         }
     }
 
