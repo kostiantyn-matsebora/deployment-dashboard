@@ -101,31 +101,37 @@ public sealed class RateLimitOwnUsageTests
     [Fact]
     public async Task WindowRollover_ResetsOwnCount()
     {
-        var budget = await MakeBudget(totalLimit: 1000, budgetPct: 100);
+        // Window 1: reset_at is 1 s in the past (the old window has already expired).
+        // The injected clock is fixed so rollover detection is deterministic.
+        var fixedNow = DateTimeOffset.UtcNow;
+        var window1ResetAt = fixedNow.AddSeconds(-1);
+        var window2ResetAt = fixedNow.AddSeconds(3600);
 
-        // Call with a reset_at in the past (window already rolled over).
-        var pastEpoch = DateTimeOffset.UtcNow.AddSeconds(-5).ToUnixTimeSeconds();
-        var response = MakeResponse(externalUsed: 50, limit: 1000, remaining: 950, resetEpoch: pastEpoch);
+        var budget = await MakeBudget(totalLimit: 1000, budgetPct: 100, utcNow: () => fixedNow);
 
-        // First call with old reset_at — just increments own count.
-        await budget.RecordAndWaitIfNeededAsync(response, default);
+        // Three calls inside window 1.
+        for (var i = 0; i < 3; i++)
+        {
+            await budget.RecordAndWaitIfNeededAsync(
+                MakeResponse(externalUsed: 10, limit: 1000, remaining: 990,
+                             resetEpoch: window1ResetAt.ToUnixTimeSeconds()), default);
+        }
+
+        Assert.Equal(3, budget.Used);
+
+        // First call of window 2: now >= window1ResetAt AND new reset_at > window1ResetAt
+        // → own counter must reset to 0 then increment to 1.
+        await budget.RecordAndWaitIfNeededAsync(
+            MakeResponse(externalUsed: 0, limit: 1000, remaining: 1000,
+                         resetEpoch: window2ResetAt.ToUnixTimeSeconds()), default);
+
         Assert.Equal(1, budget.Used);
-
-        // Second call with a newer reset_at in the future — window has rolled over.
-        var futureEpoch = DateTimeOffset.UtcNow.AddSeconds(3600).ToUnixTimeSeconds();
-        var response2 = MakeResponse(externalUsed: 0, limit: 1000, remaining: 1000, resetEpoch: futureEpoch);
-        await budget.RecordAndWaitIfNeededAsync(response2, default);
-
-        // The rollover detection (responseResetAt > _resetAt AND <= UtcNow) only resets
-        // when the NEW reset epoch is AFTER the old one and BEFORE now. Since futureEpoch
-        // is in the future, it won't trigger the rollover reset. After the second call
-        // own count increments to 2.
-        Assert.Equal(2, budget.Used);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static async Task<RateLimitBudget> MakeBudget(int totalLimit, int budgetPct)
+    private static async Task<RateLimitBudget> MakeBudget(
+        int totalLimit, int budgetPct, Func<DateTimeOffset>? utcNow = null)
     {
         using var http = new HttpClient(new ThrowingHandler())
         {
@@ -133,7 +139,7 @@ public sealed class RateLimitOwnUsageTests
         };
         return await RateLimitBudget.CreateAsync(
             http, configuredLimit: totalLimit, budgetPct: budgetPct,
-            NullLogger<RateLimitBudget>.Instance, default);
+            NullLogger<RateLimitBudget>.Instance, default, utcNow);
     }
 
     private static HttpResponseMessage MakeResponse(
