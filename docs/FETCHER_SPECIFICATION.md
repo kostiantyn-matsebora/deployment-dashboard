@@ -452,7 +452,7 @@ ResolveService(workflowName, repo):
 After every HTTP call to the GitHub API:
 
 1. Increment the fetcher's **own request counter** (one per call).
-2. Read `X-RateLimit-Reset` → `reset_at` (UTC). If the new `reset_at` is later than the previously observed one AND is in the past, the window has rolled over — reset own counter to 0 before incrementing.
+2. Read `X-RateLimit-Reset` → `reset_at` (UTC). The window has rolled over when **`now ≥ previously-observed reset_at`** AND the new `reset_at` is later than the previously observed one — reset own counter to 0 before incrementing. (`X-RateLimit-Reset` always points to the end of the *current* window, i.e. always in the future; checking whether the new value is in the past would never fire.)
 
 If `own_count ≥ budget`:
 
@@ -548,6 +548,8 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 ### 5.11 Per-cycle rate-limit reporting (F18)
 
 After each successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to the existing `POST /api/control/events` surface. See [`api/api-guidelines.md`](api/api-guidelines.md) §11 "Rate-limit report payload" and [`diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md).
+
+**Multi-adapter note.** With multiple adapters each adapter emits its own `rate-limit` event carrying a distinct `payload.adapter` value under the shared `component_id`. Consumers must key on `payload.adapter`, not on `component_id`, to distinguish per-adapter counters.
 
 #### Trigger and gate
 

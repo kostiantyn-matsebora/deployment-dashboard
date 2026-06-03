@@ -11,7 +11,8 @@ namespace Dashboard.Fetcher.GitHub.RateLimit;
 /// Budget = floor(total_limit × pct / 100).
 /// Own-count is incremented per GitHub API call — NOT read from <c>X-RateLimit-Used</c>
 /// (which counts all consumers of the token, not only this fetcher process).
-/// After a rate-limit window rolls over (<c>X-RateLimit-Reset</c> has passed) the own
+/// After a rate-limit window rolls over (now has passed the previously-observed
+/// <c>X-RateLimit-Reset</c> and the response carries a newer reset timestamp) the own
 /// counter is reset to zero so the next window starts fresh.
 /// Shared across backfill and normal poll.
 /// </summary>
@@ -23,11 +24,13 @@ public sealed class RateLimitBudget
     private int? _ciLimit;
     private int? _ciRemaining;
     private readonly ILogger<RateLimitBudget> _logger;
+    private readonly Func<DateTimeOffset> _utcNow;
 
-    private RateLimitBudget(int budget, ILogger<RateLimitBudget> logger)
+    private RateLimitBudget(int budget, ILogger<RateLimitBudget> logger, Func<DateTimeOffset> utcNow)
     {
         _budget = budget;
         _logger = logger;
+        _utcNow = utcNow;
     }
 
     /// <summary>Maximum budget requests per window.</summary>
@@ -63,7 +66,8 @@ public sealed class RateLimitBudget
         int configuredLimit,
         int budgetPct,
         ILogger<RateLimitBudget> logger,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<DateTimeOffset>? utcNow = null)
     {
         var totalLimit = configuredLimit > 0
             ? configuredLimit
@@ -73,7 +77,7 @@ public sealed class RateLimitBudget
         logger.LogInformation("[RateLimit] total_limit={Total} budget_pct={Pct} budget={Budget}",
             totalLimit, budgetPct, budget);
 
-        return new RateLimitBudget(budget, logger);
+        return new RateLimitBudget(budget, logger, utcNow ?? (() => DateTimeOffset.UtcNow));
     }
 
     /// <summary>
@@ -85,9 +89,15 @@ public sealed class RateLimitBudget
     public async Task RecordAndWaitIfNeededAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var responseResetAt = ReadResetAt(response);
+        var now = _utcNow();
 
-        // Roll over own-count when the window has passed.
-        if (responseResetAt > _resetAt && responseResetAt <= DateTimeOffset.UtcNow)
+        // Roll over own-count when the previously-observed window has expired AND the
+        // response carries a newer reset timestamp confirming a fresh window has started.
+        // X-RateLimit-Reset always points to the FUTURE (end of the current window), so
+        // checking responseResetAt <= now would almost never fire. The correct signal is:
+        //   now >= _resetAt  (the old window has passed)
+        //   responseResetAt > _resetAt  (the server confirms we are in a new window)
+        if (_resetAt != DateTimeOffset.MinValue && now >= _resetAt && responseResetAt > _resetAt)
             _ownCount = 0;
 
         _resetAt = responseResetAt;
@@ -103,7 +113,7 @@ public sealed class RateLimitBudget
             return;
 
         var waitUntil = _resetAt.AddSeconds(1);
-        var delay = waitUntil - DateTimeOffset.UtcNow;
+        var delay = waitUntil - _utcNow();
 
         _logger.LogInformation(
             "[RateLimit] budget exhausted (own_count={Count}/{Budget}); sleeping until {WaitUntil}",
