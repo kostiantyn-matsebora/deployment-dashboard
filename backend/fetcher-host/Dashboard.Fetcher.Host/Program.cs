@@ -139,7 +139,21 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
 
 // ── Workers ───────────────────────────────────────────────────────────────────
 builder.Services.AddHostedService<FetcherWorker>();
-builder.Services.AddHostedService<ControlStreamListener>();
+
+// F4: register ControlStreamListener only when CONTROL_API_KEY is set.
+// An empty key means the API's control surface is disabled; attempting to connect
+// would 404-loop. Log once at startup so the absence is observable.
+if (!string.IsNullOrWhiteSpace(fetcherOptions.ControlApiKey))
+{
+    builder.Services.AddHostedService<ControlStreamListener>();
+}
+else
+{
+    var startupLogger = LoggerFactory.Create(b => b.AddConsole())
+        .CreateLogger("Startup");
+    startupLogger.LogInformation(
+        "[ControlStream] CONTROL_API_KEY is not set — control-plane participation disabled");
+}
 
 var app = builder.Build();
 

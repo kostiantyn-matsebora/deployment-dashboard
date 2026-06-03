@@ -39,6 +39,7 @@ Thin nginx reverse proxy — **routing + SSE plumbing only**:
 | GW7 | **Base = `nginxinc/nginx-unprivileged`**, non-root, listens **`8080`**. | Matches integration `:8080` + a non-root container target. |
 | GW8 | **Gateway does not terminate TLS**; serves plain HTTP on `:8080`. | Internal-only network (NFR-04). TLS, where required, is a hosting concern outside this spec. (G-Q4) |
 | GW9 | **No build-time `nginx -t`**; no API caching; no rate limiting (reserved, guidelines §9). | Keep the build + image minimal. (G-Q5) |
+| GW10 | **Scalar reference UI + OpenAPI document are proxied** to the API (`/scalar*`, `/openapi/*`). | API docs reachable through the single public surface; read-only, consistent with public `GET /api/*` reads. |
 
 ---
 
@@ -62,6 +63,8 @@ The official nginx entrypoint renders `*.template` from `/etc/nginx/templates/` 
 |---|---|---|
 | `/api/events/stream` | `api` | **Dedicated SSE block** — see §5 |
 | `/api/` | `api` | JSON read/write; default buffering |
+| `/scalar`, `/scalar/` | `api` | Scalar API-reference UI (read-only docs) — bare path redirects to `/scalar/v1` |
+| `/openapi/` | `api` | OpenAPI document (`/openapi/v1.json`), fetched in-browser by Scalar |
 | `/demo/stream` | `demo-driver` | **Dedicated SSE block** — same settings as `/api/events/stream` |
 | `/demo/control-stream` | `demo-driver` | **Dedicated SSE block** — same settings as `/api/events/stream` |
 | `/demo/` | `demo-driver` | Demo driver control API + panel; default buffering |
@@ -115,6 +118,9 @@ server {
     location /demo/   { proxy_pass http://demo-driver; }
     location /healthz { proxy_pass http://api; }
     location /readyz  { proxy_pass http://api; }
+    location = /scalar  { proxy_pass http://api; }
+    location /scalar/   { proxy_pass http://api; }
+    location /openapi/  { proxy_pass http://api; }
     location /        { proxy_pass http://frontend; }
 }
 ```

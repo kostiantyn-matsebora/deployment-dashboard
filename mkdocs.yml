@@ -124,6 +124,7 @@ nav:
               - Mockup: design/mockup/index.md
       - Diagrams:
           - Overview: diagrams/index.md
+          - Component diagram (C4): diagrams/architecture-c4.md
           - GitHub emulation: diagrams/github-emulation.md
           - Reset choreography: diagrams/reset-choreography.md
   - Contributing: https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CONTRIBUTING.md

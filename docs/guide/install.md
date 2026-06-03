@@ -1,128 +1,94 @@
 # Install & deploy
 
-How to run Deployment Dashboard for a real team. For a zero-config local trial, use the [Quickstart](./quickstart.md) instead.
+How to run Deployment Dashboard for a real team. For a zero-config local trial, see the [Quickstart](./quickstart.md).
 
 ## Concepts in one minute
 
-- **Ingestion is push-first.** Your CI/CD pipeline `POST`s a deployment event to `POST /api/deployments` (one extra step — see [Integrate your CI/CD](./send-events.md)).
-- **Pull mode is optional.** The `Dashboard.Fetcher` component can poll a CI/CD API (GitHub Actions today) and post events through the same endpoint. You only need it if you can't add a push step to your pipelines.
-- **The gateway is the only published port.** Everything else (API, frontend, PostgreSQL) is internal. Default published port: `:8080`.
-- **The backend is stateless.** Run any number of API instances behind the gateway; no sticky sessions. SSE fan-out works across instances via PostgreSQL `LISTEN/NOTIFY`.
+- **Ingestion is push-first.** Your CI/CD pipeline `POST`s a deployment event to `POST /api/deployments` — one extra step ([Integrate your CI/CD](./send-events.md)).
+- **Pull mode is optional.** The Fetcher can poll a CI/CD API (GitHub Actions today) and post through the same endpoint — see [Pull mode](#pull-mode-fetcher).
+- **The gateway is the only published port** (`:8080`). API, frontend, and PostgreSQL stay internal.
+- **The backend is stateless.** Scale API instances behind the gateway; SSE fan-out works across them via PostgreSQL `LISTEN/NOTIFY`.
 
 ## Deployment shapes (Compose profiles)
 
-Two shapes, each with a pull-mode variant:
+- **`full`** — single host; the stack owns its PostgreSQL (Docker volume).
+- **`standalone`** — external managed PostgreSQL (e.g. Azure Database for PostgreSQL); the app tier scales behind the gateway.
 
-- **`standalone`** — cloud / distributed. PostgreSQL is an external managed service; the app tier scales horizontally behind the gateway.
-- **`full`** — single-VM / all-in-one. The stack owns its PostgreSQL (Docker volume) on the same host.
+Each has a **`-pull`** variant that adds the Fetcher for [pull-mode ingestion](#pull-mode-fetcher).
 
-> Pick **`standalone`** when your database is managed (e.g. Azure Database for PostgreSQL). Pick **`full`** for a single box that owns its data volume.
+## Get the stack
 
-> ⚠️ **Required secrets — set these before deploying.** Production profiles require `API_KEY`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` (plus `POSTGRES_HOST` for `standalone`). Compose does **not** refuse to start when they're missing — it substitutes empty strings, so the stack comes up and then the API / database containers **crash-loop** (the API validates these on startup). Set them in `.env` (or your environment) first. The `demo` profile needs none.
-
-### Get the compose project
-
-Two options — OCI artifact (recommended) or curl.
-
-#### Option A: OCI artifact (recommended)
-
-No local compose files needed. Fetch only the env template, fill in your secrets, then reference the artifact directly:
-
-```bash
-# 1. Fetch the env template — this is the only file you need locally
-curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
-cp .env.example .env
-# edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
-#   (+ POSTGRES_HOST for standalone)
-
-# 2. Start — Compose fetches the project from GHCR; .env in the working directory
-#    is auto-loaded for variable interpolation
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
-```
-
-Replace `0.2.0` with the release you want to pin. A `.env` in the working directory is auto-loaded; alternatively pass `--env-file ./your.env` explicitly. `--project-directory .` points Compose at the current directory for env resolution — without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` path error.
-
-> **First run prompt.** The first `oci://` pull shows an interactive confirmation listing the interpolation variables and their sources before proceeding — this is expected. Preview resolution without starting the stack: `docker compose --project-directory . --env-file ./.env -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 config --environment`
-
-> **Availability.** The OCI artifact is published automatically on each release. It does not exist until the first release (`v0.1.0`) is cut — use the curl alternative below until then.
-
-Image references inside the artifact are pinned to exact digests at publish time — every `up` on a given tag pulls the exact images from that release. Environment variable placeholders (`${API_KEY}`, `${POSTGRES_USER}`, etc.) are resolved client-side at `up` time, not baked into the artifact. See [Pinning a release version](#pinning-a-release-version).
-
-#### Option B: fetch the compose files
-
-Fetch the files you need into a working directory — no clone required, images pull from GHCR.
-
-**Base file (all profiles):**
+Fetch the compose file and env template — no clone, images pull from GHCR:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.yaml
 curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
+cp .env.example .env
+# set API_KEY, POSTGRES_USER, POSTGRES_PASSWORD  (+ POSTGRES_HOST for standalone)
+
+docker compose --profile full up -d
 ```
 
-**Demo overlay (demo profile only):**
+> ⚠️ **Set `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (+ `POSTGRES_HOST` for `standalone`) before starting.** Compose substitutes empty strings for missing values, so the API and database containers crash-loop instead of failing fast.
+
+To pin a release, replace `main` in the URLs with the tag (e.g. `.../v0.2.1/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
+
+## Pull mode (Fetcher)
+
+Use pull mode when you can't add a push step to your pipelines — or when the dashboard runs in a **locked-down network that forbids inbound WAN traffic**. The Fetcher is **outbound-only**: it polls the GitHub Deployments API and posts to the dashboard's internal ingest, so nothing needs to accept inbound connections (unlike push, where CI/CD must reach in). Only the `-pull` profiles start it.
+
+Add two values to `.env`, then start a `-pull` profile:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.demo.yaml
+# in .env, additionally set:
+#   GITHUB_TOKEN=...                 # read-only; see token scope below
+#   GITHUB_REPOS=acme/api,acme/web   # comma-separated owner/repo
+
+docker compose --profile full-pull up -d
 ```
 
-To pin to a specific release, replace `main` in the URLs with the release tag (e.g. `.../v0.2.0/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
+`standalone-pull` is identical (`--profile standalone-pull`, with `POSTGRES_HOST` set). Other fetcher options have sane defaults — see [Configuration → Fetcher: pull mode](./configuration.md#fetcher-pull-mode). The first start runs a bounded backfill, so the matrix fills after a poll cycle or two.
 
-### Profiles
+**GitHub token scope** — the Fetcher only reads, never writes:
+
+- **Public repos:** a classic PAT with **no scopes**, or a fine-grained PAT with **Public repositories (read-only)**.
+- **Private repos:** a fine-grained PAT with **Contents · Deployments · Actions: Read** on the target repos (or classic `repo`).
+
+## Profiles
 
 | Profile | What starts | Required env | Command |
 |---|---|---|---|
-| `standalone` | Gateway + Frontend + API. External PostgreSQL, push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` | `docker compose --profile standalone up` |
-| `standalone-pull` | `standalone` + Fetcher (pull-mode ingestion). | + `GITHUB_REPOS` / `GITHUB_TOKEN` | `docker compose --profile standalone-pull up` |
-| `full` | Gateway + Frontend + API + bundled PostgreSQL (Docker volume). Push-only. | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose --profile full up` |
-| `full-pull` | `full` + Fetcher (pull-mode ingestion). | + `GITHUB_REPOS` / `GITHUB_TOKEN` | `docker compose --profile full-pull up` |
-| `demo` | Everything + Demo Driver + GitHub Emulator + Fetcher. Zero-config evaluation. | _(none — insecure defaults)_ | `docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up` |
-
-## Minimal production start
-
-```bash
-# 1. Fetch only the env template — fill in your secrets
-curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
-cp .env.example .env
-# edit .env — set at least API_KEY, POSTGRES_USER, POSTGRES_PASSWORD
-#   (+ POSTGRES_HOST for standalone)
-
-# 2. Start — OCI artifact + images pull from GHCR; .env is auto-loaded from cwd
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
-```
-
-> Substitute `0.2.0` with the release you want. See [Pinning a release version](#pinning-a-release-version). If the first release has not been cut yet, use [Option B](#option-b-fetch-the-compose-files) instead.
+| `full` | Gateway + Frontend + API + bundled PostgreSQL | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `docker compose --profile full up -d` |
+| `standalone` | Gateway + Frontend + API (external PostgreSQL) | + `POSTGRES_HOST` | `docker compose --profile standalone up -d` |
+| `full-pull` | `full` + Fetcher | + `GITHUB_TOKEN`, `GITHUB_REPOS` | `docker compose --profile full-pull up -d` |
+| `standalone-pull` | `standalone` + Fetcher | + `GITHUB_TOKEN`, `GITHUB_REPOS` | `docker compose --profile standalone-pull up -d` |
 
 Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
 
 ## Running from local source
 
-Building and running from a clone is a **contributor** workflow (local image builds, per-component debug loops) — see [CONTRIBUTING.md → Local setup](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CONTRIBUTING.md#local-setup).
+Building from a clone is a **contributor** workflow — see [CONTRIBUTING.md → Local setup](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CONTRIBUTING.md#local-setup).
 
 ## Production checklist
 
-- **Set a strong `API_KEY`.** Every write is rejected with `401` without it.
-- **Set `CONTROL_API_KEY`** (distinct from `API_KEY`) only if you need the destructive reset surface; leave it unset to hide `POST /api/control/reset` entirely.
-- **Front the stack with TLS.** The dashboard is internal read-only tooling (no auth on reads, by design — see [Architecture overview](./architecture-overview.md)). Do **not** expose the Read API to the public internet; terminate TLS and restrict to your internal network.
-- **Set `HISTORY_RETENTION_DAYS`** to your audit needs (minimum 90; 365 recommended for production).
-- **Scale the API** horizontally behind the gateway as load grows — it's stateless.
+- **Set a strong `API_KEY`.** Writes are rejected `401` without it.
+- **Set `CONTROL_API_KEY`** (distinct from `API_KEY`) only if you need the reset surface; leave it unset to hide `POST /api/control/reset`.
+- **Front the stack with TLS** and keep it on your internal network — reads are unauthenticated by design ([Architecture](./architecture-overview.md)).
+- **Set `HISTORY_RETENTION_DAYS`** (minimum 90; 365 recommended).
+- **Scale the API** horizontally behind the gateway as needed — it's stateless.
 
 See [Configuration](./configuration.md) for every environment variable.
 
 ## Pinning a release version
 
-By default the stack pulls `latest`, which tracks the most recent push to `main`. For a reproducible deployment, pin to a published release version:
+By default the stack pulls `latest` (tracks `main`). For a reproducible deploy, pin in `.env`:
 
 ```dotenv
-# compose/.env
-DASHBOARD_VERSION=0.2.0
+DASHBOARD_VERSION=0.2.1
 ```
 
-**No leading `v`.** The git tag is `v0.1.0`; the published image tag is `0.1.0`. See `compose/.env.example` for the full note.
-
-Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`) containing all `compose/*.yaml` files and `compose/.env.example` — a clone-free way to deploy a specific version without checking out the repo.
-
-For the full release process, see [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
+**No leading `v`** — the git tag `v0.2.1` publishes images as `0.2.1`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
 
 ## Hosting notes
 
-The reference target is **Azure** (≤ $30/month, container-based — see [SAD §5–6](../SAD.md#5-non-functional-requirements)), but nothing is Azure-specific: every backend component is a standard OCI container deployable on any container host. Terraform modules for Azure are planned (`infrastructure/`, not yet present).
+The reference target is **Azure** (≤ $30/month, container-based — [SAD §5–6](../SAD.md#5-non-functional-requirements)), but nothing is Azure-specific: every component is a standard OCI container. Terraform modules for Azure are planned (`infrastructure/`, not yet present).
