@@ -116,6 +116,17 @@ export const PANEL_HTML = `<!DOCTYPE html>
     /* GitHub card hidden by default */
     #gh-emulator-card { display: none; }
 
+    /* Fetcher Rate-Limit card — hidden until first rate-limit event */
+    #rl-card { display: none; }
+    .rl-row  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .rl-kv   { display: flex; align-items: baseline; gap: 4px; }
+    .rl-key  { font-size: 0.65rem; color: #52525b; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+    .rl-val  { font-size: 0.82rem; color: #d4d4d8; font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace; }
+    .rl-sep  { color: #3f3f46; user-select: none; font-size: 0.7rem; }
+    .badge-paused { background: #312e81; color: #a5b4fc; }
+    .rl-progress-wrap { margin-top: 6px; }
+    .rl-progress-label { display: flex; justify-content: space-between; font-size: 0.68rem; color: #71717a; margin-bottom: 3px; }
+
     /* Liveness chips (status bar) */
     .lv-chip {
       display: inline-flex; align-items: center; gap: 4px;
@@ -328,6 +339,30 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
+    <!-- ── Fetcher · Rate Limit card ───────────────────────────────────────
+         Hidden until the first rate-limit component event arrives.
+         Consumes event_type: rate-limit off /demo/control-events (§4.9).
+         These events are NOT added to the Events feed list (card-only). -->
+    <div class="card card-control" id="rl-card">
+      <div class="card-title">Fetcher · Rate Limit</div>
+      <div class="rl-row">
+        <span class="badge badge-running" id="rl-state-badge">running</span>
+        <span class="rl-kv"><span class="rl-key">Adapter</span><span class="rl-val" id="rl-adapter">—</span></span>
+      </div>
+      <div class="rl-progress-wrap">
+        <div class="rl-progress-label">
+          <span>Own usage</span>
+          <span id="rl-own-label">— / —</span>
+        </div>
+        <div class="progress-bg"><div class="progress-fill" id="rl-progress-fill"></div></div>
+      </div>
+      <div class="rl-row" style="margin-top:8px">
+        <span class="rl-kv"><span class="rl-key">CI quota</span><span class="rl-val" id="rl-ci-remaining">—</span><span class="rl-sep">/</span><span class="rl-val" id="rl-ci-limit">—</span></span>
+        <span class="rl-sep">·</span>
+        <span class="rl-kv"><span class="rl-key">Resets</span><span class="rl-val" id="rl-reset-at">—</span></span>
+      </div>
+    </div>
+
     <!-- ── Control API card ──────────────────────────────────────────────── -->
     <div class="card card-control" id="control-api-card">
       <div class="card-title">Control API</div>
@@ -449,6 +484,16 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const ghEmitBadge     = $('gh-emit-badge');
     const ghEmitBtn       = $('gh-emit-btn');
     const ghStoreInfo     = $('gh-store-info');
+
+    // Fetcher · Rate Limit card refs (shown/hidden by rate-limit component events).
+    const rlCard          = $('rl-card');
+    const rlStateBadge    = $('rl-state-badge');
+    const rlAdapter       = $('rl-adapter');
+    const rlOwnLabel      = $('rl-own-label');
+    const rlProgressFill  = $('rl-progress-fill');
+    const rlCiRemaining   = $('rl-ci-remaining');
+    const rlCiLimit       = $('rl-ci-limit');
+    const rlResetAt       = $('rl-reset-at');
 
     // Merged Events feed refs (data feed — exempt from card-blocked dimming).
     const eventsLiveBadge = $('events-live-badge');
@@ -912,9 +957,55 @@ export const PANEL_HTML = `<!DOCTYPE html>
       compEventSource.onerror = () => { compEventsState = 'reconnecting'; recalcEventsLiveBadge(); };
     }
 
+    // ── Fetcher · Rate Limit card updater ────────────────────────────────────
+    // Called when a rate-limit component event arrives.  Updates card fields and
+    // makes the card visible.  These events are SUPPRESSED from the Events feed.
+    function updateRateLimitCard(rec) {
+      const p = rec.payload || {};
+
+      // State badge: running (indigo) vs paused (purple) vs anything else (neutral).
+      const state = rec.state || 'running';
+      rlStateBadge.textContent = esc(state);
+      rlStateBadge.className   = state === 'paused'  ? 'badge badge-paused'
+                               : state === 'running' ? 'badge badge-running'
+                               :                       'badge badge-idle';
+
+      // Adapter label.
+      rlAdapter.textContent = p.adapter != null ? esc(String(p.adapter)) : '\\u2014';
+
+      // Own budget progress bar: own_used / own_budget.
+      const ownUsed   = p.own_used   != null ? p.own_used   : null;
+      const ownBudget = p.own_budget != null ? p.own_budget : null;
+      rlOwnLabel.textContent = (ownUsed != null ? String(ownUsed) : '\\u2014') +
+                               ' / ' +
+                               (ownBudget != null ? String(ownBudget) : '\\u2014');
+      const pct = (ownUsed != null && ownBudget != null && ownBudget > 0)
+        ? Math.min(100, Math.round(ownUsed / ownBudget * 100))
+        : 0;
+      rlProgressFill.style.width = pct + '%';
+
+      // CI quota fields.
+      rlCiRemaining.textContent = p.ci_remaining != null ? String(p.ci_remaining) : '\\u2014';
+      rlCiLimit.textContent     = p.ci_limit     != null ? String(p.ci_limit)     : '\\u2014';
+
+      // Reset-at: render as local time, or — for null.
+      rlResetAt.textContent = p.reset_at != null ? fmt(p.reset_at) : '\\u2014';
+
+      // Reveal the card on the first event.
+      rlCard.style.display          = 'flex';
+      rlCard.style.flexDirection    = 'column';
+    }
+
     // Renders a single ComponentEventRecord into the merged Events store.
     // Previously accepted an array (poll response); now called per-frame (SSE).
+    // rate-limit events are routed to the Fetcher · Rate Limit card and are
+    // NOT added to the Events feed (per-cycle noise suppression).
     function mergeCompEvents(rec) {
+      if (rec.event_type === 'rate-limit') {
+        updateRateLimitCard(rec);
+        return;
+      }
+
       const stateCls = rec.state === 'running' ? 'fi-state-running'
                      : rec.state === 'error'   ? 'fi-state-error'
                      :                           'fi-state-neutral';
