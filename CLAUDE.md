@@ -59,6 +59,15 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 
 Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
 
+## Code intelligence (Serena-first)
+
+The Serena MCP server (`mcp__serena__*`) exposes symbol-level retrieval and editing via language servers (C# / TypeScript / PowerShell). **Prefer it over `Read` / `Grep` wherever code symbols apply** — it returns targeted symbols, not whole files, cutting token use across agent turns.
+
+- **Understand code.** `get_symbols_overview` (a file's top-level symbols), then `find_symbol` (locate; `depth=1` for members, `include_body` only when you need the source).
+- **Trace impact before editing a shared symbol.** `find_referencing_symbols` / `find_implementations` / `find_declaration` — not a grep-and-read sweep.
+- **Edit code.** `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` instead of full-file rewrites.
+- **Fall back to `Read` / `Grep`** for declarative/non-code files (YAML, JSON, Markdown, Dockerfiles, configs), exact line-range reads, or content Serena's LSPs don't index well (e.g. PowerShell beyond the fallback tier).
+
 ## Scripts
 
 Following rules MUST be followed for every script in this repository (build / install / dev tooling / CI helpers / one-off automation):
