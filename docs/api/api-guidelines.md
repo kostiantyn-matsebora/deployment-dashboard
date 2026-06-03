@@ -268,6 +268,30 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 | `heartbeat` | Periodic liveness ping; no state change |
 | `error` | Component encountered an error; `state` will be `error` |
 | `reset-ack` | Drain-complete ack for a `reset-initiated` event; sent with `state: paused` and `payload.reset_id` = the initiating event id |
+| `rate-limit` | Per-cycle fetcher report of CI/CD API limits and the fetcher's own budget/usage; `state` = running (or paused during reset); see Rate-limit payload below. |
+
+### Rate-limit report payload (`event_type: rate-limit`)
+
+Emitted by `dashboard-fetcher` after each poll cycle (backfill + normal) once a GitHub snapshot exists. The `payload` is opaque jsonb to the API; the field shape below is a CONVENTION the read surfaces depend on, not an API schema. Diagrams: [`fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.md).
+
+| Field | Type | Source | Meaning |
+|---|---|---|---|
+| `adapter` | string | `ICiCdAdapter.AdapterId` | Adapter that produced the snapshot (e.g. `github-actions`). |
+| `ci_limit` | integer \| null | GitHub `X-RateLimit-Limit` | CI/CD API total hourly quota. |
+| `ci_remaining` | integer \| null | GitHub `X-RateLimit-Remaining` | CI/CD-wide remaining quota (all token consumers). |
+| `own_budget` | integer \| null | `floor(ci_limit × RateLimitBudgetPct/100)` | Fetcher self-throttle budget for this window. |
+| `own_used` | integer \| null | Fetcher's own request counter this window | Fetcher's own usage of the CI/CD API this window. |
+| `reset_at` | string (RFC 3339 UTC) \| null | GitHub `X-RateLimit-Reset` | Window rollover instant. |
+
+- **`adapter`** is always present.
+- **The five numeric/time fields are `null` before the first GitHub response.** The fetcher skips the emit until a snapshot exists, so no all-null reports reach the stream.
+- **`state`** = `running` normally; `paused` while paused for reset.
+
+**Wire example** — frame on `GET /api/control/events/stream`:
+```
+event: component
+data: {"id":"01J9G2A1B2C3D4E5F6G7H8J9K0","component_id":"dashboard-fetcher","event_type":"rate-limit","state":"running","occurred_at":"2026-06-01T10:30:00Z","received_at":"2026-06-01T10:30:00Z","payload":{"adapter":"github-actions","ci_limit":5000,"ci_remaining":4830,"own_budget":2500,"own_used":170,"reset_at":"2026-06-01T11:00:00Z"}}
+```
 
 ### SSE component-events stream (`GET /api/control/events/stream`)
 
