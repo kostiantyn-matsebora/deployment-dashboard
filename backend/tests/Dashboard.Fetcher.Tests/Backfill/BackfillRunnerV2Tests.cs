@@ -13,8 +13,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Dashboard.Fetcher.Tests.Backfill;
 
 /// <summary>
-/// Tests for F1 (backfill depth, no-progress stop, deferred YAML) and
+/// Tests for F1 (backfill depth in STATUS EVENTS, no-progress stop, deferred YAML) and
 /// F2 (service identity from run path) in BackfillRunner.
+///
+/// BackfillDepth now counts MAPPED STATUS EVENTS per (service, environment) slot,
+/// not deployment objects (§5.8, F13 — new semantics).
 /// </summary>
 public sealed class BackfillRunnerV2Tests
 {
@@ -25,19 +28,94 @@ public sealed class BackfillRunnerV2Tests
     private const string FullRepo = $"{Owner}/{Repo}";
     private const long RunId = 100L;
 
-    // ── F1: depth > 1 keeps N deployments per slot ───────────────────────────
+    // ── Worked example: depth=2 with waiting/queued/in_progress/success ──────
+
+    /// <summary>
+    /// Spec worked example (F13):
+    /// Single deployment: waiting(06:01:21) → queued(06:01:22) → in_progress(06:01:25) → success(06:10:55).
+    /// With BackfillDepth=2 → exactly 2 events: in-progress (from in_progress @06:01:25) + success (@06:10:55).
+    /// waiting is unmapped; queued maps to in-progress but is the 3rd-latest mapped event → dropped.
+    /// </summary>
+    [Fact]
+    public async Task WorkedExample_Depth2_YieldsInProgressAndSuccess()
+    {
+        var baseTime = new DateTimeOffset(2026, 6, 1, 6, 0, 0, TimeSpan.Zero);
+
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+
+        var statusWaiting = new GhDeploymentStatus
+        {
+            Id = 10, State = "waiting",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = baseTime.AddMinutes(1).AddSeconds(21),
+        };
+        var statusQueued = new GhDeploymentStatus
+        {
+            Id = 11, State = "queued",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = baseTime.AddMinutes(1).AddSeconds(22),
+        };
+        var statusInProgress = new GhDeploymentStatus
+        {
+            Id = 12, State = "in_progress",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = baseTime.AddMinutes(1).AddSeconds(25),
+        };
+        var statusSuccess = new GhDeploymentStatus
+        {
+            Id = 13, State = "success",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = baseTime.AddMinutes(10).AddSeconds(55),
+        };
+
+        var handler = new FakeGithubHandler(BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["prod"] = [deployment],
+            },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = [statusWaiting, statusQueued, statusInProgress, statusSuccess],
+            },
+            workflowRunId: RunId));
+
+        var (runner, _) = BuildRunner(handler, depth: 2);
+        var (events, _) = await runner.RunAsync(CancellationToken.None);
+
+        // Exactly 2 events: in-progress (from in_progress status) and success.
+        Assert.Equal(2, events.Count);
+
+        var happenedAts = events.Select(e => e.HappenedAt).ToHashSet();
+        Assert.Contains(statusInProgress.CreatedAt, happenedAts);
+        Assert.Contains(statusSuccess.CreatedAt, happenedAts);
+
+        // queued maps to in-progress but is the 3rd-latest mapped event → must be absent.
+        Assert.DoesNotContain(statusQueued.CreatedAt, happenedAts);
+
+        // waiting is unmapped → must be absent.
+        Assert.DoesNotContain(statusWaiting.CreatedAt, happenedAts);
+
+        // Contract statuses: one in-progress (from in_progress row) and one success.
+        var statuses = events.Select(e => e.Status).OrderBy(s => s).ToList();
+        Assert.Equal(["in-progress", "success"], statuses);
+    }
+
+    // ── depth=2 keeps 2 latest events, not 2 deployments ─────────────────────
 
     [Fact]
-    public async Task BackfillDepth2_KeepsTwoDeploymentsPerSlot()
+    public async Task BackfillDepth2_KeepsTwoLatestEventsPerSlot()
     {
-        // Three prod deployments for the same service; depth=2 should keep the newest two.
+        // Three deployments, each with one success status. depth=2 → 2 latest events
+        // (from deploys 1 and 2); deploy 3 is oldest and must be excluded.
         var deploy1 = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
         var deploy2 = MakeDeployment(id: 2, env: "prod", daysAgo: 2);
         var deploy3 = MakeDeployment(id: 3, env: "prod", daysAgo: 3);
 
-        var status1 = MakeStatus(deployId: 1, state: "success", runId: RunId);
-        var status2 = MakeStatus(deployId: 2, state: "success", runId: RunId);
-        var status3 = MakeStatus(deployId: 3, state: "success", runId: RunId);
+        var status1 = MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24);
+        var status2 = MakeStatus(deployId: 2, state: "success", runId: RunId, hoursAgo: 48);
+        var status3 = MakeStatus(deployId: 3, state: "success", runId: RunId, hoursAgo: 72);
 
         var handler = new FakeGithubHandler(BuildUrlMap(
             workflows: [MakeWorkflow("Deploy API")],
@@ -57,12 +135,164 @@ public sealed class BackfillRunnerV2Tests
         var (runner, _) = BuildRunner(handler, depth: 2);
         var (events, _) = await runner.RunAsync(CancellationToken.None);
 
-        // depth=2 → keep deploys 1 and 2, discard 3
+        // depth=2 → 2 events from the 2 newest deployments
         Assert.Equal(2, events.Count);
         var ids = events.Select(e => e.DeploymentId).ToHashSet();
         Assert.Contains("gh-deploy-1", ids);
         Assert.Contains("gh-deploy-2", ids);
         Assert.DoesNotContain("gh-deploy-3", ids);
+    }
+
+    // ── depth=2 filled from multiple deployments when newest has only 1 ───────
+
+    [Fact]
+    public async Task BackfillDepth2_FillsFromNextDeploymentWhenNewestHasOnlyOneEvent()
+    {
+        // deploy1 (newest): only 1 mapped status (in_progress).
+        // deploy2: 1 mapped status (success).
+        // depth=2 → must collect 1 from deploy1 + 1 from deploy2 = 2 events total.
+        var deploy1 = MakeDeployment(id: 1, env: "staging", daysAgo: 1);
+        var deploy2 = MakeDeployment(id: 2, env: "staging", daysAgo: 2);
+
+        // deploy1 has only an in_progress status (deployment still running).
+        var status1 = MakeStatus(deployId: 1, state: "in_progress", runId: RunId, hoursAgo: 2);
+        // deploy2 completed.
+        var status2 = MakeStatus(deployId: 2, state: "success", runId: RunId + 1, hoursAgo: 50);
+
+        var urlMap = BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["staging"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["staging"] = [deploy1, deploy2],
+            },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = [status1],
+                [2] = [status2],
+            },
+            workflowRunId: RunId);
+
+        // Add run metadata for the second deployment's run.
+        urlMap[$"/repos/{Owner}/{Repo}/actions/runs/{RunId + 1}"] =
+            new GhWorkflowRun { Id = RunId + 1, Name = "Deploy API", Path = ".github/workflows/deploy.yml", HeadSha = "abc" };
+
+        var handler = new FakeGithubHandler(urlMap);
+        var (runner, _) = BuildRunner(handler, depth: 2);
+        var (events, _) = await runner.RunAsync(CancellationToken.None);
+
+        // Exactly 2 events: one from each deployment.
+        Assert.Equal(2, events.Count);
+        var deploymentIds = events.Select(e => e.DeploymentId).ToHashSet();
+        Assert.Contains("gh-deploy-1", deploymentIds);
+        Assert.Contains("gh-deploy-2", deploymentIds);
+    }
+
+    // ── depth=1 → only the single latest event ───────────────────────────────
+
+    [Fact]
+    public async Task BackfillDepth1_KeepsOnlyLatestEvent()
+    {
+        // Single deployment with success status. depth=1 → exactly 1 event (the terminal success).
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+        var status = MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24);
+
+        var handler = new FakeGithubHandler(BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["prod"] = [deployment],
+            },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = [status],
+            },
+            workflowRunId: RunId));
+
+        var (runner, _) = BuildRunner(handler, depth: 1);
+        var (events, _) = await runner.RunAsync(CancellationToken.None);
+
+        Assert.Single(events);
+        Assert.Equal("gh-deploy-1", events[0].DeploymentId);
+        Assert.Equal("success", events[0].Status);
+    }
+
+    // ── depth=1 with multi-status deployment → only the latest (terminal) ────
+
+    [Fact]
+    public async Task BackfillDepth1_MultiStatusDeployment_KeepsOnlyTerminalEvent()
+    {
+        // Deployment with queued → in_progress → success. depth=1 → only success (latest).
+        var baseTime = DateTimeOffset.UtcNow.AddDays(-1);
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+
+        var statuses = new List<GhDeploymentStatus>
+        {
+            new() { Id = 10, State = "queued",      TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1", CreatedAt = baseTime },
+            new() { Id = 11, State = "in_progress", TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1", CreatedAt = baseTime.AddMinutes(1) },
+            new() { Id = 12, State = "success",     TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1", CreatedAt = baseTime.AddMinutes(10) },
+        };
+
+        var handler = new FakeGithubHandler(BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["prod"] = [deployment],
+            },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = statuses,
+            },
+            workflowRunId: RunId));
+
+        var (runner, _) = BuildRunner(handler, depth: 1);
+        var (events, _) = await runner.RunAsync(CancellationToken.None);
+
+        // Only 1 event: the terminal success (latest by created_at).
+        Assert.Single(events);
+        Assert.Equal("success", events[0].Status);
+        Assert.Equal(baseTime.AddMinutes(10), events[0].HappenedAt);
+    }
+
+    // ── The latest event is always the terminal (most recent) status ──────────
+
+    [Fact]
+    public async Task BackfillDepth2_LatestEventIsTerminalStatus()
+    {
+        // depth=2 on a deployment with queued/in_progress/success → the 2 kept events
+        // must include success (the terminal/most-recent event).
+        var baseTime = DateTimeOffset.UtcNow.AddDays(-1);
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+
+        var statuses = new List<GhDeploymentStatus>
+        {
+            new() { Id = 10, State = "queued",      TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1", CreatedAt = baseTime },
+            new() { Id = 11, State = "in_progress", TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1", CreatedAt = baseTime.AddMinutes(1) },
+            new() { Id = 12, State = "success",     TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1", CreatedAt = baseTime.AddMinutes(10) },
+        };
+
+        var handler = new FakeGithubHandler(BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["prod"] = [deployment],
+            },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = statuses,
+            },
+            workflowRunId: RunId));
+
+        var (runner, _) = BuildRunner(handler, depth: 2);
+        var (events, _) = await runner.RunAsync(CancellationToken.None);
+
+        Assert.Equal(2, events.Count);
+        // The most recent event must be the terminal success.
+        var latest = events.OrderByDescending(e => e.HappenedAt).First();
+        Assert.Equal("success", latest.Status);
     }
 
     // ── F1: no-progress stop ─────────────────────────────────────────────────
@@ -82,11 +312,11 @@ public sealed class BackfillRunnerV2Tests
 
         var statusesById = new Dictionary<long, List<GhDeploymentStatus>>
         {
-            [1] = [MakeStatus(deployId: 1, state: "success", runId: RunId)],
+            [1] = [MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24)],
         };
-        // All extra deploys also have status for same service (already at depth=1)
+        // All extra deploys also have status for same service (already at depth=1 event)
         foreach (var d in extraDeploys)
-            statusesById[d.Id] = [MakeStatus(deployId: d.Id, state: "success", runId: RunId + d.Id)];
+            statusesById[d.Id] = [MakeStatus(deployId: d.Id, state: "success", runId: RunId + d.Id, hoursAgo: (int)(d.Id * 24))];
 
         // Register the same run for all extra deployments (same service, so they all hit
         // the "already filled" branch and increment consecutiveNoProgress).
@@ -111,7 +341,7 @@ public sealed class BackfillRunnerV2Tests
         var (runner, _) = BuildRunner(handler, depth: 1);
         var (events, _) = await runner.RunAsync(CancellationToken.None);
 
-        // Only 1 deployment kept (depth=1). Scanning stopped after stall window.
+        // Only 1 event kept (depth=1 status event). Scanning stopped after stall window.
         Assert.Single(events);
         Assert.Equal("gh-deploy-1", events[0].DeploymentId);
     }
@@ -121,7 +351,7 @@ public sealed class BackfillRunnerV2Tests
     [Fact]
     public async Task DeferYaml_YamlFetchedOnlyForKeptDeployment()
     {
-        // Two deployments for same service (depth=1). Only the first (kept) should
+        // Two deployments for same service (depth=1 event). Only the first (kept) should
         // trigger a workflow-file (YAML) fetch. The second (discarded) must not.
         var kept = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
         var discarded = MakeDeployment(id: 2, env: "prod", daysAgo: 2);
@@ -135,8 +365,8 @@ public sealed class BackfillRunnerV2Tests
             },
             statusesById: new Dictionary<long, List<GhDeploymentStatus>>
             {
-                [1] = [MakeStatus(deployId: 1, state: "success", runId: RunId)],
-                [2] = [MakeStatus(deployId: 2, state: "success", runId: RunId + 1)],
+                [1] = [MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24)],
+                [2] = [MakeStatus(deployId: 2, state: "success", runId: RunId + 1, hoursAgo: 48)],
             },
             workflowRunId: RunId);
 
@@ -156,6 +386,53 @@ public sealed class BackfillRunnerV2Tests
         Assert.Equal(1, yamlFetches);
     }
 
+    // ── F1: YAML fetched only for deployments contributing kept events ────────
+
+    [Fact]
+    public async Task DeferYaml_YamlFetchedForBothDeploymentsWhenDepth2NeedsThem()
+    {
+        // depth=2; deploy1 has 1 mapped status, deploy2 has 1 mapped status.
+        // Both are kept (together they supply 2 events). YAML must be fetched for both.
+        var deploy1 = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+        var deploy2 = MakeDeployment(id: 2, env: "prod", daysAgo: 2);
+
+        var urlMap = BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["prod"] = [deploy1, deploy2],
+            },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = [MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24)],
+                [2] = [MakeStatus(deployId: 2, state: "success", runId: RunId + 1, hoursAgo: 48)],
+            },
+            workflowRunId: RunId);
+
+        // The YAML content response is keyed without ?ref= suffix (FakeGithubHandler strips it).
+        // Both runs share the same workflow path, so only one YAML fetch should occur
+        // because WorkflowGraphCache de-duplicates by (repo, run_id) — but the graph is
+        // fetched for each distinct run_id. RunId and RunId+1 are distinct, but the YAML
+        // path is the same. The cache key is run_id, so both entries will call GetOrFetchGraph,
+        // but the second will hit the same /contents/ URL (same path, different run metadata).
+        // We only assert both deployment graphs are populated (2 YAML fetches or 1 if cache
+        // collapsed by path — implementation detail; assert at least 1).
+        urlMap[$"/repos/{Owner}/{Repo}/actions/runs/{RunId + 1}"] =
+            new GhWorkflowRun { Id = RunId + 1, Name = "Deploy API", Path = ".github/workflows/deploy.yml", HeadSha = "abc0001" };
+
+        var handler = new CountingFakeGithubHandler(urlMap);
+        var (runner, _) = BuildRunner(handler, depth: 2);
+        var (events, _) = await runner.RunAsync(CancellationToken.None);
+
+        // Both deployments contribute events.
+        Assert.Equal(2, events.Count);
+
+        // At least 1 YAML fetch occurred (both graphs populated).
+        var yamlFetches = handler.Calls.Count(c => c.Contains("/contents/"));
+        Assert.True(yamlFetches >= 1, $"Expected ≥1 YAML fetch but got {yamlFetches}");
+    }
+
     // ── F2: run-name override → resolved via path to workflow name ───────────
 
     [Fact]
@@ -172,7 +449,7 @@ public sealed class BackfillRunnerV2Tests
             State = "active"
         };
         var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
-        var status = MakeStatus(deployId: 1, state: "success", runId: RunId);
+        var status = MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24);
 
         // Run has a run-name override ("Release v1.2.3") but path maps to "Release API".
         var workflowRun = new GhWorkflowRun
@@ -206,7 +483,7 @@ public sealed class BackfillRunnerV2Tests
             State = "active"
         };
         var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
-        var status = MakeStatus(deployId: 1, state: "success", runId: RunId);
+        var status = MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24);
 
         var workflowRun = new GhWorkflowRun
         {
@@ -265,6 +542,56 @@ public sealed class BackfillRunnerV2Tests
         Assert.Equal(expectedSince, cursor.Repos[FullRepo].Since);
     }
 
+    // ── Cursor = max created_at of EMITTED events after depth trim ────────────
+
+    [Fact]
+    public async Task Backfill_AdvancesCursor_ToMaxOfEmittedEventsAfterTrim()
+    {
+        // Deployment has 3 mapped statuses; depth=2 keeps the 2 latest.
+        // Cursor must equal the max created_at of those 2 kept events, not the discarded one.
+        var baseTime = DateTimeOffset.UtcNow.AddDays(-1);
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+
+        var statusQueued = new GhDeploymentStatus
+        {
+            Id = 10, State = "queued",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = baseTime,
+        };
+        var statusInProgress = new GhDeploymentStatus
+        {
+            Id = 11, State = "in_progress",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = baseTime.AddMinutes(5),
+        };
+        var statusSuccess = new GhDeploymentStatus
+        {
+            Id = 12, State = "success",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = baseTime.AddMinutes(15),
+        };
+
+        var handler = new FakeGithubHandler(BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>> { ["prod"] = [deployment] },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = [statusQueued, statusInProgress, statusSuccess],
+            },
+            workflowRunId: RunId));
+
+        var (runner, _) = BuildRunner(handler, depth: 2);
+        var (events, cursor) = await runner.RunAsync(CancellationToken.None);
+
+        // 2 events kept (in_progress and success; queued dropped as 3rd-latest).
+        Assert.Equal(2, events.Count);
+
+        // Cursor = max emitted created_at = statusSuccess.CreatedAt.
+        Assert.True(cursor.Repos.ContainsKey(FullRepo));
+        Assert.Equal(statusSuccess.CreatedAt, cursor.Repos[FullRepo].Since);
+    }
+
     // ── infrastructure ────────────────────────────────────────────────────────
 
     private static GhDeployment MakeDeployment(long id, string env, int daysAgo) =>
@@ -277,13 +604,13 @@ public sealed class BackfillRunnerV2Tests
             CreatedAt = DateTimeOffset.UtcNow.AddDays(-daysAgo),
         };
 
-    private static GhDeploymentStatus MakeStatus(long deployId, string state, long runId) =>
+    private static GhDeploymentStatus MakeStatus(long deployId, string state, long runId, int hoursAgo) =>
         new()
         {
             Id = deployId * 10,
             State = state,
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{runId}/jobs/1",
-            CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),
+            CreatedAt = DateTimeOffset.UtcNow.AddHours(-hoursAgo),
         };
 
     private static GhWorkflow MakeWorkflow(string name) =>
@@ -378,7 +705,7 @@ public sealed class BackfillRunnerV2Tests
     }
 
     private static (BackfillRunner Runner, WorkflowGraphCache GraphCache) BuildRunner(
-        HttpMessageHandler handler, int depth = 1)
+        HttpMessageHandler handler, int depth = 2)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
 

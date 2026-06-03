@@ -47,7 +47,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F10 | **`parent_deployments` derived from workflow `needs` graph.** The adapter fetches the workflow YAML for each run, parses the deployment-job subgraph (`environment:` + `needs:`), and resolves parent edges to `deployment_id` values (§5.6). Any resolution failure → `parent_deployments = []`; ingest is never blocked. | Reproduces the deployment graph GitHub surfaces in the Actions Run UI. `explicit parent` is the Swimlanes default correlation predicate — accurate population here makes it work out of the box. |
 | F11 | **Workflow graph cached in-memory per `(repo, run_id)`.** Bounded LRU (≤ 200 entries). Cache entry includes workflow `name` (used as service identity), `path`, `head_sha`, and parsed deployment-job subgraph. | Avoids re-fetching the workflow YAML for each status event that shares a run; workflow runs are immutable so no invalidation is needed. |
 | F12 | **Service identity = workflow YAML `name:` field**, resolved via the run's `path` (e.g. `.github/workflows/deploy.yml`) → the active workflow with that path → its YAML `name:` field. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB__SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: path→workflow-name lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; SERVICE_MAP handles edge cases without restructuring the pipeline. |
-| F13 | **Backfill fills the last `BACKFILL_DEPTH` deployments per `(service, environment)` slot** (default 1). Enumerates active workflows and environments per repo; paginates newest-first. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress when its service is already at depth or is unknown. The YAML graph is fetched **only** for kept deployments; discarded deployments cost only statuses + run-metadata. `BACKFILL_MAX_AGE` is the hard backstop (whichever hits first). | No-progress stop bounds API calls for active envs with one service; defer-YAML avoids YAML fetches for discarded deployments. |
+| F13 | **Backfill fills the last `BACKFILL_DEPTH` status events per `(service, environment)` slot** (default 2). Enumerates active workflows and environments per repo; paginates deployments newest-first. For each candidate deployment, fetches its statuses and counts the mapped ones (§5.3; unmapped states like `waiting`/`inactive` don't count). Stops scanning a slot once `eventsSoFar ≥ BACKFILL_DEPTH`. After collecting candidate events, trims to the `BACKFILL_DEPTH` latest by `status.created_at` per slot before posting. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress when its service is already at depth or is unknown or has zero mapped statuses. The YAML graph is fetched **only** for deployments contributing kept events; discarded deployments cost only statuses + run-metadata. `BACKFILL_MAX_AGE` is the hard backstop. | Controls how many history drawer entries seed each slot at startup; status-event count matches what the history drawer shows. No-progress stop and defer-YAML bounds API cost as before. |
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
 | F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
@@ -308,7 +308,7 @@ Fills the store with the most recent deployment per `(service, environment)` slo
 #### 5.8.2 Per-repo procedure
 
 ```
-depth    ← BACKFILL_DEPTH (default 1)
+depth       ← BACKFILL_DEPTH (default 2)
 StallWindow ← 20  // consecutive no-progress deployments before stopping
 
 services ← GET /repos/{owner}/{repo}/actions/workflows?per_page=100
@@ -318,11 +318,13 @@ services ← GET /repos/{owner}/{repo}/actions/workflows?per_page=100
 
 envs     ← GET /repos/{owner}/{repo}/environments → [env.name]
 
-events   ← []
+candidates ← []   // (deployment, statuses, run_id, graph, service) tuples
 cutoff   ← now − BACKFILL_MAX_AGE
 
+// Pass 1: collect candidate deployments.
+// eventsSoFar[service] counts MAPPED STATUS EVENTS accumulated for each (service, env) slot.
 for each env E in envs:
-  filled ← {}   // service → count kept so far
+  eventsSoFar ← {}   // service → mapped-event count so far for this env
   consecutiveNoProgress ← 0
 
   paginate GET /repos/{owner}/{repo}/deployments?environment={E}&per_page=100 newest-first:
@@ -330,26 +332,38 @@ for each env E in envs:
       if D.created_at < cutoff: stop paginating this env
       if consecutiveNoProgress >= StallWindow: stop paginating this env  // F1 no-progress stop
 
-      statuses ← fetch D's statuses                              // always needed for event data
-      run_id   ← extract from any status.target_url (§5.6.1)
-      run      ← run_id != null ? FetchRunMetadata(repo, run_id) : null  // run metadata only (cheap)
-      service  ← run != null AND pathToService[run.path] exists
-                   ? pathToService[run.path]                     // F2: path → workflow name
-                   : ResolveService(run?.Name, repo)             // fallback: run display name
+      statuses   ← fetch D's statuses                              // always needed for event data
+      mappedCount ← count of statuses where StatusMapper.Map(state) ≠ null
+      run_id     ← extract from any status.target_url (§5.6.1)
+      run        ← run_id != null ? FetchRunMetadata(repo, run_id) : null  // cheap
+      service    ← run != null AND pathToService[run.path] exists
+                     ? pathToService[run.path]                     // F2: path → workflow name
+                     : ResolveService(run?.Name, repo)             // fallback: run display name
 
-      if service ∉ allServiceNames OR filled[service] >= depth:
+      if service ∉ allServiceNames OR eventsSoFar[service] >= depth OR mappedCount == 0:
         consecutiveNoProgress++
         continue
 
-      // Kept: now fetch the full YAML graph (for parent derivation) — deferred until here (F1)
-      graph ← GetOrFetchGraph(repo, run_id)   // §5.6.2 LRU cache (run metadata re-used)
-      events.AddAll(BuildEvents(D, statuses, graph))   // §5.3 status mapping + §5.6 parent derivation
-      filled[service]++
+      // Kept: fetch the full YAML graph (parent derivation) — deferred until here (F1)
+      graph ← GetOrFetchGraph(repo, run_id)   // §5.6.2 LRU cache
+      candidates.Add((D, statuses, run_id, graph, service))
+      eventsSoFar[service] += mappedCount
       consecutiveNoProgress ← 0
+
+// Pass 2: build events, trim to depth latest per slot, advance cursor.
+envMap ← BuildEnvToDeploymentIdMap(candidates)  // §5.6.4 — needs all candidates first
+allEvents ← []
+for each candidate (D, statuses, run_id, graph, service) in candidates:
+  for each status S in statuses where StatusMapper.Map(S.state) ≠ null:
+    allEvents.Add(BuildEvent(D, S, graph, envMap))   // §5.3 mapping + §5.6 parent derivation
+
+// Trim to depth latest by happened_at per (service, environment) slot.
+events ← allEvents grouped by (service, environment),
+          each group ordered descending by happened_at, take depth, flatten
 ```
 
 - Sort collected `events` by `happened_at` ascending before posting (preserves append-only log ordering).
-- Advance cursor to `max(status.created_at)` across all events.
+- Advance cursor to `max(status.created_at)` across **emitted** (post-trim) events.
 - Discarded deployments cost only statuses + run-metadata; the YAML fetch is deferred until a deployment is kept (F1).
 
 #### 5.8.3 Service resolution
@@ -498,7 +512,7 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | `INITIAL_LOOKBACK` | `7.00:00:00` | normal poll first-run window (F7); also the default for `BACKFILL_MAX_AGE` when unset |
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
 | `BACKFILL_MAX_AGE` | `30.00:00:00` | how far back backfill scans per environment; defaults to `INITIAL_LOOKBACK` |
-| `BACKFILL_DEPTH` | `1` | number of most-recent deployments to keep per `(service, environment)` slot during backfill (F13); default 1 (only the latest) |
+| `BACKFILL_DEPTH` | `2` | number of latest status events to seed per `(service, environment)` slot during backfill (F13); default 2 |
 | `GITHUB__BaseUrl` | `https://api.github.com` | overridable for the integration mock |
 | `GITHUB__Token` | *(secret)* | PAT / GitHub App token |
 | `GITHUB__Repos` | `acme/api,acme/web` | repos to poll |

@@ -170,7 +170,7 @@ services:
       GITHUB__RateLimitBudgetPct: "${GITHUB_RATE_LIMIT_BUDGET_PCT:-30}"
       BACKFILL: "${BACKFILL:-false}"
       BACKFILL_MAX_AGE: "${BACKFILL_MAX_AGE:-}"
-      BACKFILL_DEPTH: "${BACKFILL_DEPTH:-1}"
+      BACKFILL_DEPTH: "${BACKFILL_DEPTH:-2}"
     depends_on:
       api:
         condition: service_healthy
