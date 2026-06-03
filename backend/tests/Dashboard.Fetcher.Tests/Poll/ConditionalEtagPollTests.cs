@@ -188,30 +188,39 @@ public sealed class ConditionalEtagPollTests
 
         var stagingDeploy = new GhDeployment
         {
-            Id = StagingDeployId, Sha = "shaSTG", Ref = "main",
-            Environment = "staging", CreatedAt = since1.AddMinutes(1),
+            Id = StagingDeployId,
+            Sha = "shaSTG",
+            Ref = "main",
+            Environment = "staging",
+            CreatedAt = since1.AddMinutes(1),
         };
         var prodDeploy = new GhDeployment
         {
-            Id = ProdDeployId, Sha = "shaPRD", Ref = "main",
-            Environment = "production", CreatedAt = since1.AddMinutes(2),
+            Id = ProdDeployId,
+            Sha = "shaPRD",
+            Ref = "main",
+            Environment = "production",
+            CreatedAt = since1.AddMinutes(2),
         };
 
         var stagingInProgress = new GhDeploymentStatus
         {
-            Id = 600, State = "in_progress",
+            Id = 600,
+            State = "in_progress",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{SharedRunId}/jobs/1",
             CreatedAt = since1.AddMinutes(5),
         };
         var prodInProgress = new GhDeploymentStatus
         {
-            Id = 610, State = "in_progress",
+            Id = 610,
+            State = "in_progress",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{SharedRunId}/jobs/2",
             CreatedAt = since1.AddMinutes(6),
         };
         var prodSuccess = new GhDeploymentStatus
         {
-            Id = 611, State = "success",
+            Id = 611,
+            State = "success",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{SharedRunId}/jobs/2",
             CreatedAt = since2.AddMinutes(5),
         };
