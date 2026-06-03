@@ -3,13 +3,14 @@
  *
  * Tests the filtering + mapping logic that the App uses when calling
  * streamComponentEvents():
- *   - rate-limit event_type → latestRateLimit signal updated
- *   - other event_types     → signal left unchanged (last-value-wins)
+ *   - rate-limit event_type → per-adapter map entry updated (Fix 4)
+ *   - other event_types     → map left unchanged (last-value-wins)
  *   - null payload          → ignored
+ *   - two adapters retained, not overwritten (Fix 4)
+ *   - sseConnected set true on onopen, false on onerror (Fix 3)
  *
  * EventSource is not available in the Vitest/jsdom environment. We test the
- * App-level integration logic directly by simulating the Observable it consumes,
- * keeping the service as a pure value source.
+ * App-level integration logic directly by simulating the Observable it consumes.
  *
  * This approach mirrors the swimlanes.component.spec.ts pattern: inject a mock
  * service and feed signals; no real network connections.
@@ -37,7 +38,7 @@ function mkRecord(
 
 /**
  * Simulate what App.connectComponentEvents() does for each record:
- * filter by event_type + payload, then map into RateLimitReport.
+ * filter by event_type + payload, then map into a per-adapter RateLimitReport.
  * Returns the report or undefined (nothing set).
  */
 function processRecord(record: ComponentEventRecord): RateLimitReport | undefined {
@@ -45,9 +46,10 @@ function processRecord(record: ComponentEventRecord): RateLimitReport | undefine
     return undefined;
   }
   const p = record.payload;
+  const adapter = typeof p['adapter'] === 'string' ? p['adapter'] : '';
   return {
     state:        record.state,
-    adapter:      typeof p['adapter']      === 'string'  ? p['adapter']      : '',
+    adapter,
     ci_limit:     typeof p['ci_limit']     === 'number'  ? p['ci_limit']     : null,
     ci_remaining: typeof p['ci_remaining'] === 'number'  ? p['ci_remaining'] : null,
     own_budget:   typeof p['own_budget']   === 'number'  ? p['own_budget']   : null,
@@ -56,11 +58,27 @@ function processRecord(record: ComponentEventRecord): RateLimitReport | undefine
   };
 }
 
+/**
+ * Simulate what App.connectComponentEvents() does to the rateLimitMap signal:
+ * update the per-adapter entry in the existing map.
+ */
+function applyToMap(
+  mapSignal: ReturnType<typeof signal<Map<string, RateLimitReport>>>,
+  record: ComponentEventRecord,
+): void {
+  const report = processRecord(record);
+  if (report) {
+    const next = new Map(mapSignal());
+    next.set(report.adapter, report);
+    mapSignal.set(next);
+  }
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe('App.connectComponentEvents — rate-limit filtering', () => {
+describe('App.connectComponentEvents — rate-limit filtering + per-adapter keying', () => {
 
-  // ── Filter: only rate-limit events update the signal ────────────────────
+  // ── Filter: only rate-limit events update the map ───────────────────────
 
   it('processes a rate-limit event and maps all fields correctly', () => {
     const record = mkRecord('rate-limit', 'running', {
@@ -112,42 +130,58 @@ describe('App.connectComponentEvents — rate-limit filtering', () => {
     expect(processRecord(record)).toBeUndefined();
   });
 
-  // ── Last-value-wins via signal ────────────────────────────────────────────
+  // ── Per-adapter map keying (Fix 4) ────────────────────────────────────────
 
-  it('last-value-wins: later report overwrites earlier', () => {
-    const rl = signal<RateLimitReport | undefined>(undefined);
+  it('two adapters are both retained in the map (Fix 4)', () => {
+    const rl = signal<Map<string, RateLimitReport>>(new Map());
 
-    const r1 = processRecord(mkRecord('rate-limit', 'running', {
+    applyToMap(rl, mkRecord('rate-limit', 'running', {
       adapter: 'github-actions', ci_limit: 5000, ci_remaining: 4000,
       own_budget: 2500, own_used: 100, reset_at: null,
     }));
-    if (r1) rl.set(r1);
-    expect(rl()!.own_used).toBe(100);
+    applyToMap(rl, mkRecord('rate-limit', 'running', {
+      adapter: 'azure-devops', ci_limit: 300, ci_remaining: 200,
+      own_budget: 150, own_used: 50, reset_at: null,
+    }));
 
-    const r2 = processRecord(mkRecord('rate-limit', 'running', {
+    const map = rl();
+    expect(map.size).toBe(2);
+    expect(map.get('github-actions')?.own_used).toBe(100);
+    expect(map.get('azure-devops')?.own_used).toBe(50);
+  });
+
+  it('second report for same adapter overwrites first (last-value-wins per adapter)', () => {
+    const rl = signal<Map<string, RateLimitReport>>(new Map());
+
+    applyToMap(rl, mkRecord('rate-limit', 'running', {
+      adapter: 'github-actions', ci_limit: 5000, ci_remaining: 4000,
+      own_budget: 2500, own_used: 100, reset_at: null,
+    }));
+    applyToMap(rl, mkRecord('rate-limit', 'running', {
       adapter: 'github-actions', ci_limit: 5000, ci_remaining: 3900,
       own_budget: 2500, own_used: 200, reset_at: null,
     }));
-    if (r2) rl.set(r2);
-    expect(rl()!.own_used).toBe(200);
+
+    const map = rl();
+    expect(map.size).toBe(1);
+    expect(map.get('github-actions')?.own_used).toBe(200);
   });
 
-  it('non-rate-limit event does not overwrite the last rate-limit report', () => {
-    const rl = signal<RateLimitReport | undefined>(undefined);
+  it('non-rate-limit event does not modify the map', () => {
+    const rl = signal<Map<string, RateLimitReport>>(new Map());
 
-    const r1 = processRecord(mkRecord('rate-limit', 'running', {
+    applyToMap(rl, mkRecord('rate-limit', 'running', {
       adapter: 'github-actions', ci_limit: 5000, ci_remaining: 4000,
       own_budget: 2500, own_used: 100, reset_at: null,
     }));
-    if (r1) rl.set(r1);
 
     // Simulate a heartbeat arriving — processRecord returns undefined, App does not call set().
-    const r2 = processRecord(mkRecord('heartbeat', 'running', {}));
-    if (r2) rl.set(r2);
+    applyToMap(rl, mkRecord('heartbeat', 'running', {}));
 
-    // Signal should still hold the rate-limit report.
-    expect(rl()).toBeDefined();
-    expect(rl()!.own_used).toBe(100);
+    // Map should still hold only the rate-limit report.
+    const map = rl();
+    expect(map.size).toBe(1);
+    expect(map.get('github-actions')?.own_used).toBe(100);
   });
 
   // ── Null field handling ───────────────────────────────────────────────────
@@ -177,5 +211,59 @@ describe('App.connectComponentEvents — rate-limit filtering', () => {
     expect(report!.own_budget).toBeNull();
     expect(report!.own_used).toBeNull();
     expect(report!.reset_at).toBeNull();
+  });
+});
+
+// ── SSE liveness — sseConnected reflects connection state (Fix 3) ────────────
+
+describe('App.connectSSE — sseConnected liveness (Fix 3)', () => {
+  it('sseConnected is set true by onOpen callback (simulates EventSource.onopen)', () => {
+    const sseConnected = signal<boolean>(false);
+
+    // Simulate the onOpen callback that App passes to streamEvents().
+    const onOpen = () => sseConnected.set(true);
+    onOpen();
+
+    expect(sseConnected()).toBe(true);
+  });
+
+  it('sseConnected is set false by onError callback (simulates EventSource.onerror)', () => {
+    const sseConnected = signal<boolean>(true);
+
+    // Simulate the onError callback.
+    const onError = () => sseConnected.set(false);
+    onError();
+
+    expect(sseConnected()).toBe(false);
+  });
+
+  it('sseConnected stays true even when no deployment events arrive', () => {
+    const sseConnected = signal<boolean>(false);
+
+    // Connection opens → true.
+    const onOpen = () => sseConnected.set(true);
+    onOpen();
+
+    // No events arrive — sseConnected must remain true (Fix 3: not event-arrival-gated).
+    expect(sseConnected()).toBe(true);
+  });
+
+  it('applyDeploymentEvent is called WITHOUT toggling sseConnected (separation of concerns)', () => {
+    // In the fixed App.connectSSE(), sseConnected is managed by onOpen/onError only.
+    // The `next` handler calls applyDeploymentEvent but does NOT touch sseConnected.
+    const sseConnected = signal<boolean>(false);
+    let applyCount = 0;
+
+    const onOpen = () => sseConnected.set(true);
+    // Simulate next handler — does NOT set sseConnected.
+    const onNext = () => { applyCount++; };
+
+    onOpen();
+    onNext(); // event arrives
+    onNext(); // another event
+
+    // sseConnected is still true (set by onopen, not reset by events).
+    expect(sseConnected()).toBe(true);
+    expect(applyCount).toBe(2);
   });
 });

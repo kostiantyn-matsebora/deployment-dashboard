@@ -52,13 +52,13 @@ Requirements distilled from design-iteration conversations. One requirement per 
 
 Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.md), [`docs/api/api-guidelines.md`](../api/api-guidelines.md) §11 "Rate-limit report payload".
 
-**Stream.** The SPA subscribes to `GET /api/control/events/stream` (SSE, event name `component`), filters frames where `event_type === "rate-limit"`, and keeps the latest report (last-value-wins; no history).
+**Stream.** The SPA subscribes to `GET /api/control/events/stream` (SSE, event name `component`), filters frames where `event_type === "rate-limit"`, and maintains a **per-adapter map** keyed by `payload.adapter` (last-value-wins per adapter; no history).
 
-**Visibility.** The chip is rendered only after the first qualifying event arrives; it is absent on initial load.
+**Visibility.** Chips are rendered only after the first qualifying event arrives; absent on initial load. The last-known per-adapter map persists to `localStorage` (key `dd.rateLimit`) and is hydrated on init so chips appear immediately after reload.
 
-**Chip (`.hdr-icons` group).** A compact icon-button in the header icon group. Displays inline value `own_used / own_budget`. Clicking opens a `p-popover` with the full breakdown.
+**Chips (`.hdr-icons` group).** One compact icon-button per adapter, sorted alphabetically by adapter name. Each displays inline `own_used / own_budget`. Clicking opens that adapter's `p-popover` with the full breakdown. With a single adapter the header looks identical to the single-chip design.
 
-**Popover fields.**
+**Popover fields (per chip).**
 - `adapter` — CI/CD adapter name; always present.
 - `own_used / own_budget` — fetcher's own request usage vs self-throttle budget; displays `—` for null values.
 - Usage bar — visual proportion of `own_used / own_budget`; rendered only when `own_budget > 0`; never divides by zero.
@@ -67,6 +67,8 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 - `state` badge — `running` (green) or `paused` (amber); styled distinctly.
 
 **Null safety.** Any null numeric or time field renders as an em-dash (`—`). No `NaN` may appear in the UI.
+
+**Live/SSE indicator.** `sseConnected` reflects `EventSource` connection state: `true` on `onopen`, `false` on `onerror` or when the connection is closed. It is independent of data-event arrival — the indicator stays green during idle periods between deployment events (e.g., `: ping` heartbeats keep the connection alive but do not fire JS events).
 
 ### Live interactions
 
