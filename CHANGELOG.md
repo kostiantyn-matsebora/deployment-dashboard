@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [0.4.0] - 2026-06-03
 
+### Changed
+
+- **Fetcher backfill is now chunked and resumable.** Backfill streams one chunk per (repo, environment), posted and checkpointed incrementally instead of all-or-nothing. A large repo fills the store across multiple rate-limit windows and, after an interruption (crash or rate-limit pause + restart), resumes without re-scanning already-completed environments. (`ICiCdAdapter.FetchAsync` now returns `IAsyncEnumerable<FetchResult>`; the opaque cursor carries backfill progress and decodes backward-compatibly. GitHub API usage is identical on an uninterrupted pass and strictly lower on resume.)
+- **Fetcher live poll no longer re-reads finished deployments.** Deployments already in a terminal state (`success`/`failure`/`error`/`inactive`) are cached and skipped on subsequent poll cycles, cutting an idle cycle from ~14 GitHub calls to ~1; new and in-flight deployments are still polled every cycle. Parent-deployment edges for promotion chains are preserved (terminal deployments stay in the run→environment map via a cached run id).
+
 
 ## [0.3.0] - 2026-06-03
 
