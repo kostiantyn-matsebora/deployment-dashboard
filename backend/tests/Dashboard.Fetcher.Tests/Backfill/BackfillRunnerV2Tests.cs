@@ -45,25 +45,29 @@ public sealed class BackfillRunnerV2Tests
 
         var statusWaiting = new GhDeploymentStatus
         {
-            Id = 10, State = "waiting",
+            Id = 10,
+            State = "waiting",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
             CreatedAt = baseTime.AddMinutes(1).AddSeconds(21),
         };
         var statusQueued = new GhDeploymentStatus
         {
-            Id = 11, State = "queued",
+            Id = 11,
+            State = "queued",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
             CreatedAt = baseTime.AddMinutes(1).AddSeconds(22),
         };
         var statusInProgress = new GhDeploymentStatus
         {
-            Id = 12, State = "in_progress",
+            Id = 12,
+            State = "in_progress",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
             CreatedAt = baseTime.AddMinutes(1).AddSeconds(25),
         };
         var statusSuccess = new GhDeploymentStatus
         {
-            Id = 13, State = "success",
+            Id = 13,
+            State = "success",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
             CreatedAt = baseTime.AddMinutes(10).AddSeconds(55),
         };
@@ -554,19 +558,22 @@ public sealed class BackfillRunnerV2Tests
 
         var statusQueued = new GhDeploymentStatus
         {
-            Id = 10, State = "queued",
+            Id = 10,
+            State = "queued",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
             CreatedAt = baseTime,
         };
         var statusInProgress = new GhDeploymentStatus
         {
-            Id = 11, State = "in_progress",
+            Id = 11,
+            State = "in_progress",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
             CreatedAt = baseTime.AddMinutes(5),
         };
         var statusSuccess = new GhDeploymentStatus
         {
-            Id = 12, State = "success",
+            Id = 12,
+            State = "success",
             TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
             CreatedAt = baseTime.AddMinutes(15),
         };
