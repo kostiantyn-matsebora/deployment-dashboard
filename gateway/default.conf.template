@@ -78,6 +78,13 @@ server {
     location = /healthz { proxy_pass http://api; }
     location = /readyz  { proxy_pass http://api; }
 
+    # ── API docs — Scalar reference UI + OpenAPI document (read-only, GW10) ──────
+    # Reachable through the single public surface; same default buffering as /api/.
+    # Bare /scalar redirects to /scalar/v1; the SPA must not swallow these paths.
+    location = /scalar  { proxy_pass http://api; }
+    location /scalar/   { proxy_pass http://api; }
+    location /openapi/  { proxy_pass http://api; }
+
     # ── Frontend SPA ────────────────────────────────────────────────────────────
     # try_files fallback is owned by the frontend container (GW3).
     # Variable-based proxy_pass defers DNS resolution so the gateway starts

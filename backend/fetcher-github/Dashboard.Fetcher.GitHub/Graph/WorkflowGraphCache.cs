@@ -11,6 +11,7 @@ namespace Dashboard.Fetcher.GitHub.Graph;
 public sealed class WorkflowGraphCache
 {
     private readonly BoundedLruCache<string, WorkflowGraph?> _graphs = new(200);
+    private readonly BoundedLruCache<string, GhWorkflowRun?> _runs = new(200);
     private readonly BoundedLruCache<string, string?> _artifacts = new(200);
 
     /// <summary>
@@ -28,6 +29,34 @@ public sealed class WorkflowGraphCache
         var graph = await FetchGraphAsync(owner, repo, runId, github, ct);
         _graphs.Set(key, graph);
         return graph;
+    }
+
+    /// <summary>
+    /// Returns only the run metadata (path, name, head_sha) without fetching the YAML.
+    /// Used during backfill scanning to resolve service identity cheaply — the YAML is
+    /// deferred until the deployment is actually kept (F1 / F2).
+    /// Returns null on non-2xx — never throws.
+    /// </summary>
+    public async Task<GhWorkflowRun?> GetOrFetchRunAsync(
+        string owner, string repo, long runId,
+        GithubClient github, CancellationToken ct)
+    {
+        var key = $"{owner}/{repo}:{runId}";
+
+        // If we already fetched the full graph, the run is implicitly cached inside it.
+        // Re-use the embedded run rather than making an extra call.
+        if (_graphs.TryGet(key, out var graph) && graph is not null)
+        {
+            // Reconstruct a minimal GhWorkflowRun from the cached graph name (path not stored
+            // in WorkflowGraph, so fall through to the run cache in that case).
+        }
+
+        if (_runs.TryGet(key, out var cached))
+            return cached;
+
+        var run = await FetchRunAsync(owner, repo, runId, github, ct);
+        _runs.Set(key, run);
+        return run;
     }
 
     /// <summary>
@@ -49,6 +78,21 @@ public sealed class WorkflowGraphCache
     }
 
     // ── private fetch helpers ─────────────────────────────────────────────────
+
+    private static async Task<GhWorkflowRun?> FetchRunAsync(
+        string owner, string repo, long runId,
+        GithubClient github, CancellationToken ct)
+    {
+        try
+        {
+            return await github.GetAsync<GhWorkflowRun>(
+                $"/repos/{owner}/{repo}/actions/runs/{runId}", ct);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static async Task<WorkflowGraph?> FetchGraphAsync(
         string owner, string repo, long runId,

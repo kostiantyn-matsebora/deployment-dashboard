@@ -12,7 +12,7 @@
  */
 
 import { Subject } from 'rxjs';
-import { DemoService } from '../src/demo/demo.service';
+import { DemoService, MAX_EMIT_DELAY_MS } from '../src/demo/demo.service';
 import { ResetCoordinator } from '../src/control/reset-coordinator';
 import { EmitService } from '../src/demo/emit.service';
 
@@ -243,5 +243,70 @@ describe('DemoService.startIngest', () => {
       // The key invariant: runner.run is not called a second time.
       expect(status.state).toBe('running');
     });
+  });
+});
+
+describe('DemoService — emit delay clamping (CodeQL js/resource-exhaustion)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /** Replace runner.run/runWire with capturing spies so no events are posted. */
+  function spyOnRunner(svc: DemoService): jest.Mock {
+    const runner = (svc as unknown as { runner: { run: jest.Mock; runWire: jest.Mock } }).runner;
+    const spy = jest.fn().mockResolvedValue(undefined);
+    runner.run     = spy;
+    runner.runWire = spy;
+    return spy;
+  }
+
+  // The delay is the 4th positional arg to runner.run / runner.runWire.
+  const delayArg = (spy: jest.Mock) => spy.mock.calls[0][3] as number;
+
+  it('clamps an excessive delay_ms (startIngest) down to MAX_EMIT_DELAY_MS', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+    const spy = spyOnRunner(svc);
+
+    await svc.startIngest({ dataset: 'demo', delay_ms: 10_000_000 });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(delayArg(spy)).toBe(MAX_EMIT_DELAY_MS);
+  });
+
+  it('clamps a negative delay_ms (startIngest) up to 0', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+    const spy = spyOnRunner(svc);
+
+    await svc.startIngest({ dataset: 'demo', delay_ms: -500 });
+
+    expect(delayArg(spy)).toBe(0);
+  });
+
+  it('collapses a non-finite delay_ms (NaN) to 0', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+    const spy = spyOnRunner(svc);
+
+    await svc.startIngest({ dataset: 'demo', delay_ms: Number.NaN });
+
+    expect(delayArg(spy)).toBe(0);
+  });
+
+  it('clamps an excessive delayMs on the legacy start() path', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+    const spy = spyOnRunner(svc);
+
+    await svc.start('demo-set', Number.MAX_SAFE_INTEGER);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(delayArg(spy)).toBe(MAX_EMIT_DELAY_MS);
+  });
+
+  it('passes a legitimate in-range delay through unchanged', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+    const spy = spyOnRunner(svc);
+
+    await svc.startIngest({ dataset: 'demo', delay_ms: 250 });
+
+    expect(delayArg(spy)).toBe(250);
   });
 });

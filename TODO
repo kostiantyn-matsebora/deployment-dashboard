@@ -4,8 +4,13 @@
 ☐ Fetcher after each cycle of fetching must report event to control API containimg CI/CD api limits, own limits and own usage of ci/cd API, information about usage and limits must be shown on dashboard
 ✔ Add views of control api and components event streams @done(26-05-31 22:40)
 ✔ Create adopter documentation and gh pages @done(26-06-01)
-☐ Expose scalar UI via gateway
+✔ Expose scalar UI via gateway @done(26-06-03)
 ✔ Add logo wherever its suitable @done(26-06-02 03:27)
 ✔ Make component events stream instead of polling @done(26-06-02)
 ☐ Add corellation ID to the events to corellate them with command and each other
+☐ Split gateway into a separate demo image (FROM production gateway) so the production gateway carries no /demo routes or DEMO_DRIVER_UPSTREAM at all; the demo image layers the demo-driver routes on top
+☐ Rework api-tests to follow the adopter full-pull path — production compose (no demo overlay), --profile full-pull, with demo-driver + github-emulator added via their own profiles and the fetcher pointed at the emulator (GITHUB_BASE_URL) as the only fake. Exercises the real production profile (catches gateway/compose/profile regressions the current demo-flavored stack masks)
+✔ Optimize live poll with ETag/If-None-Match on /deployments and /deployments/{id}/statuses — a conditional 304 is free (does not count against the rate limit); GithubClient handles 304 but never sends If-None-Match, so F8 is effectively unimplemented. (Skip-terminal — not re-reading finished deployments — is DONE in #237; ETag would make the remaining per-cycle /deployments list + any in-flight deployment re-reads free too.) @done(26-06-03)
 ✔ Create release lifecycle for solution @done(26-06-01 22:27)
+✔ Add trivy scanning for docker image build workflows @done(26-06-03)
+☐ Add `waiting` and `queued` as distinct deployment statuses (contract DeploymentStatus + OpenAPI + frontend tile/colors + fetcher StatusMapper) instead of collapsing to in-progress. `waiting` = blocked on a deployment protection rule (required reviewers / wait timer) — currently dropped by the fetcher; `queued` currently maps to in-progress. Surfacing them distinctly shows approval-gated and queued deployments (e.g. protected production environments).

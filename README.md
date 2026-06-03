@@ -12,6 +12,7 @@
   <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/releases"><img src="https://img.shields.io/github/v/release/kostiantyn-matsebora/deployment-dashboard?display_name=tag&sort=semver" alt="Latest release"></a>
   <a href="https://kostiantyn-matsebora.github.io/deployment-dashboard/"><img src="https://img.shields.io/badge/docs-online-blue" alt="Docs"></a>
+  <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/security/code-scanning"><img src="https://img.shields.io/badge/security-Trivy-1904DA?logo=trivy&logoColor=white" alt="Trivy image scanning"></a>
   <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20with-Claude%20Code-D97757?logo=claude&logoColor=white" alt="Built with Claude Code"></a>
 </p>
 
@@ -90,17 +91,18 @@ curl -X POST "$DASHBOARD_URL/api/deployments" \
 
 ## Deploy for your team
 
-Fetch the env template, fill in your secrets, then start the stack from the OCI artifact — no clone required:
+Fetch the compose file and env template, fill in your secrets, then start — no clone required:
 
 ```bash
+curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/docker-compose.yaml
 curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/compose/.env.example
 cp .env.example .env
 # edit .env — set API_KEY, POSTGRES_USER, POSTGRES_PASSWORD (+ POSTGRES_HOST for standalone)
 
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose:0.2.0 --profile full up -d
+docker compose --profile full up -d
 ```
 
-**Shapes:** `standalone` (external PostgreSQL) or `full` (bundled PostgreSQL); add `-pull` to either for the optional Fetcher. `demo` is for evaluation only. The gateway (`:8080`) is the only published port. Pin a version via `DASHBOARD_VERSION=0.2.0` in `.env` (no leading `v`).
+**Shapes:** `standalone` (external PostgreSQL) or `full` (bundled PostgreSQL); add `-pull` to either for the optional Fetcher. `demo` is for evaluation only. The gateway (`:8080`) is the only published port. Pin a version via `DASHBOARD_VERSION=0.2.1` in `.env` (no leading `v`).
 
 [Install & deploy →](docs/guide/install.md)
 

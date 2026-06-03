@@ -200,6 +200,12 @@ public sealed class FetcherReadinessIndicatorTests
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    private static async IAsyncEnumerable<Dashboard.Fetcher.Abstractions.FetchResult> EmptyChunks()
+    {
+        yield return new Dashboard.Fetcher.Abstractions.FetchResult([], null);
+        await Task.CompletedTask;
+    }
+
     private static PollLoop MakePollLoop(IFetcherReadinessIndicator? readiness = null)
     {
         var adapter = Substitute.For<Dashboard.Fetcher.Abstractions.ICiCdAdapter>();
@@ -207,7 +213,7 @@ public sealed class FetcherReadinessIndicatorTests
         adapter.FetchAsync(
             Arg.Any<string?>(),
             Arg.Any<CancellationToken>())
-            .Returns(new Dashboard.Fetcher.Abstractions.FetchResult([], null));
+            .Returns(EmptyChunks());
 
         var ingest = Substitute.For<Dashboard.Fetcher.Ingest.IIngestClient>();
         var state = Substitute.For<Dashboard.Fetcher.Ingest.IFetcherStateClient>();

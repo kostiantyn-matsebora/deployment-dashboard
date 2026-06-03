@@ -51,13 +51,31 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 - Exception: user explicitly instructs a direct push to `main`.
 - Default when user says "push": push the current branch, not `main`.
 
-**Session worktree.** When the `SessionStart` hook emits `additionalContext` containing an `EnterWorktree` instruction with a worktree path, call `EnterWorktree` with that path immediately — before reading or responding to the user's first message. Call it directly; `EnterWorktree` does not require loading its schema via `ToolSearch` first (the worktree-entry guard blocks `ToolSearch` until `EnterWorktree` completes).
-
-**Lazy branching.** Session worktrees start in detached HEAD. Before any `git commit`, first run `git checkout -b <conventional-name>` to create a properly named branch. The `Invoke-BranchGuard.ps1` hook enforces this mechanically and will block the commit if HEAD is still detached.
-
 ## Agent dispatch
 
 Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
+
+## Code intelligence (Serena-first)
+
+The Serena MCP server (`mcp__serena__*`) exposes symbol-level retrieval and editing via language servers (C# / TypeScript / PowerShell). **Prefer it over `Read` / `Grep` wherever code symbols apply** — it returns targeted symbols, not whole files, cutting token use across agent turns.
+
+**Load before use (mandatory).** Serena's tools are *deferred* — their schemas are unloaded, so they cannot be called until fetched. At the start of any code task, load them via `ToolSearch` (e.g. `select:mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols`). Skip this and agents silently default to `Grep` / `Read`; this step is what makes the preference below take effect.
+
+- **Understand code.** `get_symbols_overview` (a file's top-level symbols), then `find_symbol` (locate; `depth=1` for members, `include_body` only when you need the source).
+- **Trace impact before editing a shared symbol.** `find_referencing_symbols` / `find_implementations` / `find_declaration` — not a grep-and-read sweep.
+- **Edit code.** `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` instead of full-file rewrites.
+- **Fall back to `Read` / `Grep`** for declarative/non-code files (YAML, JSON, Dockerfiles, configs), exact line-range reads, or content Serena's LSPs don't index well (e.g. PowerShell beyond the fallback tier). For **Markdown docs** prefer the markdown MCP (see *Docs intelligence* below), not `Read`.
+
+## Docs intelligence (markdown-first)
+
+The markdown MCP server (`mcp__markdown__*`, `ofershap/mcp-server-markdown`) exposes structural, embedding-free section retrieval over `.md` files via the heading tree. **Prefer it over `Read` wherever a doc section applies** — it returns one section, not the whole file, cutting token use across agent turns. The docs analogue of *Code intelligence* above; paths resolve against the project root, so pass relative paths (`docs/index.md`).
+
+**Load before use (mandatory).** Its tools are *deferred* — load via `ToolSearch` (e.g. `select:mcp__markdown__list_headings,mcp__markdown__get_section,mcp__markdown__search_docs`). Skip this and agents silently default to `Read`; this step is what makes the preference below take effect.
+
+- **Map, then extract.** `list_headings` (a file's heading tree / TOC) before reading, then `get_section` to pull only the target heading's content — pairs with the index-first navigation in *Sources of truth*.
+- **Locate across docs.** `list_files` (enumerate `.md`) + `search_docs` (case-insensitive keyword scan, **not** semantic) to find the file, then `get_section` to extract.
+- **Address by heading TEXT, not anchor slug.** `get_section(file, "Sources of truth")`, never `"sources-of-truth"` — `index.md` cross-links use `#slugs`, so convert slug → heading text before calling.
+- **Fall back to `Read`** for whole-file reads, content not delimited by headings, exact line-range reads, or frontmatter-only needs (or use `get_frontmatter`).
 
 ## Scripts
 

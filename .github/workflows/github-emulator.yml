@@ -47,6 +47,7 @@ jobs:
 
   # ── Docker ──────────────────────────────────────────────────────────────────
   # Builds on every run (validates Dockerfile + build context).
+  # Scans the local image with Trivy before any push.
   # Pushes the github-emulator image to GHCR only on push to main.
   docker:
     name: Docker
@@ -55,6 +56,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # required for SARIF upload to the Security tab
 
     steps:
       - uses: actions/checkout@v6
@@ -79,12 +81,33 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build and push
+      # ── Step 1: Build locally (load into Docker daemon for scanning) ───────
+      - name: Build (local load for scanning)
         uses: docker/build-push-action@v7
         with:
           context: demo
           file: demo/github-emulator/Dockerfile
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Step 2: Trivy vulnerability scan ──────────────────────────────────
+      - name: Trivy scan
+        uses: ./.github/actions/trivy-scan
+        with:
+          image-ref: ${{ env.IMAGE }}:scan
+          category: trivy-github-emulator
+
+      # ── Step 3: Push (main only, cache hit — no rebuild) ──────────────────
+      - name: Push to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: demo
+          file: demo/github-emulator/Dockerfile
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

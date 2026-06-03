@@ -13,6 +13,11 @@ RUN npm run build -- --configuration production
 # Spec: SAD §7 Dashboard Frontend — "nginx + Angular static"
 FROM nginx:alpine AS serve
 
+# Patch OS packages to the latest in the pinned Alpine minor so the published
+# image isn't gated on the base image catching up to Alpine's security repo
+# (the Trivy CI gate fails on fixed CRITICAL/HIGH OS CVEs — e.g. CVE-2026-6732).
+RUN apk upgrade --no-cache
+
 # Remove default nginx static content
 RUN rm -rf /usr/share/nginx/html/*
 

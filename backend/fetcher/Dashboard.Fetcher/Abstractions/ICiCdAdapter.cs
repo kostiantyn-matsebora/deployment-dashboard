@@ -14,10 +14,15 @@ public interface ICiCdAdapter
     string AdapterId { get; }
 
     /// <summary>
-    /// Poll the source for events newer than <paramref name="cursor"/> (null = first run).
-    /// Returns the events to push and the advanced cursor (opaque to the host).
+    /// Streams chunks of events newer than <paramref name="cursor"/> (null = first run).
+    /// Each yielded <see cref="FetchResult"/> carries the events for that chunk plus the
+    /// full advanced cursor as of that chunk (opaque to the host).
+    /// Backfill yields one chunk per (repo, environment) plus a zero-event completion
+    /// marker per repo. Normal poll yields a single chunk.
+    /// At-least-once (F5): a throw mid-stream leaves the cursor at the last persisted
+    /// chunk; the next poll re-delivers the failed chunk (duplicates are acceptable).
     /// </summary>
-    Task<FetchResult> FetchAsync(string? cursor, CancellationToken ct);
+    IAsyncEnumerable<FetchResult> FetchAsync(string? cursor, CancellationToken ct);
 }
 
 /// <summary>Events are the canonical wire DTO — already tool-neutral.</summary>

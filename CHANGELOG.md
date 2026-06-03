@@ -7,6 +7,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.5.0] - 2026-06-03
+
+### Changed
+
+- **Fetcher live poll now uses conditional requests (ETag / `If-None-Match`).** The per-repo deployments list and in-flight deployment status re-reads send `If-None-Match`; an unchanged response comes back `304 Not Modified`, which does **not** count against the GitHub rate limit. Building on the terminal-deployment skip from 0.4.0, an idle poll cycle now returns cheap 304s instead of re-downloading the deployments list and statuses. Parent-deployment edges are preserved across cycles, and the optimization degrades gracefully to full fetches when the upstream does not supply ETags (e.g. the github-emulator). (Implements Fetcher spec F8.)
+
+
+## [0.4.0] - 2026-06-03
+
+### Changed
+
+- **Fetcher backfill is now chunked and resumable.** Backfill streams one chunk per (repo, environment), posted and checkpointed incrementally instead of all-or-nothing. A large repo fills the store across multiple rate-limit windows and, after an interruption (crash or rate-limit pause + restart), resumes without re-scanning already-completed environments. (`ICiCdAdapter.FetchAsync` now returns `IAsyncEnumerable<FetchResult>`; the opaque cursor carries backfill progress and decodes backward-compatibly. GitHub API usage is identical on an uninterrupted pass and strictly lower on resume.)
+- **Fetcher live poll no longer re-reads finished deployments.** Deployments already in a terminal state (`success`/`failure`/`error`/`inactive`) are cached and skipped on subsequent poll cycles, cutting an idle cycle from ~14 GitHub calls to ~1; new and in-flight deployments are still polled every cycle. Parent-deployment edges for promotion chains are preserved (terminal deployments stay in the run→environment map via a cached run id).
+
+
+## [0.3.0] - 2026-06-03
+
+### Added
+
+- **Fetcher backfill depth.** `BACKFILL_DEPTH` (default 2) controls how many of the latest status events seed each (service, environment) slot during backfill. `BACKFILL_DEPTH` and `BACKFILL_MAX_AGE` are now configurable via Compose / `.env`.
+
+### Changed
+
+- **Fetcher backfill reworked** to seed the latest `BACKFILL_DEPTH` status events per (service, environment) slot — with a no-progress per-environment stop and workflow-YAML fetched only for kept deployments. Bounds backfill cost to the matrix size instead of raw deployment volume, and yields clean history (no duplicate or stale `in-progress` rows for completed deployments). The live poll path is unchanged.
+- **Fetcher service identity** now resolves from the workflow's stable name/path instead of the run's display name, so workflows that set `run-name:` map to the correct service.
+- **Fetcher rate-limit budget** now tracks the fetcher's own request count since start rather than GitHub's shared `X-RateLimit-Used`, so a partially-used token no longer forces an immediate pause.
+- **Fetcher control-plane** participation is skipped entirely when `CONTROL_API_KEY` is unset (no reconnect loop); when enabled, the control-stream reconnect uses exponential backoff.
+
+### Fixed
+
+- **Fetcher backfill cursor** was never advanced (a nullable `DateTimeOffset?` comparison was always false), so the first poll re-ingested the whole lookback window; the cursor now tracks the latest seeded status.
+- **Swimlanes** rendered the full 40-character commit SHA; truncated to 7 to match the matrix and history views.
+
+
+## [0.2.1] - 2026-06-03
+
+### Fixed
+
+- **Gateway startup in non-demo profiles.** The gateway nginx template references `${DEMO_DRIVER_UPSTREAM}` (listed in `NGINX_ENVSUBST_FILTER`), but the base compose only set it under the `demo` profile — so `full` / `full-pull` / `standalone*` left the literal unsubstituted and nginx refused to start (`unknown variable "demo_driver_upstream"`). The variable is now defaulted in the gateway environment; `/demo/*` still returns 502 in non-demo profiles, as intended.
+- Local build compose (`docker-compose.local.yaml`): `demo-driver` and `github-emulator` are now gated behind their own profiles, so a production-like profile (`full` / `full-pull` / `standalone`) runs locally-built images without starting demo components.
+
+### Documentation
+
+- Install guide reworked for adopters — the local-file (curl) path is now the recommended way to deploy production / secret-bearing profiles (`oci:// up` does not load `.env` or `--env-file`, a Docker Compose limitation); the `oci://` one-liner remains the demo path in the Quickstart.
+- Pull-mode (Fetcher) install elevated with its security rationale — the Fetcher is outbound-only, suited to locked-down networks that forbid inbound WAN traffic — plus GitHub token-scope guidance. The "Why Deployment Dashboard?" highlight notes the same.
+
+
 ## [0.2.0] - 2026-06-02
 
 ### Added

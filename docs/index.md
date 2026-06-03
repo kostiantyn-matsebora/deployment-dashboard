@@ -99,6 +99,8 @@ hide:
 
     Can't touch the pipeline? The optional Fetcher polls your CI/CD API and posts on your behalf — through the very same contract.
 
+    Pull mode also fits **locked-down networks that forbid inbound WAN traffic**: the Fetcher is **outbound-only** (it calls the GitHub API and the dashboard's internal ingest), so the dashboard never has to accept inbound connections from the internet — unlike push, where CI/CD must reach in to POST.
+
 </div>
 
 ## Send your first deployment

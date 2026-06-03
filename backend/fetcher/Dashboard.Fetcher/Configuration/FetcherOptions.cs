@@ -12,6 +12,12 @@ public sealed class FetcherOptions
     public bool Backfill { get; set; } = false;
 
     /// <summary>
+    /// Number of latest status events to seed per (service, environment) slot during backfill (F13).
+    /// Default 2 — seeds the two most recent mapped status events per slot.
+    /// </summary>
+    public int BackfillDepth { get; set; } = 2;
+
+    /// <summary>
     /// How far back backfill scans per environment.
     /// Falls back to <see cref="InitialLookback"/> when zero (§6).
     /// </summary>
