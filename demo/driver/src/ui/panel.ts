@@ -342,25 +342,11 @@ export const PANEL_HTML = `<!DOCTYPE html>
     <!-- ── Fetcher · Rate Limit card ───────────────────────────────────────
          Hidden until the first rate-limit component event arrives.
          Consumes event_type: rate-limit off /demo/control-events (§4.9).
-         These events are NOT added to the Events feed list (card-only). -->
+         These events are NOT added to the Events feed list (card-only).
+         One section per adapter (keyed by payload.adapter, last-value-wins). -->
     <div class="card card-control" id="rl-card">
       <div class="card-title">Fetcher · Rate Limit</div>
-      <div class="rl-row">
-        <span class="badge badge-running" id="rl-state-badge">running</span>
-        <span class="rl-kv"><span class="rl-key">Adapter</span><span class="rl-val" id="rl-adapter">—</span></span>
-      </div>
-      <div class="rl-progress-wrap">
-        <div class="rl-progress-label">
-          <span>Own usage</span>
-          <span id="rl-own-label">— / —</span>
-        </div>
-        <div class="progress-bg"><div class="progress-fill" id="rl-progress-fill"></div></div>
-      </div>
-      <div class="rl-row" style="margin-top:8px">
-        <span class="rl-kv"><span class="rl-key">CI quota</span><span class="rl-val" id="rl-ci-remaining">—</span><span class="rl-sep">/</span><span class="rl-val" id="rl-ci-limit">—</span></span>
-        <span class="rl-sep">·</span>
-        <span class="rl-kv"><span class="rl-key">Resets</span><span class="rl-val" id="rl-reset-at">—</span></span>
-      </div>
+      <div id="rl-adapters-container"></div>
     </div>
 
     <!-- ── Control API card ──────────────────────────────────────────────── -->
@@ -486,14 +472,12 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const ghStoreInfo     = $('gh-store-info');
 
     // Fetcher · Rate Limit card refs (shown/hidden by rate-limit component events).
-    const rlCard          = $('rl-card');
-    const rlStateBadge    = $('rl-state-badge');
-    const rlAdapter       = $('rl-adapter');
-    const rlOwnLabel      = $('rl-own-label');
-    const rlProgressFill  = $('rl-progress-fill');
-    const rlCiRemaining   = $('rl-ci-remaining');
-    const rlCiLimit       = $('rl-ci-limit');
-    const rlResetAt       = $('rl-reset-at');
+    const rlCard             = $('rl-card');
+    const rlAdaptersContainer = $('rl-adapters-container');
+
+    // Per-adapter store: keyed by payload.adapter string, last-value-wins per adapter.
+    // Shape: { [adapterName: string]: { state, p: payload } }
+    const rlAdapterStore = {};
 
     // Merged Events feed refs (data feed — exempt from card-blocked dimming).
     const eventsLiveBadge = $('events-live-badge');
@@ -958,42 +942,95 @@ export const PANEL_HTML = `<!DOCTYPE html>
     }
 
     // ── Fetcher · Rate Limit card updater ────────────────────────────────────
-    // Called when a rate-limit component event arrives.  Updates card fields and
-    // makes the card visible.  These events are SUPPRESSED from the Events feed.
-    function updateRateLimitCard(rec) {
-      const p = rec.payload || {};
+    // Called when a rate-limit component event arrives.  Updates the per-adapter
+    // store (last-value-wins per adapter) and re-renders all adapter sections.
+    // These events are SUPPRESSED from the Events feed.
 
-      // State badge: running (indigo) vs paused (purple) vs anything else (neutral).
-      const state = rec.state || 'running';
-      rlStateBadge.textContent = esc(state);
-      rlStateBadge.className   = state === 'paused'  ? 'badge badge-paused'
-                               : state === 'running' ? 'badge badge-running'
-                               :                       'badge badge-idle';
+    // Converts an adapter name into a safe HTML id slug (lowercase, non-alnum → '-').
+    function rlSlug(adapter) {
+      return String(adapter).toLowerCase().replace(/[^a-z0-9]/g, '-');
+    }
 
-      // Adapter label.
-      rlAdapter.textContent = p.adapter != null ? esc(String(p.adapter)) : '\\u2014';
+    // Builds the HTML for one adapter section from the store entry.
+    function rlAdapterSectionHtml(adapterName, entry) {
+      const slug      = rlSlug(adapterName);
+      const p         = entry.p || {};
+      const state     = entry.state || 'running';
+      const badgeCls  = state === 'paused'  ? 'badge badge-paused'
+                      : state === 'running' ? 'badge badge-running'
+                      :                       'badge badge-idle';
 
-      // Own budget progress bar: own_used / own_budget.
       const ownUsed   = p.own_used   != null ? p.own_used   : null;
       const ownBudget = p.own_budget != null ? p.own_budget : null;
-      rlOwnLabel.textContent = (ownUsed != null ? String(ownUsed) : '\\u2014') +
-                               ' / ' +
-                               (ownBudget != null ? String(ownBudget) : '\\u2014');
+      const ownLabel  = (ownUsed   != null ? esc(String(ownUsed))   : '\\u2014') +
+                        ' / ' +
+                        (ownBudget != null ? esc(String(ownBudget)) : '\\u2014');
       const pct = (ownUsed != null && ownBudget != null && ownBudget > 0)
         ? Math.min(100, Math.round(ownUsed / ownBudget * 100))
         : 0;
-      rlProgressFill.style.width = pct + '%';
 
-      // CI quota fields.
-      rlCiRemaining.textContent = p.ci_remaining != null ? String(p.ci_remaining) : '\\u2014';
-      rlCiLimit.textContent     = p.ci_limit     != null ? String(p.ci_limit)     : '\\u2014';
+      const ciRemaining = p.ci_remaining != null ? esc(String(p.ci_remaining)) : '\\u2014';
+      const ciLimit     = p.ci_limit     != null ? esc(String(p.ci_limit))     : '\\u2014';
+      const resetAt     = p.reset_at     != null ? esc(fmt(p.reset_at))        : '\\u2014';
 
-      // Reset-at: render as local time, or — for null.
-      rlResetAt.textContent = p.reset_at != null ? fmt(p.reset_at) : '\\u2014';
+      return (
+        '<div id="rl-' + slug + '-section" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #27272a">' +
+          '<div class="rl-row">' +
+            '<span id="rl-' + slug + '-state-badge" class="' + badgeCls + '">' + esc(state) + '</span>' +
+            '<span class="rl-kv">' +
+              '<span class="rl-key">Adapter</span>' +
+              '<span class="rl-val" id="rl-' + slug + '-adapter">' + esc(adapterName) + '</span>' +
+            '</span>' +
+          '</div>' +
+          '<div class="rl-progress-wrap">' +
+            '<div class="rl-progress-label">' +
+              '<span>Own usage</span>' +
+              '<span id="rl-' + slug + '-own-label">' + ownLabel + '</span>' +
+            '</div>' +
+            '<div class="progress-bg">' +
+              '<div class="progress-fill" id="rl-' + slug + '-progress-fill" style="width:' + pct + '%"></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="rl-row" style="margin-top:8px">' +
+            '<span class="rl-kv">' +
+              '<span class="rl-key">CI quota</span>' +
+              '<span class="rl-val" id="rl-' + slug + '-ci-remaining">' + ciRemaining + '</span>' +
+              '<span class="rl-sep">/</span>' +
+              '<span class="rl-val" id="rl-' + slug + '-ci-limit">' + ciLimit + '</span>' +
+            '</span>' +
+            '<span class="rl-sep">\\u00b7</span>' +
+            '<span class="rl-kv">' +
+              '<span class="rl-key">Resets</span>' +
+              '<span class="rl-val" id="rl-' + slug + '-reset-at">' + resetAt + '</span>' +
+            '</span>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function updateRateLimitCard(rec) {
+      const p           = rec.payload || {};
+      const adapterName = p.adapter != null ? String(p.adapter) : 'unknown';
+
+      // Update store: last-value-wins per adapter.
+      rlAdapterStore[adapterName] = { state: rec.state || 'running', p };
+
+      // Re-render all adapter sections from the store.
+      const html = Object.keys(rlAdapterStore)
+        .map(name => rlAdapterSectionHtml(name, rlAdapterStore[name]))
+        .join('');
+      // Remove trailing separator border from the last section.
+      rlAdaptersContainer.innerHTML = html;
+      const sections = rlAdaptersContainer.querySelectorAll('[id$="-section"]');
+      if (sections.length > 0) {
+        sections[sections.length - 1].style.borderBottom = 'none';
+        sections[sections.length - 1].style.marginBottom = '0';
+        sections[sections.length - 1].style.paddingBottom = '0';
+      }
 
       // Reveal the card on the first event.
-      rlCard.style.display          = 'flex';
-      rlCard.style.flexDirection    = 'column';
+      rlCard.style.display       = 'flex';
+      rlCard.style.flexDirection = 'column';
     }
 
     // Renders a single ComponentEventRecord into the merged Events store.

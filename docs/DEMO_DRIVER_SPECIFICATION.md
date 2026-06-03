@@ -505,9 +505,11 @@ Read-only card in the top card row that visualises the fetcher's CI/CD rate-limi
 
 **Source.** Consumes `event_type: rate-limit` component events off the existing `GET /demo/control-events` proxy (§4.9) — the same stream already subscribed to by the panel. No additional server endpoint needed. Payload field contract: [`docs/api/api-guidelines.md` §11 — Rate-limit report payload](api/api-guidelines.md#rate-limit-report-payload-event_type-rate-limit); visual reference: [`docs/diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md) Diagram B.
 
+**Per-adapter sections.** The card renders **one section per adapter**, keyed by `payload.adapter` (last-value-wins per adapter). Each incoming `rate-limit` event updates the store entry for its adapter and re-renders all sections from the store. This handles multiple concurrent adapters without flip-flopping. Adapter names are slugified (lowercase, non-alphanumeric → `-`) to build unique per-adapter element ids (`rl-<slug>-state-badge`, `rl-<slug>-own-label`, etc.).
+
 **Visibility.** Hidden (`display: none`) until the first `rate-limit` event arrives, then shown — same gating pattern as the GitHub Emulator card.
 
-**Displayed fields.**
+**Displayed fields (per adapter section).**
 
 | Element | Field(s) | Fallback when null |
 |---|---|---|
@@ -603,7 +605,7 @@ Panel behaviour:
 | Unit | `github-proxy.controller.spec.ts` | All five proxy routes (`status`, `seed`, `clear`, `emit` GET, `emit` POST) forward request body + response body verbatim to `GITHUB_EMULATOR_URL/_github/*`; `POST` mutator routes return `503` while `reset_state == blocked`; `GET` routes are NOT blocked; non-2xx upstream responses surfaced as-is |
 | Unit | `github-proxy.client.spec.ts` | HTTP client constructs correct upstream URL; passes body through; surfaces upstream status code |
 | Unit | `health.controller.spec.ts` | `GET /demo/health` returns `{ driver:"up", api, emulator, fetcher }`; probes run in parallel; `2xx` upstream → `"up"`, non-2xx/unreachable → `"down"`; never blocked by reset gate; `FETCHER_URL` used for fetcher probe |
-| Unit | `panel-rate-limit.spec.ts` | `PANEL_HTML` contains all required `id=` attributes for the Rate Limit card; `#rl-card { display: none; }` CSS hidden-by-default gate; `event_type === 'rate-limit'` routing guard in `mergeCompEvents`; early-return (suppression) fires before `mergeIntoStore`; `updateRateLimitCard` defined; `badge-paused` / `badge-running` branches; null fallback `—`; division-by-zero guard; `fmt(p.reset_at)` local-time render; card reveal on first event |
+| Unit | `panel-rate-limit.spec.ts` | `PANEL_HTML` contains `id="rl-card"` and `id="rl-adapters-container"`; `#rl-card { display: none; }` CSS hidden-by-default gate; `event_type === 'rate-limit'` routing guard in `mergeCompEvents`; early-return (suppression) fires before `mergeIntoStore`; `updateRateLimitCard` defined; `rlAdapterStore` keyed by adapter name (last-value-wins); `rlSlug` helper slugifies adapter name; `rlAdapterSectionHtml` builds per-adapter markup; per-adapter element id slug patterns (`rl-<slug>-section`, `-state-badge`, `-own-label`, `-progress-fill`, `-ci-remaining`, `-ci-limit`, `-reset-at`); `Object.keys(rlAdapterStore)` drives the render loop; `rlAdaptersContainer.innerHTML` updated on each event; `badge-paused` / `badge-running` branches; null fallback `—`; division-by-zero guard; `fmt(p.reset_at)` local-time render; card reveal on first event |
 
 ---
 

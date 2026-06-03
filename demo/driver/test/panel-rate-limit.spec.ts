@@ -1,44 +1,32 @@
 /**
  * panel-rate-limit.spec.ts
  *
- * Unit tests for the "Fetcher · Rate Limit" card additions to PANEL_HTML.
+ * Unit tests for the "Fetcher · Rate Limit" card in PANEL_HTML.
  *
  * The panel is a served inline HTML+JS string — there is no DOM/browser test
  * harness.  These tests use string-contains checks to assert:
- *   1. The required element ids are present in the HTML.
+ *   1. The card container and dynamic adapter container id are present in the HTML.
  *   2. The rate-limit routing logic (event_type === 'rate-limit' early-return)
  *      exists in the JS section, which guarantees suppression from the Events feed.
  *   3. The updateRateLimitCard function and its key logic branches are present.
- *
- * This matches how the panel string is realistically testable without a browser
- * environment (consistent with all other panel-level assertions in the project).
+ *   4. The per-adapter store (rlAdapterStore) and slug helper (rlSlug) exist.
+ *   5. A single adapter still renders correctly (rlAdapterSectionHtml).
  */
 
 import { PANEL_HTML } from '../src/ui/panel';
 
-// ── Element IDs ──────────────────────────────────────────────────────────────
+// ── Static element IDs ────────────────────────────────────────────────────────
 
-describe('PANEL_HTML — Fetcher Rate Limit card element ids', () => {
-  const requiredIds = [
-    'rl-card',
-    'rl-state-badge',
-    'rl-adapter',
-    'rl-own-label',
-    'rl-progress-fill',
-    'rl-ci-remaining',
-    'rl-ci-limit',
-    'rl-reset-at',
-  ];
+describe('PANEL_HTML — Fetcher Rate Limit card static element ids', () => {
+  it('contains element id="rl-card" (outer card container)', () => {
+    expect(PANEL_HTML).toContain('id="rl-card"');
+  });
 
-  requiredIds.forEach(id => {
-    it(`contains element id="${id}"`, () => {
-      expect(PANEL_HTML).toContain(`id="${id}"`);
-    });
+  it('contains element id="rl-adapters-container" (dynamic per-adapter content)', () => {
+    expect(PANEL_HTML).toContain('id="rl-adapters-container"');
   });
 
   it('card title reads "Fetcher · Rate Limit"', () => {
-    // The · separator is the HTML entity ·  or the literal unicode char;
-    // in the source it is the raw UTF-8 middle-dot inside the template literal.
     expect(PANEL_HTML).toContain('Fetcher');
     expect(PANEL_HTML).toContain('Rate Limit');
   });
@@ -52,8 +40,7 @@ describe('PANEL_HTML — Fetcher Rate Limit card element ids', () => {
 
 describe('PANEL_HTML — rate-limit event routing and suppression', () => {
   it('mergeCompEvents checks event_type === "rate-limit" before mergeIntoStore', () => {
-    // The guard must appear inside mergeCompEvents.  The string
-    // `event_type === 'rate-limit'` is the canonical gate.
+    // The guard must appear inside mergeCompEvents.
     expect(PANEL_HTML).toContain("event_type === 'rate-limit'");
   });
 
@@ -62,12 +49,11 @@ describe('PANEL_HTML — rate-limit event routing and suppression', () => {
   });
 
   it('returns early from mergeCompEvents for rate-limit events (suppression)', () => {
-    // The block pattern: if rate-limit → updateRateLimitCard → return
-    // Verify that `return` follows the updateRateLimitCard call inside the guard.
-    const rlBlock = PANEL_HTML.indexOf("event_type === 'rate-limit'");
+    // Verify that `return` follows the updateRateLimitCard call inside the guard,
+    // and that return precedes the next mergeIntoStore call.
+    const rlBlock    = PANEL_HTML.indexOf("event_type === 'rate-limit'");
     const returnAfter = PANEL_HTML.indexOf('return;', rlBlock);
     const mergeAfter  = PANEL_HTML.indexOf('mergeIntoStore', rlBlock);
-    // return; must appear before mergeIntoStore within the same guard block.
     expect(rlBlock).toBeGreaterThan(-1);
     expect(returnAfter).toBeGreaterThan(rlBlock);
     expect(returnAfter).toBeLessThan(mergeAfter);
@@ -78,21 +64,89 @@ describe('PANEL_HTML — rate-limit event routing and suppression', () => {
   });
 });
 
+// ── Per-adapter store and slug helper ─────────────────────────────────────────
+
+describe('PANEL_HTML — per-adapter store and slug helper', () => {
+  it('declares rlAdapterStore as a per-adapter keyed object', () => {
+    expect(PANEL_HTML).toContain('rlAdapterStore');
+  });
+
+  it('updates rlAdapterStore keyed by adapter name (last-value-wins)', () => {
+    // The store update uses the adapterName as key.
+    expect(PANEL_HTML).toContain('rlAdapterStore[adapterName]');
+  });
+
+  it('defines rlSlug helper function for safe id slugification', () => {
+    expect(PANEL_HTML).toContain('function rlSlug(adapter)');
+  });
+
+  it('rlSlug lowercases input', () => {
+    expect(PANEL_HTML).toContain('.toLowerCase()');
+  });
+
+  it('rlSlug replaces non-alphanumeric characters with hyphens', () => {
+    // The regex /[^a-z0-9]/g → '-' is the canonical slug replacement.
+    expect(PANEL_HTML).toContain("[^a-z0-9]");
+  });
+
+  it('defines rlAdapterSectionHtml to build per-adapter section markup', () => {
+    expect(PANEL_HTML).toContain('function rlAdapterSectionHtml(adapterName, entry)');
+  });
+
+  it('per-adapter section id uses slug pattern rl-<slug>-section', () => {
+    // In the JS source the id is built as: '<div id="rl-' + slug + '-section"'
+    // The panel string contains the literal fragment below (single-quote after rl-).
+    expect(PANEL_HTML).toContain("rl-' + slug + '-section");
+  });
+
+  it('per-adapter state badge id uses slug pattern rl-<slug>-state-badge', () => {
+    expect(PANEL_HTML).toContain("rl-' + slug + '-state-badge");
+  });
+
+  it('per-adapter own-label id uses slug pattern rl-<slug>-own-label', () => {
+    expect(PANEL_HTML).toContain("rl-' + slug + '-own-label");
+  });
+
+  it('per-adapter progress-fill id uses slug pattern rl-<slug>-progress-fill', () => {
+    expect(PANEL_HTML).toContain("rl-' + slug + '-progress-fill");
+  });
+
+  it('per-adapter ci-remaining id uses slug pattern rl-<slug>-ci-remaining', () => {
+    expect(PANEL_HTML).toContain("rl-' + slug + '-ci-remaining");
+  });
+
+  it('per-adapter ci-limit id uses slug pattern rl-<slug>-ci-limit', () => {
+    expect(PANEL_HTML).toContain("rl-' + slug + '-ci-limit");
+  });
+
+  it('per-adapter reset-at id uses slug pattern rl-<slug>-reset-at', () => {
+    expect(PANEL_HTML).toContain("rl-' + slug + '-reset-at");
+  });
+
+  it('iterates over all store keys to render one section per adapter', () => {
+    // Object.keys(rlAdapterStore) drives the per-adapter loop.
+    expect(PANEL_HTML).toContain('Object.keys(rlAdapterStore)');
+  });
+
+  it('renders sections into rl-adapters-container via innerHTML', () => {
+    expect(PANEL_HTML).toContain('rlAdaptersContainer.innerHTML');
+  });
+});
+
 // ── updateRateLimitCard logic branches ────────────────────────────────────────
 
 describe('PANEL_HTML — updateRateLimitCard logic', () => {
   it('applies badge-paused class for paused state', () => {
-    expect(PANEL_HTML).toContain("badge badge-paused");
+    expect(PANEL_HTML).toContain('badge badge-paused');
     expect(PANEL_HTML).toContain("state === 'paused'");
   });
 
   it('applies badge-running class for running state', () => {
     expect(PANEL_HTML).toContain("state === 'running'");
-    expect(PANEL_HTML).toContain("badge badge-running");
+    expect(PANEL_HTML).toContain('badge badge-running');
   });
 
   it('renders null own_used / own_budget as em-dash fallback', () => {
-    // Null guard: `ownUsed != null ? String(ownUsed) : '\\u2014'`
     expect(PANEL_HTML).toContain('\\u2014');
   });
 
@@ -101,7 +155,6 @@ describe('PANEL_HTML — updateRateLimitCard logic', () => {
   });
 
   it('guards against division by zero on own_budget', () => {
-    // `ownBudget > 0` prevents NaN from division
     expect(PANEL_HTML).toContain('ownBudget > 0');
   });
 
@@ -110,8 +163,8 @@ describe('PANEL_HTML — updateRateLimitCard logic', () => {
     expect(PANEL_HTML).toContain('fmt(p.reset_at)');
   });
 
-  it('reveals the card on first event via style.display = "flex"', () => {
-    expect(PANEL_HTML).toContain("rlCard.style.display");
+  it('reveals the card on first event via rlCard.style.display', () => {
+    expect(PANEL_HTML).toContain('rlCard.style.display');
   });
 });
 
