@@ -72,7 +72,7 @@ export class DeploymentApiService {
    * EventSource automatically sends Last-Event-ID on reconnect; the server
    * replays missed events from that cursor (spec §7 SSE + LISTEN/NOTIFY).
    */
-  streamEvents(options?: { service?: string }): Observable<DeploymentEvent> {
+  streamEvents(options?: { service?: string; onOpen?: () => void; onError?: () => void }): Observable<DeploymentEvent> {
     let url = '/api/events/stream';
     if (options?.service) {
       url += `?service=${encodeURIComponent(options.service)}`;
@@ -81,6 +81,8 @@ export class DeploymentApiService {
     return fromEventPattern<DeploymentEvent>(
       (handler) => {
         const es = new EventSource(url);
+        es.onopen  = () => options?.onOpen?.();
+        es.onerror = () => options?.onError?.();
         es.addEventListener('deployment', (event: Event) => {
           const msg = event as MessageEvent;
           try {

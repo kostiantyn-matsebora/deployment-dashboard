@@ -67,12 +67,12 @@ export class App implements OnInit, OnDestroy {
   }
 
   private connectSSE(): void {
-    const sub = this.api.streamEvents().subscribe({
-      next:  (ev) => {
-        this.state.sseConnected.set(true);
-        this.state.applyDeploymentEvent(ev);
-      },
-      error: () => this.state.sseConnected.set(false),
+    const sub = this.api.streamEvents({
+      onOpen:  () => this.state.sseConnected.set(true),
+      onError: () => this.state.sseConnected.set(false),
+    }).subscribe({
+      next:  (ev) => this.state.applyDeploymentEvent(ev),
+      error: ()   => this.state.sseConnected.set(false),
     });
     this.subs.push(sub);
   }
@@ -88,19 +88,24 @@ export class App implements OnInit, OnDestroy {
       next: (record) => {
         if (record.event_type === 'rate-limit' && record.payload) {
           const p = record.payload as Record<string, unknown>;
+          const adapter = typeof p['adapter'] === 'string' ? p['adapter'] : '';
           const report: RateLimitReport = {
             state:        record.state,
-            adapter:      typeof p['adapter']      === 'string'  ? p['adapter']      : '',
+            adapter,
             ci_limit:     typeof p['ci_limit']     === 'number'  ? p['ci_limit']     : null,
             ci_remaining: typeof p['ci_remaining'] === 'number'  ? p['ci_remaining'] : null,
             own_budget:   typeof p['own_budget']   === 'number'  ? p['own_budget']   : null,
             own_used:     typeof p['own_used']     === 'number'  ? p['own_used']     : null,
             reset_at:     typeof p['reset_at']     === 'string'  ? p['reset_at']     : null,
           };
-          this.state.latestRateLimit.set(report);
+          // Update the per-adapter entry in the map (Fix 4: multi-adapter keying).
+          const current = this.state.rateLimitMap();
+          const next = new Map(current);
+          next.set(adapter, report);
+          this.state.rateLimitMap.set(next);
         }
       },
-      error: () => { /* non-fatal; rate-limit chip stays at last known value */ },
+      error: () => { /* non-fatal; rate-limit chips stay at last known value */ },
     });
     this.subs.push(sub);
   }
