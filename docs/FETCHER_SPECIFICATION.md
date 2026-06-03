@@ -207,7 +207,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 - `backfill[repo].done_envs` = list of environment names whose per-env scan is complete and emitted. Used to skip already-processed envs on resume.
 - `backfill` key absent = no backfill in progress (old cursors decode safely with empty backfill).
 - First run (cursor `null`): `since = now − INITIAL_LOOKBACK` (F7).
-- ETags cached alongside (optional) to short-circuit unchanged pages with `304` (F8).
+- ETags cached for the live poll (per-repo deployment list + per-deployment statuses) to short-circuit unchanged pages with `304` (F8); see §5.5.2.
 
 ### 5.5 Resilience (inside the adapter)
 
@@ -231,6 +231,34 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 The parent-derivation map (§5.6.4) is built from **freshly-fetched deployments ∪ cached-terminal deployments** in the window. This preserves cross-environment parent edges: a `staging` deployment that went terminal in cycle N is still present in the map in cycle N+1, allowing a `production` deployment in the same run to resolve its parent correctly.
 
 Scope: **live poll only**. Backfill is unchanged.
+
+#### 5.5.2 Poll efficiency — conditional requests (ETag)
+
+Scope: **live poll only** (backfill unchanged). Applies to two endpoints per repo per cycle:
+- `GET /repos/{owner}/{repo}/deployments` (the per-repo deployment list).
+- `GET /repos/{owner}/{repo}/deployments/{id}/statuses` (per non-terminal deployment).
+
+**Mechanism (`GithubClient.GetPagedConditionalAsync<T>`).**
+
+`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. Pages 2+ are fetched unconditionally. A `304` does not count against the GitHub rate-limit (F8/F16) but IS still recorded by the fetcher's own-request budget counter (it is still an HTTP request).
+
+**Instance caches** (both persist across cycles; adapter is a DI singleton):
+- `_deploymentsListCache` — per-repo `(etag, windowed deployments snapshot)`. Capacity 64 entries, LRU eviction.
+- `_statusEtagCache` — per-deployment `(etag, runId?)` for in-flight (non-terminal) deployments. Capacity 2 000 entries, LRU eviction.
+
+**Conditions and behaviour:**
+
+| Condition | Behaviour |
+|---|---|
+| Deployments list `304` | Reuse cached windowed snapshot. Per-deployment status checks still run normally — a list `304` never skips status re-checks. |
+| Deployments list `200` | Apply `cutoff` window to fresh items; refresh cache only when a `ETag` header is present. |
+| Deployment in terminal cache | Skip `GET /deployments/{id}/statuses` entirely (§5.5.1); terminal-skip wins — the conditional path never runs for it. |
+| Non-terminal deployment statuses `304` | Reuse cached `runId` for the env→deploymentId map (§5.6.4); emit no events (list is byte-identical and the cursor has advanced past every cached status's `created_at`). Deployment stays eligible for future conditional fetches — not promoted to terminal. |
+| Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If latest status is terminal, also record in the terminal cache (§5.5.1). |
+
+**Graceful degradation.** When the server omits the `ETag` header on a `200` response (e.g. the `github-emulator`), nothing is cached and every subsequent cycle is a normal unconditional fetch — correctness is unaffected.
+
+**Interplay with §5.5.1.** Both terminal-skip and ETag-`304` populate the same `reusedRunIds` map, which feeds the `envToDeploymentId` build in §5.6.4. Cross-cycle and cross-environment parent edges are preserved regardless of which path suppressed the status re-fetch.
 
 ### 5.6 Parent deployment derivation (F10)
 
@@ -604,6 +632,14 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 **Backfill:** all services covered on first page (early exit); rarely-deployed service found on page 2 (pagination); service not deployed to env within `BACKFILL_MAX_AGE` (skipped); `BACKFILL=true` overwrites existing cursor; events posted oldest-first.
 
 **Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB__RateLimit` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
+
+**Conditional requests (ETag, §5.5.2):**
+- In-flight statuses `304` across cycles → no event emitted in cycle 2; `If-None-Match` was sent for the statuses URL.
+- Statuses `200` after payload change → new event emitted; statuses endpoint did NOT return `304` (ETag rotated).
+- Deployments-list `304` → cached snapshot reused; per-deployment status endpoint still called in cycle 2 (list `304` does not skip status checks).
+- Parent edge preserved when staging statuses return `304` in cycle 2 — prod event resolves `parent_deployments` via the cached `runId`.
+- No ETag from server → no `If-None-Match` sent on the next cycle; no `304`s served (graceful degradation, behaviour identical to unconditional fetch).
+- Rate-limit budget still increments its own-request counter for `304` responses.
 
 **Control-plane participation (F17, §5.10):**
 - `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at, payload.reset_id}` where `reset_id` = the `reset-initiated` event id.
