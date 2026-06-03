@@ -1,0 +1,63 @@
+name: Trivy image scan
+description: >
+  Scans a locally-built Docker image with Trivy.
+  Runs twice against the same image-ref (Trivy caches its DB so the second run
+  is cheap):
+    1. SARIF run  — exit-code 0, uploads results to the GitHub Security tab.
+    2. Gate run   — exit-code 1 on CRITICAL/HIGH (ignore-unfixed), fails the build.
+
+inputs:
+  image-ref:
+    description: >
+      Local image reference to scan (e.g. "localbuild:scan").
+      Must already be loaded into the local Docker daemon before this action runs.
+    required: true
+  category:
+    description: >
+      Unique SARIF category for this service (e.g. "trivy-api", "trivy-gateway",
+      "trivy-release-api"). Each service must use a distinct value so its results
+      occupy a separate code-scanning category in the GitHub Security tab and do
+      NOT overwrite other services' findings.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # ── Run 1: SARIF upload (exit-code 0 — never fails the build) ───────────────
+    # Emits a complete SARIF report regardless of findings so the Security tab
+    # always has up-to-date results. exit-code is 0 so this step is never the
+    # cause of a build failure.
+    - name: Trivy scan (SARIF)
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: ${{ inputs.image-ref }}
+        scan-type: image
+        format: sarif
+        output: trivy-results.sarif
+        exit-code: '0'
+        ignore-unfixed: true
+        severity: CRITICAL,HIGH
+
+    # Upload SARIF to the GitHub Security tab.
+    # `if: always()` ensures the upload runs even when the gate step below fails.
+    # `security-events: write` must be granted by the calling job (enforced in the
+    # per-service workflows and in ci.yml — see permissions blocks).
+    - name: Upload SARIF to GitHub Security tab
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: trivy-results.sarif
+        category: ${{ inputs.category }}
+
+    # ── Run 2: Gate (exit-code 1 on findings — fails the build) ─────────────────
+    # Table output is human-readable in the workflow log. Fails if any unfixed
+    # CRITICAL or HIGH CVE is present. The DB is already warm from Run 1.
+    - name: Trivy scan (gate — fail on CRITICAL/HIGH)
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: ${{ inputs.image-ref }}
+        scan-type: image
+        format: table
+        exit-code: '1'
+        severity: CRITICAL,HIGH
+        ignore-unfixed: true
