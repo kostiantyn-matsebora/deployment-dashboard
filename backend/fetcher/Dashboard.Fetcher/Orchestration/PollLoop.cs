@@ -10,6 +10,9 @@ namespace Dashboard.Fetcher.Orchestration;
 /// Cursor persisted only after all POSTs succeed — guarantees at-least-once delivery (F5).
 /// Supports pause / resume for the reset choreography (F17, §5.10.3).
 /// Updates <see cref="IFetcherReadinessIndicator"/> after every cycle when provided.
+/// When <paramref name="reportCycleAsync"/> is provided and the cycle produced a non-null
+/// snapshot, it is invoked after <see cref="IFetcherReadinessIndicator.RecordSuccess"/>
+/// (F18 / §5.11). The delegate is fire-and-swallow: a failure must not interrupt the loop.
 /// </summary>
 public sealed class PollLoop(
     ICiCdAdapter adapter,
@@ -18,7 +21,8 @@ public sealed class PollLoop(
     TimeSpan pollInterval,
     ILogger<PollLoop> logger,
     IFetcherReadinessIndicator? readiness = null,
-    Func<RateLimitSnapshot?>? rateLimitSnapshotFactory = null)
+    Func<RateLimitSnapshot?>? rateLimitSnapshotFactory = null,
+    Func<RateLimitSnapshot, CancellationToken, Task>? reportCycleAsync = null)
 {
     // Guards the pause state. Permit is drained when paused so the loop waits on WaitAsync.
     private readonly SemaphoreSlim _resumeGate = new(1, 1);
@@ -91,7 +95,23 @@ public sealed class PollLoop(
             try
             {
                 cursor = await PollOnceAsync(cursor, ct);
-                readiness?.RecordSuccess(rateLimitSnapshotFactory?.Invoke());
+                var snapshot = rateLimitSnapshotFactory?.Invoke();
+                readiness?.RecordSuccess(snapshot);
+
+                // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
+                if (reportCycleAsync is not null && snapshot is not null)
+                {
+                    try
+                    {
+                        await reportCycleAsync(snapshot, ct);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        logger.LogWarning(ex,
+                            "[{Adapter}] per-cycle rate-limit report failed (non-fatal)",
+                            adapter.AdapterId);
+                    }
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

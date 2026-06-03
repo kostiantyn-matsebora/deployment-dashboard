@@ -120,19 +120,36 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
     var logFactory = sp.GetRequiredService<ILoggerFactory>();
     var readiness = sp.GetRequiredService<FetcherReadinessIndicator>();
     var rateLimitBudget = sp.GetRequiredService<RateLimitBudget>();
+    var componentEvents = sp.GetRequiredService<IComponentEventClient>();
 
+    // Snapshot includes ci_limit / ci_remaining for F18 (§5.11).
     Func<RateLimitSnapshot?> snapshotFactory = () =>
-        new RateLimitSnapshot(rateLimitBudget.Used, rateLimitBudget.Budget, rateLimitBudget.ResetAt);
+        new RateLimitSnapshot(
+            rateLimitBudget.Used,
+            rateLimitBudget.Budget,
+            rateLimitBudget.ResetAt,
+            rateLimitBudget.CiLimit,
+            rateLimitBudget.CiRemaining);
 
     return adapters
-        .Select(adapter => new PollLoop(
-            adapter,
-            ingest,
-            state,
-            fetcherOptions.PollInterval,
-            logFactory.CreateLogger<PollLoop>(),
-            readiness,
-            snapshotFactory))
+        .Select(adapter =>
+        {
+            // Delegate closes over the adapter id so IComponentEventClient carries it
+            // without changing the Orchestration → Control dependency direction (F18).
+            Func<RateLimitSnapshot, CancellationToken, Task> reportCycleAsync =
+                (snapshot, ct) => componentEvents.PostRateLimitAsync(
+                    snapshot, adapter.AdapterId, "running", ct);
+
+            return new PollLoop(
+                adapter,
+                ingest,
+                state,
+                fetcherOptions.PollInterval,
+                logFactory.CreateLogger<PollLoop>(),
+                readiness,
+                snapshotFactory,
+                reportCycleAsync);
+        })
         .ToList()
         .AsReadOnly();
 });
@@ -182,6 +199,8 @@ app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
         used = rl.Used,
         budget = rl.Budget,
         reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
+        ci_limit = rl.CiLimit,
+        ci_remaining = rl.CiRemaining,
     };
 
     var body = new

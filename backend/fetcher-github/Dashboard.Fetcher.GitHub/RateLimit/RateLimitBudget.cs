@@ -20,6 +20,8 @@ public sealed class RateLimitBudget
     private readonly int _budget;
     private int _ownCount;
     private DateTimeOffset _resetAt = DateTimeOffset.MinValue;
+    private int? _ciLimit;
+    private int? _ciRemaining;
     private readonly ILogger<RateLimitBudget> _logger;
 
     private RateLimitBudget(int budget, ILogger<RateLimitBudget> logger)
@@ -39,6 +41,18 @@ public sealed class RateLimitBudget
 
     /// <summary>Unix-epoch reset timestamp from the last response; <see cref="DateTimeOffset.MinValue"/> if never received.</summary>
     public DateTimeOffset ResetAt => _resetAt;
+
+    /// <summary>
+    /// CI/CD API total hourly quota from <c>X-RateLimit-Limit</c>;
+    /// <c>null</c> before the first GitHub response (F18 / §5.11).
+    /// </summary>
+    public int? CiLimit => _ciLimit;
+
+    /// <summary>
+    /// CI/CD-wide remaining quota from <c>X-RateLimit-Remaining</c> (all consumers);
+    /// <c>null</c> before the first GitHub response (F18 / §5.11).
+    /// </summary>
+    public int? CiRemaining => _ciRemaining;
 
     /// <summary>
     /// Initialises the budget: reads GITHUB__RATE_LIMIT when set,
@@ -66,6 +80,7 @@ public sealed class RateLimitBudget
     /// Called after every GitHub API response.
     /// Increments the own-request counter; resets it when the rate-limit window has rolled over.
     /// Pauses until reset_at + 1s when own count reaches the budget.
+    /// Also captures <c>X-RateLimit-Limit</c> / <c>X-RateLimit-Remaining</c> for the F18 snapshot.
     /// </summary>
     public async Task RecordAndWaitIfNeededAsync(HttpResponseMessage response, CancellationToken ct)
     {
@@ -77,6 +92,12 @@ public sealed class RateLimitBudget
 
         _resetAt = responseResetAt;
         _ownCount++;
+
+        // Capture CI/CD-wide quota fields for the per-cycle rate-limit event (F18 / §5.11).
+        if (TryGetIntHeader(response, "X-RateLimit-Limit", out var ciLimit))
+            _ciLimit = ciLimit;
+        if (TryGetIntHeader(response, "X-RateLimit-Remaining", out var ciRemaining))
+            _ciRemaining = ciRemaining;
 
         if (_ownCount < _budget)
             return;
@@ -137,6 +158,14 @@ public sealed class RateLimitBudget
             return value is not null;
         }
         value = null;
+        return false;
+    }
+
+    private static bool TryGetIntHeader(HttpResponseMessage response, string name, out int value)
+    {
+        if (TryGetHeader(response, name, out var raw) && int.TryParse(raw, out value))
+            return true;
+        value = 0;
         return false;
     }
 }
