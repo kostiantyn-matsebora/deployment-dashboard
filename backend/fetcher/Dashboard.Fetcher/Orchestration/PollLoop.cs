@@ -124,16 +124,21 @@ public sealed class PollLoop(
 
     private async Task<string?> PollOnceAsync(string? cursor, CancellationToken ct)
     {
-        var result = await adapter.FetchAsync(cursor, ct);
-
-        foreach (var ev in result.Events)
-            await ingest.PostAsync(ev, adapter.AdapterId, ct);
-
-        // Advance cursor only after all POSTs succeed (F5).
-        if (result.Events.Count > 0 && result.Cursor != cursor)
+        // Iterate chunks; post each chunk's events, then persist the cursor when it changes.
+        // Persist even on 0-event chunks (backfill completion markers carry no events but
+        // advance the cursor — §5.8, chunk granularity rule 3).
+        // At-least-once (F5): a throw mid-chunk leaves the cursor at the last completed
+        // chunk; the next poll re-delivers the failed chunk (duplicates acceptable).
+        await foreach (var chunk in adapter.FetchAsync(cursor, ct))
         {
-            await state.PutAsync(adapter.AdapterId, result.Cursor!, ct);
-            cursor = result.Cursor;
+            foreach (var ev in chunk.Events)
+                await ingest.PostAsync(ev, adapter.AdapterId, ct);
+
+            if (chunk.Cursor != cursor)
+            {
+                await state.PutAsync(adapter.AdapterId, chunk.Cursor!, ct);
+                cursor = chunk.Cursor;
+            }
         }
 
         return cursor;

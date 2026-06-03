@@ -18,6 +18,12 @@ public sealed class ControlStreamListenerTests
 {
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
+    private static async IAsyncEnumerable<FetchResult> EmptyChunks()
+    {
+        yield return new FetchResult([], null);
+        await Task.CompletedTask;
+    }
+
     private static PollLoop MakePollLoop(
         ICiCdAdapter? adapter = null,
         IIngestClient? ingest = null,
@@ -26,7 +32,7 @@ public sealed class ControlStreamListenerTests
         adapter ??= Substitute.For<ICiCdAdapter>();
         adapter.AdapterId.Returns("github-actions");
         adapter.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-               .Returns(new FetchResult([], null));
+               .Returns(EmptyChunks());
 
         ingest ??= Substitute.For<IIngestClient>();
 
@@ -333,7 +339,7 @@ public sealed class ControlStreamListenerTests
                .Returns(_ =>
                {
                    fetchCallCount++;
-                   return Task.FromResult(new FetchResult([], null));
+                   return EmptyChunks();
                });
 
         var ingest = Substitute.For<IIngestClient>();
@@ -373,7 +379,7 @@ public sealed class ControlStreamListenerTests
                .Returns(args =>
                {
                    receivedCursor = (string?)args[0];
-                   return Task.FromResult(new FetchResult([], null));
+                   return EmptyChunks();
                });
 
         var ingest = Substitute.For<IIngestClient>();

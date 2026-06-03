@@ -1,3 +1,4 @@
+using Dashboard.Fetcher.Abstractions;
 using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.GitHub.Cursor;
 using Dashboard.Fetcher.GitHub.Graph;
@@ -13,6 +14,22 @@ namespace Dashboard.Fetcher.GitHub.Backfill;
 /// Fills the store with the most recent <see cref="FetcherOptions.BackfillDepth"/> status events
 /// per (service, environment) slot (§5.8, F13).
 /// Triggered on null cursor (first run) or BACKFILL=true (F14).
+///
+/// Streaming + resumable (chunked backfill):
+/// Yields one <see cref="FetchResult"/> per completed (repo, env) plus a zero-event
+/// completion marker per repo.  The orchestrator persists the cursor after each chunk
+/// so a mid-backfill crash resumes from the last completed env.
+///
+/// Parent-map choice: the per-repo envToDeploymentId map is accumulated as each env
+/// completes within a repo (§5.6.4 cross-env edges). A parent deployment in an env
+/// processed later becomes a forward reference that Swimlanes resolves at render time
+/// (§5.6.5 — dangling ids are tolerated). Within-repo edges from earlier envs are
+/// resolved correctly because all of those deployments are accumulated into the repo
+/// map before emitting later-env events.
+///
+/// Empty-repo completion: when a repo has no emitted events (maxSince == null), the
+/// completion marker emits without advancing repos[repo].since, so the next poll window
+/// falls back to now − INITIAL_LOOKBACK (safe; avoids missing events in an empty repo).
 /// </summary>
 public sealed class BackfillRunner(
     GithubClient github,
@@ -28,216 +45,255 @@ public sealed class BackfillRunner(
     /// </summary>
     private const int StallWindow = 20;
 
-    public async Task<(IReadOnlyList<DeploymentEventIngest> Events, GithubCursor Cursor)> RunAsync(
-        CancellationToken ct)
+    /// <summary>
+    /// Streams backfill chunks — one per completed (repo, env) plus a zero-event
+    /// completion marker per repo.  Each chunk carries the full running cursor so the
+    /// orchestrator can persist it after every yield.
+    /// </summary>
+    public async IAsyncEnumerable<FetchResult> RunAsync(
+        GithubCursor incoming,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
         logger.LogInformation("[Backfill] starting (depth={Depth})", fetcherOptions.BackfillDepth);
 
-        var allEvents = new List<DeploymentEventIngest>();
-        var cursor = new GithubCursor();
+        var cursor = incoming;
         var serviceMap = options.ServiceMapDict;
         var maxAge = fetcherOptions.EffectiveBackfillMaxAge;
 
         foreach (var repo in options.RepoList)
         {
             var (owner, repoName) = SplitRepo(repo);
-            var (events, maxSince) = await BackfillRepoAsync(
-                owner, repoName, repo, serviceMap, maxAge, ct);
-            allEvents.AddRange(events);
+            var existing = incoming.BackfillFor(repo);
 
-            if (maxSince.HasValue)
-                cursor = cursor.WithRepo(repo, maxSince.Value);
+            // Stable anchor: reuse the persisted anchor for a resume, set a fresh one otherwise.
+            var anchor = existing?.Anchor ?? DateTimeOffset.UtcNow;
+            var cutoff = anchor - maxAge;
+            var alreadyDone = existing?.DoneEnvs ?? [];
+
+            logger.LogInformation("[Backfill] {Repo}: anchor={Anchor}, resuming={Resume}, doneEnvs={Done}",
+                repo, anchor, existing is not null, string.Join(",", alreadyDone));
+
+            // Per-repo accumulated envToDeploymentId map for parent derivation (§5.6.4).
+            // Built incrementally as each env's deployments are scanned so within-repo
+            // edges from earlier envs resolve when later-env events reference them.
+            var repoEnvMap = new Dictionary<long, Dictionary<string, string>>();
+
+            DateTimeOffset? maxSinceForRepo = null;
+
+            // Discover active workflows for service resolution.
+            var workflowList = await github.GetAsync<GhWorkflowListResponse>(
+                $"/repos/{owner}/{repoName}/actions/workflows?per_page=100", ct);
+            var activeWorkflows = workflowList?.Workflows
+                .Where(w => w.State == "active")
+                .ToList() ?? [];
+
+            var pathToService = activeWorkflows
+                .ToDictionary(
+                    w => w.Path,
+                    w => ServiceResolver.Resolve(w.Name, repo, serviceMap),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var allServiceNames = activeWorkflows
+                .Select(w => ServiceResolver.Resolve(w.Name, repo, serviceMap))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // Discover environments.
+            var envList = await github.GetAsync<GhEnvironmentListResponse>(
+                $"/repos/{owner}/{repoName}/environments", ct);
+            var environments = envList?.Environments.Select(e => e.Name).ToList() ?? [];
+
+            var remainingEnvs = environments
+                .Where(e => !alreadyDone.Contains(e, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var env in remainingEnvs)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var (envEvents, envDeployments) = await BackfillEnvAsync(
+                    owner, repoName, repo, env, cutoff,
+                    pathToService, allServiceNames, serviceMap,
+                    repoEnvMap, ct);
+
+                // Accumulate deployment data into the repo-level env map so that
+                // subsequent envs can resolve parent edges back to this env's deployments.
+                MergeIntoRepoEnvMap(repoEnvMap, envDeployments);
+
+                // Sort env events oldest-first (§5.8.2).
+                envEvents.Sort((a, b) => a.HappenedAt.CompareTo(b.HappenedAt));
+
+                foreach (var ev in envEvents)
+                {
+                    if (maxSinceForRepo is null || ev.HappenedAt > maxSinceForRepo.Value)
+                        maxSinceForRepo = ev.HappenedAt;
+                }
+
+                // Advance the running cursor with the done-env marker.
+                cursor = cursor.WithBackfillEnvDone(repo, anchor, env);
+
+                yield return new FetchResult(envEvents, cursor.Encode());
+            }
+
+            // Zero-event completion marker: sets repos[repo].since and removes the backfill marker.
+            cursor = cursor.WithBackfillComplete(repo, maxSinceForRepo);
+            yield return new FetchResult([], cursor.Encode());
+
+            logger.LogInformation("[Backfill] {Repo}: complete — maxSince={MaxSince}", repo, maxSinceForRepo);
         }
 
-        // Sort oldest-first before returning (§5.8.2)
-        allEvents.Sort((a, b) => a.HappenedAt.CompareTo(b.HappenedAt));
-
-        logger.LogInformation("[Backfill] complete — {Count} events", allEvents.Count);
-        return (allEvents, cursor);
+        logger.LogInformation("[Backfill] all repos complete");
     }
 
-    private async Task<(List<DeploymentEventIngest> Events, DateTimeOffset? MaxSince)> BackfillRepoAsync(
-        string owner, string repoName, string repo,
-        IReadOnlyDictionary<string, string> serviceMap,
-        TimeSpan maxAge, CancellationToken ct)
+    // ── per-env scan ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Scans one environment and returns the trimmed events plus the raw deployment
+    /// collection for the caller to merge into the repo env-map.
+    /// </summary>
+    private async Task<(List<DeploymentEventIngest> Events,
+        List<(long Id, string Env, DateTimeOffset CreatedAt, long? RunId)> Deployments)>
+        BackfillEnvAsync(
+            string owner, string repoName, string repo, string env,
+            DateTimeOffset cutoff,
+            IReadOnlyDictionary<string, string> pathToService,
+            IReadOnlySet<string> allServiceNames,
+            IReadOnlyDictionary<string, string> serviceMap,
+            Dictionary<long, Dictionary<string, string>> repoEnvMap,
+            CancellationToken ct)
     {
         var depth = fetcherOptions.BackfillDepth > 0 ? fetcherOptions.BackfillDepth : 1;
-        var cutoff = DateTimeOffset.UtcNow - maxAge;
 
-        // Discover active workflows; build path→workflowName map for F2 service resolution.
-        var workflowList = await github.GetAsync<GhWorkflowListResponse>(
-            $"/repos/{owner}/{repoName}/actions/workflows?per_page=100", ct);
-        var activeWorkflows = workflowList?.Workflows
-            .Where(w => w.State == "active")
-            .ToList() ?? [];
-
-        // F2: path → resolved service name (avoids mis-mapping when run-name: is overridden)
-        var pathToService = activeWorkflows
-            .ToDictionary(
-                w => w.Path,
-                w => ServiceResolver.Resolve(w.Name, repo, serviceMap),
-                StringComparer.OrdinalIgnoreCase);
-
-        var allServiceNames = activeWorkflows
-            .Select(w => ServiceResolver.Resolve(w.Name, repo, serviceMap))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // Discover environments
-        var envList = await github.GetAsync<GhEnvironmentListResponse>(
-            $"/repos/{owner}/{repoName}/environments", ct);
-        var environments = envList?.Environments.Select(e => e.Name).ToList() ?? [];
-
-        // Pass 1: accumulate chosen deployments with their fetched data.
-        // Parent derivation is deferred to pass 2 so the full cross-environment
-        // envToDeploymentId map (§5.6.4) can be built before resolving any edges.
-        //
-        // filled[service] = count of MAPPED STATUS EVENTS kept so far for this env.
-        // Scanning stops for a slot once filled[service] >= depth (event-count, not
-        // deployment-count). The newest deployments are scanned first; we collect
-        // all their mapped statuses and trim to the depth-latest after pass 2.
+        // Pass 1: collect chosen deployments for this env.
         var chosen = new List<(
             GhDeployment Deployment,
             List<GhDeploymentStatus> Statuses,
             long? RunId,
             WorkflowGraph? Graph,
-            string? WorkflowName,
             string Service)>();
 
-        foreach (var env in environments)
+        var filled = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var consecutiveNoProgress = 0;
+
+        await foreach (var deployment in github.GetPagedAsync<GhDeployment>(
+            $"/repos/{owner}/{repoName}/deployments?environment={Uri.EscapeDataString(env)}", ct))
         {
-            // filled[service] = count of mapped status events contributed to this env slot
-            var filled = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var consecutiveNoProgress = 0;
+            if (deployment.CreatedAt < cutoff)
+                break;
 
-            await foreach (var deployment in github.GetPagedAsync<GhDeployment>(
-                $"/repos/{owner}/{repoName}/deployments?environment={Uri.EscapeDataString(env)}", ct))
+            if (consecutiveNoProgress >= StallWindow)
             {
-                if (deployment.CreatedAt < cutoff)
-                    break;
-
-                // F1 no-progress stop: abort env scan when stalled for StallWindow deployments.
-                if (consecutiveNoProgress >= StallWindow)
-                {
-                    logger.LogDebug(
-                        "[Backfill] {Repo}/{Env}: stalled after {N} consecutive no-progress deployments",
-                        repo, env, consecutiveNoProgress);
-                    break;
-                }
-
-                // Fetch statuses (always needed for event data and run_id extraction).
-                var statuses = await FetchAllStatusesAsync(owner, repoName, deployment.Id, ct);
-                var runId = statuses
-                    .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
-                    .FirstOrDefault(r => r.HasValue);
-
-                // F2: resolve service from run path → active-workflow name, not run.Name.
-                // Only fetch run metadata (cheap); defer YAML until keep decision is made.
-                var service = await ResolveServiceFromRunAsync(
-                    owner, repoName, repo, runId, pathToService, serviceMap, ct);
-
-                var eventsSoFar = filled.GetValueOrDefault(service, 0);
-                if (!allServiceNames.Contains(service) || eventsSoFar >= depth)
-                {
-                    consecutiveNoProgress++;
-                    continue;
-                }
-
-                // Count how many additional mapped events this deployment would contribute.
-                var mappedCount = statuses.Count(s => StatusMapper.Map(s.State) is not null);
-                if (mappedCount == 0)
-                {
-                    consecutiveNoProgress++;
-                    continue;
-                }
-
-                // Kept: fetch the full workflow graph (YAML) for parent derivation.
-                WorkflowGraph? graph = null;
-                if (runId.HasValue)
-                    graph = await graphCache.GetOrFetchGraphAsync(owner, repoName, runId.Value, github, ct);
-
-                var workflowName = graph?.WorkflowName;
-
-                chosen.Add((deployment, statuses, runId, graph, workflowName, service));
-                filled[service] = eventsSoFar + mappedCount;
-                consecutiveNoProgress = 0; // progress was made
-
                 logger.LogDebug(
-                    "[Backfill] {Repo}/{Env}: kept deployment {Id} for service '{Service}' ({EventCount} events so far / {Depth})",
-                    repo, env, deployment.Id, service, filled[service], depth);
+                    "[Backfill] {Repo}/{Env}: stalled after {N} consecutive no-progress deployments",
+                    repo, env, consecutiveNoProgress);
+                break;
             }
+
+            var statuses = await FetchAllStatusesAsync(owner, repoName, deployment.Id, ct);
+            var runId = statuses
+                .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
+                .FirstOrDefault(r => r.HasValue);
+
+            var service = await ResolveServiceFromRunAsync(
+                owner, repoName, repo, runId, pathToService, serviceMap, ct);
+
+            var eventsSoFar = filled.GetValueOrDefault(service, 0);
+            if (!allServiceNames.Contains(service) || eventsSoFar >= depth)
+            {
+                consecutiveNoProgress++;
+                continue;
+            }
+
+            var mappedCount = statuses.Count(s => StatusMapper.Map(s.State) is not null);
+            if (mappedCount == 0)
+            {
+                consecutiveNoProgress++;
+                continue;
+            }
+
+            WorkflowGraph? graph = null;
+            if (runId.HasValue)
+                graph = await graphCache.GetOrFetchGraphAsync(owner, repoName, runId.Value, github, ct);
+
+            chosen.Add((deployment, statuses, runId, graph, service));
+            filled[service] = eventsSoFar + mappedCount;
+            consecutiveNoProgress = 0;
         }
 
-        // Pass 2: build the full cross-environment envToDeploymentId map from ALL chosen
-        // deployments (§5.6.4), then derive parents and build events.
-        var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(
-            chosen.Select(c => (c.Deployment.Id, c.Deployment.Environment, c.Deployment.CreatedAt, c.RunId)));
+        // Collect the raw deployment tuples for the caller to merge into the repo map.
+        var deploymentTuples = chosen
+            .Select(c => (c.Deployment.Id, c.Deployment.Environment, c.Deployment.CreatedAt, c.RunId))
+            .ToList();
 
-        // Collect all candidate events before trimming to depth latest per slot.
+        // Build the env map using all known repo deployments so far PLUS this env's new ones.
+        // This ensures parent edges from this env back to a prior env in the same run are resolved.
+        var combinedMap = new Dictionary<long, Dictionary<string, string>>(repoEnvMap);
+        MergeIntoMap(combinedMap, deploymentTuples);
+
+        // Pass 2: build events and trim.
         var candidateEvents = new List<(DeploymentEventIngest Event, string Slot)>();
-        DateTimeOffset? maxSince = null;
 
-        foreach (var (deployment, statuses, runId, graph, workflowName, service) in chosen)
+        foreach (var (deployment, statuses, runId, graph, service) in chosen)
         {
             foreach (var status in statuses)
             {
                 var contractStatus = StatusMapper.Map(status.State);
                 if (contractStatus is null) continue;
 
-                var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
-                var version = await versionResolver.ResolveAsync(
-                    owner, repoName, deployment, status, ct);
+                var parentDeployments = DeriveParents(deployment, runId, graph, combinedMap);
+                var version = await versionResolver.ResolveAsync(owner, repoName, deployment, status, ct);
 
                 var ev = EventMapper.Map(
                     deployment, status, repo, contractStatus,
-                    workflowName, version, parentDeployments, serviceMap);
+                    graph?.WorkflowName, version, parentDeployments, serviceMap);
 
-                // Slot key for per-slot depth trimming.
                 var slot = $"{service}\x00{deployment.Environment}";
                 candidateEvents.Add((ev, slot));
             }
         }
 
-        // Trim to the BackfillDepth latest events per (service, environment) slot
-        // by status created_at, then advance the cursor over what is actually emitted.
         var events = new List<DeploymentEventIngest>();
-
-        var bySlot = candidateEvents
-            .GroupBy(x => x.Slot)
-            .ToList();
-
-        foreach (var slotGroup in bySlot)
+        foreach (var slotGroup in candidateEvents.GroupBy(x => x.Slot))
         {
-            // Order by HappenedAt descending, keep the depth latest, then sort ascending
-            // for the final post ordering (§5.8.2 oldest-first).
             var kept = slotGroup
                 .OrderByDescending(x => x.Event.HappenedAt)
                 .Take(depth)
-                .Select(x => x.Event)
-                .ToList();
-
+                .Select(x => x.Event);
             events.AddRange(kept);
         }
 
-        // Advance cursor over all emitted events.
-        foreach (var ev in events)
-        {
-            // NOTE: maxSince is DateTimeOffset? — a lifted `>` against null is always
-            // false, so the null case must be handled explicitly or the cursor never
-            // advances (backfill would return an empty cursor → next poll re-scans the
-            // whole INITIAL_LOOKBACK window).
-            if (maxSince is null || ev.HappenedAt > maxSince.Value)
-                maxSince = ev.HappenedAt;
-        }
-
-        return (events, maxSince);
+        return (events, deploymentTuples);
     }
 
-    /// <summary>
-    /// Resolves the service name using the run's <c>path</c> field (F2).
-    /// Looks up the path in the pre-built active-workflow path→service map.
-    /// Falls back to <see cref="ServiceResolver.Resolve"/> with the run's display name,
-    /// then to repo short name.
-    /// </summary>
+    // ── env-map helpers ───────────────────────────────────────────────────────
+
+    private static void MergeIntoRepoEnvMap(
+        Dictionary<long, Dictionary<string, string>> target,
+        List<(long Id, string Env, DateTimeOffset CreatedAt, long? RunId)> deployments) =>
+        MergeIntoMap(target, deployments);
+
+    private static void MergeIntoMap(
+        Dictionary<long, Dictionary<string, string>> target,
+        IEnumerable<(long Id, string Env, DateTimeOffset CreatedAt, long? RunId)> deployments)
+    {
+        var partial = ParentDerivation.BuildEnvToDeploymentIdMap(deployments);
+        foreach (var (runId, envToId) in partial)
+        {
+            if (!target.TryGetValue(runId, out var existing))
+            {
+                target[runId] = envToId;
+                continue;
+            }
+            // Merge; keep later CreatedAt wins (handled inside BuildEnvToDeploymentIdMap per runId,
+            // but different envs within the same runId may arrive from different passes — apply
+            // a simple "add if absent" merge since BuildEnvToDeploymentIdMap already handles
+            // collision within a single call's deployment set).
+            foreach (var (env, id) in envToId)
+                existing.TryAdd(env, id);
+        }
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
     private async Task<string> ResolveServiceFromRunAsync(
         string owner, string repoName, string repo,
         long? runId,
@@ -252,7 +308,6 @@ public sealed class BackfillRunner(
         if (run is not null && pathToService.TryGetValue(run.Path, out var serviceFromPath))
             return serviceFromPath;
 
-        // Fallback: run display name (may be run-name: override, but better than nothing).
         return ServiceResolver.Resolve(run?.Name, repo, serviceMap);
     }
 

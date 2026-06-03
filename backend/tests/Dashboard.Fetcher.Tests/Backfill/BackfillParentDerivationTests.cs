@@ -5,10 +5,12 @@ using System.Text.Json;
 using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
+using Dashboard.Fetcher.GitHub.Cursor;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
+using Dashboard.Shared.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dashboard.Fetcher.Tests.Backfill;
@@ -50,7 +52,7 @@ public sealed class BackfillParentDerivationTests
         var (runner, _) = BuildRunner(handler);
 
         // Act
-        var (events, _) = await runner.RunAsync(CancellationToken.None);
+        var (events, _) = await DrainAsync(runner);
 
         // Only success statuses are emitted (one per env × one status each)
         Assert.Equal(3, events.Count);
@@ -167,6 +169,22 @@ public sealed class BackfillParentDerivationTests
             // Workflow file content
             [$"/repos/{Owner}/{Repo}/contents/.github/workflows/deploy.yml"] = workflowFile,
         };
+    }
+
+    // ── compatibility helper ──────────────────────────────────────────────────
+
+    private static async Task<(List<DeploymentEventIngest> Events, GithubCursor FinalCursor)>
+        DrainAsync(BackfillRunner runner, CancellationToken ct = default)
+    {
+        var events = new List<DeploymentEventIngest>();
+        GithubCursor finalCursor = new();
+        await foreach (var chunk in runner.RunAsync(new GithubCursor(), ct))
+        {
+            events.AddRange(chunk.Events);
+            if (chunk.Cursor is not null)
+                finalCursor = GithubCursor.Decode(chunk.Cursor);
+        }
+        return (events, finalCursor);
     }
 
     private static (BackfillRunner Runner, WorkflowGraphCache GraphCache) BuildRunner(
