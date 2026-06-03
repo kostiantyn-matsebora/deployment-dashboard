@@ -177,3 +177,70 @@ All notable changes to this project will be documented here.
             Should -Throw
     }
 }
+
+# ============================================================
+Describe 'Update-DocVersionExamples' {
+
+    It 'bumps the DASHBOARD_VERSION pin assignment' {
+        Update-DocVersionExamples -Content 'DASHBOARD_VERSION=0.2.1' -Version '0.5.0' |
+            Should -Be 'DASHBOARD_VERSION=0.5.0'
+    }
+
+    It 'bumps the "published release (e.g. `x`)" table example' {
+        $in = 'For a reproducible deploy, pin to a published release (e.g. `0.2.1`). |'
+        Update-DocVersionExamples -Content $in -Version '0.5.0' |
+            Should -Be 'For a reproducible deploy, pin to a published release (e.g. `0.5.0`). |'
+    }
+
+    It 'bumps both versions in the "git tag `vx` publishes images as `x`" line' {
+        $in = 'the git tag `v0.2.1` publishes images as `0.2.1`.'
+        Update-DocVersionExamples -Content $in -Version '0.5.0' |
+            Should -Be 'the git tag `v0.5.0` publishes images as `0.5.0`.'
+    }
+
+    It 'bumps the pin-a-release compose URL tag' {
+        Update-DocVersionExamples -Content '`.../v0.2.1/compose/...`' -Version '0.5.0' |
+            Should -Be '`.../v0.5.0/compose/...`'
+    }
+
+    It 'bumps the OCI compose-demo artifact tag' {
+        $in = 'oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.2.1'
+        Update-DocVersionExamples -Content $in -Version '0.5.0' |
+            Should -Be 'oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.5.0'
+    }
+
+    It 'rewrites every pin example in a combined document' {
+        $doc = @'
+DASHBOARD_VERSION=0.2.1
+pin to a published release (e.g. `0.2.1`).
+the git tag `v0.2.1` publishes images as `0.2.1`.
+replace main with the tag (e.g. `.../v0.2.1/compose/...`)
+compose-demo:0.2.1 --profile demo up
+'@
+        $out = Update-DocVersionExamples -Content $doc -Version '0.5.0'
+        $out | Should -Not -Match '0\.2\.1'
+        ([regex]::Matches($out, '0\.5\.0')).Count | Should -Be 6
+    }
+
+    It 'leaves the "first release (v0.1.0) is cut" historical note untouched' {
+        $in = 'The `:latest` tag exists once the first release (`v0.1.0`) is cut.'
+        Update-DocVersionExamples -Content $in -Version '0.5.0' | Should -Be $in
+    }
+
+    It 'leaves demo seed versions (compose tag context absent) untouched' {
+        $in = "version: 'v0.41.2', ref:'#7912'"
+        Update-DocVersionExamples -Content $in -Version '0.5.0' | Should -Be $in
+    }
+
+    It 'is idempotent — a second pass is a no-op' {
+        $in = 'DASHBOARD_VERSION=0.5.0 and `.../v0.5.0/compose/...`'
+        $once = Update-DocVersionExamples -Content $in -Version '0.5.0'
+        Update-DocVersionExamples -Content $once -Version '0.5.0' | Should -Be $once
+        $once | Should -Be $in
+    }
+
+    It 'handles a pre-release target version' {
+        Update-DocVersionExamples -Content 'DASHBOARD_VERSION=0.2.1' -Version '1.0.0-rc.1' |
+            Should -Be 'DASHBOARD_VERSION=1.0.0-rc.1'
+    }
+}
