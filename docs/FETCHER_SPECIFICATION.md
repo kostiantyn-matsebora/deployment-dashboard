@@ -39,7 +39,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F2 | **One abstraction — `ICiCdAdapter`.** The host/orchestrator depend only on it + the canonical DTO + an opaque cursor string. **Zero** tool-specifics leak out. | The headline requirement. Adding Azure DevOps / Jenkins = a new adapter, no host changes. |
 | F3 | **Adapter owns its cursor shape.** Persisted opaquely via `/api/fetcher/state/{adapter}`; host never parses it. | Matches openapi opaque-cursor contract. |
 | F4 | **GitHub adapter sources the Deployments + Deployment Statuses REST API.** `AdapterId = github-actions`. | Those endpoints carry `environment` + the status lifecycle the matrix needs (workflow-runs API lacks `environment`). |
-| F5 | **At-least-once delivery.** Cursor advances *only* after a successful `POST`; a mid-batch failure re-polls and may re-post. | Store is append-only / no dedup — duplicates are acceptable, dropped events are not. |
+| F5 | **At-least-once delivery per chunk.** Cursor advances after all POSTs in a chunk succeed and the cursor is persisted; a throw mid-chunk leaves the cursor at the previous chunk → next loop re-delivers that chunk (dupes OK, append-only). | Store is append-only / no dedup — duplicates are acceptable, dropped events are not. |
 | F6 | **Single replica per adapter.** No leader election; the cursor is shared but unlocked. | Two replicas would double-post. The API (not the fetcher) is the horizontally-scaled tier. |
 | F7 | **Bounded initial backfill.** On a `404` (no cursor yet) the adapter starts from `now − INITIAL_LOOKBACK`, not from repo genesis. | Avoids flooding the store with full history on first run. |
 | F8 | **Adapter handles conditional requests + rate limits.** ETag / `If-None-Match`, `X-RateLimit-*`, `Retry-After`, backoff. | Keeps polling cheap and a good API citizen — internal to the adapter. |
@@ -93,9 +93,12 @@ public interface ICiCdAdapter
     /// (dashboard-fetcher/<id>) and the /api/fetcher/state/{adapter} key.
     string AdapterId { get; }
 
-    /// Poll the source for events newer than `cursor` (null = first run).
-    /// Returns the events to push and the advanced cursor (opaque to the host).
-    Task<FetchResult> FetchAsync(string? cursor, CancellationToken ct);
+    /// Streams chunks of events newer than `cursor` (null = first run).
+    /// Each yielded FetchResult carries the events for that chunk plus the full
+    /// advanced cursor as of that chunk (opaque to the host).
+    /// Backfill yields one chunk per (repo, env) plus a zero-event completion
+    /// marker per repo. Normal poll yields a single chunk.
+    IAsyncEnumerable<FetchResult> FetchAsync(string? cursor, CancellationToken ct);
 }
 
 /// Events are the canonical wire DTO — already tool-neutral.
@@ -110,20 +113,25 @@ public sealed record FetchResult(
 var cursor = await state.GetAsync(adapter.AdapterId, ct);     // GET  /api/fetcher/state/{id} (404 -> null)
 while (!ct.IsCancellationRequested)
 {
-    var result = await adapter.FetchAsync(cursor, ct);        // ALL tool logic is inside here
-    foreach (var ev in result.Events)                          // ordered oldest-first
-        await ingest.PostAsync(ev, adapter.AdapterId, ct);     // POST /api/deployments (X-Api-Key + X-Progress-Reporter)
-
-    if (result.Events.Count > 0 && result.Cursor != cursor)
+    // Iterate chunks; persist cursor after each chunk that advances it.
+    // Zero-event chunks (backfill completion markers) are also persisted when cursor changes.
+    await foreach (var chunk in adapter.FetchAsync(cursor, ct))
     {
-        await state.PutAsync(adapter.AdapterId, result.Cursor, ct);  // PUT /api/fetcher/state/{id}
-        cursor = result.Cursor;
+        foreach (var ev in chunk.Events)
+            await ingest.PostAsync(ev, adapter.AdapterId, ct);  // POST /api/deployments
+
+        if (chunk.Cursor != cursor)
+        {
+            await state.PutAsync(adapter.AdapterId, chunk.Cursor!, ct);  // PUT /api/fetcher/state/{id}
+            cursor = chunk.Cursor;
+        }
     }
     await Task.Delay(pollInterval, ct);
 }
 ```
 
-- Cursor is **persisted only after** the batch's POSTs succeed (F5). A throw mid-batch leaves the cursor where it was → next loop re-polls and re-pushes the tail (dupes OK, append-only).
+- Cursor is **persisted after each chunk** whose cursor advances (F5). A throw mid-chunk leaves the cursor at the last completed chunk → next loop re-delivers from that point (dupes OK, append-only).
+- Zero-event completion markers (backfill repo-done) ARE persisted when they carry a new cursor.
 - The host references **no** `Dashboard.Fetcher.Adapters.GitHub` type — adapters are resolved via DI as `IEnumerable<ICiCdAdapter>`.
 
 ---
@@ -177,13 +185,27 @@ One **GitHub deployment status** → one **event row** (matches the append-only 
 
 ### 5.4 Cursor shape (opaque to the backend)
 
-Base64 of compact JSON, forward-only, well under the 8 KiB limit:
+Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 
+**Normal / post-backfill shape:**
 ```json
 { "repos": { "acme/api": { "since": "2026-05-28T10:14:02Z" }, "acme/web": { "since": "2026-05-28T09:50:00Z" } } }
 ```
 
-- `since` = high-water mark on `status.created_at` per repo. Each poll emits statuses with `created_at > since`, oldest-first, then advances `since` to the max emitted.
+**Mid-backfill shape (backfill section present while in progress):**
+```json
+{
+  "repos": { "acme/api": { "since": "2026-05-28T10:14:02Z" } },
+  "backfill": {
+    "acme/web": { "anchor": "2026-05-28T12:00:00Z", "done_envs": ["dev", "staging"] }
+  }
+}
+```
+
+- `repos[repo].since` = high-water mark on `status.created_at`. Set only on backfill completion or normal poll advance. Never set mid-backfill.
+- `backfill[repo].anchor` = UTC timestamp when this repo's backfill pass started. Stable across resumes (prevents scan-window drift on restart).
+- `backfill[repo].done_envs` = list of environment names whose per-env scan is complete and emitted. Used to skip already-processed envs on resume.
+- `backfill` key absent = no backfill in progress (old cursors decode safely with empty backfill).
 - First run (cursor `null`): `since = now − INITIAL_LOOKBACK` (F7).
 - ETags cached alongside (optional) to short-circuit unchanged pages with `304` (F8).
 
@@ -295,7 +317,7 @@ Artifact content is **LRU-cached per `(repo, run_id, artifact_name)`** alongside
 
 ### 5.8 Backfill (F13, F14)
 
-Fills the store with the most recent deployment per `(service, environment)` slot on first run or explicit reset. Runs once before the normal poll loop; the poll loop then resumes from the advanced cursor.
+Fills the store with the most recent deployment per `(service, environment)` slot on first run or explicit reset. Chunked and resumable — the orchestrator persists the cursor after each chunk, so a mid-backfill crash restarts from the last completed env rather than from scratch.
 
 #### 5.8.1 Trigger and lifecycle
 
@@ -303,67 +325,46 @@ Fills the store with the most recent deployment per `(service, environment)` slo
 |---|---|
 | Cursor `null` (adapter's `GET /api/fetcher/state` returned `404`) | Backfill runs automatically in place of the normal first-run empty-window. |
 | `BACKFILL=true` env var set | Backfill runs unconditionally, regardless of existing cursor. Existing cursor is overwritten on completion. |
-| Normal run (cursor present, `BACKFILL` unset) | Backfill skipped entirely. |
+| Cursor present AND `backfill` section non-empty | Resume in-progress backfill from last persisted chunk (see §5.8.2). |
+| Normal run (cursor present, `BACKFILL` unset, no `backfill` section) | Backfill skipped entirely. |
 
-#### 5.8.2 Per-repo procedure
+#### 5.8.2 Per-repo procedure (chunked + resumable)
+
+Chunk granularity: **one `FetchResult` chunk per (repo, env)** that passes depth-scan, plus a **zero-event completion chunk per repo** that finalises the cursor.
 
 ```
 depth       ← BACKFILL_DEPTH (default 2)
 StallWindow ← 20  // consecutive no-progress deployments before stopping
+anchor      ← incoming.BackfillFor(repo)?.anchor ?? UtcNow  // stable across resumes
+cutoff      ← anchor − BACKFILL_MAX_AGE
+doneEnvs    ← incoming.BackfillFor(repo)?.done_envs ?? []   // skip on resume
 
-services ← GET /repos/{owner}/{repo}/actions/workflows?per_page=100
-             filter: state == "active"
-             → pathToService map: { wf.path → ResolveService(wf.name, repo) }
-             → allServiceNames: set of resolved service names
+envs        ← GET /repos/{owner}/{repo}/environments → [env.name]
+              filter: env ∉ doneEnvs                         // resume: skip completed envs
 
-envs     ← GET /repos/{owner}/{repo}/environments → [env.name]
+for each remaining env E:
+  // Pass 1: collect candidates for this env (depth, no-progress, defer-YAML as before).
+  // …(same per-env scan as before)…
 
-candidates ← []   // (deployment, statuses, run_id, graph, service) tuples
-cutoff   ← now − BACKFILL_MAX_AGE
+  // Pass 2: build + trim events (same trimming logic as before).
+  // Parent derivation uses the per-repo envToDeploymentId map accumulated so far
+  // (deployments from envs processed earlier in this repo are already in the map).
 
-// Pass 1: collect candidate deployments.
-// eventsSoFar[service] counts MAPPED STATUS EVENTS accumulated for each (service, env) slot.
-for each env E in envs:
-  eventsSoFar ← {}   // service → mapped-event count so far for this env
-  consecutiveNoProgress ← 0
+  runningCursor ← runningCursor.WithBackfillEnvDone(repo, anchor, E)
+  yield FetchResult(envEvents sorted oldest-first, runningCursor.Encode())
+  // Orchestrator persists cursor here — crash safety: next run skips E
 
-  paginate GET /repos/{owner}/{repo}/deployments?environment={E}&per_page=100 newest-first:
-    for each deployment D:
-      if D.created_at < cutoff: stop paginating this env
-      if consecutiveNoProgress >= StallWindow: stop paginating this env  // F1 no-progress stop
-
-      statuses   ← fetch D's statuses                              // always needed for event data
-      mappedCount ← count of statuses where StatusMapper.Map(state) ≠ null
-      run_id     ← extract from any status.target_url (§5.6.1)
-      run        ← run_id != null ? FetchRunMetadata(repo, run_id) : null  // cheap
-      service    ← run != null AND pathToService[run.path] exists
-                     ? pathToService[run.path]                     // F2: path → workflow name
-                     : ResolveService(run?.Name, repo)             // fallback: run display name
-
-      if service ∉ allServiceNames OR eventsSoFar[service] >= depth OR mappedCount == 0:
-        consecutiveNoProgress++
-        continue
-
-      // Kept: fetch the full YAML graph (parent derivation) — deferred until here (F1)
-      graph ← GetOrFetchGraph(repo, run_id)   // §5.6.2 LRU cache
-      candidates.Add((D, statuses, run_id, graph, service))
-      eventsSoFar[service] += mappedCount
-      consecutiveNoProgress ← 0
-
-// Pass 2: build events, trim to depth latest per slot, advance cursor.
-envMap ← BuildEnvToDeploymentIdMap(candidates)  // §5.6.4 — needs all candidates first
-allEvents ← []
-for each candidate (D, statuses, run_id, graph, service) in candidates:
-  for each status S in statuses where StatusMapper.Map(S.state) ≠ null:
-    allEvents.Add(BuildEvent(D, S, graph, envMap))   // §5.3 mapping + §5.6 parent derivation
-
-// Trim to depth latest by happened_at per (service, environment) slot.
-events ← allEvents grouped by (service, environment),
-          each group ordered descending by happened_at, take depth, flatten
+// Zero-event completion marker for this repo:
+runningCursor ← runningCursor.WithBackfillComplete(repo, maxSinceForRepo)
+  // → sets repos[repo].since = max(status.created_at) of all emitted events
+  // → removes backfill[repo] marker
+  // → if no events were emitted (empty repo), repos[repo].since is NOT set;
+  //   next poll falls back to now − INITIAL_LOOKBACK (safe for empty repos)
+yield FetchResult([], runningCursor.Encode())
 ```
 
-- Sort collected `events` by `happened_at` ascending before posting (preserves append-only log ordering).
-- Advance cursor to `max(status.created_at)` across **emitted** (post-trim) events.
+- `repos[repo].since` is set **only by `WithBackfillComplete`** (or normal poll). Never advanced mid-backfill — backfill walks newest-first, so an early `since` would make the next poll skip not-yet-seeded older deployments. The `done_envs` list is the mid-backfill progress marker.
+- **Parent-map choice (within-repo edges).** The per-repo `envToDeploymentId` map is accumulated incrementally as each env's deployments are collected. Within-repo parent edges from earlier envs resolve correctly. A parent in a not-yet-processed env is a forward reference (§5.6.5) — Swimlanes resolves dangling ids at render time.
 - Discarded deployments cost only statuses + run-metadata; the YAML fetch is deferred until a deployment is kept (F1).
 
 #### 5.8.3 Service resolution

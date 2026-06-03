@@ -26,17 +26,23 @@ public sealed class GithubActionsAdapter(
 {
     public string AdapterId => "github-actions";
 
-    public async Task<FetchResult> FetchAsync(string? cursor, CancellationToken ct)
+    public async IAsyncEnumerable<FetchResult> FetchAsync(
+        string? cursor,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
     {
-        var shouldBackfill = cursor is null || fetcherOptions.Backfill;
+        var decoded = GithubCursor.Decode(cursor);
+
+        // Backfill when: no cursor, BACKFILL=true flag, or an active backfill marker exists (resume).
+        var shouldBackfill = cursor is null || fetcherOptions.Backfill || decoded.IsBackfilling;
 
         if (shouldBackfill)
         {
-            var (events, newCursor) = await backfillRunner.RunAsync(ct);
-            return new FetchResult(events, newCursor.Encode());
+            await foreach (var chunk in backfillRunner.RunAsync(decoded, ct))
+                yield return chunk;
+            yield break;
         }
 
-        return await PollAsync(GithubCursor.Decode(cursor), ct);
+        yield return await PollAsync(decoded, ct);
     }
 
     // ── normal poll ───────────────────────────────────────────────────────────

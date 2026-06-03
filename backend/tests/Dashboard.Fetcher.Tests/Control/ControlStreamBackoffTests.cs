@@ -141,12 +141,18 @@ public sealed class ControlStreamBackoffTests
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
+    private static async IAsyncEnumerable<FetchResult> EmptyChunks()
+    {
+        yield return new FetchResult([], null);
+        await Task.CompletedTask;
+    }
+
     private static PollLoop MakePollLoop()
     {
         var adapter = Substitute.For<ICiCdAdapter>();
         adapter.AdapterId.Returns("github-actions");
         adapter.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-               .Returns(new FetchResult([], null));
+               .Returns(EmptyChunks());
 
         var ingest = Substitute.For<IIngestClient>();
         var state = Substitute.For<IFetcherStateClient>();
