@@ -44,7 +44,7 @@ runs:
     # per-service workflows and in ci.yml — see permissions blocks).
     - name: Upload SARIF to GitHub Security tab
       if: always()
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: trivy-results.sarif
         category: ${{ inputs.category }}
