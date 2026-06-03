@@ -116,3 +116,45 @@ export type CorrelationPredicate = typeof CORRELATION_PREDICATES[number];
 /** Time-window options for the Swimlanes correlation picker. */
 export const TIME_WINDOWS = ['5 min', '1 hr', '1 day', '7 days'] as const;
 export type TimeWindow = typeof TIME_WINDOWS[number];
+
+// ── Operational telemetry — fetcher rate-limit reporting ──────────────────────
+
+/**
+ * Rate-limit snapshot stored in app state — combines the top-level `state`
+ * field from the ComponentEventRecord envelope with the `payload` fields.
+ * Shape convention from docs/api/api-guidelines.md §11 "Rate-limit report payload".
+ * All numeric/time fields are null before the first GitHub API response.
+ */
+export interface RateLimitReport {
+  /**
+   * Fetcher lifecycle state from the ComponentEventRecord envelope.
+   * "running" normally; "paused" during reset.
+   */
+  state: string;
+  /** CI/CD adapter identifier (e.g. "github-actions"). Always present. */
+  adapter: string;
+  /** CI/CD API total hourly quota. Null before first GitHub response. */
+  ci_limit: number | null;
+  /** CI/CD-wide remaining quota (all token consumers). Null before first GitHub response. */
+  ci_remaining: number | null;
+  /** Fetcher self-throttle budget for this window. Null before first GitHub response. */
+  own_budget: number | null;
+  /** Fetcher's own request counter this window. Null before first GitHub response. */
+  own_used: number | null;
+  /** Window rollover instant (RFC 3339 UTC). Null before first GitHub response. */
+  reset_at: string | null;
+}
+
+/**
+ * Full ComponentEventRecord frame delivered by GET /api/control/events/stream.
+ * Source: docs/api/api-guidelines.md §11 SSE component-events stream.
+ */
+export interface ComponentEventRecord {
+  id: string;
+  component_id: string;
+  event_type: string;
+  state: string;
+  occurred_at: string;
+  received_at: string;
+  payload: Record<string, unknown> | null;
+}

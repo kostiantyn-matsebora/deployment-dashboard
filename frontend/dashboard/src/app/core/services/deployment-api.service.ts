@@ -1,7 +1,12 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, fromEventPattern } from 'rxjs';
-import { DeploymentEvent, DeploymentEventPage, Matrix } from '../models/deployment.model';
+import {
+  ComponentEventRecord,
+  DeploymentEvent,
+  DeploymentEventPage,
+  Matrix,
+} from '../models/deployment.model';
 
 export interface ListDeploymentsParams {
   service?: string;
@@ -102,5 +107,36 @@ export class DeploymentApiService {
       url += `?service=${encodeURIComponent(options.service)}`;
     }
     return new EventSource(url);
+  }
+
+  /**
+   * GET /api/control/events/stream — SSE fan-out of component events.
+   *
+   * Returns a live Observable<ComponentEventRecord>. Caller is responsible for
+   * unsubscribing (which closes the EventSource).
+   *
+   * Event name on the wire is "component" (not "message").
+   * Source: docs/api/api-guidelines.md §11 SSE component-events stream.
+   */
+  streamComponentEvents(): Observable<ComponentEventRecord> {
+    const url = '/api/control/events/stream';
+
+    return fromEventPattern<ComponentEventRecord>(
+      (handler) => {
+        const es = new EventSource(url);
+        es.addEventListener('component', (event: Event) => {
+          const msg = event as MessageEvent;
+          try {
+            handler(JSON.parse(msg.data) as ComponentEventRecord);
+          } catch {
+            // malformed event — skip
+          }
+        });
+        return es;
+      },
+      (_handler, es: EventSource) => {
+        es.close();
+      },
+    );
   }
 }
