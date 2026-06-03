@@ -230,6 +230,41 @@ public sealed class BackfillRunnerV2Tests
         Assert.Empty(events);
     }
 
+    // ── Regression: backfill must advance the cursor to the max status time ───
+
+    [Fact]
+    public async Task Backfill_AdvancesCursor_ToMaxStatusTime()
+    {
+        // Regression for the nullable-comparison bug: maxSince is DateTimeOffset? and a
+        // lifted `>` against null is always false, so maxSince never advanced — backfill
+        // returned an EMPTY cursor and the next poll fell back to SinceFor's
+        // (now − initialLookback) window, re-ingesting the entire backlog.
+        var expectedSince = DateTimeOffset.UtcNow.AddDays(-2);
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+        var status = new GhDeploymentStatus
+        {
+            Id = 10,
+            State = "success",
+            TargetUrl = $"https://github.com/{Owner}/{Repo}/actions/runs/{RunId}/jobs/1",
+            CreatedAt = expectedSince,
+        };
+
+        var handler = new FakeGithubHandler(BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>> { ["prod"] = [deployment] },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>> { [1] = [status] },
+            workflowRunId: RunId));
+
+        var (runner, _) = BuildRunner(handler, depth: 1);
+        var (events, cursor) = await runner.RunAsync(CancellationToken.None);
+
+        Assert.Single(events);
+        Assert.True(cursor.Repos.ContainsKey(FullRepo),
+            "backfill cursor must include the repo; an empty cursor makes the next poll re-scan the whole window");
+        Assert.Equal(expectedSince, cursor.Repos[FullRepo].Since);
+    }
+
     // ── infrastructure ────────────────────────────────────────────────────────
 
     private static GhDeployment MakeDeployment(long id, string env, int daysAgo) =>

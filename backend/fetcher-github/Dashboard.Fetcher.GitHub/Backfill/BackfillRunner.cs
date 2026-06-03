@@ -176,7 +176,11 @@ public sealed class BackfillRunner(
                     deployment, status, repo, contractStatus,
                     workflowName, version, parentDeployments, serviceMap));
 
-                if (status.CreatedAt > maxSince)
+                // NOTE: maxSince is DateTimeOffset? — a lifted `>` against null is always
+                // false, so the null case must be handled explicitly or the cursor never
+                // advances (backfill would return an empty cursor → next poll re-scans the
+                // whole INITIAL_LOOKBACK window).
+                if (maxSince is null || status.CreatedAt > maxSince.Value)
                     maxSince = status.CreatedAt;
             }
         }
