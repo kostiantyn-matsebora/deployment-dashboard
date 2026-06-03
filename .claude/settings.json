@@ -22,29 +22,9 @@
             "timeout": 30
           }
         ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeLifecycle.ps1\" -SnapshotSession",
-            "timeout": 30
-          }
-        ]
       }
     ],
     "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeEntryGuard.ps1\" -CheckEntry",
-            "timeout": 5
-          }
-        ]
-      },
       {
         "matcher": "Bash",
         "hooks": [
@@ -67,16 +47,6 @@
       }
     ],
     "PostToolUse": [
-      {
-        "matcher": "EnterWorktree",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeEntryGuard.ps1\" -ClearEntry",
-            "timeout": 5
-          }
-        ]
-      },
       {
         "matcher": "Skill",
         "hooks": [
@@ -119,16 +89,6 @@
           {
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -SessionEnd",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeLifecycle.ps1\" -SessionEnd",
             "timeout": 30
           }
         ]
