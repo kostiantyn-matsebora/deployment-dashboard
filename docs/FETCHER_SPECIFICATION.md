@@ -217,6 +217,21 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 - Workflow run or file fetch non-2xx, YAML parse error, or missing `target_url` → `parent_deployments = []` for the affected events; never throw / never block ingest (F10).
 - Artifact list or download non-2xx, or artifact name not found → `version = null`; never throw / never block ingest (F15).
 
+#### 5.5.1 Poll efficiency — terminal deployment skip
+
+`PollRepoAsync` maintains a bounded instance cache (`deploymentId → runId?`, cap 2 000, LRU eviction) across poll cycles. **Terminal** GitHub states: `success`, `failure`, `error`, `inactive`.
+
+| Condition | Behaviour |
+|---|---|
+| `deployment.Id` in terminal cache | Skip `GET /deployments/{id}/statuses` entirely. Still include the deployment in the `envToDeploymentId` map (§5.6.4) using the cached `runId` so parent edges remain resolvable. Contributes no new events. |
+| Not in cache | Fetch statuses as normal. After fetch: if the latest status (newest-first ordering from GitHub) is terminal, record `deploymentId → runId` in the cache. |
+| First appearance of any `deployment.Id` | Always fetched (id never in cache). |
+| Non-terminal latest status | NOT cached; re-fetched every cycle until terminal. |
+
+The parent-derivation map (§5.6.4) is built from **freshly-fetched deployments ∪ cached-terminal deployments** in the window. This preserves cross-environment parent edges: a `staging` deployment that went terminal in cycle N is still present in the map in cycle N+1, allowing a `production` deployment in the same run to resolve its parent correctly.
+
+Scope: **live poll only**. Backfill is unchanged.
+
 ### 5.6 Parent deployment derivation (F10)
 
 Populates `parent_deployments` by reconstructing the deployment-job subgraph from the workflow YAML. Runs inside `FetchAsync` before the event batch is returned — all events for the same poll window are resolved together.

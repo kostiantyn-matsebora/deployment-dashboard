@@ -24,6 +24,9 @@ public sealed class GithubActionsAdapter(
     BackfillRunner backfillRunner,
     ILogger<GithubActionsAdapter> logger) : ICiCdAdapter
 {
+    // Persists across poll cycles (adapter is a DI singleton) — see §5.5 poll-efficiency note.
+    private readonly TerminalDeploymentCache _terminalCache = new();
+
     public string AdapterId => "github-actions";
 
     public async IAsyncEnumerable<FetchResult> FetchAsync(
@@ -73,9 +76,13 @@ public sealed class GithubActionsAdapter(
         var serviceMap = options.ServiceMapDict;
         var cutoff = since - TimeSpan.FromDays(1);  // margin for delayed status events
 
-        // Step 1: collect deployments and statuses in the window
+        // Step 1: collect deployments in the window; fetch statuses only for non-terminal ones.
         var deployments = new List<GhDeployment>();
         var allStatuses = new Dictionary<long, List<GhDeploymentStatus>>();
+
+        // Cached-terminal entries contribute to the parent map but produce no events.
+        // Key: deploymentId, Value: runId extracted from the last status (may be null).
+        var cachedTerminalRunIds = new Dictionary<long, long?>();
 
         await foreach (var d in github.GetPagedAsync<GhDeployment>(
             $"/repos/{owner}/{repoName}/deployments", ct))
@@ -84,28 +91,59 @@ public sealed class GithubActionsAdapter(
                 break;
 
             deployments.Add(d);
+
+            if (_terminalCache.TryGet(d.Id, out var cachedRunId))
+            {
+                // Already terminal: skip the /statuses fetch; retain for parent map.
+                cachedTerminalRunIds[d.Id] = cachedRunId;
+                continue;
+            }
+
             var statuses = new List<GhDeploymentStatus>();
             await foreach (var s in github.GetPagedAsync<GhDeploymentStatus>(
                 $"/repos/{owner}/{repoName}/deployments/{d.Id}/statuses", ct))
                 statuses.Add(s);
             allStatuses[d.Id] = statuses;
+
+            // Statuses are returned newest-first; the first entry is the latest.
+            var latestStatus = statuses.Count > 0 ? statuses[0] : null;
+            if (latestStatus is not null && TerminalDeploymentCache.IsTerminalState(latestStatus.State))
+            {
+                var extractedRunId = EventMapper.ExtractRunId(latestStatus.TargetUrl);
+                _terminalCache.Record(d.Id, extractedRunId);
+            }
         }
 
-        // Step 2: build envToDeploymentId for parent derivation (§5.6.4)
-        var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(
-            deployments.SelectMany(d =>
-                allStatuses.GetValueOrDefault(d.Id, [])
-                    .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
-                    .Where(r => r.HasValue)
-                    .Take(1)
-                    .Select(r => (d.Id, d.Environment, d.CreatedAt, r))));
+        // Step 2: build envToDeploymentId for parent derivation (§5.6.4).
+        // Includes both freshly-fetched deployments AND cached-terminal ones so that
+        // parent edges to finished environments remain resolvable in later cycles.
+        var envMapEntries = deployments.SelectMany<GhDeployment, (long DeploymentId, string Environment, DateTimeOffset CreatedAt, long? RunId)>(d =>
+        {
+            if (cachedTerminalRunIds.TryGetValue(d.Id, out var cachedRunId))
+            {
+                // Cached-terminal: use the stored run_id directly.
+                return [(d.Id, d.Environment, d.CreatedAt, cachedRunId)];
+            }
 
-        // Step 3: map new status events (status.created_at > since)
+            return allStatuses.GetValueOrDefault(d.Id, [])
+                .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
+                .Where(r => r.HasValue)
+                .Take(1)
+                .Select(r => (d.Id, d.Environment, d.CreatedAt, r));
+        });
+
+        var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(envMapEntries);
+
+        // Step 3: map new status events (status.created_at > since).
+        // Only freshly-fetched (non-terminal) deployments can have new events.
         var events = new List<DeploymentEventIngest>();
         var maxSince = since;
 
         foreach (var deployment in deployments)
         {
+            if (cachedTerminalRunIds.ContainsKey(deployment.Id))
+                continue; // terminal — all statuses are ≤ since; contributes no events
+
             var statuses = allStatuses.GetValueOrDefault(deployment.Id, []);
 
             foreach (var status in statuses)
