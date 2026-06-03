@@ -52,6 +52,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
 | F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
 | F17 | **Control-plane participant (gated on CONTROL_API_KEY).** When `CONTROL_API_KEY` is set, a second long-lived task subscribes to `GET /api/control/stream` with exponential backoff on failures (1 s → 2 s → 4 s … capped 30 s). When `CONTROL_API_KEY` is empty, the subscriber is never started and a startup log message records the absence. Reacts to: drain + ack on `reset-initiated`, drop cursor + backfill + report `running` on `reset-completed`. Still **just a consumer** of the existing control-plane contract — no backend change (F1, SAD §3). | Prevents 404-looping when the API's control surface is disabled (empty key); backoff avoids hammering on transient failures. |
+| F18 | **Per-cycle rate-limit reporting.** After every successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to `POST /api/control/events`. Reuses the existing `ComponentEventClient` transport. Skipped when snapshot is null (before the first GitHub response). Not gated on `CONTROL_API_KEY` — always active when `API_KEY` is present. Non-fatal: POST failures are logged and swallowed so reporting never breaks the poll loop. | Operators and end-users can observe CI/CD quota consumption in real time without backend change. The snapshot already exists (F16); this adds only the emit step. |
 
 ---
 
@@ -544,6 +545,54 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 ---
 
+### 5.11 Per-cycle rate-limit reporting (F18)
+
+After each successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to the existing `POST /api/control/events` surface. See [`api/api-guidelines.md`](api/api-guidelines.md) §11 "Rate-limit report payload" and [`diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md).
+
+#### Trigger and gate
+
+| Condition | Behaviour |
+|---|---|
+| Snapshot present after `PollOnceAsync` | Post `rate-limit` event immediately. |
+| Snapshot null (before first GitHub response) | Skip — no all-null reports. |
+| `CONTROL_API_KEY` absent | **Not** a gate — the report uses `X-Api-Key` (same as ingest); always active when `API_KEY` is present. |
+
+#### Extended `RateLimitSnapshot`
+
+`RateLimitSnapshot` carries two additional fields populated from GitHub response headers after each call (`GithubClient` → `RateLimitBudget.RecordAndWaitIfNeededAsync`):
+
+| Field | Source | Null when |
+|---|---|---|
+| `CiLimit` | `X-RateLimit-Limit` | Before first GitHub response. |
+| `CiRemaining` | `X-RateLimit-Remaining` | Before first GitHub response. |
+
+Existing fields (`Used`, `Budget`, `ResetAt`) are unchanged.
+
+#### Payload mapping
+
+The `payload` object maps the snapshot to the api-guidelines `rate-limit` contract:
+
+| Payload field | Source |
+|---|---|
+| `adapter` | `ICiCdAdapter.AdapterId` (e.g. `github-actions`) |
+| `ci_limit` | `snapshot.CiLimit` (null when not yet received) |
+| `ci_remaining` | `snapshot.CiRemaining` (null when not yet received) |
+| `own_budget` | `snapshot.Budget` |
+| `own_used` | `snapshot.Used` |
+| `reset_at` | `snapshot.ResetAt`; serialised as RFC 3339 UTC; **null** when `ResetAt == DateTimeOffset.MinValue` |
+
+`state` = `"running"` normally. The delegate closure in DI supplies the adapter id and state; `PollLoop` itself remains free of the `Control` namespace dependency.
+
+#### Resilience
+
+Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level and swallowed. The poll loop continues regardless. This mirrors `PostAckAsync` / `PostRunningAsync` behaviour (§5.10.4, §5.10.5).
+
+#### Wiring (no `Orchestration` → `Control` dependency)
+
+`PollLoop` accepts an optional `Func<RateLimitSnapshot, CancellationToken, Task>? reportCycleAsync` parameter. `Program.cs` DI wires it to `IComponentEventClient.PostRateLimitAsync`, closing over the adapter id. This preserves the existing dependency direction: `Control` → `Orchestration`, never the reverse.
+
+---
+
 ## 6. Configuration (env)
 
 | Var | Example | Purpose |
@@ -588,7 +637,13 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
     "last_success_at": "<RFC 3339 UTC>" | null,
     "last_error": "<string>" | null,
     "paused_for_reset": false,
-    "rate_limit": { "used": 150, "budget": 1500, "reset_at": "<RFC 3339 UTC>" } | null
+    "rate_limit": {
+      "used": 150,
+      "budget": 1500,
+      "reset_at": "<RFC 3339 UTC>",
+      "ci_limit": 5000,
+      "ci_remaining": 4830
+    } | null
   }
 }
 ```
@@ -650,6 +705,15 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 - `: ping` frame → treated as heartbeat, no event dispatched.
 - Ack POST returns non-2xx → subscriber stays paused, does not throw, still recovers on subsequent `reset-completed`.
 - Component id overridden via `COMPONENT_ID` → header reflects the override.
+
+**Per-cycle rate-limit reporting (F18, §5.11):**
+- `RateLimitBudget.CiLimit` and `CiRemaining` are null before the first GitHub response; populated from `X-RateLimit-Limit` / `X-RateLimit-Remaining` on first response; updated on subsequent responses; remain null when headers are absent.
+- `PostRateLimitAsync` emits body with `event_type:"rate-limit"`, correct `state`, `occurred_at`; payload contains `adapter`, `ci_limit`, `ci_remaining`, `own_budget`, `own_used`, `reset_at`; `reset_at` is null when snapshot `ResetAt == DateTimeOffset.MinValue`; `X-Api-Key` and `X-Component-Id` headers present.
+- `PostRateLimitAsync` non-2xx response → does not throw.
+- `PostRateLimitAsync` transport error → does not throw.
+- Per-cycle `reportCycleAsync` delegate fires once per successful cycle when snapshot is non-null.
+- Per-cycle `reportCycleAsync` delegate NOT invoked when snapshot is null.
+- `reportCycleAsync` throws → loop continues next cycle (non-fatal).
 
 **Functional readiness indicator (§6.1):**
 - Initial state → `LastOutcome = null`, `LastSuccessAt = null`, `IsPausedForReset = false`.

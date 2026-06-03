@@ -1,12 +1,13 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Dashboard.Fetcher.Orchestration;
 using Microsoft.Extensions.Logging;
 
 namespace Dashboard.Fetcher.Control;
 
 /// <summary>
-/// HTTP client for <c>POST /api/control/events</c> (§5.10.4, §5.10.5).
+/// HTTP client for <c>POST /api/control/events</c> (§5.10.4, §5.10.5, F18).
 /// <c>X-Api-Key</c> and <c>X-Component-Id</c> are added by the typed-client factory in DI.
 /// </summary>
 public sealed class ComponentEventClient(
@@ -43,6 +44,33 @@ public sealed class ComponentEventClient(
         await PostAsync(body, ct);
     }
 
+    /// <inheritdoc />
+    public async Task PostRateLimitAsync(
+        RateLimitSnapshot snapshot,
+        string adapterId,
+        string state,
+        CancellationToken ct)
+    {
+        // reset_at is null when the snapshot hasn't received a real reset timestamp yet.
+        var resetAt = snapshot.ResetAt == DateTimeOffset.MinValue
+            ? (DateTimeOffset?)null
+            : snapshot.ResetAt;
+
+        var body = new ComponentEventBody(
+            EventType: "rate-limit",
+            State: state,
+            OccurredAt: DateTimeOffset.UtcNow,
+            Payload: new RateLimitPayload(
+                Adapter: adapterId,
+                CiLimit: snapshot.CiLimit,
+                CiRemaining: snapshot.CiRemaining,
+                OwnBudget: snapshot.Budget,
+                OwnUsed: snapshot.Used,
+                ResetAt: resetAt));
+
+        await PostAsync(body, ct);
+    }
+
     private async Task PostAsync(ComponentEventBody body, CancellationToken ct)
     {
         try
@@ -60,17 +88,30 @@ public sealed class ComponentEventClient(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Non-fatal per §5.10.4 — ack failure does not block recovery.
+            // Non-fatal per §5.10.4 / §5.11 — event post failure must not break the poll loop.
             logger.LogWarning(ex,
                 "[ComponentEvent] POST /api/control/events failed; event_type={EventType}",
                 body.EventType);
         }
     }
 
-    // Separate record so JsonSerializer picks up snake_case names for the payload object.
+    // ── wire types ───────────────────────────────────────────────────────────
+
     private sealed record ComponentEventBody(
         [property: JsonPropertyName("event_type")] string EventType,
         [property: JsonPropertyName("state")] string State,
         [property: JsonPropertyName("occurred_at")] DateTimeOffset OccurredAt,
         [property: JsonPropertyName("payload")] object Payload);
+
+    /// <summary>
+    /// Payload shape for <c>event_type: rate-limit</c> (§5.11 / api-guidelines §11).
+    /// Fields serialised as snake_case via <see cref="JsonOptions"/>.
+    /// </summary>
+    private sealed record RateLimitPayload(
+        string Adapter,
+        int? CiLimit,
+        int? CiRemaining,
+        int OwnBudget,
+        int OwnUsed,
+        DateTimeOffset? ResetAt);
 }
