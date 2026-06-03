@@ -8,6 +8,7 @@ import {
   MatrixField,
   MatrixRow,
   MatrixSlot,
+  RateLimitReport,
   SWIMLANE_FIELDS,
   SwimlaneField,
   TIME_WINDOWS,
@@ -118,6 +119,15 @@ export class AppStateService {
 
   // ── SSE live status ───────────────────────────────────────
   readonly sseConnected = signal<boolean>(false);
+
+  // ── Operational telemetry — fetcher rate-limit ────────────
+  /**
+   * Latest rate-limit report from dashboard-fetcher.
+   * undefined until the first `event_type: rate-limit` component event arrives.
+   * Last-value-wins; updated by App on every qualifying SSE frame.
+   * Source: docs/diagrams/fetcher-rate-limit.md + api-guidelines.md §11.
+   */
+  readonly latestRateLimit = signal<RateLimitReport | undefined>(undefined);
 
   // ── Matrix data ───────────────────────────────────────────
   /**

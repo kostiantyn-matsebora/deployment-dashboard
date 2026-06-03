@@ -13,6 +13,7 @@ import {
   CorrelationPredicate,
   MATRIX_FIELDS,
   MatrixField,
+  RateLimitReport,
   SWIMLANE_FIELDS,
   SwimlaneField,
   Theme,
@@ -62,12 +63,14 @@ export class TopbarComponent {
   protected readonly router       = inject(Router);
 
   // Popovers
-  protected readonly fieldsPopover      = viewChild<Popover>('fieldsPopover');
-  protected readonly correlationPopover = viewChild<Popover>('correlationPopover');
+  protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
+  protected readonly correlationPopover   = viewChild<Popover>('correlationPopover');
+  protected readonly rateLimitPopover     = viewChild<Popover>('rateLimitPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
   protected readonly fieldsPopoverOpen      = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
+  protected readonly rateLimitPopoverOpen   = signal(false);
 
   // ── View tabs ─────────────────────────────────────────────
   protected readonly viewOptions: ViewOption[] = [
@@ -116,6 +119,44 @@ export class TopbarComponent {
 
   // ── Live indicator ────────────────────────────────────────
   protected readonly sseConnected = computed(() => this.state.sseConnected());
+
+  // ── Rate-limit telemetry ──────────────────────────────────
+  /** Latest rate-limit report; undefined until the first report arrives. */
+  protected readonly rateLimitReport = computed(() => this.state.latestRateLimit());
+
+  /** Inline chip label: own_used/own_budget, or "–" when not yet received. */
+  protected readonly rateLimitChipLabel = computed<string>(() => {
+    const r = this.rateLimitReport();
+    if (!r) return '';
+    const used   = r.own_used   ?? null;
+    const budget = r.own_budget ?? null;
+    if (used === null || budget === null) return '–/–';
+    return `${used}/${budget}`;
+  });
+
+  /** Percentage of own budget used; null when budget is 0 or fields are null. */
+  protected readonly ownBudgetPct = computed<number | null>(() => {
+    const r = this.rateLimitReport();
+    if (!r || r.own_budget == null || r.own_budget <= 0 || r.own_used == null) return null;
+    return Math.min(100, Math.round((r.own_used / r.own_budget) * 100));
+  });
+
+  /** Format reset_at as a human-readable local time string, or em-dash if null. */
+  protected formatResetAt(resetAt: string | null): string {
+    if (!resetAt) return '—';
+    try {
+      return new Date(resetAt).toLocaleTimeString(undefined, {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+    } catch {
+      return '—';
+    }
+  }
+
+  /** Format a nullable number for display — returns em-dash for null. */
+  protected fmtNum(v: number | null | undefined): string {
+    return v != null ? String(v) : '—';
+  }
 
   // ── View helpers ──────────────────────────────────────────
   protected readonly isMatrix = computed(() => this.state.activeView() === 'matrix');
@@ -183,6 +224,14 @@ export class TopbarComponent {
     if (p) {
       p.toggle(event);
       this.correlationPopoverOpen.update(v => !v);
+    }
+  }
+
+  protected toggleRateLimitPopover(event: MouseEvent): void {
+    const p = this.rateLimitPopover();
+    if (p) {
+      p.toggle(event);
+      this.rateLimitPopoverOpen.update(v => !v);
     }
   }
 }

@@ -46,6 +46,28 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - The auto theme mode resolves the active theme via the system `prefers-color-scheme` media query.
 - The user's theme selection persists across reloads via `localStorage`.
 
+### Operational telemetry — fetcher rate-limit indicator
+
+> **Scope.** This subsection governs a **fetcher operational telemetry surface** in the header. It is distinct from deployment data. The 11-field deployment whitelist (see Data → Visible-field whitelist) governs deployment elements (tiles, nodes, drawers, inspector) and does **not** apply to this indicator.
+
+Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.md), [`docs/api/api-guidelines.md`](../api/api-guidelines.md) §11 "Rate-limit report payload".
+
+**Stream.** The SPA subscribes to `GET /api/control/events/stream` (SSE, event name `component`), filters frames where `event_type === "rate-limit"`, and keeps the latest report (last-value-wins; no history).
+
+**Visibility.** The chip is rendered only after the first qualifying event arrives; it is absent on initial load.
+
+**Chip (`.hdr-icons` group).** A compact icon-button in the header icon group. Displays inline value `own_used / own_budget`. Clicking opens a `p-popover` with the full breakdown.
+
+**Popover fields.**
+- `adapter` — CI/CD adapter name; always present.
+- `own_used / own_budget` — fetcher's own request usage vs self-throttle budget; displays `—` for null values.
+- Usage bar — visual proportion of `own_used / own_budget`; rendered only when `own_budget > 0`; never divides by zero.
+- `ci_remaining / ci_limit` — CI/CD-wide remaining vs total quota; displays `—` for null values.
+- `reset_at` — window rollover time as local clock string; displays `—` when null.
+- `state` badge — `running` (green) or `paused` (amber); styled distinctly.
+
+**Null safety.** Any null numeric or time field renders as an em-dash (`—`). No `NaN` may appear in the UI.
+
 ### Live interactions
 
 - Hovering any version anywhere in the Matrix amber-highlights every tile across environments where the same version is deployed.
