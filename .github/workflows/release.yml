@@ -28,6 +28,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # required for SARIF upload to the Security tab
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +81,31 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
-      - name: Build and push
+      # ── Step 1: Build locally (load into Docker daemon for scanning) ───────
+      # Scan before push: the image is loaded but not pushed yet.
+      # GHA layer cache is populated here; the push step below is a cache hit.
+      - name: Build (local load for scanning)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Step 2: Trivy vulnerability scan ──────────────────────────────────
+      # Each matrix entry gets a unique SARIF category so results from different
+      # services do not overwrite each other in the GitHub Security tab.
+      - name: Trivy scan
+        uses: ./.github/actions/trivy-scan
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:scan
+          category: trivy-release-${{ matrix.key }}
+
+      # ── Step 3: Push (cache hit — no rebuild, just export + push) ─────────
+      - name: Push to GHCR
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}

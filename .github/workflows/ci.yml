@@ -111,6 +111,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # caps the callee docker job's SARIF upload permission
     uses: ./.github/workflows/api.yml
 
   ci-frontend:
@@ -120,6 +121,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # caps the callee docker job's SARIF upload permission
     uses: ./.github/workflows/frontend.yml
 
   ci-gateway:
@@ -129,6 +131,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # caps the callee docker job's SARIF upload permission
     uses: ./.github/workflows/gateway.yml
 
   ci-fetcher:
@@ -138,6 +141,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # caps the callee docker job's SARIF upload permission
     uses: ./.github/workflows/fetcher.yml
 
   ci-demo-driver:
@@ -147,6 +151,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # caps the callee docker job's SARIF upload permission
     uses: ./.github/workflows/demo-driver.yml
 
   ci-github-emulator:
@@ -156,6 +161,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # caps the callee docker job's SARIF upload permission
     uses: ./.github/workflows/github-emulator.yml
 
   ci-api-tests:
