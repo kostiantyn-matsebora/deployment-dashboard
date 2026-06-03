@@ -59,6 +59,8 @@ Route each change to the specialist that owns it (`api-architect` / `backend-dev
 
 The Serena MCP server (`mcp__serena__*`) exposes symbol-level retrieval and editing via language servers (C# / TypeScript / PowerShell). **Prefer it over `Read` / `Grep` wherever code symbols apply** — it returns targeted symbols, not whole files, cutting token use across agent turns.
 
+**Load before use (mandatory).** Serena's tools are *deferred* — their schemas are unloaded, so they cannot be called until fetched. At the start of any code task, load them via `ToolSearch` (e.g. `select:mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols`). Skip this and agents silently default to `Grep` / `Read`; this step is what makes the preference below take effect.
+
 - **Understand code.** `get_symbols_overview` (a file's top-level symbols), then `find_symbol` (locate; `depth=1` for members, `include_body` only when you need the source).
 - **Trace impact before editing a shared symbol.** `find_referencing_symbols` / `find_implementations` / `find_declaration` — not a grep-and-read sweep.
 - **Edit code.** `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` instead of full-file rewrites.
