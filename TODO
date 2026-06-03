@@ -9,4 +9,5 @@
 ✔ Make component events stream instead of polling @done(26-06-02)
 ☐ Add corellation ID to the events to corellate them with command and each other
 ☐ Split gateway into a separate demo image (FROM production gateway) so the production gateway carries no /demo routes or DEMO_DRIVER_UPSTREAM at all; the demo image layers the demo-driver routes on top
+☐ Rework api-tests to follow the adopter full-pull path — production compose (no demo overlay), --profile full-pull, with demo-driver + github-emulator added via their own profiles and the fetcher pointed at the emulator (GITHUB_BASE_URL) as the only fake. Exercises the real production profile (catches gateway/compose/profile regressions the current demo-flavored stack masks)
 ✔ Create release lifecycle for solution @done(26-06-01 22:27)
