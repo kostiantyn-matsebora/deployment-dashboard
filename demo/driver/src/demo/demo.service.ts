@@ -23,6 +23,25 @@ export interface DemoStatus extends RunnerStatus {
   reset_id:    string | null;
 }
 
+/**
+ * Upper bound for the per-event emit delay (ms). The delay is forwarded to
+ * setTimeout in the ScenarioRunner; an unbounded, caller-supplied value would
+ * let a single request schedule an enormous timer and stall the runner
+ * indefinitely (resource exhaustion — CodeQL js/resource-exhaustion). 60s per
+ * event is far beyond any legitimate demo pacing.
+ */
+export const MAX_EMIT_DELAY_MS = 60_000;
+
+/**
+ * Clamp a (possibly caller-supplied) delay to a safe [0, MAX_EMIT_DELAY_MS]
+ * range. Non-finite values (NaN / Infinity from malformed JSON bodies) collapse
+ * to 0. The Math.min upper bound also sanitizes the value for static analysis.
+ */
+function clampDelayMs(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(Math.max(0, value), MAX_EMIT_DELAY_MS);
+}
+
 @Injectable()
 export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticipant {
   private readonly runner = new ScenarioRunner();
@@ -148,7 +167,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     if (this.runner.state === 'running') return this.getStatus();
 
     const config        = getConfig();
-    const effectiveDelay = delay_ms !== undefined ? delay_ms : config.emitDelayMs;
+    const effectiveDelay = clampDelayMs(delay_ms !== undefined ? delay_ms : config.emitDelayMs);
     const client        = new WriteApiClient(
       config.writeApiUrl,
       config.apiKey,
@@ -216,7 +235,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     if (!scenario) throw new Error(`Scenario '${scenarioName}' not found`);
 
     const config        = getConfig();
-    const effectiveDelay = delayMs !== undefined ? delayMs : config.emitDelayMs;
+    const effectiveDelay = clampDelayMs(delayMs !== undefined ? delayMs : config.emitDelayMs);
     const client        = new WriteApiClient(
       config.writeApiUrl,
       config.apiKey,
