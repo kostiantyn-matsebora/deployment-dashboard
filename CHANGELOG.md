@@ -9,6 +9,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [0.3.0] - 2026-06-03
 
+### Added
+
+- **Fetcher backfill depth.** `BACKFILL_DEPTH` (default 2) controls how many of the latest status events seed each (service, environment) slot during backfill. `BACKFILL_DEPTH` and `BACKFILL_MAX_AGE` are now configurable via Compose / `.env`.
+
+### Changed
+
+- **Fetcher backfill reworked** to seed the latest `BACKFILL_DEPTH` status events per (service, environment) slot — with a no-progress per-environment stop and workflow-YAML fetched only for kept deployments. Bounds backfill cost to the matrix size instead of raw deployment volume, and yields clean history (no duplicate or stale `in-progress` rows for completed deployments). The live poll path is unchanged.
+- **Fetcher service identity** now resolves from the workflow's stable name/path instead of the run's display name, so workflows that set `run-name:` map to the correct service.
+- **Fetcher rate-limit budget** now tracks the fetcher's own request count since start rather than GitHub's shared `X-RateLimit-Used`, so a partially-used token no longer forces an immediate pause.
+- **Fetcher control-plane** participation is skipped entirely when `CONTROL_API_KEY` is unset (no reconnect loop); when enabled, the control-stream reconnect uses exponential backoff.
+
+### Fixed
+
+- **Fetcher backfill cursor** was never advanced (a nullable `DateTimeOffset?` comparison was always false), so the first poll re-ingested the whole lookback window; the cursor now tracks the latest seeded status.
+- **Swimlanes** rendered the full 40-character commit SHA; truncated to 7 to match the matrix and history views.
+
 
 ## [0.2.1] - 2026-06-03
 
