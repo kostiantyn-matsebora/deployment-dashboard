@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.5.0] - 2026-06-03
+
+### Changed
+
+- **Fetcher live poll now uses conditional requests (ETag / `If-None-Match`).** The per-repo deployments list and in-flight deployment status re-reads send `If-None-Match`; an unchanged response comes back `304 Not Modified`, which does **not** count against the GitHub rate limit. Building on the terminal-deployment skip from 0.4.0, an idle poll cycle now returns cheap 304s instead of re-downloading the deployments list and statuses. Parent-deployment edges are preserved across cycles, and the optimization degrades gracefully to full fetches when the upstream does not supply ETags (e.g. the github-emulator). (Implements Fetcher spec F8.)
+
+
 ## [0.4.0] - 2026-06-03
 
 ### Changed
