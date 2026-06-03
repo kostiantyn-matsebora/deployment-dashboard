@@ -46,12 +46,12 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F9 | **Config-driven; base URL overridable.** Repos + service/version mapping + GitHub base URL from env. | Integration repoints the GitHub base URL at a mock; production points at `api.github.com`. |
 | F10 | **`parent_deployments` derived from workflow `needs` graph.** The adapter fetches the workflow YAML for each run, parses the deployment-job subgraph (`environment:` + `needs:`), and resolves parent edges to `deployment_id` values (§5.6). Any resolution failure → `parent_deployments = []`; ingest is never blocked. | Reproduces the deployment graph GitHub surfaces in the Actions Run UI. `explicit parent` is the Swimlanes default correlation predicate — accurate population here makes it work out of the box. |
 | F11 | **Workflow graph cached in-memory per `(repo, run_id)`.** Bounded LRU (≤ 200 entries). Cache entry includes workflow `name` (used as service identity), `path`, `head_sha`, and parsed deployment-job subgraph. | Avoids re-fetching the workflow YAML for each status event that shares a run; workflow runs are immutable so no invalidation is needed. |
-| F12 | **Service identity = workflow YAML `name:` field** (how the workflow appears in the GitHub UI). `GITHUB__SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Requires zero config for the common case (workflow name = service name); SERVICE_MAP handles edge cases without restructuring the pipeline. |
-| F13 | **Backfill fills the most recent deployment per `(service, environment)` slot.** Enumerates active workflows (services) and environments per repo; paginates deployments per environment newest-first, stopping when all services are covered or `deployment.created_at < now − BACKFILL_MAX_AGE`. | Per-environment pagination + early-exit on full coverage minimises API calls. Guarantees every service is represented regardless of deployment frequency — fixes the gap where last-N-per-env misses rarely-deployed services. |
+| F12 | **Service identity = workflow YAML `name:` field**, resolved via the run's `path` (e.g. `.github/workflows/deploy.yml`) → the active workflow with that path → its YAML `name:` field. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB__SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: path→workflow-name lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; SERVICE_MAP handles edge cases without restructuring the pipeline. |
+| F13 | **Backfill fills the last `BACKFILL_DEPTH` status events per `(service, environment)` slot** (default 2). Enumerates active workflows and environments per repo; paginates deployments newest-first. For each candidate deployment, fetches its statuses and counts the mapped ones (§5.3; unmapped states like `waiting`/`inactive` don't count). Stops scanning a slot once `eventsSoFar ≥ BACKFILL_DEPTH`. After collecting candidate events, trims to the `BACKFILL_DEPTH` latest by `status.created_at` per slot before posting. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress when its service is already at depth or is unknown or has zero mapped statuses. The YAML graph is fetched **only** for deployments contributing kept events; discarded deployments cost only statuses + run-metadata. `BACKFILL_MAX_AGE` is the hard backstop. | Controls how many history drawer entries seed each slot at startup; status-event count matches what the history drawer shows. No-progress stop and defer-YAML bounds API cost as before. |
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
-| F16 | **Rate-limit budget.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). When the consumed-request count reaches the budget, the adapter waits until `X-RateLimit-Reset`. | Prevents crowding out other consumers of the same PAT; the fetcher is a background process and must not monopolise a shared token. |
-| F17 | **Control-plane participant.** A second long-lived task subscribes to `GET /api/control/stream` and reacts to the reset choreography: drain + ack on `reset-initiated`, drop cursor + backfill + report `running` on `reset-completed`. Still **just a consumer** of the existing control-plane contract — no backend change (F1, SAD §3). | Lets the API orchestrate a system-wide data reset (API_SPECIFICATION §5/§7); the fetcher must pause cleanly and re-seed afterwards rather than fight the data-clearing window. |
+| F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
+| F17 | **Control-plane participant (gated on CONTROL_API_KEY).** When `CONTROL_API_KEY` is set, a second long-lived task subscribes to `GET /api/control/stream` with exponential backoff on failures (1 s → 2 s → 4 s … capped 30 s). When `CONTROL_API_KEY` is empty, the subscriber is never started and a startup log message records the absence. Reacts to: drain + ack on `reset-initiated`, drop cursor + backfill + report `running` on `reset-completed`. Still **just a consumer** of the existing control-plane contract — no backend change (F1, SAD §3). | Prevents 404-looping when the API's control surface is disabled (empty key); backoff avoids hammering on transient failures. |
 
 ---
 
@@ -207,8 +207,10 @@ For every deployment status, extract `run_id` from `status.target_url` via patte
 
 | Step | Call | Use |
 |---|---|---|
-| 1 | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` | obtain `name` (workflow display name → service identity), `path` (e.g. `.github/workflows/deploy.yml`), and `head_sha` |
-| 2 | `GET /repos/{owner}/{repo}/contents/{path}?ref={head_sha}` | Base64-decode `content` → workflow YAML |
+| 1 | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` | obtain `path` (e.g. `.github/workflows/deploy.yml`) and `head_sha`; `name` (run display name) is used only as a last-resort fallback if the YAML `name:` field is absent |
+| 2 | `GET /repos/{owner}/{repo}/contents/{path}?ref={head_sha}` | Base64-decode `content` → workflow YAML; parse top-level `name:` field → **service identity** (F2 / F12) |
+
+Service identity comes from the YAML `name:` field (the workflow's static definition name), **not** `run.Name` (which can be overridden by `run-name:` and changes per run). When the YAML `name:` field is absent, the parser falls back to `run.Name`; if that is also absent, the repo short name.
 
 Parse the `jobs:` map. Normalise per-job fields:
 
@@ -306,36 +308,63 @@ Fills the store with the most recent deployment per `(service, environment)` slo
 #### 5.8.2 Per-repo procedure
 
 ```
+depth       ← BACKFILL_DEPTH (default 2)
+StallWindow ← 20  // consecutive no-progress deployments before stopping
+
 services ← GET /repos/{owner}/{repo}/actions/workflows?per_page=100
              filter: state == "active"
-             → Set of { wf.name → ResolveService(wf.name, repo) }
+             → pathToService map: { wf.path → ResolveService(wf.name, repo) }
+             → allServiceNames: set of resolved service names
 
 envs     ← GET /repos/{owner}/{repo}/environments → [env.name]
 
-events   ← []
+candidates ← []   // (deployment, statuses, run_id, graph, service) tuples
 cutoff   ← now − BACKFILL_MAX_AGE
 
+// Pass 1: collect candidate deployments.
+// eventsSoFar[service] counts MAPPED STATUS EVENTS accumulated for each (service, env) slot.
 for each env E in envs:
-  filled ← {}   // service → true
+  eventsSoFar ← {}   // service → mapped-event count so far for this env
+  consecutiveNoProgress ← 0
 
   paginate GET /repos/{owner}/{repo}/deployments?environment={E}&per_page=100 newest-first:
     for each deployment D:
       if D.created_at < cutoff: stop paginating this env
+      if consecutiveNoProgress >= StallWindow: stop paginating this env  // F1 no-progress stop
 
-      statuses ← fetch D's statuses                              // also needed for event data
-      run_id   ← extract from any status.target_url (§5.6.1)
-      wf_name  ← run_id != null ? GetWorkflowName(repo, run_id) : null   // §5.6.2 LRU cache
-      service  ← ResolveService(wf_name, repo)                  // §5.8.3
+      statuses   ← fetch D's statuses                              // always needed for event data
+      mappedCount ← count of statuses where StatusMapper.Map(state) ≠ null
+      run_id     ← extract from any status.target_url (§5.6.1)
+      run        ← run_id != null ? FetchRunMetadata(repo, run_id) : null  // cheap
+      service    ← run != null AND pathToService[run.path] exists
+                     ? pathToService[run.path]                     // F2: path → workflow name
+                     : ResolveService(run?.Name, repo)             // fallback: run display name
 
-      if service ∈ services AND service ∉ filled:
-        events.AddAll(BuildEvents(D, statuses))   // §5.3 status mapping + §5.6 parent derivation
-        filled[service] ← true
+      if service ∉ allServiceNames OR eventsSoFar[service] >= depth OR mappedCount == 0:
+        consecutiveNoProgress++
+        continue
 
-    if filled.keys == services.keys: break        // all services covered for this env
+      // Kept: fetch the full YAML graph (parent derivation) — deferred until here (F1)
+      graph ← GetOrFetchGraph(repo, run_id)   // §5.6.2 LRU cache
+      candidates.Add((D, statuses, run_id, graph, service))
+      eventsSoFar[service] += mappedCount
+      consecutiveNoProgress ← 0
+
+// Pass 2: build events, trim to depth latest per slot, advance cursor.
+envMap ← BuildEnvToDeploymentIdMap(candidates)  // §5.6.4 — needs all candidates first
+allEvents ← []
+for each candidate (D, statuses, run_id, graph, service) in candidates:
+  for each status S in statuses where StatusMapper.Map(S.state) ≠ null:
+    allEvents.Add(BuildEvent(D, S, graph, envMap))   // §5.3 mapping + §5.6 parent derivation
+
+// Trim to depth latest by happened_at per (service, environment) slot.
+events ← allEvents grouped by (service, environment),
+          each group ordered descending by happened_at, take depth, flatten
 ```
 
 - Sort collected `events` by `happened_at` ascending before posting (preserves append-only log ordering).
-- Advance cursor to `max(status.created_at)` across all events.
+- Advance cursor to `max(status.created_at)` across **emitted** (post-trim) events.
+- Discarded deployments cost only statuses + run-metadata; the YAML fetch is deferred until a deployment is kept (F1).
 
 #### 5.8.3 Service resolution
 
@@ -349,6 +378,7 @@ ResolveService(workflowName, repo):
 
 - Keys without `/` → workflow-level; keys matching `owner/repo` → repo-level.
 - GitHub workflow names cannot contain `/` — no key ambiguity.
+- `workflowName` here is the YAML `name:` field — resolved via `path → active-workflow` lookup (F2 / F12), NOT the run's display name.
 
 ---
 
@@ -374,21 +404,22 @@ ResolveService(workflowName, repo):
 
 #### Per-request enforcement
 
-After every HTTP call to the GitHub API, read response headers:
+After every HTTP call to the GitHub API:
 
-- `X-RateLimit-Used` — requests consumed since the window opened (preferred).
-- `X-RateLimit-Remaining` + `X-RateLimit-Limit` — fallback: `used = limit − remaining`.
+1. Increment the fetcher's **own request counter** (one per call).
+2. Read `X-RateLimit-Reset` → `reset_at` (UTC). If the new `reset_at` is later than the previously observed one AND is in the past, the window has rolled over — reset own counter to 0 before incrementing.
 
-If `used ≥ budget`:
+If `own_count ≥ budget`:
 
-1. Read `X-RateLimit-Reset` → Unix epoch → `reset_at` (UTC).
-2. `wait_until = reset_at + 1 s` (margin to let GitHub's counter roll over).
-3. Log: `[GithubActionsAdapter] rate-limit budget exhausted; sleeping until {wait_until}`.
-4. Pause until `wait_until`.
-5. Reset internal `used` counter to 0.
+1. `wait_until = reset_at + 1 s` (margin to let GitHub's counter roll over).
+2. Log: `[RateLimit] budget exhausted (own_count=N/M); sleeping until {wait_until}`.
+3. Pause until `wait_until`.
+4. Reset own counter to 0.
 
 #### Notes
 
+- The own counter tracks this **fetcher process's** calls only — `X-RateLimit-Used` (cumulative across all token consumers) is deliberately NOT used for the budget check. A token already partly used by other consumers does not trigger an immediate pause.
+- `X-RateLimit-Reset` is still read from response headers to determine sleep duration.
 - `total_limit` is constant for the process lifetime — PAT limits do not change without token rotation.
 - Budget enforcement applies uniformly — backfill and normal poll share the same counter.
 - `GET /rate_limit` costs 1 request against the quota (startup only).
@@ -408,6 +439,8 @@ The fetcher joins the reset choreography as the **`dashboard-fetcher`** particip
 
 #### 5.10.2 Subscriber
 
+The subscriber is **only started when `CONTROL_API_KEY` is non-empty**. When the key is absent the listener is never registered; the poll loop (`FetcherWorker`) still runs as normal. A single startup log message records the absence.
+
 A second long-lived task (alongside the poll loop) holds an open control stream:
 
 | Property | Value |
@@ -416,7 +449,7 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | Auth | `X-Control-API-Key: <CONTROL_API_KEY>` (distinct from `API_KEY`; new config key) |
 | HTTP client | `HttpClient` streaming the response body (`ResponseHeadersRead`); **not** `EventSource` — custom headers required |
 | Heartbeat | server emits `: ping` every 15 s — treat as liveness; reset the read-idle timer, no other action |
-| Reconnect | on drop, reconnect sending `Last-Event-ID: <last-seen-event-id>`; server replays `id > last` within the 2 h window |
+| Reconnect | on drop, reconnect with `Last-Event-ID: <last-seen-event-id>` and **exponential backoff** (1 s → 2 s → 4 s … capped at 30 s); backoff resets to 1 s after a successful connect |
 | Unknown `event:` | **no-op** (forward-compat; new orchestration types may appear) |
 | Filter scope | server delivers only `component == dashboard-fetcher` OR `component == "*"`; all three reset events are `*` |
 
@@ -479,6 +512,7 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | `INITIAL_LOOKBACK` | `7.00:00:00` | normal poll first-run window (F7); also the default for `BACKFILL_MAX_AGE` when unset |
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
 | `BACKFILL_MAX_AGE` | `30.00:00:00` | how far back backfill scans per environment; defaults to `INITIAL_LOOKBACK` |
+| `BACKFILL_DEPTH` | `2` | number of latest status events to seed per `(service, environment)` slot during backfill (F13); default 2 |
 | `GITHUB__BaseUrl` | `https://api.github.com` | overridable for the integration mock |
 | `GITHUB__Token` | *(secret)* | PAT / GitHub App token |
 | `GITHUB__Repos` | `acme/api,acme/web` | repos to poll |

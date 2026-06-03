@@ -55,7 +55,7 @@
   <!-- Row 3: vc-env-row subgrid — sha (col1 left) + environment (col2 right, PROMOTED) -->
   <div class="vc-env-row">
     @if (show('sha') && event().sha) {
-      <span class="fld-sha">{{ event().sha }}</span>
+      <span class="fld-sha">{{ event().sha?.slice(0, 7) }}</span>
     }
     @if (show('environment')) {
       <span class="vc-env">{{ event().environment }}</span>

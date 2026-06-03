@@ -169,6 +169,8 @@ services:
       # Unset GITHUB__RateLimit → discovered from GitHub /rate_limit on startup (F16).
       GITHUB__RateLimitBudgetPct: "${GITHUB_RATE_LIMIT_BUDGET_PCT:-30}"
       BACKFILL: "${BACKFILL:-false}"
+      BACKFILL_MAX_AGE: "${BACKFILL_MAX_AGE:-}"
+      BACKFILL_DEPTH: "${BACKFILL_DEPTH:-2}"
     depends_on:
       api:
         condition: service_healthy

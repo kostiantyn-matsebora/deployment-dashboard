@@ -22,16 +22,24 @@ public sealed class ControlStreamListener(
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
+    // Exponential backoff: 1 s, 2 s, 4 s, … capped at 30 s (§5.10.2 / F4).
+    private static readonly TimeSpan BackoffMin = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan BackoffMax = TimeSpan.FromSeconds(30);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         string? lastEventId = null;
+        var backoff = BackoffMin;
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var connected = false;
             try
             {
                 await foreach (var frame in streamClient.StreamAsync(lastEventId, stoppingToken))
                 {
+                    connected = true;
+
                     if (frame.IsPing)
                     {
                         // Heartbeat — no action, just keeps read-idle timer reset (§5.10.2).
@@ -47,6 +55,10 @@ public sealed class ControlStreamListener(
 
                     await HandleEventAsync(frame.EventType, frame.Data, stoppingToken);
                 }
+
+                // Stream ended cleanly (EOF) — reset backoff on clean completion.
+                if (connected)
+                    backoff = BackoffMin;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -55,13 +67,20 @@ public sealed class ControlStreamListener(
             catch (Exception ex)
             {
                 logger.LogWarning(ex,
-                    "[ControlStream] Stream disconnected; reconnecting with Last-Event-ID={LastId}",
-                    lastEventId);
+                    "[ControlStream] Stream disconnected; reconnecting with Last-Event-ID={LastId} in {Backoff}s",
+                    lastEventId, (int)backoff.TotalSeconds);
             }
 
-            // Brief pause before reconnect to avoid tight error loops.
-            try { await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken); }
+            // Exponential backoff before reconnect; reset to minimum after a successful connect.
+            try { await Task.Delay(backoff, stoppingToken); }
             catch (OperationCanceledException) { break; }
+
+            if (!connected)
+                backoff = backoff < BackoffMax
+                    ? TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, BackoffMax.TotalSeconds))
+                    : BackoffMax;
+            else
+                backoff = BackoffMin;
         }
     }
 
