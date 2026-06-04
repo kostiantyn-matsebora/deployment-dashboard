@@ -241,7 +241,7 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 
 **Mechanism (`GithubClient.GetPagedConditionalAsync<T>`).**
 
-`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. Pages 2+ are fetched unconditionally. A `304` does not count against the GitHub rate-limit (F8/F16) but IS still recorded by the fetcher's own-request budget counter (it is still an HTTP request).
+`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. Pages 2+ are fetched unconditionally. A `304` is free: GitHub does not charge it against the quota (`X-RateLimit-Remaining` is unchanged), so it is **NOT** counted by the fetcher's own-request budget counter (`own_used`). The budget still processes the `X-RateLimit-Reset` / `X-RateLimit-Limit` / `X-RateLimit-Remaining` headers unconditionally so the snapshot stays current.
 
 **Instance caches** (both persist across cycles; adapter is a DI singleton):
 - `_deploymentsListCache` — per-repo `(etag, windowed deployments snapshot)`. Capacity 64 entries, LRU eviction.
@@ -451,8 +451,10 @@ ResolveService(workflowName, repo):
 
 After every HTTP call to the GitHub API:
 
-1. Increment the fetcher's **own request counter** (one per call).
-2. Read `X-RateLimit-Reset` → `reset_at` (UTC). The window has rolled over when **`now ≥ previously-observed reset_at`** AND the new `reset_at` is later than the previously observed one — reset own counter to 0 before incrementing. (`X-RateLimit-Reset` always points to the end of the *current* window, i.e. always in the future; checking whether the new value is in the past would never fire.)
+1. Read `X-RateLimit-Reset` → `reset_at` (UTC). The window has rolled over when **`now ≥ previously-observed reset_at`** AND the new `reset_at` is later than the previously observed one — reset own counter to 0. (`X-RateLimit-Reset` always points to the end of the *current* window, i.e. always in the future; checking whether the new value is in the past would never fire.)
+2. Update `_resetAt` unconditionally (even for 304 responses).
+3. Increment the fetcher's **own request counter** — **only for quota-consuming responses** (all except `304 Not Modified`). A `304` is free (GitHub does not charge it; `X-RateLimit-Remaining` is unchanged), so counting it would over-report usage and over-throttle against F16's "must not monopolise a shared token" rationale.
+4. Capture `X-RateLimit-Limit` / `X-RateLimit-Remaining` unconditionally for the F18 snapshot.
 
 If `own_count ≥ budget`:
 
@@ -696,7 +698,7 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 - Deployments-list `304` → cached snapshot reused; per-deployment status endpoint still called in cycle 2 (list `304` does not skip status checks).
 - Parent edge preserved when staging statuses return `304` in cycle 2 — prod event resolves `parent_deployments` via the cached `runId`.
 - No ETag from server → no `If-None-Match` sent on the next cycle; no `304`s served (graceful degradation, behaviour identical to unconditional fetch).
-- Rate-limit budget still increments its own-request counter for `304` responses.
+- Rate-limit budget does **NOT** increment the own counter for `304` responses (304 consumes no quota); a `200` does. Rollover bookkeeping and header capture (`X-RateLimit-Limit` / `X-RateLimit-Remaining`) remain unconditional.
 
 **Control-plane participation (F17, §5.10):**
 - `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at, payload.reset_id}` where `reset_id` = the `reset-initiated` event id.

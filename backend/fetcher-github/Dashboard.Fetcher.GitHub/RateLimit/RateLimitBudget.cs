@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using Dashboard.Fetcher.GitHub.Models;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,8 @@ namespace Dashboard.Fetcher.GitHub.RateLimit;
 /// exhausted (F16 / F3).
 ///
 /// Budget = floor(total_limit × pct / 100).
-/// Own-count is incremented per GitHub API call — NOT read from <c>X-RateLimit-Used</c>
+/// Own-count is incremented per quota-consuming GitHub API call (excludes 304 Not Modified,
+/// which GitHub does not charge) — NOT read from <c>X-RateLimit-Used</c>
 /// (which counts all consumers of the token, not only this fetcher process).
 /// After a rate-limit window rolls over (now has passed the previously-observed
 /// <c>X-RateLimit-Reset</c> and the response carries a newer reset timestamp) the own
@@ -82,7 +84,8 @@ public sealed class RateLimitBudget
 
     /// <summary>
     /// Called after every GitHub API response.
-    /// Increments the own-request counter; resets it when the rate-limit window has rolled over.
+    /// Increments the own-request counter for quota-consuming responses only (not 304);
+    /// resets it when the rate-limit window has rolled over.
     /// Pauses until reset_at + 1s when own count reaches the budget.
     /// Also captures <c>X-RateLimit-Limit</c> / <c>X-RateLimit-Remaining</c> for the F18 snapshot.
     /// </summary>
@@ -101,7 +104,13 @@ public sealed class RateLimitBudget
             _ownCount = 0;
 
         _resetAt = responseResetAt;
-        _ownCount++;
+
+        // 304 Not Modified consumes no GitHub quota — X-RateLimit-Remaining is unchanged.
+        // Count only quota-consuming responses toward own usage and the self-throttle
+        // budget (§5.5.2 / F16). The rollover and header-capture above remain unconditional
+        // because 304 responses still carry reset-at and Limit/Remaining headers.
+        if (response.StatusCode != HttpStatusCode.NotModified)
+            _ownCount++;
 
         // Capture CI/CD-wide quota fields for the per-cycle rate-limit event (F18 / §5.11).
         if (TryGetIntHeader(response, "X-RateLimit-Limit", out var ciLimit))

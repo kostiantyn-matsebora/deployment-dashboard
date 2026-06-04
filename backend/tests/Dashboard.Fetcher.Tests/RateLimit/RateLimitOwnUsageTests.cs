@@ -76,6 +76,34 @@ public sealed class RateLimitOwnUsageTests
         Assert.Equal(0, budget.Used);
     }
 
+    // ── F3: 304 Not Modified does NOT increment own count ────────────────────
+
+    [Fact]
+    public async Task OwnCount_NotIncremented_For304Response()
+    {
+        // 304 consumes no GitHub quota; own_used must stay at 0 after a 304 call (§5.5.2 / F16).
+        var budget = await MakeBudget(totalLimit: 1000, budgetPct: 100);
+
+        var response = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.NotModified);
+        response.Headers.Add("X-RateLimit-Reset", FutureEpoch().ToString());
+
+        await budget.RecordAndWaitIfNeededAsync(response, default);
+
+        Assert.Equal(0, budget.Used);
+    }
+
+    [Fact]
+    public async Task OwnCount_Incremented_For200Response()
+    {
+        // Non-304 (200 OK) is quota-consuming; own_used must increment to 1 (§5.5.2 / F16).
+        var budget = await MakeBudget(totalLimit: 1000, budgetPct: 100);
+
+        var response = MakeResponse(externalUsed: 1, limit: 1000, remaining: 999, resetEpoch: FutureEpoch());
+        await budget.RecordAndWaitIfNeededAsync(response, default);
+
+        Assert.Equal(1, budget.Used);
+    }
+
     // ── F3: own count increments per call, not from external header ──────────
 
     [Fact]
