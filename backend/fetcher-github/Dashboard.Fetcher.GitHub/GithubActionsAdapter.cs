@@ -118,8 +118,8 @@ public sealed class GithubActionsAdapter(
             var statuses = new List<GhDeploymentStatus>(result.Items);
             allStatuses[d.Id] = statuses;
 
-            // Statuses are returned newest-first; the first entry is the latest.
-            var latestStatus = statuses.Count > 0 ? statuses[0] : null;
+            // Select the true latest by created_at — the endpoint's array ordering is not guaranteed.
+            var latestStatus = statuses.Count > 0 ? statuses.MaxBy(s => s.CreatedAt) : null;
             var extractedRunId = latestStatus is not null
                 ? EventMapper.ExtractRunId(latestStatus.TargetUrl)
                 : null;

@@ -225,7 +225,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 | Condition | Behaviour |
 |---|---|
 | `deployment.Id` in terminal cache | Skip `GET /deployments/{id}/statuses` entirely. Still include the deployment in the `envToDeploymentId` map (§5.6.4) using the cached `runId` so parent edges remain resolvable. Contributes no new events. |
-| Not in cache | Fetch statuses as normal. After fetch: if the latest status (newest-first ordering from GitHub) is terminal, record `deploymentId → runId` in the cache. |
+| Not in cache | Fetch statuses as normal. After fetch: select the status with the maximum `created_at` as the latest (the endpoint's array ordering is not guaranteed); if that status is terminal, record `deploymentId → runId` in the cache. |
 | First appearance of any `deployment.Id` | Always fetched (id never in cache). |
 | Non-terminal latest status | NOT cached; re-fetched every cycle until terminal. |
 
@@ -257,7 +257,7 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 | Deployments list `200` | Pager stops at the cutoff (early-stop, newest-first); result is already windowed. Cache when an `ETag` header is present. |
 | Deployment in terminal cache | Skip `GET /deployments/{id}/statuses` entirely (§5.5.1); terminal-skip wins — the conditional path never runs for it. |
 | Non-terminal deployment statuses `304` | Reuse cached `runId` for the env→deploymentId map (§5.6.4); emit no events (list is byte-identical and the cursor has advanced past every cached status's `created_at`). Deployment stays eligible for future conditional fetches — not promoted to terminal. |
-| Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If latest status is terminal, also record in the terminal cache (§5.5.1). |
+| Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If the status with the maximum `created_at` is terminal, also record in the terminal cache (§5.5.1). |
 
 **Graceful degradation.** When the server omits the `ETag` header on a `200` response (e.g. the `github-emulator`), nothing is cached and every subsequent cycle is a normal unconditional fetch — correctness is unaffected.
 
