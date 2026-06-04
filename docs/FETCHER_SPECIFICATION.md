@@ -624,6 +624,8 @@ Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `
 
 > **Env var binding rule.** The segment after `__` must match the C# property name exactly (PascalCase). .NET config maps `__` to a section separator and binds by property name — not by SCREAMING_SNAKE. Example: `GITHUB__BaseUrl` → section `GitHub`, property `BaseUrl`; `GITHUB__BASE_URL` does NOT bind and the property keeps its default.
 
+> **Explicit-binding vars.** `POLL_INTERVAL_SECONDS`, `INITIAL_LOOKBACK`, `BACKFILL`, `BACKFILL_MAX_AGE`, `BACKFILL_DEPTH`, `CONTROL_API_KEY`, and `COMPONENT_ID` are top-level SCREAMING_SNAKE names that do **not** bind through the PascalCase rule above. They are read explicitly by name in `FetcherOptionsEnv.ApplyEnvOverrides` (mirroring `GITHUB__*` which uses the section rule). A missing or unparseable value leaves the property at its default without throwing.
+
 **Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
 **Demo mode.** Set `GITHUB__BaseUrl=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB__Token` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed.
