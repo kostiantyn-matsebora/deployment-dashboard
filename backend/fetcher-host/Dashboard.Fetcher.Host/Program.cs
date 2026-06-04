@@ -18,9 +18,9 @@ var builder = WebApplication.CreateBuilder(args);
 var fetcherOptions = new FetcherOptions();
 builder.Configuration.Bind(fetcherOptions);
 
-// Allow env-var overrides for control-plane keys (§6).
-fetcherOptions.ControlApiKey = builder.Configuration["CONTROL_API_KEY"] ?? fetcherOptions.ControlApiKey;
-fetcherOptions.ComponentId = builder.Configuration["COMPONENT_ID"] ?? fetcherOptions.ComponentId;
+// Apply explicit SCREAMING_SNAKE env-var overrides (§6).
+// Top-level vars do not bind through .NET's PascalCase rule and must be read explicitly.
+FetcherOptionsEnv.ApplyEnvOverrides(builder.Configuration, fetcherOptions);
 
 var githubOptions = new GithubAdapterOptions();
 builder.Configuration.GetSection("GitHub").Bind(githubOptions);
