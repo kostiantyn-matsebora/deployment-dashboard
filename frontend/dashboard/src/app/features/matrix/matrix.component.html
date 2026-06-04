@@ -17,11 +17,37 @@
       [style.grid-template-columns]="gridColumns()"
     >
 
-      <!-- Header row: empty service-column corner + env tags -->
+      <!-- Header row: empty service-column corner + env tags (drag-reorderable) -->
       <div class="col-head col-corner"></div>
-      @for (env of environments(); track env) {
-        <div class="col-head"><span class="env-tag">{{ env }}</span></div>
-      }
+
+      <!-- CDK drop list spans the visible env headers; orientation horizontal -->
+      <div
+        class="col-headers-drop"
+        cdkDropList
+        cdkDropListOrientation="horizontal"
+        [cdkDropListData]="environments()"
+        (cdkDropListDropped)="onColDrop($event)"
+      >
+        @for (env of environments(); track env) {
+          <div
+            class="col-head col-draggable"
+            cdkDrag
+            [cdkDragData]="env"
+            [attr.aria-label]="'Column: ' + env + '. Drag to reorder.'"
+            title="Drag to reorder"
+          >
+            <span
+              class="col-drag-grip"
+              cdkDragHandle
+              aria-hidden="true"
+              title="Drag to reorder"
+            >⠿</span>
+            <span class="env-tag">{{ env }}</span>
+            <!-- CDK drag placeholder -->
+            <div *cdkDragPlaceholder class="col-drag-placeholder"></div>
+          </div>
+        }
+      </div>
 
       <!-- Service rows -->
       @for (row of filteredRows(); track row.service) {
@@ -29,7 +55,7 @@
         <!-- Row header — sticky left column -->
         <div class="row-head row" [attr.data-svc]="row.service">{{ row.service }}</div>
 
-        <!-- Slot tiles for each environment -->
+        <!-- Slot tiles for each visible ordered environment -->
         @for (env of environments(); track env) {
           <div class="row" [attr.data-svc]="row.service">
             @if (row.slots[env]) {

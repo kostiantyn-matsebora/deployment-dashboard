@@ -126,6 +126,69 @@
   flex-direction: column;
 }
 
+/* ── Column drag-and-drop (CDK) ──────────────────────────── */
+
+/* The transparent drop-list wrapper that spans the env header cells.
+   display: contents lets the CDK container participate in the grid
+   track without adding an extra grid item. */
+.col-headers-drop {
+  display: contents;
+}
+
+/* CDK resets — remove the CDK default dragging styles on the host */
+.col-draggable.cdk-drag-animating {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.col-draggable.cdk-drag-placeholder {
+  opacity: 0;
+}
+
+/* Drop target highlight */
+.col-headers-drop.cdk-drop-list-dragging .col-draggable:not(.cdk-drag-placeholder) {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* Visible grip glyph */
+.col-drag-grip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: grab;
+  margin-right: 5px;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+  line-height: 1;
+}
+
+.col-draggable:hover .col-drag-grip {
+  color: var(--ink-1);
+}
+
+.col-drag-grip:active,
+.cdk-drag-dragging .col-drag-grip {
+  cursor: grabbing;
+}
+
+/* Placeholder strip shown in the drop position */
+.col-drag-placeholder {
+  position: absolute;
+  inset: 0;
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px dashed rgba(var(--accent-rgb), 0.45);
+  border-radius: 6px;
+}
+
+/* Dragging ghost opacity */
+.cdk-drag-preview.col-draggable {
+  opacity: 0.75;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  background: var(--glass-strong);
+  border-radius: 6px;
+  padding: 2px 8px 6px;
+}
+
 /* ── Empty slot ───────────────────────────────────────────── */
 .slot.empty {
   /* flex: 1 1 auto — mirrors .slot in tile CSS; fills the .row flex column

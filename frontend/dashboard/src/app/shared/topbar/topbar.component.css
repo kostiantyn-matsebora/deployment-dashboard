@@ -563,6 +563,59 @@
 .rl-bar-track { width: 100%; height: 5px; border-radius: 999px; background: var(--glass-edge); overflow: hidden; }
 .rl-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.7), rgba(var(--accent-rgb), 1)); transition: width 0.3s ease; }
 
+/* ── Hidden-count badge (Columns + Fields buttons) ──────────────────────── */
+/* Positioned inside icon-btn; shown only when items are hidden. */
+.hidden-count-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.9);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+  pointer-events: none;
+  border: 1.5px solid var(--glass);
+}
+
+/* ── Columns popover reset link ──────────────────────────── */
+.cols-reset-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: rgba(var(--accent-rgb), 0.9);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  letter-spacing: 0.2px;
+  transition: color 0.12s ease;
+  margin-top: 4px;
+  border-top: 1px solid var(--glass-edge);
+  padding-top: 8px;
+}
+
+.cols-reset-btn:hover {
+  color: rgba(var(--accent-rgb), 1);
+}
+
+/* ── Popover hint text ───────────────────────────────────── */
+.hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.2px;
+}
+
 /* ── Time window row ─────────────────────────────────────── */
 .tw-row {
   display: flex;

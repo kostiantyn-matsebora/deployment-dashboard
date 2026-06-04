@@ -5,6 +5,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDragPlaceholder, CdkDropList } from '@angular/cdk/drag-drop';
 
 import { AppStateService } from '../../core/services/app-state.service';
 import { deriveBoxState } from '../../core/models/deployment.model';
@@ -24,7 +25,7 @@ import { HistoryDrawerComponent } from './history-drawer/history-drawer.componen
 @Component({
   selector: 'app-matrix',
   standalone: true,
-  imports: [MatrixTileComponent, HistoryDrawerComponent],
+  imports: [MatrixTileComponent, HistoryDrawerComponent, CdkDropList, CdkDrag, CdkDragHandle, CdkDragPlaceholder],
   templateUrl: './matrix.component.html',
   styleUrl: './matrix.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,9 +41,14 @@ export class MatrixComponent {
   // ── Version hover cross-matrix highlight ──────────────────
   protected readonly highlightedVersion = signal<string | null>(null);
 
-  // ── Derived ───────────────────────────────────────────────
-  protected readonly environments = computed(() =>
+  // ── All environments from the data ────────────────────────
+  protected readonly allEnvironments = computed(() =>
     this.state.matrixData()?.environments ?? []
+  );
+
+  // ── Visible, ordered environments (applies col order + hidden set) ────────
+  protected readonly environments = computed(() =>
+    this.state.orderedVisibleEnvironments(this.allEnvironments())
   );
 
   protected readonly gridColumns = computed(() => {
@@ -69,6 +75,15 @@ export class MatrixComponent {
       return true;
     });
   });
+
+  // ── Column drag-reorder ───────────────────────────────────
+  protected onColDrop(event: CdkDragDrop<string[]>): void {
+    if (event.previousIndex === event.currentIndex) return;
+    const visible = this.environments();
+    const fromEnv = visible[event.previousIndex];
+    const toEnv   = visible[event.currentIndex];
+    this.state.reorderColumn(fromEnv, toEnv);
+  }
 
   // ── Tile interaction ──────────────────────────────────────
   protected openDrawer(service: string, env: string): void {

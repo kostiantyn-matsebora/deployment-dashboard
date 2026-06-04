@@ -24,6 +24,33 @@
 - **Service filter:** inline `pInputText` in topbar. Case-insensitive substring match against component name. Matching toggles `.is-hidden` on `.row` elements.
 - **Failures-only:** inline `p-toggleSwitch` pill. When ON, hides service rows that have no failed states (fail-last, run-fail-last, run-fail-only).
 
+### Column Controls
+
+#### Show / Hide
+
+- The `⊞` Columns button (Matrix-only topbar icon) opens a popover listing every environment with a checkbox.
+- Unchecking an environment **fully removes** that column — header cell and all body cells — and the matrix re-renders from the visible, ordered environments. No placeholder or empty column remains.
+- The last visible environment cannot be unchecked (click is blocked).
+- "Show all · reset order" (popover footer action) restores all environments and the default column order in one step.
+
+#### Drag Reorder
+
+- Visible column headers (`.col-head`) carry a `⠿` grip glyph (`.col-drag-grip`), are `draggable="true"`, and have `cursor: grab` / tooltip `"Drag to reorder"`.
+- Dragging uses the HTML5 Drag and Drop API (`dragstart` / `dragover` / `drop` events on `.col-head` elements).
+- The dragged column fades to 40% opacity; the drop target gains an accent dashed outline.
+- On drop: the column order updates, the new order is persisted, the matrix re-renders, and the picker reflects the new order.
+
+#### Persistence
+
+Column state persists client-side to `localStorage`. Both keys are cleared by "Show all · reset order".
+
+| Key | Format | Content |
+|-----|--------|---------|
+| `dd:colOrder` | JSON array | Ordered permutation of all environment names. |
+| `dd:colHidden` | Comma-separated string | Names of hidden environments. Empty string = none hidden. |
+
+On load: the persisted order is validated as a full permutation of the known environment set; if stale (environment added or removed) it falls back to the default environment order. Hidden-set entries not in the known environment set are ignored.
+
 ---
 
 ## Swimlanes View Layout
