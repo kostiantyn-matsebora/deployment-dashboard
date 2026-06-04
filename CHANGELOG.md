@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.6.1] - 2026-06-04
+
+### Fixed
+
+- **Matrix tile showed an in-progress spinner for a deployment that had actually failed.** A (service, environment) slot whose latest deployment failed and which had no earlier successful deployment was rendered with the amber in-progress spinner instead of a failed tile. The history drawer and swimlanes were unaffected (they read the status directly); only the matrix tile mis-derived its state. Failures now always render as a failed tile, with or without prior success history. Surfaced by backfilling a real repository whose environment had only ever failed.
+
+### Documentation
+
+- **GitHub authentication for organizations that disable fine-grained PATs.** The install guide now gives the classic PAT first-class standing for private/organization repositories (previously a parenthetical), adds an over-grant caveat (the classic `repo` scope grants full read/write — broader than the read-only access the Fetcher uses), and documents authorizing a classic PAT for **SAML SSO** — including re-authorizing after every token rotation. A new FAQ entry covers the `403` / `X-GitHub-SSO` symptom of an unauthorized token.
+
+
 ## [0.6.0] - 2026-06-04
 
 ### Added

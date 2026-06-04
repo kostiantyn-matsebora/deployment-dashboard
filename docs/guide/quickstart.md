@@ -22,7 +22,7 @@ docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deplo
 To pin to a specific release version:
 
 ```bash
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.6.0 --profile demo up
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.6.1 --profile demo up
 ```
 
 > **Why `--project-directory .`?** It points Compose at the current directory for `.env`/variable resolution. Without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` "CreateFile/no such file" error.
@@ -43,7 +43,7 @@ docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo
 
 > On PowerShell, replace the trailing `\` line-continuations with backticks (`` ` ``).
 
-To pin to a specific release, replace `main` in the URLs with the release tag (e.g. `.../v0.6.0/compose/...`) and set `DASHBOARD_VERSION=0.6.0` for a reproducible deploy — see [Pinning a release version](./install.md#pinning-a-release-version).
+To pin to a specific release, replace `main` in the URLs with the release tag (e.g. `.../v0.6.1/compose/...`) and set `DASHBOARD_VERSION=0.6.1` for a reproducible deploy — see [Pinning a release version](./install.md#pinning-a-release-version).
 
 Then open:
 
