@@ -5,8 +5,6 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDragPlaceholder, CdkDropList } from '@angular/cdk/drag-drop';
-
 import { AppStateService } from '../../core/services/app-state.service';
 import { deriveBoxState } from '../../core/models/deployment.model';
 import { MatrixTileComponent } from './matrix-tile/matrix-tile.component';
@@ -25,7 +23,7 @@ import { HistoryDrawerComponent } from './history-drawer/history-drawer.componen
 @Component({
   selector: 'app-matrix',
   standalone: true,
-  imports: [MatrixTileComponent, HistoryDrawerComponent, CdkDropList, CdkDrag, CdkDragHandle, CdkDragPlaceholder],
+  imports: [MatrixTileComponent, HistoryDrawerComponent],
   templateUrl: './matrix.component.html',
   styleUrl: './matrix.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -76,13 +74,49 @@ export class MatrixComponent {
     });
   });
 
-  // ── Column drag-reorder ───────────────────────────────────
-  protected onColDrop(event: CdkDragDrop<string[]>): void {
-    if (event.previousIndex === event.currentIndex) return;
-    const visible = this.environments();
-    const fromEnv = visible[event.previousIndex];
-    const toEnv   = visible[event.currentIndex];
-    this.state.reorderColumn(fromEnv, toEnv);
+  // ── Native HTML5 column drag-reorder ─────────────────────
+  /** The env name currently being dragged; null when no drag is in progress. */
+  protected readonly draggedEnv  = signal<string | null>(null);
+  /** The env name the pointer is currently over during a drag. */
+  protected readonly dragOverEnv = signal<string | null>(null);
+
+  protected onDragStart(env: string, event: DragEvent): void {
+    this.draggedEnv.set(env);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  protected onDragOver(env: string, event: DragEvent): void {
+    // REQUIRED: preventDefault() makes this element a valid drop target.
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    this.dragOverEnv.set(env);
+  }
+
+  protected onDragLeave(env: string): void {
+    // Only clear dragOverEnv if we're leaving the cell we set it on,
+    // not bubbling from a child element clearing the wrong cell.
+    if (this.dragOverEnv() === env) {
+      this.dragOverEnv.set(null);
+    }
+  }
+
+  protected onDrop(toEnv: string, event: DragEvent): void {
+    event.preventDefault();
+    const fromEnv = this.draggedEnv();
+    this.draggedEnv.set(null);
+    this.dragOverEnv.set(null);
+    if (fromEnv && fromEnv !== toEnv) {
+      this.state.reorderColumn(fromEnv, toEnv);
+    }
+  }
+
+  protected onDragEnd(): void {
+    this.draggedEnv.set(null);
+    this.dragOverEnv.set(null);
   }
 
   // ── Tile interaction ──────────────────────────────────────
