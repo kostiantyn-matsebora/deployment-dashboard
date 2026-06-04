@@ -10,7 +10,7 @@
   </div>
 
   <!-- View tabs ──────────────────────────────────────────── -->
-  <nav class="tabs" role="tablist">
+  <nav class="tabs" role="tablist" aria-label="View selection">
     <p-selectButton
       [options]="viewOptions"
       optionLabel="label"
@@ -58,6 +58,7 @@
         [ngModel]="serviceFilter()"
         (ngModelChange)="onFilterChange($event)"
         aria-label="Filter services by name"
+        title="Filter services by name"
       />
       <label
         class="toggle hdr-fail-toggle"
@@ -66,6 +67,7 @@
         role="switch"
         [attr.aria-checked]="failuresOnly()"
         aria-label="Show failures only"
+        title="Show failures only"
       >
         <span class="switch"></span>
         <span>Failures only</span>
@@ -158,7 +160,8 @@
           class="icon-btn"
           [class.is-active]="correlationPopoverOpen()"
           title="Correlation &amp; time window"
-          aria-label="Correlation"
+          aria-label="Correlation and time window"
+          aria-haspopup="true"
           (click)="toggleCorrelationPopover($event)"
         >
           <span aria-hidden="true">⇆</span>
@@ -189,16 +192,62 @@
       </div>
     }
 
+    <!-- Columns picker (matrix-only — show/hide environments) ──────────────── -->
+    @if (isMatrix()) {
+      <div style="position: relative">
+        <button
+          class="icon-btn"
+          [class.is-active]="columnsPopoverOpen() || colHiddenCount() > 0"
+          [title]="columnsBtnTitle()"
+          [attr.aria-label]="columnsBtnTitle()"
+          aria-haspopup="true"
+          (click)="toggleColumnsPopover($event)"
+        >
+          <span aria-hidden="true">⊞</span>
+          @if (colHiddenCount() > 0) {
+            <span class="hidden-count-badge" aria-hidden="true">{{ colHiddenCount() }}</span>
+          }
+        </button>
+        <p-popover #columnsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content">
+            <span class="popover-title">COLUMNS — Matrix</span>
+            <div class="field-grid field-grid--single">
+              @for (env of allEnvironments(); track env) {
+                <label
+                  class="field-toggle"
+                  [class.is-on]="isColVisible(env)"
+                  (click)="toggleColHidden(env)"
+                >
+                  <span class="field-check" [class.checked]="isColVisible(env)" aria-hidden="true"></span>
+                  <span class="field-label">{{ env }}</span>
+                </label>
+              }
+            </div>
+            <div class="hint">Tip: drag a column header to reorder.</div>
+            <button
+              class="cols-reset-btn"
+              (click)="resetColumns()"
+              aria-label="Show all environments and reset column order"
+            >Show all · reset order</button>
+          </div>
+        </p-popover>
+      </div>
+    }
+
     <!-- Fields picker (shared) ──────────────────────────── -->
     <div style="position: relative">
       <button
         class="icon-btn"
-        [class.is-active]="fieldsPopoverOpen()"
-        title="Fields"
-        aria-label="Fields"
+        [class.is-active]="fieldsPopoverOpen() || fieldsHiddenCount() > 0"
+        [title]="fieldsBtnTitle()"
+        [attr.aria-label]="fieldsBtnTitle()"
+        aria-haspopup="true"
         (click)="toggleFieldsPopover($event)"
       >
         <span aria-hidden="true">▦</span>
+        @if (fieldsHiddenCount() > 0) {
+          <span class="hidden-count-badge" aria-hidden="true">{{ fieldsHiddenCount() }}</span>
+        }
       </button>
       <p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
         <div class="picker-content">
@@ -247,6 +296,7 @@
     class="live-pill"
     [class.is-live]="sseConnected()"
     role="status"
+    title="Server-sent events — live deployment updates"
     [attr.aria-label]="sseConnected() ? 'Live updates connected' : 'Connecting to live updates'"
   >
     <span class="live-dot" aria-hidden="true"></span>

@@ -32,8 +32,14 @@ flowchart LR
 | Filter input | `pInputText` | Matrix-only, inline. Filters service rows by name (case-insensitive substring). |
 | Failures toggle | `p-toggleSwitch` | Matrix-only, inline pill. `.is-on` = coral border + switch, hides non-failed rows. |
 | Theme switch | `p-selectButton` | 3-state segmented: ☀ / ☾ / AUTO. Sets `data-theme` on `<html>`, persists to `localStorage`. |
-| Icon buttons | Custom | Fields picker (▦) — shared. Correlation picker (⚙) — Swimlanes-only. Open popovers on click. |
+| Icon buttons — Fields (▦) | Custom | Shared (Matrix + Swimlanes). Opens Fields picker popover. Shows accent state + hidden-count badge when any fields are OFF. Tooltip: `Fields — toggle visible data fields` (normal); `Fields — N field(s) hidden` when N > 0. |
+| Icon buttons — Columns (⊞) | Custom | **Matrix-only** (hidden in Swimlanes). Opens Columns picker popover. Shows accent state + hidden-count badge when any environments are hidden. Tooltip: `Columns — show/hide environments` (normal); `Columns — N environment(s) hidden` when N > 0. |
+| Icon buttons — Correlation (⇆) | Custom | **Swimlanes-only**. Opens Correlation picker popover. |
 | Live indicator | Custom | Green dot with `pulseRing` animation (1.8s). Shows SSE connection status. |
+
+**Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, and the Live pill.
+
+**Hidden-count badge.** Fields and Columns buttons share the same badge mechanism: when the hidden count N > 0, the button gains `.is-active` accent styling and a small filled count badge (`.hidden-count-badge`) positioned top-right on the icon. When N = 0, the badge is hidden and styling reverts to default.
 
 Topbar must be `position: relative; z-index: 30` so popovers render above sibling stacking contexts created by `backdrop-filter` on the matrix/vis shells.
 
@@ -168,6 +174,16 @@ Persistent right sidebar in Swimlanes view. Updated when a node is selected.
 On-demand dropdown panels anchored to icon buttons. `z-index: 20` inside topbar's stacking context (`z-index: 30`).
 
 **PrimeNG component:** `p-popover` with `[dismissable]="true"`, `appendTo="body"`.
+
+### Columns Picker (Matrix only)
+
+**Matrix-only.** The `⊞` icon button opens this popover; the button and its wrapper `div` are hidden (`display: none`) when the Swimlanes view is active.
+
+- **Toggle list:** one checkbox row per environment, ordered by the current column order. Checked = visible; unchecked = hidden.
+- **Last-visible guard:** unchecking is blocked when exactly one environment is visible — the toggle click is a no-op, preventing a fully-empty grid.
+- **Grid recompute:** hiding or showing an environment triggers an immediate matrix re-render — the grid recomputes from the visible, ordered environments. No placeholder columns; hidden columns are fully absent from the DOM.
+- **"Show all · reset order" action:** a text-button at the bottom of the popover restores all environments to visible and resets the column order to the default environment order. Clears both `localStorage` keys.
+- **Persistence:** hidden set persisted to `localStorage` key `dd:colHidden`. Restored on load.
 
 ### Fields Picker
 

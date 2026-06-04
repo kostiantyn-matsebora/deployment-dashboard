@@ -11,8 +11,10 @@ import { ThemeService } from '../../core/services/theme.service';
 import {
   CORRELATION_PREDICATES,
   CorrelationPredicate,
+  MATRIX_FIELDS,
   MatrixField,
   RateLimitReport,
+  SWIMLANE_FIELDS,
   SwimlaneField,
   Theme,
 } from '../../core/models/deployment.model';
@@ -62,11 +64,13 @@ export class TopbarComponent {
 
   // Popovers
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
+  protected readonly columnsPopover       = viewChild<Popover>('columnsPopover');
   protected readonly correlationPopover   = viewChild<Popover>('correlationPopover');
   protected readonly rateLimitPopovers    = viewChildren<Popover>('rateLimitPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
   protected readonly fieldsPopoverOpen      = signal(false);
+  protected readonly columnsPopoverOpen     = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
   protected readonly rateLimitPopoverOpen   = signal<Map<string, boolean>>(new Map());
 
@@ -167,6 +171,43 @@ export class TopbarComponent {
   // ── View helpers ──────────────────────────────────────────
   protected readonly isMatrix = computed(() => this.state.activeView() === 'matrix');
 
+  // ── All environments from matrix data ─────────────────────
+  protected readonly allEnvironments = computed(() =>
+    this.state.matrixData()?.environments ?? []
+  );
+
+  // ── Column hidden count (badge for Columns button) ────────
+  protected readonly colHiddenCount = computed(() =>
+    this.state.matrixColHidden().size
+  );
+
+  /** Title / aria label for the Columns button, reflecting hidden count. */
+  protected readonly columnsBtnTitle = computed(() => {
+    const n = this.colHiddenCount();
+    return n > 0
+      ? `Columns — ${n} environment${n === 1 ? '' : 's'} hidden`
+      : 'Columns — show/hide environments';
+  });
+
+  // ── Fields hidden count (per-view; badge for Fields button) ──────────────
+  protected readonly fieldsHiddenCount = computed(() => {
+    if (this.isMatrix()) {
+      const visible = this.state.matrixVisibleFields();
+      return MATRIX_FIELDS.length - visible.size;
+    } else {
+      const visible = this.state.swimlaneVisibleFields();
+      return SWIMLANE_FIELDS.length - visible.size;
+    }
+  });
+
+  /** Title / aria label for the Fields button, reflecting hidden count. */
+  protected readonly fieldsBtnTitle = computed(() => {
+    const n = this.fieldsHiddenCount();
+    return n > 0
+      ? `Fields — ${n} field${n === 1 ? '' : 's'} hidden`
+      : 'Fields — toggle visible data fields';
+  });
+
   // ── Fields picker ─────────────────────────────────────────
   /** Matrix field keys with display labels (parent_deployments removed — not shown in tiles). */
   protected readonly matrixFieldDefs: { key: MatrixField; label: string }[] = [
@@ -207,6 +248,19 @@ export class TopbarComponent {
     this.state.toggleSwimlaneField(key);
   }
 
+  // ── Columns picker ────────────────────────────────────────
+  protected isColVisible(env: string): boolean {
+    return !this.state.matrixColHidden().has(env);
+  }
+
+  protected toggleColHidden(env: string): void {
+    this.state.toggleColHidden(env, this.allEnvironments());
+  }
+
+  protected resetColumns(): void {
+    this.state.resetColumns(this.allEnvironments());
+  }
+
   // ── Correlation picker ────────────────────────────────────
   protected readonly correlationPredicates = CORRELATION_PREDICATES;
 
@@ -222,6 +276,14 @@ export class TopbarComponent {
     if (p) {
       p.toggle(event);
       this.fieldsPopoverOpen.update(v => !v);
+    }
+  }
+
+  protected toggleColumnsPopover(event: MouseEvent): void {
+    const p = this.columnsPopover();
+    if (p) {
+      p.toggle(event);
+      this.columnsPopoverOpen.update(v => !v);
     }
   }
 

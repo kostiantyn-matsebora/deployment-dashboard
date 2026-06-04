@@ -32,6 +32,19 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - The Swimlanes attribute picker exposes 8 toggles: `environment`, `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`. `parent_deployments` is intentionally absent — the graph edges convey it.
 - Both attribute pickers default to all options ON.
 
+### Column visibility and order (Matrix only)
+
+- The Matrix view provides a column visibility picker (Columns button, `⊞`) that lets the user show or hide individual environment columns.
+- Hiding an environment column fully removes it from the grid (header + all cells); no placeholder column remains.
+- The last visible environment column cannot be hidden.
+- Visible environment columns are draggable to reorder via a `⠿` grip handle on each column header.
+- A "Show all · reset order" action in the Columns popover restores all columns to visible and resets to the default column order.
+- Column visibility (hidden set) and column order persist client-side to `localStorage` keys `dd:colHidden` and `dd:colOrder`.
+- Both persistence keys are cleared by "Show all · reset order".
+- On reload, persisted column state is restored; a stale `colOrder` (environment set changed) falls back to the default order.
+- The Fields button and Columns button each display an accent active state plus a numeric count badge when their respective hidden counts are greater than zero. The badge and accent clear when the count returns to zero.
+- Each button's tooltip reflects the current hidden count: `"Fields — N field(s) hidden"` / `"Columns — N environment(s) hidden"` when N > 0; default label text when N = 0.
+
 ### Details surfaces
 
 - Clicking any slot in the Matrix view opens a side drawer showing the per-slot deployment history.
@@ -150,8 +163,10 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 ### Control surfaces
 
 - The filter input and failures-only toggle are persistent inline elements in the Matrix header.
-- The fields picker, correlation picker, and time-window control are on-demand header icon-button popovers.
+- The fields picker, columns picker, correlation picker, and time-window control are on-demand header icon-button popovers.
+- The columns picker icon button is hidden when the Swimlanes view is active.
 - The theme switcher is a persistent header control.
+- Every interactive topbar control carries a concise hover tooltip.
 - Popover surfaces render above all canvas content via z-index without being clipped by stacking contexts.
 
 ## Data

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Deployment Dashboard — Variant C — Glassy Dark Monitoring</title>
+<title>Deployment Dashboard — Monitoring · Live</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -538,6 +538,82 @@
   }
   .icon-btn.has-active .badge-dot { display: block; }
 
+  /* ----- rate-limit chip (⧖ label inline inside the icon-btn) ----- */
+  .rl-chip {
+    width: auto;
+    padding: 0 10px;
+    gap: 5px;
+    font-size: 13px;
+  }
+  .rl-chip-icon { font-size: 14px; line-height: 1; }
+  .rl-chip-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-1);
+    letter-spacing: 0.2px;
+  }
+  .rl-chip:hover .rl-chip-label,
+  .rl-chip.is-active .rl-chip-label { color: var(--ink-0); }
+
+  /* rate-limit popover rows */
+  .rl-popover { min-width: 290px; }
+  .rl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+  }
+  .rl-row:last-child { margin-bottom: 0; }
+  .rl-field-label {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    min-width: 68px;
+    flex-shrink: 0;
+  }
+  .rl-field-value {
+    font-size: 12px;
+    color: var(--ink-0);
+  }
+  .rl-field-value.mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+  }
+  .rl-state-badge {
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--emerald-wash);
+    border: 1px solid var(--emerald-edge);
+    color: var(--emerald);
+  }
+  .rl-state-badge.is-paused {
+    background: var(--amber-wash);
+    border-color: var(--amber-edge);
+    color: var(--amber);
+  }
+  .rl-section { margin-bottom: 7px; }
+  .rl-bar-track {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--glass-edge);
+    overflow: hidden;
+    margin-top: 5px;
+  }
+  .rl-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(to right, rgba(var(--accent-rgb),0.6), rgba(var(--accent-rgb),1));
+    transition: width .3s ease;
+  }
+
   /* popover surface */
   .popover {
     position: absolute;
@@ -765,7 +841,11 @@
     padding: 2px 8px 6px;
     text-align: center;
     border-bottom: 1px solid var(--glass-edge);
+    position: relative;
+    cursor: grab;
+    user-select: none;
   }
+  .col-head:active { cursor: grabbing; }
   .col-head .env-tag {
     display: inline-block;
     padding: 3px 10px;
@@ -801,6 +881,69 @@
     border-left: 2px solid rgba(var(--accent-rgb), 0.35);
     padding-left: 10px;
   }
+  /* Drag grip glyph — always visible so columns read as reorderable */
+  .col-drag-grip {
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1;
+    margin-right: 4px;
+    flex-shrink: 0;
+    cursor: grab;
+    user-select: none;
+    transition: color .15s ease;
+  }
+  .col-head:hover .col-drag-grip { color: var(--ink-1); }
+  .col-head.dragging .col-drag-grip { cursor: grabbing; }
+
+  .col-head.drag-over {
+    background: rgba(var(--accent-rgb), 0.10);
+    border-bottom-color: rgba(var(--accent-rgb), 0.6);
+    outline: 1px dashed rgba(var(--accent-rgb), 0.45);
+    outline-offset: -1px;
+  }
+  .col-head.dragging { opacity: 0.45; }
+  /* Shared hidden-count badge — used by both Columns and Fields buttons */
+  .hidden-count-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    background: rgba(var(--accent-rgb), 0.85);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    line-height: 14px;
+    text-align: center;
+    pointer-events: none;
+    display: none;           /* shown only when hidden count > 0 */
+  }
+  .hidden-count-badge.is-visible { display: block; }
+
+  /* "Show all / reset order" link inside the Columns popover */
+  .cols-reset-link {
+    display: block;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--glass-edge);
+    font-size: 11px;
+    color: rgba(var(--accent-rgb), 0.85);
+    cursor: pointer;
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    font-family: inherit;
+    text-align: left;
+    width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+    transition: color .15s ease;
+  }
+  .cols-reset-link:hover { color: rgba(var(--accent-rgb), 1); }
 
   /* ----- slot card (base) -----
      Tile sizing is DYNAMIC: min-height ≈ size of bare 6-box-state chrome
@@ -1918,13 +2061,13 @@
       <div class="brand-mark"></div>
       <div>
         <div class="brand-name">Deployment Dashboard</div>
-        <div class="brand-sub">Variant C · Glassy Dark</div>
+        <div class="brand-sub">Monitoring · Live</div>
       </div>
     </div>
 
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-view="matrix" role="tab">Matrix</button>
-      <button class="tab" data-view="vis" role="tab">Swimlanes</button>
+      <button class="tab is-active" data-view="matrix" role="tab" title="Matrix view — service × environment grid" aria-label="Matrix view">Matrix</button>
+      <button class="tab" data-view="vis" role="tab" title="Swimlanes view — deployment DAGs per service" aria-label="Swimlanes view">Swimlanes</button>
     </nav>
 
     <div class="topbar-spacer"></div>
@@ -1938,8 +2081,8 @@
 
     <!-- Inline matrix filter (persistent, no popover) -->
     <div class="hdr-filter" id="hdr-matrix-filter">
-      <input type="text" class="input hdr-filter-input" id="svc-filter" placeholder="filter services…" autocomplete="off" spellcheck="false">
-      <label class="toggle hdr-fail-toggle" id="fail-toggle">
+      <input type="text" class="input hdr-filter-input" id="svc-filter" placeholder="filter services…" autocomplete="off" spellcheck="false" title="Filter service rows by name" aria-label="Filter services by name">
+      <label class="toggle hdr-fail-toggle" id="fail-toggle" title="Show only services with at least one failure" aria-label="Show failures only">
         <span class="switch"></span>
         <span>Failures only</span>
       </label>
@@ -1954,6 +2097,40 @@
     </div>
 
     <div class="hdr-icons">
+
+      <!-- Rate-limit chip — one per adapter (static fixture: github-actions) -->
+      <div style="position:relative" id="hdr-rl-chip">
+        <button class="icon-btn rl-chip" id="btn-ratelimit" title="Fetcher CI/CD rate-limit usage (github-actions)" aria-label="Fetcher rate-limit usage for github-actions" aria-haspopup="true">
+          <span class="rl-chip-icon" aria-hidden="true">⧖</span>
+          <span class="rl-chip-label">38/60</span>
+        </button>
+        <div class="popover rl-popover" id="pop-ratelimit" role="dialog" aria-label="Fetcher rate-limit">
+          <div class="popover-title">Fetcher Rate Limit</div>
+          <div class="rl-row">
+            <span class="rl-field-label">Adapter</span>
+            <span class="rl-field-value">github-actions</span>
+            <span class="rl-state-badge" role="status" aria-label="Fetcher state: running">running</span>
+          </div>
+          <div class="rl-section">
+            <div class="rl-row">
+              <span class="rl-field-label">Own usage</span>
+              <span class="rl-field-value mono">38 / 60</span>
+            </div>
+            <div class="rl-bar-track" role="progressbar" aria-valuenow="63" aria-valuemin="0" aria-valuemax="100" aria-label="Own budget used: 63%">
+              <div class="rl-bar-fill" style="width:63%"></div>
+            </div>
+          </div>
+          <div class="rl-row">
+            <span class="rl-field-label">CI quota</span>
+            <span class="rl-field-value mono">4820 / 5000</span>
+          </div>
+          <div class="rl-row">
+            <span class="rl-field-label">Resets at</span>
+            <span class="rl-field-value mono">2026-06-04T15:00:00Z</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Visualisation-only icons -->
       <div style="position:relative; display:none" id="hdr-vis-icons">
         <button class="icon-btn" id="btn-correlation" title="Correlation &amp; time window" aria-label="Correlation">
@@ -1976,6 +2153,9 @@
               <label class="predicate" data-p="version" role="radio" aria-checked="false">
                 <span class="radio"></span><span class="pred-name">same version</span>
               </label>
+              <label class="predicate" data-p="ref" role="radio" aria-checked="false">
+                <span class="radio"></span><span class="pred-name">same ref</span>
+              </label>
               <label class="predicate is-on" data-p="parent" role="radio" aria-checked="true">
                 <span class="radio"></span><span class="pred-name">explicit parent</span>
               </label>
@@ -1996,10 +2176,25 @@
         </div>
       </div>
 
+      <!-- Columns picker (matrix-only — show/hide + reorder hint) -->
+      <div style="position:relative" id="hdr-cols-btn">
+        <button class="icon-btn" id="btn-columns" title="Columns — show/hide environments" aria-label="Columns" aria-haspopup="true">
+          <span aria-hidden="true">⊞</span>
+          <span class="hidden-count-badge" id="col-hidden-badge" aria-hidden="true"></span>
+        </button>
+        <div class="popover" id="pop-columns" role="dialog" aria-label="Column visibility">
+          <div class="popover-title">Columns — Matrix</div>
+          <div class="fields-grid" id="cols-grid-matrix"></div>
+          <div class="hint" style="margin-top:8px">Tip: drag a column header to reorder.</div>
+          <button class="cols-reset-link" id="btn-cols-reset" aria-label="Show all environments and reset column order">Show all · reset order</button>
+        </div>
+      </div>
+
       <!-- Fields picker (shared icon-button, popover content swaps per view) -->
       <div style="position:relative">
-        <button class="icon-btn" id="btn-fields" title="Fields" aria-label="Fields">
+        <button class="icon-btn" id="btn-fields" title="Fields — toggle visible data fields" aria-label="Fields — toggle visible data fields">
           <span aria-hidden="true">▦</span>
+          <span class="hidden-count-badge" id="fields-hidden-badge" aria-hidden="true"></span>
         </button>
         <div class="popover" id="pop-fields" role="dialog" aria-label="Visible fields">
           <div class="popover-title" id="pop-fields-title">Visible fields — Matrix</div>
@@ -2010,7 +2205,7 @@
       </div>
     </div>
 
-    <div class="live-pill">
+    <div class="live-pill" title="Server-sent events — live deployment updates" aria-label="Live connection status">
       <span class="live-dot"></span>
       <span>SSE live</span>
     </div>
@@ -2021,15 +2216,7 @@
 
     <div class="matrix-shell fields-rich" id="matrix-shell">
       <div class="matrix" id="matrix">
-        <!-- header row -->
-        <div></div>
-        <div class="col-head"><span class="env-tag">dev</span></div>
-        <div class="col-head"><span class="env-tag">staging</span></div>
-        <div class="col-head"><span class="env-tag">qa</span></div>
-        <div class="col-head"><span class="env-tag">preprod</span></div>
-        <div class="col-head"><span class="env-tag">prod</span></div>
-
-        <!-- ROWS POPULATED BY JS -->
+        <!-- header row and body rows are fully built by renderMatrix() in JS -->
       </div>
     </div>
   </section>
@@ -2178,7 +2365,9 @@ const SLOTS = {
   'billing-webhook|staging':  { state: 'running-only',
                                 current: { id:'a3e1f95ba1d7', version: 'v1.4.0', ref:'feat/retry-jitter',                                              elapsed: '5m ago',  sha:'7d8e9f0', run_number:825, run_url:'https://ci.internal/runs/825', parents:1 } },
   'billing-webhook|qa':       { state: 'success', current: { id:'b4f20a6cb2e8', version: 'v1.3.9', ref:'#1188',              actor: 'l.osman',        elapsed: '6h ago',  sha:'6c7d8e9', run_number:810, run_url:'https://ci.internal/runs/810', parents:1 } },
-  'billing-webhook|preprod':  { state: 'success', current: { id:'c5031b7dc3f9', version: 'v1.3.9', ref:'#1188',              actor: 'release-bot',    elapsed: '1d ago',  sha:'6c7d8e9', run_number:801, run_url:'https://ci.internal/runs/801', parents:1 } },
+  // S4-no-prior: fail-last with NO last field → full coral tile, no split/divider (box-state parity demo)
+  'billing-webhook|preprod':  { state: 'fail-last',
+                                current: { id:'e7f30b8dc4a1', version: 'v1.3.9', ref:'feat/retry-jitter', actor: 'l.osman', elapsed: '2h ago', sha:'6c7d8e9', run_number:818, run_url:'https://ci.internal/runs/818', parents:0 } },
   'billing-webhook|prod':     { state: 'success', current: { id:'d6142c8ed40a', version: 'v1.3.8', ref:'release/1.3',         actor: 'release-bot',    elapsed: '6d ago',  sha:'5b6c7d8', run_number:792, run_url:'https://ci.internal/runs/792', parents:0 } },
 };
 
@@ -2187,7 +2376,8 @@ const SX_MARK = {
   'billing-webhook|dev':            'S1',
   'order-svc|staging':              'S2',
   'auth-bff|dev':                   'S3',
-  'notification-worker|staging':    'S4',
+  'notification-worker|staging':    'S4 (split — has last_successful)',
+  'billing-webhook|preprod':        'S4-no-prior (full coral — no last_successful)',
   'catalog-edge|qa':                'S5',
   'ledger-projector|qa':            'S6',
 };
@@ -2198,14 +2388,13 @@ const SX_MARK = {
    for matrix (row × col); environment is toggleable for visualisation.
    ================================================================= */
 const MATRIX_FIELDS = [
-  { key: 'version',             label: 'version' },
-  { key: 'run_url',             label: 'run_url' },
-  { key: 'sha',                 label: 'sha' },
-  { key: 'run_number',          label: 'run_number' },
-  { key: 'ref',                 label: 'ref' },
-  { key: 'actor',               label: 'actor' },
-  { key: 'happened_at',         label: 'happened_at' },
-  { key: 'parrent_deployments', label: 'parrent_deployments' },
+  { key: 'version',     label: 'version' },
+  { key: 'run_url',     label: 'run_url' },
+  { key: 'sha',         label: 'sha' },
+  { key: 'run_number',  label: 'run_number' },
+  { key: 'ref',         label: 'ref' },
+  { key: 'actor',       label: 'actor' },
+  { key: 'happened_at', label: 'happened_at' },
 ];
 // parrent_deployments is intentionally NOT in VIS_FIELDS — the swimlane
 // graph already renders parent relationships as edges, so the "↵ N parents"
@@ -2437,15 +2626,141 @@ function renderLastIdentifier(rec) {
 }
 
 /* =================================================================
+   MATRIX COLUMN CONTROL — show/hide + reorder + localStorage persistence
+   ================================================================= */
+
+/* Column order persisted to mx.colOrder (JSON array — permutation of ENVS).
+   Hidden set persisted to mx.colHidden (comma-separated env names).
+   Visible envs = colOrder filtered by those NOT in colHidden. */
+const MX_ORDER_KEY  = 'mx.colOrder';
+const MX_HIDDEN_KEY = 'mx.colHidden';
+
+function loadColOrder() {
+  try {
+    const raw = localStorage.getItem(MX_ORDER_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      // validate: must be a permutation of ENVS (handles added/removed envs gracefully)
+      if (Array.isArray(arr) && arr.length === ENVS.length && ENVS.every(e => arr.includes(e))) {
+        return arr;
+      }
+    }
+  } catch (_) {}
+  return [...ENVS];
+}
+
+function saveColOrder(order) {
+  try { localStorage.setItem(MX_ORDER_KEY, JSON.stringify(order)); } catch (_) {}
+}
+
+function loadColHidden() {
+  try {
+    const raw = localStorage.getItem(MX_HIDDEN_KEY);
+    if (raw) return new Set(raw.split(',').filter(Boolean));
+  } catch (_) {}
+  return new Set();
+}
+
+function saveColHidden(set) {
+  try { localStorage.setItem(MX_HIDDEN_KEY, [...set].join(',')); } catch (_) {}
+}
+
+// Mutable state — initialised from localStorage
+let colOrder  = loadColOrder();
+let colHidden = loadColHidden();
+
+/* Visible envs: colOrder with hidden entries removed. */
+function visibleEnvs() {
+  return colOrder.filter(env => !colHidden.has(env));
+}
+
+/* Recompute grid-template-columns from visibleEnvs().
+   Service-name column is always 180px; each visible env column sizes to content. */
+function computeGridCols() {
+  const n = visibleEnvs().length;
+  if (n === 0) return '180px';
+  return '180px ' + Array(n).fill('minmax(140px, max-content)').join(' ');
+}
+
+/* =================================================================
    RENDER MATRIX
    ================================================================= */
 const matrixEl = document.getElementById('matrix');
 
-function renderMatrix() {
-  // Remove any existing rows (keep header divs — first 6 nodes)
-  while (matrixEl.children.length > 6) matrixEl.removeChild(matrixEl.lastChild);
+/* drag state */
+let dragSrcEnv = null;
 
-  SERVICES.forEach((svc) => {
+function renderMatrix() {
+  matrixEl.innerHTML = '';
+  matrixEl.style.gridTemplateColumns = computeGridCols();
+
+  const visible = visibleEnvs();
+
+  // ---- Corner cell (row 1, col 1) — empty spacer ----
+  matrixEl.appendChild(document.createElement('div'));
+
+  // ---- Column headers (row 1, cols 2..N) — visible envs only ----
+  visible.forEach(env => {
+    const head = document.createElement('div');
+    head.className = 'col-head';
+    head.dataset.env = env;
+    head.setAttribute('draggable', 'true');
+    head.setAttribute('aria-label', 'Column: ' + env + '. Drag to reorder.');
+    head.title = 'Drag to reorder';
+
+    // Grip glyph — visible drag affordance
+    const grip = document.createElement('span');
+    grip.className = 'col-drag-grip';
+    grip.setAttribute('aria-hidden', 'true');
+    grip.textContent = '⠿';
+
+    const tag = document.createElement('span');
+    tag.className = 'env-tag';
+    tag.textContent = env;
+
+    head.appendChild(grip);
+    head.appendChild(tag);
+
+    // Drag-and-drop handlers
+    head.addEventListener('dragstart', e => {
+      dragSrcEnv = env;
+      head.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', env);
+    });
+    head.addEventListener('dragend', () => {
+      dragSrcEnv = null;
+      head.classList.remove('dragging');
+      document.querySelectorAll('.col-head.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+    head.addEventListener('dragover', e => {
+      if (!dragSrcEnv || dragSrcEnv === env) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.col-head.drag-over').forEach(el => { if (el !== head) el.classList.remove('drag-over'); });
+      head.classList.add('drag-over');
+    });
+    head.addEventListener('dragleave', () => head.classList.remove('drag-over'));
+    head.addEventListener('drop', e => {
+      e.preventDefault();
+      head.classList.remove('drag-over');
+      if (!dragSrcEnv || dragSrcEnv === env) return;
+      const fromIdx = colOrder.indexOf(dragSrcEnv);
+      const toIdx   = colOrder.indexOf(env);
+      if (fromIdx === -1 || toIdx === -1) return;
+      colOrder.splice(fromIdx, 1);
+      colOrder.splice(toIdx, 0, dragSrcEnv);
+      saveColOrder(colOrder);
+      dragSrcEnv = null;
+      renderMatrix();
+      buildColsPicker(); // keep picker checkboxes in sync with new order
+    });
+
+    matrixEl.appendChild(head);
+  });
+
+  // ---- Service rows — visible envs only ----
+  SERVICES.forEach(svc => {
     const rowFrag = document.createDocumentFragment();
     const rowMarker = document.createElement('div');
     rowMarker.className = 'row-head row';
@@ -2453,13 +2768,12 @@ function renderMatrix() {
     rowMarker.dataset.svc = svc;
     rowFrag.appendChild(rowMarker);
 
-    ENVS.forEach(env => {
+    visible.forEach(env => {
       const key = `${svc}|${env}`;
-      const slot = SLOTS[key];
       const cell = document.createElement('div');
       cell.className = 'row';
       cell.dataset.svc = svc;
-      cell.appendChild(renderSlot(svc, env, slot, key));
+      cell.appendChild(renderSlot(svc, env, SLOTS[key], key));
       rowFrag.appendChild(cell);
     });
 
@@ -2597,30 +2911,48 @@ function renderSlot(svc, env, slot, key) {
   }
 
   else if (st === 'fail-last') {
-    /* ---------- S4 — split: top red + Failed tag + version + meta; bottom = single fallback identifier.
-       failed-line wraps so actor/time ride alongside the version. */
-    wrap.classList.add('split');
-    const top = document.createElement('div'); top.className = 'sec-top is-failed';
-    const tl = document.createElement('div'); tl.className = 'failed-line';
-    const tag = document.createElement('span');
-    tag.className = 'failed-tag';
-    tag.textContent = 'Failed';
-    tl.appendChild(tag);
-    if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
-    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
-    if (headlineMeta) tl.appendChild(headlineMeta);
-    top.appendChild(tl);
-    const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
-    if (tAttrs) top.appendChild(tAttrs);
-    wrap.appendChild(top);
-
-    const div = document.createElement('div'); div.className = 'divider';
-    wrap.appendChild(div);
-
-    const bot = document.createElement('div'); bot.className = 'sec-bot';
-    const last = renderLastIdentifier(slot.last);
-    if (last) bot.appendChild(last);
-    wrap.appendChild(bot);
+    /* ---------- S4 — failure.
+       When slot.last is present: SPLIT (top red + Failed tag + version + meta; bottom = single
+       fallback identifier). This is the "failed, older success exists" case (traditional S4).
+       When slot.last is ABSENT: FULL coral tile — red FAILED tag + version + meta, no bottom
+       section, no divider. Matches deriveBoxState: failure always → s-fail-last regardless of
+       whether last_successful exists; isSplit() is false when lastSucc() is absent. */
+    if (slot.last) {
+      // Split variant
+      wrap.classList.add('split');
+      const top = document.createElement('div'); top.className = 'sec-top is-failed';
+      const tl = document.createElement('div'); tl.className = 'failed-line';
+      const tag = document.createElement('span');
+      tag.className = 'failed-tag';
+      tag.textContent = 'Failed';
+      tl.appendChild(tag);
+      if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
+      const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+      if (headlineMeta) tl.appendChild(headlineMeta);
+      top.appendChild(tl);
+      const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+      if (tAttrs) top.appendChild(tAttrs);
+      wrap.appendChild(top);
+      const divEl = document.createElement('div'); divEl.className = 'divider';
+      wrap.appendChild(divEl);
+      const bot = document.createElement('div'); bot.className = 'sec-bot';
+      const last = renderLastIdentifier(slot.last);
+      if (last) bot.appendChild(last);
+      wrap.appendChild(bot);
+    } else {
+      // Full coral tile — no split, no divider, no bottom section
+      const tl = document.createElement('div'); tl.className = 'failed-line';
+      const tag = document.createElement('span');
+      tag.className = 'failed-tag';
+      tag.textContent = 'Failed';
+      tl.appendChild(tag);
+      if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
+      const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+      if (headlineMeta) tl.appendChild(headlineMeta);
+      wrap.appendChild(tl);
+      const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+      if (tAttrs) wrap.appendChild(tAttrs);
+    }
   }
 
   else if (st === 'run-fail-only') {
@@ -2716,14 +3048,17 @@ function setView(view) {
   currentView = view;
   document.getElementById('view-matrix').classList.toggle('is-active', view === 'matrix');
   document.getElementById('view-vis').classList.toggle('is-active', view === 'vis');
-  // inline matrix filter is matrix-only; vis view hides it (filter doesn't apply to DAG)
+  // inline matrix filter + columns picker are matrix-only
   document.getElementById('hdr-matrix-filter').style.display = view === 'matrix' ? 'flex' : 'none';
-  document.getElementById('hdr-vis-icons').style.display    = view === 'vis'    ? '' : 'none';
+  document.getElementById('hdr-cols-btn').style.display      = view === 'matrix' ? ''     : 'none';
+  document.getElementById('hdr-vis-icons').style.display     = view === 'vis'    ? ''     : 'none';
   // Fields popover content swaps per view
   document.getElementById('fields-grid-matrix').style.display = view === 'matrix' ? '' : 'none';
   document.getElementById('fields-grid-vis').style.display    = view === 'vis'    ? '' : 'none';
   document.getElementById('pop-fields-title').textContent =
     view === 'matrix' ? 'Visible fields — Matrix' : 'Visible fields — Swimlanes';
+  // Fields badge reflects the active view's hidden-field count
+  syncFieldsBtn();
   // close any open popover when switching
   closeAllPopovers();
 
@@ -2748,8 +3083,11 @@ document.querySelectorAll('.tab').forEach(t => {
    POPOVERS — click-outside / ESC / re-click to close
    ================================================================= */
 /* Filter popover removed — filter controls are inline in the header now.
-   Vis correlation popover and shared fields-picker popover remain. */
+   Rate-limit chip popover, columns picker (matrix-only), vis correlation popover,
+   and shared fields-picker popover remain. */
 const POPOVERS = [
+  { btn: 'btn-ratelimit',   pop: 'pop-ratelimit' },
+  { btn: 'btn-columns',     pop: 'pop-columns' },
   { btn: 'btn-correlation', pop: 'pop-correlation' },
   { btn: 'btn-fields',      pop: 'pop-fields' },
 ];
@@ -2799,9 +3137,11 @@ function buildFieldsPicker(containerId, fields, fieldsOn, onChange) {
   });
 }
 buildFieldsPicker('fields-grid-matrix', MATRIX_FIELDS, matrixFieldsOn, () => {
+  syncFieldsBtn();
   renderMatrix();
 });
 buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
+  syncFieldsBtn();
   // Field toggle → clear cached dims so the measurement pass remeasures
   // against the new content. This cascades into lane geometry.
   window.__visNodeDims = null;
@@ -2809,6 +3149,103 @@ buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
   // preserve selection ring after rebuild
   selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
 });
+
+/* =================================================================
+   COLUMNS PICKER — show/hide environments (matrix-only)
+   One checkbox row per env (same field-toggle styling as Fields picker).
+   Order follows colOrder so the picker always reflects the current sequence.
+   Edge case: prevent hiding the last visible environment.
+   ================================================================= */
+
+/* Shared helper — syncs one icon-button's is-active state, count badge,
+   title, and aria-label based on a hidden count n.
+   zeroTitle / zeroAria: strings used when n === 0.
+   noun: singular noun for the thing being hidden (e.g. "field", "environment"). */
+function syncIconBtn(btnId, badgeId, n, zeroTitle, zeroAria, noun) {
+  const btn   = document.getElementById(btnId);
+  const badge = document.getElementById(badgeId);
+  if (!btn || !badge) return;
+  if (n > 0) {
+    btn.classList.add('is-active');
+    badge.textContent = n;
+    badge.classList.add('is-visible');
+    const label = n === 1 ? '1 ' + noun + ' hidden' : n + ' ' + noun + 's hidden';
+    btn.title = btn.title.replace(/\s*—.*$/, '') + ' — ' + label;
+    btn.setAttribute('aria-label', btn.title + '. Click to manage.');
+  } else {
+    btn.classList.remove('is-active');
+    badge.textContent = '';
+    badge.classList.remove('is-visible');
+    btn.title = zeroTitle;
+    btn.setAttribute('aria-label', zeroAria);
+  }
+}
+
+/* Keep the Columns button in sync with the current colHidden state. */
+function syncColsBtn() {
+  syncIconBtn(
+    'btn-columns', 'col-hidden-badge',
+    colHidden.size,
+    'Columns — show/hide environments',
+    'Columns — show/hide environments',
+    'environment'
+  );
+}
+
+/* Keep the Fields button in sync with the current view's hidden-field count.
+   Matrix: counts OFF fields in matrixFieldsOn (total = MATRIX_FIELDS.length).
+   Swimlanes: counts OFF fields in visFieldsOn (total = VIS_FIELDS.length). */
+function syncFieldsBtn() {
+  const isMatrix = (currentView === 'matrix');
+  const total    = isMatrix ? MATRIX_FIELDS.length : VIS_FIELDS.length;
+  const on       = isMatrix ? matrixFieldsOn.size  : visFieldsOn.size;
+  const n        = total - on;
+  syncIconBtn(
+    'btn-fields', 'fields-hidden-badge',
+    n,
+    'Fields — toggle visible data fields',
+    'Fields — toggle visible data fields',
+    'field'
+  );
+}
+
+function buildColsPicker() {
+  const container = document.getElementById('cols-grid-matrix');
+  container.innerHTML = '';
+  colOrder.forEach(env => {
+    const isOn = !colHidden.has(env);
+    const lbl = document.createElement('label');
+    lbl.className = 'field-toggle' + (isOn ? ' is-on' : '');
+    lbl.innerHTML = `<span class="chk"></span><span>${env}</span>`;
+    lbl.addEventListener('click', e => {
+      e.preventDefault();
+      const currentlyOn = !colHidden.has(env);
+      // Prevent hiding the last visible env
+      if (currentlyOn && visibleEnvs().length <= 1) return;
+      if (currentlyOn) colHidden.add(env);
+      else colHidden.delete(env);
+      saveColHidden(colHidden);
+      lbl.classList.toggle('is-on', !colHidden.has(env));
+      syncColsBtn();
+      renderMatrix();
+    });
+    container.appendChild(lbl);
+  });
+  syncColsBtn();
+}
+buildColsPicker();
+
+// "Show all · reset order" button inside the Columns popover
+document.getElementById('btn-cols-reset').addEventListener('click', e => {
+  e.stopPropagation();
+  colOrder  = [...ENVS];
+  colHidden = new Set();
+  try { localStorage.removeItem(MX_ORDER_KEY);  } catch (_) {}
+  try { localStorage.removeItem(MX_HIDDEN_KEY); } catch (_) {}
+  buildColsPicker();  // rebuilds picker + calls syncColsBtn()
+  renderMatrix();
+});
+
 // initial view sync
 setView('matrix');
 

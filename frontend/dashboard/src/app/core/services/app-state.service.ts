@@ -45,6 +45,8 @@ const K = {
   correlation:    'dd:correlation',
   timeWindow:     'dd:timeWindow',
   rateLimit:      'dd.rateLimit',
+  colOrder:       'dd:colOrder',
+  colHidden:      'dd:colHidden',
 } as const;
 
 /**
@@ -150,6 +152,31 @@ export class AppStateService {
    */
   readonly matrixData = signal<Matrix | null>(null);
 
+  // ── Matrix column order + visibility ────────────────────────────────────
+  /**
+   * Persisted column order: a permutation of all environment names last seen.
+   * On load the stored array is validated against the live environment list and
+   * re-reconciled in `orderedVisibleEnvironments()`.
+   */
+  readonly matrixColOrder = signal<string[]>(
+    this.ls(K.colOrder, v => {
+      const arr: unknown = JSON.parse(v);
+      if (!Array.isArray(arr)) return null;
+      return (arr as unknown[]).every(x => typeof x === 'string') ? (arr as string[]) : null;
+    }, []),
+  );
+
+  /**
+   * Set of environment names that the user has hidden.
+   * Guard: must always leave at least one column visible.
+   */
+  readonly matrixColHidden = signal<Set<string>>(
+    this.ls(K.colHidden, v => {
+      if (!v) return null;
+      return new Set(v.split(',').filter(Boolean));
+    }, new Set<string>()),
+  );
+
   // ── KPIs ─────────────────────────────────────────────────
   readonly kpi = computed<Kpi>(() => {
     const matrix = this.matrixData();
@@ -175,6 +202,20 @@ export class AppStateService {
     effect(() => this.save(K.correlation, this.correlationPredicate()));
     effect(() => this.save(K.timeWindow,  this.timeWindow()));
     effect(() => this.save(K.rateLimit,   JSON.stringify(Object.fromEntries(this.rateLimitMap()))));
+    effect(() => this.save(K.colOrder,    JSON.stringify(this.matrixColOrder())));
+    effect(() => this.save(K.colHidden,   [...this.matrixColHidden()].join(',')));
+
+    // ── Seed column order whenever matrix data loads / envs change ─────
+    // Runs on first load (GET /api/matrix) and on every SSE event that
+    // adds a new environment. syncColOrder() is a no-op when the order
+    // already contains all current envs, so the persistence effect above
+    // only fires when something actually changes.
+    effect(() => {
+      const matrix = this.matrixData();
+      if (matrix) {
+        this.syncColOrder(matrix.environments);
+      }
+    });
   }
 
   // ── SSE incremental update ────────────────────────────────
@@ -249,6 +290,85 @@ export class AppStateService {
     const s = new Set(this.swimlaneVisibleFields());
     s.has(field) ? s.delete(field) : s.add(field);
     this.swimlaneVisibleFields.set(s);
+  }
+
+  // ── Column order + visibility helpers ────────────────────────────────────
+
+  /**
+   * Derive the ordered + filtered environment list for matrix rendering.
+   *
+   * Algorithm:
+   * 1. Start from `allEnvs` (live environment list from matrix data).
+   * 2. Prepend any envs from the saved order that still exist in `allEnvs`
+   *    (preserves user-defined order; new envs not yet in colOrder fall to end).
+   * 3. Append any new envs from `allEnvs` not yet in the saved order (sorted).
+   * 4. Drop hidden envs.
+   *
+   * This handles environments appearing/disappearing from the data gracefully.
+   */
+  orderedVisibleEnvironments(allEnvs: string[]): string[] {
+    const savedOrder = this.matrixColOrder();
+    const hidden     = this.matrixColHidden();
+
+    // Build ordered list: saved order first, then new envs (not in saved order)
+    const inSaved  = savedOrder.filter(e => allEnvs.includes(e));
+    const newEnvs  = allEnvs.filter(e => !savedOrder.includes(e));
+    const ordered  = [...inSaved, ...newEnvs];
+
+    return ordered.filter(e => !hidden.has(e));
+  }
+
+  /**
+   * Reorder columns: move `fromEnv` to the position occupied by `toEnv`.
+   * Operates on the full (non-hidden) order array.
+   */
+  reorderColumn(fromEnv: string, toEnv: string): void {
+    const order = [...this.matrixColOrder()];
+    const fromIdx = order.indexOf(fromEnv);
+    const toIdx   = order.indexOf(toEnv);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, fromEnv);
+    this.matrixColOrder.set(order);
+  }
+
+  /**
+   * Toggle env column visibility. Refuses to hide the last visible column.
+   * `allEnvs` is passed so the guard can check against the current data set.
+   */
+  toggleColHidden(env: string, allEnvs: string[]): void {
+    const hidden  = new Set(this.matrixColHidden());
+    const visible = allEnvs.filter(e => !hidden.has(e));
+    if (!hidden.has(env)) {
+      // Attempting to hide — guard: must leave at least one visible
+      if (visible.length <= 1) return;
+      hidden.add(env);
+    } else {
+      hidden.delete(env);
+    }
+    this.matrixColHidden.set(hidden);
+  }
+
+  /**
+   * Show all columns and reset the column order to the default (sortEnvs).
+   */
+  resetColumns(allEnvs: string[]): void {
+    this.matrixColHidden.set(new Set());
+    this.matrixColOrder.set(sortEnvs([...allEnvs]));
+  }
+
+  /**
+   * Ensure the saved column order contains all current envs.
+   * Called when new environments appear in matrix data.
+   */
+  syncColOrder(allEnvs: string[]): void {
+    const order   = this.matrixColOrder();
+    // Keep existing order for envs still present; append new envs sorted
+    const kept    = order.filter(e => allEnvs.includes(e));
+    const newEnvs = allEnvs.filter(e => !order.includes(e));
+    if (kept.length !== order.length || newEnvs.length > 0) {
+      this.matrixColOrder.set([...kept, ...sortEnvs(newEnvs)]);
+    }
   }
 
   // ── localStorage helpers ──────────────────────────────────

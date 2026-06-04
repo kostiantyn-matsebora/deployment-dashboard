@@ -71,6 +71,9 @@ describe('TopbarComponent — rate-limit indicator', () => {
       sseConnected,
       kpi:                    signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
       rateLimitMap,
+      matrixData:             signal(null),
+      matrixColHidden:        signal(new Set<string>()),
+      matrixColOrder:         signal([] as string[]),
     };
 
     const mockTheme: Partial<ThemeService> = {
