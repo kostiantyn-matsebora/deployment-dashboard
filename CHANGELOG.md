@@ -9,6 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [0.6.0] - 2026-06-04
 
+### Added
+
+- **Fetcher rate-limit telemetry on the dashboard.** The pull-mode Fetcher now reports its CI/CD API consumption after every poll cycle — a new `rate-limit` component event carrying the CI/CD API quota, the Fetcher's self-imposed budget, and its own usage. It is surfaced two ways: a usage chip with a click-to-expand popover in the dashboard header, and a "Fetcher · Rate Limit" card on the demo-driver panel. One indicator per configured CI/CD adapter, the last value persists across reloads, and it reuses the existing component-event stream — no `Dashboard.Api` change.
+
+### Changed
+
+- **Fetcher live poll stops paginating at the cursor window.** The deployments-list fetch now stops as soon as it crosses the cursor cutoff (GitHub returns newest-first), instead of paging the entire repository history and trimming afterwards — turning a ~40-page scan on large, active repos into ~1 page, while keeping the page-1 ETag short-circuit. Backfill was already bounded; the live path now matches it.
+- **Fetcher self-throttle no longer counts free requests.** Conditional `304 Not Modified` responses — which consume no GitHub quota — are excluded from the Fetcher's own-usage counter, so the reported `own_used` reflects real quota consumption and the budget is not tripped by free polls. The own-usage counter also resets correctly when the rate-limit window rolls over.
+
+### Fixed
+
+- **Fetcher re-fetched finished deployments on every poll cycle.** A deployment's latest status was read by array position, but the GitHub deployment-statuses endpoint ordering is not guaranteed — so terminal deployments were never recorded in the skip cache and were re-polled (and their old statuses re-processed) indefinitely. The latest status is now selected by `created_at`; finished deployments are fetched once and then skipped.
+- **Fetcher top-level environment variables were silently ignored.** `POLL_INTERVAL_SECONDS`, `INITIAL_LOOKBACK`, `BACKFILL_MAX_AGE`, and `BACKFILL_DEPTH` did not bind (configuration binding does not strip underscores from the documented `SCREAMING_SNAKE` names), so they fell back to their defaults regardless of what was set. They are now read explicitly by their documented names.
+
 
 ## [0.5.0] - 2026-06-03
 
