@@ -52,6 +52,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
 | F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
 | F17 | **Control-plane participant (gated on CONTROL_API_KEY).** When `CONTROL_API_KEY` is set, a second long-lived task subscribes to `GET /api/control/stream` with exponential backoff on failures (1 s → 2 s → 4 s … capped 30 s). When `CONTROL_API_KEY` is empty, the subscriber is never started and a startup log message records the absence. Reacts to: drain + ack on `reset-initiated`, drop cursor + backfill + report `running` on `reset-completed`. Still **just a consumer** of the existing control-plane contract — no backend change (F1, SAD §3). | Prevents 404-looping when the API's control surface is disabled (empty key); backoff avoids hammering on transient failures. |
+| F18 | **Per-cycle rate-limit reporting.** After every successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to `POST /api/control/events`. Reuses the existing `ComponentEventClient` transport. Skipped when snapshot is null (before the first GitHub response). Not gated on `CONTROL_API_KEY` — always active when `API_KEY` is present. Non-fatal: POST failures are logged and swallowed so reporting never breaks the poll loop. | Operators and end-users can observe CI/CD quota consumption in real time without backend change. The snapshot already exists (F16); this adds only the emit step. |
 
 ---
 
@@ -224,7 +225,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 | Condition | Behaviour |
 |---|---|
 | `deployment.Id` in terminal cache | Skip `GET /deployments/{id}/statuses` entirely. Still include the deployment in the `envToDeploymentId` map (§5.6.4) using the cached `runId` so parent edges remain resolvable. Contributes no new events. |
-| Not in cache | Fetch statuses as normal. After fetch: if the latest status (newest-first ordering from GitHub) is terminal, record `deploymentId → runId` in the cache. |
+| Not in cache | Fetch statuses as normal. After fetch: select the status with the maximum `created_at` as the latest (the endpoint's array ordering is not guaranteed); if that status is terminal, record `deploymentId → runId` in the cache. |
 | First appearance of any `deployment.Id` | Always fetched (id never in cache). |
 | Non-terminal latest status | NOT cached; re-fetched every cycle until terminal. |
 
@@ -240,7 +241,9 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 
 **Mechanism (`GithubClient.GetPagedConditionalAsync<T>`).**
 
-`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. Pages 2+ are fetched unconditionally. A `304` does not count against the GitHub rate-limit (F8/F16) but IS still recorded by the fetcher's own-request budget counter (it is still an HTTP request).
+`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. A `304` is free: GitHub does not charge it against the quota (`X-RateLimit-Remaining` is unchanged), so it is **NOT** counted by the fetcher's own-request budget counter (`own_used`). The budget still processes the `X-RateLimit-Reset` / `X-RateLimit-Limit` / `X-RateLimit-Remaining` headers unconditionally so the snapshot stays current.
+
+**Early-stop at the cutoff window (deployments list only).** The deployments-list fetch passes a `stopBefore` predicate (`d.CreatedAt < cutoff`) to `GetPagedConditionalAsync`. GitHub returns deployments newest-first, so once a deployment older than `cutoff` is encountered the pager stops immediately: that item and all subsequent items on the same page are excluded, and no further pages are requested. This mirrors the bounded scan behaviour of backfill (§5.8.2) and prevents a page-1 change on a large repo from paging through the full deployment history to reach the cutoff.
 
 **Instance caches** (both persist across cycles; adapter is a DI singleton):
 - `_deploymentsListCache` — per-repo `(etag, windowed deployments snapshot)`. Capacity 64 entries, LRU eviction.
@@ -251,10 +254,10 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 | Condition | Behaviour |
 |---|---|
 | Deployments list `304` | Reuse cached windowed snapshot. Per-deployment status checks still run normally — a list `304` never skips status re-checks. |
-| Deployments list `200` | Apply `cutoff` window to fresh items; refresh cache only when a `ETag` header is present. |
+| Deployments list `200` | Pager stops at the cutoff (early-stop, newest-first); result is already windowed. Cache when an `ETag` header is present. |
 | Deployment in terminal cache | Skip `GET /deployments/{id}/statuses` entirely (§5.5.1); terminal-skip wins — the conditional path never runs for it. |
 | Non-terminal deployment statuses `304` | Reuse cached `runId` for the env→deploymentId map (§5.6.4); emit no events (list is byte-identical and the cursor has advanced past every cached status's `created_at`). Deployment stays eligible for future conditional fetches — not promoted to terminal. |
-| Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If latest status is terminal, also record in the terminal cache (§5.5.1). |
+| Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If the status with the maximum `created_at` is terminal, also record in the terminal cache (§5.5.1). |
 
 **Graceful degradation.** When the server omits the `ETag` header on a `200` response (e.g. the `github-emulator`), nothing is cached and every subsequent cycle is a normal unconditional fetch — correctness is unaffected.
 
@@ -450,8 +453,10 @@ ResolveService(workflowName, repo):
 
 After every HTTP call to the GitHub API:
 
-1. Increment the fetcher's **own request counter** (one per call).
-2. Read `X-RateLimit-Reset` → `reset_at` (UTC). If the new `reset_at` is later than the previously observed one AND is in the past, the window has rolled over — reset own counter to 0 before incrementing.
+1. Read `X-RateLimit-Reset` → `reset_at` (UTC). The window has rolled over when **`now ≥ previously-observed reset_at`** AND the new `reset_at` is later than the previously observed one — reset own counter to 0. (`X-RateLimit-Reset` always points to the end of the *current* window, i.e. always in the future; checking whether the new value is in the past would never fire.)
+2. Update `_resetAt` unconditionally (even for 304 responses).
+3. Increment the fetcher's **own request counter** — **only for quota-consuming responses** (all except `304 Not Modified`). A `304` is free (GitHub does not charge it; `X-RateLimit-Remaining` is unchanged), so counting it would over-report usage and over-throttle against F16's "must not monopolise a shared token" rationale.
+4. Capture `X-RateLimit-Limit` / `X-RateLimit-Remaining` unconditionally for the F18 snapshot.
 
 If `own_count ≥ budget`:
 
@@ -544,6 +549,56 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 ---
 
+### 5.11 Per-cycle rate-limit reporting (F18)
+
+After each successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to the existing `POST /api/control/events` surface. See [`api/api-guidelines.md`](api/api-guidelines.md) §11 "Rate-limit report payload" and [`diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md).
+
+**Multi-adapter note.** With multiple adapters each adapter emits its own `rate-limit` event carrying a distinct `payload.adapter` value under the shared `component_id`. Consumers must key on `payload.adapter`, not on `component_id`, to distinguish per-adapter counters.
+
+#### Trigger and gate
+
+| Condition | Behaviour |
+|---|---|
+| Snapshot present after `PollOnceAsync` | Post `rate-limit` event immediately. |
+| Snapshot null (before first GitHub response) | Skip — no all-null reports. |
+| `CONTROL_API_KEY` absent | **Not** a gate — the report uses `X-Api-Key` (same as ingest); always active when `API_KEY` is present. |
+
+#### Extended `RateLimitSnapshot`
+
+`RateLimitSnapshot` carries two additional fields populated from GitHub response headers after each call (`GithubClient` → `RateLimitBudget.RecordAndWaitIfNeededAsync`):
+
+| Field | Source | Null when |
+|---|---|---|
+| `CiLimit` | `X-RateLimit-Limit` | Before first GitHub response. |
+| `CiRemaining` | `X-RateLimit-Remaining` | Before first GitHub response. |
+
+Existing fields (`Used`, `Budget`, `ResetAt`) are unchanged.
+
+#### Payload mapping
+
+The `payload` object maps the snapshot to the api-guidelines `rate-limit` contract:
+
+| Payload field | Source |
+|---|---|
+| `adapter` | `ICiCdAdapter.AdapterId` (e.g. `github-actions`) |
+| `ci_limit` | `snapshot.CiLimit` (null when not yet received) |
+| `ci_remaining` | `snapshot.CiRemaining` (null when not yet received) |
+| `own_budget` | `snapshot.Budget` |
+| `own_used` | `snapshot.Used` |
+| `reset_at` | `snapshot.ResetAt`; serialised as RFC 3339 UTC; **null** when `ResetAt == DateTimeOffset.MinValue` |
+
+`state` = `"running"` normally. The delegate closure in DI supplies the adapter id and state; `PollLoop` itself remains free of the `Control` namespace dependency.
+
+#### Resilience
+
+Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level and swallowed. The poll loop continues regardless. This mirrors `PostAckAsync` / `PostRunningAsync` behaviour (§5.10.4, §5.10.5).
+
+#### Wiring (no `Orchestration` → `Control` dependency)
+
+`PollLoop` accepts an optional `Func<RateLimitSnapshot, CancellationToken, Task>? reportCycleAsync` parameter. `Program.cs` DI wires it to `IComponentEventClient.PostRateLimitAsync`, closing over the adapter id. This preserves the existing dependency direction: `Control` → `Orchestration`, never the reverse.
+
+---
+
 ## 6. Configuration (env)
 
 | Var | Example | Purpose |
@@ -588,7 +643,13 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
     "last_success_at": "<RFC 3339 UTC>" | null,
     "last_error": "<string>" | null,
     "paused_for_reset": false,
-    "rate_limit": { "used": 150, "budget": 1500, "reset_at": "<RFC 3339 UTC>" } | null
+    "rate_limit": {
+      "used": 150,
+      "budget": 1500,
+      "reset_at": "<RFC 3339 UTC>",
+      "ci_limit": 5000,
+      "ci_remaining": 4830
+    } | null
   }
 }
 ```
@@ -639,7 +700,7 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 - Deployments-list `304` → cached snapshot reused; per-deployment status endpoint still called in cycle 2 (list `304` does not skip status checks).
 - Parent edge preserved when staging statuses return `304` in cycle 2 — prod event resolves `parent_deployments` via the cached `runId`.
 - No ETag from server → no `If-None-Match` sent on the next cycle; no `304`s served (graceful degradation, behaviour identical to unconditional fetch).
-- Rate-limit budget still increments its own-request counter for `304` responses.
+- Rate-limit budget does **NOT** increment the own counter for `304` responses (304 consumes no quota); a `200` does. Rollover bookkeeping and header capture (`X-RateLimit-Limit` / `X-RateLimit-Remaining`) remain unconditional.
 
 **Control-plane participation (F17, §5.10):**
 - `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at, payload.reset_id}` where `reset_id` = the `reset-initiated` event id.
@@ -650,6 +711,15 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 - `: ping` frame → treated as heartbeat, no event dispatched.
 - Ack POST returns non-2xx → subscriber stays paused, does not throw, still recovers on subsequent `reset-completed`.
 - Component id overridden via `COMPONENT_ID` → header reflects the override.
+
+**Per-cycle rate-limit reporting (F18, §5.11):**
+- `RateLimitBudget.CiLimit` and `CiRemaining` are null before the first GitHub response; populated from `X-RateLimit-Limit` / `X-RateLimit-Remaining` on first response; updated on subsequent responses; remain null when headers are absent.
+- `PostRateLimitAsync` emits body with `event_type:"rate-limit"`, correct `state`, `occurred_at`; payload contains `adapter`, `ci_limit`, `ci_remaining`, `own_budget`, `own_used`, `reset_at`; `reset_at` is null when snapshot `ResetAt == DateTimeOffset.MinValue`; `X-Api-Key` and `X-Component-Id` headers present.
+- `PostRateLimitAsync` non-2xx response → does not throw.
+- `PostRateLimitAsync` transport error → does not throw.
+- Per-cycle `reportCycleAsync` delegate fires once per successful cycle when snapshot is non-null.
+- Per-cycle `reportCycleAsync` delegate NOT invoked when snapshot is null.
+- `reportCycleAsync` throws → loop continues next cycle (non-fatal).
 
 **Functional readiness indicator (§6.1):**
 - Initial state → `LastOutcome = null`, `LastSuccessAt = null`, `IsPausedForReset = false`.

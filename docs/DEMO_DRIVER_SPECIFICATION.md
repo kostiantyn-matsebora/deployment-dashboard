@@ -488,15 +488,40 @@ Source: `demo/data/events.json#events` (47 events).
 |---|---|---|
 | **Ingest** | 1 | *Ingest sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); **Reset** checkbox (checked by default); delay (ms) input; **Ingest** / **Stop** buttons. *Live Emission sub-section:* Random events `OFF` / `LIVE` badge; **Enable** / **Disable** toggle → `GET\|POST /demo/emit`. |
 | **GitHub Emulator** | 2 (between Ingest and Status) | *Seed sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only); **Reset** checkbox; **Seed** / **Clear** buttons → `POST /demo/github/seed` \| `POST /demo/github/clear`. *Live sub-section:* `OFF` / `LIVE` badge; **Enable** / **Disable** toggle → `POST /demo/github/emit`. *Store sub-section:* counters (repos / deployments / statuses / workflows / environments), dataset badge, `seeded_at` — from `GET /demo/github/status`. |
-| **Status** | 3 | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
-| **API** | 4 | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
-| **Deployments** | 5 | Real-time `GET /demo/deployments-stream` SSE feed (§4.11) — proxies `GET /api/events/stream`; all pushers (demo-driver, fetcher, any); `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
-| **Reset (system)** | 6 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only. |
-| **Events** | 7 | Merged feed sourced from BOTH `GET /demo/control-stream` (§4.8 SSE) AND `GET /demo/control-events` (§4.9 SSE); `EventSource` on each; rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `● LIVE` / `● RECONNECTING` badge; **Clear** button. Fresh connect starts empty — fills as events arrive (no server replay on either feed). Persists latest 20 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
+| **Fetcher · Rate Limit** | 3 (after GitHub Emulator, before Control API) | Read-only card. See §8.1 below. |
+| **Status** | 4 | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
+| **API** | 5 | **Reset State** button; inline result (`✓ Reset OK (204)` / `✗ HTTP 401`) |
+| **Deployments** | 6 | Real-time `GET /demo/deployments-stream` SSE feed (§4.11) — proxies `GET /api/events/stream`; all pushers (demo-driver, fetcher, any); `● LIVE` / `● RECONNECTING` badge; rows follow unified Time·Source·Event·ID·Details format (see below); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
+| **Reset (system)** | 7 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `reset_id` when blocked. Reflects API-driven reset participation (§4.7) — read-only. |
+| **Events** | 8 | Merged feed sourced from BOTH `GET /demo/control-stream` (§4.8 SSE) AND `GET /demo/control-events` (§4.9 SSE); `EventSource` on each; rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `● LIVE` / `● RECONNECTING` badge; **Clear** button. Fresh connect starts empty — fills as events arrive (no server replay on either feed). Persists latest 20 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
 
 **GitHub Emulator card.** All panel calls go to `/demo/github/*` (the proxy — §5). The Seed sub-section and Live sub-section are interactive controls — dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; §5.1). The Store sub-section is a data surface and stays live.
 
 - **Emulator-liveness gating.** The GitHub Emulator card is **hidden unless the emulator answers the liveness probe** — `emulator == "up"` in the `GET /demo/health` response. When the emulator is absent (e.g. non-demo deployments) the card stays hidden; the 5 s health poll re-evaluates, so the card appears/disappears as the emulator comes and goes.
+
+### 8.1 Fetcher · Rate Limit card
+
+Read-only card in the top card row that visualises the fetcher's CI/CD rate-limit state per poll cycle.
+
+**Source.** Consumes `event_type: rate-limit` component events off the existing `GET /demo/control-events` proxy (§4.9) — the same stream already subscribed to by the panel. No additional server endpoint needed. Payload field contract: [`docs/api/api-guidelines.md` §11 — Rate-limit report payload](api/api-guidelines.md#rate-limit-report-payload-event_type-rate-limit); visual reference: [`docs/diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md) Diagram B.
+
+**Per-adapter sections.** The card renders **one section per adapter**, keyed by `payload.adapter` (last-value-wins per adapter). Each incoming `rate-limit` event updates the store entry for its adapter and re-renders all sections from the store. This handles multiple concurrent adapters without flip-flopping. Adapter names are slugified (lowercase, non-alphanumeric → `-`) to build unique per-adapter element ids (`rl-<slug>-state-badge`, `rl-<slug>-own-label`, etc.).
+
+**Visibility.** Hidden (`display: none`) until the first `rate-limit` event arrives, then shown — same gating pattern as the GitHub Emulator card.
+
+**Displayed fields (per adapter section).**
+
+| Element | Field(s) | Fallback when null |
+|---|---|---|
+| State badge | `state` (`running` = indigo; `paused` = purple) | — |
+| Adapter label | `payload.adapter` | — |
+| Own usage progress bar | `payload.own_used` / `payload.own_budget` (bar fill = `own_used / own_budget × 100%`, capped at 100%) | 0% fill; "— / —" label |
+| CI quota | `payload.ci_remaining` / `payload.ci_limit` | `—` |
+| Resets at | `payload.reset_at` rendered as local time via `fmt()` | `—` |
+
+All null fields render as `—`; no NaN is ever shown (division-by-zero guard on `own_budget`).
+
+**Events feed suppression.** `rate-limit` events are routed exclusively to this card. They are **not added** to the merged Events feed list — emitting one row per cycle (~30 s) would create per-cycle noise with no diagnostic value. All other `event_type` values continue flowing to the Events feed unchanged.
 
 **Unified feed row format.** Both feed cards (Deployments, Events) use the same column order:
 
@@ -580,6 +605,7 @@ Panel behaviour:
 | Unit | `github-proxy.controller.spec.ts` | All five proxy routes (`status`, `seed`, `clear`, `emit` GET, `emit` POST) forward request body + response body verbatim to `GITHUB_EMULATOR_URL/_github/*`; `POST` mutator routes return `503` while `reset_state == blocked`; `GET` routes are NOT blocked; non-2xx upstream responses surfaced as-is |
 | Unit | `github-proxy.client.spec.ts` | HTTP client constructs correct upstream URL; passes body through; surfaces upstream status code |
 | Unit | `health.controller.spec.ts` | `GET /demo/health` returns `{ driver:"up", api, emulator, fetcher }`; probes run in parallel; `2xx` upstream → `"up"`, non-2xx/unreachable → `"down"`; never blocked by reset gate; `FETCHER_URL` used for fetcher probe |
+| Unit | `panel-rate-limit.spec.ts` | `PANEL_HTML` contains `id="rl-card"` and `id="rl-adapters-container"`; `#rl-card { display: none; }` CSS hidden-by-default gate; `event_type === 'rate-limit'` routing guard in `mergeCompEvents`; early-return (suppression) fires before `mergeIntoStore`; `updateRateLimitCard` defined; `rlAdapterStore` keyed by adapter name (last-value-wins); `rlSlug` helper slugifies adapter name; `rlAdapterSectionHtml` builds per-adapter markup; per-adapter element id slug patterns (`rl-<slug>-section`, `-state-badge`, `-own-label`, `-progress-fill`, `-ci-remaining`, `-ci-limit`, `-reset-at`); `Object.keys(rlAdapterStore)` drives the render loop; `rlAdaptersContainer.innerHTML` updated on each event; `badge-paused` / `badge-running` branches; null fallback `—`; division-by-zero guard; `fmt(p.reset_at)` local-time render; card reveal on first event |
 
 ---
 
