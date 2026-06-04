@@ -80,6 +80,28 @@ public sealed class RateLimitSnapshotHeaderTests
         Assert.Null(budget.CiRemaining);
     }
 
+    // ── 304 still populates CiLimit / CiRemaining ───────────────────────────
+
+    [Fact]
+    public async Task CiLimit_And_CiRemaining_PopulatedFrom304Response()
+    {
+        // Header capture is unconditional — 304 responses still carry Limit/Remaining headers
+        // and those values must update the snapshot (§5.5.2 / F16).
+        var budget = await MakeBudget(totalLimit: 1000, budgetPct: 30);
+
+        var response = new HttpResponseMessage(HttpStatusCode.NotModified);
+        response.Headers.Add("X-RateLimit-Limit", "5000");
+        response.Headers.Add("X-RateLimit-Remaining", "4750");
+        response.Headers.Add("X-RateLimit-Reset", FutureEpoch().ToString());
+        await budget.RecordAndWaitIfNeededAsync(response, default);
+
+        Assert.Equal(5000, budget.CiLimit);
+        Assert.Equal(4750, budget.CiRemaining);
+
+        // own_used must NOT be incremented.
+        Assert.Equal(0, budget.Used);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static async Task<RateLimitBudget> MakeBudget(int totalLimit, int budgetPct)

@@ -146,6 +146,40 @@ public sealed class RateLimitBudgetRolloverTests
         Assert.Equal(window2End, budget.ResetAt);
     }
 
+    // ── Rollover still fires when the triggering response is 304 ─────────────
+
+    [Fact]
+    public async Task WindowRollover_TriggeredByA304_StillResetsCount_ButDoesNotIncrement()
+    {
+        // Demonstrates that rollover bookkeeping (resetting own count) is unconditional —
+        // it fires even when the response that carries the new reset_at is a 304.
+        // However, because 304 consumes no quota, own_used ends at 0 after the rollover
+        // (reset to 0, then the 304 does NOT increment) (§5.5.2 / F16).
+        var epoch = new DateTimeOffset(2025, 6, 20, 0, 0, 0, TimeSpan.Zero);
+        var window1End = epoch.AddSeconds(3600);
+        var window2End = epoch.AddSeconds(7200);
+
+        var now = epoch;
+        var budget = await MakeBudget(totalLimit: 1000, budgetPct: 100, utcNow: () => now);
+
+        // 3 quota-consuming requests in window 1.
+        for (var i = 0; i < 3; i++)
+            await budget.RecordAndWaitIfNeededAsync(MakeResponse(window1End.ToUnixTimeSeconds()), default);
+
+        Assert.Equal(3, budget.Used);
+
+        // Advance past window 1.
+        now = window1End.AddSeconds(5);
+
+        // A 304 response arrives carrying the window-2 reset timestamp — triggers rollover.
+        // ResetAt must update; own_used must be 0 (rolled over to 0, 304 does not increment).
+        var response304 = Make304Response(window2End.ToUnixTimeSeconds());
+        await budget.RecordAndWaitIfNeededAsync(response304, default);
+
+        Assert.Equal(0, budget.Used);
+        Assert.Equal(window2End, budget.ResetAt);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static async Task<RateLimitBudget> MakeBudget(
@@ -165,6 +199,15 @@ public sealed class RateLimitBudgetRolloverTests
     private static HttpResponseMessage MakeResponse(long resetEpoch)
     {
         var r = new HttpResponseMessage(HttpStatusCode.OK);
+        r.Headers.Add("X-RateLimit-Limit", "1000");
+        r.Headers.Add("X-RateLimit-Remaining", "999");
+        r.Headers.Add("X-RateLimit-Reset", resetEpoch.ToString());
+        return r;
+    }
+
+    private static HttpResponseMessage Make304Response(long resetEpoch)
+    {
+        var r = new HttpResponseMessage(HttpStatusCode.NotModified);
         r.Headers.Add("X-RateLimit-Limit", "1000");
         r.Headers.Add("X-RateLimit-Remaining", "999");
         r.Headers.Add("X-RateLimit-Reset", resetEpoch.ToString());
