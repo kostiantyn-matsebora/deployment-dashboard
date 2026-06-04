@@ -172,8 +172,10 @@ test.describe('Mockup — Matrix View', () => {
 
   test('failures-only toggle hides services with no failure state', async ({ page }) => {
     await page.locator('#fail-toggle').click();
-    // billing-webhook: all slots are success / running-only (no fail-last/run-fail-* state)
-    await expect(page.locator('.row-head[data-svc="billing-webhook"]')).toHaveClass(/is-hidden/);
+    // search-indexer: all 5 slots are success (no fail-last/run-fail-* state)
+    // billing-webhook was changed to have a fail-last preprod slot (S4-no-prior parity demo)
+    // and correctly stays visible, so search-indexer is the reliable all-success service.
+    await expect(page.locator('.row-head[data-svc="search-indexer"]')).toHaveClass(/is-hidden/);
   });
 
   test('failures-only toggle keeps services that have a failure state', async ({ page }) => {
