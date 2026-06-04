@@ -5,6 +5,7 @@ import { Subscription, filter } from 'rxjs';
 import { TopbarComponent } from './shared/topbar/topbar.component';
 import { AppStateService } from './core/services/app-state.service';
 import { DeploymentApiService } from './core/services/deployment-api.service';
+import { RateLimitReport } from './core/models/deployment.model';
 
 /**
  * Root application shell.
@@ -38,6 +39,7 @@ export class App implements OnInit, OnDestroy {
     this.syncActiveView();
     this.loadMatrix();
     this.connectSSE();
+    this.connectComponentEvents();
   }
 
   ngOnDestroy(): void {
@@ -65,12 +67,45 @@ export class App implements OnInit, OnDestroy {
   }
 
   private connectSSE(): void {
-    const sub = this.api.streamEvents().subscribe({
-      next:  (ev) => {
-        this.state.sseConnected.set(true);
-        this.state.applyDeploymentEvent(ev);
+    const sub = this.api.streamEvents({
+      onOpen:  () => this.state.sseConnected.set(true),
+      onError: () => this.state.sseConnected.set(false),
+    }).subscribe({
+      next:  (ev) => this.state.applyDeploymentEvent(ev),
+      error: ()   => this.state.sseConnected.set(false),
+    });
+    this.subs.push(sub);
+  }
+
+  /**
+   * Subscribe to GET /api/control/events/stream and update the latest
+   * rate-limit report signal when a "rate-limit" component event arrives.
+   * All other event_types are silently ignored.
+   * The stored RateLimitReport merges the envelope `state` with the payload fields.
+   */
+  private connectComponentEvents(): void {
+    const sub = this.api.streamComponentEvents().subscribe({
+      next: (record) => {
+        if (record.event_type === 'rate-limit' && record.payload) {
+          const p = record.payload as Record<string, unknown>;
+          const adapter = typeof p['adapter'] === 'string' ? p['adapter'] : '';
+          const report: RateLimitReport = {
+            state:        record.state,
+            adapter,
+            ci_limit:     typeof p['ci_limit']     === 'number'  ? p['ci_limit']     : null,
+            ci_remaining: typeof p['ci_remaining'] === 'number'  ? p['ci_remaining'] : null,
+            own_budget:   typeof p['own_budget']   === 'number'  ? p['own_budget']   : null,
+            own_used:     typeof p['own_used']     === 'number'  ? p['own_used']     : null,
+            reset_at:     typeof p['reset_at']     === 'string'  ? p['reset_at']     : null,
+          };
+          // Update the per-adapter entry in the map (Fix 4: multi-adapter keying).
+          const current = this.state.rateLimitMap();
+          const next = new Map(current);
+          next.set(adapter, report);
+          this.state.rateLimitMap.set(next);
+        }
       },
-      error: () => this.state.sseConnected.set(false),
+      error: () => { /* non-fatal; rate-limit chips stay at last known value */ },
     });
     this.subs.push(sub);
   }

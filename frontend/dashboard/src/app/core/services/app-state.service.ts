@@ -8,6 +8,7 @@ import {
   MatrixField,
   MatrixRow,
   MatrixSlot,
+  RateLimitReport,
   SWIMLANE_FIELDS,
   SwimlaneField,
   TIME_WINDOWS,
@@ -43,6 +44,7 @@ const K = {
   swFields:       'dd:swFields',
   correlation:    'dd:correlation',
   timeWindow:     'dd:timeWindow',
+  rateLimit:      'dd.rateLimit',
 } as const;
 
 /**
@@ -119,6 +121,28 @@ export class AppStateService {
   // ── SSE live status ───────────────────────────────────────
   readonly sseConnected = signal<boolean>(false);
 
+  // ── Operational telemetry — fetcher rate-limit ────────────
+  /**
+   * Per-adapter rate-limit reports keyed by `payload.adapter`.
+   * Empty map until the first `event_type: rate-limit` component event arrives.
+   * Last-value-wins per adapter; updated by App on every qualifying SSE frame.
+   * Persisted to localStorage under `dd.rateLimit`; hydrated on init.
+   * Source: docs/diagrams/fetcher-rate-limit.md + api-guidelines.md §11.
+   */
+  readonly rateLimitMap = signal<Map<string, RateLimitReport>>(
+    this.ls(K.rateLimit, (raw) => {
+      const obj: unknown = JSON.parse(raw);
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+      const map = new Map<string, RateLimitReport>();
+      for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+          map.set(k, v as RateLimitReport);
+        }
+      }
+      return map.size > 0 ? map : null;
+    }, new Map<string, RateLimitReport>()),
+  );
+
   // ── Matrix data ───────────────────────────────────────────
   /**
    * Loaded once via GET /api/matrix; subsequently updated in-place by
@@ -150,6 +174,7 @@ export class AppStateService {
     effect(() => this.save(K.swFields,    JSON.stringify([...this.swimlaneVisibleFields()])));
     effect(() => this.save(K.correlation, this.correlationPredicate()));
     effect(() => this.save(K.timeWindow,  this.timeWindow()));
+    effect(() => this.save(K.rateLimit,   JSON.stringify(Object.fromEntries(this.rateLimitMap()))));
   }
 
   // ── SSE incremental update ────────────────────────────────

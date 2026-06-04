@@ -92,6 +92,65 @@
   <!-- Icon buttons + popovers ────────────────────────────── -->
   <div class="hdr-icons">
 
+    <!-- Rate-limit chips — one per adapter (shown only when reports have arrived) ── -->
+    @for (entry of rateLimitEntries(); track entry[0]; let i = $index) {
+      <div style="position: relative">
+        <button
+          class="icon-btn rl-chip"
+          [class.is-active]="isRateLimitPopoverOpen(entry[0])"
+          title="Fetcher CI/CD rate-limit usage ({{ entry[0] }})"
+          aria-label="Fetcher rate-limit usage for {{ entry[0] }}: {{ chipLabel(entry[1]) }}"
+          aria-haspopup="true"
+          (click)="toggleRateLimitPopover(entry[0], $event, i)"
+        >
+          <span class="rl-chip-icon" aria-hidden="true">⧖</span>
+          <span class="rl-chip-label">{{ chipLabel(entry[1]) }}</span>
+        </button>
+        <p-popover #rateLimitPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content rl-popover-content">
+            <span class="popover-title">FETCHER RATE LIMIT</span>
+
+            <!-- Adapter + state row -->
+            <div class="rl-row">
+              <span class="rl-field-label">Adapter</span>
+              <span class="rl-field-value">{{ entry[1].adapter }}</span>
+              <span
+                class="rl-state-badge"
+                [class.is-paused]="entry[1].state === 'paused'"
+                role="status"
+                [attr.aria-label]="'Fetcher state: ' + entry[1].state"
+              >{{ entry[1].state }}</span>
+            </div>
+
+            <!-- Own usage bar + values -->
+            <div class="rl-section">
+              <div class="rl-row">
+                <span class="rl-field-label">Own usage</span>
+                <span class="rl-field-value mono">{{ fmtNum(entry[1].own_used) }} / {{ fmtNum(entry[1].own_budget) }}</span>
+              </div>
+              @if (ownBudgetPct(entry[1]) !== null) {
+                <div class="rl-bar-track" role="progressbar" [attr.aria-valuenow]="ownBudgetPct(entry[1])" aria-valuemin="0" aria-valuemax="100" [attr.aria-label]="'Own budget used: ' + ownBudgetPct(entry[1]) + '%'">
+                  <div class="rl-bar-fill" [style.width.%]="ownBudgetPct(entry[1])"></div>
+                </div>
+              }
+            </div>
+
+            <!-- CI quota -->
+            <div class="rl-row">
+              <span class="rl-field-label">CI quota</span>
+              <span class="rl-field-value mono">{{ fmtNum(entry[1].ci_remaining) }} / {{ fmtNum(entry[1].ci_limit) }}</span>
+            </div>
+
+            <!-- Reset time -->
+            <div class="rl-row">
+              <span class="rl-field-label">Resets at</span>
+              <span class="rl-field-value mono">{{ formatResetAt(entry[1].reset_at) }}</span>
+            </div>
+          </div>
+        </p-popover>
+      </div>
+    }
+
     <!-- Correlation picker (Swimlanes only) ─────────────── -->
     @if (!isMatrix()) {
       <div style="position: relative">
