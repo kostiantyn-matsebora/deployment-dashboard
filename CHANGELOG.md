@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.7.0] - 2026-06-05
+
+### Added
+
+- **Matrix environment-column controls.** Per-user control over the matrix's environment columns: a **Columns** picker (matrix view) to show/hide individual environments — a hidden column is removed from the grid entirely — and **drag-to-reorder** of the column headers via a grip handle. The Fields and Columns buttons show a count badge when items are hidden, and "Show all · reset order" restores the defaults. Column order and visibility persist client-side and survive reloads. No API or contract change — the matrix response still carries every environment; this is purely a per-user view preference.
+
+
 ## [0.6.1] - 2026-06-04
 
 ### Fixed

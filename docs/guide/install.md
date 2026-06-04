@@ -31,7 +31,7 @@ docker compose --profile full up -d
 
 > ⚠️ **Set `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` (+ `POSTGRES_HOST` for `standalone`) before starting.** Compose substitutes empty strings for missing values, so the API and database containers crash-loop instead of failing fast.
 
-To pin a release, replace `main` in the URLs with the tag (e.g. `.../v0.6.1/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
+To pin a release, replace `main` in the URLs with the tag (e.g. `.../v0.7.0/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
 
 ## Pull mode (Fetcher)
 
@@ -94,10 +94,10 @@ See [Configuration](./configuration.md) for every environment variable.
 By default the stack pulls `latest` (tracks `main`). For a reproducible deploy, pin in `.env`:
 
 ```dotenv
-DASHBOARD_VERSION=0.6.1
+DASHBOARD_VERSION=0.7.0
 ```
 
-**No leading `v`** — the git tag `v0.6.1` publishes images as `0.6.1`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
+**No leading `v`** — the git tag `v0.7.0` publishes images as `0.7.0`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
 
 ## Hosting notes
 
