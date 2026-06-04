@@ -341,6 +341,188 @@ test.describe('Live app — Matrix environment-column controls', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Inset guard — picker popover content is inset from the panel border
+//
+// Guards the regression where .picker-content had no padding and toggle pills
+// sat flush to the glass-popover 1px border (0 px gap on all sides).
+//
+// Root cause: the CSS relied on ::ng-deep .glass-popover .p-popover-content,
+// targeting a PrimeNG inner element that newer PrimeNG versions no longer
+// render. The rule was dead; the fix moves padding to .picker-content directly.
+//
+// These tests will FAIL if .picker-content padding is removed: gaps drop to 0.
+// Threshold is 10 px (well below the 14 px spec, tolerates minor viewport shifts).
+// ---------------------------------------------------------------------------
+
+test.describe('Inset guard — picker content is inset from panel border', () => {
+
+  // ── Columns popover ───────────────────────────────────────────────────────
+
+  test('Columns popover: toggle pills are inset ≥10px from the panel border on left and right', async ({ page }) => {
+    // Inject long env names to maximise toggle width (worst case for overflow).
+    await page.route('**/api/matrix**', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          generated_at: new Date().toISOString(),
+          environments: ['release', 'release-gate', 'release-playground'],
+          rows: [{
+            service: 'demo-service',
+            slots: {
+              'release':            { current: { id:'1', deployment_id:'d1', service:'demo-service', environment:'release',            status:'success',     happened_at: new Date().toISOString() } },
+              'release-gate':       { current: { id:'2', deployment_id:'d2', service:'demo-service', environment:'release-gate',       status:'in-progress', happened_at: new Date().toISOString() } },
+              'release-playground': { current: { id:'3', deployment_id:'d3', service:'demo-service', environment:'release-playground', status:'failure',     happened_at: new Date().toISOString() } },
+            },
+          }],
+        }),
+      });
+    });
+
+    await page.goto('/matrix');
+    await page.waitForSelector('.col-draggable .env-tag', { timeout: 20_000 });
+    await page.waitForTimeout(400);
+
+    await page.locator('button[aria-label*="Columns"]').click();
+    await page.waitForSelector('.picker-content', { timeout: 5_000 });
+    await page.waitForTimeout(300);
+
+    const gaps = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>('.glass-popover');
+      const toggles = Array.from(document.querySelectorAll<HTMLElement>('.picker-content .field-toggle'));
+      if (!panel || !toggles.length) return null;
+
+      const panelRect = panel.getBoundingClientRect();
+      // 1 px border on each side
+      const panelInnerL = panelRect.left + 1;
+      const panelInnerR = panelRect.right - 1;
+
+      const leftmostX  = Math.min(...toggles.map(t => t.getBoundingClientRect().left));
+      const rightmostR = Math.max(...toggles.map(t => t.getBoundingClientRect().right));
+
+      return {
+        gapLeft:  leftmostX  - panelInnerL,
+        gapRight: panelInnerR - rightmostR,
+        panelInnerL,
+        panelInnerR,
+        leftmostX,
+        rightmostR,
+      };
+    });
+
+    expect(gaps, 'Could not find .glass-popover or .field-toggle elements').not.toBeNull();
+    expect(
+      gaps!.gapLeft,
+      `Columns toggle left gap is ${gaps!.gapLeft.toFixed(1)}px — expected ≥10px inset from panel border. ` +
+      `panelInnerL=${gaps!.panelInnerL.toFixed(1)}, leftmostToggle.x=${gaps!.leftmostX.toFixed(1)}. ` +
+      'Fix: ensure .picker-content has padding (removing it drops gap to 0).',
+    ).toBeGreaterThanOrEqual(10);
+    expect(
+      gaps!.gapRight,
+      `Columns toggle right gap is ${gaps!.gapRight.toFixed(1)}px — expected ≥10px inset from panel border. ` +
+      `panelInnerR=${gaps!.panelInnerR.toFixed(1)}, rightmostToggle.right=${gaps!.rightmostR.toFixed(1)}.`,
+    ).toBeGreaterThanOrEqual(10);
+  });
+
+  test('Columns popover: toggle pills are inset ≥10px from the panel border on top', async ({ page }) => {
+    await page.route('**/api/matrix**', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          generated_at: new Date().toISOString(),
+          environments: ['release', 'release-gate', 'release-playground'],
+          rows: [{
+            service: 'demo-service',
+            slots: {
+              'release':            { current: { id:'1', deployment_id:'d1', service:'demo-service', environment:'release',            status:'success',     happened_at: new Date().toISOString() } },
+              'release-gate':       { current: { id:'2', deployment_id:'d2', service:'demo-service', environment:'release-gate',       status:'in-progress', happened_at: new Date().toISOString() } },
+              'release-playground': { current: { id:'3', deployment_id:'d3', service:'demo-service', environment:'release-playground', status:'failure',     happened_at: new Date().toISOString() } },
+            },
+          }],
+        }),
+      });
+    });
+
+    await page.goto('/matrix');
+    await page.waitForSelector('.col-draggable .env-tag', { timeout: 20_000 });
+    await page.waitForTimeout(400);
+
+    await page.locator('button[aria-label*="Columns"]').click();
+    await page.waitForSelector('.picker-content', { timeout: 5_000 });
+    await page.waitForTimeout(300);
+
+    const gapTop = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>('.glass-popover');
+      const toggles = Array.from(document.querySelectorAll<HTMLElement>('.picker-content .field-toggle'));
+      if (!panel || !toggles.length) return null;
+      const panelInnerT = panel.getBoundingClientRect().top + 1;
+      const topmostY    = Math.min(...toggles.map(t => t.getBoundingClientRect().top));
+      return { gap: topmostY - panelInnerT, panelInnerT, topmostY };
+    });
+
+    expect(gapTop, 'Could not find panel or toggles').not.toBeNull();
+    expect(
+      gapTop!.gap,
+      `Columns toggle top gap is ${gapTop!.gap.toFixed(1)}px — expected ≥10px inset. ` +
+      '(The .popover-title sits between the panel top and the first toggle, contributing extra gap.)',
+    ).toBeGreaterThanOrEqual(10);
+  });
+
+  // ── Fields popover (Matrix) ───────────────────────────────────────────────
+
+  test('Fields popover (Matrix): toggle pills are inset ≥10px from the panel border L/R/top', async ({ page }) => {
+    await page.goto('/matrix');
+    await page.waitForSelector('.col-draggable .env-tag', { timeout: 20_000 });
+    await page.waitForTimeout(300);
+
+    await page.locator('button[aria-label*="Fields"]').click();
+    await page.waitForSelector('.picker-content', { timeout: 5_000 });
+    await page.waitForTimeout(300);
+
+    const gaps = await page.evaluate(() => {
+      const panel = document.querySelector<HTMLElement>('.glass-popover');
+      // Fields uses the 2-col grid (no --single modifier)
+      const toggles = Array.from(
+        document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single) .field-toggle'),
+      );
+      if (!panel || !toggles.length) return null;
+
+      const panelRect   = panel.getBoundingClientRect();
+      const panelInnerL = panelRect.left  + 1;
+      const panelInnerR = panelRect.right - 1;
+      const panelInnerT = panelRect.top   + 1;
+
+      const rects = toggles.map(t => t.getBoundingClientRect());
+      const leftmostX  = Math.min(...rects.map(r => r.left));
+      const rightmostR = Math.max(...rects.map(r => r.right));
+      const topmostY   = Math.min(...rects.map(r => r.top));
+
+      return {
+        gapLeft:  leftmostX - panelInnerL,
+        gapRight: panelInnerR - rightmostR,
+        gapTop:   topmostY - panelInnerT,
+      };
+    });
+
+    expect(gaps, 'Could not find .glass-popover or Fields .field-toggle elements').not.toBeNull();
+    expect(
+      gaps!.gapLeft,
+      `Fields toggle left gap is ${gaps!.gapLeft.toFixed(1)}px — expected ≥10px. Fix: ensure .picker-content has padding.`,
+    ).toBeGreaterThanOrEqual(10);
+    expect(
+      gaps!.gapRight,
+      `Fields toggle right gap is ${gaps!.gapRight.toFixed(1)}px — expected ≥10px.`,
+    ).toBeGreaterThanOrEqual(10);
+    expect(
+      gaps!.gapTop,
+      `Fields toggle top gap is ${gaps!.gapTop.toFixed(1)}px — expected ≥10px.`,
+    ).toBeGreaterThanOrEqual(10);
+  });
+
+});
+
+// ---------------------------------------------------------------------------
 // Overflow regression guard — Columns + Fields popovers
 //
 // Covers the text-overlapping-border bug class:

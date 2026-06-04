@@ -407,16 +407,18 @@
   min-width: 260px;
 }
 
-:host ::ng-deep .glass-popover .p-popover-content {
-  padding: 14px 14px 12px;
-}
-
 /* ── Picker content wrapper ──────────────────────────────── */
+/* Inset padding lives on OUR wrapper, not PrimeNG's content section: newer
+   PrimeNG renders [data-pc-section="content"] (there is no .p-popover-content),
+   so a ::ng-deep .p-popover-content rule is dead and the content sits flush to
+   the panel border on all sides. Padding here insets every picker popover
+   (Columns / Fields / Correlation) uniformly; matches .rl-popover-content. */
 .picker-content {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 220px;
+  padding: 14px 14px 12px;
 }
 
 .popover-title {
@@ -566,8 +568,9 @@
 .icon-btn.rl-chip { width: auto; padding: 0 10px; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
 .rl-chip-icon { font-size: 13px; line-height: 1; flex-shrink: 0; }
 .rl-chip-label { letter-spacing: 0.2px; white-space: nowrap; }
-/* rl-popover-content: same inner padding as .picker-content siblings; gap matches rl-row density. */
-.rl-popover-content { min-width: 240px; gap: 6px; padding: 14px 14px 12px; }
+/* rl-popover-content: inset padding is inherited from the shared .picker-content
+   base (single source of truth); only the rate-limit-specific deltas live here. */
+.rl-popover-content { min-width: 240px; gap: 6px; }
 .rl-section { display: flex; flex-direction: column; gap: 5px; }
 .rl-row { display: flex; align-items: center; gap: 8px; }
 .rl-field-label { font-size: 10.5px; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; min-width: 72px; }
