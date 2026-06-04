@@ -46,7 +46,10 @@ export class MatrixTileComponent {
   protected readonly boxState    = computed<BoxState>(() => deriveBoxState(this.slot()));
   protected readonly isSplit     = computed<boolean>(() => {
     const s = this.boxState();
-    return s === 's-run-last' || s === 's-run-fail-last' || s === 's-fail-last';
+    const hasSplit = s === 's-run-last' || s === 's-run-fail-last' || s === 's-fail-last';
+    // s-fail-last may occur without last_successful (failure with no prior
+    // success); in that case do not render the split bottom section.
+    return hasSplit && !!this.lastSucc();
   });
 
   /** True when current.version === highlighted AND version is non-empty. */

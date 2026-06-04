@@ -89,7 +89,10 @@ export type BoxState =
 export function deriveBoxState(slot: MatrixSlot): BoxState {
   const { current, last_successful, prev_failed } = slot;
   if (current.status === 'success') return 's-success';
-  if (current.status === 'failure') return last_successful ? 's-fail-last' : 's-running-only';
+  // Failure always maps to s-fail-last regardless of whether last_successful
+  // is present. When last_successful is absent the tile renders as a full
+  // failed tile (no split / bottom section).
+  if (current.status === 'failure') return 's-fail-last';
   // in-progress
   if (last_successful) return prev_failed ? 's-run-fail-last' : 's-run-last';
   return prev_failed ? 's-run-fail-only' : 's-running-only';
