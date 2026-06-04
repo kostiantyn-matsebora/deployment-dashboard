@@ -339,3 +339,327 @@ test.describe('Live app — Matrix environment-column controls', () => {
   });
 
 });
+
+// ---------------------------------------------------------------------------
+// Overflow regression guard — Columns + Fields popovers
+//
+// Covers the text-overlapping-border bug class:
+//   Root cause #1: .field-toggle had no border in base state; .field-toggle.is-on
+//     added `border: 1px solid …` which shrank the content box by 2px, causing
+//     text to touch/overlap the pill border.
+//   Root cause #2: the Columns picker used `grid-template-columns: 1fr 1fr`,
+//     forcing each toggle into half the popover width — long env names overflowed.
+//
+// Fix verified here:
+//   - .field-toggle now reserves `border: 1px solid transparent` in the base;
+//     .is-on only changes border-color — box size is constant.
+//   - The Columns picker grid uses .field-grid--single (1fr); Fields keeps 2-col.
+// ---------------------------------------------------------------------------
+
+test.describe('Overflow guard — toggle pills do not overflow on/off', () => {
+
+  // ── Columns popover: long environment names ───────────────────────────────
+
+  test('Columns popover: long env names fit within their toggle, OFF and ON, no layout jump', async ({ page }) => {
+    // Inject a matrix response with long environment names via route interception.
+    await page.route('**/api/matrix**', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          generated_at: new Date().toISOString(),
+          environments: ['release-gate', 'release-playground', 'dev', 'prod'],
+          rows: [
+            {
+              service: 'test-svc',
+              slots: {
+                'release-gate': {
+                  current: {
+                    id: 'ev-1', deployment_id: 'dep-1',
+                    service: 'test-svc', environment: 'release-gate',
+                    status: 'success', happened_at: new Date().toISOString(),
+                  },
+                },
+                'release-playground': {
+                  current: {
+                    id: 'ev-2', deployment_id: 'dep-2',
+                    service: 'test-svc', environment: 'release-playground',
+                    status: 'success', happened_at: new Date().toISOString(),
+                  },
+                },
+                'dev': {
+                  current: {
+                    id: 'ev-3', deployment_id: 'dep-3',
+                    service: 'test-svc', environment: 'dev',
+                    status: 'success', happened_at: new Date().toISOString(),
+                  },
+                },
+                'prod': {
+                  current: {
+                    id: 'ev-4', deployment_id: 'dep-4',
+                    service: 'test-svc', environment: 'prod',
+                    status: 'success', happened_at: new Date().toISOString(),
+                  },
+                },
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.goto('/matrix');
+    await page.waitForSelector('.col-draggable .env-tag', { timeout: 20_000 });
+    await page.waitForTimeout(400);
+
+    // Open the Columns popover.
+    await page.locator('button[aria-label*="Columns"]').click();
+    await page.waitForSelector('.picker-content', { timeout: 5_000 });
+    await page.waitForTimeout(300);
+
+    // ── Assert: no overflow in OFF state ─────────────────────────────────
+    const offOverflows = await page.evaluate(() => {
+      const toggles = Array.from(
+        document.querySelectorAll<HTMLElement>('.picker-content .field-grid--single .field-toggle'),
+      );
+      return toggles
+        .filter((t) => {
+          const label = t.querySelector<HTMLElement>('.field-label');
+          if (!label) return false;
+          // scrollWidth > offsetWidth means text is wider than its container.
+          return label.scrollWidth > t.clientWidth + 2; // 2px tolerance for sub-pixel rounding
+        })
+        .map((t) => t.querySelector('.field-label')?.textContent?.trim() ?? '?');
+    });
+    expect(
+      offOverflows,
+      `These env labels overflow their toggle (OFF state): [${offOverflows.join(', ')}]`,
+    ).toEqual([]);
+
+    // ── Assert: box width is stable when toggling ON ──────────────────────
+    // Capture widths in OFF state.
+    const widthsBefore = await page.evaluate(() => {
+      return Array.from(
+        document.querySelectorAll<HTMLElement>('.picker-content .field-grid--single .field-toggle'),
+      ).map((t) => ({ env: t.querySelector('.field-label')?.textContent?.trim(), w: t.offsetWidth }));
+    });
+
+    // Click the toggle for 'release-gate' to turn it OFF (currently ON = visible).
+    await page
+      .locator('.picker-content .field-grid--single .field-toggle')
+      .filter({ has: page.locator('.field-label', { hasText: /^release-gate$/ }) })
+      .click();
+    await page.waitForTimeout(200);
+
+    // Capture widths after the ON→OFF transition.
+    const widthsAfter = await page.evaluate(() => {
+      return Array.from(
+        document.querySelectorAll<HTMLElement>('.picker-content .field-grid--single .field-toggle'),
+      ).map((t) => ({ env: t.querySelector('.field-label')?.textContent?.trim(), w: t.offsetWidth }));
+    });
+
+    for (let i = 0; i < widthsBefore.length; i++) {
+      const before = widthsBefore[i];
+      const after  = widthsAfter[i];
+      expect(
+        Math.abs((after?.w ?? 0) - (before?.w ?? 0)),
+        `Toggle for "${before?.env}" shifted by ${Math.abs((after?.w ?? 0) - (before?.w ?? 0))}px on ON→OFF (border should be reserved, not added)`,
+      ).toBeLessThanOrEqual(1); // 1px sub-pixel tolerance
+    }
+
+    // ── Assert: no overflow in ON state either ────────────────────────────
+    // Click 'release-playground' ON→OFF to get a mix of ON and OFF.
+    await page
+      .locator('.picker-content .field-grid--single .field-toggle')
+      .filter({ has: page.locator('.field-label', { hasText: /^release-playground$/ }) })
+      .click();
+    await page.waitForTimeout(200);
+
+    const onOverflows = await page.evaluate(() => {
+      const toggles = Array.from(
+        document.querySelectorAll<HTMLElement>('.picker-content .field-grid--single .field-toggle'),
+      );
+      return toggles
+        .filter((t) => {
+          const label = t.querySelector<HTMLElement>('.field-label');
+          if (!label) return false;
+          return label.scrollWidth > t.clientWidth + 2;
+        })
+        .map((t) => t.querySelector('.field-label')?.textContent?.trim() ?? '?');
+    });
+    expect(
+      onOverflows,
+      `These env labels overflow their toggle (ON state): [${onOverflows.join(', ')}]`,
+    ).toEqual([]);
+  });
+
+  // ── Fields popover: matrix view ───────────────────────────────────────────
+
+  test('Fields popover (Matrix): no label overflow off or on, no box jump on toggle', async ({ page }) => {
+    await page.goto('/matrix');
+    await page.waitForSelector('.col-draggable .env-tag', { timeout: 20_000 });
+    await page.waitForTimeout(300);
+
+    // Open Fields popover.
+    await page.locator('button[aria-label*="Fields"]').click();
+    await page.waitForSelector('.picker-content', { timeout: 5_000 });
+    await page.waitForTimeout(300);
+
+    // ── OFF state: no overflow ────────────────────────────────────────────
+    // Note: we look for the Fields popover's grid, which is .field-grid without
+    // the --single modifier.
+    const offOverflows = await page.evaluate(() => {
+      // There may be multiple .picker-content popovers in DOM; find the open one
+      // (visible) that has a .field-grid (Fields picker).
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      const overflowed: string[] = [];
+      for (const grid of grids) {
+        const toggles = Array.from(grid.querySelectorAll<HTMLElement>('.field-toggle'));
+        for (const t of toggles) {
+          const label = t.querySelector<HTMLElement>('.field-label');
+          if (!label) continue;
+          if (label.scrollWidth > t.clientWidth + 2) {
+            overflowed.push(label.textContent?.trim() ?? '?');
+          }
+        }
+      }
+      return overflowed;
+    });
+    expect(offOverflows, `Fields labels overflow in OFF state: [${offOverflows.join(', ')}]`).toEqual([]);
+
+    // ── Capture widths before toggling ────────────────────────────────────
+    const widthsBefore = await page.evaluate(() => {
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      return grids.flatMap((g) =>
+        Array.from(g.querySelectorAll<HTMLElement>('.field-toggle')).map((t) => ({
+          label: t.querySelector('.field-label')?.textContent?.trim(),
+          w: t.offsetWidth,
+        })),
+      );
+    });
+
+    // Toggle every field OFF (click each toggle).
+    const toggles = page.locator('.field-grid:not(.field-grid--single) .field-toggle');
+    const count = await toggles.count();
+    for (let i = 0; i < count; i++) {
+      await toggles.nth(i).click();
+      await page.waitForTimeout(100);
+    }
+
+    // ── ON→OFF state: no overflow ─────────────────────────────────────────
+    const onOverflows = await page.evaluate(() => {
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      const overflowed: string[] = [];
+      for (const grid of grids) {
+        const toggles = Array.from(grid.querySelectorAll<HTMLElement>('.field-toggle'));
+        for (const t of toggles) {
+          const label = t.querySelector<HTMLElement>('.field-label');
+          if (!label) continue;
+          if (label.scrollWidth > t.clientWidth + 2) {
+            overflowed.push(label.textContent?.trim() ?? '?');
+          }
+        }
+      }
+      return overflowed;
+    });
+    expect(onOverflows, `Fields labels overflow after toggling: [${onOverflows.join(', ')}]`).toEqual([]);
+
+    // ── Box width stable on/off ───────────────────────────────────────────
+    const widthsAfter = await page.evaluate(() => {
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      return grids.flatMap((g) =>
+        Array.from(g.querySelectorAll<HTMLElement>('.field-toggle')).map((t) => ({
+          label: t.querySelector('.field-label')?.textContent?.trim(),
+          w: t.offsetWidth,
+        })),
+      );
+    });
+    for (let i = 0; i < widthsBefore.length; i++) {
+      const b = widthsBefore[i], a = widthsAfter[i];
+      expect(
+        Math.abs((a?.w ?? 0) - (b?.w ?? 0)),
+        `Fields toggle "${b?.label}" shifted by ${Math.abs((a?.w ?? 0) - (b?.w ?? 0))}px on toggle (border reservation failed)`,
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  // ── Fields popover: swimlanes view ────────────────────────────────────────
+
+  test('Fields popover (Swimlanes): no label overflow off or on, no box jump on toggle', async ({ page }) => {
+    await page.goto('/swimlanes');
+    await page.waitForSelector('app-root', { timeout: 20_000 });
+    await page.waitForTimeout(300);
+
+    // Open Fields popover.
+    await page.locator('button[aria-label*="Fields"]').click();
+    await page.waitForSelector('.picker-content', { timeout: 5_000 });
+    await page.waitForTimeout(300);
+
+    // ── OFF state: no overflow ────────────────────────────────────────────
+    const offOverflows = await page.evaluate(() => {
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      const overflowed: string[] = [];
+      for (const grid of grids) {
+        for (const t of Array.from(grid.querySelectorAll<HTMLElement>('.field-toggle'))) {
+          const label = t.querySelector<HTMLElement>('.field-label');
+          if (label && label.scrollWidth > t.clientWidth + 2) {
+            overflowed.push(label.textContent?.trim() ?? '?');
+          }
+        }
+      }
+      return overflowed;
+    });
+    expect(offOverflows, `Swimlanes Fields labels overflow in OFF state: [${offOverflows.join(', ')}]`).toEqual([]);
+
+    // ── Toggle all OFF → verify ON state + box stability ──────────────────
+    const widthsBefore = await page.evaluate(() => {
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      return grids.flatMap((g) =>
+        Array.from(g.querySelectorAll<HTMLElement>('.field-toggle')).map((t) => ({
+          label: t.querySelector('.field-label')?.textContent?.trim(),
+          w: t.offsetWidth,
+        })),
+      );
+    });
+
+    const toggles = page.locator('.field-grid:not(.field-grid--single) .field-toggle');
+    const count = await toggles.count();
+    for (let i = 0; i < count; i++) {
+      await toggles.nth(i).click();
+      await page.waitForTimeout(100);
+    }
+
+    const widthsAfter = await page.evaluate(() => {
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      return grids.flatMap((g) =>
+        Array.from(g.querySelectorAll<HTMLElement>('.field-toggle')).map((t) => ({
+          label: t.querySelector('.field-label')?.textContent?.trim(),
+          w: t.offsetWidth,
+        })),
+      );
+    });
+    for (let i = 0; i < widthsBefore.length; i++) {
+      const b = widthsBefore[i], a = widthsAfter[i];
+      expect(
+        Math.abs((a?.w ?? 0) - (b?.w ?? 0)),
+        `Swimlanes Fields toggle "${b?.label}" shifted by ${Math.abs((a?.w ?? 0) - (b?.w ?? 0))}px on toggle`,
+      ).toBeLessThanOrEqual(1);
+    }
+
+    const onOverflows = await page.evaluate(() => {
+      const grids = Array.from(document.querySelectorAll<HTMLElement>('.field-grid:not(.field-grid--single)'));
+      const overflowed: string[] = [];
+      for (const grid of grids) {
+        for (const t of Array.from(grid.querySelectorAll<HTMLElement>('.field-toggle'))) {
+          const label = t.querySelector<HTMLElement>('.field-label');
+          if (label && label.scrollWidth > t.clientWidth + 2) {
+            overflowed.push(label.textContent?.trim() ?? '?');
+          }
+        }
+      }
+      return overflowed;
+    });
+    expect(onOverflows, `Swimlanes Fields labels overflow after toggling: [${onOverflows.join(', ')}]`).toEqual([]);
+  });
+
+});
