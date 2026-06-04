@@ -49,10 +49,20 @@ docker compose --profile full-pull up -d
 
 `standalone-pull` is identical (`--profile standalone-pull`, with `POSTGRES_HOST` set). Other fetcher options have sane defaults — see [Configuration → Fetcher: pull mode](./configuration.md#fetcher-pull-mode). The first start runs a bounded backfill, so the matrix fills after a poll cycle or two.
 
-**GitHub token scope** — the Fetcher only reads, never writes:
+**GitHub token scope** — the Fetcher only reads, never writes. A classic **or** fine-grained PAT works:
 
-- **Public repos:** a classic PAT with **no scopes**, or a fine-grained PAT with **Public repositories (read-only)**.
-- **Private repos:** a fine-grained PAT with **Contents · Deployments · Actions: Read** on the target repos (or classic `repo`).
+- **Public repos:** classic PAT with **no scopes**, or fine-grained PAT with **Public repositories → read-only**.
+- **Private repos:** classic PAT with the **`repo`** scope, or fine-grained PAT with **Contents · Deployments · Actions: Read** on the target repos.
+
+> **Caveat — classic PAT over-grant.** Classic PATs have no read-only granularity: the `repo` scope grants **full read/write** to all your private repos — far broader than the read-only access the Fetcher actually uses. Prefer a fine-grained PAT (read-only, repo-scoped) where org policy allows it; use classic `repo` only when fine-grained PATs are disabled.
+
+**Organization repos (SSO / fine-grained PATs disabled).** Many orgs disable fine-grained PATs and/or enforce SAML SSO. A classic PAT with `repo` is the reliable path:
+
+1. Create the classic PAT with the `repo` scope.
+2. On the token page, click **Configure SSO → Authorize** for the org.
+3. Re-authorize after **every** token rotation — a regenerated token starts unauthorized.
+
+> A token that isn't SSO-authorized returns **HTTP 403** (with an `X-GitHub-SSO` header), not 401 — the usual symptom of a forgotten re-authorize after rotation.
 
 ## Profiles
 
