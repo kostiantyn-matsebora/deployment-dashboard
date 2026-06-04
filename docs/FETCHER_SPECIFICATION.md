@@ -241,7 +241,9 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 
 **Mechanism (`GithubClient.GetPagedConditionalAsync<T>`).**
 
-`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. Pages 2+ are fetched unconditionally. A `304` is free: GitHub does not charge it against the quota (`X-RateLimit-Remaining` is unchanged), so it is **NOT** counted by the fetcher's own-request budget counter (`own_used`). The budget still processes the `X-RateLimit-Reset` / `X-RateLimit-Limit` / `X-RateLimit-Remaining` headers unconditionally so the snapshot stays current.
+`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. A `304` is free: GitHub does not charge it against the quota (`X-RateLimit-Remaining` is unchanged), so it is **NOT** counted by the fetcher's own-request budget counter (`own_used`). The budget still processes the `X-RateLimit-Reset` / `X-RateLimit-Limit` / `X-RateLimit-Remaining` headers unconditionally so the snapshot stays current.
+
+**Early-stop at the cutoff window (deployments list only).** The deployments-list fetch passes a `stopBefore` predicate (`d.CreatedAt < cutoff`) to `GetPagedConditionalAsync`. GitHub returns deployments newest-first, so once a deployment older than `cutoff` is encountered the pager stops immediately: that item and all subsequent items on the same page are excluded, and no further pages are requested. This mirrors the bounded scan behaviour of backfill (§5.8.2) and prevents a page-1 change on a large repo from paging through the full deployment history to reach the cutoff.
 
 **Instance caches** (both persist across cycles; adapter is a DI singleton):
 - `_deploymentsListCache` — per-repo `(etag, windowed deployments snapshot)`. Capacity 64 entries, LRU eviction.
@@ -252,7 +254,7 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 | Condition | Behaviour |
 |---|---|
 | Deployments list `304` | Reuse cached windowed snapshot. Per-deployment status checks still run normally — a list `304` never skips status re-checks. |
-| Deployments list `200` | Apply `cutoff` window to fresh items; refresh cache only when a `ETag` header is present. |
+| Deployments list `200` | Pager stops at the cutoff (early-stop, newest-first); result is already windowed. Cache when an `ETag` header is present. |
 | Deployment in terminal cache | Skip `GET /deployments/{id}/statuses` entirely (§5.5.1); terminal-skip wins — the conditional path never runs for it. |
 | Non-terminal deployment statuses `304` | Reuse cached `runId` for the env→deploymentId map (§5.6.4); emit no events (list is byte-identical and the cursor has advanced past every cached status's `created_at`). Deployment stays eligible for future conditional fetches — not promoted to terminal. |
 | Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If latest status is terminal, also record in the terminal cache (§5.5.1). |
