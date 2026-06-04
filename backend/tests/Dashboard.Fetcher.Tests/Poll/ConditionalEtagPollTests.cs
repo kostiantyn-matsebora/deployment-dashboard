@@ -326,15 +326,19 @@ public sealed class ConditionalEtagPollTests
         Assert.Equal(0, handler.Served304Count);
     }
 
-    // ── 6. Rate-limit budget records 304s ────────────────────────────────────
+    // ── 6. Rate-limit budget does NOT count 304 responses ───────────────────
 
     /// <summary>
-    /// A 304 response must still pass through RecordAndWaitIfNeededAsync — the budget
-    /// counts own requests, and a 304 is still a request. Assert no crash when budget
-    /// is initialised to a realistic value (100 % of 5 000).
+    /// A 304 response passes through <c>RecordAndWaitIfNeededAsync</c> (no crash) but must
+    /// NOT increment <c>Used</c>. GitHub does not charge 304 against the quota
+    /// (X-RateLimit-Remaining is unchanged), so counting them would over-report usage
+    /// and over-throttle — see §5.5.2 / F16.
+    ///
+    /// Cycle 1 seeds the ETag cache with a 200. Cycle 2 for the in-flight deployment
+    /// statuses returns 304. Assert that <c>Used</c> does NOT increase for the 304 call.
     /// </summary>
     [Fact]
-    public async Task RateLimitBudget_StillRecords304Responses()
+    public async Task RateLimitBudget_DoesNotCount304Responses()
     {
         var since1 = DateTimeOffset.UtcNow.AddHours(-2);
         var since2 = DateTimeOffset.UtcNow.AddMinutes(-30);
@@ -360,20 +364,22 @@ public sealed class ConditionalEtagPollTests
         var githubClient = new GithubClient(httpClient, rateLimitBudget);
         var adapter = BuildAdapterFromClient(githubClient);
 
-        // Cycle 1 — 200 responses.
+        // Cycle 1 — all 200 responses; seeds the ETag cache.
         var cursor1 = new GithubCursor().WithRepo(FullRepo, since1).Encode();
         await DrainPollAsync(adapter, cursor1);
 
         var usedAfterCycle1 = rateLimitBudget.Used;
         Assert.True(usedAfterCycle1 > 0, "Budget must have recorded cycle-1 requests");
 
-        // Cycle 2 — some responses will be 304 (statuses ETag cached).
+        // Cycle 2 — statuses endpoint returns 304 (ETag cached, list unchanged).
         var cursor2 = new GithubCursor().WithRepo(FullRepo, since2).Encode();
         await DrainPollAsync(adapter, cursor2); // must not throw
 
-        // Own count increased (304s were counted).
-        Assert.True(rateLimitBudget.Used > usedAfterCycle1,
-            "Budget must record 304 responses (they are still own requests)");
+        // A 304 was served in cycle 2.
+        Assert.True(handler.Served304Count > 0, "At least one 304 must have been served in cycle 2");
+
+        // Own count must NOT have increased for the 304 calls — 304 is free, zero quota consumed.
+        Assert.Equal(usedAfterCycle1, rateLimitBudget.Used);
     }
 
     // ── infrastructure ────────────────────────────────────────────────────────

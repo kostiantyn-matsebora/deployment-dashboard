@@ -183,6 +183,48 @@ function Update-Changelog {
     return ($result -join $newline)
 }
 
+function Update-DocVersionExamples {
+    <#
+    .SYNOPSIS
+        Rewrite the release pin-version EXAMPLES in adopter docs to <Version>.
+
+    .DESCRIPTION
+        Pure string transform. Bumps the "pin to a published release" examples so
+        the guide always demonstrates the latest tag instead of drifting behind it.
+        Each rule is anchored to its surrounding prose, so only the pin examples
+        move — the "first release (v0.1.0) is cut" historical note, the demo seed
+        versions in the mockup, and any other SemVer stay untouched. Idempotent.
+
+        Covered examples (any SemVer -> <Version>):
+          - DASHBOARD_VERSION=<semver>                     (.env / inline)
+          - published release (e.g. `<semver>`)            (configuration table)
+          - the git tag `v<semver>` publishes images as `<semver>`
+          - .../v<semver>/compose/...                      (pin-a-release URL)
+          - compose-demo:<semver>                          (OCI demo artifact)
+    #>
+    param([string]$Content, [string]$Version)
+
+    $sv = '\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?'   # SemVer, no leading 'v'
+    $bt = [char]0x60                            # backtick (markdown code span)
+
+    # 1. DASHBOARD_VERSION=<semver>
+    $Content = $Content -replace "DASHBOARD_VERSION=$sv", "DASHBOARD_VERSION=$Version"
+
+    # 2. published release (e.g. `<semver>`)
+    $Content = $Content -replace "(published release \(e\.g\. $bt)$sv($bt\))", ('${1}' + $Version + '${2}')
+
+    # 3. the git tag `v<semver>` publishes images as `<semver>`
+    $Content = $Content -replace "(the git tag ${bt}v)$sv($bt publishes images as $bt)$sv($bt)", ('${1}' + $Version + '${2}' + $Version + '${3}')
+
+    # 4. .../v<semver>/compose/...
+    $Content = $Content -replace "/v$sv/compose/", "/v$Version/compose/"
+
+    # 5. compose-demo:<semver>
+    $Content = $Content -replace "compose-demo:$sv", "compose-demo:$Version"
+
+    return $Content
+}
+
 # ------------------------------------------------------------------
 # Entry block (integration only — not unit-tested)
 # ------------------------------------------------------------------
@@ -256,6 +298,29 @@ if (-not $AsLibrary) {
     $today = Get-Date -Format 'yyyy-MM-dd'
     $updated = Update-Changelog -Content $original -Version $target -Date $today
 
+    # --- Doc pin-version examples ----------------------------------------------
+    # Keep the adopter guide's "pin to a published release" examples on the latest
+    # tag so they don't drift behind the release. Only files that actually change
+    # are staged + committed.
+    $docRelPaths = @(
+        'docs/guide/install.md'
+        'docs/guide/configuration.md'
+        'docs/guide/quickstart.md'
+    )
+    $docUpdates = @()
+    foreach ($rel in $docRelPaths) {
+        $docPath = Join-Path $repoRoot $rel
+        if (-not (Test-Path $docPath)) {
+            Write-Warning "Doc not found, skipping pin-version bump: $rel"
+            continue
+        }
+        $docOriginal = Get-Content -Path $docPath -Raw
+        $docUpdated = Update-DocVersionExamples -Content $docOriginal -Version $target
+        if ($docUpdated -ne $docOriginal) {
+            $docUpdates += [pscustomobject]@{ Rel = $rel; Path = $docPath; Content = $docUpdated }
+        }
+    }
+
     $postMerge = @(
         'git checkout main && git pull'
         "git tag -a $tagName -m `"$tagName`" && git push origin $tagName"
@@ -285,10 +350,20 @@ six service images and draft the GitHub Release.
         Write-Information $updated
         Write-Information '------------------------------------------------------------'
         Write-Information ''
+        if ($docUpdates.Count -gt 0) {
+            Write-Information "[DryRun] Doc pin-version examples bumped to $target in:"
+            foreach ($d in $docUpdates) { Write-Information "  $($d.Rel)" }
+        }
+        else {
+            Write-Information "[DryRun] No doc pin-version examples needed updating (already $target)."
+        }
+        Write-Information ''
         Write-Information '[DryRun] Would run:'
         Write-Information "  git checkout -b $branchName"
-        Write-Information '  (write CHANGELOG.md)'
-        Write-Information '  git add CHANGELOG.md'
+        Write-Information '  (write CHANGELOG.md'
+        if ($docUpdates.Count -gt 0) { Write-Information '   + the doc files listed above)' }
+        else { Write-Information '   )' }
+        Write-Information "  git add CHANGELOG.md$(if ($docUpdates.Count -gt 0) { ' ' + (($docUpdates | ForEach-Object { $_.Rel }) -join ' ') })"
         Write-Information "  git commit -m `"chore(release): $tagName`""
         Write-Information "  git push -u origin $branchName"
         Write-Information "  gh pr create --title `"chore(release): $tagName`" --body <post-merge instructions>"
@@ -298,10 +373,18 @@ six service images and draft the GitHub Release.
     }
 
     Set-Content -Path $changelogPath -Value $updated -NoNewline
+    foreach ($d in $docUpdates) {
+        Set-Content -Path $d.Path -Value $d.Content -NoNewline
+        Write-Information "Bumped pin-version examples to $target in $($d.Rel)."
+    }
     & git checkout -b $branchName
     if ($LASTEXITCODE -ne 0) { Write-Fail "git checkout -b $branchName failed." }
     & git add $changelogPath
     if ($LASTEXITCODE -ne 0) { Write-Fail 'git add CHANGELOG.md failed.' }
+    foreach ($d in $docUpdates) {
+        & git add $d.Path
+        if ($LASTEXITCODE -ne 0) { Write-Fail "git add $($d.Rel) failed." }
+    }
     & git commit -m "chore(release): $tagName"
     if ($LASTEXITCODE -ne 0) { Write-Fail 'git commit failed.' }
     & git push -u origin $branchName

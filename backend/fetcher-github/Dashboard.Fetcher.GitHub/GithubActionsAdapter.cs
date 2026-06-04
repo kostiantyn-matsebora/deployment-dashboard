@@ -118,8 +118,8 @@ public sealed class GithubActionsAdapter(
             var statuses = new List<GhDeploymentStatus>(result.Items);
             allStatuses[d.Id] = statuses;
 
-            // Statuses are returned newest-first; the first entry is the latest.
-            var latestStatus = statuses.Count > 0 ? statuses[0] : null;
+            // Select the true latest by created_at — the endpoint's array ordering is not guaranteed.
+            var latestStatus = statuses.Count > 0 ? statuses.MaxBy(s => s.CreatedAt) : null;
             var extractedRunId = latestStatus is not null
                 ? EventMapper.ExtractRunId(latestStatus.TargetUrl)
                 : null;
@@ -212,9 +212,10 @@ public sealed class GithubActionsAdapter(
     }
 
     /// <summary>
-    /// Fetches the deployments list for a repo using a conditional request (F8).
+    /// Fetches the deployments list for a repo using a conditional request (F8 / §5.5.2).
     /// On 304, reuses the cached snapshot (newest-first, already windowed).
-    /// On 200, fetches fresh items, applies the cutoff window, and caches when an ETag is present.
+    /// On 200, paginates only until the cutoff is crossed (early-stop, newest-first) and
+    /// caches the windowed result when an ETag is present.
     /// </summary>
     private async Task<List<GhDeployment>> FetchDeploymentsWindowAsync(
         string owner, string repoName, string repo, DateTimeOffset cutoff, CancellationToken ct)
@@ -223,19 +224,13 @@ public sealed class GithubActionsAdapter(
 
         var result = await github.GetPagedConditionalAsync<GhDeployment>(
             $"/repos/{owner}/{repoName}/deployments",
-            cached.ETag, ct);
+            cached.ETag, ct,
+            stopBefore: d => d.CreatedAt < cutoff);
 
         if (result.NotModified)
             return new List<GhDeployment>(cached.Deployments);
 
-        // Apply window cutoff — items are newest-first from GitHub.
-        var windowed = new List<GhDeployment>();
-        foreach (var d in result.Items)
-        {
-            if (d.CreatedAt < cutoff)
-                break;
-            windowed.Add(d);
-        }
+        var windowed = new List<GhDeployment>(result.Items);
 
         if (result.ETag is not null)
             _deploymentsListCache.Set(repo, (result.ETag, windowed));
