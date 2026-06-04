@@ -204,6 +204,18 @@ export class AppStateService {
     effect(() => this.save(K.rateLimit,   JSON.stringify(Object.fromEntries(this.rateLimitMap()))));
     effect(() => this.save(K.colOrder,    JSON.stringify(this.matrixColOrder())));
     effect(() => this.save(K.colHidden,   [...this.matrixColHidden()].join(',')));
+
+    // ── Seed column order whenever matrix data loads / envs change ─────
+    // Runs on first load (GET /api/matrix) and on every SSE event that
+    // adds a new environment. syncColOrder() is a no-op when the order
+    // already contains all current envs, so the persistence effect above
+    // only fires when something actually changes.
+    effect(() => {
+      const matrix = this.matrixData();
+      if (matrix) {
+        this.syncColOrder(matrix.environments);
+      }
+    });
   }
 
   // ── SSE incremental update ────────────────────────────────

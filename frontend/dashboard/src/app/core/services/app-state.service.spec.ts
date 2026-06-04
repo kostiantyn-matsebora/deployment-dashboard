@@ -241,6 +241,132 @@ describe('AppStateService — column order + hidden-set', () => {
       expect(service.matrixColOrder()).not.toContain('qa');
     });
   });
+
+  // ── First-time-reorder regression ────────────────────────────────────────
+  //
+  // Regression guard for the bug where reorderColumn() was always a no-op on
+  // a fresh session because matrixColOrder stayed [] until syncColOrder was
+  // called — but syncColOrder was never called automatically.
+  //
+  // The fix: an effect in the constructor calls syncColOrder whenever
+  // matrixData() becomes non-null. These tests verify that path end-to-end.
+
+  describe('first-time reorder (fresh session, no prior localStorage)', () => {
+
+    it('setting matrixData populates matrixColOrder via the seeding effect', async () => {
+      // Fresh service, empty colOrder (no localStorage entry)
+      expect(service.matrixColOrder()).toEqual([]);
+
+      // Simulate the GET /api/matrix response arriving
+      service.matrixData.set({
+        generated_at:  '2026-06-04T10:00:00Z',
+        environments:  ['dev', 'staging', 'prod'],
+        rows:          [],
+      });
+
+      // Allow the effect to run
+      await TestBed.flushEffects();
+
+      // colOrder must now contain all three environments
+      expect(service.matrixColOrder()).toContain('dev');
+      expect(service.matrixColOrder()).toContain('staging');
+      expect(service.matrixColOrder()).toContain('prod');
+      expect(service.matrixColOrder()).toHaveLength(3);
+    });
+
+    it('reorderColumn succeeds on the FIRST drag after matrixData loads (the regression case)', async () => {
+      // Precondition: empty localStorage — no prior dd:colOrder stored
+      expect(localStorage.getItem('dd:colOrder')).toBeNull();
+      expect(service.matrixColOrder()).toEqual([]);
+
+      // Matrix data loads (as it would from GET /api/matrix)
+      service.matrixData.set({
+        generated_at:  '2026-06-04T10:00:00Z',
+        environments:  ['dev', 'staging', 'prod'],
+        rows:          [],
+      });
+      await TestBed.flushEffects();
+
+      // At this point a user drags 'dev' onto 'prod' for the first time.
+      // Before the fix, matrixColOrder was still [] so indexOf returned -1
+      // and reorderColumn returned early — a silent no-op.
+      service.reorderColumn('dev', 'prod');
+
+      // After the fix the reorder must take effect.
+      // splice('dev' out of [dev,staging,prod], insert at prod's index):
+      // → ['staging', 'prod', 'dev']
+      expect(service.matrixColOrder()).toEqual(['staging', 'prod', 'dev']);
+    });
+
+    it('reorderColumn is a silent no-op WITHOUT the seeding effect (confirms test guards the bug)', async () => {
+      // Manually reproduce the pre-fix state: colOrder is empty, matrixData set,
+      // but syncColOrder is NOT called (i.e. the effect is absent).
+      // We simulate by calling reorderColumn directly without flushEffects.
+      service.matrixData.set({
+        generated_at:  '2026-06-04T10:00:00Z',
+        environments:  ['dev', 'staging', 'prod'],
+        rows:          [],
+      });
+      // Deliberately do NOT flush effects — colOrder stays []
+
+      service.reorderColumn('dev', 'prod');
+
+      // With an empty colOrder, indexOf returns -1 → early return → order unchanged.
+      // This is the broken behaviour the fix corrects; the array remains empty.
+      expect(service.matrixColOrder()).toEqual([]);
+    });
+
+    it('seeding effect is idempotent: re-setting matrixData with same envs does not change colOrder', async () => {
+      service.matrixData.set({
+        generated_at: '2026-06-04T10:00:00Z',
+        environments: ['dev', 'staging', 'prod'],
+        rows:         [],
+      });
+      await TestBed.flushEffects();
+      const orderAfterFirst = [...service.matrixColOrder()];
+
+      // User reorders: dev → prod
+      service.reorderColumn('dev', 'prod');
+      const orderAfterReorder = [...service.matrixColOrder()];
+
+      // SSE arrives with the same environment list (typical heartbeat / update)
+      service.matrixData.set({
+        generated_at: '2026-06-04T11:00:00Z',
+        environments: ['dev', 'staging', 'prod'],
+        rows:         [],
+      });
+      await TestBed.flushEffects();
+
+      // syncColOrder with all envs already present must not overwrite the
+      // user's reordered state
+      expect(service.matrixColOrder()).toEqual(orderAfterReorder);
+    });
+
+    it('new environment added via SSE is appended to colOrder without disturbing existing order', async () => {
+      service.matrixData.set({
+        generated_at: '2026-06-04T10:00:00Z',
+        environments: ['dev', 'staging'],
+        rows:         [],
+      });
+      await TestBed.flushEffects();
+
+      // User reorders: staging first
+      service.reorderColumn('staging', 'dev');
+      expect(service.matrixColOrder()).toEqual(['staging', 'dev']);
+
+      // SSE adds a new 'prod' environment
+      service.matrixData.set({
+        generated_at: '2026-06-04T10:01:00Z',
+        environments: ['dev', 'staging', 'prod'],
+        rows:         [],
+      });
+      await TestBed.flushEffects();
+
+      // Existing order preserved; 'prod' appended
+      expect(service.matrixColOrder()).toEqual(['staging', 'dev', 'prod']);
+    });
+
+  });
 });
 
 // ── Badge count derivations — TopbarComponent helpers ─────────────────────────
