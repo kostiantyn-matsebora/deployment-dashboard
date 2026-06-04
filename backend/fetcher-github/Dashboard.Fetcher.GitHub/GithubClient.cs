@@ -71,9 +71,15 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
     /// Returns <see cref="ConditionalList{T}.NotModified"/> = true on 304.
     /// On 404 returns an empty list with no ETag (mirrors <see cref="GetPagedAsync{T}"/> semantics).
     /// Graceful degradation: if the server omits ETag on 200, callers simply won't cache.
+    ///
+    /// <paramref name="stopBefore"/> is an optional early-stop predicate. When non-null and the
+    /// predicate returns true for an item, pagination stops immediately and that item plus every
+    /// item after it on the same page are excluded from the result. Because GitHub returns items
+    /// newest-first, this lets callers stop at a time-based cutoff without fetching later pages.
     /// </summary>
     public async Task<ConditionalList<T>> GetPagedConditionalAsync<T>(
-        string path, string? ifNoneMatch, CancellationToken ct)
+        string path, string? ifNoneMatch, CancellationToken ct,
+        Func<T, bool>? stopBefore = null)
     {
         // ── Page 1: conditional request ──────────────────────────────────────
         var req = new HttpRequestMessage(HttpMethod.Get, PagedUrl(path, page: 1));
@@ -94,6 +100,16 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
         var newEtag = response.Headers.ETag?.ToString();
         var page1Items = await response.Content.ReadFromJsonAsync<List<T>>(ct) ?? [];
 
+        if (stopBefore is not null)
+        {
+            var cutIndex = page1Items.FindIndex(item => stopBefore(item));
+            if (cutIndex >= 0)
+            {
+                // Cutoff reached on page 1 — truncate and stop; no further pages needed.
+                return new(NotModified: false, Items: page1Items[..cutIndex], ETag: newEtag);
+            }
+        }
+
         if (page1Items.Count == 0 || !HasNextPage(response))
             return new(NotModified: false, Items: page1Items, ETag: newEtag);
 
@@ -113,6 +129,17 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
             var pageItems = await pageResponse.Content.ReadFromJsonAsync<List<T>>(ct);
             if (pageItems is null || pageItems.Count == 0)
                 break;
+
+            if (stopBefore is not null)
+            {
+                var cutIndex = pageItems.FindIndex(item => stopBefore(item));
+                if (cutIndex >= 0)
+                {
+                    // Cutoff crossed on this page — take only the in-window prefix and stop.
+                    all.AddRange(pageItems[..cutIndex]);
+                    break;
+                }
+            }
 
             all.AddRange(pageItems);
 
