@@ -46,11 +46,11 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F9 | **Config-driven; base URL overridable.** Repos + service/version mapping + GitHub base URL from env. | Integration repoints the GitHub base URL at a mock; production points at `api.github.com`. |
 | F10 | **`parent_deployments` derived from workflow `needs` graph.** The adapter fetches the workflow YAML for each run, parses the deployment-job subgraph (`environment:` + `needs:`), and resolves parent edges to `deployment_id` values (§5.6). Any resolution failure → `parent_deployments = []`; ingest is never blocked. | Reproduces the deployment graph GitHub surfaces in the Actions Run UI. `explicit parent` is the Swimlanes default correlation predicate — accurate population here makes it work out of the box. |
 | F11 | **Workflow graph cached in-memory per `(repo, run_id)`.** Bounded LRU (≤ 200 entries). Cache entry includes workflow `name` (used as service identity), `path`, `head_sha`, and parsed deployment-job subgraph. | Avoids re-fetching the workflow YAML for each status event that shares a run; workflow runs are immutable so no invalidation is needed. |
-| F12 | **Service identity = workflow YAML `name:` field**, resolved via the run's `path` (e.g. `.github/workflows/deploy.yml`) → the active workflow with that path → its YAML `name:` field. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB__SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: path→workflow-name lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; SERVICE_MAP handles edge cases without restructuring the pipeline. |
+| F12 | **Service identity = workflow YAML `name:` field**, resolved via the run's `path` (e.g. `.github/workflows/deploy.yml`) → the active workflow with that path → its YAML `name:` field. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB_SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: path→workflow-name lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; SERVICE_MAP handles edge cases without restructuring the pipeline. |
 | F13 | **Backfill fills the last `BACKFILL_DEPTH` status events per `(service, environment)` slot** (default 2). Enumerates active workflows and environments per repo; paginates deployments newest-first. For each candidate deployment, fetches its statuses and counts the mapped ones (§5.3; unmapped states like `waiting`/`inactive` don't count). Stops scanning a slot once `eventsSoFar ≥ BACKFILL_DEPTH`. After collecting candidate events, trims to the `BACKFILL_DEPTH` latest by `status.created_at` per slot before posting. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress when its service is already at depth or is unknown or has zero mapped statuses. The YAML graph is fetched **only** for deployments contributing kept events; discarded deployments cost only statuses + run-metadata. `BACKFILL_MAX_AGE` is the hard backstop. | Controls how many history drawer entries seed each slot at startup; status-event count matches what the history drawer shows. No-progress stop and defer-YAML bounds API cost as before. |
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
-| F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
+| F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB_RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB_RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
 | F17 | **Control-plane participant (gated on CONTROL_API_KEY).** When `CONTROL_API_KEY` is set, a second long-lived task subscribes to `GET /api/control/stream` with exponential backoff on failures (1 s → 2 s → 4 s … capped 30 s). When `CONTROL_API_KEY` is empty, the subscriber is never started and a startup log message records the absence. Reacts to: drain + ack on `reset-initiated`, drop cursor + backfill + report `running` on `reset-completed`. Still **just a consumer** of the existing control-plane contract — no backend change (F1, SAD §3). | Prevents 404-looping when the API's control surface is disabled (empty key); backoff avoids hammering on transient failures. |
 | F18 | **Per-cycle rate-limit reporting.** After every successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to `POST /api/control/events`. Reuses the existing `ComponentEventClient` transport. Skipped when snapshot is null (before the first GitHub response). Not gated on `CONTROL_API_KEY` — always active when `API_KEY` is present. Non-fatal: POST failures are logged and swallowed so reporting never breaks the poll loop. | Operators and end-users can observe CI/CD quota consumption in real time without backend change. The snapshot already exists (F16); this adds only the emit step. |
 
@@ -450,10 +450,10 @@ ResolveService(workflowName, repo):
 
 #### Discovery (startup)
 
-1. If `GITHUB__RATE_LIMIT` is set → `total_limit = GITHUB__RATE_LIMIT`.
+1. If `GITHUB_RATE_LIMIT` is set → `total_limit = GITHUB_RATE_LIMIT`.
 2. Else → `GET /rate_limit` (same auth headers as §5.1); read `resources.core.limit` → `total_limit`.
 3. On non-2xx or parse error → log warning; `total_limit = 5000` (GitHub authenticated PAT default).
-4. `budget = floor(total_limit × GITHUB__RATE_LIMIT_BUDGET_PCT / 100)`.
+4. `budget = floor(total_limit × GITHUB_RATE_LIMIT_BUDGET_PCT / 100)`.
 
 #### Per-request enforcement
 
@@ -618,23 +618,19 @@ Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level 
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
 | `BACKFILL_MAX_AGE` | `30.00:00:00` | how far back backfill scans per environment; defaults to `INITIAL_LOOKBACK` |
 | `BACKFILL_DEPTH` | `2` | number of latest status events to seed per `(service, environment)` slot during backfill (F13); default 2 |
-| `GITHUB__BaseUrl` | `https://api.github.com` | overridable for the integration mock |
-| `GITHUB__Token` | *(secret)* | PAT / GitHub App token |
-| `GITHUB__Repos` | `acme/api,acme/web` | repos to poll |
-| `GITHUB__ServiceMap` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
-| `GITHUB__VersionSource` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
-| `GITHUB__RateLimit` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
-| `GITHUB__RateLimitBudgetPct` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
+| `GITHUB_BASE_URL` | `https://api.github.com` | overridable for the integration mock |
+| `GITHUB_TOKEN` | *(secret)* | PAT / GitHub App token |
+| `GITHUB_REPOS` | `acme/api,acme/web` | repos to poll |
+| `GITHUB_SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
+| `GITHUB_VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
+| `GITHUB_RATE_LIMIT` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
+| `GITHUB_RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
 
-Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `JENKINS__…`) drops in without collision.
-
-> **Env var binding rule.** The segment after `__` must match the C# property name exactly (PascalCase). .NET config maps `__` to a section separator and binds by property name — not by SCREAMING_SNAKE. Example: `GITHUB__BaseUrl` → section `GitHub`, property `BaseUrl`; `GITHUB__BASE_URL` does NOT bind and the property keeps its default.
-
-> **Explicit-binding vars.** `POLL_INTERVAL_SECONDS`, `INITIAL_LOOKBACK`, `BACKFILL`, `BACKFILL_MAX_AGE`, `BACKFILL_DEPTH`, `CONTROL_API_KEY`, and `COMPONENT_ID` are top-level SCREAMING_SNAKE names that do **not** bind through the PascalCase rule above. They are read explicitly by name in `FetcherOptionsEnv.ApplyEnvOverrides` (mirroring `GITHUB__*` which uses the section rule). A missing or unparseable value leaves the property at its default without throwing.
+> **Explicit-binding vars.** All vars in this table are read explicitly by name — `FetcherOptionsEnv.ApplyEnvOverrides` (for the fetcher vars) and `GithubAdapterOptionsEnv.ApplyEnvOverrides` (for the `GITHUB_*` vars). The appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it. A missing or unparseable value leaves the property at its default without throwing.
 
 **Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
-**Demo mode.** Set `GITHUB__BaseUrl=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB__Token` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed.
+**Demo mode.** Set `GITHUB_BASE_URL=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB_TOKEN` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed.
 
 ### 6.1 Functional readiness — `GET /readyz`
 
@@ -700,7 +696,7 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 
 **Backfill:** all services covered on first page (early exit); rarely-deployed service found on page 2 (pagination); service not deployed to env within `BACKFILL_MAX_AGE` (skipped); `BACKFILL=true` overwrites existing cursor; events posted oldest-first.
 
-**Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB__RateLimit` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
+**Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB_RATE_LIMIT` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
 
 **Conditional requests (ETag, §5.5.2):**
 - In-flight statuses `304` across cycles → no event emitted in cycle 2; `If-None-Match` was sent for the statuses URL.

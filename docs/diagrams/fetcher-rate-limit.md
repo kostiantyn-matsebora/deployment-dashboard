@@ -66,7 +66,7 @@ Posted to the existing `POST /api/control/events` (auth `X-Api-Key` + `X-Compone
 | Field | Source (fetcher already reads it) | The task's three asks |
 |---|---|---|
 | `adapter` | `ICiCdAdapter.AdapterId` (e.g. `github-actions`) | — |
-| `ci_limit` | GitHub `X-RateLimit-Limit` / `GITHUB__RateLimit` | **CI/CD API limit** |
+| `ci_limit` | GitHub `X-RateLimit-Limit` / `GITHUB_RATE_LIMIT` | **CI/CD API limit** |
 | `ci_remaining` | GitHub `X-RateLimit-Remaining` (all token consumers) | CI/CD API usage (remaining) |
 | `own_budget` | `floor(ci_limit × RateLimitBudgetPct/100)` (F16) | **own limit** |
 | `own_used` | fetcher's own request counter this window (F16) | **own usage of CI/CD API** |

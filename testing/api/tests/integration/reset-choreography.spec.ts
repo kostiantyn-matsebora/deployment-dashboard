@@ -3,13 +3,13 @@
  *
  * Spec references:
  *   docs/diagrams/reset-choreography.md — flow + locked decisions
- *   docs/API_SPECIFICATION.md §5 (endpoints), §9 (Reset:* config), §10 phase 11
+ *   docs/API_SPECIFICATION.md §5 (endpoints), §9 (RESET_* config), §10 phase 11
  *   docs/api/api-guidelines.md §11 (control-plane model)
  *
  * Stack under test: Dashboard.Api + PostgreSQL + demo-driver (no fetcher).
- *   Reset__AckTimeoutSeconds  = 3          (compose/docker-compose.test.yaml)
- *   Reset__ExpectedComponents = [api-test-reset]  (single synthetic component)
- *   Reset__GateMaxTtlSeconds  = 15
+ *   RESET_ACK_TIMEOUT_SECONDS  = 3              (compose/docker-compose.test.yaml)
+ *   RESET_EXPECTED_COMPONENTS  = api-test-reset (single synthetic component, CSV)
+ *   RESET_GATE_MAX_TTL_SECONDS = 15
  *
  * The real demo-driver is in the compose stack but NOT in ExpectedComponents,
  * so its acks are ignored by the gate.  The test suite drives completion by

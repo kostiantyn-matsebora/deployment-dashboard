@@ -60,7 +60,7 @@ public sealed class RateLimitBudget
     public int? CiRemaining => _ciRemaining;
 
     /// <summary>
-    /// Initialises the budget: reads GITHUB__RATE_LIMIT when set,
+    /// Initialises the budget: reads GITHUB_RATE_LIMIT when set,
     /// otherwise calls GET /rate_limit; falls back to 5 000 on failure (F16).
     /// </summary>
     public static async Task<RateLimitBudget> CreateAsync(

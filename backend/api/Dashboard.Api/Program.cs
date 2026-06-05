@@ -4,9 +4,11 @@ using Dashboard.Api.Extensions;
 using Dashboard.Control;
 using Dashboard.Control.Sse;
 using Dashboard.Read;
+using Dashboard.Shared.Configuration;
 using Dashboard.Shared.Data;
 using Dashboard.Write;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +32,13 @@ builder.Services.AddDashboardProblemDetails();
 builder.Services.Configure<RouteHandlerOptions>(opts => opts.ThrowOnBadRequest = true);
 
 // ── Data ──────────────────────────────────────────────────────────────────────
+// Expose ConnectionStrings:Postgres as a synthetic key computed lazily from flat
+// POSTGRES_* env vars (highest priority) → appsettings Postgres:* section → built-in
+// defaults. Adding this source last gives it the highest priority and ensures
+// resolution always reads from the live ConfigurationManager so any providers
+// added after initial setup (e.g. test-harness in-memory collections) are visible.
+((IConfigurationBuilder)builder.Configuration).Add(new PostgresConnectionStringSource(builder.Configuration));
+
 builder.Services.AddDbContext<DashboardDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 

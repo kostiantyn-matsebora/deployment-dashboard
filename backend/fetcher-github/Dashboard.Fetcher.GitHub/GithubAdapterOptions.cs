@@ -1,6 +1,6 @@
 namespace Dashboard.Fetcher.GitHub;
 
-/// <summary>Config bound to the GITHUB__ env namespace (§6).</summary>
+/// <summary>Config bound from the appsettings <c>GitHub</c> section; overridden by flat <c>GITHUB_*</c> env vars (§6).</summary>
 public sealed class GithubAdapterOptions
 {
     public string BaseUrl { get; set; } = "https://api.github.com";

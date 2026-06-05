@@ -117,10 +117,14 @@ services:
     pull_policy: always
     profiles: [api, standalone, standalone-pull, full, full-pull, demo]
     environment:
-      # Connection string assembled from individual parts so each can be
-      # overridden independently.  Override POSTGRES_HOST for standalone.
-      ConnectionStrings__Postgres: >-
-        Host=${POSTGRES_HOST:-postgres};Port=${POSTGRES_PORT:-5432};Database=${POSTGRES_DB:-deployment_dashboard};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # DB connection parts — the app assembles the connection string (appsettings
+      # Postgres section = base; these POSTGRES_* env vars override). Override
+      # POSTGRES_HOST for standalone (external DB).
+      POSTGRES_HOST:     "${POSTGRES_HOST:-postgres}"
+      POSTGRES_PORT:     "${POSTGRES_PORT:-5432}"
+      POSTGRES_DB:       "${POSTGRES_DB:-deployment_dashboard}"
+      POSTGRES_USER:     "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
       # Write-endpoint shared secret.  Required — validated on app startup.
       API_KEY: "${API_KEY}"
       # Control-surface shared secret (API_SPECIFICATION.md D8).
@@ -132,8 +136,12 @@ services:
       # Set only when running the API without the gateway (split-domain mode,
       # API_SPECIFICATION.md D6); the two modes are mutually exclusive.
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-}"
-      # Minimum 90, default 365.  The demo profile overrides this to a shorter window.
+      # Minimum 90 (smaller values clamp up), default 365.
       HISTORY_RETENTION_DAYS: "${HISTORY_RETENTION_DAYS:-365}"
+      # Reset-choreography tuning (§9); empty = appsettings default (ack 10s / gate 60s / [dashboard-fetcher,demo-driver]).
+      RESET_ACK_TIMEOUT_SECONDS: "${RESET_ACK_TIMEOUT_SECONDS:-}"
+      RESET_GATE_MAX_TTL_SECONDS: "${RESET_GATE_MAX_TTL_SECONDS:-}"
+      RESET_EXPECTED_COMPONENTS: "${RESET_EXPECTED_COMPONENTS:-}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,14 +168,17 @@ services:
       POLL_INTERVAL_SECONDS: "${POLL_INTERVAL_SECONDS:-30}"
       # GitHub source — points at REAL GitHub by default. The demo override
       # (docker-compose.demo.yaml) repoints this at the in-stack github-emulator.
-      # Key after __ must match the C# property name (PascalCase); .NET config
-      # maps __ to a section separator and binds by property name, not SCREAMING_SNAKE.
-      GITHUB__BaseUrl: "${GITHUB_BASE_URL:-https://api.github.com}"
-      GITHUB__Token: "${GITHUB_TOKEN:-}"
-      GITHUB__Repos: "${GITHUB_REPOS:-}"
-      GITHUB__VersionSource: "${GITHUB_VERSION_SOURCE:-attribute:sha}"
-      # Unset GITHUB__RateLimit → discovered from GitHub /rate_limit on startup (F16).
-      GITHUB__RateLimitBudgetPct: "${GITHUB_RATE_LIMIT_BUDGET_PCT:-30}"
+      GITHUB_BASE_URL: "${GITHUB_BASE_URL:-https://api.github.com}"
+      GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
+      GITHUB_REPOS: "${GITHUB_REPOS:-}"
+      GITHUB_VERSION_SOURCE: "${GITHUB_VERSION_SOURCE:-attribute:sha}"
+      # GITHUB_RATE_LIMIT = 0 → discovered from GitHub /rate_limit on startup (F16).
+      GITHUB_RATE_LIMIT: "${GITHUB_RATE_LIMIT:-0}"
+      GITHUB_RATE_LIMIT_BUDGET_PCT: "${GITHUB_RATE_LIMIT_BUDGET_PCT:-30}"
+      # Optional service-identity overrides (FETCHER_SPECIFICATION §5.8.3).
+      GITHUB_SERVICE_MAP: "${GITHUB_SERVICE_MAP:-}"
+      # How far back the first poll looks for deployments; empty = code default (7 days).
+      INITIAL_LOOKBACK: "${INITIAL_LOOKBACK:-}"
       BACKFILL: "${BACKFILL:-false}"
       BACKFILL_MAX_AGE: "${BACKFILL_MAX_AGE:-}"
       BACKFILL_DEPTH: "${BACKFILL_DEPTH:-2}"

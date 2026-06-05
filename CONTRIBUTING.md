@@ -59,10 +59,11 @@ docker run --rm -p 5432:5432 \
 
 # Terminal 2 — the API (Development env comes from launchSettings.json)
 cd backend
-ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=deployment_dashboard;Username=dev;Password=dev" \
+POSTGRES_HOST=localhost POSTGRES_USER=dev POSTGRES_PASSWORD=dev \
   dotnet run --project api/Dashboard.Api
 ```
-> PowerShell: set the env var on its own line first — `$env:ConnectionStrings__Postgres = "Host=localhost;Port=5432;Database=deployment_dashboard;Username=dev;Password=dev"` — then `dotnet run --project api/Dashboard.Api`.
+> The API assembles its connection from `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` (defaults: `postgres` / `5432` / `deployment_dashboard`).
+> PowerShell: set them on their own lines first — `$env:POSTGRES_HOST="localhost"; $env:POSTGRES_USER="dev"; $env:POSTGRES_PASSWORD="dev"` — then `dotnet run --project api/Dashboard.Api`.
 
 To point the **SPA at the real API** instead of the mock, change the `target` in `frontend/dashboard/proxy.conf.json` from `http://localhost:3000` to `http://localhost:5205`.
 
@@ -72,7 +73,7 @@ To point the **SPA at the real API** instead of the mock, change the `target` in
 |---|---|---|---|
 | Demo Driver | `demo/driver/` | `http://localhost:3001/demo/` | `WRITE_API_URL` (`:3000`), `API_KEY`, `CONTROL_API_KEY`, `GITHUB_EMULATOR_URL` (`:3100`) |
 | GitHub Emulator | `demo/github-emulator/` | `http://localhost:3100` | — |
-| Fetcher (pull mode) | `backend/` → `dotnet run --project fetcher/Dashboard.Fetcher` | worker (no HTTP port) | `GITHUB__*`, `WRITE_API_URL` — see [Configuration](docs/guide/configuration.md) |
+| Fetcher (pull mode) | `backend/` → `dotnet run --project fetcher/Dashboard.Fetcher` | worker (no HTTP port) | `GITHUB_*`, `WRITE_API_URL` — see [Configuration](docs/guide/configuration.md) |
 
 Point a component's `WRITE_API_URL` at the mock (`:3000`) or the real API (`:5205`) as needed.
 
