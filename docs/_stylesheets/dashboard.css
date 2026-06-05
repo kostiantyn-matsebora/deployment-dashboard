@@ -292,7 +292,7 @@ body {
    tall C4 card doesn't stretch to full column height. */
 .md-typeset .dd-shot.dd-diagram {
   width: auto;
-  max-width: min(100%, 460px);
+  max-width: min(100%, 720px);
   margin-inline: auto;
 }
 .dd-shotframe {
