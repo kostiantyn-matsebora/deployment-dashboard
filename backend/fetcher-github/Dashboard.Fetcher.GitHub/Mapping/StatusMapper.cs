@@ -12,11 +12,11 @@ public static class StatusMapper
     /// </summary>
     public static string? Map(string githubState) => githubState switch
     {
-        "pending"     => DeploymentStatus.Pending,
-        "queued"      => DeploymentStatus.Queued,
+        "pending" => DeploymentStatus.Pending,
+        "queued" => DeploymentStatus.Queued,
         "in_progress" => DeploymentStatus.InProgress,
-        "waiting"     => DeploymentStatus.Waiting,
-        "success"     => DeploymentStatus.Success,
+        "waiting" => DeploymentStatus.Waiting,
+        "success" => DeploymentStatus.Success,
         "failure" or "error" => DeploymentStatus.Failure,
         _ => null,  // inactive = supersession marker; unknown states dropped
     };

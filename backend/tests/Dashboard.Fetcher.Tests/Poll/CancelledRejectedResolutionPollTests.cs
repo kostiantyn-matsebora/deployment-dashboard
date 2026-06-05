@@ -174,11 +174,11 @@ public sealed class CancelledRejectedResolutionPollTests
     /// are NOT subjected to the cancellation/rejection resolution path.
     /// </summary>
     [Theory]
-    [InlineData("success",     DeploymentStatus.Success)]
+    [InlineData("success", DeploymentStatus.Success)]
     [InlineData("in_progress", DeploymentStatus.InProgress)]
-    [InlineData("pending",     DeploymentStatus.Pending)]
-    [InlineData("queued",      DeploymentStatus.Queued)]
-    [InlineData("waiting",     DeploymentStatus.Waiting)]
+    [InlineData("pending", DeploymentStatus.Pending)]
+    [InlineData("queued", DeploymentStatus.Queued)]
+    [InlineData("waiting", DeploymentStatus.Waiting)]
     public async Task NonFailureState_EmitsExpectedStatusWithoutReviewCall(
         string rawState, string expectedStatus)
     {

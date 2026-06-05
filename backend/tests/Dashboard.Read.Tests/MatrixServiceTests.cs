@@ -172,7 +172,7 @@ public sealed class MatrixServiceTests
         // Scenario: in-progress at T, pending at T+5 — pending is newer so it becomes next.
         var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
         var effectiveEv = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime);
-        var pendingEv   = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime.AddMinutes(5));
+        var pendingEv = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime.AddMinutes(5));
 
         var svc = new MatrixService(new StubRepository(
             effective: [effectiveEv],
@@ -191,7 +191,7 @@ public sealed class MatrixServiceTests
     {
         // Scenario: pending at T, then success at T+5 — success is current, next omitted.
         var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
-        var pendingEv   = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime);
+        var pendingEv = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime);
         var effectiveEv = MakeEvent("svc-a", "prod", DeploymentStatus.Success, baseTime.AddMinutes(5));
 
         var svc = new MatrixService(new StubRepository(
@@ -211,7 +211,7 @@ public sealed class MatrixServiceTests
         // next is included only when strictly newer; equal timestamps do NOT qualify.
         var at = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
         var effectiveEv = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, at);
-        var pendingEv   = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, at);
+        var pendingEv = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, at);
 
         var svc = new MatrixService(new StubRepository(
             effective: [effectiveEv],
@@ -262,9 +262,9 @@ public sealed class MatrixServiceTests
     {
         // last_successful remains correct regardless of the next field.
         var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
-        var successEv   = MakeEvent("svc-a", "prod", DeploymentStatus.Success, baseTime);
-        var failureEv   = MakeEvent("svc-a", "prod", DeploymentStatus.Failure, baseTime.AddMinutes(5));
-        var pendingEv   = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime.AddMinutes(10));
+        var successEv = MakeEvent("svc-a", "prod", DeploymentStatus.Success, baseTime);
+        var failureEv = MakeEvent("svc-a", "prod", DeploymentStatus.Failure, baseTime.AddMinutes(5));
+        var pendingEv = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime.AddMinutes(10));
 
         var svc = new MatrixService(new StubRepository(
             effective: [failureEv],
@@ -298,8 +298,8 @@ public sealed class MatrixServiceTests
     public async Task GetMatrixAsync_MultipleEnvironments_EnvironmentsSortedAlphabetically()
     {
         var evP = MakeEvent("svc-a", "prod", DeploymentStatus.Success);
-        var evD = MakeEvent("svc-a", "dev",  DeploymentStatus.Success);
-        var evQ = MakeEvent("svc-a", "qa",   DeploymentStatus.Success);
+        var evD = MakeEvent("svc-a", "dev", DeploymentStatus.Success);
+        var evQ = MakeEvent("svc-a", "qa", DeploymentStatus.Success);
         var svc = new MatrixService(new StubRepository(effective: [evP, evD, evQ]));
 
         var result = await svc.GetMatrixAsync(null, CancellationToken.None);
@@ -352,7 +352,7 @@ public sealed class MatrixServiceTests
     public async Task GetMatrixAsync_LastSuccessfulChanges_ETagDiffers()
     {
         var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
-        var current    = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime.AddMinutes(5));
+        var current = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime.AddMinutes(5));
         var oldSuccess = MakeEvent("svc-a", "prod", DeploymentStatus.Success, baseTime);
         var newSuccess = MakeEvent("svc-a", "prod", DeploymentStatus.Success, baseTime.AddMinutes(1));
 
@@ -368,9 +368,9 @@ public sealed class MatrixServiceTests
     public async Task GetMatrixAsync_NextChanges_ETagDiffers()
     {
         var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
-        var current  = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime);
-        var next1    = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime.AddMinutes(1));
-        var next2    = MakeEvent("svc-a", "prod", DeploymentStatus.Queued, baseTime.AddMinutes(1));
+        var current = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime);
+        var next1 = MakeEvent("svc-a", "prod", DeploymentStatus.Pending, baseTime.AddMinutes(1));
+        var next2 = MakeEvent("svc-a", "prod", DeploymentStatus.Queued, baseTime.AddMinutes(1));
 
         var r1 = await new MatrixService(new StubRepository(effective: [current], nonEffective: [next1]))
             .GetMatrixAsync(null, CancellationToken.None);

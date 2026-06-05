@@ -27,14 +27,14 @@ public sealed class DeploymentStatusTests
     [Fact]
     public void Constants_MatchExpectedWireValues()
     {
-        Assert.Equal("pending",    DeploymentStatus.Pending);
-        Assert.Equal("queued",     DeploymentStatus.Queued);
+        Assert.Equal("pending", DeploymentStatus.Pending);
+        Assert.Equal("queued", DeploymentStatus.Queued);
         Assert.Equal("in-progress", DeploymentStatus.InProgress);
-        Assert.Equal("waiting",    DeploymentStatus.Waiting);
-        Assert.Equal("success",    DeploymentStatus.Success);
-        Assert.Equal("failure",    DeploymentStatus.Failure);
-        Assert.Equal("cancelled",  DeploymentStatus.Cancelled);
-        Assert.Equal("rejected",   DeploymentStatus.Rejected);
+        Assert.Equal("waiting", DeploymentStatus.Waiting);
+        Assert.Equal("success", DeploymentStatus.Success);
+        Assert.Equal("failure", DeploymentStatus.Failure);
+        Assert.Equal("cancelled", DeploymentStatus.Cancelled);
+        Assert.Equal("rejected", DeploymentStatus.Rejected);
     }
 
     [Fact]
@@ -42,26 +42,26 @@ public sealed class DeploymentStatusTests
         Assert.Equal(8, DeploymentStatus.All.Count);
 
     [Theory]
-    [InlineData("success",   true)]
-    [InlineData("failure",   true)]
+    [InlineData("success", true)]
+    [InlineData("failure", true)]
     [InlineData("cancelled", true)]
-    [InlineData("rejected",  true)]
+    [InlineData("rejected", true)]
     [InlineData("in-progress", false)]
-    [InlineData("pending",   false)]
-    [InlineData("queued",    false)]
-    [InlineData("waiting",   false)]
+    [InlineData("pending", false)]
+    [InlineData("queued", false)]
+    [InlineData("waiting", false)]
     public void IsTerminal_ReturnsExpected(string status, bool expected) =>
         Assert.Equal(expected, DeploymentStatus.IsTerminal(status));
 
     [Theory]
     [InlineData("in-progress", true)]
-    [InlineData("success",     true)]
-    [InlineData("failure",     true)]
-    [InlineData("pending",     false)]
-    [InlineData("queued",      false)]
-    [InlineData("waiting",     false)]
-    [InlineData("cancelled",   false)]
-    [InlineData("rejected",    false)]
+    [InlineData("success", true)]
+    [InlineData("failure", true)]
+    [InlineData("pending", false)]
+    [InlineData("queued", false)]
+    [InlineData("waiting", false)]
+    [InlineData("cancelled", false)]
+    [InlineData("rejected", false)]
     public void IsEffective_ReturnsExpected(string status, bool expected) =>
         Assert.Equal(expected, DeploymentStatus.IsEffective(status));
 }
