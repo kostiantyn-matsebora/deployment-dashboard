@@ -287,13 +287,13 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 | `CORS_ALLOWED_ORIGINS` | *(empty)* | CSV of allowed origins; empty disables CORS |
 | `HISTORY_RETENTION_DAYS` | `365` | deployment-events retention window (≥ 90); control-plane tables always use fixed 2 h |
 
-**Reset choreography (appsettings + env, D12–D13).** Unlike the env-only vars above, these bind from `appsettings.json` **and** are overridable via environment variables through standard .NET configuration (the `__` section separator: e.g. `Reset__AckTimeoutSeconds`). They live under a `Reset` section.
+**Reset choreography (appsettings + env, D12–D13).** These bind from `appsettings.json` (PascalCase `Reset` section) **and** are overridable via flat `SCREAMING_SNAKE` env vars. `RESET_EXPECTED_COMPONENTS` is a CSV string (replaces the old indexed-array `Reset__ExpectedComponents__0…` override, eliminating the array-append footgun).
 
 | Key (appsettings) | Env override | Default | Purpose |
 |---|---|---|---|
-| `Reset:AckTimeoutSeconds` | `Reset__AckTimeoutSeconds` | `10` | Max wait for component acks before forcing `draining → resetting` (D13). |
-| `Reset:ExpectedComponents` | `Reset__ExpectedComponents__0`, `…__1` | `dashboard-fetcher`, `demo-driver` | Component ids whose acks are awaited; snapshotted into `reset_cycle.expected_components` at cycle start. |
-| `Reset:GateMaxTtlSeconds` | `Reset__GateMaxTtlSeconds` | `60` | Hard wall-clock ceiling on the entire orchestrator cycle (draining → resetting → idle), including data clearing. When exceeded: state forced to `idle`, `reset-completed` emitted on the control stream (so components recover), advisory lock released. Prevents a hung DB call wedging ingest indefinitely. |
+| `Reset:AckTimeoutSeconds` | `RESET_ACK_TIMEOUT_SECONDS` | `10` | Max seconds to await component acks before forcing `draining → resetting` (D13). |
+| `Reset:ExpectedComponents` | `RESET_EXPECTED_COMPONENTS` (CSV string) | `dashboard-fetcher,demo-driver` | Component ids whose acks are awaited; snapshotted into `reset_cycle.expected_components` at cycle start. |
+| `Reset:GateMaxTtlSeconds` | `RESET_GATE_MAX_TTL_SECONDS` | `60` | Hard wall-clock ceiling on the entire orchestrator cycle (draining → resetting → idle), including data clearing. When exceeded: state forced to `idle`, `reset-completed` emitted on the control stream (so components recover), advisory lock released. Prevents a hung DB call wedging ingest indefinitely. |
 
 ---
 

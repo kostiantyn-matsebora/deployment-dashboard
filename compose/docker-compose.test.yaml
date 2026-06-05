@@ -52,10 +52,10 @@
 services:
   api:
     environment:
-      Reset__AckTimeoutSeconds: "3"
-      Reset__ExpectedComponents__0: "api-test-reset"
-      Reset__ExpectedComponents__1: "api-test-reset"
-      Reset__GateMaxTtlSeconds: "15"
+      RESET_ACK_TIMEOUT_SECONDS: "3"
+      # CSV replaces the whole expected-components set (no index-overlay footgun).
+      RESET_EXPECTED_COMPONENTS: "api-test-reset"
+      RESET_GATE_MAX_TTL_SECONDS: "15"
 
   github-emulator:
     environment:

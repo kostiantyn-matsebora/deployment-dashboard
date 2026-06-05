@@ -15,7 +15,7 @@ No. It's read-only / notification-only — a view of state, not a deployment eng
 No. They're discovered from the events you post. A new `service`/`environment` appears automatically.
 
 **How long is history kept?**
-Per `HISTORY_RETENTION_DAYS` (minimum 90; default 30 for demo; 365 recommended for production). See [Configuration](./configuration.md).
+Per `HISTORY_RETENTION_DAYS` (default 365; minimum 90 — smaller values are clamped up). Pruned daily by a background job. See [Configuration](./configuration.md).
 
 ## Troubleshooting
 

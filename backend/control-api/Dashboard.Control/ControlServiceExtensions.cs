@@ -1,4 +1,5 @@
 using Dashboard.Control.Notifiers;
+using Microsoft.Extensions.Configuration;
 using Dashboard.Control.Options;
 using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
@@ -16,7 +17,8 @@ public static class ControlServiceExtensions
     {
         // ── Options ───────────────────────────────────────────────────────────
         services.AddOptions<ResetOptions>()
-                .BindConfiguration(ResetOptions.SectionName);
+                .BindConfiguration(ResetOptions.SectionName)
+                .Configure<IConfiguration>((opts, cfg) => ResetOptionsEnv.ApplyEnvOverrides(cfg, opts));
 
         // ── Repositories + validators ─────────────────────────────────────────
         services.AddScoped<IComponentEventRepository, ComponentEventRepository>();

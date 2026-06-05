@@ -15,6 +15,10 @@ public static class WriteServiceExtensions
         services.AddScoped<IDeploymentIngestService, DeploymentIngestService>();
         services.AddScoped<IIngestValidator, IngestValidator>();
         services.AddScoped<IFetcherStateRepository, FetcherStateRepository>();
+
+        // ── Daily retention prune job ─────────────────────────────────────────
+        services.AddHostedService<HistoryRetentionService>();
+
         return services;
     }
 }
