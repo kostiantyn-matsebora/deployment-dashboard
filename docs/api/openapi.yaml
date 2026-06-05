@@ -786,8 +786,17 @@ components:
 
     Status:
       type: string
-      enum: [in-progress, success, failure]
-      description: State carried by this individual event row.
+      enum: [pending, queued, waiting, in-progress, success, failure, cancelled, rejected]
+      description: |
+        State carried by this individual event row.
+        - `pending`     — created but not yet started; no work has begun.
+        - `queued`      — accepted and waiting in line to start; not yet running.
+        - `waiting`     — blocked awaiting an approval or wait-timer gate; has not started.
+        - `in-progress` — actively running.
+        - `success`     — completed successfully.
+        - `failure`     — ran and ended unsuccessfully.
+        - `cancelled`   — stopped before completing; did not finish.
+        - `rejected`    — denied at an approval gate; never ran.
 
     DeploymentEventIngest:
       type: object

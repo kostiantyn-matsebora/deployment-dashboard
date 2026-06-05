@@ -24,9 +24,14 @@ public sealed class IngestValidatorTests
         Assert.Empty(_validator.Validate(ValidBody()));
 
     [Theory]
+    [InlineData("pending")]
+    [InlineData("queued")]
     [InlineData("in-progress")]
+    [InlineData("waiting")]
     [InlineData("success")]
     [InlineData("failure")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
     public void Validate_AllValidStatuses_NoStatusFailure(string status)
     {
         var failures = _validator.Validate(ValidBody() with { Status = status });
@@ -34,9 +39,9 @@ public sealed class IngestValidatorTests
     }
 
     [Theory]
-    [InlineData("pending")]
-    [InlineData("queued")]
     [InlineData("SUCCESS")]
+    [InlineData("In-Progress")]
+    [InlineData("FAILURE")]
     public void Validate_InvalidStatus_ReturnsStatusFailure(string status)
     {
         var failures = _validator.Validate(ValidBody() with { Status = status });

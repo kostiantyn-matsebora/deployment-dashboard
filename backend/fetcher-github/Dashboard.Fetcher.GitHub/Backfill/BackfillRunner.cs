@@ -239,6 +239,10 @@ public sealed class BackfillRunner(
                 var contractStatus = StatusMapper.Map(status.State);
                 if (contractStatus is null) continue;
 
+                // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
+                if (contractStatus == DeploymentStatus.Failure)
+                    contractStatus = await ResolveFailureStatusAsync(owner, repoName, deployment.Id, runId, ct);
+
                 var parentDeployments = DeriveParents(deployment, runId, graph, combinedMap);
                 var version = await versionResolver.ResolveAsync(owner, repoName, deployment, status, ct);
 
@@ -349,6 +353,45 @@ public sealed class BackfillRunner(
             .Select(id => id!)
             .Distinct()
             .ToArray();
+    }
+
+    /// <inheritdoc cref="GithubActionsAdapter.ResolveFailureStatusAsync"/>
+    private async Task<string> ResolveFailureStatusAsync(
+        string owner, string repoName, long deploymentId, long? runId, CancellationToken ct)
+    {
+        try
+        {
+            await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
+                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
+            {
+                if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
+                    return DeploymentStatus.Rejected;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
+                owner, repoName, deploymentId);
+        }
+
+        if (runId.HasValue)
+        {
+            try
+            {
+                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
+                if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
+                    return DeploymentStatus.Cancelled;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
+                    owner, repoName, runId);
+            }
+        }
+
+        return DeploymentStatus.Failure;
     }
 
     private static (string Owner, string Repo) SplitRepo(string repo)

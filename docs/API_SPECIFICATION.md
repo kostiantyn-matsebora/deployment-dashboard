@@ -96,7 +96,7 @@ backend/
 | `service` | text | no | |
 | `environment` | text | no | |
 | `version` | text | yes | ≤ 50 chars |
-| `status` | text | no | `in-progress` \| `success` \| `failure` |
+| `status` | text | no | `pending` \| `queued` \| `waiting` \| `in-progress` \| `success` \| `failure` \| `cancelled` \| `rejected` |
 | `happened_at` | timestamptz | no | **emitter-supplied**; all read ordering uses this |
 | `run_url` | text | yes | ≤ 2048 |
 | `run_number` | text | yes | ≤ 128 |
