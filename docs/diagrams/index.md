@@ -6,6 +6,8 @@ children:
   - /architecture-c4
   - /architecture-c4.drawio
   - /architecture-c4.svg
+  - /architecture-c4-dark.drawio
+  - /architecture-c4-dark.svg
   - /fetcher-rate-limit
   - /github-emulation
   - /reset-choreography
