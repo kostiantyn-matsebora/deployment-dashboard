@@ -184,6 +184,12 @@ One **GitHub deployment status** → one **event row** (matches the append-only 
 | `failure`, `error` | `failure` |
 | `inactive` | *(skipped — supersession marker, not a transition)* |
 
+**Settled mapping decisions (intentional — not gaps):**
+- **`error` collapses into `failure`.** GitHub's `error` (the deployment couldn't be processed — a system/integration-level problem) vs `failure` (the deploy ran and failed) is a distinction with no operator consequence here: both are terminal "did not succeed" outcomes and the viewer's reaction is identical. `error` is also rare on Actions-driven deployments (mostly emitted by third-party deploy integrations). Not promoted to its own contract status; preserve the raw state in event metadata if granularity is ever needed.
+- **`inactive` is skipped.** It is not a deploy outcome — it is GitHub bookkeeping marking a deployment as no longer the live one (auto-set on a prior `success` when a newer `success` supersedes it in the same environment). The dashboard's "latest deployment per environment" model already captures supersession via the newer deployment it *does* ingest, so emitting `inactive` would be redundant and semantically wrong. (Edge case — a deployment deactivated *without* a replacement, e.g. teardown of an ephemeral environment — would leave a stale tile; out of scope, would be a deliberate "show env as empty" feature, not a fix.)
+
+**Pre-run states (`queued`, `pending`, `waiting`) currently flatten to `in-progress`** (and `waiting` is dropped — no row above). Promoting them to distinct statuses is tracked work, not settled — see the root `TODO`.
+
 ### 5.4 Cursor shape (opaque to the backend)
 
 Base64 of compact JSON, forward-only, well under the 8 KiB limit.
