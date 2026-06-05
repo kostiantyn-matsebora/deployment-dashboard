@@ -51,6 +51,17 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 - Exception: user explicitly instructs a direct push to `main`.
 - Default when user says "push": push the current branch, not `main`.
 
+## GitHub issues
+
+**Before creating any issue, classify it and fill the matching template** in `.github/ISSUE_TEMPLATE/` — never open a free-form/blank issue (blank issues are disabled).
+
+1. **Classify.** Bug (something broken / regressed) vs Feature (new capability or improvement).
+2. **Pick the template.** Bug → `bug-report.md`. Feature/enhancement → `feature-request.md`.
+3. **Honor the template's spec.** Apply its `title:` prefix (`[Bug] ` / `[Feature] `) and `labels:` (`bug` / `enhancement`), and fill **every** section heading the template defines — do not invent or drop sections.
+   - Bug: *What happened* · *Steps to reproduce* · *Expected behavior* · *Environment*.
+   - Feature: *Problem / motivation* · *Proposed solution* (behavior, not implementation) · *Alternatives considered* · *Additional context*.
+4. **Security reports** are not issues — route to the private advisory link in `config.yml`.
+
 ## Agent dispatch
 
 Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
