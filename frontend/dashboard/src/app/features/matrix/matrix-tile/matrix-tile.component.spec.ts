@@ -12,12 +12,12 @@ import { TestBed }           from '@angular/core/testing';
 import { By }                from '@angular/platform-browser';
 
 import { MatrixTileComponent }              from './matrix-tile.component';
-import { DeploymentEvent, MatrixSlot }      from '../../../core/models/deployment.model';
+import { DeploymentEvent, MatrixSlot, Status } from '../../../core/models/deployment.model';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function mkEvent(
-  status: DeploymentEvent['status'],
+  status: Status,
   overrides: Partial<DeploymentEvent> = {},
 ): DeploymentEvent {
   return {
@@ -38,6 +38,7 @@ function priv(c: MatrixTileComponent): {
   isSplit():  boolean;
   isRunning(): boolean;
   lastSucc():  DeploymentEvent | undefined;
+  ctxStatus(): string | null;
 } {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return c as any;
@@ -202,4 +203,89 @@ describe('MatrixTileComponent — S5 in-progress only (no regression)', () => {
     const fixture = await createTile(slot);
     expect(priv(fixture.componentInstance).isRunning()).toBe(true);
   });
+});
+
+// ── Context statuses — ctx-badge rendering via slot.next (#268) ───────────────
+
+const CTX_STATUSES: Status[] = ['pending', 'queued', 'waiting', 'cancelled', 'rejected'];
+
+/**
+ * Build a slot with a success current + a next context event.
+ * slot.next carries the context status; current stays as success.
+ */
+function mkCtxSlot(status: Status, version?: string): MatrixSlot {
+  return {
+    current: mkEvent('success'),
+    next: mkEvent(status, { id: 'ctx-1', deployment_id: 'ctx-dep-1', version }),
+  };
+}
+
+describe('MatrixTileComponent — context statuses render a ctx-badge (slot.next)', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  for (const status of CTX_STATUSES) {
+    describe(`status = ${status}`, () => {
+      it(`ctxStatus() returns '${status}'`, async () => {
+        const fixture = await createTile(mkCtxSlot(status));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        expect((fixture.componentInstance as any).ctxStatus()).toBe(status);
+      });
+
+      it('renders a .ctx-badge element with correct class', async () => {
+        const fixture = await createTile(mkCtxSlot(status));
+        const badge = fixture.debugElement.query(By.css(`.ctx-badge.cb-${status}`));
+        expect(badge).not.toBeNull();
+      });
+
+      it('does NOT render a spinner (primary state is success, not running)', async () => {
+        const fixture = await createTile(mkCtxSlot(status));
+        const spinner = fixture.debugElement.query(By.css('.spinner'));
+        expect(spinner).toBeNull();
+      });
+
+      it('isRunning() is false (primary current is success)', async () => {
+        const fixture = await createTile(mkCtxSlot(status));
+        expect(priv(fixture.componentInstance).isRunning()).toBe(false);
+      });
+
+      it('boxState is s-success (primary current.status = success)', async () => {
+        const fixture = await createTile(mkCtxSlot(status));
+        expect(priv(fixture.componentInstance).boxState()).toBe('s-success');
+        const el = fixture.debugElement.query(By.css('.slot'));
+        expect(el.classes['s-success']).toBe(true);
+      });
+    });
+  }
+});
+
+describe('MatrixTileComponent — ctx-badge shows version from slot.next', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('ctx-badge renders the next version when slot.next has one', async () => {
+    const fixture = await createTile(mkCtxSlot('pending', 'v2.16.0-rc1'));
+    const badge = fixture.debugElement.query(By.css('.ctx-badge.cb-pending'));
+    expect(badge).not.toBeNull();
+    expect(badge.nativeElement.textContent).toContain('v2.16.0-rc1');
+  });
+
+  it('ctx-badge renders without version when slot.next has none', async () => {
+    const fixture = await createTile(mkCtxSlot('rejected'));
+    const badge = fixture.debugElement.query(By.css('.ctx-badge.cb-rejected'));
+    expect(badge).not.toBeNull();
+  });
+});
+
+describe('MatrixTileComponent — no ctx-badge when slot.next is absent', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  for (const status of ['success', 'failure', 'in-progress'] as Status[]) {
+    it(`no ctx-badge when slot has no .next (primary status = ${status})`, async () => {
+      const slot: MatrixSlot = { current: mkEvent(status) };
+      const fixture = await createTile(slot);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((fixture.componentInstance as any).ctxStatus()).toBeNull();
+      const badge = fixture.debugElement.query(By.css('.ctx-badge'));
+      expect(badge).toBeNull();
+    });
+  }
 });

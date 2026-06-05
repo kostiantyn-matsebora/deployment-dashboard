@@ -12,6 +12,7 @@ import {
 
 import { DeploymentEvent, SwimlaneField } from '../../../core/models/deployment.model';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
+import { isContextStatus } from '../../../core/models/deployment.model';
 
 /** Real rendered size of a node card, reported to the swimlane layout. */
 export interface CardDims {
@@ -50,6 +51,8 @@ export class VisCardComponent {
   readonly visibleFields = input.required<Set<SwimlaneField>>();
   /** True when this node is the currently selected node in the inspector. */
   readonly isSelected = input<boolean>(false);
+  /** Optional context-status next event for this node's slot (from slot.next). */
+  readonly nextEvent = input<DeploymentEvent | null>(null);
 
   /** Emitted when the card is clicked — parent handles inspector state. */
   readonly nodeClick = output<DeploymentEvent>();
@@ -95,6 +98,35 @@ export class VisCardComponent {
       default:            return 's-failure';
     }
   });
+
+  /**
+   * Context status from slot.next (pending/queued/waiting/cancelled/rejected),
+   * if any. Falls back to checking event().status for backward compatibility
+   * (guards the case where event itself is a context status — should not happen
+   * in normal flow but handled defensively).
+   */
+  protected readonly ctxStatus = computed<string | null>(() => {
+    const next = this.nextEvent();
+    if (next && isContextStatus(next.status)) return next.status;
+    // Defensive fallback: if current event is itself a context status
+    const s = this.event().status;
+    return isContextStatus(s) ? s : null;
+  });
+
+  /** Version of the context-status next event (for the badge label). */
+  protected readonly ctxVersion = computed<string | undefined>(() => {
+    const next = this.nextEvent();
+    if (next && isContextStatus(next.status)) return next.version;
+    return undefined;
+  });
+
+  /** Icon glyph for a context status. */
+  protected ctxIcon(status: string): string {
+    const icons: Record<string, string> = {
+      'pending': '○', 'queued': '≡', 'waiting': '◷', 'cancelled': '⊘', 'rejected': '⊗',
+    };
+    return icons[status] ?? '';
+  }
 
   /** True when Row 1 (version / happened_at) should render. */
   protected readonly showTopRow = computed<boolean>(() => {

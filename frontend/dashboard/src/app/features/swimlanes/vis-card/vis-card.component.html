@@ -62,4 +62,20 @@
     }
   </div>
 
+  <!-- Context badge — from slot.next (pending/queued/waiting/cancelled/rejected) -->
+  @if (ctxStatus()) {
+    <div class="ctx-row">
+      <span
+        class="ctx-badge cb-{{ ctxStatus() }}"
+        [attr.aria-label]="ctxStatus()! + (ctxVersion() ? ' ' + ctxVersion() : '')"
+      >
+        <span aria-hidden="true">{{ ctxIcon(ctxStatus()!) }}</span>
+        <span>{{ ctxStatus() }}</span>
+        @if (ctxVersion()) {
+          <span class="ctx-ver">{{ ctxVersion() }}</span>
+        }
+      </span>
+    </div>
+  }
+
 </div>

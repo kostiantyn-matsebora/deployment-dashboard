@@ -257,6 +257,19 @@
 }
 .tile-last-succ .glyph { color: var(--ink-3); }
 
+/* ── Context badge row — spans full tile width ───────────── */
+.slot .ctx-row {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+/* version text inside a context badge */
+.ctx-badge .ctx-ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
 /* ── Field glyphs & typography ────────────────────────────── */
 .glyph { color: var(--ink-3); }
 

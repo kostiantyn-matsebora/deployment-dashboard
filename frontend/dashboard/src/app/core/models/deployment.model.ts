@@ -7,7 +7,15 @@
  * ref, actor, happened_at, parent_deployments
  */
 
-export type Status = 'in-progress' | 'success' | 'failure';
+export type Status =
+  | 'in-progress'
+  | 'success'
+  | 'failure'
+  | 'pending'
+  | 'queued'
+  | 'waiting'
+  | 'cancelled'
+  | 'rejected';
 
 export type Theme = 'dark' | 'light' | 'auto';
 
@@ -30,8 +38,9 @@ export interface DeploymentEvent {
 }
 
 /** One (service, environment) cell in the Matrix view. */
+/** One (service, environment) cell in the Matrix view. */
 export interface MatrixSlot {
-  /** Most recent event for this slot. */
+  /** Most recent effective event (status: in-progress | success | failure). */
   current: DeploymentEvent;
   /**
    * Most recent successful event. Omitted when current IS the last success
@@ -45,6 +54,13 @@ export interface MatrixSlot {
    * Distinguishes S2 vs S3 and S5 vs S6.
    */
   prev_failed?: boolean;
+  /**
+   * The latest non-effective deployment beyond the live one —
+   * status is one of pending | queued | waiting | cancelled | rejected.
+   * Present only when such an event is newer (happened_at) than current.
+   * Rendered as a secondary "next" context badge, never as the slot primary state.
+   */
+  next?: DeploymentEvent;
 }
 
 /** One service row in the Matrix view. */
@@ -86,6 +102,23 @@ export type BoxState =
  *   S2 vs S3 (both in-progress + last_successful)
  *   S5 vs S6 (both in-progress, no success history)
  */
+/**
+ * The five "context" statuses that are NOT primary tile states.
+ * They appear as a secondary `.ctx-badge` pill on the tile/card.
+ */
+export type ContextStatus = 'pending' | 'queued' | 'waiting' | 'cancelled' | 'rejected';
+
+/** Returns true when a status is a context (non-primary) status. */
+export function isContextStatus(status: Status): status is ContextStatus {
+  return (
+    status === 'pending' ||
+    status === 'queued' ||
+    status === 'waiting' ||
+    status === 'cancelled' ||
+    status === 'rejected'
+  );
+}
+
 export function deriveBoxState(slot: MatrixSlot): BoxState {
   const { current, last_successful, prev_failed } = slot;
   if (current.status === 'success') return 's-success';
@@ -93,6 +126,13 @@ export function deriveBoxState(slot: MatrixSlot): BoxState {
   // is present. When last_successful is absent the tile renders as a full
   // failed tile (no split / bottom section).
   if (current.status === 'failure') return 's-fail-last';
+  // No-effective-current fallback: if current.status is a context status
+  // (pending/queued/waiting/cancelled/rejected) the server should have put it
+  // in slot.next instead. Guard: render neutrally rather than crashing.
+  // last_successful → success-like; otherwise treat as s-running-only neutral.
+  if (isContextStatus(current.status)) {
+    return last_successful ? 's-success' : 's-running-only';
+  }
   // in-progress
   if (last_successful) return prev_failed ? 's-run-fail-last' : 's-run-last';
   return prev_failed ? 's-run-fail-only' : 's-running-only';

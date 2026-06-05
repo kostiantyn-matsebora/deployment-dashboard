@@ -4,13 +4,13 @@
     "run_number": "All env deployments produced by one workflow run share the same run_number (and run_url); each env still gets its own deployment_id (gh-{svc}-{env}-{run}). Same run_number across a chain is what makes the 'same run_number' correlation predicate agree with 'explicit parent'.",
     "elapsed_minutes": "Minutes before 'now'. Consumers derive happened_at = Date.now() - elapsed_minutes*60000. Within one promotion the upstream env is older (larger elapsed) and the downstream env is newer (smaller elapsed); an in-progress tip is newest.",
     "scenarios": {
-      "payments-api":        "FULLY CONNECTED — one run (4830, v2.15.0) promoted dev→staging→qa→preprod→prod; single chain.",
-      "search-indexer":      "FULLY CONNECTED — one run (1410, v0.8.0) promoted through all five envs.",
+      "payments-api":        "FULLY CONNECTED — one run (4830, v2.15.0) promoted dev→staging→qa→preprod→prod; single chain. prod has a PENDING context badge (run 4840, v2.16.0-rc1).",
+      "search-indexer":      "FULLY CONNECTED — one run (1410, v0.8.0) promoted through all five envs. prod has a QUEUED context badge (run 1420, v0.8.1-rc1).",
       "auth-bff":            "PARTIAL — new run 3300 (v3.3.0) in flight dev→staging→qa(in-progress); older run 3210 (v3.2.4) holds preprod→prod; qa also shows last_successful from run 3200 as a lone node. dev/staging/qa are disconnected from preprod/prod (different runs).",
       "order-svc":           "FAN-IN MERGE — run 2960 (v0.42.0) dev→staging→qa where qa lists TWO parents (dev AND staging of the same run); preprod (run 2940) and prod (run 2920, ref-only fallback) are separate lone nodes.",
-      "billing-webhook":     "FULLY DISCONNECTED — every env from a different run (822/825/810/801/792), no parents → five separate nodes. staging is an in-progress first-ever deploy (no actor).",
-      "catalog-edge":        "PARTIAL — run 5160 (v5.0.0-rc2) dev→staging→qa(in-progress, first-ever to qa, no actor); older run 5145 (v4.18.7) holds preprod→prod.",
-      "ledger-projector":    "PARTIAL — run 1830 (v2.0.1) dev→staging; qa is a lone in-progress retry (run 1828) after a failure; older run 1802 (v1.9.8) holds preprod→prod.",
+      "billing-webhook":     "FULLY DISCONNECTED — every env from a different run (822/825/810/801/792), no parents. staging is an in-progress first-ever deploy (no actor). prod has a WAITING context badge (run 826, v1.4.1-rc1).",
+      "catalog-edge":        "PARTIAL — run 5160 (v5.0.0-rc2) dev→staging→qa(in-progress, first-ever to qa, no actor); older run 5145 (v4.18.7) holds preprod→prod. prod has a REJECTED context badge (run 5161, v5.0.0-rc2).",
+      "ledger-projector":    "PARTIAL — run 1830 (v2.0.1) dev→staging; qa is a lone in-progress retry (run 1828) after a failure; older run 1802 (v1.9.8) holds preprod→prod. prod has a CANCELLED context badge (run 1831, v2.0.2-rc1).",
       "notification-worker": "PARTIAL — run 3110 (v1.9.1) dev→staging(FAILURE) with staging last_successful (run 3081, sha-only fallback) as a lone node; older run 3076 (v1.8.4) holds qa→preprod; prod (run 3041) is a lone node.",
       "platform-proxy":     "LONG VERSION (early stages) — run 6200 (v2.0.0-beta.3+build.20250530) on dev(success) + staging(in-progress) only; no qa/preprod/prod yet.",
       "data-pipeline":      "LONG VERSION (late stages) — run 7100 (v1.99.0-hotfix.csrf-protection) on preprod(success) + prod(in-progress) only; earlier stages already gone."
@@ -48,7 +48,12 @@
     "auth-bff|qa":                 "partial-with-last-successful",
     "notification-worker|staging": "failure-with-last-successful",
     "catalog-edge|qa":             "connected-inprogress",
-    "ledger-projector|qa":         "lone-inprogress-retry"
+    "ledger-projector|qa":         "lone-inprogress-retry",
+    "payments-api|prod":           "ctx-pending",
+    "search-indexer|prod":         "ctx-queued",
+    "billing-webhook|prod":        "ctx-waiting",
+    "ledger-projector|prod":       "ctx-cancelled",
+    "catalog-edge|prod":           "ctx-rejected"
   },
 
   "events": [
@@ -108,7 +113,13 @@
     { "deployment_id": "gh-proxy-staging-6200",  "service": "platform-proxy",      "environment": "staging", "status": "in-progress", "elapsed_minutes": 8,    "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": ["gh-proxy-dev-6200"] },
 
     { "deployment_id": "gh-pipeline-preprod-7100","service": "data-pipeline",       "environment": "preprod", "status": "success",     "elapsed_minutes": 120,  "version": "v1.99.0", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": [] },
-    { "deployment_id": "gh-pipeline-prod-7100",   "service": "data-pipeline",       "environment": "prod",    "status": "in-progress", "elapsed_minutes": 10,   "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": ["gh-pipeline-preprod-7100"] }
+    { "deployment_id": "gh-pipeline-prod-7100",   "service": "data-pipeline",       "environment": "prod",    "status": "in-progress", "elapsed_minutes": 10,   "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": ["gh-pipeline-preprod-7100"] },
+
+    { "deployment_id": "gh-pay-prod-4840",        "service": "payments-api",        "environment": "prod",    "status": "pending",     "elapsed_minutes": 5,    "version": "v2.16.0-rc1", "sha": "0b1c2d3", "ref": "release/2.16",       "actor": "mreyes",      "run_number": "4840", "run_url": "https://ci.internal/runs/4840", "parent_deployments": [] },
+    { "deployment_id": "gh-search-prod-1420",     "service": "search-indexer",      "environment": "prod",    "status": "queued",      "elapsed_minutes": 8,    "version": "v0.8.1-rc1",  "sha": "b2c3d4e", "ref": "release/0.8",        "actor": "mreyes",      "run_number": "1420", "run_url": "https://ci.internal/runs/1420", "parent_deployments": [] },
+    { "deployment_id": "gh-billhook-prod-826",    "service": "billing-webhook",     "environment": "prod",    "status": "waiting",     "elapsed_minutes": 2,    "version": "v1.4.1-rc1",  "sha": "6e7f8a1", "ref": "feat/retry-jitter-v2", "actor": "l.osman",   "run_number": "826",  "run_url": "https://ci.internal/runs/826",  "parent_deployments": [] },
+    { "deployment_id": "gh-ledger-prod-1831",     "service": "ledger-projector",    "environment": "prod",    "status": "cancelled",   "elapsed_minutes": 3,    "version": "v2.0.2-rc1",  "sha": "6b7c8d9", "ref": "main",               "actor": "r.iyer",      "run_number": "1831", "run_url": "https://ci.internal/runs/1831", "parent_deployments": [] },
+    { "deployment_id": "gh-catalog-prod-5161",    "service": "catalog-edge",        "environment": "prod",    "status": "rejected",    "elapsed_minutes": 1,    "version": "v5.0.0-rc2",  "sha": "2d9e0f1", "ref": "feat/v5-rewrite",    "actor": "tcheng",      "run_number": "5161", "run_url": "https://ci.internal/runs/5161", "parent_deployments": [] }
 
   ],
 

@@ -1,6 +1,14 @@
 /** TypeScript types for demo/data/events.json — lives here because only the mock server needs them. */
 
-export type DemoStatus = 'in-progress' | 'success' | 'failure';
+export type DemoStatus =
+  | 'in-progress'
+  | 'success'
+  | 'failure'
+  | 'pending'
+  | 'queued'
+  | 'waiting'
+  | 'cancelled'
+  | 'rejected';
 
 export interface DemoEvent {
   deployment_id: string;

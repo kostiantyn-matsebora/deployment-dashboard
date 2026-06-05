@@ -54,6 +54,36 @@
   --coral-glow:  rgba(255, 93, 93, 0.38);
   --coral-edge:  rgba(255, 93, 93, 0.60);
 
+  /* Context statuses — Pending (slate) — Scheme B */
+  --slate:       #8b93ad;
+  --slate-wash:  rgba(139, 147, 173, 0.15);
+  --slate-glow:  rgba(139, 147, 173, 0.30);
+  --slate-edge:  rgba(139, 147, 173, 0.50);
+
+  /* Context statuses — Queued (blue) — Scheme B */
+  --blue:        #4aa3f0;
+  --blue-wash:   rgba(74, 163, 240, 0.15);
+  --blue-glow:   rgba(74, 163, 240, 0.30);
+  --blue-edge:   rgba(74, 163, 240, 0.50);
+
+  /* Context statuses — Waiting (violet) — Scheme B */
+  --violet:      #9a85ff;
+  --violet-wash: rgba(154, 133, 255, 0.15);
+  --violet-glow: rgba(154, 133, 255, 0.30);
+  --violet-edge: rgba(154, 133, 255, 0.50);
+
+  /* Context statuses — Cancelled (grey) — Scheme B */
+  --grey:        #9aa0b5;
+  --grey-wash:   rgba(154, 160, 181, 0.15);
+  --grey-glow:   rgba(154, 160, 181, 0.28);
+  --grey-edge:   rgba(154, 160, 181, 0.45);
+
+  /* Context statuses — Rejected (rose) — Scheme B */
+  --rose:        #cf8095;
+  --rose-wash:   rgba(207, 128, 149, 0.15);
+  --rose-glow:   rgba(207, 128, 149, 0.30);
+  --rose-edge:   rgba(207, 128, 149, 0.50);
+
   /* Structural surfaces */
   --neutral-wash:      rgba(255, 255, 255, 0.03);
   --grid-line:         rgba(255, 255, 255, 0.045);
@@ -113,6 +143,32 @@
   --coral-glow:  rgba(255, 93, 93, 0.25);
   --coral-edge:  rgba(255, 93, 93, 0.50);
 
+  /* Context statuses — light theme hue overrides — Scheme B */
+  --slate:       #5e667e;
+  --slate-wash:  rgba(94, 102, 126, 0.12);
+  --slate-glow:  rgba(94, 102, 126, 0.24);
+  --slate-edge:  rgba(94, 102, 126, 0.45);
+
+  --blue:        #2b7fd0;
+  --blue-wash:   rgba(43, 127, 208, 0.10);
+  --blue-glow:   rgba(43, 127, 208, 0.22);
+  --blue-edge:   rgba(43, 127, 208, 0.42);
+
+  --violet:      #6f55cf;
+  --violet-wash: rgba(111, 85, 207, 0.10);
+  --violet-glow: rgba(111, 85, 207, 0.22);
+  --violet-edge: rgba(111, 85, 207, 0.42);
+
+  --grey:        #6a7088;
+  --grey-wash:   rgba(106, 112, 136, 0.10);
+  --grey-glow:   rgba(106, 112, 136, 0.20);
+  --grey-edge:   rgba(106, 112, 136, 0.38);
+
+  --rose:        #b05f76;
+  --rose-wash:   rgba(176, 95, 118, 0.10);
+  --rose-glow:   rgba(176, 95, 118, 0.22);
+  --rose-edge:   rgba(176, 95, 118, 0.42);
+
   --neutral-wash:      rgba(20, 24, 40, 0.03);
   --grid-line:         rgba(20, 24, 40, 0.05);
   --scrollbar-thumb:   rgba(20, 24, 40, 0.18);
@@ -171,6 +227,32 @@
     --coral-wash:  rgba(255, 93, 93, 0.13);
     --coral-glow:  rgba(255, 93, 93, 0.25);
     --coral-edge:  rgba(255, 93, 93, 0.50);
+
+    /* Context statuses — auto/light overrides — Scheme B */
+    --slate:       #5e667e;
+    --slate-wash:  rgba(94, 102, 126, 0.12);
+    --slate-glow:  rgba(94, 102, 126, 0.24);
+    --slate-edge:  rgba(94, 102, 126, 0.45);
+
+    --blue:        #2b7fd0;
+    --blue-wash:   rgba(43, 127, 208, 0.10);
+    --blue-glow:   rgba(43, 127, 208, 0.22);
+    --blue-edge:   rgba(43, 127, 208, 0.42);
+
+    --violet:      #6f55cf;
+    --violet-wash: rgba(111, 85, 207, 0.10);
+    --violet-glow: rgba(111, 85, 207, 0.22);
+    --violet-edge: rgba(111, 85, 207, 0.42);
+
+    --grey:        #6a7088;
+    --grey-wash:   rgba(106, 112, 136, 0.10);
+    --grey-glow:   rgba(106, 112, 136, 0.20);
+    --grey-edge:   rgba(106, 112, 136, 0.38);
+
+    --rose:        #b05f76;
+    --rose-wash:   rgba(176, 95, 118, 0.10);
+    --rose-glow:   rgba(176, 95, 118, 0.22);
+    --rose-edge:   rgba(176, 95, 118, 0.42);
 
     --neutral-wash:      rgba(20, 24, 40, 0.03);
     --grid-line:         rgba(20, 24, 40, 0.05);

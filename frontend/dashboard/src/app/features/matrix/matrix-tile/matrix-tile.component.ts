@@ -9,6 +9,7 @@ import {
   MatrixField,
   MatrixSlot,
   deriveBoxState,
+  isContextStatus,
 } from '../../../core/models/deployment.model';
 
 
@@ -43,6 +44,7 @@ export class MatrixTileComponent {
   // ── Computed ──────────────────────────────────────────────
   protected readonly current     = computed<DeploymentEvent>(() => this.slot().current);
   protected readonly lastSucc    = computed<DeploymentEvent | undefined>(() => this.slot().last_successful);
+  protected readonly nextEvent   = computed<DeploymentEvent | undefined>(() => this.slot().next);
   protected readonly boxState    = computed<BoxState>(() => deriveBoxState(this.slot()));
   protected readonly isSplit     = computed<boolean>(() => {
     const s = this.boxState();
@@ -57,6 +59,20 @@ export class MatrixTileComponent {
     const hv  = this.highlightedVersion();
     const ver = this.current().version;
     return !!(hv && ver && hv === ver);
+  });
+
+  /**
+   * The context status from slot.next (if present).
+   * slot.next is the latest non-effective deployment beyond the live one.
+   */
+  protected readonly ctxStatus = computed<string | null>(() => {
+    const n = this.nextEvent();
+    return n && isContextStatus(n.status) ? n.status : null;
+  });
+
+  /** Version string from slot.next (for the context badge). */
+  protected readonly ctxVersion = computed<string | undefined>(() => {
+    return this.nextEvent()?.version;
   });
 
   // ── Field visibility helpers ─────────────────────────────
@@ -78,6 +94,18 @@ export class MatrixTileComponent {
            (this.show('run_url')    && !!ev.run_url)    ||
            (this.show('run_number') && !!ev.run_number) ||
            (this.show('actor')      && !!ev.actor);
+  }
+
+  /** Icon glyph for a given context status. */
+  protected ctxIcon(status: string): string {
+    const icons: Record<string, string> = {
+      'pending':   '○',
+      'queued':    '≡',
+      'waiting':   '◷',
+      'cancelled': '⊘',
+      'rejected':  '⊗',
+    };
+    return icons[status] ?? '';
   }
 
   // ── Event handlers ────────────────────────────────────────

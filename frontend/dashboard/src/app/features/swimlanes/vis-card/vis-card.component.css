@@ -183,6 +183,12 @@
   white-space: nowrap;
 }
 
+/* ── Context badge row — spans full card width ───────────── */
+.vis-card .ctx-row {
+  grid-column: 1 / -1;
+  margin-top: 3px;
+}
+
 /* ── Field glyphs & typography ────────────────────────────── */
 .glyph {
   color: var(--ink-3);
@@ -228,4 +234,11 @@
   font-size: 9.5px;
   color: var(--ink-1);
   white-space: nowrap;
+}
+
+/* ── Context badge version text ───────────────────────────── */
+.ctx-badge .ctx-ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  opacity: 0.85;
 }

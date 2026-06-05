@@ -95,9 +95,17 @@ export class HistoryDrawerComponent {
   }
 
   protected statusLabel(status: string): string {
-    if (status === 'in-progress') return 'In Progress';
-    if (status === 'success') return 'Success';
-    return 'Failed';
+    switch (status) {
+      case 'in-progress': return 'In Progress';
+      case 'success':     return 'Success';
+      case 'failure':     return 'Failed';
+      case 'pending':     return 'Pending';
+      case 'queued':      return 'Queued';
+      case 'waiting':     return 'Waiting';
+      case 'cancelled':   return 'Cancelled';
+      case 'rejected':    return 'Rejected';
+      default:            return status;
+    }
   }
 
   protected formatAbsolute(iso: string): string {
