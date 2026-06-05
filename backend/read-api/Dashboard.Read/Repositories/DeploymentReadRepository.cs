@@ -50,25 +50,56 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
     public async Task<DeploymentEvent?> GetByIdAsync(Guid id, CancellationToken ct)
         => await db.DeploymentEvents.FindAsync([id], ct);
 
-    public async Task<IReadOnlyList<DeploymentEvent>> GetCurrentPerSlotAsync(
+    public async Task<IReadOnlyList<DeploymentEvent>> GetEffectivePerSlotAsync(
         string? serviceFilter, CancellationToken ct)
     {
         var q = db.DeploymentEvents.AsQueryable();
         if (serviceFilter is not null)
             q = q.Where(e => e.Service == serviceFilter);
 
-        // "Current" = events where no newer event exists in the same (service, environment) slot.
+        // Effective = in-progress | success | failure.
+        // Latest effective per slot = no newer effective event exists in the same slot.
         // The correlated NOT EXISTS translates to SQL on both Postgres and SQLite.
-        var rawCurrent = await q
-            .Where(e => !db.DeploymentEvents.Any(e2 =>
-                e2.Service == e.Service &&
-                e2.Environment == e.Environment &&
-                e2.HappenedAt > e.HappenedAt))
+        var effectiveStatuses = new[] { DeploymentStatus.InProgress, DeploymentStatus.Success, DeploymentStatus.Failure };
+
+        var rawEffective = await q
+            .Where(e => effectiveStatuses.Contains(e.Status) &&
+                        !db.DeploymentEvents.Any(e2 =>
+                            e2.Service == e.Service &&
+                            e2.Environment == e.Environment &&
+                            effectiveStatuses.Contains(e2.Status) &&
+                            e2.HappenedAt > e.HappenedAt))
             .ToListAsync(ct);
 
         // In-memory tiebreak: if multiple events share the max happened_at in a slot,
         // keep the one with the greatest Id (most recently inserted UUIDv7).
-        return rawCurrent
+        return rawEffective
+            .GroupBy(e => (e.Service, e.Environment))
+            .Select(g => g.OrderByDescending(e => e.Id).First())
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<DeploymentEvent>> GetLatestNonEffectivePerSlotAsync(
+        string? serviceFilter, CancellationToken ct)
+    {
+        var q = db.DeploymentEvents.AsQueryable();
+        if (serviceFilter is not null)
+            q = q.Where(e => e.Service == serviceFilter);
+
+        // Non-effective = pending | queued | waiting | cancelled | rejected.
+        // Latest non-effective per slot = no newer non-effective event exists in the same slot.
+        var nonEffectiveStatuses = new[] { DeploymentStatus.Pending, DeploymentStatus.Queued, DeploymentStatus.Waiting, DeploymentStatus.Cancelled, DeploymentStatus.Rejected };
+
+        var rawNonEffective = await q
+            .Where(e => nonEffectiveStatuses.Contains(e.Status) &&
+                        !db.DeploymentEvents.Any(e2 =>
+                            e2.Service == e.Service &&
+                            e2.Environment == e.Environment &&
+                            nonEffectiveStatuses.Contains(e2.Status) &&
+                            e2.HappenedAt > e.HappenedAt))
+            .ToListAsync(ct);
+
+        return rawNonEffective
             .GroupBy(e => (e.Service, e.Environment))
             .Select(g => g.OrderByDescending(e => e.Id).First())
             .ToList();

@@ -52,4 +52,16 @@ public sealed class DeploymentStatusTests
     [InlineData("waiting",   false)]
     public void IsTerminal_ReturnsExpected(string status, bool expected) =>
         Assert.Equal(expected, DeploymentStatus.IsTerminal(status));
+
+    [Theory]
+    [InlineData("in-progress", true)]
+    [InlineData("success",     true)]
+    [InlineData("failure",     true)]
+    [InlineData("pending",     false)]
+    [InlineData("queued",      false)]
+    [InlineData("waiting",     false)]
+    [InlineData("cancelled",   false)]
+    [InlineData("rejected",    false)]
+    public void IsEffective_ReturnsExpected(string status, bool expected) =>
+        Assert.Equal(expected, DeploymentStatus.IsEffective(status));
 }

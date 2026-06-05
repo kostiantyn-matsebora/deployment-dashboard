@@ -25,6 +25,14 @@ public static class DeploymentStatus
     public static bool IsValid(string? value) => value is not null && All.Contains(value);
 
     /// <summary>
+    /// Effective statuses — the deployment has entered or completed execution.
+    /// These are the only statuses eligible for a slot's <c>current</c> field.
+    /// Mirrors <see cref="IsTerminal"/> in structure.
+    /// </summary>
+    public static bool IsEffective(string status) =>
+        status is InProgress or Success or Failure;
+
+    /// <summary>
     /// Terminal statuses — polling skips re-fetching; no further transitions expected.
     /// </summary>
     public static bool IsTerminal(string status) =>
