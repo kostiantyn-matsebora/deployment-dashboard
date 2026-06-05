@@ -7,7 +7,7 @@
 | `component` | string | Yes | Row header (Matrix), lane header (Swimlanes). Implicit — not in field picker. |
 | `environment` | string | Yes | Column header (Matrix), promoted identifier bottom-right (Swimlanes). Toggleable in Swimlanes picker. |
 | `version` | string | No | Headline identifier (Matrix tile). Secondary top-left (Swimlane node). Up to 50 chars, never truncated. |
-| `status` | enum | Yes | `in-progress` / `success` / `failure`. Drives box state and tile color. Implicit — not in field picker. |
+| `status` | enum | Yes | 8 values — **effective** (mutate/mutated the environment): `success`, `in-progress`, `failure`; **next** (the latest deployment beyond the live one): `pending`, `queued`, `waiting`, `cancelled`, `rejected`. Tile/box colour is driven by the effective status only; next-status appears as a `.ctx-badge` layered on the tile, not as the box colour. Implicit — not in field picker. |
 | `run_url` | string | No | ↗ "run" dashed link. Opens in new tab. |
 | `sha` | string | No | Plain mono hex. Mid-row left (Matrix), bottom-left (Swimlane). |
 | `run_number` | string | No | # prefix. Mid-row right cluster. |

@@ -121,6 +121,8 @@ The `#nodeTemplate` receives `let-node` with `node.data` containing the full dep
       [class.s-progress]="node.data.status === 'in-progress'"
       [class.s-failure]="node.data.status === 'failure'"
       [class.is-selected]="node.data.id === selectedNodeId">
+      <!-- ctx-badge overlay (next-status only: pending/queued/waiting/cancelled/rejected) -->
+      <!-- rendered inside vis-card when node.data.nextStatus is set -->
       <!-- vis-card internal structure per § Swimlane Node Card -->
     </xhtml:div>
   </svg:foreignObject>
@@ -154,13 +156,46 @@ Status-colored edges with arrow markers. The link's `data.status` determines str
 </ng-template>
 ```
 
+### Status Colour Map
+
+**Tile / card colour** (the 3 effective statuses — drive box colour, edge stroke, and card class):
+
+| Status | Hue | Token | Icon |
+|--------|-----|-------|------|
+| `success` | emerald | `--emerald` | `✓` |
+| `in-progress` | amber | `--amber` | spinner `◴` |
+| `failure` | coral | `--coral` | `✕` |
+
+**Next-deployment badge** (the 5 non-effective statuses — rendered as `.ctx-badge` layered on the tile/card; never drive box colour):
+
+| Status | Hue | Token | Icon | Description |
+|--------|-----|-------|------|-------------|
+| `pending` | slate | `--slate` | `○` | created, not started |
+| `queued` | blue | `--blue` | `≡` | queued to run |
+| `waiting` | violet | `--violet` | `◷` | blocked on approval / wait timer |
+| `cancelled` | grey | `--grey` | `⊘` | run cancelled |
+| `rejected` | rose | `--rose` | `⊗` | reviewer denied — never ran |
+
+The next badge shows the **latest deployment beyond the live one** (if any). It is present on both Matrix tiles and Swimlane cards.
+
+**Legend.** Each view (Matrix / Swimlanes) carries its own legend popover (`#legend-matrix` / `#legend-vis`) with two groups: "Environment state (tile colour)" for the 3 effective statuses and "Next deployment (badge · history)" for the 5 non-effective statuses.
+
+**Inspector.** The inspector panel shows the effective deployment's fields first, then a dotted separator, then a `next` group for the next-deployment entry (if present). The history drawer shows all 8 statuses as distinct entries, with the next deployment leading.
+
 ### Edge Color Mapping
 
+Edges carry the **parent node's** effective status. All 8 status values map to a stroke colour (next-status nodes that appear in the history DAG use the same hue table):
+
 | Parent Status | Stroke Color (dark) | Token |
-|---------------|--------------------:|-------|
+|---------------|---------------------|-------|
 | `success` | emerald | `--emerald` |
 | `in-progress` | amber | `--amber` |
 | `failure` | coral | `--coral` |
+| `pending` | slate | `--slate` |
+| `queued` | blue | `--blue` |
+| `waiting` | violet | `--violet` |
+| `cancelled` | grey | `--grey` |
+| `rejected` | rose | `--rose` |
 
 ### Layout Constraints
 

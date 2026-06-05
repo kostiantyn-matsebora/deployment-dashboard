@@ -191,7 +191,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 | ingest | `POST /api/deployments` | `X-Api-Key` | append 1 row → `NOTIFY deployment_events` → `201` + `Location`; **`503` + `Retry-After`** during the reset data-clearing window (state `resetting`) |
 | deployments | `GET /api/deployments` | none | cursor page, `happened_at DESC, id DESC`; filters: service/environment/status/deployment_id/since/until |
 | deployments | `GET /api/deployments/{id}` | none | single row / `404` |
-| matrix | `GET /api/matrix` | none | `current` + `last_successful` per slot; weak `ETag` + `If-None-Match` |
+| matrix | `GET /api/matrix` | none | `current` (latest **effective**: `in-progress`/`success`/`failure`) + `last_successful` + optional `next` (latest **non-effective**: `pending`/`queued`/`waiting`/`cancelled`/`rejected`, only when newer than `current`) per slot; weak `ETag` + `If-None-Match` |
 | discovery | `GET /api/services`, `GET /api/environments` | none | distinct, sorted |
 | stream | `GET /api/events/stream` | none | SSE; `event: deployment`; `id:` = row id; `Last-Event-ID` replay; `: ping`/15 s |
 | fetcher | `GET/PUT /api/fetcher/state/{adapter}` | `X-Api-Key` | opaque upsert; `413` > 8 KiB |
