@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Npgsql;
 
 namespace Dashboard.Api.Tests.Helpers;
 
@@ -62,10 +63,20 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>
     {
         builder.ConfigureAppConfiguration((_, config) =>
         {
+            // Parse the Testcontainer connection string into its constituent parts and inject
+            // them as flat POSTGRES_* keys — the same form the application reads at runtime.
+            // This drives PostgresConnectionString.Resolve through the identical production
+            // path; no ConnectionStrings:Postgres key is set anywhere.
+            var csb = new NpgsqlConnectionStringBuilder(_connectionString);
+
             var values = new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Postgres"] = _connectionString,
-                ["API_KEY"] = TestApiKey,
+                ["POSTGRES_HOST"]     = csb.Host     ?? "localhost",
+                ["POSTGRES_PORT"]     = (csb.Port != 0 ? csb.Port : 5432).ToString(),
+                ["POSTGRES_DB"]       = csb.Database ?? string.Empty,
+                ["POSTGRES_USER"]     = csb.Username ?? string.Empty,
+                ["POSTGRES_PASSWORD"] = csb.Password ?? string.Empty,
+                ["API_KEY"]           = TestApiKey,
             };
 
             // Explicitly null out the key when not included so that any value from

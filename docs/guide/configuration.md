@@ -75,7 +75,7 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 | `BACKFILL_MAX_AGE` | no | (uses `INITIAL_LOOKBACK`) | How far back backfill scans per environment (TimeSpan `d.hh:mm:ss`). |
 | `BACKFILL_DEPTH` | no | `2` | Latest status events to seed per (service, environment) slot during backfill. |
 
-> **Container-side binding (don't rename `GITHUB_*`).** `docker-compose.yaml` maps each `GITHUB_*` host var to a `GITHUB__<PascalCase>` container env var (e.g. `GITHUB_BASE_URL` → `GITHUB__BaseUrl`). The segment after `__` must match the C# property name — .NET config maps `__` to a section separator and binds by property name, not by `SCREAMING_SNAKE`.
+> **Settings layering.** An appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it (same pattern as the rest of the stack).
 
 ## Demo / dev only
 

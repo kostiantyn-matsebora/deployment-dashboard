@@ -87,7 +87,7 @@ Per-repo shape:
 
 ## 5. Emulated GitHub REST surface — `/`
 
-Paths are served at the service root (no prefix). The fetcher points `GITHUB__BASE_URL=http://github-emulator:3100`; its root-relative paths resolve directly.
+Paths are served at the service root (no prefix). The fetcher points `GITHUB_BASE_URL=http://github-emulator:3100`; its root-relative paths resolve directly.
 
 | Method | Path | Response shape | FETCHER_SPEC ref |
 |---|---|---|---|

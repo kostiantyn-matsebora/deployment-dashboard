@@ -3,6 +3,7 @@ using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.Control;
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
+using Dashboard.Fetcher.GitHub.Configuration;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
@@ -24,6 +25,9 @@ FetcherOptionsEnv.ApplyEnvOverrides(builder.Configuration, fetcherOptions);
 
 var githubOptions = new GithubAdapterOptions();
 builder.Configuration.GetSection("GitHub").Bind(githubOptions);
+
+// Apply flat GITHUB_* env-var overrides so env wins over appsettings (§6).
+GithubAdapterOptionsEnv.ApplyEnvOverrides(builder.Configuration, githubOptions);
 
 // Resolve BackfillMaxAge from InitialLookback when not explicitly set.
 if (githubOptions.BackfillMaxAge == TimeSpan.Zero)

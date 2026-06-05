@@ -5,27 +5,20 @@
 # Appended last in COMPOSE_FILE so these values win over demo defaults.
 #
 # ── Reset choreography isolation ─────────────────────────────────────────────
-#   AckTimeoutSeconds = 3   Short window so timeout-backstop tests finish fast.
-#   ExpectedComponents = [api-test-reset]
+#   RESET_ACK_TIMEOUT_SECONDS = 3   Short window so timeout-backstop tests finish fast.
+#   RESET_EXPECTED_COMPONENTS = api-test-reset
 #                           A single synthetic component id the test suite
 #                           controls via POST /api/control/events.  The real
 #                           demo-driver and fetcher-host stay in the stack but
-#                           are NOT in ExpectedComponents, so their acks are
-#                           ignored by the reset gate (they still react to
-#                           reset-initiated — that is fine; the test drives
-#                           completion independently via api-test-reset).
-#
-#   IMPORTANT — .NET array binding does NOT replace the whole array. Config
-#   children are bound by INDEX over the keys present across providers (env wins
-#   over appsettings at a shared index), and the result is APPENDED onto the
-#   ResetOptions.ExpectedComponents property default. That default is therefore
-#   kept EMPTY ([]) in code so this override fully defines the set; were it the
-#   old ["dashboard-fetcher","demo-driver"] initializer, those two would survive
-#   here as phantom expected components the gate would wait on forever.
-#   appsettings.json seeds ["dashboard-fetcher","demo-driver"] at indices 0,1, so
-#   we pin BOTH __0 and __1 to "api-test-reset" (env wins at both) → the bound
-#   array is ["api-test-reset","api-test-reset"], which dedups to {api-test-reset}.
-#   GateMaxTtlSeconds = 15  Enough headroom for the longest test scenario
+#                           are NOT in this set, so their acks are ignored by the
+#                           reset gate (they still react to reset-initiated —
+#                           that is fine; the test drives completion
+#                           independently via api-test-reset).
+#                           The CSV value replaces the whole ExpectedComponents
+#                           set wholesale, overriding the appsettings default
+#                           ["dashboard-fetcher","demo-driver"] — no .NET
+#                           index-overlay footgun (the old Reset__…__0/__1 form).
+#   RESET_GATE_MAX_TTL_SECONDS = 15  Enough headroom for the longest test scenario
 #                           (timeout backstop at ~3 s + overhead) without
 #                           wedging ingest during teardown.
 #
@@ -45,7 +38,7 @@
 #                           ignores fetcher acks (ExpectedComponents above), so
 #                           reset-choreography tests are unaffected by the
 #                           fetcher's presence.
-#   GITHUB__RateLimitBudgetPct = 100   Use the full simulated budget for speed.
+#   GITHUB_RATE_LIMIT_BUDGET_PCT = 100  Use the full simulated budget for speed.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -64,4 +57,4 @@ services:
   fetcher-host:
     environment:
       POLL_INTERVAL_SECONDS: "2"
-      GITHUB__RateLimitBudgetPct: "100"
+      GITHUB_RATE_LIMIT_BUDGET_PCT: "100"

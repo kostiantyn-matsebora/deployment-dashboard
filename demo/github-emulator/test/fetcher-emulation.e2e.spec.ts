@@ -28,7 +28,7 @@
  *  5. Assert an artifact-sourced version on a search-indexer deployment:
  *       GET http://localhost:5000/api/services/search-indexer/deployments?per_page=1
  *     IMPORTANT: payments-api versions will be null because
- *       GITHUB__VERSION_SOURCE=artifact:version.txt and payments-api has NO artifacts
+ *       GITHUB_VERSION_SOURCE=artifact:version.txt and payments-api has NO artifacts
  *       (it uses payload.version instead).
  *     search-indexer has version.txt artifacts → its version field should be non-null
  *     (e.g. "v0.8.0").
@@ -39,7 +39,7 @@
  *
  * Stack services required:
  *   - github-emulator  at http://localhost:3100
- *   - Dashboard.Fetcher.Host (configured with GITHUB__BASE_URL=http://github-emulator:3100)
+ *   - Dashboard.Fetcher.Host (configured with GITHUB_BASE_URL=http://github-emulator:3100)
  *   - Dashboard.Api           at http://localhost:5000
  *   - Postgres (upstream of Dashboard.Api)
  */
@@ -155,7 +155,7 @@ describe.skip(
 
     // ── Test 5: payments-api versions are null (no artifacts — see IMPORTANT note) ──
 
-    it('payments-api versions are null (GITHUB__VERSION_SOURCE=artifact:version.txt, no artifacts)', async () => {
+    it('payments-api versions are null (GITHUB_VERSION_SOURCE=artifact:version.txt, no artifacts)', async () => {
       requireStack();
 
       const res = await fetch(

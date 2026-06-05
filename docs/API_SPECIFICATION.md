@@ -281,7 +281,7 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 
 | Var | Default | Purpose |
 |---|---|---|
-| `ConnectionStrings__Postgres` | — | DB connection |
+| `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | `postgres` / `5432` / `deployment_dashboard` / — / — | DB connection parts; the app assembles the connection string (appsettings `Postgres` section = base, these env vars override) |
 | `API_KEY` | — | shared write/fetcher/component-event secret (`X-Api-Key`) |
 | `CONTROL_API_KEY` | — | control stream + reset secret (`X-Control-API-Key`, D8) |
 | `CORS_ALLOWED_ORIGINS` | *(empty)* | CSV of allowed origins; empty disables CORS |

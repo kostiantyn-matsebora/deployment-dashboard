@@ -182,7 +182,7 @@ describe('Scenario: GitHub emulator → fetcher backfill → API state', () => {
   });
 
   it('search-indexer deployments carry version resolved from artifact (F15)', async () => {
-    // The fetcher is configured with GITHUB__VersionSource="artifact:version.txt"
+    // The fetcher is configured with GITHUB_VERSION_SOURCE="artifact:version.txt"
     // (demo compose override). Every search-indexer deployment in the fixture has
     // a version.txt artifact with content "v0.8.0".
     const page = await getJson(`/api/deployments?service=search-indexer&limit=50`);
