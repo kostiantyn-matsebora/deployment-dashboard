@@ -288,6 +288,13 @@ body {
     0 28px 70px -32px rgba(0, 0, 0, 0.7),
     0 0 0 1px var(--dd-accent-soft);
 }
+/* Portrait architecture diagram: keep the dd-shot frame, cap the width so the
+   tall C4 card doesn't stretch to full column height. */
+.md-typeset .dd-shot.dd-diagram {
+  width: auto;
+  max-width: min(100%, 460px);
+  margin-inline: auto;
+}
 .dd-shotframe {
   margin: 1.4rem 0 2rem;
 }
