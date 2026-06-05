@@ -120,6 +120,33 @@ export class GithubRestController {
     })));
   }
 
+  // ── GET /repos/:owner/:repo/deployments/:id/reviews ───────────────────────
+
+  @Get('repos/:owner/:repo/deployments/:id/reviews')
+  listReviews(
+    @Param('owner') owner: string,
+    @Param('repo')  repo:  string,
+    @Param('id')    idStr: string,
+    @Res() res: Response,
+  ): void {
+    applyRateLimitHeaders(res);
+
+    const repoStore = this.storeService.getStore().getRepo(owner, repo);
+    if (!repoStore) {
+      res.status(404).json(NOT_FOUND_BODY);
+      return;
+    }
+
+    const id      = parseInt(idStr, 10);
+    const reviews = repoStore.reviews.get(id) ?? [];
+
+    res.json(reviews.map(r => ({
+      state:        r.state,
+      user:         r.user,
+      submitted_at: r.submitted_at,
+    })));
+  }
+
   // ── GET /repos/:owner/:repo/actions/runs/:run_id ──────────────────────────
 
   @Get('repos/:owner/:repo/actions/runs/:run_id')
@@ -146,10 +173,11 @@ export class GithubRestController {
     }
 
     res.json({
-      id:       run.id,
-      name:     run.name,
-      path:     run.path,
-      head_sha: run.head_sha,
+      id:         run.id,
+      name:       run.name,
+      path:       run.path,
+      head_sha:   run.head_sha,
+      conclusion: run.conclusion ?? null,
     });
   }
 

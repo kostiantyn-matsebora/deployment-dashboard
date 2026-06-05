@@ -674,3 +674,76 @@
   border: 1px solid var(--glass-edge-2);
   border-radius: 7px;
 }
+
+/* ── Legend popover ──────────────────────────────────────── */
+.legend-content { min-width: 220px; gap: 10px; }
+
+.lg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lg-group-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--glass-edge);
+  margin-bottom: 2px;
+}
+
+.lg-item {
+  display: grid;
+  grid-template-columns: 14px 10px 1fr auto;
+  column-gap: 7px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.lg-ic {
+  font-size: 11px;
+  text-align: center;
+  line-height: 1;
+}
+
+.lg-ic.s-success   { color: var(--emerald); }
+.lg-ic.s-progress  { color: var(--amber); }
+.lg-ic.s-failure   { color: var(--coral); }
+.lg-ic.s-pending   { color: var(--slate); }
+.lg-ic.s-queued    { color: var(--blue); }
+.lg-ic.s-waiting   { color: var(--violet); }
+.lg-ic.s-cancelled { color: var(--grey); }
+.lg-ic.s-rejected  { color: var(--rose); }
+
+.lg-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.lg-sw.sw-success   { background: var(--emerald-wash); border: 1px solid var(--emerald-edge); }
+.lg-sw.sw-progress  { background: var(--amber-wash);   border: 1px solid var(--amber-edge); }
+.lg-sw.sw-failure   { background: var(--coral-wash);   border: 1px solid var(--coral-edge); }
+.lg-sw.sw-pending   { background: var(--slate-wash);   border: 1px solid var(--slate-edge); }
+.lg-sw.sw-queued    { background: var(--blue-wash);    border: 1px solid var(--blue-edge); }
+.lg-sw.sw-waiting   { background: var(--violet-wash);  border: 1px solid var(--violet-edge); }
+.lg-sw.sw-cancelled { background: var(--grey-wash);    border: 1px solid var(--grey-edge); }
+.lg-sw.sw-rejected  { background: var(--rose-wash);    border: 1px solid var(--rose-edge); }
+
+.lg-nm {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+
+.lg-ds {
+  font-size: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  text-align: right;
+}

@@ -289,6 +289,84 @@
       </p-popover>
     </div>
 
+    <!-- Legend popover (☷) ──────────────────────────────── -->
+    <div style="position: relative">
+      <button
+        class="icon-btn"
+        [class.is-active]="legendPopoverOpen()"
+        title="Legend — status key"
+        aria-label="Legend — status key"
+        aria-haspopup="true"
+        (click)="toggleLegendPopover($event)"
+      >
+        <span aria-hidden="true">☷</span>
+      </button>
+      <p-popover #legendPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+        <div class="picker-content legend-content">
+          <span class="popover-title">LEGEND — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
+
+          <!-- Effective statuses -->
+          <div class="lg-group">
+            <span class="lg-group-label">Effective</span>
+            <div class="lg-item">
+              <span class="lg-ic s-success" aria-hidden="true">✓</span>
+              <span class="lg-sw sw-success" aria-hidden="true"></span>
+              <span class="lg-nm">success</span>
+              <span class="lg-ds">deployment completed</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-progress" aria-hidden="true">◴</span>
+              <span class="lg-sw sw-progress" aria-hidden="true"></span>
+              <span class="lg-nm">in-progress</span>
+              <span class="lg-ds">running now</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-failure" aria-hidden="true">✕</span>
+              <span class="lg-sw sw-failure" aria-hidden="true"></span>
+              <span class="lg-nm">failure</span>
+              <span class="lg-ds">run failed</span>
+            </div>
+          </div>
+
+          <!-- Context statuses -->
+          <div class="lg-group">
+            <span class="lg-group-label">Context (next)</span>
+            <div class="lg-item">
+              <span class="lg-ic s-pending" aria-hidden="true">○</span>
+              <span class="lg-sw sw-pending" aria-hidden="true"></span>
+              <span class="lg-nm">pending</span>
+              <span class="lg-ds">waiting to queue</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-queued" aria-hidden="true">≡</span>
+              <span class="lg-sw sw-queued" aria-hidden="true"></span>
+              <span class="lg-nm">queued</span>
+              <span class="lg-ds">in the queue</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-waiting" aria-hidden="true">◷</span>
+              <span class="lg-sw sw-waiting" aria-hidden="true"></span>
+              <span class="lg-nm">waiting</span>
+              <span class="lg-ds">waiting for approval</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-cancelled" aria-hidden="true">⊘</span>
+              <span class="lg-sw sw-cancelled" aria-hidden="true"></span>
+              <span class="lg-nm">cancelled</span>
+              <span class="lg-ds">run cancelled</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-rejected" aria-hidden="true">⊗</span>
+              <span class="lg-sw sw-rejected" aria-hidden="true"></span>
+              <span class="lg-nm">rejected</span>
+              <span class="lg-ds">approval rejected</span>
+            </div>
+          </div>
+
+        </div>
+      </p-popover>
+    </div>
+
   </div>
 
   <!-- Live pill ───────────────────────────────────────────── -->

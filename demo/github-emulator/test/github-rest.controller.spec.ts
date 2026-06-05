@@ -621,4 +621,130 @@ jobs:
       expect(used2).toBeGreaterThan(used1);
     });
   });
+
+  // ── Run conclusion (cancelled path) ─────────────────────────────────────────
+
+  describe('GET /repos/:owner/:repo/actions/runs/:run_id — conclusion field', () => {
+    const CANCELLED_RUN_ID = 9002;
+    const CANCEL_DEP_ID    = 7002;
+
+    beforeEach(() => {
+      const store = storeService.getStore();
+      const repo  = store.getRepo(OWNER, REPO)!;
+
+      // A run that concluded as cancelled
+      repo.runs.set(CANCELLED_RUN_ID, {
+        id:         CANCELLED_RUN_ID,
+        name:       'test-svc',
+        path:       WF_PATH,
+        head_sha:   SHA,
+        conclusion: 'cancelled',
+      });
+
+      // Its deployment has a failure status (as GitHub writes it)
+      const TARGET_URL = `http://github.com/repos/${OWNER}/${REPO}/actions/runs/${CANCELLED_RUN_ID}`;
+      repo.deployments.push({
+        id:          CANCEL_DEP_ID,
+        sha:         SHA,
+        ref:         'refs/heads/main',
+        environment: 'staging',
+        payload:     null,
+        creator:     { login: 'alice' },
+        created_at:  '2026-06-06T08:00:00Z',
+      });
+      repo.statuses.set(CANCEL_DEP_ID, [
+        { id: 90001, state: 'in_progress', target_url: TARGET_URL, creator: { login: 'alice' }, created_at: '2026-06-06T08:00:30Z' },
+        { id: 90002, state: 'failure',     target_url: TARGET_URL, creator: { login: 'alice' }, created_at: '2026-06-06T08:02:00Z' },
+      ]);
+    });
+
+    it('returns conclusion=cancelled for a cancelled run', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/actions/runs/${CANCELLED_RUN_ID}`)
+        .expect(200);
+
+      expect(res.body.conclusion).toBe('cancelled');
+    });
+
+    it('returns conclusion=null for an in-progress run (no conclusion set)', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/actions/runs/${RUN_ID}`)
+        .expect(200);
+
+      // The test-setup run does not set conclusion → emitted as null
+      expect(res.body.conclusion).toBeNull();
+    });
+
+    it('carries X-RateLimit-* headers on conclusion response', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/actions/runs/${CANCELLED_RUN_ID}`)
+        .expect(200);
+      expectRateLimitHeaders(res.headers as Record<string, string>);
+    });
+  });
+
+  // ── GET /repos/:owner/:repo/deployments/:id/reviews (rejected path) ──────────
+
+  describe('GET /repos/:owner/:repo/deployments/:id/reviews', () => {
+    const REJECTED_DEP_ID = 7003;
+
+    beforeEach(() => {
+      const store = storeService.getStore();
+      const repo  = store.getRepo(OWNER, REPO)!;
+
+      // A deployment whose reviewer rejected the environment gate
+      repo.deployments.push({
+        id:          REJECTED_DEP_ID,
+        sha:         SHA,
+        ref:         'refs/heads/main',
+        environment: 'prod',
+        payload:     null,
+        creator:     { login: 'alice' },
+        created_at:  '2026-06-06T08:05:00Z',
+      });
+      repo.statuses.set(REJECTED_DEP_ID, [
+        { id: 70031, state: 'in_progress', target_url: `http://github.com/repos/${OWNER}/${REPO}/actions/runs/9003`, creator: { login: 'alice' }, created_at: '2026-06-06T08:05:30Z' },
+        { id: 70032, state: 'failure',     target_url: `http://github.com/repos/${OWNER}/${REPO}/actions/runs/9003`, creator: { login: 'alice' }, created_at: '2026-06-06T08:07:00Z' },
+      ]);
+      repo.reviews.set(REJECTED_DEP_ID, [
+        { state: 'rejected', user: { login: 'sec-approver' }, submitted_at: '2026-06-06T08:06:45Z' },
+      ]);
+    });
+
+    it('returns an array of review objects with state, user, submitted_at', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/deployments/${REJECTED_DEP_ID}/reviews`)
+        .expect(200);
+
+      expect(Array.isArray(res.body)).toBe(true);
+      const review = res.body[0];
+      expect(review.state).toBe('rejected');
+      expect(review.user.login).toBe('sec-approver');
+      expect(typeof review.submitted_at).toBe('string');
+    });
+
+    it('returns an empty array for a deployment with no reviews', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/deployments/${DEP_ID}/reviews`)
+        .expect(200);
+
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body).toHaveLength(0);
+    });
+
+    it('carries X-RateLimit-* headers', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/deployments/${REJECTED_DEP_ID}/reviews`)
+        .expect(200);
+      expectRateLimitHeaders(res.headers as Record<string, string>);
+    });
+
+    it('returns GitHub-shaped 404 for unknown repo', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/x/y/deployments/${REJECTED_DEP_ID}/reviews`)
+        .expect(404);
+
+      expect(res.body).toMatchObject(GITHUB_404_SHAPE);
+    });
+  });
 });

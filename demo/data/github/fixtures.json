@@ -7,7 +7,14 @@
     "run_ids": "run_id values are taken from events.json run_number fields so target_url patterns are consistent.",
     "multi_run": "Services with multiple runs (auth-bff: 3300/3210/3200, order-svc: 2960/2940/2920, etc.) have a deployment object per run per env. The fetcher backfill picks the newest per (service, env).",
     "disconnected": "billing-webhook has five separate run_ids (one per env) — fully disconnected as in events.json.",
-    "target_url": "Every status target_url embeds /actions/runs/{run_id} for fetcher §5.6.1 run-id extraction."
+    "target_url": "Every status target_url embeds /actions/runs/{run_id} for fetcher §5.6.1 run-id extraction.",
+    "new_statuses": {
+      "pending":   "payments-api prod run 4840 — single 'pending' status → maps to contract 'pending'. run 4830 'success' is the effective slot; run 4840 is the incoming next.",
+      "queued":    "search-indexer prod run 1420 — single 'queued' status → maps to contract 'queued'.",
+      "waiting":   "billing-webhook prod run 826 — single 'waiting' status → maps to contract 'waiting'.",
+      "cancelled": "ledger-projector prod run 1831 — 'failure' status + run_conclusion 'cancelled' → fetcher ResolveFailureStatusAsync detects cancelled run → contract 'cancelled'.",
+      "rejected":  "catalog-edge prod run 5161 — 'waiting' status + reviews [{state: rejected}] → fetcher reviews endpoint → contract 'rejected'."
+    }
   },
   "repos": [
 
@@ -93,6 +100,20 @@
           "statuses": [
             { "id": 48305001, "state": "in_progress", "created_at": "2026-05-31T07:00:30Z" },
             { "id": 48305002, "state": "success",     "created_at": "2026-05-31T07:04:00Z" }
+          ]
+        },
+        {
+          "_note": "NEW STATUS: pending — run 4840 queued for prod; run 4830 success remains the effective slot.",
+          "id": 4840005,
+          "sha": "0b1c2d3",
+          "ref": "release/2.16",
+          "environment": "prod",
+          "payload": { "version": "v2.16.0-rc1" },
+          "creator": "mreyes",
+          "created_at": "2026-06-06T07:55:00Z",
+          "run_id": 4840,
+          "statuses": [
+            { "id": 48400051, "state": "pending", "created_at": "2026-06-06T07:55:30Z" }
           ]
         }
       ]
@@ -186,6 +207,21 @@
             { "id": 14105002, "state": "success",     "created_at": "2026-05-31T06:44:00Z" }
           ],
           "artifact": { "id": 99005, "name": "version.txt", "content": "v0.8.0" }
+        },
+        {
+          "_note": "NEW STATUS: queued — run 1420 waiting to dispatch for prod.",
+          "id": 1420005,
+          "sha": "b2c3d4e",
+          "ref": "release/0.8",
+          "environment": "prod",
+          "payload": null,
+          "creator": "mreyes",
+          "created_at": "2026-06-06T06:52:00Z",
+          "run_id": 1420,
+          "statuses": [
+            { "id": 14200051, "state": "queued", "created_at": "2026-06-06T06:52:30Z" }
+          ],
+          "artifact": { "id": 99020, "name": "version.txt", "content": "v0.8.1-rc1" }
         }
       ]
     },
@@ -459,6 +495,20 @@
             { "id": 7921001, "state": "in_progress", "created_at": "2026-05-25T07:00:30Z" },
             { "id": 7921002, "state": "success",     "created_at": "2026-05-25T07:04:00Z" }
           ]
+        },
+        {
+          "_note": "NEW STATUS: waiting — run 826 awaiting environment gate approval for prod.",
+          "id": 826001,
+          "sha": "6e7f8a1",
+          "ref": "feat/retry-jitter-v2",
+          "environment": "prod",
+          "payload": { "version": "v1.4.1-rc1" },
+          "creator": "l.osman",
+          "created_at": "2026-06-06T07:58:00Z",
+          "run_id": 826,
+          "statuses": [
+            { "id": 8260011, "state": "waiting", "created_at": "2026-06-06T07:58:30Z" }
+          ]
         }
       ]
     },
@@ -544,6 +594,24 @@
           "statuses": [
             { "id": 51452001, "state": "in_progress", "created_at": "2026-05-29T09:00:30Z" },
             { "id": 51452002, "state": "success",     "created_at": "2026-05-29T09:04:00Z" }
+          ]
+        },
+        {
+          "_note": "NEW STATUS: rejected — reviewer denied the prod environment gate. GitHub writes failure on the deployment_status. Fetcher reads /deployments/{id}/reviews, finds state=rejected via ResolveFailureStatusAsync.",
+          "id": 5161001,
+          "sha": "2d9e0f1",
+          "ref": "feat/v5-rewrite",
+          "environment": "prod",
+          "payload": { "version": "v5.0.0-rc2" },
+          "creator": "tcheng",
+          "created_at": "2026-06-06T07:59:00Z",
+          "run_id": 5161,
+          "statuses": [
+            { "id": 51610011, "state": "in_progress", "created_at": "2026-06-06T07:59:30Z" },
+            { "id": 51610012, "state": "failure",     "created_at": "2026-06-06T08:01:00Z" }
+          ],
+          "reviews": [
+            { "state": "rejected", "user": "sec-approver", "submitted_at": "2026-06-06T08:00:45Z" }
           ]
         }
       ]
@@ -644,6 +712,22 @@
           "statuses": [
             { "id": 18022001, "state": "in_progress", "created_at": "2026-05-31T04:00:30Z" },
             { "id": 18022002, "state": "success",     "created_at": "2026-05-31T04:04:00Z" }
+          ]
+        },
+        {
+          "_note": "NEW STATUS: cancelled — run 1831 concluded as cancelled; GitHub writes failure on the deployment_status. Fetcher cross-references run.conclusion=cancelled via ResolveFailureStatusAsync.",
+          "id": 1831001,
+          "sha": "6b7c8d9",
+          "ref": "main",
+          "environment": "prod",
+          "payload": { "version": "v2.0.2-rc1" },
+          "creator": "r.iyer",
+          "created_at": "2026-06-06T07:57:00Z",
+          "run_id": 1831,
+          "run_conclusion": "cancelled",
+          "statuses": [
+            { "id": 18310011, "state": "in_progress", "created_at": "2026-06-06T07:57:30Z" },
+            { "id": 18310012, "state": "failure",     "created_at": "2026-06-06T07:59:00Z" }
           ]
         }
       ]

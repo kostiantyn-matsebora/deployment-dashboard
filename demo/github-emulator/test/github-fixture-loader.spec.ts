@@ -221,6 +221,121 @@ describe('GithubFixtureLoader', () => {
     });
   });
 
+  describe('new statuses (issue #268) — pending / queued / waiting / cancelled / rejected paths', () => {
+    describe('pending — payments-api prod run 4840', () => {
+      let paymentsRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        paymentsRepo = store.getRepo('demo-org', 'payments-api');
+      });
+
+      it('has a deployment with a pending status (deployment id 4840005)', () => {
+        const dep = paymentsRepo!.deployments.find(d => d.id === 4840005);
+        expect(dep).toBeDefined();
+        const sts = paymentsRepo!.statuses.get(4840005) ?? [];
+        expect(sts.some(s => s.state === 'pending')).toBe(true);
+      });
+
+      it('effective run 4830 success co-exists so the pending is the "next" deployment', () => {
+        const dep = paymentsRepo!.deployments.find(d => d.id === 4830005);
+        expect(dep).toBeDefined();
+        const sts = paymentsRepo!.statuses.get(4830005) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('run 4840 target_url embeds /actions/runs/4840', () => {
+        const sts = paymentsRepo!.statuses.get(4840005) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/4840'))).toBe(true);
+      });
+    });
+
+    describe('queued — search-indexer prod run 1420', () => {
+      let idxRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        idxRepo = store.getRepo('demo-org', 'search-indexer');
+      });
+
+      it('has a deployment with a queued status (deployment id 1420005)', () => {
+        const sts = idxRepo!.statuses.get(1420005) ?? [];
+        expect(sts.some(s => s.state === 'queued')).toBe(true);
+      });
+
+      it('run 1420 target_url embeds /actions/runs/1420', () => {
+        const sts = idxRepo!.statuses.get(1420005) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/1420'))).toBe(true);
+      });
+    });
+
+    describe('waiting — billing-webhook prod run 826', () => {
+      let hookRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        hookRepo = store.getRepo('demo-org', 'billing-webhook');
+      });
+
+      it('has a deployment with a waiting status (deployment id 826001)', () => {
+        const sts = hookRepo!.statuses.get(826001) ?? [];
+        expect(sts.some(s => s.state === 'waiting')).toBe(true);
+      });
+
+      it('run 826 target_url embeds /actions/runs/826', () => {
+        const sts = hookRepo!.statuses.get(826001) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/826'))).toBe(true);
+      });
+    });
+
+    describe('cancelled — ledger-projector prod run 1831 (failure + run.conclusion=cancelled)', () => {
+      let ledgerRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        ledgerRepo = store.getRepo('demo-org', 'ledger-projector');
+      });
+
+      it('has a deployment with a failure status (deployment id 1831001)', () => {
+        const sts = ledgerRepo!.statuses.get(1831001) ?? [];
+        expect(sts.some(s => s.state === 'failure')).toBe(true);
+      });
+
+      it('run 1831 has conclusion=cancelled', () => {
+        const run = ledgerRepo!.runs.get(1831);
+        expect(run).toBeDefined();
+        expect(run!.conclusion).toBe('cancelled');
+      });
+
+      it('run 1831 target_url embeds /actions/runs/1831', () => {
+        const sts = ledgerRepo!.statuses.get(1831001) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/1831'))).toBe(true);
+      });
+    });
+
+    describe('rejected — catalog-edge prod run 5161 (failure + reviews[rejected])', () => {
+      let catalogRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        catalogRepo = store.getRepo('demo-org', 'catalog-edge');
+      });
+
+      it('has a deployment with a failure status (deployment id 5161001)', () => {
+        const sts = catalogRepo!.statuses.get(5161001) ?? [];
+        expect(sts.some(s => s.state === 'failure')).toBe(true);
+      });
+
+      it('deployment 5161001 has a rejected review', () => {
+        const reviews = catalogRepo!.reviews.get(5161001) ?? [];
+        expect(reviews.length).toBeGreaterThan(0);
+        expect(reviews.some(r => r.state === 'rejected')).toBe(true);
+      });
+
+      it('rejected review has user and submitted_at fields', () => {
+        const reviews = catalogRepo!.reviews.get(5161001) ?? [];
+        const rejected = reviews.find(r => r.state === 'rejected')!;
+        expect(typeof rejected.user.login).toBe('string');
+        expect(typeof rejected.submitted_at).toBe('string');
+      });
+    });
+  });
+
   describe('GithubStoreStatus counters after load', () => {
     it('summary repos matches number of loaded repos', () => {
       const keys = store.allRepoKeys();

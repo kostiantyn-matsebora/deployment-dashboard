@@ -198,6 +198,22 @@ export class SwimlanesComponent {
     this.dagContent.set(next);
   }
 
+  /**
+   * Map from `current.id` → `slot.next` for all slots that have a next event.
+   * Used to pass the context-status badge data to vis-card nodes.
+   */
+  protected readonly nextByEventId = computed<Map<string, DeploymentEvent>>(() => {
+    const matrix = this.state.matrixData();
+    const map = new Map<string, DeploymentEvent>();
+    if (!matrix) return map;
+    for (const row of matrix.rows) {
+      for (const slot of Object.values(row.slots) as MatrixSlot[]) {
+        if (slot.next) map.set(slot.current.id, slot.next);
+      }
+    }
+    return map;
+  });
+
   // ── Events extracted from shared matrix snapshot ──────────
   private readonly eventsFromMatrix = computed<Map<string, DeploymentEvent[]>>(() => {
     const matrix = this.state.matrixData();

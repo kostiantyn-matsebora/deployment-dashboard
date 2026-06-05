@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { GithubStore, GhDeployment, GhDeploymentStatus, GhWorkflowRun, GhWorkflow, GhEnvironment, GhArtifact } from './github-store';
+import { GithubStore, GhDeployment, GhDeploymentStatus, GhWorkflowRun, GhWorkflow, GhEnvironment, GhArtifact, GhDeploymentReview } from './github-store';
 
 /** Raw shape of a fixture JSON file under demo/data/github/. */
 interface GithubFixtureFile {
@@ -22,22 +22,32 @@ interface WorkflowFixture {
   yaml: string;
 }
 
+interface ReviewFixture {
+  state:        string;
+  user:         string;
+  submitted_at: string;
+}
+
 interface DeploymentFixture {
-  id:          number;
-  sha:         string;
-  ref:         string;
-  environment: string;
-  payload:     Record<string, unknown> | null;
-  creator:     string;
-  created_at:  string;
-  run_id:      number;
-  statuses:    StatusFixture[];
-  artifact?:   ArtifactFixture;
+  id:             number;
+  sha:            string;
+  ref:            string;
+  environment:    string;
+  payload:        Record<string, unknown> | null;
+  creator:        string;
+  created_at:     string;
+  run_id:         number;
+  /** Conclusion to record on the associated workflow run — e.g. "cancelled". */
+  run_conclusion?: string | null;
+  statuses:       StatusFixture[];
+  artifact?:      ArtifactFixture;
+  /** Reviewer decisions for environment gate deployments. */
+  reviews?:       ReviewFixture[];
 }
 
 interface StatusFixture {
   id:         number;
-  state:      'queued' | 'pending' | 'in_progress' | 'success' | 'failure' | 'error' | 'inactive';
+  state:      'queued' | 'pending' | 'in_progress' | 'waiting' | 'success' | 'failure' | 'error' | 'inactive';
   created_at: string;
 }
 
@@ -90,7 +100,7 @@ export class GithubFixtureLoader {
         repo.workflows.push(workflow);
       }
 
-      // Deployments, statuses, runs, workflow YAML, artifacts
+      // Deployments, statuses, runs, workflow YAML, artifacts, reviews
       for (const dep of repoFixture.deployments) {
         const deployment: GhDeployment = {
           id:          dep.id,
@@ -113,17 +123,19 @@ export class GithubFixtureLoader {
         }));
         repo.statuses.set(dep.id, statuses);
 
-        // Workflow run — match by workflow id first, fall back to first workflow
+        // Workflow run — match by workflow id first, fall back to first workflow.
+        // If a run_conclusion is provided, it overrides the existing conclusion on the run.
         if (!repo.runs.has(dep.run_id)) {
           const matchingWf = repoFixture.workflows.find(wf => wf.id === dep.run_id)
             ?? repoFixture.workflows[0];
 
           if (matchingWf) {
             const run: GhWorkflowRun = {
-              id:       dep.run_id,
-              name:     matchingWf.name,
-              path:     matchingWf.path,
-              head_sha: dep.sha,
+              id:         dep.run_id,
+              name:       matchingWf.name,
+              path:       matchingWf.path,
+              head_sha:   dep.sha,
+              conclusion: dep.run_conclusion ?? null,
             };
             repo.runs.set(dep.run_id, run);
 
@@ -133,6 +145,10 @@ export class GithubFixtureLoader {
               repo.workflowYaml.set(yamlKey, matchingWf.yaml);
             }
           }
+        } else if (dep.run_conclusion != null) {
+          // Patch conclusion on a previously-registered run (same run_id, multiple deployments)
+          const existing = repo.runs.get(dep.run_id)!;
+          repo.runs.set(dep.run_id, { ...existing, conclusion: dep.run_conclusion });
         }
 
         // Artifact
@@ -146,6 +162,16 @@ export class GithubFixtureLoader {
           const existing = repo.artifacts.get(dep.run_id) ?? [];
           existing.push(artifact);
           repo.artifacts.set(dep.run_id, existing);
+        }
+
+        // Reviews — reviewer decisions for environment gate deployments
+        if (dep.reviews && dep.reviews.length > 0) {
+          const reviews: GhDeploymentReview[] = dep.reviews.map(r => ({
+            state:        r.state,
+            user:         { login: r.user },
+            submitted_at: r.submitted_at,
+          }));
+          repo.reviews.set(dep.id, reviews);
         }
       }
     }
