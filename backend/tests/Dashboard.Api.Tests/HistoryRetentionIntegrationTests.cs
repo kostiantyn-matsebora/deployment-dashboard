@@ -51,7 +51,7 @@ public sealed class HistoryRetentionIntegrationTests : IAsyncLifetime
     {
         // Arrange
         var now = DateTimeOffset.UtcNow;
-        var old   = DeploymentEventAt(now.AddDays(-400)); // outside 365-day window → pruned
+        var old = DeploymentEventAt(now.AddDays(-400)); // outside 365-day window → pruned
         var exact = DeploymentEventAt(now.AddDays(-365)); // exactly at boundary → survives (strict <)
         var recent = DeploymentEventAt(now.AddDays(-30)); // well within window → survives
 
@@ -78,7 +78,7 @@ public sealed class HistoryRetentionIntegrationTests : IAsyncLifetime
     public async Task PrunePass_DeletesControlStreamEventsOlderThanTwoHours_KeepsRecent()
     {
         var now = DateTimeOffset.UtcNow;
-        var old    = ControlStreamEventAt(now.AddHours(-3));
+        var old = ControlStreamEventAt(now.AddHours(-3));
         var recent = ControlStreamEventAt(now.AddMinutes(-30));
 
         _db.ControlStreamEvents.AddRange(old, recent);
@@ -99,7 +99,7 @@ public sealed class HistoryRetentionIntegrationTests : IAsyncLifetime
     public async Task PrunePass_DeletesComponentEventsOlderThanTwoHours_KeepsRecent()
     {
         var now = DateTimeOffset.UtcNow;
-        var old    = ComponentEventAt(now.AddHours(-3));
+        var old = ComponentEventAt(now.AddHours(-3));
         var recent = ComponentEventAt(now.AddMinutes(-10));
 
         _db.ComponentEvents.AddRange(old, recent);
@@ -159,15 +159,15 @@ public sealed class HistoryRetentionIntegrationTests : IAsyncLifetime
         var now = DateTimeOffset.UtcNow;
 
         // deployment_events: 1 old, 1 recent.
-        var oldDep    = DeploymentEventAt(now.AddDays(-400));
+        var oldDep = DeploymentEventAt(now.AddDays(-400));
         var recentDep = DeploymentEventAt(now.AddDays(-1));
 
         // control_stream_events: 1 old, 1 recent.
-        var oldCtrl    = ControlStreamEventAt(now.AddHours(-3));
+        var oldCtrl = ControlStreamEventAt(now.AddHours(-3));
         var recentCtrl = ControlStreamEventAt(now.AddMinutes(-20));
 
         // component_events: 1 old, 1 recent.
-        var oldComp    = ComponentEventAt(now.AddHours(-25));
+        var oldComp = ComponentEventAt(now.AddHours(-25));
         var recentComp = ComponentEventAt(now.AddMinutes(-5));
 
         _db.DeploymentEvents.AddRange(oldDep, recentDep);
@@ -180,7 +180,7 @@ public sealed class HistoryRetentionIntegrationTests : IAsyncLifetime
 
         _db.ChangeTracker.Clear();
 
-        var deps  = await _db.DeploymentEvents.ToListAsync();
+        var deps = await _db.DeploymentEvents.ToListAsync();
         var ctrls = await _db.ControlStreamEvents.ToListAsync();
         var comps = await _db.ComponentEvents.ToListAsync();
 
@@ -220,19 +220,19 @@ public sealed class HistoryRetentionIntegrationTests : IAsyncLifetime
     private static DeploymentEvent DeploymentEventAt(DateTimeOffset happenedAt) =>
         new()
         {
-            Id           = Guid.CreateVersion7(),
+            Id = Guid.CreateVersion7(),
             DeploymentId = $"dep-{Guid.NewGuid():N}",
-            Service      = "svc",
-            Environment  = "prod",
-            Status       = "success",
-            HappenedAt   = happenedAt,
+            Service = "svc",
+            Environment = "prod",
+            Status = "success",
+            HappenedAt = happenedAt,
         };
 
     private static ControlStreamEvent ControlStreamEventAt(DateTimeOffset occurredAt) =>
         new()
         {
-            Id        = Guid.CreateVersion7(),
-            Type      = "reset-initiated",
+            Id = Guid.CreateVersion7(),
+            Type = "reset-initiated",
             Component = "*",
             OccurredAt = occurredAt,
         };
@@ -240,11 +240,11 @@ public sealed class HistoryRetentionIntegrationTests : IAsyncLifetime
     private static ComponentEvent ComponentEventAt(DateTimeOffset receivedAt) =>
         new()
         {
-            Id          = Guid.CreateVersion7(),
+            Id = Guid.CreateVersion7(),
             ComponentId = "demo-driver",
-            EventType   = "status",
-            State       = "running",
-            OccurredAt  = receivedAt,
-            ReceivedAt  = receivedAt,
+            EventType = "status",
+            State = "running",
+            OccurredAt = receivedAt,
+            ReceivedAt = receivedAt,
         };
 }

@@ -31,8 +31,8 @@ public sealed class PostgresConnectionStringTests
     {
         var config = FromMemory(new()
         {
-            ["Postgres:Host"]     = "db.internal",
-            ["Postgres:Port"]     = "5433",
+            ["Postgres:Host"] = "db.internal",
+            ["Postgres:Port"] = "5433",
             ["Postgres:Database"] = "my_db",
             ["Postgres:Username"] = "app",
             ["Postgres:Password"] = "secret",
@@ -69,17 +69,17 @@ public sealed class PostgresConnectionStringTests
         // appsettings section + env vars set; env vars must win.
         var config = FromMemory(new()
         {
-            ["Postgres:Host"]     = "appsettings-host",
-            ["Postgres:Port"]     = "9999",
+            ["Postgres:Host"] = "appsettings-host",
+            ["Postgres:Port"] = "9999",
             ["Postgres:Database"] = "appsettings-db",
             ["Postgres:Username"] = "appsettings-user",
             ["Postgres:Password"] = "appsettings-pass",
             // env vars — AddInMemoryCollection resolves them through IConfiguration
             // so we can use the key names the helper reads directly.
-            ["POSTGRES_HOST"]     = "env-host",
-            ["POSTGRES_PORT"]     = "5433",
-            ["POSTGRES_DB"]       = "env-db",
-            ["POSTGRES_USER"]     = "env-user",
+            ["POSTGRES_HOST"] = "env-host",
+            ["POSTGRES_PORT"] = "5433",
+            ["POSTGRES_DB"] = "env-db",
+            ["POSTGRES_USER"] = "env-user",
             ["POSTGRES_PASSWORD"] = "env-pass",
         });
 
@@ -96,8 +96,8 @@ public sealed class PostgresConnectionStringTests
         // POSTGRES_HOST overrides; remaining parts come from appsettings.
         var config = FromMemory(new()
         {
-            ["POSTGRES_HOST"]     = "override-host",
-            ["Postgres:Port"]     = "5433",
+            ["POSTGRES_HOST"] = "override-host",
+            ["Postgres:Port"] = "5433",
             ["Postgres:Username"] = "cfg-user",
             ["Postgres:Password"] = "cfg-pass",
             // Database is absent everywhere → built-in default.
@@ -117,8 +117,8 @@ public sealed class PostgresConnectionStringTests
     {
         var config = FromMemory(new()
         {
-            ["POSTGRES_HOST"]  = "   ",     // whitespace → treat as absent
-            ["Postgres:Host"]  = "cfg-host",
+            ["POSTGRES_HOST"] = "   ",     // whitespace → treat as absent
+            ["Postgres:Host"] = "cfg-host",
         });
 
         var result = PostgresConnectionString.Resolve(config);
@@ -146,17 +146,17 @@ public sealed class PostgresConnectionStringTests
     {
         var config = FromMemory(new()
         {
-            ["POSTGRES_HOST"]     = "h",
-            ["POSTGRES_PORT"]     = "1234",
-            ["POSTGRES_DB"]       = "d",
-            ["POSTGRES_USER"]     = "u",
+            ["POSTGRES_HOST"] = "h",
+            ["POSTGRES_PORT"] = "1234",
+            ["POSTGRES_DB"] = "d",
+            ["POSTGRES_USER"] = "u",
             ["POSTGRES_PASSWORD"] = "p",
         });
 
         var result = PostgresConnectionString.Resolve(config);
 
         Assert.StartsWith("Host=", result);
-        Assert.Contains(";Port=",     result);
+        Assert.Contains(";Port=", result);
         Assert.Contains(";Database=", result);
         Assert.Contains(";Username=", result);
         Assert.Contains(";Password=", result);

@@ -241,7 +241,7 @@ public sealed class GithubAdapterOptionsEnvTests
         var config = BuildConfig(new Dictionary<string, string?>
         {
             ["GitHub:Token"] = "from-appsettings",
-            ["GITHUB_TOKEN"]  = "from-env",
+            ["GITHUB_TOKEN"] = "from-env",
         });
 
         var options = new GithubAdapterOptions();

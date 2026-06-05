@@ -71,12 +71,12 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>
 
             var values = new Dictionary<string, string?>
             {
-                ["POSTGRES_HOST"]     = csb.Host     ?? "localhost",
-                ["POSTGRES_PORT"]     = (csb.Port != 0 ? csb.Port : 5432).ToString(),
-                ["POSTGRES_DB"]       = csb.Database ?? string.Empty,
-                ["POSTGRES_USER"]     = csb.Username ?? string.Empty,
+                ["POSTGRES_HOST"] = csb.Host ?? "localhost",
+                ["POSTGRES_PORT"] = (csb.Port != 0 ? csb.Port : 5432).ToString(),
+                ["POSTGRES_DB"] = csb.Database ?? string.Empty,
+                ["POSTGRES_USER"] = csb.Username ?? string.Empty,
                 ["POSTGRES_PASSWORD"] = csb.Password ?? string.Empty,
-                ["API_KEY"]           = TestApiKey,
+                ["API_KEY"] = TestApiKey,
             };
 
             // Explicitly null out the key when not included so that any value from

@@ -33,10 +33,10 @@ public static class PostgresConnectionString
     /// </summary>
     public static string Resolve(IConfiguration configuration)
     {
-        var host     = Resolve(configuration, "POSTGRES_HOST",     "Postgres:Host",     DefaultHost);
-        var port     = Resolve(configuration, "POSTGRES_PORT",     "Postgres:Port",     DefaultPort);
-        var database = Resolve(configuration, "POSTGRES_DB",       "Postgres:Database", DefaultDatabase);
-        var username = Resolve(configuration, "POSTGRES_USER",     "Postgres:Username", string.Empty);
+        var host = Resolve(configuration, "POSTGRES_HOST", "Postgres:Host", DefaultHost);
+        var port = Resolve(configuration, "POSTGRES_PORT", "Postgres:Port", DefaultPort);
+        var database = Resolve(configuration, "POSTGRES_DB", "Postgres:Database", DefaultDatabase);
+        var username = Resolve(configuration, "POSTGRES_USER", "Postgres:Username", string.Empty);
         var password = Resolve(configuration, "POSTGRES_PASSWORD", "Postgres:Password", string.Empty);
 
         return $"Host={host};Port={port};Database={database};Username={username};Password={password}";

@@ -31,14 +31,14 @@ public sealed class ResetOptionsEnvWiringTests
         var config = BuildConfig(new Dictionary<string, string?>
         {
             // appsettings-style section (what BindConfiguration("Reset") reads)
-            ["Reset:AckTimeoutSeconds"]  = "10",
-            ["Reset:GateMaxTtlSeconds"]  = "60",
+            ["Reset:AckTimeoutSeconds"] = "10",
+            ["Reset:GateMaxTtlSeconds"] = "60",
             ["Reset:ExpectedComponents:0"] = "dashboard-fetcher",
             ["Reset:ExpectedComponents:1"] = "demo-driver",
             // env-var overrides (what ResetOptionsEnv.ApplyEnvOverrides reads)
-            ["RESET_ACK_TIMEOUT_SECONDS"]  = "7",
+            ["RESET_ACK_TIMEOUT_SECONDS"] = "7",
             ["RESET_GATE_MAX_TTL_SECONDS"] = "42",
-            ["RESET_EXPECTED_COMPONENTS"]  = "a,b,c",
+            ["RESET_EXPECTED_COMPONENTS"] = "a,b,c",
         });
 
         var provider = BuildProvider(config);
@@ -61,7 +61,7 @@ public sealed class ResetOptionsEnvWiringTests
         {
             ["Reset:ExpectedComponents:0"] = "dashboard-fetcher",
             ["Reset:ExpectedComponents:1"] = "demo-driver",
-            ["RESET_EXPECTED_COMPONENTS"]  = "a,b,c",
+            ["RESET_EXPECTED_COMPONENTS"] = "a,b,c",
         });
 
         var provider = BuildProvider(config);
@@ -80,8 +80,8 @@ public sealed class ResetOptionsEnvWiringTests
         // Only the appsettings section is present; no SCREAMING_SNAKE keys.
         var config = BuildConfig(new Dictionary<string, string?>
         {
-            ["Reset:AckTimeoutSeconds"]    = "10",
-            ["Reset:GateMaxTtlSeconds"]    = "60",
+            ["Reset:AckTimeoutSeconds"] = "10",
+            ["Reset:GateMaxTtlSeconds"] = "60",
             ["Reset:ExpectedComponents:0"] = "dashboard-fetcher",
             ["Reset:ExpectedComponents:1"] = "demo-driver",
         });
@@ -99,11 +99,11 @@ public sealed class ResetOptionsEnvWiringTests
     {
         var config = BuildConfig(new Dictionary<string, string?>
         {
-            ["Reset:AckTimeoutSeconds"]    = "10",
-            ["Reset:GateMaxTtlSeconds"]    = "60",
+            ["Reset:AckTimeoutSeconds"] = "10",
+            ["Reset:GateMaxTtlSeconds"] = "60",
             ["Reset:ExpectedComponents:0"] = "dashboard-fetcher",
             ["Reset:ExpectedComponents:1"] = "demo-driver",
-            ["RESET_ACK_TIMEOUT_SECONDS"]  = "7",
+            ["RESET_ACK_TIMEOUT_SECONDS"] = "7",
             // RESET_GATE_MAX_TTL_SECONDS and RESET_EXPECTED_COMPONENTS absent
         });
 
