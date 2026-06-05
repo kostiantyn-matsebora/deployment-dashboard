@@ -7,6 +7,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.8.0] - 2026-06-05
+
+### Added
+
+- **Deployment-history retention is now enforced.** A daily background job prunes `deployment_events` older than `HISTORY_RETENTION_DAYS` (default 365, minimum 90 — smaller values clamp up), alongside the short-lived control/component event logs (fixed 2-hour window). Previously `HISTORY_RETENTION_DAYS` was documented and wired into the API container but read by nothing, so deployment history grew unbounded.
+- **Previously-undocumented configuration is now documented.** `GATEWAY_PORT`, `BACKFILL`, `INITIAL_LOOKBACK`, `GITHUB_SERVICE_MAP`, `GITHUB_RATE_LIMIT`, and the reset-choreography knobs (`RESET_ACK_TIMEOUT_SECONDS`, `RESET_GATE_MAX_TTL_SECONDS`, `RESET_EXPECTED_COMPONENTS`) are now in `compose/.env.example` and the configuration guide, with demo-only variables grouped in their own section.
+
+### Changed
+
+- **Breaking — unified, flat environment-variable convention.** Every setting now reads as a flat `SCREAMING_SNAKE` variable (an appsettings section still provides the defaults; the environment variable overrides it). The previous .NET `Section__Property` env forms are removed:
+  - `Reset__AckTimeoutSeconds` / `Reset__GateMaxTtlSeconds` / `Reset__ExpectedComponents__N` → `RESET_ACK_TIMEOUT_SECONDS` / `RESET_GATE_MAX_TTL_SECONDS` / `RESET_EXPECTED_COMPONENTS` (now a comma-separated list, which also removes the old array-append footgun).
+  - every `GITHUB__<Pascal>` (e.g. `GITHUB__BaseUrl`, `GITHUB__Token`) → flat `GITHUB_*` (`GITHUB_BASE_URL`, `GITHUB_TOKEN`, …).
+  - `ConnectionStrings__Postgres` → assembled by the app from `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`.
+  - **Action required:** adopters setting any of the old `__` forms must switch to the new flat names.
+- **Breaking — `API_PORT` renamed to `GATEWAY_PORT`.** `API_PORT` was documented but never had any effect (the gateway is the single public surface); the host port is now correctly named `GATEWAY_PORT`.
+
+### Documentation
+
+- Documented the GitHub deployment-status → contract-status mapping decisions — `error` collapses into `failure`, and `inactive` is skipped as a supersession marker — so they are not re-discovered as bugs.
+- The project home/README now leads with a views switcher and a light/dark C4 architecture diagram.
+
+
 ## [0.7.0] - 2026-06-05
 
 ### Added
