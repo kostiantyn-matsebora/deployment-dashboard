@@ -51,9 +51,9 @@ the orchestrator reviews, reconciles, commits, ships — this keeps the change a
 - **The orchestrator traffics in compressed messages, not raw artifacts.** It reads
   `RESULT`/`FINDING`/`ARTIFACT` — never test logs, full diffs, or source. A decision that
   needs an artifact read → delegate it and get back a compressed message.
-- **Keep the lead's working set to `plan + current wave`.** Maintain a durable **run ledger**
-  (lane map + one line per wave: changed / decided / deferred) as the authoritative state; fold
-  each `RESULT` into it and drop the verbatim message. In team mode the shared task list is the ledger.
+- **Keep the lead's working set to `plan + current wave`.**
+  - Maintain a durable **run ledger** (lane map + one line per wave: changed / decided / deferred) as the authoritative state.
+  - Fold each `RESULT` into it and drop the verbatim message. In team mode the shared task list is the ledger.
 
 ## Communication protocol
 
@@ -129,10 +129,10 @@ Testing is split by ownership; failures route through the orchestrator.
 - **`testing` owns the wider net** — API/integration/e2e/regression, run after integration.
   - Reports red to the orchestrator (failing `RESULT` / `FINDING`).
   - Never fixes production code; may fix the *tests*, never weaken them.
-- **Orchestrator diagnoses to *route*, not to fix.** From the `FINDING` (`expect`/`actual`/
-  `suspect`) it picks the owning specialist and issues a `FIX` — it does not open the code
-  itself. **Deep investigation is the owning agent's prerogative**, in that agent's own
-  context. Re-runs after each fix; loops until green. Never ships red.
+- **Orchestrator diagnoses to *route*, not to fix.**
+  - From the `FINDING` (`expect`/`actual`/`suspect`) it picks the owning specialist and issues a `FIX`; it does not open the code itself.
+  - **Deep investigation is the owning agent's prerogative**, in that agent's own context.
+  - Re-run after each fix; loop until green. Never ship red.
 
 ## Standing guardrails — every role inherits these
 
