@@ -38,10 +38,20 @@ is unchanged; teams never replace it — opt-in escalation only.**
 | **In-session subagents** *(default)* | The orchestrator dispatches the owning role as an in-session subagent that reports back. | Most work: one/few surfaces, handled by one integrator + sequential/parallel subagents. |
 | **Spawned team** *(opt-in)* | Role members run as separate, coordinated sessions under a plan-confirm launch; the lead integrates. | ≥3 layers sharing a contract, where per-role context + peer contract-negotiation pay off. |
 
-**Claude Code binding** (this is the only client-specific wiring; other runtimes map equivalently):
+The modes are runtime-neutral; each runtime maps them to its own primitives. Two bindings ship:
+
+**Claude Code:**
 
 - In-session subagent = the `Agent`/Task tool.
 - Spawned team = `/feature-team <issue>` → plan-confirm → `TeamCreate` + spawn members (`subagent_type` = role), coordinating via `SendMessage` + a shared task list.
+- Project bindings: `CLAUDE.md` § *Project bindings*.
+
+**GitHub Copilot:**
+
+- Role member = a custom agent `.github/agents/<role>.agent.md` (body = the role anchor), invoked `@<role>`.
+- In-session subagent = invoke `@<role>` directly.
+- Spawned team = `/fleet` (Copilot CLI) — decomposes the objective into parallel tracks dispatched to the role agents; the lead integrates.
+- Project bindings: `.github/copilot-instructions.md`.
 
 ## Single-integrator model
 

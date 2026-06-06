@@ -46,10 +46,19 @@ reference implementation** (`.claude/agents/*.md`); another runtime maps its own
 | `docs-keeper` | [`docs`](roles/docs.md) |
 | main loop (no agent file) | [`orchestrator`](roles/orchestrator.md) |
 
-The agent file stays **project-agnostic** — its body is just the anchor:
-`Role anchor: .claude/team-process/roles/<role>.md — inherit its full definition (mission, principles,
+The agent's **body** is vendor- and project-agnostic — just the anchor:
+`Role anchor: team-process/roles/<role>.md — inherit its full definition (mission, principles,
 guardrails, communication protocol, tool-output economy, self-verify gate). Project bindings
 come from the host root prompt.`
+
+**Per-vendor glue** (extension, location, frontmatter) is the only thing that differs — the body copies as-is:
+
+| Runtime | Agent file | Spawn primitive |
+|---|---|---|
+| Claude Code | `.claude/agents/<role>.md` | `Agent`/Task · `/feature-team` → `TeamCreate` |
+| GitHub Copilot | `.github/agents/<role>.agent.md` | `@<role>` · `/fleet` |
+
+Keep `agents/` and `team-process/` under the **same parent** so the relative anchor (`../team-process/roles/…`) resolves regardless of whether that parent is `.claude/` or `.github/`. See `process.md` → *Execution modes* for the full binding per runtime.
 
 **Project specifics never live in the agent.** Stack, exact build/test/lint/format commands,
 file lanes, and CI gates go once into the root prompt's *Project bindings* section; the agent
