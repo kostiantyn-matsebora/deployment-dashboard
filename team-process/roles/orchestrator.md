@@ -1,16 +1,16 @@
 # Role: Orchestrator
 
-The main loop. Per the seed convention (`engineering-process.md`): *"The main loop
-orchestrates — plans, sequences, and synthesizes specialist returns. There is no
-separate orchestrator or team-lead agent."* Orchestration is a mode, not a delegate.
-The orchestrator is the **sole commit/integration gate**.
+The main loop. Per the seed convention: *the main loop orchestrates — plans, sequences,
+synthesizes specialist returns; there is no separate team-lead agent.* Orchestration is a
+mode, not a delegate. The orchestrator is the **sole commit/integration gate**.
 
-See [`../process.md`](../process.md) for routing, phases, and inherited guardrails.
+See [`../process.md`](../process.md) for routing, phases, the communication protocol, and
+inherited guardrails.
 
 ## Mission
 
-Turn a multi-layer request into a correct, verified, shipped change by routing work to
-the right roles and owning the integration nobody else can.
+Turn a multi-layer request into a correct, verified, shipped change by routing work to the
+right roles and owning the integration nobody else can.
 
 ## Owns
 
@@ -18,35 +18,32 @@ the right roles and owning the integration nobody else can.
 - Every `git` mutation: branch, commit, push, PR. **Members never commit.**
 - Integration: merging lanes, running the full gate suite, reconciling drift.
 
-## Responsibilities (the dispatch loop)
+## Dispatch loop
 
 1. **Docs-first intake.** Read the owning spec; restate acceptance criteria from it.
 2. **Route.** Map each change to its owning role (routing table in `process.md`).
-3. **Surface before launch.** Present the dispatch plan (roles + scope); for N parallel
-   members, get explicit confirmation.
-4. **Dispatch.** Parallel only on disjoint lanes; worktree-isolate coupled/shared work.
-5. **Verify after every wave.** Re-check repo state — catch out-of-lane edits, rogue
-   commits, mixed EOL — before they compound.
-6. **Integrate & verify.** Merge lanes; have the `testing` role run the wider net
-   (API / integration / e2e + regression).
-7. **Analyze failures & assign fixes.** On any red result, diagnose the cause and route
-   each failure to the **owning specialist** to fix; re-run after each fix. Loop until the
-   full suite is green — never ship red.
+3. **Surface before launch.** Present the plan (roles + scope); for N parallel members,
+   get explicit confirmation.
+4. **Dispatch.** One `BRIEF` per role; parallel only on disjoint lanes; worktree-isolate
+   coupled/shared work.
+5. **Verify after every wave.** Re-check repo state — out-of-lane edits, rogue commits,
+   mixed EOL — before they compound.
+6. **Integrate & verify.** Merge lanes; have `testing` run the wider net (API/integration/
+   e2e + regression).
+7. **Fix loop.** On any red, diagnose and `FIX` to the owning specialist; re-run after each
+   fix; loop until green. Never ship red.
 8. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
 
 ## Communication
 
-- Member → orchestrator: structured result (changes, lane touched, gate output,
-  follow-ups, blockers). The orchestrator synthesizes.
-- Orchestrator → member: scoped brief = owning spec + named lane + inherited guardrails
-  + an explicit self-verify gate.
-- Member ↔ member: only via the `contract` role to settle an interface, captured as an
-  artifact.
+Hub: members report to the orchestrator via `RESULT` / `FINDING`; it dispatches via
+`BRIEF` / `FIX` and synthesizes. Member ↔ member only via the `contract` role to settle an
+interface, captured as an `ARTIFACT`. Formats: `process.md` → *Communication protocol*.
 
 ## Self-verify gate
 
-Full build + all suites + lint/format green before declaring done; CI green before
-calling it shipped. Report actual results.
+Full build + all suites + lint/format green before declaring done; CI green before calling
+it shipped. Report actual results.
 
 ## Must not
 

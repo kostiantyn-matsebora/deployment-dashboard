@@ -1,120 +1,151 @@
 # Orchestration Process
 
-Extracted and generalized from a proven in-repo dispatch convention
-(`engineering-process.md`, which noted it was "suitable for extraction to a shared
-engineering-team framework"). Defines how one **orchestrator** routes a multi-layer
-change across role-specialists. Project-agnostic. Pairs with [`roles/`](roles/).
+Generalized from a proven in-repo dispatch convention (`engineering-process.md`). One
+**orchestrator** routes a multi-layer change across role-specialists. Project-agnostic.
+Pairs with [`roles/`](roles/).
 
-## Routing (the seed convention)
+## Routing
 
-The main loop **orchestrates**: it plans, sequences, and synthesizes specialist
-returns. There is no separate team-lead agent — orchestration is a mode.
+The main loop **orchestrates** — plans, sequences, synthesizes returns. No separate
+team-lead agent; orchestration is a mode. Route each change to its owning role:
 
-Route each change to the role that owns it:
-
-| Change type | Role |
+| Change | Role |
 |---|---|
 | Contract / API shape (endpoint, verb, payload, wire format) | [`contract`](roles/contract.md) |
 | Server-side / backend code | [`backend`](roles/backend.md) |
 | Frontend / SPA / UI | [`frontend`](roles/frontend.md) |
-| CI/CD, containers, release lifecycle, infrastructure (IaC) | [`infrastructure`](roles/infrastructure.md) |
+| CI/CD, containers, release, IaC | [`infrastructure`](roles/infrastructure.md) |
 | Tests + verification | [`testing`](roles/testing.md) |
 | Markdown docs / indexes / sources-of-truth | [`docs`](roles/docs.md) |
 | Plan, dispatch, integrate, ship | [`orchestrator`](roles/orchestrator.md) |
 
-## Rules (from the seed convention)
+## Rules
 
-- **Surface before launch.** Present the dispatch plan (which roles + scope) before
-  starting. For N parallel members, get explicit user confirmation first.
-- **Parallelize only independent slices.** Serialize coupled or shared-file edits — or
-  isolate them in separate git worktrees — to avoid index contention.
-- **Inline execution is the exception.** Reserve main-loop execution for trivial edits,
-  orchestration itself, and conversational turns. Substantive changes go to the owning role.
+- **Surface before launch.** Present the dispatch plan (roles + scope) before starting;
+  for N parallel members, get explicit confirmation.
+- **Parallelize only disjoint lanes.** Serialize coupled/shared-file edits, or isolate
+  them in separate worktrees — avoid index contention.
+- **Inline is the exception.** Main-loop execution only for trivial edits, orchestration,
+  and conversational turns. Substantive changes → the owning role.
 
-## Execution modes — same roles, two substrates
+## Execution modes
 
-The roles and guardrails are identical regardless of *how* a role runs. Only the
-substrate differs. **The default flow is unchanged; teams never replace it — they are
-an escalation the user opts into explicitly.**
+Roles + guardrails are identical across modes; only the substrate differs. **Default flow
+is unchanged; teams never replace it — opt-in escalation only.**
 
-| Mode | How it starts | Substrate | When |
+| Mode | Start | Substrate | When |
 |---|---|---|---|
-| **Subagents on demand** *(default)* | The orchestrator (main loop) dispatches the owning role as an in-session subagent that reports back. Triggered by normal asks — "pick up issue 86", freeform instructions. | `Agent`/Task subagents inside the lead's session. | Most work: one or a few surfaces, or any task one integrator + sequential/parallel subagents can handle. |
-| **Agent team** *(opt-in)* | The orchestrator runs `/feature-team <issue>`: plan-and-confirm, then `TeamCreate` + spawn role members as separate sessions coordinating via `SendMessage` + a shared task list. | Separate Claude sessions, each spawned with the role's `subagent_type`. | Big issues — **≥3 layers with a shared contract** — where dedicated per-role context + peer contract-negotiation pay off. |
+| **Subagents** *(default)* | Orchestrator dispatches the owning role as an in-session subagent. | `Agent`/Task subagents in the lead's session. | Most work: one/few surfaces, handled by one integrator + sequential/parallel subagents. |
+| **Agent team** *(opt-in)* | `/feature-team <issue>`: plan-confirm → `TeamCreate` + spawn role members as separate sessions. | Separate Claude sessions, each `subagent_type` = role. | ≥3 layers sharing a contract, where per-role context + peer contract-negotiation pay off. |
 
-Both modes obey this process and the same [`roles/`](roles/). Trivial edits,
-orchestration, and conversational turns stay inline regardless of mode.
+## Single-integrator model
 
-## Orchestration model — single integrator
+One orchestrator is the **sole integration/commit gate**. Members produce in-lane changes;
+the orchestrator reviews, reconciles, commits, ships — this keeps the change auditable.
 
-One orchestrator is the **sole integration and commit gate**. Members produce changes
-in their lane; the orchestrator reviews, reconciles, commits, and ships. This is what
-keeps a multi-agent change auditable.
+- **Hub-and-spoke default.** Members report to the orchestrator; it holds the plan + merge.
+- **Peer-to-peer only for contract negotiation.** The `contract` role may settle an
+  interface directly with consumers — the result is an `ARTIFACT`, never left as chat.
+- **Fan-out is deterministic.** Drive parallel phases from an explicit plan, not chatter
+  — repeatable + visible.
 
-- **Hub-and-spoke by default.** Members report to the orchestrator, which synthesizes
-  and holds the plan + the merge.
-- **Peer-to-peer only for contract negotiation.** The `contract` role may talk directly
-  with consumers to settle an interface — but the result is an **artifact** (spec /
-  schema), never left as chat.
-- **Structured fan-out is deterministic.** Drive parallel phases from an explicit
-  plan/script, not free-form chatter — so what ran is repeatable and visible.
+## Communication protocol
+
+All cross-role messages use these 5 typed forms. **Fixed field order; omit empty fields;
+one fact per line.** The vocabulary is binding — roles emit/consume these, not free prose.
+
+```
+BRIEF              orch → role   · dispatch
+spec:    <owning spec path#section — docs-first target + acceptance gate>
+lane:    <glob(s) the role may touch; nothing else>
+task:    <one line>
+gate:    <self-verify set, e.g. build+unit+lint>
+seed:    <optional diagnosis/theory to TEST FIRST before investigating>
+```
+```
+RESULT             role → orch   · hand-back
+role:    <role>
+changed: <files>
+gate:    <ACTUAL results, e.g. build ok | unit 12/12 | lint ok — never "should pass">
+notes:   <≤3 design decisions>
+follow:  <out-of-lane needs / deferred>
+block:   <none | see FINDING>
+```
+```
+FINDING            role → orch   · blocker / contradiction / impossible
+where:   <file or spec>
+issue:   <contradiction | impossible | missing input>
+options: <a / b>
+need:    <decision required>
+```
+```
+FIX                orch → role   · fix-loop assignment
+test:    <failing test id>
+expect:  <…>   actual: <…>
+suspect: <layer / file>
+```
+```
+ARTIFACT           contract → orch → consumers   · settled interface
+spec:    <committed path>
+delta:   <resources / operations changed>
+open:    <questions needing a decision>
+```
+
+- `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
+- A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
+  until green (see *Fix loop*).
+- Members never commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
 
 ## Phases
 
-0. **Intake & docs-first.** Read the owning spec before any code; restate its acceptance
-   criteria. The spec is the contract *and* the regression gate.
-1. **Contract.** Cross-layer change → define/update the shared contract first; everyone
-   codes against the agreed artifact.
-2. **Plan & dispatch.** Map work to roles; declare each role's **ownership lane** (exact
-   files); surface the plan; confirm before N parallel members.
-3. **Implement.** Parallel **only on disjoint lanes**; coupled/shared work is serialized
-   or **worktree-isolated**. Each member **self-verifies** (build + **unit tests for its
-   own change** + lint) and reports actual pass/fail counts.
-4. **Integrate & verify.** Orchestrator merges lanes; the `testing` role runs the wider
-   net (API / integration / e2e + **regression**); failures route back through the
-   orchestrator to the owning specialist (see *Verification & the fix loop*). Re-verify
-   against the phase-0 spec.
-5. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI
-   green. Never push to the default branch directly.
+0. **Intake & docs-first.** Read the owning spec before code; restate its acceptance
+   criteria. Spec = contract *and* regression gate.
+1. **Contract.** Cross-layer change → define/update the shared contract first (→ `ARTIFACT`);
+   all code targets the agreed artifact.
+2. **Plan & dispatch.** Map work to roles; declare each lane (exact files) in a `BRIEF`;
+   surface the plan; confirm before N parallel members.
+3. **Implement.** Parallel only on disjoint lanes; coupled/shared work serialized or
+   worktree-isolated. Each member self-verifies (build + own-change unit tests + lint) and
+   returns a `RESULT` with actual counts.
+4. **Integrate & verify.** Orchestrator merges lanes; `testing` runs the wider net
+   (API/integration/e2e + regression). Red → `FIX` to the owning role. Re-verify against
+   the phase-0 spec.
+5. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
+   Never push to the default branch.
 
-## Verification & the fix loop
+## Fix loop
 
-Testing is split by ownership; failures route back through the orchestrator.
+Testing is split by ownership; failures route through the orchestrator.
 
-- **Each implementer tests its own change.** Within its lane, a specialist writes and
-  runs **unit tests** for the code it produced (where applicable) as part of self-verify,
-  and reports actual pass/fail counts. No change is handed back unit-untested.
-- **The `testing` role owns the wider net** — API, integration, e2e, and **regression**
-  across the suite — run after implementers integrate. It **reports negative (failing)
-  results to the orchestrator** rather than fixing production code itself (it may fix the
-  *tests* per its own guardrail, never weaken them).
-- **The orchestrator analyzes failures and assigns the fix.** On any red result it
-  diagnoses the cause, routes each failure to the **owning specialist** to fix, then
-  re-runs — looping until the full suite is green. The orchestrator never ships red.
+- **Implementer tests its own change.** Each specialist writes + runs unit tests for its
+  code (where applicable) and reports actual counts in `RESULT`. No change handed back
+  unit-untested.
+- **`testing` owns the wider net** — API/integration/e2e/regression, run after integration.
+  It reports red to the orchestrator (failing `RESULT` / `FINDING`), never fixes production
+  code (may fix the *tests*, never weaken them).
+- **Orchestrator diagnoses + assigns.** On red, issues a `FIX` to the owning specialist,
+  re-runs after each fix, loops until green. Never ships red.
 
 ## Standing guardrails — every role inherits these
 
-1. **Docs-first.** Read the owning spec via the docs index before coding; it's the
-   contract + acceptance gate. Update the spec first when behavior changes.
-2. **Single integrator.** Members **never** commit, push, or open PRs — hand back; only
-   the orchestrator integrates.
-3. **Stay in your lane.** Touch only declared files. Need a change outside it? Report
-   it — don't make it.
-4. **Repo hygiene.** Match the project's line-ending + formatting convention; run the
-   formatter; never introduce mixed EOL. OS-dependent formatters that differ from CI →
-   the CI platform's result wins.
-5. **Self-verify before returning.** Build + tests + lint green; report **actual** results
-   (counts, failures, skips). No "should pass."
-6. **Report, don't act, on scope changes.** A blocker, contradiction, or "impossible"
-   finding is escalated as a decision — never silently re-scoped.
-7. **Check provided theories first.** When the orchestrator/user hands a diagnosis,
-   cheaply test *that* before independent investigation.
+1. **Docs-first.** Read the owning spec (`BRIEF.spec`) before coding; it's contract +
+   acceptance gate. Behavior change → update the spec first.
+2. **Single integrator.** Members never commit/push/PR — hand back via `RESULT`.
+3. **Stay in your lane.** Touch only `BRIEF.lane` files. Need more? `RESULT.follow` or a
+   `FINDING` — don't make the change.
+4. **Repo hygiene.** Match the project's line-ending + format convention; run the formatter;
+   no mixed EOL. OS-dependent formatter differs from CI → the CI platform's result wins.
+5. **Self-verify before returning.** Build + tests + lint green; `RESULT.gate` carries
+   actual counts/failures/skips. No "should pass."
+6. **Report, don't act, on scope changes.** Blocker / contradiction / "impossible" → a
+   `FINDING`, never a silent re-scope.
+7. **Check provided theories first.** A `BRIEF.seed` diagnosis is tested cheaply before
+   independent investigation.
 
 ## Verify state after every wave
 
 The orchestrator re-checks repo state between waves — a member may have done more than
-asked (committed, pushed, touched out-of-lane files, introduced mixed EOL). Catch it
-before it compounds.
+asked (committed, pushed, out-of-lane edits, mixed EOL). Catch it before it compounds.
 
 ## Anti-patterns (each cost a real failure)
 
