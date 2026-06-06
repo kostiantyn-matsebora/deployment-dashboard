@@ -695,6 +695,135 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    // ── GetLastSuccessfulPerSlotAsync — additional coverage ───────────────────
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_MultipleSlots_ReturnsOnePerSlot()
+    {
+        await SeedAsync(service: "svc-a", environment: "dev", status: DeploymentStatus.Success);
+        await SeedAsync(service: "svc-a", environment: "prod", status: DeploymentStatus.Success);
+        await SeedAsync(service: "svc-b", environment: "prod", status: DeploymentStatus.Success);
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Equal(3, result.Count);
+    }
+
+    // ── TiebreakByIdPerSlot — same happened_at resolved by greatest Id ────────
+
+    [Fact]
+    public async Task GetEffectivePerSlotAsync_SameHappenedAt_TiebreaksByGreatestId()
+    {
+        // Two effective events in the same slot with identical happened_at.
+        // The one with the greater UUIDv7 Id (inserted last) must win.
+        var sharedTime = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        var earlier = new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = "dep-001",
+            Service = "svc-a",
+            Environment = "prod",
+            Status = DeploymentStatus.Success,
+            HappenedAt = sharedTime,
+        };
+        _ctx.DeploymentEvents.Add(earlier);
+        await _ctx.SaveChangesAsync();
+
+        // Small delay so the second UUIDv7 is lexicographically greater.
+        await Task.Delay(1);
+        var later = new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = "dep-002",
+            Service = "svc-a",
+            Environment = "prod",
+            Status = DeploymentStatus.Failure,
+            HappenedAt = sharedTime,
+        };
+        _ctx.DeploymentEvents.Add(later);
+        await _ctx.SaveChangesAsync();
+
+        var result = await _repo.GetEffectivePerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(later.Id, result[0].Id);
+    }
+
+    [Fact]
+    public async Task GetLatestNonEffectivePerSlotAsync_SameHappenedAt_TiebreaksByGreatestId()
+    {
+        var sharedTime = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        var first = new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = "dep-003",
+            Service = "svc-a",
+            Environment = "prod",
+            Status = DeploymentStatus.Pending,
+            HappenedAt = sharedTime,
+        };
+        _ctx.DeploymentEvents.Add(first);
+        await _ctx.SaveChangesAsync();
+
+        await Task.Delay(1);
+        var second = new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = "dep-004",
+            Service = "svc-a",
+            Environment = "prod",
+            Status = DeploymentStatus.Queued,
+            HappenedAt = sharedTime,
+        };
+        _ctx.DeploymentEvents.Add(second);
+        await _ctx.SaveChangesAsync();
+
+        var result = await _repo.GetLatestNonEffectivePerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(second.Id, result[0].Id);
+    }
+
+    // ── ListAsync — combined filters ──────────────────────────────────────────
+
+    [Fact]
+    public async Task ListAsync_ServiceAndStatusFilter_CombinesFilters()
+    {
+        await SeedAsync(service: "svc-a", status: DeploymentStatus.Success);
+        await SeedAsync(service: "svc-a", status: DeploymentStatus.Failure);
+        await SeedAsync(service: "svc-b", status: DeploymentStatus.Success);
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Service = "svc-a", Status = DeploymentStatus.Success },
+            CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal("svc-a", items[0].Service);
+        Assert.Equal(DeploymentStatus.Success, items[0].Status);
+    }
+
+    [Fact]
+    public async Task ListAsync_SinceAndUntilFilter_ReturnsBoundedRange()
+    {
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        await SeedAsync(happenedAt: t0.AddHours(-1));        // before since — excluded
+        var inside = await SeedAsync(happenedAt: t0.AddHours(1));  // inside range
+        await SeedAsync(happenedAt: t0.AddHours(3));         // at or after until — excluded
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Since = t0, Until = t0.AddHours(2) },
+            CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(inside.Id, items[0].Id);
+    }
+
+    // ── GetSinceAsync — gap note ──────────────────────────────────────────────
+    // GetSinceAsync uses FromSqlInterpolated with a Postgres uuid > operator that
+    // SQLite does not support. Unit coverage is therefore not possible with the
+    // in-memory SQLite fixture. Covered end-to-end by the API integration tests
+    // (testing/api) which run against a real Postgres instance via Testcontainers.
+
     private static DeploymentListQuery DefaultQuery() =>
         new(Service: null, Environment: null, Status: null, DeploymentId: null,
             Since: null, Until: null, Cursor: null, Limit: 100);
