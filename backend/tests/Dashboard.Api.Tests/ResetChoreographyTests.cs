@@ -72,7 +72,7 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
             Headers = { { "X-Api-Key", TestApiFactory.TestApiKey } },
         };
 
-    private HttpRequestMessage AckRequest(string componentId, string resetId) =>
+    private HttpRequestMessage AckRequest(string componentId, string correlationId) =>
         new(HttpMethod.Post, "/api/control/events")
         {
             Content = JsonContent.Create(new
@@ -80,12 +80,12 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
                 event_type = "reset-ack",
                 state = "paused",
                 occurred_at = DateTimeOffset.UtcNow.ToString("o"),
-                payload = new { reset_id = resetId },
             }),
             Headers =
             {
                 { "X-Api-Key", TestApiFactory.TestApiKey },
                 { "X-Component-Id", componentId },
+                { "X-Correlation-Id", correlationId },
             },
         };
 
@@ -113,14 +113,14 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
     // ── 202 / 409 ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Post_Reset_Returns202WithResetIdAndDrainingState()
+    public async Task Post_Reset_Returns202WithCorrelationIdAndDrainingState()
     {
         var res = await _client.SendAsync(ResetRequest());
 
         Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("draining", body.GetProperty("state").GetString());
-        Assert.NotEqual(Guid.Empty, Guid.Parse(body.GetProperty("reset_id").GetString()!));
+        Assert.NotEqual(Guid.Empty, Guid.Parse(body.GetProperty("correlation_id").GetString()!));
         Assert.True(body.TryGetProperty("accepted_at", out _));
     }
 
@@ -152,7 +152,7 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var body = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
-        var resetId = body.GetProperty("reset_id").GetString()!;
+        var correlationId = body.GetProperty("correlation_id").GetString()!;
 
         var frames = await ReadDataFramesAsync(stream, 1, cts.Token);
         Assert.Single(frames);
@@ -160,13 +160,15 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         var ev = frames[0];
         Assert.Equal("reset-initiated", ev.GetProperty("type").GetString());
         Assert.Equal("*", ev.GetProperty("component").GetString());
-        Assert.Equal(resetId, ev.GetProperty("id").GetString());
+        Assert.Equal(correlationId, ev.GetProperty("id").GetString());
+        // reset-initiated carries its own id as correlation_id
+        Assert.Equal(correlationId, ev.GetProperty("correlation_id").GetString());
     }
 
-    // ── reset_id correlation across all three events ───────────────────────────
+    // ── correlation_id across all three events ────────────────────────────────
 
     [Fact]
-    public async Task FullCycle_TwoAcks_EmitsStartedAndCompleted_WithResetIdCorrelation()
+    public async Task FullCycle_TwoAcks_EmitsStartedAndCompleted_WithCorrelationId()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
@@ -179,12 +181,12 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
-        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+        var correlationId = resetBody.GetProperty("correlation_id").GetString()!;
 
-        var ack1 = await _client.SendAsync(AckRequest("dashboard-fetcher", resetId), cts.Token);
+        var ack1 = await _client.SendAsync(AckRequest("dashboard-fetcher", correlationId), cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, ack1.StatusCode);
 
-        var ack2 = await _client.SendAsync(AckRequest("demo-driver", resetId), cts.Token);
+        var ack2 = await _client.SendAsync(AckRequest("demo-driver", correlationId), cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, ack2.StatusCode);
 
         var frames = await ReadDataFramesAsync(stream, 3, cts.Token);
@@ -195,10 +197,10 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         Assert.Contains("reset-completed", types);
 
         var started = frames.First(f => f.GetProperty("type").GetString() == "reset-started");
-        Assert.Equal(resetId, started.GetProperty("reset_id").GetString());
+        Assert.Equal(correlationId, started.GetProperty("correlation_id").GetString());
 
         var completed = frames.First(f => f.GetProperty("type").GetString() == "reset-completed");
-        Assert.Equal(resetId, completed.GetProperty("reset_id").GetString());
+        Assert.Equal(correlationId, completed.GetProperty("correlation_id").GetString());
     }
 
     // ── 401 auth ──────────────────────────────────────────────────────────────
@@ -274,10 +276,10 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
-        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+        var correlationId = resetBody.GetProperty("correlation_id").GetString()!;
 
-        await _client.SendAsync(AckRequest("dashboard-fetcher", resetId), cts.Token);
-        await _client.SendAsync(AckRequest("demo-driver", resetId), cts.Token);
+        await _client.SendAsync(AckRequest("dashboard-fetcher", correlationId), cts.Token);
+        await _client.SendAsync(AckRequest("demo-driver", correlationId), cts.Token);
 
         var frames = await ReadDataFramesAsync(stream, 3, cts.Token);
         Assert.Contains(frames, f => f.GetProperty("type").GetString() == "reset-completed");
@@ -365,7 +367,7 @@ public sealed class AckFanInTests : IAsyncLifetime
         return req;
     }
 
-    private HttpRequestMessage AckRequest(string componentId, string resetId) =>
+    private HttpRequestMessage AckRequest(string componentId, string correlationId) =>
         new(HttpMethod.Post, "/api/control/events")
         {
             Content = JsonContent.Create(new
@@ -373,12 +375,12 @@ public sealed class AckFanInTests : IAsyncLifetime
                 event_type = "reset-ack",
                 state = "paused",
                 occurred_at = DateTimeOffset.UtcNow.ToString("o"),
-                payload = new { reset_id = resetId },
             }),
             Headers =
             {
                 { "X-Api-Key", TestApiFactory.TestApiKey },
                 { "X-Component-Id", componentId },
+                { "X-Correlation-Id", correlationId },
             },
         };
 
@@ -405,25 +407,23 @@ public sealed class AckFanInTests : IAsyncLifetime
 
     // ── Reproducing test ──────────────────────────────────────────────────────
 
-    // ── ACK-gate regression: correlation_id is observability-only ─────────────
+    // ── ACK-gate: X-Correlation-Id is the gate key ────────────────────────────
 
     /// <summary>
-    /// Verifies that a reset-ack with <c>X-Correlation-Id</c> set but with a missing
-    /// or mismatched <c>payload.reset_id</c> does NOT advance the ack gate.
-    /// The gate counts acks purely via <c>payload.reset_id</c>; <c>correlation_id</c>
-    /// is additive/observability only and must not substitute for it.
+    /// Verifies that a reset-ack with NO <c>X-Correlation-Id</c> header does NOT advance
+    /// the ack gate. The gate keys purely on <c>X-Correlation-Id</c>; an absent header
+    /// means the event is recorded (204) but does not count toward the active cycle.
     /// </summary>
     [Fact]
-    public async Task AckGate_ResetAckWithCorrelationIdButMissingPayloadResetId_DoesNotCountTowardGate()
+    public async Task AckGate_ResetAckWithMissingCorrelationIdHeader_DoesNotCountTowardGate()
     {
         // A long timeout (30 s from factory config) means early completion can ONLY happen
-        // if the ack gate was triggered.  We send a "ack" that has X-Correlation-Id set
-        // but no payload.reset_id.  The gate should NOT open; we then send the real ack
-        // and confirm only that one completes the cycle.
+        // if the ack gate was triggered.  We send a reset-ack with no X-Correlation-Id
+        // header; the gate should NOT open.  Then send the real ack (with header) and
+        // confirm only that one completes the cycle.
         //
-        // Two separate SSE connections are used: the first (probe) is closed deliberately
-        // after the spurious-ack window; the second (verify) captures the ack-driven
-        // reset-started.  This avoids sharing a stream across a cancel boundary.
+        // Two separate SSE connections: first (probe) captures the spurious-ack window;
+        // second (verify) captures the ack-driven reset-started.
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
 
         // Open first SSE connection for the probe window.
@@ -437,10 +437,9 @@ public sealed class AckFanInTests : IAsyncLifetime
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
-        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+        var correlationId = resetBody.GetProperty("correlation_id").GetString()!;
 
-        // Post a reset-ack that carries X-Correlation-Id = resetId but omits payload.reset_id.
-        // This must NOT count as a valid ack — the gate relies on payload.reset_id only.
+        // Post a reset-ack with no X-Correlation-Id — must NOT count toward the gate.
         var spuriousAck = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
         {
             Content = JsonContent.Create(new
@@ -448,20 +447,19 @@ public sealed class AckFanInTests : IAsyncLifetime
                 event_type = "reset-ack",
                 state = "paused",
                 occurred_at = DateTimeOffset.UtcNow.ToString("o"),
-                // payload.reset_id intentionally absent
             }),
             Headers =
             {
                 { "X-Api-Key", TestApiFactory.TestApiKey },
                 { "X-Component-Id", TestComponent },
-                { "X-Correlation-Id", resetId },
+                // X-Correlation-Id intentionally absent
             },
         };
         var spuriousRes = await _client.SendAsync(spuriousAck, cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, spuriousRes.StatusCode);
 
         // Give the orchestrator 2 s — if the spurious ack opened the gate, reset-started
-        // would arrive within this window.  Collect all frames from the probe stream.
+        // would arrive within this window.
         await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
 
         // Read any frames that arrived so far (non-blocking: use a short window).
@@ -472,7 +470,7 @@ public sealed class AckFanInTests : IAsyncLifetime
 
         Assert.True(
             !probeTypes.Contains("reset-started"),
-            "reset-started must NOT arrive after a spurious ack lacking payload.reset_id.");
+            "reset-started must NOT arrive after a reset-ack with no X-Correlation-Id header.");
 
         // Open a second SSE connection for the real verification phase.
         using var verifyRes = await _client.SendAsync(
@@ -480,9 +478,9 @@ public sealed class AckFanInTests : IAsyncLifetime
         await using var verifyStream = await verifyRes.Content.ReadAsStreamAsync(cts.Token);
         await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
 
-        // Now post the correct ack — gate must open and reset-started must arrive promptly.
+        // Now post the correct ack (with X-Correlation-Id) — gate must open promptly.
         var ackSentAt = DateTimeOffset.UtcNow;
-        var realAck = await _client.SendAsync(AckRequest(TestComponent, resetId), cts.Token);
+        var realAck = await _client.SendAsync(AckRequest(TestComponent, correlationId), cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, realAck.StatusCode);
 
         var frames = await ReadDataFramesAsync(verifyStream, 1, cts.Token);
@@ -490,8 +488,8 @@ public sealed class AckFanInTests : IAsyncLifetime
             f => f.TryGetProperty("type", out var t) && t.GetString() == "reset-started");
 
         Assert.True(startedFrame.ValueKind != JsonValueKind.Undefined,
-            "reset-started must arrive after the correct ack (with payload.reset_id).");
-        Assert.Equal(resetId, startedFrame.GetProperty("reset_id").GetString());
+            "reset-started must arrive after the correct ack (with X-Correlation-Id).");
+        Assert.Equal(correlationId, startedFrame.GetProperty("correlation_id").GetString());
 
         var elapsed = startedFrame.GetProperty("occurred_at").GetDateTimeOffset() - ackSentAt;
         Assert.True(elapsed.TotalSeconds < 5.0,
@@ -501,11 +499,11 @@ public sealed class AckFanInTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Asserts that posting a reset-ack with a mismatched <c>payload.reset_id</c> (wrong
-    /// reset cycle) does NOT advance the ack gate for the active cycle.
+    /// Asserts that a reset-ack carrying a mismatched <c>X-Correlation-Id</c> (stale/wrong
+    /// cycle id) does NOT advance the ack gate for the active cycle.
     /// </summary>
     [Fact]
-    public async Task AckGate_ResetAckWithMismatchedPayloadResetId_DoesNotCountTowardGate()
+    public async Task AckGate_ResetAckWithMismatchedCorrelationId_DoesNotCountTowardGate()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
@@ -518,14 +516,27 @@ public sealed class AckFanInTests : IAsyncLifetime
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
-        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+        var correlationId = resetBody.GetProperty("correlation_id").GetString()!;
 
-        // Post a reset-ack with a wrong (stale) reset_id in the payload.
-        // This must NOT count toward the current cycle's ack gate.
-        var staleResetId = Guid.CreateVersion7().ToString();
-        var mismatchedAck = AckRequest(TestComponent, staleResetId);
-        // Also set X-Correlation-Id = active resetId to confirm the gate ignores it.
-        mismatchedAck.Headers.Add("X-Correlation-Id", resetId);
+        // Post a reset-ack with a stale/wrong X-Correlation-Id — must NOT count.
+        var staleCorrelationId = Guid.CreateVersion7().ToString();
+        Assert.NotEqual(correlationId, staleCorrelationId);
+
+        var mismatchedAck = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
+        {
+            Content = JsonContent.Create(new
+            {
+                event_type = "reset-ack",
+                state = "paused",
+                occurred_at = DateTimeOffset.UtcNow.ToString("o"),
+            }),
+            Headers =
+            {
+                { "X-Api-Key", TestApiFactory.TestApiKey },
+                { "X-Component-Id", TestComponent },
+                { "X-Correlation-Id", staleCorrelationId },
+            },
+        };
 
         var mismatchedRes = await _client.SendAsync(mismatchedAck, cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, mismatchedRes.StatusCode);
@@ -542,7 +553,7 @@ public sealed class AckFanInTests : IAsyncLifetime
 
         Assert.True(
             !probeTypes.Contains("reset-started"),
-            "reset-started must NOT arrive after an ack with a mismatched payload.reset_id.");
+            "reset-started must NOT arrive after a reset-ack with a mismatched X-Correlation-Id.");
 
         cts.Cancel();
     }
@@ -576,13 +587,13 @@ public sealed class AckFanInTests : IAsyncLifetime
         var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
-        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+        var correlationId = resetBody.GetProperty("correlation_id").GetString()!;
 
         // Record the moment the ack is sent.
         var ackSentAt = DateTimeOffset.UtcNow;
 
         // --- Post the ack that should drive early completion ---
-        var ackRes = await _client.SendAsync(AckRequest(TestComponent, resetId), cts.Token);
+        var ackRes = await _client.SendAsync(AckRequest(TestComponent, correlationId), cts.Token);
         Assert.Equal(HttpStatusCode.NoContent, ackRes.StatusCode);
 
         // --- Read SSE until reset-started (or 15 s total) ---
@@ -595,8 +606,8 @@ public sealed class AckFanInTests : IAsyncLifetime
         Assert.True(startedFrame.ValueKind != JsonValueKind.Undefined,
             "reset-started must appear within the 15-second window.");
 
-        // Verify it carries the correct reset_id correlation.
-        Assert.Equal(resetId, startedFrame.GetProperty("reset_id").GetString());
+        // Verify it carries the correct correlation_id.
+        Assert.Equal(correlationId, startedFrame.GetProperty("correlation_id").GetString());
 
         // Measure elapsed time: reset-started.occurred_at must be within 5 s of when
         // the ack was sent.  AckTimeoutSeconds = 30, so anything under 5 s is ack-driven.
@@ -706,7 +717,7 @@ public sealed class IngestGateTests : IAsyncLifetime
         var cycle = await db.ResetCycles.FindAsync((short)1);
         Assert.NotNull(cycle);
         cycle.State = "resetting";
-        cycle.ResetId = Guid.CreateVersion7();
+        cycle.CorrelationId = Guid.CreateVersion7();
         cycle.StartedAt = DateTimeOffset.UtcNow.AddSeconds(-120);
         cycle.DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(-60);
         await db.SaveChangesAsync();
@@ -720,7 +731,7 @@ public sealed class IngestGateTests : IAsyncLifetime
         var reloaded = await db.ResetCycles.FindAsync((short)1);
         Assert.NotNull(reloaded);
         Assert.Equal("idle", reloaded.State);
-        Assert.Null(reloaded.ResetId);
+        Assert.Null(reloaded.CorrelationId);
     }
 
     [Fact]
@@ -730,11 +741,11 @@ public sealed class IngestGateTests : IAsyncLifetime
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<Dashboard.Shared.Data.DashboardDbContext>();
 
-        var resetId = Guid.CreateVersion7();
+        var correlationId = Guid.CreateVersion7();
         var cycle = await db.ResetCycles.FindAsync((short)1);
         Assert.NotNull(cycle);
         cycle.State = "draining";
-        cycle.ResetId = resetId;
+        cycle.CorrelationId = correlationId;
         cycle.StartedAt = DateTimeOffset.UtcNow;
         cycle.DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(300);
         await db.SaveChangesAsync();
@@ -747,7 +758,7 @@ public sealed class IngestGateTests : IAsyncLifetime
         var reloaded = await db.ResetCycles.FindAsync((short)1);
         Assert.NotNull(reloaded);
         Assert.Equal("draining", reloaded.State);
-        Assert.Equal(resetId, reloaded.ResetId);
+        Assert.Equal(correlationId, reloaded.CorrelationId);
     }
 
     // ── Fix C: ResetStateProvider seeded from DB at startup ───────────────────

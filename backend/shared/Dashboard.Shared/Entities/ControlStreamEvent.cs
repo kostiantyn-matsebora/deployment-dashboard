@@ -21,10 +21,11 @@ public sealed class ControlStreamEvent
     public required string Component { get; set; }
 
     /// <summary>
-    /// Correlates <c>reset-started</c> / <c>reset-completed</c> back to the id of the
-    /// initiating <c>reset-initiated</c> event. <c>null</c> on <c>reset-initiated</c> itself.
+    /// Correlation id: born at <c>reset-initiated</c> (where it equals the event's own id).
+    /// <c>reset-started</c> and <c>reset-completed</c> carry the <c>reset-initiated</c> id.
+    /// <c>null</c> on <c>reset-initiated</c> itself (populated on downstream frames only).
     /// </summary>
-    public Guid? ResetId { get; set; }
+    public Guid? CorrelationId { get; set; }
 
     /// <summary>Server-assigned UTC timestamp at emit time.</summary>
     public required DateTimeOffset OccurredAt { get; set; }

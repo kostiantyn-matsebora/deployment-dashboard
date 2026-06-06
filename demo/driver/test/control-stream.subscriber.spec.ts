@@ -103,7 +103,7 @@ describe('ControlStreamSubscriber', () => {
 
   // ── SSE dispatch ──────────────────────────────────────────────────────────
 
-  it('dispatches reset-initiated using the event id as reset_id', async () => {
+  it('dispatches reset-initiated using the event id as correlation_id', async () => {
     const sseText =
       `event: reset-initiated\nid: ${RESET_ID}\ndata: {"id":"${RESET_ID}","component":"*"}\n\n`;
     globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
@@ -116,8 +116,8 @@ describe('ControlStreamSubscriber', () => {
     expect(coord.onResetInitiated).toHaveBeenCalledWith(RESET_ID);
   });
 
-  it('dispatches reset-started with reset_id from data body', async () => {
-    const sseText = `event: reset-started\nid: other\ndata: {"reset_id":"${RESET_ID}"}\n\n`;
+  it('dispatches reset-started with correlation_id from data body', async () => {
+    const sseText = `event: reset-started\nid: other\ndata: {"correlation_id":"${RESET_ID}"}\n\n`;
     globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
     const coord = makeCoordinator();
     const sub = track(makeSubscriber(coord));
@@ -128,8 +128,8 @@ describe('ControlStreamSubscriber', () => {
     expect(coord.onResetStarted).toHaveBeenCalledWith(RESET_ID);
   });
 
-  it('dispatches reset-completed with reset_id from data body', async () => {
-    const sseText = `event: reset-completed\nid: other\ndata: {"reset_id":"${RESET_ID}"}\n\n`;
+  it('dispatches reset-completed with correlation_id from data body', async () => {
+    const sseText = `event: reset-completed\nid: other\ndata: {"correlation_id":"${RESET_ID}"}\n\n`;
     globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
     const coord = makeCoordinator();
     const sub = track(makeSubscriber(coord));
@@ -312,7 +312,7 @@ describe('ControlStreamSubscriber', () => {
     });
 
     it('publishes reset-completed frame to ControlFeed and dispatches to coordinator', async () => {
-      const sseText = `event: reset-completed\nid: other\ndata: {"reset_id":"${RESET_ID}"}\n\n`;
+      const sseText = `event: reset-completed\nid: other\ndata: {"correlation_id":"${RESET_ID}"}\n\n`;
       globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
       const coord = makeCoordinator();
       const feed  = new ControlFeed();

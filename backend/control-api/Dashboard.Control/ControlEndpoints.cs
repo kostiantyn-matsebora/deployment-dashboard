@@ -83,7 +83,7 @@ public static class ControlEndpoints
                 statusCode: StatusCodes.Status409Conflict);
 
         return Results.Accepted(value: new ResetAcceptedResponse(
-            acceptance.ResetId,
+            acceptance.CorrelationId,
             acceptance.State,
             acceptance.AcceptedAt));
     }
@@ -135,10 +135,11 @@ public static class ControlEndpoints
         // parses the id, fetches the full row, and fans it out to live SSE subscribers.
         await componentEventNotifier.NotifyAsync(entity.Id, ct);
 
-        // For reset-ack events, also NOTIFY the component_acks channel so the driving reset instance
-        // can count this ack for the active cycle (§7 ch.3, D16).
-        if (body.EventType == "reset-ack" && ExtractResetId(body) is { } resetId)
-            await ackNotifier.NotifyAsync(componentId, resetId, ct);
+        // For reset-ack events, NOTIFY the component_acks channel using the X-Correlation-Id header
+        // so the driving reset instance can count this ack for the active cycle (§7 ch.3, D16).
+        // A missing or invalid X-Correlation-Id means the ack is recorded (204) but NOT gated.
+        if (body.EventType == "reset-ack" && correlationId is { Length: > 0 })
+            await ackNotifier.NotifyAsync(componentId, correlationId, ct);
 
         return Results.NoContent();
     }
@@ -299,23 +300,4 @@ public static class ControlEndpoints
         await httpContext.Response.Body.FlushAsync(ct);
     }
 
-    /// <summary>
-    /// Extracts <c>reset_id</c> from the opaque payload of a <c>reset-ack</c> event.
-    /// The payload is an already-serialised JSON string stored verbatim; parse it minimally.
-    /// </summary>
-    private static string? ExtractResetId(ComponentEventIngest body)
-    {
-        if (body.Payload is not { } payload) return null;
-
-        try
-        {
-            return payload.TryGetProperty("reset_id", out var prop)
-                ? prop.GetString()
-                : null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }

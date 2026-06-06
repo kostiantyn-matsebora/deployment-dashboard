@@ -86,15 +86,17 @@ public sealed class ControlEndpointTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Post_ValidControlApiKey_BodyContainsResetIdStateAndAcceptedAt()
+    public async Task Post_ValidControlApiKey_BodyContainsCorrelationIdStateAndAcceptedAt()
     {
         var res = await _client.SendAsync(ResetRequest());
 
         Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("draining", body.GetProperty("state").GetString());
-        Assert.NotEqual(Guid.Empty, Guid.Parse(body.GetProperty("reset_id").GetString()!));
+        Assert.NotEqual(Guid.Empty, Guid.Parse(body.GetProperty("correlation_id").GetString()!));
         Assert.True(body.TryGetProperty("accepted_at", out _));
+        // reset_id is retired; the field must NOT be present in the 202 body.
+        Assert.False(body.TryGetProperty("reset_id", out _), "202 body must not contain 'reset_id' — retired in favour of 'correlation_id'.");
     }
 }
 

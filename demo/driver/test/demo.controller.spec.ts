@@ -18,8 +18,8 @@ const idle = (overrides: Partial<DemoStatus> = {}): DemoStatus => ({
   errors:       0,
   started_at:   null,
   finished_at:  null,
-  reset_state:  'idle',
-  reset_id:     null,
+  reset_state:    'idle',
+  correlation_id: null,
   ...overrides,
 });
 
@@ -37,14 +37,14 @@ const done = (): DemoStatus => ({
   errors:       0,
   started_at:   '2026-01-01T00:00:00Z',
   finished_at:  '2026-01-01T00:01:00Z',
-  reset_state:  'idle',
-  reset_id:     null,
+  reset_state:    'idle',
+  correlation_id: null,
 });
 
 const blocked = (): DemoStatus => idle({
   state:       'blocked',
-  reset_state: 'blocked',
-  reset_id:    '01J9F4WZK3W9G2T6X4QH3DKQF6',
+  reset_state:    'blocked',
+  correlation_id: '01J9F4WZK3W9G2T6X4QH3DKQF6',
 });
 
 /** Build a minimal mock Express Response for testing guardNotBlocked. */
@@ -188,7 +188,7 @@ describe('DemoController', () => {
       service.getStatus.mockReturnValue(blocked());
       const result = controller.status();
       expect(result.reset_state).toBe('blocked');
-      expect(result.reset_id).toBe('01J9F4WZK3W9G2T6X4QH3DKQF6');
+      expect(result.correlation_id).toBe('01J9F4WZK3W9G2T6X4QH3DKQF6');
     });
   });
 
@@ -268,8 +268,8 @@ describe('DemoController', () => {
     it('calls service.startIngest with the request body', async () => {
       service.startIngest.mockResolvedValue(running());
       const res = makeMockRes();
-      await controller.ingest({ dataset: 'demo', reset: false }, res);
-      expect(service.startIngest).toHaveBeenCalledWith({ dataset: 'demo', reset: false });
+      await controller.ingest({ dataset: 'demo' }, res);
+      expect(service.startIngest).toHaveBeenCalledWith({ dataset: 'demo' });
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ state: 'running' }));
     });
 

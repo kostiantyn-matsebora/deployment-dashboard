@@ -93,11 +93,11 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
             NullLogger<ResetOrchestrator>.Instance);
     }
 
-    private async Task<ResetCycle> SeedCycleInStateAsync(string state, Guid resetId)
+    private async Task<ResetCycle> SeedCycleInStateAsync(string state, Guid correlationId)
     {
         var cycle = await _cycleRepo.LoadAsync(CancellationToken.None);
         cycle.State = state;
-        cycle.ResetId = resetId;
+        cycle.CorrelationId = correlationId;
         cycle.ExpectedComponents = ["dashboard-fetcher", "demo-driver"];
         cycle.AcksReceived = [];
         cycle.StartedAt = DateTimeOffset.UtcNow.AddSeconds(-5);
@@ -112,8 +112,8 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
     [Fact]
     public async Task AbortCycle_FromDraining_WritesIdleAndEmitsResetCompleted()
     {
-        var resetId = Guid.CreateVersion7();
-        var cycle = await SeedCycleInStateAsync(ResetState.Draining, resetId);
+        var correlationId = Guid.CreateVersion7();
+        var cycle = await SeedCycleInStateAsync(ResetState.Draining, correlationId);
 
         var orchestrator = BuildOrchestrator();
         await orchestrator.ExecuteAbortAsync(_db, cycle, _controlStreamRepo, _notifier, CancellationToken.None);
@@ -122,7 +122,7 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
         _db.ChangeTracker.Clear();
         var saved = await _cycleRepo.LoadAsync(CancellationToken.None);
         Assert.Equal(ResetState.Idle, saved.State);
-        Assert.Null(saved.ResetId);
+        Assert.Null(saved.CorrelationId);
         Assert.Null(saved.ExpectedComponents);
         Assert.Null(saved.AcksReceived);
         Assert.Null(saved.StartedAt);
@@ -133,12 +133,12 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
         var completed = Assert.Single(events);
         Assert.Equal("reset-completed", completed.Type);
         Assert.Equal("*", completed.Component);
-        Assert.Equal(resetId, completed.ResetId);
+        Assert.Equal(correlationId, completed.CorrelationId);
 
         // NOTIFY dispatched through the notifier.
         var notified = Assert.Single(_notifier.Notified);
         Assert.Equal("reset-completed", notified.Type);
-        Assert.Equal(resetId, notified.ResetId);
+        Assert.Equal(correlationId, notified.CorrelationId);
     }
 
     // ── Abort emits reset-completed (resetting state) ─────────────────────────
@@ -146,8 +146,8 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
     [Fact]
     public async Task AbortCycle_FromResetting_WritesIdleAndEmitsResetCompleted()
     {
-        var resetId = Guid.CreateVersion7();
-        var cycle = await SeedCycleInStateAsync(ResetState.Resetting, resetId);
+        var correlationId = Guid.CreateVersion7();
+        var cycle = await SeedCycleInStateAsync(ResetState.Resetting, correlationId);
 
         var orchestrator = BuildOrchestrator();
         await orchestrator.ExecuteAbortAsync(_db, cycle, _controlStreamRepo, _notifier, CancellationToken.None);
@@ -155,12 +155,12 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
         _db.ChangeTracker.Clear();
         var saved = await _cycleRepo.LoadAsync(CancellationToken.None);
         Assert.Equal(ResetState.Idle, saved.State);
-        Assert.Null(saved.ResetId);
+        Assert.Null(saved.CorrelationId);
 
         var events = await _db.ControlStreamEvents.ToListAsync();
         var completed = Assert.Single(events);
         Assert.Equal("reset-completed", completed.Type);
-        Assert.Equal(resetId, completed.ResetId);
+        Assert.Equal(correlationId, completed.CorrelationId);
     }
 
     // ── Abort clears all cycle fields ─────────────────────────────────────────
@@ -168,8 +168,8 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
     [Fact]
     public async Task AbortCycle_ClearsAllCycleFields()
     {
-        var resetId = Guid.CreateVersion7();
-        var cycle = await SeedCycleInStateAsync(ResetState.Draining, resetId);
+        var correlationId = Guid.CreateVersion7();
+        var cycle = await SeedCycleInStateAsync(ResetState.Draining, correlationId);
 
         var orchestrator = BuildOrchestrator();
         await orchestrator.ExecuteAbortAsync(_db, cycle, _controlStreamRepo, _notifier, CancellationToken.None);
@@ -177,7 +177,7 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
         _db.ChangeTracker.Clear();
         var saved = await _cycleRepo.LoadAsync(CancellationToken.None);
         Assert.Equal(ResetState.Idle, saved.State);
-        Assert.Null(saved.ResetId);
+        Assert.Null(saved.CorrelationId);
         Assert.Null(saved.StartedAt);
         Assert.Null(saved.DeadlineAt);
         Assert.Null(saved.ExpectedComponents);
@@ -190,14 +190,14 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
     public async Task AbortCycle_WhenAlreadyIdle_EmitsResetCompletedAndRemainsIdle()
     {
         // Even if the cycle is already idle (e.g. another instance cleaned it up), the abort
-        // still emits reset-completed because the resetId is preserved in the cycle object
+        // still emits reset-completed because the correlationId is preserved in the cycle object
         // passed in — this mirrors TryAbortAsync's fallback branch.
-        var resetId = Guid.CreateVersion7();
+        var correlationId = Guid.CreateVersion7();
         var cycle = new ResetCycle
         {
             Id = 1,
             State = ResetState.Idle,
-            ResetId = resetId,
+            CorrelationId = correlationId,
         };
 
         var orchestrator = BuildOrchestrator();
@@ -211,7 +211,7 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
         var events = await _db.ControlStreamEvents.ToListAsync();
         var completed = Assert.Single(events);
         Assert.Equal("reset-completed", completed.Type);
-        Assert.Equal(resetId, completed.ResetId);
+        Assert.Equal(correlationId, completed.CorrelationId);
     }
 
     // ── GateMaxTtlSeconds CTS distinguishes timeout from app-stop ─────────────

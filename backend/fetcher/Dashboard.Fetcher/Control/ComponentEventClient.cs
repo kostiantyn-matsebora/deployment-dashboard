@@ -27,9 +27,9 @@ public sealed class ComponentEventClient(
             EventType: "reset-ack",
             State: "paused",
             OccurredAt: DateTimeOffset.UtcNow,
-            Payload: new { reset_id = resetId });
+            Payload: null);
 
-        // Correlate reset-ack back to the reset event that triggered it (§265).
+        // X-Correlation-Id carries the ack-gate key (§5.10.4) — no payload.reset_id.
         await PostAsync(body, correlationId: resetId, ct);
     }
 
@@ -40,9 +40,9 @@ public sealed class ComponentEventClient(
             EventType: "status",
             State: "running",
             OccurredAt: DateTimeOffset.UtcNow,
-            Payload: new { reset_id = resetId });
+            Payload: null);
 
-        // Correlate post-reset status back to the reset event (§265).
+        // X-Correlation-Id optionally correlates recovery to the same reset process (§5.10.5).
         await PostAsync(body, correlationId: resetId, ct);
     }
 
@@ -108,7 +108,7 @@ public sealed class ComponentEventClient(
         [property: JsonPropertyName("event_type")] string EventType,
         [property: JsonPropertyName("state")] string State,
         [property: JsonPropertyName("occurred_at")] DateTimeOffset OccurredAt,
-        [property: JsonPropertyName("payload")] object Payload);
+        [property: JsonPropertyName("payload")] object? Payload);
 
     /// <summary>
     /// Payload shape for <c>event_type: rate-limit</c> (§5.11 / api-guidelines §11).

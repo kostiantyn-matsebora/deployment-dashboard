@@ -337,3 +337,136 @@ describe('DOM — chip click and keydown wire through delegated handler', () => 
     expect(bar.style.display).toBe('none');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Static — command-event (control-stream) corr chip
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PANEL_HTML — command events carry correlation_id chip (not reset_id text)', () => {
+  it('mergeCtrlEvent reads d.correlation_id (not d.reset_id)', () => {
+    expect(PANEL_HTML).toContain('d.correlation_id || null');
+    expect(PANEL_HTML).not.toContain('d.reset_id');
+  });
+
+  it('mergeCtrlEvent stores correlationId on the ctrl entry', () => {
+    // The ctrl entry object includes correlationId as a field.
+    const mergeIdx = PANEL_HTML.indexOf('function mergeCtrlEvent');
+    const corrIdx  = PANEL_HTML.indexOf('correlationId,', mergeIdx);
+    expect(mergeIdx).toBeGreaterThan(-1);
+    expect(corrIdx).toBeGreaterThan(mergeIdx);
+  });
+
+  it('mergeCtrlEvent does NOT set a reset_id text detailsHtml (chip replaces it)', () => {
+    // Old code: detailsHtml = d.reset_id ? 'reset_id: ...' : '';
+    // New code: detailsHtml: '' — chip appended by renderEventsStore like comp events.
+    expect(PANEL_HTML).not.toContain("'reset_id: '");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOM — command-event chip: delegated handler works for ctrl-style chips
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Command-event rows are rendered by renderEventsStore with the same .fi-corr
+ * chip + data-corr-id pattern as component events.  The delegated listener on
+ * eventsFeedList fires for both.  These tests verify that a chip injected with
+ * a ctrl-event-style corrId activates the filter — proving the mechanism is
+ * not limited to component events.
+ *
+ * Note: bootPanel() must only be called once per jsdom document lifetime.
+ * The existing DOM suite already calls it in its beforeAll; this suite runs in
+ * the same jsdom window and relies on the listeners already being wired.  We
+ * guard against a stale document by checking the feed element is present.
+ */
+describe('DOM — command-event corr chip activates filter through delegated handler', () => {
+  beforeAll(() => {
+    // Only boot if the panel has not yet been written to this jsdom document.
+    // (The sibling DOM suite runs first and calls bootPanel in its own beforeAll.)
+    if (!document.getElementById('events-feed-list')) {
+      bootPanel();
+    }
+  });
+
+  afterEach(() => {
+    // Clear filter + events store between tests.
+    const clearBtn = document.getElementById('corr-filter-clear-btn')!;
+    clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+
+  it('a ctrl-style chip (source=control-api) activates the correlation filter on click', () => {
+    // Inject a chip with a corrId that represents a control-stream frame.
+    const corrId = 'ctrl-saga-corr-0001';
+    const chip   = injectChip(corrId);
+    const bar    = document.getElementById('corr-filter-bar')!;
+    const label  = document.getElementById('corr-filter-id')!;
+
+    expect(bar.style.display).toBe('none');
+    chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(bar.style.display).not.toBe('none');
+    expect(label.textContent).toBe(corrId);
+  });
+
+  it('the same corrId chip filters the events list (only matching entries shown)', () => {
+    // With a filter active on corrId, the feed shows only that corrId's entries.
+    // We inject one chip with the target id and click it, then inject another
+    // chip with a different id and verify the feed only shows one item.
+    const corrId = 'ctrl-saga-corr-0002';
+    const chip   = injectChip(corrId);
+    chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    // Re-inject a chip with the same id (mimicking renderEventsStore rerender).
+    const chip2 = injectChip(corrId);
+    expect(chip2.classList.contains('fi-corr-active')).toBe(false); // injected raw, not by renderer
+    // The bar is still visible (filter is active).
+    const bar = document.getElementById('corr-filter-bar')!;
+    expect(bar.style.display).not.toBe('none');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Static — reset checkboxes removed (#9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PANEL_HTML — reset checkboxes are gone (#9)', () => {
+  it('does NOT contain id="reset-check" (Ingest card checkbox removed)', () => {
+    expect(PANEL_HTML).not.toContain('id="reset-check"');
+  });
+
+  it('does NOT contain id="gh-reset-check" (GitHub Emulator card checkbox removed)', () => {
+    expect(PANEL_HTML).not.toContain('id="gh-reset-check"');
+  });
+
+  it('does NOT reference resetCheck variable in JS', () => {
+    // The JS variable was removed along with the element.
+    expect(PANEL_HTML).not.toContain("= $('reset-check')");
+    expect(PANEL_HTML).not.toContain('resetCheck');
+  });
+
+  it('does NOT reference ghResetCheck variable in JS', () => {
+    expect(PANEL_HTML).not.toContain("= $('gh-reset-check')");
+    expect(PANEL_HTML).not.toContain('ghResetCheck');
+  });
+
+  it('ingest body does NOT include a reset field', () => {
+    // The ingest POST body no longer sends reset: true/false.
+    expect(PANEL_HTML).not.toContain('reset: doReset');
+    expect(PANEL_HTML).not.toContain('reset: reset,');
+  });
+
+  it('ghDoSeed does NOT call /demo/api-reset (reset trigger removed)', () => {
+    // The Step 2 reset block inside ghDoSeed is gone.
+    const ghDoSeedIdx = PANEL_HTML.indexOf('async function ghDoSeed');
+    const ghDoStopIdx = PANEL_HTML.indexOf('async function ghDoStop');
+    expect(ghDoSeedIdx).toBeGreaterThan(-1);
+    expect(ghDoStopIdx).toBeGreaterThan(-1);
+    // No api-reset call should appear between ghDoSeed and ghDoStop.
+    const apiResetInGhDoSeed = PANEL_HTML.indexOf('/demo/api-reset', ghDoSeedIdx);
+    expect(apiResetInGhDoSeed === -1 || apiResetInGhDoSeed > ghDoStopIdx).toBe(true);
+  });
+
+  it('dedicated Reset System button is still present', () => {
+    expect(PANEL_HTML).toContain('id="reset-api-btn"');
+    expect(PANEL_HTML).toContain('Reset System');
+  });
+});

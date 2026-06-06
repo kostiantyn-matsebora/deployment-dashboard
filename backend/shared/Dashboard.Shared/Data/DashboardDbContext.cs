@@ -169,9 +169,10 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .HasColumnName("component")
                   .IsRequired();
 
-            // Nullable: present on reset-started / reset-completed; absent on reset-initiated.
-            entity.Property(e => e.ResetId)
-                  .HasColumnName("reset_id")
+            // Nullable: present on all three frames; on reset-initiated it equals the event id.
+            // On reset-started / reset-completed it equals the reset-initiated id.
+            entity.Property(e => e.CorrelationId)
+                  .HasColumnName("correlation_id")
                   .HasColumnType("uuid");
 
             entity.Property(e => e.OccurredAt)
@@ -210,8 +211,8 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .HasColumnName("state")
                   .IsRequired();
 
-            entity.Property(e => e.ResetId)
-                  .HasColumnName("reset_id")
+            entity.Property(e => e.CorrelationId)
+                  .HasColumnName("correlation_id")
                   .HasColumnType("uuid");
 
             entity.Property(e => e.ExpectedComponents)
@@ -327,6 +328,11 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
             entity.HasIndex(e => new { e.ReceivedAt, e.Id })
                   .IsDescending(true, true)
                   .HasDatabaseName("ix_ce_received_id");
+
+            // Partial index: correlation_id lookup for reset-ack gating (only rows that carry one).
+            entity.HasIndex(e => e.CorrelationId)
+                  .HasDatabaseName("ix_ce_correlation_id")
+                  .HasFilter("correlation_id IS NOT NULL");
         });
     }
 }

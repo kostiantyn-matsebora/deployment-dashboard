@@ -12,7 +12,6 @@ import { ControlEventsClient } from '../control/control-events.client';
 
 export interface IngestOptions {
   dataset?:  string;   // 'demo' | 'random'  (default 'demo')
-  reset?:    boolean;  // call POST /api/control/reset first
   count?:    number;   // random only â€” number of service scenarios (1â€“10, default 10 = all services)
   delay_ms?: number;   // overrides EMIT_DELAY_MS
 }
@@ -20,7 +19,7 @@ export interface IngestOptions {
 /** Extended status including reset-participation fields (Â§4.1). */
 export interface DemoStatus extends RunnerStatus {
   reset_state: 'idle' | 'blocked';
-  reset_id:    string | null;
+  correlation_id: string | null;
 }
 
 /**
@@ -112,8 +111,8 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
   getStatus(): DemoStatus {
     return {
       ...this.runner.status,
-      reset_state: this.resetCoordinator.resetState,
-      reset_id:    this.resetCoordinator.resetId,
+      reset_state:    this.resetCoordinator.resetState,
+      correlation_id: this.resetCoordinator.resetId,
     };
   }
 
@@ -137,35 +136,13 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
   // â”€â”€ Ingest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Unified ingest entry point for the new control group (Â§4.4).
-   * - If reset=true: calls POST /api/control/reset on the target before starting.
+   * Unified ingest entry point for the new control group (§4.3).
    * - dataset='demo': posts the demo-set scenario events.
    * - dataset='random': generates and posts `count` random events.
    * Idempotent: returns current status when already running.
    */
   async startIngest(opts: IngestOptions): Promise<DemoStatus> {
-    const { dataset = 'demo', reset = false, count = 10, delay_ms } = opts;
-
-    if (reset) {
-      const config = getConfig();
-      const ctrl   = new ControlApiClient(config.writeApiUrl, config.controlApiKey);
-      const result = await ctrl.resetApi();
-      if (!result.ok) {
-        console.warn(`[demo-driver] pre-ingest API reset returned HTTP ${result.http_status}`);
-      } else if (result.reset_id) {
-        // Declare the expected cycle immediately so the coordinator does not
-        // fast-resolve awaitCycleComplete in the window before reset-initiated
-        // arrives via SSE (which is the race that causes mid-flight stopWork).
-        this.resetCoordinator.expectCycle(result.reset_id);
-        // Wait for the reset cycle to complete before ingesting.  The coordinator
-        // will be blocked by its own reset-initiated handler during this window;
-        // awaitCycleComplete only reads state and registers a waiter â€” it does
-        // not call stopWork/unblockWork, so there is no deadlock risk.
-        await this.resetCoordinator.awaitCycleComplete(result.reset_id);
-      } else {
-        console.warn('[demo-driver] API reset accepted but returned no reset_id â€” proceeding without waiting');
-      }
-    }
+    const { dataset = 'demo', count = 10, delay_ms } = opts;
 
     if (this.runner.state === 'running') return this.getStatus();
 
@@ -177,7 +154,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
       `demo-driver/${dataset}`,
     );
 
-    // Generate a per-run correlation id for component-event grouping (Â§4.12).
+    // Generate a per-run correlation id for component-event grouping (§4.12).
     const runId = crypto.randomUUID();
     const eventsClient = this.eventsClient;
     if (eventsClient) {

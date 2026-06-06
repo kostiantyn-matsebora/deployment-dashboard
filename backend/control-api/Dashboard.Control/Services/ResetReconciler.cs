@@ -127,10 +127,10 @@ internal sealed class ResetReconciler(
 
         // Orphan detected: abort.
         logger.LogWarning(
-            "Reset reconciler: orphaned cycle detected (state={State}, reset_id={ResetId}, deadline={Deadline}). Aborting.",
-            cycle.State, cycle.ResetId, gateMaxDeadline);
+            "Reset reconciler: orphaned cycle detected (state={State}, correlation_id={CorrelationId}, deadline={Deadline}). Aborting.",
+            cycle.State, cycle.CorrelationId, gateMaxDeadline);
 
-        var abortedResetId = cycle.ResetId ?? Guid.Empty;
+        var abortedResetId = cycle.CorrelationId ?? Guid.Empty;
 
         var controlStream = sp.GetRequiredService<IControlStreamRepository>();
         var notifier = sp.GetRequiredService<IControlEventNotifier>();
@@ -144,7 +144,7 @@ internal sealed class ResetReconciler(
                 Id = Guid.CreateVersion7(),
                 Type = "reset-completed",
                 Component = "*",
-                ResetId = abortedResetId,
+                CorrelationId = abortedResetId,
                 OccurredAt = DateTimeOffset.UtcNow,
             };
             await controlStream.InsertAsync(completedEvent, ct);
@@ -153,7 +153,7 @@ internal sealed class ResetReconciler(
 
         // Transition cycle to idle.
         cycle.State = ResetState.Idle;
-        cycle.ResetId = null;
+        cycle.CorrelationId = null;
         cycle.ExpectedComponents = null;
         cycle.AcksReceived = null;
         cycle.StartedAt = null;

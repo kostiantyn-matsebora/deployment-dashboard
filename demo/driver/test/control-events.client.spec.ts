@@ -40,7 +40,7 @@ describe('ControlEventsClient', () => {
       expect(headers['X-Component-Id']).toBe(COMPONENT_ID);
     });
 
-    it('sends X-Correlation-Id matching the reset_id', async () => {
+    it('sends X-Correlation-Id matching the reset id', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postResetAck(RESET_ID);
       const { headers } = mockFetch.mock.calls[0][1];
@@ -55,11 +55,11 @@ describe('ControlEventsClient', () => {
       expect(body.state).toBe('paused');
     });
 
-    it('includes payload.reset_id matching the provided reset_id', async () => {
+    it('does NOT include payload.reset_id in the body', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postResetAck(RESET_ID);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.payload.reset_id).toBe(RESET_ID);
+      expect(body.payload?.reset_id).toBeUndefined();
     });
 
     it('includes occurred_at as a valid ISO string', async () => {
@@ -79,7 +79,7 @@ describe('ControlEventsClient', () => {
       expect(headers['X-Component-Id']).toBe('custom-driver');
     });
 
-    it('does not throw on network error â€” logs and swallows', async () => {
+    it('does not throw on network error — logs and swallows', async () => {
       const mockFetch = jest.fn().mockRejectedValue(new Error('Network'));
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       await expect(makeClient(mockFetch).postResetAck(RESET_ID)).resolves.toBeUndefined();
@@ -96,11 +96,11 @@ describe('ControlEventsClient', () => {
       expect(body.state).toBe('running');
     });
 
-    it('includes payload.reset_id', async () => {
+    it('does NOT include payload.reset_id in the body', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postStatusRunning(RESET_ID);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.payload.reset_id).toBe(RESET_ID);
+      expect(body.payload?.reset_id).toBeUndefined();
     });
 
     it('sends X-Api-Key and X-Component-Id headers', async () => {
@@ -111,7 +111,7 @@ describe('ControlEventsClient', () => {
       expect(headers['X-Component-Id']).toBe(COMPONENT_ID);
     });
 
-    it('sends X-Correlation-Id matching the reset_id', async () => {
+    it('sends X-Correlation-Id matching the reset id', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postStatusRunning(RESET_ID);
       const { headers } = mockFetch.mock.calls[0][1];
@@ -130,11 +130,11 @@ describe('ControlEventsClient', () => {
       expect(body.state).toBe('running');
     });
 
-    it('includes payload.run_id matching the runId', async () => {
+    it('does NOT include payload.run_id in the body', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postRunStart(RUN_ID);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.payload.run_id).toBe(RUN_ID);
+      expect(body.payload?.run_id).toBeUndefined();
     });
 
     it('includes payload.detail when provided', async () => {
@@ -144,11 +144,11 @@ describe('ControlEventsClient', () => {
       expect(body.payload.detail).toBe('ingest demo started');
     });
 
-    it('omits payload.detail when not provided', async () => {
+    it('omits payload entirely when detail is not provided', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postRunStart(RUN_ID);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.payload.detail).toBeUndefined();
+      expect(body.payload).toBeUndefined();
     });
 
     it('sends X-Correlation-Id matching the runId', async () => {
@@ -191,11 +191,11 @@ describe('ControlEventsClient', () => {
       expect(body.state).toBe('idle');
     });
 
-    it('includes payload.run_id matching the runId', async () => {
+    it('does NOT include payload.run_id in the body', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postRunComplete(RUN_ID);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.payload.run_id).toBe(RUN_ID);
+      expect(body.payload?.run_id).toBeUndefined();
     });
 
     it('sends X-Correlation-Id matching the runId', async () => {

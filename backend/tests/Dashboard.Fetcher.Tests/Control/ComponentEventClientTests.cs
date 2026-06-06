@@ -43,9 +43,9 @@ public sealed class ComponentEventClientTests
     }
 
     [Fact]
-    public async Task PostAckAsync_BodyStillContainsResetId()
+    public async Task PostAckAsync_BodyHasNoResetId()
     {
-        // Ensure the header is additive — payload.reset_id must remain intact.
+        // X-Correlation-Id is the sole correlation carrier — payload must have no reset_id.
         var handler = new CapturingHandler(HttpStatusCode.NoContent);
         var client = new ComponentEventClient(MakeHttpClient(handler), NullLogger<ComponentEventClient>.Instance);
 
@@ -53,8 +53,8 @@ public sealed class ComponentEventClientTests
 
         var json = await handler.LastRequest!.Content!.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
-        var resetId = doc.RootElement.GetProperty("payload").GetProperty("reset_id").GetString();
-        Assert.Equal("reset-evt-001", resetId);
+        Assert.False(doc.RootElement.TryGetProperty("payload", out _),
+            "Body must not contain a payload field when there is no payload");
     }
 
     // ── PostRunningAsync (post-reset status) ──────────────────────────────────
@@ -84,9 +84,9 @@ public sealed class ComponentEventClientTests
     }
 
     [Fact]
-    public async Task PostRunningAsync_BodyStillContainsResetId()
+    public async Task PostRunningAsync_BodyHasNoResetId()
     {
-        // Ensure the header is additive — payload.reset_id must remain intact.
+        // X-Correlation-Id optionally correlates recovery — payload must have no reset_id.
         var handler = new CapturingHandler(HttpStatusCode.NoContent);
         var client = new ComponentEventClient(MakeHttpClient(handler), NullLogger<ComponentEventClient>.Instance);
 
@@ -94,8 +94,8 @@ public sealed class ComponentEventClientTests
 
         var json = await handler.LastRequest!.Content!.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
-        var resetId = doc.RootElement.GetProperty("payload").GetProperty("reset_id").GetString();
-        Assert.Equal("reset-evt-002", resetId);
+        Assert.False(doc.RootElement.TryGetProperty("payload", out _),
+            "Body must not contain a payload field when there is no payload");
     }
 
     // ── PostRateLimitAsync (non-reset) — header must be absent ───────────────

@@ -310,10 +310,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
         <input type="number" id="count-input" value="10" min="1" max="10" step="1"
                style="width:60px;display:none">
 
-        <label class="chk-label">
-          <input type="checkbox" id="reset-check" checked> Reset
-        </label>
-
         <span class="lbl">Delay (ms)</span>
         <input type="number" id="delay-input" value="0" min="0" step="100">
 
@@ -351,10 +347,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
           <span class="lbl" id="gh-count-lbl" style="display:none">Count</span>
           <input type="number" id="gh-count-input" value="5" min="1" max="20" step="1"
                  style="width:60px;display:none">
-
-          <label class="chk-label">
-            <input type="checkbox" id="gh-reset-check" checked> Reset
-          </label>
 
           <button class="btn-run" id="gh-seed-btn" onclick="ghSeedOrStop()">Seed</button>
         </div>
@@ -469,7 +461,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const datasetSelect   = $('dataset-select');
     const countLbl        = $('count-lbl');
     const countInput      = $('count-input');
-    const resetCheck      = $('reset-check');
     const delayInput      = $('delay-input');
     const ingestBtn       = $('ingest-btn');
     const ingestStopBtn   = $('ingest-stop-btn');
@@ -503,7 +494,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const ghDatasetSelect = $('gh-dataset-select');
     const ghCountLbl      = $('gh-count-lbl');
     const ghCountInput    = $('gh-count-input');
-    const ghResetCheck    = $('gh-reset-check');
     const ghSeedBtn       = $('gh-seed-btn');
     const ghSeedMsg       = $('gh-seed-msg');
     const ghEmitBadge     = $('gh-emit-badge');
@@ -535,8 +525,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     // Interactive controls blocked during reset.
     const interactiveControls = [
       ingestBtn, ingestStopBtn, emitToggleBtn, resetApiBtn,
-      datasetSelect, countInput, delayInput, resetCheck,
-      ghSeedBtn, ghEmitBtn, ghDatasetSelect, ghCountInput, ghResetCheck,
+      datasetSelect, countInput, delayInput,
+      ghSeedBtn, ghEmitBtn, ghDatasetSelect, ghCountInput,
     ];
 
     let pollTimer           = null;
@@ -601,7 +591,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     function applyStatus(d) {
       const state      = d.state      || 'idle';
       const resetState = d.reset_state || 'idle';
-      const resetId    = d.reset_id   || null;
+      const correlationId = d.correlation_id || null;
 
       // Scenario state badge.
       stateBadge.textContent = state;
@@ -611,7 +601,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
       if (resetState === 'blocked') {
         resetStateBadge.textContent = 'RESET IN PROGRESS';
         resetStateBadge.className   = 'badge badge-reset-blocked';
-        resetIdDisplay.textContent  = resetId ? 'reset_id: ' + resetId : '';
+        resetIdDisplay.textContent  = correlationId ? 'corr: ' + correlationId : '';
         sbResetBadge.textContent    = 'RESET: IN PROGRESS';
         sbResetBadge.className      = 'badge badge-reset-blocked';
       } else {
@@ -669,25 +659,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
     ingestBtn.addEventListener('click', async () => {
       if (isBlocked) return;
       const dataset  = datasetSelect.value;
-      const reset    = resetCheck.checked;
       const delay    = parseInt(delayInput.value, 10) || 0;
       const count    = Math.min(parseInt(countInput.value, 10) || 10, 10);
-      const body     = { dataset, reset, delay_ms: delay };
+      const body     = { dataset, delay_ms: delay };
       if (dataset === 'random') body.count = count;
-
-      // When reset is checked the server blocks until the full reset cycle
-      // completes before responding.  Dim the control cards immediately so
-      // the user sees feedback during the wait; applyStatus will clear it once
-      // the response arrives with reset_state back to idle.
-      if (reset) {
-        isBlocked = true;
-        interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
-        interactiveControls.forEach(el => { el.disabled = true; });
-        resetStateBadge.textContent = 'RESET IN PROGRESS';
-        resetStateBadge.className   = 'badge badge-reset-blocked';
-        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
-        sbResetBadge.className      = 'badge badge-reset-blocked';
-      }
 
       try {
         const data = await apiFetch('/demo/ingest', {
@@ -695,21 +670,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
           body:   JSON.stringify(body),
         });
         applyStatus(data);
-      } catch {
-        // On network error: revert the optimistic card-dim so the UI is not
-        // permanently stuck.
-        if (reset) {
-          isBlocked = false;
-          interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
-          interactiveControls.forEach(el => { el.disabled = false; });
-          ingestBtn.disabled     = false;
-          ingestStopBtn.disabled = true;
-          resetStateBadge.textContent = 'IDLE';
-          resetStateBadge.className   = 'badge badge-reset-idle';
-          sbResetBadge.textContent    = 'RESET: IDLE';
-          sbResetBadge.className      = 'badge badge-reset-idle';
-        }
-      }
+      } catch {}
     });
 
     ingestStopBtn.addEventListener('click', async () => {
@@ -968,22 +929,21 @@ export const PANEL_HTML = `<!DOCTYPE html>
                        : type === 'reset-completed'  ? 'fi-type-completed'
                        :                               'fi-type-unknown';
 
-      const ts          = d.occurred_at || new Date().toISOString();
-      const detailsHtml = d.reset_id
-        ? 'reset_id: <span class="fi-id">' + esc(d.reset_id) + '</span>'
-        : '';
+      const ts            = d.occurred_at || new Date().toISOString();
+      const correlationId = d.correlation_id || null;
 
       const entry = {
-        _kind:      'ctrl',
-        _ts:        ts,
-        id:         d.id || ('ctrl-' + ts),
-        time:       fmtMs(ts),
-        source:     'control-api',
-        sourceClass:'fi-source-ctrl',
-        event:      type,
+        _kind:        'ctrl',
+        _ts:          ts,
+        id:           d.id || ('ctrl-' + ts),
+        time:         fmtMs(ts),
+        source:       'control-api',
+        sourceClass:  'fi-source-ctrl',
+        event:        type,
         eventClass,
-        rowId:      d.id || '',
-        detailsHtml,
+        rowId:        d.id || '',
+        correlationId,
+        detailsHtml:  '',
       };
       mergeIntoStore(entry);
     }
@@ -1224,16 +1184,13 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     async function ghDoSeed() {
       if (isBlocked) return;
-      const doReset = ghResetCheck.checked;
       ghSeedBtn.disabled    = true;
       ghSeedMsg.textContent = '';
       ghSeedMsg.className   = 'api-msg';
 
-      // Step 1: seed the emulator.
-      let seedOk = false;
       try {
         const dataset = ghDatasetSelect.value;
-        const body    = { dataset, reset: doReset };
+        const body    = { dataset };
         if (dataset === 'random') body.count = parseInt(ghCountInput.value, 10) || 5;
         const d = await apiFetch('/demo/github/seed', {
           method: 'POST',
@@ -1242,51 +1199,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
         applyGithubStatus(d);
         ghSeedMsg.textContent = '\\u2713 Seeded';
         ghSeedMsg.className   = 'api-msg ok';
-        seedOk = true;
       } catch {
         ghSeedMsg.textContent = '\\u2717 Seed error';
         ghSeedMsg.className   = 'api-msg err';
-        ghSeedBtn.disabled = isBlocked;
-        return;
-      }
-
-      // Step 2: if Reset was checked, also trigger the system reset — mirrors
-      // the ingest handler's optimistic-dim pattern exactly.
-      if (seedOk && doReset) {
-        // Optimistic dim — same block as ingest handler.
-        isBlocked = true;
-        interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
-        interactiveControls.forEach(el => { el.disabled = true; });
-        resetStateBadge.textContent = 'RESET IN PROGRESS';
-        resetStateBadge.className   = 'badge badge-reset-blocked';
-        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
-        sbResetBadge.className      = 'badge badge-reset-blocked';
-
-        try {
-          const r = await apiFetch('/demo/api-reset', { method: 'POST' });
-          if (r.ok) {
-            schedulePoll();
-          } else {
-            // Non-OK response: revert optimistic dim.
-            isBlocked = false;
-            interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
-            interactiveControls.forEach(el => { el.disabled = false; });
-            resetStateBadge.textContent = 'IDLE';
-            resetStateBadge.className   = 'badge badge-reset-idle';
-            sbResetBadge.textContent    = 'RESET: IDLE';
-            sbResetBadge.className      = 'badge badge-reset-idle';
-          }
-        } catch {
-          // Network error: revert optimistic dim.
-          isBlocked = false;
-          interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
-          interactiveControls.forEach(el => { el.disabled = false; });
-          resetStateBadge.textContent = 'IDLE';
-          resetStateBadge.className   = 'badge badge-reset-idle';
-          sbResetBadge.textContent    = 'RESET: IDLE';
-          sbResetBadge.className      = 'badge badge-reset-idle';
-        }
-      } else {
+      } finally {
         ghSeedBtn.disabled = isBlocked;
       }
     }

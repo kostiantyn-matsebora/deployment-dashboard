@@ -4,29 +4,27 @@ export interface ResetAckPayload {
   event_type:  'reset-ack';
   state:       'paused';
   occurred_at: string;
-  payload:     { reset_id: string };
 }
 
 export interface StatusPayload {
   event_type:  'status';
   state:       'running';
   occurred_at: string;
-  payload:     { reset_id: string };
 }
 
 export interface RunStatusPayload {
   event_type:  'status';
   state:       'running' | 'idle';
   occurred_at: string;
-  payload:     { run_id: string; detail?: string };
+  payload?:    { detail: string };
 }
 
 /**
- * POST /api/control/events â€” component event reporting.
+ * POST /api/control/events — component event reporting.
  *
- * Auth:  X-Api-Key (same key used for ingest; Â§4 api-guidelines).
- * Ident: X-Component-Id header (required by server, Â§11 api-guidelines).
- * No retry â€” fire-and-forget; the server's 2 h retention window survives
+ * Auth:  X-Api-Key (same key used for ingest; §4 api-guidelines).
+ * Ident: X-Component-Id header (required by server, §11 api-guidelines).
+ * No retry — fire-and-forget; the server's 2 h retention window survives
  * transient failures; re-connection + replay handles recovery.
  */
 export class ControlEventsClient {
@@ -46,7 +44,6 @@ export class ControlEventsClient {
       event_type:  'reset-ack',
       state:       'paused',
       occurred_at: new Date().toISOString(),
-      payload:     { reset_id: resetId },
     };
     await this._postEvent(body, resetId);
   }
@@ -56,7 +53,6 @@ export class ControlEventsClient {
       event_type:  'status',
       state:       'running',
       occurred_at: new Date().toISOString(),
-      payload:     { reset_id: resetId },
     };
     await this._postEvent(body, resetId);
   }
@@ -67,7 +63,7 @@ export class ControlEventsClient {
       event_type:  'status',
       state:       'running',
       occurred_at: new Date().toISOString(),
-      payload:     detail !== undefined ? { run_id: runId, detail } : { run_id: runId },
+      ...(detail !== undefined ? { payload: { detail } } : {}),
     };
     await this._postEvent(body, runId);
   }
@@ -78,7 +74,6 @@ export class ControlEventsClient {
       event_type:  'status',
       state:       'idle',
       occurred_at: new Date().toISOString(),
-      payload:     { run_id: runId },
     };
     await this._postEvent(body, runId);
   }
