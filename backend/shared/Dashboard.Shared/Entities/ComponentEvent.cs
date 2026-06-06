@@ -30,4 +30,7 @@ public sealed class ComponentEvent
 
     /// <summary>Opaque JSON object stored verbatim (jsonb on Postgres). Serialised size ≤ 8 KiB.</summary>
     public string? Payload { get; set; }
+
+    /// <summary>From the optional <c>X-Correlation-Id</c> header; opaque, ≤ 128 chars. Null when absent.</summary>
+    public string? CorrelationId { get; set; }
 }

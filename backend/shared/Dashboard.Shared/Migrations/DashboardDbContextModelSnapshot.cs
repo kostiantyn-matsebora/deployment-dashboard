@@ -33,6 +33,11 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("text")
                         .HasColumnName("component_id");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("correlation_id");
+
                     b.Property<string>("Detail")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)")

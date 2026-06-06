@@ -93,6 +93,7 @@ public static class ControlEndpoints
     private static async Task<IResult> HandlePostEventAsync(
         [FromBody] ComponentEventIngest body,
         [FromHeader(Name = "X-Component-Id")] string? componentId,
+        [FromHeader(Name = "X-Correlation-Id")] string? correlationId,
         IComponentEventRepository repository,
         IComponentAckNotifier ackNotifier,
         IComponentEventNotifier componentEventNotifier,
@@ -124,6 +125,8 @@ public static class ControlEndpoints
             OccurredAt = body.OccurredAt,
             ReceivedAt = DateTimeOffset.UtcNow,
             Payload = payloadJson,
+            // Validation filter guarantees this is either null or a non-empty string ≤ 128 chars.
+            CorrelationId = correlationId,
         };
 
         await repository.InsertAsync(entity, ct);

@@ -313,6 +313,11 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                           v => DateTimeOffset.FromUnixTimeMilliseconds(v));
             }
 
+            // Nullable: from optional X-Correlation-Id header; opaque ≤ 128 chars; echo-only.
+            entity.Property(e => e.CorrelationId)
+                  .HasColumnName("correlation_id")
+                  .HasMaxLength(128);
+
             // Index: per-component listing + filter.
             entity.HasIndex(e => new { e.ComponentId, e.ReceivedAt, e.Id })
                   .IsDescending(false, true, true)
