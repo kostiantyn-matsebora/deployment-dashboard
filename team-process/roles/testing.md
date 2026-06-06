@@ -46,7 +46,9 @@ green. It may fix the *tests* themselves — never weaken/delete an assertion to
 
 1. **Analyze changes** — diff to see what changed; identify affected systems.
 2. **Write tests** — Arrange-Act-Assert; happy path + error cases.
-3. **Run** — in the framework's real test environment (not an ad-hoc runner).
+3. **Run** — in the framework's real test environment (not an ad-hoc runner). Capture
+   output; surface exit code + failing slice only — never stream the full run into context
+   (see *Tool-output economy* in `process.md`).
 4. **Fix failures** — root cause only; re-run until 100% pass.
 5. **Report** — `RESULT` with pass/fail counts, coverage gaps, suggested additions.
 

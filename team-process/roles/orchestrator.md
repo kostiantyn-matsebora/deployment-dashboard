@@ -43,7 +43,8 @@ interface, captured as an `ARTIFACT`. Formats: `process.md` → *Communication p
 ## Self-verify gate
 
 Full build + all suites + lint/format green before declaring done; CI green before calling
-it shipped. Report actual results.
+it shipped. Report actual results. Apply *Tool-output economy* — check CI status and pull
+only the failing job's log slice; don't stream full suite/CI output into context.
 
 ## Must not
 

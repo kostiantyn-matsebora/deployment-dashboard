@@ -141,6 +141,27 @@ Testing is split by ownership; failures route through the orchestrator.
    `FINDING`, never a silent re-scope.
 7. **Check provided theories first.** A `BRIEF.seed` diagnosis is tested cheaply before
    independent investigation.
+8. **Tool-output economy.** Pull only the needed slice of a tool run into context — exit
+   code + aggregate on success, exit code + failing slice on failure — never the full log.
+   See *Tool-output economy*.
+
+## Tool-output economy
+
+Verbose tool runs (tests, builds, linters, installs, searches) burn context for an answer
+that's usually one number. Pull only the **needed slice** into context — never the raw log.
+
+- **Capture, then inspect.** Redirect the run to a file/variable; branch on the **exit code**;
+  surface only the filtered slice.
+- **Success → aggregate only.** Exit code + the summary line (e.g. `42/42 passed`, `build ok`).
+  Discard per-item chatter.
+- **Failure → exit code + failing slice.** Failing names + their assertion diff / error lines
+  only — not the passing noise around them.
+- **Prefer the tool's quiet mode** (minimal/error-only reporter, `--quiet`, `--no-progress`)
+  over post-filtering when available.
+- **Scope reads/searches too.** Globs + line ranges; symbol/section retrieval (Serena /
+  markdown MCP), not whole-file or whole-repo dumps.
+
+`RESULT.gate` is this aggregate, never a pasted raw log. Binding for every role and mode.
 
 ## Verify state after every wave
 
