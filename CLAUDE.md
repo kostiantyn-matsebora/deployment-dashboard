@@ -66,11 +66,11 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 
 Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
 
-Each agent is a **project-agnostic anchor** to its generic role in `team-process/roles/*` (mission, principles, guardrails, communication protocol, tool-output economy). The **project-specific bindings** below are the *only* place stack lives — agents carry no stack.
+Each agent is a **project-agnostic anchor** to its generic role in `.claude/team-process/roles/*` (mission, principles, guardrails, communication protocol, tool-output economy). The **project-specific bindings** below are the *only* place stack lives — agents carry no stack.
 
 ## Project bindings
 
-Per-role stack, file lanes, and gate commands. **Apply the tool-output-economy guardrail** (`team-process/process.md`) to every command: capture output, branch on the exit code, surface only the aggregate (success) or the failing slice (failure) — never the full log.
+Per-role stack, file lanes, and gate commands. **Apply the tool-output-economy guardrail** (`.claude/team-process/process.md`) to every command: capture output, branch on the exit code, surface only the aggregate (success) or the failing slice (failure) — never the full log.
 
 **contract** (`api-architect`)
 - **Source of truth:** `docs/api/openapi.yaml` (OpenAPI 3.1); guidelines `docs/api/api-guidelines.md`. Behavior-only changes — no backend tech in the contract.

@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Write, Edit, SlashCommand, mcp__markdown__list_files, m
 model: sonnet
 ---
 
-> **Role anchor.** Fulfils the **docs** role — [`team-process/roles/docs.md`](../../team-process/roles/docs.md). Inherit its **full definition**: mission & scope, the binding gates (non-overwrite policy, index convention + hierarchical walk-up, README classification, children-path resolution, YAML front-matter quoting, host authoring rules, output-format discipline, anti-patterns), standing guardrails, communication protocol, and tool-output economy. Same role whether dispatched as an on-demand subagent (the default flow) or spawned as a team member (`subagent_type: docs-keeper`, via `/feature-team`). **Never commit/push** — hand back to the orchestrator.
+> **Role anchor.** Fulfils the **docs** role — [`.claude/team-process/roles/docs.md`](../team-process/roles/docs.md). Inherit its **full definition**: mission & scope, the binding gates (non-overwrite policy, index convention + hierarchical walk-up, README classification, children-path resolution, YAML front-matter quoting, host authoring rules, output-format discipline, anti-patterns), standing guardrails, communication protocol, and tool-output economy. Same role whether dispatched as an on-demand subagent (the default flow) or spawned as a team member (`subagent_type: docs-keeper`, via `/feature-team`). **Never commit/push** — hand back to the orchestrator.
 
 This agent is a **thin dispatcher**: it classifies the trigger, runs the matching slash command (each inherits the role's binding gates), and folds results into one structured report.
 
