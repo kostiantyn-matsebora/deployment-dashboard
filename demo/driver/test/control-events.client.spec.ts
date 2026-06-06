@@ -40,6 +40,13 @@ describe('ControlEventsClient', () => {
       expect(headers['X-Component-Id']).toBe(COMPONENT_ID);
     });
 
+    it('sends X-Correlation-Id matching the reset_id', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postResetAck(RESET_ID);
+      const { headers } = mockFetch.mock.calls[0][1];
+      expect(headers['X-Correlation-Id']).toBe(RESET_ID);
+    });
+
     it('sends correct event_type=reset-ack and state=paused', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
       await makeClient(mockFetch).postResetAck(RESET_ID);
@@ -102,6 +109,13 @@ describe('ControlEventsClient', () => {
       const { headers } = mockFetch.mock.calls[0][1];
       expect(headers['X-Api-Key']).toBe(API_KEY);
       expect(headers['X-Component-Id']).toBe(COMPONENT_ID);
+    });
+
+    it('sends X-Correlation-Id matching the reset_id', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postStatusRunning(RESET_ID);
+      const { headers } = mockFetch.mock.calls[0][1];
+      expect(headers['X-Correlation-Id']).toBe(RESET_ID);
     });
   });
 });

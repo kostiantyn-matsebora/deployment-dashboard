@@ -41,7 +41,7 @@ export class ControlEventsClient {
       occurred_at: new Date().toISOString(),
       payload:     { reset_id: resetId },
     };
-    await this._postEvent(body);
+    await this._postEvent(body, resetId);
   }
 
   async postStatusRunning(resetId: string): Promise<void> {
@@ -51,19 +51,28 @@ export class ControlEventsClient {
       occurred_at: new Date().toISOString(),
       payload:     { reset_id: resetId },
     };
-    await this._postEvent(body);
+    await this._postEvent(body, resetId);
   }
 
-  private async _postEvent(body: ResetAckPayload | StatusPayload): Promise<void> {
+  private async _postEvent(
+    body: ResetAckPayload | StatusPayload,
+    correlationId?: string,
+  ): Promise<void> {
+    const headers: Record<string, string> = {
+      'Content-Type':   'application/json; charset=utf-8',
+      'X-Api-Key':      this.apiKey,
+      'X-Component-Id': this.componentId,
+    };
+
+    if (correlationId !== undefined) {
+      headers['X-Correlation-Id'] = correlationId;
+    }
+
     try {
       await this._fetch(`${this.writeApiUrl}/api/control/events`, {
-        method:  'POST',
-        headers: {
-          'Content-Type':   'application/json; charset=utf-8',
-          'X-Api-Key':      this.apiKey,
-          'X-Component-Id': this.componentId,
-        },
-        body: JSON.stringify(body),
+        method: 'POST',
+        headers,
+        body:   JSON.stringify(body),
       });
     } catch (err) {
       console.warn('[demo-driver] control-events POST failed:', err);
