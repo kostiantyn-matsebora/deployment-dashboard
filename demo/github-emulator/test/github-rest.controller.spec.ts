@@ -607,7 +607,24 @@ jobs:
   // ── Rate-limit decrement across requests ────────────────────────────────────
 
   describe('rate-limit decrement', () => {
-    it('X-RateLimit-Used increases across consecutive requests', async () => {
+    it('X-RateLimit-Used increases across consecutive charged requests', async () => {
+      // GET /rate_limit is budget-exempt (GitHub semantics), so probe a charged
+      // endpoint instead. Two non-conditional GETs both return 200 and each
+      // consumes one unit of budget.
+      const res1 = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/deployments`)
+        .expect(200);
+
+      const res2 = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/deployments`)
+        .expect(200);
+
+      const used1 = parseInt(res1.headers['x-ratelimit-used'] as string, 10);
+      const used2 = parseInt(res2.headers['x-ratelimit-used'] as string, 10);
+      expect(used2).toBeGreaterThan(used1);
+    });
+
+    it('GET /rate_limit is budget-exempt (used unchanged across calls)', async () => {
       const res1 = await request(app.getHttpServer())
         .get('/rate_limit')
         .expect(200);
@@ -618,7 +635,26 @@ jobs:
 
       const used1 = parseInt(res1.headers['x-ratelimit-used'] as string, 10);
       const used2 = parseInt(res2.headers['x-ratelimit-used'] as string, 10);
-      expect(used2).toBeGreaterThan(used1);
+      expect(used2).toBe(used1);
+    });
+
+    it('304 Not Modified does not consume budget', async () => {
+      // First request returns 200 + ETag; replaying it with If-None-Match
+      // yields 304 and must leave X-RateLimit-Used unchanged.
+      const res1 = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/deployments`)
+        .expect(200);
+      const etag = res1.headers['etag'] as string;
+      expect(etag).toBeTruthy();
+
+      const res2 = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/deployments`)
+        .set('If-None-Match', etag)
+        .expect(304);
+
+      const used1 = parseInt(res1.headers['x-ratelimit-used'] as string, 10);
+      const used2 = parseInt(res2.headers['x-ratelimit-used'] as string, 10);
+      expect(used2).toBe(used1);
     });
   });
 
