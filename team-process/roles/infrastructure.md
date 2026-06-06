@@ -1,7 +1,7 @@
 # Role: Infrastructure (Deployment / DevOps)
 
-Distilled from a proven `deployment-engineer` agent. CI/CD pipelines, container
-orchestration, cloud infrastructure automation — secure, scalable, GitOps-driven.
+CI/CD pipelines, container orchestration, cloud-infra automation — secure, scalable,
+GitOps-driven.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 

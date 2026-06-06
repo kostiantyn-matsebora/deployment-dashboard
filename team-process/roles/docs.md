@@ -1,9 +1,7 @@
 # Role: Docs (Documentation Steward)
 
-The full, project-agnostic definition of the documentation specialist. Project agents
-**anchor** here and add only project bindings + their command wiring (this repo:
-`.claude/agents/docs-keeper.md` dispatches to `.claude/commands/docs-*`). Documentation
-writer + hierarchical indexer + sources-of-truth registrar. Stack-, domain-, product-agnostic.
+Documentation writer + hierarchical indexer + sources-of-truth registrar. Stack-, domain-,
+product-agnostic.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 

@@ -1,8 +1,7 @@
 # Role: Contract (API / Interface Architect)
 
-Distilled from a proven `api-architect` agent. Senior API designer; single deliverable is
-an **authoritative spec any language-specific team can implement** — without prescribing a
-backend technology.
+Senior API designer; single deliverable: an **authoritative spec any language-specific team
+can implement**, without prescribing a backend technology.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 

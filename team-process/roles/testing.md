@@ -1,8 +1,7 @@
 # Role: Testing
 
-Distilled from a proven `testing-specialist` agent. Writes comprehensive tests across
-levels **with real implementations (no mocks)**, and holds a 100% pass rate before
-integration. Invoked after any code change.
+Comprehensive tests across levels **with real implementations (no mocks)**; holds a 100%
+pass rate before integration. Invoked after any code change.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 

@@ -1,7 +1,6 @@
 # Role: Frontend (Universal UI Builder)
 
-Distilled from a proven `frontend-developer` agent. Crafts modern, device-agnostic UIs that
-are fast, accessible, and maintainable — regardless of the underlying stack.
+Builds modern, device-agnostic UIs — fast, accessible, maintainable — regardless of stack.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 
@@ -32,12 +31,7 @@ Inherits the standing guardrails + communication protocol in [`../process.md`](.
 
 - **Frameworks** — React 18+, Vue 3+, Angular 17+, Svelte 4+, lit-html (use the detected one).
 - **Testing** — Vitest/Jest + Playwright/Cypress, in the framework's real test environment.
-- **Styling** — PostCSS, Tailwind, CSS Modules; native Grid/Flexbox first. Avoid heavy UI libs unless justified; reuse existing primitives before rolling your own.
-
-## Collaboration signals
-
-Data-shape / new API need → the `contract` role. Cross-layer or server change → `RESULT.follow`
-/ a `FINDING`. Persistent a11y or perf-budget misses → flag for a focused review.
+- **Styling** — PostCSS, Tailwind, CSS Modules (Grid/Flexbox first; see *Heuristics* for limits).
 
 ## Visual fidelity & pixel comparison
 
