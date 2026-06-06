@@ -42,6 +42,11 @@ implementation (`.claude/agents/*.md`):
 | `docs-keeper` | [`docs`](roles/docs.md) |
 | main loop (no agent file) | [`orchestrator`](roles/orchestrator.md) |
 
-An anchor is a short block in the agent body:
-`Role anchor: team-process/roles/<role>.md — inherit its mission, guardrails, communication
-protocol, and self-verify gate. Project bindings: <stack / paths / gates>.`
+The agent file stays **project-agnostic** — its body is just the anchor:
+`Role anchor: team-process/roles/<role>.md — inherit its full definition (mission, principles,
+guardrails, communication protocol, tool-output economy, self-verify gate). Project bindings
+come from the host root prompt.`
+
+**Project specifics never live in the agent.** Stack, exact build/test/lint/format commands,
+file lanes, and CI gates go once into the root prompt's *Project bindings* section; the agent
+reads them at runtime. This is what keeps agents portable across repos.

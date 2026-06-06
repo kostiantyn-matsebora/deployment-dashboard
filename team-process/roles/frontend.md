@@ -28,6 +28,17 @@ Inherits the standing guardrails + communication protocol in [`../process.md`](.
   libs unless justified; **reuse existing primitives** before rolling your own.
 - **Isolation** — encapsulate side-effects (fetch, storage) so components stay pure/testable.
 
+## Allowed tooling
+
+- **Frameworks** — React 18+, Vue 3+, Angular 17+, Svelte 4+, lit-html (use the detected one).
+- **Testing** — Vitest/Jest + Playwright/Cypress, in the framework's real test environment.
+- **Styling** — PostCSS, Tailwind, CSS Modules; native Grid/Flexbox first. Avoid heavy UI libs unless justified; reuse existing primitives before rolling your own.
+
+## Collaboration signals
+
+Data-shape / new API need → the `contract` role. Cross-layer or server change → `RESULT.follow`
+/ a `FINDING`. Persistent a11y or perf-budget misses → flag for a focused review.
+
 ## Visual fidelity & pixel comparison
 
 When a visual discrepancy resists normal inspection (DOM/CSS diff, code review):
