@@ -167,7 +167,7 @@ export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
 
     switch (evt.type) {
       case 'reset-initiated': {
-        // The reset_id IS the event id (§4.7 spec + choreography diagram).
+        // The correlation_id IS the event id (§4.7 spec + choreography diagram).
         const resetId = evt.id ?? this._parseResetId(evt.data);
         if (resetId) {
           await this.coordinator.onResetInitiated(resetId);
@@ -198,7 +198,7 @@ export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
     if (!data) return null;
     try {
       const parsed = JSON.parse(data) as Record<string, unknown>;
-      return (parsed.reset_id as string) ?? (parsed.id as string) ?? null;
+      return (parsed.correlation_id as string) ?? (parsed.id as string) ?? null;
     } catch {
       return null;
     }

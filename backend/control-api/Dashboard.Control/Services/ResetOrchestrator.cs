@@ -120,10 +120,10 @@ internal sealed class ResetOrchestrator(
 
         // ── Phase: draining — wait for acks or AckTimeout ────────────────────
         var cycle = await LoadCycleAsync(db, ct);
-        if (cycle.ResetId != resetId)
+        if (cycle.CorrelationId != resetId)
         {
-            logger.LogWarning("Reset orchestrator: reset_id mismatch; expected {Expected}, got {Actual}. Aborting.",
-                resetId, cycle.ResetId);
+            logger.LogWarning("Reset orchestrator: correlation_id mismatch; expected {Expected}, got {Actual}. Aborting.",
+                resetId, cycle.CorrelationId);
             return;
         }
 
@@ -154,11 +154,12 @@ internal sealed class ResetOrchestrator(
         if (stateNotifier is not null)
             await stateNotifier.NotifyStateAsync(ResetState.Resetting, ct);
 
-        var resetStartedEvent = BuildControlEvent("reset-started", resetId);
+        var correlationId = cycle.CorrelationId ?? resetId;
+        var resetStartedEvent = BuildControlEvent("reset-started", correlationId);
         await controlStream.InsertAsync(resetStartedEvent, ct);
         await notifier.NotifyAsync(resetStartedEvent, ct);
 
-        logger.LogInformation("Reset orchestrator: entered resetting phase for {ResetId}.", resetId);
+        logger.LogInformation("Reset orchestrator: entered resetting phase for {CorrelationId}.", correlationId);
 
         // Check GateMaxTtl before clearing.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
@@ -180,11 +181,11 @@ internal sealed class ResetOrchestrator(
         if (stateNotifier is not null)
             await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
 
-        var resetCompletedEvent = BuildControlEvent("reset-completed", resetId);
+        var resetCompletedEvent = BuildControlEvent("reset-completed", correlationId);
         await controlStream.InsertAsync(resetCompletedEvent, ct);
         await notifier.NotifyAsync(resetCompletedEvent, ct);
 
-        logger.LogInformation("Reset orchestrator: reset {ResetId} completed.", resetId);
+        logger.LogInformation("Reset orchestrator: reset {CorrelationId} completed.", correlationId);
     }
 
     // ct is the linked token (appStopping ∪ processCts) passed down from RunCycleAsync.
@@ -218,7 +219,7 @@ internal sealed class ResetOrchestrator(
             {
                 while (acksBroadcaster.AckReader.TryRead(out var ack))
                 {
-                    if (!Guid.TryParse(ack.ResetId, out var ackResetId) || ackResetId != cycle.ResetId)
+                    if (!Guid.TryParse(ack.CorrelationId, out var ackCorrelationId) || ackCorrelationId != cycle.CorrelationId)
                         continue;
 
                     if (acksReceived.Add(ack.ComponentId))
@@ -239,8 +240,8 @@ internal sealed class ResetOrchestrator(
         {
             // Inner ack-wait timeout elapsed; proceed with however many acks arrived.
             logger.LogInformation(
-                "Reset orchestrator: ack timeout elapsed for reset {ResetId}; proceeding with {Count}/{Total} acks.",
-                cycle.ResetId, acksReceived.Count, expectedComponents.Length);
+                "Reset orchestrator: ack timeout elapsed for correlation_id {CorrelationId}; proceeding with {Count}/{Total} acks.",
+                cycle.CorrelationId, acksReceived.Count, expectedComponents.Length);
         }
     }
 
@@ -254,9 +255,9 @@ internal sealed class ResetOrchestrator(
         IResetStateNotifier? stateNotifier,
         CancellationToken abortCt)
     {
-        logger.LogWarning("Reset orchestrator: GateMaxTtl exceeded; aborting reset {ResetId}.", cycle.ResetId);
+        logger.LogWarning("Reset orchestrator: GateMaxTtl exceeded; aborting reset {CorrelationId}.", cycle.CorrelationId);
 
-        var abortedResetId = cycle.ResetId ?? Guid.Empty;
+        var abortedResetId = cycle.CorrelationId ?? Guid.Empty;
 
         var machine = new ResetStateMachine(cycle);
         if (!machine.IsInState(ResetState.Idle))
@@ -375,7 +376,7 @@ internal sealed class ResetOrchestrator(
         else
         {
             existing.State = cycle.State;
-            existing.ResetId = cycle.ResetId;
+            existing.CorrelationId = cycle.CorrelationId;
             existing.ExpectedComponents = cycle.ExpectedComponents;
             existing.AcksReceived = cycle.AcksReceived;
             existing.StartedAt = cycle.StartedAt;
@@ -386,20 +387,20 @@ internal sealed class ResetOrchestrator(
         db.ChangeTracker.Clear();
     }
 
-    private static ControlStreamEvent BuildControlEvent(string type, Guid resetId) =>
+    private static ControlStreamEvent BuildControlEvent(string type, Guid correlationId) =>
         new()
         {
             Id = Guid.CreateVersion7(),
             Type = type,
             Component = "*",
-            ResetId = resetId,
+            CorrelationId = correlationId,
             OccurredAt = DateTimeOffset.UtcNow,
         };
 
     private static void ClearCycleFields(ResetCycle cycle)
     {
         cycle.State = ResetState.Idle;
-        cycle.ResetId = null;
+        cycle.CorrelationId = null;
         cycle.ExpectedComponents = null;
         cycle.AcksReceived = null;
         cycle.StartedAt = null;
