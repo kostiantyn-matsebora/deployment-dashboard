@@ -38,7 +38,7 @@ internal sealed class ResetService(
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = resetId,
+            CorrelationId = resetId,
             ExpectedComponents = opts.ExpectedComponents,
             AcksReceived = [],
             StartedAt = now,
@@ -54,15 +54,17 @@ internal sealed class ResetService(
 
         var initiatedEvent = new ControlStreamEvent
         {
-            Id = resetId, // Per spec: reset-initiated event id IS the reset_id correlated by others.
+            Id = resetId, // Per spec: reset-initiated event id IS the correlation_id carried by others.
             Type = "reset-initiated",
             Component = "*",
+            // reset-initiated carries its own id as correlation_id; downstream frames echo it.
+            CorrelationId = resetId,
             OccurredAt = now,
         };
         await controlStream.InsertAsync(initiatedEvent, ct);
         await notifier.NotifyAsync(initiatedEvent, ct);
 
-        logger.LogInformation("Reset initiated: reset_id={ResetId}.", resetId);
+        logger.LogInformation("Reset initiated: correlation_id={CorrelationId}.", resetId);
 
         // Fire-and-forget the orchestrator on the thread pool.
         // Pass ApplicationStopping so the drive aborts cleanly on graceful shutdown (Fix D).

@@ -220,6 +220,38 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .fi-state-error     { color: #f87171; }
     .fi-state-neutral   { color: #a1a1aa; }
 
+    /* Correlation-id chip — rendered inline in the details cell when present. */
+    .fi-corr {
+      display: inline-block; font-size: 0.6rem; font-weight: 700;
+      padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em;
+      background: #1f1535; color: #c4b5fd;
+      cursor: pointer; white-space: nowrap;
+      border: 1px solid #3b2d6e;
+      transition: background 0.12s, color 0.12s;
+    }
+    .fi-corr:hover { background: #2e1d5e; color: #ddd6fe; }
+    /* Active correlation filter — chip is highlighted when this id is being filtered. */
+    .fi-corr-active {
+      background: #4c1d95; color: #ede9fe; border-color: #7c3aed;
+    }
+
+    /* Active correlation filter bar — shown in Events header when a filter is set. */
+    .corr-filter-bar {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.68rem; padding: 2px 7px; border-radius: 4px;
+      background: #1f1535; border: 1px solid #3b2d6e; color: #c4b5fd;
+    }
+    .corr-filter-bar .corr-filter-id {
+      font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
+      font-size: 0.65rem; color: #ddd6fe; max-width: 14ch;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .corr-filter-bar .corr-filter-clear {
+      cursor: pointer; font-size: 0.7rem; color: #a78bfa; padding: 0 2px;
+      background: none; border: none; line-height: 1; transition: color 0.1s;
+    }
+    .corr-filter-bar .corr-filter-clear:hover { color: #ede9fe; }
+
     /* Control card dim — applied to interactive cards while reset_state == blocked */
     .card-blocked { opacity: 0.45; pointer-events: none; }
   </style>
@@ -278,10 +310,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
         <input type="number" id="count-input" value="10" min="1" max="10" step="1"
                style="width:60px;display:none">
 
-        <label class="chk-label">
-          <input type="checkbox" id="reset-check" checked> Reset
-        </label>
-
         <span class="lbl">Delay (ms)</span>
         <input type="number" id="delay-input" value="0" min="0" step="100">
 
@@ -319,10 +347,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
           <span class="lbl" id="gh-count-lbl" style="display:none">Count</span>
           <input type="number" id="gh-count-input" value="5" min="1" max="20" step="1"
                  style="width:60px;display:none">
-
-          <label class="chk-label">
-            <input type="checkbox" id="gh-reset-check" checked> Reset
-          </label>
 
           <button class="btn-run" id="gh-seed-btn" onclick="ghSeedOrStop()">Seed</button>
         </div>
@@ -385,7 +409,14 @@ export const PANEL_HTML = `<!DOCTYPE html>
     <div class="card" id="events-card">
       <div class="feed-header">
         <div class="card-title">Events</div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <!-- Correlation filter bar — hidden until a correlation chip is clicked. -->
+          <span class="corr-filter-bar" id="corr-filter-bar" style="display:none" aria-live="polite">
+            <span style="color:#a78bfa;font-size:0.65rem;white-space:nowrap">corr:</span>
+            <span class="corr-filter-id" id="corr-filter-id" title=""></span>
+            <button class="corr-filter-clear" id="corr-filter-clear-btn"
+                    aria-label="Clear correlation filter" title="Clear correlation filter">&#x2715;</button>
+          </span>
           <span class="live-badge live-connecting" id="events-live-badge">● CONNECTING</span>
           <button class="btn-sm" id="events-clear-btn">Clear</button>
         </div>
@@ -430,7 +461,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const datasetSelect   = $('dataset-select');
     const countLbl        = $('count-lbl');
     const countInput      = $('count-input');
-    const resetCheck      = $('reset-check');
     const delayInput      = $('delay-input');
     const ingestBtn       = $('ingest-btn');
     const ingestStopBtn   = $('ingest-stop-btn');
@@ -464,7 +494,6 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const ghDatasetSelect = $('gh-dataset-select');
     const ghCountLbl      = $('gh-count-lbl');
     const ghCountInput    = $('gh-count-input');
-    const ghResetCheck    = $('gh-reset-check');
     const ghSeedBtn       = $('gh-seed-btn');
     const ghSeedMsg       = $('gh-seed-msg');
     const ghEmitBadge     = $('gh-emit-badge');
@@ -480,10 +509,15 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const rlAdapterStore = {};
 
     // Merged Events feed refs (data feed — exempt from card-blocked dimming).
-    const eventsLiveBadge = $('events-live-badge');
-    const eventsClearBtn  = $('events-clear-btn');
-    const eventsFeedList  = $('events-feed-list');
-    const eventsFeedEmpty = $('events-feed-empty');
+    const eventsLiveBadge  = $('events-live-badge');
+    const eventsClearBtn   = $('events-clear-btn');
+    const eventsFeedList   = $('events-feed-list');
+    const eventsFeedEmpty  = $('events-feed-empty');
+
+    // Correlation filter refs.
+    const corrFilterBar      = $('corr-filter-bar');
+    const corrFilterId       = $('corr-filter-id');
+    const corrFilterClearBtn = $('corr-filter-clear-btn');
 
     // Interactive control cards — dimmed while reset_state == blocked.
     const interactiveCards = [$('ingest-card'), $('gh-emulator-card'), $('control-api-card')];
@@ -491,8 +525,8 @@ export const PANEL_HTML = `<!DOCTYPE html>
     // Interactive controls blocked during reset.
     const interactiveControls = [
       ingestBtn, ingestStopBtn, emitToggleBtn, resetApiBtn,
-      datasetSelect, countInput, delayInput, resetCheck,
-      ghSeedBtn, ghEmitBtn, ghDatasetSelect, ghCountInput, ghResetCheck,
+      datasetSelect, countInput, delayInput,
+      ghSeedBtn, ghEmitBtn, ghDatasetSelect, ghCountInput,
     ];
 
     let pollTimer           = null;
@@ -507,6 +541,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     // Merged events store: dedup by id, sorted datetime DESC.
     let eventsStore = [];
+
+    // Active correlation filter — null means no filter (show all events).
+    // Set by clicking a .fi-corr chip; cleared by corrFilterClearBtn.
+    let activeCorrelationId = null;
 
     // Deployments feed store: latest 10, newest first; each entry is a rendered row obj.
     let deploymentsStore = [];
@@ -553,7 +591,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
     function applyStatus(d) {
       const state      = d.state      || 'idle';
       const resetState = d.reset_state || 'idle';
-      const resetId    = d.reset_id   || null;
+      const correlationId = d.correlation_id || null;
 
       // Scenario state badge.
       stateBadge.textContent = state;
@@ -563,7 +601,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
       if (resetState === 'blocked') {
         resetStateBadge.textContent = 'RESET IN PROGRESS';
         resetStateBadge.className   = 'badge badge-reset-blocked';
-        resetIdDisplay.textContent  = resetId ? 'reset_id: ' + resetId : '';
+        resetIdDisplay.textContent  = correlationId ? 'corr: ' + correlationId : '';
         sbResetBadge.textContent    = 'RESET: IN PROGRESS';
         sbResetBadge.className      = 'badge badge-reset-blocked';
       } else {
@@ -621,25 +659,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
     ingestBtn.addEventListener('click', async () => {
       if (isBlocked) return;
       const dataset  = datasetSelect.value;
-      const reset    = resetCheck.checked;
       const delay    = parseInt(delayInput.value, 10) || 0;
       const count    = Math.min(parseInt(countInput.value, 10) || 10, 10);
-      const body     = { dataset, reset, delay_ms: delay };
+      const body     = { dataset, delay_ms: delay };
       if (dataset === 'random') body.count = count;
-
-      // When reset is checked the server blocks until the full reset cycle
-      // completes before responding.  Dim the control cards immediately so
-      // the user sees feedback during the wait; applyStatus will clear it once
-      // the response arrives with reset_state back to idle.
-      if (reset) {
-        isBlocked = true;
-        interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
-        interactiveControls.forEach(el => { el.disabled = true; });
-        resetStateBadge.textContent = 'RESET IN PROGRESS';
-        resetStateBadge.className   = 'badge badge-reset-blocked';
-        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
-        sbResetBadge.className      = 'badge badge-reset-blocked';
-      }
 
       try {
         const data = await apiFetch('/demo/ingest', {
@@ -647,21 +670,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
           body:   JSON.stringify(body),
         });
         applyStatus(data);
-      } catch {
-        // On network error: revert the optimistic card-dim so the UI is not
-        // permanently stuck.
-        if (reset) {
-          isBlocked = false;
-          interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
-          interactiveControls.forEach(el => { el.disabled = false; });
-          ingestBtn.disabled     = false;
-          ingestStopBtn.disabled = true;
-          resetStateBadge.textContent = 'IDLE';
-          resetStateBadge.className   = 'badge badge-reset-idle';
-          sbResetBadge.textContent    = 'RESET: IDLE';
-          sbResetBadge.className      = 'badge badge-reset-idle';
-        }
-      }
+      } catch {}
     });
 
     ingestStopBtn.addEventListener('click', async () => {
@@ -720,8 +729,29 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     eventsClearBtn.addEventListener('click', () => {
       eventsStore = [];
+      activeCorrelationId = null;
+      applyCorrFilter();
       localStorage.removeItem('dd.events');
       renderEventsStore();
+    });
+
+    corrFilterClearBtn.addEventListener('click', () => {
+      activeCorrelationId = null;
+      applyCorrFilter();
+      renderEventsStore();
+    });
+
+    // Delegated handler for .fi-corr chips: one listener on the feed container,
+    // resolves the closest chip and calls selectCorrId(id).
+    eventsFeedList.addEventListener('click', e => {
+      const chip = e.target.closest('.fi-corr');
+      if (chip) selectCorrId(chip.dataset.corrId);
+    });
+    eventsFeedList.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const chip = e.target.closest('.fi-corr');
+        if (chip) { e.preventDefault(); selectCorrId(chip.dataset.corrId); }
+      }
     });
 
     // ── Deployments SSE stream (GET /demo/deployments-stream) ────────────────
@@ -899,22 +929,21 @@ export const PANEL_HTML = `<!DOCTYPE html>
                        : type === 'reset-completed'  ? 'fi-type-completed'
                        :                               'fi-type-unknown';
 
-      const ts          = d.occurred_at || new Date().toISOString();
-      const detailsHtml = d.reset_id
-        ? 'reset_id: <span class="fi-id">' + esc(d.reset_id) + '</span>'
-        : '';
+      const ts            = d.occurred_at || new Date().toISOString();
+      const correlationId = d.correlation_id || null;
 
       const entry = {
-        _kind:      'ctrl',
-        _ts:        ts,
-        id:         d.id || ('ctrl-' + ts),
-        time:       fmtMs(ts),
-        source:     'control-api',
-        sourceClass:'fi-source-ctrl',
-        event:      type,
+        _kind:        'ctrl',
+        _ts:          ts,
+        id:           d.id || ('ctrl-' + ts),
+        time:         fmtMs(ts),
+        source:       'control-api',
+        sourceClass:  'fi-source-ctrl',
+        event:        type,
         eventClass,
-        rowId:      d.id || '',
-        detailsHtml,
+        rowId:        d.id || '',
+        correlationId,
+        detailsHtml:  '',
       };
       mergeIntoStore(entry);
     }
@@ -1053,16 +1082,19 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const detailsHtml =
         '<span class="' + stateCls + '">' + esc(rec.state || '') + '</span>' + detailPart;
 
+      const correlationId = rec.correlation_id || null;
+
       const entry = {
-        _kind:      'comp',
-        _ts:        ts,
-        id:         rec.id || ('comp-' + ts + '-' + (rec.component_id || '')),
-        time:       fmtMs(ts),
-        source:     rec.component_id || '',
-        sourceClass:'fi-source-comp',
-        event:      rec.event_type   || '',
-        eventClass: 'fi-event-neutral',
-        rowId:      rec.id           || '',
+        _kind:         'comp',
+        _ts:           ts,
+        id:            rec.id || ('comp-' + ts + '-' + (rec.component_id || '')),
+        time:          fmtMs(ts),
+        source:        rec.component_id || '',
+        sourceClass:   'fi-source-comp',
+        event:         rec.event_type   || '',
+        eventClass:    'fi-event-neutral',
+        rowId:         rec.id           || '',
+        correlationId,
         detailsHtml,
       };
       mergeIntoStore(entry);
@@ -1082,13 +1114,50 @@ export const PANEL_HTML = `<!DOCTYPE html>
       }
     }
 
+    // Updates the correlation filter bar visibility and label.
+    function applyCorrFilter() {
+      if (activeCorrelationId) {
+        corrFilterId.textContent = activeCorrelationId;
+        corrFilterId.title       = activeCorrelationId;
+        corrFilterBar.style.display = '';
+      } else {
+        corrFilterBar.style.display = 'none';
+        corrFilterId.textContent = '';
+        corrFilterId.title       = '';
+      }
+    }
+
+    // Selects a correlation id for filtering: if the same id is already active,
+    // clicking it again clears the filter (toggle off).
+    function selectCorrId(id) {
+      activeCorrelationId = (activeCorrelationId === id) ? null : id;
+      applyCorrFilter();
+      renderEventsStore();
+    }
+
     function renderEventsStore() {
       eventsFeedList.innerHTML = '';
-      if (!eventsStore.length) {
+      // Apply active correlation filter (client-side, over accumulated store).
+      const visible = activeCorrelationId
+        ? eventsStore.filter(e => e.correlationId === activeCorrelationId)
+        : eventsStore;
+      if (!visible.length) {
         eventsFeedList.appendChild(eventsFeedEmpty);
         return;
       }
-      eventsStore.forEach(entry => {
+      visible.forEach(entry => {
+        // Append the correlation-id chip to detailsHtml when present.
+        // Chip is highlighted (.fi-corr-active) when it matches the active filter.
+        let detailsHtml = entry.detailsHtml || '';
+        if (entry.correlationId) {
+          const activeCls = entry.correlationId === activeCorrelationId ? ' fi-corr-active' : '';
+          detailsHtml +=
+            ' <span class="fi-corr' + activeCls + '"' +
+            ' data-corr-id="' + esc(entry.correlationId) + '"' +
+            ' title="Filter by correlation id: ' + esc(entry.correlationId) + '"' +
+            ' role="button" tabindex="0" aria-pressed="' + (activeCls ? 'true' : 'false') + '"' +
+            '>corr:' + esc(entry.correlationId.slice(0, 8)) + (entry.correlationId.length > 8 ? '…' : '') + '</span>';
+        }
         const row = feedRow({
           time:        entry.time,
           source:      entry.source,
@@ -1096,7 +1165,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
           event:       entry.event,
           eventClass:  entry.eventClass,
           id:          entry.rowId,
-          detailsHtml: entry.detailsHtml,
+          detailsHtml,
         });
         eventsFeedList.appendChild(row);
       });
@@ -1115,16 +1184,13 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     async function ghDoSeed() {
       if (isBlocked) return;
-      const doReset = ghResetCheck.checked;
       ghSeedBtn.disabled    = true;
       ghSeedMsg.textContent = '';
       ghSeedMsg.className   = 'api-msg';
 
-      // Step 1: seed the emulator.
-      let seedOk = false;
       try {
         const dataset = ghDatasetSelect.value;
-        const body    = { dataset, reset: doReset };
+        const body    = { dataset };
         if (dataset === 'random') body.count = parseInt(ghCountInput.value, 10) || 5;
         const d = await apiFetch('/demo/github/seed', {
           method: 'POST',
@@ -1133,51 +1199,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
         applyGithubStatus(d);
         ghSeedMsg.textContent = '\\u2713 Seeded';
         ghSeedMsg.className   = 'api-msg ok';
-        seedOk = true;
       } catch {
         ghSeedMsg.textContent = '\\u2717 Seed error';
         ghSeedMsg.className   = 'api-msg err';
-        ghSeedBtn.disabled = isBlocked;
-        return;
-      }
-
-      // Step 2: if Reset was checked, also trigger the system reset — mirrors
-      // the ingest handler's optimistic-dim pattern exactly.
-      if (seedOk && doReset) {
-        // Optimistic dim — same block as ingest handler.
-        isBlocked = true;
-        interactiveCards.forEach(el => { el.classList.add('card-blocked'); });
-        interactiveControls.forEach(el => { el.disabled = true; });
-        resetStateBadge.textContent = 'RESET IN PROGRESS';
-        resetStateBadge.className   = 'badge badge-reset-blocked';
-        sbResetBadge.textContent    = 'RESET: IN PROGRESS';
-        sbResetBadge.className      = 'badge badge-reset-blocked';
-
-        try {
-          const r = await apiFetch('/demo/api-reset', { method: 'POST' });
-          if (r.ok) {
-            schedulePoll();
-          } else {
-            // Non-OK response: revert optimistic dim.
-            isBlocked = false;
-            interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
-            interactiveControls.forEach(el => { el.disabled = false; });
-            resetStateBadge.textContent = 'IDLE';
-            resetStateBadge.className   = 'badge badge-reset-idle';
-            sbResetBadge.textContent    = 'RESET: IDLE';
-            sbResetBadge.className      = 'badge badge-reset-idle';
-          }
-        } catch {
-          // Network error: revert optimistic dim.
-          isBlocked = false;
-          interactiveCards.forEach(el => { el.classList.remove('card-blocked'); });
-          interactiveControls.forEach(el => { el.disabled = false; });
-          resetStateBadge.textContent = 'IDLE';
-          resetStateBadge.className   = 'badge badge-reset-idle';
-          sbResetBadge.textContent    = 'RESET: IDLE';
-          sbResetBadge.className      = 'badge badge-reset-idle';
-        }
-      } else {
+      } finally {
         ghSeedBtn.disabled = isBlocked;
       }
     }

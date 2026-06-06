@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Dashboard.Shared.Entities;
 
 namespace Dashboard.Control.Models;
@@ -11,6 +12,8 @@ namespace Dashboard.Control.Models;
 public sealed record ComponentEventRecord(
     Guid Id,
     string ComponentId,
+    // Spec: present on every frame; null when X-Correlation-Id was absent on the originating POST.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CorrelationId,
     string EventType,
     string State,
     string? Detail,
@@ -25,6 +28,6 @@ public sealed record ComponentEventRecord(
             : null;
 
         return new ComponentEventRecord(
-            e.Id, e.ComponentId, e.EventType, e.State, e.Detail, e.OccurredAt, e.ReceivedAt, payload);
+            e.Id, e.ComponentId, e.CorrelationId, e.EventType, e.State, e.Detail, e.OccurredAt, e.ReceivedAt, payload);
     }
 }

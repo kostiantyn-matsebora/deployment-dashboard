@@ -27,9 +27,10 @@ public sealed class ComponentEventClient(
             EventType: "reset-ack",
             State: "paused",
             OccurredAt: DateTimeOffset.UtcNow,
-            Payload: new { reset_id = resetId });
+            Payload: null);
 
-        await PostAsync(body, ct);
+        // X-Correlation-Id carries the ack-gate key (§5.10.4) — no payload.reset_id.
+        await PostAsync(body, correlationId: resetId, ct);
     }
 
     /// <inheritdoc />
@@ -39,9 +40,10 @@ public sealed class ComponentEventClient(
             EventType: "status",
             State: "running",
             OccurredAt: DateTimeOffset.UtcNow,
-            Payload: new { reset_id = resetId });
+            Payload: null);
 
-        await PostAsync(body, ct);
+        // X-Correlation-Id optionally correlates recovery to the same reset process (§5.10.5).
+        await PostAsync(body, correlationId: resetId, ct);
     }
 
     /// <inheritdoc />
@@ -68,18 +70,23 @@ public sealed class ComponentEventClient(
                 OwnUsed: snapshot.Used,
                 ResetAt: resetAt));
 
-        await PostAsync(body, ct);
+        // Non-reset post — no correlation header.
+        await PostAsync(body, correlationId: null, ct);
     }
 
-    private async Task PostAsync(ComponentEventBody body, CancellationToken ct)
+    private async Task PostAsync(ComponentEventBody body, string? correlationId, CancellationToken ct)
     {
         try
         {
-            var response = await http.PostAsJsonAsync(
-                "/api/control/events",
-                body,
-                JsonOptions,
-                ct);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
+            {
+                Content = JsonContent.Create(body, options: JsonOptions),
+            };
+
+            if (correlationId is not null)
+                request.Headers.Add("X-Correlation-Id", correlationId);
+
+            var response = await http.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
                 logger.LogWarning(
@@ -101,7 +108,7 @@ public sealed class ComponentEventClient(
         [property: JsonPropertyName("event_type")] string EventType,
         [property: JsonPropertyName("state")] string State,
         [property: JsonPropertyName("occurred_at")] DateTimeOffset OccurredAt,
-        [property: JsonPropertyName("payload")] object Payload);
+        [property: JsonPropertyName("payload")] object? Payload);
 
     /// <summary>
     /// Payload shape for <c>event_type: rate-limit</c> (§5.11 / api-guidelines §11).

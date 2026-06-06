@@ -15,4 +15,4 @@ public interface IResetService
 }
 
 /// <summary>202 response body for an accepted reset.</summary>
-public sealed record ResetAcceptance(Guid ResetId, string State, DateTimeOffset AcceptedAt);
+public sealed record ResetAcceptance(Guid CorrelationId, string State, DateTimeOffset AcceptedAt);
