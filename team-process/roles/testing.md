@@ -53,13 +53,14 @@ green. It may fix the *tests* themselves — never weaken/delete an assertion to
 
 ## Best practices
 
-One logical assertion per test (where practical) · names read like specifications · clean
-up test data in teardown · deterministic, no flakiness · 100% pass before any merge.
+- One logical assertion per test (where practical).
+- Names read like specifications.
+- Clean up test data in teardown.
+- Deterministic — no flakiness.
+- 100% pass before any merge.
 
 ## Orchestration contract
 
-- Stay in the test lane. A test that can't pass because behavior is wrong → a `FINDING` (the
-  code or spec is wrong); **never weaken/delete an assertion to force green**, and never
-  assert implementation details the spec doesn't mandate.
-- Self-verify (suites green, deterministic); report actual counts in `RESULT.gate`.
-  **Never** commit/push/PR.
+- **Stay in the test lane.** A test that can't pass because behavior is wrong → a `FINDING` (the code or spec is wrong).
+- **Never weaken/delete an assertion to force green**; never assert implementation details the spec doesn't mandate.
+- **Self-verify** (suites green, deterministic); actual counts in `RESULT.gate`. **Never** commit/push/PR.

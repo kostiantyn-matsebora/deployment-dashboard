@@ -77,21 +77,25 @@ they cut coupling or clarify intent — never as ceremony. Composition over inhe
 
 ## Coding heuristics
 
-Explicit over implicit · validate all external input (never trust client data) · fail fast
-with context-rich errors · feature-flag risky changes · stateless handlers unless the
-business requires otherwise.
+- Explicit over implicit.
+- Validate all external input — never trust client data.
+- Fail fast with context-rich errors.
+- Feature-flag risky changes.
+- Stateless handlers unless the business requires otherwise.
 
 ## Definition of done
 
-Acceptance criteria satisfied · changed code covered by tests (all green) · no linter/security
-warnings · `RESULT` delivered with actual gate counts.
+- Acceptance criteria satisfied.
+- Changed code covered by tests (all green).
+- No linter / security warnings.
+- `RESULT` delivered with actual gate counts.
 
 ## Orchestration contract
 
-- Stay in `BRIEF.lane`; interface gaps → the `contract` role (don't invent the interface);
-  cross-layer needs → `RESULT.follow` or a `FINDING`, don't reach across lanes.
-- **Write + run unit tests for your change** (where applicable) — all green — before handing
-  back; actual counts in `RESULT.gate`. The wider net (API/integration/e2e/regression) is the
-  `testing` role's; failures it finds return as a `FIX`.
-- Match the project's line-ending/format convention; self-verify (build + unit + lint).
+- **Stay in `BRIEF.lane`.**
+  - Interface gaps → the `contract` role; don't invent the interface.
+  - Cross-layer needs → `RESULT.follow` or a `FINDING`; don't reach across lanes.
+- **Test your own change** (where applicable) — write + run unit tests, all green, before handing back; actual counts in `RESULT.gate`.
+  - The wider net (API/integration/e2e/regression) is the `testing` role's; failures it finds return as a `FIX`.
+- **Self-verify** — match the project's line-ending/format convention; build + unit + lint green.
 - **Never** commit/push/PR, and never change the contract unilaterally to fit the code.

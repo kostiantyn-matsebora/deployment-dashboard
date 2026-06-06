@@ -47,11 +47,10 @@ Never skip this when the user says "visually" or "pixel by pixel."
 
 ## Orchestration contract
 
-- Stay in `BRIEF.lane`; data-shape gaps → the `contract` role; behavior ambiguity → the
-  design spec, and if unresolved a `FINDING` — don't guess and diverge.
+- **Stay in `BRIEF.lane`.**
+  - Data-shape gaps → the `contract` role.
+  - Behavior ambiguity → the design spec; if unresolved, a `FINDING` — don't guess and diverge.
 - **Extend, don't overwrite** documented behavior while adding new behavior.
-- **Write + run unit/component tests for your change** (in the framework's real test env,
-  not an ad-hoc runner) — all green — before handing back; report actual counts in
-  `RESULT.gate`. The wider net (e2e/visual/regression) is the `testing` role's; failures it
-  finds return as a `FIX`.
-- Self-verify (build + unit/component + lint). **Never** commit/push/PR.
+- **Test your own change** — write + run unit/component tests (framework's real test env, not an ad-hoc runner), all green, before handing back; actual counts in `RESULT.gate`.
+  - The wider net (e2e/visual/regression) is the `testing` role's; failures it finds return as a `FIX`.
+- **Self-verify** (build + unit/component + lint). **Never** commit/push/PR.

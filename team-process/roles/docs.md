@@ -80,9 +80,12 @@ MUST NOT silently clobber existing files. On every `Write`/`Edit`:
 | Legacy navigation `README.md` | none | Flag for owner removal; never edit/delete. |
 | Walk-up ancestor index | per-file gate | Hand-authored → propose-only; do not halt the walk-up. |
 
-Rules of thumb: read before write · Edit over Write · surface losses (list dropped
-hand-authored sections + pause) · one-shot bypass only on explicit blanket permission for named
-paths.
+Rules of thumb:
+
+- Read before write.
+- Edit over Write.
+- Surface losses — list dropped hand-authored sections, then pause.
+- One-shot bypass only on explicit blanket permission, for the named paths.
 
 ## YAML front-matter quoting (binding)
 
@@ -105,13 +108,19 @@ At dispatch start, load the host's doc rules (first hit wins): `CLAUDE.md` doc-a
 section → `AGENTS.md`/`.agent/RULES.md`/`.cursorrules` → `CONTRIBUTING.md` § docs →
 `docs/STYLE.md`. What you find is binding; quote the rule headings so the user can verify.
 
-**Fallback** (only when discovery is empty): one source of truth (others cite by path+section)
-· structure beats prose (steps→list, mappings→table, "X means Y"→`**X.** Y`, multi-rule
-bullet→sub-bullets) · section atomicity · one term per concept · front-load instructions ·
-imperative voice · forbidden actions as one list · ASCII first · cut filler · **extract over
-compact** (move reusable parts to a referenced file — in-place reformatting plateaus ~−10%,
-extraction reaches −60%+) · preserve normative content (`MUST`/`SHOULD`/numbered constraints /
-anchoring examples survive compression).
+**Fallback** (only when discovery is empty):
+
+- **One source of truth** — others cite by path + section.
+- **Structure beats prose** — steps→list, mappings→table, "X means Y"→`**X.** Y`, multi-rule bullet→sub-bullets.
+- **Section atomicity** — each section reads standalone; cite prerequisites.
+- **One term per concept.**
+- **Front-load instructions** — most important first.
+- **Imperative voice** — "Do X." / "Never Y."
+- **Forbidden actions as one list** per role.
+- **ASCII first.**
+- **Cut filler** — every sentence earns its tokens.
+- **Extract over compact** — move reusable parts to a referenced file (in-place reformatting plateaus ~−10%; extraction reaches −60%+).
+- **Preserve normative content** — `MUST`/`SHOULD`/numbered constraints / anchoring examples survive compression.
 
 ## Output discipline (binding)
 

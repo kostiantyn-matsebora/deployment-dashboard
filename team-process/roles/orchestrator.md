@@ -36,9 +36,11 @@ right roles and owning the integration nobody else can.
 
 ## Communication
 
-Hub: members report to the orchestrator via `RESULT` / `FINDING`; it dispatches via
-`BRIEF` / `FIX` and synthesizes. Member ↔ member only via the `contract` role to settle an
-interface, captured as an `ARTIFACT`. Formats: `process.md` → *Communication protocol*.
+Hub-and-spoke; formats in `process.md` → *Communication protocol*.
+
+- **Member → orchestrator:** `RESULT` / `FINDING`.
+- **Orchestrator → member:** `BRIEF` / `FIX`; the orchestrator synthesizes.
+- **Member ↔ member:** only via the `contract` role to settle an interface, captured as an `ARTIFACT`.
 
 ## Self-verify gate
 
