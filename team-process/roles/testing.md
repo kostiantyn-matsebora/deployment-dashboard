@@ -23,14 +23,25 @@ Use real implementations: real service injection, real app instances for integra
 real browser automation for E2E, real database/services. Isolate only at the true
 network boundary when unavoidable.
 
-## Levels
+## Levels & ownership
 
-- **Unit** — components / services / pure functions (tests beside source).
+- **Unit** — owned by the **implementer** of the code (each specialist writes + runs unit
+  tests for its own change). This role fills gaps where unit coverage is missing.
 - **Integration** — real module wiring at the controller+service layer; HTTP via a real
-  client; no stubs.
-- **E2E** — full user flows against the running stack.
-- **Visual** — screenshot/visual regression.
-- **Script/tooling** — every automation script has a sibling test suite.
+  client; no stubs. *(this role)*
+- **API / contract** — endpoints behave per the contract artifact. *(this role)*
+- **E2E** — full user flows against the running stack. *(this role)*
+- **Regression** — re-run the full suite after integration to catch breakage. *(this role)*
+- **Visual** — screenshot/visual regression. *(this role)*
+- **Script/tooling** — every automation script has a sibling test suite. *(this role)*
+
+## Failure reporting — route, don't fix
+
+This role does **not** fix production code. On any failing/negative result, report it to
+the **orchestrator** with: the failing test, expected vs actual, and the likely owning
+layer. The orchestrator analyzes and assigns the owning specialist to fix; this role
+re-runs after each fix until the suite is green. (It may fix the *tests* themselves —
+never weaken/delete an assertion to force green.)
 
 ## Workflow
 

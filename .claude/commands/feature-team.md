@@ -61,8 +61,10 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
    - `run_in_background: true` so the lead can coordinate while members work.
    - **Prompt = scoped brief:** owning spec + the member's named lane + "inherit your
      role file `team-process/roles/<role>.md` and its guardrails" + an explicit
-     self-verify gate (build + tests + lint, report actual results) + "do NOT commit/push;
-     hand changes back to the lead."
+     self-verify gate (build + **unit tests for your own change** + lint, report actual
+     results) + "do NOT commit/push; hand changes back to the lead."
+   - The **testing member** additionally owns the wider net (API / integration / e2e +
+     regression) and **reports failures to the lead — it does not fix production code.**
 7. **Assign work.** Create the task list (one task per lane); have members self-claim or
    assign directly. Contract member first if cross-layer — its artifact unblocks the rest.
 
@@ -76,11 +78,15 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
 
 ## Phase 4 — Integrate & ship (lead only)
 
-10. Merge member lanes/worktrees; run the **full** gate suite; reconcile drift; re-verify
-    against the phase-2 spec.
-11. Commit in logical groups → branch → open/update PR → watch CI to green. Never push to
+10. Merge member lanes/worktrees (implementers have already unit-tested their own changes).
+    Have the **testing member** run the wider net — API / integration / e2e + **regression**.
+11. **Analyze failures & assign fixes.** The testing member reports negative results to you
+    (the lead), not fixes them. Diagnose each failure, route it to the **owning member** to
+    fix, re-run — loop until the full suite is green. Reconcile drift; re-verify against the
+    phase-2 spec.
+12. Commit in logical groups → branch → open/update PR → watch CI to green. Never push to
     the default branch directly.
-12. **`TeamDelete`** once integrated.
+13. **`TeamDelete`** once integrated.
 
 ## Guardrails (inherited from team-process/process.md — binding)
 

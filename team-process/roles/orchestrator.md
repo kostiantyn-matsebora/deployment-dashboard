@@ -27,8 +27,12 @@ the right roles and owning the integration nobody else can.
 4. **Dispatch.** Parallel only on disjoint lanes; worktree-isolate coupled/shared work.
 5. **Verify after every wave.** Re-check repo state — catch out-of-lane edits, rogue
    commits, mixed EOL — before they compound.
-6. **Integrate.** Merge, run full gates, reconcile against the spec.
-7. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
+6. **Integrate & verify.** Merge lanes; have the `testing` role run the wider net
+   (API / integration / e2e + regression).
+7. **Analyze failures & assign fixes.** On any red result, diagnose the cause and route
+   each failure to the **owning specialist** to fix; re-run after each fix. Loop until the
+   full suite is green — never ship red.
+8. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
 
 ## Communication
 

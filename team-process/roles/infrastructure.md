@@ -50,5 +50,8 @@ deployment/rollback runbook.
   the owning app role — don't edit application logic.
 - **Never bake secrets or environment-specific values into committed files** (env files
   stay gitignored). Changes idempotent + environment-parameterized.
+- **Run unit/script tests for changed automation** (where applicable, e.g. script suites,
+  config validation) — green — before handing back. The wider net (smoke / e2e /
+  regression) is the `testing` role's; failures route back via the orchestrator.
 - Self-verify (pipeline/container builds, IaC validate/plan) and report actual results.
   **Never** commit/push/PR — hand back for integration.

@@ -50,6 +50,9 @@ warnings · Implementation Report delivered.
 
 - Stay in the declared file lane; interface gaps → the `contract` role (don't invent
   the interface); cross-layer needs → report, don't reach across lanes.
-- Match the project's line-ending/format convention; self-verify (build + tests + lint)
-  and report actual pass/fail counts before handing back.
+- **Write + run unit tests for your change** (where applicable) — all green — before
+  handing back; report actual pass/fail counts. The wider net (API / integration / e2e /
+  regression) is the `testing` role's; test failures it finds route back to you via the
+  orchestrator.
+- Match the project's line-ending/format convention; self-verify (build + unit tests + lint).
 - **Never** commit/push/PR, and never change the contract unilaterally to fit the code.

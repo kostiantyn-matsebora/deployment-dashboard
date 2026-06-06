@@ -47,5 +47,8 @@ Never skip this when the user says "visually" or "pixel by pixel."
 - Stay in the declared lane; data-shape gaps → the `contract` role; behavior ambiguity
   → the design spec, and if unresolved, escalate — don't guess and diverge.
 - **Extend, don't overwrite** documented behavior while adding new behavior.
-- Self-verify (build + component/unit tests in the real env + lint) and report actual
-  results. **Never** commit/push/PR.
+- **Write + run unit/component tests for your change** (in the framework's real test
+  env, not an ad-hoc runner) — all green — before handing back; report actual results.
+  The wider net (e2e / visual / regression) is the `testing` role's; failures it finds
+  route back to you via the orchestrator.
+- Self-verify (build + unit/component tests + lint). **Never** commit/push/PR.

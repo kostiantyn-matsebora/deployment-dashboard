@@ -68,11 +68,29 @@ keeps a multi-agent change auditable.
 2. **Plan & dispatch.** Map work to roles; declare each role's **ownership lane** (exact
    files); surface the plan; confirm before N parallel members.
 3. **Implement.** Parallel **only on disjoint lanes**; coupled/shared work is serialized
-   or **worktree-isolated**. Each member **self-verifies** (build + test + lint).
-4. **Integrate & verify.** Orchestrator merges lanes, runs the **full** gate suite,
-   reconciles drift, re-verifies against the phase-0 spec.
+   or **worktree-isolated**. Each member **self-verifies** (build + **unit tests for its
+   own change** + lint) and reports actual pass/fail counts.
+4. **Integrate & verify.** Orchestrator merges lanes; the `testing` role runs the wider
+   net (API / integration / e2e + **regression**); failures route back through the
+   orchestrator to the owning specialist (see *Verification & the fix loop*). Re-verify
+   against the phase-0 spec.
 5. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI
    green. Never push to the default branch directly.
+
+## Verification & the fix loop
+
+Testing is split by ownership; failures route back through the orchestrator.
+
+- **Each implementer tests its own change.** Within its lane, a specialist writes and
+  runs **unit tests** for the code it produced (where applicable) as part of self-verify,
+  and reports actual pass/fail counts. No change is handed back unit-untested.
+- **The `testing` role owns the wider net** — API, integration, e2e, and **regression**
+  across the suite — run after implementers integrate. It **reports negative (failing)
+  results to the orchestrator** rather than fixing production code itself (it may fix the
+  *tests* per its own guardrail, never weaken them).
+- **The orchestrator analyzes failures and assigns the fix.** On any red result it
+  diagnoses the cause, routes each failure to the **owning specialist** to fix, then
+  re-runs — looping until the full suite is green. The orchestrator never ships red.
 
 ## Standing guardrails — every role inherits these
 
