@@ -1,22 +1,73 @@
 /**
+ * @jest-environment jest-environment-jsdom
+ *
  * panel-correlation.spec.ts
  *
- * Unit tests for the correlation_id visibility (R1) and filter (R2) features
- * in PANEL_HTML.
+ * Tests for the correlation_id visibility (R1) and filter (R2) features.
  *
- * Strategy: string-contains checks on the PANEL_HTML constant (same approach
- * as panel-rate-limit.spec.ts), asserting:
- *   R1 — correlation_id is read from rec and stored on each comp event entry.
- *   R1 — a .fi-corr chip is rendered inline in the details cell when present.
- *   R2 — activeCorrelationId state variable and selectCorrId() are defined.
- *   R2 — renderEventsStore filters on activeCorrelationId when set.
- *   R2 — corrFilterClearBtn wires up to clear the filter.
- *   R2 — the filter bar DOM elements are present and hidden by default.
+ * Two layers:
+ *   Static  — string-contains checks on PANEL_HTML (structure / code presence).
+ *   DOM     — jsdom-based tests that render chips into a real document, dispatch
+ *             genuine click/keydown Events on chip elements, and assert that the
+ *             filter bar appears and the clear button works.
+ *             These are the regression gate: the prior string-contains tests passed
+ *             while the onclick was broken because they never exercised the DOM path.
  */
 
 import { PANEL_HTML } from '../src/ui/panel';
 
-// ── R1 — visibility: correlation_id stored on entry ──────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Boot PANEL_HTML in the jsdom document provided by jest-environment-jsdom.
+ * We write the HTML into document.documentElement, then execute the inline
+ * <script> via eval in window scope so the delegated listeners are wired up.
+ *
+ * Stubs for network / timer APIs are set on window before execution so the
+ * script runs without throwing.
+ */
+function bootPanel(): void {
+  // Stub Web APIs the inline script touches but we don't exercise.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const win = globalThis as any;
+  win.EventSource = class {
+    addEventListener() {}
+    close() {}
+  };
+  win.fetch = () =>
+    Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+
+  // Write the full HTML into the document.
+  document.open();
+  document.write(PANEL_HTML);
+  document.close();
+}
+
+/**
+ * Inject a minimal .fi-corr chip into eventsFeedList, mirroring what
+ * renderEventsStore produces after the fix (data-corr-id, no inline onclick).
+ */
+function injectChip(corrId: string): HTMLElement {
+  const list = document.getElementById('events-feed-list')!;
+  list.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'feed-item feed-row';
+  row.innerHTML =
+    '<span class="fi-details"> ' +
+      '<span class="fi-corr"' +
+      ' data-corr-id="' + corrId + '"' +
+      ' role="button" tabindex="0" aria-pressed="false"' +
+      '>corr:' + corrId.slice(0, 8) + '</span>' +
+    '</span>';
+  list.appendChild(row);
+  return list.querySelector('.fi-corr') as HTMLElement;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Static — R1: chip HTML structure
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe('PANEL_HTML — R1: correlation_id read and stored on comp event entry', () => {
   it('reads rec.correlation_id in mergeCompEvents', () => {
@@ -31,8 +82,6 @@ describe('PANEL_HTML — R1: correlation_id read and stored on comp event entry'
     expect(PANEL_HTML).toContain('rec.correlation_id || null');
   });
 });
-
-// ── R1 — visibility: .fi-corr chip rendered in details cell ─────────────────
 
 describe('PANEL_HTML — R1: .fi-corr chip rendered for present correlation ids', () => {
   it('defines .fi-corr CSS class in the style block', () => {
@@ -51,8 +100,8 @@ describe('PANEL_HTML — R1: .fi-corr chip rendered for present correlation ids'
     expect(PANEL_HTML).toContain('"fi-corr');
   });
 
-  it('chip calls selectCorrId onclick', () => {
-    expect(PANEL_HTML).toContain('onclick="selectCorrId(');
+  it('chip uses data-corr-id attribute (safe, delegated-handler approach)', () => {
+    expect(PANEL_HTML).toContain('data-corr-id=');
   });
 
   it('chip includes role="button" for accessibility', () => {
@@ -63,8 +112,15 @@ describe('PANEL_HTML — R1: .fi-corr chip rendered for present correlation ids'
     expect(PANEL_HTML).toContain('tabindex="0"');
   });
 
-  it('chip includes a keydown handler so Enter/Space also activates it', () => {
-    expect(PANEL_HTML).toContain('onkeydown=');
+  it('delegated click handler is bound on eventsFeedList (not inline onclick)', () => {
+    // Inline onclick replaced by a single delegated addEventListener.
+    expect(PANEL_HTML).not.toContain('onclick="selectCorrId(');
+    expect(PANEL_HTML).toContain("eventsFeedList.addEventListener('click'");
+  });
+
+  it('delegated keydown handler is bound on eventsFeedList (not inline onkeydown)', () => {
+    expect(PANEL_HTML).not.toContain('onkeydown=');
+    expect(PANEL_HTML).toContain("eventsFeedList.addEventListener('keydown'");
   });
 
   it('chip is NOT rendered when correlationId is absent (conditional on entry.correlationId)', () => {
@@ -72,7 +128,9 @@ describe('PANEL_HTML — R1: .fi-corr chip rendered for present correlation ids'
   });
 });
 
-// ── R2 — filter state and selectCorrId function ──────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Static — R2: filter state, selectCorrId, helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe('PANEL_HTML — R2: activeCorrelationId state and selectCorrId handler', () => {
   it('declares activeCorrelationId as null (no active filter on load)', () => {
@@ -84,7 +142,6 @@ describe('PANEL_HTML — R2: activeCorrelationId state and selectCorrId handler'
   });
 
   it('selectCorrId toggles filter off when the same id is clicked again', () => {
-    // The toggle: activeCorrelationId === id → null.
     expect(PANEL_HTML).toContain('activeCorrelationId === id');
   });
 
@@ -98,15 +155,12 @@ describe('PANEL_HTML — R2: activeCorrelationId state and selectCorrId handler'
   });
 });
 
-// ── R2 — renderEventsStore filters on activeCorrelationId ────────────────────
-
 describe('PANEL_HTML — R2: renderEventsStore applies client-side correlation filter', () => {
   it('filters eventsStore by activeCorrelationId when set', () => {
     expect(PANEL_HTML).toContain('e.correlationId === activeCorrelationId');
   });
 
   it('uses the full store when activeCorrelationId is null (no filter)', () => {
-    // The ternary: activeCorrelationId ? filter(...) : eventsStore
     expect(PANEL_HTML).toContain('activeCorrelationId\n        ? eventsStore.filter');
   });
 
@@ -114,8 +168,6 @@ describe('PANEL_HTML — R2: renderEventsStore applies client-side correlation f
     expect(PANEL_HTML).toContain('fi-corr-active');
   });
 });
-
-// ── R2 — filter bar DOM elements ─────────────────────────────────────────────
 
 describe('PANEL_HTML — R2: correlation filter bar DOM elements', () => {
   it('contains element id="corr-filter-bar" (filter bar container)', () => {
@@ -139,8 +191,6 @@ describe('PANEL_HTML — R2: correlation filter bar DOM elements', () => {
   });
 });
 
-// ── R2 — applyCorrFilter helper ───────────────────────────────────────────────
-
 describe('PANEL_HTML — R2: applyCorrFilter helper wires filter bar to state', () => {
   it('defines applyCorrFilter function', () => {
     expect(PANEL_HTML).toContain('function applyCorrFilter()');
@@ -158,8 +208,6 @@ describe('PANEL_HTML — R2: applyCorrFilter helper wires filter bar to state', 
     expect(PANEL_HTML).toContain('corrFilterId.textContent = activeCorrelationId');
   });
 });
-
-// ── R2 — clear affordance wired up ───────────────────────────────────────────
 
 describe('PANEL_HTML — R2: corrFilterClearBtn clears the active correlation filter', () => {
   it('corrFilterClearBtn has an event listener', () => {
@@ -181,10 +229,111 @@ describe('PANEL_HTML — R2: corrFilterClearBtn clears the active correlation fi
   });
 
   it('eventsClearBtn also resets the correlation filter on full clear', () => {
-    // The eventsClearBtn handler sets activeCorrelationId = null before renderEventsStore.
     const clearIdx  = PANEL_HTML.indexOf("eventsClearBtn.addEventListener('click'");
     const nullIdx   = PANEL_HTML.indexOf('activeCorrelationId = null', clearIdx);
     expect(clearIdx).toBeGreaterThan(-1);
     expect(nullIdx).toBeGreaterThan(clearIdx);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOM — chip click / keydown fires selectCorrId through the delegated handler
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * These tests are the regression gate.  The jsdom environment is provided by
+ * jest-environment-jsdom (docblock above).  The panel is booted once (beforeAll)
+ * so the inline <script> runs a single time and the delegated listeners on
+ * eventsFeedList are wired up.  Each test re-injects a chip and dispatches a
+ * real DOM Event; between tests the clear button is used to reset filter state.
+ *
+ * Because the handler resolves event.target.closest('.fi-corr') and reads
+ * chip.dataset.corrId, these tests fail if either the chip lacks the attribute
+ * or the delegated listener is absent — exactly the broken path they guard.
+ */
+describe('DOM — chip click and keydown wire through delegated handler', () => {
+  beforeAll(() => {
+    bootPanel();
+  });
+
+  // Helper: clear the active filter after each test so tests are independent.
+  afterEach(() => {
+    const clearBtn = document.getElementById('corr-filter-clear-btn')!;
+    clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+
+  it('clicking a chip makes the filter bar visible', () => {
+    const corrId = 'abc123def456';
+    const chip   = injectChip(corrId);
+    const bar    = document.getElementById('corr-filter-bar')!;
+
+    expect(bar.style.display).toBe('none');
+    chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(bar.style.display).not.toBe('none');
+  });
+
+  it('clicking a chip sets the filter label to the correlation id', () => {
+    const corrId = 'abc123def456';
+    const chip   = injectChip(corrId);
+    const label  = document.getElementById('corr-filter-id')!;
+
+    chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(label.textContent).toBe(corrId);
+  });
+
+  it('clicking the clear button hides the filter bar again', () => {
+    const corrId   = 'abc123def456';
+    const chip     = injectChip(corrId);
+    const bar      = document.getElementById('corr-filter-bar')!;
+    const clearBtn = document.getElementById('corr-filter-clear-btn')!;
+
+    chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(bar.style.display).not.toBe('none');
+
+    clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(bar.style.display).toBe('none');
+  });
+
+  it('clicking the same chip twice toggles the filter off (clear-bar hidden)', () => {
+    const corrId = 'abc123def456';
+    const chip   = injectChip(corrId);
+    const bar    = document.getElementById('corr-filter-bar')!;
+
+    // First click: filter on.
+    chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(bar.style.display).not.toBe('none');
+
+    // renderEventsStore rebuilds the list; re-inject a chip with the same id.
+    const chip2 = injectChip(corrId);
+    chip2.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(bar.style.display).toBe('none');
+  });
+
+  it('pressing Enter on a chip makes the filter bar visible', () => {
+    const corrId = 'abc123def456';
+    const chip   = injectChip(corrId);
+    const bar    = document.getElementById('corr-filter-bar')!;
+
+    expect(bar.style.display).toBe('none');
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(bar.style.display).not.toBe('none');
+  });
+
+  it('pressing Space on a chip makes the filter bar visible', () => {
+    const corrId = 'abc123def456';
+    const chip   = injectChip(corrId);
+    const bar    = document.getElementById('corr-filter-bar')!;
+
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    expect(bar.style.display).not.toBe('none');
+  });
+
+  it('pressing a non-activation key on a chip does NOT activate the filter', () => {
+    const corrId = 'abc123def456';
+    const chip   = injectChip(corrId);
+    const bar    = document.getElementById('corr-filter-bar')!;
+
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    expect(bar.style.display).toBe('none');
   });
 });

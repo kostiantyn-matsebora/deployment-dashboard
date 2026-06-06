@@ -780,6 +780,19 @@ export const PANEL_HTML = `<!DOCTYPE html>
       renderEventsStore();
     });
 
+    // Delegated handler for .fi-corr chips: one listener on the feed container,
+    // resolves the closest chip and calls selectCorrId(id).
+    eventsFeedList.addEventListener('click', e => {
+      const chip = e.target.closest('.fi-corr');
+      if (chip) selectCorrId(chip.dataset.corrId);
+    });
+    eventsFeedList.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const chip = e.target.closest('.fi-corr');
+        if (chip) { e.preventDefault(); selectCorrId(chip.dataset.corrId); }
+      }
+    });
+
     // ── Deployments SSE stream (GET /demo/deployments-stream) ────────────────
     // Re-broadcasts the API's real deployment stream as named "deployment" frames.
     // Each frame data is a DeploymentEvent JSON.
@@ -1180,11 +1193,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
           const activeCls = entry.correlationId === activeCorrelationId ? ' fi-corr-active' : '';
           detailsHtml +=
             ' <span class="fi-corr' + activeCls + '"' +
+            ' data-corr-id="' + esc(entry.correlationId) + '"' +
             ' title="Filter by correlation id: ' + esc(entry.correlationId) + '"' +
             ' role="button" tabindex="0" aria-pressed="' + (activeCls ? 'true' : 'false') + '"' +
-            ' onclick="selectCorrId(' + JSON.stringify(entry.correlationId) + ')"' +
-            ' onkeydown="if(event.key===\\'Enter\\'||event.key===\\' \\')selectCorrId(' + JSON.stringify(entry.correlationId) + ')"' +
-            '>corr:' + esc(entry.correlationId.slice(0, 8)) + (entry.correlationId.length > 8 ? '\\u2026' : '') + '</span>';
+            '>corr:' + esc(entry.correlationId.slice(0, 8)) + (entry.correlationId.length > 8 ? '…' : '') + '</span>';
         }
         const row = feedRow({
           time:        entry.time,
