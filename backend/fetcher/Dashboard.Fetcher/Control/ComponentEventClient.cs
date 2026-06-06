@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dashboard.Fetcher.Orchestration;
+using Dashboard.Shared.Contracts;
 using Microsoft.Extensions.Logging;
 
 namespace Dashboard.Fetcher.Control;
@@ -14,6 +15,17 @@ public sealed class ComponentEventClient(
     HttpClient http,
     ILogger<ComponentEventClient> logger) : IComponentEventClient
 {
+    // ── Event type constants (outgoing to POST /api/control/events) ───────────
+
+    /// <summary>Event type for a reset acknowledgement (§5.10.4).</summary>
+    public const string EventTypeResetAck = "reset-ack";
+
+    /// <summary>Event type for a status report (§5.10.5 / F18).</summary>
+    public const string EventTypeStatus = "status";
+
+    /// <summary>Event type for a rate-limit report (F18 / §5.11).</summary>
+    public const string EventTypeRateLimit = "rate-limit";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -24,8 +36,8 @@ public sealed class ComponentEventClient(
     public async Task PostAckAsync(string resetId, CancellationToken ct)
     {
         var body = new ComponentEventBody(
-            EventType: "reset-ack",
-            State: "paused",
+            EventType: EventTypeResetAck,
+            State: ComponentState.Paused,
             OccurredAt: DateTimeOffset.UtcNow,
             Payload: null);
 
@@ -37,8 +49,8 @@ public sealed class ComponentEventClient(
     public async Task PostRunningAsync(string resetId, CancellationToken ct)
     {
         var body = new ComponentEventBody(
-            EventType: "status",
-            State: "running",
+            EventType: EventTypeStatus,
+            State: ComponentState.Running,
             OccurredAt: DateTimeOffset.UtcNow,
             Payload: null);
 
@@ -59,7 +71,7 @@ public sealed class ComponentEventClient(
             : snapshot.ResetAt;
 
         var body = new ComponentEventBody(
-            EventType: "rate-limit",
+            EventType: EventTypeRateLimit,
             State: state,
             OccurredAt: DateTimeOffset.UtcNow,
             Payload: new RateLimitPayload(
