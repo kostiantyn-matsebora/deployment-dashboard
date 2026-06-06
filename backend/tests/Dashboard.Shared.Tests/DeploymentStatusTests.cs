@@ -89,9 +89,9 @@ public sealed class ComponentStateTests
     public void Constants_MatchExpectedWireValues()
     {
         Assert.Equal("running", ComponentState.Running);
-        Assert.Equal("idle",    ComponentState.Idle);
-        Assert.Equal("paused",  ComponentState.Paused);
-        Assert.Equal("error",   ComponentState.Error);
+        Assert.Equal("idle", ComponentState.Idle);
+        Assert.Equal("paused", ComponentState.Paused);
+        Assert.Equal("error", ComponentState.Error);
     }
 
     [Fact]
@@ -102,8 +102,8 @@ public sealed class ComponentStateTests
     public void All_ContainsAllKnownStates()
     {
         Assert.Contains(ComponentState.Running, ComponentState.All);
-        Assert.Contains(ComponentState.Idle,    ComponentState.All);
-        Assert.Contains(ComponentState.Paused,  ComponentState.All);
-        Assert.Contains(ComponentState.Error,   ComponentState.All);
+        Assert.Contains(ComponentState.Idle, ComponentState.All);
+        Assert.Contains(ComponentState.Paused, ComponentState.All);
+        Assert.Contains(ComponentState.Error, ComponentState.All);
     }
 }

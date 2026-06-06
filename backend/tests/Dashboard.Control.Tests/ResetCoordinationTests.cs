@@ -22,14 +22,14 @@ public sealed class ResetCoordinationTests
 
     [Theory]
     [InlineData("reset-initiated", nameof(ResetCoordination.EventResetInitiated))]
-    [InlineData("reset-started",   nameof(ResetCoordination.EventResetStarted))]
+    [InlineData("reset-started", nameof(ResetCoordination.EventResetStarted))]
     [InlineData("reset-completed", nameof(ResetCoordination.EventResetCompleted))]
     public void EventTypeConstants_HaveExpectedValues(string expected, string constantName)
     {
         var value = constantName switch
         {
             nameof(ResetCoordination.EventResetInitiated) => ResetCoordination.EventResetInitiated,
-            nameof(ResetCoordination.EventResetStarted)   => ResetCoordination.EventResetStarted,
+            nameof(ResetCoordination.EventResetStarted) => ResetCoordination.EventResetStarted,
             nameof(ResetCoordination.EventResetCompleted) => ResetCoordination.EventResetCompleted,
             _ => throw new InvalidOperationException(constantName),
         };
