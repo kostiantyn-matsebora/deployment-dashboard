@@ -66,6 +66,63 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 
 Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
 
+Each agent is a **project-agnostic anchor** to its generic role in `.claude/team-process/roles/*` (mission, principles, guardrails, communication protocol, tool-output economy). The **project-specific bindings** below are the *only* place stack lives — agents carry no stack.
+
+## Project bindings
+
+Per-role stack, file lanes, and gate commands. **Apply the tool-output-economy guardrail** (`.claude/team-process/process.md`) to every command: capture output, branch on the exit code, surface only the aggregate (success) or the failing slice (failure) — never the full log.
+
+**contract** (`api-architect`)
+- **Source of truth:** `docs/api/openapi.yaml` (OpenAPI 3.1); guidelines `docs/api/api-guidelines.md`. Behavior-only changes — no backend tech in the contract.
+- **Lanes:** `docs/api/openapi.yaml`, `docs/api/api-guidelines.md`.
+- **Validate:** YAML well-formed + spec self-consistent (no spectral configured in CI); surface validation errors only. Hand off as an `ARTIFACT`.
+
+**backend** (`backend-developer`)
+- **Stack:** .NET 10 (`net10.0`, C#), EF Core, xUnit. Solution `backend/Dashboard.slnx`.
+- **Lanes:** `backend/<service>/**` (services: `api`, `control-api`, `read-api`, `write-api`, `fetcher`, `fetcher-github`, `fetcher-host`, `shared`).
+- **Gates** (run from `backend/`; mirror `.github/workflows/api.yml`):
+  - Format — `dotnet format Dashboard.slnx --verify-no-changes`
+  - Build — `dotnet build Dashboard.slnx -c Release --nologo -v q`
+  - Test — `dotnet test Dashboard.slnx --settings Dashboard.runsettings --nologo -c Release` → on fail `… 2>&1 | Select-String 'error|\bFailed\b|\[xUnit'`
+- **Config:** flat `SCREAMING_SNAKE` env vars (appsettings base + `*OptionsEnv` override); never `Section__Property`. Env files gitignored; no secrets in code/logs.
+
+**frontend** (`frontend-developer`)
+- **Stack:** Angular (standalone), unit tests via `@angular/build:unit-test` (Vitest), Node 24. No `ng lint` configured.
+- **Lanes:** `frontend/dashboard/**` (SPA) + `frontend/mock/**` (mock server).
+- **Local surfaces:** SPA `ng serve` :4200; mock :3000 — real-app E2E needs **both** live (jsdom masks browser drag bugs).
+- **Gates** (in `frontend/dashboard`; mirror `.github/workflows/frontend.yml`):
+  - Test — `npm test` → surface failing specs only
+  - Build — `npm run build -- --configuration production`
+- **Reuse existing primitives** (rate-limit popover, inspector) / PrimeNG / native before bespoke CSS; one source of truth, no magic size math.
+
+**infrastructure** (`deployment-engineer`)
+- **Stack:** Docker multi-stage (non-root, minimal), Compose (`compose/*.yaml`), nginx gateway (`gateway/`), GitHub Actions (`.github/workflows/*`). Azure-only (NFR-01/06); `infrastructure/` (Terraform) reserved. Trivy scans images (build → scan → push; SARIF → Security tab).
+- **Lanes:** `.github/workflows/**`, `compose/**`, `gateway/**`, `**/Dockerfile`, `scripts/**`. App logic → owning app role.
+- **Gates:**
+  - Image — `docker build …` → surface error lines only
+  - Stack — `docker compose -f compose/docker-compose.yaml up -d --build --wait`; diagnose via `docker compose logs --no-color <svc>` (slice, not all)
+  - CI — check the run **status/conclusion** + pull only the failing job's log; don't stream
+- **Scripts:** PowerShell 7+ with sibling Pester suites (§Scripts); `-AsLibrary` switch. No secrets/env-specific values in committed files.
+
+**testing** (`testing-specialist`) — **NO MOCKS.** Owns the wider net; unit tests belong to each implementer.
+
+| Level | Lane | Command (mirrors CI) | On fail → surface |
+|---|---|---|---|
+| Backend (.NET/xUnit) | `backend/tests/**` | `dotnet test Dashboard.slnx --settings Dashboard.runsettings --nologo -c Release` (from `backend/`) | `Select-String 'error|\bFailed\b|\[xUnit'` |
+| Frontend (Angular/Vitest) | `frontend/dashboard/**/*.spec.ts` | `npm test` (in `frontend/dashboard`) | failing specs only |
+| Demo driver (Jest) | `demo/driver/**/*.spec.ts` | `npm test` (in `demo/driver`) | `✕` / `FAIL` lines |
+| API integration | `testing/api/**` | `docker compose up -d --build --wait` → `npm run test:integration` | failing requests + `docker compose logs --no-color` slice |
+| E2E (Playwright) | `testing/e2e/**` | `npx playwright test` | failing test + trace |
+| Scripts (Pester v5) | `*.Tests.ps1` (sibling) | `Invoke-Pester -Output Minimal` | failed `It` only |
+
+- **Overlap invariants:** every new UI combo MUST add a row to `testing/e2e/tests/overlap-invariants.spec.ts` (`COMBOS_UNDER_TEST`).
+- **api-tests CI triggers main-only;** `gh run watch | tail` masks the exit code — check run status explicitly.
+
+**docs** (`docs-keeper`)
+- **Authoring rules:** this file's *Context economy and documentation authoring rules* + *Sources of truth* index convention are the binding host rules.
+- **Lanes:** `docs/**/*.md`, per-directory `index.md`, and the *Sources of truth* registry (Edit-only, smallest region).
+- **Tooling:** markdown MCP for section retrieval; maintenance hook `pwsh scripts/hooks/Invoke-DocsKeeperMaintenance.ps1 -DriftOnly` (mirrors `.github/workflows/docs.yml`).
+
 ## Code intelligence (Serena-first)
 
 The Serena MCP server (`mcp__serena__*`) exposes symbol-level retrieval and editing via language servers (C# / TypeScript / PowerShell). **Prefer it over `Read` / `Grep` wherever code symbols apply** — it returns targeted symbols, not whole files, cutting token use across agent turns.
