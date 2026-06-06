@@ -18,9 +18,14 @@ Inherits the standing guardrails + communication protocol in [`../process.md`](.
 
 ## Philosophy — NO MOCKS, NO SPIES
 
-Real implementations: real service injection, real app instances for integration, real
-browser automation for E2E, real database/services. Isolate only at the true network
-boundary when unavoidable.
+Real implementations only:
+
+- real service injection;
+- real app instances for integration;
+- real browser automation for E2E;
+- real database / services.
+
+Isolate only at the true network boundary, when unavoidable.
 
 ## Levels & ownership
 
@@ -36,10 +41,11 @@ boundary when unavoidable.
 
 ## Failure reporting — route, don't fix
 
-This role does **not** fix production code. On any red result, report to the orchestrator
-(failing `RESULT` / `FINDING`): failing test, expected vs actual, likely owning layer. The
-orchestrator issues a `FIX` to the owning specialist; this role re-runs after each fix until
-green. It may fix the *tests* themselves — never weaken/delete an assertion to force green.
+This role does **not** fix production code.
+
+- On any red result, report to the orchestrator (failing `RESULT` / `FINDING`): failing test, expected vs actual, likely owning layer.
+- The orchestrator issues a `FIX` to the owning specialist; this role re-runs after each fix until green.
+- It may fix the *tests* themselves — never weaken/delete an assertion to force green.
 
 ## Workflow
 

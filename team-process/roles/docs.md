@@ -17,27 +17,29 @@ Inherits the standing guardrails + communication protocol in [`../process.md`](.
 
 ## Index convention (binding)
 
-- Filename `index.md` (lowercase). Hierarchy = YAML `children:` array, parent → child forward
-  references; no `parent:` backref.
-- Paths github/docs-style **sibling-relative**: leading `/` is relative to the parent index's
-  own directory (NOT repo root). Markdown files → no extension; non-Markdown → with extension;
-  sub-dirs with their own `index.md` → no trailing slash.
-- Sub-dir **without** `index.md` → parent's discovery descends recursively; deeper files appear
-  as nested paths (`/<sub>/<name>`).
-- Body: optional narrative + `## Contents` H2 TOC for Markdown in the descent scope. No
-  `## Files` / `## Child indexes` tables — the `children:` array IS the index.
-- Registry references only **ROOT indexes** (those not in any other index's `children:`) +
-  uncovered unique docs — minimum footprint.
+- **Filename** `index.md` (lowercase).
+- **Hierarchy** — YAML `children:` array; parent → child forward references; no `parent:` backref.
+- **Paths** github/docs-style **sibling-relative** — leading `/` is relative to the parent index's own directory (NOT repo root):
+  - Markdown files → no extension.
+  - Non-Markdown → with extension.
+  - Sub-dirs with their own `index.md` → no trailing slash.
+- **Sub-dir without `index.md`** → discovery descends recursively; deeper files appear as nested paths (`/<sub>/<name>`).
+- **Body** — optional narrative + `## Contents` H2 TOC for Markdown in the descent scope. No `## Files` / `## Child indexes` tables — the `children:` array IS the index.
+- **Registry** references only **ROOT indexes** (those in no other index's `children:`) + uncovered unique docs — minimum footprint.
 
 **Hierarchical walk-up.** After writing `<dir>/index.md`, walk UP the tree applying the same
 recursive-descent discovery + non-overwrite gate to each ancestor, to the indexed-tree root.
-Linear (each ancestor once) · idempotent (no-op when unchanged) · gate-respecting
-(hand-authored ancestor → propose-only, never halt) · boundary-shrinking (a new sub-index
-shrinks every ancestor's footprint).
 
-**Growth by splitting.** (1) One `index.md` at the root covers the whole subtree. (2) When it
-grows too large, add a sub-index → it becomes a boundary; next walk-up shrinks the root's
-`children:`. (3) Repeat for granularity; owner controls which sub-dirs become boundaries.
+- **Linear** — each ancestor visited once.
+- **Idempotent** — no-op when unchanged.
+- **Gate-respecting** — hand-authored ancestor → propose-only, never halt.
+- **Boundary-shrinking** — a new sub-index shrinks every ancestor's footprint.
+
+**Growth by splitting.**
+
+1. One `index.md` at the root covers the whole subtree.
+2. When it grows too large, add a sub-index → it becomes a boundary; next walk-up shrinks the root's `children:`.
+3. Repeat for granularity; owner controls which sub-dirs become boundaries.
 
 ## README classification (binding)
 
@@ -124,9 +126,9 @@ section → `AGENTS.md`/`.agent/RULES.md`/`.cursorrules` → `CONTRIBUTING.md` �
 
 ## Output discipline (binding)
 
-Closing synthesis is **structured-only — never freeform prose.** No "I reviewed…" preamble, no
-"In summary…" trailer. Fill only the slots the operation populates; omit empty slots (never
-invent one); one report per dispatch (chained sub-steps fold into it).
+- **Structured-only — never freeform prose.** No "I reviewed…" preamble, no "In summary…" trailer.
+- **Applicable slots only** — fill the slots the operation populates; omit empty ones, never invent one.
+- **One report per dispatch** — chained sub-steps fold into it.
 
 ## Anti-patterns (binding)
 
@@ -140,8 +142,6 @@ invent one); one report per dispatch (chained sub-steps fold into it).
 
 ## Orchestration contract
 
-- After a behavior change ships, ensure its **owning spec matches reality** — the spec is the
-  contract for the next docs-first read. Surface spec-vs-app conflicts as a `FINDING`; apply
-  the agreed direction, don't guess.
-- Self-verify (links/anchors resolve, index reflects the tree, authoring rules honored); report
-  actual deltas in `RESULT`. **Never** commit/push/PR — hand back for integration.
+- After a behavior change ships, ensure its **owning spec matches reality** — the spec is the contract for the next docs-first read.
+  - Surface spec-vs-app conflicts as a `FINDING`; apply the agreed direction, don't guess.
+- **Self-verify** (links/anchors resolve, index reflects the tree, authoring rules honored); actual deltas in `RESULT`. **Never** commit/push/PR — hand back for integration.

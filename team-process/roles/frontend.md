@@ -21,10 +21,15 @@ Inherits the standing guardrails + communication protocol in [`../process.md`](.
 
 - **Mobile-first, progressive enhancement** — core experience in HTML/CSS, then JS.
 - **Semantic HTML & ARIA** — correct roles, labels, relationships.
-- **Performance budgets** — keep per-page JS small; inline critical CSS; prefetch routes.
+- **Performance budgets.**
+  - Keep per-page JS small.
+  - Inline critical CSS.
+  - Prefetch routes.
 - **State** — prefer local; abstract global state behind composables/hooks/stores.
-- **Styling** — Grid/Flexbox, logical properties, `prefers-color-scheme`; avoid heavy UI
-  libs unless justified; **reuse existing primitives** before rolling your own.
+- **Styling.**
+  - Grid/Flexbox, logical properties, `prefers-color-scheme`.
+  - Avoid heavy UI libs unless justified.
+  - **Reuse existing primitives** before rolling your own.
 - **Isolation** — encapsulate side-effects (fetch, storage) so components stay pure/testable.
 
 ## Allowed tooling

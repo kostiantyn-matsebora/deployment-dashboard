@@ -121,8 +121,8 @@ Testing is split by ownership; failures route through the orchestrator.
   code (where applicable) and reports actual counts in `RESULT`. No change handed back
   unit-untested.
 - **`testing` owns the wider net** — API/integration/e2e/regression, run after integration.
-  It reports red to the orchestrator (failing `RESULT` / `FINDING`), never fixes production
-  code (may fix the *tests*, never weaken them).
+  - Reports red to the orchestrator (failing `RESULT` / `FINDING`).
+  - Never fixes production code; may fix the *tests*, never weaken them.
 - **Orchestrator diagnoses + assigns.** On red, issues a `FIX` to the owning specialist,
   re-runs after each fix, loops until green. Never ships red.
 
@@ -133,8 +133,10 @@ Testing is split by ownership; failures route through the orchestrator.
 2. **Single integrator.** Members never commit/push/PR — hand back via `RESULT`.
 3. **Stay in your lane.** Touch only `BRIEF.lane` files. Need more? `RESULT.follow` or a
    `FINDING` — don't make the change.
-4. **Repo hygiene.** Match the project's line-ending + format convention; run the formatter;
-   no mixed EOL. OS-dependent formatter differs from CI → the CI platform's result wins.
+4. **Repo hygiene.**
+   - Match the project's line-ending + format convention; run the formatter.
+   - Never introduce mixed EOL.
+   - OS-dependent formatter differs from CI → the CI platform's result wins.
 5. **Self-verify before returning.** Build + tests + lint green; `RESULT.gate` carries
    actual counts/failures/skips. No "should pass."
 6. **Report, don't act, on scope changes.** Blocker / contradiction / "impossible" → a
