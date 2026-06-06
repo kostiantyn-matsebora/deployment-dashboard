@@ -217,11 +217,15 @@ Every arrow originates at the caller. The SSE stream is a **response to a compon
 
 | `type` | When emitted | Scope | Component action |
 |---|---|---|---|
-| `reset-initiated` | `POST /api/control/reset` accepted (`idle → draining`) | `*` | Drain: stop work, block own surfaces, then ack (`reset-ack` / `paused` / `reset_id`). |
+| `reset-initiated` | `POST /api/control/reset` accepted (`idle → draining`) | `*` | Drain: stop work, block own surfaces, then ack (`reset-ack` / `paused` / `X-Correlation-Id`). |
 | `reset-started` | All acks in OR `AckTimeoutSeconds` elapsed (`draining → resetting`) | `*` | Reset window open; ingest briefly returns `503`. |
 | `reset-completed` | Data cleared, gates released (`resetting → idle`) | `*` | Recover: clear state, re-ingest/backfill, report `running`. |
 
-`reset-started` / `reset-completed` carry `reset_id` correlating back to the `reset-initiated` event id.
+**`correlation_id` — the process id (binding).** Every frame carries `correlation_id`:
+- `reset-initiated` — equals the frame's own `id` (the process id originates here).
+- `reset-started` / `reset-completed` — the initiating `reset-initiated` id.
+
+Each frame's `id` (SSE cursor) is its own unique value, **distinct** from `correlation_id`; the two coincide only at the origin. The component side carries the same `correlation_id` on `reset-ack` + post-reset `status`, so the whole saga shares one filterable key. There is no `reset_id` field anywhere.
 Components MUST ignore unknown `type` values (forward-compatibility).
 
 **Wire example:**
@@ -230,15 +234,15 @@ Components MUST ignore unknown `type` values (forward-compatibility).
 
 event: reset-initiated
 id: 01J9F4WZK3W9G2T6X4QH3DKQF6
-data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset-initiated","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset-initiated","component":"*","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:00Z"}
 
 event: reset-started
 id: 01J9F4X0M5A1B2C3D4E5F6G7H8
-data: {"id":"01J9F4X0M5A1B2C3D4E5F6G7H8","type":"reset-started","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:10Z"}
+data: {"id":"01J9F4X0M5A1B2C3D4E5F6G7H8","type":"reset-started","component":"*","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:10Z"}
 
 event: reset-completed
 id: 01J9F4X1N6B2C3D4E5F6G7H8J9
-data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
+data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
 ```
 
 ### Component event reporting (`POST /api/control/events`)
@@ -248,7 +252,7 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 | Auth | **`X-Api-Key`** — same key components already hold for ingest / fetcher state |
 | Component identity | **`X-Component-Id` header (required)** — NOT a body field |
 | `component_id` stored | Server writes the `X-Component-Id` value as `component_id` on the row |
-| Correlation | **`X-Correlation-Id` header (optional)** — opaque token grouping the event with a control command; NOT a body field |
+| Correlation | **`X-Correlation-Id` header** — the process key grouping the event with a control command; NOT a body field. REQUIRED on `reset-ack` (the ack-gate key); optional otherwise |
 | `correlation_id` stored | Server writes the `X-Correlation-Id` value as nullable `correlation_id` on the row; echoed on the SSE frame |
 | Shape | Single endpoint for ALL components — body contains only event data, no identity field |
 | Semantics | Append-only log in `component_events` table; `received_at` is server-assigned |
@@ -264,11 +268,11 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 - **Variant form is illustrative only** — `dashboard-fetcher.github-actions` shows the pattern's expressiveness, not a registered component. **Control-plane reset acks MUST use the exact id listed in `ExpectedComponents`** (`dashboard-fetcher`, `demo-driver`); a dotted variant would not be counted by the ack-gate. Variants may still appear on non-reset `status`/`heartbeat` posts.
 
 **`X-Correlation-Id` rules:**
-- **Optional.** Absent → `correlation_id` is `null`; `204` (no error).
-- Opaque string, length 1–128 → accepted. Longer than 128 chars → `422` (problem+json, `/X-Correlation-Id` pointer). Format is **not** constrained to a UUID — generic for any future control command.
-- Stored verbatim as the nullable `correlation_id` column; echoed on the `component` SSE frame.
-- **For reset choreography, components SHOULD set it to the `reset-initiated` event id** (a UUIDv7) on the `reset-ack` post and the post-reset `status` post — the same value already placed in `payload.reset_id`.
-- **Ack-gate is unaffected (binding).** `correlation_id` is additive/observability only. The reset ack fan-in still gates on `payload.reset_id` (`NOTIFY component_acks {component_id, reset_id}`); setting this header does NOT replace that body field. Reset acks MUST keep `payload.reset_id`.
+- The process key — opaque string, length 1–128 → accepted. Longer than 128 chars → `422` (problem+json, `/X-Correlation-Id` pointer). Format is **not** constrained to a UUID — generic for any future control command.
+- Stored verbatim as the nullable `correlation_id` column, **distinct** from the row's own `id`; echoed on the `component` SSE frame.
+- **REQUIRED on `reset-ack`** — set to the `reset-initiated` event id (a UUIDv7). This IS the ack-gate key.
+  - **Ack-gate keys on `correlation_id` (binding).** The reset ack fan-in matches `correlation_id` against the in-flight cycle (`NOTIFY component_acks {component_id, correlation_id}`). A `reset-ack` with a missing/invalid/mismatched `correlation_id` is still recorded (`204`) but does **NOT** count toward the gate (stale/mismatch-safe). There is no `reset_id` body field.
+- **Optional on non-reset posts** (`status` / `heartbeat` / `error` / `rate-limit`). Absent → `correlation_id` is `null`; `204` (no error). For a post-reset `status`, components SHOULD set it to the reset id to correlate recovery to the same process.
 
 **Known `event_type` values** (not exhaustive — new types are additive):
 
@@ -277,7 +281,7 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 | `status` | State transition or periodic status report |
 | `heartbeat` | Periodic liveness ping; no state change |
 | `error` | Component encountered an error; `state` will be `error` |
-| `reset-ack` | Drain-complete ack for a `reset-initiated` event; sent with `state: paused` and `payload.reset_id` = the initiating event id |
+| `reset-ack` | Drain-complete ack for a `reset-initiated` event; sent with `state: paused` and the **required** `X-Correlation-Id` header = the initiating event id (the ack-gate key) |
 | `rate-limit` | Per-cycle fetcher report of CI/CD API limits and the fetcher's own budget/usage; `state` = running (or paused during reset); see Rate-limit payload below. |
 
 ### Rate-limit report payload (`event_type: rate-limit`)
@@ -320,7 +324,7 @@ Carbon copy of the deployment stream (§7) — same SSE pattern, component paylo
 
 See §7 for the shared SSE pattern.
 
-Each frame carries `correlation_id` — `null` unless the originating POST sent `X-Correlation-Id`.
+Each frame carries `correlation_id` (the process key) **distinct** from the row's own `id` — `null` unless the originating POST sent `X-Correlation-Id`.
 
 **Wire example:**
 ```
@@ -331,7 +335,7 @@ data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","component_id":"dashboard-fetcher","cor
 
 id: 01J9F4WZK3W9G2T6X4QH3DKQF7
 event: component
-data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF7","component_id":"dashboard-fetcher","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","event_type":"reset-ack","state":"paused","detail":"Drained; poll loop + ingestion stopped","occurred_at":"2026-05-31T10:00:05Z","received_at":"2026-05-31T10:00:05Z","payload":{"reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6"}}
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF7","component_id":"dashboard-fetcher","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","event_type":"reset-ack","state":"paused","detail":"Drained; poll loop + ingestion stopped","occurred_at":"2026-05-31T10:00:05Z","received_at":"2026-05-31T10:00:05Z","payload":{}}
 ```
 
 ### Readiness probe
@@ -369,19 +373,18 @@ fetch("GET /api/control/stream?component=dashboard-fetcher", {
 
 on event "reset-initiated":
   drain: stop poll loop / ingestion, block own API + UI
-  fetch("POST /api/control/events", {           // ack: paused, carry reset_id
+  fetch("POST /api/control/events", {           // ack: paused; correlation_id IS the ack-gate key
     headers: {
       "X-Api-Key":         API_KEY,
       "X-Component-Id":    "dashboard-fetcher", // MUST match ExpectedComponents — NOT "dashboard-fetcher.github-actions"
-      "X-Correlation-Id":  event.data.id,       // optional; = reset-initiated id → echoed as correlation_id on the SSE frame
+      "X-Correlation-Id":  event.data.correlation_id, // REQUIRED on reset-ack; = reset-initiated id (== event.data.id at origin)
       "Content-Type":      "application/json"
     },
     body: JSON.stringify({
       event_type:  "reset-ack",
       state:       "paused",
       detail:      "Drained; poll loop + ingestion stopped",
-      occurred_at: new Date().toISOString(),
-      payload:     { reset_id: event.data.id }   // reset_id = reset-initiated event id — AUTHORITATIVE for the ack-gate
+      occurred_at: new Date().toISOString()       // no reset_id body field — the gate reads correlation_id
     })
   })
 
@@ -392,10 +395,9 @@ on event "reset-completed":
   clear local state / cursor → backfill (initial ingestion), resume poll
   fetch("POST /api/control/events", {            // recovered: running
     headers: { "X-Api-Key": API_KEY, "X-Component-Id": "dashboard-fetcher",
-               "X-Correlation-Id": event.data.reset_id,   // optional; correlate the recovery post to the same reset
+               "X-Correlation-Id": event.data.correlation_id,  // optional here; correlate recovery to the same process
                "Content-Type": "application/json" },
-    body: JSON.stringify({ event_type: "status", state: "running", occurred_at: new Date().toISOString(),
-                           payload: { reset_id: event.data.reset_id } })
+    body: JSON.stringify({ event_type: "status", state: "running", occurred_at: new Date().toISOString() })
   })
 
 // Periodic heartbeat (every ≤ 30 s)

@@ -533,10 +533,10 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 | Part | Value |
 |---|---|
-| Headers | `X-Api-Key: <API_KEY>`, `X-Component-Id: dashboard-fetcher`, `Content-Type: application/json; charset=utf-8` |
-| Body | `{ "event_type": "reset-ack", "state": "paused", "occurred_at": "<now UTC RFC 3339>", "payload": { "reset_id": "<reset-initiated event id>" } }` |
+| Headers | `X-Api-Key: <API_KEY>`, `X-Component-Id: dashboard-fetcher`, **`X-Correlation-Id: <reset-initiated event id>` (required)**, `Content-Type: application/json; charset=utf-8` |
+| Body | `{ "event_type": "reset-ack", "state": "paused", "occurred_at": "<now UTC RFC 3339>" }` |
 
-- `reset_id` = the `id` of the received `reset-initiated` event (the orchestrator correlates the ack to the in-flight cycle by this value).
+- `X-Correlation-Id` = the `id` of the received `reset-initiated` event (the received frame's `correlation_id`, which at the origin equals its own `id`). **This IS the ack-gate key** — the orchestrator correlates the ack to the in-flight cycle by this value. There is no `payload.reset_id` body field. A missing/invalid `X-Correlation-Id` is recorded but does not count toward the gate.
 - Expected response `204`. Treat `4xx`/`5xx`/transport error as non-fatal: log, stay paused, await `reset-completed` (the orchestrator proceeds on `AckTimeoutSeconds` regardless — the reset is not blocked by a lost ack).
 
 #### 5.10.5 Recovery on `reset-completed`
@@ -549,8 +549,8 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 | Part | Value |
 |---|---|
-| Headers | `X-Api-Key`, `X-Component-Id: dashboard-fetcher`, `Content-Type` |
-| Body | `{ "event_type": "status", "state": "running", "occurred_at": "<now UTC>", "payload": { "reset_id": "<reset-completed reset_id>" } }` |
+| Headers | `X-Api-Key`, `X-Component-Id: dashboard-fetcher`, `X-Correlation-Id: <reset-completed correlation_id>` (optional, recommended — correlates recovery to the same process), `Content-Type` |
+| Body | `{ "event_type": "status", "state": "running", "occurred_at": "<now UTC>" }` |
 
 > The reset linkage to backfill is **implicit by design**: the fetcher does not call a "backfill" API: it simply drops the cursor and lets the existing F14 null-cursor path do the work. This keeps the reset handler tiny and reuses the tested backfill flow.
 
@@ -717,8 +717,8 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 - Rate-limit budget does **NOT** increment the own counter for `304` responses (304 consumes no quota); a `200` does. Rollover bookkeeping and header capture (`X-RateLimit-Limit` / `X-RateLimit-Remaining`) remain unconditional.
 
 **Control-plane participation (F17, §5.10):**
-- `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at, payload.reset_id}` where `reset_id` = the `reset-initiated` event id.
-- `reset-completed` received → in-memory cursor dropped; next `GET /api/fetcher/state` mock returns `404` → backfill (F14) triggered; `status`/`running` event posted afterwards with `payload.reset_id` = the `reset-completed` reset_id.
+- `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + **`X-Correlation-Id` = the `reset-initiated` event id** + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at}` (no `payload.reset_id`).
+- `reset-completed` received → in-memory cursor dropped; next `GET /api/fetcher/state` mock returns `404` → backfill (F14) triggered; `status`/`running` event posted afterwards with `X-Correlation-Id` = the `reset-completed` `correlation_id`.
 - `reset-started` received → **no** ack, no extra POST, poll loop stays paused (asserts no redundant handling).
 - Unknown `event:` type → no-op (no POST, poll loop unaffected).
 - Reconnect after a dropped stream sends `Last-Event-ID` = last seen event id.
@@ -759,7 +759,7 @@ Real fetcher-host against the `github-emulator` + real `Dashboard.Api` + Postgre
 - Populated `parent_deployments` on a two-environment chain.
 - Backfill populates `(service, environment)` slots correctly.
 - NFR-03 latency envelope.
-- **Full reset cycle (F17, §5.10)** against the **real** API + Postgres: fetcher subscribes to `GET /api/control/stream`; operator triggers `POST /api/control/reset`; assert the fetcher (a) receives `reset-initiated` and posts a `reset-ack` (`paused`, correct `reset_id`) visible via `GET /api/control/events`; (b) on `reset-completed` drops its cursor, re-backfills against the mock GitHub API after the store + `fetcher_state` were cleared, and posts a `status`/`running` event. Confirms the orchestrator counts the `dashboard-fetcher` ack and the store is re-populated post-reset.
+- **Full reset cycle (F17, §5.10)** against the **real** API + Postgres: fetcher subscribes to `GET /api/control/stream`; operator triggers `POST /api/control/reset`; assert the fetcher (a) receives `reset-initiated` and posts a `reset-ack` (`paused`, correct `X-Correlation-Id`) visible via `GET /api/control/events`; (b) on `reset-completed` drops its cursor, re-backfills against the mock GitHub API after the store + `fetcher_state` were cleared, and posts a `status`/`running` event. Confirms the orchestrator counts the `dashboard-fetcher` ack and the store is re-populated post-reset.
 
 ---
 

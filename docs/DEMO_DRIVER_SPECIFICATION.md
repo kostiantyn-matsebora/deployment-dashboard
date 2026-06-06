@@ -133,7 +133,7 @@ No authentication required (internal dev/demo tooling only).
   "started_at":   null,
   "finished_at":  null,
   "reset_state":  "idle",
-  "reset_id":     null
+  "correlation_id": null
 }
 ```
 
@@ -146,7 +146,7 @@ No authentication required (internal dev/demo tooling only).
 | Field | Type | Notes |
 |---|---|---|
 | `reset_state` | `idle` \| `blocked` | Driver's reset-participation state, independent of scenario `state`. `blocked` = a reset is in progress. |
-| `reset_id` | string \| null | The `reset_id` of the in-progress reset; `null` when `reset_state == idle`. |
+| `correlation_id` | string \| null | The `correlation_id` (process id) of the in-progress reset â€” the `reset-initiated` event id; `null` when `reset_state == idle`. |
 
 ### 4.2 Scenarios (legacy â€” backwards compat)
 
@@ -170,7 +170,6 @@ No authentication required (internal dev/demo tooling only).
 ```json
 {
   "dataset":  "demo",
-  "reset":    true,
   "count":    20,
   "delay_ms": 0
 }
@@ -179,13 +178,14 @@ No authentication required (internal dev/demo tooling only).
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `dataset` | `"demo"` \| `"random"` | `"demo"` | `"demo"` = events from `demo-set` scenario file; `"random"` = generated events |
-| `reset` | boolean | `false` | When `true`, calls `POST /api/control/reset` on the write-API target before ingesting |
 | `count` | integer | `10` | Number of service scenarios to generate (1â€“10); `"random"` only â€” each scenario emits 3 events per `(service, env)` slot: one primary (current state, branching topology) + two historical (2 h and 4 h old) covering the remaining statuses so every slot has full `in-progress`/`success`/`failure` coverage; ignored for `"demo"` |
 | `delay_ms` | integer | `EMIT_DELAY_MS` | Per-event delay (ms); `0` = bulk load |
 
+**Ingest never triggers a reset (#9).** `POST /demo/ingest` only ingests events; it does NOT call `POST /api/control/reset`. There is no `reset` field. A system reset is available ONLY via the dedicated **Reset System** control (`POST /demo/api-reset`, Â§4.5).
+
 **Idempotency:** `POST /demo/ingest` while `state == running` returns current status; does not double-start.
 
-**Per-run correlation (Â§4.12).** Before the runner starts, `startIngest` generates one `run_id` (`crypto.randomUUID()`), posts a `status`/`running` component event carrying `X-Correlation-Id: <run_id>` + `payload.run_id`. When the runner completes (done or failed), a `status`/`idle` event with the same `run_id` is posted. Both events share the correlation id so the panel filter groups them.
+**Per-run correlation (Â§4.12).** Before the runner starts, `startIngest` generates one `run_id` (`crypto.randomUUID()`) and posts a `status`/`running` component event carrying `X-Correlation-Id: <run_id>` ONLY (stored as the event's `correlation_id`; no `payload.run_id` body field). When the runner completes (done or failed), a `status`/`idle` event with the same `X-Correlation-Id: <run_id>` is posted. Both events share the one correlation id so the panel filter groups them.
 
 ### 4.4 Live Emission
 
@@ -198,7 +198,7 @@ Periodic random-event emission â€” mirrors `/_mock/emit` pattern from the m
 
 When enabled, fires every `EMIT_INTERVAL_MS` (default 8 s): generates one random event, POSTs it to `WRITE_API_URL/api/deployments`, and emits a `posted` / `error` frame on `/demo/stream`.
 
-**Per-run correlation (Â§4.12).** On `enable()` the service generates one `run_id` (`crypto.randomUUID()`), posts a `status`/`running` component event carrying `X-Correlation-Id: <run_id>` + `payload.run_id`, and stores it. On `disable()` it posts a `status`/`idle` component event with the same `run_id`. Both events share the correlation id so the panel filter groups them.
+**Per-run correlation (Â§4.12).** On `enable()` the service generates one `run_id` (`crypto.randomUUID()`), posts a `status`/`running` component event carrying `X-Correlation-Id: <run_id>` ONLY (stored as the event's `correlation_id`; no `payload.run_id` body field), and stores it. On `disable()` it posts a `status`/`idle` component event with the same `X-Correlation-Id: <run_id>`. Both events share the one correlation id so the panel filter groups them.
 
 ### 4.5 API Reset
 
@@ -268,32 +268,34 @@ The driver is a participant in the API-driven reset choreography (D10; visual: [
 
 **On `reset-initiated`** (drain):
 1. Stop any running ingest / scenario run; disable live emission.
-2. Enter `reset_state = blocked`, record `reset_id` from the event id; scenario `state` reflects `blocked`.
+2. Enter `reset_state = blocked`, record `correlation_id` from the `reset-initiated` event id; scenario `state` reflects `blocked`.
 3. Block the `/demo/` control API â€” incoming control calls (`ingest` / `ingest/stop` / `scenarios/*/run`/`stop` / `emit` / `api-reset`) return **`503`** while blocked. Body is **RFC 9457 `application/problem+json`** (consistent with the API surface, [`api-guidelines.md Â§6`](api/api-guidelines.md#6-error-envelope-rfc-9457)) â€” `type` `.../errors/reset-in-progress`, `title` `Reset in progress`, `status` 503. `Retry-After` (seconds) is set from the remaining local gate window (`RESET_GATE_MAX_TTL_MS`, Â§8). `GET /demo/status` is **never** blocked â€” it reports the blocked state. `GET /demo/stream` stays open.
 4. Disable + dim the interactive control cards (Ingest, GitHub Emulator, Reset-System trigger) on the `GET /demo/` panel; the data feeds (Status, Deployments, Events) stay live so the operator can watch the reset choreography (Â§8). No full-panel overlay.
 5. POST a `reset-ack` via the component-event client:
 
 ```
 POST {WRITE_API_URL}/api/control/events
-X-Api-Key:       <API_KEY>
-X-Component-Id:  demo-driver
-Content-Type:    application/json; charset=utf-8
+X-Api-Key:        <API_KEY>
+X-Component-Id:   demo-driver
+X-Correlation-Id: <reset-initiated event id>   â† required; the ack-gate key
+Content-Type:     application/json; charset=utf-8
 
 {
   "event_type":  "reset-ack",
   "state":       "paused",
-  "occurred_at": "<now, RFC 3339 UTC>",
-  "payload":     { "reset_id": "<reset-initiated event id>" }
+  "occurred_at": "<now, RFC 3339 UTC>"
 }
 ```
+
+The `X-Correlation-Id` (= the `reset-initiated` `correlation_id`, which equals its own `id`) IS the ack-gate key â€” there is no `payload.reset_id` body field. A missing/invalid value is recorded but does not count toward the gate.
 
 **On `reset-started`:** no action â€” the driver is already blocked from `reset-initiated`. State this explicitly so no double-handling is implemented.
 
 **On `reset-completed`** (recover):
 1. Unblock the `/demo/` control API.
-2. Clear `reset_state` back to `idle`; clear `reset_id`; scenario `state` returns to `idle` (counters as left by Â§4.2 `reset` semantics).
+2. Clear `reset_state` back to `idle`; clear `correlation_id`; scenario `state` returns to `idle` (counters as left by Â§4.2 `reset` semantics).
 3. Re-enable the interactive control cards (Ingest, GitHub Emulator â€” Â§8).
-4. POST a component event reusing the existing `event_type: status` (NOT a new type), `state: running`, `payload.reset_id` = the completed reset's id.
+4. POST a component event reusing the existing `event_type: status` (NOT a new type), `state: running`, header `X-Correlation-Id` = the completed reset's `correlation_id` (optional, recommended; no body id field).
 5. **Do NOT auto-restart** any scenario or re-enable emission â€” return to idle; the operator resumes manually.
 
 **Unknown `event_type`:** no-op (forward-compatibility, per control-stream contract).
@@ -321,10 +323,10 @@ Wire example:
 : ping
 
 event: reset-initiated
-data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset-initiated","component":"*","occurred_at":"2026-05-31T10:00:00Z"}
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","type":"reset-initiated","component":"*","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:00Z"}
 
 event: reset-completed
-data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
+data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
 ```
 
 **Rationale.** The driver holds the single authenticated upstream connection (`X-Control-API-Key`); the browser never sees the key and N panels share one upstream subscription. Degrades gracefully when the upstream has no control stream (e.g. the mock): the feed simply stays empty.
@@ -354,7 +356,7 @@ Wire example:
 : ping
 
 event: component
-data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","component_id":"demo-driver","event_type":"reset-ack","state":"paused","occurred_at":"2026-05-31T10:00:01Z"}
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF6","component_id":"demo-driver","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF5","event_type":"reset-ack","state":"paused","occurred_at":"2026-05-31T10:00:01Z"}
 
 event: component
 data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","component_id":"dashboard-fetcher","event_type":"status","state":"running","occurred_at":"2026-05-31T10:00:12Z"}
@@ -418,28 +420,28 @@ Same-origin SSE passthrough of [`GET /api/events/stream`](api/openapi.yaml) (the
 
 ### 4.12 Per-run emission correlation
 
-Each demo run (ingest via `POST /demo/ingest`, or a live-emission session enabled via `POST /demo/emit`) generates **one `run_id`** (`crypto.randomUUID()`) at start time and posts two component status events that share it:
+Each demo run (ingest via `POST /demo/ingest`, or a live-emission session enabled via `POST /demo/emit`) generates **one `run_id`** (`crypto.randomUUID()`) at start time and posts two component status events that share it. The `run_id` travels in the `X-Correlation-Id` header ONLY (stored as the event's `correlation_id`) â€” there is no `payload.run_id` body field:
 
 | When | `event_type` | `state` | `X-Correlation-Id` | `payload` |
 |---|---|---|---|---|
-| Run starts | `status` | `running` | `<run_id>` | `{ "run_id": "<run_id>", "detail": "<description>" }` |
-| Run ends (done / idle / stopped) | `status` | `idle` | `<run_id>` | `{ "run_id": "<run_id>" }` |
+| Run starts | `status` | `running` | `<run_id>` | `{ "detail": "<description>" }` (no id) |
+| Run ends (done / idle / stopped) | `status` | `idle` | `<run_id>` | â€” |
 
 **Per-run scope rules:**
-- Each `POST /demo/ingest` call generates its own `run_id` (distinct from any reset id).
+- Each `POST /demo/ingest` call generates its own `run_id` (a distinct process from any reset).
 - Each `POST /demo/emit { enabled: true }` (or toggle-on) generates a new `run_id`; `disable()` closes it.
-- The reset flow is **unaffected** â€” `reset-ack` and post-reset `status`/`running` continue using `reset_id` as their correlation id (Â§4.7).
+- **One correlation model everywhere (#265).** Both per-run status events and the reset-ack / post-reset status (Â§4.7) correlate via `X-Correlation-Id` = the id of the process they belong to (the `run_id` for emission, the `reset-initiated` id for reset). There is no second body id field anywhere â€” no `payload.run_id`, no `payload.reset_id`.
 
 **Wire shape** (both events posted to `POST {WRITE_API_URL}/api/control/events`):
 ```
-X-Api-Key:       <API_KEY>
-X-Component-Id:  demo-driver
+X-Api-Key:        <API_KEY>
+X-Component-Id:   demo-driver
 X-Correlation-Id: <run_id>
 
-{ "event_type": "status", "state": "running"|"idle", "occurred_at": "<ISO>", "payload": { "run_id": "<run_id>" } }
+{ "event_type": "status", "state": "running"|"idle", "occurred_at": "<ISO>" }
 ```
 
-**Purpose.** The panel's correlation-id filter (Â§8) can then group both events by `run_id`, making the demo/emission runs demonstrable in the component-events feed.
+**Purpose.** The panel's correlation-id filter (Â§8) can then group both events by the stored `correlation_id`, making the demo/emission runs demonstrable in the component-events feed.
 
 ---
 
@@ -515,13 +517,13 @@ Source: `demo/data/events.json#events` (47 events).
 
 | Card | Position | Controls |
 |---|---|---|
-| **Ingest** | 1 | *Ingest sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); **Reset** checkbox (checked by default); delay (ms) input; **Ingest** / **Stop** buttons. *Live Emission sub-section:* Random events `OFF` / `LIVE` badge; **Enable** / **Disable** toggle â†’ `GET\|POST /demo/emit`. |
-| **GitHub Emulator** | 2 (between Ingest and Status) | *Seed sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only); **Reset** checkbox; **Seed** / **Clear** buttons â†’ `POST /demo/github/seed` \| `POST /demo/github/clear`. *Live sub-section:* `OFF` / `LIVE` badge; **Enable** / **Disable** toggle â†’ `POST /demo/github/emit`. *Store sub-section:* counters (repos / deployments / statuses / workflows / environments), dataset badge, `seeded_at` â€” from `GET /demo/github/status`. |
+| **Ingest** | 1 | *Ingest sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only, hidden for demo); delay (ms) input; **Ingest** / **Stop** buttons. (No Reset checkbox â€” ingest never triggers a reset; Â§4.3.) *Live Emission sub-section:* Random events `OFF` / `LIVE` badge; **Enable** / **Disable** toggle â†’ `GET\|POST /demo/emit`. |
+| **GitHub Emulator** | 2 (between Ingest and Status) | *Seed sub-section:* Dataset dropdown (`demo` \| `random`); count input (random only); **Seed** / **Clear** buttons â†’ `POST /demo/github/seed` \| `POST /demo/github/clear`. (No Reset checkbox â€” seed never triggers a reset.) *Live sub-section:* `OFF` / `LIVE` badge; **Enable** / **Disable** toggle â†’ `POST /demo/github/emit`. *Store sub-section:* counters (repos / deployments / statuses / workflows / environments), dataset badge, `seeded_at` â€” from `GET /demo/github/status`. |
 | **Fetcher Â· Rate Limit** | 3 (after GitHub Emulator, before Control API) | Read-only card. See Â§8.1 below. |
 | **Status** | 4 | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
 | **API** | 5 | **Reset State** button; inline result (`âœ“ Reset OK (204)` / `âœ— HTTP 401`) |
 | **Deployments** | 6 | Real-time `GET /demo/deployments-stream` SSE feed (Â§4.11) â€” proxies `GET /api/events/stream`; all pushers (demo-driver, fetcher, any); `â— LIVE` / `â— RECONNECTING` badge; rows follow unified TimeÂ·SourceÂ·EventÂ·IDÂ·Details format (see below); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
-| **Reset (system)** | 7 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `reset_id` when blocked. Reflects API-driven reset participation (Â§4.7) â€” read-only. |
+| **Reset (system)** | 7 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `correlation_id` when blocked. Reflects API-driven reset participation (Â§4.7) â€” read-only. |
 | **Events** | 8 | Merged feed sourced from BOTH `GET /demo/control-stream` (Â§4.8 SSE) AND `GET /demo/control-events` (Â§4.9 SSE); `EventSource` on each; rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `â— LIVE` / `â— RECONNECTING` badge; **Clear** button. Fresh connect starts empty â€” fills as events arrive (no server replay on either feed). Persists latest 20 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
 
 **GitHub Emulator card.** All panel calls go to `/demo/github/*` (the proxy â€” Â§5). The Seed sub-section and Live sub-section are interactive controls â€” dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; Â§5.1). The Store sub-section is a data surface and stays live.
@@ -567,7 +569,7 @@ Per-feed row mapping:
 | Feed | Row kind | Time | Source | Event | ID | Details |
 |---|---|---|---|---|---|---|
 | Deployments (`/demo/deployments-stream`) | â€” | `happened_at` (ms) | `progress_reporter` (e.g. `dashboard-fetcher/github-actions`, `demo-driver/demo`) | `status` | `deployment_id` | `service / env â†’ status` Â· `version` |
-| Events (merged) | control-stream row | `occurred_at` (ms) | `control-api` (literal) | `type` (reset-initiated=amber / reset-started=blue / reset-completed=green / unknown=default) | event `id` | `reset_id: <id>` when present |
+| Events (merged) | control-stream row | `occurred_at` (ms) | `control-api` (literal) | `type` (reset-initiated=amber / reset-started=blue / reset-completed=green / unknown=default) | event `id` | `correlation_id: <id>` (the process id) |
 | Events (merged) | component row | `received_at` (ms) | `component_id` | `event_type` | record `id` | `state` (colour-coded) Â· `detail` when present Â· notable payload keys |
 
 **localStorage persistence.**
@@ -626,11 +628,11 @@ Panel behaviour:
 | Unit | `demo.controller.spec.ts` | All endpoints: status, scenarios, ingest, ingest/stop, emit GET/POST, api-reset, reset; state transitions; NotFoundException on missing scenario; `/demo/` control calls return `503` + `Retry-After` while `reset_state == blocked`, while `GET /demo/status` still answers (blocked state); `GET /demo/control-stream` emits frames pushed to ControlFeed and is NOT blocked during reset; `GET /demo/control-events` re-broadcasts SSE from ComponentEventFeed and is NOT blocked during reset |
 | Unit | `control-feed.spec.ts` | Every parsed frame (known + unknown type) is published to subscribers; multiple subscribers each receive all frames; late subscriber gets only post-subscription frames (no replay) |
 | Unit | `component-events.subscriber.spec.ts` | Parses SSE frames from `fetch()`+ReadableStream; reconnects with `Last-Event-ID`; connect failure logs + retries and does NOT crash; each received frame published to `ComponentEventFeed`; exponential backoff applied on reconnect |
-| Unit | `control-events.client.spec.ts` | `reset-ack` POST carries `X-Api-Key` + `X-Component-Id: demo-driver` + correct body (`event_type: reset-ack`, `state: paused`, `payload.reset_id`); `status`/`running` POST shape; component id from `COMPONENT_ID`; `postRunStart` sends `state: running` + `payload.run_id` + `X-Correlation-Id`; `postRunComplete` sends `state: idle` + `payload.run_id` + same `X-Correlation-Id`; distinct calls with distinct run ids get distinct headers |
-| Unit | `demo.service.spec.ts` | `startIngest` posts run-start component event before runner starts and run-complete after runner finishes; two distinct `startIngest` calls produce two distinct `run_id`s; the run-start and run-complete events for the same call share the same `run_id` |
-| Unit | `emit.service.spec.ts` | `enable()` posts run-start component event with a fresh `run_id`; `disable()` posts run-complete with the same `run_id`; two successive enable/disable cycles produce distinct `run_id`s; no component event posted when no client is set |
+| Unit | `control-events.client.spec.ts` | `reset-ack` POST carries `X-Api-Key` + `X-Component-Id: demo-driver` + **`X-Correlation-Id` = reset id** + correct body (`event_type: reset-ack`, `state: paused`, NO `payload.reset_id`); `status`/`running` POST shape; component id from `COMPONENT_ID`; `postRunStart` sends `state: running` + `X-Correlation-Id: <run_id>` (no `payload.run_id`); `postRunComplete` sends `state: idle` + same `X-Correlation-Id` (no body id); distinct calls with distinct run ids get distinct headers |
+| Unit | `demo.service.spec.ts` | `startIngest` posts run-start component event before runner starts and run-complete after runner finishes; two distinct `startIngest` calls produce two distinct `run_id`s (carried in `X-Correlation-Id`, not the body); the run-start and run-complete events for the same call share the same `X-Correlation-Id`; ingest does NOT trigger a reset |
+| Unit | `emit.service.spec.ts` | `enable()` posts run-start component event with a fresh `run_id` in `X-Correlation-Id`; `disable()` posts run-complete with the same `X-Correlation-Id`; two successive enable/disable cycles produce distinct `run_id`s; no component event posted when no client is set |
 | Unit | `control-stream.subscriber.spec.ts` | Parses SSE frames from `fetch()`+ReadableStream; reconnects with `Last-Event-ID`; connect failure (no control stream, e.g. mock) logs + retries and does NOT crash; unknown `event_type` is a no-op; dispatches `reset-initiated`/`reset-completed` to the coordinator; publishes every parsed frame (known + unknown) to ControlFeed |
-| Unit | `reset-coordinator.spec.ts` | On `reset-initiated`: stops ingest/run, disables emit, enters `blocked`, acks (`paused` + `reset_id`); `reset-started` = no-op; on `reset-completed`: unblocks, posts `status`/`running` with `reset_id`, returns to idle, does NOT auto-restart; local `RESET_GATE_MAX_TTL_MS` safety unblock fires when no `reset-completed` arrives (no `running` posted) |
+| Unit | `reset-coordinator.spec.ts` | On `reset-initiated`: stops ingest/run, disables emit, enters `blocked`, acks (`paused` + `X-Correlation-Id` = reset id, no body id); `reset-started` = no-op; on `reset-completed`: unblocks, posts `status`/`running` with `X-Correlation-Id` = reset id, returns to idle, does NOT auto-restart; local `RESET_GATE_MAX_TTL_MS` safety unblock fires when no `reset-completed` arrives (no `running` posted) |
 | Integration | `demo.e2e.spec.ts` | Start driver against mock; `POST /demo/ingest { dataset: "demo" }`; poll until `state == done`; assert `GET /api/services` returns â‰¥ 1 service |
 | Integration | `reset-cycle.e2e.spec.ts` | Full reset cycle against a **real** `Dashboard.Api`: trigger `POST /api/control/reset`; assert the driver acks `reset-initiated` (component event visible via `GET /api/control/events/stream`), `/demo/` calls return `503` while blocked, and on `reset-completed` the driver unblocks + posts `status`/`running` and returns to idle |
 | Unit | `github-proxy.controller.spec.ts` | All five proxy routes (`status`, `seed`, `clear`, `emit` GET, `emit` POST) forward request body + response body verbatim to `GITHUB_EMULATOR_URL/_github/*`; `POST` mutator routes return `503` while `reset_state == blocked`; `GET` routes are NOT blocked; non-2xx upstream responses surfaced as-is |
