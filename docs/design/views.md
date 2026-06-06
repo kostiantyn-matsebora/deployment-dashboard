@@ -117,12 +117,13 @@ The `#nodeTemplate` receives `let-node` with `node.data` containing the full dep
     [attr.width]="node.dimension.width"
     [attr.height]="node.dimension.height">
     <xhtml:div class="vis-card"
-      [class.s-success]="node.data.status === 'success'"
-      [class.s-progress]="node.data.status === 'in-progress'"
-      [class.s-failure]="node.data.status === 'failure'"
+      [class.s-success]="node.data.currentStatus === 'success'"
+      [class.s-progress]="node.data.currentStatus === 'in-progress'"
+      [class.s-failure]="node.data.currentStatus === 'failure'"
+      [class.s-never-deployed]="node.data.neverDeployed"
       [class.is-selected]="node.data.id === selectedNodeId">
-      <!-- ctx-badge overlay (next-status only: pending/queued/waiting/cancelled/rejected) -->
-      <!-- rendered inside vis-card when node.data.nextStatus is set -->
+      <!-- never-deployed: render neutral surface + status chip (hue from node.data.status) -->
+      <!-- ctx-badge overlay (.ctx-row): present when node.data.nextStatus is set -->
       <!-- vis-card internal structure per § Swimlane Node Card -->
     </xhtml:div>
   </svg:foreignObject>
@@ -178,7 +179,10 @@ Status-colored edges with arrow markers. The link's `data.status` determines str
 
 The next badge shows the **latest deployment beyond the live one** (if any). It is present on both Matrix tiles and Swimlane cards.
 
-**Legend.** Each view (Matrix / Swimlanes) carries its own legend popover (`#legend-matrix` / `#legend-vis`) with two groups: "Environment state (tile colour)" for the 3 effective statuses and "Next deployment (badge · history)" for the 5 non-effective statuses.
+**Legend.** Each view (Matrix / Swimlanes) carries its own legend popover (`#legend-matrix` / `#legend-vis`), swapped on view change. Three sections:
+- **Status key** — "Environment state" (3 effective) + "Next deployment" (5 context): icon + swatch + meaning.
+- **Field reference** — each visible field rendered AS IT APPEARS + its meaning (matrix `MATRIX_FIELDS` / swimlane `SWIMLANE_FIELDS`).
+- **Layout guide** — Matrix: tile layouts (split / prev. failed / never-deployed / empty). Swimlanes: edges = parent→child + the correlation predicate.
 
 **Inspector.** The inspector panel shows the effective deployment's fields first, then a dotted separator, then a `next` group for the next-deployment entry (if present). The history drawer shows all 8 statuses as distinct entries, with the next deployment leading.
 

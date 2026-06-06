@@ -1109,6 +1109,18 @@
     height: 100%;
   }
 
+  /* state — never effectively deployed on this env (only a non-effective
+     deployment exists yet). NEUTRAL/grey surface — the tile colour means
+     "deployment health", and there is none yet; the actual status rides on a
+     chip. Distinct from .slot.empty ("—" = no deployment events at all). */
+  .slot.s-never-deployed {
+    background: var(--slot-empty-bg);
+  }
+  .slot.s-never-deployed::before {
+    background: var(--ink-3);
+    box-shadow: none;
+  }
+
   /* state — success */
   .slot.s-success {
     background: linear-gradient(180deg, var(--emerald-wash), rgba(52,210,154,0.06));
@@ -1574,6 +1586,10 @@
     box-shadow: 0 0 0 1px rgba(255,93,93,0.10), 0 10px 24px -14px var(--coral-glow);
   }
   .vis-card.s-failure::before { background: var(--coral); box-shadow: 0 0 12px var(--coral-glow); }
+  /* never effectively deployed — neutral/grey card (no health colour); the
+     status rides on a chip. Mirrors the matrix .slot.s-never-deployed. */
+  .vis-card.s-never-deployed { border-color: var(--glass-edge); }
+  .vis-card.s-never-deployed::before { background: var(--ink-3); box-shadow: none; }
 
   .vis-card.is-selected {
     box-shadow:
@@ -2740,7 +2756,7 @@ const SLOTS = {
                           current: { id:'4d8f9250a1b7', version: 'v0.41.2', ref:'#7912',                                                              elapsed: '6m ago',  sha:'c8d9e0f', run_number:2955, run_url:'https://ci.internal/runs/2955', parents:1 },
                           last:    { id:'5e90a361b2c8', version: 'v0.41.1', ref:'main',                actor: 'jpark',                                elapsed: '4h ago',  sha:'b7c8d9e', run_number:2935, run_url:'https://ci.internal/runs/2935', parents:2 } },
   'order-svc|qa':       { state: 'success', current: { id:'6fa1b472c3d9', version: 'v0.41.1', ref:'main',                  actor: 'jpark',             elapsed: '2h ago',  sha:'b7c8d9e', run_number:2938, run_url:'https://ci.internal/runs/2938', parents:1 } },
-  'order-svc|preprod':  { state: 'success', current: { id:'70b2c583d4ea', version: 'v0.41.0', ref:'release/0.41',         actor: 'release-bot',       elapsed: '11h ago', sha:'a6b7c8d', run_number:2920, run_url:'https://ci.internal/runs/2920', parents:1 } },
+  'order-svc|preprod':  { state: 'never-deployed', status: 'waiting', current: { id:'aa11bb22cc33', version: 'v0.41.2', ref:'release/0.41',         actor: 'release-bot',       elapsed: 'just now', sha:'a6b7c8d', run_number:2921, run_url:'https://ci.internal/runs/2921', parents:1 } },
   'order-svc|prod':     { state: 'fail-last',
                           current: { id:'81c3d694e5fb', version: 'v0.41.0', ref:'release/0.41',                                                       elapsed: '52m ago', sha:'a6b7c8d', run_number:2945, run_url:'https://ci.internal/runs/2945', parents:1 },
                           // bottom-section fallback DEMO step 3: no version, no sha, ref present → falls to ref
@@ -3410,6 +3426,27 @@ function renderSlot(svc, env, slot, key) {
     if (attrs) wrap.appendChild(attrs);
   }
 
+  else if (st === 'never-deployed') {
+    /* ---------- Never effectively deployed on this env: the only deployment so
+       far is a non-effective status (pending/queued/waiting/cancelled/rejected),
+       with no prior success/in-progress/failure. The tile is NEUTRAL/grey (no
+       health to colour by) and carries the actual status on a chip. */
+    const line = document.createElement('div');
+    line.className = 'ver-row';
+    const chip = document.createElement('span');
+    chip.className = 'status-chip ' + statusKlass(slot.status);
+    chip.textContent = `${STATUS_ICONS[slot.status] || ''} ${slot.status}`;
+    line.appendChild(chip);
+    if (matrixFieldsOn.has('version') && slot.current.version) {
+      line.appendChild(v(slot.current.version));
+    }
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) line.appendChild(headlineMeta);
+    wrap.appendChild(line);
+    const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (attrs) wrap.appendChild(attrs);
+  }
+
   // Context badge — deployment context layered on the effective tile state.
   // slot.context = 'pending' | 'queued' | 'waiting' | 'cancelled' | 'rejected'
   if (slot.context) {
@@ -3828,6 +3865,18 @@ const histEl = document.getElementById('hist');
 function makeHistory(svc, env) {
   // synthetic per (svc, env), domain-model-only — full 11-field records
   const slot = SLOTS[`${svc}|${env}`];
+  // Never-deployed slot: only ONE deployment exists (a single non-effective
+  // status), so history shows exactly that one event — no synthetic priors.
+  if (slot && slot.state === 'never-deployed') {
+    const c = slot.current;
+    return [{
+      id: c.id, component: svc, environment: env, version: c.version,
+      status: slot.status, run_url: c.run_url,
+      sha: c.sha, run_number: c.run_number, ref: c.ref, actor: c.actor,
+      happened_at: '2026-06-06T07:58:30Z', elapsed: c.elapsed || 'just now',
+      parrent_deployments: [],
+    }];
+  }
   const seedVer = (slot && (slot.current.version || slot.last?.version)) || 'v1.0.0';
   const major = seedVer;
   const slotState = slot?.state;
@@ -4047,10 +4096,10 @@ const VIS_NODES = [
     happened_at: '2026-05-26T05:42:11Z', elapsed: '1d ago',
     parrent_deployments: ['o1b3c4d5e6f7'], col: 2 },
   { id: 'o4e6f7a8b9c0', component: 'order-svc', environment: 'preprod',
-    version: 'v0.41.1', status: 'success', run_url: 'https://ci.internal/runs/2935',
-    sha: 'd4e5f6a', run_number: 2935, ref: 'release/0.41', actor: 'release-bot',
-    happened_at: '2026-05-26T19:08:55Z', elapsed: '22h ago',
-    parrent_deployments: ['o2c4d5e6f7a8', 'o3d5e6f7a8b9'], col: 4 },
+    version: 'v0.41.2', status: 'waiting', neverDeployed: true, run_url: 'https://ci.internal/runs/2921',
+    sha: 'a6b7c8d', run_number: 2921, ref: 'release/0.41', actor: 'release-bot',
+    happened_at: '2026-06-06T07:58:30Z', elapsed: 'just now',
+    parrent_deployments: [], col: 4 },
   { id: 'o5f7a8b9c0d1', component: 'order-svc', environment: 'prod',
     version: 'v0.41.2', status: 'in-progress', run_url: 'https://ci.internal/runs/2948',
     sha: 'e5f6a7b', run_number: 2948, ref: '#7912', actor: 'jpark',
@@ -4504,7 +4553,7 @@ function buildSwim() {
   VIS_NODES.forEach(n => {
     if (n.x === undefined || n.y === undefined) return; // not in any service shown
     const card = document.createElement('div');
-    const klass = statusKlass(n.status);
+    const klass = n.neverDeployed ? 's-never-deployed' : statusKlass(n.status);
     const selected = n.id === PRESELECTED_NODE_ID ? ' is-selected' : '';
     card.className = `vis-card ${klass}${selected}`;
     card.dataset.nodeId = n.id;
@@ -4525,12 +4574,21 @@ function buildSwim() {
     // For in-progress we use the static ◴ glyph (no animated spinner on vis-cards).
     const verRow = document.createElement('div');
     verRow.className = 'vc-ver-row';
-    // Status icon — always present, tinted by semantic alias token
-    const vcIc = document.createElement('span');
-    vcIc.setAttribute('aria-hidden', 'true');
-    vcIc.style.cssText = 'font-size:11px;line-height:1;color:var(--' + n.status + ');flex-shrink:0;margin-right:4px';
-    vcIc.textContent = STATUS_ICONS[n.status] || '';
-    verRow.appendChild(vcIc);
+    // Status indicator. Never-deployed nodes use a status CHIP (the card is
+    // neutral); all others use the tinted primary icon.
+    if (n.neverDeployed) {
+      const chip = document.createElement('span');
+      chip.className = 'status-chip ' + statusKlass(n.status);
+      chip.style.cssText = 'flex-shrink:0;margin-right:6px';
+      chip.textContent = `${STATUS_ICONS[n.status] || ''} ${n.status}`;
+      verRow.appendChild(chip);
+    } else {
+      const vcIc = document.createElement('span');
+      vcIc.setAttribute('aria-hidden', 'true');
+      vcIc.style.cssText = 'font-size:11px;line-height:1;color:var(--' + n.status + ');flex-shrink:0;margin-right:4px';
+      vcIc.textContent = STATUS_ICONS[n.status] || '';
+      verRow.appendChild(vcIc);
+    }
     if (visFieldsOn.has('version') && n.version) {
       const ver = document.createElement('div');
       ver.className = 'vc-ver';

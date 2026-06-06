@@ -12,7 +12,7 @@
       "catalog-edge":        "PARTIAL — run 5160 (v5.0.0-rc2) dev→staging→qa(in-progress, first-ever to qa, no actor); older run 5145 (v4.18.7) holds preprod→prod. prod has a REJECTED context badge (run 5161, v5.0.0-rc2).",
       "ledger-projector":    "PARTIAL — run 1830 (v2.0.1) dev→staging; qa is a lone in-progress retry (run 1828) after a failure; older run 1802 (v1.9.8) holds preprod→prod. prod has a CANCELLED context badge (run 1831, v2.0.2-rc1).",
       "notification-worker": "PARTIAL — run 3110 (v1.9.1) dev→staging(FAILURE) with staging last_successful (run 3081, sha-only fallback) as a lone node; older run 3076 (v1.8.4) holds qa→preprod; prod (run 3041) is a lone node.",
-      "platform-proxy":     "LONG VERSION (early stages) — run 6200 (v2.0.0-beta.3+build.20250530) on dev(success) + staging(in-progress) only; no qa/preprod/prod yet.",
+      "platform-proxy":     "LONG VERSION (early stages) — run 6200 (v2.0.0-beta.3+build.20250530) on dev(success) + staging(in-progress); qa has NEVER-DEPLOYED (waiting, run 6210) — first-ever gated deploy, no effective baseline.",
       "data-pipeline":      "LONG VERSION (late stages) — run 7100 (v1.99.0-hotfix.csrf-protection) on preprod(success) + prod(in-progress) only; earlier stages already gone."
     },
     "fallback_fields": {
@@ -53,7 +53,8 @@
     "search-indexer|prod":         "ctx-queued",
     "billing-webhook|prod":        "ctx-waiting",
     "ledger-projector|prod":       "ctx-cancelled",
-    "catalog-edge|prod":           "ctx-rejected"
+    "catalog-edge|prod":           "ctx-rejected",
+    "platform-proxy|qa":           "never-deployed"
   },
 
   "events": [
@@ -111,6 +112,7 @@
 
     { "deployment_id": "gh-proxy-dev-6200",      "service": "platform-proxy",      "environment": "dev",     "status": "success",     "elapsed_minutes": 55,   "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": [] },
     { "deployment_id": "gh-proxy-staging-6200",  "service": "platform-proxy",      "environment": "staging", "status": "in-progress", "elapsed_minutes": 8,    "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6200", "run_url": "https://ci.internal/runs/6200", "parent_deployments": ["gh-proxy-dev-6200"] },
+    { "deployment_id": "gh-proxy-qa-6210",       "service": "platform-proxy",      "environment": "qa",      "status": "waiting",     "elapsed_minutes": 2,    "version": "v2.0.0-beta.3+build.20250530", "sha": "f1e2d3c", "ref": "feat/connection-pool-rewrite", "actor": "p.novak",     "run_number": "6210", "run_url": "https://ci.internal/runs/6210", "parent_deployments": [] },
 
     { "deployment_id": "gh-pipeline-preprod-7100","service": "data-pipeline",       "environment": "preprod", "status": "success",     "elapsed_minutes": 120,  "version": "v1.99.0", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": [] },
     { "deployment_id": "gh-pipeline-prod-7100",   "service": "data-pipeline",       "environment": "prod",    "status": "in-progress", "elapsed_minutes": 10,   "version": "v1.99.0-hotfix.csrf-protection", "sha": "a9b8c7d", "ref": "hotfix/csrf-protection",      "actor": "release-bot", "run_number": "7100", "run_url": "https://ci.internal/runs/7100", "parent_deployments": ["gh-pipeline-preprod-7100"] },

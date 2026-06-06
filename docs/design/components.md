@@ -136,7 +136,7 @@ flowchart TB
 | Primary identifier | `version` (headline, 11px 600) | `environment` (bottom-right, Inter 11px 600) |
 | Version treatment | Headline (prominent) | Top-left (secondary, 10.5px 500, muted) |
 | Internal layout | Flex column | 2-column CSS grid (subgrid rows) |
-| Status states | 6-state machine (split tiles) | 3 simple states: `.s-success`, `.s-progress`, `.s-failure` |
+| Status states | 6-state machine (split tiles) + `next` badge + never-deployed | same model — effective primary + `next` badge + never-deployed (see "Deployment statuses & context rendering"; NOT just 3 states) |
 | `parrent_deployments` | Shown as "⟵ N parents" text | **NOT rendered** — edges convey parents |
 | Content overflow | Column expands horizontally | Rows scroll horizontally inside the card |
 | Positioning | CSS grid cell (flow) | Managed by ngx-graph dagre layout (SVG `<g>` transform) |
@@ -152,7 +152,7 @@ Right-side slide-out panel showing per-slot deployment history. Opened by clicki
 - **Width:** 440px, right-aligned.
 - **Overlay:** `--drawer-overlay` scrim covering viewport. Click to dismiss.
 - **Header:** breadcrumb (`component · environment`), "history" title, close button (×).
-- **Entries:** Timeline with colored pip (emerald/amber/coral). Each entry is a full-width card showing ALL 11 domain-model fields as explicit **label/value rows** — NOT mixed-treatment.
+- **Entries:** Timeline with colored pip in the **status hue** (all 8 statuses, not only emerald/amber/coral — see "Deployment statuses & context rendering"). Each entry is a full-width card showing ALL 11 domain-model fields as explicit **label/value rows** — NOT mixed-treatment.
 - **Rendered fields per entry:** version, status chip, ref, sha, run_number, actor, happened_at (elapsed + absolute UTC), parrent_deployments (list of truncated GUIDs), run_url link.
 - **Close:** Escape key, overlay click, or × button.
 
@@ -166,6 +166,61 @@ Persistent right sidebar in Swimlanes view. Updated when a node is selected.
 - **Header:** breadcrumb (`component · environment`), status chip + version.
 - **Body:** 2-column `.insp-grid` — ALL 11 domain-model fields as explicit **label/value** rows. `happened_at` shows elapsed + absolute UTC. `parrent_deployments` shows truncated GUIDs as accent-colored chips.
 - Fields render regardless of attribute-picker state.
+- **Next group (issue #268):** when `slot.next` is present, after the live fields a dotted separator then `next status` (chip) · `next version` · `next run_url`.
+
+---
+
+## Deployment statuses & context rendering (issue #268)
+
+**Authoritative acceptance spec — every change to tiles / cards / history / inspector / legend MUST keep all of the below satisfied.** Source of truth for the 8-status model; do not regress.
+
+### Status set (8)
+
+| Status | Class | Group | Hue token | Icon |
+|---|---|---|---|---|
+| `success` | `s-success` | effective | `--emerald` | ✓ |
+| `in-progress` | `s-progress` | effective | `--amber` | spinner |
+| `failure` | `s-failure` | effective | `--coral` | ✕ |
+| `pending` | `s-pending` | context (next) | `--slate` | ○ |
+| `queued` | `s-queued` | context (next) | `--blue` | ≡ |
+| `waiting` | `s-waiting` | context (next) | `--violet` | ◷ |
+| `cancelled` | `s-cancelled` | context (next) | `--grey` | ⊘ |
+| `rejected` | `s-rejected` | context (next) | `--rose` | ⊗ |
+
+- **Effective** statuses describe the environment's deployment health → they DRIVE the tile/card colour (the 6 box states above).
+- **Context** statuses are the *next* deployment (beyond the live one) → NEVER the tile colour; rendered as a badge/chip.
+
+### `current` vs `next` (per slot)
+
+- `current` = latest EFFECTIVE deployment → tile/card primary (box state + split-bottom).
+- **Split-bottom (S2–S4)** shows the last-successful identifier via fallback `version → sha → ref → run_number` (the *previous* deployment). **Required on BOTH matrix tile and swimlane card.**
+- `next` = latest CONTEXT deployment, present only when newer than `current` → secondary `.ctx-badge` on its own `.ctx-row`: icon + status word + version. Rendered on matrix tile AND swimlane card.
+
+### Never-deployed slot (no effective baseline)
+
+A slot whose only/latest deployment is a context status with NO prior effective deployment (e.g. first-ever gated/queued deploy). Read model: `current` is a context status, `next` absent.
+
+- Render a **NEUTRAL / grey surface** (no health colour) + version + meta + a **status chip** carrying the actual context status (its hue + icon).
+- DISTINCT from EMPTY ("—", zero deployment events → slot absent from the row).
+- **History = exactly ONE entry** (the single deployment).
+- Applies to matrix tile, swimlane card, and inspector.
+
+### Surface parity
+
+Matrix tile and swimlane card render the SAME state model: effective primary (6 box states) + `next` badge + never-deployed neutral. _(Supersedes the earlier "Swimlane = 3 simple states" note.)_
+
+### History drawer
+
+- All 8 statuses appear as distinct entries — pip + status chip in the **status hue** (not only emerald/amber/coral).
+- The `next` deployment is the most-recent entry (leads the list).
+- Never-deployed slot → single entry only.
+
+### Legend (top-bar, per view)
+
+Per-view content (matrix vs swimlanes), swapped on view change:
+- **Status key** — "Environment state" (3 effective) + "Next deployment" (5 context): icon + swatch + meaning.
+- **Field reference** — each visible field rendered AS IT APPEARS + its meaning (matrix `MATRIX_FIELDS` / swimlane `SWIMLANE_FIELDS`).
+- **Matrix:** tile layouts (split / prev. failed / never-deployed / empty). **Swimlanes:** edges = parent→child + the correlation predicate.
 
 ---
 
