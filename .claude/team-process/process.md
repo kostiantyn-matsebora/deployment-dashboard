@@ -72,45 +72,56 @@ the orchestrator reviews, reconciles, commits, ships — this keeps the change a
 
 ## Communication protocol
 
-All cross-role messages use these 5 typed forms. **Fixed field order; omit empty fields;
-one fact per line.** The vocabulary is binding — roles emit/consume these, not free prose.
+All cross-role messages use these 5 typed forms. Each form is a table: **field name** ·
+**what belongs** (the pieces of info) · **constraint** (the rule governing it). **Fixed row
+order; omit empty rows.** The vocabulary is binding — roles emit/consume these, not free prose.
 
-```
-BRIEF              orch → role   · dispatch
-spec:    <owning spec path#section — docs-first target + acceptance gate>
-lane:    <glob(s) the role may touch; nothing else>
-task:    <one line>
-gate:    <self-verify set, e.g. build+unit+lint>
-seed:    <optional diagnosis/theory to TEST FIRST before investigating>
-```
-```
-RESULT             role → orch   · hand-back
-role:    <role>
-changed: <files>
-gate:    <ACTUAL results, e.g. build ok | unit 12/12 | lint ok — never "should pass">
-notes:   <≤3 design decisions>
-follow:  <out-of-lane needs / deferred>
-block:   <none | see FINDING>
-```
-```
-FINDING            role → orch   · blocker / contradiction / impossible
-where:   <file or spec>
-issue:   <contradiction | impossible | missing input>
-options: <a / b>
-need:    <decision required>
-```
-```
-FIX                orch → role   · fix-loop assignment
-test:    <failing test id>
-expect:  <…>   actual: <…>
-suspect: <layer / file>
-```
-```
-ARTIFACT           contract → orch → consumers   · settled interface
-spec:    <committed path>
-delta:   <resources / operations changed>
-open:    <questions needing a decision>
-```
+**BRIEF** — orch → role · dispatch
+
+| Field | What belongs | Constraint |
+|---|---|---|
+| spec | • owning spec path#section<br>• acceptance gate it sets | docs-first target; required |
+| lane | • glob(s) the role may touch | nothing outside it |
+| task | • the change to make | one line, imperative |
+| gate | • self-verify set | build + unit + lint |
+| seed | • diagnosis/theory to test first | optional; omit if none |
+
+**RESULT** — role → orch · hand-back
+
+| Field | What belongs | Constraint |
+|---|---|---|
+| role | • the reporting role | one of the role names |
+| changed | • files touched | in-lane only |
+| gate | • actual gate outcomes | real counts (`build ok`, `unit 12/12`); never "should pass" |
+| notes | • key design decisions | ≤3 |
+| follow | • out-of-lane needs / deferred | omit if none |
+| block | • blocker pointer | `none` or `see FINDING` |
+
+**FINDING** — role → orch · blocker / contradiction / impossible
+
+| Field | What belongs | Constraint |
+|---|---|---|
+| where | • file or spec at fault | path or spec ref |
+| issue | • the problem | one of: contradiction / impossible / missing input |
+| options | • viable paths | ≥2 (a / b) |
+| need | • the decision required | one line |
+
+**FIX** — orch → role · fix-loop assignment
+
+| Field | What belongs | Constraint |
+|---|---|---|
+| test | • failing test id | exact id |
+| expect | • expected behavior | — |
+| actual | • observed behavior | — |
+| suspect | • likely layer / file | a route hint, not a fix |
+
+**ARTIFACT** — contract → orch → consumers · settled interface
+
+| Field | What belongs | Constraint |
+|---|---|---|
+| spec | • committed contract path | committed, not chat |
+| delta | • resources / operations changed | — |
+| open | • questions needing a decision | omit if none |
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
