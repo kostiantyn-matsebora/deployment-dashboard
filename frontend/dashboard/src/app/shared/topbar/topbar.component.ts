@@ -66,12 +66,14 @@ export class TopbarComponent {
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
   protected readonly columnsPopover       = viewChild<Popover>('columnsPopover');
   protected readonly correlationPopover   = viewChild<Popover>('correlationPopover');
+  protected readonly legendPopover        = viewChild<Popover>('legendPopover');
   protected readonly rateLimitPopovers    = viewChildren<Popover>('rateLimitPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
   protected readonly fieldsPopoverOpen      = signal(false);
   protected readonly columnsPopoverOpen     = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
+  protected readonly legendPopoverOpen      = signal(false);
   protected readonly rateLimitPopoverOpen   = signal<Map<string, boolean>>(new Map());
 
   // ── View tabs ─────────────────────────────────────────────
@@ -292,6 +294,14 @@ export class TopbarComponent {
     if (p) {
       p.toggle(event);
       this.correlationPopoverOpen.update(v => !v);
+    }
+  }
+
+  protected toggleLegendPopover(event: MouseEvent): void {
+    const p = this.legendPopover();
+    if (p) {
+      p.toggle(event);
+      this.legendPopoverOpen.update(v => !v);
     }
   }
 

@@ -6,11 +6,11 @@
  * Critical regression: failure with no last_successful must yield 's-fail-last'
  * (NOT 's-running-only'). See bug fix: deriveBoxState failure branch.
  */
-import { deriveBoxState, DeploymentEvent, MatrixSlot } from './deployment.model';
+import { deriveBoxState, isContextStatus, DeploymentEvent, MatrixSlot, Status } from './deployment.model';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function mkEvent(status: 'success' | 'failure' | 'in-progress'): DeploymentEvent {
+function mkEvent(status: Status): DeploymentEvent {
   return {
     id:            'evt-1',
     deployment_id: 'dep-1',
@@ -21,7 +21,7 @@ function mkEvent(status: 'success' | 'failure' | 'in-progress'): DeploymentEvent
   };
 }
 
-function mkSlot(overrides: Partial<MatrixSlot> & { status: 'success' | 'failure' | 'in-progress' }): MatrixSlot {
+function mkSlot(overrides: Partial<MatrixSlot> & { status: Status }): MatrixSlot {
   const { status, ...rest } = overrides;
   return {
     current: mkEvent(status),
@@ -121,4 +121,52 @@ describe('deriveBoxState — s-running-only is never returned for failure', () =
     const result = deriveBoxState(mkSlot({ status: 'failure', last_successful: mkEvent('success') }));
     expect(result).not.toBe('s-running-only');
   });
+});
+
+// ── Context statuses — pending/queued/waiting/cancelled/rejected ───────────────
+
+const CONTEXT_STATUSES: Status[] = ['pending', 'queued', 'waiting', 'cancelled', 'rejected'];
+
+describe('deriveBoxState — context statuses with last_successful → s-success', () => {
+  for (const status of CONTEXT_STATUSES) {
+    it(`${status} + last_successful returns s-success (tile shows last-deployed state)`, () => {
+      const slot = mkSlot({ status, last_successful: mkEvent('success') });
+      expect(deriveBoxState(slot)).toBe('s-success');
+    });
+  }
+});
+
+describe('deriveBoxState — context statuses without last_successful → s-never-deployed', () => {
+  for (const status of CONTEXT_STATUSES) {
+    it(`${status} without last_successful returns s-never-deployed (neutral tile, never-deployed)`, () => {
+      const slot = mkSlot({ status });
+      expect(deriveBoxState(slot)).toBe('s-never-deployed');
+    });
+  }
+});
+
+describe('deriveBoxState — s-never-deployed is not reachable from effective statuses', () => {
+  it('success never returns s-never-deployed', () => {
+    expect(deriveBoxState(mkSlot({ status: 'success' }))).not.toBe('s-never-deployed');
+  });
+  it('failure never returns s-never-deployed', () => {
+    expect(deriveBoxState(mkSlot({ status: 'failure' }))).not.toBe('s-never-deployed');
+  });
+  it('in-progress never returns s-never-deployed', () => {
+    expect(deriveBoxState(mkSlot({ status: 'in-progress' }))).not.toBe('s-never-deployed');
+  });
+});
+
+// ── isContextStatus ────────────────────────────────────────────────────────────
+
+describe('isContextStatus', () => {
+  it('returns true for pending', ()   => expect(isContextStatus('pending')).toBe(true));
+  it('returns true for queued', ()    => expect(isContextStatus('queued')).toBe(true));
+  it('returns true for waiting', ()   => expect(isContextStatus('waiting')).toBe(true));
+  it('returns true for cancelled', () => expect(isContextStatus('cancelled')).toBe(true));
+  it('returns true for rejected', ()  => expect(isContextStatus('rejected')).toBe(true));
+
+  it('returns false for success',     () => expect(isContextStatus('success')).toBe(false));
+  it('returns false for failure',     () => expect(isContextStatus('failure')).toBe(false));
+  it('returns false for in-progress', () => expect(isContextStatus('in-progress')).toBe(false));
 });

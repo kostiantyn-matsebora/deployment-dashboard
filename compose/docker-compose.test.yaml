@@ -39,6 +39,13 @@
 #                           reset-choreography tests are unaffected by the
 #                           fetcher's presence.
 #   GITHUB_RATE_LIMIT_BUDGET_PCT = 100  Use the full simulated budget for speed.
+#   BACKFILL_DEPTH = 5              S3 (ledger-projector/qa) requires 5 status events:
+#                           run 1815001 (in_progress+success=2) + run 1823001
+#                           (in_progress+failure=2) + run 1828001 (in_progress=1).
+#                           BACKFILL_DEPTH counts mapped status events per slot, not
+#                           deployments. depth=3 stops at run 1823001 (events 3-4) and
+#                           never fetches the run 1815001 success anchor. depth=5 reaches
+#                           all 5 status events and posts the success anchor.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -58,3 +65,7 @@ services:
     environment:
       POLL_INTERVAL_SECONDS: "2"
       GITHUB_RATE_LIMIT_BUDGET_PCT: "100"
+      # S3 (ledger-projector/qa) needs 5 status events (depth counts mapped status events per
+      # slot, not deployments): 1828001(1) + 1823001(2) + 1815001(2) = 5. depth=3 stops at
+      # event 3 (run 1823001.in_progress) and never fetches the run 1815001 success anchor.
+      BACKFILL_DEPTH: "5"

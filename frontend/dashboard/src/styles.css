@@ -90,6 +90,46 @@ body::after {
   background: var(--popover-bg) !important;
 }
 
+/* ── Context badge — secondary status pill on matrix tiles and vis-cards ─────
+   Five "context" statuses (pending/queued/waiting/cancelled/rejected) that are
+   NOT primary tile states. Rendered in a .ctx-row (flow, below tile content).
+   Spec: docs/design/mockup/index.html §ctx-badge                              */
+
+.ctx-row {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.ctx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px 1px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  border: 1px solid transparent;
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.ctx-badge.cb-pending   { color: var(--slate);  border-color: var(--slate-edge);  background: var(--slate-wash); }
+.ctx-badge.cb-queued    { color: var(--blue);   border-color: var(--blue-edge);   background: var(--blue-wash); }
+.ctx-badge.cb-waiting   { color: var(--violet); border-color: var(--violet-edge); background: var(--violet-wash); }
+.ctx-badge.cb-cancelled { color: var(--grey);   border-color: var(--grey-edge);   background: var(--grey-wash); }
+.ctx-badge.cb-rejected  { color: var(--rose);   border-color: var(--rose-edge);   background: var(--rose-wash); }
+
+/* Status chip in history drawer — reuses same hue families */
+.s-pending   .status-chip { color: var(--slate);  border-color: var(--slate-edge);  background: var(--slate-wash); }
+.s-queued    .status-chip { color: var(--blue);   border-color: var(--blue-edge);   background: var(--blue-wash); }
+.s-waiting   .status-chip { color: var(--violet); border-color: var(--violet-edge); background: var(--violet-wash); }
+.s-cancelled .status-chip { color: var(--grey);   border-color: var(--grey-edge);   background: var(--grey-wash); }
+.s-rejected  .status-chip { color: var(--rose);   border-color: var(--rose-edge);   background: var(--rose-wash); }
+
 /* Keyframe animations shared across components */
 @keyframes spin {
   to { transform: rotate(360deg); }

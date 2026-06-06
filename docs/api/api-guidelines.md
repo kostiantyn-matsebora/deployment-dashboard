@@ -12,7 +12,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | Path params | lower kebab-case | `{adapter}` |
 | Query params | lower snake_case | `?since=…&run_number=…` |
 | JSON fields | lower snake_case | `deployment_id`, `parent_deployments`, `happened_at` |
-| Enum values | lower kebab-case | `in-progress`, `success`, `failure` |
+| Enum values | lower kebab-case | `pending`, `queued`, `waiting`, `in-progress`, `success`, `failure`, `cancelled`, `rejected` |
 | Headers | `Train-Case` | `X-Api-Key`, `X-Component-Id`, `Last-Event-ID` |
 
 **Verb mapping.**
@@ -91,7 +91,7 @@ Every non-2xx body is `application/problem+json`:
   "type":     "https://deployment-dashboard/errors/validation",
   "title":    "Payload validation failed",
   "status":   422,
-  "detail":   "status must be one of in-progress|success|failure",
+  "detail":   "status must be one of pending|queued|waiting|in-progress|success|failure|cancelled|rejected",
   "instance": "/api/deployments"
 }
 ```
@@ -106,7 +106,7 @@ For `422` payload-validation failures, the body additionally carries an `errors[
   "errors": [
     { "pointer": "/happened_at", "message": "must be RFC 3339 with timezone" },
     { "pointer": "/run_number",  "message": "must be an integer" },
-    { "pointer": "/status",      "message": "must be one of in-progress|success|failure" }
+    { "pointer": "/status",      "message": "must be one of pending|queued|waiting|in-progress|success|failure|cancelled|rejected" }
   ]
 }
 ```

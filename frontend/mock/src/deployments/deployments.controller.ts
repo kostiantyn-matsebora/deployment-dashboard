@@ -33,7 +33,10 @@ interface DeploymentEventIngest {
   parent_deployments?: unknown;
 }
 
-const VALID_STATUSES = new Set(['in-progress', 'success', 'failure']);
+const VALID_STATUSES = new Set([
+  'in-progress', 'success', 'failure',
+  'pending', 'queued', 'waiting', 'cancelled', 'rejected',
+]);
 
 function validateIngest(body: DeploymentEventIngest): void {
   const errors: Array<{ pointer: string; message: string }> = [];
@@ -45,7 +48,7 @@ function validateIngest(body: DeploymentEventIngest): void {
   if (!body.environment || typeof body.environment !== 'string' || body.environment.length === 0)
     errors.push({ pointer: '/environment', message: 'Required non-empty string.' });
   if (!body.status || !VALID_STATUSES.has(body.status as string))
-    errors.push({ pointer: '/status', message: 'Required; must be in-progress, success, or failure.' });
+    errors.push({ pointer: '/status', message: 'Required; must be one of: pending, queued, waiting, in-progress, success, failure, cancelled, rejected.' });
   if (!body.happened_at || typeof body.happened_at !== 'string')
     errors.push({ pointer: '/happened_at', message: 'Required RFC 3339 date-time string.' });
 

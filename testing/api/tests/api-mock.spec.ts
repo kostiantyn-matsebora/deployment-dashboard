@@ -183,7 +183,8 @@ describe('POST /api/deployments', () => {
   });
 
   it('returns 422 when status is an invalid enum value', async () => {
-    const res = await post('/api/deployments', minimalEvent({ status: 'pending' }), { 'X-Api-Key': API_KEY });
+    // 'unknown-status' is genuinely invalid; 'pending' is now a valid status (#268)
+    const res = await post('/api/deployments', minimalEvent({ status: 'unknown-status' }), { 'X-Api-Key': API_KEY });
     expect(res.status).toBe(422);
   });
 
@@ -201,6 +202,19 @@ describe('POST /api/deployments', () => {
     expect(problem.errors.length).toBeGreaterThanOrEqual(2);
     expect(problem.errors[0]).toMatchObject({ pointer: expect.any(String), message: expect.any(String) });
   });
+
+  // ── Context statuses (#268) ─────────────────────────────────────────────────
+
+  const CTX_STATUSES = ['pending', 'queued', 'waiting', 'cancelled', 'rejected'] as const;
+
+  for (const status of CTX_STATUSES) {
+    it(`returns 201 for context status: ${status}`, async () => {
+      const res = await post('/api/deployments', minimalEvent({ status }), { 'X-Api-Key': API_KEY });
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.status).toBe(status);
+    });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,7 +242,7 @@ describe('GET /api/deployments', () => {
     const item = body.items[0];
     expect(typeof item.id).toBe('string');
     expect(typeof item.deployment_id).toBe('string');
-    expect(['in-progress', 'success', 'failure']).toContain(item.status);
+    expect(['in-progress', 'success', 'failure', 'pending', 'queued', 'waiting', 'cancelled', 'rejected']).toContain(item.status);
     expect(typeof item.happened_at).toBe('string');
   });
 
@@ -385,6 +399,57 @@ describe('GET /api/matrix', () => {
     await post('/_mock/demo', { enabled: false });
     const { rows } = await (await get('/api/matrix')).json();
     expect(rows.length).toBe(0);
+  });
+
+  // ── Context statuses appear in matrix slot.next (#268) ────────────────────
+
+  it('slot.next is populated when a context-status event is posted after a success', async () => {
+    const svc = `ctx-svc-${Date.now()}`;
+    const env = 'prod';
+    const t0 = new Date(Date.now() - 60000).toISOString();
+    const t1 = new Date().toISOString();
+    // Post success first, then pending (newer)
+    await post('/api/deployments', minimalEvent({ service: svc, environment: env, status: 'success', happened_at: t0 }), { 'X-Api-Key': API_KEY });
+    await post('/api/deployments', minimalEvent({ service: svc, environment: env, status: 'pending', happened_at: t1 }), { 'X-Api-Key': API_KEY });
+
+    const { rows } = await (await get(`/api/matrix?service=${encodeURIComponent(svc)}`)).json();
+    const slot = rows[0]?.slots[env];
+    expect(slot).toBeDefined();
+    // current must remain the effective (success) event
+    expect(slot.current.status).toBe('success');
+    // next must carry the context status
+    expect(slot.next).toBeDefined();
+    expect(slot.next.status).toBe('pending');
+  });
+
+  it('slot.next is populated for queued; current stays as the effective state', async () => {
+    const svc = `ctx-svc2-${Date.now()}`;
+    const env = 'staging';
+    const t0 = new Date(Date.now() - 120000).toISOString();
+    const t1 = new Date(Date.now() - 60000).toISOString();
+    const t2 = new Date().toISOString();
+    await post('/api/deployments', minimalEvent({ service: svc, environment: env, status: 'success',    happened_at: t0 }), { 'X-Api-Key': API_KEY });
+    await post('/api/deployments', minimalEvent({ service: svc, environment: env, status: 'in-progress', happened_at: t1 }), { 'X-Api-Key': API_KEY });
+    await post('/api/deployments', minimalEvent({ service: svc, environment: env, status: 'queued',      happened_at: t2 }), { 'X-Api-Key': API_KEY });
+
+    const { rows } = await (await get(`/api/matrix?service=${encodeURIComponent(svc)}`)).json();
+    const slot = rows[0]?.slots[env];
+    // current = most recent effective = in-progress
+    expect(slot.current.status).toBe('in-progress');
+    expect(slot.last_successful?.status).toBe('success');
+    // next = context event
+    expect(slot.next?.status).toBe('queued');
+  });
+
+  it('slot.next is absent when no context event exists', async () => {
+    const svc = `ctx-svc3-${Date.now()}`;
+    const env = 'qa';
+    await post('/api/deployments', minimalEvent({ service: svc, environment: env, status: 'success', happened_at: new Date().toISOString() }), { 'X-Api-Key': API_KEY });
+
+    const { rows } = await (await get(`/api/matrix?service=${encodeURIComponent(svc)}`)).json();
+    const slot = rows[0]?.slots[env];
+    expect(slot.current.status).toBe('success');
+    expect(slot.next).toBeUndefined();
   });
 });
 

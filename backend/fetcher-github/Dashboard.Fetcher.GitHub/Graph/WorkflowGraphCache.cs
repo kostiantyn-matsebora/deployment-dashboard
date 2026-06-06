@@ -43,15 +43,14 @@ public sealed class WorkflowGraphCache
     {
         var key = $"{owner}/{repo}:{runId}";
 
-        // If we already fetched the full graph, the run is implicitly cached inside it.
-        // Re-use the embedded run rather than making an extra call.
-        if (_graphs.TryGet(key, out var graph) && graph is not null)
-        {
-            // Reconstruct a minimal GhWorkflowRun from the cached graph name (path not stored
-            // in WorkflowGraph, so fall through to the run cache in that case).
-        }
-
-        if (_runs.TryGet(key, out var cached))
+        // A run's identity fields (path, name, head_sha) are immutable, but its
+        // `conclusion` is null while the run is in flight and is only set once it
+        // completes. Status refinement reads `conclusion` to detect cancellation
+        // (GithubActionsAdapter.ResolveFailureStatusAsync), so a run cached mid-flight
+        // (non-null run, null conclusion) MUST be re-fetched — otherwise a later
+        // cancellation is missed and the deployment stays `failure`. Reuse the cache
+        // only for completed runs (conclusion present) or negative results (null).
+        if (_runs.TryGet(key, out var cached) && (cached is null || cached.Conclusion is not null))
             return cached;
 
         var run = await FetchRunAsync(owner, repo, runId, github, ct);

@@ -143,9 +143,14 @@
   margin-top: 5px;
   flex-shrink: 0;
 }
-.hist-entry.s-success .pip  { background: var(--emerald); box-shadow: 0 0 10px var(--emerald-glow); }
-.hist-entry.s-failure .pip  { background: var(--coral);   box-shadow: 0 0 10px var(--coral-glow);   }
+.hist-entry.s-success  .pip { background: var(--emerald); box-shadow: 0 0 10px var(--emerald-glow); }
+.hist-entry.s-failure  .pip { background: var(--coral);   box-shadow: 0 0 10px var(--coral-glow);   }
 .hist-entry.s-progress .pip { background: var(--amber);   box-shadow: 0 0 10px var(--amber-glow);   }
+.hist-entry.s-pending  .pip { background: var(--slate);   box-shadow: 0 0 8px  var(--slate-glow);   }
+.hist-entry.s-queued   .pip { background: var(--blue);    box-shadow: 0 0 8px  var(--blue-glow);    }
+.hist-entry.s-waiting  .pip { background: var(--violet);  box-shadow: 0 0 8px  var(--violet-glow);  }
+.hist-entry.s-cancelled .pip{ background: var(--grey);    box-shadow: 0 0 8px  var(--grey-glow);    }
+.hist-entry.s-rejected .pip { background: var(--rose);    box-shadow: 0 0 8px  var(--rose-glow);    }
 
 /* Content area */
 .hist-main {
@@ -227,9 +232,14 @@
   border-radius: 999px;
   border: 1px solid;
 }
-.status-chip.s-success  { color: var(--emerald); border-color: rgba(52,  210, 154, 0.5); background: rgba(52,  210, 154, 0.10); }
-.status-chip.s-failure  { color: var(--coral);   border-color: rgba(255,  93,  93, 0.5); background: rgba(255,  93,  93, 0.10); }
-.status-chip.s-progress { color: var(--amber);   border-color: rgba(245, 165,  36, 0.5); background: rgba(245, 165,  36, 0.10); }
+.status-chip.s-success  { color: var(--emerald); border-color: var(--emerald-edge); background: var(--emerald-wash); }
+.status-chip.s-failure  { color: var(--coral);   border-color: var(--coral-edge);   background: var(--coral-wash);   }
+.status-chip.s-progress { color: var(--amber);   border-color: var(--amber-edge);   background: var(--amber-wash);   }
+.status-chip.s-pending  { color: var(--slate);   border-color: var(--slate-edge);   background: var(--slate-wash);   }
+.status-chip.s-queued   { color: var(--blue);    border-color: var(--blue-edge);    background: var(--blue-wash);    }
+.status-chip.s-waiting  { color: var(--violet);  border-color: var(--violet-edge);  background: var(--violet-wash);  }
+.status-chip.s-cancelled{ color: var(--grey);    border-color: var(--grey-edge);    background: var(--grey-wash);    }
+.status-chip.s-rejected { color: var(--rose);    border-color: var(--rose-edge);    background: var(--rose-wash);    }
 
 /* ── Run link ─────────────────────────────────────────────── */
 .hist-link {

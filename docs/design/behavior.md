@@ -16,6 +16,8 @@ Fields use **mixed visual treatment** — position, glyph prefix, and typography
 | `run_url` | Mid-row right cluster | ↗ "run" dashed link, indigo (#a8a0ff) | `.fld-runurl` |
 | `run_number` | Mid-row right cluster | # prefix, mono 10.5px | `.fld-runno` |
 | `parrent_deployments` | Full-width tail row | ⟵ N parents, mono 10px, `--ink-2` | `.fld-parents` |
+| Next badge (`nextStatus`) | `.ctx-row` below attrs | `.ctx-badge`: icon + status word + version; hue from next status. Present only when a `next` deployment exists. Never drives tile colour. | `.ctx-row` / `.ctx-badge` |
+| Never-deployed chip | Replaces primary icon in headline | Status chip in context-status hue; tile surface is neutral (`s-never-deployed`). Present only when slot has no prior effective deployment. | `.status-chip` |
 
 ### Position Contract (Swimlane Nodes)
 
@@ -27,14 +29,16 @@ Fields use **mixed visual treatment** — position, glyph prefix, and typography
 | `sha` | Bottom-left (env row, col 1) | Plain mono hex, 9.5px |
 | `run_url` + `run_number` + `actor` | Body col 2 (right cluster) | Same glyphs as Matrix, 9.5px |
 | `environment` | Bottom-right (env row, col 2) | Inter 11px 600, `--ink-0`, lowercase (PROMOTED) |
+| Next badge (`nextStatus`) | `.ctx-row` below body | `.ctx-badge`: icon + status word + version; hue from next status. Present only when a `next` deployment exists. Never drives card colour. |
+| Never-deployed chip | Replaces primary icon in top row | Status chip in context-status hue; card surface is neutral (`s-never-deployed`). Present only when node has no prior effective deployment. |
 
 ### Details Surfaces (Drawer & Inspector)
 
 Use explicit **label/value** rows — every visible domain-model field rendered regardless of attribute-picker state. `happened_at` shows both elapsed and absolute UTC.
 
-### Bottom-Section Fallback Chain (Split Tiles)
+### Bottom-Section Fallback Chain (Split Tiles / Cards)
 
-The split-tile bottom section shows a single identifier from the last-successful deployment. The first non-empty field wins:
+The split-bottom section shows a single identifier from the last-successful (`current`) deployment. Required on both matrix tiles and swimlane cards (S2–S4 states). The first non-empty field wins:
 
 ```
 version → sha → ref → run_number
@@ -50,8 +54,8 @@ version → sha → ref → run_number
 | Type in filter input | Matrix rows | Hide rows whose component name doesn't include the query (case-insensitive substring). |
 | Click failures toggle | Matrix rows | Toggle `.is-on`. When ON, hide rows with no failed states. |
 | Hover `.ver` | All tiles | Amber-highlight all `.ver` spans and their parent `.slot`s that share the same version string. |
-| Click Matrix tile | Drawer | Open history drawer for that (service, environment) slot. Overlay + slide-in animation. |
-| Click Swimlane node | Inspector | Select node (accent ring). Update Inspector with all 11 fields. |
+| Click Matrix tile | Drawer | Open history drawer for that (service, environment) slot. Overlay + slide-in animation. History shows all 8 statuses as distinct entries (pip in status hue); `next` deployment leads the list. |
+| Click Swimlane node | Inspector | Select node (accent ring). Inspector shows effective deployment's fields first, dotted separator, then `next` group (if present). |
 | Click icon button | Popover | Toggle popover open/closed. Close any other open popover first. |
 | Click field toggle | View content | Toggle field on/off in the active view. Tiles/nodes resize. Swimlanes recompute layout. |
 | Click predicate radio | Correlation picker | Single-select. Disable time-window when "explicit parent" is selected. |

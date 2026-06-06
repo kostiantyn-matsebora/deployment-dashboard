@@ -73,6 +73,42 @@
     --coral-glow:   rgba(255, 93, 93, 0.38);
     --coral-edge:   rgba(255, 93, 93, 0.60);
 
+    /* NEW — Scheme B status hues (issue #268) */
+    --slate:        #8b93ad;
+    --slate-wash:   rgba(139, 147, 173, 0.14);
+    --slate-glow:   rgba(139, 147, 173, 0.28);
+    --slate-edge:   rgba(139, 147, 173, 0.45);
+
+    --blue:         #4aa3f0;
+    --blue-wash:    rgba(74, 163, 240, 0.16);
+    --blue-glow:    rgba(74, 163, 240, 0.35);
+    --blue-edge:    rgba(74, 163, 240, 0.50);
+
+    --violet:       #9a85ff;
+    --violet-wash:  rgba(154, 133, 255, 0.16);
+    --violet-glow:  rgba(154, 133, 255, 0.35);
+    --violet-edge:  rgba(154, 133, 255, 0.50);
+
+    --grey:         #9aa0b5;
+    --grey-wash:    rgba(255, 255, 255, 0.05);
+    --grey-glow:    transparent;
+    --grey-edge:    rgba(255, 255, 255, 0.18);
+
+    --rose:         #cf8095;
+    --rose-wash:    rgba(207, 128, 149, 0.15);
+    --rose-glow:    rgba(207, 128, 149, 0.28);
+    --rose-edge:    rgba(207, 128, 149, 0.48);
+
+    /* Semantic status-hue aliases — used by var(--${status}) in JS icon tints */
+    --success:     var(--emerald);
+    --failure:     var(--coral);
+    --in-progress: var(--amber);
+    --pending:     var(--slate);
+    --queued:      var(--blue);
+    --waiting:     var(--violet);
+    --cancelled:   var(--grey);
+    --rejected:    var(--rose);
+
     --neutral-wash: rgba(255, 255, 255, 0.03);
 
     /* additional structural tokens consumed below */
@@ -135,6 +171,42 @@
     --coral-glow:   rgba(255, 93, 93, 0.25);
     --coral-edge:   rgba(255, 93, 93, 0.50);
 
+    /* NEW — Scheme B status hues (issue #268) */
+    --slate:        #5e667e;
+    --slate-wash:   rgba(94, 102, 126, 0.12);
+    --slate-glow:   rgba(94, 102, 126, 0.22);
+    --slate-edge:   rgba(94, 102, 126, 0.42);
+
+    --blue:         #2b7fd0;
+    --blue-wash:    rgba(43, 127, 208, 0.12);
+    --blue-glow:    rgba(43, 127, 208, 0.24);
+    --blue-edge:    rgba(43, 127, 208, 0.46);
+
+    --violet:       #6f55cf;
+    --violet-wash:  rgba(111, 85, 207, 0.12);
+    --violet-glow:  rgba(111, 85, 207, 0.24);
+    --violet-edge:  rgba(111, 85, 207, 0.46);
+
+    --grey:         #6a7088;
+    --grey-wash:    rgba(20, 24, 40, 0.05);
+    --grey-glow:    transparent;
+    --grey-edge:    rgba(20, 24, 40, 0.16);
+
+    --rose:         #b05f76;
+    --rose-wash:    rgba(176, 95, 118, 0.12);
+    --rose-glow:    rgba(176, 95, 118, 0.22);
+    --rose-edge:    rgba(176, 95, 118, 0.46);
+
+    /* Semantic status-hue aliases — used by var(--${status}) in JS icon tints */
+    --success:     var(--emerald);
+    --failure:     var(--coral);
+    --in-progress: var(--amber);
+    --pending:     var(--slate);
+    --queued:      var(--blue);
+    --waiting:     var(--violet);
+    --cancelled:   var(--grey);
+    --rejected:    var(--rose);
+
     --neutral-wash: rgba(20, 24, 40, 0.03);
 
     --grid-line:        rgba(20, 24, 40, 0.05);
@@ -194,6 +266,42 @@
       --coral-wash:   rgba(255, 93, 93, 0.13);
       --coral-glow:   rgba(255, 93, 93, 0.25);
       --coral-edge:   rgba(255, 93, 93, 0.50);
+
+      /* NEW — Scheme B status hues (issue #268) — same as light block */
+      --slate:        #5e667e;
+      --slate-wash:   rgba(94, 102, 126, 0.12);
+      --slate-glow:   rgba(94, 102, 126, 0.22);
+      --slate-edge:   rgba(94, 102, 126, 0.42);
+
+      --blue:         #2b7fd0;
+      --blue-wash:    rgba(43, 127, 208, 0.12);
+      --blue-glow:    rgba(43, 127, 208, 0.24);
+      --blue-edge:    rgba(43, 127, 208, 0.46);
+
+      --violet:       #6f55cf;
+      --violet-wash:  rgba(111, 85, 207, 0.12);
+      --violet-glow:  rgba(111, 85, 207, 0.24);
+      --violet-edge:  rgba(111, 85, 207, 0.46);
+
+      --grey:         #6a7088;
+      --grey-wash:    rgba(20, 24, 40, 0.05);
+      --grey-glow:    transparent;
+      --grey-edge:    rgba(20, 24, 40, 0.16);
+
+      --rose:         #b05f76;
+      --rose-wash:    rgba(176, 95, 118, 0.12);
+      --rose-glow:    rgba(176, 95, 118, 0.22);
+      --rose-edge:    rgba(176, 95, 118, 0.46);
+
+      /* Semantic status-hue aliases — used by var(--${status}) in JS icon tints */
+      --success:     var(--emerald);
+      --failure:     var(--coral);
+      --in-progress: var(--amber);
+      --pending:     var(--slate);
+      --queued:      var(--blue);
+      --waiting:     var(--violet);
+      --cancelled:   var(--grey);
+      --rejected:    var(--rose);
 
       --neutral-wash: rgba(20, 24, 40, 0.03);
 
@@ -1001,6 +1109,18 @@
     height: 100%;
   }
 
+  /* state — never effectively deployed on this env (only a non-effective
+     deployment exists yet). NEUTRAL/grey surface — the tile colour means
+     "deployment health", and there is none yet; the actual status rides on a
+     chip. Distinct from .slot.empty ("—" = no deployment events at all). */
+  .slot.s-never-deployed {
+    background: var(--slot-empty-bg);
+  }
+  .slot.s-never-deployed::before {
+    background: var(--ink-3);
+    box-shadow: none;
+  }
+
   /* state — success */
   .slot.s-success {
     background: linear-gradient(180deg, var(--emerald-wash), rgba(52,210,154,0.06));
@@ -1173,6 +1293,34 @@
     font-family: 'Inter', sans-serif;
   }
   .warn-badge .warn-icon { font-size: 10px; }
+
+  /* context badge — layered on top-right corner of matrix tile or vis-card.
+     Shows deployment context (pending/queued/waiting/cancelled/rejected) that
+     is NOT the effective environment state. Keeps the tile primary state intact. */
+  .ctx-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px 1px 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0.1px;
+    white-space: nowrap;
+    pointer-events: none;
+    border: 1px solid transparent;
+  }
+  /* Context badge lives on its OWN row, in normal flow, so it never overlaps
+     the headline meta (actor/time, which sit top-right of the version row). */
+  .ctx-row { display: flex; align-items: center; margin-top: 4px; }
+  .vis-card .ctx-row { margin-top: 3px; }
+  /* Per-status badge tint — uses existing hue tokens */
+  .ctx-badge.cb-pending   { color: var(--slate);  border-color: var(--slate-edge);  background: var(--slate-wash); }
+  .ctx-badge.cb-queued    { color: var(--blue);   border-color: var(--blue-edge);   background: var(--blue-wash); }
+  .ctx-badge.cb-waiting   { color: var(--violet); border-color: var(--violet-edge); background: var(--violet-wash); }
+  .ctx-badge.cb-cancelled { color: var(--grey);   border-color: var(--grey-edge);   background: var(--grey-wash); }
+  .ctx-badge.cb-rejected  { color: var(--rose);   border-color: var(--rose-edge);   background: var(--rose-wash); }
 
   .failed-line {
     display: flex; align-items: center; gap: 8px;
@@ -1438,6 +1586,11 @@
     box-shadow: 0 0 0 1px rgba(255,93,93,0.10), 0 10px 24px -14px var(--coral-glow);
   }
   .vis-card.s-failure::before { background: var(--coral); box-shadow: 0 0 12px var(--coral-glow); }
+  /* never effectively deployed — neutral/grey card (no health colour); the
+     status rides on a chip. Mirrors the matrix .slot.s-never-deployed. */
+  .vis-card.s-never-deployed { border-color: var(--glass-edge); }
+  .vis-card.s-never-deployed::before { background: var(--ink-3); box-shadow: none; }
+
   .vis-card.is-selected {
     box-shadow:
       0 0 0 2px rgba(var(--accent-rgb),0.55),
@@ -1768,6 +1921,13 @@
     display: flex; align-items: center; gap: 8px;
     margin: 4px 0 12px;
   }
+  /* dotted separator that splits the live deployment fields from the
+     "next deployment" group at the bottom of the inspector grid */
+  .insp-grid .insp-sep {
+    grid-column: 1 / -1;
+    border-top: 1px dotted var(--glass-edge-2);
+    margin: 6px 0 1px;
+  }
 
   .vis-canvas {
     padding: 18px 18px 14px;
@@ -1911,9 +2071,15 @@
     border-radius: 50%;
     margin-top: 5px;
   }
-  .hist-entry.s-success .pip  { background: var(--emerald); box-shadow: 0 0 10px var(--emerald-glow); }
-  .hist-entry.s-failure .pip  { background: var(--coral);   box-shadow: 0 0 10px var(--coral-glow); }
-  .hist-entry.s-progress .pip { background: var(--amber);   box-shadow: 0 0 10px var(--amber-glow); }
+  .hist-entry.s-success .pip   { background: var(--emerald); box-shadow: 0 0 10px var(--emerald-glow); }
+  .hist-entry.s-failure .pip   { background: var(--coral);   box-shadow: 0 0 10px var(--coral-glow); }
+  .hist-entry.s-progress .pip  { background: var(--amber);   box-shadow: 0 0 10px var(--amber-glow); }
+  /* Scheme B pips (issue #268) */
+  .hist-entry.s-pending .pip   { background: var(--slate);   box-shadow: 0 0 8px var(--slate-glow); }
+  .hist-entry.s-queued .pip    { background: var(--blue);    box-shadow: 0 0 8px var(--blue-glow); }
+  .hist-entry.s-waiting .pip   { background: var(--violet);  box-shadow: 0 0 8px var(--violet-glow); }
+  .hist-entry.s-cancelled .pip { background: var(--grey);    box-shadow: none; }
+  .hist-entry.s-rejected .pip  { background: var(--rose);    box-shadow: 0 0 8px var(--rose-glow); }
 
   .hist-main { display: flex; flex-direction: column; gap: 4px; }
   .hist-main .l1 {
@@ -1945,9 +2111,15 @@
     border-radius: 999px;
     border: 1px solid;
   }
-  .status-chip.s-success  { color: var(--emerald); border-color: rgba(52,210,154,0.5);  background: rgba(52,210,154,0.10); }
-  .status-chip.s-failure  { color: var(--coral);   border-color: rgba(255,93,93,0.5);   background: rgba(255,93,93,0.10); }
-  .status-chip.s-progress { color: var(--amber);   border-color: rgba(245,165,36,0.5);  background: rgba(245,165,36,0.10); }
+  .status-chip.s-success   { color: var(--emerald); border-color: rgba(52,210,154,0.5);   background: rgba(52,210,154,0.10); }
+  .status-chip.s-failure   { color: var(--coral);   border-color: rgba(255,93,93,0.5);    background: rgba(255,93,93,0.10); }
+  .status-chip.s-progress  { color: var(--amber);   border-color: rgba(245,165,36,0.5);   background: rgba(245,165,36,0.10); }
+  /* Scheme B chips (issue #268) */
+  .status-chip.s-pending   { color: var(--slate);   border-color: var(--slate-edge);      background: var(--slate-wash); }
+  .status-chip.s-queued    { color: var(--blue);    border-color: var(--blue-edge);       background: var(--blue-wash); }
+  .status-chip.s-waiting   { color: var(--violet);  border-color: var(--violet-edge);     background: var(--violet-wash); }
+  .status-chip.s-cancelled { color: var(--grey);    border-color: var(--grey-edge);       background: var(--grey-wash); }
+  .status-chip.s-rejected  { color: var(--rose);    border-color: var(--rose-edge);       background: var(--rose-wash); }
 
   .hist-link {
     color: var(--ink-2);
@@ -2037,6 +2209,137 @@
   /* hide rows that don't match filter */
   .matrix.is-filtered .row.is-hidden { display: contents; }
   .row.is-hidden > * { display: none !important; }
+
+  /* =========================================================
+     LEGEND POPOVER — deployment status key (issue #268)
+     ========================================================= */
+  .lg-group {
+    font-size: 10px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+    margin: 12px 0 5px;
+  }
+  .lg-group:first-of-type { margin-top: 0; }
+  .lg-item {
+    display: grid;
+    grid-template-columns: 16px 12px 1fr;
+    align-items: center;
+    gap: 9px;
+    padding: 3px 0;
+  }
+  .lg-item .lg-ic {
+    font-size: 13px;
+    text-align: center;
+    line-height: 1;
+  }
+  .lg-item .lg-sw {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+  .lg-item .lg-txt {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .lg-item .lg-nm {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-0);
+  }
+  .lg-item .lg-ds {
+    font-size: 10.5px;
+    color: var(--ink-2);
+  }
+  /* per-status colour assignment for legend icon + swatch */
+  .lg-item.s-success  .lg-ic { color: var(--emerald); }
+  .lg-item.s-success  .lg-sw { background: var(--emerald); box-shadow: 0 0 7px var(--emerald-glow); }
+  .lg-item.s-progress .lg-ic { color: var(--amber); }
+  .lg-item.s-progress .lg-sw { background: var(--amber);   box-shadow: 0 0 7px var(--amber-glow); }
+  .lg-item.s-failure  .lg-ic { color: var(--coral); }
+  .lg-item.s-failure  .lg-sw { background: var(--coral);   box-shadow: 0 0 7px var(--coral-glow); }
+  .lg-item.s-pending  .lg-ic { color: var(--slate); }
+  .lg-item.s-pending  .lg-sw { background: var(--slate);   box-shadow: 0 0 6px var(--slate-glow); }
+  .lg-item.s-queued   .lg-ic { color: var(--blue); }
+  .lg-item.s-queued   .lg-sw { background: var(--blue);    box-shadow: 0 0 6px var(--blue-glow); }
+  .lg-item.s-waiting  .lg-ic { color: var(--violet); }
+  .lg-item.s-waiting  .lg-sw { background: var(--violet);  box-shadow: 0 0 6px var(--violet-glow); }
+  .lg-item.s-cancelled .lg-ic { color: var(--grey); }
+  .lg-item.s-cancelled .lg-sw { background: var(--grey);   box-shadow: none; }
+  .lg-item.s-rejected  .lg-ic { color: var(--rose); }
+  .lg-item.s-rejected  .lg-sw { background: var(--rose);   box-shadow: 0 0 6px var(--rose-glow); }
+
+  /* ---- legend example-list rows ---- */
+  /* Two-column row: left = rendered example snippet, right = meaning text */
+  .lg-ex {
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+  }
+  .lg-ex-l {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    gap: 3px;
+    flex-wrap: nowrap;
+  }
+  .lg-ex-r {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    line-height: 1.35;
+    min-width: 0;
+  }
+  /* tiny split-tile swatch: top accent band + neutral bottom band */
+  .lg-split-swatch {
+    display: inline-flex;
+    flex-direction: column;
+    width: 30px;
+    height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--glass-edge-2);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .lg-split-swatch .sw-top {
+    flex: 1;
+    background: linear-gradient(180deg, var(--amber-wash), rgba(245,165,36,0.08));
+    border-bottom: 1px dashed var(--divider-dash);
+  }
+  .lg-split-swatch .sw-bot {
+    flex: 1;
+    background: var(--neutral-wash);
+  }
+  /* tiny empty-slot swatch */
+  .lg-empty-swatch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--glass-edge);
+    background: var(--slot-empty-bg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-3);
+    flex-shrink: 0;
+  }
+  /* arrow glyph for Edges row */
+  .lg-arrow {
+    display: inline-flex;
+    align-items: center;
+    font-size: 15px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+  }
+  /* pop-legend scrolls when content is tall */
+  #pop-legend { max-height: 80vh; overflow-y: auto; }
 
   /* Bug 4: hairline divider between service rows — applied to every grid cell
      (both row-head and tile cells, which share the .row class). Theme-tokenized
@@ -2203,6 +2506,128 @@
           <div class="hint" id="pop-fields-hint">component &amp; environment are implicit (row × column). status is shown via the colored container.</div>
         </div>
       </div>
+
+      <!-- Legend — per-view anatomy key + status reference. Swaps content on view change,
+           mirroring the Fields popover pattern. -->
+      <div style="position:relative">
+        <button class="icon-btn" id="btn-legend" title="Legend — how to read a deployment" aria-label="Legend — how to read a deployment" aria-haspopup="true">
+          <span aria-hidden="true">☷</span>
+        </button>
+        <div class="popover" id="pop-legend" role="dialog" aria-label="Deployment legend" style="min-width:300px;right:0">
+          <div class="popover-title" id="pop-legend-title">Legend — Matrix</div>
+
+          <!-- ===== MATRIX legend ===== -->
+          <div id="legend-matrix">
+            <div class="lg-group">Environment state (tile colour)</div>
+            <div class="lg-item s-success">
+              <span class="lg-ic">✓</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">success</span><span class="lg-ds">deployed OK</span></span>
+            </div>
+            <div class="lg-item s-progress">
+              <span class="lg-ic">◴</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">in-progress</span><span class="lg-ds">actively deploying</span></span>
+            </div>
+            <div class="lg-item s-failure">
+              <span class="lg-ic">✕</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">failure</span><span class="lg-ds">deploy ran and failed</span></span>
+            </div>
+            <div class="lg-group">Next deployment (badge · history)</div>
+            <div class="lg-item s-pending">
+              <span class="lg-ic">○</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">pending</span><span class="lg-ds">created, not started</span></span>
+            </div>
+            <div class="lg-item s-queued">
+              <span class="lg-ic">≡</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">queued</span><span class="lg-ds">queued to run</span></span>
+            </div>
+            <div class="lg-item s-waiting">
+              <span class="lg-ic">◷</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">waiting</span><span class="lg-ds">blocked on approval / wait timer</span></span>
+            </div>
+            <div class="lg-item s-cancelled">
+              <span class="lg-ic">⊘</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">cancelled</span><span class="lg-ds">run cancelled</span></span>
+            </div>
+            <div class="lg-item s-rejected">
+              <span class="lg-ic">⊗</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">rejected</span><span class="lg-ds">reviewer denied — never ran</span></span>
+            </div>
+
+            <div class="lg-group">Tile contents</div>
+            <div id="legend-matrix-fields"></div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="ctx-badge cb-waiting" style="pointer-events:none">◷ waiting v2.5.0-rc1</span></div>
+              <div class="lg-ex-r">next badge — incoming or attempted deploy on top of the live state</div>
+            </div>
+            <div class="lg-group">Tile layouts</div>
+            <div class="lg-ex">
+              <div class="lg-ex-l">
+                <div class="lg-split-swatch"><div class="sw-top"></div><div class="sw-bot"></div></div>
+              </div>
+              <div class="lg-ex-r">split — current state (top) over the last successful deploy (bottom); what's actually live</div>
+            </div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="warn-badge"><span class="warn-icon">⚠</span> prev. failed</span></div>
+              <div class="lg-ex-r">latest attempt failed; an older success is still live</div>
+            </div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><div class="lg-empty-swatch">—</div></div>
+              <div class="lg-ex-r">empty — no deployments for this service × environment</div>
+            </div>
+          </div>
+
+          <!-- ===== SWIMLANES legend ===== -->
+          <div id="legend-vis" style="display:none">
+            <div class="lg-group">Environment state (card colour)</div>
+            <div class="lg-item s-success">
+              <span class="lg-ic">✓</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">success</span><span class="lg-ds">deployed OK</span></span>
+            </div>
+            <div class="lg-item s-progress">
+              <span class="lg-ic">◴</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">in-progress</span><span class="lg-ds">actively deploying</span></span>
+            </div>
+            <div class="lg-item s-failure">
+              <span class="lg-ic">✕</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">failure</span><span class="lg-ds">deploy ran and failed</span></span>
+            </div>
+            <div class="lg-group">Next deployment (badge · history)</div>
+            <div class="lg-item s-pending">
+              <span class="lg-ic">○</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">pending</span><span class="lg-ds">created, not started</span></span>
+            </div>
+            <div class="lg-item s-queued">
+              <span class="lg-ic">≡</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">queued</span><span class="lg-ds">queued to run</span></span>
+            </div>
+            <div class="lg-item s-waiting">
+              <span class="lg-ic">◷</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">waiting</span><span class="lg-ds">blocked on approval / wait timer</span></span>
+            </div>
+            <div class="lg-item s-cancelled">
+              <span class="lg-ic">⊘</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">cancelled</span><span class="lg-ds">run cancelled</span></span>
+            </div>
+            <div class="lg-item s-rejected">
+              <span class="lg-ic">⊗</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">rejected</span><span class="lg-ds">reviewer denied — never ran</span></span>
+            </div>
+
+            <div class="lg-group">Card contents</div>
+            <div id="legend-vis-fields"></div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="ctx-badge cb-waiting" style="pointer-events:none">◷ waiting v2.5.0-rc1</span></div>
+              <div class="lg-ex-r">next badge — incoming or attempted deploy on top of this state</div>
+            </div>
+            <div class="lg-group">Edges</div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="lg-arrow">→</span></div>
+              <div class="lg-ex-r">parent → child (same release flowing across services/envs); correlation predicate set in the Correlation popover</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
 
     <div class="live-pill" title="Server-sent events — live deployment updates" aria-label="Live connection status">
@@ -2312,7 +2737,7 @@ const SLOTS = {
                                     last:    { id:'3c4d5e6f7081', version: '',       ref:'release/1.8',                       actor: 'release-bot', elapsed: '11h ago', sha:'9f8e7d6', run_number:3081, run_url:'https://ci.internal/runs/3081', parents:1 } },
   'notification-worker|qa':       { state: 'success', current: { id:'4d5e6f708192', version: 'v1.8.4', ref:'release/1.8',         actor: 'akhan',       elapsed: '9h ago',  sha:'9f8e7d6', run_number:3076, run_url:'https://ci.internal/runs/3076', parents:1 } },
   'notification-worker|preprod':  { state: 'success', current: { id:'5e6f70819203', version: 'v1.8.4', ref:'release/1.8',         actor: 'release-bot', elapsed: '1d ago',  sha:'9f8e7d6', run_number:3060, run_url:'https://ci.internal/runs/3060', parents:1 } },
-  'notification-worker|prod':     { state: 'success', current: { id:'6f7081920314', version: 'v1.8.3', ref:'release/1.8',         actor: 'release-bot', elapsed: '3d ago',  sha:'8e7d6c5', run_number:3041, run_url:'https://ci.internal/runs/3041', parents:1 } },
+  'notification-worker|prod':     { state: 'success', context: 'rejected', current: { id:'6f7081920314', version: 'v1.8.4', ref:'release/1.8', actor: 'akhan', elapsed: '9h ago', sha:'9f8e7d6', run_number:3076, run_url:'https://ci.internal/runs/3076', parents:1 } },
 
   // auth-bff
   'auth-bff|dev':      { state: 'run-fail-last',
@@ -2331,7 +2756,7 @@ const SLOTS = {
                           current: { id:'4d8f9250a1b7', version: 'v0.41.2', ref:'#7912',                                                              elapsed: '6m ago',  sha:'c8d9e0f', run_number:2955, run_url:'https://ci.internal/runs/2955', parents:1 },
                           last:    { id:'5e90a361b2c8', version: 'v0.41.1', ref:'main',                actor: 'jpark',                                elapsed: '4h ago',  sha:'b7c8d9e', run_number:2935, run_url:'https://ci.internal/runs/2935', parents:2 } },
   'order-svc|qa':       { state: 'success', current: { id:'6fa1b472c3d9', version: 'v0.41.1', ref:'main',                  actor: 'jpark',             elapsed: '2h ago',  sha:'b7c8d9e', run_number:2938, run_url:'https://ci.internal/runs/2938', parents:1 } },
-  'order-svc|preprod':  { state: 'success', current: { id:'70b2c583d4ea', version: 'v0.41.0', ref:'release/0.41',         actor: 'release-bot',       elapsed: '11h ago', sha:'a6b7c8d', run_number:2920, run_url:'https://ci.internal/runs/2920', parents:1 } },
+  'order-svc|preprod':  { state: 'never-deployed', status: 'waiting', current: { id:'aa11bb22cc33', version: 'v0.41.2', ref:'release/0.41',         actor: 'release-bot',       elapsed: 'just now', sha:'a6b7c8d', run_number:2921, run_url:'https://ci.internal/runs/2921', parents:1 } },
   'order-svc|prod':     { state: 'fail-last',
                           current: { id:'81c3d694e5fb', version: 'v0.41.0', ref:'release/0.41',                                                       elapsed: '52m ago', sha:'a6b7c8d', run_number:2945, run_url:'https://ci.internal/runs/2945', parents:1 },
                           // bottom-section fallback DEMO step 3: no version, no sha, ref present → falls to ref
@@ -2351,20 +2776,20 @@ const SLOTS = {
   'ledger-projector|qa':       { state: 'run-fail-only',
                                   current: { id:'1a5260c2184e', version: '', ref:'fix/skew-projection',                                              elapsed: '12m ago', sha:'5b6c7d8', run_number:1828, run_url:'https://ci.internal/runs/1828', parents:0 } },
   'ledger-projector|preprod':  { state: 'success', current: { id:'2b6371d3295f', version: 'v1.9.8', ref:'release/1.9',     actor: 'release-bot',    elapsed: '8h ago',  sha:'39a4b5c', run_number:1802, run_url:'https://ci.internal/runs/1802', parents:1 } },
-  'ledger-projector|prod':     { state: 'success', current: { id:'3c7482e43a60', version: 'v1.9.8', ref:'release/1.9',     actor: 'release-bot',    elapsed: '1d ago',  sha:'39a4b5c', run_number:1790, run_url:'https://ci.internal/runs/1790', parents:1 } },
+  'ledger-projector|prod':     { state: 'success', context: 'cancelled', current: { id:'3c7482e43a60', version: 'v1.9.8', ref:'release/1.9', actor: 'release-bot', elapsed: '4h ago', sha:'39a4b5c', run_number:1795, run_url:'https://ci.internal/runs/1795', parents:1 } },
 
   // search-indexer
   'search-indexer|dev':      { state: 'success', current: { id:'4d8593f54b71', version: 'v0.7.12', ref:'#5021',              actor: 'mreyes',        elapsed: '3m ago',  sha:'6c7d8e9', run_number:1402, run_url:'https://ci.internal/runs/1402', parents:1 } },
   'search-indexer|staging':  { state: 'success', current: { id:'5e96a4065c82', version: 'v0.7.12', ref:'#5021',              actor: 'mreyes',        elapsed: '44m ago', sha:'6c7d8e9', run_number:1400, run_url:'https://ci.internal/runs/1400', parents:1 } },
   'search-indexer|qa':       { state: 'success', current: { id:'6fa7b5176d93', version: 'v0.7.11', ref:'main',                actor: 'mreyes',        elapsed: '4h ago',  sha:'5b6c7d8', run_number:1391, run_url:'https://ci.internal/runs/1391', parents:1 } },
-  'search-indexer|preprod':  { state: 'success', current: { id:'70b8c6287ea4', version: 'v0.7.10', ref:'release/0.7',         actor: 'release-bot',   elapsed: '2d ago',  sha:'4a5b6c7', run_number:1378, run_url:'https://ci.internal/runs/1378', parents:1 } },
-  'search-indexer|prod':     { state: 'success', current: { id:'81c9d7398fb5', version: 'v0.7.10', ref:'release/0.7',         actor: 'release-bot',   elapsed: '5d ago',  sha:'4a5b6c7', run_number:1370, run_url:'https://ci.internal/runs/1370', parents:1 } },
+  'search-indexer|preprod':  { state: 'success', context: 'pending', contextVersion: 'v0.7.12', current: { id:'70b8c6287ea4', version: 'v0.7.11', ref:'release/0.7', actor: 'release-bot', elapsed: '4h ago', sha:'5b6c7d8', run_number:1391, run_url:'https://ci.internal/runs/1391', parents:1 } },
+  'search-indexer|prod':     { state: 'success', context: 'queued', contextVersion: 'v0.7.12', current: { id:'81c9d7398fb5', version: 'v0.7.11', ref:'release/0.7', actor: 'release-bot', elapsed: '4h ago', sha:'5b6c7d8', run_number:1391, run_url:'https://ci.internal/runs/1391', parents:1 } },
 
   // billing-webhook
   'billing-webhook|dev':      { state: 'success', current: { id:'92d0e84a90c6', version: 'v1.4.0', ref:'feat/retry-jitter', actor: 'l.osman',        elapsed: '15m ago', sha:'7d8e9f0', run_number:822, run_url:'https://ci.internal/runs/822', parents:1 } },
   'billing-webhook|staging':  { state: 'running-only',
                                 current: { id:'a3e1f95ba1d7', version: 'v1.4.0', ref:'feat/retry-jitter',                                              elapsed: '5m ago',  sha:'7d8e9f0', run_number:825, run_url:'https://ci.internal/runs/825', parents:1 } },
-  'billing-webhook|qa':       { state: 'success', current: { id:'b4f20a6cb2e8', version: 'v1.3.9', ref:'#1188',              actor: 'l.osman',        elapsed: '6h ago',  sha:'6c7d8e9', run_number:810, run_url:'https://ci.internal/runs/810', parents:1 } },
+  'billing-webhook|qa':       { state: 'success', context: 'waiting', contextVersion: 'v1.4.0', current: { id:'b4f20a6cb2e8', version: 'v1.3.9', ref:'main', actor: 'l.osman', elapsed: '1d ago', sha:'6c8e5d1', run_number:820, run_url:'https://ci.internal/runs/820', parents:1 } },
   // S4-no-prior: fail-last with NO last field → full coral tile, no split/divider (box-state parity demo)
   'billing-webhook|preprod':  { state: 'fail-last',
                                 current: { id:'e7f30b8dc4a1', version: 'v1.3.9', ref:'feat/retry-jitter', actor: 'l.osman', elapsed: '2h ago', sha:'6c7d8e9', run_number:818, run_url:'https://ci.internal/runs/818', parents:0 } },
@@ -2790,6 +3215,54 @@ function v(version) {
   return s;
 }
 
+/* =================================================================
+   SHARED STATUS ICON MAP (single source of truth — tiles + vis-cards + legend)
+   All 8 statuses. In-progress uses the animated .spinner element; this map
+   stores the static glyph shown in vis-cards / legend (◴ = partial-clock).
+   ================================================================= */
+const STATUS_ICONS = {
+  'success':     '✓',
+  'failure':     '✕',
+  'in-progress': '◴',   /* static glyph for vis-card / legend; tiles use .spinner */
+  'pending':     '○',
+  'queued':      '≡',
+  'waiting':     '◷',
+  'cancelled':   '⊘',
+  'rejected':    '⊗',
+};
+
+/* Helper — create a small status-icon span tinted with var(--<status>). */
+function statusIcon(status, extraStyle) {
+  const ic = document.createElement('span');
+  ic.setAttribute('aria-hidden', 'true');
+  ic.style.cssText = `font-size:12px;line-height:1;color:var(--${status});flex-shrink:0${extraStyle ? ';' + extraStyle : ''}`;
+  ic.textContent = STATUS_ICONS[status] || '';
+  return ic;
+}
+
+/* Context badge — the small secondary pill ('additional context' layered on the
+   effective tile/card state). Icon + status word + optional incoming version.
+   Always lives on its OWN row (.ctx-row) so it never overlaps the headline meta. */
+function ctxBadge(context, version) {
+  const badge = document.createElement('span');
+  badge.className = `ctx-badge cb-${context}`;
+  badge.setAttribute('aria-label', version ? `${context} ${version}` : context);
+  const ic = document.createElement('span');
+  ic.setAttribute('aria-hidden', 'true');
+  ic.textContent = STATUS_ICONS[context] || '';
+  badge.appendChild(ic);
+  const lbl = document.createElement('span');
+  lbl.textContent = context;
+  badge.appendChild(lbl);
+  if (version) {
+    const vt = document.createElement('span');
+    vt.textContent = version;
+    vt.style.cssText = 'font-family:"JetBrains Mono",monospace;font-weight:600;opacity:0.85';
+    badge.appendChild(vt);
+  }
+  return badge;
+}
+
 function renderSlot(svc, env, slot, key) {
   const wrap = document.createElement('div');
   if (!slot) {
@@ -2814,40 +3287,29 @@ function renderSlot(svc, env, slot, key) {
   const st = slot.state;
 
   if (st === 'success') {
-    /* ---------- S1 — full green: headline row (version + actor + happened_at)
-       then packed mid-row (ref + sha | run_url + run_number) then parents.
-       Headline meta only attaches when the version itself is rendered, so
-       toggling version off cleanly drops the whole headline row. */
+    /* ---------- S1 — full green: ✓ icon + version headline + meta. */
     const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    const verLine = document.createElement('div');
+    verLine.className = 'ver-row';
+    verLine.appendChild(statusIcon('success'));
     if (matrixFieldsOn.has('version') && slot.current.version) {
-      const verLine = document.createElement('div');
-      verLine.className = 'ver-row';
       verLine.appendChild(v(slot.current.version));
-      if (headlineMeta) verLine.appendChild(headlineMeta);
-      wrap.appendChild(verLine);
-    } else if (headlineMeta) {
-      // version off but meta still wanted → standalone meta row
-      const metaLine = document.createElement('div');
-      metaLine.className = 'ver-row';
-      metaLine.appendChild(headlineMeta);
-      wrap.appendChild(metaLine);
     }
+    if (headlineMeta) verLine.appendChild(headlineMeta);
+    wrap.appendChild(verLine);
     const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
     if (attrs) wrap.appendChild(attrs);
   }
 
   else if (st === 'running-only') {
-    /* ---------- S5 — full orange: spinner + version (if ON) + headline meta;
-       running-line itself wraps so actor/time can ride to the right of the
-       version on the same physical row when space allows. */
+    /* ---------- S5 — full orange: spinner + version (if ON) + headline meta.
+       When version is off → spinner + meta only; no word fallback. */
     const line = document.createElement('div');
     line.className = 'running-line';
     const sp = document.createElement('span'); sp.className = 'spinner';
     line.appendChild(sp);
     if (matrixFieldsOn.has('version') && slot.current.version) {
       line.appendChild(v(slot.current.version));
-    } else {
-      const lbl = document.createElement('span'); lbl.className = 'failed-tag'; lbl.textContent = 'Running'; line.appendChild(lbl);
     }
     const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
     if (headlineMeta) line.appendChild(headlineMeta);
@@ -2911,21 +3373,15 @@ function renderSlot(svc, env, slot, key) {
   }
 
   else if (st === 'fail-last') {
-    /* ---------- S4 — failure.
-       When slot.last is present: SPLIT (top red + Failed tag + version + meta; bottom = single
-       fallback identifier). This is the "failed, older success exists" case (traditional S4).
-       When slot.last is ABSENT: FULL coral tile — red FAILED tag + version + meta, no bottom
-       section, no divider. Matches deriveBoxState: failure always → s-fail-last regardless of
-       whether last_successful exists; isSplit() is false when lastSucc() is absent. */
+    /* ---------- S4 — failure: ✕ icon replaces the "Failed" word.
+       When slot.last present: SPLIT (top red section; bottom = last-successful identifier).
+       When slot.last absent: FULL coral tile — icon + version + meta, no split. */
     if (slot.last) {
       // Split variant
       wrap.classList.add('split');
       const top = document.createElement('div'); top.className = 'sec-top is-failed';
       const tl = document.createElement('div'); tl.className = 'failed-line';
-      const tag = document.createElement('span');
-      tag.className = 'failed-tag';
-      tag.textContent = 'Failed';
-      tl.appendChild(tag);
+      tl.appendChild(statusIcon('failure'));
       if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
       const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
       if (headlineMeta) tl.appendChild(headlineMeta);
@@ -2942,10 +3398,7 @@ function renderSlot(svc, env, slot, key) {
     } else {
       // Full coral tile — no split, no divider, no bottom section
       const tl = document.createElement('div'); tl.className = 'failed-line';
-      const tag = document.createElement('span');
-      tag.className = 'failed-tag';
-      tag.textContent = 'Failed';
-      tl.appendChild(tag);
+      tl.appendChild(statusIcon('failure'));
       if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
       const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
       if (headlineMeta) tl.appendChild(headlineMeta);
@@ -2971,6 +3424,36 @@ function renderSlot(svc, env, slot, key) {
     // S6: no running version, no bottom. Other selected attrs (sha/run_number/ref/run_url/parents) still rendered.
     const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
     if (attrs) wrap.appendChild(attrs);
+  }
+
+  else if (st === 'never-deployed') {
+    /* ---------- Never effectively deployed on this env: the only deployment so
+       far is a non-effective status (pending/queued/waiting/cancelled/rejected),
+       with no prior success/in-progress/failure. The tile is NEUTRAL/grey (no
+       health to colour by) and carries the actual status on a chip. */
+    const line = document.createElement('div');
+    line.className = 'ver-row';
+    const chip = document.createElement('span');
+    chip.className = 'status-chip ' + statusKlass(slot.status);
+    chip.textContent = `${STATUS_ICONS[slot.status] || ''} ${slot.status}`;
+    line.appendChild(chip);
+    if (matrixFieldsOn.has('version') && slot.current.version) {
+      line.appendChild(v(slot.current.version));
+    }
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) line.appendChild(headlineMeta);
+    wrap.appendChild(line);
+    const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (attrs) wrap.appendChild(attrs);
+  }
+
+  // Context badge — deployment context layered on the effective tile state.
+  // slot.context = 'pending' | 'queued' | 'waiting' | 'cancelled' | 'rejected'
+  if (slot.context) {
+    const row = document.createElement('div');
+    row.className = 'ctx-row';
+    row.appendChild(ctxBadge(slot.context, slot.contextVersion));
+    wrap.appendChild(row);
   }
 
   return wrap;
@@ -3057,6 +3540,11 @@ function setView(view) {
   document.getElementById('fields-grid-vis').style.display    = view === 'vis'    ? '' : 'none';
   document.getElementById('pop-fields-title').textContent =
     view === 'matrix' ? 'Visible fields — Matrix' : 'Visible fields — Swimlanes';
+  // Legend popover content swaps per view (mirrors Fields pattern)
+  document.getElementById('legend-matrix').style.display = view === 'matrix' ? '' : 'none';
+  document.getElementById('legend-vis').style.display    = view === 'vis'    ? '' : 'none';
+  document.getElementById('pop-legend-title').textContent =
+    view === 'matrix' ? 'Legend — Matrix' : 'Legend — Swimlanes';
   // Fields badge reflects the active view's hidden-field count
   syncFieldsBtn();
   // close any open popover when switching
@@ -3090,6 +3578,7 @@ const POPOVERS = [
   { btn: 'btn-columns',     pop: 'pop-columns' },
   { btn: 'btn-correlation', pop: 'pop-correlation' },
   { btn: 'btn-fields',      pop: 'pop-fields' },
+  { btn: 'btn-legend',      pop: 'pop-legend' },
 ];
 function closeAllPopovers() {
   POPOVERS.forEach(({btn, pop}) => {
@@ -3149,6 +3638,122 @@ buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
   // preserve selection ring after rebuild
   selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
 });
+
+/* =================================================================
+   LEGEND FIELD ROWS — programmatic, from fieldSpan + real classes
+   Uses the same renderer the tiles/cards use so examples can't drift.
+   ================================================================= */
+(function buildLegendFields() {
+  /* Sample record covering all fields */
+  const ALL_ON = new Set(['version','run_url','sha','run_number','ref','actor',
+                          'happened_at','environment','parrent_deployments']);
+  const sampleRec = {
+    version:    'v2.14.3',
+    run_url:    'https://ci.internal/runs/4821',
+    sha:        '7d3e2a1',
+    run_number: 4821,
+    ref:        'release/2.14',
+    actor:      'mreyes',
+    elapsed:    '2h ago',
+    parents:    1,
+  };
+  const sampleEnv = 'staging';
+
+  /* Short meaning for each field key */
+  const MEANING = {
+    version:     'version — currently deployed',
+    run_url:     'run_url — link to the CI run',
+    sha:         'sha — commit deployed',
+    run_number:  'run_number — CI run number',
+    ref:         'ref — branch or tag',
+    actor:       'actor — who triggered the deploy',
+    happened_at: 'happened_at — when it ran',
+    environment: 'environment — which env it ran in',
+  };
+
+  /* Build one .lg-ex row: left = example element, right = meaning text */
+  function exRow(leftEl, meaning) {
+    const row = document.createElement('div');
+    row.className = 'lg-ex';
+    const l = document.createElement('div');
+    l.className = 'lg-ex-l';
+    l.appendChild(leftEl);
+    const r = document.createElement('div');
+    r.className = 'lg-ex-r';
+    r.textContent = meaning;
+    row.appendChild(l);
+    row.appendChild(r);
+    return row;
+  }
+
+  /* ---- matrix tile ---- */
+  (function() {
+    const container = document.getElementById('legend-matrix-fields');
+    if (!container) return;
+
+    MATRIX_FIELDS.forEach(({ key }) => {
+      let leftEl;
+      if (key === 'version') {
+        /* Tile renders version as a .ver span */
+        const s = document.createElement('span');
+        s.className = 'ver';
+        s.style.cssText = 'cursor:default;pointer-events:none';
+        s.textContent = sampleRec.version;
+        leftEl = s;
+      } else if (key === 'actor') {
+        /* Tile places actor in .ver-meta via renderHeadlineMeta */
+        const wrap = document.createElement('span');
+        wrap.className = 'ver-meta';
+        const el = fieldSpan('actor', sampleRec, ALL_ON);
+        if (el) wrap.appendChild(el);
+        leftEl = wrap;
+      } else if (key === 'happened_at') {
+        /* Tile places happened_at in .ver-meta alongside actor */
+        const wrap = document.createElement('span');
+        wrap.className = 'ver-meta';
+        const el = fieldSpan('happened_at', sampleRec, ALL_ON);
+        if (el) wrap.appendChild(el);
+        leftEl = wrap;
+      } else {
+        /* All other fields: run_url, sha, run_number, ref — via fieldSpan */
+        leftEl = fieldSpan(key, sampleRec, ALL_ON) || document.createElement('span');
+      }
+      container.appendChild(exRow(leftEl, MEANING[key] || key));
+    });
+  })();
+
+  /* ---- vis-card ---- */
+  (function() {
+    const container = document.getElementById('legend-vis-fields');
+    if (!container) return;
+
+    VIS_FIELDS.forEach(({ key }) => {
+      let leftEl;
+      if (key === 'environment') {
+        /* Card renders env as .vc-env div */
+        const d = document.createElement('div');
+        d.className = 'vc-env';
+        d.textContent = sampleEnv;
+        /* vc-env is normally scoped inside vis-card; inline the critical styles
+           so it renders correctly when standing alone in the legend */
+        d.style.cssText = 'font-family:"Inter",system-ui,sans-serif;font-size:11px;font-weight:600;color:var(--ink-0);text-transform:lowercase;display:inline-flex;align-items:center;gap:5px;white-space:nowrap';
+        leftEl = d;
+      } else if (key === 'version') {
+        /* Card renders version as .vc-ver div */
+        const d = document.createElement('div');
+        d.className = 'vc-ver';
+        d.textContent = sampleRec.version;
+        /* vc-ver scoped inside vis-card; inline critical styles */
+        d.style.cssText = 'font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:500;color:var(--ink-2);white-space:nowrap';
+        leftEl = d;
+      } else {
+        /* run_url, sha, run_number, ref, actor, happened_at — via fieldSpan */
+        leftEl = fieldSpan(key, sampleRec, ALL_ON) || document.createElement('span');
+      }
+      container.appendChild(exRow(leftEl, MEANING[key] || key));
+    });
+  })();
+})();
 
 /* =================================================================
    COLUMNS PICKER — show/hide environments (matrix-only)
@@ -3259,14 +3864,28 @@ const histEl = document.getElementById('hist');
 
 function makeHistory(svc, env) {
   // synthetic per (svc, env), domain-model-only — full 11-field records
-  const seedVer = (SLOTS[`${svc}|${env}`] && (SLOTS[`${svc}|${env}`].current.version || SLOTS[`${svc}|${env}`].last?.version)) || 'v1.0.0';
+  const slot = SLOTS[`${svc}|${env}`];
+  // Never-deployed slot: only ONE deployment exists (a single non-effective
+  // status), so history shows exactly that one event — no synthetic priors.
+  if (slot && slot.state === 'never-deployed') {
+    const c = slot.current;
+    return [{
+      id: c.id, component: svc, environment: env, version: c.version,
+      status: slot.status, run_url: c.run_url,
+      sha: c.sha, run_number: c.run_number, ref: c.ref, actor: c.actor,
+      happened_at: '2026-06-06T07:58:30Z', elapsed: c.elapsed || 'just now',
+      parrent_deployments: [],
+    }];
+  }
+  const seedVer = (slot && (slot.current.version || slot.last?.version)) || 'v1.0.0';
   const major = seedVer;
+  const slotState = slot?.state;
   const topStatus =
-    SLOTS[`${svc}|${env}`]?.state.startsWith('run') ? 'in-progress' :
-    SLOTS[`${svc}|${env}`]?.state === 'fail-last'   ? 'failure'     : 'success';
+    slotState?.startsWith('run')              ? 'in-progress' :
+    slotState === 'fail-last'                 ? 'failure'     : 'success';
 
   // ids: 12-hex tail; used internally for parent joins only (NOT rendered visibly)
-  return [
+  const entries = [
     { id: '9f4c8b21e7a3', component: svc, environment: env, version: major,
       status: topStatus, run_url: 'https://ci.internal/runs/4821',
       sha: '7d3e2a1', run_number: 4821, ref: 'feat/auth-refactor', actor: 'mreyes',
@@ -3278,19 +3897,19 @@ function makeHistory(svc, env) {
       happened_at: '2026-05-27T11:08:42Z', elapsed: '6h ago',
       parrent_deployments: ['5a2c4d10ffba'] },
     { id: '5a2c4d10ffba', component: svc, environment: env, version: bumpVer(major, -1),
-      status: 'success', run_url: 'https://ci.internal/runs/4808',
+      status: 'rejected', run_url: 'https://ci.internal/runs/4809',
+      sha: '6b9f0a3', run_number: 4809, ref: 'feat/auth-refactor', actor: 's.harper',
+      happened_at: '2026-05-27T09:10:00Z', elapsed: '8h ago',
+      parrent_deployments: ['4e8b1f7a3c20'] },
+    { id: '4e8b1f7a3c20', component: svc, environment: env, version: bumpVer(major, -1),
+      status: 'cancelled', run_url: 'https://ci.internal/runs/4808',
       sha: '6b9f0a3', run_number: 4808, ref: 'main', actor: 's.harper',
       happened_at: '2026-05-27T08:51:17Z', elapsed: '9h ago',
-      parrent_deployments: ['4e8b1f7a3c20'] },
-    { id: '4e8b1f7a3c20', component: svc, environment: env, version: bumpVer(major, -2),
-      status: 'success', run_url: 'https://ci.internal/runs/4792',
-      sha: '5a2c4d1', run_number: 4792, ref: 'release/2.14', actor: 'release-bot',
-      happened_at: '2026-05-26T20:14:33Z', elapsed: '1d ago',
       parrent_deployments: ['3d7a6c2b15ee'] },
     { id: '3d7a6c2b15ee', component: svc, environment: env, version: bumpVer(major, -2),
-      status: 'failure', run_url: 'https://ci.internal/runs/4787',
-      sha: '4e8b1f7', run_number: 4787, ref: '#4101', actor: 'release-bot',
-      happened_at: '2026-05-25T12:02:09Z', elapsed: '2d ago',
+      status: 'waiting', run_url: 'https://ci.internal/runs/4792',
+      sha: '5a2c4d1', run_number: 4792, ref: 'release/2.14', actor: 'release-bot',
+      happened_at: '2026-05-26T20:14:33Z', elapsed: '1d ago',
       parrent_deployments: ['c1f8023ab9d4'] },
     { id: 'c1f8023ab9d4', component: svc, environment: env, version: bumpVer(major, -3),
       status: 'success', run_url: 'https://ci.internal/runs/4760',
@@ -3298,6 +3917,22 @@ function makeHistory(svc, env) {
       happened_at: '2026-05-22T09:30:55Z', elapsed: '5d ago',
       parrent_deployments: [] },
   ];
+
+  // A deployment context (incoming waiting/queued/pending, or a cancelled/rejected
+  // attempt) is the MOST RECENT event for the slot — prepend it so the history's
+  // latest entry matches the matrix context badge.
+  if (slot?.context) {
+    entries.unshift({
+      id: 'ctx00beef0001', component: svc, environment: env,
+      version: slot.contextVersion || bumpVer(major, 1),
+      status: slot.context, run_url: 'https://ci.internal/runs/4830',
+      sha: '8e4f3b2', run_number: 4830, ref: 'main', actor: 'release-bot',
+      happened_at: '2026-05-27T15:40:00Z', elapsed: '40m ago',
+      parrent_deployments: ['9f4c8b21e7a3'],
+    });
+  }
+
+  return entries;
 }
 function bumpVer(v, delta) {
   // crude — last numeric -> shift by delta
@@ -3314,9 +3949,7 @@ function openDrawer(svc, env, opts) {
   const entries = makeHistory(svc, env);
   entries.forEach((h, idx) => {
     const e = document.createElement('div');
-    const klass =
-      h.status === 'success'    ? 's-success'  :
-      h.status === 'failure'    ? 's-failure'  : 's-progress';
+    const klass = statusKlass(h.status);
     e.className = `hist-entry ${klass}` + (opts.markFirst && idx === 0 ? ' pre-opened' : '');
 
     const parentsHtml = h.parrent_deployments.length
@@ -3463,10 +4096,10 @@ const VIS_NODES = [
     happened_at: '2026-05-26T05:42:11Z', elapsed: '1d ago',
     parrent_deployments: ['o1b3c4d5e6f7'], col: 2 },
   { id: 'o4e6f7a8b9c0', component: 'order-svc', environment: 'preprod',
-    version: 'v0.41.1', status: 'success', run_url: 'https://ci.internal/runs/2935',
-    sha: 'd4e5f6a', run_number: 2935, ref: 'release/0.41', actor: 'release-bot',
-    happened_at: '2026-05-26T19:08:55Z', elapsed: '22h ago',
-    parrent_deployments: ['o2c4d5e6f7a8', 'o3d5e6f7a8b9'], col: 4 },
+    version: 'v0.41.2', status: 'waiting', neverDeployed: true, run_url: 'https://ci.internal/runs/2921',
+    sha: 'a6b7c8d', run_number: 2921, ref: 'release/0.41', actor: 'release-bot',
+    happened_at: '2026-06-06T07:58:30Z', elapsed: 'just now',
+    parrent_deployments: [], col: 4 },
   { id: 'o5f7a8b9c0d1', component: 'order-svc', environment: 'prod',
     version: 'v0.41.2', status: 'in-progress', run_url: 'https://ci.internal/runs/2948',
     sha: 'e5f6a7b', run_number: 2948, ref: '#7912', actor: 'jpark',
@@ -3505,6 +4138,38 @@ const VIS_NODES = [
     sha: '3e0f1a2', run_number: 5145, ref: 'release/4.18', actor: 'release-bot',
     happened_at: '2026-05-27T03:20:45Z', elapsed: '14h ago',
     parrent_deployments: [], col: 6 },
+
+  /* --- Scheme B demo nodes (issue #268) — context badges on success primary state --- */
+  { id: 'n1pending0001', component: 'auth-bff', environment: 'dev',
+    version: 'v3.2.6', status: 'success', context: 'pending', contextVersion: 'v3.2.7-rc1', contextRunUrl: 'https://ci.internal/runs/3262', contextRunNumber: 3262,
+    run_url: 'https://ci.internal/runs/3260',
+    sha: 'a1b2c3e', run_number: 3255, ref: 'release/3.2', actor: 'release-bot',
+    happened_at: '2026-05-27T16:00:00Z', elapsed: '55m ago',
+    parrent_deployments: [], col: 8 },
+  { id: 'n2queued0002', component: 'order-svc', environment: 'dev',
+    version: 'v0.41.2', status: 'success', context: 'queued', contextVersion: 'v0.41.3-rc1', contextRunUrl: 'https://ci.internal/runs/2960', contextRunNumber: 2960,
+    run_url: 'https://ci.internal/runs/2958',
+    sha: 'b2c3d4f', run_number: 2958, ref: 'feat/cart-merge', actor: 'jpark',
+    happened_at: '2026-05-27T16:30:00Z', elapsed: '25m ago',
+    parrent_deployments: [], col: 8 },
+  { id: 'n3waiting0003', component: 'payments-api', environment: 'staging',
+    version: 'v2.14.3', status: 'success', context: 'waiting', contextVersion: 'v2.14.4-rc1', contextRunUrl: 'https://ci.internal/runs/4830', contextRunNumber: 4830,
+    run_url: 'https://ci.internal/runs/4825',
+    sha: 'c3d4e5g', run_number: 4825, ref: 'release/2.14', actor: 'mreyes',
+    happened_at: '2026-05-27T15:45:00Z', elapsed: '70m ago',
+    parrent_deployments: [], col: 8 },
+  { id: 'n4cancelled004', component: 'catalog-edge', environment: 'qa',
+    version: 'v5.0.0-rc1', status: 'success', context: 'cancelled', contextVersion: 'v5.0.0-rc2', contextRunUrl: 'https://ci.internal/runs/5160', contextRunNumber: 5160,
+    run_url: 'https://ci.internal/runs/5155',
+    sha: 'd4e5f6h', run_number: 5155, ref: 'feat/v5-rewrite', actor: 'tcheng',
+    happened_at: '2026-05-27T14:00:00Z', elapsed: '3h ago',
+    parrent_deployments: ['c4d1e2f3a4b5'], col: 5 },
+  { id: 'n5rejected0005', component: 'auth-bff', environment: 'staging',
+    version: 'v3.2.6', status: 'success', context: 'rejected',
+    run_url: 'https://ci.internal/runs/3258',
+    sha: 'e5f6a7c', run_number: 3258, ref: 'release/3.2', actor: 's.harper',
+    happened_at: '2026-05-27T12:00:00Z', elapsed: '5h ago',
+    parrent_deployments: ['n1pending0001'], col: 9 },
 ];
 
 // Pre-selected inspector node
@@ -3514,7 +4179,17 @@ const VIS_BY_ID = {};
 VIS_NODES.forEach(n => { VIS_BY_ID[n.id] = n; });
 
 function statusKlass(s) {
-  return s === 'success' ? 's-success' : s === 'failure' ? 's-failure' : 's-progress';
+  switch (s) {
+    case 'success':     return 's-success';
+    case 'failure':     return 's-failure';
+    case 'in-progress': return 's-progress';
+    case 'pending':     return 's-pending';
+    case 'queued':      return 's-queued';
+    case 'waiting':     return 's-waiting';
+    case 'cancelled':   return 's-cancelled';
+    case 'rejected':    return 's-rejected';
+    default:            return 's-progress';
+  }
 }
 
 /* -----------------------------------------------------------------
@@ -3878,7 +4553,7 @@ function buildSwim() {
   VIS_NODES.forEach(n => {
     if (n.x === undefined || n.y === undefined) return; // not in any service shown
     const card = document.createElement('div');
-    const klass = statusKlass(n.status);
+    const klass = n.neverDeployed ? 's-never-deployed' : statusKlass(n.status);
     const selected = n.id === PRESELECTED_NODE_ID ? ' is-selected' : '';
     card.className = `vis-card ${klass}${selected}`;
     card.dataset.nodeId = n.id;
@@ -3895,11 +4570,25 @@ function buildSwim() {
       parents: n.parrent_deployments.length,
     };
 
-    // Top row: version (left) + happened_at (right via margin-left:auto).
-    // Row is emitted if EITHER field is present so neither is silently dropped
-    // when the other is toggled off via the picker.
+    // Top row: status icon (always) + version (left) + happened_at (right via margin-left:auto).
+    // For in-progress we use the static ◴ glyph (no animated spinner on vis-cards).
     const verRow = document.createElement('div');
     verRow.className = 'vc-ver-row';
+    // Status indicator. Never-deployed nodes use a status CHIP (the card is
+    // neutral); all others use the tinted primary icon.
+    if (n.neverDeployed) {
+      const chip = document.createElement('span');
+      chip.className = 'status-chip ' + statusKlass(n.status);
+      chip.style.cssText = 'flex-shrink:0;margin-right:6px';
+      chip.textContent = `${STATUS_ICONS[n.status] || ''} ${n.status}`;
+      verRow.appendChild(chip);
+    } else {
+      const vcIc = document.createElement('span');
+      vcIc.setAttribute('aria-hidden', 'true');
+      vcIc.style.cssText = 'font-size:11px;line-height:1;color:var(--' + n.status + ');flex-shrink:0;margin-right:4px';
+      vcIc.textContent = STATUS_ICONS[n.status] || '';
+      verRow.appendChild(vcIc);
+    }
     if (visFieldsOn.has('version') && n.version) {
       const ver = document.createElement('div');
       ver.className = 'vc-ver';
@@ -3909,6 +4598,15 @@ function buildSwim() {
     const tim = fieldSpan('happened_at', rec, visFieldsOn);
     if (tim) verRow.appendChild(tim);
     if (verRow.childElementCount) card.appendChild(verRow);
+
+    // Context badge — incoming/attempted deployment layered on the effective
+    // card state; its own row so it never collides with the version-row time.
+    if (n.context) {
+      const ctxRow = document.createElement('div');
+      ctxRow.className = 'ctx-row';
+      ctxRow.appendChild(ctxBadge(n.context, n.contextVersion));
+      card.appendChild(ctxRow);
+    }
 
     // Mid grid — happened_at + sha are excluded:
     //   happened_at rides on the version row (top-right)
@@ -3970,12 +4668,11 @@ function selectVisNode(id) {
 
 function renderInspector(n) {
   document.getElementById('insp-crumbs').textContent = `${n.component} · ${n.environment}`;
-  const klass =
-    n.status === 'success'    ? 's-success'  :
-    n.status === 'failure'    ? 's-failure'  : 's-progress';
+  const klass = statusKlass(n.status);
+  // Header carries just the version; status + context live as badge-valued grid
+  // rows below (avoids cramming chips beside a long version).
   document.getElementById('insp-status-row').innerHTML =
-    `<span class="status-chip ${klass}">${n.status}</span>` +
-    `<span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-0)">${n.version}</span>`;
+    `<span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-0)">${n.version}</span>`;
 
   const parentsHtml = n.parrent_deployments.length
     ? n.parrent_deployments.map(pid => `<span class="pid" style="display:inline-block;margin-right:4px;padding:1px 6px;border-radius:4px;background:rgba(120,110,255,0.10);border:1px solid rgba(120,110,255,0.30);color:var(--ink-1)">${shortId(pid)}</span>`).join('')
@@ -3986,7 +4683,7 @@ function renderInspector(n) {
     <span class="k">component</span>     <span class="v">${n.component}</span>
     <span class="k">environment</span>   <span class="v">${n.environment}</span>
     <span class="k">version</span>       <span class="v">${n.version}</span>
-    <span class="k">status</span>        <span class="v">${n.status}</span>
+    <span class="k">status</span>        <span class="v"><span class="status-chip ${klass}">${STATUS_ICONS[n.status] || ''} ${n.status}</span></span>
     <span class="k">run_url</span>       <span class="v"><a class="run-link" href="${n.run_url}" target="_blank" rel="noreferrer">run #${n.run_number} &#x2197;</a></span>
     <span class="k">sha</span>           <span class="v">${n.sha}</span>
     <span class="k">run_number</span>    <span class="v">${n.run_number}</span>
@@ -3994,6 +4691,10 @@ function renderInspector(n) {
     <span class="k">actor</span>         <span class="v">${n.actor}</span>
     <span class="k">happened_at</span>   <span class="v">${n.elapsed} <span class="muted">&mdash; ${n.happened_at}</span></span>
     <span class="k">parrent_deployments</span> <span class="v parents">${parentsHtml}</span>
+    ${n.context ? `<span class="insp-sep"></span>
+    <span class="k">next status</span>   <span class="v"><span class="status-chip ${statusKlass(n.context)}">${STATUS_ICONS[n.context] || ''} ${n.context}</span></span>
+    ${n.contextVersion ? `<span class="k">next version</span>  <span class="v">${n.contextVersion}</span>` : ''}
+    ${n.contextRunUrl ? `<span class="k">next run_url</span>  <span class="v"><a class="run-link" href="${n.contextRunUrl}" target="_blank" rel="noreferrer">run #${n.contextRunNumber} &#x2197;</a></span>` : ''}` : ''}
   `;
 }
 

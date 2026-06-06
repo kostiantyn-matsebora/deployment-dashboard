@@ -7,7 +7,15 @@
  * ref, actor, happened_at, parent_deployments
  */
 
-export type Status = 'in-progress' | 'success' | 'failure';
+export type Status =
+  | 'in-progress'
+  | 'success'
+  | 'failure'
+  | 'pending'
+  | 'queued'
+  | 'waiting'
+  | 'cancelled'
+  | 'rejected';
 
 export type Theme = 'dark' | 'light' | 'auto';
 
@@ -31,7 +39,7 @@ export interface DeploymentEvent {
 
 /** One (service, environment) cell in the Matrix view. */
 export interface MatrixSlot {
-  /** Most recent event for this slot. */
+  /** Most recent effective event (status: in-progress | success | failure). */
   current: DeploymentEvent;
   /**
    * Most recent successful event. Omitted when current IS the last success
@@ -45,6 +53,13 @@ export interface MatrixSlot {
    * Distinguishes S2 vs S3 and S5 vs S6.
    */
   prev_failed?: boolean;
+  /**
+   * The latest non-effective deployment beyond the live one —
+   * status is one of pending | queued | waiting | cancelled | rejected.
+   * Present only when such an event is newer (happened_at) than current.
+   * Rendered as a secondary "next" context badge, never as the slot primary state.
+   */
+  next?: DeploymentEvent;
 }
 
 /** One service row in the Matrix view. */
@@ -73,12 +88,13 @@ export interface DeploymentEventPage {
  * Derived client-side from (current.status, last_successful presence).
  */
 export type BoxState =
-  | 's-success'        // S1 — last deployment succeeded
-  | 's-run-last'       // S2 — in-progress; prev terminal = success
-  | 's-run-fail-last'  // S3 — in-progress; prev terminal = failure; older success exists
-  | 's-fail-last'      // S4 — failure; older success exists
-  | 's-running-only'   // S5 — in-progress; no prior successful deployment
-  | 's-run-fail-only'; // S6 — in-progress; prev terminal = failure; no success history
+  | 's-success'          // S1 — last deployment succeeded
+  | 's-run-last'         // S2 — in-progress; prev terminal = success
+  | 's-run-fail-last'    // S3 — in-progress; prev terminal = failure; older success exists
+  | 's-fail-last'        // S4 — failure; older success exists
+  | 's-running-only'     // S5 — in-progress; no prior successful deployment
+  | 's-run-fail-only'    // S6 — in-progress; no prior success; prev terminal = failure
+  | 's-never-deployed';  // N  — context status; no effective baseline (first-ever gated deploy) // S6 — in-progress; prev terminal = failure; no success history
 
 /**
  * Derive the box state from a matrix slot.
@@ -86,6 +102,23 @@ export type BoxState =
  *   S2 vs S3 (both in-progress + last_successful)
  *   S5 vs S6 (both in-progress, no success history)
  */
+/**
+ * The five "context" statuses that are NOT primary tile states.
+ * They appear as a secondary `.ctx-badge` pill on the tile/card.
+ */
+export type ContextStatus = 'pending' | 'queued' | 'waiting' | 'cancelled' | 'rejected';
+
+/** Returns true when a status is a context (non-primary) status. */
+export function isContextStatus(status: Status): status is ContextStatus {
+  return (
+    status === 'pending' ||
+    status === 'queued' ||
+    status === 'waiting' ||
+    status === 'cancelled' ||
+    status === 'rejected'
+  );
+}
+
 export function deriveBoxState(slot: MatrixSlot): BoxState {
   const { current, last_successful, prev_failed } = slot;
   if (current.status === 'success') return 's-success';
@@ -93,6 +126,13 @@ export function deriveBoxState(slot: MatrixSlot): BoxState {
   // is present. When last_successful is absent the tile renders as a full
   // failed tile (no split / bottom section).
   if (current.status === 'failure') return 's-fail-last';
+  // Never-deployed: current is a context status (pending/queued/waiting/
+  // cancelled/rejected) with NO effective baseline — first-ever gated deploy.
+  // Renders as a neutral/grey tile with a status chip. DISTINCT from empty
+  // slot ("—") and from a context next badge on an effective tile.
+  if (isContextStatus(current.status)) {
+    return last_successful ? 's-success' : 's-never-deployed';
+  }
   // in-progress
   if (last_successful) return prev_failed ? 's-run-fail-last' : 's-run-last';
   return prev_failed ? 's-run-fail-only' : 's-running-only';

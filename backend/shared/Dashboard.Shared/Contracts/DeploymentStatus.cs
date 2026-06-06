@@ -6,13 +6,35 @@ namespace Dashboard.Shared.Contracts;
 /// </summary>
 public static class DeploymentStatus
 {
+    public const string Pending = "pending";
+    public const string Queued = "queued";
     public const string InProgress = "in-progress";
+    public const string Waiting = "waiting";
     public const string Success = "success";
     public const string Failure = "failure";
+    public const string Cancelled = "cancelled";
+    public const string Rejected = "rejected";
 
     /// <summary>All valid values for use in validation and switch expressions.</summary>
     public static readonly IReadOnlySet<string> All =
-        new HashSet<string>(StringComparer.Ordinal) { InProgress, Success, Failure };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            Pending, Queued, InProgress, Waiting, Success, Failure, Cancelled, Rejected,
+        };
 
     public static bool IsValid(string? value) => value is not null && All.Contains(value);
+
+    /// <summary>
+    /// Effective statuses — the deployment has entered or completed execution.
+    /// These are the only statuses eligible for a slot's <c>current</c> field.
+    /// Mirrors <see cref="IsTerminal"/> in structure.
+    /// </summary>
+    public static bool IsEffective(string status) =>
+        status is InProgress or Success or Failure;
+
+    /// <summary>
+    /// Terminal statuses — polling skips re-fetching; no further transitions expected.
+    /// </summary>
+    public static bool IsTerminal(string status) =>
+        status is Success or Failure or Cancelled or Rejected;
 }

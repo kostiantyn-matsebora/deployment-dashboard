@@ -104,6 +104,18 @@
   box-shadow: 0 0 14px var(--amber-glow);
 }
 
+/* ── N: never-deployed — neutral/grey surface (no health colour) ──
+   The tile colour conveys deployment health; there is none yet.
+   The actual context status rides on a chip in the ver-row.
+   Mirrors .slot.s-never-deployed in the mockup.               */
+.slot.s-never-deployed {
+  background: var(--slot-empty-bg);
+}
+.slot.s-never-deployed::before {
+  background: var(--ink-3);
+  box-shadow: none;
+}
+
 /* ── S4: failed + last successful ──────────────────────────── */
 .slot.s-fail-last {
   border-color: var(--coral-edge);
@@ -256,6 +268,19 @@
   margin: 0 -10px -6px;
 }
 .tile-last-succ .glyph { color: var(--ink-3); }
+
+/* ── Context badge row — spans full tile width ───────────── */
+.slot .ctx-row {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+/* version text inside a context badge */
+.ctx-badge .ctx-ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  opacity: 0.85;
+}
 
 /* ── Field glyphs & typography ────────────────────────────── */
 .glyph { color: var(--ink-3); }
