@@ -220,6 +220,38 @@ export const PANEL_HTML = `<!DOCTYPE html>
     .fi-state-error     { color: #f87171; }
     .fi-state-neutral   { color: #a1a1aa; }
 
+    /* Correlation-id chip — rendered inline in the details cell when present. */
+    .fi-corr {
+      display: inline-block; font-size: 0.6rem; font-weight: 700;
+      padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em;
+      background: #1f1535; color: #c4b5fd;
+      cursor: pointer; white-space: nowrap;
+      border: 1px solid #3b2d6e;
+      transition: background 0.12s, color 0.12s;
+    }
+    .fi-corr:hover { background: #2e1d5e; color: #ddd6fe; }
+    /* Active correlation filter — chip is highlighted when this id is being filtered. */
+    .fi-corr-active {
+      background: #4c1d95; color: #ede9fe; border-color: #7c3aed;
+    }
+
+    /* Active correlation filter bar — shown in Events header when a filter is set. */
+    .corr-filter-bar {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.68rem; padding: 2px 7px; border-radius: 4px;
+      background: #1f1535; border: 1px solid #3b2d6e; color: #c4b5fd;
+    }
+    .corr-filter-bar .corr-filter-id {
+      font-family: 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
+      font-size: 0.65rem; color: #ddd6fe; max-width: 14ch;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .corr-filter-bar .corr-filter-clear {
+      cursor: pointer; font-size: 0.7rem; color: #a78bfa; padding: 0 2px;
+      background: none; border: none; line-height: 1; transition: color 0.1s;
+    }
+    .corr-filter-bar .corr-filter-clear:hover { color: #ede9fe; }
+
     /* Control card dim — applied to interactive cards while reset_state == blocked */
     .card-blocked { opacity: 0.45; pointer-events: none; }
   </style>
@@ -385,7 +417,14 @@ export const PANEL_HTML = `<!DOCTYPE html>
     <div class="card" id="events-card">
       <div class="feed-header">
         <div class="card-title">Events</div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <!-- Correlation filter bar — hidden until a correlation chip is clicked. -->
+          <span class="corr-filter-bar" id="corr-filter-bar" style="display:none" aria-live="polite">
+            <span style="color:#a78bfa;font-size:0.65rem;white-space:nowrap">corr:</span>
+            <span class="corr-filter-id" id="corr-filter-id" title=""></span>
+            <button class="corr-filter-clear" id="corr-filter-clear-btn"
+                    aria-label="Clear correlation filter" title="Clear correlation filter">&#x2715;</button>
+          </span>
           <span class="live-badge live-connecting" id="events-live-badge">● CONNECTING</span>
           <button class="btn-sm" id="events-clear-btn">Clear</button>
         </div>
@@ -480,10 +519,15 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const rlAdapterStore = {};
 
     // Merged Events feed refs (data feed — exempt from card-blocked dimming).
-    const eventsLiveBadge = $('events-live-badge');
-    const eventsClearBtn  = $('events-clear-btn');
-    const eventsFeedList  = $('events-feed-list');
-    const eventsFeedEmpty = $('events-feed-empty');
+    const eventsLiveBadge  = $('events-live-badge');
+    const eventsClearBtn   = $('events-clear-btn');
+    const eventsFeedList   = $('events-feed-list');
+    const eventsFeedEmpty  = $('events-feed-empty');
+
+    // Correlation filter refs.
+    const corrFilterBar      = $('corr-filter-bar');
+    const corrFilterId       = $('corr-filter-id');
+    const corrFilterClearBtn = $('corr-filter-clear-btn');
 
     // Interactive control cards — dimmed while reset_state == blocked.
     const interactiveCards = [$('ingest-card'), $('gh-emulator-card'), $('control-api-card')];
@@ -507,6 +551,10 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     // Merged events store: dedup by id, sorted datetime DESC.
     let eventsStore = [];
+
+    // Active correlation filter — null means no filter (show all events).
+    // Set by clicking a .fi-corr chip; cleared by corrFilterClearBtn.
+    let activeCorrelationId = null;
 
     // Deployments feed store: latest 10, newest first; each entry is a rendered row obj.
     let deploymentsStore = [];
@@ -720,7 +768,15 @@ export const PANEL_HTML = `<!DOCTYPE html>
 
     eventsClearBtn.addEventListener('click', () => {
       eventsStore = [];
+      activeCorrelationId = null;
+      applyCorrFilter();
       localStorage.removeItem('dd.events');
+      renderEventsStore();
+    });
+
+    corrFilterClearBtn.addEventListener('click', () => {
+      activeCorrelationId = null;
+      applyCorrFilter();
       renderEventsStore();
     });
 
@@ -1053,16 +1109,19 @@ export const PANEL_HTML = `<!DOCTYPE html>
       const detailsHtml =
         '<span class="' + stateCls + '">' + esc(rec.state || '') + '</span>' + detailPart;
 
+      const correlationId = rec.correlation_id || null;
+
       const entry = {
-        _kind:      'comp',
-        _ts:        ts,
-        id:         rec.id || ('comp-' + ts + '-' + (rec.component_id || '')),
-        time:       fmtMs(ts),
-        source:     rec.component_id || '',
-        sourceClass:'fi-source-comp',
-        event:      rec.event_type   || '',
-        eventClass: 'fi-event-neutral',
-        rowId:      rec.id           || '',
+        _kind:         'comp',
+        _ts:           ts,
+        id:            rec.id || ('comp-' + ts + '-' + (rec.component_id || '')),
+        time:          fmtMs(ts),
+        source:        rec.component_id || '',
+        sourceClass:   'fi-source-comp',
+        event:         rec.event_type   || '',
+        eventClass:    'fi-event-neutral',
+        rowId:         rec.id           || '',
+        correlationId,
         detailsHtml,
       };
       mergeIntoStore(entry);
@@ -1082,13 +1141,51 @@ export const PANEL_HTML = `<!DOCTYPE html>
       }
     }
 
+    // Updates the correlation filter bar visibility and label.
+    function applyCorrFilter() {
+      if (activeCorrelationId) {
+        corrFilterId.textContent = activeCorrelationId;
+        corrFilterId.title       = activeCorrelationId;
+        corrFilterBar.style.display = '';
+      } else {
+        corrFilterBar.style.display = 'none';
+        corrFilterId.textContent = '';
+        corrFilterId.title       = '';
+      }
+    }
+
+    // Selects a correlation id for filtering: if the same id is already active,
+    // clicking it again clears the filter (toggle off).
+    function selectCorrId(id) {
+      activeCorrelationId = (activeCorrelationId === id) ? null : id;
+      applyCorrFilter();
+      renderEventsStore();
+    }
+
     function renderEventsStore() {
       eventsFeedList.innerHTML = '';
-      if (!eventsStore.length) {
+      // Apply active correlation filter (client-side, over accumulated store).
+      const visible = activeCorrelationId
+        ? eventsStore.filter(e => e.correlationId === activeCorrelationId)
+        : eventsStore;
+      if (!visible.length) {
         eventsFeedList.appendChild(eventsFeedEmpty);
         return;
       }
-      eventsStore.forEach(entry => {
+      visible.forEach(entry => {
+        // Append the correlation-id chip to detailsHtml when present.
+        // Chip is highlighted (.fi-corr-active) when it matches the active filter.
+        let detailsHtml = entry.detailsHtml || '';
+        if (entry.correlationId) {
+          const activeCls = entry.correlationId === activeCorrelationId ? ' fi-corr-active' : '';
+          detailsHtml +=
+            ' <span class="fi-corr' + activeCls + '"' +
+            ' title="Filter by correlation id: ' + esc(entry.correlationId) + '"' +
+            ' role="button" tabindex="0" aria-pressed="' + (activeCls ? 'true' : 'false') + '"' +
+            ' onclick="selectCorrId(' + JSON.stringify(entry.correlationId) + ')"' +
+            ' onkeydown="if(event.key===\\'Enter\\'||event.key===\\' \\')selectCorrId(' + JSON.stringify(entry.correlationId) + ')"' +
+            '>corr:' + esc(entry.correlationId.slice(0, 8)) + (entry.correlationId.length > 8 ? '\\u2026' : '') + '</span>';
+        }
         const row = feedRow({
           time:        entry.time,
           source:      entry.source,
@@ -1096,7 +1193,7 @@ export const PANEL_HTML = `<!DOCTYPE html>
           event:       entry.event,
           eventClass:  entry.eventClass,
           id:          entry.rowId,
-          detailsHtml: entry.detailsHtml,
+          detailsHtml,
         });
         eventsFeedList.appendChild(row);
       });
