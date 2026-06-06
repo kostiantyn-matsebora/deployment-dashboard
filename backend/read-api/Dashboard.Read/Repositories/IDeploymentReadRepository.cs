@@ -49,6 +49,17 @@ internal interface IDeploymentReadRepository
     Task<IReadOnlyList<string>> GetDistinctEnvironmentsAsync(CancellationToken ct);
 
     /// <summary>
+    /// Returns the most recent terminal (<c>success</c> | <c>failure</c>) event per
+    /// <c>(service, environment)</c> slot that is strictly older than the corresponding
+    /// effective current event. Used to compute <c>prev_failed</c>: when the returned
+    /// event has status <c>failure</c>, the previous completed attempt failed.
+    /// Only slots where <c>current.status == in-progress</c> produce a meaningful result;
+    /// callers ignore this query result for other current statuses.
+    /// </summary>
+    Task<IReadOnlyList<DeploymentEvent>> GetLatestTerminalBeforeCurrentPerSlotAsync(
+        string? serviceFilter, CancellationToken ct);
+
+    /// <summary>
     /// Returns all events with <c>id &gt; lastId</c>, ordered by <c>id</c> ascending.
     /// Used for SSE <c>Last-Event-ID</c> resume replay (D3: the row <c>id</c> is the stream cursor).
     /// </summary>

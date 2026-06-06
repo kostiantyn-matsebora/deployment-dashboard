@@ -139,6 +139,22 @@ describe('Scenario: GitHub emulator → fetcher backfill → API state', () => {
       },
       { timeoutMs: 120_000, intervalMs: 2_000, label: `services count >= ${EXPECTED_SERVICE_COUNT}` },
     );
+
+    // Extra guard: wait until the S3 last_successful anchor (ledger-projector/qa success)
+    // is ingested and visible in the matrix. The service-count gate fires as soon as the
+    // 10th service appears, which may be before the depth-3 backfill of deeper slots
+    // (e.g. ledger-projector/qa has 3 deployments: in-progress + failure + success anchor)
+    // has finished posting all events.
+    await waitFor(
+      async () => {
+        const matrix = await getJson('/api/matrix');
+        const ledgerRow = (matrix.rows as any[]).find((r: any) => r.service === 'ledger-projector');
+        if (!ledgerRow) return null;
+        const qaSlot = ledgerRow.slots['qa'];
+        return qaSlot?.last_successful ? qaSlot : null;
+      },
+      { timeoutMs: 60_000, intervalMs: 2_000, label: 'ledger-projector/qa last_successful ingested (S3 anchor)' },
+    );
   }, 150_000);
 
   afterAll(async () => {
@@ -233,5 +249,121 @@ describe('Scenario: GitHub emulator → fetcher backfill → API state', () => {
         }
       }
     }
+  });
+
+  // ── Box-state regression suite (demo fixture — fixtures.json _doc.box_state_slots) ──
+  //
+  // Each case maps to one named slot from the demo data. All assertions target
+  // /api/matrix and confirm that the correct shape is returned after backfill.
+  //
+  // prev_failed semantics (docs/design/components.md §"6 Box States"):
+  //   S3 / S6 — current=in-progress, prev terminal=failure   → prev_failed=true
+  //   S2 / S5 — current=in-progress, prev terminal=success or none → prev_failed false/absent
+
+  it('box state S1 — payments-api/dev: current=success, no last_successful, no next', async () => {
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'payments-api');
+    expect(row).toBeDefined();
+    const slot = row.slots['dev'];
+    expect(slot).toBeDefined();
+    expect(slot.current.status).toBe('success');
+    expect(slot.last_successful).toBeUndefined();
+    expect(slot.next).toBeUndefined();
+    expect(slot.prev_failed ?? false).toBe(false);
+  });
+
+  it('box state S2 — auth-bff/qa: current=in-progress, last_successful set, prev_failed false', async () => {
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'auth-bff');
+    expect(row).toBeDefined();
+    const slot = row.slots['qa'];
+    expect(slot).toBeDefined();
+    expect(slot.current.status).toBe('in-progress');
+    expect(slot.last_successful).toBeDefined();
+    expect(slot.last_successful.status).toBe('success');
+    expect(slot.prev_failed ?? false).toBe(false);
+  });
+
+  it('box state S3 — ledger-projector/qa: current=in-progress, last_successful set, prev_failed=true', async () => {
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'ledger-projector');
+    expect(row).toBeDefined();
+    const slot = row.slots['qa'];
+    expect(slot).toBeDefined();
+    expect(slot.current.status).toBe('in-progress');
+    expect(slot.last_successful).toBeDefined();
+    expect(slot.last_successful.status).toBe('success');
+    expect(slot.prev_failed).toBe(true);
+  });
+
+  it('box state S4 — notification-worker/staging: current=failure, last_successful set', async () => {
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'notification-worker');
+    expect(row).toBeDefined();
+    const slot = row.slots['staging'];
+    expect(slot).toBeDefined();
+    expect(slot.current.status).toBe('failure');
+    expect(slot.last_successful).toBeDefined();
+    expect(slot.last_successful.status).toBe('success');
+    expect(slot.prev_failed ?? false).toBe(false);
+  });
+
+  it('box state S5 — platform-proxy/staging: current=in-progress, no last_successful, prev_failed false', async () => {
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'platform-proxy');
+    expect(row).toBeDefined();
+    const slot = row.slots['staging'];
+    expect(slot).toBeDefined();
+    expect(slot.current.status).toBe('in-progress');
+    expect(slot.last_successful).toBeUndefined();
+    expect(slot.prev_failed ?? false).toBe(false);
+  });
+
+  it('box state S6 — billing-webhook/staging: current=in-progress, no last_successful, prev_failed=true', async () => {
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'billing-webhook');
+    expect(row).toBeDefined();
+    const slot = row.slots['staging'];
+    expect(slot).toBeDefined();
+    expect(slot.current.status).toBe('in-progress');
+    expect(slot.last_successful).toBeUndefined();
+    expect(slot.prev_failed).toBe(true);
+  });
+
+  it('box state never-deployed — billing-webhook/prod: current=context-status, no next', async () => {
+    // run 826001 waiting is the only ingested deployment (run 792001 is outside window).
+    // The slot falls back to non-effective as current; next is absent (no effective baseline).
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'billing-webhook');
+    expect(row).toBeDefined();
+    const slot = row.slots['prod'];
+    expect(slot).toBeDefined();
+    const CONTEXT_STATUSES = ['pending', 'queued', 'waiting', 'cancelled', 'rejected'];
+    expect(CONTEXT_STATUSES).toContain(slot.current.status);
+    expect(slot.next).toBeUndefined();
+    expect(slot.prev_failed ?? false).toBe(false);
+  });
+
+  it('box state effective+next badge — payments-api/prod: current=success, next=pending', async () => {
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'payments-api');
+    expect(row).toBeDefined();
+    const slot = row.slots['prod'];
+    expect(slot).toBeDefined();
+    expect(slot.current.status).toBe('success');
+    expect(slot.next).toBeDefined();
+    expect(slot.next.status).toBe('pending');
+    expect(slot.prev_failed ?? false).toBe(false);
+  });
+
+  it('box state empty slot — platform-proxy/qa: absent from slots map', async () => {
+    // platform-proxy/qa has no deployments — must not appear in slots.
+    const matrix = await getJson('/api/matrix');
+    const row = (matrix.rows as any[]).find((r: any) => r.service === 'platform-proxy');
+    expect(row).toBeDefined();
+    // qa is listed in environments but not in the platform-proxy slots (no deployments).
+    expect(row.slots['qa']).toBeUndefined();
+    // environments list includes qa because other services have qa deployments.
+    expect(matrix.environments).toContain('qa');
   });
 });

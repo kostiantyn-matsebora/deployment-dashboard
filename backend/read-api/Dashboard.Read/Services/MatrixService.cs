@@ -18,12 +18,15 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
         var effectivePerSlot = await repository.GetEffectivePerSlotAsync(serviceFilter, ct);
         var nonEffectivePerSlot = await repository.GetLatestNonEffectivePerSlotAsync(serviceFilter, ct);
         var lastSuccessfulPerSlot = await repository.GetLastSuccessfulPerSlotAsync(serviceFilter, ct);
+        var latestTerminalBeforeCurrent = await repository.GetLatestTerminalBeforeCurrentPerSlotAsync(serviceFilter, ct);
 
         var effectiveLookup = effectivePerSlot
             .ToDictionary(e => (e.Service, e.Environment));
         var nonEffectiveLookup = nonEffectivePerSlot
             .ToDictionary(e => (e.Service, e.Environment));
         var successLookup = lastSuccessfulPerSlot
+            .ToDictionary(e => (e.Service, e.Environment));
+        var prevTerminalLookup = latestTerminalBeforeCurrent
             .ToDictionary(e => (e.Service, e.Environment));
 
         // All slots visible in the matrix: every slot that has at least one event of any kind.
@@ -40,7 +43,7 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
                 Service: g.Key,
                 Slots: g.ToDictionary(
                     k => k.Environment,
-                    k => BuildSlot(k, effectiveLookup, nonEffectiveLookup, successLookup),
+                    k => BuildSlot(k, effectiveLookup, nonEffectiveLookup, successLookup, prevTerminalLookup),
                     StringComparer.Ordinal)))
             .ToList<MatrixRow>();
 
@@ -64,7 +67,8 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
         (string Service, string Environment) key,
         Dictionary<(string, string), DeploymentEvent> effectiveLookup,
         Dictionary<(string, string), DeploymentEvent> nonEffectiveLookup,
-        Dictionary<(string, string), DeploymentEvent> successLookup)
+        Dictionary<(string, string), DeploymentEvent> successLookup,
+        Dictionary<(string, string), DeploymentEvent> prevTerminalLookup)
     {
         effectiveLookup.TryGetValue(key, out var effective);
         nonEffectiveLookup.TryGetValue(key, out var nonEffective);
@@ -94,7 +98,15 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
         successLookup.TryGetValue(key, out var lastSuccessful);
         var resolvedLastSuccessful = current.Status == DeploymentStatus.Success ? null : lastSuccessful;
 
-        return new MatrixSlot(current, resolvedLastSuccessful, next);
+        // prev_failed: true when current is in-progress AND the latest terminal event
+        // (success|failure) strictly older than current is a failure.
+        // The guard on current.Status ensures semantics are preserved even if the
+        // repository returns results for non-in-progress slots (defensive).
+        prevTerminalLookup.TryGetValue(key, out var prevTerminal);
+        var prevFailed = current.Status == DeploymentStatus.InProgress
+                         && prevTerminal?.Status == DeploymentStatus.Failure;
+
+        return new MatrixSlot(current, resolvedLastSuccessful, next, prevFailed);
     }
 
     /// <summary>

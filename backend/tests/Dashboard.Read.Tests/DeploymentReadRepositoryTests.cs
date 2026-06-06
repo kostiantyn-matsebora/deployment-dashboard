@@ -364,6 +364,153 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         Assert.Equal("svc-a", result[0].Service);
     }
 
+    // ── GetLatestTerminalBeforeCurrentPerSlotAsync ────────────────────────────
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_NoEvents_ReturnsEmpty()
+    {
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_OnlyInProgress_ReturnsEmpty()
+    {
+        // No terminal event precedes the in-progress — result must be empty.
+        await SeedAsync(status: DeploymentStatus.InProgress);
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_SuccessIsCurrentNotInProgress_ReturnsEmpty()
+    {
+        // Current is success (S1) — prev_failed is not applicable; result must be empty.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        await SeedAsync(status: DeploymentStatus.Failure, happenedAt: baseTime);
+        await SeedAsync(status: DeploymentStatus.Success, happenedAt: baseTime.AddMinutes(5));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_FailureIsCurrentNotInProgress_ReturnsEmpty()
+    {
+        // Current is failure (S4) — prev_failed is not applicable; result must be empty.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        await SeedAsync(status: DeploymentStatus.Success, happenedAt: baseTime);
+        await SeedAsync(status: DeploymentStatus.Failure, happenedAt: baseTime.AddMinutes(5));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_PrevIsSuccess_ReturnsThatSuccess()
+    {
+        // S2: in-progress after a success — returns the success terminal.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        var successEv = await SeedAsync(status: DeploymentStatus.Success, happenedAt: baseTime);
+        await SeedAsync(status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(successEv.Id, result[0].Id);
+        Assert.Equal(DeploymentStatus.Success, result[0].Status);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_PrevIsFailure_ReturnsThatFailure()
+    {
+        // S6: in-progress after a failure — returns the failure terminal.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        var failureEv = await SeedAsync(status: DeploymentStatus.Failure, happenedAt: baseTime);
+        await SeedAsync(status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(failureEv.Id, result[0].Id);
+        Assert.Equal(DeploymentStatus.Failure, result[0].Status);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_S3_ReturnsLatestTerminalBeforeInProgress()
+    {
+        // S3: success → failure → in-progress. Latest terminal before in-progress = failure.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        await SeedAsync(status: DeploymentStatus.Success, happenedAt: baseTime);
+        var failureEv = await SeedAsync(status: DeploymentStatus.Failure, happenedAt: baseTime.AddMinutes(10));
+        await SeedAsync(status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(20));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(failureEv.Id, result[0].Id);
+        Assert.Equal(DeploymentStatus.Failure, result[0].Status);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_S2_ReturnsLatestTerminalBeforeInProgress()
+    {
+        // S2: failure → success → in-progress. Latest terminal before in-progress = success.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        await SeedAsync(status: DeploymentStatus.Failure, happenedAt: baseTime);
+        var successEv = await SeedAsync(status: DeploymentStatus.Success, happenedAt: baseTime.AddMinutes(10));
+        await SeedAsync(status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(20));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(successEv.Id, result[0].Id);
+        Assert.Equal(DeploymentStatus.Success, result[0].Status);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_MultipleSlots_ReturnsOnePerSlot()
+    {
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        // Slot 1 (svc-a/prod): success → in-progress
+        var s1Ev = await SeedAsync(service: "svc-a", environment: "prod",
+            status: DeploymentStatus.Success, happenedAt: baseTime);
+        await SeedAsync(service: "svc-a", environment: "prod",
+            status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5));
+        // Slot 2 (svc-a/dev): failure → in-progress
+        var s2Ev = await SeedAsync(service: "svc-a", environment: "dev",
+            status: DeploymentStatus.Failure, happenedAt: baseTime);
+        await SeedAsync(service: "svc-a", environment: "dev",
+            status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        var ids = result.Select(e => e.Id).ToHashSet();
+        Assert.Contains(s1Ev.Id, ids);
+        Assert.Contains(s2Ev.Id, ids);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_WithServiceFilter_ReturnsOnlyThatService()
+    {
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        await SeedAsync(service: "svc-a", status: DeploymentStatus.Failure, happenedAt: baseTime);
+        await SeedAsync(service: "svc-a", status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5));
+        await SeedAsync(service: "svc-b", status: DeploymentStatus.Failure, happenedAt: baseTime);
+        await SeedAsync(service: "svc-b", status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5));
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync("svc-a", CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal("svc-a", result[0].Service);
+    }
+
     // ── ListAsync — basic ─────────────────────────────────────────────────────
 
     [Fact]

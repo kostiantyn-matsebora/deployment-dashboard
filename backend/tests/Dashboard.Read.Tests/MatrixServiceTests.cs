@@ -16,15 +16,18 @@ public sealed class MatrixServiceTests
         private readonly IReadOnlyList<DeploymentEvent> _effective;
         private readonly IReadOnlyList<DeploymentEvent> _nonEffective;
         private readonly IReadOnlyList<DeploymentEvent> _lastSuccessful;
+        private readonly IReadOnlyList<DeploymentEvent> _prevTerminal;
 
         public StubRepository(
             IReadOnlyList<DeploymentEvent>? effective = null,
             IReadOnlyList<DeploymentEvent>? nonEffective = null,
-            IReadOnlyList<DeploymentEvent>? lastSuccessful = null)
+            IReadOnlyList<DeploymentEvent>? lastSuccessful = null,
+            IReadOnlyList<DeploymentEvent>? prevTerminal = null)
         {
             _effective = effective ?? [];
             _nonEffective = nonEffective ?? [];
             _lastSuccessful = lastSuccessful ?? [];
+            _prevTerminal = prevTerminal ?? [];
         }
 
         public Task<IReadOnlyList<DeploymentEvent>> GetEffectivePerSlotAsync(
@@ -38,6 +41,10 @@ public sealed class MatrixServiceTests
         public Task<IReadOnlyList<DeploymentEvent>> GetLastSuccessfulPerSlotAsync(
             string? serviceFilter, CancellationToken ct)
             => Task.FromResult(_lastSuccessful);
+
+        public Task<IReadOnlyList<DeploymentEvent>> GetLatestTerminalBeforeCurrentPerSlotAsync(
+            string? serviceFilter, CancellationToken ct)
+            => Task.FromResult(_prevTerminal);
 
         // Unused by MatrixService — throw to surface accidental calls.
         public Task<(IReadOnlyList<DeploymentEvent>, string?)> ListAsync(
@@ -162,6 +169,137 @@ public sealed class MatrixServiceTests
         var slot = result.Matrix.Rows.Single().Slots["prod"];
         Assert.Equal(currentEv.Id, slot.Current.Id);
         Assert.Equal(successEv.Id, slot.LastSuccessful!.Id);
+    }
+
+    // ── PrevFailed rules ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetMatrixAsync_InProgressNoPrevTerminal_PrevFailedFalse()
+    {
+        // S5: in-progress with no prior terminal — prev_failed must be false.
+        var current = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress);
+        var svc = new MatrixService(new StubRepository(effective: [current]));
+
+        var result = await svc.GetMatrixAsync(null, CancellationToken.None);
+
+        var slot = result.Matrix.Rows.Single().Slots["prod"];
+        Assert.False(slot.PrevFailed);
+    }
+
+    [Fact]
+    public async Task GetMatrixAsync_InProgressPrevTerminalIsSuccess_PrevFailedFalse()
+    {
+        // S2: in-progress with prior success — prev_failed must be false.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        var successEv = MakeEvent("svc-a", "prod", DeploymentStatus.Success, baseTime);
+        var currentEv = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime.AddMinutes(5));
+
+        // Repository returns the success event as the prev terminal.
+        var svc = new MatrixService(new StubRepository(
+            effective: [currentEv],
+            lastSuccessful: [successEv],
+            prevTerminal: [successEv]));
+
+        var result = await svc.GetMatrixAsync(null, CancellationToken.None);
+
+        var slot = result.Matrix.Rows.Single().Slots["prod"];
+        Assert.False(slot.PrevFailed);
+    }
+
+    [Fact]
+    public async Task GetMatrixAsync_InProgressPrevTerminalIsFailure_PrevFailedTrue()
+    {
+        // S3/S6: in-progress with prior failure — prev_failed must be true.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        var failureEv = MakeEvent("svc-a", "prod", DeploymentStatus.Failure, baseTime);
+        var currentEv = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime.AddMinutes(5));
+
+        // Repository returns the failure event as the prev terminal.
+        var svc = new MatrixService(new StubRepository(
+            effective: [currentEv],
+            prevTerminal: [failureEv]));
+
+        var result = await svc.GetMatrixAsync(null, CancellationToken.None);
+
+        var slot = result.Matrix.Rows.Single().Slots["prod"];
+        Assert.True(slot.PrevFailed);
+    }
+
+    [Fact]
+    public async Task GetMatrixAsync_SuccessCurrentNoPrevTerminal_PrevFailedFalse()
+    {
+        // S1: current is success — prev_failed is always false (not in-progress).
+        var ev = MakeEvent("svc-a", "prod", DeploymentStatus.Success);
+        var svc = new MatrixService(new StubRepository(effective: [ev]));
+
+        var result = await svc.GetMatrixAsync(null, CancellationToken.None);
+
+        var slot = result.Matrix.Rows.Single().Slots["prod"];
+        Assert.False(slot.PrevFailed);
+    }
+
+    [Fact]
+    public async Task GetMatrixAsync_FailureCurrentWithPrevFailure_PrevFailedFalse()
+    {
+        // S4: current is failure — prev_failed is always false (not in-progress),
+        // even if the repository returned a terminal event for this slot.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        var olderFailureEv = MakeEvent("svc-a", "prod", DeploymentStatus.Failure, baseTime);
+        var currentEv = MakeEvent("svc-a", "prod", DeploymentStatus.Failure, baseTime.AddMinutes(5));
+
+        var svc = new MatrixService(new StubRepository(
+            effective: [currentEv],
+            prevTerminal: [olderFailureEv]));
+
+        var result = await svc.GetMatrixAsync(null, CancellationToken.None);
+
+        // prev_failed is derived from the repository result, not current status guard —
+        // the repository should not return results for non-in-progress currents, so
+        // prevTerminalLookup for this slot is empty and PrevFailed = false.
+        var slot = result.Matrix.Rows.Single().Slots["prod"];
+        Assert.False(slot.PrevFailed);
+    }
+
+    [Fact]
+    public async Task GetMatrixAsync_S3_InProgressWithSuccessAndPrevFailure_PrevFailedTrueLastSuccessfulSet()
+    {
+        // S3: in-progress + prior failure + older success (last_successful set, prev_failed true).
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        var successEv = MakeEvent("svc-a", "prod", DeploymentStatus.Success, baseTime);
+        var failureEv = MakeEvent("svc-a", "prod", DeploymentStatus.Failure, baseTime.AddMinutes(10));
+        var currentEv = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime.AddMinutes(20));
+
+        var svc = new MatrixService(new StubRepository(
+            effective: [currentEv],
+            lastSuccessful: [successEv],
+            prevTerminal: [failureEv]));
+
+        var result = await svc.GetMatrixAsync(null, CancellationToken.None);
+
+        var slot = result.Matrix.Rows.Single().Slots["prod"];
+        Assert.Equal(currentEv.Id, slot.Current.Id);
+        Assert.Equal(successEv.Id, slot.LastSuccessful!.Id);
+        Assert.True(slot.PrevFailed);
+    }
+
+    [Fact]
+    public async Task GetMatrixAsync_S6_InProgressWithPrevFailureNoSuccess_PrevFailedTrueLastSuccessfulNull()
+    {
+        // S6: in-progress + prior failure + no success history.
+        var baseTime = new DateTimeOffset(2026, 5, 28, 10, 0, 0, TimeSpan.Zero);
+        var failureEv = MakeEvent("svc-a", "prod", DeploymentStatus.Failure, baseTime);
+        var currentEv = MakeEvent("svc-a", "prod", DeploymentStatus.InProgress, baseTime.AddMinutes(10));
+
+        var svc = new MatrixService(new StubRepository(
+            effective: [currentEv],
+            prevTerminal: [failureEv]));
+
+        var result = await svc.GetMatrixAsync(null, CancellationToken.None);
+
+        var slot = result.Matrix.Rows.Single().Slots["prod"];
+        Assert.Equal(currentEv.Id, slot.Current.Id);
+        Assert.Null(slot.LastSuccessful);
+        Assert.True(slot.PrevFailed);
     }
 
     // ── Next rules ────────────────────────────────────────────────────────────

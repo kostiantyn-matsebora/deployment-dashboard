@@ -127,6 +127,53 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
             .ToList();
     }
 
+    public async Task<IReadOnlyList<DeploymentEvent>> GetLatestTerminalBeforeCurrentPerSlotAsync(
+        string? serviceFilter, CancellationToken ct)
+    {
+        var q = db.DeploymentEvents.AsQueryable();
+        if (serviceFilter is not null)
+            q = q.Where(e => e.Service == serviceFilter);
+
+        // Terminal = success | failure.
+        var terminalStatuses = new[] { DeploymentStatus.Success, DeploymentStatus.Failure };
+
+        // We want: the latest terminal event per slot, provided that:
+        //   (a) the latest EFFECTIVE event in the same slot is in-progress (prev_failed is
+        //       only meaningful when current is in-progress), AND
+        //   (b) no newer terminal event exists in the same slot
+        //       (i.e. this event IS the latest terminal).
+        //
+        // Effective = in-progress | success | failure.
+        var effectiveStatuses = new[] { DeploymentStatus.InProgress, DeploymentStatus.Success, DeploymentStatus.Failure };
+
+        var rawTerminal = await q
+            .Where(e => terminalStatuses.Contains(e.Status) &&
+                        // (b) This is the latest terminal event in the slot.
+                        !db.DeploymentEvents.Any(e2 =>
+                            e2.Service == e.Service &&
+                            e2.Environment == e.Environment &&
+                            terminalStatuses.Contains(e2.Status) &&
+                            e2.HappenedAt > e.HappenedAt) &&
+                        // (a) The latest effective event in this slot is in-progress.
+                        db.DeploymentEvents.Any(e2 =>
+                            e2.Service == e.Service &&
+                            e2.Environment == e.Environment &&
+                            e2.Status == DeploymentStatus.InProgress &&
+                            e2.HappenedAt > e.HappenedAt &&
+                            !db.DeploymentEvents.Any(e3 =>
+                                e3.Service == e.Service &&
+                                e3.Environment == e.Environment &&
+                                effectiveStatuses.Contains(e3.Status) &&
+                                e3.HappenedAt > e2.HappenedAt)))
+            .ToListAsync(ct);
+
+        // In-memory tiebreak: keep the event with the greatest Id per slot.
+        return rawTerminal
+            .GroupBy(e => (e.Service, e.Environment))
+            .Select(g => g.OrderByDescending(e => e.Id).First())
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<string>> GetDistinctServicesAsync(CancellationToken ct)
         => await db.DeploymentEvents
             .Select(e => e.Service)

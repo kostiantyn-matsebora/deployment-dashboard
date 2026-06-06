@@ -28,4 +28,5 @@ public sealed record MatrixRow(
 public sealed record MatrixSlot(
     DeploymentEvent Current,
     DeploymentEvent? LastSuccessful,
-    DeploymentEvent? Next = null);
+    DeploymentEvent? Next = null,
+    bool PrevFailed = false);

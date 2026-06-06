@@ -978,6 +978,15 @@ components:
             Omitted when `current.status == success` (then `current` IS the last
             successful). Also omitted when no successful deployment has ever
             occurred in this slot.
+        prev_failed:
+          type: boolean
+          description: |
+            Present and `true` when `current.status == in-progress` AND the most recent
+            terminal deployment (status `success` | `failure`) strictly older than `current`
+            in this slot was a **failure**. Omitted (or `false`) when `current` is not
+            in-progress, when no prior terminal deployment exists, or when the prior
+            terminal deployment succeeded. Distinguishes S3/S6 (prev failed) from S2/S5
+            (prev succeeded or no history).
         next:
           $ref: '#/components/schemas/DeploymentEvent'
           description: |
