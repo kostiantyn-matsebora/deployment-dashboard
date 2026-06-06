@@ -14,12 +14,19 @@ export interface StatusPayload {
   payload:     { reset_id: string };
 }
 
+export interface RunStatusPayload {
+  event_type:  'status';
+  state:       'running' | 'idle';
+  occurred_at: string;
+  payload:     { run_id: string; detail?: string };
+}
+
 /**
- * POST /api/control/events — component event reporting.
+ * POST /api/control/events â€” component event reporting.
  *
- * Auth:  X-Api-Key (same key used for ingest; §4 api-guidelines).
- * Ident: X-Component-Id header (required by server, §11 api-guidelines).
- * No retry — fire-and-forget; the server's 2 h retention window survives
+ * Auth:  X-Api-Key (same key used for ingest; Â§4 api-guidelines).
+ * Ident: X-Component-Id header (required by server, Â§11 api-guidelines).
+ * No retry â€” fire-and-forget; the server's 2 h retention window survives
  * transient failures; re-connection + replay handles recovery.
  */
 export class ControlEventsClient {
@@ -54,8 +61,30 @@ export class ControlEventsClient {
     await this._postEvent(body, resetId);
   }
 
+  /** Post a run-start status event (event_type=status, state=running) correlated by runId. */
+  async postRunStart(runId: string, detail?: string): Promise<void> {
+    const body: RunStatusPayload = {
+      event_type:  'status',
+      state:       'running',
+      occurred_at: new Date().toISOString(),
+      payload:     detail !== undefined ? { run_id: runId, detail } : { run_id: runId },
+    };
+    await this._postEvent(body, runId);
+  }
+
+  /** Post a run-complete status event (event_type=status, state=idle) correlated by runId. */
+  async postRunComplete(runId: string): Promise<void> {
+    const body: RunStatusPayload = {
+      event_type:  'status',
+      state:       'idle',
+      occurred_at: new Date().toISOString(),
+      payload:     { run_id: runId },
+    };
+    await this._postEvent(body, runId);
+  }
+
   private async _postEvent(
-    body: ResetAckPayload | StatusPayload,
+    body: ResetAckPayload | StatusPayload | RunStatusPayload,
     correlationId?: string,
   ): Promise<void> {
     const headers: Record<string, string> = {

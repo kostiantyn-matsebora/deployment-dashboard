@@ -79,7 +79,7 @@ describe('ControlEventsClient', () => {
       expect(headers['X-Component-Id']).toBe('custom-driver');
     });
 
-    it('does not throw on network error — logs and swallows', async () => {
+    it('does not throw on network error â€” logs and swallows', async () => {
       const mockFetch = jest.fn().mockRejectedValue(new Error('Network'));
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
       await expect(makeClient(mockFetch).postResetAck(RESET_ID)).resolves.toBeUndefined();
@@ -116,6 +116,104 @@ describe('ControlEventsClient', () => {
       await makeClient(mockFetch).postStatusRunning(RESET_ID);
       const { headers } = mockFetch.mock.calls[0][1];
       expect(headers['X-Correlation-Id']).toBe(RESET_ID);
+    });
+  });
+
+  describe('postRunStart', () => {
+    const RUN_ID = 'run-00000000-1111-2222-3333-444444444444';
+
+    it('sends event_type=status and state=running', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunStart(RUN_ID);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.event_type).toBe('status');
+      expect(body.state).toBe('running');
+    });
+
+    it('includes payload.run_id matching the runId', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunStart(RUN_ID);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.payload.run_id).toBe(RUN_ID);
+    });
+
+    it('includes payload.detail when provided', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunStart(RUN_ID, 'ingest demo started');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.payload.detail).toBe('ingest demo started');
+    });
+
+    it('omits payload.detail when not provided', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunStart(RUN_ID);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.payload.detail).toBeUndefined();
+    });
+
+    it('sends X-Correlation-Id matching the runId', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunStart(RUN_ID);
+      const { headers } = mockFetch.mock.calls[0][1];
+      expect(headers['X-Correlation-Id']).toBe(RUN_ID);
+    });
+
+    it('sends X-Api-Key and X-Component-Id headers', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunStart(RUN_ID);
+      const { headers } = mockFetch.mock.calls[0][1];
+      expect(headers['X-Api-Key']).toBe(API_KEY);
+      expect(headers['X-Component-Id']).toBe(COMPONENT_ID);
+    });
+
+    it('distinct run ids produce distinct X-Correlation-Id values', async () => {
+      const RUN_ID_2  = 'run-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      const client    = makeClient(mockFetch);
+      await client.postRunStart(RUN_ID);
+      await client.postRunStart(RUN_ID_2);
+      const corr1 = mockFetch.mock.calls[0][1].headers['X-Correlation-Id'];
+      const corr2 = mockFetch.mock.calls[1][1].headers['X-Correlation-Id'];
+      expect(corr1).toBe(RUN_ID);
+      expect(corr2).toBe(RUN_ID_2);
+      expect(corr1).not.toBe(corr2);
+    });
+  });
+
+  describe('postRunComplete', () => {
+    const RUN_ID = 'run-00000000-1111-2222-3333-444444444444';
+
+    it('sends event_type=status and state=idle', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunComplete(RUN_ID);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.event_type).toBe('status');
+      expect(body.state).toBe('idle');
+    });
+
+    it('includes payload.run_id matching the runId', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunComplete(RUN_ID);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.payload.run_id).toBe(RUN_ID);
+    });
+
+    it('sends X-Correlation-Id matching the runId', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      await makeClient(mockFetch).postRunComplete(RUN_ID);
+      const { headers } = mockFetch.mock.calls[0][1];
+      expect(headers['X-Correlation-Id']).toBe(RUN_ID);
+    });
+
+    it('run-start and run-complete for same runId share the correlation id', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ status: 204 });
+      const client    = makeClient(mockFetch);
+      await client.postRunStart(RUN_ID, 'ingest started');
+      await client.postRunComplete(RUN_ID);
+      const corrStart    = mockFetch.mock.calls[0][1].headers['X-Correlation-Id'];
+      const corrComplete = mockFetch.mock.calls[1][1].headers['X-Correlation-Id'];
+      expect(corrStart).toBe(RUN_ID);
+      expect(corrComplete).toBe(RUN_ID);
     });
   });
 });

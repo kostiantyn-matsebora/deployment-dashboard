@@ -13,11 +13,11 @@ import { ControlEventsClient } from '../control/control-events.client';
 export interface IngestOptions {
   dataset?:  string;   // 'demo' | 'random'  (default 'demo')
   reset?:    boolean;  // call POST /api/control/reset first
-  count?:    number;   // random only — number of service scenarios (1–10, default 10 = all services)
+  count?:    number;   // random only â€” number of service scenarios (1â€“10, default 10 = all services)
   delay_ms?: number;   // overrides EMIT_DELAY_MS
 }
 
-/** Extended status including reset-participation fields (§4.1). */
+/** Extended status including reset-participation fields (Â§4.1). */
 export interface DemoStatus extends RunnerStatus {
   reset_state: 'idle' | 'blocked';
   reset_id:    string | null;
@@ -27,7 +27,7 @@ export interface DemoStatus extends RunnerStatus {
  * Upper bound for the per-event emit delay (ms). The delay is forwarded to
  * setTimeout in the ScenarioRunner; an unbounded, caller-supplied value would
  * let a single request schedule an enormous timer and stall the runner
- * indefinitely (resource exhaustion — CodeQL js/resource-exhaustion). 60s per
+ * indefinitely (resource exhaustion â€” CodeQL js/resource-exhaustion). 60s per
  * event is far beyond any legitimate demo pacing.
  */
 export const MAX_EMIT_DELAY_MS = 60_000;
@@ -48,6 +48,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
   private scenarios: Scenario[] = [];
   private streamSub:     Subscription | null = null;
   private emitStreamSub: Subscription | null = null;
+  private eventsClient:  ControlEventsClient | null = null;
 
   /** SSE fan-out re-exported for controller subscriptions. */
   readonly stream$ = new Subject<StreamFrame>();
@@ -67,7 +68,9 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
       config.apiKey,
       config.componentId,
     );
+    this.eventsClient = eventsClient;
     this.resetCoordinator.registerEventsClient(eventsClient);
+    this.emitService.setEventsClient(eventsClient);
 
     try {
       this.scenarios = loadScenarios(config.scenariosDir);
@@ -90,7 +93,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     this.stream$.complete();
   }
 
-  // ── ResetParticipant ─────────────────────────────────────────────────────
+  // â”€â”€ ResetParticipant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** Called by ResetCoordinator on reset-initiated: stop work, enter blocked state. */
   stopWork(): void {
@@ -104,7 +107,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     this.runner.reset();
   }
 
-  // ── Queries ───────────────────────────────────────────────────────────────
+  // â”€â”€ Queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   getStatus(): DemoStatus {
     return {
@@ -131,10 +134,10 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     return { emitting: this.emitService.emitting };
   }
 
-  // ── Ingest ────────────────────────────────────────────────────────────────
+  // â”€â”€ Ingest â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Unified ingest entry point for the new control group (§4.4).
+   * Unified ingest entry point for the new control group (Â§4.4).
    * - If reset=true: calls POST /api/control/reset on the target before starting.
    * - dataset='demo': posts the demo-set scenario events.
    * - dataset='random': generates and posts `count` random events.
@@ -156,11 +159,11 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
         this.resetCoordinator.expectCycle(result.reset_id);
         // Wait for the reset cycle to complete before ingesting.  The coordinator
         // will be blocked by its own reset-initiated handler during this window;
-        // awaitCycleComplete only reads state and registers a waiter — it does
+        // awaitCycleComplete only reads state and registers a waiter â€” it does
         // not call stopWork/unblockWork, so there is no deadlock risk.
         await this.resetCoordinator.awaitCycleComplete(result.reset_id);
       } else {
-        console.warn('[demo-driver] API reset accepted but returned no reset_id — proceeding without waiting');
+        console.warn('[demo-driver] API reset accepted but returned no reset_id â€” proceeding without waiting');
       }
     }
 
@@ -174,17 +177,36 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
       `demo-driver/${dataset}`,
     );
 
+    // Generate a per-run correlation id for component-event grouping (Â§4.12).
+    const runId = crypto.randomUUID();
+    const eventsClient = this.eventsClient;
+    if (eventsClient) {
+      eventsClient.postRunStart(runId, `ingest ${dataset} started`).catch(() => { /* fire-and-forget */ });
+    }
+
+    const onRunComplete = () => {
+      if (eventsClient) {
+        eventsClient.postRunComplete(runId).catch(() => { /* fire-and-forget */ });
+      }
+    };
+
     if (dataset === 'random') {
       const events = generateRandomEvents(Math.min(Math.max(1, count), SERVICE_COUNT));
-      this.runner.runWire('random', events, client, effectiveDelay).catch(err => {
-        console.error('[demo-driver] runner error:', err);
-      });
+      this.runner.runWire('random', events, client, effectiveDelay)
+        .then(onRunComplete)
+        .catch(err => {
+          console.error('[demo-driver] runner error:', err);
+          onRunComplete();
+        });
     } else {
       const scenario = this.scenarios.find(s => s.name === 'demo-set') ?? this.scenarios[0];
       if (!scenario) throw new Error('No demo scenario available');
-      this.runner.run(scenario.name, scenario.events, client, effectiveDelay).catch(err => {
-        console.error('[demo-driver] runner error:', err);
-      });
+      this.runner.run(scenario.name, scenario.events, client, effectiveDelay)
+        .then(onRunComplete)
+        .catch(err => {
+          console.error('[demo-driver] runner error:', err);
+          onRunComplete();
+        });
     }
 
     return this.getStatus();
@@ -196,7 +218,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     return this.getStatus();
   }
 
-  // ── Live Emission ─────────────────────────────────────────────────────────
+  // â”€â”€ Live Emission â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Enable / disable periodic random event emission.
@@ -212,7 +234,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     return { emitting: this.emitService.emitting };
   }
 
-  // ── API Reset ─────────────────────────────────────────────────────────────
+  // â”€â”€ API Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /** Proxy POST /api/control/reset to the write-API target. */
   async resetApi(): Promise<ResetResult> {
@@ -221,11 +243,11 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     return ctrl.resetApi();
   }
 
-  // ── Legacy scenario commands (backwards compat) ───────────────────────────
+  // â”€â”€ Legacy scenario commands (backwards compat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Start a named scenario run.
-   * Idempotent: returns current status when already running (§4.2).
+   * Idempotent: returns current status when already running (Â§4.2).
    * delayMs overrides EMIT_DELAY_MS if provided.
    */
   async start(scenarioName: string, delayMs?: number): Promise<DemoStatus> {
