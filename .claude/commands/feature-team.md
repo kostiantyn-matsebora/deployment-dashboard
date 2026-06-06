@@ -1,5 +1,5 @@
 ---
-description: Launch a plan-and-confirm Claude agent team for a multi-layer issue. The lead does docs-first intake, drafts a lane map + member roster, SURFACES the plan, and only TeamCreate + spawns members after approval. Implements team-process/.
+description: Launch a plan-and-confirm Claude agent team for a multi-layer issue. The lead does docs-first intake, drafts a lane map + member roster, SURFACES the plan, and only TeamCreate + spawns members after approval. Implements .claude/team-process/.
 argument-hint: <issue-number | task description>
 ---
 
@@ -7,7 +7,7 @@ argument-hint: <issue-number | task description>
 
 Run a non-trivial, multi-layer change as a **Claude agent team** (multiple sessions,
 each spawned in the context of a project agent, coordinating via `SendMessage` + a
-shared task list). The playbook is [`team-process/`](../../team-process/process.md);
+shared task list). The playbook is [`.claude/team-process/`](../team-process/process.md);
 this command is its runtime launcher.
 
 **You are the lead/orchestrator.** Teams are runtime-only — nothing here is checked in
@@ -22,12 +22,12 @@ project settings. If unset, stop and tell the user to enable it.
 
 | Role | `subagent_type` |
 |---|---|
-| [contract](../../team-process/roles/contract.md) | `api-architect` |
-| [backend](../../team-process/roles/backend.md) | `backend-developer` |
-| [frontend](../../team-process/roles/frontend.md) | `frontend-developer` |
-| [infrastructure](../../team-process/roles/infrastructure.md) | `deployment-engineer` |
-| [testing](../../team-process/roles/testing.md) | `testing-specialist` |
-| [docs](../../team-process/roles/docs.md) | `docs-keeper` |
+| [contract](../team-process/roles/contract.md) | `api-architect` |
+| [backend](../team-process/roles/backend.md) | `backend-developer` |
+| [frontend](../team-process/roles/frontend.md) | `frontend-developer` |
+| [infrastructure](../team-process/roles/infrastructure.md) | `deployment-engineer` |
+| [testing](../team-process/roles/testing.md) | `testing-specialist` |
+| [docs](../team-process/roles/docs.md) | `docs-keeper` |
 
 Spawn only the roles the change actually needs (routing table in `process.md`).
 
@@ -60,7 +60,7 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
      same-file clobbers).
    - `run_in_background: true` so the lead can coordinate while members work.
    - **Prompt = scoped brief:** owning spec + the member's named lane + "inherit your
-     role file `team-process/roles/<role>.md` and its guardrails" + an explicit
+     role file `.claude/team-process/roles/<role>.md` and its guardrails" + an explicit
      self-verify gate (build + **unit tests for your own change** + lint, report actual
      results) + "do NOT commit/push; hand changes back to the lead."
    - The **testing member** additionally owns the wider net (API / integration / e2e +
@@ -88,7 +88,7 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
     the default branch directly.
 13. **`TeamDelete`** once integrated.
 
-## Guardrails (inherited from team-process/process.md — binding)
+## Guardrails (inherited from .claude/team-process/process.md — binding)
 
 Docs-first · single integrator (members never commit) · stay in your lane · repo hygiene
 (match EOL/format; CI platform's result wins) · self-verify before returning · report —

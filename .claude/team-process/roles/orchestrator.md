@@ -15,6 +15,7 @@ right roles and owning the integration nobody else can.
 ## Owns
 
 - The plan, the dispatch, and the **ownership-lane map** (who may touch what).
+- The **run ledger** — the authoritative plan + per-wave record; the lead's durable state, not the conversation.
 - Every `git` mutation: branch, commit, push, PR. **Members never commit.**
 - Integration: merging lanes, running the full gate suite, reconciling drift.
 
@@ -30,15 +31,31 @@ right roles and owning the integration nobody else can.
    mixed EOL — before they compound.
 6. **Integrate & verify.** Merge lanes; have `testing` run the wider net (API/integration/
    e2e + regression).
-7. **Fix loop.** On any red, diagnose and `FIX` to the owning specialist; re-run after each
-   fix; loop until green. Never ship red.
+7. **Fix loop.** On red, read the `FINDING`, pick the owning specialist, and issue a `FIX` —
+   **route, don't investigate** (the deep dig is the specialist's). Re-run after each fix; loop
+   until green. Never ship red.
 8. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
 
 ## Communication
 
-Hub: members report to the orchestrator via `RESULT` / `FINDING`; it dispatches via
-`BRIEF` / `FIX` and synthesizes. Member ↔ member only via the `contract` role to settle an
-interface, captured as an `ARTIFACT`. Formats: `process.md` → *Communication protocol*.
+Hub-and-spoke; formats in `process.md` → *Communication protocol*.
+
+- **Member → orchestrator:** `RESULT` / `FINDING`.
+- **Orchestrator → member:** `BRIEF` / `FIX`; the orchestrator synthesizes.
+- **Member ↔ member:** only via the `contract` role to settle an interface, captured as an `ARTIFACT`.
+
+## Context economy
+
+The lead runs on the most expensive model and persists across the whole run — keep its context flat.
+
+- **Traffic in compressed messages, never raw artifacts.** Read `RESULT`/`FINDING`/`ARTIFACT` —
+  not test logs, full diffs, or source. A decision needing an artifact read → delegate it.
+- **Working set = `plan + current wave`.** Fold each `RESULT` into the **run ledger**, then drop
+  the verbatim message. The ledger (not the conversation) is the source of truth — auditable, and
+  it survives a compacted or dropped session. Team mode: the shared task list is the ledger.
+- **Diagnose to route, not to fix** — deep investigation is the owning specialist's (see `process.md` → *Fix loop*).
+- **The plan prefix is stable → prompt-cacheable.** Phase boundaries are checkpoints: a fresh lead
+  reads the ledger, not the transcript.
 
 ## Self-verify gate
 

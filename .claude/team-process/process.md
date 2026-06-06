@@ -33,10 +33,25 @@ team-lead agent; orchestration is a mode. Route each change to its owning role:
 Roles + guardrails are identical across modes; only the substrate differs. **Default flow
 is unchanged; teams never replace it — opt-in escalation only.**
 
-| Mode | Start | Substrate | When |
-|---|---|---|---|
-| **Subagents** *(default)* | Orchestrator dispatches the owning role as an in-session subagent. | `Agent`/Task subagents in the lead's session. | Most work: one/few surfaces, handled by one integrator + sequential/parallel subagents. |
-| **Agent team** *(opt-in)* | `/feature-team <issue>`: plan-confirm → `TeamCreate` + spawn role members as separate sessions. | Separate Claude sessions, each `subagent_type` = role. | ≥3 layers sharing a contract, where per-role context + peer contract-negotiation pay off. |
+| Mode | How it runs | When |
+|---|---|---|
+| **In-session subagents** *(default)* | The orchestrator dispatches the owning role as an in-session subagent that reports back. | Most work: one/few surfaces, handled by one integrator + sequential/parallel subagents. |
+| **Spawned team** *(opt-in)* | Role members run as separate, coordinated sessions under a plan-confirm launch; the lead integrates. | ≥3 layers sharing a contract, where per-role context + peer contract-negotiation pay off. |
+
+The modes are runtime-neutral; each runtime maps them to its own primitives. Two bindings ship:
+
+**Claude Code:**
+
+- In-session subagent = the `Agent`/Task tool.
+- Spawned team = `/feature-team <issue>` → plan-confirm → `TeamCreate` + spawn members (`subagent_type` = role), coordinating via `SendMessage` + a shared task list.
+- Project bindings: `CLAUDE.md` § *Project bindings*.
+
+**GitHub Copilot:**
+
+- Role member = a custom agent `.github/agents/<role>.agent.md` (body = the role anchor), invoked `@<role>`.
+- In-session subagent = invoke `@<role>` directly.
+- Spawned team = `/fleet` (Copilot CLI) — decomposes the objective into parallel tracks dispatched to the role agents; the lead integrates.
+- Project bindings: `.github/copilot-instructions.md`.
 
 ## Single-integrator model
 
@@ -48,6 +63,12 @@ the orchestrator reviews, reconciles, commits, ships — this keeps the change a
   interface directly with consumers — the result is an `ARTIFACT`, never left as chat.
 - **Fan-out is deterministic.** Drive parallel phases from an explicit plan, not chatter
   — repeatable + visible.
+- **The orchestrator traffics in compressed messages, not raw artifacts.** It reads
+  `RESULT`/`FINDING`/`ARTIFACT` — never test logs, full diffs, or source. A decision that
+  needs an artifact read → delegate it and get back a compressed message.
+- **Keep the lead's working set to `plan + current wave`.**
+  - Maintain a durable **run ledger** (lane map + one line per wave: changed / decided / deferred) as the authoritative state.
+  - Fold each `RESULT` into it and drop the verbatim message. In team mode the shared task list is the ledger.
 
 ## Communication protocol
 
@@ -121,10 +142,12 @@ Testing is split by ownership; failures route through the orchestrator.
   code (where applicable) and reports actual counts in `RESULT`. No change handed back
   unit-untested.
 - **`testing` owns the wider net** — API/integration/e2e/regression, run after integration.
-  It reports red to the orchestrator (failing `RESULT` / `FINDING`), never fixes production
-  code (may fix the *tests*, never weaken them).
-- **Orchestrator diagnoses + assigns.** On red, issues a `FIX` to the owning specialist,
-  re-runs after each fix, loops until green. Never ships red.
+  - Reports red to the orchestrator (failing `RESULT` / `FINDING`).
+  - Never fixes production code; may fix the *tests*, never weaken them.
+- **Orchestrator diagnoses to *route*, not to fix.**
+  - From the `FINDING` (`expect`/`actual`/`suspect`) it picks the owning specialist and issues a `FIX`; it does not open the code itself.
+  - **Deep investigation is the owning agent's prerogative**, in that agent's own context.
+  - Re-run after each fix; loop until green. Never ship red.
 
 ## Standing guardrails — every role inherits these
 
@@ -133,8 +156,10 @@ Testing is split by ownership; failures route through the orchestrator.
 2. **Single integrator.** Members never commit/push/PR — hand back via `RESULT`.
 3. **Stay in your lane.** Touch only `BRIEF.lane` files. Need more? `RESULT.follow` or a
    `FINDING` — don't make the change.
-4. **Repo hygiene.** Match the project's line-ending + format convention; run the formatter;
-   no mixed EOL. OS-dependent formatter differs from CI → the CI platform's result wins.
+4. **Repo hygiene.**
+   - Match the project's line-ending + format convention; run the formatter.
+   - Never introduce mixed EOL.
+   - OS-dependent formatter differs from CI → the CI platform's result wins.
 5. **Self-verify before returning.** Build + tests + lint green; `RESULT.gate` carries
    actual counts/failures/skips. No "should pass."
 6. **Report, don't act, on scope changes.** Blocker / contradiction / "impossible" → a
