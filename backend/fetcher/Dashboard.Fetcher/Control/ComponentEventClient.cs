@@ -29,7 +29,8 @@ public sealed class ComponentEventClient(
             OccurredAt: DateTimeOffset.UtcNow,
             Payload: new { reset_id = resetId });
 
-        await PostAsync(body, ct);
+        // Correlate reset-ack back to the reset event that triggered it (§265).
+        await PostAsync(body, correlationId: resetId, ct);
     }
 
     /// <inheritdoc />
@@ -41,7 +42,8 @@ public sealed class ComponentEventClient(
             OccurredAt: DateTimeOffset.UtcNow,
             Payload: new { reset_id = resetId });
 
-        await PostAsync(body, ct);
+        // Correlate post-reset status back to the reset event (§265).
+        await PostAsync(body, correlationId: resetId, ct);
     }
 
     /// <inheritdoc />
@@ -68,18 +70,23 @@ public sealed class ComponentEventClient(
                 OwnUsed: snapshot.Used,
                 ResetAt: resetAt));
 
-        await PostAsync(body, ct);
+        // Non-reset post — no correlation header.
+        await PostAsync(body, correlationId: null, ct);
     }
 
-    private async Task PostAsync(ComponentEventBody body, CancellationToken ct)
+    private async Task PostAsync(ComponentEventBody body, string? correlationId, CancellationToken ct)
     {
         try
         {
-            var response = await http.PostAsJsonAsync(
-                "/api/control/events",
-                body,
-                JsonOptions,
-                ct);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
+            {
+                Content = JsonContent.Create(body, options: JsonOptions),
+            };
+
+            if (correlationId is not null)
+                request.Headers.Add("X-Correlation-Id", correlationId);
+
+            var response = await http.SendAsync(request, ct);
 
             if (!response.IsSuccessStatusCode)
                 logger.LogWarning(
