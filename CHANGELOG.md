@@ -9,6 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [0.9.0] - 2026-06-06
 
+### Added
+
+- **Five new deployment statuses, surfaced end-to-end.** Beyond `in-progress` / `success` / `failure`, the dashboard now distinguishes `pending`, `queued`, `waiting`, `cancelled`, and `rejected` (an 8-value status enum). The three *effective* statuses (`success` / `in-progress` / `failure`) still drive the matrix tile and swimlane card colour; the five new statuses surface as a distinct **"next"** badge for a deployment beyond the live one, and all eight appear in deployment history and the inspector. The contract gains `MatrixSlot.next` (the latest non-effective deployment, when newer than the current effective one) and `MatrixSlot.prev_failed`.
+- **Cancelled and not-approved deployments are distinguished from plain failures.** The fetcher derives `cancelled` from the associated workflow-run conclusion and `rejected` from pending-deployment reviews — signals that live beyond GitHub's `deployment_status` pipeline, which has no `cancelled`/`rejected` state of its own.
+- **"Never deployed" neutral state.** A slot whose only/latest deployment is non-effective with no effective baseline now renders a neutral tile and status chip instead of a spinner or a failure.
+
+### Fixed
+
+- **Demo rate-limit count no longer inflates on unchanged polls.** The github-emulator now honours `If-None-Match` (returning `304` with a content ETag) and exempts `GET /rate_limit`, so repeated fetcher polls of unchanged data no longer grow the dashboard's reported request count.
+
+### Security
+
+- `.gitignore` now ignores all `**/.env.*` files (while keeping `.env.example`), so environment files containing secrets cannot be committed accidentally.
+
 
 ## [0.8.0] - 2026-06-05
 
