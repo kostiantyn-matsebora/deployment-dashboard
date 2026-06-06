@@ -12,7 +12,7 @@ Choreography-driven, event-based system-state reset across `Dashboard.Api` and i
 | `reset-started` | Acks in OR timeout elapsed | `*` | Reset window opened; ingest briefly returns `503`. |
 | `reset-completed` | Data cleared, gates released | `*` | Recover: clear state, re-ingest/backfill, unblock, report `running`. |
 
-Acks are `POST /api/control/events` with `event_type: reset-ack`, `state: paused`, `payload.reset_id` correlating to the `reset-initiated` event id.
+Acks are `POST /api/control/events` with `event_type: reset-ack`, `state: paused`, `payload.reset_id` correlating to the `reset-initiated` event id. The orchestrator gates **only** on `payload.reset_id`. Components SHOULD also send the optional `X-Correlation-Id: <reset_id>` header — stored as the row's `correlation_id` and echoed on the component-events SSE frame — but this is observability only; it does **not** drive the ack-gate (see [`API_SPECIFICATION.md` §7 Channel 3](../API_SPECIFICATION.md#channel-3--component_acks-reset-ack-fan-in)).
 
 ## Sequence
 
@@ -99,7 +99,7 @@ stateDiagram-v2
 | 2 | Proceed when **both** acks (fetcher + demo-driver) are in **OR** `AckTimeoutSeconds` elapses; default **10 s**. |
 | 3 | Reset clears **only** `deployment_events` + `fetcher_state`; control/component tables left to the 2 h retention job. |
 | 4 | Event types `reset-initiated` / `reset-started` / `reset-completed`; the legacy `reset` type is dropped (no alias). |
-| 5 | Ack = `POST /api/control/events` `{event_type: reset-ack, state: paused, payload.reset_id}`. |
+| 5 | Ack = `POST /api/control/events` `{event_type: reset-ack, state: paused, payload.reset_id}`. The ack-gate keys on `payload.reset_id` (unchanged). The optional `X-Correlation-Id: <reset_id>` header is additive observability (stored as `correlation_id`, echoed on the SSE frame) and does not drive the gate (#265). |
 | 6 | No status endpoint — reset progress is observable via the control-stream events only. |
 
 Config keys (appsettings + env override): `AckTimeoutSeconds` (default 10), `ExpectedComponents` (default `dashboard-fetcher`, `demo-driver`), `GateMaxTtlSeconds` (default 60).

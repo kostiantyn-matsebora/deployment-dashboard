@@ -144,6 +144,7 @@ Stores operational events posted by components via `POST /api/control/events`.
 |---|---|---|---|
 | `id` | uuid PK | no | `Guid.CreateVersion7()` — sort key |
 | `component_id` | text | no | from `X-Component-Id` header; `^[a-z0-9][a-z0-9.-]{0,127}$` |
+| `correlation_id` | text | yes | from optional `X-Correlation-Id` header; opaque, ≤ 128 chars; `null` if absent. For reset = the `reset-initiated` event id. Echoed on the SSE frame; **not** the ack-gate key |
 | `event_type` | text | no | `status` \| `heartbeat` \| `error` \| … (open) |
 | `state` | text | no | `running` \| `idle` \| `paused` \| `error` |
 | `detail` | text | yes | ≤ 512 chars |
@@ -155,6 +156,7 @@ Stores operational events posted by components via `POST /api/control/events`.
 - PK `(id)`.
 - `(component_id, received_at DESC, id DESC)` — per-component SSE replay filter.
 - `(received_at DESC, id DESC)` — global SSE replay + cursor.
+- No index on `correlation_id` — echo-only column; no endpoint filters by it and the ack-gate keys on `payload.reset_id`.
 
 ### `reset_cycle` (single-row reset state, D12)
 
@@ -197,7 +199,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 | fetcher | `GET/PUT /api/fetcher/state/{adapter}` | `X-Api-Key` | opaque upsert; `413` > 8 KiB |
 | control | `POST /api/control/reset` | `X-Control-API-Key` | **async** (D8, D12): emit `reset-initiated` (state `idle→draining`) → `202` + `ResetAccepted{reset_id, state}`; drain + ack-or-timeout → `reset-started` (`draining→resetting`, ingest gate ON) → clear **only `deployment_events` + `fetcher_state`** (D14) → `reset-completed` (`resetting→idle`); `409` if a reset is already in flight |
 | control-stream | `GET /api/control/stream` | `X-Control-API-Key` | SSE; `event:` ∈ `reset-initiated` \| `reset-started` \| `reset-completed` (+ future types); `id:` = row id; `Last-Event-ID` replay from `control_stream_events` (2 h window); `: ping`/15 s; `?component=` filter |
-| control-events | `POST /api/control/events` | `X-Api-Key` + `X-Component-Id` | append 1 row to `component_events`; `component_id` from header (D9); `NOTIFY component_events <id>`; `413` > 8 KiB payload; `422` on missing/invalid header → `204` |
+| control-events | `POST /api/control/events` | `X-Api-Key` + `X-Component-Id` (+ optional `X-Correlation-Id`) | append 1 row to `component_events`; `component_id` from header (D9); optional `correlation_id` from `X-Correlation-Id` (opaque ≤ 128, nullable); `NOTIFY component_events <id>`; `413` > 8 KiB payload; `422` on missing/invalid `X-Component-Id` or `X-Correlation-Id` > 128 chars → `204` |
 | control-events-stream | `GET /api/control/events/stream` | none | SSE; `event: component`; `id:` = row id (UUIDv7); `Last-Event-ID` replay from `component_events` (2 h window); `: ping`/15 s; fresh connect = live only; no query filters |
 | ops | `GET /healthz`, `GET /readyz` | none | liveness / readiness (DB reachable + all four LISTEN channels attached: `deployment_events`, `control_events`, `component_acks`, `component_events` — D10, D12) |
 
@@ -247,6 +249,8 @@ The reset orchestrator must learn when a component has drained, across API insta
 
 Only `reset-ack` events trigger the NOTIFY; ordinary `status` / `heartbeat` / `error` events do not. Acks whose `reset_id` does not match the current cycle are ignored (stale/duplicate-safe).
 
+**Ack-gate key — unchanged by `correlation_id` (binding).** The NOTIFY payload `reset_id` and the fan-in match are derived from **`payload.reset_id`** in the body, exactly as today. The new `correlation_id` column (from the optional `X-Correlation-Id` header) is **additive/observability only** and is NOT read by the ack fan-in. A reset-ack with a populated `correlation_id` but missing/mismatched `payload.reset_id` does NOT count toward the gate. Reset acks therefore MUST keep `payload.reset_id`; sending `X-Correlation-Id` (recommended, = the reset id) only enriches the SSE frame.
+
 ### Channel 4 — `component_events` (component-event SSE stream)
 
 Mirrors Channel 1 (`deployment_events`) exactly, but fans out component-reported events instead of deployment events.
@@ -254,8 +258,8 @@ Mirrors Channel 1 (`deployment_events`) exactly, but fans out component-reported
 1. `POST /api/control/events` inserts the `component_events` row, then issues `NOTIFY component_events <id>` — **id only** (NOT the full JSON; a `payload` can be up to 8 KiB, exceeding the ~8000-byte Postgres NOTIFY limit).
 2. A singleton background broadcaster `ComponentEventBroadcaster` (`IHostedService`) holds one dedicated Npgsql connection with `LISTEN component_events`. On each notification, it fetches the full row by id from the DB, then fans it out through an in-process `Channel<ComponentEventRecord>` to all open `GET /api/control/events/stream` responses.
 3. This **mirrors `DeploymentEventBroadcaster` exactly** (id-only NOTIFY → DB fetch → fan-out). It differs from `ControlEventBroadcaster` (Channel 2), which carries the whole event in the NOTIFY payload.
-4. Returns `Results.ServerSentEvents(IAsyncEnumerable<SseItem<ComponentEventRecord>>)`; `event: component`; `SseItem.EventId` = row `id`.
-5. On `Last-Event-ID`: replay `WHERE id > @last ORDER BY id` from the existing `component_events` table (already 2 h retention) — **no new table, no new migration** — then attach to the live channel.
+4. Returns `Results.ServerSentEvents(IAsyncEnumerable<SseItem<ComponentEventRecord>>)`; `event: component`; `SseItem.EventId` = row `id`. Each `ComponentEventRecord` includes `correlation_id` (the stored value, or `null`).
+5. On `Last-Event-ID`: replay `WHERE id > @last ORDER BY id` from the existing `component_events` table (already 2 h retention) — the new `correlation_id` column requires a migration to add the nullable column, but **no new table** — then attach to the live channel.
 6. No query filters on the stream endpoint.
 
 ### `readyz` dependency

@@ -20,7 +20,7 @@ info:
         - `POST /api/control/reset` — initiates an asynchronous, multi-phase system-state reset; returns `202` immediately.
           Progress is signalled on the control stream as `reset-initiated` → `reset-started` → `reset-completed`.
         - `GET  /api/control/stream` — SSE channel; API emits orchestration events (incl. the reset phases); `Last-Event-ID` replay within 2 h window.
-        - `POST /api/control/events` — single inbound endpoint; all components post their events here. Gated by `X-Api-Key`; component identified by `X-Component-Id` header.
+        - `POST /api/control/events` — single inbound endpoint; all components post their events here. Gated by `X-Api-Key`; component identified by `X-Component-Id` header; optional `X-Correlation-Id` header groups the event with a control command.
         - `GET  /api/control/events/stream` — SSE fan-out of component-reported events; `Last-Event-ID` replay within 2 h window. Unauthenticated.
       - **Ops** — `/healthz`, `/readyz`.
 
@@ -571,6 +571,33 @@ paths:
             server's `ExpectedComponents` (`dashboard-fetcher`, `demo-driver`).
             The server stores this value as `component_id` on the persisted row.
             Missing or pattern-invalid → `422`.
+        - name: X-Correlation-Id
+          in: header
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+          description: |
+            **Optional.** Opaque correlation token grouping this event with a
+            control command it belongs to. Generic — usable by ANY control
+            command, not reset-only. The server stores it verbatim as the
+            nullable `correlation_id` column and echoes it on the
+            `GET /api/control/events/stream` frame (`ComponentEventRecord.correlation_id`).
+
+            For reset choreography, components SHOULD set this to the
+            `reset-initiated` event id (a UUIDv7) on the `reset-ack` post and on
+            the post-reset `status` post — the same value they already place in
+            `payload.reset_id`. The format is **not** constrained to a UUID so
+            future commands may use any opaque token.
+
+            Absent → `correlation_id` is `null`; `204` (no error). Present, length
+            1–128 → accepted (`204`). Longer than 128 chars → `422`
+            (problem+json, `/X-Correlation-Id` pointer).
+
+            **Ack-gate note (binding):** `correlation_id` is additive/observability
+            only. The reset ack fan-in continues to gate on `payload.reset_id`
+            (see Channel 3, `component_acks`); setting this header does NOT replace
+            that body field. Reset acks MUST keep `payload.reset_id`.
       requestBody:
         required: true
         content:
@@ -591,6 +618,11 @@ paths:
                     events_this_hour: 42
               fetcher_reset_ack:
                 summary: Fetcher acking a reset-initiated event (drain complete; paused).
+                description: |
+                  Body is identity-free as always. The ack is gated by
+                  `payload.reset_id` (unchanged). The component SHOULD also send
+                  header `X-Correlation-Id: 01J9F4WZK3W9G2T6X4QH3DKQF6` (the same
+                  reset id) so the SSE frame carries `correlation_id` for observers.
                 value:
                   event_type: reset-ack
                   state: paused
@@ -682,7 +714,11 @@ paths:
                     : ping
                     id: 01J9F4WZK3W9G2T6X4QH3DKQF5
                     event: component
-                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","component_id":"dashboard-fetcher","event_type":"status","state":"running","detail":"Polling github-actions adapter at 30 s interval","occurred_at":"2026-05-31T10:00:00Z","received_at":"2026-05-31T10:00:00Z","payload":{"adapter":"github-actions","events_this_hour":42}}
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","component_id":"dashboard-fetcher","correlation_id":null,"event_type":"status","state":"running","detail":"Polling github-actions adapter at 30 s interval","occurred_at":"2026-05-31T10:00:00Z","received_at":"2026-05-31T10:00:00Z","payload":{"adapter":"github-actions","events_this_hour":42}}
+
+                    id: 01J9F4WZK3W9G2T6X4QH3DKQF7
+                    event: component
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF7","component_id":"dashboard-fetcher","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","event_type":"reset-ack","state":"paused","detail":"Drained; poll loop + ingestion stopped","occurred_at":"2026-05-31T10:00:05Z","received_at":"2026-05-31T10:00:05Z","payload":{"reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6"}}
 
   # ───── Ops ────────────────────────────────────────────────────────────────
   /healthz:
@@ -1165,6 +1201,16 @@ components:
         component_id:
           type: string
           description: Value of the `X-Component-Id` header from the originating POST.
+        correlation_id:
+          type: string
+          nullable: true
+          maxLength: 128
+          description: |
+            Value of the optional `X-Correlation-Id` header from the originating
+            POST, or `null` if the header was absent. Opaque token correlating
+            this event with a control command (for reset, the `reset-initiated`
+            event id). Echoed verbatim; never parsed by the API. Additive — the
+            reset ack-gate still keys on `payload.reset_id`, not this field.
         event_type:
           type: string
         state:

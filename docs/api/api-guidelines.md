@@ -30,6 +30,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | `X-Api-Key` | request | every write call (`POST /api/deployments`, `GET/PUT /api/fetcher/state/*`, `POST /api/control/events`) | Static shared secret. |
 | `X-Control-API-Key` | request | control stream + reset (`POST /api/control/reset`, `GET /api/control/stream`) | Static shared secret, distinct from `X-Api-Key` (D8). |
 | `X-Component-Id` | request | **required** on `POST /api/control/events` | Component identifier. Pattern: `^[a-z0-9][a-z0-9.-]{0,127}$`. Stored as `component_id` on the row. |
+| `X-Correlation-Id` | request | **optional** on `POST /api/control/events` | Opaque correlation token, ≤ 128 chars. Stored as nullable `correlation_id` on the row; echoed on the component-events SSE frame. For reset, set to the `reset-initiated` event id. Absent → `null`; length 1–128 → accepted; > 128 → `422`. |
 | `X-Progress-Reporter` | request | optional on `POST /api/deployments` | Ingest attribution. Format: `<emitter>/<adapter>`. Stored alongside the deployment event row. |
 | `Content-Type` | request | every body-bearing call | `application/json; charset=utf-8` |
 | `Accept` | request | optional | `application/json`, or `text/event-stream` for SSE endpoints. |
@@ -247,6 +248,8 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 | Auth | **`X-Api-Key`** — same key components already hold for ingest / fetcher state |
 | Component identity | **`X-Component-Id` header (required)** — NOT a body field |
 | `component_id` stored | Server writes the `X-Component-Id` value as `component_id` on the row |
+| Correlation | **`X-Correlation-Id` header (optional)** — opaque token grouping the event with a control command; NOT a body field |
+| `correlation_id` stored | Server writes the `X-Correlation-Id` value as nullable `correlation_id` on the row; echoed on the SSE frame |
 | Shape | Single endpoint for ALL components — body contains only event data, no identity field |
 | Semantics | Append-only log in `component_events` table; `received_at` is server-assigned |
 | **Retention** | **2 hours** — short-lived observability data, not a durable audit log |
@@ -259,6 +262,13 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 - Examples: `dashboard-fetcher`, `dashboard-fetcher.github-actions`, `demo-driver`.
 - Dot separates family from variant (e.g. `.github-actions`); no slashes.
 - **Variant form is illustrative only** — `dashboard-fetcher.github-actions` shows the pattern's expressiveness, not a registered component. **Control-plane reset acks MUST use the exact id listed in `ExpectedComponents`** (`dashboard-fetcher`, `demo-driver`); a dotted variant would not be counted by the ack-gate. Variants may still appear on non-reset `status`/`heartbeat` posts.
+
+**`X-Correlation-Id` rules:**
+- **Optional.** Absent → `correlation_id` is `null`; `204` (no error).
+- Opaque string, length 1–128 → accepted. Longer than 128 chars → `422` (problem+json, `/X-Correlation-Id` pointer). Format is **not** constrained to a UUID — generic for any future control command.
+- Stored verbatim as the nullable `correlation_id` column; echoed on the `component` SSE frame.
+- **For reset choreography, components SHOULD set it to the `reset-initiated` event id** (a UUIDv7) on the `reset-ack` post and the post-reset `status` post — the same value already placed in `payload.reset_id`.
+- **Ack-gate is unaffected (binding).** `correlation_id` is additive/observability only. The reset ack fan-in still gates on `payload.reset_id` (`NOTIFY component_acks {component_id, reset_id}`); setting this header does NOT replace that body field. Reset acks MUST keep `payload.reset_id`.
 
 **Known `event_type` values** (not exhaustive — new types are additive):
 
@@ -310,12 +320,18 @@ Carbon copy of the deployment stream (§7) — same SSE pattern, component paylo
 
 See §7 for the shared SSE pattern.
 
+Each frame carries `correlation_id` — `null` unless the originating POST sent `X-Correlation-Id`.
+
 **Wire example:**
 ```
 : ping
 id: 01J9F4WZK3W9G2T6X4QH3DKQF5
 event: component
-data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","component_id":"dashboard-fetcher","event_type":"status","state":"running","detail":"Polling github-actions adapter at 30 s interval","occurred_at":"2026-05-31T10:00:00Z","received_at":"2026-05-31T10:00:00Z","payload":{"adapter":"github-actions","events_this_hour":42}}
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","component_id":"dashboard-fetcher","correlation_id":null,"event_type":"status","state":"running","detail":"Polling github-actions adapter at 30 s interval","occurred_at":"2026-05-31T10:00:00Z","received_at":"2026-05-31T10:00:00Z","payload":{"adapter":"github-actions","events_this_hour":42}}
+
+id: 01J9F4WZK3W9G2T6X4QH3DKQF7
+event: component
+data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF7","component_id":"dashboard-fetcher","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","event_type":"reset-ack","state":"paused","detail":"Drained; poll loop + ingestion stopped","occurred_at":"2026-05-31T10:00:05Z","received_at":"2026-05-31T10:00:05Z","payload":{"reset_id":"01J9F4WZK3W9G2T6X4QH3DKQF6"}}
 ```
 
 ### Readiness probe
@@ -355,16 +371,17 @@ on event "reset-initiated":
   drain: stop poll loop / ingestion, block own API + UI
   fetch("POST /api/control/events", {           // ack: paused, carry reset_id
     headers: {
-      "X-Api-Key":       API_KEY,
-      "X-Component-Id":  "dashboard-fetcher",   // MUST match ExpectedComponents — NOT "dashboard-fetcher.github-actions"
-      "Content-Type":    "application/json"
+      "X-Api-Key":         API_KEY,
+      "X-Component-Id":    "dashboard-fetcher", // MUST match ExpectedComponents — NOT "dashboard-fetcher.github-actions"
+      "X-Correlation-Id":  event.data.id,       // optional; = reset-initiated id → echoed as correlation_id on the SSE frame
+      "Content-Type":      "application/json"
     },
     body: JSON.stringify({
       event_type:  "reset-ack",
       state:       "paused",
       detail:      "Drained; poll loop + ingestion stopped",
       occurred_at: new Date().toISOString(),
-      payload:     { reset_id: event.data.id }   // reset_id = reset-initiated event id
+      payload:     { reset_id: event.data.id }   // reset_id = reset-initiated event id — AUTHORITATIVE for the ack-gate
     })
   })
 
@@ -374,7 +391,9 @@ on event "reset-started":
 on event "reset-completed":
   clear local state / cursor → backfill (initial ingestion), resume poll
   fetch("POST /api/control/events", {            // recovered: running
-    headers: { "X-Api-Key": API_KEY, "X-Component-Id": "dashboard-fetcher", "Content-Type": "application/json" },
+    headers: { "X-Api-Key": API_KEY, "X-Component-Id": "dashboard-fetcher",
+               "X-Correlation-Id": event.data.reset_id,   // optional; correlate the recovery post to the same reset
+               "Content-Type": "application/json" },
     body: JSON.stringify({ event_type: "status", state: "running", occurred_at: new Date().toISOString(),
                            payload: { reset_id: event.data.reset_id } })
   })
