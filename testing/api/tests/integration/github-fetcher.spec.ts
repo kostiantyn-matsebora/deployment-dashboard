@@ -219,7 +219,18 @@ describe('Scenario: GitHub emulator → fetcher backfill → API state', () => {
 
       for (const slot of Object.values(row.slots) as any[]) {
         expect(typeof slot.current.id).toBe('string');
-        expect(['in-progress', 'success', 'failure']).toContain(slot.current.status);
+        // `current` is the latest EFFECTIVE deployment; when a slot's only ingested
+        // activity is a non-effective ("next") deployment it legitimately surfaces as
+        // current (contract fallback). So current may be any valid status...
+        const EFFECTIVE = ['in-progress', 'success', 'failure'];
+        const NEXT = ['pending', 'queued', 'waiting', 'cancelled', 'rejected'];
+        expect([...EFFECTIVE, ...NEXT]).toContain(slot.current.status);
+        // ...but the feature invariant holds: when a `next` is present, `current`
+        // is the effective baseline and `next` is a non-effective status.
+        if (slot.next) {
+          expect(EFFECTIVE).toContain(slot.current.status);
+          expect(NEXT).toContain(slot.next.status);
+        }
       }
     }
   });

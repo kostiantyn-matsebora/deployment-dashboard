@@ -75,7 +75,7 @@ describe('POST /api/deployments', () => {
 
   // ── Validation (422) — implemented (semantic rules) ──────────────────────────
   it('returns 422 on an invalid status enum value', async () => {
-    const res = await post('/api/deployments', minimalEvent({ status: 'pending' }), { 'X-Api-Key': API_KEY });
+    const res = await post('/api/deployments', minimalEvent({ status: 'not-a-real-status' }), { 'X-Api-Key': API_KEY });
     expect(res.status).toBe(422);
   });
 
