@@ -405,6 +405,148 @@ public sealed class AckFanInTests : IAsyncLifetime
 
     // ── Reproducing test ──────────────────────────────────────────────────────
 
+    // ── ACK-gate regression: correlation_id is observability-only ─────────────
+
+    /// <summary>
+    /// Verifies that a reset-ack with <c>X-Correlation-Id</c> set but with a missing
+    /// or mismatched <c>payload.reset_id</c> does NOT advance the ack gate.
+    /// The gate counts acks purely via <c>payload.reset_id</c>; <c>correlation_id</c>
+    /// is additive/observability only and must not substitute for it.
+    /// </summary>
+    [Fact]
+    public async Task AckGate_ResetAckWithCorrelationIdButMissingPayloadResetId_DoesNotCountTowardGate()
+    {
+        // A long timeout (30 s from factory config) means early completion can ONLY happen
+        // if the ack gate was triggered.  We send a "ack" that has X-Correlation-Id set
+        // but no payload.reset_id.  The gate should NOT open; we then send the real ack
+        // and confirm only that one completes the cycle.
+        //
+        // Two separate SSE connections are used: the first (probe) is closed deliberately
+        // after the spurious-ack window; the second (verify) captures the ack-driven
+        // reset-started.  This avoids sharing a stream across a cancel boundary.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+        // Open first SSE connection for the probe window.
+        using var probeRes = await _client.SendAsync(
+            ControlStreamRequest(), HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        Assert.Equal(HttpStatusCode.OK, probeRes.StatusCode);
+        await using var probeStream = await probeRes.Content.ReadAsStreamAsync(cts.Token);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
+
+        var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
+        Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
+        var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
+        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+
+        // Post a reset-ack that carries X-Correlation-Id = resetId but omits payload.reset_id.
+        // This must NOT count as a valid ack — the gate relies on payload.reset_id only.
+        var spuriousAck = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
+        {
+            Content = JsonContent.Create(new
+            {
+                event_type = "reset-ack",
+                state = "paused",
+                occurred_at = DateTimeOffset.UtcNow.ToString("o"),
+                // payload.reset_id intentionally absent
+            }),
+            Headers =
+            {
+                { "X-Api-Key", TestApiFactory.TestApiKey },
+                { "X-Component-Id", TestComponent },
+                { "X-Correlation-Id", resetId },
+            },
+        };
+        var spuriousRes = await _client.SendAsync(spuriousAck, cts.Token);
+        Assert.Equal(HttpStatusCode.NoContent, spuriousRes.StatusCode);
+
+        // Give the orchestrator 2 s — if the spurious ack opened the gate, reset-started
+        // would arrive within this window.  Collect all frames from the probe stream.
+        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+
+        // Read any frames that arrived so far (non-blocking: use a short window).
+        using var probeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        var probeFrames = await ReadDataFramesAsync(probeStream, 99, probeCts.Token);
+        var probeTypes = probeFrames.Select(f =>
+            f.TryGetProperty("type", out var t) ? t.GetString() : null).ToList();
+
+        Assert.True(
+            !probeTypes.Contains("reset-started"),
+            "reset-started must NOT arrive after a spurious ack lacking payload.reset_id.");
+
+        // Open a second SSE connection for the real verification phase.
+        using var verifyRes = await _client.SendAsync(
+            ControlStreamRequest(), HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        await using var verifyStream = await verifyRes.Content.ReadAsStreamAsync(cts.Token);
+        await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
+
+        // Now post the correct ack — gate must open and reset-started must arrive promptly.
+        var ackSentAt = DateTimeOffset.UtcNow;
+        var realAck = await _client.SendAsync(AckRequest(TestComponent, resetId), cts.Token);
+        Assert.Equal(HttpStatusCode.NoContent, realAck.StatusCode);
+
+        var frames = await ReadDataFramesAsync(verifyStream, 1, cts.Token);
+        var startedFrame = frames.FirstOrDefault(
+            f => f.TryGetProperty("type", out var t) && t.GetString() == "reset-started");
+
+        Assert.True(startedFrame.ValueKind != JsonValueKind.Undefined,
+            "reset-started must arrive after the correct ack (with payload.reset_id).");
+        Assert.Equal(resetId, startedFrame.GetProperty("reset_id").GetString());
+
+        var elapsed = startedFrame.GetProperty("occurred_at").GetDateTimeOffset() - ackSentAt;
+        Assert.True(elapsed.TotalSeconds < 5.0,
+            $"reset-started arrived {elapsed.TotalSeconds:F1} s after the ack — expected < 5 s (ack-driven).");
+
+        cts.Cancel();
+    }
+
+    /// <summary>
+    /// Asserts that posting a reset-ack with a mismatched <c>payload.reset_id</c> (wrong
+    /// reset cycle) does NOT advance the ack gate for the active cycle.
+    /// </summary>
+    [Fact]
+    public async Task AckGate_ResetAckWithMismatchedPayloadResetId_DoesNotCountTowardGate()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        using var streamRes = await _client.SendAsync(
+            ControlStreamRequest(), HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        await using var stream = await streamRes.Content.ReadAsStreamAsync(cts.Token);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
+
+        var resetRes = await _client.SendAsync(ResetRequest(), cts.Token);
+        Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
+        var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
+        var resetId = resetBody.GetProperty("reset_id").GetString()!;
+
+        // Post a reset-ack with a wrong (stale) reset_id in the payload.
+        // This must NOT count toward the current cycle's ack gate.
+        var staleResetId = Guid.CreateVersion7().ToString();
+        var mismatchedAck = AckRequest(TestComponent, staleResetId);
+        // Also set X-Correlation-Id = active resetId to confirm the gate ignores it.
+        mismatchedAck.Headers.Add("X-Correlation-Id", resetId);
+
+        var mismatchedRes = await _client.SendAsync(mismatchedAck, cts.Token);
+        Assert.Equal(HttpStatusCode.NoContent, mismatchedRes.StatusCode);
+
+        // Give the orchestrator 2 s — if the mismatched ack opened the gate, reset-started
+        // would arrive within this window.
+        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+
+        // Drain any frames that arrived in the window.
+        using var drainCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        var probeFrames = await ReadDataFramesAsync(stream, 99, drainCts.Token);
+        var probeTypes = probeFrames.Select(f =>
+            f.TryGetProperty("type", out var t) ? t.GetString() : null).ToList();
+
+        Assert.True(
+            !probeTypes.Contains("reset-started"),
+            "reset-started must NOT arrive after an ack with a mismatched payload.reset_id.");
+
+        cts.Cancel();
+    }
+
     /// <summary>
     /// Asserts that posting a reset-ack from the single expected component drives
     /// the orchestrator to emit <c>reset-started</c> promptly — well before the
