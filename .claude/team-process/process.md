@@ -33,10 +33,15 @@ team-lead agent; orchestration is a mode. Route each change to its owning role:
 Roles + guardrails are identical across modes; only the substrate differs. **Default flow
 is unchanged; teams never replace it — opt-in escalation only.**
 
-| Mode | Start | Substrate | When |
-|---|---|---|---|
-| **Subagents** *(default)* | Orchestrator dispatches the owning role as an in-session subagent. | `Agent`/Task subagents in the lead's session. | Most work: one/few surfaces, handled by one integrator + sequential/parallel subagents. |
-| **Agent team** *(opt-in)* | `/feature-team <issue>`: plan-confirm → `TeamCreate` + spawn role members as separate sessions. | Separate Claude sessions, each `subagent_type` = role. | ≥3 layers sharing a contract, where per-role context + peer contract-negotiation pay off. |
+| Mode | How it runs | When |
+|---|---|---|
+| **In-session subagents** *(default)* | The orchestrator dispatches the owning role as an in-session subagent that reports back. | Most work: one/few surfaces, handled by one integrator + sequential/parallel subagents. |
+| **Spawned team** *(opt-in)* | Role members run as separate, coordinated sessions under a plan-confirm launch; the lead integrates. | ≥3 layers sharing a contract, where per-role context + peer contract-negotiation pay off. |
+
+**Claude Code binding** (this is the only client-specific wiring; other runtimes map equivalently):
+
+- In-session subagent = the `Agent`/Task tool.
+- Spawned team = `/feature-team <issue>` → plan-confirm → `TeamCreate` + spawn members (`subagent_type` = role), coordinating via `SendMessage` + a shared task list.
 
 ## Single-integrator model
 

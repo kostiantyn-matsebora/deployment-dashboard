@@ -1,9 +1,13 @@
 # Team Process Kit
 
-A portable, **project-agnostic** definition of how a small fleet of role-specialist agents
-collaborate on a non-trivial change under one orchestrator. Drop into any repo spanning
-**frontend + backend + infrastructure** (or a subset). Defines *who does what and how they
-coordinate* — not the technology (stack-, domain-, tool-agnostic).
+A portable definition of how a small fleet of role-specialist agents collaborate on a
+non-trivial change under one orchestrator. Drop into any repo spanning **frontend + backend +
+infrastructure** (or a subset). Defines *who does what and how they coordinate* — not the
+technology.
+
+The **core** (`process.md` · `roles/`) is stack-, domain-, and **runtime-agnostic**; the only
+client-specific wiring is one labeled *Claude Code binding* in `process.md` (and the
+reference agents below), which another agent runtime can swap.
 
 ## Layout
 
@@ -29,8 +33,8 @@ the kit when a lesson is universal; update the project layer when it's local.
 
 ## Anchoring (generic role → project agent)
 
-Each project agent declares the role it fulfils and inherits that role's contract. Reference
-implementation (`.claude/agents/*.md`):
+Each project agent declares the role it fulfils and inherits that role's contract. **Claude Code
+reference implementation** (`.claude/agents/*.md`); another runtime maps its own agent files to the same roles:
 
 | Project agent | Role |
 |---|---|
