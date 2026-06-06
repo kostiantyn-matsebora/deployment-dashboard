@@ -104,6 +104,18 @@
   box-shadow: 0 0 14px var(--amber-glow);
 }
 
+/* ── N: never-deployed — neutral/grey surface (no health colour) ──
+   The tile colour conveys deployment health; there is none yet.
+   The actual context status rides on a chip in the ver-row.
+   Mirrors .slot.s-never-deployed in the mockup.               */
+.slot.s-never-deployed {
+  background: var(--slot-empty-bg);
+}
+.slot.s-never-deployed::before {
+  background: var(--ink-3);
+  box-shadow: none;
+}
+
 /* ── S4: failed + last successful ──────────────────────────── */
 .slot.s-fail-last {
   border-color: var(--coral-edge);

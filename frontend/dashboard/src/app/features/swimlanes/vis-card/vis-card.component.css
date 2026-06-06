@@ -87,6 +87,12 @@
   box-shadow: 0 0 12px var(--coral-glow);
 }
 
+/* ── N: never-deployed — neutral/grey card (no health colour) ─
+   Mirrors .vis-card.s-never-deployed in the mockup.
+   The context status rides on a chip in the ver-row.           */
+.vis-card.s-never-deployed { border-color: var(--glass-edge); }
+.vis-card.s-never-deployed::before { background: var(--ink-3); box-shadow: none; }
+
 /* ── Selected node ring ───────────────────────────────────── */
 .vis-card.is-selected {
   box-shadow:

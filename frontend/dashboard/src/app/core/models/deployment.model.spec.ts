@@ -136,13 +136,25 @@ describe('deriveBoxState — context statuses with last_successful → s-success
   }
 });
 
-describe('deriveBoxState — context statuses without last_successful → s-running-only', () => {
+describe('deriveBoxState — context statuses without last_successful → s-never-deployed', () => {
   for (const status of CONTEXT_STATUSES) {
-    it(`${status} without last_successful returns s-running-only (neutral tile)`, () => {
+    it(`${status} without last_successful returns s-never-deployed (neutral tile, never-deployed)`, () => {
       const slot = mkSlot({ status });
-      expect(deriveBoxState(slot)).toBe('s-running-only');
+      expect(deriveBoxState(slot)).toBe('s-never-deployed');
     });
   }
+});
+
+describe('deriveBoxState — s-never-deployed is not reachable from effective statuses', () => {
+  it('success never returns s-never-deployed', () => {
+    expect(deriveBoxState(mkSlot({ status: 'success' }))).not.toBe('s-never-deployed');
+  });
+  it('failure never returns s-never-deployed', () => {
+    expect(deriveBoxState(mkSlot({ status: 'failure' }))).not.toBe('s-never-deployed');
+  });
+  it('in-progress never returns s-never-deployed', () => {
+    expect(deriveBoxState(mkSlot({ status: 'in-progress' }))).not.toBe('s-never-deployed');
+  });
 });
 
 // ── isContextStatus ────────────────────────────────────────────────────────────

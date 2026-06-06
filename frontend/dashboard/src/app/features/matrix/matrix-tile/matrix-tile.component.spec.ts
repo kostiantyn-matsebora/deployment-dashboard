@@ -289,3 +289,98 @@ describe('MatrixTileComponent — no ctx-badge when slot.next is absent', () => 
     });
   }
 });
+
+// ── Never-deployed — context status current, no baseline (#268) ───────────────
+
+const NEVER_DEPLOYED_STATUSES: Status[] = ['pending', 'queued', 'waiting', 'cancelled', 'rejected'];
+
+describe('MatrixTileComponent — never-deployed: context current + no last_successful', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  for (const status of NEVER_DEPLOYED_STATUSES) {
+    describe(`status = ${status}`, () => {
+      it(`boxState() returns 's-never-deployed'`, async () => {
+        const slot: MatrixSlot = { current: mkEvent(status) };
+        const fixture = await createTile(slot);
+        expect(priv(fixture.componentInstance).boxState()).toBe('s-never-deployed');
+      });
+
+      it('the root .slot carries class s-never-deployed', async () => {
+        const slot: MatrixSlot = { current: mkEvent(status) };
+        const fixture = await createTile(slot);
+        const el = fixture.debugElement.query(By.css('.slot'));
+        expect(el.classes['s-never-deployed']).toBe(true);
+      });
+
+      it('does NOT carry any effective state class', async () => {
+        const slot: MatrixSlot = { current: mkEvent(status) };
+        const fixture = await createTile(slot);
+        const el = fixture.debugElement.query(By.css('.slot'));
+        expect(el.classes['s-success']).toBeFalsy();
+        expect(el.classes['s-running-only']).toBeFalsy();
+        expect(el.classes['s-fail-last']).toBeFalsy();
+      });
+
+      it('renders a status chip with correct class cb-' + status, async () => {
+        const slot: MatrixSlot = { current: mkEvent(status) };
+        const fixture = await createTile(slot);
+        const chip = fixture.debugElement.query(By.css(`.ctx-badge.cb-${status}`));
+        expect(chip).not.toBeNull();
+      });
+
+      it('does NOT render a spinner', async () => {
+        const slot: MatrixSlot = { current: mkEvent(status) };
+        const fixture = await createTile(slot);
+        expect(fixture.debugElement.query(By.css('.spinner'))).toBeNull();
+      });
+
+      it('isRunning() is false', async () => {
+        const slot: MatrixSlot = { current: mkEvent(status) };
+        const fixture = await createTile(slot);
+        expect(priv(fixture.componentInstance).isRunning()).toBe(false);
+      });
+
+      it('isSplit() is false', async () => {
+        const slot: MatrixSlot = { current: mkEvent(status) };
+        const fixture = await createTile(slot);
+        expect(priv(fixture.componentInstance).isSplit()).toBe(false);
+      });
+    });
+  }
+});
+
+describe('MatrixTileComponent — never-deployed: version visible when present', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('renders version span when version is present', async () => {
+    const slot: MatrixSlot = { current: mkEvent('waiting', { version: 'v2.0.0-beta.3' }) };
+    const fixture = await createTile(slot);
+    const ver = fixture.debugElement.query(By.css('.ver'));
+    expect(ver).not.toBeNull();
+    expect(ver.nativeElement.textContent.trim()).toBe('v2.0.0-beta.3');
+  });
+});
+
+describe('MatrixTileComponent — never-deployed does NOT affect existing effective states', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('success with last_successful stays s-success (not s-never-deployed)', async () => {
+    const slot: MatrixSlot = {
+      current: mkEvent('success'),
+      last_successful: mkEvent('success', { id: 'evt-2', deployment_id: 'dep-2' }),
+    };
+    const fixture = await createTile(slot);
+    expect(priv(fixture.componentInstance).boxState()).toBe('s-success');
+    expect(fixture.debugElement.query(By.css('.slot')).classes['s-never-deployed']).toBeFalsy();
+  });
+
+  it('context status WITH last_successful returns s-success (not s-never-deployed)', async () => {
+    const slot: MatrixSlot = {
+      current: mkEvent('waiting'),
+      last_successful: mkEvent('success', { id: 'evt-2', deployment_id: 'dep-2' }),
+    };
+    const fixture = await createTile(slot);
+    expect(priv(fixture.componentInstance).boxState()).toBe('s-success');
+    expect(fixture.debugElement.query(By.css('.slot')).classes['s-never-deployed']).toBeFalsy();
+  });
+});

@@ -10,9 +10,8 @@ import {
   output,
 } from '@angular/core';
 
-import { DeploymentEvent, SwimlaneField } from '../../../core/models/deployment.model';
+import { DeploymentEvent, isContextStatus, SwimlaneField } from '../../../core/models/deployment.model';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
-import { isContextStatus } from '../../../core/models/deployment.model';
 
 /** Real rendered size of a node card, reported to the swimlane layout. */
 export interface CardDims {
@@ -53,6 +52,13 @@ export class VisCardComponent {
   readonly isSelected = input<boolean>(false);
   /** Optional context-status next event for this node's slot (from slot.next). */
   readonly nextEvent = input<DeploymentEvent | null>(null);
+  /**
+   * True when this node's slot is never-deployed: `current` is a context
+   * status with no effective baseline. Set by the parent (SwimlanesComponent)
+   * which has access to `slot.last_successful`; the vis-card cannot derive
+   * this from the event alone.
+   */
+  readonly neverDeployed = input<boolean>(false);
 
   /** Emitted when the card is clicked — parent handles inspector state. */
   readonly nodeClick = output<DeploymentEvent>();
@@ -91,7 +97,15 @@ export class VisCardComponent {
 
   // ── Derived ─────────────────────────────────────────────────
 
+  /**
+   * True when this node's slot is never-deployed: driven by the `neverDeployed`
+   * input from the parent (which has access to slot.last_successful). Renders a
+   * neutral/grey card + status chip. Mirrors .vis-card.s-never-deployed.
+   */
+  protected readonly isNeverDeployed = computed<boolean>(() => this.neverDeployed());
+
   protected readonly statusClass = computed<string>(() => {
+    if (this.isNeverDeployed()) return 's-never-deployed';
     switch (this.event().status) {
       case 'success':     return 's-success';
       case 'in-progress': return 's-progress';
@@ -101,16 +115,12 @@ export class VisCardComponent {
 
   /**
    * Context status from slot.next (pending/queued/waiting/cancelled/rejected),
-   * if any. Falls back to checking event().status for backward compatibility
-   * (guards the case where event itself is a context status — should not happen
-   * in normal flow but handled defensively).
+   * if any. Only reads slot.next — the never-deployed case is handled via
+   * isNeverDeployed() + statusClass(), not via ctxStatus().
    */
   protected readonly ctxStatus = computed<string | null>(() => {
     const next = this.nextEvent();
-    if (next && isContextStatus(next.status)) return next.status;
-    // Defensive fallback: if current event is itself a context status
-    const s = this.event().status;
-    return isContextStatus(s) ? s : null;
+    return next && isContextStatus(next.status) ? next.status : null;
   });
 
   /** Version of the context-status next event (for the badge label). */

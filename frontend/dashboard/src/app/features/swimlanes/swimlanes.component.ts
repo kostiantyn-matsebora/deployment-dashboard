@@ -17,6 +17,7 @@ import {
   SwimlaneField,
   TIME_WINDOWS,
   TimeWindow,
+  isContextStatus,
 } from '../../core/models/deployment.model';
 import { CardDims, VisCardComponent } from './vis-card/vis-card.component';
 import { InspectorPanelComponent } from './inspector-panel/inspector-panel.component';
@@ -212,6 +213,27 @@ export class SwimlanesComponent {
       }
     }
     return map;
+  });
+
+  /**
+   * Set of event IDs whose slot is never-deployed: `current` is a context
+   * status with NO `last_successful` (first-ever gated deploy, no baseline).
+   * Passed to VisCardComponent so it can render neutral + chip instead of a
+   * coloured card. Cannot be derived from the event alone in the vis-card
+   * because `last_successful` is not part of the node event.
+   */
+  protected readonly neverDeployedIds = computed<Set<string>>(() => {
+    const matrix = this.state.matrixData();
+    const ids = new Set<string>();
+    if (!matrix) return ids;
+    for (const row of matrix.rows) {
+      for (const slot of Object.values(row.slots) as MatrixSlot[]) {
+        if (isContextStatus(slot.current.status) && !slot.last_successful) {
+          ids.add(slot.current.id);
+        }
+      }
+    }
+    return ids;
   });
 
   // ── Events extracted from shared matrix snapshot ──────────

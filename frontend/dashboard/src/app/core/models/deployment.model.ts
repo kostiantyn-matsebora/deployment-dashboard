@@ -38,7 +38,6 @@ export interface DeploymentEvent {
 }
 
 /** One (service, environment) cell in the Matrix view. */
-/** One (service, environment) cell in the Matrix view. */
 export interface MatrixSlot {
   /** Most recent effective event (status: in-progress | success | failure). */
   current: DeploymentEvent;
@@ -89,12 +88,13 @@ export interface DeploymentEventPage {
  * Derived client-side from (current.status, last_successful presence).
  */
 export type BoxState =
-  | 's-success'        // S1 — last deployment succeeded
-  | 's-run-last'       // S2 — in-progress; prev terminal = success
-  | 's-run-fail-last'  // S3 — in-progress; prev terminal = failure; older success exists
-  | 's-fail-last'      // S4 — failure; older success exists
-  | 's-running-only'   // S5 — in-progress; no prior successful deployment
-  | 's-run-fail-only'; // S6 — in-progress; prev terminal = failure; no success history
+  | 's-success'          // S1 — last deployment succeeded
+  | 's-run-last'         // S2 — in-progress; prev terminal = success
+  | 's-run-fail-last'    // S3 — in-progress; prev terminal = failure; older success exists
+  | 's-fail-last'        // S4 — failure; older success exists
+  | 's-running-only'     // S5 — in-progress; no prior successful deployment
+  | 's-run-fail-only'    // S6 — in-progress; no prior success; prev terminal = failure
+  | 's-never-deployed';  // N  — context status; no effective baseline (first-ever gated deploy) // S6 — in-progress; prev terminal = failure; no success history
 
 /**
  * Derive the box state from a matrix slot.
@@ -126,12 +126,12 @@ export function deriveBoxState(slot: MatrixSlot): BoxState {
   // is present. When last_successful is absent the tile renders as a full
   // failed tile (no split / bottom section).
   if (current.status === 'failure') return 's-fail-last';
-  // No-effective-current fallback: if current.status is a context status
-  // (pending/queued/waiting/cancelled/rejected) the server should have put it
-  // in slot.next instead. Guard: render neutrally rather than crashing.
-  // last_successful → success-like; otherwise treat as s-running-only neutral.
+  // Never-deployed: current is a context status (pending/queued/waiting/
+  // cancelled/rejected) with NO effective baseline — first-ever gated deploy.
+  // Renders as a neutral/grey tile with a status chip. DISTINCT from empty
+  // slot ("—") and from a context next badge on an effective tile.
   if (isContextStatus(current.status)) {
-    return last_successful ? 's-success' : 's-running-only';
+    return last_successful ? 's-success' : 's-never-deployed';
   }
   // in-progress
   if (last_successful) return prev_failed ? 's-run-fail-last' : 's-run-last';
