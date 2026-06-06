@@ -6,14 +6,18 @@ namespace Dashboard.Fetcher.GitHub.Mapping;
 public static class StatusMapper
 {
     /// <summary>
-    /// Returns the contract status string, or null when the state must be skipped
+    /// Maps a raw GitHub deployment_status <c>state</c> to a contract status string,
+    /// or null when the state must be skipped
     /// (<c>inactive</c> is a supersession marker, not a lifecycle transition).
     /// </summary>
     public static string? Map(string githubState) => githubState switch
     {
-        "queued" or "pending" or "in_progress" => DeploymentStatus.InProgress,
+        "pending" => DeploymentStatus.Pending,
+        "queued" => DeploymentStatus.Queued,
+        "in_progress" => DeploymentStatus.InProgress,
+        "waiting" => DeploymentStatus.Waiting,
         "success" => DeploymentStatus.Success,
         "failure" or "error" => DeploymentStatus.Failure,
-        _ => null
+        _ => null,  // inactive = supersession marker; unknown states dropped
     };
 }

@@ -1,5 +1,6 @@
 <!-- InspectorPanelComponent — 320px right sidebar.
-     Spec: docs/design/components.md §Inspector Panel -->
+     Spec: docs/design/components.md §Inspector Panel
+     Issue #268: next deployment section (dotted separator + next fields) -->
 
 <div class="insp-panel">
 
@@ -95,6 +96,36 @@
           <span class="v-muted">—</span>
         }
       </span>
+
+      <!-- ── Next deployment — dotted separator + fields ── -->
+      @if (nextEvent()) {
+        <!-- dotted separator (full-width) -->
+        <div class="insp-sep-dotted"></div>
+
+        <!-- next status -->
+        <span class="k next-k">next status</span>
+        <span class="v">
+          <span class="insp-status" [class]="statusClassFor(nextEvent()!.status)">
+            {{ statusLabelFor(nextEvent()!.status) }}
+          </span>
+        </span>
+
+        <!-- next version -->
+        <span class="k next-k">next version</span>
+        <span class="v mono">{{ nextEvent()!.version || '—' }}</span>
+
+        <!-- next run_url -->
+        <span class="k next-k">next run_url</span>
+        <span class="v">
+          @if (nextEvent()!.run_url) {
+            <a class="insp-link" [href]="nextEvent()!.run_url" target="_blank" rel="noopener">
+              ↗ view run
+            </a>
+          } @else {
+            <span class="v-muted">—</span>
+          }
+        </span>
+      }
 
     </div>
     <!-- /insp-grid -->

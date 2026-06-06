@@ -32,21 +32,50 @@ export class InspectorPanelComponent {
   /** Selected deployment event — null when nothing is selected. */
   readonly event = input<DeploymentEvent | null>(null);
 
+  /**
+   * Optional next deployment event from slot.next (when the inspector is
+   * used from the Matrix context and the slot carries a next badge).
+   * When provided, shows a dotted separator + next-status/version/run_url.
+   */
+  readonly nextEvent = input<DeploymentEvent | null>(null);
+
   // ── Derived ─────────────────────────────────────────────────
 
   protected readonly statusClass = computed<string>(() => {
-    const s = this.event()?.status;
-    if (s === 'success')     return 'chip-success';
-    if (s === 'in-progress') return 'chip-progress';
-    return 'chip-failure';
+    return this.statusClassFor(this.event()?.status);
   });
 
   protected readonly statusLabel = computed<string>(() => {
-    const s = this.event()?.status;
-    if (s === 'success')     return 'success';
-    if (s === 'in-progress') return 'in-progress';
-    return 'failure';
+    return this.statusLabelFor(this.event()?.status);
   });
+
+  /** Status CSS class for any status string (current or next). */
+  protected statusClassFor(status: string | undefined): string {
+    if (status === 'success')     return 'chip-success';
+    if (status === 'in-progress') return 'chip-progress';
+    if (status === 'failure')     return 'chip-failure';
+    if (status === 'pending')     return 'chip-pending';
+    if (status === 'queued')      return 'chip-queued';
+    if (status === 'waiting')     return 'chip-waiting';
+    if (status === 'cancelled')   return 'chip-cancelled';
+    if (status === 'rejected')    return 'chip-rejected';
+    return 'chip-failure';
+  }
+
+  /** Human-readable label for any status string. */
+  protected statusLabelFor(status: string | undefined): string {
+    switch (status) {
+      case 'success':     return 'success';
+      case 'in-progress': return 'in-progress';
+      case 'failure':     return 'failure';
+      case 'pending':     return 'pending';
+      case 'queued':      return 'queued';
+      case 'waiting':     return 'waiting';
+      case 'cancelled':   return 'cancelled';
+      case 'rejected':    return 'rejected';
+      default:            return status ?? '—';
+    }
+  }
 
   // ── Helpers ──────────────────────────────────────────────────
 

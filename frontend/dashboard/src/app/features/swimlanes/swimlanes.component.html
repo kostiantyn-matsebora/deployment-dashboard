@@ -71,6 +71,8 @@
                         [event]="node.data"
                         [visibleFields]="state.swimlaneVisibleFields()"
                         [isSelected]="node.data.id === state.selectedNodeId()"
+                        [nextEvent]="nextByEventId().get(node.data.id) ?? null"
+                        [neverDeployed]="neverDeployedIds().has(node.data.id)"
                         (nodeClick)="onNodeSelect($event)"
                         (dims)="onCardDims($event)"
                       />
@@ -123,7 +125,7 @@
 
     <!-- ── Inspector panel ───────────────────────────────── -->
     <div class="vis-side">
-      <app-inspector-panel [event]="state.selectedEvent()" />
+      <app-inspector-panel [event]="state.selectedEvent()" [nextEvent]="state.selectedNextEvent()" />
     </div>
 
   </div>

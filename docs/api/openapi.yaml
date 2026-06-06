@@ -222,13 +222,22 @@ paths:
         Returns one row per service. Each row contains a `slots` map keyed by
         environment name. Each slot carries:
 
-          - `current` — the most recent event for that `(service, environment)`,
-            chosen by `MAX(happened_at)`.
+          - `current` — the most recent **effective** event for that
+            `(service, environment)`, where *effective* means `status` is one of
+            `in-progress` | `success` | `failure`. Chosen by `MAX(happened_at)`
+            among effective events. This is the live deployment the slot's
+            primary state renders from.
           - `last_successful` — the most recent `success` event in the same slot
             (omitted when `current` is itself the last success).
+          - `next` — the most recent **non-effective** event (`status` one of
+            `pending` | `queued` | `waiting` | `cancelled` | `rejected`),
+            present only when it is more recent (`happened_at`) than `current`.
+            Represents the latest deployment beyond the live one; the frontend
+            renders it as a small "next" badge, not as the slot's primary state.
 
         The frontend resolves the **six box states** (SAD §7 / FR §"Box states (Matrix)")
-        from `(current.status, last_successful presence)` — no server-side state field.
+        from `(current.status, last_successful presence)` — no server-side state
+        field — and renders `next` (when present) as a secondary badge.
       parameters:
         - { name: service, in: query, schema: { type: string }, description: Filter to a single service (Matrix inline filter). }
       responses:
@@ -786,8 +795,17 @@ components:
 
     Status:
       type: string
-      enum: [in-progress, success, failure]
-      description: State carried by this individual event row.
+      enum: [pending, queued, waiting, in-progress, success, failure, cancelled, rejected]
+      description: |
+        State carried by this individual event row.
+        - `pending`     — created but not yet started; no work has begun.
+        - `queued`      — accepted and waiting in line to start; not yet running.
+        - `waiting`     — blocked awaiting an approval or wait-timer gate; has not started.
+        - `in-progress` — actively running.
+        - `success`     — completed successfully.
+        - `failure`     — ran and ended unsuccessfully.
+        - `cancelled`   — stopped before completing; did not finish.
+        - `rejected`    — denied at an approval gate; never ran.
 
     DeploymentEventIngest:
       type: object
@@ -950,12 +968,38 @@ components:
       properties:
         current:
           $ref: '#/components/schemas/DeploymentEvent'
+          description: |
+            The most recent **effective** deployment for this slot — `status` is
+            one of `in-progress` | `success` | `failure`. This is the live
+            deployment; the slot's primary status renders from `current.status`.
         last_successful:
           $ref: '#/components/schemas/DeploymentEvent'
           description: |
             Omitted when `current.status == success` (then `current` IS the last
             successful). Also omitted when no successful deployment has ever
             occurred in this slot.
+        prev_failed:
+          type: boolean
+          description: |
+            Present and `true` when `current.status == in-progress` AND the most recent
+            terminal deployment (status `success` | `failure`) strictly older than `current`
+            in this slot was a **failure**. Omitted (or `false`) when `current` is not
+            in-progress, when no prior terminal deployment exists, or when the prior
+            terminal deployment succeeded. Distinguishes S3/S6 (prev failed) from S2/S5
+            (prev succeeded or no history).
+        next:
+          $ref: '#/components/schemas/DeploymentEvent'
+          description: |
+            The latest **non-effective** deployment beyond the live one —
+            `status` is one of `pending` | `queued` | `waiting` | `cancelled` |
+            `rejected`. Present only when such an event exists AND its
+            `happened_at` is more recent than `current.happened_at` (i.e. a newer
+            deployment has been observed that has not yet become effective, or
+            ended without running). Omitted otherwise. Mirrors a deployment and
+            carries the same fields as `current` (`status`, `version`, `run_url`,
+            `run_number`, `sha`, `ref`, `actor`, `happened_at`, …). The frontend
+            renders this as a secondary "next" badge, never as the slot's primary
+            state.
 
     # ── Fetcher ──────────────────────────────────────────────────────────────
 

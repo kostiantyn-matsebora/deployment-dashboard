@@ -4,8 +4,9 @@
 # net: if anyone accidentally introduces an env-file anywhere in the tree
 # (including dev_env/), it stays uncommitted.
 **/.env
-**/.env.local
-**/.env.*.local
+**/.env.*
+# Keep committed templates/examples (no secrets).
+!**/.env.example
 
 # ---- .NET ----------------------------------------------------------------
 **/bin/

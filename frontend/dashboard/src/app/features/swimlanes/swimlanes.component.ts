@@ -17,6 +17,7 @@ import {
   SwimlaneField,
   TIME_WINDOWS,
   TimeWindow,
+  isContextStatus,
 } from '../../core/models/deployment.model';
 import { CardDims, VisCardComponent } from './vis-card/vis-card.component';
 import { InspectorPanelComponent } from './inspector-panel/inspector-panel.component';
@@ -197,6 +198,43 @@ export class SwimlanesComponent {
     next.set(dagId, { width, height });
     this.dagContent.set(next);
   }
+
+  /**
+   * Map from `current.id` → `slot.next` for all slots that have a next event.
+   * Used to pass the context-status badge data to vis-card nodes.
+   */
+  protected readonly nextByEventId = computed<Map<string, DeploymentEvent>>(() => {
+    const matrix = this.state.matrixData();
+    const map = new Map<string, DeploymentEvent>();
+    if (!matrix) return map;
+    for (const row of matrix.rows) {
+      for (const slot of Object.values(row.slots) as MatrixSlot[]) {
+        if (slot.next) map.set(slot.current.id, slot.next);
+      }
+    }
+    return map;
+  });
+
+  /**
+   * Set of event IDs whose slot is never-deployed: `current` is a context
+   * status with NO `last_successful` (first-ever gated deploy, no baseline).
+   * Passed to VisCardComponent so it can render neutral + chip instead of a
+   * coloured card. Cannot be derived from the event alone in the vis-card
+   * because `last_successful` is not part of the node event.
+   */
+  protected readonly neverDeployedIds = computed<Set<string>>(() => {
+    const matrix = this.state.matrixData();
+    const ids = new Set<string>();
+    if (!matrix) return ids;
+    for (const row of matrix.rows) {
+      for (const slot of Object.values(row.slots) as MatrixSlot[]) {
+        if (isContextStatus(slot.current.status) && !slot.last_successful) {
+          ids.add(slot.current.id);
+        }
+      }
+    }
+    return ids;
+  });
 
   // ── Events extracted from shared matrix snapshot ──────────
   private readonly eventsFromMatrix = computed<Map<string, DeploymentEvent[]>>(() => {

@@ -34,6 +34,15 @@ public sealed record GhWorkflowRun
     [JsonPropertyName("name")] public string? Name { get; init; }
     [JsonPropertyName("path")] public string Path { get; init; } = "";
     [JsonPropertyName("head_sha")] public string HeadSha { get; init; } = "";
+    /// <summary>Run conclusion (e.g. "success", "failure", "cancelled", "timed_out", "skipped", null when still in progress).</summary>
+    [JsonPropertyName("conclusion")] public string? Conclusion { get; init; }
+}
+
+/// <summary>One review entry from GET /repos/{owner}/{repo}/deployments/{id}/reviews.</summary>
+public sealed record GhDeploymentReview
+{
+    /// <summary>"approved" or "rejected"</summary>
+    [JsonPropertyName("state")] public string State { get; init; } = "";
 }
 
 public sealed record GhWorkflowFileContent

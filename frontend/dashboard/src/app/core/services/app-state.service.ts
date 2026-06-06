@@ -13,6 +13,7 @@ import {
   SwimlaneField,
   TIME_WINDOWS,
   TimeWindow,
+  isContextStatus,
 } from '../models/deployment.model';
 
 export interface Kpi {
@@ -119,6 +120,24 @@ export class AppStateService {
   /** Transient — not persisted. */
   readonly selectedNodeId = signal<string | null>(null);
   readonly selectedEvent  = signal<DeploymentEvent | null>(null);
+
+  /**
+   * The `next` context-status event for the currently selected slot, if any.
+   * Derived from `selectedEvent` + matrix snapshot: finds the slot whose
+   * `current.id === selectedEvent.id` and returns its `next` field.
+   * Null when no node is selected or the selected slot has no next event.
+   */
+  readonly selectedNextEvent = computed<DeploymentEvent | null>(() => {
+    const ev = this.selectedEvent();
+    const matrix = this.matrixData();
+    if (!ev || !matrix) return null;
+    for (const row of matrix.rows) {
+      for (const slot of Object.values(row.slots) as MatrixSlot[]) {
+        if (slot.current.id === ev.id) return slot.next ?? null;
+      }
+    }
+    return null;
+  });
 
   // ── SSE live status ───────────────────────────────────────
   readonly sseConnected = signal<boolean>(false);
@@ -227,11 +246,15 @@ export class AppStateService {
    * events (current + last_successful), so growth is proportional to the number
    * of distinct (service, env) pairs seen, which is bounded in any real system.
    *
-   * Slot update rules:
-   *   success     → current = ev;  last_successful = undefined
-   *   failure     → current = ev;  last_successful promoted from previous current
+   * Slot update rules (effective statuses: success / in-progress / failure):
+   *   success     → current = ev;  last_successful = undefined;  next cleared
+   *   failure     → current = ev;  last_successful promoted from previous current;  next cleared
    *   in-progress → current = ev;  last_successful carried forward;
-   *                 prev_failed = (prev current was failure) OR (prev had prev_failed)
+   *                 prev_failed = (prev current was failure) OR (prev had prev_failed);  next cleared
+   *
+   * Context statuses (pending / queued / waiting / cancelled / rejected):
+   *   → stored in next only; current + last_successful are unchanged.
+   *   A context event older than the existing current is ignored.
    */
   applyDeploymentEvent(ev: DeploymentEvent): void {
     const matrix = this.matrixData();
@@ -240,23 +263,42 @@ export class AppStateService {
     const existingRow  = matrix.rows.find((r) => r.service === ev.service);
     const existingSlot = existingRow?.slots[ev.environment] as MatrixSlot | undefined;
 
-    // ── Derive slot fields ────────────────────────────────
-    const prevLastSuccessful =
-      existingSlot?.current.status === 'success'
-        ? existingSlot.current
-        : existingSlot?.last_successful;
+    let newSlot: MatrixSlot;
 
-    const lastSuccessful = ev.status === 'success' ? undefined : prevLastSuccessful;
+    if (isContextStatus(ev.status)) {
+      // ── Context event: update slot.next only ──────────────
+      if (!existingSlot) {
+        // No slot yet — can't place a context event without a current; skip
+        return;
+      }
+      const evTs      = new Date(ev.happened_at).getTime();
+      const currentTs = new Date(existingSlot.current.happened_at).getTime();
+      if (evTs <= currentTs) {
+        // Older than current effective event — ignore
+        return;
+      }
+      newSlot = { ...existingSlot, next: ev };
+    } else {
+      // ── Effective event: update current ───────────────────
+      const prevLastSuccessful =
+        existingSlot?.current.status === 'success'
+          ? existingSlot.current
+          : existingSlot?.last_successful;
 
-    const prevFailed =
-      ev.status === 'in-progress' &&
-      (existingSlot?.current.status === 'failure' || existingSlot?.prev_failed === true);
+      const lastSuccessful = ev.status === 'success' ? undefined : prevLastSuccessful;
 
-    const newSlot: MatrixSlot = {
-      current: ev,
-      ...(lastSuccessful ? { last_successful: lastSuccessful } : {}),
-      ...(prevFailed     ? { prev_failed: true }               : {}),
-    };
+      const prevFailed =
+        ev.status === 'in-progress' &&
+        (existingSlot?.current.status === 'failure' || existingSlot?.prev_failed === true);
+
+      // Effective event supersedes any pending next
+      newSlot = {
+        current: ev,
+        ...(lastSuccessful ? { last_successful: lastSuccessful } : {}),
+        ...(prevFailed     ? { prev_failed: true }               : {}),
+        // next cleared — a new effective event resolves the previous context status
+      };
+    }
 
     // ── Patch or insert row ───────────────────────────────
     let rows = matrix.rows;

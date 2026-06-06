@@ -5,7 +5,9 @@
        Row 2 (tile-attrs subgrid):   ref left · run+actor right
        Row 3 (tile-attrs subgrid):   sha left · parents   right
        [split states only] divider + last-successful row
+       [next present] context badge row
      Spec: docs/design/components.md §Matrix Tile + §6 Box States
+     Issue #268: next deployment badge via slot.next; never-deployed neutral
      ============================================================ -->
 
 <div
@@ -16,6 +18,7 @@
   [class.s-fail-last]="boxState() === 's-fail-last'"
   [class.s-running-only]="boxState() === 's-running-only'"
   [class.s-run-fail-only]="boxState() === 's-run-fail-only'"
+  [class.s-never-deployed]="boxState() === 's-never-deployed'"
   [class.highlighted-slot]="isHighlighted()"
   role="button"
   tabindex="0"
@@ -40,7 +43,19 @@
       <span class="warn-badge"><span class="warn-icon">⚠</span><span>prev. failed</span></span>
     }
 
-    <!-- Version -->
+    <!-- Never-deployed status chip — N: context status, no effective baseline -->
+    @if (boxState() === 's-never-deployed') {
+      <span
+        class="ctx-badge cb-{{ current().status }}"
+        [attr.aria-label]="current().status"
+        aria-hidden="false"
+      >
+        <span aria-hidden="true">{{ ctxIcon(current().status) }}</span>
+        <span>{{ current().status }}</span>
+      </span>
+    }
+
+    <!-- Version: current is always the effective event now -->
     @if (show('version') && current().version) {
       <span
         class="ver"
@@ -48,8 +63,10 @@
         (mouseenter)="onVerHover(current().version!)"
         (mouseleave)="onVerLeave()"
       >{{ current().version }}</span>
-    } @else if (boxState() === 's-running-only') {
-      <span class="failed-tag">Running</span>
+    } @else if (!show('version') || !current().version) {
+      @if (boxState() === 's-running-only') {
+        <span class="failed-tag">Running</span>
+      }
     }
 
     <!-- Time — right side via margin-left: auto -->
@@ -77,6 +94,22 @@
         <span class="fld-runno"><span class="glyph">#</span>{{ lastSucc()!.run_number }}</span>
       }
     </span>
+  }
+
+  <!-- ── Context badge — slot.next: pending/queued/waiting/cancelled/rejected ── -->
+  @if (ctxStatus()) {
+    <div class="ctx-row">
+      <span
+        class="ctx-badge cb-{{ ctxStatus() }}"
+        [attr.aria-label]="ctxStatus()! + (ctxVersion() ? ' ' + ctxVersion() : '')"
+      >
+        <span aria-hidden="true">{{ ctxIcon(ctxStatus()!) }}</span>
+        <span>{{ ctxStatus() }}</span>
+        @if (ctxVersion()) {
+          <span class="ctx-ver">{{ ctxVersion() }}</span>
+        }
+      </span>
+    </div>
   }
 
 </div>
