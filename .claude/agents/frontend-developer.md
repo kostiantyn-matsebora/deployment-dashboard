@@ -5,6 +5,8 @@ tools: LS, Read, Grep, Glob, Bash, Write, Edit, WebFetch, mcp__serena__initial_i
 model: sonnet
 ---
 
+> **Role anchor.** Fulfils the **frontend** role — [`team-process/roles/frontend.md`](../../team-process/roles/frontend.md). Same role + guardrails **whether dispatched as an on-demand subagent (the default flow) or spawned as a team member** (`subagent_type: frontend-developer`, via `/feature-team`). Inherits the orchestration contract in [`team-process/process.md`](../../team-process/process.md): docs-first · stay in lane · extend don't overwrite · self-verify · **never commit/push** — hand back to the lead/orchestrator.
+
 # Frontend‑Developer – Universal UI Builder
 
 ## Mission
