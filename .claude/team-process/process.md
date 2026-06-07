@@ -74,7 +74,9 @@ the orchestrator reviews, reconciles, commits, ships — this keeps the change a
 
 All cross-role messages use these 6 typed forms. Each form is a table: **field name** ·
 **what belongs** (the pieces of info) · **constraint** (the rule governing it). **Fixed row
-order; omit empty rows.** The vocabulary is binding — roles emit/consume these, not free prose.
+order; omit empty rows.** Every cross-role message **MUST** be one of these forms, emitted
+verbatim — **never** free prose. This binds the **orchestrator** too (`BRIEF` to dispatch,
+`FIX` to route), not only members.
 
 **BRIEF** — orch → role · dispatch
 
@@ -138,12 +140,12 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 - A `BRIEF` **references** the role's typed form in *Communication protocol* (`RESULT`/`REVIEW`/…);
   it MUST NOT restate or invent a hand-back shape — restating competes with the protocol, itself a breach.
 - A hand-back not in its typed form (extra/renamed fields, prose values, notes over the limit) is
-  returned **UNREAD** — orchestrator replies *re-emit as `RESULT`/`REVIEW`* and never parses prose.
+  returned **UNREAD** — the orchestrator **MUST** reply *re-emit as `RESULT`/`REVIEW`* and **MUST NOT** parse the prose.
 - A `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer;
   loop until every competency `pass`es (see *Review loop*). Peer review precedes `testing`.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see *Fix loop*).
-- Members never commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
+- Members **MUST NOT** commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
 
 ## Phases
 
@@ -226,9 +228,9 @@ orchestrator.
 8. **Tool-output economy.** Pull only the needed slice of a tool run into context — exit
    code + aggregate on success, exit code + failing slice on failure — never the full log.
    See *Tool-output economy*.
-9. **Typed forms verbatim.** Emit `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` exactly per the
-   *Communication protocol* tables — fixed row order, no extra fields, within stated limits.
-   Non-conforming → returned unread for re-emit.
+9. **Typed forms verbatim.** Every hand-back **MUST** match a *Communication protocol* table
+   exactly — fixed row order, no extra fields, within limits. Non-conforming hand-backs **MUST**
+   be returned unread for re-emit; the orchestrator **MUST NOT** act on prose.
 10. **Walk the full bar before hand-back.** Self-check EVERY touched symbol against this role's
     non-negotiables + SOLID/DI; attest it in `RESULT.gate` / `REVIEW.checked`. Opportunistic
     "what jumps out" is not enough.
