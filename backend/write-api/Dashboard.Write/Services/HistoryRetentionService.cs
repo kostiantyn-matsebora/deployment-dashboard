@@ -21,7 +21,6 @@ internal sealed class HistoryRetentionService(
     IConfiguration configuration,
     ILogger<HistoryRetentionService> logger) : BackgroundService
 {
-    internal const string RetentionDaysConfigKey = "HISTORY_RETENTION_DAYS";
     internal const int DefaultRetentionDays = 365;
     internal const int MinRetentionDays = 90;
     internal static readonly TimeSpan ShortRetention = TimeSpan.FromHours(2);
@@ -87,7 +86,7 @@ internal sealed class HistoryRetentionService(
     /// </summary>
     internal static int ResolveRetentionDays(IConfiguration config, ILogger logger)
     {
-        var raw = config[RetentionDaysConfigKey];
+        var raw = config["HISTORY_RETENTION_DAYS"];
 
         if (string.IsNullOrWhiteSpace(raw) || !int.TryParse(raw, out var parsed) || parsed <= 0)
             return DefaultRetentionDays;

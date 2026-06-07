@@ -12,6 +12,8 @@ namespace Dashboard.Control.Filters;
 /// </summary>
 internal sealed class ComponentEventValidationEndpointFilter(IComponentEventValidator validator) : IEndpointFilter
 {
+    private const int MaxCorrelationIdLength = 128;
+
     public async ValueTask<object?> InvokeAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -25,11 +27,11 @@ internal sealed class ComponentEventValidationEndpointFilter(IComponentEventVali
                 "Missing or invalid X-Component-Id header. Pattern: ^[a-z0-9][a-z0-9.-]{0,127}$."));
 
         // X-Correlation-Id is optional; absent → null (no error). Present but >128 chars → 422.
-        var correlationId = context.HttpContext.Request.Headers[ComponentId.CorrelationIdHeaderName].FirstOrDefault();
-        if (correlationId is not null && correlationId.Length > ComponentId.MaxCorrelationIdLength)
+        var correlationId = context.HttpContext.Request.Headers["X-Correlation-Id"].FirstOrDefault();
+        if (correlationId is not null && correlationId.Length > MaxCorrelationIdLength)
             failures.Add(new ValidationFailure(
                 "/X-Correlation-Id",
-                $"X-Correlation-Id must not exceed {ComponentId.MaxCorrelationIdLength} characters."));
+                $"X-Correlation-Id must not exceed {MaxCorrelationIdLength} characters."));
 
         var body = context.Arguments.OfType<ComponentEventIngest>().FirstOrDefault();
         if (body is null)

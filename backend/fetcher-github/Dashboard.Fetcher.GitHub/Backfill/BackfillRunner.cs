@@ -330,13 +330,73 @@ public sealed class BackfillRunner(
         long? runId,
         WorkflowGraph? graph,
         Dictionary<long, Dictionary<string, string>> envMap)
-        => ParentDerivation.DeriveParents(deployment, runId, graph, envMap);
+    {
+        if (runId is null || graph is null)
+            return [];
 
-    private Task<string> ResolveFailureStatusAsync(
+        var deployJob = graph.DeploymentJobs.Values
+            .FirstOrDefault(j => j.Environment == deployment.Environment);
+        if (deployJob is null)
+            return [];
+
+        var parentJobIds = ParentDerivation.FindParentDeploymentJobIds(
+            deployJob, graph.DeploymentJobs, graph.AllJobs);
+
+        if (!envMap.TryGetValue(runId.Value, out var resolvedEnvMap))
+            return [];
+
+        return parentJobIds
+            .Select(id => graph.DeploymentJobs.TryGetValue(id, out var j) ? j.Environment : null)
+            .Where(env => env is not null)
+            .Select(env => resolvedEnvMap.TryGetValue(env!, out var ghId) ? ghId : null)
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .Distinct()
+            .ToArray();
+    }
+
+    /// <inheritdoc cref="GithubActionsAdapter.ResolveFailureStatusAsync"/>
+    private async Task<string> ResolveFailureStatusAsync(
         string owner, string repoName, long deploymentId, long? runId, CancellationToken ct)
-        => GithubStatusResolver.ResolveFailureStatusAsync(
-            owner, repoName, deploymentId, runId, github, graphCache, logger, ct);
+    {
+        try
+        {
+            await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
+                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
+            {
+                if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
+                    return DeploymentStatus.Rejected;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
+                owner, repoName, deploymentId);
+        }
+
+        if (runId.HasValue)
+        {
+            try
+            {
+                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
+                if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
+                    return DeploymentStatus.Cancelled;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
+                    owner, repoName, runId);
+            }
+        }
+
+        return DeploymentStatus.Failure;
+    }
 
     private static (string Owner, string Repo) SplitRepo(string repo)
-        => GithubAdapterOptions.SplitRepo(repo);
+    {
+        var parts = repo.Split('/', 2);
+        return parts.Length == 2 ? (parts[0], parts[1]) : ("", repo);
+    }
 }

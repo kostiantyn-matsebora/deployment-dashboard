@@ -4,6 +4,7 @@ using Dashboard.Control.Repositories;
 using Dashboard.Control.StateMachine;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -60,7 +61,7 @@ internal sealed class ResetReconciler(
     private async Task TickAsync(CancellationToken ct)
     {
         var connectionString = services.GetService<IConfiguration>()
-            ?.GetConnectionString(ResetCoordination.PostgresConnectionName);
+            ?.GetConnectionString("Postgres");
 
         if (string.IsNullOrEmpty(connectionString))
             return;
@@ -138,14 +139,25 @@ internal sealed class ResetReconciler(
         // Emit reset-completed so connected components can recover.
         if (abortedResetId != Guid.Empty)
         {
-            var completedEvent = ResetCoordination.BuildControlEvent(
-                ResetCoordination.EventResetCompleted, abortedResetId);
+            var completedEvent = new ControlStreamEvent
+            {
+                Id = Guid.CreateVersion7(),
+                Type = "reset-completed",
+                Component = "*",
+                CorrelationId = abortedResetId,
+                OccurredAt = DateTimeOffset.UtcNow,
+            };
             await controlStream.InsertAsync(completedEvent, ct);
             await notifier.NotifyAsync(completedEvent, ct);
         }
 
-        // Transition cycle to idle and clear all fields.
-        ResetCoordination.ClearCycleFields(cycle);
+        // Transition cycle to idle.
+        cycle.State = ResetState.Idle;
+        cycle.CorrelationId = null;
+        cycle.ExpectedComponents = null;
+        cycle.AcksReceived = null;
+        cycle.StartedAt = null;
+        cycle.DeadlineAt = null;
         await db.SaveChangesAsync(ct);
 
         // Notify all instances to update their cached gate flag (Fix C).

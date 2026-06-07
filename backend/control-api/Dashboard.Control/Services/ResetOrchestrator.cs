@@ -36,7 +36,7 @@ internal sealed class ResetOrchestrator(
         CancellationToken appStopping)
     {
         var connectionString = services.GetService<IConfiguration>()
-            ?.GetConnectionString(ResetCoordination.PostgresConnectionName);
+            ?.GetConnectionString("Postgres");
 
         if (string.IsNullOrEmpty(connectionString))
         {
@@ -155,7 +155,7 @@ internal sealed class ResetOrchestrator(
             await stateNotifier.NotifyStateAsync(ResetState.Resetting, ct);
 
         var correlationId = cycle.CorrelationId ?? resetId;
-        var resetStartedEvent = ResetCoordination.BuildControlEvent(ResetCoordination.EventResetStarted, correlationId);
+        var resetStartedEvent = BuildControlEvent("reset-started", correlationId);
         await controlStream.InsertAsync(resetStartedEvent, ct);
         await notifier.NotifyAsync(resetStartedEvent, ct);
 
@@ -174,14 +174,14 @@ internal sealed class ResetOrchestrator(
 
         // ── Resetting → Idle ──────────────────────────────────────────────────
         machine.Fire(ResetTrigger.Complete);
-        ResetCoordination.ClearCycleFields(cycle);
+        ClearCycleFields(cycle);
         await SaveCycleAsync(db, cycle, ct);
 
         // Notify all instances that the gate is now OFF (Fix C).
         if (stateNotifier is not null)
             await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
 
-        var resetCompletedEvent = ResetCoordination.BuildControlEvent(ResetCoordination.EventResetCompleted, correlationId);
+        var resetCompletedEvent = BuildControlEvent("reset-completed", correlationId);
         await controlStream.InsertAsync(resetCompletedEvent, ct);
         await notifier.NotifyAsync(resetCompletedEvent, ct);
 
@@ -262,14 +262,14 @@ internal sealed class ResetOrchestrator(
         var machine = new ResetStateMachine(cycle);
         if (!machine.IsInState(ResetState.Idle))
             machine.Fire(ResetTrigger.Abort);
-        ResetCoordination.ClearCycleFields(cycle);
+        ClearCycleFields(cycle);
         await SaveCycleAsync(db, cycle, abortCt);
 
         // Emit reset-completed so connected components (fetcher, demo-driver) can recover
         // via the control stream — mirrors the reconciler abort path.
         if (abortedResetId != Guid.Empty)
         {
-            var completedEvent = ResetCoordination.BuildControlEvent(ResetCoordination.EventResetCompleted, abortedResetId);
+            var completedEvent = BuildControlEvent("reset-completed", abortedResetId);
             await controlStream.InsertAsync(completedEvent, abortCt);
             await notifier.NotifyAsync(completedEvent, abortCt);
         }
@@ -300,7 +300,7 @@ internal sealed class ResetOrchestrator(
             {
                 // Cycle already idle (may have been cleaned up), but still emit reset-completed
                 // so any components still waiting on the stream can recover.
-                var completedEvent = ResetCoordination.BuildControlEvent(ResetCoordination.EventResetCompleted, resetId);
+                var completedEvent = BuildControlEvent("reset-completed", resetId);
                 await controlStream.InsertAsync(completedEvent, appStopping);
                 await notifier.NotifyAsync(completedEvent, appStopping);
             }
@@ -356,7 +356,7 @@ internal sealed class ResetOrchestrator(
         catch { /* Best-effort: connection may already be closed. */ }
     }
 
-    // ── DB helpers ────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static async Task<ResetCycle> LoadCycleAsync(DashboardDbContext db, CancellationToken ct)
     {
@@ -385,5 +385,25 @@ internal sealed class ResetOrchestrator(
 
         await db.SaveChangesAsync(ct);
         db.ChangeTracker.Clear();
+    }
+
+    private static ControlStreamEvent BuildControlEvent(string type, Guid correlationId) =>
+        new()
+        {
+            Id = Guid.CreateVersion7(),
+            Type = type,
+            Component = "*",
+            CorrelationId = correlationId,
+            OccurredAt = DateTimeOffset.UtcNow,
+        };
+
+    private static void ClearCycleFields(ResetCycle cycle)
+    {
+        cycle.State = ResetState.Idle;
+        cycle.CorrelationId = null;
+        cycle.ExpectedComponents = null;
+        cycle.AcksReceived = null;
+        cycle.StartedAt = null;
+        cycle.DeadlineAt = null;
     }
 }

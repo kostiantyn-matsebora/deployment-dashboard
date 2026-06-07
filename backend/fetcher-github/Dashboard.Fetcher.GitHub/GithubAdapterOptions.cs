@@ -41,14 +41,4 @@ public sealed class GithubAdapterOptions
             .Select(p => p.Split('=', 2))
             .Where(parts => parts.Length == 2)
             .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
-
-    /// <summary>
-    /// Splits an "owner/repo" string into its constituent parts.
-    /// Returns an empty owner when the slash is absent (defensive fallback).
-    /// </summary>
-    public static (string Owner, string Repo) SplitRepo(string repo)
-    {
-        var parts = repo.Split('/', 2);
-        return parts.Length == 2 ? (parts[0], parts[1]) : ("", repo);
-    }
 }

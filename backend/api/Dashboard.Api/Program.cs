@@ -1,15 +1,26 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Dashboard.Api.Extensions;
 using Dashboard.Control;
+using Dashboard.Control.Sse;
 using Dashboard.Read;
 using Dashboard.Shared.Configuration;
 using Dashboard.Shared.Data;
 using Dashboard.Write;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ── JSON ──────────────────────────────────────────────────────────────────────
-builder.Services.AddDashboardJsonOptions();
+// Global snake_case policy covers response DTOs (DeploymentEvent entity fields).
+// Ingest DTO uses [JsonPropertyName] which takes precedence.
+builder.Services.ConfigureHttpJsonOptions(opts =>
+{
+    opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+    opts.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+});
 
 // ── Problem details ───────────────────────────────────────────────────────────
 builder.Services.AddDashboardProblemDetails();
@@ -31,17 +42,40 @@ builder.Services.Configure<RouteHandlerOptions>(opts => opts.ThrowOnBadRequest =
 builder.Services.AddDbContext<DashboardDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-// ── Domain services ───────────────────────────────────────────────────────────
+// ── Write services ────────────────────────────────────────────────────────────
 builder.Services.AddWriteServices();
+
+// ── Read services ─────────────────────────────────────────────────────────────
 builder.Services.AddReadServices();
+
+// ── Control services ──────────────────────────────────────────────────────────
 builder.Services.AddControlServices();
 
 // ── CORS (D6) ─────────────────────────────────────────────────────────────────
 // Enabled only when CORS_ALLOWED_ORIGINS is set; empty/absent = off (gateway / same-origin).
-builder.Services.AddDashboardCors(builder.Configuration);
+var corsOrigins = builder.Configuration["CORS_ALLOWED_ORIGINS"];
+if (!string.IsNullOrWhiteSpace(corsOrigins))
+{
+    var origins = corsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    builder.Services.AddCors(opts =>
+        opts.AddDefaultPolicy(policy =>
+            policy.WithOrigins(origins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .DisallowCredentials()));
+}
 
 // ── OpenAPI ───────────────────────────────────────────────────────────────────
-builder.Services.AddDashboardOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((doc, _, _) =>
+    {
+        doc.Info.Title = "Deployment Dashboard API";
+        doc.Info.Version = "v1";
+        doc.Info.Description = "Write and read deployment events.";
+        return Task.CompletedTask;
+    });
+});
 
 var app = builder.Build();
 
@@ -53,16 +87,67 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
-app.UseDashboardCors();
+
+if (!string.IsNullOrWhiteSpace(corsOrigins))
+    app.UseCors();
 
 // ── OpenAPI / Scalar ──────────────────────────────────────────────────────────
-app.MapDashboardOpenApi();
+app.MapOpenApi();
+app.MapScalarApiReference();
 
-// ── Infrastructure endpoints ──────────────────────────────────────────────────
-app.MapLivenessProbe();
-app.MapReadinessProbe();
+// ── Endpoints ─────────────────────────────────────────────────────────────────
 
-// ── Domain endpoints ──────────────────────────────────────────────────────────
+// Liveness probe: process is up. Returns {"status":"ok"} per the OpenAPI contract.
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }))
+   .WithTags("ops")
+   .WithSummary("Liveness probe");
+
+// Readiness probe: DB reachable + ALL FOUR LISTEN channels attached (D10, D12, §7 ch.4).
+// Returns 200 ready/degraded or 503 when the DB is not reachable.
+app.MapGet("/readyz", async (
+    DashboardDbContext db,
+    IReadinessIndicator deploymentReadiness,
+    IControlReadinessIndicator controlReadiness,
+    IAckReadinessIndicator ackReadiness,
+    IComponentEventReadinessIndicator componentEventReadiness,
+    CancellationToken ct) =>
+{
+    var dbOk = false;
+    try
+    {
+        await db.Database.ExecuteSqlRawAsync("SELECT 1", ct);
+        dbOk = true;
+    }
+    catch { /* db unreachable */ }
+
+    var deploymentListenOk = deploymentReadiness.IsListenerConnected;
+    var controlListenOk = controlReadiness.IsControlListenerConnected;
+    var ackListenOk = ackReadiness.IsAckListenerConnected;
+    var componentEventListenOk = componentEventReadiness.IsComponentEventListenerConnected;
+
+    var checks = new Dictionary<string, string>
+    {
+        ["db"] = dbOk ? "ok" : "fail",
+        ["listen_deployment"] = deploymentListenOk ? "ok" : "fail",
+        ["listen_control"] = controlListenOk ? "ok" : "fail",
+        ["listen_acks"] = ackListenOk ? "ok" : "fail",
+        ["listen_component_events"] = componentEventListenOk ? "ok" : "fail",
+    };
+
+    if (!dbOk)
+        return Results.Problem(
+            title: "Service is not ready.",
+            detail: "Database is not reachable.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            extensions: new Dictionary<string, object?> { ["checks"] = checks });
+
+    // All four LISTEN channels must be attached for full readiness (D10, D12, §7 ch.4); any missing → degraded.
+    var status = deploymentListenOk && controlListenOk && ackListenOk && componentEventListenOk ? "ready" : "degraded";
+    return Results.Ok(new { status, checks });
+})
+   .WithTags("ops")
+   .WithSummary("Readiness probe");
+
 app.MapWriteEndpoints();
 app.MapFetcherStateEndpoints();
 app.MapReadEndpoints();

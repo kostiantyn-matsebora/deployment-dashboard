@@ -55,8 +55,8 @@ internal sealed class ResetService(
         var initiatedEvent = new ControlStreamEvent
         {
             Id = resetId, // Per spec: reset-initiated event id IS the correlation_id carried by others.
-            Type = ResetCoordination.EventResetInitiated,
-            Component = ResetCoordination.ComponentWildcard,
+            Type = "reset-initiated",
+            Component = "*",
             // reset-initiated carries its own id as correlation_id; downstream frames echo it.
             CorrelationId = resetId,
             OccurredAt = now,

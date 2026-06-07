@@ -10,12 +10,11 @@ namespace Dashboard.Write.Filters;
 /// </summary>
 internal sealed class ApiKeyEndpointFilter(IConfiguration configuration) : IEndpointFilter
 {
-    internal const string HeaderName = "X-Api-Key";
-    internal const string ApiKeyConfigKey = "API_KEY";
+    private const string HeaderName = "X-Api-Key";
 
     // Resolved once at construction; IConfiguration is loaded at startup and does not
     // change at runtime, so reading the key per-request is unnecessary overhead.
-    private readonly string? _configuredKey = configuration[ApiKeyConfigKey];
+    private readonly string? _configuredKey = configuration["API_KEY"];
 
     public async ValueTask<object?> InvokeAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)

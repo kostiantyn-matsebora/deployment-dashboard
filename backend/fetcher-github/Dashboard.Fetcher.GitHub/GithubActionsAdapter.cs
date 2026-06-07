@@ -80,7 +80,7 @@ public sealed class GithubActionsAdapter(
     private async Task<(List<DeploymentEventIngest> Events, DateTimeOffset MaxSince)> PollRepoAsync(
         string repo, DateTimeOffset since, CancellationToken ct)
     {
-        var (owner, repoName) = GithubAdapterOptions.SplitRepo(repo);
+        var (owner, repoName) = SplitRepo(repo);
         var serviceMap = options.ServiceMapDict;
         var cutoff = since - TimeSpan.FromDays(1);  // margin for delayed status events
 
@@ -187,10 +187,9 @@ public sealed class GithubActionsAdapter(
 
                 // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
                 if (contractStatus == DeploymentStatus.Failure)
-                    contractStatus = await GithubStatusResolver.ResolveFailureStatusAsync(
-                        owner, repoName, deployment.Id, runId, github, graphCache, logger, ct);
+                    contractStatus = await ResolveFailureStatusAsync(owner, repoName, deployment.Id, runId, ct);
 
-                var parentDeployments = ParentDerivation.DeriveParents(deployment, runId, graph, envMap);
+                var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
 
                 string? version = null;
                 try
@@ -241,5 +240,95 @@ public sealed class GithubActionsAdapter(
             _deploymentsListCache.Set(repo, (result.ETag, windowed));
 
         return windowed;
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static string[] DeriveParents(
+        GhDeployment deployment,
+        long? runId,
+        WorkflowGraph? graph,
+        Dictionary<long, Dictionary<string, string>> envMap)
+    {
+        if (runId is null || graph is null)
+            return [];
+
+        var deployJob = graph.DeploymentJobs.Values
+            .FirstOrDefault(j => j.Environment == deployment.Environment);
+        if (deployJob is null)
+            return [];
+
+        var parentJobIds = ParentDerivation.FindParentDeploymentJobIds(
+            deployJob, graph.DeploymentJobs, graph.AllJobs);
+
+        if (!envMap.TryGetValue(runId.Value, out var resolvedEnvMap))
+            return [];
+
+        return parentJobIds
+            .Select(id => graph.DeploymentJobs.TryGetValue(id, out var j) ? j.Environment : null)
+            .Where(env => env is not null)
+            .Select(env => resolvedEnvMap.TryGetValue(env!, out var ghId) ? ghId : null)
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .Distinct()
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Refines a raw-GitHub <c>failure</c>/<c>error</c> status to the correct contract status:
+    /// <list type="bullet">
+    ///   <item><c>rejected</c> — at least one deployment review has <c>state = "rejected"</c>
+    ///         (reviewer explicitly denied the environment gate).</item>
+    ///   <item><c>cancelled</c> — the associated workflow run's <c>conclusion</c> is
+    ///         <c>"cancelled"</c> (run was cancelled before or during execution).</item>
+    ///   <item><c>failure</c> — neither of the above; the deployment ran and failed.</item>
+    /// </list>
+    /// Reviews are checked first because a rejected gate also produces a cancelled-like
+    /// run conclusion on some GitHub configurations; rejected is the more specific signal.
+    /// </summary>
+    private async Task<string> ResolveFailureStatusAsync(
+        string owner, string repoName, long deploymentId, long? runId, CancellationToken ct)
+    {
+        // Check reviews first — rejection is the most specific signal.
+        try
+        {
+            await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
+                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
+            {
+                if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
+                    return DeploymentStatus.Rejected;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
+                owner, repoName, deploymentId);
+        }
+
+        // Check run conclusion for cancellation.
+        if (runId.HasValue)
+        {
+            try
+            {
+                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
+                if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
+                    return DeploymentStatus.Cancelled;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
+                    owner, repoName, runId);
+            }
+        }
+
+        return DeploymentStatus.Failure;
+    }
+
+    private static (string Owner, string Repo) SplitRepo(string repo)
+    {
+        var parts = repo.Split('/', 2);
+        return parts.Length == 2 ? (parts[0], parts[1]) : ("", repo);
     }
 }
