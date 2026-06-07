@@ -12,6 +12,8 @@
         `| field | value |` OR a definition/bullet line `field: value` / `- field: value`;
         a label merely mentioned in prose does NOT count;
       - mandatory fields must be present with a NON-EMPTY value;
+      - each value cell must be a `•` bullet list — one item per line (`<br>`-separated
+        in a table cell); prose or inline-separated values are rejected;
       - the fields must appear in the form's fixed row order (process.md: "Fixed row order");
       - REVIEW.verdict must be `pass` or `changes-requested`.
 
@@ -88,6 +90,23 @@ function Get-FieldLine {
     return @{ Found = $false; Value = ''; Index = -1 }
 }
 
+# A populated value cell must be a '•' bullet list: each item starts with '•',
+# one item per line (items separated by <br> in a table cell, or by newlines).
+function Test-IsBulletCell {
+    param([string]$Value)
+    $bullet = [char]0x2022
+    $items = @([regex]::Split($Value, '(?i)<br\s*/?>|\r?\n') |
+        ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+    if ($items.Count -eq 0) { return $false }
+    foreach ($it in $items) {
+        if ($it[0] -ne $bullet) { return $false }            # each item starts with '•'
+        $rest = $it.Substring(1)
+        if ($rest.IndexOf($bullet) -ge 0) { return $false }  # only one item per line
+        if ($rest.Trim() -eq '') { return $false }           # bullet must carry content
+    }
+    return $true
+}
+
 function Get-ProtocolFormDecision {
     param([string]$Text)
     # Empty / whitespace — includes object protocol-response messages (shutdown etc.),
@@ -125,6 +144,18 @@ function Get-ProtocolFormDecision {
         return @{
             Block  = $true
             Reason = "Malformed $tag — field row(s) present but empty: $($empty -join ', '). Give a value or omit the row (process.md: omit empty rows)."
+        }
+    }
+
+    # 2b. Each present value cell must be a '•' bullet list, one item per line.
+    $notBulleted = @($canonical | Where-Object {
+            $occ[$_].Found -and -not [string]::IsNullOrWhiteSpace($occ[$_].Value) -and
+            -not (Test-IsBulletCell -Value $occ[$_].Value)
+        })
+    if ($notBulleted.Count -gt 0) {
+        return @{
+            Block  = $true
+            Reason = "Malformed $tag — value cell(s) not a bullet list: $($notBulleted -join ', '). Each value must be a '$([char]0x2022)' bullet list with one item per line (separate items with <br> in a table cell)."
         }
     }
 
