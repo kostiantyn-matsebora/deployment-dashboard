@@ -66,7 +66,7 @@ public sealed class BackfillRunner(
             var existing = incoming.BackfillFor(repo);
 
             // Stable anchor: reuse the persisted anchor for a resume, set a fresh one otherwise.
-            var anchor = existing?.Anchor ?? DateTimeOffset.UtcNow;
+            var anchor = existing?.Anchor ?? fetcherOptions.UtcNow;
             var cutoff = anchor - maxAge;
             var alreadyDone = existing?.DoneEnvs ?? [];
 

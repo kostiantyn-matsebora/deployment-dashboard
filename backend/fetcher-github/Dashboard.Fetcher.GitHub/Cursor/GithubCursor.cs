@@ -54,9 +54,11 @@ public sealed class GithubCursor
     /// <summary>
     /// Returns the high-water mark for <paramref name="repo"/>,
     /// falling back to <c>now − initialLookback</c> when not present (F7).
+    /// <paramref name="now"/> is supplied by the caller (the fetcher clock) so a pinned
+    /// test clock keeps the window stable against static fixtures.
     /// </summary>
-    public DateTimeOffset SinceFor(string repo, TimeSpan initialLookback) =>
-        Repos.TryGetValue(repo, out var c) ? c.Since : DateTimeOffset.UtcNow - initialLookback;
+    public DateTimeOffset SinceFor(string repo, TimeSpan initialLookback, DateTimeOffset now) =>
+        Repos.TryGetValue(repo, out var c) ? c.Since : now - initialLookback;
 
     /// <summary>Returns a new cursor with the repo's high-water mark advanced.</summary>
     public GithubCursor WithRepo(string repo, DateTimeOffset since) =>

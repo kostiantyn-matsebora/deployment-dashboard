@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Configuration;
 
 namespace Dashboard.Fetcher.Configuration;
@@ -28,6 +29,7 @@ public static class FetcherOptionsEnv
         ApplyInt(config, "BACKFILL_DEPTH", v => options.BackfillDepth = v);
         ApplyString(config, "CONTROL_API_KEY", v => options.ControlApiKey = v);
         ApplyString(config, "COMPONENT_ID", v => options.ComponentId = v);
+        ApplyDateTimeOffset(config, "FETCHER_NOW", v => options.NowOverride = v);
     }
 
     // ── private helpers ───────────────────────────────────────────────────────
@@ -43,6 +45,15 @@ public static class FetcherOptionsEnv
     {
         var raw = config[key];
         if (raw is not null && TimeSpan.TryParse(raw, out var value))
+            apply(value);
+    }
+
+    private static void ApplyDateTimeOffset(IConfiguration config, string key, Action<DateTimeOffset> apply)
+    {
+        var raw = config[key];
+        if (raw is not null && DateTimeOffset.TryParse(
+                raw, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value))
             apply(value);
     }
 
