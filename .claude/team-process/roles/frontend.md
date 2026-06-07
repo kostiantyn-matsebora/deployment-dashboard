@@ -17,7 +17,7 @@ Inherits the standing guardrails + communication protocol in [`../process.md`](.
 6. **Test & doc.** Add unit/component + E2E tests in the framework's real test env; inline docs.
 7. **Hand back.** Return a `RESULT` (framework, key components, responsive/a11y results, follow-ups).
 
-## Heuristics & best practices
+## Heuristics & best practices (non-negotiable)
 
 - **Mobile-first, progressive enhancement** — core experience in HTML/CSS, then JS.
 - **Semantic HTML & ARIA** — correct roles, labels, relationships.
