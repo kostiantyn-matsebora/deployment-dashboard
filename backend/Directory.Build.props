@@ -1,0 +1,24 @@
+<Project>
+
+  <!-- ──────────────────────────────────────────────────────────────────────────
+       Gate B — structural-quality analyzers (process hard gates).
+
+       SonarAnalyzer surfaces long methods, god-classes, and excessive complexity
+       as build WARNINGS. They are intentionally NOT errors yet: the existing
+       backend already violates several (e.g. GithubActionsAdapter.PollRepoAsync 136
+       lines, BackfillRunner.BackfillEnvAsync 116). Workflow:
+         1. land as warnings  → the build emits the authoritative violation list,
+         2. clear the backlog → fix the flagged members/classes,
+         3. flip to error     → set the rules below to `error` in backend/.editorconfig
+                                so the structural bar can never regress.
+
+       Rule severities live in backend/.editorconfig (catch-all off, targets on),
+       which keeps the `dotnet format` verify gate unaffected: the enabled rules
+       have no code fixes, so `dotnet format` has nothing to rewrite.
+       ────────────────────────────────────────────────────────────────────────── -->
+
+  <ItemGroup>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.27.0.140913" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

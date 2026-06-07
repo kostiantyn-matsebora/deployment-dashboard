@@ -81,8 +81,8 @@ Per-role stack, file lanes, and gate commands. **Apply the tool-output-economy g
 - **Stack:** .NET 10 (`net10.0`, C#), EF Core, xUnit. Solution `backend/Dashboard.slnx`.
 - **Lanes:** `backend/<service>/**` (services: `api`, `control-api`, `read-api`, `write-api`, `fetcher`, `fetcher-github`, `fetcher-host`, `shared`).
 - **Gates** (run from `backend/`; mirror `.github/workflows/api.yml`):
-  - Format — `dotnet format Dashboard.slnx --verify-no-changes`
-  - Build — `dotnet build Dashboard.slnx -c Release --nologo -v q`
+  - Format — `dotnet format whitespace Dashboard.slnx --verify-no-changes` + `dotnet format style Dashboard.slnx --verify-no-changes` (analyzers run in Build, not format).
+  - Build — `dotnet build Dashboard.slnx -c Release --nologo -v q`. Structural analyzers (SonarAnalyzer, Gate B; `backend/.editorconfig` + `Directory.Build.props`) surface as warnings — flip the rules to `error` once the backlog clears.
   - Test — `dotnet test Dashboard.slnx --settings Dashboard.runsettings --nologo -c Release` → on fail `… 2>&1 | Select-String 'error|\bFailed\b|\[xUnit'`
 - **Config:** flat `SCREAMING_SNAKE` env vars (appsettings base + `*OptionsEnv` override); never `Section__Property`. Env files gitignored; no secrets in code/logs.
 
@@ -169,3 +169,42 @@ Following rules MUST be followed always for any kind of project documentation an
   - Steps → numbered list. Choices / mappings → table. "X means Y" → `**X.** Y` on its own line.
   - Multi-rule bullet ("do A; also B; warn C") → parent + sub-bullets, one rule per line.
   - Prose paragraph stating > 2 rules → restructure.
+
+<!-- code-review-graph MCP tools -->
+## MCP Tools: code-review-graph
+
+**IMPORTANT: This project has a knowledge graph. ALWAYS use the
+code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
+the codebase.** The graph is faster, cheaper (fewer tokens), and gives
+you structural context (callers, dependents, test coverage) that file
+scanning cannot.
+
+### When to use graph tools FIRST
+
+- **Exploring code**: `semantic_search_nodes` or `query_graph` instead of Grep
+- **Understanding impact**: `get_impact_radius` instead of manually tracing imports
+- **Code review**: `detect_changes` + `get_review_context` instead of reading entire files
+- **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
+- **Architecture questions**: `get_architecture_overview` + `list_communities`
+
+Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+
+### Key Tools
+
+| Tool | Use when |
+| ------ | ---------- |
+| `detect_changes` | Reviewing code changes — gives risk-scored analysis |
+| `get_review_context` | Need source snippets for review — token-efficient |
+| `get_impact_radius` | Understanding blast radius of a change |
+| `get_affected_flows` | Finding which execution paths are impacted |
+| `query_graph` | Tracing callers, callees, imports, tests, dependencies |
+| `semantic_search_nodes` | Finding functions/classes by name or keyword |
+| `get_architecture_overview` | Understanding high-level codebase structure |
+| `refactor_tool` | Planning renames, finding dead code |
+
+### Workflow
+
+1. The graph auto-updates on file changes (via hooks).
+2. Use `detect_changes` for code review.
+3. Use `get_affected_flows` to understand impact.
+4. Use `query_graph` pattern="tests_for" to check coverage.

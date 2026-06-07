@@ -22,6 +22,16 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || echo 'Not a git repo, skipping'",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -44,6 +54,26 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-LaneGuard.ps1\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-ProtocolFormGuard.ps1\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -54,6 +84,16 @@
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -MarkRevised",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || true",
+            "timeout": 30
           }
         ]
       }

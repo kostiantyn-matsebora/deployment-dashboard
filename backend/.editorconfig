@@ -1,0 +1,33 @@
+# Gate B — structural-quality rule severities (process hard gates).
+#
+# Catch-all OFF, then re-enable only the structural proxies below. This keeps
+# `dotnet format --verify-no-changes` unaffected (the enabled rules have no code
+# fixes, so format has nothing to rewrite) while the build surfaces long methods,
+# god-classes, and high complexity as warnings.
+#
+# To convert the gate from advisory to hard once the backlog is cleared, change
+# the target rules from `warning` to `error`.
+root = true
+
+# Pin the formatter's newline to LF so `dotnet format` behaves identically on
+# Windows (CRLF default) and Linux CI — matches the repo's .gitattributes policy.
+[*]
+end_of_line = lf
+
+[*.cs]
+dotnet_analyzer_diagnostic.severity = none
+
+# Long method — methods should not have too many lines (Sonar default ~80 lines).
+dotnet_diagnostic.S138.severity = warning
+# File should not have too many lines of code.
+dotnet_diagnostic.S104.severity = warning
+# Type should not have too many methods (god-class proxy).
+dotnet_diagnostic.S1448.severity = warning
+# Class should not be coupled to too many other classes (SRP / feature-envy proxy).
+dotnet_diagnostic.S1200.severity = warning
+# Cyclomatic complexity should not be too high.
+dotnet_diagnostic.S1541.severity = warning
+# Cognitive complexity should not be too high (mixed-abstraction / hard-to-follow proxy).
+dotnet_diagnostic.S3776.severity = warning
+# Methods should not have too many parameters (data-clump proxy).
+dotnet_diagnostic.S107.severity = warning

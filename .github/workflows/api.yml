@@ -34,9 +34,14 @@ jobs:
         working-directory: backend
         run: dotnet tool restore
 
+      # Formatting only (whitespace + style). Structural analyzers (SonarAnalyzer,
+      # Gate B) run in the Build step below — `dotnet format analyzers` would fail
+      # verify on warning-level diagnostics that have no code fix.
       - name: Format gate
         working-directory: backend
-        run: dotnet format Dashboard.slnx --verify-no-changes
+        run: |
+          dotnet format whitespace Dashboard.slnx --verify-no-changes
+          dotnet format style Dashboard.slnx --verify-no-changes
 
       - name: Build
         working-directory: backend
