@@ -135,8 +135,8 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 | open | • questions needing a decision | omit if none |
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
-- A `BRIEF` **references** the role's hand-back template (below); it MUST NOT restate or invent a
-  hand-back shape — restating competes with the protocol and is itself a breach.
+- A `BRIEF` **references** the role's typed form in *Communication protocol* (`RESULT`/`REVIEW`/…);
+  it MUST NOT restate or invent a hand-back shape — restating competes with the protocol, itself a breach.
 - A hand-back not in its typed form (extra/renamed fields, prose values, notes over the limit) is
   returned **UNREAD** — orchestrator replies *re-emit as `RESULT`/`REVIEW`* and never parses prose.
 - A `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer;
@@ -144,38 +144,6 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see *Fix loop*).
 - Members never commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
-
-## Hand-back templates (emit verbatim)
-
-Copy the skeleton, fill the values, emit nothing else. Roles inline these so they are in-context;
-this is the canonical source. `role` = a competency name (`backend`, …), never the agent instance.
-
-```
-RESULT
-role:    <competency>
-changed: <in-lane files>
-gate:    <actual: build ok · unit 12/12>      # never "should pass"
-notes:   <≤3 key decisions>
-follow:  <out-of-lane / deferred>             # omit row if none
-block:   none | see FINDING
-```
-```
-REVIEW
-role:    <competency>                          # reviewer ≠ implementer
-scope:   <lanes/files reviewed>
-checked: <touched symbols × dimensions walked> # full bar per symbol
-verdict: pass | changes-requested
-remarks:                                       # omit block if pass
-  - smell/principle: <name> | location: <file:line> | required: <one line>
-block:   none | see FINDING
-```
-```
-FINDING
-where:   <file / spec ref>
-issue:   contradiction | impossible | missing input
-options: a) <path>  b) <path>
-need:    <decision required, one line>
-```
 
 ## Phases
 
@@ -258,9 +226,9 @@ orchestrator.
 8. **Tool-output economy.** Pull only the needed slice of a tool run into context — exit
    code + aggregate on success, exit code + failing slice on failure — never the full log.
    See *Tool-output economy*.
-9. **Typed forms verbatim.** Emit `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` exactly from the
-   *Hand-back templates* — fixed rows, no extra fields, within stated limits. Non-conforming →
-   returned unread for re-emit.
+9. **Typed forms verbatim.** Emit `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` exactly per the
+   *Communication protocol* tables — fixed row order, no extra fields, within stated limits.
+   Non-conforming → returned unread for re-emit.
 10. **Walk the full bar before hand-back.** Self-check EVERY touched symbol against this role's
     non-negotiables + SOLID/DI; attest it in `RESULT.gate` / `REVIEW.checked`. Opportunistic
     "what jumps out" is not enough.
