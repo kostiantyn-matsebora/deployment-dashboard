@@ -7,10 +7,17 @@
     with the form name on its own opening line:
         REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT
 
-    Enforcement is SHAPE-ONLY (honest limit): it blocks free-prose hand-backs and
-    forms missing required fields / with an invalid verdict. It cannot judge whether
-    a `checked` row is thorough. Informal coordination messages (no form tag, not
-    form-like) pass through untouched.
+    Validates STRUCTURE, not just keyword presence:
+      - each field must be a real structured row — a markdown table row
+        `| field | value |` OR a definition/bullet line `field: value` / `- field: value`;
+        a label merely mentioned in prose does NOT count;
+      - mandatory fields must be present with a NON-EMPTY value;
+      - the fields must appear in the form's fixed row order (process.md: "Fixed row order");
+      - REVIEW.verdict must be `pass` or `changes-requested`.
+
+    Still shape-only by design (honest limit): it cannot judge whether a `checked`
+    row is thorough or a `remarks` entry is correct. Informal coordination messages
+    (no form tag, not form-like) pass through untouched.
 .PARAMETER AsLibrary
     Define functions without executing entry block (for Pester).
 #>
@@ -31,11 +38,26 @@ function Get-FormTag {
     return $null
 }
 
-function Get-RequiredFields {
+# Full canonical field order per form (process.md Communication protocol).
+function Get-CanonicalFields {
     param([string]$Form)
     switch ($Form) {
         'REVIEW' { return @('role', 'scope', 'checked', 'verdict', 'remarks', 'block') }
-        'RESULT' { return @('role', 'changed', 'gate', 'block') }
+        'RESULT' { return @('role', 'changed', 'gate', 'notes', 'follow', 'block') }
+        'BRIEF' { return @('spec', 'lane', 'task', 'gate', 'seed') }
+        'FINDING' { return @('where', 'issue', 'options', 'need') }
+        'FIX' { return @('test', 'expect', 'actual', 'suspect') }
+        'ARTIFACT' { return @('spec', 'delta', 'open') }
+        default { return @() }
+    }
+}
+
+# Fields that MUST be present with a value (others may be omitted when empty).
+function Get-MandatoryFields {
+    param([string]$Form)
+    switch ($Form) {
+        'REVIEW' { return @('role', 'scope', 'checked', 'verdict') }
+        'RESULT' { return @('role', 'changed', 'gate') }
         'BRIEF' { return @('spec', 'lane', 'task', 'gate') }
         'FINDING' { return @('where', 'issue', 'options', 'need') }
         'FIX' { return @('test', 'expect', 'actual', 'suspect') }
@@ -44,29 +66,37 @@ function Get-RequiredFields {
     }
 }
 
-function Test-FieldPresent {
-    # Matches both table cells (`| role |`) and colon form (`role:`).
+# Locate a field as a STRUCTURED row (table cell or definition/bullet line) and
+# capture its value + line index. A prose mention does not match.
+function Get-FieldLine {
     param([string]$Text, [string]$Label)
-    return ($Text -match "(?im)(^|\|)\s*$([regex]::Escape($Label))\s*(\||:)")
-}
-
-function Get-FormFieldHits {
-    param([string]$Text)
-    $labels = @('role', 'scope', 'checked', 'verdict', 'remarks', 'changed', 'gate',
-        'spec', 'lane', 'task', 'where', 'issue', 'options', 'need',
-        'expect', 'actual', 'suspect', 'delta', 'block')
-    $hits = 0
-    foreach ($l in $labels) {
-        if (Test-FieldPresent -Text $Text -Label $l) { $hits++ }
+    $esc = [regex]::Escape($Label)
+    $lines = $Text -split "`r?`n"
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $ln = $lines[$i]
+        # Markdown table row:  | field | value |   (trailing pipe optional)
+        if ($ln -match "(?i)^\s*\|\s*$esc\s*\|\s*(?<v>[^|]*?)\s*\|?\s*$") {
+            return @{ Found = $true; Value = $Matches['v'].Trim(); Index = $i }
+        }
+        # Definition / bullet line:  field: value   |   - field: value   |   * field: value
+        if ($ln -match "(?i)^\s*[-*]?\s*$esc\s*:\s*(?<v>.*?)\s*$") {
+            return @{ Found = $true; Value = $Matches['v'].Trim(); Index = $i }
+        }
     }
-    return $hits
+    return @{ Found = $false; Value = ''; Index = -1 }
 }
 
 function Test-IsFormLike {
-    # A message that carries hand-back content but may lack a tag.
+    # A hand-back carrying ≥3 fields as structured rows (table/definition), even
+    # if the form tag is missing. Prose mentions do not count.
     param([string]$Text)
     if (Get-FormTag -Text $Text) { return $true }
-    return ((Get-FormFieldHits -Text $Text) -ge 3)
+    $all = @('role', 'scope', 'checked', 'verdict', 'remarks', 'changed', 'gate',
+        'spec', 'lane', 'task', 'where', 'issue', 'options', 'need',
+        'expect', 'actual', 'suspect', 'delta', 'block')
+    $hits = 0
+    foreach ($l in $all) { if ((Get-FieldLine -Text $Text -Label $l).Found) { $hits++ } }
+    return ($hits -ge 3)
 }
 
 function Get-ProtocolFormDecision {
@@ -85,18 +115,45 @@ function Get-ProtocolFormDecision {
         return @{ Block = $false }   # informal coordination — allowed
     }
 
-    $missing = @(Get-RequiredFields -Form $tag | Where-Object { -not (Test-FieldPresent -Text $Text -Label $_) })
+    $canonical = Get-CanonicalFields -Form $tag
+    $mandatory = Get-MandatoryFields -Form $tag
+    $occ = @{}
+    foreach ($f in $canonical) { $occ[$f] = Get-FieldLine -Text $Text -Label $f }
+
+    # 1. Mandatory fields must each be present as a structured row.
+    $missing = @($mandatory | Where-Object { -not $occ[$_].Found })
     if ($missing.Count -gt 0) {
         return @{
             Block  = $true
-            Reason = "Malformed $tag — missing required field(s): $($missing -join ', '). Emit every $tag row in fixed order, omit only empty rows (process.md Communication protocol)."
+            Reason = "Malformed $tag — missing required field row(s): $($missing -join ', '). Emit each as a table row '| field | value |' (or 'field: value'), not prose."
         }
     }
 
-    if ($tag -eq 'REVIEW' -and ($Text -notmatch '(?im)verdict[^\n]*\b(pass|changes-requested)\b')) {
+    # 2. Any present field row must carry a non-empty value (omit empty rows instead).
+    $empty = @($canonical | Where-Object { $occ[$_].Found -and [string]::IsNullOrWhiteSpace($occ[$_].Value) })
+    if ($empty.Count -gt 0) {
         return @{
             Block  = $true
-            Reason = "Malformed REVIEW — verdict must be 'pass' or 'changes-requested'."
+            Reason = "Malformed $tag — field row(s) present but empty: $($empty -join ', '). Give a value or omit the row (process.md: omit empty rows)."
+        }
+    }
+
+    # 3. Present fields must appear in the form's fixed row order.
+    $presentIndices = @($canonical | Where-Object { $occ[$_].Found } | ForEach-Object { $occ[$_].Index })
+    for ($i = 1; $i -lt $presentIndices.Count; $i++) {
+        if ($presentIndices[$i] -le $presentIndices[$i - 1]) {
+            return @{
+                Block  = $true
+                Reason = "Malformed $tag — fields out of order. Emit in fixed order: $($canonical -join ', ')."
+            }
+        }
+    }
+
+    # 4. REVIEW.verdict value must be pass | changes-requested.
+    if ($tag -eq 'REVIEW' -and ($occ['verdict'].Value -notmatch '(?i)\b(pass|changes-requested)\b')) {
+        return @{
+            Block  = $true
+            Reason = "Malformed REVIEW — verdict must be 'pass' or 'changes-requested' (got '$($occ['verdict'].Value)')."
         }
     }
 

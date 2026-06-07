@@ -5,7 +5,7 @@ BeforeAll {
     $script:ScriptPath = (Resolve-Path (Join-Path $PSScriptRoot 'Invoke-ProtocolFormGuard.ps1')).Path
     . $script:ScriptPath -AsLibrary
 
-    $script:ValidReview = @'
+    $script:ValidReviewTable = @'
 REVIEW
 
 | Field | Value |
@@ -18,11 +18,18 @@ REVIEW
 | block | none |
 '@
 
+    $script:ValidReviewDefList = @'
+REVIEW
+role: backend
+scope: backend/fetcher
+checked: PollLoop × SOLID
+verdict: pass
+remarks: none
+block: none
+'@
+
     $script:ValidResult = @'
 RESULT
-
-| Field | Value |
-|---|---|
 | role | backend |
 | changed | backend/fetcher/PollLoop.cs |
 | gate | build ok; unit 12/12 |
@@ -37,12 +44,8 @@ Describe 'Get-FormTag' {
         Get-FormTag -Text "REVIEW`n| role | backend |" | Should -Be 'REVIEW'
     }
 
-    It 'detects a #-prefixed tag' {
-        Get-FormTag -Text "#RESULT`nstuff" | Should -Be 'RESULT'
-    }
-
-    It 'is case-insensitive on the tag' {
-        Get-FormTag -Text "review`n..." | Should -Be 'REVIEW'
+    It 'detects a #-prefixed tag, case-insensitive' {
+        Get-FormTag -Text "#result`nstuff" | Should -Be 'RESULT'
     }
 
     It 'returns null when the first non-empty line is prose' {
@@ -51,62 +54,117 @@ Describe 'Get-FormTag' {
 }
 
 # ============================================================
-Describe 'Test-FieldPresent' {
+Describe 'Get-FieldLine (structural)' {
 
-    It 'matches a table cell' {
-        Test-FieldPresent -Text '| verdict | pass |' -Label 'verdict' | Should -BeTrue
+    It 'captures the value from a table row' {
+        $r = Get-FieldLine -Text '| verdict | changes-requested |' -Label 'verdict'
+        $r.Found | Should -BeTrue
+        $r.Value | Should -Be 'changes-requested'
     }
 
-    It 'matches a colon form' {
-        Test-FieldPresent -Text 'role: backend' -Label 'role' | Should -BeTrue
+    It 'captures the value from a definition line' {
+        $r = Get-FieldLine -Text 'role: backend' -Label 'role'
+        $r.Found | Should -BeTrue
+        $r.Value | Should -Be 'backend'
     }
 
-    It 'does not match the label inside prose' {
-        Test-FieldPresent -Text 'the role of the fetcher is to poll' -Label 'role' | Should -BeFalse
+    It 'captures the value from a bullet definition line' {
+        (Get-FieldLine -Text '- gate: build ok' -Label 'gate').Value | Should -Be 'build ok'
+    }
+
+    It 'does NOT match a label mentioned in prose' {
+        (Get-FieldLine -Text 'the role of the fetcher is to poll' -Label 'role').Found | Should -BeFalse
+    }
+
+    It 'reports an empty value for an empty table cell' {
+        $r = Get-FieldLine -Text '| scope |  |' -Label 'scope'
+        $r.Found | Should -BeTrue
+        $r.Value | Should -BeNullOrEmpty
     }
 }
 
 # ============================================================
-Describe 'Get-ProtocolFormDecision' {
+Describe 'Get-ProtocolFormDecision — valid forms pass' {
 
-    It 'passes a well-formed REVIEW' {
-        (Get-ProtocolFormDecision -Text $script:ValidReview).Block | Should -BeFalse
+    It 'passes a well-formed REVIEW table' {
+        (Get-ProtocolFormDecision -Text $script:ValidReviewTable).Block | Should -BeFalse
     }
 
-    It 'passes a well-formed RESULT' {
+    It 'passes a REVIEW as a definition list' {
+        (Get-ProtocolFormDecision -Text $script:ValidReviewDefList).Block | Should -BeFalse
+    }
+
+    It 'passes a RESULT that omits optional rows (notes/follow)' {
         (Get-ProtocolFormDecision -Text $script:ValidResult).Block | Should -BeFalse
     }
+}
 
-    It 'blocks a REVIEW missing the checked row' {
-        $bad = $script:ValidReview -replace '(?im)^\| checked .*$', ''
+# ============================================================
+Describe 'Get-ProtocolFormDecision — structural violations block' {
+
+    It 'blocks a REVIEW missing a mandatory field row (checked)' {
+        $bad = $script:ValidReviewTable -replace '(?im)^\| checked .*$', ''
         $d = Get-ProtocolFormDecision -Text $bad
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'checked'
     }
 
+    It 'blocks a REVIEW with a present-but-empty mandatory value' {
+        $bad = $script:ValidReviewTable -replace '\| scope \| backend/fetcher/\*\* \|', '| scope |  |'
+        $d = Get-ProtocolFormDecision -Text $bad
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'empty'
+    }
+
+    It 'blocks a REVIEW whose fields are out of order' {
+        $outOfOrder = @'
+REVIEW
+| role | backend |
+| verdict | pass |
+| scope | x |
+| checked | y |
+'@
+        $d = Get-ProtocolFormDecision -Text $outOfOrder
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'out of order'
+    }
+
     It 'blocks a REVIEW with an invalid verdict value' {
-        $bad = $script:ValidReview -replace 'changes-requested', 'maybe'
+        $bad = $script:ValidReviewTable -replace 'changes-requested', 'maybe'
         $d = Get-ProtocolFormDecision -Text $bad
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'verdict'
     }
 
-    It 'blocks an untagged hand-back table that is form-like (missing tag)' {
+    It 'blocks a tagged REVIEW whose body is prose (no structured rows)' {
+        $prose = "REVIEW`nThis is my review. The role is backend and the verdict is pass, looks fine."
+        $d = Get-ProtocolFormDecision -Text $prose
+        $d.Block | Should -BeTrue
+    }
+
+    It 'blocks an untagged hand-back table (missing form tag)' {
         $untagged = @'
 Here is my review:
-
 | role | backend |
-| scope | backend/fetcher |
+| scope | x |
 | verdict | changes-requested |
-| remarks | a few issues |
+| remarks | y |
 '@
         $d = Get-ProtocolFormDecision -Text $untagged
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'no form tag'
     }
+}
+
+# ============================================================
+Describe 'Get-ProtocolFormDecision — non-forms pass through' {
 
     It 'allows an informal coordination message' {
-        (Get-ProtocolFormDecision -Text 'Please re-run iteration 2 when you get a chance.').Block | Should -BeFalse
+        (Get-ProtocolFormDecision -Text 'Please re-run iteration 2 when you can.').Block | Should -BeFalse
+    }
+
+    It 'allows prose that merely mentions a couple of field words' {
+        (Get-ProtocolFormDecision -Text 'The role here is to verify the scope of the change.').Block | Should -BeFalse
     }
 
     It 'allows an empty message' {
@@ -118,8 +176,7 @@ Here is my review:
 Describe 'Get-SendMessageText' {
 
     It 'returns the string message verbatim' {
-        $ti = [pscustomobject]@{ message = 'hello'; to = 'lead' }
-        Get-SendMessageText -ToolInput $ti | Should -Be 'hello'
+        Get-SendMessageText -ToolInput ([pscustomobject]@{ message = 'hello'; to = 'lead' }) | Should -Be 'hello'
     }
 
     It 'returns empty for an object (legacy protocol response) message' {
