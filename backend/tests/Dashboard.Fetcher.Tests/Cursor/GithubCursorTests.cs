@@ -25,24 +25,25 @@ public sealed class GithubCursorTests
     }
 
     [Fact]
-    public void SinceFor_UnknownRepo_FallsBackToNowMinusLookback()
+    public void SinceFor_UnknownRepo_FallsBackToSuppliedNowMinusLookback()
     {
         var cursor = new GithubCursor();
         var lookback = TimeSpan.FromDays(7);
+        var now = new DateTimeOffset(2026, 6, 6, 12, 0, 0, TimeSpan.Zero);
 
-        var since = cursor.SinceFor("new/repo", lookback);
+        var since = cursor.SinceFor("new/repo", lookback, now);
 
-        var expected = DateTimeOffset.UtcNow - lookback;
-        Assert.True(Math.Abs((since - expected).TotalSeconds) < 2);
+        // Uses the caller-supplied clock, not wall-clock now (pinnable for tests/fixtures).
+        Assert.Equal(now - lookback, since);
     }
 
     [Fact]
-    public void SinceFor_KnownRepo_ReturnsStoredValue()
+    public void SinceFor_KnownRepo_ReturnsStoredValue_IgnoringNow()
     {
         var stored = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var cursor = new GithubCursor().WithRepo("acme/api", stored);
 
-        Assert.Equal(stored, cursor.SinceFor("acme/api", TimeSpan.FromDays(7)));
+        Assert.Equal(stored, cursor.SinceFor("acme/api", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
     }
 
     [Fact]

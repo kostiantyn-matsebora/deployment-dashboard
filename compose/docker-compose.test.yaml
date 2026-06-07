@@ -69,3 +69,14 @@ services:
       # slot, not deployments): 1828001(1) + 1823001(2) + 1815001(2) = 5. depth=3 stops at
       # event 3 (run 1823001.in_progress) and never fetches the run 1815001 success anchor.
       BACKFILL_DEPTH: "5"
+      # Pin the fetcher clock so the static GitHub fixtures never age out of the
+      # backfill window. The window is now-relative (anchor = UtcNow, cutoff =
+      # anchor − InitialLookback), but the fixtures use hardcoded created_at dates
+      # (2026-05-25 … 06-06). Without a pin the default 7d window slides with the
+      # calendar and silently drops fixture events once real time passes the authored
+      # window (~2026-06-06) — a time-bomb that breaks github-fetcher.spec.ts on any
+      # run after that date. FETCHER_NOW pins "now" to 2026-06-06T12:00Z, reproducing
+      # the authored 7d window (opens 2026-05-30T12:00Z): run 792001 (05-25) stays
+      # outside, run 826001 (06-06T07:58 waiting) stays inside — exactly the
+      # billing-webhook/prod never-deployed assertion the suite relies on.
+      FETCHER_NOW: "2026-06-06T12:00:00Z"

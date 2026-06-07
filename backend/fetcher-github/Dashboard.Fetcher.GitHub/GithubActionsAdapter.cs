@@ -65,7 +65,7 @@ public sealed class GithubActionsAdapter(
 
         foreach (var repo in options.RepoList)
         {
-            var since = cursor.SinceFor(repo, fetcherOptions.InitialLookback);
+            var since = cursor.SinceFor(repo, fetcherOptions.InitialLookback, fetcherOptions.UtcNow);
             var (events, maxSince) = await PollRepoAsync(repo, since, ct);
             allEvents.AddRange(events);
 
