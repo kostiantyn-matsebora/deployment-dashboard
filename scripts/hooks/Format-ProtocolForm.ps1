@@ -95,7 +95,8 @@ function ConvertTo-FormFields {
         }
     }
 
-    Write-Output -NoEnumerate $fields
+    # Return the list as a single object (comma operator prevents enumeration).
+    , $fields
 }
 
 # Render parsed fields as the aligned 2-column table.

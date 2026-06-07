@@ -137,7 +137,8 @@ function Get-AlignedTableFields {
     }
 
     if (-not $hasTableRow) { return $null }
-    Write-Output -NoEnumerate $fields
+    # Return the list as a single object (comma operator prevents enumeration).
+    , $fields
 }
 
 # Validate that a single item cell string is exactly one '•' bullet with content.
@@ -256,7 +257,6 @@ function Get-ProtocolFormDecision {
     }
 
     # 5. Present fields must appear in the form's fixed row order.
-    $presentInOrder = @($canonical | Where-Object { $occ.ContainsKey($_) })
     # Verify that the order in the parsed fields list matches canonical order.
     $parsedNames    = @($fields | ForEach-Object { $_.Name })
     $canonicalSlice = @($canonical | Where-Object { $occ.ContainsKey($_) })
