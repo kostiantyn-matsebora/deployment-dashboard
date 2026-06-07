@@ -61,15 +61,10 @@ public sealed class ControlStreamClient(
 
         while (!ct.IsCancellationRequested)
         {
-            string? line;
-            try
+            var (line, readError) = await TryReadLineAsync(reader, ct);
+            if (readError)
             {
-                line = await reader.ReadLineAsync(ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogWarning(ex, "[ControlStream] Read error; signalling reconnect");
-                yield break;
+                yield break; // error already logged in TryReadLineAsync
             }
 
             if (line is null)
@@ -106,17 +101,41 @@ public sealed class ControlStreamClient(
             }
 
             // Field lines.
-            if (line.StartsWith("id:", StringComparison.Ordinal))
-                frameId = line["id:".Length..].TrimStart();
-            else if (line.StartsWith("event:", StringComparison.Ordinal))
-                frameEvent = line["event:".Length..].TrimStart();
-            else if (line.StartsWith("data:", StringComparison.Ordinal))
-            {
-                if (dataLines.Length > 0)
-                    dataLines.Append('\n');
-                dataLines.Append(line["data:".Length..].TrimStart());
-            }
-            // Other field names (retry: etc.) — silently ignored (forward-compat).
+            ParseFieldLine(line, ref frameId, ref frameEvent, dataLines);
+        }
+    }
+
+    // Reads one line from the SSE stream. Returns (null, false) on EOF, (null, true) on error.
+    private async Task<(string? Line, bool Error)> TryReadLineAsync(StreamReader reader, CancellationToken ct)
+    {
+        try
+        {
+            return (await reader.ReadLineAsync(ct), false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "[ControlStream] Read error; signalling reconnect");
+            return (null, true);
+        }
+    }
+
+    // Parses one SSE field line (id:/event:/data:) and updates frame accumulators in-place.
+    // Other field names (retry: etc.) are silently ignored (forward-compat).
+    private static void ParseFieldLine(
+        string line,
+        ref string? frameId,
+        ref string? frameEvent,
+        StringBuilder dataLines)
+    {
+        if (line.StartsWith("id:", StringComparison.Ordinal))
+            frameId = line["id:".Length..].TrimStart();
+        else if (line.StartsWith("event:", StringComparison.Ordinal))
+            frameEvent = line["event:".Length..].TrimStart();
+        else if (line.StartsWith("data:", StringComparison.Ordinal))
+        {
+            if (dataLines.Length > 0)
+                dataLines.Append('\n');
+            dataLines.Append(line["data:".Length..].TrimStart());
         }
     }
 }

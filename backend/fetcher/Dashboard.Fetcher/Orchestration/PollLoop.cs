@@ -71,74 +71,111 @@ public sealed class PollLoop(
 
         while (!ct.IsCancellationRequested)
         {
-            // Block here while paused; cancel unblocks the wait.
-            if (_isPaused)
-            {
-                try
-                {
-                    await _resumeGate.WaitAsync(ct);
-                    _resumeGate.Release(); // restore the permit so future iterations pass through
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    break;
-                }
-            }
-
-            // Apply cursor override injected by DropCursorAndResume (§5.10.5).
-            if (_hasPendingCursorOverride)
-            {
-                cursor = _pendingCursorOverride;
-                _hasPendingCursorOverride = false;
-            }
-
-            try
-            {
-                cursor = await PollOnceAsync(cursor, ct);
-                var snapshot = rateLimitSnapshotFactory?.Invoke();
-                readiness?.RecordSuccess(snapshot);
-
-                // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
-                if (reportCycleAsync is not null && snapshot is not null)
-                {
-                    try
-                    {
-                        await reportCycleAsync(snapshot, ct);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        logger.LogWarning(ex,
-                            "[{Adapter}] per-cycle rate-limit report failed (non-fatal)",
-                            adapter.AdapterId);
-                    }
-                }
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
+            if (!await WaitWhilePausedAsync(ct))
                 break;
-            }
-            catch (HttpRequestException ex) when (
-                ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            {
-                logger.LogError(ex, "[{Adapter}] poll error (auth failed); retrying next interval",
-                    adapter.AdapterId);
-                readiness?.RecordAuthFailed(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "[{Adapter}] poll error; retrying next interval",
-                    adapter.AdapterId);
-                readiness?.RecordError(ex.Message);
-            }
 
-            try
-            {
-                await Task.Delay(pollInterval, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
+            cursor = ApplyPendingCursorOverride(cursor);
+
+            var (shouldContinue, updatedCursor) = await PollAndReportAsync(cursor, ct);
+            cursor = updatedCursor;
+            if (!shouldContinue)
                 break;
-            }
+
+            if (!await DelayIntervalAsync(ct))
+                break;
+        }
+    }
+
+    // Returns false when cancellation has been requested (caller should break).
+    private async Task<bool> WaitWhilePausedAsync(CancellationToken ct)
+    {
+        if (!_isPaused)
+            return true;
+
+        try
+        {
+            await _resumeGate.WaitAsync(ct);
+            _resumeGate.Release(); // restore the permit so future iterations pass through
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
+    // Swaps in the cursor injected by DropCursorAndResume (§5.10.5), if any.
+    private string? ApplyPendingCursorOverride(string? cursor)
+    {
+        if (!_hasPendingCursorOverride)
+            return cursor;
+
+        _hasPendingCursorOverride = false;
+        return _pendingCursorOverride;
+    }
+
+    // Runs one poll cycle, records readiness, and posts the rate-limit report (§5.11 / F18).
+    // Returns false when cancellation has been requested (caller should break).
+    // Returns (shouldContinue, updatedCursor). shouldContinue=false signals the loop to break.
+    private async Task<(bool Continue, string? Cursor)> PollAndReportAsync(string? cursor, CancellationToken ct)
+    {
+        try
+        {
+            cursor = await PollOnceAsync(cursor, ct);
+            var snapshot = rateLimitSnapshotFactory?.Invoke();
+            readiness?.RecordSuccess(snapshot);
+            await TryReportRateLimitAsync(snapshot, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return (false, cursor);
+        }
+        catch (HttpRequestException ex) when (
+            ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            logger.LogError(ex, "[{Adapter}] poll error (auth failed); retrying next interval",
+                adapter.AdapterId);
+            readiness?.RecordAuthFailed(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[{Adapter}] poll error; retrying next interval",
+                adapter.AdapterId);
+            readiness?.RecordError(ex.Message);
+        }
+
+        return (true, cursor);
+    }
+
+    // Posts per-cycle rate-limit snapshot; non-fatal on failure (§5.11 / F18).
+    private async Task TryReportRateLimitAsync(RateLimitSnapshot? snapshot, CancellationToken ct)
+    {
+        if (reportCycleAsync is null || snapshot is null)
+            return;
+
+        try
+        {
+            await reportCycleAsync(snapshot, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex,
+                "[{Adapter}] per-cycle rate-limit report failed (non-fatal)",
+                adapter.AdapterId);
+        }
+    }
+
+    // Waits one poll interval. Returns false when cancellation fires (caller should break).
+    private async Task<bool> DelayIntervalAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(pollInterval, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 
