@@ -49,7 +49,7 @@ jobs:
 
       - name: Build
         working-directory: backend
-        run: dotnet build Dashboard.slnx -c Release --nologo
+        run: dotnet build Dashboard.slnx -c Release --nologo -p:EnableStructuralAnalyzers=true
 
       - name: Test
         working-directory: backend

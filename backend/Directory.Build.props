@@ -17,7 +17,11 @@
        have no code fixes, so `dotnet format` has nothing to rewrite.
        ────────────────────────────────────────────────────────────────────────── -->
 
-  <ItemGroup>
+  <!-- Opt-in: analyzers run only when EnableStructuralAnalyzers=true (the CI Build
+       gate sets it). Docker image publishes and plain local builds do NOT load
+       SonarAnalyzer, keeping image builds fast and side-effect-free (the api-tests
+       compose rebuild must stay main-equivalent). -->
+  <ItemGroup Condition="'$(EnableStructuralAnalyzers)' == 'true'">
     <PackageReference Include="SonarAnalyzer.CSharp" Version="10.27.0.140913" PrivateAssets="all" />
   </ItemGroup>
 
