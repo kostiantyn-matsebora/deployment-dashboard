@@ -80,31 +80,8 @@ public sealed class BackfillRunner(
 
             DateTimeOffset? maxSinceForRepo = null;
 
-            // Discover active workflows for service resolution.
-            var workflowList = await github.GetAsync<GhWorkflowListResponse>(
-                $"/repos/{owner}/{repoName}/actions/workflows?per_page=100", ct);
-            var activeWorkflows = workflowList?.Workflows
-                .Where(w => w.State == "active")
-                .ToList() ?? [];
-
-            var pathToService = activeWorkflows
-                .ToDictionary(
-                    w => w.Path,
-                    w => ServiceResolver.Resolve(w.Name, repo, serviceMap),
-                    StringComparer.OrdinalIgnoreCase);
-
-            var allServiceNames = activeWorkflows
-                .Select(w => ServiceResolver.Resolve(w.Name, repo, serviceMap))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            // Discover environments.
-            var envList = await github.GetAsync<GhEnvironmentListResponse>(
-                $"/repos/{owner}/{repoName}/environments", ct);
-            var environments = envList?.Environments.Select(e => e.Name).ToList() ?? [];
-
-            var remainingEnvs = environments
-                .Where(e => !alreadyDone.Contains(e, StringComparer.OrdinalIgnoreCase))
-                .ToList();
+            var (pathToService, allServiceNames) = await ResolveWorkflowMappingsAsync(owner, repoName, serviceMap, repo, ct);
+            var remainingEnvs = await DiscoverRemainingEnvsAsync(owner, repoName, alreadyDone, ct);
 
             foreach (var env in remainingEnvs)
             {
@@ -144,6 +121,52 @@ public sealed class BackfillRunner(
         logger.LogInformation("[Backfill] all repos complete");
     }
 
+    /// <summary>
+    /// Discovers active workflows and builds the path-to-service and service-name lookup maps.
+    /// </summary>
+    private async Task<(IReadOnlyDictionary<string, string> PathToService, IReadOnlySet<string> AllServiceNames)>
+        ResolveWorkflowMappingsAsync(
+            string owner, string repoName,
+            IReadOnlyDictionary<string, string> serviceMap,
+            string repo,
+            CancellationToken ct)
+    {
+        var workflowList = await github.GetAsync<GhWorkflowListResponse>(
+            $"/repos/{owner}/{repoName}/actions/workflows?per_page=100", ct);
+        var activeWorkflows = workflowList?.Workflows
+            .Where(w => w.State == "active")
+            .ToList() ?? [];
+
+        var pathToService = activeWorkflows
+            .ToDictionary(
+                w => w.Path,
+                w => ServiceResolver.Resolve(w.Name, repo, serviceMap),
+                StringComparer.OrdinalIgnoreCase);
+
+        var allServiceNames = activeWorkflows
+            .Select(w => ServiceResolver.Resolve(w.Name, repo, serviceMap))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return (pathToService, allServiceNames);
+    }
+
+    /// <summary>
+    /// Fetches the environment list for a repo and filters out already-completed environments.
+    /// </summary>
+    private async Task<List<string>> DiscoverRemainingEnvsAsync(
+        string owner, string repoName,
+        IReadOnlyCollection<string> alreadyDone,
+        CancellationToken ct)
+    {
+        var envList = await github.GetAsync<GhEnvironmentListResponse>(
+            $"/repos/{owner}/{repoName}/environments", ct);
+        var environments = envList?.Environments.Select(e => e.Name).ToList() ?? [];
+
+        return environments
+            .Where(e => !alreadyDone.Contains(e, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     // ── per-env scan ──────────────────────────────────────────────────────────
 
     /// <summary>
@@ -164,6 +187,49 @@ public sealed class BackfillRunner(
         var depth = fetcherOptions.BackfillDepth > 0 ? fetcherOptions.BackfillDepth : 1;
 
         // Pass 1: collect chosen deployments for this env.
+        var chosen = await CollectChosenDeploymentsAsync(
+            owner, repoName, repo, env, cutoff,
+            pathToService, allServiceNames, serviceMap, depth, ct);
+
+        // Collect the raw deployment tuples for the caller to merge into the repo map.
+        var deploymentTuples = chosen
+            .Select(c => (c.Deployment.Id, c.Deployment.Environment, c.Deployment.CreatedAt, c.RunId))
+            .ToList();
+
+        // Build the env map using all known repo deployments so far PLUS this env's new ones.
+        // This ensures parent edges from this env back to a prior env in the same run are resolved.
+        var combinedMap = new Dictionary<long, Dictionary<string, string>>(repoEnvMap);
+        MergeIntoMap(combinedMap, deploymentTuples);
+
+        // Pass 2: build events and trim by slot depth.
+        var candidateEvents = await BuildEnvEventsAsync(
+            owner, repoName, repo, chosen, serviceMap, combinedMap, ct);
+
+        var events = TrimEventsBySlotDepth(candidateEvents, depth);
+
+        return (events, deploymentTuples);
+    }
+
+    /// <summary>
+    /// Pass 1: pages through GitHub deployments for one environment and returns
+    /// the chosen subset — up to <paramref name="depth"/> mapped statuses per service slot,
+    /// stopping early when the stall window is exhausted or the cutoff is reached.
+    /// </summary>
+    private async Task<List<(
+            GhDeployment Deployment,
+            List<GhDeploymentStatus> Statuses,
+            long? RunId,
+            WorkflowGraph? Graph,
+            string Service)>>
+        CollectChosenDeploymentsAsync(
+            string owner, string repoName, string repo, string env,
+            DateTimeOffset cutoff,
+            IReadOnlyDictionary<string, string> pathToService,
+            IReadOnlySet<string> allServiceNames,
+            IReadOnlyDictionary<string, string> serviceMap,
+            int depth,
+            CancellationToken ct)
+    {
         var chosen = new List<(
             GhDeployment Deployment,
             List<GhDeploymentStatus> Statuses,
@@ -219,17 +285,24 @@ public sealed class BackfillRunner(
             consecutiveNoProgress = 0;
         }
 
-        // Collect the raw deployment tuples for the caller to merge into the repo map.
-        var deploymentTuples = chosen
-            .Select(c => (c.Deployment.Id, c.Deployment.Environment, c.Deployment.CreatedAt, c.RunId))
-            .ToList();
+        return chosen;
+    }
 
-        // Build the env map using all known repo deployments so far PLUS this env's new ones.
-        // This ensures parent edges from this env back to a prior env in the same run are resolved.
-        var combinedMap = new Dictionary<long, Dictionary<string, string>>(repoEnvMap);
-        MergeIntoMap(combinedMap, deploymentTuples);
-
-        // Pass 2: build events and trim.
+    /// <summary>
+    /// Pass 2: maps chosen deployments + their statuses to ingest events,
+    /// refining failure status and resolving parent edges.
+    /// </summary>
+    private async Task<List<(DeploymentEventIngest Event, string Slot)>> BuildEnvEventsAsync(
+        string owner, string repoName, string repo,
+        List<(GhDeployment Deployment,
+              List<GhDeploymentStatus> Statuses,
+              long? RunId,
+              WorkflowGraph? Graph,
+              string Service)> chosen,
+        IReadOnlyDictionary<string, string> serviceMap,
+        Dictionary<long, Dictionary<string, string>> combinedMap,
+        CancellationToken ct)
+    {
         var candidateEvents = new List<(DeploymentEventIngest Event, string Slot)>();
 
         foreach (var (deployment, statuses, runId, graph, service) in chosen)
@@ -255,6 +328,17 @@ public sealed class BackfillRunner(
             }
         }
 
+        return candidateEvents;
+    }
+
+    /// <summary>
+    /// Trims the candidate event list to at most <paramref name="depth"/> events per slot,
+    /// keeping the most recent by <see cref="DeploymentEventIngest.HappenedAt"/>.
+    /// </summary>
+    private static List<DeploymentEventIngest> TrimEventsBySlotDepth(
+        List<(DeploymentEventIngest Event, string Slot)> candidateEvents,
+        int depth)
+    {
         var events = new List<DeploymentEventIngest>();
         foreach (var slotGroup in candidateEvents.GroupBy(x => x.Slot))
         {
@@ -264,8 +348,7 @@ public sealed class BackfillRunner(
                 .Select(x => x.Event);
             events.AddRange(kept);
         }
-
-        return (events, deploymentTuples);
+        return events;
     }
 
     // ── env-map helpers ───────────────────────────────────────────────────────
@@ -329,70 +412,14 @@ public sealed class BackfillRunner(
         GhDeployment deployment,
         long? runId,
         WorkflowGraph? graph,
-        Dictionary<long, Dictionary<string, string>> envMap)
-    {
-        if (runId is null || graph is null)
-            return [];
-
-        var deployJob = graph.DeploymentJobs.Values
-            .FirstOrDefault(j => j.Environment == deployment.Environment);
-        if (deployJob is null)
-            return [];
-
-        var parentJobIds = ParentDerivation.FindParentDeploymentJobIds(
-            deployJob, graph.DeploymentJobs, graph.AllJobs);
-
-        if (!envMap.TryGetValue(runId.Value, out var resolvedEnvMap))
-            return [];
-
-        return parentJobIds
-            .Select(id => graph.DeploymentJobs.TryGetValue(id, out var j) ? j.Environment : null)
-            .Where(env => env is not null)
-            .Select(env => resolvedEnvMap.TryGetValue(env!, out var ghId) ? ghId : null)
-            .Where(id => id is not null)
-            .Select(id => id!)
-            .Distinct()
-            .ToArray();
-    }
+        Dictionary<long, Dictionary<string, string>> envMap) =>
+        DeploymentMapper.DeriveParents(deployment, runId, graph, envMap);
 
     /// <inheritdoc cref="GithubActionsAdapter.ResolveFailureStatusAsync"/>
-    private async Task<string> ResolveFailureStatusAsync(
-        string owner, string repoName, long deploymentId, long? runId, CancellationToken ct)
-    {
-        try
-        {
-            await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
-                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
-            {
-                if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
-                    return DeploymentStatus.Rejected;
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex,
-                "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
-                owner, repoName, deploymentId);
-        }
-
-        if (runId.HasValue)
-        {
-            try
-            {
-                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
-                if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
-                    return DeploymentStatus.Cancelled;
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex,
-                    "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
-                    owner, repoName, runId);
-            }
-        }
-
-        return DeploymentStatus.Failure;
-    }
+    private Task<string> ResolveFailureStatusAsync(
+        string owner, string repoName, long deploymentId, long? runId, CancellationToken ct) =>
+        DeploymentMapper.ResolveFailureStatusAsync(
+            owner, repoName, deploymentId, runId, github, graphCache, logger, ct);
 
     private static (string Owner, string Repo) SplitRepo(string repo)
     {

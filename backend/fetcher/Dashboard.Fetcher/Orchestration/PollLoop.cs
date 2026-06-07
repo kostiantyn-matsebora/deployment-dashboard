@@ -71,26 +71,9 @@ public sealed class PollLoop(
 
         while (!ct.IsCancellationRequested)
         {
-            // Block here while paused; cancel unblocks the wait.
-            if (_isPaused)
-            {
-                try
-                {
-                    await _resumeGate.WaitAsync(ct);
-                    _resumeGate.Release(); // restore the permit so future iterations pass through
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    break;
-                }
-            }
+            if (!await WaitWhilePausedAsync(ct)) break;
 
-            // Apply cursor override injected by DropCursorAndResume (§5.10.5).
-            if (_hasPendingCursorOverride)
-            {
-                cursor = _pendingCursorOverride;
-                _hasPendingCursorOverride = false;
-            }
+            cursor = ApplyPendingCursorOverride(cursor);
 
             try
             {
@@ -100,18 +83,7 @@ public sealed class PollLoop(
 
                 // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
                 if (reportCycleAsync is not null && snapshot is not null)
-                {
-                    try
-                    {
-                        await reportCycleAsync(snapshot, ct);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        logger.LogWarning(ex,
-                            "[{Adapter}] per-cycle rate-limit report failed (non-fatal)",
-                            adapter.AdapterId);
-                    }
-                }
+                    await TryReportCycleAsync(snapshot, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -131,14 +103,61 @@ public sealed class PollLoop(
                 readiness?.RecordError(ex.Message);
             }
 
-            try
-            {
-                await Task.Delay(pollInterval, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            if (!await WaitIntervalAsync(ct)) break;
+        }
+    }
+
+    // Block here while paused; cancel unblocks the wait. Returns false when cancelled.
+    private async Task<bool> WaitWhilePausedAsync(CancellationToken ct)
+    {
+        if (!_isPaused) return true;
+        try
+        {
+            await _resumeGate.WaitAsync(ct);
+            _resumeGate.Release(); // restore the permit so future iterations pass through
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
+    // Apply cursor override injected by DropCursorAndResume (§5.10.5).
+    private string? ApplyPendingCursorOverride(string? cursor)
+    {
+        if (!_hasPendingCursorOverride) return cursor;
+        _hasPendingCursorOverride = false;
+        return _pendingCursorOverride;
+    }
+
+    // Fire-and-swallow per-cycle rate-limit report (F18 / §5.11).
+    // A failure must not interrupt the loop.
+    private async Task TryReportCycleAsync(RateLimitSnapshot snapshot, CancellationToken ct)
+    {
+        try
+        {
+            await reportCycleAsync!(snapshot, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex,
+                "[{Adapter}] per-cycle rate-limit report failed (non-fatal)",
+                adapter.AdapterId);
+        }
+    }
+
+    // Wait for the configured poll interval. Returns false when cancelled.
+    private async Task<bool> WaitIntervalAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(pollInterval, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 

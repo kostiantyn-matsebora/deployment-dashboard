@@ -106,17 +106,27 @@ public sealed class ControlStreamClient(
             }
 
             // Field lines.
-            if (line.StartsWith("id:", StringComparison.Ordinal))
-                frameId = line["id:".Length..].TrimStart();
-            else if (line.StartsWith("event:", StringComparison.Ordinal))
-                frameEvent = line["event:".Length..].TrimStart();
-            else if (line.StartsWith("data:", StringComparison.Ordinal))
-            {
-                if (dataLines.Length > 0)
-                    dataLines.Append('\n');
-                dataLines.Append(line["data:".Length..].TrimStart());
-            }
-            // Other field names (retry: etc.) — silently ignored (forward-compat).
+            ParseFieldLine(line, ref frameId, ref frameEvent, dataLines);
+        }
+    }
+
+    // Parse a non-empty, non-comment SSE field line and update the current frame state.
+    // Other field names (retry: etc.) — silently ignored (forward-compat).
+    private static void ParseFieldLine(
+        string line,
+        ref string? frameId,
+        ref string? frameEvent,
+        StringBuilder dataLines)
+    {
+        if (line.StartsWith("id:", StringComparison.Ordinal))
+            frameId = line["id:".Length..].TrimStart();
+        else if (line.StartsWith("event:", StringComparison.Ordinal))
+            frameEvent = line["event:".Length..].TrimStart();
+        else if (line.StartsWith("data:", StringComparison.Ordinal))
+        {
+            if (dataLines.Length > 0)
+                dataLines.Append('\n');
+            dataLines.Append(line["data:".Length..].TrimStart());
         }
     }
 }
