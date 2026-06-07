@@ -16,8 +16,10 @@
       - REVIEW.verdict must be `pass` or `changes-requested`.
 
     Still shape-only by design (honest limit): it cannot judge whether a `checked`
-    row is thorough or a `remarks` entry is correct. Informal coordination messages
-    (no form tag, not form-like) pass through untouched.
+    row is thorough or a `remarks` entry is correct. Per process.md, EVERY cross-role
+    message must be a typed form — so any non-empty string that is not a valid tagged
+    form is BLOCKED (no "informal coordination" escape). Only empty strings and object
+    protocol-response messages (shutdown etc., which arrive as '') pass through.
 .PARAMETER AsLibrary
     Define functions without executing entry block (for Pester).
 #>
@@ -86,33 +88,21 @@ function Get-FieldLine {
     return @{ Found = $false; Value = ''; Index = -1 }
 }
 
-function Test-IsFormLike {
-    # A hand-back carrying ≥3 fields as structured rows (table/definition), even
-    # if the form tag is missing. Prose mentions do not count.
-    param([string]$Text)
-    if (Get-FormTag -Text $Text) { return $true }
-    $all = @('role', 'scope', 'checked', 'verdict', 'remarks', 'changed', 'gate',
-        'spec', 'lane', 'task', 'where', 'issue', 'options', 'need',
-        'expect', 'actual', 'suspect', 'delta', 'block')
-    $hits = 0
-    foreach ($l in $all) { if ((Get-FieldLine -Text $Text -Label $l).Found) { $hits++ } }
-    return ($hits -ge 3)
-}
-
 function Get-ProtocolFormDecision {
     param([string]$Text)
+    # Empty / whitespace — includes object protocol-response messages (shutdown etc.),
+    # which Get-SendMessageText flattens to ''. Not a cross-role hand-back; allow.
     if ([string]::IsNullOrWhiteSpace($Text)) { return @{ Block = $false } }
 
     $tag = Get-FormTag -Text $Text
 
+    # No form tag → free prose. process.md: every cross-role message MUST be a typed
+    # form. No "informal coordination" escape — block and require re-emission.
     if (-not $tag) {
-        if (Test-IsFormLike -Text $Text) {
-            return @{
-                Block  = $true
-                Reason = 'This looks like a typed-form hand-back but has no form tag. Open the message with the form name on its own line (REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT) and emit that form''s fields. Free-prose hand-backs are returned UNREAD (process.md Communication protocol).'
-            }
+        return @{
+            Block  = $true
+            Reason = 'Free-prose cross-role message — not permitted. Every cross-role message MUST be one of the six typed forms (REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT), opened with the form name on its own line and emitting that form''s fields. Informal prose is returned UNREAD (process.md Communication protocol). Re-emit in the correct typed form.'
         }
-        return @{ Block = $false }   # informal coordination — allowed
     }
 
     $canonical = Get-CanonicalFields -Form $tag
