@@ -239,6 +239,63 @@ public sealed class FetcherOptionsEnvTests
         Assert.Equal(TimeSpan.FromDays(14), options.EffectiveBackfillMaxAge);
     }
 
+    // ── FETCHER_NOW (clock pin) ──────────────────────────────────────────────
+
+    [Fact]
+    public void FetcherNow_SetsNowOverride_WhenKeyPresent()
+    {
+        var options = new FetcherOptions();
+        var config = BuildConfig(new Dictionary<string, string?> { ["FETCHER_NOW"] = "2026-06-06T12:00:00Z" });
+
+        FetcherOptionsEnv.ApplyEnvOverrides(config, options);
+
+        Assert.Equal(new DateTimeOffset(2026, 6, 6, 12, 0, 0, TimeSpan.Zero), options.NowOverride);
+    }
+
+    [Fact]
+    public void FetcherNow_LeavesNowOverrideNull_WhenKeyAbsent()
+    {
+        var options = new FetcherOptions();
+        var config = BuildConfig(new Dictionary<string, string?>());
+
+        FetcherOptionsEnv.ApplyEnvOverrides(config, options);
+
+        Assert.Null(options.NowOverride);
+    }
+
+    [Fact]
+    public void FetcherNow_LeavesNowOverrideNull_WhenValueUnparseable()
+    {
+        var options = new FetcherOptions();
+        var config = BuildConfig(new Dictionary<string, string?> { ["FETCHER_NOW"] = "not-a-date" });
+
+        var exception = Record.Exception(() => FetcherOptionsEnv.ApplyEnvOverrides(config, options));
+
+        Assert.Null(exception);
+        Assert.Null(options.NowOverride);
+    }
+
+    [Fact]
+    public void UtcNow_ReturnsOverride_WhenSet()
+    {
+        var pinned = new DateTimeOffset(2026, 6, 6, 12, 0, 0, TimeSpan.Zero);
+        var options = new FetcherOptions { NowOverride = pinned };
+
+        Assert.Equal(pinned, options.UtcNow);
+    }
+
+    [Fact]
+    public void UtcNow_ReturnsWallClock_WhenOverrideNull()
+    {
+        var options = new FetcherOptions();
+
+        var before = DateTimeOffset.UtcNow;
+        var actual = options.UtcNow;
+        var after = DateTimeOffset.UtcNow;
+
+        Assert.InRange(actual, before, after);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static IConfiguration BuildConfig(Dictionary<string, string?> values) =>
