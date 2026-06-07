@@ -152,22 +152,24 @@ Here is my review:
 '@
         $d = Get-ProtocolFormDecision -Text $untagged
         $d.Block | Should -BeTrue
-        $d.Reason | Should -Match 'no form tag'
+        $d.Reason | Should -Match 'typed form'
     }
 }
 
 # ============================================================
-Describe 'Get-ProtocolFormDecision — non-forms pass through' {
+Describe 'Get-ProtocolFormDecision — free prose is blocked (strict)' {
 
-    It 'allows an informal coordination message' {
-        (Get-ProtocolFormDecision -Text 'Please re-run iteration 2 when you can.').Block | Should -BeFalse
+    It 'blocks an informal coordination message' {
+        $d = Get-ProtocolFormDecision -Text 'Please re-run iteration 2 when you can.'
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'typed form'
     }
 
-    It 'allows prose that merely mentions a couple of field words' {
-        (Get-ProtocolFormDecision -Text 'The role here is to verify the scope of the change.').Block | Should -BeFalse
+    It 'blocks prose that merely mentions a couple of field words' {
+        (Get-ProtocolFormDecision -Text 'The role here is to verify the scope of the change.').Block | Should -BeTrue
     }
 
-    It 'allows an empty message' {
+    It 'allows an empty message (empty + object protocol-response messages)' {
         (Get-ProtocolFormDecision -Text '').Block | Should -BeFalse
     }
 }
