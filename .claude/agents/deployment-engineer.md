@@ -1,7 +1,6 @@
 ---
 name: deployment-engineer
 description: Designs and implements robust CI/CD pipelines, container orchestration, and cloud infrastructure automation. Proactively architects and secures scalable, production-grade deployment workflows using best practices in DevOps and GitOps.
-tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash, LS, WebSearch, WebFetch, Task, mcp__context7__resolve-library-id, mcp__context7__get-library-docs, mcp__sequential-thinking__sequentialthinking, mcp__serena__initial_instructions, mcp__serena__get_symbols_overview, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_implementations, mcp__serena__find_declaration, mcp__serena__get_diagnostics_for_file, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__rename_symbol, mcp__serena__replace_content, mcp__serena__safe_delete_symbol, mcp__markdown__list_files, mcp__markdown__list_headings, mcp__markdown__get_section, mcp__markdown__search_docs, mcp__markdown__find_code_blocks, mcp__markdown__get_frontmatter
 model: sonnet
 context_tokens: 3310
 ---

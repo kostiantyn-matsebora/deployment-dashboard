@@ -1,7 +1,6 @@
 ---
 name: api-architect
 description: Universal API designer specializing in RESTful design, GraphQL schemas, and modern contract standards. **MUST BE USED** proactively whenever a project needs a new or revised API contract. Produces clear resource models, OpenAPI/GraphQL specs, and guidance on auth, versioning, pagination, and error formats—without prescribing any specific backend technology.
-tools: Read, Grep, Glob, Write, WebFetch, WebSearch, Bash, Edit, mcp__markdown__list_files, mcp__markdown__list_headings, mcp__markdown__get_section, mcp__markdown__search_docs, mcp__markdown__find_code_blocks, mcp__markdown__get_frontmatter
 context_tokens: 3010
 ---
 

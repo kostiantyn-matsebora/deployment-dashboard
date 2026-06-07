@@ -78,6 +78,87 @@ order; omit empty rows.** Every cross-role message **MUST** be one of these form
 verbatim — **never** free prose. This binds the **orchestrator** too (`BRIEF` to dispatch,
 `FIX` to route), not only members.
 
+**Emitted rendering (all six forms).** *Every* typed form — REVIEW · RESULT · BRIEF ·
+FINDING · FIX · ARTIFACT — is sent as an aligned 2-column table: **one `•` item per row**,
+the field name on its **first row only** (blank field cell on continuation rows), columns
+auto-padded so every `|` lines up, and a **full-width `-----` rule after each field block**.
+Never use `<br>`; never join two items on one line. Render with the helper
+`scripts/hooks/Format-ProtocolForm.ps1` rather than hand-aligning. Worked examples — every form rendered:
+
+```
+REVIEW
+| role    | • backend                                                 |
+-----------------------------------------------------------------------
+| scope   | • backend/fetcher-github/**                               |
+-----------------------------------------------------------------------
+| checked | • GithubActionsAdapter × SRP / smells                     |
+|         | • BackfillRunner × SOLID / DI                             |
+-----------------------------------------------------------------------
+| verdict | • changes-requested                                       |
+-----------------------------------------------------------------------
+| remarks | • SRP · GithubActionsAdapter.cs:42 · extract HTTP adapter |
+-----------------------------------------------------------------------
+| block   | • see FINDING                                             |
+-----------------------------------------------------------------------
+
+RESULT
+| role    | • backend                                     |
+-----------------------------------------------------------
+| changed | • GithubActionsAdapter.cs                     |
+|         | • BackfillRunner.cs                           |
+-----------------------------------------------------------
+| gate    | • build ok                                    |
+|         | • 264/264 tests                               |
+-----------------------------------------------------------
+| notes   | • extracted HTTP adapter into dedicated class |
+-----------------------------------------------------------
+| block   | • none                                        |
+-----------------------------------------------------------
+
+BRIEF
+| spec | • docs/fetcher/fetcher.md#polling                      |
+-----------------------------------------------------------------
+| lane | • backend/fetcher-github/**                            |
+-----------------------------------------------------------------
+| task | • decompose long methods in GithubActionsAdapter       |
+-----------------------------------------------------------------
+| gate | • build ok                                             |
+|      | • unit tests green                                     |
+-----------------------------------------------------------------
+| seed | • methods over 40 lines flagged by structural analyzer |
+-----------------------------------------------------------------
+
+FINDING
+| where   | • backend/fetcher-github/GithubActionsAdapter.cs |
+--------------------------------------------------------------
+| issue   | • contradiction                                  |
+--------------------------------------------------------------
+| options | • a - extract method; keep class boundary        |
+|         | • b - split into two focused classes             |
+--------------------------------------------------------------
+| need    | • decide ownership boundary before refactor      |
+--------------------------------------------------------------
+
+FIX
+| test    | • BackfillRunnerTests.RunAsync_StopsOnCancellation          |
+-------------------------------------------------------------------------
+| expect  | • test completes within 5 s                                 |
+-------------------------------------------------------------------------
+| actual  | • hangs indefinitely                                        |
+-------------------------------------------------------------------------
+| suspect | • BackfillRunner.cs - missing CancellationToken propagation |
+-------------------------------------------------------------------------
+
+ARTIFACT
+| spec  | • docs/api/openapi.yaml                         |
+-----------------------------------------------------------
+| delta | • GET /deployments — added status filter param  |
+|       | • POST /deployments — added correlationId field |
+-----------------------------------------------------------
+| open  | • pagination strategy not yet decided           |
+-----------------------------------------------------------
+```
+
 **BRIEF** — orch → role · dispatch
 
 | Field | What belongs | Constraint |
@@ -250,8 +331,6 @@ that's usually one number. Pull only the **needed slice** into context — never
   only — not the passing noise around them.
 - **Prefer the tool's quiet mode** (minimal/error-only reporter, `--quiet`, `--no-progress`)
   over post-filtering when available.
-- **Scope reads/searches too.** Globs + line ranges; symbol/section retrieval (Serena /
-  markdown MCP), not whole-file or whole-repo dumps.
 
 `RESULT.gate` is this aggregate, never a pasted raw log. Binding for every role and mode.
 

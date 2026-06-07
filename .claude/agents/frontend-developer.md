@@ -1,7 +1,6 @@
 ---
 name: frontend-developer
 description: MUST BE USED to deliver responsive, accessible, high‑performance UIs. Use PROACTIVELY whenever user‑facing code is required and no framework‑specific sub‑agent exists. Capable of working with vanilla JS/TS, React, Vue, Angular, Svelte, or Web Components.
-tools: LS, Read, Grep, Glob, Bash, Write, Edit, WebFetch, mcp__serena__initial_instructions, mcp__serena__get_symbols_overview, mcp__serena__find_symbol, mcp__serena__find_referencing_symbols, mcp__serena__find_implementations, mcp__serena__find_declaration, mcp__serena__get_diagnostics_for_file, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__rename_symbol, mcp__serena__replace_content, mcp__serena__safe_delete_symbol, mcp__markdown__list_files, mcp__markdown__list_headings, mcp__markdown__get_section, mcp__markdown__search_docs, mcp__markdown__find_code_blocks, mcp__markdown__get_frontmatter
 model: sonnet
 context_tokens: 3410
 ---
