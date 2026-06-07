@@ -117,3 +117,4 @@ site/
 .tmp-card-shots/
 # Added by code-review-graph
 .code-review-graph/
+.tokensave

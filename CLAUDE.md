@@ -123,16 +123,29 @@ Per-role stack, file lanes, and gate commands. **Apply the tool-output-economy g
 - **Lanes:** `docs/**/*.md`, per-directory `index.md`, and the *Sources of truth* registry (Edit-only, smallest region).
 - **Tooling:** markdown MCP for section retrieval; maintenance hook `pwsh scripts/hooks/Invoke-DocsKeeperMaintenance.ps1 -DriftOnly` (mirrors `.github/workflows/docs.yml`).
 
-## Code intelligence (Serena-first)
+## Code intelligence (purpose-routed MCP)
 
-The Serena MCP server (`mcp__serena__*`) exposes symbol-level retrieval and editing via language servers (C# / TypeScript / PowerShell). **Prefer it over `Read` / `Grep` wherever code symbols apply** — it returns targeted symbols, not whole files, cutting token use across agent turns.
+Three code MCP servers are available. **Route by purpose — pick the server built for the job; never one server for everything.** Prefer them over `Read` / `Grep`: they return targeted symbols plus structural context (callers, dependents, tests), not whole files — cutting tokens across agent turns.
 
-**Load before use (mandatory).** Serena's tools are *deferred* — their schemas are unloaded, so they cannot be called until fetched. At the start of any code task, load them via `ToolSearch` (e.g. `select:mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols`). Skip this and agents silently default to `Grep` / `Read`; this step is what makes the preference below take effect.
+**Load before use (mandatory).** All three expose *deferred* tools — schemas unloaded, uncallable until fetched via `ToolSearch` (e.g. `select:mcp__tokensave__tokensave_context,mcp__serena__find_symbol`). Skip this and agents silently fall back to `Grep` / `Read`; loading is what makes the routing below take effect.
 
-- **Understand code.** `get_symbols_overview` (a file's top-level symbols), then `find_symbol` (locate; `depth=1` for members, `include_body` only when you need the source).
-- **Trace impact before editing a shared symbol.** `find_referencing_symbols` / `find_implementations` / `find_declaration` — not a grep-and-read sweep.
-- **Edit code.** `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` instead of full-file rewrites.
-- **Fall back to `Read` / `Grep`** for declarative/non-code files (YAML, JSON, Dockerfiles, configs), exact line-range reads, or content Serena's LSPs don't index well (e.g. PowerShell beyond the fallback tier). For **Markdown docs** prefer the markdown MCP (see *Docs intelligence* below), not `Read`.
+**Routing.**
+
+| Purpose | Primary server | Tools |
+|---|---|---|
+| **Research / explore / understand** code | **tokensave** | `tokensave_context` (NL query → symbols + snippets), `tokensave_search`, `tokensave_callers` / `tokensave_callees` / `tokensave_call_chain` |
+| **Impact / blast radius** before touching a shared symbol | **tokensave** | `tokensave_impact` / `tokensave_affected` / `tokensave_coupling`; cross-check refs with serena `find_referencing_symbols` / `find_implementations` |
+| **Symbol-level editing** | **serena** | `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` — LSP-accurate (C# / TS / PowerShell) |
+| **Code review** (change-scoped) | **code-review-graph** (+ tokensave + serena) | graph: `detect_changes` (risk-scored) / `get_review_context` / `get_impact_radius` / `get_affected_flows`; tokensave for deeper structure; serena to read exact symbol bodies |
+| **Architecture / structure overview** | **tokensave** or **code-review-graph** | tokensave `tokensave_outline` / `tokensave_health` / `tokensave_hotspots`; graph `get_architecture_overview` / `list_communities` |
+| **Docs (`.md`)** | **markdown** | see *Docs intelligence* below |
+
+**Per-server notes.**
+- **tokensave** (`mcp__tokensave__*`). Code graph; start with `tokensave_context` for any exploration. Read-only discovery tools are parallel-safe. **4-call budget per question** — synthesize from what you have rather than exceed it. Report `tokensave_metrics:` savings to the user when present.
+- **serena** (`mcp__serena__*`). LSP retrieval + editing. `get_symbols_overview` → `find_symbol` (`depth=1` for members, `include_body` only when source needed). Owns surgical edits.
+- **code-review-graph** (`mcp__code-review-graph__*`). Persistent change-review graph; auto-updates via hooks but **rebuild after a branch switch** (it warns when stale).
+
+- **Fall back to `Read` / `Grep`** for declarative/non-code files (YAML, JSON, Dockerfiles, configs), exact line-range reads, or content the LSPs don't index well. For **Markdown** use the markdown MCP, not `Read`.
 
 ## Docs intelligence (markdown-first)
 
@@ -169,42 +182,3 @@ Following rules MUST be followed always for any kind of project documentation an
   - Steps → numbered list. Choices / mappings → table. "X means Y" → `**X.** Y` on its own line.
   - Multi-rule bullet ("do A; also B; warn C") → parent + sub-bullets, one rule per line.
   - Prose paragraph stating > 2 rules → restructure.
-
-<!-- code-review-graph MCP tools -->
-## MCP Tools: code-review-graph
-
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
-the codebase.** The graph is faster, cheaper (fewer tokens), and gives
-you structural context (callers, dependents, test coverage) that file
-scanning cannot.
-
-### When to use graph tools FIRST
-
-- **Exploring code**: `semantic_search_nodes` or `query_graph` instead of Grep
-- **Understanding impact**: `get_impact_radius` instead of manually tracing imports
-- **Code review**: `detect_changes` + `get_review_context` instead of reading entire files
-- **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
-- **Architecture questions**: `get_architecture_overview` + `list_communities`
-
-Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
-
-### Key Tools
-
-| Tool | Use when |
-| ------ | ---------- |
-| `detect_changes` | Reviewing code changes — gives risk-scored analysis |
-| `get_review_context` | Need source snippets for review — token-efficient |
-| `get_impact_radius` | Understanding blast radius of a change |
-| `get_affected_flows` | Finding which execution paths are impacted |
-| `query_graph` | Tracing callers, callees, imports, tests, dependencies |
-| `semantic_search_nodes` | Finding functions/classes by name or keyword |
-| `get_architecture_overview` | Understanding high-level codebase structure |
-| `refactor_tool` | Planning renames, finding dead code |
-
-### Workflow
-
-1. The graph auto-updates on file changes (via hooks).
-2. Use `detect_changes` for code review.
-3. Use `get_affected_flows` to understand impact.
-4. Use `query_graph` pattern="tests_for" to check coverage.
