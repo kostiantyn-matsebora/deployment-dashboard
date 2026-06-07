@@ -64,7 +64,7 @@ the orchestrator reviews, reconciles, commits, ships — this keeps the change a
 - **Fan-out is deterministic.** Drive parallel phases from an explicit plan, not chatter
   — repeatable + visible.
 - **The orchestrator traffics in compressed messages, not raw artifacts.** It reads
-  `RESULT`/`FINDING`/`ARTIFACT` — never test logs, full diffs, or source. A decision that
+  `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` — never test logs, full diffs, or source. A decision that
   needs an artifact read → delegate it and get back a compressed message.
 - **Keep the lead's working set to `plan + current wave`.**
   - Maintain a durable **run ledger** (lane map + one line per wave: changed / decided / deferred) as the authoritative state.
@@ -72,9 +72,11 @@ the orchestrator reviews, reconciles, commits, ships — this keeps the change a
 
 ## Communication protocol
 
-All cross-role messages use these 5 typed forms. Each form is a table: **field name** ·
+All cross-role messages use these 6 typed forms. Each form is a table: **field name** ·
 **what belongs** (the pieces of info) · **constraint** (the rule governing it). **Fixed row
-order; omit empty rows.** The vocabulary is binding — roles emit/consume these, not free prose.
+order; omit empty rows.** Every cross-role message **MUST** be one of these forms, emitted
+verbatim — **never** free prose. This binds the **orchestrator** too (`BRIEF` to dispatch,
+`FIX` to route), not only members.
 
 **BRIEF** — orch → role · dispatch
 
@@ -95,6 +97,17 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 | gate | • actual gate outcomes | real counts (`build ok`, `unit 12/12`); never "should pass" |
 | notes | • key design decisions | ≤3 |
 | follow | • out-of-lane needs / deferred | omit if none |
+| block | • blocker pointer | `none` or `see FINDING` |
+
+**REVIEW** — reviewer → orch · peer compliance check (pre-testing)
+
+| Field | What belongs | Constraint |
+|---|---|---|
+| role | • the reviewing competency | a role name; reviewer ≠ that lane's implementer |
+| scope | • lanes/files reviewed | the change set in this competency |
+| checked | • touched symbols × dimensions walked | required; the full bar per symbol, not a skim |
+| verdict | • `pass` / `changes-requested` | `pass` only with zero remarks; invalid without `checked` |
+| remarks | • each: principle/smell · location `file:line` · required change | omit if `pass`; cite the role's non-negotiables |
 | block | • blocker pointer | `none` or `see FINDING` |
 
 **FINDING** — role → orch · blocker / contradiction / impossible
@@ -124,9 +137,15 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 | open | • questions needing a decision | omit if none |
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
+- A `BRIEF` **references** the role's typed form in *Communication protocol* (`RESULT`/`REVIEW`/…);
+  it MUST NOT restate or invent a hand-back shape — restating competes with the protocol, itself a breach.
+- A hand-back not in its typed form (extra/renamed fields, prose values, notes over the limit) is
+  returned **UNREAD** — the orchestrator **MUST** reply *re-emit as `RESULT`/`REVIEW`* and **MUST NOT** parse the prose.
+- A `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer;
+  loop until every competency `pass`es (see *Review loop*). Peer review precedes `testing`.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see *Fix loop*).
-- Members never commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
+- Members **MUST NOT** commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
 
 ## Phases
 
@@ -139,10 +158,14 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 3. **Implement.** Parallel only on disjoint lanes; coupled/shared work serialized or
    worktree-isolated. Each member self-verifies (build + own-change unit tests + lint) and
    returns a `RESULT` with actual counts.
-4. **Integrate & verify.** Orchestrator merges lanes; `testing` runs the wider net
-   (API/integration/e2e + regression). Red → `FIX` to the owning role. Re-verify against
-   the phase-0 spec.
-5. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
+4. **Integrate.** Orchestrator merges lanes into the branch.
+5. **Cross-review.** Before `testing`: dispatch one reviewer per touched competency (reviewer ≠
+   that lane's implementer) to check the integrated change set against that role's
+   **non-negotiable** definitions; each returns a `REVIEW`. All `pass` → proceed. Any
+   `changes-requested` → route remarks to the owning implementer and loop (see *Review loop*).
+6. **Verify.** `testing` runs the wider net (API/integration/e2e + regression). Red → `FIX` to
+   the owning role. Re-verify against the phase-0 spec.
+7. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
    Never push to the default branch.
 
 ## Fix loop
@@ -159,6 +182,31 @@ Testing is split by ownership; failures route through the orchestrator.
   - From the `FINDING` (`expect`/`actual`/`suspect`) it picks the owning specialist and issues a `FIX`; it does not open the code itself.
   - **Deep investigation is the owning agent's prerogative**, in that agent's own context.
   - Re-run after each fix; loop until green. Never ship red.
+
+## Review loop
+
+Peer review runs AFTER implementers hand back + lanes are integrated, and BEFORE `testing`.
+Catches what a green build can't: principle / code-smell violations. Remarks route through the
+orchestrator.
+
+- **One reviewer per touched competency.** For each role whose lane the change set changed,
+  dispatch a fresh instance of that role as reviewer (backend→`backend`, frontend→`frontend`,
+  infra/devops→`infrastructure`, contract→`contract`, …). **Reviewer ≠ the implementer** of that
+  lane (independent eyes).
+- **Scope = that role's non-negotiables.** The reviewer reads only its competency's diff and
+  checks it against its role's binding definitions (e.g. `backend`: engineering principles · the
+  code-smell→remedy table · coding heuristics). Read-only — a reviewer never edits production code.
+- **Returns a `REVIEW`** — `pass`, or `changes-requested` + remarks (principle/smell · location ·
+  required change).
+- **All competencies `pass` → proceed to *Verify*.** Any `changes-requested` → orchestrator routes
+  each remark to the owning implementer; it fixes; re-review that competency. Loop until all `pass`.
+- **Checklist-driven, per-symbol.** The reviewer enumerates each touched symbol and walks the FULL
+  bar against it (every smell + SOLID/DI), recording coverage in `REVIEW.checked`. A skim is not a
+  review; `verdict: pass` is invalid without `checked`.
+- **Re-review is full, not delta.** After a fix, re-run the full checklist on the whole CHANGED UNIT
+  — a fix that trades one smell for another (e.g. cutting params but keeping a concrete dependency)
+  must be caught here, not just the original remark.
+- **Reviewers report, never fix** — mirrors `testing`; preserves the single-integrator model.
 
 ## Standing guardrails — every role inherits these
 
@@ -180,6 +228,14 @@ Testing is split by ownership; failures route through the orchestrator.
 8. **Tool-output economy.** Pull only the needed slice of a tool run into context — exit
    code + aggregate on success, exit code + failing slice on failure — never the full log.
    See *Tool-output economy*.
+9. **Typed forms verbatim.** Every hand-back **MUST** match a *Communication protocol* table
+   exactly — fixed row order, no extra fields, within limits. Non-conforming hand-backs **MUST**
+   be returned unread for re-emit; the orchestrator **MUST NOT** act on prose.
+10. **Walk the full bar before hand-back.** Self-check EVERY touched symbol against this role's
+    non-negotiables + SOLID/DI; attest it in `RESULT.gate` / `REVIEW.checked`. Opportunistic
+    "what jumps out" is not enough.
+11. **No-harm refactor.** Remedying one smell must not introduce or retain another — re-check the
+    whole changed unit against the full bar (smell table + SOLID/DI), not just the target.
 
 ## Tool-output economy
 
@@ -211,3 +267,5 @@ asked (committed, pushed, out-of-lane edits, mixed EOL). Catch it before it comp
 - Returning unverified work ("builds locally") → red CI, wasted round-trips.
 - Re-deriving a diagnosis the user already gave → burned effort.
 - Silent truncation/re-scoping when blocked → the request quietly unmet.
+- Tests-green mistaken for principle-compliance → smells ship unreviewed (run the *Review loop*).
+- Self-review by the implementer → blind spots; the reviewer must be a different instance.

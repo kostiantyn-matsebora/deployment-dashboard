@@ -44,7 +44,7 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
    - **Ownership-lane map** — the exact files each member may touch (must be disjoint;
      if not, mark for serialization or worktree isolation).
    - **Sequence** — contract-first if cross-layer; then parallel implement on disjoint
-     lanes; then integrate + verify; then ship.
+     lanes; then integrate; then cross-review (peer, per competency); then verify; then ship.
 4. **Surface and STOP.** Present scope + roster + lane map + sequence. Do **not**
    `TeamCreate` or spawn anything until the user approves. (Repo rule: *surface before
    launch; for N parallel members get explicit confirmation*.)
@@ -76,17 +76,31 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
 9. **Verify state after every wave** — re-check repo/worktree state; catch out-of-lane
    edits, stray commits, mixed EOL before they compound.
 
-## Phase 4 — Integrate & ship (lead only)
+## Phase 4 — Cross-review (peer, before testing)
 
-10. Merge member lanes/worktrees (implementers have already unit-tested their own changes).
-    Have the **testing member** run the wider net — API / integration / e2e + **regression**.
-11. **Analyze failures & assign fixes.** The testing member reports negative results to you
+10. Merge member lanes/worktrees into the branch (implementers have already unit-tested their
+    own changes).
+11. **Dispatch one reviewer per touched competency** — backend→`backend-developer`,
+    frontend→`frontend-developer`, devops→`deployment-engineer`, contract→`api-architect`,
+    docs→`docs-keeper`. The reviewer is a **fresh instance, ≠ that lane's implementer**. Brief
+    each to review ONLY its competency's diff against its role's **non-negotiable** definitions
+    (engineering principles / code-smell→remedy table / coding heuristics, or the role's
+    equivalent), read-only (never edits code), and return a `REVIEW` (`pass` /
+    `changes-requested` + remarks: principle/smell · location · required change).
+12. **All `pass` → Phase 5.** Any `changes-requested` → route each remark to the owning
+    implementer to fix; re-review that competency; loop until all `pass`. Reviewers report,
+    never fix. (See `process.md` *Review loop*.)
+
+## Phase 5 — Verify & ship (lead only)
+
+13. Have the **testing member** run the wider net — API / integration / e2e + **regression**.
+14. **Analyze failures & assign fixes.** The testing member reports negative results to you
     (the lead), not fixes them. Diagnose each failure, route it to the **owning member** to
     fix, re-run — loop until the full suite is green. Reconcile drift; re-verify against the
     phase-2 spec.
-12. Commit in logical groups → branch → open/update PR → watch CI to green. Never push to
+15. Commit in logical groups → branch → open/update PR → watch CI to green. Never push to
     the default branch directly.
-13. **`TeamDelete`** once integrated.
+16. **`TeamDelete`** once integrated.
 
 ## Guardrails (inherited from .claude/team-process/process.md — binding)
 

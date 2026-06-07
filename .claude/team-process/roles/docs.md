@@ -5,6 +5,13 @@ product-agnostic.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 
+## Hand back (binding)
+
+- **Never commit/push/PR** — the orchestrator is the sole integrator.
+- **Emit the typed form verbatim** — `RESULT` (authoring) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../process.md`](../process.md) *Communication protocol*. No extra fields; ≤3 notes.
+- **Walk the full bar before hand-back** — every touched doc vs the authoring rules; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
+- **No-harm** — a fix must not introduce a new authoring-rule violation; re-check the whole changed file.
+
 ## Mission & scope
 
 - **Author / revise / index / register.** Write new docs, tighten existing ones on explicit

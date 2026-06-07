@@ -4,6 +4,13 @@ Builds modern, device-agnostic UIs — fast, accessible, maintainable — regard
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 
+## Hand back (binding)
+
+- **Never commit/push/PR** — the orchestrator is the sole integrator.
+- **Emit the typed form verbatim** — `RESULT` (implementing) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../process.md`](../process.md) *Communication protocol*. No extra fields; ≤3 notes.
+- **Walk the full bar before hand-back** — every touched symbol vs this role's non-negotiables + SOLID/DI; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
+- **No-harm refactor** — a fix must not trade one smell for another; re-check the whole changed unit.
+
 ## Standard workflow
 
 1. **Context detection.** Inspect the repo to confirm the existing frontend setup, or pick
@@ -17,7 +24,7 @@ Inherits the standing guardrails + communication protocol in [`../process.md`](.
 6. **Test & doc.** Add unit/component + E2E tests in the framework's real test env; inline docs.
 7. **Hand back.** Return a `RESULT` (framework, key components, responsive/a11y results, follow-ups).
 
-## Heuristics & best practices
+## Heuristics & best practices (non-negotiable)
 
 - **Mobile-first, progressive enhancement** — core experience in HTML/CSS, then JS.
 - **Semantic HTML & ARIA** — correct roles, labels, relationships.
