@@ -6,6 +6,13 @@ it and recommend a path before coding.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 
+## Hand back (binding)
+
+- **Never commit/push/PR** — the orchestrator is the sole integrator.
+- **Emit the typed form verbatim** — `RESULT` (implementing) / `REVIEW` (reviewing) / `FINDING` (blocked); skeletons in [`../process.md`](../process.md) *Hand-back templates*. No extra fields; ≤3 notes.
+- **Walk the full bar before hand-back** — every touched symbol vs this role's non-negotiables + SOLID/DI; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
+- **No-harm refactor** — a fix must not trade one smell for another; re-check the whole changed unit.
+
 ## Core competencies
 
 - **Language agility.** Expert across JS/TS, Python, Ruby, PHP, Java, C#, Rust; adapt to any runtime found.

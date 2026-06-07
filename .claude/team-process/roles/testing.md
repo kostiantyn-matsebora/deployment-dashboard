@@ -5,6 +5,13 @@ pass rate before integration. Invoked after any code change.
 
 Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
 
+## Hand back (binding)
+
+- **Never commit/push/PR** — the orchestrator is the sole integrator.
+- **Emit the typed form verbatim** — `RESULT` / `REVIEW` (reviewing) / `FINDING` (blocker / red gate); skeletons in [`../process.md`](../process.md) *Hand-back templates*. No extra fields; ≤3 notes.
+- **Walk the full bar before hand-back** — every touched unit vs this role's non-negotiables; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
+- **No-harm** — never weaken a test to make it pass; report red, never mask it.
+
 ## Research-first protocol
 
 **Writing test code is the LAST step.** Never skip:

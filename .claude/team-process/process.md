@@ -103,8 +103,9 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 |---|---|---|
 | role | • the reviewing competency | a role name; reviewer ≠ that lane's implementer |
 | scope | • lanes/files reviewed | the change set in this competency |
-| verdict | • `pass` / `changes-requested` | `pass` only with zero remarks |
-| remarks | • each: principle/smell · location · required change | omit if `pass`; cite the role's non-negotiables |
+| checked | • touched symbols × dimensions walked | required; the full bar per symbol, not a skim |
+| verdict | • `pass` / `changes-requested` | `pass` only with zero remarks; invalid without `checked` |
+| remarks | • each: principle/smell · location `file:line` · required change | omit if `pass`; cite the role's non-negotiables |
 | block | • blocker pointer | `none` or `see FINDING` |
 
 **FINDING** — role → orch · blocker / contradiction / impossible
@@ -134,11 +135,47 @@ order; omit empty rows.** The vocabulary is binding — roles emit/consume these
 | open | • questions needing a decision | omit if none |
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
+- A `BRIEF` **references** the role's hand-back template (below); it MUST NOT restate or invent a
+  hand-back shape — restating competes with the protocol and is itself a breach.
+- A hand-back not in its typed form (extra/renamed fields, prose values, notes over the limit) is
+  returned **UNREAD** — orchestrator replies *re-emit as `RESULT`/`REVIEW`* and never parses prose.
 - A `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer;
   loop until every competency `pass`es (see *Review loop*). Peer review precedes `testing`.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see *Fix loop*).
 - Members never commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
+
+## Hand-back templates (emit verbatim)
+
+Copy the skeleton, fill the values, emit nothing else. Roles inline these so they are in-context;
+this is the canonical source. `role` = a competency name (`backend`, …), never the agent instance.
+
+```
+RESULT
+role:    <competency>
+changed: <in-lane files>
+gate:    <actual: build ok · unit 12/12>      # never "should pass"
+notes:   <≤3 key decisions>
+follow:  <out-of-lane / deferred>             # omit row if none
+block:   none | see FINDING
+```
+```
+REVIEW
+role:    <competency>                          # reviewer ≠ implementer
+scope:   <lanes/files reviewed>
+checked: <touched symbols × dimensions walked> # full bar per symbol
+verdict: pass | changes-requested
+remarks:                                       # omit block if pass
+  - smell/principle: <name> | location: <file:line> | required: <one line>
+block:   none | see FINDING
+```
+```
+FINDING
+where:   <file / spec ref>
+issue:   contradiction | impossible | missing input
+options: a) <path>  b) <path>
+need:    <decision required, one line>
+```
 
 ## Phases
 
@@ -193,6 +230,12 @@ orchestrator.
   required change).
 - **All competencies `pass` → proceed to *Verify*.** Any `changes-requested` → orchestrator routes
   each remark to the owning implementer; it fixes; re-review that competency. Loop until all `pass`.
+- **Checklist-driven, per-symbol.** The reviewer enumerates each touched symbol and walks the FULL
+  bar against it (every smell + SOLID/DI), recording coverage in `REVIEW.checked`. A skim is not a
+  review; `verdict: pass` is invalid without `checked`.
+- **Re-review is full, not delta.** After a fix, re-run the full checklist on the whole CHANGED UNIT
+  — a fix that trades one smell for another (e.g. cutting params but keeping a concrete dependency)
+  must be caught here, not just the original remark.
 - **Reviewers report, never fix** — mirrors `testing`; preserves the single-integrator model.
 
 ## Standing guardrails — every role inherits these
@@ -215,6 +258,14 @@ orchestrator.
 8. **Tool-output economy.** Pull only the needed slice of a tool run into context — exit
    code + aggregate on success, exit code + failing slice on failure — never the full log.
    See *Tool-output economy*.
+9. **Typed forms verbatim.** Emit `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` exactly from the
+   *Hand-back templates* — fixed rows, no extra fields, within stated limits. Non-conforming →
+   returned unread for re-emit.
+10. **Walk the full bar before hand-back.** Self-check EVERY touched symbol against this role's
+    non-negotiables + SOLID/DI; attest it in `RESULT.gate` / `REVIEW.checked`. Opportunistic
+    "what jumps out" is not enough.
+11. **No-harm refactor.** Remedying one smell must not introduce or retain another — re-check the
+    whole changed unit against the full bar (smell table + SOLID/DI), not just the target.
 
 ## Tool-output economy
 
