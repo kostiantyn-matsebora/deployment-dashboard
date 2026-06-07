@@ -1,4 +1,4 @@
-using Dashboard.Fetcher.GitHub.Models;
+﻿using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Shared.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -16,27 +16,29 @@ namespace Dashboard.Fetcher.GitHub.Graph;
 /// Reviews are checked first because a rejected gate also produces a cancelled-like
 /// run conclusion on some GitHub configurations; rejected is the more specific signal.
 /// </summary>
-internal static class FailureStatusResolver
+internal sealed class FailureStatusResolver(
+    GithubClient github,
+    WorkflowGraphCache graphCache,
+    ILogger logger)
 {
-    internal static async Task<string> ResolveAsync(
+    internal async Task<string> ResolveAsync(
         string owner, string repoName, long deploymentId, long? runId,
-        GithubClient github, WorkflowGraphCache graphCache,
-        ILogger logger, CancellationToken ct)
+        CancellationToken ct)
     {
         // Check reviews first — rejection is the most specific signal.
-        if (await IsRejectedAsync(owner, repoName, deploymentId, github, logger, ct))
+        if (await IsRejectedAsync(owner, repoName, deploymentId, ct))
             return DeploymentStatus.Rejected;
 
         // Check run conclusion for cancellation.
-        if (await IsCancelledAsync(owner, repoName, runId, graphCache, github, logger, ct))
+        if (await IsCancelledAsync(owner, repoName, runId, ct))
             return DeploymentStatus.Cancelled;
 
         return DeploymentStatus.Failure;
     }
 
-    private static async Task<bool> IsRejectedAsync(
+    private async Task<bool> IsRejectedAsync(
         string owner, string repoName, long deploymentId,
-        GithubClient github, ILogger logger, CancellationToken ct)
+        CancellationToken ct)
     {
         try
         {
@@ -57,10 +59,9 @@ internal static class FailureStatusResolver
         return false;
     }
 
-    private static async Task<bool> IsCancelledAsync(
+    private async Task<bool> IsCancelledAsync(
         string owner, string repoName, long? runId,
-        WorkflowGraphCache graphCache, GithubClient github,
-        ILogger logger, CancellationToken ct)
+        CancellationToken ct)
     {
         if (!runId.HasValue)
             return false;

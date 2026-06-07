@@ -1,4 +1,4 @@
-using Dashboard.Fetcher.Abstractions;
+﻿using Dashboard.Fetcher.Abstractions;
 using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.GitHub.Cursor;
 using Dashboard.Fetcher.GitHub.Graph;
@@ -287,6 +287,7 @@ public sealed class BackfillRunner(
         CancellationToken ct)
     {
         var candidateEvents = new List<(DeploymentEventIngest Event, string Slot)>();
+        var failureResolver = new FailureStatusResolver(github, graphCache, logger);
 
         foreach (var (deployment, statuses, runId, graph, service) in chosen)
         {
@@ -297,8 +298,8 @@ public sealed class BackfillRunner(
 
                 // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
                 if (contractStatus == DeploymentStatus.Failure)
-                    contractStatus = await FailureStatusResolver.ResolveAsync(
-                        owner, repoName, deployment.Id, runId, github, graphCache, logger, ct);
+                    contractStatus = await failureResolver.ResolveAsync(
+                        owner, repoName, deployment.Id, runId, ct);
 
                 var parentDeployments = ParentDerivation.DeriveParents(deployment, runId, graph, combinedMap);
                 var version = await versionResolver.ResolveAsync(owner, repoName, deployment, status, ct);
