@@ -331,13 +331,12 @@ public sealed class EarlyStopPaginationTests
             Backfill = false,
         };
         var versionResolver = new VersionResolver(VersionSourceConfig.Default, graphCache, githubClient);
-        var statusResolver = new GithubStatusResolver(githubClient, graphCache, NullLogger<GithubStatusResolver>.Instance);
         var backfillRunner = new BackfillRunner(
             githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, statusResolver, NullLogger<BackfillRunner>.Instance);
+            versionResolver, NullLogger<BackfillRunner>.Instance);
         return new GithubActionsAdapter(
             githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, backfillRunner, statusResolver, NullLogger<GithubActionsAdapter>.Instance);
+            versionResolver, backfillRunner, NullLogger<GithubActionsAdapter>.Instance);
     }
 
     // ── paged fake HTTP handlers ──────────────────────────────────────────────

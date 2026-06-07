@@ -6,11 +6,6 @@ using Dashboard.Fetcher.Ingest;
 namespace Dashboard.Fetcher.Host.Extensions;
 
 /// <summary>
-/// Groups the Dashboard API base URL and key required by all ingest/state/control HTTP clients.
-/// </summary>
-internal readonly record struct DashboardApiConnection(string BaseUrl, string ApiKey);
-
-/// <summary>
 /// Registers the typed and named <see cref="System.Net.Http.HttpClient"/> instances required
 /// by the fetcher host (§3 solution layout).
 /// </summary>
@@ -25,26 +20,27 @@ internal static class FetcherHttpClientExtensions
     /// </summary>
     internal static IServiceCollection AddFetcherHttpClients(
         this IServiceCollection services,
-        DashboardApiConnection api,
+        string apiBaseUrl,
+        string apiKey,
         FetcherOptions fetcherOptions,
         GithubAdapterOptions githubOptions)
     {
         services.AddHttpClient<IIngestClient, IngestClient>(c =>
         {
-            c.BaseAddress = new Uri(api.BaseUrl);
-            c.DefaultRequestHeaders.Add(FetcherConstants.HeaderApiKey, api.ApiKey);
+            c.BaseAddress = new Uri(apiBaseUrl);
+            c.DefaultRequestHeaders.Add(FetcherConstants.HeaderApiKey, apiKey);
         });
 
         services.AddHttpClient<IFetcherStateClient, FetcherStateClient>(c =>
         {
-            c.BaseAddress = new Uri(api.BaseUrl);
-            c.DefaultRequestHeaders.Add(FetcherConstants.HeaderApiKey, api.ApiKey);
+            c.BaseAddress = new Uri(apiBaseUrl);
+            c.DefaultRequestHeaders.Add(FetcherConstants.HeaderApiKey, apiKey);
         });
 
         // Control-stream subscriber — X-Control-API-Key (§5.10.2).
         services.AddHttpClient<IControlStreamClient, ControlStreamClient>(c =>
         {
-            c.BaseAddress = new Uri(api.BaseUrl);
+            c.BaseAddress = new Uri(apiBaseUrl);
             c.DefaultRequestHeaders.Add(FetcherConstants.HeaderControlApiKey, fetcherOptions.ControlApiKey);
             // Infinite timeout — the stream is long-lived; reconnect is handled inside the listener.
             c.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
@@ -53,8 +49,8 @@ internal static class FetcherHttpClientExtensions
         // Component-event poster — X-Api-Key + X-Component-Id (§5.10.4).
         services.AddHttpClient<IComponentEventClient, ComponentEventClient>(c =>
         {
-            c.BaseAddress = new Uri(api.BaseUrl);
-            c.DefaultRequestHeaders.Add(FetcherConstants.HeaderApiKey, api.ApiKey);
+            c.BaseAddress = new Uri(apiBaseUrl);
+            c.DefaultRequestHeaders.Add(FetcherConstants.HeaderApiKey, apiKey);
             c.DefaultRequestHeaders.Add(FetcherConstants.HeaderComponentId, fetcherOptions.ComponentId);
         });
 

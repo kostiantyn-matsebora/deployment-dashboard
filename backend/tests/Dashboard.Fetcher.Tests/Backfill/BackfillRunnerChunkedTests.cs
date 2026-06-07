@@ -389,7 +389,6 @@ public sealed class BackfillRunnerChunkedTests
             fetcherOptions,
             graphCache,
             versionResolver,
-            new GithubStatusResolver(githubClient, graphCache, NullLogger<GithubStatusResolver>.Instance),
             NullLogger<BackfillRunner>.Instance);
 
         return (runner, graphCache);

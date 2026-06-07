@@ -9,23 +9,8 @@ namespace Dashboard.Fetcher.GitHub;
 /// Shared resolution logic for refining a raw GitHub <c>failure</c>/<c>error</c> status
 /// to the correct contract status. Used by both the normal poll and backfill paths.
 /// </summary>
-public sealed class GithubStatusResolver(
-    GithubClient github,
-    WorkflowGraphCache graphCache,
-    ILogger<GithubStatusResolver> logger)
+internal static class GithubStatusResolver
 {
-    private const string ReviewStateRejected = "rejected";
-    private const string ConclusionCancelled = "cancelled";
-
-    /// <summary>
-    /// Groups the identity parameters for a single GitHub deployment.
-    /// </summary>
-    internal readonly record struct GithubDeploymentRef(
-        string Owner,
-        string RepoName,
-        long DeploymentId,
-        long? RunId);
-
     /// <summary>
     /// Refines a raw GitHub <c>failure</c>/<c>error</c> deployment status to the correct
     /// contract status:
@@ -39,64 +24,50 @@ public sealed class GithubStatusResolver(
     /// Reviews are checked first because a rejected gate also produces a cancelled-like
     /// run conclusion on some GitHub configurations; rejected is the more specific signal.
     /// </summary>
-    internal async Task<string> ResolveFailureStatusAsync(
-        GithubDeploymentRef deployment,
+    internal static async Task<string> ResolveFailureStatusAsync(
+        string owner,
+        string repoName,
+        long deploymentId,
+        long? runId,
+        GithubClient github,
+        WorkflowGraphCache graphCache,
+        ILogger logger,
         CancellationToken ct)
     {
-        if (await HasRejectedReviewAsync(deployment, ct))
-            return DeploymentStatus.Rejected;
-
-        if (await IsRunCancelledAsync(deployment, ct))
-            return DeploymentStatus.Cancelled;
-
-        return DeploymentStatus.Failure;
-    }
-
-    // ── private predicates ────────────────────────────────────────────────────
-
-    private async Task<bool> HasRejectedReviewAsync(
-        GithubDeploymentRef deployment,
-        CancellationToken ct)
-    {
+        // Check reviews first — rejection is the most specific signal.
         try
         {
             await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
-                $"/repos/{deployment.Owner}/{deployment.RepoName}/deployments/{deployment.DeploymentId}/reviews", ct))
+                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
             {
-                if (review.State.Equals(ReviewStateRejected, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
+                    return DeploymentStatus.Rejected;
             }
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex,
                 "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
-                deployment.Owner, deployment.RepoName, deployment.DeploymentId);
+                owner, repoName, deploymentId);
         }
 
-        return false;
-    }
-
-    private async Task<bool> IsRunCancelledAsync(
-        GithubDeploymentRef deployment,
-        CancellationToken ct)
-    {
-        if (!deployment.RunId.HasValue)
-            return false;
-
-        try
+        // Check run conclusion for cancellation.
+        if (runId.HasValue)
         {
-            var run = await graphCache.GetOrFetchRunAsync(
-                deployment.Owner, deployment.RepoName, deployment.RunId.Value, github, ct);
-            return run?.Conclusion?.Equals(ConclusionCancelled, StringComparison.OrdinalIgnoreCase) is true;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex,
-                "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
-                deployment.Owner, deployment.RepoName, deployment.RunId);
+            try
+            {
+                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
+                if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
+                    return DeploymentStatus.Cancelled;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
+                    owner, repoName, runId);
+            }
         }
 
-        return false;
+        return DeploymentStatus.Failure;
     }
 }
