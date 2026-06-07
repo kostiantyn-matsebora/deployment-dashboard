@@ -115,3 +115,5 @@ site/
 
 # Local screenshot scratch (puppeteer + node_modules)
 .tmp-card-shots/
+# Added by code-review-graph
+.code-review-graph/

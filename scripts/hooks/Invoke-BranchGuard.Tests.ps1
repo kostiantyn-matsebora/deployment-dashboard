@@ -99,3 +99,112 @@ Describe 'Get-BranchGuardDecision' {
         $result.Reason | Should -Match 'git checkout -b'
     }
 }
+
+# ============================================================
+Describe 'Test-IsGitPushCommand' {
+
+    It 'true for git push' {
+        Test-IsGitPushCommand -Command 'git push' | Should -BeTrue
+    }
+
+    It 'true for git push --force origin feat' {
+        Test-IsGitPushCommand -Command 'git push --force origin feat' | Should -BeTrue
+    }
+
+    It 'false for git pull' {
+        Test-IsGitPushCommand -Command 'git pull' | Should -BeFalse
+    }
+
+    It 'false for git commit' {
+        Test-IsGitPushCommand -Command 'git commit -m x' | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Test-IsPrCreateCommand' {
+
+    It 'true for gh pr create' {
+        Test-IsPrCreateCommand -Command 'gh pr create --base main --head feat' | Should -BeTrue
+    }
+
+    It 'false for gh pr view' {
+        Test-IsPrCreateCommand -Command 'gh pr view 5' | Should -BeFalse
+    }
+
+    It 'false for gh run list' {
+        Test-IsPrCreateCommand -Command 'gh run list' | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Test-IsLinkedWorktree' {
+
+    It 'true when git-dir differs from git-common-dir (linked worktree)' {
+        $runner = New-GitRunner @{
+            'rev-parse --git-dir'        = '/repo/.git/worktrees/member-1'
+            'rev-parse --git-common-dir' = '/repo/.git'
+        }
+        Test-IsLinkedWorktree -GitRunner $runner | Should -BeTrue
+    }
+
+    It 'false when git-dir equals git-common-dir (main worktree)' {
+        $runner = New-GitRunner @{
+            'rev-parse --git-dir'        = '.git'
+            'rev-parse --git-common-dir' = '.git'
+        }
+        Test-IsLinkedWorktree -GitRunner $runner | Should -BeFalse
+    }
+
+    It 'false when runner returns nothing' {
+        $runner = New-GitRunner @{}
+        Test-IsLinkedWorktree -GitRunner $runner | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Get-BranchGuardDecision (single-integrator / worktree)' {
+
+    BeforeAll {
+        $script:linked = @{
+            'rev-parse --git-dir'        = '/repo/.git/worktrees/m1'
+            'rev-parse --git-common-dir' = '/repo/.git'
+        }
+    }
+
+    It 'blocks git commit from a linked worktree' {
+        $runner = New-GitRunner $script:linked
+        $r = Get-BranchGuardDecision -Command 'git commit -m x' -GitRunner $runner
+        $r.Block | Should -BeTrue
+        $r.Reason | Should -Match 'Single-integrator'
+    }
+
+    It 'blocks git push from a linked worktree' {
+        $runner = New-GitRunner $script:linked
+        $r = Get-BranchGuardDecision -Command 'git push origin feat' -GitRunner $runner
+        $r.Block | Should -BeTrue
+        $r.Reason | Should -Match 'Single-integrator'
+    }
+
+    It 'blocks gh pr create from a linked worktree' {
+        $runner = New-GitRunner $script:linked
+        $r = Get-BranchGuardDecision -Command 'gh pr create --base main' -GitRunner $runner
+        $r.Block | Should -BeTrue
+        $r.Reason | Should -Match 'Single-integrator'
+    }
+
+    It 'does not block git commit from the main worktree on a branch' {
+        $runner = New-GitRunner @{
+            'rev-parse --git-dir'        = '.git'
+            'rev-parse --git-common-dir' = '.git'
+            'rev-parse --abbrev-ref HEAD' = 'feat/x'
+        }
+        $r = Get-BranchGuardDecision -Command 'git commit -m x' -GitRunner $runner
+        $r.Block | Should -BeFalse
+    }
+
+    It 'does not block a non-integration command from a linked worktree' {
+        $runner = New-GitRunner $script:linked
+        $r = Get-BranchGuardDecision -Command 'git status' -GitRunner $runner
+        $r.Block | Should -BeFalse
+    }
+}
