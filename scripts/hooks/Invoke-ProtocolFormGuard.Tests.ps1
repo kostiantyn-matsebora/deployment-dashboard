@@ -5,35 +5,47 @@ BeforeAll {
     $script:ScriptPath = (Resolve-Path (Join-Path $PSScriptRoot 'Invoke-ProtocolFormGuard.ps1')).Path
     . $script:ScriptPath -AsLibrary
 
-    $script:ValidReviewTable = @'
-REVIEW
-
-| Field | Value |
-|---|---|
-| role | • backend |
-| scope | • backend/fetcher/** |
-| checked | • PollLoop × [SOLID, smells] |
-| verdict | • changes-requested |
-| remarks | • F1 · cloud:resilience · GithubClient.cs:156 · add timeout |
-| block | • none |
-'@
-
-    $script:ValidReviewDefList = @'
-REVIEW
-role: • backend
-scope: • backend/fetcher
-checked: • PollLoop × SOLID
-verdict: • pass
-remarks: • none
-block: • none
-'@
-
+    # Canonical aligned-table RESULT (3 fields, dash rules, aligned columns).
     $script:ValidResult = @'
 RESULT
-| role | • backend |
-| changed | • backend/fetcher/PollLoop.cs |
-| gate | • build ok<br>• unit 12/12 |
-| block | • none |
+| role    | • backend         |
+-------------------------------
+| changed | • PollLoop.cs     |
+|         | • ControlStream   |
+-------------------------------
+| gate    | • build ok        |
+|         | • 264/264 tests   |
+-------------------------------
+'@
+
+    # Canonical aligned-table REVIEW (pass verdict).
+    $script:ValidReviewPass = @'
+REVIEW
+| role    | • backend                                  |
+-------------------------------------------------------
+| scope   | • backend/fetcher/**                       |
+-------------------------------------------------------
+| checked | • PollLoop × SOLID / smells                |
+-------------------------------------------------------
+| verdict | • pass                                     |
+-------------------------------------------------------
+'@
+
+    # Canonical aligned-table REVIEW (changes-requested with remarks + block).
+    $script:ValidReviewChanges = @'
+REVIEW
+| role    | • backend                                       |
+------------------------------------------------------------
+| scope   | • backend/fetcher/**                            |
+------------------------------------------------------------
+| checked | • PollLoop × SOLID / smells                     |
+------------------------------------------------------------
+| verdict | • changes-requested                             |
+------------------------------------------------------------
+| remarks | • SRP · PollLoop.cs:42 · extract polling loop   |
+------------------------------------------------------------
+| block   | • none                                          |
+------------------------------------------------------------
 '@
 }
 
@@ -41,7 +53,7 @@ RESULT
 Describe 'Get-FormTag' {
 
     It 'detects a bare leading form name' {
-        Get-FormTag -Text "REVIEW`n| role | backend |" | Should -Be 'REVIEW'
+        Get-FormTag -Text "REVIEW`n| role    | • backend |`n-----------`n" | Should -Be 'REVIEW'
     }
 
     It 'detects a #-prefixed tag, case-insensitive' {
@@ -54,75 +66,173 @@ Describe 'Get-FormTag' {
 }
 
 # ============================================================
-Describe 'Get-FieldLine (structural)' {
+Describe 'Get-AlignedTableFields' {
 
-    It 'captures the value from a table row' {
-        $r = Get-FieldLine -Text '| verdict | changes-requested |' -Label 'verdict'
-        $r.Found | Should -BeTrue
-        $r.Value | Should -Be 'changes-requested'
+    It 'parses a single-item field with a dash rule' {
+        $text = "RESULT`n| role | • backend |`n-----------------`n"
+        $fields = Get-AlignedTableFields -Text $text
+        $fields.Count | Should -Be 1
+        $fields[0].Name | Should -Be 'role'
+        $fields[0].Items[0] | Should -Be '• backend'
+        $fields[0].HasDashRule | Should -BeTrue
     }
 
-    It 'captures the value from a definition line' {
-        $r = Get-FieldLine -Text 'role: backend' -Label 'role'
-        $r.Found | Should -BeTrue
-        $r.Value | Should -Be 'backend'
+    It 'parses continuation rows as items of the current field' {
+        $text = "RESULT`n| changed | • PollLoop.cs |`n|         | • ControlStream |`n-----------------------`n"
+        $fields = Get-AlignedTableFields -Text $text
+        $fields.Count | Should -Be 1
+        $fields[0].Items.Count | Should -Be 2
     }
 
-    It 'captures the value from a bullet definition line' {
-        (Get-FieldLine -Text '- gate: build ok' -Label 'gate').Value | Should -Be 'build ok'
+    It 'detects a field block missing its dash rule' {
+        $text = "RESULT`n| role | • backend |`n| gate | • build ok |`n-------------------`n"
+        $fields = Get-AlignedTableFields -Text $text
+        # 'role' field gets no dash rule (dash rule came after 'gate')
+        $role = $fields | Where-Object { $_.Name -eq 'role' }
+        $role.HasDashRule | Should -BeFalse
     }
 
-    It 'does NOT match a label mentioned in prose' {
-        (Get-FieldLine -Text 'the role of the fetcher is to poll' -Label 'role').Found | Should -BeFalse
-    }
-
-    It 'reports an empty value for an empty table cell' {
-        $r = Get-FieldLine -Text '| scope |  |' -Label 'scope'
-        $r.Found | Should -BeTrue
-        $r.Value | Should -BeNullOrEmpty
+    It 'returns null when there are no table rows' {
+        $result = Get-AlignedTableFields -Text "RESULT`nThis is just prose."
+        $result | Should -BeNullOrEmpty
     }
 }
 
 # ============================================================
 Describe 'Get-ProtocolFormDecision — valid forms pass' {
 
-    It 'passes a well-formed REVIEW table' {
-        (Get-ProtocolFormDecision -Text $script:ValidReviewTable).Block | Should -BeFalse
-    }
-
-    It 'passes a REVIEW as a definition list' {
-        (Get-ProtocolFormDecision -Text $script:ValidReviewDefList).Block | Should -BeFalse
-    }
-
-    It 'passes a RESULT that omits optional rows (notes/follow)' {
+    It 'passes a well-formed aligned RESULT' {
         (Get-ProtocolFormDecision -Text $script:ValidResult).Block | Should -BeFalse
+    }
+
+    It 'passes a well-formed aligned REVIEW with pass verdict' {
+        (Get-ProtocolFormDecision -Text $script:ValidReviewPass).Block | Should -BeFalse
+    }
+
+    It 'passes a well-formed aligned REVIEW with changes-requested verdict' {
+        (Get-ProtocolFormDecision -Text $script:ValidReviewChanges).Block | Should -BeFalse
+    }
+
+    It 'passes a RESULT that omits optional rows (notes/follow/block)' {
+        (Get-ProtocolFormDecision -Text $script:ValidResult).Block | Should -BeFalse
+    }
+
+    It 'allows an empty message (empty + object protocol-response messages)' {
+        (Get-ProtocolFormDecision -Text '').Block | Should -BeFalse
     }
 }
 
 # ============================================================
-Describe 'Get-ProtocolFormDecision — structural violations block' {
+Describe 'Get-ProtocolFormDecision — aligned format violations block' {
 
-    It 'blocks a REVIEW missing a mandatory field row (checked)' {
-        $bad = $script:ValidReviewTable -replace '(?im)^\| checked .*$', ''
-        $d = Get-ProtocolFormDecision -Text $bad
-        $d.Block | Should -BeTrue
-        $d.Reason | Should -Match 'checked'
-    }
-
-    It 'blocks a REVIEW with a present-but-empty mandatory value' {
-        $bad = $script:ValidReviewTable -replace '(?m)^\| scope \|.*$', '| scope |  |'
-        $d = Get-ProtocolFormDecision -Text $bad
-        $d.Block | Should -BeTrue
-        $d.Reason | Should -Match 'empty'
-    }
-
-    It 'blocks a REVIEW whose fields are out of order' {
-        $outOfOrder = @'
-REVIEW
+    It 'blocks misaligned table rows (different row lengths)' {
+        # Deliberately unpadded columns.
+        $misaligned = @'
+RESULT
 | role | • backend |
-| verdict | • pass |
-| scope | • x |
-| checked | • y |
+-------------------------------
+| changed | • PollLoop.cs |
+-------------------------------
+| gate | • build ok |
+-------------------------------
+'@
+        $d = Get-ProtocolFormDecision -Text $misaligned
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'aligned'
+    }
+
+    It 'blocks a value cell containing a <br> tag' {
+        $withBr = @'
+RESULT
+| role    | • backend                          |
+------------------------------------------------
+| changed | • PollLoop.cs<br>• ControlStream   |
+------------------------------------------------
+| gate    | • build ok                         |
+------------------------------------------------
+'@
+        $d = Get-ProtocolFormDecision -Text $withBr
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'br'
+    }
+
+    It 'blocks two bullets glued on one row' {
+        $glued = @'
+RESULT
+| role    | • backend                  |
+-----------------------------------------
+| changed | • PollLoop.cs • Control.cs |
+-----------------------------------------
+| gate    | • build ok                 |
+-----------------------------------------
+'@
+        $d = Get-ProtocolFormDecision -Text $glued
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'bullet'
+    }
+
+    It 'blocks a field block missing its dash rule' {
+        $noDash = @'
+RESULT
+| role    | • backend         |
+| changed | • PollLoop.cs     |
+-------------------------------
+| gate    | • build ok        |
+-------------------------------
+'@
+        $d = Get-ProtocolFormDecision -Text $noDash
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'dash rule'
+    }
+
+    It 'blocks a body that is prose (not a table)' {
+        $prose = "RESULT`nThis is my result. The role is backend and the gate is green."
+        $d = Get-ProtocolFormDecision -Text $prose
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'aligned 2-column table'
+    }
+}
+
+# ============================================================
+Describe 'Get-ProtocolFormDecision — existing structural rules still enforced' {
+
+    It 'blocks a RESULT missing a mandatory field row (changed)' {
+        $missingChanged = @'
+RESULT
+| role | • backend     |
+------------------------
+| gate | • build ok    |
+------------------------
+'@
+        $d = Get-ProtocolFormDecision -Text $missingChanged
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'changed'
+    }
+
+    It 'blocks a value cell that has an empty bullet' {
+        $emptyBullet = @'
+RESULT
+| role    | •              |
+----------------------------
+| changed | • PollLoop.cs  |
+----------------------------
+| gate    | • build ok     |
+----------------------------
+'@
+        $d = Get-ProtocolFormDecision -Text $emptyBullet
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'bullet'
+    }
+
+    It 'blocks fields out of canonical order' {
+        $outOfOrder = @'
+RESULT
+| role    | • backend         |
+-------------------------------
+| gate    | • build ok        |
+-------------------------------
+| changed | • PollLoop.cs     |
+-------------------------------
 '@
         $d = Get-ProtocolFormDecision -Text $outOfOrder
         $d.Block | Should -BeTrue
@@ -130,79 +240,61 @@ REVIEW
     }
 
     It 'blocks a REVIEW with an invalid verdict value' {
-        $bad = $script:ValidReviewTable -replace 'changes-requested', 'maybe'
-        $d = Get-ProtocolFormDecision -Text $bad
+        # Replace with same-length string ('nope'='pass'=4 chars) to avoid triggering alignment check first.
+        $badVerdict = $script:ValidReviewPass -replace ([char]0x2022 + ' pass'), ([char]0x2022 + ' nope')
+        $d = Get-ProtocolFormDecision -Text $badVerdict
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'verdict'
     }
 
-    It 'blocks a tagged REVIEW whose body is prose (no structured rows)' {
-        $prose = "REVIEW`nThis is my review. The role is backend and the verdict is pass, looks fine."
-        $d = Get-ProtocolFormDecision -Text $prose
-        $d.Block | Should -BeTrue
-    }
-
-    It 'blocks an untagged hand-back table (missing form tag)' {
+    It 'blocks an untagged hand-back (missing form tag)' {
         $untagged = @'
-Here is my review:
-| role | backend |
-| scope | x |
-| verdict | changes-requested |
-| remarks | y |
+| role    | • backend         |
+-------------------------------
+| changed | • PollLoop.cs     |
+-------------------------------
+| gate    | • build ok        |
+-------------------------------
 '@
         $d = Get-ProtocolFormDecision -Text $untagged
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'typed form'
     }
-}
 
-# ============================================================
-Describe 'Get-ProtocolFormDecision — value cells must be bullet lists' {
-
-    It 'blocks a RESULT whose value cells are prose, not bullets' {
-        $prose = @'
-RESULT
-| role | backend |
-| changed | x.cs |
-| gate | build ok |
-'@
-        $d = Get-ProtocolFormDecision -Text $prose
-        $d.Block | Should -BeTrue
-        $d.Reason | Should -Match 'bullet'
-    }
-
-    It 'blocks a cell with two bullets glued on one line (one item per line)' {
-        $glued = @'
-RESULT
-| role | • backend |
-| changed | • a.cs • b.cs |
-| gate | • build ok |
-'@
-        $d = Get-ProtocolFormDecision -Text $glued
-        $d.Block | Should -BeTrue
-        $d.Reason | Should -Match 'bullet'
-    }
-
-    It 'passes a multi-item bulleted cell separated by <br>' {
-        (Get-ProtocolFormDecision -Text $script:ValidResult).Block | Should -BeFalse
-    }
-}
-
-# ============================================================
-Describe 'Get-ProtocolFormDecision — free prose is blocked (strict)' {
-
-    It 'blocks an informal coordination message' {
+    It 'blocks free-prose informal coordination message' {
         $d = Get-ProtocolFormDecision -Text 'Please re-run iteration 2 when you can.'
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'typed form'
     }
+}
 
-    It 'blocks prose that merely mentions a couple of field words' {
-        (Get-ProtocolFormDecision -Text 'The role here is to verify the scope of the change.').Block | Should -BeTrue
+# ============================================================
+Describe 'Get-ProtocolFormDecision — BRIEF form' {
+
+    BeforeAll {
+        $script:ValidBrief = @'
+BRIEF
+| spec | • docs/api/openapi.yaml                        |
+---------------------------------------------------------
+| lane | • backend/fetcher-github/**                    |
+---------------------------------------------------------
+| task | • decompose long methods in GithubAdapter.cs   |
+---------------------------------------------------------
+| gate | • build ok                                     |
+|      | • 264/264 tests                                |
+---------------------------------------------------------
+'@
     }
 
-    It 'allows an empty message (empty + object protocol-response messages)' {
-        (Get-ProtocolFormDecision -Text '').Block | Should -BeFalse
+    It 'passes a well-formed aligned BRIEF' {
+        (Get-ProtocolFormDecision -Text $script:ValidBrief).Block | Should -BeFalse
+    }
+
+    It 'blocks a BRIEF missing mandatory field task' {
+        $bad = $script:ValidBrief -replace '(?m)^\| task \|.*$', ''
+        $d   = Get-ProtocolFormDecision -Text $bad
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'task'
     }
 }
 

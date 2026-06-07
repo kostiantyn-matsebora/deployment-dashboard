@@ -78,8 +78,86 @@ order; omit empty rows.** Every cross-role message **MUST** be one of these form
 verbatim — **never** free prose. This binds the **orchestrator** too (`BRIEF` to dispatch,
 `FIX` to route), not only members.
 
-Each value cell is a **`•` bullet list — one item per line** (`<br>` between items in a
-table cell); never prose, and never multiple items joined on one line.
+**Emitted rendering (all six forms).** *Every* typed form — REVIEW · RESULT · BRIEF ·
+FINDING · FIX · ARTIFACT — is sent as an aligned 2-column table: **one `•` item per row**,
+the field name on its **first row only** (blank field cell on continuation rows), columns
+auto-padded so every `|` lines up, and a **full-width `-----` rule after each field block**.
+Never use `<br>`; never join two items on one line. Render with the helper
+`scripts/hooks/Format-ProtocolForm.ps1` rather than hand-aligning. Worked examples — every form rendered:
+
+```
+REVIEW
+| role    | • backend                                                 |
+-----------------------------------------------------------------------
+| scope   | • backend/fetcher-github/**                               |
+-----------------------------------------------------------------------
+| checked | • GithubActionsAdapter × SRP / smells                     |
+|         | • BackfillRunner × SOLID / DI                             |
+-----------------------------------------------------------------------
+| verdict | • changes-requested                                       |
+-----------------------------------------------------------------------
+| remarks | • SRP · GithubActionsAdapter.cs:42 · extract HTTP adapter |
+-----------------------------------------------------------------------
+| block   | • see FINDING                                             |
+-----------------------------------------------------------------------
+
+RESULT
+| role    | • backend                                     |
+-----------------------------------------------------------
+| changed | • GithubActionsAdapter.cs                     |
+|         | • BackfillRunner.cs                           |
+-----------------------------------------------------------
+| gate    | • build ok                                    |
+|         | • 264/264 tests                               |
+-----------------------------------------------------------
+| notes   | • extracted HTTP adapter into dedicated class |
+-----------------------------------------------------------
+| block   | • none                                        |
+-----------------------------------------------------------
+
+BRIEF
+| spec | • docs/fetcher/fetcher.md#polling                      |
+-----------------------------------------------------------------
+| lane | • backend/fetcher-github/**                            |
+-----------------------------------------------------------------
+| task | • decompose long methods in GithubActionsAdapter       |
+-----------------------------------------------------------------
+| gate | • build ok                                             |
+|      | • unit tests green                                     |
+-----------------------------------------------------------------
+| seed | • methods over 40 lines flagged by structural analyzer |
+-----------------------------------------------------------------
+
+FINDING
+| where   | • backend/fetcher-github/GithubActionsAdapter.cs |
+--------------------------------------------------------------
+| issue   | • contradiction                                  |
+--------------------------------------------------------------
+| options | • a - extract method; keep class boundary        |
+|         | • b - split into two focused classes             |
+--------------------------------------------------------------
+| need    | • decide ownership boundary before refactor      |
+--------------------------------------------------------------
+
+FIX
+| test    | • BackfillRunnerTests.RunAsync_StopsOnCancellation          |
+-------------------------------------------------------------------------
+| expect  | • test completes within 5 s                                 |
+-------------------------------------------------------------------------
+| actual  | • hangs indefinitely                                        |
+-------------------------------------------------------------------------
+| suspect | • BackfillRunner.cs - missing CancellationToken propagation |
+-------------------------------------------------------------------------
+
+ARTIFACT
+| spec  | • docs/api/openapi.yaml                         |
+-----------------------------------------------------------
+| delta | • GET /deployments — added status filter param  |
+|       | • POST /deployments — added correlationId field |
+-----------------------------------------------------------
+| open  | • pagination strategy not yet decided           |
+-----------------------------------------------------------
+```
 
 **BRIEF** — orch → role · dispatch
 
