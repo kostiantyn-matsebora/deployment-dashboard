@@ -250,8 +250,6 @@ that's usually one number. Pull only the **needed slice** into context — never
   only — not the passing noise around them.
 - **Prefer the tool's quiet mode** (minimal/error-only reporter, `--quiet`, `--no-progress`)
   over post-filtering when available.
-- **Scope reads/searches too.** Globs + line ranges; symbol/section retrieval (Serena /
-  markdown MCP), not whole-file or whole-repo dumps.
 
 `RESULT.gate` is this aggregate, never a pasted raw log. Binding for every role and mode.
 
