@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Dashboard.Fetcher.GitHub.RateLimit;
@@ -81,7 +81,47 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
         string path, string? ifNoneMatch, CancellationToken ct,
         Func<T, bool>? stopBefore = null)
     {
-        // ── Page 1: conditional request ──────────────────────────────────────
+        // -- Page 1: conditional request --------------------------------------
+        var page1 = await FetchPage1Async<T>(path, ifNoneMatch, ct);
+
+        if (page1.NotModified)
+            return new(NotModified: true, Items: [], ETag: ifNoneMatch);
+
+        if (page1.NotFound)
+            return new(NotModified: false, Items: [], ETag: null);
+
+        var newEtag = page1.ETag;
+        var page1Items = page1.Items;
+
+        if (stopBefore is not null)
+        {
+            var cutIndex = page1Items.FindIndex(item => stopBefore(item));
+            if (cutIndex >= 0)
+            {
+                // Cutoff reached on page 1 -- truncate and stop; no further pages needed.
+                return new(NotModified: false, Items: page1Items[..cutIndex], ETag: newEtag);
+            }
+        }
+
+        if (page1Items.Count == 0 || !page1.HasNextPage)
+            return new(NotModified: false, Items: page1Items, ETag: newEtag);
+
+        // -- Pages 2+: unconditional -----------------------------------------
+        var all = new List<T>(page1Items);
+        await FetchRemainingPagesAsync(path, all, stopBefore, ct);
+
+        return new(NotModified: false, Items: all, ETag: newEtag);
+    }
+
+    // -- page-fetch internals ------------------------------------------------
+
+    // Holds the page-1 response in a structured form so GetPagedConditionalAsync can branch cleanly.
+    private readonly record struct Page1Result<T>(
+        bool NotModified, bool NotFound, string? ETag, List<T> Items, bool HasNextPage);
+
+    private async Task<Page1Result<T>> FetchPage1Async<T>(
+        string path, string? ifNoneMatch, CancellationToken ct)
+    {
         var req = new HttpRequestMessage(HttpMethod.Get, PagedUrl(path, page: 1));
         if (ifNoneMatch is not null && EntityTagHeaderValue.TryParse(ifNoneMatch, out var etv))
             req.Headers.IfNoneMatch.Add(etv);
@@ -90,38 +130,29 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
         await rateLimitBudget.RecordAndWaitIfNeededAsync(response, ct);
 
         if (response.StatusCode == HttpStatusCode.NotModified)
-            return new(NotModified: true, Items: [], ETag: ifNoneMatch);
+            return new(NotModified: true, NotFound: false, ETag: null, Items: [], HasNextPage: false);
 
         if (response.StatusCode == HttpStatusCode.NotFound)
-            return new(NotModified: false, Items: [], ETag: null);
+            return new(NotModified: false, NotFound: true, ETag: null, Items: [], HasNextPage: false);
 
         response.EnsureSuccessStatusCode();
 
         var newEtag = response.Headers.ETag?.ToString();
-        var page1Items = await response.Content.ReadFromJsonAsync<List<T>>(ct) ?? [];
+        var items = await response.Content.ReadFromJsonAsync<List<T>>(ct) ?? [];
+        return new(NotModified: false, NotFound: false, ETag: newEtag, Items: items, HasNextPage: HasNextPage(response));
+    }
 
-        if (stopBefore is not null)
-        {
-            var cutIndex = page1Items.FindIndex(item => stopBefore(item));
-            if (cutIndex >= 0)
-            {
-                // Cutoff reached on page 1 — truncate and stop; no further pages needed.
-                return new(NotModified: false, Items: page1Items[..cutIndex], ETag: newEtag);
-            }
-        }
-
-        if (page1Items.Count == 0 || !HasNextPage(response))
-            return new(NotModified: false, Items: page1Items, ETag: newEtag);
-
-        // ── Pages 2+: unconditional ──────────────────────────────────────────
-        var all = new List<T>(page1Items);
+    private async Task FetchRemainingPagesAsync<T>(
+        string path, List<T> all, Func<T, bool>? stopBefore, CancellationToken ct)
+    {
         var page = 2;
         while (!ct.IsCancellationRequested)
         {
             var pageResponse = await http.GetAsync(PagedUrl(path, page), ct);
             await rateLimitBudget.RecordAndWaitIfNeededAsync(pageResponse, ct);
 
-            if (pageResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.NotModified)
+            if (pageResponse.StatusCode is HttpStatusCode.NotFound
+                or HttpStatusCode.NotModified)
                 break;
 
             pageResponse.EnsureSuccessStatusCode();
@@ -135,7 +166,7 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
                 var cutIndex = pageItems.FindIndex(item => stopBefore(item));
                 if (cutIndex >= 0)
                 {
-                    // Cutoff crossed on this page — take only the in-window prefix and stop.
+                    // Cutoff crossed on this page -- take only the in-window prefix and stop.
                     all.AddRange(pageItems[..cutIndex]);
                     break;
                 }
@@ -148,8 +179,6 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
 
             page++;
         }
-
-        return new(NotModified: false, Items: all, ETag: newEtag);
     }
 
     /// <summary>Downloads raw bytes (e.g. ZIP archive). Returns null on any non-2xx.</summary>

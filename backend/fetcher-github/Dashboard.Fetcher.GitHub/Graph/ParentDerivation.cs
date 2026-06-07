@@ -1,3 +1,5 @@
+﻿using Dashboard.Fetcher.GitHub.Models;
+
 namespace Dashboard.Fetcher.GitHub.Graph;
 
 /// <summary>
@@ -70,5 +72,41 @@ public static class ParentDerivation
             outer => outer.Value.ToDictionary(
                 inner => inner.Key,
                 inner => $"gh-deploy-{inner.Value.DeploymentId}"));
+    }
+
+
+    /// <summary>
+    /// Resolves the parent deployment IDs for a deployment, walking the workflow graph (§5.6.3–5.6.4).
+    /// Returns an empty array when <paramref name="runId"/> or <paramref name="graph"/> is null,
+    /// or when no matching deploy job or env-map entry is found.
+    /// </summary>
+    public static string[] DeriveParents(
+        GhDeployment deployment,
+        long? runId,
+        WorkflowGraph? graph,
+        Dictionary<long, Dictionary<string, string>> envMap)
+    {
+        if (runId is null || graph is null)
+            return [];
+
+        var deployJob = graph.DeploymentJobs.Values
+            .FirstOrDefault(j => j.Environment == deployment.Environment);
+        if (deployJob is null)
+            return [];
+
+        var parentJobIds = FindParentDeploymentJobIds(
+            deployJob, graph.DeploymentJobs, graph.AllJobs);
+
+        if (!envMap.TryGetValue(runId.Value, out var resolvedEnvMap))
+            return [];
+
+        return parentJobIds
+            .Select(id => graph.DeploymentJobs.TryGetValue(id, out var j) ? j.Environment : null)
+            .Where(env => env is not null)
+            .Select(env => resolvedEnvMap.TryGetValue(env!, out var ghId) ? ghId : null)
+            .Where(id => id is not null)
+            .Select(id => id!)
+            .Distinct()
+            .ToArray();
     }
 }

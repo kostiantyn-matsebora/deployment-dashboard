@@ -80,17 +80,36 @@ public sealed class GithubActionsAdapter(
     private async Task<(List<DeploymentEventIngest> Events, DateTimeOffset MaxSince)> PollRepoAsync(
         string repo, DateTimeOffset since, CancellationToken ct)
     {
-        var (owner, repoName) = SplitRepo(repo);
-        var serviceMap = options.ServiceMapDict;
+        var (owner, repoName) = RepoHelper.SplitRepo(repo);
         var cutoff = since - TimeSpan.FromDays(1);  // margin for delayed status events
 
         // Step 1: collect deployments in the window via conditional list request (F8 / §5.4).
         var deployments = await FetchDeploymentsWindowAsync(owner, repoName, repo, cutoff, ct);
 
         // Step 2: fetch statuses for each deployment (conditional for in-flight, skip for terminal).
-        // reusedRunIds: deployments whose statuses were NOT re-fetched this cycle but whose
-        // run_id is known — both terminal-cache hits AND etag-304 hits populate this map.
-        // Used to build the env→deploymentId map (§5.6.4) and to skip event emission.
+        var (reusedRunIds, allStatuses) = await FetchDeploymentStatusesAsync(owner, repoName, deployments, ct);
+
+        // Step 3: build envToDeploymentId for parent derivation (§5.6.4).
+        var envMap = BuildEnvMap(deployments, reusedRunIds, allStatuses);
+
+        // Step 4: map new status events (status.created_at > since).
+        var (events, maxSince) = await MapNewEventsAsync(
+            owner, repoName, repo, since, deployments, reusedRunIds, allStatuses, envMap, ct);
+
+        return (events, maxSince);
+    }
+
+    /// <summary>
+    /// Fetches statuses for each deployment (conditional for in-flight, skip for terminal).
+    /// reusedRunIds: deployments whose statuses were NOT re-fetched this cycle but whose
+    /// run_id is known — both terminal-cache hits AND etag-304 hits populate this map.
+    /// Used to build the env→deploymentId map (§5.6.4) and to skip event emission.
+    /// </summary>
+    private async Task<(Dictionary<long, long?> ReusedRunIds, Dictionary<long, List<GhDeploymentStatus>> AllStatuses)>
+        FetchDeploymentStatusesAsync(
+            string owner, string repoName,
+            IReadOnlyList<GhDeployment> deployments, CancellationToken ct)
+    {
         var reusedRunIds = new Dictionary<long, long?>();
         var allStatuses = new Dictionary<long, List<GhDeploymentStatus>>();
 
@@ -131,9 +150,19 @@ public sealed class GithubActionsAdapter(
                 _terminalCache.Record(d.Id, extractedRunId);
         }
 
-        // Step 3: build envToDeploymentId for parent derivation (§5.6.4).
-        // Includes freshly-fetched, cached-terminal, and etag-304-reused deployments
-        // so that parent edges to finished/unchanged environments remain resolvable.
+        return (reusedRunIds, allStatuses);
+    }
+
+    /// <summary>
+    /// Builds the envToDeploymentId map (§5.6.4).
+    /// Includes freshly-fetched, cached-terminal, and etag-304-reused deployments
+    /// so that parent edges to finished/unchanged environments remain resolvable.
+    /// </summary>
+    private static Dictionary<long, Dictionary<string, string>> BuildEnvMap(
+        IReadOnlyList<GhDeployment> deployments,
+        Dictionary<long, long?> reusedRunIds,
+        Dictionary<long, List<GhDeploymentStatus>> allStatuses)
+    {
         var envMapEntries = deployments.SelectMany<GhDeployment, (long DeploymentId, string Environment, DateTimeOffset CreatedAt, long? RunId)>(d =>
         {
             if (reusedRunIds.TryGetValue(d.Id, out var reusedRunId))
@@ -146,10 +175,22 @@ public sealed class GithubActionsAdapter(
                 .Select(r => (d.Id, d.Environment, d.CreatedAt, r));
         });
 
-        var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(envMapEntries);
+        return ParentDerivation.BuildEnvToDeploymentIdMap(envMapEntries);
+    }
 
-        // Step 4: map new status events (status.created_at > since).
-        // Only freshly-fetched (non-terminal, non-304) deployments can have new events.
+    /// <summary>
+    /// Maps new status events (status.created_at &gt; since) for freshly-fetched deployments.
+    /// Terminal and 304-reused deployments are skipped — their statuses were not re-fetched.
+    /// </summary>
+    private async Task<(List<DeploymentEventIngest> Events, DateTimeOffset MaxSince)> MapNewEventsAsync(
+        string owner, string repoName, string repo, DateTimeOffset since,
+        IReadOnlyList<GhDeployment> deployments,
+        Dictionary<long, long?> reusedRunIds,
+        Dictionary<long, List<GhDeploymentStatus>> allStatuses,
+        Dictionary<long, Dictionary<string, string>> envMap,
+        CancellationToken ct)
+    {
+        var serviceMap = options.ServiceMapDict;
         var events = new List<DeploymentEventIngest>();
         var maxSince = since;
 
@@ -170,38 +211,15 @@ public sealed class GithubActionsAdapter(
                     continue;
 
                 var runId = EventMapper.ExtractRunId(status.TargetUrl);
-                WorkflowGraph? graph = null;
-                if (runId.HasValue)
-                {
-                    try
-                    {
-                        graph = await graphCache.GetOrFetchGraphAsync(
-                            owner, repoName, runId.Value, github, ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex,
-                            "[{Repo}] workflow graph fetch failed for run {RunId}", repo, runId);
-                    }
-                }
+                var graph = await TryFetchGraphAsync(owner, repoName, repo, runId, ct);
 
                 // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
                 if (contractStatus == DeploymentStatus.Failure)
-                    contractStatus = await ResolveFailureStatusAsync(owner, repoName, deployment.Id, runId, ct);
+                    contractStatus = await FailureStatusResolver.ResolveAsync(
+                        owner, repoName, deployment.Id, runId, github, graphCache, logger, ct);
 
-                var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
-
-                string? version = null;
-                try
-                {
-                    version = await versionResolver.ResolveAsync(
-                        owner, repoName, deployment, status, ct);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex,
-                        "[{Repo}] version resolution failed for deployment {Id}", repo, deployment.Id);
-                }
+                var parentDeployments = ParentDerivation.DeriveParents(deployment, runId, graph, envMap);
+                var version = await TryResolveVersionAsync(owner, repoName, repo, deployment, status, ct);
 
                 events.Add(EventMapper.Map(
                     deployment, status, repo, contractStatus,
@@ -244,91 +262,37 @@ public sealed class GithubActionsAdapter(
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static string[] DeriveParents(
-        GhDeployment deployment,
-        long? runId,
-        WorkflowGraph? graph,
-        Dictionary<long, Dictionary<string, string>> envMap)
+    private async Task<WorkflowGraph?> TryFetchGraphAsync(
+        string owner, string repoName, string repo, long? runId, CancellationToken ct)
     {
-        if (runId is null || graph is null)
-            return [];
+        if (!runId.HasValue)
+            return null;
 
-        var deployJob = graph.DeploymentJobs.Values
-            .FirstOrDefault(j => j.Environment == deployment.Environment);
-        if (deployJob is null)
-            return [];
-
-        var parentJobIds = ParentDerivation.FindParentDeploymentJobIds(
-            deployJob, graph.DeploymentJobs, graph.AllJobs);
-
-        if (!envMap.TryGetValue(runId.Value, out var resolvedEnvMap))
-            return [];
-
-        return parentJobIds
-            .Select(id => graph.DeploymentJobs.TryGetValue(id, out var j) ? j.Environment : null)
-            .Where(env => env is not null)
-            .Select(env => resolvedEnvMap.TryGetValue(env!, out var ghId) ? ghId : null)
-            .Where(id => id is not null)
-            .Select(id => id!)
-            .Distinct()
-            .ToArray();
-    }
-
-    /// <summary>
-    /// Refines a raw-GitHub <c>failure</c>/<c>error</c> status to the correct contract status:
-    /// <list type="bullet">
-    ///   <item><c>rejected</c> — at least one deployment review has <c>state = "rejected"</c>
-    ///         (reviewer explicitly denied the environment gate).</item>
-    ///   <item><c>cancelled</c> — the associated workflow run's <c>conclusion</c> is
-    ///         <c>"cancelled"</c> (run was cancelled before or during execution).</item>
-    ///   <item><c>failure</c> — neither of the above; the deployment ran and failed.</item>
-    /// </list>
-    /// Reviews are checked first because a rejected gate also produces a cancelled-like
-    /// run conclusion on some GitHub configurations; rejected is the more specific signal.
-    /// </summary>
-    private async Task<string> ResolveFailureStatusAsync(
-        string owner, string repoName, long deploymentId, long? runId, CancellationToken ct)
-    {
-        // Check reviews first — rejection is the most specific signal.
         try
         {
-            await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
-                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
-            {
-                if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
-                    return DeploymentStatus.Rejected;
-            }
+            return await graphCache.GetOrFetchGraphAsync(owner, repoName, runId.Value, github, ct);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex,
-                "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
-                owner, repoName, deploymentId);
+                "[{Repo}] workflow graph fetch failed for run {RunId}", repo, runId);
+            return null;
         }
-
-        // Check run conclusion for cancellation.
-        if (runId.HasValue)
-        {
-            try
-            {
-                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
-                if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
-                    return DeploymentStatus.Cancelled;
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex,
-                    "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
-                    owner, repoName, runId);
-            }
-        }
-
-        return DeploymentStatus.Failure;
     }
 
-    private static (string Owner, string Repo) SplitRepo(string repo)
+    private async Task<string?> TryResolveVersionAsync(
+        string owner, string repoName, string repo,
+        GhDeployment deployment, GhDeploymentStatus status, CancellationToken ct)
     {
-        var parts = repo.Split('/', 2);
-        return parts.Length == 2 ? (parts[0], parts[1]) : ("", repo);
+        try
+        {
+            return await versionResolver.ResolveAsync(owner, repoName, deployment, status, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "[{Repo}] version resolution failed for deployment {Id}", repo, deployment.Id);
+            return null;
+        }
     }
 }

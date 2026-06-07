@@ -57,54 +57,23 @@ public sealed class BackfillRunner(
         logger.LogInformation("[Backfill] starting (depth={Depth})", fetcherOptions.BackfillDepth);
 
         var cursor = incoming;
-        var serviceMap = options.ServiceMapDict;
-        var maxAge = fetcherOptions.EffectiveBackfillMaxAge;
 
         foreach (var repo in options.RepoList)
         {
-            var (owner, repoName) = SplitRepo(repo);
-            var existing = incoming.BackfillFor(repo);
-
-            // Stable anchor: reuse the persisted anchor for a resume, set a fresh one otherwise.
-            var anchor = existing?.Anchor ?? fetcherOptions.UtcNow;
-            var cutoff = anchor - maxAge;
-            var alreadyDone = existing?.DoneEnvs ?? [];
+            var (owner, repoName) = RepoHelper.SplitRepo(repo);
+            var (anchor, cutoff, alreadyDone) = ResolveRepoAnchor(repo, incoming);
 
             logger.LogInformation("[Backfill] {Repo}: anchor={Anchor}, resuming={Resume}, doneEnvs={Done}",
-                repo, anchor, existing is not null, string.Join(",", alreadyDone));
+                repo, anchor, incoming.BackfillFor(repo) is not null, string.Join(",", alreadyDone));
 
             // Per-repo accumulated envToDeploymentId map for parent derivation (§5.6.4).
             // Built incrementally as each env's deployments are scanned so within-repo
             // edges from earlier envs resolve when later-env events reference them.
             var repoEnvMap = new Dictionary<long, Dictionary<string, string>>();
-
             DateTimeOffset? maxSinceForRepo = null;
 
-            // Discover active workflows for service resolution.
-            var workflowList = await github.GetAsync<GhWorkflowListResponse>(
-                $"/repos/{owner}/{repoName}/actions/workflows?per_page=100", ct);
-            var activeWorkflows = workflowList?.Workflows
-                .Where(w => w.State == "active")
-                .ToList() ?? [];
-
-            var pathToService = activeWorkflows
-                .ToDictionary(
-                    w => w.Path,
-                    w => ServiceResolver.Resolve(w.Name, repo, serviceMap),
-                    StringComparer.OrdinalIgnoreCase);
-
-            var allServiceNames = activeWorkflows
-                .Select(w => ServiceResolver.Resolve(w.Name, repo, serviceMap))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            // Discover environments.
-            var envList = await github.GetAsync<GhEnvironmentListResponse>(
-                $"/repos/{owner}/{repoName}/environments", ct);
-            var environments = envList?.Environments.Select(e => e.Name).ToList() ?? [];
-
-            var remainingEnvs = environments
-                .Where(e => !alreadyDone.Contains(e, StringComparer.OrdinalIgnoreCase))
-                .ToList();
+            var (pathToService, allServiceNames) = await DiscoverWorkflowsAsync(owner, repoName, repo, ct);
+            var remainingEnvs = await DiscoverEnvironmentsAsync(owner, repoName, alreadyDone, ct);
 
             foreach (var env in remainingEnvs)
             {
@@ -112,7 +81,7 @@ public sealed class BackfillRunner(
 
                 var (envEvents, envDeployments) = await BackfillEnvAsync(
                     owner, repoName, repo, env, cutoff,
-                    pathToService, allServiceNames, serviceMap,
+                    pathToService, allServiceNames, options.ServiceMapDict,
                     repoEnvMap, ct);
 
                 // Accumulate deployment data into the repo-level env map so that
@@ -130,7 +99,6 @@ public sealed class BackfillRunner(
 
                 // Advance the running cursor with the done-env marker.
                 cursor = cursor.WithBackfillEnvDone(repo, anchor, env);
-
                 yield return new FetchResult(envEvents, cursor.Encode());
             }
 
@@ -142,6 +110,53 @@ public sealed class BackfillRunner(
         }
 
         logger.LogInformation("[Backfill] all repos complete");
+    }
+
+    // ── per-repo setup ────────────────────────────────────────────────────────
+
+    private (DateTimeOffset Anchor, DateTimeOffset Cutoff, IReadOnlyList<string> AlreadyDone)
+        ResolveRepoAnchor(string repo, GithubCursor incoming)
+    {
+        var existing = incoming.BackfillFor(repo);
+        var anchor = existing?.Anchor ?? fetcherOptions.UtcNow;
+        var cutoff = anchor - fetcherOptions.EffectiveBackfillMaxAge;
+        IReadOnlyList<string> alreadyDone = existing?.DoneEnvs ?? [];
+        return (anchor, cutoff, alreadyDone);
+    }
+
+    private async Task<(IReadOnlyDictionary<string, string> PathToService, IReadOnlySet<string> AllServiceNames)>
+        DiscoverWorkflowsAsync(string owner, string repoName, string repo, CancellationToken ct)
+    {
+        var serviceMap = options.ServiceMapDict;
+        var workflowList = await github.GetAsync<GhWorkflowListResponse>(
+            $"/repos/{owner}/{repoName}/actions/workflows?per_page=100", ct);
+        var activeWorkflows = workflowList?.Workflows
+            .Where(w => w.State == "active")
+            .ToList() ?? [];
+
+        var pathToService = activeWorkflows
+            .ToDictionary(
+                w => w.Path,
+                w => ServiceResolver.Resolve(w.Name, repo, serviceMap),
+                StringComparer.OrdinalIgnoreCase);
+
+        var allServiceNames = activeWorkflows
+            .Select(w => ServiceResolver.Resolve(w.Name, repo, serviceMap))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return (pathToService, allServiceNames);
+    }
+
+    private async Task<List<string>> DiscoverEnvironmentsAsync(
+        string owner, string repoName, IReadOnlyList<string> alreadyDone, CancellationToken ct)
+    {
+        var envList = await github.GetAsync<GhEnvironmentListResponse>(
+            $"/repos/{owner}/{repoName}/environments", ct);
+        var environments = envList?.Environments.Select(e => e.Name).ToList() ?? [];
+
+        return environments
+            .Where(e => !alreadyDone.Contains(e, StringComparer.OrdinalIgnoreCase))
+            .ToList();
     }
 
     // ── per-env scan ──────────────────────────────────────────────────────────
@@ -164,6 +179,42 @@ public sealed class BackfillRunner(
         var depth = fetcherOptions.BackfillDepth > 0 ? fetcherOptions.BackfillDepth : 1;
 
         // Pass 1: collect chosen deployments for this env.
+        var chosen = await CollectChosenDeploymentsAsync(
+            owner, repoName, repo, env, cutoff,
+            pathToService, allServiceNames, serviceMap, depth, ct);
+
+        // Collect the raw deployment tuples for the caller to merge into the repo map.
+        var deploymentTuples = chosen
+            .Select(c => (c.Deployment.Id, c.Deployment.Environment, c.Deployment.CreatedAt, c.RunId))
+            .ToList();
+
+        // Build the env map using all known repo deployments so far PLUS this env's new ones.
+        // This ensures parent edges from this env back to a prior env in the same run are resolved.
+        var combinedMap = new Dictionary<long, Dictionary<string, string>>(repoEnvMap);
+        MergeIntoMap(combinedMap, deploymentTuples);
+
+        // Pass 2: build events and trim.
+        var events = await BuildAndTrimEventsAsync(
+            owner, repoName, repo, chosen, combinedMap, serviceMap, depth, ct);
+
+        return (events, deploymentTuples);
+    }
+
+    private async Task<List<(
+        GhDeployment Deployment,
+        List<GhDeploymentStatus> Statuses,
+        long? RunId,
+        WorkflowGraph? Graph,
+        string Service)>>
+        CollectChosenDeploymentsAsync(
+            string owner, string repoName, string repo, string env,
+            DateTimeOffset cutoff,
+            IReadOnlyDictionary<string, string> pathToService,
+            IReadOnlySet<string> allServiceNames,
+            IReadOnlyDictionary<string, string> serviceMap,
+            int depth,
+            CancellationToken ct)
+    {
         var chosen = new List<(
             GhDeployment Deployment,
             List<GhDeploymentStatus> Statuses,
@@ -219,17 +270,22 @@ public sealed class BackfillRunner(
             consecutiveNoProgress = 0;
         }
 
-        // Collect the raw deployment tuples for the caller to merge into the repo map.
-        var deploymentTuples = chosen
-            .Select(c => (c.Deployment.Id, c.Deployment.Environment, c.Deployment.CreatedAt, c.RunId))
-            .ToList();
+        return chosen;
+    }
 
-        // Build the env map using all known repo deployments so far PLUS this env's new ones.
-        // This ensures parent edges from this env back to a prior env in the same run are resolved.
-        var combinedMap = new Dictionary<long, Dictionary<string, string>>(repoEnvMap);
-        MergeIntoMap(combinedMap, deploymentTuples);
-
-        // Pass 2: build events and trim.
+    private async Task<List<DeploymentEventIngest>> BuildAndTrimEventsAsync(
+        string owner, string repoName, string repo,
+        IEnumerable<(
+            GhDeployment Deployment,
+            List<GhDeploymentStatus> Statuses,
+            long? RunId,
+            WorkflowGraph? Graph,
+            string Service)> chosen,
+        Dictionary<long, Dictionary<string, string>> combinedMap,
+        IReadOnlyDictionary<string, string> serviceMap,
+        int depth,
+        CancellationToken ct)
+    {
         var candidateEvents = new List<(DeploymentEventIngest Event, string Slot)>();
 
         foreach (var (deployment, statuses, runId, graph, service) in chosen)
@@ -241,9 +297,10 @@ public sealed class BackfillRunner(
 
                 // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
                 if (contractStatus == DeploymentStatus.Failure)
-                    contractStatus = await ResolveFailureStatusAsync(owner, repoName, deployment.Id, runId, ct);
+                    contractStatus = await FailureStatusResolver.ResolveAsync(
+                        owner, repoName, deployment.Id, runId, github, graphCache, logger, ct);
 
-                var parentDeployments = DeriveParents(deployment, runId, graph, combinedMap);
+                var parentDeployments = ParentDerivation.DeriveParents(deployment, runId, graph, combinedMap);
                 var version = await versionResolver.ResolveAsync(owner, repoName, deployment, status, ct);
 
                 var ev = EventMapper.Map(
@@ -265,7 +322,7 @@ public sealed class BackfillRunner(
             events.AddRange(kept);
         }
 
-        return (events, deploymentTuples);
+        return events;
     }
 
     // ── env-map helpers ───────────────────────────────────────────────────────
@@ -323,80 +380,5 @@ public sealed class BackfillRunner(
             $"/repos/{owner}/{repoName}/deployments/{deploymentId}/statuses", ct))
             statuses.Add(s);
         return statuses;
-    }
-
-    private static string[] DeriveParents(
-        GhDeployment deployment,
-        long? runId,
-        WorkflowGraph? graph,
-        Dictionary<long, Dictionary<string, string>> envMap)
-    {
-        if (runId is null || graph is null)
-            return [];
-
-        var deployJob = graph.DeploymentJobs.Values
-            .FirstOrDefault(j => j.Environment == deployment.Environment);
-        if (deployJob is null)
-            return [];
-
-        var parentJobIds = ParentDerivation.FindParentDeploymentJobIds(
-            deployJob, graph.DeploymentJobs, graph.AllJobs);
-
-        if (!envMap.TryGetValue(runId.Value, out var resolvedEnvMap))
-            return [];
-
-        return parentJobIds
-            .Select(id => graph.DeploymentJobs.TryGetValue(id, out var j) ? j.Environment : null)
-            .Where(env => env is not null)
-            .Select(env => resolvedEnvMap.TryGetValue(env!, out var ghId) ? ghId : null)
-            .Where(id => id is not null)
-            .Select(id => id!)
-            .Distinct()
-            .ToArray();
-    }
-
-    /// <inheritdoc cref="GithubActionsAdapter.ResolveFailureStatusAsync"/>
-    private async Task<string> ResolveFailureStatusAsync(
-        string owner, string repoName, long deploymentId, long? runId, CancellationToken ct)
-    {
-        try
-        {
-            await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
-                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
-            {
-                if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
-                    return DeploymentStatus.Rejected;
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex,
-                "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
-                owner, repoName, deploymentId);
-        }
-
-        if (runId.HasValue)
-        {
-            try
-            {
-                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
-                if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
-                    return DeploymentStatus.Cancelled;
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex,
-                    "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
-                    owner, repoName, runId);
-            }
-        }
-
-        return DeploymentStatus.Failure;
-    }
-
-    private static (string Owner, string Repo) SplitRepo(string repo)
-    {
-        var parts = repo.Split('/', 2);
-        return parts.Length == 2 ? (parts[0], parts[1]) : ("", repo);
     }
 }

@@ -1,10 +1,15 @@
-using YamlDotNet.RepresentationModel;
+﻿using YamlDotNet.RepresentationModel;
 
 namespace Dashboard.Fetcher.GitHub.Graph;
 
 /// <summary>Parses a workflow YAML string into a <see cref="WorkflowGraph"/> (§5.6.2).</summary>
 public static class WorkflowGraphParser
 {
+    /// <summary>
+    /// Parses the workflow YAML into a graph.
+    /// <paramref name="fallbackName"/> is used only when the YAML contains no top-level
+    /// <c>name:</c> field — the YAML name is the stable service-identity source (F2).
+    /// </summary>
     /// <summary>
     /// Parses the workflow YAML into a graph.
     /// <paramref name="fallbackName"/> is used only when the YAML contains no top-level
@@ -29,20 +34,7 @@ public static class WorkflowGraphParser
                 jobsNode is not YamlMappingNode jobsMap)
                 return Empty(workflowName);
 
-            var allJobs = new Dictionary<string, WorkflowJob>(StringComparer.Ordinal);
-
-            foreach (var (keyNode, valueNode) in jobsMap.Children)
-            {
-                if (keyNode is not YamlScalarNode keyScalar ||
-                    valueNode is not YamlMappingNode jobNode)
-                    continue;
-
-                var jobId = keyScalar.Value ?? "";
-                allJobs[jobId] = new WorkflowJob(
-                    jobId,
-                    ParseEnvironment(jobNode),
-                    ParseNeeds(jobNode));
-            }
+            var allJobs = ParseAllJobs(jobsMap);
 
             var deploymentJobs = allJobs.Values
                 .Where(j => j.Environment is not null)
@@ -54,6 +46,26 @@ public static class WorkflowGraphParser
         {
             return Empty(fallbackName);
         }
+    }
+
+    private static Dictionary<string, WorkflowJob> ParseAllJobs(YamlMappingNode jobsMap)
+    {
+        var allJobs = new Dictionary<string, WorkflowJob>(StringComparer.Ordinal);
+
+        foreach (var (keyNode, valueNode) in jobsMap.Children)
+        {
+            if (keyNode is not YamlScalarNode keyScalar ||
+                valueNode is not YamlMappingNode jobNode)
+                continue;
+
+            var jobId = keyScalar.Value ?? "";
+            allJobs[jobId] = new WorkflowJob(
+                jobId,
+                ParseEnvironment(jobNode),
+                ParseNeeds(jobNode));
+        }
+
+        return allJobs;
     }
 
     private static WorkflowGraph Empty(string workflowName) =>

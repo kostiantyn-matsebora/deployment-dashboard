@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using Dashboard.Fetcher.GitHub.Models;
 using Microsoft.Extensions.Logging;
@@ -89,20 +89,19 @@ public sealed class RateLimitBudget
     /// Pauses until reset_at + 1s when own count reaches the budget.
     /// Also captures <c>X-RateLimit-Limit</c> / <c>X-RateLimit-Remaining</c> for the F18 snapshot.
     /// </summary>
+    /// <summary>
+    /// Called after every GitHub API response.
+    /// Increments the own-request counter for quota-consuming responses only (not 304);
+    /// resets it when the rate-limit window has rolled over.
+    /// Pauses until reset_at + 1s when own count reaches the budget.
+    /// Also captures <c>X-RateLimit-Limit</c> / <c>X-RateLimit-Remaining</c> for the F18 snapshot.
+    /// </summary>
     public async Task RecordAndWaitIfNeededAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var responseResetAt = ReadResetAt(response);
         var now = _utcNow();
 
-        // Roll over own-count when the previously-observed window has expired AND the
-        // response carries a newer reset timestamp confirming a fresh window has started.
-        // X-RateLimit-Reset always points to the FUTURE (end of the current window), so
-        // checking responseResetAt <= now would almost never fire. The correct signal is:
-        //   now >= _resetAt  (the old window has passed)
-        //   responseResetAt > _resetAt  (the server confirms we are in a new window)
-        if (_resetAt != DateTimeOffset.MinValue && now >= _resetAt && responseResetAt > _resetAt)
-            _ownCount = 0;
-
+        RolloverIfNewWindow(responseResetAt, now);
         _resetAt = responseResetAt;
 
         // 304 Not Modified consumes no GitHub quota — X-RateLimit-Remaining is unchanged.
@@ -118,9 +117,31 @@ public sealed class RateLimitBudget
         if (TryGetIntHeader(response, "X-RateLimit-Remaining", out var ciRemaining))
             _ciRemaining = ciRemaining;
 
-        if (_ownCount < _budget)
-            return;
+        if (_ownCount >= _budget)
+            await ThrottleUntilWindowResetAsync(ct);
+    }
 
+    // ── internals ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Rolls over the own-count to zero when the previously-observed window has expired AND
+    /// the response carries a newer reset timestamp confirming a fresh window.
+    /// X-RateLimit-Reset always points to the FUTURE (end of the current window), so
+    /// checking responseResetAt &lt;= now would almost never fire. The correct signal is:
+    ///   now &gt;= _resetAt  (the old window has passed)
+    ///   responseResetAt &gt; _resetAt  (the server confirms we are in a new window)
+    /// </summary>
+    private void RolloverIfNewWindow(DateTimeOffset responseResetAt, DateTimeOffset now)
+    {
+        if (_resetAt != DateTimeOffset.MinValue && now >= _resetAt && responseResetAt > _resetAt)
+            _ownCount = 0;
+    }
+
+    /// <summary>
+    /// Sleeps until reset_at + 1s then resets the own-count so the next window starts fresh.
+    /// </summary>
+    private async Task ThrottleUntilWindowResetAsync(CancellationToken ct)
+    {
         var waitUntil = _resetAt.AddSeconds(1);
         var delay = waitUntil - _utcNow();
 
@@ -133,8 +154,6 @@ public sealed class RateLimitBudget
 
         _ownCount = 0;
     }
-
-    // ── internals ────────────────────────────────────────────────────────────
 
     private static async Task<int> DiscoverLimitAsync(
         HttpClient github, ILogger<RateLimitBudget> logger, CancellationToken ct)
