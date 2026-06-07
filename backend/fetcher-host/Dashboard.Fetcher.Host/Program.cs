@@ -28,7 +28,7 @@ var apiKey = builder.Configuration["API_KEY"] ?? "";
 
 // ── Services ──────────────────────────────────────────────────────────────────
 builder.Services
-    .AddFetcherHttpClients(apiBaseUrl, apiKey, fetcherOptions, githubOptions)
+    .AddFetcherHttpClients(new DashboardApiConnection(apiBaseUrl, apiKey), fetcherOptions, githubOptions)
     .AddFetcherSingletons(fetcherOptions, githubOptions)
     .AddFetcherWorkers(fetcherOptions);
 

@@ -18,47 +18,7 @@ internal static class FetcherHealthEndpointExtensions
         app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
         // Functional readiness: reflects actual GitHub poll-cycle health (FETCHER_SPECIFICATION §6).
-        // Decision: 503 when last_outcome is auth_failed or error AND the loop is NOT paused for reset.
-        //           200 in all other cases (ok, rate_limited, paused-for-reset, never-polled).
-        // Paused-for-reset is an expected healthy transient — must NOT read as failed.
-        app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
-        {
-            var outcome = indicator.LastOutcome;
-            var paused = indicator.IsPausedForReset;
-
-            var isHardFailure = !paused &&
-                outcome is PollOutcome.AuthFailed or PollOutcome.Error;
-
-            var status = outcome is PollOutcome.Ok ? "ready" : "degraded";
-
-            var rl = indicator.RateLimit;
-            object? rateLimitPayload = rl is null ? null : new
-            {
-                used = rl.Used,
-                budget = rl.Budget,
-                reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
-                ci_limit = rl.CiLimit,
-                ci_remaining = rl.CiRemaining,
-            };
-
-            var body = new
-            {
-                status,
-                github = new
-                {
-                    reachable = outcome is PollOutcome.Ok or PollOutcome.RateLimited,
-                    last_outcome = OutcomeLabel(outcome),
-                    last_success_at = indicator.LastSuccessAt,
-                    last_error = indicator.LastErrorSummary,
-                    paused_for_reset = paused,
-                    rate_limit = rateLimitPayload,
-                },
-            };
-
-            return isHardFailure
-                ? Results.Json(body, statusCode: StatusCodes.Status503ServiceUnavailable)
-                : Results.Ok(body);
-        });
+        app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) => HandleReadyzAsync(indicator));
 
         return app;
     }
@@ -72,4 +32,51 @@ internal static class FetcherHealthEndpointExtensions
         null => null,
         _ => outcome.ToString()?.ToLowerInvariant(),
     };
+
+    // ── handlers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Classifies the current poll-cycle health and returns the /readyz payload.
+    /// Decision: 503 when last_outcome is auth_failed or error AND the loop is NOT paused for reset.
+    ///           200 in all other cases (ok, rate_limited, paused-for-reset, never-polled).
+    /// Paused-for-reset is an expected healthy transient — must NOT read as failed.
+    /// </summary>
+    private static IResult HandleReadyzAsync(IFetcherReadinessIndicator indicator)
+    {
+        var outcome = indicator.LastOutcome;
+        var paused = indicator.IsPausedForReset;
+
+        var isHardFailure = !paused &&
+            outcome is PollOutcome.AuthFailed or PollOutcome.Error;
+
+        var status = outcome is PollOutcome.Ok ? "ready" : "degraded";
+
+        var rl = indicator.RateLimit;
+        object? rateLimitPayload = rl is null ? null : new
+        {
+            used = rl.Used,
+            budget = rl.Budget,
+            reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
+            ci_limit = rl.CiLimit,
+            ci_remaining = rl.CiRemaining,
+        };
+
+        var body = new
+        {
+            status,
+            github = new
+            {
+                reachable = outcome is PollOutcome.Ok or PollOutcome.RateLimited,
+                last_outcome = OutcomeLabel(outcome),
+                last_success_at = indicator.LastSuccessAt,
+                last_error = indicator.LastErrorSummary,
+                paused_for_reset = paused,
+                rate_limit = rateLimitPayload,
+            },
+        };
+
+        return isHardFailure
+            ? Results.Json(body, statusCode: StatusCodes.Status503ServiceUnavailable)
+            : Results.Ok(body);
+    }
 }

@@ -300,13 +300,14 @@ public sealed class CancelledRejectedResolutionPollTests
         var versionResolver = new VersionResolver(
             VersionSourceConfig.Default, graphCache, githubClient);
 
+        var statusResolver = new GithubStatusResolver(githubClient, graphCache, NullLogger<GithubStatusResolver>.Instance);
         var backfillRunner = new BackfillRunner(
             githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, NullLogger<BackfillRunner>.Instance);
+            versionResolver, statusResolver, NullLogger<BackfillRunner>.Instance);
 
         return new GithubActionsAdapter(
             githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, backfillRunner, NullLogger<GithubActionsAdapter>.Instance);
+            versionResolver, backfillRunner, statusResolver, NullLogger<GithubActionsAdapter>.Instance);
     }
 
     // ── fake HTTP handler ─────────────────────────────────────────────────────

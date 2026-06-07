@@ -29,9 +29,8 @@ internal static class FetcherWorkerExtensions
         }
         else
         {
-            var startupLogger = LoggerFactory.Create(b => b.AddConsole())
-                .CreateLogger("Startup");
-            startupLogger.LogInformation(
+            using var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+            loggerFactory.CreateLogger("Startup").LogInformation(
                 "[ControlStream] CONTROL_API_KEY is not set — control-plane participation disabled");
         }
 

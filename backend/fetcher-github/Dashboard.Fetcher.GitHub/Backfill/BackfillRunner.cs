@@ -1,6 +1,7 @@
 using Dashboard.Fetcher.Abstractions;
 using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.GitHub.Cursor;
+using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
@@ -37,6 +38,7 @@ public sealed class BackfillRunner(
     FetcherOptions fetcherOptions,
     WorkflowGraphCache graphCache,
     VersionResolver versionResolver,
+    GithubStatusResolver statusResolver,
     ILogger<BackfillRunner> logger)
 {
     /// <summary>
@@ -241,7 +243,8 @@ public sealed class BackfillRunner(
 
                 // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
                 if (contractStatus == DeploymentStatus.Failure)
-                    contractStatus = await ResolveFailureStatusAsync(owner, repoName, deployment.Id, runId, ct);
+                    contractStatus = await statusResolver.ResolveFailureStatusAsync(
+                        new GithubStatusResolver.GithubDeploymentRef(owner, repoName, deployment.Id, runId), ct);
 
                 var parentDeployments = DeriveParents(deployment, runId, graph, combinedMap);
                 var version = await versionResolver.ResolveAsync(owner, repoName, deployment, status, ct);
@@ -331,11 +334,6 @@ public sealed class BackfillRunner(
         WorkflowGraph? graph,
         Dictionary<long, Dictionary<string, string>> envMap)
         => ParentDerivation.DeriveParents(deployment, runId, graph, envMap);
-
-    private Task<string> ResolveFailureStatusAsync(
-        string owner, string repoName, long deploymentId, long? runId, CancellationToken ct)
-        => GithubStatusResolver.ResolveFailureStatusAsync(
-            owner, repoName, deploymentId, runId, github, graphCache, logger, ct);
 
     private static (string Owner, string Repo) SplitRepo(string repo)
         => GithubAdapterOptions.SplitRepo(repo);

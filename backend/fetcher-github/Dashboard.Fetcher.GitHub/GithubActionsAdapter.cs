@@ -22,6 +22,7 @@ public sealed class GithubActionsAdapter(
     WorkflowGraphCache graphCache,
     VersionResolver versionResolver,
     BackfillRunner backfillRunner,
+    GithubStatusResolver statusResolver,
     ILogger<GithubActionsAdapter> logger) : ICiCdAdapter
 {
     // Persists across poll cycles (adapter is a DI singleton) — see §5.5 poll-efficiency note.
@@ -187,8 +188,8 @@ public sealed class GithubActionsAdapter(
 
                 // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
                 if (contractStatus == DeploymentStatus.Failure)
-                    contractStatus = await GithubStatusResolver.ResolveFailureStatusAsync(
-                        owner, repoName, deployment.Id, runId, github, graphCache, logger, ct);
+                    contractStatus = await statusResolver.ResolveFailureStatusAsync(
+                        new GithubStatusResolver.GithubDeploymentRef(owner, repoName, deployment.Id, runId), ct);
 
                 var parentDeployments = ParentDerivation.DeriveParents(deployment, runId, graph, envMap);
 

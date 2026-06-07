@@ -765,6 +765,7 @@ public sealed class BackfillRunnerV2Tests
             fetcherOptions,
             graphCache,
             versionResolver,
+            new GithubStatusResolver(githubClient, graphCache, NullLogger<GithubStatusResolver>.Instance),
             NullLogger<BackfillRunner>.Instance);
 
         return (runner, graphCache);

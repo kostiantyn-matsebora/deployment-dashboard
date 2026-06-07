@@ -65,6 +65,7 @@ internal static class FetcherSingletonExtensions
             sp.GetRequiredService<WorkflowGraphCache>(),
             sp.GetRequiredService<GithubClient>()));
 
+        services.AddSingleton<GithubStatusResolver>();
         services.AddSingleton<BackfillRunner>();
         services.AddSingleton<GithubActionsAdapter>();
         services.AddSingleton<ICiCdAdapter>(sp => sp.GetRequiredService<GithubActionsAdapter>());

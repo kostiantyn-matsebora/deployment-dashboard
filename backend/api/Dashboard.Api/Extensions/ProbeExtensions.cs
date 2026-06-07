@@ -48,12 +48,19 @@ internal static class ProbeExtensions
     {
         var dbOk = await IsDatabaseReachableAsync(db, ct);
 
-        var checks = BuildChecks(
-            dbOk,
-            deploymentReadiness.IsListenerConnected,
-            controlReadiness.IsControlListenerConnected,
-            ackReadiness.IsAckListenerConnected,
-            componentEventReadiness.IsComponentEventListenerConnected);
+        var deploymentListenOk = deploymentReadiness.IsListenerConnected;
+        var controlListenOk    = controlReadiness.IsControlListenerConnected;
+        var ackListenOk        = ackReadiness.IsAckListenerConnected;
+        var componentEventListenOk = componentEventReadiness.IsComponentEventListenerConnected;
+
+        var checks = new Dictionary<string, string>
+        {
+            ["db"]                     = dbOk                 ? "ok" : "fail",
+            ["listen_deployment"]      = deploymentListenOk   ? "ok" : "fail",
+            ["listen_control"]         = controlListenOk      ? "ok" : "fail",
+            ["listen_acks"]            = ackListenOk          ? "ok" : "fail",
+            ["listen_component_events"]= componentEventListenOk ? "ok" : "fail",
+        };
 
         if (!dbOk)
             return Results.Problem(
@@ -64,10 +71,7 @@ internal static class ProbeExtensions
 
         // All four LISTEN channels must be attached for full readiness; any missing → degraded.
         var allListenersConnected =
-            deploymentReadiness.IsListenerConnected &&
-            controlReadiness.IsControlListenerConnected &&
-            ackReadiness.IsAckListenerConnected &&
-            componentEventReadiness.IsComponentEventListenerConnected;
+            deploymentListenOk && controlListenOk && ackListenOk && componentEventListenOk;
 
         var status = allListenersConnected ? "ready" : "degraded";
         return Results.Ok(new { status, checks });
@@ -80,24 +84,10 @@ internal static class ProbeExtensions
             await db.Database.ExecuteSqlRawAsync("SELECT 1", ct);
             return true;
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return false;
         }
     }
 
-    private static Dictionary<string, string> BuildChecks(
-        bool dbOk,
-        bool deploymentListenOk,
-        bool controlListenOk,
-        bool ackListenOk,
-        bool componentEventListenOk) =>
-        new()
-        {
-            ["db"] = dbOk ? "ok" : "fail",
-            ["listen_deployment"] = deploymentListenOk ? "ok" : "fail",
-            ["listen_control"] = controlListenOk ? "ok" : "fail",
-            ["listen_acks"] = ackListenOk ? "ok" : "fail",
-            ["listen_component_events"] = componentEventListenOk ? "ok" : "fail",
-        };
 }
