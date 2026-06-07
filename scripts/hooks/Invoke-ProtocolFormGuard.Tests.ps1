@@ -10,30 +10,30 @@ REVIEW
 
 | Field | Value |
 |---|---|
-| role | backend |
-| scope | backend/fetcher/** |
-| checked | PollLoop × [SOLID, smells] |
-| verdict | changes-requested |
-| remarks | F1 · cloud:resilience · GithubClient.cs:156 · add timeout |
-| block | none |
+| role | • backend |
+| scope | • backend/fetcher/** |
+| checked | • PollLoop × [SOLID, smells] |
+| verdict | • changes-requested |
+| remarks | • F1 · cloud:resilience · GithubClient.cs:156 · add timeout |
+| block | • none |
 '@
 
     $script:ValidReviewDefList = @'
 REVIEW
-role: backend
-scope: backend/fetcher
-checked: PollLoop × SOLID
-verdict: pass
-remarks: none
-block: none
+role: • backend
+scope: • backend/fetcher
+checked: • PollLoop × SOLID
+verdict: • pass
+remarks: • none
+block: • none
 '@
 
     $script:ValidResult = @'
 RESULT
-| role | backend |
-| changed | backend/fetcher/PollLoop.cs |
-| gate | build ok; unit 12/12 |
-| block | none |
+| role | • backend |
+| changed | • backend/fetcher/PollLoop.cs |
+| gate | • build ok<br>• unit 12/12 |
+| block | • none |
 '@
 }
 
@@ -110,7 +110,7 @@ Describe 'Get-ProtocolFormDecision — structural violations block' {
     }
 
     It 'blocks a REVIEW with a present-but-empty mandatory value' {
-        $bad = $script:ValidReviewTable -replace '\| scope \| backend/fetcher/\*\* \|', '| scope |  |'
+        $bad = $script:ValidReviewTable -replace '(?m)^\| scope \|.*$', '| scope |  |'
         $d = Get-ProtocolFormDecision -Text $bad
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'empty'
@@ -119,10 +119,10 @@ Describe 'Get-ProtocolFormDecision — structural violations block' {
     It 'blocks a REVIEW whose fields are out of order' {
         $outOfOrder = @'
 REVIEW
-| role | backend |
-| verdict | pass |
-| scope | x |
-| checked | y |
+| role | • backend |
+| verdict | • pass |
+| scope | • x |
+| checked | • y |
 '@
         $d = Get-ProtocolFormDecision -Text $outOfOrder
         $d.Block | Should -BeTrue
@@ -153,6 +153,38 @@ Here is my review:
         $d = Get-ProtocolFormDecision -Text $untagged
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'typed form'
+    }
+}
+
+# ============================================================
+Describe 'Get-ProtocolFormDecision — value cells must be bullet lists' {
+
+    It 'blocks a RESULT whose value cells are prose, not bullets' {
+        $prose = @'
+RESULT
+| role | backend |
+| changed | x.cs |
+| gate | build ok |
+'@
+        $d = Get-ProtocolFormDecision -Text $prose
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'bullet'
+    }
+
+    It 'blocks a cell with two bullets glued on one line (one item per line)' {
+        $glued = @'
+RESULT
+| role | • backend |
+| changed | • a.cs • b.cs |
+| gate | • build ok |
+'@
+        $d = Get-ProtocolFormDecision -Text $glued
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'bullet'
+    }
+
+    It 'passes a multi-item bulleted cell separated by <br>' {
+        (Get-ProtocolFormDecision -Text $script:ValidResult).Block | Should -BeFalse
     }
 }
 

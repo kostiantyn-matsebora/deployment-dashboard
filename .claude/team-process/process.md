@@ -78,6 +78,9 @@ order; omit empty rows.** Every cross-role message **MUST** be one of these form
 verbatim — **never** free prose. This binds the **orchestrator** too (`BRIEF` to dispatch,
 `FIX` to route), not only members.
 
+Each value cell is a **`•` bullet list — one item per line** (`<br>` between items in a
+table cell); never prose, and never multiple items joined on one line.
+
 **BRIEF** — orch → role · dispatch
 
 | Field | What belongs | Constraint |
