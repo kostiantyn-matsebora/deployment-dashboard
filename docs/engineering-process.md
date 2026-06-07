@@ -26,8 +26,8 @@ Route each change to the specialist that owns it:
 ## Orchestration playbook
 
 The routing table above is the only project-specific surface. The orchestration **mechanics**
-— launch rules, execution modes (in-session subagents vs spawned team), the typed
-communication protocol (`BRIEF` / `RESULT` / `FINDING` / `FIX` / `ARTIFACT`), phases, the fix
-loop, and standing guardrails — live once in the portable kit `.claude/team-process/process.md`
-(generic role names; this repo's role→agent mapping and per-role stack/lanes/gates are in
-`CLAUDE.md` § *Project bindings*).
+— launch rules, execution modes (in-session subagents vs spawned team), phases, and the fix
+loop — live once in the portable kit `.claude/team-process/process.md`, with the typed
+communication protocol (`BRIEF` / `RESULT` / `FINDING` / `FIX` / `ARTIFACT`) in its `protocol.md`
+companion and the standing guardrails in `guardrails.md` (generic role names; this repo's
+role→agent mapping and per-role stack/lanes/gates are in `CLAUDE.md` § *Project bindings*).

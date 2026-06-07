@@ -2,7 +2,9 @@
 
 Generalized from a proven in-repo dispatch convention (`engineering-process.md`). One
 **orchestrator** routes a multi-layer change across role-specialists. Project-agnostic.
-Pairs with [`roles/`](roles/).
+Pairs with [`roles/`](roles/). Two companions are inherited by every role:
+[`protocol.md`](protocol.md) (the typed communication forms) and
+[`guardrails.md`](guardrails.md) (standing guardrails + tool-output economy).
 
 ## Routing
 
@@ -72,161 +74,10 @@ the orchestrator reviews, reconciles, commits, ships — this keeps the change a
 
 ## Communication protocol
 
-All cross-role messages use these 6 typed forms. Each form is a table: **field name** ·
-**what belongs** (the pieces of info) · **constraint** (the rule governing it). **Fixed row
-order; omit empty rows.** Every cross-role message **MUST** be one of these forms, emitted
-verbatim — **never** free prose. This binds the **orchestrator** too (`BRIEF` to dispatch,
-`FIX` to route), not only members.
-
-**Emitted rendering (all six forms).** *Every* typed form — REVIEW · RESULT · BRIEF ·
-FINDING · FIX · ARTIFACT — is sent as an aligned 2-column table: **one `•` item per row**,
-the field name on its **first row only** (blank field cell on continuation rows), columns
-auto-padded so every `|` lines up, and a **full-width `-----` rule after each field block**.
-Never use `<br>`; never join two items on one line. Render with the helper
-`scripts/hooks/Format-ProtocolForm.ps1` rather than hand-aligning. Worked examples — every form rendered:
-
-```
-REVIEW
-| role    | • backend                                                 |
------------------------------------------------------------------------
-| scope   | • backend/fetcher-github/**                               |
------------------------------------------------------------------------
-| checked | • GithubActionsAdapter × SRP / smells                     |
-|         | • BackfillRunner × SOLID / DI                             |
------------------------------------------------------------------------
-| verdict | • changes-requested                                       |
------------------------------------------------------------------------
-| remarks | • SRP · GithubActionsAdapter.cs:42 · extract HTTP adapter |
------------------------------------------------------------------------
-| block   | • see FINDING                                             |
------------------------------------------------------------------------
-
-RESULT
-| role    | • backend                                     |
------------------------------------------------------------
-| changed | • GithubActionsAdapter.cs                     |
-|         | • BackfillRunner.cs                           |
------------------------------------------------------------
-| gate    | • build ok                                    |
-|         | • 264/264 tests                               |
------------------------------------------------------------
-| notes   | • extracted HTTP adapter into dedicated class |
------------------------------------------------------------
-| block   | • none                                        |
------------------------------------------------------------
-
-BRIEF
-| spec | • docs/fetcher/fetcher.md#polling                      |
------------------------------------------------------------------
-| lane | • backend/fetcher-github/**                            |
------------------------------------------------------------------
-| task | • decompose long methods in GithubActionsAdapter       |
------------------------------------------------------------------
-| gate | • build ok                                             |
-|      | • unit tests green                                     |
------------------------------------------------------------------
-| seed | • methods over 40 lines flagged by structural analyzer |
------------------------------------------------------------------
-
-FINDING
-| where   | • backend/fetcher-github/GithubActionsAdapter.cs |
---------------------------------------------------------------
-| issue   | • contradiction                                  |
---------------------------------------------------------------
-| options | • a - extract method; keep class boundary        |
-|         | • b - split into two focused classes             |
---------------------------------------------------------------
-| need    | • decide ownership boundary before refactor      |
---------------------------------------------------------------
-
-FIX
-| test    | • BackfillRunnerTests.RunAsync_StopsOnCancellation          |
--------------------------------------------------------------------------
-| expect  | • test completes within 5 s                                 |
--------------------------------------------------------------------------
-| actual  | • hangs indefinitely                                        |
--------------------------------------------------------------------------
-| suspect | • BackfillRunner.cs - missing CancellationToken propagation |
--------------------------------------------------------------------------
-
-ARTIFACT
-| spec  | • docs/api/openapi.yaml                         |
------------------------------------------------------------
-| delta | • GET /deployments — added status filter param  |
-|       | • POST /deployments — added correlationId field |
------------------------------------------------------------
-| open  | • pagination strategy not yet decided           |
------------------------------------------------------------
-```
-
-**BRIEF** — orch → role · dispatch
-
-| Field | What belongs | Constraint |
-|---|---|---|
-| spec | • owning spec path#section<br>• acceptance gate it sets | docs-first target; required |
-| lane | • glob(s) the role may touch | nothing outside it |
-| task | • the change to make | one line, imperative |
-| gate | • self-verify set | build + unit + lint |
-| seed | • diagnosis/theory to test first | optional; omit if none |
-
-**RESULT** — role → orch · hand-back
-
-| Field | What belongs | Constraint |
-|---|---|---|
-| role | • the reporting role | one of the role names |
-| changed | • files touched | in-lane only |
-| gate | • actual gate outcomes | real counts (`build ok`, `unit 12/12`); never "should pass" |
-| notes | • key design decisions | ≤3 |
-| follow | • out-of-lane needs / deferred | omit if none |
-| block | • blocker pointer | `none` or `see FINDING` |
-
-**REVIEW** — reviewer → orch · peer compliance check (pre-testing)
-
-| Field | What belongs | Constraint |
-|---|---|---|
-| role | • the reviewing competency | a role name; reviewer ≠ that lane's implementer |
-| scope | • lanes/files reviewed | the change set in this competency |
-| checked | • touched symbols × dimensions walked | required; the full bar per symbol, not a skim |
-| verdict | • `pass` / `changes-requested` | `pass` only with zero remarks; invalid without `checked` |
-| remarks | • each: principle/smell · location `file:line` · required change | omit if `pass`; cite the role's non-negotiables |
-| block | • blocker pointer | `none` or `see FINDING` |
-
-**FINDING** — role → orch · blocker / contradiction / impossible
-
-| Field | What belongs | Constraint |
-|---|---|---|
-| where | • file or spec at fault | path or spec ref |
-| issue | • the problem | one of: contradiction / impossible / missing input |
-| options | • viable paths | ≥2 (a / b) |
-| need | • the decision required | one line |
-
-**FIX** — orch → role · fix-loop assignment
-
-| Field | What belongs | Constraint |
-|---|---|---|
-| test | • failing test id | exact id |
-| expect | • expected behavior | — |
-| actual | • observed behavior | — |
-| suspect | • likely layer / file | a route hint, not a fix |
-
-**ARTIFACT** — contract → orch → consumers · settled interface
-
-| Field | What belongs | Constraint |
-|---|---|---|
-| spec | • committed contract path | committed, not chat |
-| delta | • resources / operations changed | — |
-| open | • questions needing a decision | omit if none |
-
-- `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
-- A `BRIEF` **references** the role's typed form in *Communication protocol* (`RESULT`/`REVIEW`/…);
-  it MUST NOT restate or invent a hand-back shape — restating competes with the protocol, itself a breach.
-- A hand-back not in its typed form (extra/renamed fields, prose values, notes over the limit) is
-  returned **UNREAD** — the orchestrator **MUST** reply *re-emit as `RESULT`/`REVIEW`* and **MUST NOT** parse the prose.
-- A `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer;
-  loop until every competency `pass`es (see *Review loop*). Peer review precedes `testing`.
-- A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
-  until green (see *Fix loop*).
-- Members **MUST NOT** commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
+The 6 typed forms (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT`) — fields,
+rendering, and rules — live in [`protocol.md`](protocol.md). Every cross-role message MUST be one of
+them, emitted verbatim; a non-conforming hand-back is returned **UNREAD** for re-emit. The
+orchestrator emits `BRIEF`/`FIX` and reads the rest; it never parses prose hand-backs.
 
 ## Phases
 
@@ -289,50 +140,12 @@ orchestrator.
   must be caught here, not just the original remark.
 - **Reviewers report, never fix** — mirrors `testing`; preserves the single-integrator model.
 
-## Standing guardrails — every role inherits these
+## Standing guardrails & tool-output economy
 
-1. **Docs-first.** Read the owning spec (`BRIEF.spec`) before coding; it's contract +
-   acceptance gate. Behavior change → update the spec first.
-2. **Single integrator.** Members never commit/push/PR — hand back via `RESULT`.
-3. **Stay in your lane.** Touch only `BRIEF.lane` files. Need more? `RESULT.follow` or a
-   `FINDING` — don't make the change.
-4. **Repo hygiene.**
-   - Match the project's line-ending + format convention; run the formatter.
-   - Never introduce mixed EOL.
-   - OS-dependent formatter differs from CI → the CI platform's result wins.
-5. **Self-verify before returning.** Build + tests + lint green; `RESULT.gate` carries
-   actual counts/failures/skips. No "should pass."
-6. **Report, don't act, on scope changes.** Blocker / contradiction / "impossible" → a
-   `FINDING`, never a silent re-scope.
-7. **Check provided theories first.** A `BRIEF.seed` diagnosis is tested cheaply before
-   independent investigation.
-8. **Tool-output economy.** Pull only the needed slice of a tool run into context — exit
-   code + aggregate on success, exit code + failing slice on failure — never the full log.
-   See *Tool-output economy*.
-9. **Typed forms verbatim.** Every hand-back **MUST** match a *Communication protocol* table
-   exactly — fixed row order, no extra fields, within limits. Non-conforming hand-backs **MUST**
-   be returned unread for re-emit; the orchestrator **MUST NOT** act on prose.
-10. **Walk the full bar before hand-back.** Self-check EVERY touched symbol against this role's
-    non-negotiables + SOLID/DI; attest it in `RESULT.gate` / `REVIEW.checked`. Opportunistic
-    "what jumps out" is not enough.
-11. **No-harm refactor.** Remedying one smell must not introduce or retain another — re-check the
-    whole changed unit against the full bar (smell table + SOLID/DI), not just the target.
-
-## Tool-output economy
-
-Verbose tool runs (tests, builds, linters, installs, searches) burn context for an answer
-that's usually one number. Pull only the **needed slice** into context — never the raw log.
-
-- **Capture, then inspect.** Redirect the run to a file/variable; branch on the **exit code**;
-  surface only the filtered slice.
-- **Success → aggregate only.** Exit code + the summary line (e.g. `42/42 passed`, `build ok`).
-  Discard per-item chatter.
-- **Failure → exit code + failing slice.** Failing names + their assertion diff / error lines
-  only — not the passing noise around them.
-- **Prefer the tool's quiet mode** (minimal/error-only reporter, `--quiet`, `--no-progress`)
-  over post-filtering when available.
-
-`RESULT.gate` is this aggregate, never a pasted raw log. Binding for every role and mode.
+The 11 standing guardrails (docs-first · single-integrator · stay-in-lane · repo hygiene ·
+self-verify · report-don't-act · check-theories-first · tool-output economy · typed-forms-verbatim ·
+walk-the-full-bar · no-harm refactor) and the tool-output-economy detail are inherited by every role
+and mode — see [`guardrails.md`](guardrails.md).
 
 ## Verify state after every wave
 

@@ -5,15 +5,17 @@ non-trivial change under one orchestrator. Drop into any repo spanning **fronten
 infrastructure** (or a subset). Defines *who does what and how they coordinate* — not the
 technology.
 
-The **core** (`process.md` · `roles/`) is stack-, domain-, and **runtime-agnostic**; the only
-client-specific wiring is one labeled *Claude Code binding* in `process.md` (and the
-reference agents below), which another agent runtime can swap.
+The **core** (`process.md` · `protocol.md` · `guardrails.md` · `roles/`) is stack-, domain-, and
+**runtime-agnostic**; the only client-specific wiring is one labeled *Claude Code binding* in
+`process.md` (and the reference agents below), which another agent runtime can swap.
 
 ## Layout
 
 | File | Role |
 |---|---|
-| [`process.md`](process.md) | Orchestration playbook: routing, phases, execution modes, the **communication protocol** (5 typed messages), inherited guardrails, when-to-use threshold. |
+| [`process.md`](process.md) | Orchestration playbook: routing, execution modes, single-integrator model, phases, fix/review loops, when-to-use threshold. |
+| [`protocol.md`](protocol.md) | The **communication protocol** — 6 typed messages (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT`); inherited by every role. |
+| [`guardrails.md`](guardrails.md) | Standing guardrails + tool-output economy; inherited by every role and mode. |
 | [`roles/`](roles/) | One file per role: mission · owns · operating routine · self-verify gate · orchestration contract. |
 
 Roles: [`orchestrator`](roles/orchestrator.md) · [`contract`](roles/contract.md) ·

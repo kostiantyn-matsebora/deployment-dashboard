@@ -102,7 +102,7 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
     the default branch directly.
 16. **`TeamDelete`** once integrated.
 
-## Guardrails (inherited from .claude/team-process/process.md — binding)
+## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 
 Docs-first · single integrator (members never commit) · stay in your lane · repo hygiene
 (match EOL/format; CI platform's result wins) · self-verify before returning · report —
