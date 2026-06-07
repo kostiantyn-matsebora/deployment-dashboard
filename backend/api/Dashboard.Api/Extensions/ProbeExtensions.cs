@@ -49,17 +49,17 @@ internal static class ProbeExtensions
         var dbOk = await IsDatabaseReachableAsync(db, ct);
 
         var deploymentListenOk = deploymentReadiness.IsListenerConnected;
-        var controlListenOk    = controlReadiness.IsControlListenerConnected;
-        var ackListenOk        = ackReadiness.IsAckListenerConnected;
+        var controlListenOk = controlReadiness.IsControlListenerConnected;
+        var ackListenOk = ackReadiness.IsAckListenerConnected;
         var componentEventListenOk = componentEventReadiness.IsComponentEventListenerConnected;
 
         var checks = new Dictionary<string, string>
         {
-            ["db"]                     = dbOk                 ? "ok" : "fail",
-            ["listen_deployment"]      = deploymentListenOk   ? "ok" : "fail",
-            ["listen_control"]         = controlListenOk      ? "ok" : "fail",
-            ["listen_acks"]            = ackListenOk          ? "ok" : "fail",
-            ["listen_component_events"]= componentEventListenOk ? "ok" : "fail",
+            ["db"] = dbOk ? "ok" : "fail",
+            ["listen_deployment"] = deploymentListenOk ? "ok" : "fail",
+            ["listen_control"] = controlListenOk ? "ok" : "fail",
+            ["listen_acks"] = ackListenOk ? "ok" : "fail",
+            ["listen_component_events"] = componentEventListenOk ? "ok" : "fail",
         };
 
         if (!dbOk)
