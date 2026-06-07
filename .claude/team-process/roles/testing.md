@@ -3,12 +3,12 @@
 Comprehensive tests across levels **with real implementations (no mocks)**; holds a 100%
 pass rate before integration. Invoked after any code change.
 
-Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
+Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the communication protocol in [`../protocol.md`](../protocol.md).
 
 ## Hand back (binding)
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
-- **Emit the typed form verbatim** — `RESULT` / `REVIEW` (reviewing) / `FINDING` (blocker / red gate); forms in [`../process.md`](../process.md) *Communication protocol*. No extra fields; ≤3 notes.
+- **Emit the typed form verbatim** — `RESULT` / `REVIEW` (reviewing) / `FINDING` (blocker / red gate); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
 - **Walk the full bar before hand-back** — every touched unit vs this role's non-negotiables; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm** — never weaken a test to make it pass; report red, never mask it.
 
@@ -60,7 +60,7 @@ This role does **not** fix production code.
 2. **Write tests** — Arrange-Act-Assert; happy path + error cases.
 3. **Run** — in the framework's real test environment (not an ad-hoc runner). Capture
    output; surface exit code + failing slice only — never stream the full run into context
-   (see *Tool-output economy* in `process.md`).
+   (see *Tool-output economy* in [`../guardrails.md`](../guardrails.md)).
 4. **Fix failures** — root cause only; re-run until 100% pass.
 5. **Report** — `RESULT` with pass/fail counts, coverage gaps, suggested additions.
 

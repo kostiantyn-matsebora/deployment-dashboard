@@ -2,12 +2,12 @@
 
 Builds modern, device-agnostic UIs — fast, accessible, maintainable — regardless of stack.
 
-Inherits the standing guardrails + communication protocol in [`../process.md`](../process.md).
+Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the communication protocol in [`../protocol.md`](../protocol.md).
 
 ## Hand back (binding)
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
-- **Emit the typed form verbatim** — `RESULT` (implementing) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../process.md`](../process.md) *Communication protocol*. No extra fields; ≤3 notes.
+- **Emit the typed form verbatim** — `RESULT` (implementing) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
 - **Walk the full bar before hand-back** — every touched symbol vs this role's non-negotiables + SOLID/DI; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm refactor** — a fix must not trade one smell for another; re-check the whole changed unit.
 

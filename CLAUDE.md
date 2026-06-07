@@ -23,7 +23,7 @@
 
 ## Solution directory structure
 
-Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway). The tree below is authoritative; reserved slots are listed separately.
+The tree below is authoritative — *Present today* vs *Reserved* are split into the two tables.
 
 **Present today:**
 
@@ -53,14 +53,11 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 
 ## GitHub issues
 
-**Before creating any issue, classify it and fill the matching template** in `.github/ISSUE_TEMPLATE/` — never open a free-form/blank issue (blank issues are disabled).
+**Never open a blank/free-form issue** (blank issues are disabled). Before filing:
 
-1. **Classify.** Bug (something broken / regressed) vs Feature (new capability or improvement).
-2. **Pick the template.** Bug → `bug-report.md`. Feature/enhancement → `feature-request.md`.
-3. **Honor the template's spec.** Apply its `title:` prefix (`[Bug] ` / `[Feature] `) and `labels:` (`bug` / `enhancement`), and fill **every** section heading the template defines — do not invent or drop sections.
-   - Bug: *What happened* · *Steps to reproduce* · *Expected behavior* · *Environment*.
-   - Feature: *Problem / motivation* · *Proposed solution* (behavior, not implementation) · *Alternatives considered* · *Additional context*.
-4. **Security reports** are not issues — route to the private advisory link in `config.yml`.
+1. **Classify.** Bug (broken / regressed) vs Feature (new capability / improvement).
+2. **Fill the matching template** in `.github/ISSUE_TEMPLATE/` — Bug → `bug-report.md`, Feature → `feature-request.md`. Honor its `title:` prefix + `labels:`, and fill **every** section heading it defines (don't invent or drop sections — the template is the source of truth for sections).
+3. **Security reports** are not issues — route to the private advisory link in `config.yml`.
 
 ## Agent dispatch
 
@@ -70,97 +67,38 @@ Each agent is a **project-agnostic anchor** to its generic role in `.claude/team
 
 ## Project bindings
 
-Per-role stack, file lanes, and gate commands. **Apply the tool-output-economy guardrail** (`.claude/team-process/process.md`) to every command: capture output, branch on the exit code, surface only the aggregate (success) or the failing slice (failure) — never the full log.
+Per-role stack, file lanes, and gate commands live **one file per role** under `.claude/bindings/`.
+**Each role reads ONLY its own file** into context — not the whole set.
 
-**contract** (`api-architect`)
-- **Source of truth:** `docs/api/openapi.yaml` (OpenAPI 3.1); guidelines `docs/api/api-guidelines.md`. Behavior-only changes — no backend tech in the contract.
-- **Lanes:** `docs/api/openapi.yaml`, `docs/api/api-guidelines.md`.
-- **Validate:** YAML well-formed + spec self-consistent (no spectral configured in CI); surface validation errors only. Hand off as an `ARTIFACT`.
-
-**backend** (`backend-developer`)
-- **Stack:** .NET 10 (`net10.0`, C#), EF Core, xUnit. Solution `backend/Dashboard.slnx`.
-- **Lanes:** `backend/<service>/**` (services: `api`, `control-api`, `read-api`, `write-api`, `fetcher`, `fetcher-github`, `fetcher-host`, `shared`).
-- **Gates** (run from `backend/`; mirror `.github/workflows/api.yml`):
-  - Format — `dotnet format whitespace Dashboard.slnx --verify-no-changes` + `dotnet format style Dashboard.slnx --verify-no-changes` (analyzers run in Build, not format).
-  - Build — `dotnet build Dashboard.slnx -c Release --nologo -v q -p:EnableStructuralAnalyzers=true`. Structural analyzers (SonarAnalyzer, Gate B; `backend/.editorconfig` + `Directory.Build.props`) are **opt-in** via that flag (off in Docker publishes so image builds stay fast); they surface as warnings — flip the rules to `error` once the backlog clears.
-  - Test — `dotnet test Dashboard.slnx --settings Dashboard.runsettings --nologo -c Release` → on fail `… 2>&1 | Select-String 'error|\bFailed\b|\[xUnit'`
-- **Config:** flat `SCREAMING_SNAKE` env vars (appsettings base + `*OptionsEnv` override); never `Section__Property`. Env files gitignored; no secrets in code/logs.
-
-**frontend** (`frontend-developer`)
-- **Stack:** Angular (standalone), unit tests via `@angular/build:unit-test` (Vitest), Node 24. No `ng lint` configured.
-- **Lanes:** `frontend/dashboard/**` (SPA) + `frontend/mock/**` (mock server).
-- **Local surfaces:** SPA `ng serve` :4200; mock :3000 — real-app E2E needs **both** live (jsdom masks browser drag bugs).
-- **Gates** (in `frontend/dashboard`; mirror `.github/workflows/frontend.yml`):
-  - Test — `npm test` → surface failing specs only
-  - Build — `npm run build -- --configuration production`
-- **Reuse existing primitives** (rate-limit popover, inspector) / PrimeNG / native before bespoke CSS; one source of truth, no magic size math.
-
-**infrastructure** (`deployment-engineer`)
-- **Stack:** Docker multi-stage (non-root, minimal), Compose (`compose/*.yaml`), nginx gateway (`gateway/`), GitHub Actions (`.github/workflows/*`). Azure-only (NFR-01/06); `infrastructure/` (Terraform) reserved. Trivy scans images (build → scan → push; SARIF → Security tab).
-- **Lanes:** `.github/workflows/**`, `compose/**`, `gateway/**`, `**/Dockerfile`, `scripts/**`. App logic → owning app role.
-- **Gates:**
-  - Image — `docker build …` → surface error lines only
-  - Stack — `docker compose -f compose/docker-compose.yaml up -d --build --wait`; diagnose via `docker compose logs --no-color <svc>` (slice, not all)
-  - CI — check the run **status/conclusion** + pull only the failing job's log; don't stream
-- **Scripts:** PowerShell 7+ with sibling Pester suites (§Scripts); `-AsLibrary` switch. No secrets/env-specific values in committed files.
-
-**testing** (`testing-specialist`) — **NO MOCKS.** Owns the wider net; unit tests belong to each implementer.
-
-| Level | Lane | Command (mirrors CI) | On fail → surface |
-|---|---|---|---|
-| Backend (.NET/xUnit) | `backend/tests/**` | `dotnet test Dashboard.slnx --settings Dashboard.runsettings --nologo -c Release` (from `backend/`) | `Select-String 'error|\bFailed\b|\[xUnit'` |
-| Frontend (Angular/Vitest) | `frontend/dashboard/**/*.spec.ts` | `npm test` (in `frontend/dashboard`) | failing specs only |
-| Demo driver (Jest) | `demo/driver/**/*.spec.ts` | `npm test` (in `demo/driver`) | `✕` / `FAIL` lines |
-| API integration | `testing/api/**` | `docker compose up -d --build --wait` → `npm run test:integration` | failing requests + `docker compose logs --no-color` slice |
-| E2E (Playwright) | `testing/e2e/**` | `npx playwright test` | failing test + trace |
-| Scripts (Pester v5) | `*.Tests.ps1` (sibling) | `Invoke-Pester -Output Minimal` | failed `It` only |
-
-- **Overlap invariants:** every new UI combo MUST add a row to `testing/e2e/tests/overlap-invariants.spec.ts` (`COMBOS_UNDER_TEST`).
-- **api-tests CI triggers main-only;** `gh run watch | tail` masks the exit code — check run status explicitly.
-
-**docs** (`docs-keeper`)
-- **Authoring rules:** this file's *Context economy and documentation authoring rules* + *Sources of truth* index convention are the binding host rules.
-- **Lanes:** `docs/**/*.md`, per-directory `index.md`, and the *Sources of truth* registry (Edit-only, smallest region).
-- **Tooling:** markdown MCP for section retrieval; maintenance hook `pwsh scripts/hooks/Invoke-DocsKeeperMaintenance.ps1 -DriftOnly` (mirrors `.github/workflows/docs.yml`).
-
-## Code intelligence (purpose-routed MCP)
-
-Three code MCP servers are available. **Route by purpose — pick the server built for the job; never one server for everything.** Prefer them over `Read` / `Grep`: they return targeted symbols plus structural context (callers, dependents, tests), not whole files — cutting tokens across agent turns.
-
-**Load before use (mandatory).** All three expose *deferred* tools — schemas unloaded, uncallable until fetched via `ToolSearch` (e.g. `select:mcp__tokensave__tokensave_context,mcp__serena__find_symbol`). Skip this and agents silently fall back to `Grep` / `Read`; loading is what makes the routing below take effect.
-
-**Routing.**
-
-| Purpose | Primary server | Tools |
+| Role | Agent | Binding |
 |---|---|---|
-| **Research / explore / understand** code | **tokensave** | `tokensave_context` (NL query → symbols + snippets), `tokensave_search`, `tokensave_callers` / `tokensave_callees` / `tokensave_call_chain` |
-| **Impact / blast radius** before touching a shared symbol | **tokensave** | `tokensave_impact` / `tokensave_affected` / `tokensave_coupling`; cross-check refs with serena `find_referencing_symbols` / `find_implementations` |
-| **Symbol-level editing** | **serena** | `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` — LSP-accurate (C# / TS / PowerShell) |
-| **Code review** (change-scoped) | **code-review-graph** (+ tokensave + serena) | graph: `detect_changes` (risk-scored) / `get_review_context` / `get_impact_radius` / `get_affected_flows`; tokensave for deeper structure; serena to read exact symbol bodies |
-| **Architecture / structure overview** | **tokensave** or **code-review-graph** | tokensave `tokensave_outline` / `tokensave_health` / `tokensave_hotspots`; graph `get_architecture_overview` / `list_communities` |
-| **Docs (`.md`)** | **markdown** | see *Docs intelligence* below |
+| contract | `api-architect` | [`.claude/bindings/contract.md`](.claude/bindings/contract.md) |
+| backend | `backend-developer` | [`.claude/bindings/backend.md`](.claude/bindings/backend.md) |
+| frontend | `frontend-developer` | [`.claude/bindings/frontend.md`](.claude/bindings/frontend.md) |
+| infrastructure | `deployment-engineer` | [`.claude/bindings/infrastructure.md`](.claude/bindings/infrastructure.md) |
+| testing | `testing-specialist` | [`.claude/bindings/testing.md`](.claude/bindings/testing.md) |
+| docs | `docs-keeper` | [`.claude/bindings/docs.md`](.claude/bindings/docs.md) |
 
-**Per-server notes.**
-- **tokensave** (`mcp__tokensave__*`). Code graph; start with `tokensave_context` for any exploration. Read-only discovery tools are parallel-safe. **4-call budget per question** — synthesize from what you have rather than exceed it. Report `tokensave_metrics:` savings to the user when present.
-- **serena** (`mcp__serena__*`). LSP retrieval + editing. `get_symbols_overview` → `find_symbol` (`depth=1` for members, `include_body` only when source needed). Owns surgical edits.
-- **code-review-graph** (`mcp__code-review-graph__*`). Persistent change-review graph; auto-updates via hooks but **rebuild after a branch switch** (it warns when stale).
+**Tool-output-economy guardrail** (`.claude/team-process/guardrails.md`) — shared across all roles; apply to every command:
+- Capture output; branch on the exit code.
+- Surface only the aggregate (success) or the failing slice (failure) — never the full log.
 
-- **Fall back to `Read` / `Grep`** for declarative/non-code files (YAML, JSON, Dockerfiles, configs), exact line-range reads, or content the LSPs don't index well. For **Markdown** use the markdown MCP, not `Read`.
+## Code & docs intelligence (MCP)
 
-## Docs intelligence (markdown-first)
+Purpose-routed MCP servers return targeted symbols/sections (callers, dependents, tests, doc
+headings), not whole files — **prefer them over `Read` / `Grep`** for code and `.md`. Servers:
+**tokensave** (code research/impact) · **serena** (symbol-level editing) · **code-review-graph**
+(change review) · **markdown** (`.md` section retrieval).
 
-The markdown MCP server (`mcp__markdown__*`, `ofershap/mcp-server-markdown`) exposes structural, embedding-free section retrieval over `.md` files via the heading tree. **Prefer it over `Read` wherever a doc section applies** — it returns one section, not the whole file, cutting token use across agent turns. The docs analogue of *Code intelligence* above; paths resolve against the project root, so pass relative paths (`docs/index.md`).
+**Load before use (mandatory).** All expose *deferred* tools — uncallable until fetched via
+`ToolSearch` (e.g. `select:mcp__tokensave__tokensave_context,mcp__markdown__get_section`). Skip
+this and agents silently fall back to `Grep` / `Read`.
 
-**Load before use (mandatory).** Its tools are *deferred* — load via `ToolSearch` (e.g. `select:mcp__markdown__list_headings,mcp__markdown__get_section,mcp__markdown__search_docs`). Skip this and agents silently default to `Read`; this step is what makes the preference below take effect.
-
-- **Map, then extract.** `list_headings` (a file's heading tree / TOC) before reading, then `get_section` to pull only the target heading's content — pairs with the index-first navigation in *Sources of truth*.
-- **Locate across docs.** `list_files` (enumerate `.md`) + `search_docs` (case-insensitive keyword scan, **not** semantic) to find the file, then `get_section` to extract.
-- **Address by heading TEXT, not anchor slug.** `get_section(file, "Sources of truth")`, never `"sources-of-truth"` — `index.md` cross-links use `#slugs`, so convert slug → heading text before calling.
-- **Fall back to `Read`** for whole-file reads, content not delimited by headings, exact line-range reads, or frontmatter-only needs (or use `get_frontmatter`).
+**Routing table, per-server notes, and `Read`/`Grep` fallbacks:** [`.claude/mcp-routing.md`](.claude/mcp-routing.md).
 
 ## Scripts
 
-Following rules MUST be followed for every script in this repository (build / install / dev tooling / CI helpers / one-off automation):
+**Binding** for every script — build / install / dev tooling / CI helpers / one-off automation:
 
 - **Language.** PowerShell (`.ps1` / `.psm1`). Target **PowerShell 7+** (Core) for cross-platform parity (Windows / Linux / macOS).
 - **No alternative shells.** No `bash` / `sh` / `zsh` / `cmd` / `python` scripts as the primary deliverable. Single-line invocations inside CI YAML are exempt.
@@ -175,10 +113,11 @@ Following rules MUST be followed for every script in this repository (build / in
 
 ## Context economy and documentation authoring rules
 
-Following rules MUST be followed always for any kind of project documentation and LLM assets:
+**Binding** for all project documentation and LLM assets:
 
 - **Concise + LLM-optimized.** Cut filler, marketing tone, "in this section we will explore" preambles. Every sentence earns its tokens.
 - **Structure over prose — binding here, not aspirational.** Convert prose into the smallest readable structure that preserves every rule:
   - Steps → numbered list. Choices / mappings → table. "X means Y" → `**X.** Y` on its own line.
   - Multi-rule bullet ("do A; also B; warn C") → parent + sub-bullets, one rule per line.
   - Prose paragraph stating > 2 rules → restructure.
+

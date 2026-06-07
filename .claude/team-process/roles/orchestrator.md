@@ -4,8 +4,9 @@ The main loop. Per the seed convention: *the main loop orchestrates — plans, s
 synthesizes specialist returns; there is no separate team-lead agent.* Orchestration is a
 mode, not a delegate. The orchestrator is the **sole commit/integration gate**.
 
-See [`../process.md`](../process.md) for routing, phases, the communication protocol, and
-inherited guardrails.
+See [`../process.md`](../process.md) for routing, phases, and the fix/review loops;
+[`../protocol.md`](../protocol.md) for the communication protocol; [`../guardrails.md`](../guardrails.md)
+for inherited guardrails.
 
 ## Mission
 
@@ -38,7 +39,7 @@ right roles and owning the integration nobody else can.
 
 ## Communication
 
-Hub-and-spoke; formats in `process.md` → *Communication protocol*.
+Hub-and-spoke; formats in [`protocol.md`](../protocol.md).
 
 - **Member → orchestrator:** `RESULT` / `FINDING`.
 - **Orchestrator → member:** `BRIEF` / `FIX`; the orchestrator synthesizes.
