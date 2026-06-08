@@ -300,7 +300,7 @@ public sealed class GithubActionsAdapter(
 
         var ev = EventMapper.Map(
             deployment, status, ctx.Repo, contractStatus,
-            graph?.WorkflowName, version, parentDeployments, serviceMap);
+            new EventMappingContext(graph?.WorkflowName, version, parentDeployments, serviceMap));
 
         return (ev, status.CreatedAt);
     }

@@ -6,6 +6,7 @@ using Dashboard.Shared.Contracts;
 namespace Dashboard.Fetcher.GitHub.Mapping;
 
 /// <summary>Maps a (GhDeployment, GhDeploymentStatus) pair to DeploymentEventIngest (§5.2).</summary>
+/// <summary>Maps a (GhDeployment, GhDeploymentStatus) pair to DeploymentEventIngest (§5.2).</summary>
 public static partial class EventMapper
 {
     [GeneratedRegex(@"/actions/runs/(\d+)", RegexOptions.Compiled)]
@@ -18,20 +19,17 @@ public static partial class EventMapper
         GhDeploymentStatus status,
         string repo,
         string contractStatus,
-        string? workflowName,
-        string? version,
-        string[] parentDeployments,
-        IReadOnlyDictionary<string, string> serviceMap)
+        EventMappingContext context)
     {
         var runId = ExtractRunId(status.TargetUrl);
-        var service = ServiceResolver.Resolve(workflowName, repo, serviceMap);
+        var service = ServiceResolver.Resolve(context.WorkflowName, repo, context.ServiceMap);
 
         return new DeploymentEventIngest
         {
             DeploymentId = $"gh-deploy-{deployment.Id}",
             Service = service,
             Environment = deployment.Environment,
-            Version = version,
+            Version = context.Version,
             Status = contractStatus,
             HappenedAt = status.CreatedAt,
             RunUrl = status.TargetUrl,
@@ -39,7 +37,7 @@ public static partial class EventMapper
             Actor = status.Creator?.Login ?? deployment.Creator?.Login,
             Ref = deployment.Ref,
             Sha = deployment.Sha,
-            ParentDeployments = parentDeployments.Length > 0 ? parentDeployments : null,
+            ParentDeployments = context.ParentDeployments.Length > 0 ? context.ParentDeployments : null,
         };
     }
 
@@ -50,3 +48,11 @@ public static partial class EventMapper
         return match.Success && long.TryParse(match.Groups[1].Value, out var id) ? id : null;
     }
 }
+
+/// <summary>Contextual enrichment data for <see cref="EventMapper.Map"/>. Groups the four
+/// cohesive optional/lookup parameters so the method stays within S107 (≤7 params).</summary>
+public readonly record struct EventMappingContext(
+    string? WorkflowName,
+    string? Version,
+    string[] ParentDeployments,
+    IReadOnlyDictionary<string, string> ServiceMap);

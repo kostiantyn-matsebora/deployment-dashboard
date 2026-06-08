@@ -318,7 +318,7 @@ public sealed class BackfillRunner(
 
                 var ev = EventMapper.Map(
                     deployment, status, repo, contractStatus,
-                    graph?.WorkflowName, version, parentDeployments, serviceMap);
+                    new EventMappingContext(graph?.WorkflowName, version, parentDeployments, serviceMap));
 
                 var slot = $"{service}\x00{deployment.Environment}";
                 candidateEvents.Add((ev, slot));
