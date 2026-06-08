@@ -31,6 +31,15 @@
 [CmdletBinding()]
 param([switch]$AsLibrary)
 
+# The exact, copy-pasteable render recipe appended to every "fix it" block reason,
+# so an agent never has to guess the script's invocation. Kept DRY in one place.
+function Get-RenderRecipe {
+    $script = 'scripts/hooks/Format-ProtocolForm.ps1'
+    return @"
+Do NOT hand-align the table — render it: (1) write the simple form to a temp file — first line the tag (e.g. RESULT), then one 'field: value' line per field; for a multi-value field write 'field:' alone and put each value on its own indented line below it. (2) Run: pwsh -NoProfile -File $script -InputFile <file>. (3) Send its stdout VERBATIM as the message.
+"@.Trim()
+}
+
 function Get-FormTag {
     param([string]$Text)
     foreach ($line in ($Text -split "`r?`n")) {
@@ -192,7 +201,7 @@ function Get-ProtocolFormDecision {
     if (-not $tag) {
         return @{
             Block  = $true
-            Reason = 'Free-prose cross-role message — not permitted. Every cross-role message MUST be one of the six typed forms (REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT), opened with the form name on its own line. Informal prose is returned UNREAD (process.md Communication protocol). Re-emit in the correct typed form.'
+            Reason = "Free-prose cross-role message — not permitted. Every cross-role message MUST be one of the six typed forms (REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT), opened with the form name on its own line. Informal prose is returned UNREAD (process.md Communication protocol). $(Get-RenderRecipe)"
         }
     }
 
@@ -204,7 +213,7 @@ function Get-ProtocolFormDecision {
     if ($null -eq $fields) {
         return @{
             Block  = $true
-            Reason = "Malformed $tag — body must be an aligned 2-column table (process.md 'Emitted rendering'). Use Format-ProtocolForm.ps1 to render the form."
+            Reason = "Malformed $tag — body must be an aligned 2-column table (process.md 'Emitted rendering'). $(Get-RenderRecipe)"
         }
     }
 
@@ -251,7 +260,7 @@ function Get-ProtocolFormDecision {
         if ($widths.Count -gt 1) {
             return @{
                 Block  = $true
-                Reason = "Malformed $tag — table rows are not column-aligned (found row lengths: $($widths -join ', ')). Use Format-ProtocolForm.ps1 to produce auto-padded aligned output."
+                Reason = "Malformed $tag — table rows are not column-aligned (found row lengths: $($widths -join ', ')). $(Get-RenderRecipe)"
             }
         }
     }

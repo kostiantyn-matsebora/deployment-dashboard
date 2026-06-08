@@ -299,6 +299,45 @@ BRIEF
 }
 
 # ============================================================
+Describe 'Get-RenderRecipe — block reasons carry the exact invocation' {
+
+    It 'recipe names the -InputFile invocation and the script path' {
+        $recipe = Get-RenderRecipe
+        $recipe | Should -Match 'Format-ProtocolForm\.ps1'
+        $recipe | Should -Match '-InputFile'
+        $recipe | Should -Match 'VERBATIM'
+    }
+
+    It 'malformed-table reason embeds the render recipe' {
+        $prose = "RESULT`nThis is my result. The role is backend and the gate is green."
+        $d = Get-ProtocolFormDecision -Text $prose
+        $d.Reason | Should -Match 'aligned 2-column table'
+        $d.Reason | Should -Match '-InputFile'
+    }
+
+    It 'free-prose reason embeds the render recipe' {
+        $d = Get-ProtocolFormDecision -Text 'Please re-run iteration 2 when you can.'
+        $d.Reason | Should -Match 'typed form'
+        $d.Reason | Should -Match '-InputFile'
+    }
+
+    It 'misaligned-table reason embeds the render recipe' {
+        $misaligned = @'
+RESULT
+| role | • backend |
+-------------------------------
+| changed | • PollLoop.cs |
+-------------------------------
+| gate | • build ok |
+-------------------------------
+'@
+        $d = Get-ProtocolFormDecision -Text $misaligned
+        $d.Reason | Should -Match 'aligned'
+        $d.Reason | Should -Match '-InputFile'
+    }
+}
+
+# ============================================================
 Describe 'Get-SendMessageText' {
 
     It 'returns the string message verbatim' {

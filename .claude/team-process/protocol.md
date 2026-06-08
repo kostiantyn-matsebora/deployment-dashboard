@@ -13,23 +13,32 @@ Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FIN
 
 **Emitted rendering.** Render every form with `scripts/hooks/Format-ProtocolForm.ps1` — it owns the
 layout rules (one `•` item per row; field name on its first row only, blank on continuation rows;
-columns auto-aligned; a full-width `-----` rule after each field block; never `<br>`). One example;
-the script renders all six the same way:
+columns auto-aligned; a full-width `-----` rule after each field block; never `<br>`). **Never
+hand-align the table** — the `SendMessage` guard rejects misaligned output. Invoke without shell
+quoting pain:
+
+1. **Write the simple form to a temp file** — first line the tag, then one `field: value` line per
+   field; for a multi-value field write `field:` alone and put each value on its own indented line below.
+2. **Render:** `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file>`
+   (or pipe the form text in via stdin).
+3. **Send the stdout verbatim** as the `SendMessage` body.
+
+Simple-form input (left) → rendered output (right); the script renders all six the same way:
 
 ```
-RESULT
-| role    | • backend                                     |
------------------------------------------------------------
-| changed | • GithubActionsAdapter.cs                     |
-|         | • BackfillRunner.cs                           |
------------------------------------------------------------
-| gate    | • build ok                                    |
-|         | • 264/264 tests                               |
------------------------------------------------------------
-| notes   | • extracted HTTP adapter into dedicated class |
------------------------------------------------------------
-| block   | • none                                        |
------------------------------------------------------------
+RESULT                          RESULT
+role: backend                   | role    | • backend                                     |
+changed:                        -----------------------------------------------------------
+  GithubActionsAdapter.cs       | changed | • GithubActionsAdapter.cs                     |
+  BackfillRunner.cs             |         | • BackfillRunner.cs                           |
+gate:                           -----------------------------------------------------------
+  build ok                      | gate    | • build ok                                    |
+  264/264 tests                 |         | • 264/264 tests                               |
+notes: extracted HTTP adapter   -----------------------------------------------------------
+block: none                     | notes   | • extracted HTTP adapter                      |
+                                -----------------------------------------------------------
+                                | block   | • none                                        |
+                                -----------------------------------------------------------
 ```
 
 **BRIEF** — orch → role · dispatch
