@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Dashboard.Shared.Sse;
 
@@ -25,11 +25,11 @@ public abstract class PgListenFanOutBase<TPending, TPayload> : PgListenBroadcast
     private readonly ConcurrentDictionary<ChannelReader<TPayload>, ChannelWriter<TPayload>>
         _subscriptions = new();
 
-    /// <inheritdoc cref="PgListenBroadcasterBase{TPending}(Microsoft.Extensions.Configuration.IConfiguration,Microsoft.Extensions.Logging.ILogger)"/>
+    /// <inheritdoc cref="PgListenBroadcasterBase{TPending}(Npgsql.NpgsqlDataSource,Microsoft.Extensions.Logging.ILogger)"/>
     protected PgListenFanOutBase(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger logger)
-        : base(configuration, logger) { }
+        : base(dataSource, logger) { }
 
     // ── Subclass contract ─────────────────────────────────────────────────────
 

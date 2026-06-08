@@ -6,7 +6,6 @@ using Dashboard.Control.StateMachine;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -371,16 +370,15 @@ internal sealed class ResetOrchestrator(
     /// </summary>
     private async Task<NpgsqlConnection?> TryOpenAndAcquireLockAsync(CancellationToken ct)
     {
-        var connectionString = services.GetService<IConfiguration>()
-            ?.GetConnectionString("Postgres");
+        var dataSource = services.GetService<NpgsqlDataSource>();
 
-        if (string.IsNullOrEmpty(connectionString))
+        if (dataSource is null)
         {
-            logger.LogWarning("Reset orchestrator: Postgres connection string not available; skipping.");
+            logger.LogWarning("Reset orchestrator: NpgsqlDataSource not available; skipping.");
             return null;
         }
 
-        var lockConn = new NpgsqlConnection(connectionString);
+        var lockConn = dataSource.CreateConnection();
         await lockConn.OpenAsync(ct);
 
         bool lockAcquired;

@@ -5,9 +5,9 @@ using Dashboard.Control.Sse;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 
 namespace Dashboard.Control.Tests;
 
@@ -83,9 +83,10 @@ public sealed class ResetOrchestratorTimeoutTests : IDisposable
             .AddSingleton<IControlEventNotifier>(_notifier)
             .BuildServiceProvider();
 
-        var cfg = new ConfigurationBuilder().Build();
+        // These tests never open a Postgres connection; supply a dummy data source.
+        var dataSource = NpgsqlDataSource.Create("Host=localhost");
         var broadcaster = new ComponentAcksBroadcaster(
-            cfg, NullLogger<ComponentAcksBroadcaster>.Instance);
+            dataSource, NullLogger<ComponentAcksBroadcaster>.Instance);
 
         return new ResetOrchestrator(
             services,

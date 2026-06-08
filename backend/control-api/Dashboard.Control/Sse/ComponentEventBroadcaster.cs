@@ -1,9 +1,9 @@
 using Dashboard.Control.Models;
 using Dashboard.Control.Repositories;
 using Dashboard.Shared.Sse;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Dashboard.Control.Sse;
 
@@ -25,9 +25,9 @@ internal sealed class ComponentEventBroadcaster
 
     public ComponentEventBroadcaster(
         IServiceScopeFactory scopeFactory,
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<ComponentEventBroadcaster> logger)
-        : base(configuration, logger)
+        : base(dataSource, logger)
     {
         _scopeFactory = scopeFactory;
     }

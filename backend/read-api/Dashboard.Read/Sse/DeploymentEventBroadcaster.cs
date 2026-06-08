@@ -1,9 +1,9 @@
 using Dashboard.Read.Repositories;
 using Dashboard.Shared.Entities;
 using Dashboard.Shared.Sse;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Dashboard.Read.Sse;
 
@@ -24,9 +24,9 @@ internal sealed class DeploymentEventBroadcaster
 
     public DeploymentEventBroadcaster(
         IServiceScopeFactory scopeFactory,
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<DeploymentEventBroadcaster> logger)
-        : base(configuration, logger)
+        : base(dataSource, logger)
     {
         _scopeFactory = scopeFactory;
     }

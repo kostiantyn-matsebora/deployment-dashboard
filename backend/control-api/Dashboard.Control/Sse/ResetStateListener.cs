@@ -1,7 +1,6 @@
 using Dashboard.Shared.Abstractions;
 using Dashboard.Shared.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -27,7 +26,7 @@ namespace Dashboard.Control.Sse;
 /// </summary>
 internal sealed class ResetStateListener(
     IServiceProvider services,
-    IConfiguration configuration,
+    NpgsqlDataSource dataSource,
     ILogger<ResetStateListener> logger) : BackgroundService, Dashboard.Shared.Abstractions.IResetStateProvider
 {
     private volatile bool _isResetting;
@@ -93,10 +92,7 @@ internal sealed class ResetStateListener(
 
     private async Task ListenAsync(CancellationToken ct)
     {
-        var connectionString = configuration.GetConnectionString("Postgres")
-            ?? throw new InvalidOperationException("ConnectionStrings:Postgres is not configured.");
-
-        await using var conn = new NpgsqlConnection(connectionString);
+        await using var conn = dataSource.CreateConnection();
         await conn.OpenAsync(ct);
 
         conn.Notification += (_, args) =>

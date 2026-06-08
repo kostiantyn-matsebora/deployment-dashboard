@@ -34,7 +34,8 @@ internal sealed class PostgresConnectionStringProvider : IConfigurationProvider
             return false;
         }
 
-        value = PostgresConnectionString.Resolve(_configuration);
+        var authMode = NpgsqlDataSourceFactory.ResolveAuthMode(_configuration);
+        value = PostgresConnectionString.Resolve(_configuration, authMode);
         return true;
     }
 

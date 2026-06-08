@@ -2,8 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dashboard.Shared.Entities;
 using Dashboard.Shared.Sse;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Dashboard.Control.Sse;
 
@@ -28,9 +28,9 @@ internal sealed class ControlEventBroadcaster
     };
 
     public ControlEventBroadcaster(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<ControlEventBroadcaster> logger)
-        : base(configuration, logger) { }
+        : base(dataSource, logger) { }
 
     // ── IControlReadinessIndicator ────────────────────────────────────────────
 

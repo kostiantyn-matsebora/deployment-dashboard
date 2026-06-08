@@ -20,6 +20,9 @@ internal sealed class DashboardDbContextFactory : IDesignTimeDbContextFactory<Da
             .AddEnvironmentVariables()
             .Build();
 
+        // Design-time (dotnet-ef migrations/scaffolding) always runs with static credentials
+        // in CI — use the connection string directly to avoid disposing an NpgsqlDataSource
+        // before the returned context has a chance to use it.
         var connectionString = PostgresConnectionString.Resolve(configuration);
 
         var options = new DbContextOptionsBuilder<DashboardDbContext>()

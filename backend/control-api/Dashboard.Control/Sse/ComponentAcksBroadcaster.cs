@@ -2,8 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Dashboard.Shared.Sse;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Dashboard.Control.Sse;
 
@@ -32,9 +32,9 @@ internal sealed class ComponentAcksBroadcaster
             new UnboundedChannelOptions { SingleReader = false });
 
     public ComponentAcksBroadcaster(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger<ComponentAcksBroadcaster> logger)
-        : base(configuration, logger) { }
+        : base(dataSource, logger) { }
 
     // ── IAckReadinessIndicator ────────────────────────────────────────────────
 
