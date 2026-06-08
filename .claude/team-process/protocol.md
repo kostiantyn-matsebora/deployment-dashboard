@@ -62,7 +62,7 @@ block: none                     | notes   | • extracted HTTP adapter          
 | follow | • out-of-lane needs / deferred | omit if none |
 | block | • blocker pointer | `none` or `see FINDING` |
 
-**REVIEW** — reviewer → orch · peer compliance check (pre-testing)
+**REVIEW** — reviewer → orch · role-bar walk (pre-implementation scoping *or* pre-testing peer review)
 
 | Field | What belongs | Constraint |
 |---|---|---|
@@ -70,7 +70,7 @@ block: none                     | notes   | • extracted HTTP adapter          
 | scope | • lanes/files reviewed | the change set in this competency |
 | checked | • touched symbols × dimensions walked | required; the full bar per symbol, not a skim |
 | verdict | • `pass` / `changes-requested` | `pass` only with zero remarks; invalid without `checked` |
-| remarks | • each: principle/smell · location `file:line` · required change | omit if `pass`; cite the role's non-negotiables |
+| remarks | • each: principle/smell · location `file:line` · required change | omit if `pass`; cite the role's non-negotiables. When scoping, `remarks` = the refactor backlog |
 | block | • blocker pointer | `none` or `see FINDING` |
 
 **FINDING** — role → orch · blocker / contradiction / impossible
