@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -18,6 +19,10 @@ using Microsoft.AspNetCore.Routing;
 
 namespace Dashboard.Control;
 
+// S1200: An endpoint-mapping surface class necessarily references every route handler,
+// filter, model, notifier, repository, and SSE type it maps — coupling is inherent
+// to the pattern and cannot be reduced without fragmenting the routing surface.
+[SuppressMessage("SonarAnalyzer", "S1200", Justification = "Endpoint-mapping surface: coupling to all handler dependencies is inherent and irreducible.")]
 public static class ControlEndpoints
 {
     /// <summary>Max serialised <c>payload</c> size (8 KiB) — exceeding it yields <c>413</c>.</summary>

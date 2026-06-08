@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Dashboard.Control.Notifiers;
 using Microsoft.Extensions.Configuration;
 using Dashboard.Control.Options;
@@ -11,6 +12,9 @@ using Microsoft.Extensions.Hosting;
 
 namespace Dashboard.Control;
 
+// S1200: A DI composition root registers every service the module provides; referencing
+// all concrete types and their interfaces is the definition of the pattern, not a design flaw.
+[SuppressMessage("SonarAnalyzer", "S1200", Justification = "DI composition root: registering all module services requires coupling to every concrete type — this is expected and irreducible.")]
 public static class ControlServiceExtensions
 {
     public static IServiceCollection AddControlServices(this IServiceCollection services)
