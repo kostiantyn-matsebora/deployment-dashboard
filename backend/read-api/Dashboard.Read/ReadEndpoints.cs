@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Dashboard.Read.Models;
 using Dashboard.Read.Queries;
 using Dashboard.Read.Repositories;
@@ -65,26 +66,19 @@ public static class ReadEndpoints
     }
 
     private static async Task<IResult> HandleListAsync(
-        [FromQuery] string? service,
-        [FromQuery] string? environment,
-        [FromQuery] string? status,
-        [FromQuery(Name = "deployment_id")] string? deploymentId,
-        [FromQuery] DateTimeOffset? since,
-        [FromQuery] DateTimeOffset? until,
-        [FromQuery] string? cursor,
-        [FromQuery] int? limit,
+        [AsParameters] DeploymentListParameters filters,
         IDeploymentReadRepository repository,
         CancellationToken ct)
     {
         var query = new DeploymentListQuery(
-            Service: service,
-            Environment: environment,
-            Status: status,
-            DeploymentId: deploymentId,
-            Since: since,
-            Until: until,
-            Cursor: cursor,
-            Limit: Math.Clamp(limit ?? 100, 1, 500));
+            Service: filters.Service,
+            Environment: filters.Environment,
+            Status: filters.Status,
+            DeploymentId: filters.DeploymentId,
+            Since: filters.Since,
+            Until: filters.Until,
+            Cursor: filters.Cursor,
+            Limit: Math.Clamp(filters.Limit ?? 100, 1, 500));
 
         var (items, nextCursor) = await repository.ListAsync(query, ct);
         return Results.Ok(new DeploymentEventPage(items, nextCursor));
@@ -155,6 +149,13 @@ public static class ReadEndpoints
         HttpContext httpContext,
         CancellationToken ct)
     {
+        await WriteSseHeadersAsync(httpContext, ct);
+        await ReplaySinceAsync(lastEventId, service, repository, httpContext, ct);
+        await StreamLiveEventsAsync(service, broadcaster, httpContext, ct);
+    }
+
+    private static async Task WriteSseHeadersAsync(HttpContext httpContext, CancellationToken ct)
+    {
         httpContext.Response.ContentType = "text/event-stream";
         httpContext.Response.Headers.CacheControl = "no-cache";
         httpContext.Response.Headers.Connection = "keep-alive";
@@ -163,15 +164,30 @@ public static class ReadEndpoints
         // Flush headers immediately so clients using HttpCompletionOption.ResponseHeadersRead
         // receive the 200 + Content-Type before any events arrive (or before the 15 s ping fires).
         await httpContext.Response.Body.FlushAsync(ct);
+    }
 
+    private static async Task ReplaySinceAsync(
+        string? lastEventId,
+        string? service,
+        IDeploymentReadRepository repository,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
         // Replay missed events when client reconnects with Last-Event-ID.
-        if (Guid.TryParse(lastEventId, out var resumeId))
-        {
-            var missed = await repository.GetSinceAsync(resumeId, service, ct);
-            foreach (var ev in missed)
-                await WriteSseEventAsync(httpContext, ev, ct);
-        }
+        if (!Guid.TryParse(lastEventId, out var resumeId))
+            return;
 
+        var missed = await repository.GetSinceAsync(resumeId, service, ct);
+        foreach (var ev in missed)
+            await WriteSseEventAsync(httpContext, ev, ct);
+    }
+
+    private static async Task StreamLiveEventsAsync(
+        string? service,
+        IDeploymentEventBroadcaster broadcaster,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
         // Subscribe to live events and stream until the client disconnects.
         var reader = broadcaster.Subscribe();
         try
@@ -195,16 +211,25 @@ public static class ReadEndpoints
 
                 if (!hasData) break; // channel completed (broadcaster shutting down)
 
-                while (reader.TryRead(out var ev))
-                {
-                    if (service is null || ev.Service == service)
-                        await WriteSseEventAsync(httpContext, ev, ct);
-                }
+                await DrainChannelAsync(reader, service, httpContext, ct);
             }
         }
         finally
         {
             broadcaster.Unsubscribe(reader);
+        }
+    }
+
+    private static async Task DrainChannelAsync(
+        ChannelReader<DeploymentEvent> reader,
+        string? service,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        while (reader.TryRead(out var ev))
+        {
+            if (service is null || ev.Service == service)
+                await WriteSseEventAsync(httpContext, ev, ct);
         }
     }
 
