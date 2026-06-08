@@ -20,9 +20,7 @@ public sealed class PollLoop(
     IFetcherStateClient state,
     TimeSpan pollInterval,
     ILogger<PollLoop> logger,
-    IFetcherReadinessIndicator? readiness = null,
-    Func<RateLimitSnapshot?>? rateLimitSnapshotFactory = null,
-    Func<RateLimitSnapshot, CancellationToken, Task>? reportCycleAsync = null)
+    PollLoopReporting? reporting = null)
 {
     // Guards the pause state. Permit is drained when paused so the loop waits on WaitAsync.
     private readonly SemaphoreSlim _resumeGate = new(1, 1);
@@ -44,7 +42,7 @@ public sealed class PollLoop(
         if (_isPaused) return;
         _isPaused = true;
         _resumeGate.Wait(0); // drain the permit so the next gate wait blocks
-        readiness?.SetPausedForReset(true);
+        reporting?.Readiness?.SetPausedForReset(true);
         logger.LogInformation("[{Adapter}] poll loop paused for reset", adapter.AdapterId);
     }
 
@@ -54,12 +52,17 @@ public sealed class PollLoop(
     /// </summary>
     public void DropCursorAndResume()
     {
+        // Reset saga (§5.10.5): bring the fetcher to a genuine clean slate — clear the
+        // adapter's dedup caches AND drop the cursor — so the next cycle backfills from
+        // scratch rather than reverting to incremental with warm caches.
+        adapter.ResetState();
         _pendingCursorOverride = null;
         _hasPendingCursorOverride = true;
         _isPaused = false;
-        readiness?.SetPausedForReset(false);
+        reporting?.Readiness?.SetPausedForReset(false);
         try { _resumeGate.Release(); } catch (SemaphoreFullException) { /* already at capacity — already running */ }
-        logger.LogInformation("[{Adapter}] poll loop resumed with null cursor (backfill will trigger)",
+        logger.LogInformation(
+            "[{Adapter}] poll loop resumed with clean slate (caches cleared, cursor dropped — backfill will trigger)",
             adapter.AdapterId);
     }
 
@@ -71,74 +74,112 @@ public sealed class PollLoop(
 
         while (!ct.IsCancellationRequested)
         {
-            // Block here while paused; cancel unblocks the wait.
-            if (_isPaused)
-            {
-                try
-                {
-                    await _resumeGate.WaitAsync(ct);
-                    _resumeGate.Release(); // restore the permit so future iterations pass through
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    break;
-                }
-            }
+            if (!await WaitWhilePausedAsync(ct)) break;
 
-            // Apply cursor override injected by DropCursorAndResume (§5.10.5).
-            if (_hasPendingCursorOverride)
-            {
-                cursor = _pendingCursorOverride;
-                _hasPendingCursorOverride = false;
-            }
+            cursor = ApplyPendingCursorOverride(cursor);
 
-            try
-            {
-                cursor = await PollOnceAsync(cursor, ct);
-                var snapshot = rateLimitSnapshotFactory?.Invoke();
-                readiness?.RecordSuccess(snapshot);
+            var (cont, next) = await RunOneCycleAsync(cursor, ct);
+            cursor = next;
+            if (!cont) break;
 
-                // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
-                if (reportCycleAsync is not null && snapshot is not null)
-                {
-                    try
-                    {
-                        await reportCycleAsync(snapshot, ct);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        logger.LogWarning(ex,
-                            "[{Adapter}] per-cycle rate-limit report failed (non-fatal)",
-                            adapter.AdapterId);
-                    }
-                }
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (HttpRequestException ex) when (
-                ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            {
-                logger.LogError(ex, "[{Adapter}] poll error (auth failed); retrying next interval",
-                    adapter.AdapterId);
-                readiness?.RecordAuthFailed(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "[{Adapter}] poll error; retrying next interval",
-                    adapter.AdapterId);
-                readiness?.RecordError(ex.Message);
-            }
+            if (!await WaitIntervalAsync(ct)) break;
+        }
+    }
 
-            try
-            {
-                await Task.Delay(pollInterval, ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+    // Executes one poll cycle. Returns false when cancellation signals a clean exit.
+    // Executes one poll cycle. Returns (false, cursor) when cancellation signals a clean exit,
+    // (true, newCursor) on success, or (true, cursor) on a retriable error.
+    private async Task<(bool Continue, string? Cursor)> RunOneCycleAsync(string? cursor, CancellationToken ct)
+    {
+        try
+        {
+            var next = await PollOnceAsync(cursor, ct);
+            await RecordSuccessAsync(ct);
+            return (true, next);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return (false, cursor);
+        }
+        catch (HttpRequestException ex) when (
+            ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            logger.LogError(ex, "[{Adapter}] poll error (auth failed); retrying next interval",
+                adapter.AdapterId);
+            reporting?.Readiness?.RecordAuthFailed(ex.Message);
+            return (true, cursor);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[{Adapter}] poll error; retrying next interval",
+                adapter.AdapterId);
+            reporting?.Readiness?.RecordError(ex.Message);
+            return (true, cursor);
+        }
+    }
+
+    // Records a successful poll cycle: updates readiness and fires the optional per-cycle report.
+    private async Task RecordSuccessAsync(CancellationToken ct)
+    {
+        var snapshot = reporting?.RateLimitSnapshotFactory?.Invoke();
+        reporting?.Readiness?.RecordSuccess(snapshot);
+
+        // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
+        if (reporting?.ReportCycleAsync is not null && snapshot is not null)
+            await TryReportCycleAsync(snapshot, ct);
+    }
+
+    // Block here while paused; cancel unblocks the wait. Returns false when cancelled.
+    private async Task<bool> WaitWhilePausedAsync(CancellationToken ct)
+    {
+        if (!_isPaused) return true;
+        try
+        {
+            await _resumeGate.WaitAsync(ct);
+            _resumeGate.Release(); // restore the permit so future iterations pass through
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
+    // Apply cursor override injected by DropCursorAndResume (§5.10.5).
+    private string? ApplyPendingCursorOverride(string? cursor)
+    {
+        if (!_hasPendingCursorOverride) return cursor;
+        _hasPendingCursorOverride = false;
+        return _pendingCursorOverride;
+    }
+
+    // Fire-and-swallow per-cycle rate-limit report (F18 / §5.11).
+    // A failure must not interrupt the loop.
+    private async Task TryReportCycleAsync(RateLimitSnapshot snapshot, CancellationToken ct)
+    {
+        try
+        {
+            await reporting!.ReportCycleAsync!(snapshot, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex,
+                "[{Adapter}] per-cycle rate-limit report failed (non-fatal)",
+                adapter.AdapterId);
+        }
+    }
+
+    // Wait for the configured poll interval. Returns false when cancelled.
+    private async Task<bool> WaitIntervalAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(pollInterval, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 
@@ -164,3 +205,10 @@ public sealed class PollLoop(
         return cursor;
     }
 }
+
+/// <summary>Groups the three optional observability collaborators for <see cref="PollLoop"/>
+/// so its constructor stays within S107 (≤7 parameters).</summary>
+public sealed record PollLoopReporting(
+    IFetcherReadinessIndicator? Readiness,
+    Func<RateLimitSnapshot?>? RateLimitSnapshotFactory,
+    Func<RateLimitSnapshot, CancellationToken, Task>? ReportCycleAsync);

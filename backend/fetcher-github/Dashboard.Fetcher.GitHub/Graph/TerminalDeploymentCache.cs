@@ -30,6 +30,9 @@ internal sealed class TerminalDeploymentCache
     public void Record(long deploymentId, long? runId) =>
         _cache.Set(deploymentId, runId);
 
+    /// <summary>Drops all cached terminal-deployment entries (reset saga — §5.10.5).</summary>
+    public void Clear() => _cache.Clear();
+
     /// <summary>
     /// Returns true when the given raw GitHub state is terminal.
     /// Uses the raw GitHub state — NOT the contract mapping.

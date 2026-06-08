@@ -43,8 +43,7 @@ public sealed class PollLoopRateLimitReportTests
             adapter, ingest, state,
             pollInterval: TimeSpan.FromSeconds(30),
             NullLogger<PollLoop>.Instance,
-            rateLimitSnapshotFactory: () => snapshot,
-            reportCycleAsync: report);
+            new PollLoopReporting(null, () => snapshot, report));
 
         await loop.RunAsync(cts.Token);
 
@@ -73,8 +72,7 @@ public sealed class PollLoopRateLimitReportTests
             adapter, ingest, state,
             pollInterval: TimeSpan.FromSeconds(30),
             NullLogger<PollLoop>.Instance,
-            rateLimitSnapshotFactory: () => null,   // always null — no snapshot
-            reportCycleAsync: report);
+            new PollLoopReporting(null, () => null, report)); // always null — no snapshot
 
         await loop.RunAsync(cts.Token);
 
@@ -116,9 +114,7 @@ public sealed class PollLoopRateLimitReportTests
             adapter, ingest, state,
             pollInterval: TimeSpan.FromMilliseconds(10),
             NullLogger<PollLoop>.Instance,
-            readiness: readiness,
-            rateLimitSnapshotFactory: () => snapshot,
-            reportCycleAsync: alwaysFailReport);
+            new PollLoopReporting(readiness, () => snapshot, alwaysFailReport));
 
         await loop.RunAsync(cts.Token);
 

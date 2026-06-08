@@ -20,4 +20,9 @@ public static class StatusMapper
         "failure" or "error" => DeploymentStatus.Failure,
         _ => null,  // inactive = supersession marker; unknown states dropped
     };
+
+    /// <summary>Returns true when <paramref name="contractStatus"/> is <see cref="DeploymentStatus.Failure"/>
+    /// and failure-refinement (cancelled/rejected check) should be attempted.</summary>
+    public static bool IsFailureStatus(string contractStatus) =>
+        contractStatus == DeploymentStatus.Failure;
 }

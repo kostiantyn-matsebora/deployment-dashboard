@@ -9,9 +9,9 @@ public sealed class ParentDerivationTests
     [Fact]
     public void LinearChain_DevStagingProd_ProdParentIsStaging()
     {
-        var (all, deploy) = BuildGraph(new[]
+        var (all, deploy) = BuildGraph(new (string Id, string? Env, string? Needs)[]
         {
-            ("dev",     "dev",     (string?)null),
+            ("dev",     "dev",     null),
             ("staging", "staging", "dev"),
             ("prod",    "prod",    "staging"),
         });
@@ -65,10 +65,10 @@ public sealed class ParentDerivationTests
     [Fact]
     public void ParallelBranches_JobHasNoDeploymentAncestor_ReturnsEmpty()
     {
-        var (all, deploy) = BuildGraph(new[]
+        var (all, deploy) = BuildGraph(new (string Id, string? Env, string? Needs)[]
         {
-            ("deploy-eu", "eu", (string?)null),
-            ("deploy-us", "us", (string?)null),
+            ("deploy-eu", "eu", null),
+            ("deploy-us", "us", null),
         });
 
         var parents = ParentDerivation.FindParentDeploymentJobIds(deploy["deploy-eu"], deploy, all);

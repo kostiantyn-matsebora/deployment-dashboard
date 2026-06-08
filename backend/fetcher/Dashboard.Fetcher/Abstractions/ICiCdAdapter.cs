@@ -22,6 +22,14 @@ public interface ICiCdAdapter
     /// At-least-once (F5): a throw mid-stream leaves the cursor at the last persisted
     /// chunk; the next poll re-delivers the failed chunk (duplicates are acceptable).
     /// </summary>
+    /// <summary>
+    /// Resets all in-memory fetch state to first-run, invoked on the reset saga's
+    /// <c>reset-completed</c> step (alongside dropping the cursor). Clears any dedup
+    /// caches / high-water optimizations so the next <see cref="FetchAsync"/> re-fetches
+    /// from scratch. Default no-op; adapters that hold caches override it.
+    /// </summary>
+    void ResetState() { }
+
     IAsyncEnumerable<FetchResult> FetchAsync(string? cursor, CancellationToken ct);
 }
 

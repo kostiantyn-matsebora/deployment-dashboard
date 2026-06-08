@@ -5,6 +5,7 @@ using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Configuration;
 using Dashboard.Fetcher.GitHub.Graph;
+using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Fetcher.Host.Workers;
@@ -110,7 +111,9 @@ builder.Services.AddSingleton<VersionResolver>(sp => new VersionResolver(
     sp.GetRequiredService<WorkflowGraphCache>(),
     sp.GetRequiredService<GithubClient>()));
 
+builder.Services.AddSingleton<BackfillEventBuilder>();
 builder.Services.AddSingleton<BackfillRunner>();
+builder.Services.AddSingleton<DeploymentStatusEventMapper>();
 builder.Services.AddSingleton<GithubActionsAdapter>();
 builder.Services.AddSingleton<ICiCdAdapter>(sp => sp.GetRequiredService<GithubActionsAdapter>());
 
@@ -150,9 +153,7 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
                 state,
                 fetcherOptions.PollInterval,
                 logFactory.CreateLogger<PollLoop>(),
-                readiness,
-                snapshotFactory,
-                reportCycleAsync);
+                new PollLoopReporting(readiness, snapshotFactory, reportCycleAsync));
         })
         .ToList()
         .AsReadOnly();
@@ -187,7 +188,23 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 // Decision: 503 when last_outcome is auth_failed or error AND the loop is NOT paused for reset.
 //           200 in all other cases (ok, rate_limited, paused-for-reset, never-polled).
 // Paused-for-reset is an expected healthy transient — must NOT read as failed.
-app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
+app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) => BuildReadyzResult(indicator));
+
+await app.RunAsync();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+static string? OutcomeLabel(PollOutcome? outcome) => outcome switch
+{
+    PollOutcome.Ok => "ok",
+    PollOutcome.AuthFailed => "auth_failed",
+    PollOutcome.RateLimited => "rate_limited",
+    PollOutcome.Error => "error",
+    null => null,
+    _ => outcome.ToString()?.ToLowerInvariant(),
+};
+
+static IResult BuildReadyzResult(IFetcherReadinessIndicator indicator)
 {
     var outcome = indicator.LastOutcome;
     var paused = indicator.IsPausedForReset;
@@ -196,16 +213,7 @@ app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
         outcome is PollOutcome.AuthFailed or PollOutcome.Error;
 
     var status = outcome is PollOutcome.Ok ? "ready" : "degraded";
-
-    var rl = indicator.RateLimit;
-    object? rateLimitPayload = rl is null ? null : new
-    {
-        used = rl.Used,
-        budget = rl.Budget,
-        reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
-        ci_limit = rl.CiLimit,
-        ci_remaining = rl.CiRemaining,
-    };
+    var rateLimitPayload = BuildRateLimitPayload(indicator.RateLimit);
 
     var body = new
     {
@@ -224,18 +232,14 @@ app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
     return isHardFailure
         ? Results.Json(body, statusCode: StatusCodes.Status503ServiceUnavailable)
         : Results.Ok(body);
-});
+}
 
-await app.RunAsync();
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-static string? OutcomeLabel(PollOutcome? outcome) => outcome switch
-{
-    PollOutcome.Ok => "ok",
-    PollOutcome.AuthFailed => "auth_failed",
-    PollOutcome.RateLimited => "rate_limited",
-    PollOutcome.Error => "error",
-    null => null,
-    _ => outcome.ToString()?.ToLowerInvariant(),
-};
+static object? BuildRateLimitPayload(RateLimitSnapshot? rl) =>
+    rl is null ? null : new
+    {
+        used = rl.Used,
+        budget = rl.Budget,
+        reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
+        ci_limit = rl.CiLimit,
+        ci_remaining = rl.CiRemaining,
+    };
