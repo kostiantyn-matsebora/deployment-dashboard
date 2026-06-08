@@ -61,70 +61,83 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration((_, config) =>
+        builder.ConfigureAppConfiguration((_, config) => AddTestConfiguration(config));
+        builder.ConfigureServices(services => ApplyTestServiceOverrides(services));
+    }
+
+    /// <summary>
+    /// Injects flat POSTGRES_* keys derived from the Testcontainer connection string
+    /// (production path: <c>PostgresConnectionString.Resolve</c>) plus the test API keys.
+    /// Extracted to keep <see cref="ConfigureWebHost"/> within the cognitive-complexity budget.
+    /// </summary>
+    private void AddTestConfiguration(IConfigurationBuilder config)
+    {
+        // Parse the Testcontainer connection string into its constituent parts and inject
+        // them as flat POSTGRES_* keys — the same form the application reads at runtime.
+        // This drives PostgresConnectionString.Resolve through the identical production
+        // path; no ConnectionStrings:Postgres key is set anywhere.
+        var csb = new NpgsqlConnectionStringBuilder(_connectionString);
+
+        var values = new Dictionary<string, string?>
         {
-            // Parse the Testcontainer connection string into its constituent parts and inject
-            // them as flat POSTGRES_* keys — the same form the application reads at runtime.
-            // This drives PostgresConnectionString.Resolve through the identical production
-            // path; no ConnectionStrings:Postgres key is set anywhere.
-            var csb = new NpgsqlConnectionStringBuilder(_connectionString);
+            ["POSTGRES_HOST"] = csb.Host ?? "localhost",
+            ["POSTGRES_PORT"] = (csb.Port != 0 ? csb.Port : 5432).ToString(),
+            ["POSTGRES_DB"] = csb.Database ?? string.Empty,
+            ["POSTGRES_USER"] = csb.Username ?? string.Empty,
+            ["POSTGRES_PASSWORD"] = csb.Password ?? string.Empty,
+            ["API_KEY"] = TestApiKey,
+        };
 
-            var values = new Dictionary<string, string?>
-            {
-                ["POSTGRES_HOST"] = csb.Host ?? "localhost",
-                ["POSTGRES_PORT"] = (csb.Port != 0 ? csb.Port : 5432).ToString(),
-                ["POSTGRES_DB"] = csb.Database ?? string.Empty,
-                ["POSTGRES_USER"] = csb.Username ?? string.Empty,
-                ["POSTGRES_PASSWORD"] = csb.Password ?? string.Empty,
-                ["API_KEY"] = TestApiKey,
-            };
+        // Explicitly null out the key when not included so that any value from
+        // appsettings.Development.json (which WebApplicationFactory loads by default)
+        // does not leak through.
+        values["CONTROL_API_KEY"] = IncludeControlKey ? TestControlApiKey : null;
 
-            // Explicitly null out the key when not included so that any value from
-            // appsettings.Development.json (which WebApplicationFactory loads by default)
-            // does not leak through.
-            values["CONTROL_API_KEY"] = IncludeControlKey ? TestControlApiKey : null;
+        config.AddInMemoryCollection(values);
+    }
 
-            config.AddInMemoryCollection(values);
-        });
-
-        builder.ConfigureServices(services =>
+    /// <summary>
+    /// Applies per-test-class service overrides: optional <see cref="ResetOptions"/>
+    /// post-configuration, no-op notifier swap, and forced reset-state stub.
+    /// Extracted to keep <see cref="ConfigureWebHost"/> within the cognitive-complexity budget.
+    /// </summary>
+    private void ApplyTestServiceOverrides(IServiceCollection services)
+    {
+        if (ResetConfig is { } rc)
         {
-            if (ResetConfig is { } rc)
+            // Apply Reset overrides imperatively via PostConfigure rather than through
+            // configuration keys. The .NET configuration binder MERGES array indices onto
+            // the ResetOptions default initializer (["dashboard-fetcher","demo-driver"])
+            // instead of replacing the array, so a config-key override of ExpectedComponents
+            // would leave stale default entries (and empty slots) in the bound array — the
+            // orchestrator would then wait on acks the test never sends. PostConfigure runs
+            // after binding and lets us replace the array wholesale, deterministically.
+            services.PostConfigure<ResetOptions>(o =>
             {
-                // Apply Reset overrides imperatively via PostConfigure rather than through
-                // configuration keys. The .NET configuration binder MERGES array indices onto
-                // the ResetOptions default initializer (["dashboard-fetcher","demo-driver"])
-                // instead of replacing the array, so a config-key override of ExpectedComponents
-                // would leave stale default entries (and empty slots) in the bound array — the
-                // orchestrator would then wait on acks the test never sends. PostConfigure runs
-                // after binding and lets us replace the array wholesale, deterministically.
-                services.PostConfigure<ResetOptions>(o =>
-                {
-                    if (rc.AckTimeoutSeconds.HasValue)
-                        o.AckTimeoutSeconds = rc.AckTimeoutSeconds.Value;
-                    if (rc.ExpectedComponents is { } components)
-                        o.ExpectedComponents = components;
-                    if (rc.GateMaxTtlSeconds.HasValue)
-                        o.GateMaxTtlSeconds = rc.GateMaxTtlSeconds.Value;
-                });
-            }
+                if (rc.AckTimeoutSeconds.HasValue)
+                    o.AckTimeoutSeconds = rc.AckTimeoutSeconds.Value;
+                if (rc.ExpectedComponents is { } components)
+                    o.ExpectedComponents = components;
+                if (rc.GateMaxTtlSeconds.HasValue)
+                    o.GateMaxTtlSeconds = rc.GateMaxTtlSeconds.Value;
+            });
+        }
 
-            if (!UseRealNotifier)
-            {
-                // Replace Postgres notifier with no-op so tests that don't need SSE fan-out
-                // don't depend on the LISTEN connection being established.
-                services.RemoveAll<IDeploymentNotifier>();
-                services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
-            }
+        if (!UseRealNotifier)
+        {
+            // Replace Postgres notifier with no-op so tests that don't need SSE fan-out
+            // don't depend on the LISTEN connection being established.
+            services.RemoveAll<IDeploymentNotifier>();
+            services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
+        }
 
-            if (ForcedResetState is not null)
-            {
-                // Replace the real ResetStateListener singleton with a controllable stub.
-                // This lets tests verify the 503 gate path without going through NOTIFY/LISTEN.
-                services.RemoveAll<IResetStateProvider>();
-                services.AddSingleton<IResetStateProvider>(ForcedResetState);
-            }
-        });
+        if (ForcedResetState is not null)
+        {
+            // Replace the real ResetStateListener singleton with a controllable stub.
+            // This lets tests verify the 503 gate path without going through NOTIFY/LISTEN.
+            services.RemoveAll<IResetStateProvider>();
+            services.AddSingleton<IResetStateProvider>(ForcedResetState);
+        }
     }
 
     /// <summary>Applies EF migrations against the shared Postgres instance.</summary>

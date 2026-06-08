@@ -35,34 +35,9 @@ internal sealed class ResetOrchestrator(
         ResetOptions options,
         CancellationToken appStopping)
     {
-        var connectionString = services.GetService<IConfiguration>()
-            ?.GetConnectionString("Postgres");
-
-        if (string.IsNullOrEmpty(connectionString))
-        {
-            logger.LogWarning("Reset orchestrator: Postgres connection string not available; skipping.");
+        var lockConn = await TryOpenAndAcquireLockAsync(appStopping);
+        if (lockConn is null)
             return;
-        }
-
-        await using var lockConn = new NpgsqlConnection(connectionString);
-        await lockConn.OpenAsync(appStopping);
-
-        bool lockAcquired;
-        try
-        {
-            lockAcquired = await TryAcquireAdvisoryLockAsync(lockConn, appStopping);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Reset orchestrator: failed to acquire advisory lock.");
-            return;
-        }
-
-        if (!lockAcquired)
-        {
-            logger.LogInformation("Reset orchestrator: advisory lock held by another instance; yielding.");
-            return;
-        }
 
         logger.LogInformation("Reset orchestrator: advisory lock acquired for reset {ResetId}.", resetId);
 
@@ -71,6 +46,7 @@ internal sealed class ResetOrchestrator(
         // fires, the catch below force-aborts with a non-cancelled token, and the finally
         // releases the advisory lock — guaranteeing the system is never wedged longer than
         // GateMaxTtlSeconds (D12, §9).
+        await using var _ = lockConn;
         using var processCts = new CancellationTokenSource(
             TimeSpan.FromSeconds(options.GateMaxTtlSeconds));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -147,19 +123,9 @@ internal sealed class ResetOrchestrator(
         }
 
         // ── Draining → Resetting ──────────────────────────────────────────────
-        machine.Fire(ResetTrigger.AcksIn);
-        await SaveCycleAsync(db, cycle, ct);
-
-        // Notify all instances that the gate is now ON (Fix C).
-        if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Resetting, ct);
-
         var correlationId = cycle.CorrelationId ?? resetId;
-        var resetStartedEvent = BuildControlEvent("reset-started", correlationId);
-        await controlStream.InsertAsync(resetStartedEvent, ct);
-        await notifier.NotifyAsync(resetStartedEvent, ct);
-
-        logger.LogInformation("Reset orchestrator: entered resetting phase for {CorrelationId}.", correlationId);
+        machine.Fire(ResetTrigger.AcksIn);
+        await TransitionToResettingAsync(db, cycle, controlStream, notifier, stateNotifier, correlationId, ct);
 
         // Check GateMaxTtl before clearing.
         if (DateTimeOffset.UtcNow >= gateMaxDeadline)
@@ -174,16 +140,7 @@ internal sealed class ResetOrchestrator(
 
         // ── Resetting → Idle ──────────────────────────────────────────────────
         machine.Fire(ResetTrigger.Complete);
-        ClearCycleFields(cycle);
-        await SaveCycleAsync(db, cycle, ct);
-
-        // Notify all instances that the gate is now OFF (Fix C).
-        if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
-
-        var resetCompletedEvent = BuildControlEvent("reset-completed", correlationId);
-        await controlStream.InsertAsync(resetCompletedEvent, ct);
-        await notifier.NotifyAsync(resetCompletedEvent, ct);
+        await TransitionToIdleAsync(db, cycle, controlStream, notifier, stateNotifier, correlationId, ct);
 
         logger.LogInformation("Reset orchestrator: reset {CorrelationId} completed.", correlationId);
     }
@@ -217,23 +174,8 @@ internal sealed class ResetOrchestrator(
         {
             while (await acksBroadcaster.AckReader.WaitToReadAsync(linked.Token))
             {
-                while (acksBroadcaster.AckReader.TryRead(out var ack))
-                {
-                    if (!Guid.TryParse(ack.CorrelationId, out var ackCorrelationId) || ackCorrelationId != cycle.CorrelationId)
-                        continue;
-
-                    if (acksReceived.Add(ack.ComponentId))
-                    {
-                        cycle.AcksReceived = [.. acksReceived];
-                        await SaveCycleAsync(db, cycle, ct);
-                        logger.LogInformation(
-                            "Reset orchestrator: ack received from {ComponentId} ({Count}/{Total}).",
-                            ack.ComponentId, acksReceived.Count, expectedComponents.Length);
-                    }
-
-                    if (acksReceived.IsSupersetOf(expectedComponents))
-                        return;
-                }
+                if (await DrainAckBatchAsync(db, cycle, acksReceived, expectedComponents, ct))
+                    return;
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -277,6 +219,82 @@ internal sealed class ResetOrchestrator(
         // Release the gate flag on all instances (Fix C).
         if (stateNotifier is not null)
             await stateNotifier.NotifyStateAsync(ResetState.Idle, abortCt);
+    }
+
+    private async Task TransitionToResettingAsync(
+        DashboardDbContext db,
+        ResetCycle cycle,
+        IControlStreamRepository controlStream,
+        IControlEventNotifier notifier,
+        IResetStateNotifier? stateNotifier,
+        Guid correlationId,
+        CancellationToken ct)
+    {
+        await SaveCycleAsync(db, cycle, ct);
+
+        // Notify all instances that the gate is now ON (Fix C).
+        if (stateNotifier is not null)
+            await stateNotifier.NotifyStateAsync(ResetState.Resetting, ct);
+
+        var resetStartedEvent = BuildControlEvent("reset-started", correlationId);
+        await controlStream.InsertAsync(resetStartedEvent, ct);
+        await notifier.NotifyAsync(resetStartedEvent, ct);
+
+        logger.LogInformation("Reset orchestrator: entered resetting phase for {CorrelationId}.", correlationId);
+    }
+
+    private async Task TransitionToIdleAsync(
+        DashboardDbContext db,
+        ResetCycle cycle,
+        IControlStreamRepository controlStream,
+        IControlEventNotifier notifier,
+        IResetStateNotifier? stateNotifier,
+        Guid correlationId,
+        CancellationToken ct)
+    {
+        ClearCycleFields(cycle);
+        await SaveCycleAsync(db, cycle, ct);
+
+        // Notify all instances that the gate is now OFF (Fix C).
+        if (stateNotifier is not null)
+            await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
+
+        var resetCompletedEvent = BuildControlEvent("reset-completed", correlationId);
+        await controlStream.InsertAsync(resetCompletedEvent, ct);
+        await notifier.NotifyAsync(resetCompletedEvent, ct);
+    }
+
+    /// <summary>
+    /// Drains all pending acks from <see cref="ComponentAcksBroadcaster.AckReader"/> into
+    /// <paramref name="acksReceived"/>, persists the cycle after each new ack, and returns
+    /// <c>true</c> once all expected components have acknowledged.
+    /// </summary>
+    private async Task<bool> DrainAckBatchAsync(
+        DashboardDbContext db,
+        ResetCycle cycle,
+        HashSet<string> acksReceived,
+        string[] expectedComponents,
+        CancellationToken ct)
+    {
+        while (acksBroadcaster.AckReader.TryRead(out var ack))
+        {
+            if (!Guid.TryParse(ack.CorrelationId, out var ackCorrelationId) || ackCorrelationId != cycle.CorrelationId)
+                continue;
+
+            if (acksReceived.Add(ack.ComponentId))
+            {
+                cycle.AcksReceived = [.. acksReceived];
+                await SaveCycleAsync(db, cycle, ct);
+                logger.LogInformation(
+                    "Reset orchestrator: ack received from {ComponentId} ({Count}/{Total}).",
+                    ack.ComponentId, acksReceived.Count, expectedComponents.Length);
+            }
+
+            if (acksReceived.IsSupersetOf(expectedComponents))
+                return true;
+        }
+
+        return false;
     }
 
     // Fallback abort for unhandled exceptions.  resetId hint is used if the cycle row has
@@ -343,6 +361,48 @@ internal sealed class ResetOrchestrator(
             $"SELECT pg_try_advisory_lock({ResetCoordination.AdvisoryLockKey})", conn);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is true;
+    }
+
+    /// <summary>
+    /// Opens a dedicated Postgres connection and attempts to acquire the advisory lock.
+    /// Returns <c>null</c> when the connection string is missing, the lock is held by
+    /// another instance, or the lock query fails; the caller should return without driving.
+    /// Returns the open connection (non-null) only when the lock is held.
+    /// </summary>
+    private async Task<NpgsqlConnection?> TryOpenAndAcquireLockAsync(CancellationToken ct)
+    {
+        var connectionString = services.GetService<IConfiguration>()
+            ?.GetConnectionString("Postgres");
+
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            logger.LogWarning("Reset orchestrator: Postgres connection string not available; skipping.");
+            return null;
+        }
+
+        var lockConn = new NpgsqlConnection(connectionString);
+        await lockConn.OpenAsync(ct);
+
+        bool lockAcquired;
+        try
+        {
+            lockAcquired = await TryAcquireAdvisoryLockAsync(lockConn, ct);
+        }
+        catch (Exception ex)
+        {
+            await lockConn.DisposeAsync();
+            logger.LogError(ex, "Reset orchestrator: failed to acquire advisory lock.");
+            return null;
+        }
+
+        if (!lockAcquired)
+        {
+            await lockConn.DisposeAsync();
+            logger.LogInformation("Reset orchestrator: advisory lock held by another instance; yielding.");
+            return null;
+        }
+
+        return lockConn;
     }
 
     private static async Task ReleaseAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)

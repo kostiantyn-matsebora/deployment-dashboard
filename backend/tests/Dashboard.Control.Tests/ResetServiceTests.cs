@@ -202,7 +202,9 @@ public sealed class ResetServiceTests : IDisposable
 
         Assert.Equal(ResetState.Draining, loaded.State);
         Assert.Equal(correlationId, loaded.CorrelationId);
+        Assert.NotNull(loaded.ExpectedComponents);
         Assert.Equal(["a", "b"], loaded.ExpectedComponents);
+        Assert.NotNull(loaded.AcksReceived);
         Assert.Equal(["a"], loaded.AcksReceived);
     }
 

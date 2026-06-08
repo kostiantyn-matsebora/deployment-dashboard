@@ -1,5 +1,6 @@
 using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Dashboard.Shared.Data;
 
@@ -10,6 +11,25 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
     public DbSet<ControlStreamEvent> ControlStreamEvents => Set<ControlStreamEvent>();
     public DbSet<ComponentEvent> ComponentEvents => Set<ComponentEvent>();
     public DbSet<ResetCycle> ResetCycles => Set<ResetCycle>();
+
+    // ── SQLite value-conversion helpers ──────────────────────────────────────
+    // Reused across Configure* methods to eliminate repeated inline lambdas and
+    // drive S3776 (cognitive complexity) down to an acceptable level.
+
+    /// <summary>DateTimeOffset (non-nullable) ↔ Unix milliseconds (long).</summary>
+    private static readonly ValueConverter<DateTimeOffset, long> DateTimeOffsetToUnixMs =
+        new(v => v.ToUnixTimeMilliseconds(),
+            v => DateTimeOffset.FromUnixTimeMilliseconds(v));
+
+    /// <summary>DateTimeOffset? (nullable) ↔ Unix milliseconds (long?).</summary>
+    private static readonly ValueConverter<DateTimeOffset?, long?> NullableDateTimeOffsetToUnixMs =
+        new(v => v == null ? (long?)null : v.Value.ToUnixTimeMilliseconds(),
+            v => v == null ? (DateTimeOffset?)null : DateTimeOffset.FromUnixTimeMilliseconds(v.Value));
+
+    /// <summary>string[] (nullable) ↔ comma-delimited text (SQLite has no native array type).</summary>
+    private static readonly ValueConverter<string[]?, string?> StringArrayToCsv =
+        new(v => v == null ? null : string.Join(',', v),
+            v => v == null ? null : v.Split(',', StringSplitOptions.None));
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,12 +86,7 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
             // SQLite cannot compare or order DateTimeOffset as TEXT.
             // Store as Unix milliseconds so ordering and comparisons work correctly in tests.
             if (isSqlite)
-            {
-                entity.Property(e => e.HappenedAt)
-                      .HasConversion<long>(
-                          v => v.ToUnixTimeMilliseconds(),
-                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
-            }
+                entity.Property(e => e.HappenedAt).HasConversion(DateTimeOffsetToUnixMs);
 
             entity.Property(e => e.RunUrl)
                   .HasColumnName("run_url")
@@ -139,12 +154,7 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .IsRequired();
 
             if (isSqlite)
-            {
-                entity.Property(e => e.UpdatedAt)
-                      .HasConversion<long>(
-                          v => v.ToUnixTimeMilliseconds(),
-                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
-            }
+                entity.Property(e => e.UpdatedAt).HasConversion(DateTimeOffsetToUnixMs);
         });
     }
 
@@ -181,12 +191,7 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
                   .IsRequired();
 
             if (isSqlite)
-            {
-                entity.Property(e => e.OccurredAt)
-                      .HasConversion<long>(
-                          v => v.ToUnixTimeMilliseconds(),
-                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
-            }
+                entity.Property(e => e.OccurredAt).HasConversion(DateTimeOffsetToUnixMs);
 
             // Index: optional filter by component on replay.
             entity.HasIndex(e => new { e.Component, e.Id })
@@ -233,26 +238,11 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
 
             if (isSqlite)
             {
-                entity.Property(e => e.StartedAt)
-                      .HasConversion<long?>(
-                          v => v == null ? (long?)null : v.Value.ToUnixTimeMilliseconds(),
-                          v => v == null ? (DateTimeOffset?)null : DateTimeOffset.FromUnixTimeMilliseconds(v.Value));
-
-                entity.Property(e => e.DeadlineAt)
-                      .HasConversion<long?>(
-                          v => v == null ? (long?)null : v.Value.ToUnixTimeMilliseconds(),
-                          v => v == null ? (DateTimeOffset?)null : DateTimeOffset.FromUnixTimeMilliseconds(v.Value));
-
+                entity.Property(e => e.StartedAt).HasConversion(NullableDateTimeOffsetToUnixMs);
+                entity.Property(e => e.DeadlineAt).HasConversion(NullableDateTimeOffsetToUnixMs);
                 // SQLite has no native array type; store as comma-delimited text.
-                entity.Property(e => e.ExpectedComponents)
-                      .HasConversion(
-                          v => v == null ? null : string.Join(',', v),
-                          v => v == null ? null : v.Split(',', StringSplitOptions.None));
-
-                entity.Property(e => e.AcksReceived)
-                      .HasConversion(
-                          v => v == null ? null : string.Join(',', v),
-                          v => v == null ? null : v.Split(',', StringSplitOptions.None));
+                entity.Property(e => e.ExpectedComponents).HasConversion(StringArrayToCsv);
+                entity.Property(e => e.AcksReceived).HasConversion(StringArrayToCsv);
             }
         });
     }
@@ -304,14 +294,8 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
 
             if (isSqlite)
             {
-                entity.Property(e => e.OccurredAt)
-                      .HasConversion<long>(
-                          v => v.ToUnixTimeMilliseconds(),
-                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
-                entity.Property(e => e.ReceivedAt)
-                      .HasConversion<long>(
-                          v => v.ToUnixTimeMilliseconds(),
-                          v => DateTimeOffset.FromUnixTimeMilliseconds(v));
+                entity.Property(e => e.OccurredAt).HasConversion(DateTimeOffsetToUnixMs);
+                entity.Property(e => e.ReceivedAt).HasConversion(DateTimeOffsetToUnixMs);
             }
 
             // Nullable: from optional X-Correlation-Id header; opaque ≤ 128 chars; echo-only.
