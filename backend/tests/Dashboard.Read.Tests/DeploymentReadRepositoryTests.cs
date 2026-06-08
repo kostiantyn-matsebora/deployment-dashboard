@@ -364,6 +364,36 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         Assert.Equal("svc-a", result[0].Service);
     }
 
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_MultipleSlots_ReturnsOnePerSlot()
+    {
+        // Delegates to LatestPerSlotByStatusAsync — verify the per-slot dedup path
+        // returns exactly one winner per (service, environment) slot.
+        await SeedAsync(service: "svc-a", environment: "dev", status: DeploymentStatus.Success);
+        await SeedAsync(service: "svc-a", environment: "prod", status: DeploymentStatus.Success);
+        await SeedAsync(service: "svc-b", environment: "prod", status: DeploymentStatus.Success);
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Equal(3, result.Count);
+    }
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_SameHappenedAtInSlot_LatestIdWins()
+    {
+        // LatestPerSlot in-memory tiebreak: when two events share the same happenedAt,
+        // the one with the greater UUIDv7 (most recently inserted) must win.
+        var sameTime = new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
+        await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime);
+        // Seeded second → Guid.CreateVersion7() is strictly greater → must win.
+        var laterInserted = await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime);
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(laterInserted.Id, result[0].Id);
+    }
+
     // ── GetLatestTerminalBeforeCurrentPerSlotAsync ────────────────────────────
 
     [Fact]

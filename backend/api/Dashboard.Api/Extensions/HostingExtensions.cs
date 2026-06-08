@@ -73,12 +73,19 @@ internal static class HostingExtensions
         return app;
     }
 
-    /// <summary>Applies pending EF Core migrations at startup.</summary>
+    /// <summary>
+    /// Applies pending EF Core migrations at startup (production / development / staging).
+    /// In the <c>Test</c> environment, calls <c>EnsureCreated</c> instead so in-memory and
+    /// SQLite providers used in unit tests are not asked to run Postgres-targeted migrations.
+    /// </summary>
     internal static async Task MigrateDatabaseAsync(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-        await db.Database.MigrateAsync();
+        if (app.Environment.IsEnvironment("Test"))
+            await db.Database.EnsureCreatedAsync();
+        else
+            await db.Database.MigrateAsync();
     }
 
     private static string[] ReadCorsOrigins(IConfiguration configuration)

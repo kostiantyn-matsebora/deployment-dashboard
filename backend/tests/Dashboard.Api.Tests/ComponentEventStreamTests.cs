@@ -91,6 +91,42 @@ public sealed class ComponentEventStreamTests : IAsyncLifetime
         return events;
     }
 
+    /// <summary>
+    /// Reads SSE lines from <paramref name="reader"/> until the first <c>data:</c> frame
+    /// arrives, capturing the preceding <c>event:</c> name via <paramref name="onEventName"/>.
+    /// Terminates on cancellation, EOF, or after completing the <paramref name="received"/> TCS.
+    /// Extracted to keep <see cref="Stream_Live_ReceivesComponentEventFrame"/> within the
+    /// cognitive-complexity budget.
+    /// </summary>
+    private static async Task ReadFirstEventFrameAsync(
+        StreamReader reader,
+        TaskCompletionSource<JsonElement> received,
+        Action<string?> onEventName,
+        CancellationToken ct)
+    {
+        string? pendingEventName = null;
+        while (!ct.IsCancellationRequested)
+        {
+            string? line;
+            try { line = await reader.ReadLineAsync(ct); }
+            catch (OperationCanceledException) { break; }
+
+            if (line is null) break;
+            if (line.StartsWith(": ")) continue;    // heartbeat / comment
+            if (line.StartsWith("event: "))
+            {
+                pendingEventName = line[7..];
+                continue;
+            }
+            if (line.StartsWith("data: "))
+            {
+                onEventName(pendingEventName);
+                received.TrySetResult(JsonSerializer.Deserialize<JsonElement>(line[6..]));
+                break;
+            }
+        }
+    }
+
     // ── Auth — no X-Api-Key required ─────────────────────────────────────────
 
     [Fact]
@@ -212,30 +248,9 @@ public sealed class ComponentEventStreamTests : IAsyncLifetime
         string? receivedEventName = null;
         var received = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var readTask = Task.Run(async () =>
-        {
-            string? pendingEventName = null;
-            while (!cts.IsCancellationRequested)
-            {
-                string? line;
-                try { line = await reader.ReadLineAsync(cts.Token); }
-                catch (OperationCanceledException) { break; }
-
-                if (line is null) break;
-                if (line.StartsWith(": ")) continue;    // heartbeat / comment
-                if (line.StartsWith("event: "))
-                {
-                    pendingEventName = line[7..];
-                    continue;
-                }
-                if (line.StartsWith("data: "))
-                {
-                    receivedEventName = pendingEventName;
-                    received.TrySetResult(JsonSerializer.Deserialize<JsonElement>(line[6..]));
-                    break;
-                }
-            }
-        }, cts.Token);
+        var readTask = Task.Run(
+            () => ReadFirstEventFrameAsync(reader, received, r => receivedEventName = r, cts.Token),
+            cts.Token);
 
         // Allow the broadcaster's LISTEN connection to attach.
         await Task.Delay(2000, cts.Token);
