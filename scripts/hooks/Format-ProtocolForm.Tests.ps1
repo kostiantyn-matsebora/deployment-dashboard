@@ -157,6 +157,56 @@ Describe 'Format-ProtocolForm — all six form tags' {
 }
 
 # ============================================================
+Describe 'Resolve-FormText — input source resolution' {
+
+    It 'prefers -Text over -InputFile' {
+        Resolve-FormText -Text 'inline' -InputFile 'does-not-exist.txt' | Should -Be 'inline'
+    }
+
+    It 'reads the form from -InputFile when -Text is empty' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).txt"
+        try {
+            Set-Content -LiteralPath $tmp -Value "RESULT`nrole: backend`nchanged: x.cs`ngate: ok" -NoNewline
+            $text = Resolve-FormText -Text '' -InputFile $tmp
+            $text | Should -Match 'role: backend'
+        }
+        finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+
+    It 'throws a clear error when -InputFile does not exist' {
+        { Resolve-FormText -Text '' -InputFile 'C:\nope\missing-form.txt' } |
+            Should -Throw '*InputFile not found*'
+    }
+
+    # Note: the no-source path (-Text/-InputFile both empty) falls through to a
+    # blocking stdin read by design — it is only reached by genuine pipe usage
+    # (`Get-Content form.txt | …`, which closes on EOF). It is intentionally NOT
+    # unit-tested here: exercising it in a redirected-stdin host would block.
+}
+
+# ============================================================
+Describe 'Format-ProtocolForm.ps1 — -InputFile end to end (real process)' {
+
+    It 'renders an aligned table from a file via the script entry point' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).txt"
+        try {
+            $form = "RESULT`nrole: backend`nchanged:`n  a.cs`n  b.cs`ngate: build ok"
+            Set-Content -LiteralPath $tmp -Value $form -NoNewline
+            $out    = (& $script:ScriptPath -InputFile $tmp) -join "`n"
+            $lines  = $out -split "`r?`n"
+            $out    | Should -Match '^RESULT'
+            $out    | Should -Match '\| role\s+\|'
+            # All table rows aligned → identical length.
+            $rows   = @($lines | Where-Object { $_ -match '^\|' })
+            $rows.Count | Should -BeGreaterThan 0
+            $widths = $rows | ForEach-Object { $_.Length } | Sort-Object -Unique
+            @($widths).Count | Should -Be 1
+        }
+        finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+# ============================================================
 Describe 'Format-ProtocolForm — single vs multiple items' {
 
     It 'single-item field produces exactly one data row and one dash rule' {

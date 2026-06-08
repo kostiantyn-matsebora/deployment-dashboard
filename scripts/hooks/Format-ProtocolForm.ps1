@@ -36,15 +36,38 @@
       - Full-width dash rule after each field block.
 
 .PARAMETER Text
-    The simple form text to render.
+    The simple form text to render (inline string).
+
+.PARAMETER InputFile
+    Path to a file holding the simple form text. Preferred over -Text from a shell:
+    write the form to a temp file (no embedded-newline / bullet quoting to fight),
+    then render it in one clean command.
 
 .PARAMETER AsLibrary
     Define functions without executing entry block (for Pester).
+
+.EXAMPLE
+    # Robust shell flow — no quoting hell:
+    #   1. Write the simple form to a file (Write tool, or here-string):
+    #          RESULT
+    #          role: backend
+    #          changed:
+    #            GithubActionsAdapter.cs
+    #            BackfillRunner.cs
+    #          gate: build ok
+    #   2. Render it:
+    pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile form.txt
+    #   3. Send the stdout verbatim as the SendMessage body.
+
+.EXAMPLE
+    # stdin also works:
+    Get-Content form.txt -Raw | pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1
 #>
 
 [CmdletBinding()]
 param(
     [string]$Text,
+    [string]$InputFile,
     [switch]$AsLibrary
 )
 
@@ -165,6 +188,30 @@ function Format-FieldTable {
     return $sb.ToString().TrimEnd("`r", "`n")
 }
 
+# Resolve the form text from the three accepted sources, in priority order:
+# explicit -Text, then -InputFile (file contents), then redirected stdin.
+function Resolve-FormText {
+    param(
+        [string]$Text,
+        [string]$InputFile
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Text)) { return $Text }
+
+    if (-not [string]::IsNullOrWhiteSpace($InputFile)) {
+        if (-not (Test-Path -LiteralPath $InputFile)) {
+            throw "InputFile not found: $InputFile"
+        }
+        return (Get-Content -LiteralPath $InputFile -Raw)
+    }
+
+    if ([Console]::IsInputRedirected) {
+        return [Console]::In.ReadToEnd()
+    }
+
+    return ''
+}
+
 # Entry point — render a simple form text to an aligned table string.
 function Format-ProtocolForm {
     param([string]$Text)
@@ -190,7 +237,8 @@ function Format-ProtocolForm {
 }
 
 if (-not $AsLibrary) {
-    if (-not [string]::IsNullOrWhiteSpace($Text)) {
-        Format-ProtocolForm -Text $Text
+    $formText = Resolve-FormText -Text $Text -InputFile $InputFile
+    if (-not [string]::IsNullOrWhiteSpace($formText)) {
+        Format-ProtocolForm -Text $formText
     }
 }
