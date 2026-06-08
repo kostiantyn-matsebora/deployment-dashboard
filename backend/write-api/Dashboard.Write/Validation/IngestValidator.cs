@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
+using System.Text.Json.Serialization;
 using Dashboard.Shared.Contracts;
 
 namespace Dashboard.Write.Validation;
@@ -51,20 +53,17 @@ internal sealed class IngestValidator : IIngestValidator
                 "Items must be unique."));
     }
 
-    private static string ToJsonPointer(string memberName) => memberName switch
-    {
-        nameof(DeploymentEventIngest.DeploymentId) => "/deployment_id",
-        nameof(DeploymentEventIngest.Service) => "/service",
-        nameof(DeploymentEventIngest.Environment) => "/environment",
-        nameof(DeploymentEventIngest.Version) => "/version",
-        nameof(DeploymentEventIngest.Status) => "/status",
-        nameof(DeploymentEventIngest.HappenedAt) => "/happened_at",
-        nameof(DeploymentEventIngest.RunUrl) => "/run_url",
-        nameof(DeploymentEventIngest.RunNumber) => "/run_number",
-        nameof(DeploymentEventIngest.Actor) => "/actor",
-        nameof(DeploymentEventIngest.Ref) => "/ref",
-        nameof(DeploymentEventIngest.Sha) => "/sha",
-        nameof(DeploymentEventIngest.ParentDeployments) => "/parent_deployments",
-        _ => $"/{memberName}",
-    };
+    // Member name -> JSON pointer, derived from the DTO's [JsonPropertyName] attributes — the
+    // single source of truth for wire names. Adding/renaming a property needs no change here;
+    // unmapped members fall back to "/{memberName}".
+    private static readonly Dictionary<string, string> JsonPointers =
+        typeof(DeploymentEventIngest)
+            .GetProperties()
+            .ToDictionary(
+                p => p.Name,
+                p => "/" + (p.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? p.Name),
+                StringComparer.Ordinal);
+
+    private static string ToJsonPointer(string memberName) =>
+        JsonPointers.GetValueOrDefault(memberName, $"/{memberName}");
 }
