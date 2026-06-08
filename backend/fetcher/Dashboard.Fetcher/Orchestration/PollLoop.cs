@@ -52,12 +52,17 @@ public sealed class PollLoop(
     /// </summary>
     public void DropCursorAndResume()
     {
+        // Reset saga (§5.10.5): bring the fetcher to a genuine clean slate — clear the
+        // adapter's dedup caches AND drop the cursor — so the next cycle backfills from
+        // scratch rather than reverting to incremental with warm caches.
+        adapter.ResetState();
         _pendingCursorOverride = null;
         _hasPendingCursorOverride = true;
         _isPaused = false;
         reporting?.Readiness?.SetPausedForReset(false);
         try { _resumeGate.Release(); } catch (SemaphoreFullException) { /* already at capacity — already running */ }
-        logger.LogInformation("[{Adapter}] poll loop resumed with null cursor (backfill will trigger)",
+        logger.LogInformation(
+            "[{Adapter}] poll loop resumed with clean slate (caches cleared, cursor dropped — backfill will trigger)",
             adapter.AdapterId);
     }
 

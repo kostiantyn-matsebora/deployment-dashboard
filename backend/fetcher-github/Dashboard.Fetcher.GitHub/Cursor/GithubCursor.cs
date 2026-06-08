@@ -71,6 +71,16 @@ public sealed class GithubCursor
     // ── backfill helpers ──────────────────────────────────────────────────────
 
     /// <summary>True when any repo still has an active backfill marker.</summary>
+    /// <summary>
+    /// True when the cursor carries no per-repo high-water mark and no active backfill —
+    /// i.e. it is semantically a first-run cursor. An empty backfill (no events found) still
+    /// encodes to a non-null but empty cursor (<c>{"repos":{}}</c>); treating that as empty
+    /// lets the next poll re-backfill rather than silently switch to incremental, so a reset
+    /// (which clears every repo mark) yields a genuine clean slate (§5.10.5).
+    /// </summary>
+    [JsonIgnore]
+    public bool IsEmpty => Repos.Count == 0 && !IsBackfilling;
+
     public bool IsBackfilling => Backfill is { Count: > 0 };
 
     /// <summary>

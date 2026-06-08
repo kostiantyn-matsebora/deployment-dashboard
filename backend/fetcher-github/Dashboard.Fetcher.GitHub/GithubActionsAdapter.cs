@@ -39,8 +39,12 @@ public sealed class GithubActionsAdapter(
     {
         var decoded = GithubCursor.Decode(cursor);
 
-        // Backfill when: no cursor, BACKFILL=true flag, or an active backfill marker exists (resume).
-        var shouldBackfill = cursor is null || fetcherOptions.Backfill || decoded.IsBackfilling;
+        // Backfill when: no cursor, a semantically-empty cursor (no repo high-water marks —
+        // e.g. right after a reset, or after an empty backfill that found no events), the
+        // BACKFILL flag, or an active backfill marker (resume). Treating an empty cursor as a
+        // first run keeps a reset a true clean slate: data that (re-)appears afterwards is
+        // fully backfilled instead of being missed by incremental polling (§5.10.5).
+        var shouldBackfill = cursor is null || decoded.IsEmpty || fetcherOptions.Backfill || decoded.IsBackfilling;
 
         if (shouldBackfill)
         {
@@ -50,6 +54,18 @@ public sealed class GithubActionsAdapter(
         }
 
         yield return await PollAsync(decoded, ct);
+    }
+
+    /// <summary>
+    /// Reset saga (§5.10.5): drop all dedup caches so the post-reset backfill re-emits
+    /// every deployment from a clean slate. Without this, the terminal-deployment and
+    /// ETag caches survive the reset and suppress re-emission (304 / terminal-skip).
+    /// </summary>
+    public void ResetState()
+    {
+        _terminalCache.Clear();
+        _deploymentsListCache.Clear();
+        _statusEtagCache.Clear();
     }
 
     // ── normal poll ───────────────────────────────────────────────────────────
