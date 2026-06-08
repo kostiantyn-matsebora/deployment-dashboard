@@ -118,14 +118,11 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
         var newEtag = response.Headers.ETag?.ToString();
         var page1Items = await response.Content.ReadFromJsonAsync<List<T>>(ct) ?? [];
 
-        if (stopBefore is not null)
+        var truncated = TruncateAtStopBefore(page1Items, stopBefore);
+        if (truncated is not null)
         {
-            var cutIndex = page1Items.FindIndex(item => stopBefore(item));
-            if (cutIndex >= 0)
-            {
-                // Cutoff reached on page 1 — truncate and stop; no further pages needed.
-                return (new(NotModified: false, Items: page1Items[..cutIndex], ETag: newEtag), IsFinal: true);
-            }
+            // Cutoff reached on page 1 — truncate and stop; no further pages needed.
+            return (new(NotModified: false, Items: truncated, ETag: newEtag), IsFinal: true);
         }
 
         if (page1Items.Count == 0 || !HasNextPage(response))
@@ -157,15 +154,12 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
             if (pageItems is null || pageItems.Count == 0)
                 break;
 
-            if (stopBefore is not null)
+            var truncated = TruncateAtStopBefore(pageItems, stopBefore);
+            if (truncated is not null)
             {
-                var cutIndex = pageItems.FindIndex(item => stopBefore(item));
-                if (cutIndex >= 0)
-                {
-                    // Cutoff crossed on this page — take only the in-window prefix and stop.
-                    all.AddRange(pageItems[..cutIndex]);
-                    break;
-                }
+                // Cutoff crossed on this page — take only the in-window prefix and stop.
+                all.AddRange(truncated);
+                break;
             }
 
             all.AddRange(pageItems);
@@ -175,6 +169,19 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
 
             page++;
         }
+    }
+
+    /// <summary>
+    /// Returns the prefix of <paramref name="items"/> before the first item matching
+    /// <paramref name="stopBefore"/>, or null if the predicate is absent or has no match.
+    /// </summary>
+    private static List<T>? TruncateAtStopBefore<T>(List<T> items, Func<T, bool>? stopBefore)
+    {
+        if (stopBefore is null)
+            return null;
+
+        var cutIndex = items.FindIndex(item => stopBefore(item));
+        return cutIndex >= 0 ? items[..cutIndex] : null;
     }
 
     /// <summary>Downloads raw bytes (e.g. ZIP archive). Returns null on any non-2xx.</summary>

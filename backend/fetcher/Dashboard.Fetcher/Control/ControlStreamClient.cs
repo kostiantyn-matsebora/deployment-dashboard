@@ -89,25 +89,35 @@ public sealed class ControlStreamClient(
             // Blank line = frame boundary.
             if (line.Length == 0)
             {
-                if (frameEvent is not null || dataLines.Length > 0)
-                {
-                    var data = dataLines.Length > 0 ? dataLines.ToString() : null;
-                    yield return new ParsedSseEvent(
-                        IsPing: false,
-                        Id: frameId,
-                        EventType: frameEvent,
-                        Data: data);
-                }
-
-                frameId = null;
-                frameEvent = null;
-                dataLines.Clear();
+                var flushed = TryFlushFrame(ref frameId, ref frameEvent, dataLines);
+                if (flushed is not null)
+                    yield return flushed;
                 continue;
             }
 
             // Field lines.
             ParseFieldLine(line, ref frameId, ref frameEvent, dataLines);
         }
+    }
+
+    /// <summary>
+    /// Flushes accumulated SSE field lines into a <see cref="ParsedSseEvent"/> on a blank-line
+    /// frame boundary, or returns null if the frame carried no data.
+    /// </summary>
+    private static ParsedSseEvent? TryFlushFrame(
+        ref string? frameId, ref string? frameEvent, StringBuilder dataLines)
+    {
+        if (frameEvent is null && dataLines.Length == 0)
+            return null;
+
+        var data = dataLines.Length > 0 ? dataLines.ToString() : null;
+        var ev = new ParsedSseEvent(IsPing: false, Id: frameId, EventType: frameEvent, Data: data);
+
+        frameId = null;
+        frameEvent = null;
+        dataLines.Clear();
+
+        return ev;
     }
 
     // Parse a non-empty, non-comment SSE field line and update the current frame state.

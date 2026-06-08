@@ -232,57 +232,77 @@ public sealed class GithubActionsAdapter(
 
             foreach (var status in statuses)
             {
-                if (status.CreatedAt <= ctx.Since)
+                var mapped = await MapOneStatusAsync(ctx, serviceMap, deployment, status, envMap, ct);
+                if (mapped is null)
                     continue;
 
-                var contractStatus = StatusMapper.Map(status.State);
-                if (contractStatus is null)
-                    continue;
-
-                var runId = EventMapper.ExtractRunId(status.TargetUrl);
-                WorkflowGraph? graph = null;
-                if (runId.HasValue)
-                {
-                    try
-                    {
-                        graph = await graphCache.GetOrFetchGraphAsync(
-                            ctx.Owner, ctx.RepoName, runId.Value, github, ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex,
-                            "[{Repo}] workflow graph fetch failed for run {RunId}", ctx.Repo, runId);
-                    }
-                }
-
-                // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
-                if (contractStatus == DeploymentStatus.Failure)
-                    contractStatus = await ResolveFailureStatusAsync(ctx.Owner, ctx.RepoName, deployment.Id, runId, ct);
-
-                var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
-
-                string? version = null;
-                try
-                {
-                    version = await versionResolver.ResolveAsync(
-                        ctx.Owner, ctx.RepoName, deployment, status, ct);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex,
-                        "[{Repo}] version resolution failed for deployment {Id}", ctx.Repo, deployment.Id);
-                }
-
-                events.Add(EventMapper.Map(
-                    deployment, status, ctx.Repo, contractStatus,
-                    graph?.WorkflowName, version, parentDeployments, serviceMap));
-
-                if (status.CreatedAt > maxSince)
-                    maxSince = status.CreatedAt;
+                events.Add(mapped.Value.Event);
+                if (mapped.Value.At > maxSince)
+                    maxSince = mapped.Value.At;
             }
         }
 
         return (events, maxSince);
+    }
+
+    /// <summary>
+    /// Maps a single deployment status to an ingest event, or returns null if the status
+    /// should be skipped (before the poll window, unmapped state, or no-content).
+    /// </summary>
+    private async Task<(DeploymentEventIngest Event, DateTimeOffset At)?> MapOneStatusAsync(
+        RepoFetchContext ctx,
+        IReadOnlyDictionary<string, string> serviceMap,
+        GhDeployment deployment,
+        GhDeploymentStatus status,
+        Dictionary<long, Dictionary<string, string>> envMap,
+        CancellationToken ct)
+    {
+        if (status.CreatedAt <= ctx.Since)
+            return null;
+
+        var contractStatus = StatusMapper.Map(status.State);
+        if (contractStatus is null)
+            return null;
+
+        var runId = EventMapper.ExtractRunId(status.TargetUrl);
+        WorkflowGraph? graph = null;
+        if (runId.HasValue)
+        {
+            try
+            {
+                graph = await graphCache.GetOrFetchGraphAsync(
+                    ctx.Owner, ctx.RepoName, runId.Value, github, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "[{Repo}] workflow graph fetch failed for run {RunId}", ctx.Repo, runId);
+            }
+        }
+
+        // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
+        if (contractStatus == DeploymentStatus.Failure)
+            contractStatus = await ResolveFailureStatusAsync(ctx.Owner, ctx.RepoName, deployment.Id, runId, ct);
+
+        var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
+
+        string? version = null;
+        try
+        {
+            version = await versionResolver.ResolveAsync(
+                ctx.Owner, ctx.RepoName, deployment, status, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "[{Repo}] version resolution failed for deployment {Id}", ctx.Repo, deployment.Id);
+        }
+
+        var ev = EventMapper.Map(
+            deployment, status, ctx.Repo, contractStatus,
+            graph?.WorkflowName, version, parentDeployments, serviceMap);
+
+        return (ev, status.CreatedAt);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -309,7 +329,7 @@ public sealed class GithubActionsAdapter(
     private Task<string> ResolveFailureStatusAsync(
         string owner, string repoName, long deploymentId, long? runId, CancellationToken ct) =>
         DeploymentMapper.ResolveFailureStatusAsync(
-            owner, repoName, deploymentId, runId, github, graphCache, logger, ct);
+            new DeploymentLookupContext(owner, repoName, deploymentId, runId), github, graphCache, logger, ct);
 
     private static (string Owner, string Repo) SplitRepo(string repo)
     {

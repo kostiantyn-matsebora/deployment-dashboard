@@ -88,7 +88,7 @@ public sealed class BackfillRunner(
                 ct.ThrowIfCancellationRequested();
 
                 var (envEvents, envDeployments) = await BackfillEnvAsync(
-                    owner, repoName, repo, env, cutoff,
+                    new BackfillEnvContext(owner, repoName, repo, env, cutoff),
                     pathToService, allServiceNames, serviceMap,
                     repoEnvMap, ct);
 
@@ -176,8 +176,7 @@ public sealed class BackfillRunner(
     private async Task<(List<DeploymentEventIngest> Events,
         List<(long Id, string Env, DateTimeOffset CreatedAt, long? RunId)> Deployments)>
         BackfillEnvAsync(
-            string owner, string repoName, string repo, string env,
-            DateTimeOffset cutoff,
+            BackfillEnvContext ctx,
             IReadOnlyDictionary<string, string> pathToService,
             IReadOnlySet<string> allServiceNames,
             IReadOnlyDictionary<string, string> serviceMap,
@@ -188,8 +187,7 @@ public sealed class BackfillRunner(
 
         // Pass 1: collect chosen deployments for this env.
         var chosen = await CollectChosenDeploymentsAsync(
-            owner, repoName, repo, env, cutoff,
-            pathToService, allServiceNames, serviceMap, depth, ct);
+            ctx, pathToService, allServiceNames, serviceMap, depth, ct);
 
         // Collect the raw deployment tuples for the caller to merge into the repo map.
         var deploymentTuples = chosen
@@ -203,7 +201,7 @@ public sealed class BackfillRunner(
 
         // Pass 2: build events and trim by slot depth.
         var candidateEvents = await BuildEnvEventsAsync(
-            owner, repoName, repo, chosen, serviceMap, combinedMap, ct);
+            ctx.Owner, ctx.RepoName, ctx.Repo, chosen, serviceMap, combinedMap, ct);
 
         var events = TrimEventsBySlotDepth(candidateEvents, depth);
 
@@ -222,8 +220,7 @@ public sealed class BackfillRunner(
             WorkflowGraph? Graph,
             string Service)>>
         CollectChosenDeploymentsAsync(
-            string owner, string repoName, string repo, string env,
-            DateTimeOffset cutoff,
+            BackfillEnvContext ctx,
             IReadOnlyDictionary<string, string> pathToService,
             IReadOnlySet<string> allServiceNames,
             IReadOnlyDictionary<string, string> serviceMap,
@@ -241,26 +238,26 @@ public sealed class BackfillRunner(
         var consecutiveNoProgress = 0;
 
         await foreach (var deployment in github.GetPagedAsync<GhDeployment>(
-            $"/repos/{owner}/{repoName}/deployments?environment={Uri.EscapeDataString(env)}", ct))
+            $"/repos/{ctx.Owner}/{ctx.RepoName}/deployments?environment={Uri.EscapeDataString(ctx.Env)}", ct))
         {
-            if (deployment.CreatedAt < cutoff)
+            if (deployment.CreatedAt < ctx.Cutoff)
                 break;
 
             if (consecutiveNoProgress >= StallWindow)
             {
                 logger.LogDebug(
                     "[Backfill] {Repo}/{Env}: stalled after {N} consecutive no-progress deployments",
-                    repo, env, consecutiveNoProgress);
+                    ctx.Repo, ctx.Env, consecutiveNoProgress);
                 break;
             }
 
-            var statuses = await FetchAllStatusesAsync(owner, repoName, deployment.Id, ct);
+            var statuses = await FetchAllStatusesAsync(ctx.Owner, ctx.RepoName, deployment.Id, ct);
             var runId = statuses
                 .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
                 .FirstOrDefault(r => r.HasValue);
 
             var service = await ResolveServiceFromRunAsync(
-                owner, repoName, repo, runId, pathToService, serviceMap, ct);
+                ctx.Owner, ctx.RepoName, ctx.Repo, runId, pathToService, serviceMap, ct);
 
             var eventsSoFar = filled.GetValueOrDefault(service, 0);
             if (!allServiceNames.Contains(service) || eventsSoFar >= depth)
@@ -278,7 +275,7 @@ public sealed class BackfillRunner(
 
             WorkflowGraph? graph = null;
             if (runId.HasValue)
-                graph = await graphCache.GetOrFetchGraphAsync(owner, repoName, runId.Value, github, ct);
+                graph = await graphCache.GetOrFetchGraphAsync(ctx.Owner, ctx.RepoName, runId.Value, github, ct);
 
             chosen.Add((deployment, statuses, runId, graph, service));
             filled[service] = eventsSoFar + mappedCount;
@@ -416,10 +413,11 @@ public sealed class BackfillRunner(
         DeploymentMapper.DeriveParents(deployment, runId, graph, envMap);
 
     /// <inheritdoc cref="GithubActionsAdapter.ResolveFailureStatusAsync"/>
+    /// <inheritdoc cref="GithubActionsAdapter.ResolveFailureStatusAsync"/>
     private Task<string> ResolveFailureStatusAsync(
         string owner, string repoName, long deploymentId, long? runId, CancellationToken ct) =>
         DeploymentMapper.ResolveFailureStatusAsync(
-            owner, repoName, deploymentId, runId, github, graphCache, logger, ct);
+            new DeploymentLookupContext(owner, repoName, deploymentId, runId), github, graphCache, logger, ct);
 
     private static (string Owner, string Repo) SplitRepo(string repo)
     {
@@ -427,3 +425,11 @@ public sealed class BackfillRunner(
         return parts.Length == 2 ? (parts[0], parts[1]) : ("", repo);
     }
 }
+
+/// <summary>Cohesive identity/scope parameters for a single env backfill pass.</summary>
+internal readonly record struct BackfillEnvContext(
+    string Owner,
+    string RepoName,
+    string Repo,
+    string Env,
+    DateTimeOffset Cutoff);

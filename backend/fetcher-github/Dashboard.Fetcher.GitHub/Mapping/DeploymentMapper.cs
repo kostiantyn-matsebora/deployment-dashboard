@@ -14,10 +14,7 @@ internal static class DeploymentMapper
     /// <see cref="DeploymentStatus.Failure"/> (§5.3 failure classification).
     /// </summary>
     internal static async Task<string> ResolveFailureStatusAsync(
-        string owner,
-        string repoName,
-        long deploymentId,
-        long? runId,
+        DeploymentLookupContext ctx,
         GithubClient github,
         WorkflowGraphCache graphCache,
         ILogger logger,
@@ -27,7 +24,7 @@ internal static class DeploymentMapper
         try
         {
             await foreach (var review in github.GetPagedAsync<GhDeploymentReview>(
-                $"/repos/{owner}/{repoName}/deployments/{deploymentId}/reviews", ct))
+                $"/repos/{ctx.Owner}/{ctx.RepoName}/deployments/{ctx.DeploymentId}/reviews", ct))
             {
                 if (review.State.Equals("rejected", StringComparison.OrdinalIgnoreCase))
                     return DeploymentStatus.Rejected;
@@ -37,15 +34,15 @@ internal static class DeploymentMapper
         {
             logger.LogWarning(ex,
                 "[{Owner}/{Repo}] deployment reviews fetch failed for deployment {DeploymentId}",
-                owner, repoName, deploymentId);
+                ctx.Owner, ctx.RepoName, ctx.DeploymentId);
         }
 
         // Check run conclusion for cancellation.
-        if (runId.HasValue)
+        if (ctx.RunId.HasValue)
         {
             try
             {
-                var run = await graphCache.GetOrFetchRunAsync(owner, repoName, runId.Value, github, ct);
+                var run = await graphCache.GetOrFetchRunAsync(ctx.Owner, ctx.RepoName, ctx.RunId.Value, github, ct);
                 if (run?.Conclusion?.Equals("cancelled", StringComparison.OrdinalIgnoreCase) is true)
                     return DeploymentStatus.Cancelled;
             }
@@ -53,7 +50,7 @@ internal static class DeploymentMapper
             {
                 logger.LogWarning(ex,
                     "[{Owner}/{Repo}] run conclusion fetch failed for run {RunId}",
-                    owner, repoName, runId);
+                    ctx.Owner, ctx.RepoName, ctx.RunId);
             }
         }
 
@@ -94,3 +91,10 @@ internal static class DeploymentMapper
             .ToArray();
     }
 }
+
+/// <summary>Cohesive identity parameters for a single deployment lookup.</summary>
+internal readonly record struct DeploymentLookupContext(
+    string Owner,
+    string RepoName,
+    long DeploymentId,
+    long? RunId);
