@@ -6,6 +6,7 @@ using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Cursor;
+using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
@@ -300,13 +301,19 @@ public sealed class CancelledRejectedResolutionPollTests
         var versionResolver = new VersionResolver(
             VersionSourceConfig.Default, graphCache, githubClient);
 
+        var eventBuilder = new BackfillEventBuilder(
+            githubClient, graphCache, versionResolver,
+            NullLogger<BackfillEventBuilder>.Instance);
         var backfillRunner = new BackfillRunner(
-            githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, NullLogger<BackfillRunner>.Instance);
+            githubClient, adapterOptions, fetcherOptions,
+            eventBuilder, NullLogger<BackfillRunner>.Instance);
+        var statusEventMapper = new DeploymentStatusEventMapper(
+            githubClient, graphCache, versionResolver,
+            NullLogger<DeploymentStatusEventMapper>.Instance);
 
         return new GithubActionsAdapter(
-            githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, backfillRunner, NullLogger<GithubActionsAdapter>.Instance);
+            githubClient, adapterOptions, fetcherOptions,
+            backfillRunner, statusEventMapper);
     }
 
     // ── fake HTTP handler ─────────────────────────────────────────────────────

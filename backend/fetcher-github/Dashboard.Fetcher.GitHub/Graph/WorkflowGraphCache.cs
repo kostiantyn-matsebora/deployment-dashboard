@@ -32,6 +32,19 @@ public sealed class WorkflowGraphCache
     }
 
     /// <summary>
+    /// Returns the path and name fields of a run without fetching the full YAML.
+    /// Used by callers that only need service-identity resolution and want to avoid
+    /// a direct <see cref="GhWorkflowRun"/> type dependency. Returns nulls on non-2xx.
+    /// </summary>
+    public async Task<(string? Path, string? Name)> GetOrFetchRunInfoAsync(
+        string owner, string repo, long runId,
+        GithubClient github, CancellationToken ct)
+    {
+        var run = await GetOrFetchRunAsync(owner, repo, runId, github, ct);
+        return (run?.Path, run?.Name);
+    }
+
+    /// <summary>
     /// Returns only the run metadata (path, name, head_sha) without fetching the YAML.
     /// Used during backfill scanning to resolve service identity cheaply — the YAML is
     /// deferred until the deployment is actually kept (F1 / F2).

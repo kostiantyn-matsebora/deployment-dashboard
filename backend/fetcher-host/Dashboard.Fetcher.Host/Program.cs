@@ -5,6 +5,7 @@ using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Configuration;
 using Dashboard.Fetcher.GitHub.Graph;
+using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Fetcher.Host.Workers;
@@ -110,7 +111,9 @@ builder.Services.AddSingleton<VersionResolver>(sp => new VersionResolver(
     sp.GetRequiredService<WorkflowGraphCache>(),
     sp.GetRequiredService<GithubClient>()));
 
+builder.Services.AddSingleton<BackfillEventBuilder>();
 builder.Services.AddSingleton<BackfillRunner>();
+builder.Services.AddSingleton<DeploymentStatusEventMapper>();
 builder.Services.AddSingleton<GithubActionsAdapter>();
 builder.Services.AddSingleton<ICiCdAdapter>(sp => sp.GetRequiredService<GithubActionsAdapter>());
 

@@ -89,13 +89,7 @@ public sealed class PollLoop(
         try
         {
             var next = await PollOnceAsync(cursor, ct);
-            var snapshot = reporting?.RateLimitSnapshotFactory?.Invoke();
-            reporting?.Readiness?.RecordSuccess(snapshot);
-
-            // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
-            if (reporting?.ReportCycleAsync is not null && snapshot is not null)
-                await TryReportCycleAsync(snapshot, ct);
-
+            await RecordSuccessAsync(ct);
             return (true, next);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -117,6 +111,17 @@ public sealed class PollLoop(
             reporting?.Readiness?.RecordError(ex.Message);
             return (true, cursor);
         }
+    }
+
+    // Records a successful poll cycle: updates readiness and fires the optional per-cycle report.
+    private async Task RecordSuccessAsync(CancellationToken ct)
+    {
+        var snapshot = reporting?.RateLimitSnapshotFactory?.Invoke();
+        reporting?.Readiness?.RecordSuccess(snapshot);
+
+        // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
+        if (reporting?.ReportCycleAsync is not null && snapshot is not null)
+            await TryReportCycleAsync(snapshot, ct);
     }
 
     // Block here while paused; cancel unblocks the wait. Returns false when cancelled.
