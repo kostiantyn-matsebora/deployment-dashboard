@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using System.Text.Json.Serialization;
 using Dashboard.Control.Filters;
 using Dashboard.Control.Models;
@@ -104,31 +105,11 @@ public static class ControlEndpoints
         ArgumentException.ThrowIfNullOrEmpty(componentId);
 
         // Payload is stored verbatim; reject when its serialised size exceeds the limit (413).
-        string? payloadJson = null;
-        if (body.Payload is { } payload)
-        {
-            payloadJson = payload.GetRawText();
-            if (Encoding.UTF8.GetByteCount(payloadJson) > MaxPayloadBytes)
-                return Results.Problem(
-                    title: "Payload exceeds the size limit.",
-                    detail: $"The payload must not exceed {MaxPayloadBytes} bytes when serialised.",
-                    statusCode: StatusCodes.Status413RequestEntityTooLarge);
-        }
+        var (payloadJson, payloadError) = SerializeAndValidatePayload(body);
+        if (payloadError is not null)
+            return payloadError;
 
-        var entity = new ComponentEvent
-        {
-            Id = Guid.CreateVersion7(),
-            ComponentId = componentId,
-            EventType = body.EventType,
-            State = body.State,
-            Detail = body.Detail,
-            OccurredAt = body.OccurredAt,
-            ReceivedAt = DateTimeOffset.UtcNow,
-            Payload = payloadJson,
-            // Validation filter guarantees this is either null or a non-empty string ≤ 128 chars.
-            CorrelationId = correlationId,
-        };
-
+        var entity = BuildComponentEvent(componentId, correlationId, body, payloadJson);
         await repository.InsertAsync(entity, ct);
 
         // NOTIFY component_events with the new row id (id-only, §7 ch.4). The ComponentEventBroadcaster
@@ -159,12 +140,7 @@ public static class ControlEndpoints
         HttpContext httpContext,
         CancellationToken ct)
     {
-        httpContext.Response.ContentType = "text/event-stream";
-        httpContext.Response.Headers.CacheControl = "no-cache";
-        httpContext.Response.Headers.Connection = "keep-alive";
-        httpContext.Response.Headers["X-Accel-Buffering"] = "no";
-
-        await httpContext.Response.Body.FlushAsync(ct);
+        await InitializeSseResponseAsync(httpContext, ct);
 
         // Replay missed events when a client reconnects with Last-Event-ID.
         if (Guid.TryParse(lastEventId, out var resumeId))
@@ -177,27 +153,8 @@ public static class ControlEndpoints
         var reader = broadcaster.Subscribe();
         try
         {
-            while (!ct.IsCancellationRequested)
-            {
-                using var heartbeatCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, heartbeatCts.Token);
-
-                bool hasData;
-                try
-                {
-                    hasData = await reader.WaitToReadAsync(linked.Token);
-                }
-                catch (OperationCanceledException) when (heartbeatCts.IsCancellationRequested && !ct.IsCancellationRequested)
-                {
-                    await WriteSsePingAsync(httpContext, ct);
-                    continue;
-                }
-
-                if (!hasData) break; // channel completed (broadcaster shutting down)
-
-                while (reader.TryRead(out var record))
-                    await WriteComponentSseEventAsync(httpContext, record, ct);
-            }
+            await RunSseHeartbeatLoopAsync(httpContext, reader, ct,
+                record => WriteComponentSseEventAsync(httpContext, record, ct));
         }
         finally
         {
@@ -221,12 +178,7 @@ public static class ControlEndpoints
         HttpContext httpContext,
         CancellationToken ct)
     {
-        httpContext.Response.ContentType = "text/event-stream";
-        httpContext.Response.Headers.CacheControl = "no-cache";
-        httpContext.Response.Headers.Connection = "keep-alive";
-        httpContext.Response.Headers["X-Accel-Buffering"] = "no";
-
-        await httpContext.Response.Body.FlushAsync(ct);
+        await InitializeSseResponseAsync(httpContext, ct);
 
         // Replay missed events when a component reconnects with Last-Event-ID.
         if (Guid.TryParse(lastEventId, out var resumeId))
@@ -239,30 +191,12 @@ public static class ControlEndpoints
         var reader = broadcaster.Subscribe();
         try
         {
-            while (!ct.IsCancellationRequested)
-            {
-                using var heartbeatCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, heartbeatCts.Token);
-
-                bool hasData;
-                try
-                {
-                    hasData = await reader.WaitToReadAsync(linked.Token);
-                }
-                catch (OperationCanceledException) when (heartbeatCts.IsCancellationRequested && !ct.IsCancellationRequested)
-                {
-                    await WriteSsePingAsync(httpContext, ct);
-                    continue;
-                }
-
-                if (!hasData) break; // channel completed (broadcaster shutting down)
-
-                while (reader.TryRead(out var ev))
+            await RunSseHeartbeatLoopAsync(httpContext, reader, ct,
+                async ev =>
                 {
                     if (component is null || ev.Component == component || ev.Component == "*")
                         await WriteSseEventAsync(httpContext, ev, ct);
-                }
-            }
+                });
         }
         finally
         {
@@ -299,5 +233,82 @@ public static class ControlEndpoints
         await httpContext.Response.WriteAsync(": ping\n\n", ct);
         await httpContext.Response.Body.FlushAsync(ct);
     }
+
+    private static async Task InitializeSseResponseAsync(HttpContext httpContext, CancellationToken ct)
+    {
+        httpContext.Response.ContentType = "text/event-stream";
+        httpContext.Response.Headers.CacheControl = "no-cache";
+        httpContext.Response.Headers.Connection = "keep-alive";
+        httpContext.Response.Headers["X-Accel-Buffering"] = "no";
+        await httpContext.Response.Body.FlushAsync(ct);
+    }
+
+    /// <summary>
+    /// Drives the SSE read loop for a broadcast <paramref name="reader"/>, sending a heartbeat
+    /// ping every 15 s when no data arrives.  Exits when the client disconnects
+    /// (<paramref name="ct"/> is cancelled) or the channel completes.
+    /// </summary>
+    private static async Task RunSseHeartbeatLoopAsync<T>(
+        HttpContext httpContext,
+        ChannelReader<T> reader,
+        CancellationToken ct,
+        Func<T, Task> writeEvent)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            using var heartbeatCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, heartbeatCts.Token);
+
+            bool hasData;
+            try
+            {
+                hasData = await reader.WaitToReadAsync(linked.Token);
+            }
+            catch (OperationCanceledException) when (heartbeatCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                await WriteSsePingAsync(httpContext, ct);
+                continue;
+            }
+
+            if (!hasData) break; // channel completed (broadcaster shutting down)
+
+            while (reader.TryRead(out var item))
+                await writeEvent(item);
+        }
+    }
+
+    private static (string? json, IResult? error) SerializeAndValidatePayload(ComponentEventIngest body)
+    {
+        if (body.Payload is not { } payload)
+            return (null, null);
+
+        var json = payload.GetRawText();
+        if (Encoding.UTF8.GetByteCount(json) > MaxPayloadBytes)
+            return (null, Results.Problem(
+                title: "Payload exceeds the size limit.",
+                detail: $"The payload must not exceed {MaxPayloadBytes} bytes when serialised.",
+                statusCode: StatusCodes.Status413RequestEntityTooLarge));
+
+        return (json, null);
+    }
+
+    private static ComponentEvent BuildComponentEvent(
+        string componentId,
+        string? correlationId,
+        ComponentEventIngest body,
+        string? payloadJson) =>
+        new()
+        {
+            Id = Guid.CreateVersion7(),
+            ComponentId = componentId,
+            EventType = body.EventType,
+            State = body.State,
+            Detail = body.Detail,
+            OccurredAt = body.OccurredAt,
+            ReceivedAt = DateTimeOffset.UtcNow,
+            Payload = payloadJson,
+            // Validation filter guarantees this is either null or a non-empty string ≤ 128 chars.
+            CorrelationId = correlationId,
+        };
 
 }
