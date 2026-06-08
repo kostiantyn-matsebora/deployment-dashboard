@@ -18,11 +18,13 @@ cutting tokens across agent turns.
 | **Code review** (change-scoped) | **code-review-graph** (+ tokensave + serena) | graph: `detect_changes` (risk-scored) / `get_review_context` / `get_impact_radius` / `get_affected_flows`; tokensave for deeper structure; serena to read exact symbol bodies |
 | **Architecture / structure overview** | **tokensave** or **code-review-graph** | tokensave `tokensave_outline` / `tokensave_health` / `tokensave_hotspots`; graph `get_architecture_overview` / `list_communities` |
 | **Docs (`.md`)** | **markdown** | see *Docs intelligence* below |
+| **External library / framework docs** (third-party, not this repo) | **context7** | `resolve-library-id` (name → Context7 ID) → `get-library-docs` |
 
 **Per-server notes.**
 - **tokensave** (`mcp__tokensave__*`). Code graph; start with `tokensave_context` for any exploration. Read-only discovery tools are parallel-safe. **4-call budget per question** — synthesize from what you have rather than exceed it. Report `tokensave_metrics:` savings to the user when present.
 - **serena** (`mcp__serena__*`). LSP retrieval + editing. `get_symbols_overview` → `find_symbol` (`depth=1` for members, `include_body` only when source needed). Owns surgical edits.
 - **code-review-graph** (`mcp__code-review-graph__*`). Persistent change-review graph; auto-updates via hooks but **rebuild after a branch switch** (it warns when stale).
+- **context7** (`mcp__context7__*`). External (internet) docs for third-party libraries/frameworks — NOT a local-repo server. `resolve-library-id` first (free-text name → Context7-ID), then `get-library-docs` (optionally scoped by `topic`). Use over memory-recalled APIs; never for this repo's own code. Free tier is rate-limited.
 
 - **Fall back to `Read` / `Grep`** for declarative/non-code files (YAML, JSON, Dockerfiles, configs), exact line-range reads, or content the LSPs don't index well. For **Markdown** use the markdown MCP, not `Read`.
 
