@@ -18,6 +18,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -ClearMarker",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -SnapshotSession",
             "timeout": 30
           }
@@ -62,6 +72,21 @@
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-LaneGuard.ps1\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-LeadEditGuard.ps1\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\"",
+            "timeout": 10
           }
         ]
       },
@@ -87,6 +112,26 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "TeamCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -SetMarker",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "TeamDelete",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -ClearMarker",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "Skill",
         "hooks": [

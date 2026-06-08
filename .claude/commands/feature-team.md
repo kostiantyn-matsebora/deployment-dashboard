@@ -52,7 +52,9 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
 ## Phase 2 — Spawn (after approval)
 
 5. **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description
-   = the issue summary.
+   = the issue summary. *(A `PostToolUse(TeamCreate)` hook auto-writes the `.claude-team-active`
+   marker; the team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every
+   member spawn below MUST set `team_name`, or it is rejected as an in-session downgrade.)*
 6. **Spawn each member** via the `Agent` tool:
    - `team_name` = the team · `name` = a stable, referenceable label (e.g. `backend`,
      `frontend`) · `subagent_type` = the mapped agent above.
@@ -100,7 +102,8 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
     phase-2 spec.
 15. Commit in logical groups → branch → open/update PR → watch CI to green. Never push to
     the default branch directly.
-16. **`TeamDelete`** once integrated.
+16. **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook clears the
+    `.claude-team-active` marker; `SessionStart` also clears any stale marker.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 
