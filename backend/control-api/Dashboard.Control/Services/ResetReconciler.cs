@@ -60,11 +60,22 @@ internal sealed class ResetReconciler(
 
     private async Task TickAsync(CancellationToken ct)
     {
-        var lockConn = await TryOpenLockConnectionAsync(ct);
-        if (lockConn is null)
+        var connectionString = services.GetService<IConfiguration>()
+            ?.GetConnectionString("Postgres");
+
+        if (string.IsNullOrEmpty(connectionString))
             return;
 
-        await using var _ = lockConn; // guarantees disposal on every exit path
+        await using var lockConn = new NpgsqlConnection(connectionString);
+        try
+        {
+            await lockConn.OpenAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Reset reconciler: could not open DB connection; skipping tick.");
+            return;
+        }
 
         bool lockAcquired;
         try
@@ -93,7 +104,6 @@ internal sealed class ResetReconciler(
         }
         finally
         {
-            // Release before the connection is disposed (session-level lock semantics).
             await ReleaseAdvisoryLockAsync(lockConn);
         }
     }
@@ -121,73 +131,27 @@ internal sealed class ResetReconciler(
             cycle.State, cycle.CorrelationId, gateMaxDeadline);
 
         var abortedResetId = cycle.CorrelationId ?? Guid.Empty;
+
         var controlStream = sp.GetRequiredService<IControlStreamRepository>();
         var notifier = sp.GetRequiredService<IControlEventNotifier>();
         var stateNotifier = sp.GetService<IResetStateNotifier>();
 
         // Emit reset-completed so connected components can recover.
-        await EmitOrphanRecoveryEventAsync(controlStream, notifier, abortedResetId, ct);
+        if (abortedResetId != Guid.Empty)
+        {
+            var completedEvent = new ControlStreamEvent
+            {
+                Id = Guid.CreateVersion7(),
+                Type = "reset-completed",
+                Component = "*",
+                CorrelationId = abortedResetId,
+                OccurredAt = DateTimeOffset.UtcNow,
+            };
+            await controlStream.InsertAsync(completedEvent, ct);
+            await notifier.NotifyAsync(completedEvent, ct);
+        }
 
         // Transition cycle to idle.
-        await ClearCycleToIdleAsync(db, cycle, stateNotifier, ct);
-
-        logger.LogInformation("Reset reconciler: orphaned cycle aborted; state reset to idle.");
-    }
-
-    /// <summary>
-    /// Opens a dedicated Postgres connection for advisory-lock use.
-    /// Returns <c>null</c> (and logs) when the connection string is missing or
-    /// the connection cannot be established.
-    /// </summary>
-    private async Task<NpgsqlConnection?> TryOpenLockConnectionAsync(CancellationToken ct)
-    {
-        var connectionString = services.GetService<IConfiguration>()
-            ?.GetConnectionString("Postgres");
-
-        if (string.IsNullOrEmpty(connectionString))
-            return null;
-
-        var conn = new NpgsqlConnection(connectionString);
-        try
-        {
-            await conn.OpenAsync(ct);
-            return conn;
-        }
-        catch (Exception ex)
-        {
-            await conn.DisposeAsync();
-            logger.LogWarning(ex, "Reset reconciler: could not open DB connection; skipping tick.");
-            return null;
-        }
-    }
-
-    private static async Task EmitOrphanRecoveryEventAsync(
-        IControlStreamRepository controlStream,
-        IControlEventNotifier notifier,
-        Guid abortedResetId,
-        CancellationToken ct)
-    {
-        if (abortedResetId == Guid.Empty)
-            return;
-
-        var completedEvent = new ControlStreamEvent
-        {
-            Id = Guid.CreateVersion7(),
-            Type = "reset-completed",
-            Component = "*",
-            CorrelationId = abortedResetId,
-            OccurredAt = DateTimeOffset.UtcNow,
-        };
-        await controlStream.InsertAsync(completedEvent, ct);
-        await notifier.NotifyAsync(completedEvent, ct);
-    }
-
-    private static async Task ClearCycleToIdleAsync(
-        DashboardDbContext db,
-        ResetCycle cycle,
-        IResetStateNotifier? stateNotifier,
-        CancellationToken ct)
-    {
         cycle.State = ResetState.Idle;
         cycle.CorrelationId = null;
         cycle.ExpectedComponents = null;
@@ -199,6 +163,8 @@ internal sealed class ResetReconciler(
         // Notify all instances to update their cached gate flag (Fix C).
         if (stateNotifier is not null)
             await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
+
+        logger.LogInformation("Reset reconciler: orphaned cycle aborted; state reset to idle.");
     }
 
     private static async Task<bool> TryAcquireAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)

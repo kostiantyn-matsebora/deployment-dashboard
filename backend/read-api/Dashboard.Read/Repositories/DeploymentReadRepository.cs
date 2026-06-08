@@ -73,7 +73,10 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
 
         // In-memory tiebreak: if multiple events share the max happened_at in a slot,
         // keep the one with the greatest Id (most recently inserted UUIDv7).
-        return LatestPerSlot(rawEffective);
+        return rawEffective
+            .GroupBy(e => (e.Service, e.Environment))
+            .Select(g => g.OrderByDescending(e => e.Id).First())
+            .ToList();
     }
 
     public async Task<IReadOnlyList<DeploymentEvent>> GetLatestNonEffectivePerSlotAsync(
@@ -96,7 +99,10 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
                             e2.HappenedAt > e.HappenedAt))
             .ToListAsync(ct);
 
-        return LatestPerSlot(rawNonEffective);
+        return rawNonEffective
+            .GroupBy(e => (e.Service, e.Environment))
+            .Select(g => g.OrderByDescending(e => e.Id).First())
+            .ToList();
     }
 
     public async Task<IReadOnlyList<DeploymentEvent>> GetLastSuccessfulPerSlotAsync(
@@ -115,7 +121,10 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
                             e2.HappenedAt > e.HappenedAt))
             .ToListAsync(ct);
 
-        return LatestPerSlot(rawLastSuccessful);
+        return rawLastSuccessful
+            .GroupBy(e => (e.Service, e.Environment))
+            .Select(g => g.OrderByDescending(e => e.Id).First())
+            .ToList();
     }
 
     public async Task<IReadOnlyList<DeploymentEvent>> GetLatestTerminalBeforeCurrentPerSlotAsync(
@@ -159,7 +168,10 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
             .ToListAsync(ct);
 
         // In-memory tiebreak: keep the event with the greatest Id per slot.
-        return LatestPerSlot(rawTerminal);
+        return rawTerminal
+            .GroupBy(e => (e.Service, e.Environment))
+            .Select(g => g.OrderByDescending(e => e.Id).First())
+            .ToList();
     }
 
     public async Task<IReadOnlyList<string>> GetDistinctServicesAsync(CancellationToken ct)
@@ -190,14 +202,4 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
 
         return await q.OrderBy(e => e.Id).ToListAsync(ct);
     }
-
-    /// <summary>
-    /// In-memory tiebreak: given multiple events per slot (same max happened_at),
-    /// keep the one with the greatest Id (most recently inserted UUIDv7).
-    /// </summary>
-    private static IReadOnlyList<DeploymentEvent> LatestPerSlot(List<DeploymentEvent> raw) =>
-        raw
-            .GroupBy(e => (e.Service, e.Environment))
-            .Select(g => g.OrderByDescending(e => e.Id).First())
-            .ToList();
 }
