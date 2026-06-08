@@ -50,73 +50,29 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
     public async Task<DeploymentEvent?> GetByIdAsync(Guid id, CancellationToken ct)
         => await db.DeploymentEvents.FindAsync([id], ct);
 
-    public async Task<IReadOnlyList<DeploymentEvent>> GetEffectivePerSlotAsync(
+    public Task<IReadOnlyList<DeploymentEvent>> GetEffectivePerSlotAsync(
         string? serviceFilter, CancellationToken ct)
-    {
-        var q = db.DeploymentEvents.AsQueryable();
-        if (serviceFilter is not null)
-            q = q.Where(e => e.Service == serviceFilter);
+        // Effective = in-progress | success | failure. Latest effective per slot.
+        => LatestPerSlotByStatusAsync(
+            serviceFilter,
+            [DeploymentStatus.InProgress, DeploymentStatus.Success, DeploymentStatus.Failure],
+            ct);
 
-        // Effective = in-progress | success | failure.
-        // Latest effective per slot = no newer effective event exists in the same slot.
-        // The correlated NOT EXISTS translates to SQL on both Postgres and SQLite.
-        var effectiveStatuses = new[] { DeploymentStatus.InProgress, DeploymentStatus.Success, DeploymentStatus.Failure };
-
-        var rawEffective = await q
-            .Where(e => effectiveStatuses.Contains(e.Status) &&
-                        !db.DeploymentEvents.Any(e2 =>
-                            e2.Service == e.Service &&
-                            e2.Environment == e.Environment &&
-                            effectiveStatuses.Contains(e2.Status) &&
-                            e2.HappenedAt > e.HappenedAt))
-            .ToListAsync(ct);
-
-        // In-memory tiebreak: if multiple events share the max happened_at in a slot,
-        // keep the one with the greatest Id (most recently inserted UUIDv7).
-        return LatestPerSlot(rawEffective);
-    }
-
-    public async Task<IReadOnlyList<DeploymentEvent>> GetLatestNonEffectivePerSlotAsync(
+    public Task<IReadOnlyList<DeploymentEvent>> GetLatestNonEffectivePerSlotAsync(
         string? serviceFilter, CancellationToken ct)
-    {
-        var q = db.DeploymentEvents.AsQueryable();
-        if (serviceFilter is not null)
-            q = q.Where(e => e.Service == serviceFilter);
+        // Non-effective = pending | queued | waiting | cancelled | rejected. Latest per slot.
+        => LatestPerSlotByStatusAsync(
+            serviceFilter,
+            [
+                DeploymentStatus.Pending, DeploymentStatus.Queued, DeploymentStatus.Waiting,
+                DeploymentStatus.Cancelled, DeploymentStatus.Rejected,
+            ],
+            ct);
 
-        // Non-effective = pending | queued | waiting | cancelled | rejected.
-        // Latest non-effective per slot = no newer non-effective event exists in the same slot.
-        var nonEffectiveStatuses = new[] { DeploymentStatus.Pending, DeploymentStatus.Queued, DeploymentStatus.Waiting, DeploymentStatus.Cancelled, DeploymentStatus.Rejected };
-
-        var rawNonEffective = await q
-            .Where(e => nonEffectiveStatuses.Contains(e.Status) &&
-                        !db.DeploymentEvents.Any(e2 =>
-                            e2.Service == e.Service &&
-                            e2.Environment == e.Environment &&
-                            nonEffectiveStatuses.Contains(e2.Status) &&
-                            e2.HappenedAt > e.HappenedAt))
-            .ToListAsync(ct);
-
-        return LatestPerSlot(rawNonEffective);
-    }
-
-    public async Task<IReadOnlyList<DeploymentEvent>> GetLastSuccessfulPerSlotAsync(
+    public Task<IReadOnlyList<DeploymentEvent>> GetLastSuccessfulPerSlotAsync(
         string? serviceFilter, CancellationToken ct)
-    {
-        var q = db.DeploymentEvents.AsQueryable();
-        if (serviceFilter is not null)
-            q = q.Where(e => e.Service == serviceFilter);
-
-        var rawLastSuccessful = await q
-            .Where(e => e.Status == DeploymentStatus.Success &&
-                        !db.DeploymentEvents.Any(e2 =>
-                            e2.Service == e.Service &&
-                            e2.Environment == e.Environment &&
-                            e2.Status == DeploymentStatus.Success &&
-                            e2.HappenedAt > e.HappenedAt))
-            .ToListAsync(ct);
-
-        return LatestPerSlot(rawLastSuccessful);
-    }
+        // Last successful per slot.
+        => LatestPerSlotByStatusAsync(serviceFilter, [DeploymentStatus.Success], ct);
 
     public async Task<IReadOnlyList<DeploymentEvent>> GetLatestTerminalBeforeCurrentPerSlotAsync(
         string? serviceFilter, CancellationToken ct)
@@ -195,6 +151,30 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
     /// In-memory tiebreak: given multiple events per slot (same max happened_at),
     /// keep the one with the greatest Id (most recently inserted UUIDv7).
     /// </summary>
+    /// <summary>
+    /// Latest event per slot whose status is in <paramref name="statuses"/>: the row for which
+    /// no newer same-set event exists in the same (service, environment) slot. The correlated
+    /// NOT EXISTS translates to SQL on both Postgres and SQLite.
+    /// </summary>
+    private async Task<IReadOnlyList<DeploymentEvent>> LatestPerSlotByStatusAsync(
+        string? serviceFilter, string[] statuses, CancellationToken ct)
+    {
+        var q = db.DeploymentEvents.AsQueryable();
+        if (serviceFilter is not null)
+            q = q.Where(e => e.Service == serviceFilter);
+
+        var raw = await q
+            .Where(e => statuses.Contains(e.Status) &&
+                        !db.DeploymentEvents.Any(e2 =>
+                            e2.Service == e.Service &&
+                            e2.Environment == e.Environment &&
+                            statuses.Contains(e2.Status) &&
+                            e2.HappenedAt > e.HappenedAt))
+            .ToListAsync(ct);
+
+        return LatestPerSlot(raw);
+    }
+
     private static IReadOnlyList<DeploymentEvent> LatestPerSlot(List<DeploymentEvent> raw) =>
         raw
             .GroupBy(e => (e.Service, e.Environment))
