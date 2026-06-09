@@ -298,14 +298,14 @@ Small panel opened by clicking the toolbar icon. Shows the most recent deploymen
 
 | Field | Source field | Rendering |
 |-------|-------------|-----------|
-| Service | `component` | Plain text header |
+| Service | `service` | Plain text header |
 | Environment | `environment` | Plain text |
 | Version | `version` | Headline identifier |
 | Status | `status` | `status-chip` (reuses SPA token/class) |
 | Actor | `actor` | `@` prefix |
 | Elapsed | `happened_at` | Relative elapsed ("3h ago") |
 | Timestamp | `happened_at` | Absolute UTC below elapsed |
-| Run link | `run_url` / `run_number` | `hist-link` styled "Open run" (reuses SPA class) |
+| Run link | `run_url` / `run_number` | `hist-link` styled "Open run #NNN" (reuses SPA class) |
 | Dashboard link | configured base URL | "Open dashboard" — navigates to full SPA |
 
 ---

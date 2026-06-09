@@ -31,7 +31,7 @@ The tree below is authoritative — *Present today* vs *Reserved* are split into
 |---|---|
 | `docs/` | All design + contract documentation (see *Sources of truth*). |
 | `backend/[service]` | Backend services (`Dashboard.Api` + endpoint-group libs, `Dashboard.Fetcher` + host, shared, tests). |
-| `frontend/[application]` | Angular SPA (`dashboard`) + `mock` server. |
+| `frontend/[application]` | Angular SPA (`dashboard`) + `mock` server + `extension` (MV3 WebExtension). |
 | `demo/` | `driver` (demo-orchestration service) + `github-emulator` (GitHub REST emulator for fetcher demo/CI) + `data` (scenario seeds). |
 | `gateway/` | nginx App Gateway config. |
 | `testing/[type]` | Testing solutions (`api`, `e2e`). |
