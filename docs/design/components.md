@@ -268,33 +268,43 @@ The browser toolbar icon reflecting overall deployment health at a glance.
 | State | Visual | Trigger |
 |-------|--------|---------|
 | Idle | Base product logo mark, no overlay | No in-flight or failed deployments (within watch scope) |
-| In-flight | Amber badge overlay with count | ≥ 1 deployment with status `in-progress` |
-| Failed | Coral badge overlay with count | ≥ 1 deployment with status `failure` |
+| In-flight | Amber badge overlay with count | ≥ 1 `in-progress` slot (status `in-progress` enabled in filter) |
+| Failed | Coral badge overlay with count | ≥ 1 `failure` slot (status `failure` enabled in filter) |
 
 - **Base icon:** product logo mark (same mark as SPA brand region).
-- **Count overlay:** integer count positioned top-right on the icon; hidden when count = 0.
+- **Count:** per-(service×environment)-slot count; integer top-right; hidden when count = 0.
 - **Priority:** failed state takes precedence over in-flight when both are non-zero.
+- **Status filter gate:** disabling `failure` removes coral state; disabling `in-progress` removes amber.
 
 ---
 
 ### Notification Toast
 
-Browser notification fired on a new deployment event or failure within watch scope.
+Browser notification fired by the background SW on SSE events within watch scope.
 
-| Variant | Content |
-|---------|---------|
-| Success | Service name · environment · version · "succeeded" |
-| Production failure | Service name · environment · version · "FAILED" (emphasis) |
-
-- **Entire toast is a link** to the CI/CD run URL (`run_url`).
-- **Inline "View run #NNN" link** rendered inside the toast body using `run_number`.
-- **Live-region:** `role="status"` (or `aria-live="polite"`) sits on a non-interactive wrapper element — the `<a>` link is NOT the live-region host.
+- **Trigger:** any status transition where `(service, environment)` matches the watch filter AND the `status` is enabled in the status filter config.
+- **Default:** all 8 statuses enabled → toast fires on every transition; narrow via the status filter.
+- **Content:** service name · environment · version · status label.
+- **Link:** entire toast links to the CI run URL (`run_url`); body includes "Open run #NNN" (`run_number`).
+- **Accessibility (in-popup fallback display only):** if a future DOM-based toast fallback is added, `role="status"` (or `aria-live="polite"`) must sit on a non-interactive wrapper element — the `<a>` link must NOT be the live-region host. Does not apply to OS-level browser notifications, which are not DOM elements.
 
 ---
 
-### Latest-Change Popup Panel
+### Deployment List Popup Panel
 
-Small panel opened by clicking the toolbar icon. Shows the most recent deployment event that changed within the watch scope.
+Stateless panel opened by clicking the toolbar icon. Re-fetches `GET /api/deployments` on open and on storage change. Shows the last N events newest-first; N = `popupCount` (default 5).
+
+**States:**
+
+| State | Shown when |
+|-------|-----------|
+| Loading | Fetch in progress |
+| Unconfigured | No `dashboardUrl` set |
+| Paused | Master Watching switch is OFF |
+| Empty | Fetch succeeded; no events match filters |
+| List | ≥ 1 matching event |
+
+**Per-row fields:**
 
 | Field | Source field | Rendering |
 |-------|-------------|-----------|
@@ -306,7 +316,9 @@ Small panel opened by clicking the toolbar icon. Shows the most recent deploymen
 | Elapsed | `happened_at` | Relative elapsed ("3h ago") |
 | Timestamp | `happened_at` | Absolute UTC below elapsed |
 | Run link | `run_url` / `run_number` | `hist-link` styled "Open run #NNN" (reuses SPA class) |
-| Dashboard link | configured base URL | "Open dashboard" — navigates to full SPA |
+
+- "Open dashboard" link shown whenever a `dashboardUrl` is configured (footer of panel).
+- Filtered by service+environment watch filter and the status filter.
 
 ---
 
@@ -336,3 +348,24 @@ Scoped filters controlling which services and environments generate badge update
 - **"Watch only"**: only checked items watched; unchecked items excluded.
 - Filter controls are dimmed and non-interactive when the master Watching switch is OFF.
 - Persisted to extension storage.
+
+#### Status Filter
+
+Per-status enable/disable checkboxes controlling which statuses appear in the popup list, trigger notifications, and count toward the badge.
+
+| Control | Description |
+|---------|-------------|
+| Status checkboxes (8) | One checkbox per status: `pending`, `queued`, `waiting`, `in-progress`, `success`, `failure`, `cancelled`, `rejected` |
+
+- All 8 enabled by default.
+- Disabling `failure` removes coral badge state; disabling `in-progress` removes amber.
+- Dimmed and non-interactive when the master Watching switch is OFF.
+- Persisted to `storage.sync` as `statuses[]`.
+
+#### Popup Count
+
+Integer control setting the number of events shown in the deployment list popup.
+
+- Label: "Show last N events".
+- Range: 1–50; default 5.
+- Persisted to `storage.sync` as `popupCount`.
