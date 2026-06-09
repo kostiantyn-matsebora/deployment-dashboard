@@ -1,0 +1,252 @@
+/* Options page styles — Deployment Dashboard extension
+   Tokens extracted from frontend/dashboard/src/styles/tokens.css (dark theme default). */
+
+/* ── Design token subset ─────────────────────────────────────── */
+:root {
+  --bg-0:        #0b0d14;
+  --bg-1:        #0e1119;
+  --glass:        rgba(22, 26, 38, 0.55);
+  --glass-edge:   rgba(255, 255, 255, 0.06);
+  --glass-edge-2: rgba(255, 255, 255, 0.10);
+  --ink-0:  #e9ecf4;
+  --ink-1:  #b8bdcc;
+  --ink-2:  #7c829a;
+  --ink-3:  #555b73;
+  --emerald:       #34d29a;
+  --input-bg:      rgba(10, 12, 20, 0.55);
+  --switch-off-bg: rgba(255, 255, 255, 0.10);
+  --switch-knob:   #d4d8e6;
+  --accent-rgb:    120, 110, 255;
+  --divider-dash:  rgba(255, 255, 255, 0.18);
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--ink-0);
+  background: var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+}
+
+.options-root {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.options-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.options-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-0);
+}
+
+/* ── Sections ────────────────────────────────────────────────── */
+.options-section {
+  margin-bottom: 20px;
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+}
+
+.field-hint {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 6px 0 0;
+}
+
+/* ── URL input ───────────────────────────────────────────────── */
+.field-input {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-0);
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+}
+.field-input:focus {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+}
+.field-input::placeholder { color: var(--ink-3); }
+
+/* ── Watching switch row ─────────────────────────────────────── */
+.watching-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.watching-label-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.watching-label-group .field-label { margin: 0; }
+
+.watching-state-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--emerald);
+}
+
+/* Toggle switch */
+.switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--switch-off-bg);
+  border: 1px solid var(--glass-edge-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+}
+.switch.is-on {
+  background: rgba(var(--accent-rgb), 0.75);
+  border-color: rgba(var(--accent-rgb), 0.5);
+}
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--switch-knob);
+  border-radius: 50%;
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+.switch.is-on .switch-knob { transform: translateX(20px); }
+
+/* ── Divider ─────────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px dashed var(--divider-dash);
+  margin: 20px 0;
+}
+
+/* ── Filter section dimming ──────────────────────────────────── */
+.filter-section.is-dimmed {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── Segmented control ───────────────────────────────────────── */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--glass-edge-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.seg-btn {
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--glass-edge-2); }
+.seg-btn.is-active,
+.seg-btn[aria-pressed="true"] {
+  background: rgba(var(--accent-rgb), 0.22);
+  color: var(--ink-0);
+}
+.seg-btn:hover:not(.is-active) { background: var(--glass-edge); color: var(--ink-1); }
+
+/* ── Checklists ──────────────────────────────────────────────── */
+.checklist-group {
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px 12px;
+  margin: 0 0 14px;
+}
+
+.checklist-legend {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 4px;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-1);
+  cursor: pointer;
+}
+.checklist-item:hover { color: var(--ink-0); }
+
+.checklist-cb {
+  accent-color: rgba(var(--accent-rgb), 1);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.no-items { margin: 0; font-size: 12px; }
+
+.ink-2 { color: var(--ink-2); }
+
+/* ── Actions row ─────────────────────────────────────────────── */
+.actions-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.btn-primary {
+  background: rgba(var(--accent-rgb), 0.85);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: rgba(var(--accent-rgb), 1); }
+
+.save-status {
+  font-size: 12px;
+  color: var(--emerald);
+}
