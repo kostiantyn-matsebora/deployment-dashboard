@@ -39,8 +39,8 @@ Used by `full`, `full-pull`, and `demo`.
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `POSTGRES_USER` | **yes** | — | Database user. |
-| `POSTGRES_PASSWORD` | **yes** | — | Database password. |
+| `POSTGRES_USER` | **yes** | — | Database user / cloud identity DB role name. |
+| `POSTGRES_PASSWORD` | conditional | — | Database password. Set for static-credential auth (local/CI). **Omit or leave empty** to activate managed-identity passwordless auth. See [Auth modes](#postgresql-auth-modes) below. |
 | `POSTGRES_DB` | no | `deployment_dashboard` | Database name. |
 
 ## PostgreSQL: external profiles
@@ -51,8 +51,19 @@ Used by `standalone` and `standalone-pull`.
 |---|---|---|---|
 | `POSTGRES_HOST` | **yes** | `postgres` | Hostname/IP of your external PostgreSQL. Override the bundled-service default. |
 | `POSTGRES_PORT` | no | `5432` | External PostgreSQL port. |
-| `POSTGRES_USER` | **yes** | — | Database user. |
-| `POSTGRES_PASSWORD` | **yes** | — | Database password. |
+| `POSTGRES_USER` | **yes** | — | Database user / cloud identity DB role name. |
+| `POSTGRES_PASSWORD` | conditional | — | Database password. Set for static-credential auth (local/CI). **Omit or leave empty** to activate managed-identity passwordless auth. See [Auth modes](#postgresql-auth-modes) below. |
+
+## PostgreSQL: auth modes
+
+Auth mode is **auto-detected from credential presence** — no explicit toggle.
+
+| `POSTGRES_PASSWORD` | Mode | How it works |
+|---|---|---|
+| Set (non-empty) | Static password | `POSTGRES_USER` + `POSTGRES_PASSWORD` used verbatim. Default behavior; suitable for local Compose, CI, and tests. |
+| Omitted / empty | Managed identity | No static password. The service authenticates as its ambient cloud identity (e.g. Azure Workload Identity / Managed Identity) and obtains a short-lived access token at connection time, refreshed transparently. Set `POSTGRES_USER` to the identity's PostgreSQL role name. |
+
+**Cloud deployment (Azure target — NFR-01/NFR-06):** omit `POSTGRES_PASSWORD` to eliminate static credential management. The seam is provider-agnostic; any identity system that supplies a bearer token to the Npgsql password provider is compatible.
 
 ## Fetcher: pull mode
 

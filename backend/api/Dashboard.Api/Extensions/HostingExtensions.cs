@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dashboard.Shared.Configuration;
 using Dashboard.Shared.Data;
+using Npgsql;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -40,8 +41,16 @@ internal static class HostingExtensions
     {
         ((IConfigurationBuilder)builder.Configuration).Add(new PostgresConnectionStringSource(builder.Configuration));
 
-        builder.Services.AddDbContext<DashboardDbContext>(options =>
-            options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+        // Single shared NpgsqlDataSource — handles both pooled EF connections and the long-lived
+        // SSE LISTEN connections.  In managed-identity mode it carries a periodic-password provider
+        // that refreshes the token automatically; in password mode it behaves as before.
+        // Disposal: ASP.NET Core's DI container disposes IAsyncDisposable singletons on host
+        // shutdown, so NpgsqlDataSource (which implements IAsyncDisposable) is cleaned up correctly.
+        builder.Services.AddSingleton(_ =>
+            NpgsqlDataSourceFactory.Create(builder.Configuration));
+
+        builder.Services.AddDbContext<DashboardDbContext>((sp, options) =>
+            options.UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>()));
 
         return builder;
     }

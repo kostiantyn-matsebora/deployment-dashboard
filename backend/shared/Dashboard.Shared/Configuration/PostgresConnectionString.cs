@@ -31,15 +31,46 @@ public static class PostgresConnectionString
     /// <summary>
     /// Resolves and assembles the Npgsql connection string from <paramref name="configuration"/>.
     /// </summary>
-    public static string Resolve(IConfiguration configuration)
+    /// <param name="configuration">Runtime or design-time configuration.</param>
+    /// <param name="authMode">
+    /// Auth mode that controls whether a static password is included.
+    /// When <see cref="PostgresAuthMode.ManagedIdentity"/>, the <c>Password</c> keyword
+    /// is omitted so Npgsql does not send an empty credential; the password is supplied
+    /// dynamically by <c>NpgsqlDataSourceFactory</c> via the periodic-password provider.
+    /// Defaults to <see cref="PostgresAuthMode.Password"/> (unchanged behavior).
+    /// </param>
+    public static string Resolve(
+        IConfiguration configuration,
+        PostgresAuthMode authMode = PostgresAuthMode.Password)
     {
         var host = Resolve(configuration, "POSTGRES_HOST", "Postgres:Host", DefaultHost);
         var port = Resolve(configuration, "POSTGRES_PORT", "Postgres:Port", DefaultPort);
         var database = Resolve(configuration, "POSTGRES_DB", "Postgres:Database", DefaultDatabase);
         var username = Resolve(configuration, "POSTGRES_USER", "Postgres:Username", string.Empty);
-        var password = Resolve(configuration, "POSTGRES_PASSWORD", "Postgres:Password", string.Empty);
 
+        if (authMode == PostgresAuthMode.ManagedIdentity)
+            return $"Host={host};Port={port};Database={database};Username={username}";
+
+        // Resolved via the shared helper so auth-mode detection and connection-string
+        // assembly always use the same precedence (env var → appsettings → empty).
+        var password = ResolvePassword(configuration);
         return $"Host={host};Port={port};Database={database};Username={username};Password={password}";
+    }
+
+    /// <summary>
+    /// Resolves the effective Postgres password using the canonical precedence:
+    /// <c>POSTGRES_PASSWORD</c> env var → <c>Postgres:Password</c> appsettings → empty string.
+    /// Shared by <see cref="Resolve"/> and <see cref="NpgsqlDataSourceFactory.ResolveAuthMode"/>
+    /// so both always agree on whether a password is configured.
+    /// </summary>
+    internal static string ResolvePassword(IConfiguration configuration)
+    {
+        var envValue = configuration["POSTGRES_PASSWORD"];
+        if (!string.IsNullOrWhiteSpace(envValue))
+            return envValue;
+
+        var cfgValue = configuration["Postgres:Password"];
+        return string.IsNullOrWhiteSpace(cfgValue) ? string.Empty : cfgValue;
     }
 
     /// <summary>

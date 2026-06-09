@@ -1,5 +1,4 @@
 using System.Threading.Channels;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -33,7 +32,7 @@ namespace Dashboard.Shared.Sse;
 /// </typeparam>
 public abstract class PgListenBroadcasterBase<TPending> : BackgroundService
 {
-    private readonly IConfiguration _configuration;
+    private readonly NpgsqlDataSource _dataSource;
     // Volatile: written by the background LISTEN loop, read by the /readyz handler.
     private volatile bool _isListening;
 
@@ -41,12 +40,12 @@ public abstract class PgListenBroadcasterBase<TPending> : BackgroundService
     private readonly Channel<TPending> _pending =
         Channel.CreateUnbounded<TPending>(new UnboundedChannelOptions { SingleReader = true });
 
-    /// <summary>Initialises the base with the configuration and logger.</summary>
+    /// <summary>Initialises the base with the data source and logger.</summary>
     protected PgListenBroadcasterBase(
-        IConfiguration configuration,
+        NpgsqlDataSource dataSource,
         ILogger logger)
     {
-        _configuration = configuration;
+        _dataSource = dataSource;
         Logger = logger;
     }
 
@@ -124,10 +123,9 @@ public abstract class PgListenBroadcasterBase<TPending> : BackgroundService
 
     private async Task ListenAsync(CancellationToken ct)
     {
-        var connectionString = _configuration.GetConnectionString("Postgres")
-            ?? throw new InvalidOperationException("ConnectionStrings:Postgres is not configured.");
-
-        await using var conn = new NpgsqlConnection(connectionString);
+        // CreateConnection fetches a fresh token from the periodic-password provider on each
+        // (re)connect in managed-identity mode, satisfying the short-lived token requirement.
+        await using var conn = _dataSource.CreateConnection();
         await conn.OpenAsync(ct);
 
         conn.Notification += (_, args) =>

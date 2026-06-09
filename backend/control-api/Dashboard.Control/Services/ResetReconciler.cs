@@ -5,7 +5,6 @@ using Dashboard.Control.StateMachine;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -141,13 +140,12 @@ internal sealed class ResetReconciler(
     /// </summary>
     private async Task<NpgsqlConnection?> TryOpenLockConnectionAsync(CancellationToken ct)
     {
-        var connectionString = services.GetService<IConfiguration>()
-            ?.GetConnectionString("Postgres");
+        var dataSource = services.GetService<NpgsqlDataSource>();
 
-        if (string.IsNullOrEmpty(connectionString))
+        if (dataSource is null)
             return null;
 
-        var conn = new NpgsqlConnection(connectionString);
+        var conn = dataSource.CreateConnection();
         try
         {
             await conn.OpenAsync(ct);
