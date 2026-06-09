@@ -208,3 +208,48 @@ Edges carry the **parent node's** effective status. All 8 status values map to a
 - Canvas scrolls horizontally via `.vis-canvas { overflow-x: auto }` when graph width exceeds viewport.
 - On attribute toggle → recalculate node dimensions → `graph.update$.next(true)` to relayout.
 - Lanes pack densely with minimal inter-lane gap (~8px margin between stacked `<ngx-graph>` instances).
+
+---
+
+## Extension View Layout
+
+The browser extension presents three distinct surfaces (no persistent canvas — each surface is self-contained):
+
+| Surface | Entry point | Container |
+|---------|-------------|-----------|
+| Toolbar badge | Always visible | Browser toolbar icon |
+| Latest-change popup | Click toolbar icon | Browser popup (`~360px` wide) |
+| Config / options | Extension options page or popup settings tab | Full options page |
+
+### Popup Panel Layout
+
+```
+┌─────────────────────────────┐
+│  [status-chip]  Service     │
+│  Environment · Version      │
+│  @actor  ·  3h ago / UTC    │
+│  [Open run]  [Open dashboard]│
+└─────────────────────────────┘
+```
+
+- Fixed width ~360px; height content-driven.
+- Single deployment record only (the latest changed within watch scope).
+- Uses the same glass-surface tokens as the SPA (`.glass-base`, ink tokens, status palette).
+
+### Config Panel Layout
+
+```
+┌─────────────────────────────┐
+│  Dashboard URL  [________]  │
+│  Watching  [●──────] ON     │
+│  ─────────────────────────  │
+│  [Watch all except|Watch only] │
+│  Services  [ ] svc-a  [ ] svc-b │
+│  Environments  [ ] prod  [ ] staging │
+└─────────────────────────────┘
+```
+
+- Master Watching switch is prominent at top.
+- Filter section is visually dimmed when switch is OFF.
+- Mode segmented control + two checkbox lists (services, environments).
+- Persists all settings to extension storage.

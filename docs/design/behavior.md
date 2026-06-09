@@ -77,6 +77,53 @@ version → sha → ref → run_number
 
 ---
 
+## Extension Behavior
+
+### Badge State Mapping
+
+The toolbar badge reflects the highest-priority state across all watched deployments:
+
+| Priority | Condition | Badge state |
+|----------|-----------|-------------|
+| 1 (highest) | ≥ 1 `failure` in watch scope | Coral + failure count |
+| 2 | ≥ 1 `in-progress` in watch scope (no failures) | Amber + in-flight count |
+| 3 | All watched deployments succeeded or no data | Idle (logo only, no overlay) |
+
+- Count reflects the number of deployments in that state, not unique services.
+- Watch scope = services × environments passing the current include/exclude filter.
+- Badge clears immediately when Watching switch is turned OFF.
+
+### Toast Click-to-Run
+
+- Clicking anywhere on a notification toast navigates to `run_url` in a new browser tab.
+- The "View run #NNN" inline link within the toast body navigates to the same `run_url`.
+- Both paths open the CI/CD run directly — not the dashboard.
+
+### Master Switch Gating
+
+When the Watching switch is set to OFF:
+
+1. SSE connection is closed (no `LISTEN/NOTIFY` consumption).
+2. Toolbar badge is cleared to idle state.
+3. No browser notifications are fired.
+4. Filter controls (services, environments, mode) are visually dimmed and non-interactive.
+5. State is persisted immediately to extension storage.
+
+Turning the switch back ON re-opens the SSE connection and resumes all activity.
+
+### Include/Exclude Watch Filter Semantics
+
+The mode control determines how the service and environment checkbox selections are interpreted:
+
+| Mode | Checked item behaviour | Unchecked item behaviour |
+|------|----------------------|--------------------------|
+| Watch all except (default) | Excluded from watch scope | Included in watch scope |
+| Watch only | Included in watch scope | Excluded from watch scope |
+
+An empty selection in "Watch only" mode results in an empty watch scope — no badge updates or notifications.
+
+---
+
 ## Responsive Rules
 
 - **Content-driven sizing:** tiles and node cards size to their currently visible content. Toggling fields off → elements shrink.

@@ -254,3 +254,85 @@ On-demand dropdown panels anchored to icon buttons. `z-index: 20` inside topbar'
 - Single-select — shared `ngModel`.
 - Below: time-window `p-select` with options: 5 min, 1 hr, 1 day, 7 days.
 - Time-window is **disabled** when `explicit parent` is selected.
+
+---
+
+## Extension Components
+
+Components specific to the browser extension (issue #301). Reuse `status-chip` and `hist-link` tokens/classes from the SPA where noted.
+
+### Toolbar Badge
+
+The browser toolbar icon reflecting overall deployment health at a glance.
+
+| State | Visual | Trigger |
+|-------|--------|---------|
+| Idle | Base product logo mark, no overlay | No in-flight or failed deployments (within watch scope) |
+| In-flight | Amber badge overlay with count | ≥ 1 deployment with status `in-progress` |
+| Failed | Coral badge overlay with count | ≥ 1 deployment with status `failure` |
+
+- **Base icon:** product logo mark (same mark as SPA brand region).
+- **Count overlay:** integer count positioned top-right on the icon; hidden when count = 0.
+- **Priority:** failed state takes precedence over in-flight when both are non-zero.
+
+---
+
+### Notification Toast
+
+Browser notification fired on a new deployment event or failure within watch scope.
+
+| Variant | Content |
+|---------|---------|
+| Success | Service name · environment · version · "succeeded" |
+| Production failure | Service name · environment · version · "FAILED" (emphasis) |
+
+- **Entire toast is a link** to the CI/CD run URL (`run_url`).
+- **Inline "View run #NNN" link** rendered inside the toast body using `run_number`.
+- **Live-region:** `role="status"` (or `aria-live="polite"`) sits on a non-interactive wrapper element — the `<a>` link is NOT the live-region host.
+
+---
+
+### Latest-Change Popup Panel
+
+Small panel opened by clicking the toolbar icon. Shows the most recent deployment event that changed within the watch scope.
+
+| Field | Source field | Rendering |
+|-------|-------------|-----------|
+| Service | `component` | Plain text header |
+| Environment | `environment` | Plain text |
+| Version | `version` | Headline identifier |
+| Status | `status` | `status-chip` (reuses SPA token/class) |
+| Actor | `actor` | `@` prefix |
+| Elapsed | `happened_at` | Relative elapsed ("3h ago") |
+| Timestamp | `happened_at` | Absolute UTC below elapsed |
+| Run link | `run_url` / `run_number` | `hist-link` styled "Open run" (reuses SPA class) |
+| Dashboard link | configured base URL | "Open dashboard" — navigates to full SPA |
+
+---
+
+### Extension Config
+
+Extension settings panel (options page or popup settings section).
+
+#### Master Watching Switch
+
+A prominent enable/pause toggle that gates all extension activity.
+
+- **ON (Watching):** SSE connection active; badge updates; notifications fire.
+- **OFF (Paused):** SSE connection closed; badge cleared; no notifications; filter controls visually dimmed.
+- Persisted to extension storage.
+
+#### Include/Exclude Watch Filter
+
+Scoped filters controlling which services and environments generate badge updates and notifications.
+
+| Control | Description |
+|---------|-------------|
+| Mode segmented control | Two options: **"Watch all except"** / **"Watch only"** |
+| Services list | Checkbox list of known services; selection is the exclusion or inclusion set per mode |
+| Environments list | Checkbox list of known environments; same include/exclude semantics |
+
+- **"Watch all except"** (default): all services/environments watched; checked items excluded.
+- **"Watch only"**: only checked items watched; unchecked items excluded.
+- Filter controls are dimmed and non-interactive when the master Watching switch is OFF.
+- Persisted to extension storage.

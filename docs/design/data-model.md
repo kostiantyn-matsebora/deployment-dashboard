@@ -51,6 +51,22 @@ Default: **all ON**.
 
 KPI counts derive purely from the whitelisted fields — no invented metrics.
 
+## Extension Field Usage
+
+The extension popup panel and notification toasts consume a subset of the existing [Deployment Event](#deployment-event-11-visible-fields) fields — no new fields are required.
+
+| Surface | Fields consumed |
+|---------|----------------|
+| Toolbar badge | `status` (effective only — `success` / `in-progress` / `failure`) |
+| Notification toast | `component`, `environment`, `version`, `status`, `run_url`, `run_number` |
+| Latest-change popup | `component`, `environment`, `version`, `status`, `actor`, `happened_at`, `run_url`, `run_number` |
+
+- The popup renders `happened_at` as both elapsed and absolute UTC (same as the drawer/inspector).
+- `run_url` and `run_number` together produce the "Open run" link (same `hist-link` pattern as the SPA).
+- No additional fields beyond the 11-field whitelist are surfaced.
+
+---
+
 ## Derived Field Rendering
 
 - The `ref` field renders as a branch name or PR number per its domain definition.
