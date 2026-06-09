@@ -2,12 +2,25 @@
 
 Run the whole stack locally with **zero configuration** and watch a live deployment matrix fill in. No API keys, no database setup, no CI/CD wiring.
 
-## Prerequisites
+## :material-clipboard-check-outline: Prerequisites { #prerequisites }
 
-- Docker with Compose v2 (`docker compose version` ≥ 2.x).
-- ~1 GB free RAM for the stack.
+<div class="grid cards" markdown>
 
-## Run the demo
+-   :material-docker:{ .lg .middle } **Docker + Compose v2**
+
+    ---
+
+    `docker compose version` ≥ 2.x.
+
+-   :material-memory:{ .lg .middle } **~1 GB free RAM**
+
+    ---
+
+    Headroom for the full demo stack.
+
+</div>
+
+## :material-play-circle-outline: Run the demo { #run-the-demo }
 
 The `demo` profile starts everything — Gateway, Frontend, API, PostgreSQL — plus a **Demo Driver**, **GitHub Emulator**, and **Fetcher** that generate realistic deployment traffic. Insecure defaults are applied automatically; nothing to fill in. No clone, no build — all images pull from GHCR.
 
@@ -25,9 +38,11 @@ To pin to a specific release version:
 docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.9.0 --profile demo up
 ```
 
-> **Why `--project-directory .`?** It points Compose at the current directory for `.env`/variable resolution. Without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` "CreateFile/no such file" error.
+!!! question "Why `--project-directory .`?"
+    It points Compose at the current directory for `.env`/variable resolution. Without it, some Compose builds (notably on Windows) misread the `oci://` reference as a local path and fail with a `.env` "CreateFile/no such file" error.
 
-> **Availability.** The OCI artifact is published automatically on each release. The `:latest` tag exists once the first release (`v0.1.0`) is cut. Until then, use the curl alternative below.
+!!! info "Availability"
+    The OCI artifact is published automatically on each release. The `:latest` tag exists once the first release (`v0.1.0`) is cut. Until then, use the curl alternative below.
 
 The demo artifact bundles the merged base + overlay files with image references pinned to exact digests — every `up` on a given tag is fully reproducible.
 
@@ -41,7 +56,8 @@ curl -fsSLO https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-da
 docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo up
 ```
 
-> On PowerShell, replace the trailing `\` line-continuations with backticks (`` ` ``).
+!!! note "PowerShell"
+    Replace the trailing `\` line-continuations with backticks (`` ` ``).
 
 To pin to a specific release, replace `main` in the URLs with the release tag (e.g. `.../v0.9.0/compose/...`) and set `DASHBOARD_VERSION=0.9.0` for a reproducible deploy — see [Pinning a release version](./install.md#pinning-a-release-version).
 
@@ -54,18 +70,36 @@ Then open:
 
 The gateway (`:8080`) is the **only** published port. Frontend, API, and PostgreSQL stay internal.
 
-## What you're looking at
+## :material-eye-outline: What you're looking at { #what-youre-looking-at }
 
 ![The deployment matrix, populated by the demo](../_assets/screenshots/matrix-dark.png#only-dark){ .dd-shot }
 ![The deployment matrix, populated by the demo](../_assets/screenshots/matrix-light.png#only-light){ .dd-shot }
 
-- **Matrix view** — one row per service, one column per environment. Each slot shows version, status (success / in-progress / failure), actor, elapsed time, and a link to the CI/CD run.
-- **Live updates** — new deployment events stream to the browser over SSE. No reload.
-- **History** — every slot keeps its full deployment history; open the drawer to see it.
+<div class="grid cards" markdown>
+
+-   :material-view-grid-outline:{ .lg .middle } **Matrix view**
+
+    ---
+
+    One row per service, one column per environment. Each slot shows version, status, actor, elapsed time, and a link to the CI/CD run.
+
+-   :material-lightning-bolt-outline:{ .lg .middle } **Live updates**
+
+    ---
+
+    New deployment events stream to the browser over SSE — no reload.
+
+-   :material-history:{ .lg .middle } **Full history**
+
+    ---
+
+    Every slot keeps its complete deployment history; open the drawer to see it.
+
+</div>
 
 Use the **Demo Driver control panel** to trigger deployment scenarios and a reset, then watch the matrix react in real time.
 
-## Next steps
+## :material-arrow-right-circle-outline: Next steps { #next-steps }
 
 | You want to… | Go to |
 |---|---|
