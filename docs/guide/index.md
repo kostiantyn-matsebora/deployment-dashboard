@@ -1,6 +1,6 @@
 ---
-title: Using the Dashboard
-shortTitle: Using
+title: Guide
+shortTitle: Guide
 intro: 'Adopter guides — run, deploy, configure, and feed the dashboard from any CI/CD, plus an architecture overview and FAQ.'
 children:
   - /quickstart
