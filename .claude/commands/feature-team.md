@@ -5,20 +5,21 @@ argument-hint: <issue-number | task description>
 
 # /feature-team
 
-Run a non-trivial, multi-layer change as a **Claude agent team** (multiple sessions,
-each spawned in the context of a project agent, coordinating via `SendMessage` + a
-shared task list). The playbook is [`.claude/team-process/`](../team-process/process.md);
-this command is its runtime launcher.
+Run a non-trivial, multi-layer change as a **Claude agent team** (multiple sessions, each spawned in
+the context of a project agent, coordinating via `SendMessage` + a shared task list). The playbook is
+[`.claude/team-process/`](../team-process/process.md); **this command adds the spawned-team substrate
+on top of that process.** The per-phase *work* is defined by the phase activity commands — what's
+below is only the **team overlay** (spawn, coordinate, disband).
 
-**You are the lead/orchestrator.** Teams are runtime-only — nothing here is checked in
-beyond this command. Members **never** commit; the lead is the sole integration gate.
+**You are the lead/orchestrator.** Teams are runtime-only — nothing here is checked in beyond this
+command. Members **never** commit; the lead is the sole integration gate.
 
 ## Prerequisite
 
-Experimental teams feature enabled: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in user or
-project settings. If unset, stop and tell the user to enable it.
+Experimental teams feature enabled: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in user or project
+settings. If unset, stop and tell the user to enable it.
 
-## Member roster (role → project agent / subagent_type)
+## Member roster (role → `subagent_type`)
 
 | Role | `subagent_type` |
 |---|---|
@@ -31,87 +32,71 @@ project settings. If unset, stop and tell the user to enable it.
 
 Spawn only the roles the change actually needs (routing table in `process.md`).
 
-## Phase 1 — Plan (NO team yet)
+## How the process maps onto the team substrate
 
-1. **Resolve target.** `$ARGUMENTS` = an issue number (read it via `gh`/the issue
-   tracker) or a task description.
-2. **Docs-first intake.** Navigate `docs/index.md` → the owning spec(s); restate the
-   acceptance criteria from them. For API features, the contract artifact is the source
-   of truth.
-3. **Draft the plan:**
-   - **Scope** — what changes, which layers.
-   - **Roster** — which roles/members are needed.
-   - **Ownership-lane map** — the exact files each member may touch (must be disjoint;
-     if not, mark for serialization or worktree isolation).
-   - **Sequence** — contract-first if cross-layer; then parallel implement on disjoint
-     lanes; then integrate; then cross-review (peer, per competency); then verify; then ship.
-4. **Surface and STOP.** Present scope + roster + lane map + sequence. Do **not**
-   `TeamCreate` or spawn anything until the user approves. (Repo rule: *surface before
-   launch; for N parallel members get explicit confirmation*.)
+| Process activity | On the team substrate |
+|---|---|
+| [`/intake`](intake.md) · [`/contract`](contract.md) · [`/plan-dispatch`](plan-dispatch.md) | Lead runs them **solo, before any team exists** → surface the plan + STOP for approval. |
+| [`/implement`](implement.md) | Each lane runs as a **spawned member** (worktree-isolated, background). |
+| [`/integrate`](integrate.md) · [`/review-loop`](review-loop.md) | Lead integrates; spawns one reviewer per competency (reviewer ≠ implementer). |
+| [`/fix-loop`](fix-loop.md) · [`/ship`](ship.md) | Lead drives; the testing member reports red, the lead routes `FIX`es. |
 
-## Phase 2 — Spawn (after approval)
+## 1 — Plan (NO team yet)
 
-5. **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description
-   = the issue summary. *(A `PostToolUse(TeamCreate)` hook auto-writes the `.claude-team-active`
-   marker; the team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every
-   member spawn below MUST set `team_name`, or it is rejected as an in-session downgrade.)*
-6. **Spawn each member** via the `Agent` tool:
-   - `team_name` = the team · `name` = a stable, referenceable label (e.g. `backend`,
-     `frontend`) · `subagent_type` = the mapped agent above.
-   - `isolation: "worktree"` for every member that writes code in parallel (prevents
-     same-file clobbers).
-   - `run_in_background: true` so the lead can coordinate while members work.
-   - **Prompt = scoped brief:** owning spec + the member's named lane + "inherit your
-     role file `.claude/team-process/roles/<role>.md` and its guardrails" + an explicit
-     self-verify gate (build + **unit tests for your own change** + lint, report actual
-     results) + "do NOT commit/push; hand changes back to the lead."
-   - The **testing member** additionally owns the wider net (API / integration / e2e +
-     regression) and **reports failures to the lead — it does not fix production code.**
-7. **Assign work.** Create the task list (one task per lane); have members self-claim or
-   assign directly. Contract member first if cross-layer — its artifact unblocks the rest.
+Run [`/intake`](intake.md) → [`/contract`](contract.md) (if cross-layer) → [`/plan-dispatch`](plan-dispatch.md)
+**solo**. Then **surface and STOP** — present scope + roster + lane map; do **not** `TeamCreate` or
+spawn anything until the user approves (repo rule: *surface before launch; for N parallel members get
+explicit confirmation*).
 
-## Phase 3 — Coordinate (hub-and-spoke)
+## 2 — Spawn (after approval)
 
-8. Members report to the lead when done (changes, lane touched, gate results, blockers).
-   Peer `SendMessage` is reserved for **contract negotiation** (contract ↔ consumers),
-   and the outcome is recorded in the spec artifact, not left as chat.
-9. **Verify state after every wave** — re-check repo/worktree state; catch out-of-lane
-   edits, stray commits, mixed EOL before they compound.
+- **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description = the issue
+  summary. *(A `PostToolUse(TeamCreate)` hook auto-writes the `.claude-team-active` marker; the
+  team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn below
+  MUST set `team_name`, or it is rejected as an in-session downgrade.)*
+- **Spawn each member** via the `Agent` tool to execute [`/implement`](implement.md) in its lane:
+  - `team_name` = the team · `name` = a stable, referenceable label (e.g. `backend`) ·
+    `subagent_type` = the mapped agent above.
+  - `isolation: "worktree"` for every member that writes code in parallel (prevents same-file clobbers).
+  - `run_in_background: true` so the lead can coordinate while members work.
+  - **Prompt = scoped brief:** owning spec + the member's named lane + "inherit your role file
+    `.claude/team-process/roles/<role>.md` and its guardrails" + the `/implement` self-verify gate
+    (build + own-change unit tests + lint, actual counts) + "do NOT commit/push; hand back to the lead."
+- **Assign work.** Create the task list (one task per lane); contract member first if cross-layer —
+  its `ARTIFACT` unblocks the rest.
 
-## Phase 4 — Cross-review (peer, before testing)
+## 3 — Coordinate (hub-and-spoke)
 
-10. Merge member lanes/worktrees into the branch (implementers have already unit-tested their
-    own changes).
-11. **Dispatch one reviewer per touched competency** — backend→`backend-developer`,
-    frontend→`frontend-developer`, devops→`deployment-engineer`, contract→`api-architect`,
-    docs→`docs-keeper`. The reviewer is a **fresh instance, ≠ that lane's implementer**. Brief
-    each to review ONLY its competency's diff against its role's **non-negotiable** definitions
-    (engineering principles / code-smell→remedy table / coding heuristics, or the role's
-    equivalent), read-only (never edits code), and return a `REVIEW` (`pass` /
-    `changes-requested` + remarks: principle/smell · location · required change).
-12. **All `pass` → Phase 5.** Any `changes-requested` → route each remark to the owning
-    implementer to fix; re-review that competency; loop until all `pass`. Reviewers report,
-    never fix. (See `process.md` *Review loop*.)
+- Members report to the lead on completion (changes, lane touched, gate results, blockers). Peer
+  `SendMessage` is reserved for **contract negotiation** (contract ↔ consumers); the outcome is
+  recorded in the `ARTIFACT`, not left as chat.
+- **Verify state after every wave** — re-check repo/worktree state; catch out-of-lane edits, stray
+  commits, mixed EOL before they compound.
 
-## Phase 5 — Verify & ship (lead only)
+## 4 — Integrate & review
 
-13. Have the **testing member** run the wider net — API / integration / e2e + **regression**.
-14. **Analyze failures & assign fixes.** The testing member reports negative results to you
-    (the lead), not fixes them. Diagnose each failure, route it to the **owning member** to
-    fix, re-run — loop until the full suite is green. Reconcile drift; re-verify against the
-    phase-2 spec.
-15. Commit in logical groups → branch → open/update PR → watch CI to green. Never push to
-    the default branch directly.
-16. **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook clears the
-    `.claude-team-active` marker; `SessionStart` also clears any stale marker.)*
+- Run [`/integrate`](integrate.md) — merge member lanes/worktrees into the branch.
+- Run [`/review-loop`](review-loop.md) — dispatch one reviewer per touched competency as a **fresh
+  instance ≠ that lane's implementer**; route `changes-requested` remarks to the owning implementer;
+  loop until all `pass`. Reviewers report, never fix.
+
+## 5 — Verify & ship
+
+- Run [`/fix-loop`](fix-loop.md) — the **testing member** runs the wider net + regression and
+  **reports red to the lead** (never fixes production code); the lead routes each failure to its
+  owning member; loop until green.
+- Run [`/ship`](ship.md) — commit in logical groups → branch → open/update PR → watch CI green.
+  Never push the default branch.
+- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook clears the
+  `.claude-team-active` marker; `SessionStart` also clears any stale marker.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 
-Docs-first · single integrator (members never commit) · stay in your lane · repo hygiene
-(match EOL/format; CI platform's result wins) · self-verify before returning · report —
-don't act — on scope changes · check provided theories first.
+Docs-first · single integrator (members never commit) · stay in your lane · repo hygiene (match
+EOL/format; CI platform's result wins) · self-verify before returning · report — don't act — on
+scope changes · check provided theories first.
 
 ## When NOT to use
 
-1–2 surfaces with no shared contract → a single agent + inline integration. Trivial edit
-→ inline. The team pays off at **≥3 layers with a shared contract**.
+1–2 surfaces with no shared contract → a single agent + inline integration. Trivial edit → inline.
+The team pays off at **≥3 layers with a shared contract**.
