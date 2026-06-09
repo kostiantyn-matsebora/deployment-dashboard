@@ -32,20 +32,53 @@ describe('isProdLike', () => {
 });
 
 describe('buildNotification', () => {
-  it('returns null for in-progress', () => {
-    expect(buildNotification(makeEvent({ status: 'in-progress' }))).toBeNull();
+  // buildNotification is never null — callers gate firing via isStatusEnabled.
+
+  it('in-progress: message contains "started"', () => {
+    const n = buildNotification(makeEvent({ status: 'in-progress' }));
+    expect(n.message).toContain('started');
+    expect(n.title).toBe('api · staging');
   });
 
-  it('returns null for pending', () => {
-    expect(buildNotification(makeEvent({ status: 'pending' }))).toBeNull();
+  it('pending: message contains "pending"', () => {
+    const n = buildNotification(makeEvent({ status: 'pending' }));
+    expect(n.message).toContain('pending');
   });
 
-  it('returns null for queued', () => {
-    expect(buildNotification(makeEvent({ status: 'queued' }))).toBeNull();
+  it('queued: message contains "queued"', () => {
+    const n = buildNotification(makeEvent({ status: 'queued' }));
+    expect(n.message).toContain('queued');
   });
 
-  it('returns null for cancelled', () => {
-    expect(buildNotification(makeEvent({ status: 'cancelled' }))).toBeNull();
+  it('waiting: message contains "waiting"', () => {
+    const n = buildNotification(makeEvent({ status: 'waiting' }));
+    expect(n.message).toContain('waiting');
+  });
+
+  it('cancelled: message contains "cancelled"', () => {
+    const n = buildNotification(makeEvent({ status: 'cancelled' }));
+    expect(n.message).toContain('cancelled');
+  });
+
+  it('rejected: message contains "rejected"', () => {
+    const n = buildNotification(makeEvent({ status: 'rejected' }));
+    expect(n.message).toContain('rejected');
+  });
+
+  it('version and run number appear in all statuses', () => {
+    const n = buildNotification(makeEvent({ status: 'in-progress', version: 'v2.0.0', run_number: '99' }));
+    expect(n.message).toContain('v2.0.0');
+    expect(n.message).toContain('run #99');
+  });
+
+  it('clickUrl is set to run_url when present', () => {
+    const n = buildNotification(makeEvent({ status: 'cancelled', run_url: 'https://ci.example.com/42' }));
+    expect(n.clickUrl).toBe('https://ci.example.com/42');
+  });
+
+  it('clickUrl is null when run_url is absent', () => {
+    const n = buildNotification(makeEvent({ status: 'pending', run_url: null }));
+    expect(n.clickUrl).toBeNull();
   });
 
   describe('success', () => {

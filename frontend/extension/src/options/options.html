@@ -72,6 +72,27 @@
             <p class="ink-2 no-items">Loading…</p>
           </div>
         </fieldset>
+
+        <!-- Statuses checklist -->
+        <fieldset class="checklist-group" id="statuses-group">
+          <legend class="checklist-legend">Statuses</legend>
+          <div id="statuses-list" class="checklist">
+            <!-- Rendered by options.ts from ALL_STATUSES -->
+          </div>
+        </fieldset>
+
+        <!-- Popup event count -->
+        <div class="field-row">
+          <label class="field-label" for="input-popup-count">Show last N events</label>
+          <input
+            id="input-popup-count"
+            type="number"
+            class="field-input field-input-narrow"
+            min="1"
+            max="50"
+            value="5"
+          />
+        </div>
       </section>
 
       <section class="options-section actions-row">

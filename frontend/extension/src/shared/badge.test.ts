@@ -6,7 +6,29 @@ import {
   slotKey,
   isEffective,
 } from './badge';
-import type { MatrixSlot } from './types';
+import type { MatrixResponse, MatrixSlot } from './types';
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+/** Build a minimal MatrixResponse from a flat list of (service, env, status) triples. */
+function makeMatrixResponse(
+  slots: Array<{ service: string; env: string; status: 'in-progress' | 'success' | 'failure' | null }>,
+): MatrixResponse {
+  const rowMap: Record<string, Record<string, MatrixSlot>> = {};
+  for (const { service, env, status } of slots) {
+    if (!rowMap[service]) rowMap[service] = {};
+    rowMap[service][env] = status
+      ? { current: { id: 'id1', status, version: null, happened_at: '' } }
+      : {};
+  }
+  return {
+    generated_at: '2026-01-01T00:00:00Z',
+    environments: [...new Set(slots.map(s => s.env))],
+    rows: Object.entries(rowMap).map(([service, slotsMap]) => ({ service, slots: slotsMap })),
+  };
+}
+
+// ── isEffective ───────────────────────────────────────────────────────────
 
 describe('isEffective', () => {
   it('returns true for effective statuses', () => {
@@ -21,6 +43,8 @@ describe('isEffective', () => {
     }
   });
 });
+
+// ── computeBadge ──────────────────────────────────────────────────────────
 
 describe('computeBadge', () => {
   it('returns idle when map is empty', () => {
@@ -48,39 +72,116 @@ describe('computeBadge', () => {
     const map = { 'a|prod': 'failure' as const, 'b|prod': 'failure' as const };
     expect(computeBadge(map)).toEqual({ mode: 'failure', count: 2 });
   });
+
+  // ── enabledStatuses gating ─────────────────────────────────────────────
+
+  it('failure-disabled: failure slots do not count; returns idle when only failures present', () => {
+    const map = { 'a|prod': 'failure' as const, 'b|prod': 'failure' as const };
+    expect(computeBadge(map, ['success', 'in-progress'])).toEqual({ mode: 'idle', count: 0 });
+  });
+
+  it('failure-disabled: in-progress slots still count', () => {
+    const map = { 'a|prod': 'failure' as const, 'b|prod': 'in-progress' as const };
+    expect(computeBadge(map, ['in-progress', 'success'])).toEqual({ mode: 'in-progress', count: 1 });
+  });
+
+  it('in-progress-disabled: in-progress slots do not count; returns idle when only in-progress', () => {
+    const map = { 'a|prod': 'in-progress' as const, 'b|prod': 'in-progress' as const };
+    expect(computeBadge(map, ['success', 'failure'])).toEqual({ mode: 'idle', count: 0 });
+  });
+
+  it('in-progress-disabled: failure slots still count', () => {
+    const map = { 'a|prod': 'in-progress' as const, 'b|prod': 'failure' as const };
+    expect(computeBadge(map, ['success', 'failure'])).toEqual({ mode: 'failure', count: 1 });
+  });
+
+  it('empty enabledStatuses: all slots filtered → idle', () => {
+    const map = { 'a|prod': 'failure' as const, 'b|prod': 'in-progress' as const };
+    expect(computeBadge(map, [])).toEqual({ mode: 'idle', count: 0 });
+  });
+
+  it('all enabled (undefined): same as no-filter baseline', () => {
+    const map = { 'a|prod': 'failure' as const, 'b|prod': 'in-progress' as const };
+    expect(computeBadge(map, undefined)).toEqual({ mode: 'failure', count: 1 });
+  });
 });
 
+// ── seedSlotStatusFromMatrix — real MatrixResponse envelope ───────────────
+
 describe('seedSlotStatusFromMatrix', () => {
-  const makeSlot = (service: string, environment: string, status: 'in-progress' | 'success' | 'failure' | null): MatrixSlot => ({
-    service,
-    environment,
-    current: status ? { id: 'id1', status, version: null, happened_at: '' } : null,
-    last_successful: null,
-    next: null,
+  it('returns empty map when rows is empty', () => {
+    const response: MatrixResponse = { generated_at: '2026-01-01T00:00:00Z', environments: [], rows: [] };
+    expect(seedSlotStatusFromMatrix(response)).toEqual({});
   });
 
-  it('returns empty map when no slots', () => {
-    expect(seedSlotStatusFromMatrix([])).toEqual({});
+  it('skips slots with no current entry', () => {
+    const response = makeMatrixResponse([{ service: 'svc', env: 'prod', status: null }]);
+    expect(seedSlotStatusFromMatrix(response)).toEqual({});
   });
 
-  it('skips slots with null current', () => {
-    const result = seedSlotStatusFromMatrix([makeSlot('svc', 'prod', null)]);
-    expect(result).toEqual({});
-  });
-
-  it('maps effective status slots', () => {
-    const slots = [
-      makeSlot('svc-a', 'prod', 'success'),
-      makeSlot('svc-b', 'staging', 'in-progress'),
-      makeSlot('svc-c', 'prod', 'failure'),
-    ];
-    expect(seedSlotStatusFromMatrix(slots)).toEqual({
+  it('maps effective-status slots from rows[].slots record', () => {
+    const response = makeMatrixResponse([
+      { service: 'svc-a', env: 'prod', status: 'success' },
+      { service: 'svc-b', env: 'staging', status: 'in-progress' },
+      { service: 'svc-c', env: 'prod', status: 'failure' },
+    ]);
+    expect(seedSlotStatusFromMatrix(response)).toEqual({
       'svc-a|prod': 'success',
       'svc-b|staging': 'in-progress',
       'svc-c|prod': 'failure',
     });
   });
+
+  it('handles multiple environments per service row', () => {
+    // Single row with two env slots.
+    const response: MatrixResponse = {
+      generated_at: '2026-01-01T00:00:00Z',
+      environments: ['prod', 'staging'],
+      rows: [
+        {
+          service: 'api',
+          slots: {
+            prod: { current: { id: 'a', status: 'failure', version: null, happened_at: '' } },
+            staging: { current: { id: 'b', status: 'in-progress', version: null, happened_at: '' } },
+          },
+        },
+      ],
+    };
+    const result = seedSlotStatusFromMatrix(response);
+    expect(result).toEqual({ 'api|prod': 'failure', 'api|staging': 'in-progress' });
+  });
+
+  it('watchFilter predicate limits which slots are seeded', () => {
+    const response = makeMatrixResponse([
+      { service: 'api', env: 'prod', status: 'failure' },
+      { service: 'api', env: 'staging', status: 'in-progress' },
+      { service: 'worker', env: 'prod', status: 'failure' },
+    ]);
+    // Watch only api|prod.
+    const result = seedSlotStatusFromMatrix(response, (svc, env) => svc === 'api' && env === 'prod');
+    expect(result).toEqual({ 'api|prod': 'failure' });
+  });
+
+  it('watchFilter: all filtered out → empty map', () => {
+    const response = makeMatrixResponse([
+      { service: 'api', env: 'prod', status: 'failure' },
+    ]);
+    const result = seedSlotStatusFromMatrix(response, () => false);
+    expect(result).toEqual({});
+  });
+
+  it('badge counts from real envelope match expected: failure precedence over in-progress', () => {
+    const response = makeMatrixResponse([
+      { service: 'api', env: 'prod', status: 'failure' },
+      { service: 'api', env: 'staging', status: 'in-progress' },
+      { service: 'worker', env: 'prod', status: 'in-progress' },
+    ]);
+    const map = seedSlotStatusFromMatrix(response);
+    expect(computeBadge(map)).toEqual({ mode: 'failure', count: 1 });
+  });
 });
+
+// ── applyEventDelta ───────────────────────────────────────────────────────
 
 describe('applyEventDelta', () => {
   it('adds a new slot for an effective status', () => {

@@ -1,7 +1,7 @@
 // Pure badge-state reducer — no browser API dependencies; fully unit-testable.
 // Spec: docs/design/components.md §Toolbar Badge
 
-import type { DeploymentStatus, MatrixSlot } from './types';
+import type { DeploymentStatus, MatrixResponse } from './types';
 
 /** Effective statuses that contribute to the badge. */
 type EffectiveStatus = 'in-progress' | 'success' | 'failure';
@@ -24,32 +24,49 @@ export function isEffective(status: DeploymentStatus): status is EffectiveStatus
 /**
  * Reduces a slot-status map to a BadgeState.
  * Failure takes precedence over in-progress per spec.
+ * Optional `enabledStatuses` gates which effective statuses contribute to the count:
+ *   - failure slots are counted only when 'failure' is in enabledStatuses.
+ *   - in-progress slots are counted only when 'in-progress' is in enabledStatuses.
+ *   - success slots never contribute to the badge count.
+ * When enabledStatuses is omitted, all effective statuses are counted (original behaviour).
  */
-export function computeBadge(slotStatus: Record<string, EffectiveStatus>): BadgeState {
+export function computeBadge(
+  slotStatus: Record<string, EffectiveStatus>,
+  enabledStatuses?: ReadonlyArray<string>,
+): BadgeState {
+  const failureEnabled  = !enabledStatuses || enabledStatuses.includes('failure');
+  const progressEnabled = !enabledStatuses || enabledStatuses.includes('in-progress');
+
   let inProgressCount = 0;
   let failureCount = 0;
 
   for (const status of Object.values(slotStatus)) {
-    if (status === 'in-progress') inProgressCount++;
-    else if (status === 'failure') failureCount++;
+    if (status === 'failure'     && failureEnabled)  failureCount++;
+    if (status === 'in-progress' && progressEnabled) inProgressCount++;
   }
 
-  if (failureCount > 0) return { mode: 'failure', count: failureCount };
+  if (failureCount > 0)    return { mode: 'failure',     count: failureCount };
   if (inProgressCount > 0) return { mode: 'in-progress', count: inProgressCount };
   return { mode: 'idle', count: 0 };
 }
 
 /**
- * Seeds the slot-status map from GET /api/matrix response.
- * Only slots with an effective current status are stored.
+ * Seeds the slot-status map from a GET /api/matrix response envelope.
+ * Iterates `rows` then each `(env, slot)` entry in `row.slots`.
+ * Only slots with an effective `current.status` contribute to the map.
+ * An optional `watchFilter` predicate restricts seeding to the user's watch scope.
  */
 export function seedSlotStatusFromMatrix(
-  slots: MatrixSlot[],
+  response: MatrixResponse,
+  watchFilter?: (service: string, environment: string) => boolean,
 ): Record<string, EffectiveStatus> {
   const result: Record<string, EffectiveStatus> = {};
-  for (const slot of slots) {
-    if (slot.current && isEffective(slot.current.status)) {
-      result[slotKey(slot.service, slot.environment)] = slot.current.status;
+  for (const row of (response.rows ?? [])) {
+    for (const [env, slot] of Object.entries(row.slots ?? {})) {
+      if (watchFilter && !watchFilter(row.service, env)) continue;
+      if (slot.current && isEffective(slot.current.status)) {
+        result[slotKey(row.service, env)] = slot.current.status;
+      }
     }
   }
   return result;

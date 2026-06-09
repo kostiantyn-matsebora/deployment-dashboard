@@ -25,6 +25,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Defensive: ensure any element with the [hidden] attribute is not shown
+   even when a display:flex or display:block rule would otherwise override it. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: 'Inter', system-ui, sans-serif;
@@ -225,6 +229,20 @@ body {
 .no-items { margin: 0; font-size: 12px; }
 
 .ink-2 { color: var(--ink-2); }
+
+/* ── Field row (label + narrow input inline) ─────────────────── */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.field-row .field-label { margin: 0; }
+
+.field-input-narrow {
+  width: 72px;
+  text-align: center;
+}
 
 /* ── Actions row ─────────────────────────────────────────────── */
 .actions-row {

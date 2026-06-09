@@ -47,6 +47,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* [hidden] must override display:flex / display:block on .state-panel and .event-card;
+   without this every state panel renders simultaneously regardless of the hidden attribute. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   min-width: 360px;
@@ -159,12 +163,59 @@ body {
 }
 .hist-link:hover { color: var(--ink-0); border-color: var(--ink-1); }
 
+/* ── Event list ──────────────────────────────────────────────── */
+.event-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Compact event row — one deployment per row */
+.event-row {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.event-row:last-child { border-bottom: none; }
+
+.event-row .row-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.event-row .row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-1);
+  flex-wrap: wrap;
+}
+
+.event-row .row-time {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.event-row .row-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+}
+
 /* ── Footer ─────────────────────────────────────────────────── */
 .popup-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   padding: 6px 10px;
   border-top: 1px solid var(--glass-edge);
+}
+
+.footer-dashboard {
+  font-size: 11px;
 }
 
 .icon-btn {

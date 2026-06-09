@@ -1,7 +1,7 @@
 // Pure watch-filter — no browser API dependencies; fully unit-testable.
 // Spec: docs/design/components.md §Include/Exclude Watch Filter
 
-import type { ExtensionSettings } from './types';
+import type { DeploymentStatus, ExtensionSettings } from './types';
 
 /**
  * Returns true if (service, environment) falls within the user's watch scope.
@@ -32,4 +32,28 @@ export function isWatched(
   const serviceIncluded = services.length > 0 && services.includes(service);
   const envIncluded = environments.length > 0 && environments.includes(environment);
   return serviceIncluded && envIncluded;
+}
+
+/**
+ * Returns true if the given status is in the user's enabled-status allow-list.
+ * An empty list means nothing is enabled (nothing passes).
+ */
+export function isStatusEnabled(
+  status: DeploymentStatus,
+  settings: Pick<ExtensionSettings, 'statuses'>,
+): boolean {
+  return settings.statuses.includes(status);
+}
+
+/**
+ * Combined scope predicate: an event is in-scope when both
+ * isWatched(service, environment) AND isStatusEnabled(status) pass.
+ */
+export function isInScope(
+  service: string,
+  environment: string,
+  status: DeploymentStatus,
+  settings: Pick<ExtensionSettings, 'filterMode' | 'services' | 'environments' | 'statuses'>,
+): boolean {
+  return isWatched(service, environment, settings) && isStatusEnabled(status, settings);
 }

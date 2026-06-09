@@ -21,34 +21,50 @@ export function isProdLike(environment: string): boolean {
 }
 
 /**
- * Maps a DeploymentEvent to notification content.
- * Returns null if the event does not warrant a notification (non-terminal statuses).
+ * Maps a DeploymentEvent to notification content for all 8 statuses.
+ * Never returns null — callers gate firing via isStatusEnabled(status, settings).
  */
-export function buildNotification(event: DeploymentEvent): NotificationContent | null {
+export function buildNotification(event: DeploymentEvent): NotificationContent {
   const { service, environment, version, status, run_url, run_number } = event;
   const versionLabel = version ? ` ${version}` : '';
-  const runLabel = run_number ? ` (run #${run_number})` : '';
+  const runLabel     = run_number ? ` (run #${run_number})` : '';
+  const clickUrl     = run_url ?? null;
+  const base         = `${service} · ${environment}`;
 
   if (status === 'success') {
-    return {
-      title: `${service} · ${environment}`,
-      message: `${service}${versionLabel} succeeded${runLabel}`,
-      clickUrl: run_url ?? null,
-    };
+    return { title: base, message: `${service}${versionLabel} succeeded${runLabel}`, clickUrl };
   }
 
   if (status === 'failure') {
-    const isProd = isProdLike(environment);
+    const isProd   = isProdLike(environment);
     const emphasis = isProd ? 'FAILED' : 'failed';
     return {
-      title: isProd
-        ? `FAILED: ${service} · ${environment}`
-        : `${service} · ${environment}`,
+      title:   isProd ? `FAILED: ${base}` : base,
       message: `${service}${versionLabel} ${emphasis}${runLabel}`,
-      clickUrl: run_url ?? null,
+      clickUrl,
     };
   }
 
-  // No notification for non-terminal statuses (in-progress, pending, queued, etc.)
-  return null;
+  if (status === 'in-progress') {
+    return { title: base, message: `${service}${versionLabel} started${runLabel}`, clickUrl };
+  }
+
+  if (status === 'pending') {
+    return { title: base, message: `${service}${versionLabel} pending${runLabel}`, clickUrl };
+  }
+
+  if (status === 'queued') {
+    return { title: base, message: `${service}${versionLabel} queued${runLabel}`, clickUrl };
+  }
+
+  if (status === 'waiting') {
+    return { title: base, message: `${service}${versionLabel} waiting${runLabel}`, clickUrl };
+  }
+
+  if (status === 'cancelled') {
+    return { title: base, message: `${service}${versionLabel} cancelled${runLabel}`, clickUrl };
+  }
+
+  // rejected
+  return { title: base, message: `${service}${versionLabel} rejected${runLabel}`, clickUrl };
 }

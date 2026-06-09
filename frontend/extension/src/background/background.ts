@@ -14,11 +14,19 @@
 //     b) Open a NEW EventSource to `{url}?lastEventId={id}` — the server-side stream
 //        handler treats ?lastEventId (or Last-Event-ID header) as the replay cursor.
 //     c) The alarms heartbeat (~30 s) calls ensureConnected() to re-open after teardown.
+//
+// Event-handling serialization:
+//   Rapid SSE events could interleave concurrent read-modify-write cycles on storage
+//   (last-writer-wins on a stale snapshot).  A module-level promise chain `eventQueue`
+//   ensures each handleDeploymentEvent call completes its storage round-trip before the
+//   next one starts.  EventSource fires events on a single microtask queue so there is
+//   no concurrency in the JS sense, but async awaits inside the handler create gaps where
+//   a second event listener invocation can start before the first has finished writing.
 
 import browser from 'webextension-polyfill';
 import type { DeploymentEvent, ExtensionSettings, MatrixResponse } from '../shared/types';
 import { computeBadge, seedSlotStatusFromMatrix, applyEventDelta } from '../shared/badge';
-import { isWatched } from '../shared/filter';
+import { isWatched, isStatusEnabled } from '../shared/filter';
 import { buildNotification } from '../shared/notifications';
 import { getSettings, getLocalState, saveLocalState } from '../shared/storage';
 
@@ -30,6 +38,15 @@ const ALARM_NAME = 'sse-heartbeat';
 // Module-level EventSource handle.  One instance at most; recreated after teardown.
 let eventSource: EventSource | null = null;
 let currentDashboardUrl = '';
+
+// Maps notification ID → click URL so each notification uses a unique ID (event.id)
+// and the onClicked handler can still open the correct run URL.
+// Kept in-memory only; notifications are ephemeral so persistence is not needed.
+const notifClickUrls = new Map<string, string>();
+
+// Serial event queue — each handler invocation is chained onto this promise so that
+// read→modify→write cycles never interleave, eliminating the stale-snapshot race.
+let eventQueue: Promise<void> = Promise.resolve();
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -62,9 +79,10 @@ async function onAlarm(alarm: browser.Alarms.Alarm): Promise<void> {
 }
 
 async function onNotificationClicked(notificationId: string): Promise<void> {
-  // Notification ID is set to the run_url so we can open it directly.
-  if (notificationId.startsWith('http')) {
-    await browser.tabs.create({ url: notificationId });
+  const clickUrl = notifClickUrls.get(notificationId);
+  if (clickUrl) {
+    await browser.tabs.create({ url: clickUrl });
+    notifClickUrls.delete(notificationId);
   }
   await browser.notifications.clear(notificationId);
 }
@@ -96,8 +114,6 @@ async function bootstrap(): Promise<void> {
 
 // ── Badge seeding from /api/matrix ────────────────────────────────────────
 
-// B1 fix: filter matrix slots through isWatched before seeding the badge map so
-// cold-start badge counts reflect only the user's watch scope, not all slots.
 async function seedBadgeFromMatrix(dashboardUrl: string, settings: ExtensionSettings): Promise<void> {
   try {
     const url = `${dashboardUrl.replace(/\/$/, '')}/api/matrix`;
@@ -105,12 +121,12 @@ async function seedBadgeFromMatrix(dashboardUrl: string, settings: ExtensionSett
     if (!res.ok) return;
 
     const body: MatrixResponse = await res.json();
-    const watchedSlots = (body.slots ?? []).filter(
-      slot => isWatched(slot.service, slot.environment, settings),
+    const slotStatus = seedSlotStatusFromMatrix(
+      body,
+      (service, environment) => isWatched(service, environment, settings),
     );
-    const slotStatus = seedSlotStatusFromMatrix(watchedSlots);
     await saveLocalState({ slotStatus });
-    applyBadge(computeBadge(slotStatus));
+    applyBadge(computeBadge(slotStatus, settings.statuses));
   } catch {
     // Network unavailable — leave badge as-is; heartbeat will retry.
   }
@@ -124,9 +140,6 @@ function openEventSource(dashboardUrl: string): void {
   getLocalState().then(({ lastEventId }) => {
     const base = dashboardUrl.replace(/\/$/, '');
     // Append lastEventId as a query param so the server can replay missed events.
-    // The server's channel-1 handler already supports Last-Event-ID header replay;
-    // some CORS+credentials constraints prevent the browser from forwarding the header
-    // on a cross-origin EventSource, so we duplicate it as ?lastEventId.
     const url = lastEventId
       ? `${base}/api/events/stream?lastEventId=${encodeURIComponent(lastEventId)}`
       : `${base}/api/events/stream`;
@@ -134,11 +147,19 @@ function openEventSource(dashboardUrl: string): void {
     const es = new EventSource(url);
     eventSource = es;
 
-    es.addEventListener('deployment', handleDeploymentEvent);
+    es.addEventListener('deployment', (ev: Event) => {
+      // Chain onto eventQueue so each handler runs strictly after the previous one
+      // completes its storage write — eliminates the read-modify-write race.
+      // The .catch() keeps the chain alive: a single handler failure is logged but
+      // does NOT poison the queue — future events continue to be processed.
+      eventQueue = eventQueue.then(() =>
+        handleDeploymentEvent(ev as MessageEvent).catch(err =>
+          console.warn('[ext] deployment event handler failed', err),
+        ),
+      );
+    });
 
     es.onerror = () => {
-      // EventSource will auto-retry with back-off; we just log and let the
-      // heartbeat alarm trigger ensureConnected() if it stays down.
       console.warn('[ext] SSE error — will auto-retry');
     };
   });
@@ -189,34 +210,33 @@ async function handleDeploymentEvent(ev: MessageEvent): Promise<void> {
   const settings = await getSettings();
   if (!settings.watching) return;
 
-  // Apply delta to slot-status map.  applyEventDelta already handles both effective
-  // (upsert) and non-effective (delete) statuses, so no branching needed here.
-  const local = await getLocalState();
-  const updatedSlotStatus = applyEventDelta(local.slotStatus, event.service, event.environment, event.status);
-
-  // Always update latestChange if the event is within watch scope.
   const watched = isWatched(event.service, event.environment, settings);
-  const newLatestChange = watched ? event : local.latestChange;
 
-  await saveLocalState({
-    slotStatus: updatedSlotStatus,
-    latestChange: newLatestChange,
-  });
-
-  applyBadge(computeBadge(updatedSlotStatus));
-
-  // Fire notification for watched events.
+  // Only update slot-status map and badge for watched service+env combinations.
+  // Out-of-scope events advance lastEventId (gap-free replay) but must not inflate
+  // the badge — consistent with seedBadgeFromMatrix which is also watch-scoped.
   if (watched) {
-    const content = buildNotification(event);
-    if (content) {
-      const notifId = content.clickUrl ?? `notif-${event.id}`;
-      await browser.notifications.create(notifId, {
-        type: 'basic',
-        iconUrl: browser.runtime.getURL('icons/icon-48.png'),
-        title: content.title,
-        message: content.message,
-      });
-    }
+    const local = await getLocalState();
+    const updatedSlotStatus = applyEventDelta(
+      local.slotStatus, event.service, event.environment, event.status,
+    );
+    await saveLocalState({ slotStatus: updatedSlotStatus });
+    applyBadge(computeBadge(updatedSlotStatus, settings.statuses));
+  }
+
+  // Fire notification when both service+env and status are in-scope for this user.
+  const statusEnabled = isStatusEnabled(event.status, settings);
+
+  if (watched && statusEnabled) {
+    const content  = buildNotification(event);
+    const notifId  = `notif-${event.id}`;
+    if (content.clickUrl) notifClickUrls.set(notifId, content.clickUrl);
+    await browser.notifications.create(notifId, {
+      type:    'basic',
+      iconUrl: browser.runtime.getURL('icons/icon-48.png'),
+      title:   content.title,
+      message: content.message,
+    });
   }
 }
 
@@ -229,7 +249,7 @@ function applyBadge(state: ReturnType<typeof computeBadge>): void {
   }
 
   const color = state.mode === 'failure' ? CORAL : AMBER;
-  const text = String(state.count);
+  const text  = String(state.count);
 
   browser.action.setBadgeText({ text });
   browser.action.setBadgeBackgroundColor({ color });

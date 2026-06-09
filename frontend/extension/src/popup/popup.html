@@ -25,41 +25,18 @@
       <button id="btn-open-options-paused" class="link-btn" type="button">Open settings</button>
     </div>
 
-    <!-- No events yet -->
+    <!-- No in-scope events -->
     <div id="state-empty" class="state-panel" hidden>
       <p class="ink-2">No deployments in watch scope yet.</p>
     </div>
 
-    <!-- Latest change card — spec: docs/design/components.md §Latest-Change Popup Panel -->
-    <div id="state-event" class="event-card glass-base" hidden>
-      <div class="card-header">
-        <!-- status chip; class driven by JS: status-chip s-{status} -->
-        <span id="ev-status" class="status-chip" role="status"></span>
-        <!-- service name — wire field: service (NOTE: mockup labels say "component"; real field is "service") -->
-        <span id="ev-service" class="service-name"></span>
-      </div>
-      <div class="card-meta">
-        <span id="ev-environment" class="meta-item"></span>
-        <span class="meta-sep">·</span>
-        <span id="ev-version" class="meta-item mono"></span>
-      </div>
-      <div class="card-actor">
-        <span id="ev-actor" class="ink-2"></span>
-      </div>
-      <div class="card-time">
-        <span id="ev-elapsed" class="elapsed ink-2"></span>
-        <span class="meta-sep">·</span>
-        <span id="ev-utc" class="utc ink-3"></span>
-      </div>
-      <div class="card-actions">
-        <!-- hist-link class reuses SPA token — see styles.css -->
-        <!-- label is set dynamically by popup.ts: "Open run #NNN" when run_number present, "Open run" otherwise -->
-        <a id="ev-run-link" class="hist-link" target="_blank" rel="noopener noreferrer" hidden>Open run</a>
-        <a id="ev-dashboard-link" class="hist-link" target="_blank" rel="noopener noreferrer">Open dashboard</a>
-      </div>
-    </div>
+    <!-- Event list — spec: docs/design/components.md §Latest-Change Popup Panel -->
+    <!-- Rows injected by popup.ts; each row uses the .event-row template pattern -->
+    <div id="state-list" class="event-list" hidden></div>
 
     <footer class="popup-footer">
+      <!-- Open dashboard link — shown whenever a URL is configured -->
+      <a id="footer-dashboard-link" class="hist-link footer-dashboard" target="_blank" rel="noopener noreferrer" href="#" hidden>Open dashboard</a>
       <button id="btn-settings" class="icon-btn" type="button" title="Settings" aria-label="Open settings">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="3"/>
