@@ -87,7 +87,8 @@ extra_css:
 nav:
   - Home: index.md
   - Quickstart: guide/quickstart.md
-  - Using the Dashboard:
+  - Install: guide/install.md
+  - Guide:
       - guide/index.md
       - Quickstart: guide/quickstart.md
       - Screenshots: guide/screenshots.md

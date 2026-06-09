@@ -1,8 +1,8 @@
 # Configuration
 
-Every environment variable, grouped by concern. Source of truth: [`compose/.env.example`](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/compose/.env.example). Copy it to `compose/.env` and set the values for your [profile](./install.md#deployment-shapes-compose-profiles).
+Every environment variable, grouped by concern. Source of truth: [`compose/.env.example`](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/compose/.env.example). Copy it to `compose/.env` and set the values for your [profile](./install.md#2-configure--run).
 
-## Stack version
+## :material-tag-outline: Stack version { #stack-version }
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
@@ -10,17 +10,7 @@ Every environment variable, grouped by concern. Source of truth: [`compose/.env.
 
 See [Install — Pinning a release version](./install.md#pinning-a-release-version) for the full workflow, and [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md) for the release process.
 
-## Which vars does my profile need?
-
-| Profile | Required |
-|---|---|
-| `standalone` | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` |
-| `standalone-pull` | as `standalone` + `GITHUB_*` |
-| `full` | `API_KEY`, `POSTGRES_USER`, `POSTGRES_PASSWORD` |
-| `full-pull` | as `full` + `GITHUB_*` |
-| `demo` | none (insecure defaults applied) |
-
-## API
+## :material-key-variant: API { #api }
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
@@ -33,7 +23,7 @@ See [Install — Pinning a release version](./install.md#pinning-a-release-versi
 | `RESET_GATE_MAX_TTL_SECONDS` | no | `60` | Hard wall-clock ceiling on a reset cycle (D12). |
 | `RESET_EXPECTED_COMPONENTS` | no | `dashboard-fetcher,demo-driver` | CSV of component ids whose acks are awaited during reset (D13). |
 
-## PostgreSQL: bundled profiles
+## :material-database: PostgreSQL: bundled profiles { #postgresql-bundled-profiles }
 
 Used by `full`, `full-pull`, and `demo`.
 
@@ -43,7 +33,7 @@ Used by `full`, `full-pull`, and `demo`.
 | `POSTGRES_PASSWORD` | conditional | — | Database password. Set for static-credential auth (local/CI). **Omit or leave empty** to activate managed-identity passwordless auth. See [Auth modes](#postgresql-auth-modes) below. |
 | `POSTGRES_DB` | no | `deployment_dashboard` | Database name. |
 
-## PostgreSQL: external profiles
+## :material-database-outline: PostgreSQL: external profiles { #postgresql-external-profiles }
 
 Used by `standalone` and `standalone-pull`.
 
@@ -54,7 +44,7 @@ Used by `standalone` and `standalone-pull`.
 | `POSTGRES_USER` | **yes** | — | Database user / cloud identity DB role name. |
 | `POSTGRES_PASSWORD` | conditional | — | Database password. Set for static-credential auth (local/CI). **Omit or leave empty** to activate managed-identity passwordless auth. See [Auth modes](#postgresql-auth-modes) below. |
 
-## PostgreSQL: auth modes
+## :material-shield-key-outline: PostgreSQL: auth modes { #postgresql-auth-modes }
 
 Auth mode is **auto-detected from credential presence** — no explicit toggle.
 
@@ -63,9 +53,10 @@ Auth mode is **auto-detected from credential presence** — no explicit toggle.
 | Set (non-empty) | Static password | `POSTGRES_USER` + `POSTGRES_PASSWORD` used verbatim. Default behavior; suitable for local Compose, CI, and tests. |
 | Omitted / empty | Managed identity | No static password. The service authenticates as its ambient cloud identity (e.g. Azure Workload Identity / Managed Identity) and obtains a short-lived access token at connection time, refreshed transparently. Set `POSTGRES_USER` to the identity's PostgreSQL role name. |
 
-**Cloud deployment (Azure target — NFR-01/NFR-06):** omit `POSTGRES_PASSWORD` to eliminate static credential management. The seam is provider-agnostic; any identity system that supplies a bearer token to the Npgsql password provider is compatible.
+!!! tip "Cloud deployment — Azure target (NFR-01 / NFR-06)"
+    Omit `POSTGRES_PASSWORD` to eliminate static credential management. The seam is provider-agnostic; any identity system that supplies a bearer token to the Npgsql password provider is compatible.
 
-## Fetcher: pull mode
+## :material-sync: Fetcher: pull mode { #fetcher-pull-mode }
 
 Pull mode applies to `standalone-pull` and `full-pull` only.
 
@@ -86,9 +77,10 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 | `BACKFILL_MAX_AGE` | no | (uses `INITIAL_LOOKBACK`) | How far back backfill scans per environment (TimeSpan `d.hh:mm:ss`). |
 | `BACKFILL_DEPTH` | no | `2` | Latest status events to seed per (service, environment) slot during backfill. |
 
-> **Settings layering.** An appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it (same pattern as the rest of the stack).
+!!! note "Settings layering"
+    An appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it (same pattern as the rest of the stack).
 
-## Demo / dev only
+## :material-flask-outline: Demo / dev only { #demo-dev-only }
 
 Set by [`docker-compose.demo.yaml`](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/compose/docker-compose.demo.yaml) for the zero-config `demo` profile — **not required for any production profile.** Override only to tune the simulated deployment stream.
 

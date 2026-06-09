@@ -1,6 +1,6 @@
 ---
-title: Using the Dashboard
-shortTitle: Using
+title: Guide
+shortTitle: Guide
 intro: 'Adopter guides — run, deploy, configure, and feed the dashboard from any CI/CD, plus an architecture overview and FAQ.'
 children:
   - /quickstart
@@ -33,8 +33,9 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 ### `install.md`
 
 - [Concepts in one minute](./install.md#concepts-in-one-minute)
-- [Deployment shapes (Compose profiles)](./install.md#deployment-shapes-compose-profiles)
-- [Minimal production start](./install.md#minimal-production-start)
+- [Deployment shapes](./install.md#deployment-shapes)
+- [Get the stack](./install.md#1-get-the-stack)
+- [Configure & run](./install.md#2-configure--run)
 - [Running from local source](./install.md#running-from-local-source)
 - [Production checklist](./install.md#production-checklist)
 - [Pinning a release version](./install.md#pinning-a-release-version)
@@ -43,7 +44,6 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 ### `configuration.md`
 
 - [Stack version](./configuration.md#stack-version)
-- [Which vars does my profile need?](./configuration.md#which-vars-does-my-profile-need)
 - [API](./configuration.md#api)
 - [PostgreSQL: bundled profiles](./configuration.md#postgresql-bundled-profiles)
 - [PostgreSQL: external profiles](./configuration.md#postgresql-external-profiles)

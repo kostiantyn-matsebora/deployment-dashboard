@@ -164,6 +164,13 @@ body {
 .md-typeset .dd-coral,   .md-typeset .dd-coral svg   { color: var(--dd-coral); }
 .md-typeset .dd-indigo,  .md-typeset .dd-indigo svg  { color: var(--dd-accent); }
 
+/* Section-heading icons (configuration & guides) — indigo accent. */
+.md-typeset h2 .twemoji,
+.md-typeset h2 .twemoji svg {
+  color: var(--dd-accent);
+  fill: currentColor;
+}
+
 /* ----------------------------  Code / admonitions  ----------------------- */
 .md-typeset pre > code {
   border-radius: var(--dd-radius-sm);
@@ -186,6 +193,12 @@ body {
 }
 .md-typeset table:not([class]) th {
   background-color: var(--dd-glass-strong);
+}
+
+/* Variable identifiers in the first column must not break mid-token. */
+.md-typeset table:not([class]) td:first-child code,
+.md-typeset table:not([class]) th:first-child code {
+  white-space: nowrap;
 }
 
 /* ----------------------------  Mermaid diagrams  ------------------------- */
