@@ -18,7 +18,7 @@
       Wired as a PostCompact hook. Records the compaction summary as a
       capture entry so it can be surfaced and applied in a later session.
 
-    Capture file: `.claude/.docs-capture.<sanitized-sid>.json`
+    Capture file: `.docs-keeper/capture.<sanitized-sid>.json`
     Surfacing (SessionStart proposal + SessionEnd report) stays in
     Invoke-DocsKeeperMaintenance.ps1 alongside the session lifecycle.
 
@@ -83,9 +83,9 @@ function Get-SessionIdFromPayload {
 function Get-DocsCaptureFilePath {
     [CmdletBinding()]
     param([string]$RepoRoot, [string]$SessionId)
-    $dir  = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $dir  = if ($RepoRoot) { Join-Path $RepoRoot '.docs-keeper' } else { '.docs-keeper' }
     $sid  = Get-SafeSessionId -SessionId $SessionId
-    $name = if ($sid) { ".docs-capture.$sid.json" } else { '.docs-capture.json' }
+    $name = if ($sid) { "capture.$sid.json" } else { 'capture.json' }
     return (Join-Path $dir $name)
 }
 
@@ -159,7 +159,7 @@ function Read-DocsCapture {
 
 function Write-DocsCapture {
     <#
-        Writes the capture hashtable as JSON. Creates .claude/ dir if absent.
+        Writes the capture hashtable as JSON. Creates .docs-keeper/ dir if absent.
     #>
     [CmdletBinding()]
     param([string]$Path, [hashtable]$CaptureFile)
