@@ -61,38 +61,17 @@ editing the code itself instead of dispatching. Two costs compound:
 
 ## Execution modes
 
-Roles + guardrails are identical across modes; only the substrate differs. **Default flow
-is unchanged; teams never replace it — opt-in escalation only.**
+Roles + guardrails are identical across modes; only the substrate differs. **Default flow is
+unchanged; teams never replace it — opt-in escalation only.** Full matrix + runtime bindings
+(Claude Code / GitHub Copilot) in [`execution-modes.md`](execution-modes.md).
 
-| Mode | How it runs | When |
-|---|---|---|
-| **In-session subagents** *(default)* | The orchestrator dispatches the owning role as an in-session subagent that reports back. | Most work: one/few surfaces, handled by one integrator + sequential/parallel subagents. |
-| **Spawned team** *(opt-in)* | Role members run as separate, coordinated sessions under a plan-confirm launch; the lead integrates. | ≥3 layers sharing a contract, where per-role context + peer contract-negotiation pay off. |
+- **In-session subagents** *(default)* — owning role dispatched as an in-session subagent that
+  reports back. Most work.
+- **Spawned team** *(opt-in)* — role members as separate, coordinated sessions; the lead
+  integrates. ≥3 layers sharing a contract.
 
-**Mode is sticky — no silent downgrade.**
-
-- The substrate chosen at launch holds for the whole run.
-- `/feature-team` (or any spawned-team launch) commits the run to **separate member sessions**
-  coordinated via `SendMessage` + the shared task list — *every later dispatch goes to a spawned
-  member*, never to an in-session `Agent`/Task subagent.
-- Sliding back to in-session subagents mid-run — a common drift right after a conversational turn
-  — collapses the per-role contexts and peer contract-negotiation the team mode exists for.
-- Need to change substrate? Surface it as a decision; never downgrade silently.
-
-The modes are runtime-neutral; each runtime maps them to its own primitives. Two bindings ship:
-
-**Claude Code:**
-
-- In-session subagent = the `Agent`/Task tool.
-- Spawned team = `/feature-team <issue>` → plan-confirm → `TeamCreate` + spawn members (`subagent_type` = role), coordinating via `SendMessage` + a shared task list.
-- Project bindings: `CLAUDE.md` § *Project bindings*.
-
-**GitHub Copilot:**
-
-- Role member = a custom agent `.github/agents/<role>.agent.md` (body = the role anchor), invoked `@<role>`.
-- In-session subagent = invoke `@<role>` directly.
-- Spawned team = `/fleet` (Copilot CLI) — decomposes the objective into parallel tracks dispatched to the role agents; the lead integrates.
-- Project bindings: `.github/copilot-instructions.md`.
+**Mode is sticky — no silent downgrade.** The substrate chosen at launch holds for the whole run;
+need to change it → surface as a decision, never slide back to in-session subagents silently.
 
 ## Autonomy
 
@@ -157,66 +136,20 @@ orchestrator emits `BRIEF`/`FIX` and reads the rest; it never parses prose hand-
 
 ## Phases
 
-0. **Intake & docs-first.** Read the owning spec before code; restate its acceptance
-   criteria. Spec = contract *and* regression gate. Need the *state* of a code area to scope
-   the work? Delegate the assessment to the owning role (→ *Investigation is delegated*) — the
-   lead does not read the code to scope it itself.
-1. **Contract.** Cross-layer change → define/update the shared contract first (→ `ARTIFACT`);
-   all code targets the agreed artifact.
-2. **Plan & dispatch.** Map work to roles; declare each lane (exact files) in a `BRIEF`;
-   surface the plan; confirm before N parallel members.
-3. **Implement.** Parallel only on disjoint lanes; coupled/shared work serialized or
-   worktree-isolated. Each member self-verifies (build + own-change unit tests + lint) and
-   returns a `RESULT` with actual counts.
-4. **Integrate.** Orchestrator merges lanes into the branch.
-5. **Cross-review.** Before `testing`: dispatch one reviewer per touched competency (reviewer ≠
-   that lane's implementer) to check the integrated change set against that role's
-   **non-negotiable** definitions; each returns a `REVIEW`. All `pass` → proceed. Any
-   `changes-requested` → route remarks to the owning implementer and loop (see *Review loop*).
-6. **Verify.** `testing` runs the wider net (API/integration/e2e + regression). Red → `FIX` to
-   the owning role. Re-verify against the phase-0 spec.
-7. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
-   Never push to the default branch.
+Each phase is an **executable command** — its procedure can change without touching this spine.
+Run in order; skip a phase only when it doesn't apply (e.g. no contract change → skip Phase 1).
+The binding invariants each phase enforces live in the command and in *Anti-patterns* below.
 
-## Fix loop
-
-**Ownership split.** Testing is split by ownership; failures route through the orchestrator.
-
-- **Implementer tests its own change.** Each specialist writes + runs unit tests for its
-  code (where applicable) and reports actual counts in `RESULT`. No change handed back
-  unit-untested.
-- **`testing` owns the wider net** — API/integration/e2e/regression, run after integration.
-  - Reports red to the orchestrator (failing `RESULT` / `FINDING`).
-  - Never fixes production code; may fix the *tests*, never weaken them.
-- **Orchestrator diagnoses to *route*, not to fix.**
-  - From the `FINDING` (`expect`/`actual`/`suspect`) it picks the owning specialist and issues a `FIX`; it does not open the code itself.
-  - **Deep investigation is the owning agent's prerogative**, in that agent's own context.
-  - Re-run after each fix; loop until green. Never ship red.
-
-## Review loop
-
-**Timing.** Runs AFTER implementers hand back + lanes are integrated, and BEFORE `testing`.
-**Purpose.** Catches what a green build can't: principle / code-smell violations.
-**Routing.** Remarks route through the orchestrator.
-
-- **One reviewer per touched competency.** For each role whose lane the change set changed,
-  dispatch a fresh instance of that role as reviewer (backend→`backend`, frontend→`frontend`,
-  infra/devops→`infrastructure`, contract→`contract`, …). **Reviewer ≠ the implementer** of that
-  lane (independent eyes).
-- **Scope = that role's non-negotiables.** The reviewer reads only its competency's diff and
-  checks it against its role's binding definitions (e.g. `backend`: engineering principles · the
-  code-smell→remedy table · coding heuristics). Read-only — a reviewer never edits production code.
-- **Returns a `REVIEW`** — `pass`, or `changes-requested` + remarks (principle/smell · location ·
-  required change).
-- **All competencies `pass` → proceed to *Verify*.** Any `changes-requested` → orchestrator routes
-  each remark to the owning implementer; it fixes; re-review that competency. Loop until all `pass`.
-- **Checklist-driven, per-symbol.** The reviewer enumerates each touched symbol and walks the FULL
-  bar against it (every smell + SOLID/DI), recording coverage in `REVIEW.checked`. A skim is not a
-  review; `verdict: pass` is invalid without `checked`.
-- **Re-review is full, not delta.** After a fix, re-run the full checklist on the whole CHANGED UNIT
-  — a fix that trades one smell for another (e.g. cutting params but keeping a concrete dependency)
-  must be caught here, not just the original remark.
-- **Reviewers report, never fix** — mirrors `testing`; preserves the single-integrator model.
+| # | Phase | Command | Purpose |
+|---|---|---|---|
+| 0 | Intake & docs-first | [`/intake`](../commands/intake.md) | Read owning spec; restate acceptance criteria; delegate scoping (never read code to scope). |
+| 1 | Contract | [`/contract`](../commands/contract.md) | Cross-layer → define/update the shared contract first (→ `ARTIFACT`). |
+| 2 | Plan & dispatch | [`/plan-dispatch`](../commands/plan-dispatch.md) | Map work to roles; declare lanes in a `BRIEF`; surface; confirm before N parallel. |
+| 3 | Implement | [`/implement`](../commands/implement.md) | Parallel on disjoint lanes; each self-verifies → `RESULT`. Members never commit. |
+| 4 | Integrate | [`/integrate`](../commands/integrate.md) | Sole integrator merges lanes into the branch; verify repo state. |
+| 5 | Cross-review | [`/review-loop`](../commands/review-loop.md) | Pool reviewers per competency; verify + dedup → consolidated `REVIEW`. |
+| 6 | Verify | [`/fix-loop`](../commands/fix-loop.md) | `testing`'s wider net; red → `FIX`, loop until green; never ship red. |
+| 7 | Ship | [`/ship`](../commands/ship.md) | Commit groups → branch → PR → CI green. **Never push the default branch.** |
 
 ## Standing guardrails & tool-output economy
 
@@ -243,5 +176,5 @@ asked (committed, pushed, out-of-lane edits, mixed EOL). Catch it before it comp
 - "Autonomous" read as auto-merge or run-silent → shipped to the default branch unaccepted,
   or no plan surfaced to interject against.
 - Silent truncation/re-scoping when blocked → the request quietly unmet.
-- Tests-green mistaken for principle-compliance → smells ship unreviewed (run the *Review loop*).
+- Tests-green mistaken for principle-compliance → smells ship unreviewed (run [`/review-loop`](../commands/review-loop.md)).
 - Self-review by the implementer → blind spots; the reviewer must be a different instance.
