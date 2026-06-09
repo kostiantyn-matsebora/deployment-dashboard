@@ -1733,6 +1733,248 @@
   }
   .vis-stage .cards-layer .vis-card { pointer-events: auto; }
 
+  /* ===== ANALYTICS VIEW ===== */
+
+  /* Layout */
+  .an-shell {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* View header — compact single line */
+  .an-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .an-title-block .an-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-0);
+    margin: 0;
+    display: inline;
+  }
+  .an-title-block .an-sub {
+    font-size: 11px;
+    color: var(--ink-2);
+    display: inline;
+    margin-left: 8px;
+  }
+
+  /* Period segmented control */
+  .an-period {
+    display: flex;
+    gap: 2px;
+    background: var(--tabs-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+  }
+  .an-period-btn {
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  .an-period-btn:hover { color: var(--ink-0); }
+  .an-period-btn.is-active {
+    background: var(--glass-strong);
+    color: var(--ink-0);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+
+  /* DORA KPI band */
+  .an-kpi-band {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 900px) {
+    .an-kpi-band { grid-template-columns: repeat(2, 1fr); }
+  }
+  .an-kpi-card {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+    box-shadow: 0 1px 0 var(--glass-edge-2) inset, 0 24px 64px -28px rgba(0,0,0,0.55);
+    padding: 10px 13px 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .an-kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .an-kpi-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink-0);
+    line-height: 1.15;
+  }
+  .an-kpi-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .an-class-chip {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .an-class-chip.elite  { background: var(--emerald-wash); color: var(--emerald); border: 1px solid var(--emerald-edge); }
+  .an-class-chip.high   { background: var(--blue-wash);    color: var(--blue);    border: 1px solid var(--blue-edge); }
+  .an-class-chip.medium { background: var(--amber-wash);   color: var(--amber);   border: 1px solid var(--amber-edge); }
+  .an-class-chip.low    { background: var(--coral-wash);   color: var(--coral);   border: 1px solid var(--coral-edge); }
+  .an-trend-chip {
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .an-trend-chip.good { background: var(--emerald-wash); color: var(--emerald); }
+  .an-trend-chip.bad  { background: var(--coral-wash);   color: var(--coral); }
+  .an-trend-chip.flat { background: var(--glass-edge);   color: var(--ink-2); }
+  .an-kpi-sparkline { width: 100%; height: 26px; display: block; overflow: visible; }
+
+  /* Chart grid — 12-column base; span classes control placement */
+  .an-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 8px;
+  }
+  /* Span helpers */
+  .an-span-12 { grid-column: span 12; }
+  .an-span-6  { grid-column: span 6; }
+  .an-span-4  { grid-column: span 4; }
+  .an-span-8  { grid-column: span 8; }
+  @media (max-width: 1100px) {
+    .an-span-12, .an-span-8, .an-span-6, .an-span-4 { grid-column: span 12; }
+  }
+
+  /* Generic chart card */
+  .an-card {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+    box-shadow: 0 1px 0 var(--glass-edge-2) inset, 0 24px 64px -28px rgba(0,0,0,0.55);
+    padding: 11px 13px 12px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .an-card-head {
+    margin-bottom: 8px;
+  }
+  .an-card-head .an-ch-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-0);
+    margin: 0 0 1px;
+  }
+  .an-card-head .an-ch-sub {
+    font-size: 11.5px;
+    color: var(--ink-2);
+  }
+  /* Fixed-height chart bodies — SVG fills the box exactly.
+     height:100% on svg requires a definite height on the container. */
+  .an-chart-body {
+    width: 100%;
+    overflow: hidden;
+    /* default: CFR / duration (span-6 row) */
+    height: 160px;
+  }
+  .an-chart-body svg {
+    display: block;
+    width: 100%;
+    height: 100%;   /* fills the fixed container — NOT auto */
+    overflow: visible;
+  }
+  /* Per-slot height overrides */
+  .an-chart-body.an-h-freq   { height: 185px; }  /* span-8 frequency bar chart */
+  .an-chart-body.an-h-funnel { height: 175px; }  /* funnel — 5 rows × 30px */
+  .an-chart-body.an-h-heat   { height: 175px; }  /* heatmap — 7 rows × 24 cols */
+  .an-chart-body.an-h-mttr   { height: 200px; }  /* incidents list — 7 rows × 27px */
+  .an-chart-body.an-h-actors { height: 210px; }  /* deployers leaderboard — 8 rows × 24px */
+  /* Donut body: let the grid layout size it; no fixed height needed */
+  .an-chart-body.an-h-donut  { height: auto; overflow: visible; }
+
+  /* Donut card: donut LEFT, legend RIGHT — side-by-side, no dead space */
+  .an-donut-wrap {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 12px;
+  }
+  .an-donut-svg { flex-shrink: 0; }
+  /* 2-column legend: each row is name | count | % */
+  .an-donut-legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 10px;
+    align-content: center;
+  }
+  .an-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--ink-1);
+    min-width: 0;
+  }
+  .an-legend-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .an-legend-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .an-legend-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-2);
+    flex-shrink: 0;
+  }
+  .an-legend-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    min-width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
   /* =========================================================
      VISUALISATION VIEW
      ========================================================= */
@@ -2371,6 +2613,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab is-active" data-view="matrix" role="tab" title="Matrix view — service × environment grid" aria-label="Matrix view">Matrix</button>
       <button class="tab" data-view="vis" role="tab" title="Swimlanes view — deployment DAGs per service" aria-label="Swimlanes view">Swimlanes</button>
+      <button class="tab" data-view="analytics" role="tab" title="Analytics view — DORA metrics &amp; deployment trends" aria-label="Analytics view">Analytics</button>
     </nav>
 
     <div class="topbar-spacer"></div>
@@ -2668,6 +2911,112 @@
         <div class="insp-grid" id="insp-grid"></div>
       </aside>
     </div>
+  </section>
+
+  <!-- ============== ANALYTICS VIEW ============== -->
+  <section class="view" id="view-analytics">
+    <div class="an-shell">
+
+      <!-- Header -->
+      <div class="an-header">
+        <div class="an-title-block">
+          <div class="an-title">Deployment analytics</div>
+          <div class="an-sub">DORA Four Keys &middot; <span id="an-sub-days">14</span> days &middot; bounded by HISTORY_RETENTION_DAYS</div>
+        </div>
+        <div class="an-period" role="group" aria-label="Time window">
+          <button class="an-period-btn" data-days="7"  aria-pressed="false">7d</button>
+          <button class="an-period-btn is-active" data-days="14" aria-pressed="true">14d</button>
+          <button class="an-period-btn" data-days="30" aria-pressed="false">30d</button>
+        </div>
+      </div>
+
+      <!-- DORA KPI band -->
+      <div class="an-kpi-band" id="an-kpi-band">
+        <!-- Rendered by renderAnalytics() -->
+      </div>
+
+      <!-- Chart grid — 12-col base
+           Row 1 (170px): frequency (8) + donut (4)
+           Row 2 (150px): CFR (6) + duration (6)
+           Row 3 (160px): funnel (4) + heatmap (8)
+           Row 4 (160px): deployers (6) + restore (6)
+      -->
+      <div class="an-grid">
+
+        <!-- 1. Deployment frequency — span-8 -->
+        <div class="an-card an-span-8">
+          <div class="an-card-head">
+            <div class="an-ch-title">Deployment frequency over time</div>
+            <div class="an-ch-sub" id="an-freq-sub">deploys per day — success vs failure</div>
+          </div>
+          <div class="an-chart-body an-h-freq" id="an-chart-freq"></div>
+        </div>
+
+        <!-- 5. Status distribution (donut) — span-4 same row as freq -->
+        <div class="an-card an-span-4">
+          <div class="an-card-head">
+            <div class="an-ch-title">Status distribution</div>
+            <div class="an-ch-sub">share of each status</div>
+          </div>
+          <div class="an-chart-body an-h-donut" id="an-chart-donut"></div>
+        </div>
+
+        <!-- 2. Change failure rate — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Change failure rate trend</div>
+            <div class="an-ch-sub">daily CFR % &middot; dashed = 15% Elite threshold</div>
+          </div>
+          <div class="an-chart-body" id="an-chart-cfr"></div>
+        </div>
+
+        <!-- 3. Duration distribution — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Deployment duration distribution</div>
+            <div class="an-ch-sub">histogram (min) &middot; p50 and p95 markers</div>
+          </div>
+          <div class="an-chart-body" id="an-chart-dur"></div>
+        </div>
+
+        <!-- 4. Promotion funnel — span-4 -->
+        <div class="an-card an-span-4">
+          <div class="an-card-head">
+            <div class="an-ch-title">Promotion funnel</div>
+            <div class="an-ch-sub">dev &rarr; prod attrition</div>
+          </div>
+          <div class="an-chart-body an-h-funnel" id="an-chart-funnel"></div>
+        </div>
+
+        <!-- 6. Deploy heatmap — span-8 -->
+        <div class="an-card an-span-8">
+          <div class="an-card-head">
+            <div class="an-ch-title">Deploy heatmap</div>
+            <div class="an-ch-sub">day-of-week &times; hour &middot; intensity = count</div>
+          </div>
+          <div class="an-chart-body an-h-heat" id="an-chart-heat"></div>
+        </div>
+
+        <!-- 8. Top deployers — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Top deployers</div>
+            <div class="an-ch-sub">actors by deploy count</div>
+          </div>
+          <div class="an-chart-body an-h-actors" id="an-chart-actors"></div>
+        </div>
+
+        <!-- 7. MTTR — recent incidents — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Time to restore</div>
+            <div class="an-ch-sub">&lt;45m &#9646; 45-90m &#9646; &gt;90m</div>
+          </div>
+          <div class="an-chart-body an-h-mttr" id="an-chart-mttr"></div>
+        </div>
+
+      </div><!-- .an-grid -->
+    </div><!-- .an-shell -->
   </section>
 
 </div>
@@ -3531,10 +3880,14 @@ function setView(view) {
   currentView = view;
   document.getElementById('view-matrix').classList.toggle('is-active', view === 'matrix');
   document.getElementById('view-vis').classList.toggle('is-active', view === 'vis');
+  document.getElementById('view-analytics').classList.toggle('is-active', view === 'analytics');
   // inline matrix filter + columns picker are matrix-only
   document.getElementById('hdr-matrix-filter').style.display = view === 'matrix' ? 'flex' : 'none';
   document.getElementById('hdr-cols-btn').style.display      = view === 'matrix' ? ''     : 'none';
   document.getElementById('hdr-vis-icons').style.display     = view === 'vis'    ? ''     : 'none';
+  // Fields + Legend buttons hidden on analytics (no per-cell fields there)
+  document.getElementById('btn-fields').parentElement.style.display  = view === 'analytics' ? 'none' : '';
+  document.getElementById('btn-legend').parentElement.style.display  = view === 'analytics' ? 'none' : '';
   // Fields popover content swaps per view
   document.getElementById('fields-grid-matrix').style.display = view === 'matrix' ? '' : 'none';
   document.getElementById('fields-grid-vis').style.display    = view === 'vis'    ? '' : 'none';
@@ -3557,6 +3910,11 @@ function setView(view) {
     window.__visNodeDims = null;
     buildSwim();
     selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
+  }
+
+  // Analytics: render (or re-render on focus)
+  if (view === 'analytics') {
+    renderAnalytics(typeof anCurrentDays !== 'undefined' ? anCurrentDays : 14);
   }
 }
 document.querySelectorAll('.tab').forEach(t => {
@@ -3853,6 +4211,671 @@ document.getElementById('btn-cols-reset').addEventListener('click', e => {
 
 // initial view sync
 setView('matrix');
+
+/* =================================================================
+   ANALYTICS VIEW — DORA Four Keys
+   All data is deterministic (seeded PRNG, no Math.random / Date.now).
+   Prefix: an* / AN_* / .an-*
+   ================================================================= */
+
+/* ---- Seeded PRNG (mulberry32) ---- */
+function anMulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ---- Generate 30-day fixture dataset (once, fixed seed) ---- */
+const AN_SEED = 1337;
+const AN_ACTORS = ['mreyes','akhan','s.harper','jpark','tcheng','r.iyer','l.osman','release-bot'];
+// release-bot gets ~3x weight
+const AN_ACTOR_WEIGHTS = [2,2,2,2,2,2,2,6];
+
+(function buildAnData() {
+  const rng = anMulberry32(AN_SEED);
+  const rand = () => rng();
+
+  // Weighted actor pick
+  const actorTotal = AN_ACTOR_WEIGHTS.reduce((a,b)=>a+b,0);
+  function pickActor() {
+    let r = rand() * actorTotal, cum = 0;
+    for (let i=0; i<AN_ACTORS.length; i++) { cum+=AN_ACTOR_WEIGHTS[i]; if (r<cum) return AN_ACTORS[i]; }
+    return AN_ACTORS[AN_ACTORS.length-1];
+  }
+
+  window.AN_DAYS = []; // index 0 = oldest (day -29), index 29 = today
+
+  for (let d=0; d<30; d++) {
+    const total = Math.round(4 + rand()*14);          // 4–18 deploys
+    const failures = Math.round(rand() * total * 0.28); // 0–28% CFR
+    // Duration array (minutes) — mostly 5–45, occasional long tail
+    const durations = Array.from({length: total}, () => {
+      const base = 5 + rand()*40;
+      return rand() < 0.07 ? base + 40 + rand()*60 : base; // 7% long-tail
+    }).sort((a,b)=>a-b);
+    // Lead time (hours, dev→prod median) — 6h to 72h
+    const lead = 6 + rand()*66;
+    // MTTR (minutes) — 10 to 180
+    const restore = 10 + rand()*170;
+    // 24-slot hour histogram — business hours weighted
+    const hourHist = Array.from({length:24}, (_,h) => {
+      const biz = (h>=9 && h<=18) ? 3 : 0.3;
+      return Math.round(rand() * biz * total * 0.15);
+    });
+    // Actor attribution for this day
+    const actorCounts = {};
+    AN_ACTORS.forEach(a => actorCounts[a]=0);
+    for (let i=0; i<total; i++) { actorCounts[pickActor()]++; }
+    // Small status counts
+    const inProgress = Math.round(rand()*2);
+    const queued     = Math.round(rand()*1.5);
+    const pending    = Math.round(rand()*1.5);
+    const waiting    = Math.round(rand()*1);
+    const cancelled  = Math.round(rand()*1);
+    const rejected   = Math.round(rand()*1);
+
+    window.AN_DAYS.push({ total, failures, durations, lead, restore,
+      hourHist, actorCounts, inProgress, queued, pending, waiting, cancelled, rejected });
+  }
+
+  // Fixed incidents list (~9 recent)
+  const incRng = anMulberry32(AN_SEED + 7);
+  const incEnvs = ['staging','preprod','prod'];
+  window.AN_INCIDENTS = Array.from({length:9}, () => ({
+    service: SERVICES[Math.floor(incRng()*SERVICES.length)],
+    env:     incEnvs[Math.floor(incRng()*incEnvs.length)],
+    downMinutes: Math.round(10 + incRng()*170),
+  }));
+})();
+
+/* ---- Window aggregation ---- */
+function anWindowData(days) {
+  const slice = window.AN_DAYS.slice(-days);
+  let total=0, failures=0, allDurs=[], allLead=[], allRestore=[];
+  const actorTotals = {};
+  AN_ACTORS.forEach(a => actorTotals[a]=0);
+  const hourHist = new Array(24).fill(0);
+  let inP=0, queued=0, pending=0, waiting=0, cancelled=0, rejected=0;
+  const freqSeries=[], cfrSeries=[];
+
+  slice.forEach(d => {
+    total    += d.total;
+    failures += d.failures;
+    allDurs   = allDurs.concat(d.durations);
+    allLead.push(d.lead);
+    allRestore.push(d.restore);
+    AN_ACTORS.forEach(a => actorTotals[a]+=(d.actorCounts[a]||0));
+    d.hourHist.forEach((v,h) => hourHist[h]+=v);
+    inP      += d.inProgress;
+    queued   += d.queued;
+    pending  += d.pending;
+    waiting  += d.waiting;
+    cancelled+= d.cancelled;
+    rejected += d.rejected;
+    freqSeries.push({ total: d.total, failures: d.failures });
+    cfrSeries.push(d.total > 0 ? (d.failures/d.total)*100 : 0);
+  });
+
+  allDurs.sort((a,b)=>a-b);
+  allLead.sort((a,b)=>a-b);
+  allRestore.sort((a,b)=>a-b);
+  function median(arr) { if (!arr.length) return 0; const m=Math.floor(arr.length/2); return arr.length%2 ? arr[m] : (arr[m-1]+arr[m])/2; }
+  function pct(arr,p) { if (!arr.length) return 0; return arr[Math.min(arr.length-1, Math.floor(arr.length*p/100))]; }
+
+  return {
+    days, total, failures,
+    cfr: total>0 ? (failures/total)*100 : 0,
+    leadMedian: median(allLead),
+    restoreMedian: median(allRestore),
+    allDurs, durP50: pct(allDurs,50), durP95: pct(allDurs,95),
+    actorTotals,
+    hourHist,
+    inP, queued, pending, waiting, cancelled, rejected,
+    freqSeries, cfrSeries,
+    // per-day lead/restore for sparklines
+    leadSeries: slice.map(d=>d.lead),
+    restoreSeries: slice.map(d=>d.restore),
+  };
+}
+
+/* ---- CSS variable reader (resolves tokens at paint time for SVG fills) ---- */
+function anCssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/* ---- Inline SVG helpers ---- */
+function anPolyline(pts, color, opacity, strokeW) {
+  if (!pts.length) return '';
+  const d = pts.map(([x,y])=>`${x},${y}`).join(' ');
+  return `<polyline points="${d}" fill="none" stroke="${color}" stroke-width="${strokeW||1.5}" opacity="${opacity||1}" stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+function anArea(pts, color, h, opacity) {
+  if (!pts.length) return '';
+  const d = `M${pts[0][0]},${h} ` + pts.map(([x,y])=>`L${x},${y}`).join(' ') + ` L${pts[pts.length-1][0]},${h} Z`;
+  return `<path d="${d}" fill="${color}" opacity="${opacity||0.18}"/>`;
+}
+
+/* ---- Sparkline for KPI cards ---- */
+function anSparkline(series, color, w, h) {
+  if (!series.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const min=Math.min(...series), max=Math.max(...series);
+  const range=max-min || 1;
+  const pad=2;
+  const pts = series.map((v,i)=>[
+    pad + i*(w-pad*2)/(series.length-1 || 1),
+    pad + (1-(v-min)/range)*(h-pad*2)
+  ]);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="an-kpi-sparkline">
+    ${anArea(pts, color, h, 0.18)}
+    ${anPolyline(pts, color, 0.9, 1.5)}
+  </svg>`;
+}
+
+/* ---- DORA classification ---- */
+function anFreqClass(perDay) {
+  if (perDay>=1)    return {label:'Elite',  cls:'elite'};
+  if (perDay>=1/7)  return {label:'High',   cls:'high'};
+  if (perDay>=1/30) return {label:'Medium', cls:'medium'};
+  return              {label:'Low',    cls:'low'};
+}
+function anLeadClass(hours) {
+  if (hours<24)  return {label:'Elite',  cls:'elite'};
+  if (hours<168) return {label:'High',   cls:'high'};
+  if (hours<730) return {label:'Medium', cls:'medium'};
+  return           {label:'Low',    cls:'low'};
+}
+function anCfrClass(pct) {
+  if (pct<=15) return {label:'Elite',  cls:'elite'};
+  if (pct<=30) return {label:'High',   cls:'high'};
+  if (pct<=45) return {label:'Medium', cls:'medium'};
+  return         {label:'Low',    cls:'low'};
+}
+function anMttrClass(mins) {
+  if (mins<60)   return {label:'Elite',  cls:'elite'};
+  if (mins<1440) return {label:'High',   cls:'high'};
+  if (mins<10080)return {label:'Medium', cls:'medium'};
+  return           {label:'Low',    cls:'low'};
+}
+
+/* ---- Format helpers ---- */
+function anFmtHours(h) {
+  if (h<24) return `${h.toFixed(1)}h`;
+  const d=Math.floor(h/24), rem=Math.round(h%24);
+  return rem>0 ? `${d}d ${rem}h` : `${d}d`;
+}
+function anFmtMins(m) {
+  if (m<60) return `${Math.round(m)}m`;
+  const h=Math.floor(m/60), rem=Math.round(m%60);
+  return rem>0 ? `${h}h ${rem}m` : `${h}h`;
+}
+function anTrend(series, higherGood) {
+  if (series.length < 2) return {label:'—', cls:'flat'};
+  const half=Math.floor(series.length/2);
+  const first=series.slice(0,half), second=series.slice(half);
+  const avg=arr=>arr.reduce((a,b)=>a+b,0)/arr.length;
+  const a1=avg(first), a2=avg(second);
+  if (!a1) return {label:'—', cls:'flat'};
+  const delta=(a2-a1)/a1;
+  if (Math.abs(delta)<0.02) return {label:'±0%', cls:'flat'};
+  const up=delta>0;
+  const good=(higherGood ? up : !up);
+  const pctStr=(up?'↑':'↓')+Math.abs(Math.round(delta*100))+'%';
+  return {label:pctStr, cls:good?'good':'bad'};
+}
+
+/* ---- KPI band render ---- */
+function anRenderKpiBand(data) {
+  const band = document.getElementById('an-kpi-band');
+  const freq = data.total/data.days;
+  const freqCl  = anFreqClass(freq);
+  const leadCl  = anLeadClass(data.leadMedian);
+  const cfrCl   = anCfrClass(data.cfr);
+  const mttrCl  = anMttrClass(data.restoreMedian);
+
+  const freqTr  = anTrend(data.freqSeries.map(d=>d.total), true);
+  const leadTr  = anTrend(data.leadSeries, false);
+  const cfrTr   = anTrend(data.cfrSeries, false);
+  const mttrTr  = anTrend(data.restoreSeries, false);
+
+  const emerald=anCssVar('--emerald'), coral=anCssVar('--coral'),
+        amber=anCssVar('--amber'), blue=anCssVar('--blue');
+
+  function card(label, value, cls, trend, sparkSeries, sparkColor) {
+    return `<div class="an-kpi-card">
+      <div class="an-kpi-label">${label}</div>
+      <div class="an-kpi-value">${value}</div>
+      <div class="an-kpi-row">
+        <span class="an-class-chip ${cls.cls}">${cls.label}</span>
+        <span class="an-trend-chip ${trend.cls}">${trend.label}</span>
+      </div>
+      ${anSparkline(sparkSeries, sparkColor, 200, 26)}
+    </div>`;
+  }
+
+  band.innerHTML =
+    card('Deployment Frequency', `${freq.toFixed(1)}/day`, freqCl, freqTr,
+         data.freqSeries.map(d=>d.total), emerald) +
+    card('Lead Time for Changes', anFmtHours(data.leadMedian), leadCl, leadTr,
+         data.leadSeries, blue) +
+    card('Change Failure Rate', `${data.cfr.toFixed(1)}%`, cfrCl, cfrTr,
+         data.cfrSeries, coral) +
+    card('Time to Restore (MTTR)', anFmtMins(data.restoreMedian), mttrCl, mttrTr,
+         data.restoreSeries, amber);
+}
+
+/* ---- Chart 1: Deployment frequency over time (stacked bars) ---- */
+function anRenderFreq(data) {
+  const el=document.getElementById('an-chart-freq');
+  // W = actual rendered pixel width → coordinate space matches 1:1, no text distortion
+  const W=Math.max(el.offsetWidth||800, 200);
+  const H=185, PL=40, PR=86, PT=12, PB=26;
+  const cw=W-PL-PR, ch=H-PT-PB;
+  const series=data.freqSeries, n=series.length;
+  const maxV=Math.max(...series.map(d=>d.total), 1);
+  const gridLines=[0,Math.round(maxV/2),maxV];
+  const barW=Math.max(2, (cw/n)*0.62);
+  const gap=(cw/n);
+  const emerald=anCssVar('--emerald'), coral=anCssVar('--coral');
+  const gridCol=anCssVar('--grid-line'), ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axis Y labels: 13px ink-1
+  gridLines.forEach(v=>{
+    const y=PT+ch-(v/maxV)*ch;
+    svg+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="${gridCol}" stroke-width="1"/>`;
+    svg+=`<text x="${PL-5}" y="${y+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${v}</text>`;
+  });
+
+  series.forEach((d,i)=>{
+    const x=PL+i*gap+(gap-barW)/2;
+    const succH=(d.total>0)?(((d.total-d.failures)/d.total)*ch*(d.total/maxV)):0;
+    const failH=(d.total>0)?((d.failures/d.total)*ch*(d.total/maxV)):0;
+    const yFail=PT+ch-succH-failH;
+    const ySucc=PT+ch-succH;
+    if (failH>0) svg+=`<rect x="${x}" y="${yFail}" width="${barW}" height="${failH}" rx="1.5" fill="${coral}" opacity="0.85"/>`;
+    if (succH>0) svg+=`<rect x="${x}" y="${ySucc}" width="${barW}" height="${succH}" rx="1.5" fill="${emerald}" opacity="0.85"/>`;
+  });
+
+  // Date tick labels: 13px ink-1
+  const tickEvery=Math.max(1,Math.floor(n/6));
+  const today=new Date(2026,5,9);
+  for(let i=0;i<n;i++){
+    if(i%tickEvery!==0 && i!==n-1) continue;
+    const dayOffset=n-1-i;
+    const d=new Date(today); d.setDate(d.getDate()-dayOffset);
+    const x=PL+i*gap+gap/2;
+    svg+=`<text x="${x}" y="${H-6}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${d.getMonth()+1}/${d.getDate()}</text>`;
+  }
+
+  // Legend in right gutter: 14px ink-1
+  const lx=W-PR+8;
+  svg+=`<rect x="${lx}" y="${PT+2}" width="10" height="10" rx="1.5" fill="${emerald}" opacity="0.85"/>`;
+  svg+=`<text x="${lx+14}" y="${PT+11}" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">success</text>`;
+  svg+=`<rect x="${lx}" y="${PT+20}" width="10" height="10" rx="1.5" fill="${coral}" opacity="0.85"/>`;
+  svg+=`<text x="${lx+14}" y="${PT+29}" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">failure</text>`;
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 2: CFR trend line ---- */
+function anRenderCfr(data) {
+  const el=document.getElementById('an-chart-cfr');
+  const W=Math.max(el.offsetWidth||400, 200);
+  const H=160, PL=42, PR=34, PT=12, PB=26;
+  const cw=W-PL-PR, ch=H-PT-PB;
+  const series=data.cfrSeries, n=series.length;
+  const maxV=Math.max(...series, 20);
+  const gridCol=anCssVar('--grid-line'), ink1=anCssVar('--ink-1');
+  const coral=anCssVar('--coral'), amber=anCssVar('--amber');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axis Y labels: 13px ink-1
+  [0,Math.round(maxV/2),maxV].forEach(v=>{
+    const y=PT+ch-(v/maxV)*ch;
+    svg+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="${gridCol}" stroke-width="1"/>`;
+    svg+=`<text x="${PL-5}" y="${y+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${Math.round(v)}%</text>`;
+  });
+
+  if (15<=maxV) {
+    const yThr=PT+ch-(15/maxV)*ch;
+    svg+=`<line x1="${PL}" y1="${yThr}" x2="${W-PR}" y2="${yThr}" stroke="${amber}" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7"/>`;
+    svg+=`<text x="${W-PR+3}" y="${yThr+5}" font-size="13" font-weight="500" fill="${amber}" opacity="0.9" font-family="'Inter',sans-serif">15%</text>`;
+  }
+
+  const pts=series.map((v,i)=>[PL+i*(cw/(n-1||1)), PT+ch-(v/maxV)*ch]);
+  svg+=anArea(pts, coral, H-PB, 0.2);
+  svg+=anPolyline(pts, coral, 0.9, 1.8);
+  pts.forEach(([x,y])=>{
+    svg+=`<circle cx="${x}" cy="${y}" r="2.5" fill="${coral}" opacity="0.85"/>`;
+  });
+
+  // Date tick labels: 13px ink-1
+  const today=new Date(2026,5,9);
+  const tickEvery=Math.max(1,Math.floor(n/5));
+  for(let i=0;i<n;i++){
+    if(i%tickEvery!==0 && i!==n-1) continue;
+    const dayOffset=n-1-i;
+    const d=new Date(today); d.setDate(d.getDate()-dayOffset);
+    svg+=`<text x="${PL+i*(cw/(n-1||1))}" y="${H-6}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${(d.getMonth()+1)}/${d.getDate()}</text>`;
+  }
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 3: Duration distribution histogram ---- */
+function anRenderDuration(data) {
+  const el=document.getElementById('an-chart-dur');
+  const W=Math.max(el.offsetWidth||400, 200);
+  const H=160, PL=40, PR=12, PT=12, PB=26;
+  const cw=W-PL-PR, ch=H-PT-PB;
+  const labels=['0-10','10-20','20-30','30-40','40-50','50-60','60+'];
+  const counts=new Array(labels.length).fill(0);
+  data.allDurs.forEach(d=>{
+    let bi=Math.min(Math.floor(d/10), labels.length-1);
+    counts[bi]++;
+  });
+  const maxC=Math.max(...counts,1);
+  const barW=cw/labels.length*0.76, gap=cw/labels.length;
+  const blue=anCssVar('--blue'), gridCol=anCssVar('--grid-line');
+  const ink1=anCssVar('--ink-1'), emerald=anCssVar('--emerald'), amber=anCssVar('--amber');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axis Y labels: 13px ink-1
+  [0,Math.round(maxC/2),maxC].forEach(v=>{
+    const y=PT+ch-(v/maxC)*ch;
+    svg+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="${gridCol}" stroke-width="1"/>`;
+    svg+=`<text x="${PL-5}" y="${y+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${v}</text>`;
+  });
+
+  // Bucket (category) labels: 14px ink-1
+  counts.forEach((c,i)=>{
+    const x=PL+i*gap+(gap-barW)/2;
+    const bh=(c/maxC)*ch;
+    svg+=`<rect x="${x}" y="${PT+ch-bh}" width="${barW}" height="${bh}" rx="2" fill="${blue}" opacity="0.80"/>`;
+    svg+=`<text x="${x+barW/2}" y="${H-5}" text-anchor="middle" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${labels[i]}</text>`;
+  });
+
+  // p50/p95 marker labels: 13px ink-1
+  const p50Bucket=Math.min(Math.floor(data.durP50/10), labels.length-1);
+  const xp50=PL+p50Bucket*gap+gap/2;
+  svg+=`<line x1="${xp50}" y1="${PT}" x2="${xp50}" y2="${PT+ch}" stroke="${emerald}" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.9"/>`;
+  svg+=`<text x="${xp50+3}" y="${PT+13}" font-size="13" font-weight="500" fill="${emerald}" font-family="'Inter',sans-serif">p50</text>`;
+
+  const p95Bucket=Math.min(Math.floor(data.durP95/10), labels.length-1);
+  const xp95=PL+p95Bucket*gap+gap/2;
+  if (p95Bucket!==p50Bucket) {
+    svg+=`<line x1="${xp95}" y1="${PT}" x2="${xp95}" y2="${PT+ch}" stroke="${amber}" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.9"/>`;
+    svg+=`<text x="${xp95+3}" y="${PT+13}" font-size="13" font-weight="500" fill="${amber}" font-family="'Inter',sans-serif">p95</text>`;
+  }
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 4: Promotion funnel ---- */
+function anRenderFunnel(data) {
+  const el=document.getElementById('an-chart-funnel');
+  const W=Math.max(el.offsetWidth||400, 200);
+  // PL sized for longest env name at 14px Inter (~7.5px/char): "preprod"=7 → 63px
+  const PL=68, PR=44, PT=6, PB=6;
+  const cw=W-PL-PR, rowH=26, rowGap=6;
+  const n=5;
+  const svgH=n*(rowH+rowGap)+PT+PB;
+  const rng2=anMulberry32(AN_SEED+3+data.days);
+  const counts=[data.total];
+  for(let i=1;i<n;i++) counts.push(Math.round(counts[i-1]*(0.68+rng2()*0.18)));
+  const maxC=counts[0]||1;
+  const emerald=anCssVar('--emerald'), ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${svgH}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+  ENVS.forEach((env,i)=>{
+    const y=PT+i*(rowH+rowGap);
+    const bw=(counts[i]/maxC)*cw;
+    const alpha=0.55+0.45*(counts[i]/maxC);
+    svg+=`<rect x="${PL}" y="${y}" width="${bw}" height="${rowH}" rx="3" fill="${emerald}" opacity="${alpha.toFixed(2)}"/>`;
+    // Category label: 14px ink-1
+    svg+=`<text x="${PL-6}" y="${y+rowH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${env}</text>`;
+    // Count value: 14px ink-1
+    svg+=`<text x="${PL+bw+5}" y="${y+rowH/2+5}" font-size="14" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${counts[i]}</text>`;
+    if (i<n-1) {
+      const conv=counts[i]>0?Math.round(counts[i+1]/counts[i]*100):0;
+      // Conversion rate: 13px ink-1
+      svg+=`<text x="${W-5}" y="${y+rowH+rowGap/2+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${conv}%</text>`;
+    }
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 5: Status donut — donut LEFT, 2-col legend RIGHT ---- */
+function anRenderDonut(data) {
+  // PROP 4: enlarged donut to fill span-4 card (~160px)
+  const CX=80, CY=80, R=68, RI=46, SIZE=160;
+  const statuses=[
+    {key:'success',    color:anCssVar('--emerald'), count:data.total-data.failures},
+    {key:'failure',    color:anCssVar('--coral'),   count:data.failures},
+    {key:'in-progress',color:anCssVar('--amber'),   count:data.inP},
+    {key:'queued',     color:anCssVar('--blue'),     count:data.queued},
+    {key:'pending',    color:anCssVar('--slate'),    count:data.pending},
+    {key:'waiting',    color:anCssVar('--violet'),   count:data.waiting},
+    {key:'cancelled',  color:anCssVar('--grey'),     count:data.cancelled},
+    {key:'rejected',   color:anCssVar('--rose'),     count:data.rejected},
+  ].filter(s=>s.count>0);
+
+  const grandTotal=statuses.reduce((a,s)=>a+s.count,0)||1;
+  const ink2=anCssVar('--ink-2'), ink0=anCssVar('--ink-0');
+
+  function arc(cx,cy,r,startAngle,endAngle) {
+    const s=startAngle*Math.PI/180, e=endAngle*Math.PI/180;
+    const x1=cx+r*Math.cos(s), y1=cy+r*Math.sin(s);
+    const x2=cx+r*Math.cos(e), y2=cy+r*Math.sin(e);
+    const large=(endAngle-startAngle)>180?1:0;
+    return `M${x1},${y1} A${r},${r},0,${large},1,${x2},${y2}`;
+  }
+
+  let svgPaths='', angle=-90;
+  statuses.forEach(s=>{
+    const sweep=(s.count/grandTotal)*360;
+    if (sweep<0.5) return;
+    const endAngle=angle+sweep;
+    const dOuter=arc(CX,CY,R,angle,endAngle);
+    const dInner=arc(CX,CY,RI,endAngle,angle);
+    const path=`${dOuter} L${CX+RI*Math.cos(endAngle*Math.PI/180)},${CY+RI*Math.sin(endAngle*Math.PI/180)} ${dInner} Z`;
+    svgPaths+=`<path d="${path}" fill="${s.color}" opacity="0.88"/>`;
+    angle=endAngle;
+  });
+
+  const donutSvg=`<svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" class="an-donut-svg" xmlns="http://www.w3.org/2000/svg">
+    ${svgPaths}
+    <text x="${CX}" y="${CY-4}" text-anchor="middle" font-size="18" font-weight="600" fill="${ink0}" font-family="'JetBrains Mono',monospace">${grandTotal}</text>
+    <text x="${CX}" y="${CY+14}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink0}" font-family="'Inter',sans-serif">total</text>
+  </svg>`;
+
+  // Legend rows — 2-col grid via CSS (.an-donut-legend)
+  const legendRows=statuses.map(s=>`<div class="an-legend-row">
+    <span class="an-legend-dot" style="background:${s.color}"></span>
+    <span class="an-legend-name">${s.key}</span>
+    <span class="an-legend-count">${s.count}</span>
+    <span class="an-legend-pct">${Math.round(s.count/grandTotal*100)}%</span>
+  </div>`).join('');
+
+  document.getElementById('an-chart-donut').innerHTML=`
+    <div class="an-donut-wrap">
+      ${donutSvg}
+      <div class="an-donut-legend">${legendRows}</div>
+    </div>`;
+}
+
+/* ---- Chart 6: Deploy heatmap — fixed-height, fills container width ---- */
+function anRenderHeat(data) {
+  const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const el=document.getElementById('an-chart-heat');
+  // Use real container width for viewBox so cells are never stretched/smeared
+  const containerW=Math.max(el.offsetWidth||700, 200);
+  // Compute cell size from available width
+  const PL=38, PR=4, PT=20, PB=20;
+  const gridW=containerW-PL-PR;
+  // cellW derived from available space for 24 cols (gap=2)
+  const cellW=Math.floor((gridW-23*2)/24);
+  const cellH=Math.min(cellW, 16); // keep cells roughly square, cap at 16px
+  const gap=2;
+  const W=containerW;
+  const H=PT+(cellH+gap)*7+PB;
+
+  const rng3=anMulberry32(AN_SEED+11+data.days);
+  const mat=Array.from({length:7},()=>new Array(24).fill(0));
+  for(let h=0;h<24;h++){
+    const total=data.hourHist[h]||0;
+    for(let t=0;t<total;t++){
+      const dayWeights=[3,3,3,3,2,0.6,0.4];
+      const dayTotal=dayWeights.reduce((a,b)=>a+b,0);
+      let r=rng3()*dayTotal, cum=0, dd=0;
+      for(;dd<7;dd++){cum+=dayWeights[dd]; if(r<cum) break;}
+      mat[dd][h]++;
+    }
+  }
+  const maxCell=Math.max(...mat.flat(),1);
+  const accentRgb=anCssVar('--accent-rgb');
+  const ink1=anCssVar('--ink-1');
+
+  // viewBox W == containerW → preserveAspectRatio="none" is a 1:1 map, no text distortion
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Hour tick labels: 13px ink-1
+  for(let h=0;h<24;h+=3){
+    const x=PL+h*(cellW+gap)+cellW/2;
+    svg+=`<text x="${x}" y="${PT-4}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${h}h</text>`;
+  }
+  // Day labels: 14px ink-1
+  DAYS.forEach((day,d)=>{
+    const y=PT+d*(cellH+gap);
+    svg+=`<text x="${PL-5}" y="${y+cellH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${day}</text>`;
+    for(let h=0;h<24;h++){
+      const x=PL+h*(cellW+gap);
+      const alpha=mat[d][h]>0 ? 0.1+0.8*(mat[d][h]/maxCell) : 0;
+      if (alpha>0) {
+        svg+=`<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="2" fill="rgba(${accentRgb},${alpha.toFixed(2)})"/>`;
+      } else {
+        svg+=`<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="2" fill="rgba(120,110,255,0.04)"/>`;
+      }
+    }
+  });
+  svg+=`<text x="${W/2}" y="${H-4}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">hour of day (UTC)</text>`;
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 7: MTTR incidents ---- */
+function anRenderMttr() {
+  const el=document.getElementById('an-chart-mttr');
+  const W=Math.max(el.offsetWidth||300, 150);
+  const PT=6, PB=4, PR=4, rowH=24, rowGap=4;
+
+  // Sort worst-first, cap at 7 rows
+  const incidents=[...window.AN_INCIDENTS].sort((a,b)=>b.downMinutes-a.downMinutes).slice(0,7);
+  const maxM=Math.max(...incidents.map(i=>i.downMinutes),90);
+
+  // Full untruncated label: "service / env" — no slicing
+  const labels=incidents.map(inc=>`${inc.service} / ${inc.env}`);
+
+  // Gutter sized for longest label at 14px Inter (~7.5px/char)
+  const CH_WIDTH=7.5;
+  const longestLbl=labels.reduce((a,b)=>b.length>a.length?b:a,'');
+  const PL=Math.min(Math.round(longestLbl.length*CH_WIDTH)+12, Math.round(W*0.52));
+
+  const cw=W-PL-PR;
+  const svgH=incidents.length*(rowH+rowGap)+PT+PB;
+
+  const emerald=anCssVar('--emerald'), amber=anCssVar('--amber'), coral=anCssVar('--coral');
+  const ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${svgH}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+  incidents.forEach((inc,i)=>{
+    const y=PT+i*(rowH+rowGap);
+    const bw=Math.max(2,(inc.downMinutes/maxM)*cw);
+    const color=inc.downMinutes<45?emerald:(inc.downMinutes<=90?amber:coral);
+    // Row label: 14px ink-1 font-weight 500
+    svg+=`<text x="${PL-7}" y="${y+rowH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${labels[i]}</text>`;
+    svg+=`<rect x="${PL}" y="${y+2}" width="${bw}" height="${rowH-4}" rx="2" fill="${color}" opacity="0.85"/>`;
+    // Duration value: 14px ink-1 font-weight 500
+    svg+=`<text x="${PL+bw+6}" y="${y+rowH/2+5}" font-size="14" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${anFmtMins(inc.downMinutes)}</text>`;
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 8: Top deployers ---- */
+function anRenderActors(data) {
+  const el=document.getElementById('an-chart-actors');
+  const W=Math.max(el.offsetWidth||300, 150);
+  const sorted=AN_ACTORS.map(a=>({name:a, count:data.actorTotals[a]||0}))
+    .sort((a,b)=>b.count-a.count).slice(0,8);
+  // Gutter sized to longest actor name at 14px Inter (~7.5px/char)
+  const CH_WIDTH=7.5;
+  const longestName=sorted.reduce((a,b)=>b.name.length>a.length?b.name:a,'');
+  const PL=Math.min(Math.round(longestName.length*CH_WIDTH)+12, Math.round(W*0.50));
+  const PR=Math.round(W*0.18), PT=4, rowH=22, rowGap=4;
+  const H=PT+sorted.length*(rowH+rowGap)+6;
+  const maxC=sorted[0]?.count||1;
+  const cw=W-PL-PR;
+  const accentRgb=anCssVar('--accent-rgb'), ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+  sorted.forEach((actor,i)=>{
+    const y=PT+i*(rowH+rowGap);
+    const bw=Math.max(2,(actor.count/maxC)*cw);
+    const alpha=0.35+0.55*(actor.count/maxC);
+    // Name label: 14px ink-1 weight 500
+    svg+=`<text x="${PL-7}" y="${y+rowH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${actor.name}</text>`;
+    svg+=`<rect x="${PL}" y="${y+2}" width="${bw}" height="${rowH-4}" rx="2" fill="rgba(${accentRgb},${alpha.toFixed(2)})"/>`;
+    // Count value: 14px ink-1 weight 500
+    svg+=`<text x="${PL+bw+6}" y="${y+rowH/2+5}" font-size="14" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${actor.count}</text>`;
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Period control ---- */
+var anCurrentDays = 14;
+document.querySelectorAll('.an-period-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    anCurrentDays=parseInt(btn.dataset.days,10);
+    renderAnalytics(anCurrentDays);
+  });
+});
+
+/* ---- Main render entry point ---- */
+function renderAnalytics(days) {
+  anCurrentDays=days;
+  // Update sub-header text
+  const subEl=document.getElementById('an-sub-days');
+  if (subEl) subEl.textContent=days;
+  // Mark active period button
+  document.querySelectorAll('.an-period-btn').forEach(b=>{
+    const active=parseInt(b.dataset.days,10)===days;
+    b.classList.toggle('is-active',active);
+    b.setAttribute('aria-pressed', String(active));
+  });
+  const data=anWindowData(days);
+  anRenderKpiBand(data);
+  anRenderFreq(data);
+  anRenderCfr(data);
+  anRenderDuration(data);
+  anRenderFunnel(data);
+  anRenderDonut(data);
+  anRenderHeat(data);
+  anRenderMttr();
+  anRenderActors(data);
+}
 
 /* =================================================================
    DRAWER — history (domain-model fields only)
