@@ -1,0 +1,4 @@
+# Build outputs and dependencies — do not commit
+node_modules/
+dist/
+dist-zips/

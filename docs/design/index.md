@@ -38,7 +38,7 @@ children:
 - [Extension Components](./components.md#extension-components)
   - [Toolbar Badge](./components.md#toolbar-badge)
   - [Notification Toast](./components.md#notification-toast)
-  - [Latest-Change Popup Panel](./components.md#latest-change-popup-panel)
+  - [Deployment List Popup Panel](./components.md#deployment-list-popup-panel)
   - [Extension Config](./components.md#extension-config)
 
 ### `views.md`

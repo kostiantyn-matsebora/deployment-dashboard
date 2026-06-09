@@ -213,27 +213,40 @@ Edges carry the **parent node's** effective status. All 8 status values map to a
 
 ## Extension View Layout
 
-The browser extension presents three distinct surfaces (no persistent canvas — each surface is self-contained):
+The browser extension presents four distinct surfaces (no persistent canvas — each surface is self-contained):
 
 | Surface | Entry point | Container |
 |---------|-------------|-----------|
 | Toolbar badge | Always visible | Browser toolbar icon |
-| Latest-change popup | Click toolbar icon | Browser popup (`~360px` wide) |
+| Deployment list popup | Click toolbar icon | Browser popup (`~360px` wide) |
+| Notification toasts | Background SW on SSE event | Browser native notification |
 | Config / options | Extension options page or popup settings tab | Full options page |
 
 ### Popup Panel Layout
 
+Stateless list — re-fetches `GET /api/deployments` on open and on storage change.
+
 ```
 ┌─────────────────────────────┐
-│  [status-chip]  Service     │
+│  Loading… / Unconfigured /  │
+│  Paused / (empty)           │
+│  ─────────────────────────  │
+│  [status-chip]  Service     │  ← row 1 (newest)
 │  Environment · Version      │
 │  @actor  ·  3h ago / UTC    │
-│  [Open run]  [Open dashboard]│
+│  [Open run #NNN]            │
+│  ─────────────────────────  │
+│  [status-chip]  Service     │  ← row 2 …
+│  …                          │
+│  ─────────────────────────  │
+│  [Open dashboard]           │
 └─────────────────────────────┘
 ```
 
 - Fixed width ~360px; height content-driven.
-- Single deployment record only (the latest changed within watch scope).
+- Shows last N events (newest-first); N = `popupCount` (default 5), configurable 1–50.
+- Filtered by service+environment watch filter and status filter.
+- "Open dashboard" shown whenever a URL is configured.
 - Uses the same glass-surface tokens as the SPA (`.glass-base`, ink tokens, status palette).
 
 ### Config Panel Layout
@@ -246,10 +259,15 @@ The browser extension presents three distinct surfaces (no persistent canvas —
 │  [Watch all except|Watch only] │
 │  Services  [ ] svc-a  [ ] svc-b │
 │  Environments  [ ] prod  [ ] staging │
+│  ─────────────────────────  │
+│  Status filter              │
+│  [ ] pending  [ ] queued  … │
+│  ─────────────────────────  │
+│  Show last N events  [5]    │
 └─────────────────────────────┘
 ```
 
 - Master Watching switch is prominent at top.
-- Filter section is visually dimmed when switch is OFF.
-- Mode segmented control + two checkbox lists (services, environments).
+- Filter section (watch scope + status filter + popup count) is visually dimmed when switch is OFF.
+- Mode segmented control + two checkbox lists (services, environments) + status checkboxes (8) + count picker (1–50).
 - Persists all settings to extension storage.

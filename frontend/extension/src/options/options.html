@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deployment Dashboard — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <main class="options-root" role="main">
+    <header class="options-header">
+      <img src="../icons/icon-48.png" alt="" width="28" height="28" aria-hidden="true" />
+      <h1 class="options-title">Deployment Dashboard</h1>
+    </header>
+
+    <form id="options-form" novalidate>
+      <!-- Dashboard URL -->
+      <section class="options-section">
+        <label class="field-label" for="input-url">Dashboard URL</label>
+        <input
+          id="input-url"
+          type="url"
+          class="field-input"
+          placeholder="https://your-dashboard.example.com"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <p class="field-hint">Base URL of the deployed dashboard (no trailing slash needed).</p>
+      </section>
+
+      <!-- Master Watching switch — spec: docs/design/components.md §Master Watching Switch -->
+      <section class="options-section watching-row">
+        <div class="watching-label-group">
+          <span class="field-label" id="watching-label">Watching</span>
+          <span class="watching-state-label" id="watching-state-text">ON</span>
+        </div>
+        <button
+          type="button"
+          id="btn-watching"
+          class="switch"
+          role="switch"
+          aria-checked="true"
+          aria-labelledby="watching-label"
+        >
+          <span class="switch-knob"></span>
+        </button>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- Filter section — dimmed when watching is OFF -->
+      <section class="options-section filter-section" id="filter-section" aria-disabled="false">
+        <!-- Segmented mode control -->
+        <div class="field-label" id="filter-mode-label">Filter mode</div>
+        <div class="segmented" role="group" aria-labelledby="filter-mode-label">
+          <button type="button" class="seg-btn" id="seg-exclude" aria-pressed="true">Watch all except</button>
+          <button type="button" class="seg-btn" id="seg-include" aria-pressed="false">Watch only</button>
+        </div>
+
+        <!-- Services checklist -->
+        <fieldset class="checklist-group" id="services-group">
+          <legend class="checklist-legend">Services</legend>
+          <div id="services-list" class="checklist">
+            <p class="ink-2 no-items">Loading…</p>
+          </div>
+        </fieldset>
+
+        <!-- Environments checklist -->
+        <fieldset class="checklist-group" id="environments-group">
+          <legend class="checklist-legend">Environments</legend>
+          <div id="environments-list" class="checklist">
+            <p class="ink-2 no-items">Loading…</p>
+          </div>
+        </fieldset>
+
+        <!-- Statuses checklist -->
+        <fieldset class="checklist-group" id="statuses-group">
+          <legend class="checklist-legend">Statuses</legend>
+          <div id="statuses-list" class="checklist">
+            <!-- Rendered by options.ts from ALL_STATUSES -->
+          </div>
+        </fieldset>
+
+        <!-- Popup event count -->
+        <div class="field-row">
+          <label class="field-label" for="input-popup-count">Show last N events</label>
+          <input
+            id="input-popup-count"
+            type="number"
+            class="field-input field-input-narrow"
+            min="1"
+            max="50"
+            value="5"
+          />
+        </div>
+      </section>
+
+      <section class="options-section actions-row">
+        <button type="submit" id="btn-save" class="btn-primary">Save</button>
+        <span id="save-status" class="save-status" aria-live="polite"></span>
+      </section>
+    </form>
+  </main>
+  <script type="module" src="../options/options.ts"></script>
+</body>
+</html>
