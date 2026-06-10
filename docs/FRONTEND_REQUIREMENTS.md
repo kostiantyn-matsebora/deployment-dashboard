@@ -87,6 +87,29 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 
 - Hovering any version anywhere in the Matrix amber-highlights every tile across environments where the same version is deployed.
 
+### Analytics view
+
+- The dashboard provides a third view — **Analytics** — accessible via the top-nav segmented control as a 3rd tab alongside Matrix and Swimlanes.
+- The Analytics view is **read-only** — no user writes; CI/CD writes are the sole data source.
+- The period selector exposes three windows: **7d**, **14d**, **30d**; only one may be active at a time.
+- The active window is **bounded server-side** by `HISTORY_RETENTION_DAYS`; when `window.clamped === true` the SPA surfaces the clamp in the period selector subtitle ("bounded by HISTORY_RETENTION_DAYS").
+- All aggregation is **server-side**; the SPA MUST NOT compute p95 / group-by / frequency counts over raw deployment history client-side.
+- The DORA KPI band displays **four keys**: Deployment Frequency (`per_day`), Lead Time for Changes (`hours`), Change Failure Rate (`ratio`), and Time to Restore (`minutes`).
+- Each DORA KPI card renders: formatted value + unit, a performance classification chip (`elite` / `high` / `medium` / `low`), a signed trend chip vs the prior half-window (direction semantics: up = good for frequency; up = bad for CFR, lead-time, MTTR), and a per-day sparkline.
+- The Lead Time card MUST display a visible approximation label; the value MUST NOT be presented as measured commit→prod lead time (source: `api-guidelines.md` §12 lead-time caveat).
+- The chart grid contains **8 charts** backed by the 9 focused analytics endpoints:
+  - Deployment frequency over time — stacked bars, success vs failure per day (`GET /api/analytics/frequency`).
+  - Change failure rate trend — daily CFR line + dashed 15% elite reference line (`GET /api/analytics/change-failure-rate`).
+  - Deployment duration distribution — histogram bins (minutes) + p50 and p95 markers (`GET /api/analytics/duration-histogram`).
+  - Promotion funnel — 5-stage dev→staging→qa→preprod→prod sankey/funnel, count + conversion per stage (`GET /api/analytics/promotion-funnel`).
+  - Status distribution — donut of all 8 statuses, zero-filled for stable slice set (`GET /api/analytics/status-distribution`).
+  - Deploy heatmap — 7-row (day-of-week) × 24-col (UTC hour) intensity grid (`GET /api/analytics/heatmap`).
+  - Top deployers — leaderboard of actor + count, descending, default 10 entries (`GET /api/analytics/top-deployers`).
+  - Time to restore — recent incidents list, worst-first; each row shows service, environment, elapsed, severity chip (`GET /api/analytics/incidents`).
+- The DORA KPI band data comes from `GET /api/analytics/dora` (a 9th endpoint — not one of the 8 charts).
+- Every analytics GET carries a weak `ETag`; the SPA SHOULD send `If-None-Match` for `304` short-circuit on unchanged data.
+- The Analytics view uses `ngx-echarts` (`echarts` as peer) for all 8 chart renders. See `docs/design/libraries.md` for rationale and version.
+
 ## Visual
 
 ### Box states (Matrix)
