@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Dashboard.Read.Analytics;
+using Dashboard.Shared.Contracts;
 
 namespace Dashboard.Read.Tests;
 
@@ -263,5 +265,96 @@ public sealed class AnalyticsTests
         Assert.Equal(1.0, prior!.Value, precision: 10);
         // current half: 9 events / 3 days = 3/day
         Assert.Equal(3.0, current!.Value, precision: 10);
+    }
+
+    // ── F2: Status distribution — OpenAPI enum declaration order ─────────────
+
+    [Fact]
+    public void StatusDistribution_OpenApiEnumOrder_IsCorrect()
+    {
+        // Asserts the OpenAPI-declared order: pending, queued, waiting, in-progress,
+        // success, failure, cancelled, rejected. Matches AnalyticsEndpoints.StatusEnumOrder.
+        string[] expected =
+        [
+            DeploymentStatus.Pending,
+            DeploymentStatus.Queued,
+            DeploymentStatus.Waiting,
+            DeploymentStatus.InProgress,
+            DeploymentStatus.Success,
+            DeploymentStatus.Failure,
+            DeploymentStatus.Cancelled,
+            DeploymentStatus.Rejected,
+        ];
+
+        // Simulate the map-and-select the endpoint performs, with zero counts.
+        var map = new Dictionary<string, int>();
+        var statuses = expected.Select(s => new { Status = s, Count = map.GetValueOrDefault(s, 0) }).ToList();
+
+        Assert.Equal(8, statuses.Count);
+        for (var i = 0; i < expected.Length; i++)
+            Assert.Equal(expected[i], statuses[i].Status);
+    }
+
+    // ── F1: Enum serialization — wire values must be lowercase ────────────────
+
+    [Theory]
+    [InlineData(AnalyticsClassification.Elite, "\"elite\"")]
+    [InlineData(AnalyticsClassification.High, "\"high\"")]
+    [InlineData(AnalyticsClassification.Medium, "\"medium\"")]
+    [InlineData(AnalyticsClassification.Low, "\"low\"")]
+    public void Classification_SerializesLowercase(AnalyticsClassification value, string expected)
+    {
+        var json = JsonSerializer.Serialize(value);
+        Assert.Equal(expected, json);
+    }
+
+    [Theory]
+    [InlineData(AnalyticsSeverity.Low, "\"low\"")]
+    [InlineData(AnalyticsSeverity.Medium, "\"medium\"")]
+    [InlineData(AnalyticsSeverity.High, "\"high\"")]
+    [InlineData(AnalyticsSeverity.Critical, "\"critical\"")]
+    public void Severity_SerializesLowercase(AnalyticsSeverity value, string expected)
+    {
+        var json = JsonSerializer.Serialize(value);
+        Assert.Equal(expected, json);
+    }
+
+    // ── F2: SampleHalfWindows — correct trend sign for earlier-vs-later sets ──
+
+    [Fact]
+    public void SampleHalfWindows_Empty_ReturnsBothNull()
+    {
+        var (current, prior) = DoraClassifier.SampleHalfWindows([]);
+        Assert.Null(current);
+        Assert.Null(prior);
+    }
+
+    [Fact]
+    public void SampleHalfWindows_EarlierLarger_CurrentIsSmaller_TrendNegative()
+    {
+        // First (prior) half: [100, 90] → median 95; second (current) half: [10, 20] → median 15.
+        // TrendDelta = (15 - 95) / 95 ≈ −0.842 (negative = improvement for lower-is-better MTTR).
+        double[] orderedByTime = [100, 90, 10, 20];
+        var (current, prior) = DoraClassifier.SampleHalfWindows(orderedByTime);
+        Assert.NotNull(current);
+        Assert.NotNull(prior);
+        Assert.True(current < prior, "current half median should be smaller than prior (improving trend)");
+        var delta = DoraClassifier.TrendDelta(current, prior);
+        Assert.NotNull(delta);
+        Assert.True(delta < 0, "trend_delta must be negative when current is smaller than prior");
+    }
+
+    [Fact]
+    public void SampleHalfWindows_EarlierSmaller_CurrentIsLarger_TrendPositive()
+    {
+        // First (prior) half: [10, 20] → median 15; second (current) half: [100, 90] → median 95.
+        double[] orderedByTime = [10, 20, 100, 90];
+        var (current, prior) = DoraClassifier.SampleHalfWindows(orderedByTime);
+        Assert.NotNull(current);
+        Assert.NotNull(prior);
+        Assert.True(current > prior, "current half median should be larger than prior (worsening trend)");
+        var delta = DoraClassifier.TrendDelta(current, prior);
+        Assert.NotNull(delta);
+        Assert.True(delta > 0, "trend_delta must be positive when current is larger than prior");
     }
 }

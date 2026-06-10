@@ -153,6 +153,22 @@ internal static class DoraClassifier
     }
 
     /// <summary>
+    /// Splits a time-ordered sample list at the half-window boundary.
+    /// The first <c>Count/2</c> samples (earlier) form the prior half;
+    /// the remainder form the current half. Mirrors <see cref="FrequencyHalfWindows"/>
+    /// for KPIs whose repository returns samples ordered by <c>happened_at</c>.
+    /// </summary>
+    internal static (double? Current, double? Prior) SampleHalfWindows(
+        IReadOnlyList<double> samples)
+    {
+        if (samples.Count == 0) return (null, null);
+        var half = samples.Count / 2;
+        var prior = samples.Take(half).ToList();
+        var current = samples.Skip(half).ToList();
+        return (Median(current), Median(prior));
+    }
+
+    /// <summary>
     /// Splits the daily counts into current (latter half) and prior (first half) sub-windows
     /// and returns the deployment frequency for each half, enabling trend_delta computation.
     /// </summary>

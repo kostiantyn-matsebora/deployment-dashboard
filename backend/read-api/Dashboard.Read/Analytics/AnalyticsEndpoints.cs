@@ -30,6 +30,19 @@ public static class AnalyticsEndpoints
 
     private static readonly int[] DurationBinBoundaries = [0, 10, 20, 30, 60, 120];
 
+    // OpenAPI Status enum declaration order (pending, queued, waiting, in-progress, success, failure, cancelled, rejected).
+    private static readonly IReadOnlyList<string> StatusEnumOrder =
+    [
+        DeploymentStatus.Pending,
+        DeploymentStatus.Queued,
+        DeploymentStatus.Waiting,
+        DeploymentStatus.InProgress,
+        DeploymentStatus.Success,
+        DeploymentStatus.Failure,
+        DeploymentStatus.Cancelled,
+        DeploymentStatus.Rejected,
+    ];
+
     public static IEndpointRouteBuilder MapAnalyticsEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/analytics/dora", HandleDoraAsync)
@@ -126,17 +139,13 @@ public static class AnalyticsEndpoints
         var cfrSparkline = DoraClassifier.CfrSparkline(
             dailyCounts, DateOnly.FromDateTime(win.From.UtcDateTime.Date), win.Days);
 
-        // Lead time
+        // Lead time — samples are ordered by happened_at from the repository.
         var lt = DoraClassifier.Median(ltSamples);
-        var ltPrior = ltSamples.Count > 0
-            ? DoraClassifier.Median(ltSamples.Take(ltSamples.Count / 2).ToList())
-            : null;
+        var (ltCurrent, ltPrior) = DoraClassifier.SampleHalfWindows(ltSamples);
 
-        // MTTR
+        // MTTR — samples are ordered by failed_at from the repository.
         var mttr = DoraClassifier.Median(mttrSamples);
-        var mttrPrior = mttrSamples.Count > 0
-            ? DoraClassifier.Median(mttrSamples.Take(mttrSamples.Count / 2).ToList())
-            : null;
+        var (mttrCurrent, mttrPrior) = DoraClassifier.SampleHalfWindows(mttrSamples);
 
         var response = new AnalyticsDoraResponse(
             Window: win,
@@ -151,7 +160,7 @@ public static class AnalyticsEndpoints
                 Value: lt,
                 Unit: "hours",
                 Classification: DoraClassifier.ClassifyLeadTime(lt),
-                TrendDelta: DoraClassifier.TrendDelta(lt, ltPrior),
+                TrendDelta: DoraClassifier.TrendDelta(ltCurrent, ltPrior),
                 Sparkline: [],
                 Approximated: true),
             ChangeFailureRate: new AnalyticsKpi(
@@ -165,7 +174,7 @@ public static class AnalyticsEndpoints
                 Value: mttr,
                 Unit: "minutes",
                 Classification: DoraClassifier.ClassifyMttr(mttr),
-                TrendDelta: DoraClassifier.TrendDelta(mttr, mttrPrior),
+                TrendDelta: DoraClassifier.TrendDelta(mttrCurrent, mttrPrior),
                 Sparkline: [],
                 Approximated: false));
 
@@ -286,9 +295,8 @@ public static class AnalyticsEndpoints
 
         var map = counts.ToDictionary(r => r.Status, r => r.Count);
 
-        // All eight statuses in enum order, zero-filled.
-        var statuses = DeploymentStatus.All
-            .OrderBy(s => s, StringComparer.Ordinal)
+        // All eight statuses in OpenAPI enum declaration order, zero-filled.
+        var statuses = StatusEnumOrder
             .Select(s => new AnalyticsStatusCount(s, map.GetValueOrDefault(s, 0)))
             .ToList();
 

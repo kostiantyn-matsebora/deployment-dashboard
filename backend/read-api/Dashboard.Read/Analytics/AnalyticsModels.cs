@@ -22,9 +22,13 @@ public sealed record AnalyticsWindow(
 [JsonConverter(typeof(JsonStringEnumConverter<AnalyticsClassification>))]
 public enum AnalyticsClassification
 {
+    [JsonStringEnumMemberName("elite")]
     Elite,
+    [JsonStringEnumMemberName("high")]
     High,
+    [JsonStringEnumMemberName("medium")]
     Medium,
+    [JsonStringEnumMemberName("low")]
     Low,
 }
 
@@ -146,9 +150,13 @@ public sealed record AnalyticsTopDeployersResponse(
 [JsonConverter(typeof(JsonStringEnumConverter<AnalyticsSeverity>))]
 public enum AnalyticsSeverity
 {
+    [JsonStringEnumMemberName("low")]
     Low,
+    [JsonStringEnumMemberName("medium")]
     Medium,
+    [JsonStringEnumMemberName("high")]
     High,
+    [JsonStringEnumMemberName("critical")]
     Critical,
 }
 

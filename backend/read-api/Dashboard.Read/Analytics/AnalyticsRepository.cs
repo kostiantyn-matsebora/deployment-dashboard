@@ -73,11 +73,13 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
             .Select(e => new SlotEvent(e.Service, e.Environment, e.Status, e.HappenedAt))
             .ToListAsync(ct);
 
-        var samples = new List<double>();
+        // Collect (failedAt, duration) pairs so we can order by happened_at before returning,
+        // ensuring SampleHalfWindows splits on the earlier vs later time period correctly.
+        var timed = new List<(DateTimeOffset FailedAt, double Minutes)>();
         foreach (var slot in events.GroupBy(e => (e.Service, e.Environment)))
-            CollectMttrSamplesFromSlot(slot.OrderBy(e => e.HappenedAt).ToList(), samples);
+            CollectMttrSamplesFromSlot(slot.OrderBy(e => e.HappenedAt).ToList(), timed);
 
-        return samples;
+        return timed.OrderBy(s => s.FailedAt).Select(s => s.Minutes).ToList();
     }
 
     // ── Chart series ──────────────────────────────────────────────────────────
@@ -197,6 +199,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
                         && e.HappenedAt < to
                         && e.ParentDeployments != null
                         && e.ParentDeployments.Length > 0)
+            .OrderBy(e => e.HappenedAt)
             .ToListAsync(ct);
 
     private async Task<Dictionary<string, DateTimeOffset>> FetchParentMinTimesAsync(
@@ -228,7 +231,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
 
     private static void CollectMttrSamplesFromSlot(
         IReadOnlyList<SlotEvent> ordered,
-        List<double> samples)
+        List<(DateTimeOffset FailedAt, double Minutes)> samples)
     {
         for (var i = 0; i < ordered.Count; i++)
         {
@@ -237,7 +240,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
             {
                 if (ordered[j].Status != DeploymentStatus.Success) continue;
                 var minutes = (ordered[j].HappenedAt - ordered[i].HappenedAt).TotalMinutes;
-                if (minutes > 0) samples.Add(minutes);
+                if (minutes > 0) samples.Add((ordered[i].HappenedAt, minutes));
                 break;
             }
         }
