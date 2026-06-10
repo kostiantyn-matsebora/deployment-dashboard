@@ -243,4 +243,29 @@ describe('AnalyticsComponent', () => {
     const fn = (component as unknown as { formatDuration: (m: number | null) => string }).formatDuration;
     expect(fn(null)).toBe('—');
   });
+
+  it('loading indicator is absent once all 9 requests have resolved', () => {
+    // The mock API returns synchronous observables (of()), so all 9 requests
+    // resolve before detectChanges returns — the counter drops to 0.
+    expect(fixture.nativeElement.querySelector('.an-loading-bar')).toBeNull();
+  });
+
+  it('subtitleText omits retention clause when not clamped', () => {
+    // WINDOW fixture has clamped: false — subtitle must NOT contain "retention".
+    const sub: HTMLElement = fixture.nativeElement.querySelector('.an-sub');
+    expect(sub?.textContent).not.toContain('retention');
+  });
+
+  it('subtitleText computed includes retention clause when clamped', () => {
+    // Test the computed value directly without DOM re-render (avoids jsdom canvas churn).
+    const c = component as unknown as {
+      frequency: { set(v: typeof FREQ_FIXTURE | null): void };
+      dora: { set(v: typeof DORA_FIXTURE | null): void };
+      subtitleText: () => string;
+    };
+    const clampedWindow: AnalyticsWindow = { ...WINDOW, clamped: true };
+    c.dora.set(null);
+    c.frequency.set({ ...FREQ_FIXTURE, window: clampedWindow });
+    expect(c.subtitleText()).toContain('retention');
+  });
 });

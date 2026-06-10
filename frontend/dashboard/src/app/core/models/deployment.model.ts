@@ -201,9 +201,12 @@ export interface AnalyticsWindow {
 
 export type AnalyticsClassification = 'elite' | 'high' | 'medium' | 'low';
 
+/** Literal union of the units emitted by the contract (AnalyticsKpi.unit in openapi.yaml). */
+export type AnalyticsKpiUnit = 'per_day' | 'hours' | 'ratio' | 'minutes';
+
 export interface AnalyticsKpi {
   value: number | null;
-  unit: string;
+  unit: AnalyticsKpiUnit;
   classification: AnalyticsClassification;
   trend_delta: number | null;
   sparkline: number[];

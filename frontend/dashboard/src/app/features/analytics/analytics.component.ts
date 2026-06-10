@@ -48,6 +48,7 @@ import {
   AnalyticsIncidents,
   AnalyticsWindow,
   AnalyticsIncident,
+  AnalyticsKpiUnit,
 } from '../../core/models/deployment.model';
 
 // ── Status palette — shared with rest of the dashboard ───────────────────────
@@ -105,8 +106,10 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly periods = ANALYTICS_PERIODS;
   protected readonly activePeriod = signal<AnalyticsPeriod>('14d');
 
-  // ── Loading state ────────────────────────────────────────
-  protected readonly loading = signal(false);
+  // ── Loading state — counter cleared only when all 9 requests have resolved ──
+  // Each fetch() increments by 9; each settled request decrements by 1.
+  private loadingCount = signal(0);
+  protected readonly loading = computed(() => this.loadingCount() > 0);
 
   // ── Raw response signals ─────────────────────────────────
   protected readonly dora              = signal<AnalyticsDora | null>(null);
@@ -127,8 +130,9 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly subtitleText = computed(() => {
     const w = this.resolvedWindow();
     if (!w) return '';
-    const clamped = w.clamped ? ` (clamped from retention: ${w.retention_days}d)` : '';
-    return `${w.days} days · bounded by HISTORY_RETENTION_DAYS (${w.retention_days}d)${clamped}`;
+    // Retention clause is only meaningful when the window was actually clamped.
+    const retention = w.clamped ? ` — clamped to retention (${w.retention_days}d)` : '';
+    return `${w.days} days${retention}`;
   });
 
   // ── DORA KPI band ────────────────────────────────────────
@@ -441,20 +445,25 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected formatKpiValue(kpi: ReturnType<typeof this.doraKpis>[number]['kpi']): string {
     if (kpi.value === null) return '—';
     const v = kpi.value;
-    switch (kpi.unit) {
+    const unit: AnalyticsKpiUnit = kpi.unit;
+    switch (unit) {
       case 'per_day': return v.toFixed(1);
       case 'hours':   return v.toFixed(1) + ' h';
       case 'ratio':   return (v * 100).toFixed(1) + '%';
       case 'minutes': return v.toFixed(0) + ' min';
-      default:        return String(v);
+      default: {
+        // Exhaustiveness guard — TypeScript will error if a new unit is added to
+        // AnalyticsKpiUnit without a matching case above.
+        const _: never = unit;
+        return String(_);
+      }
     }
   }
 
-  protected trendLabel(kpi: ReturnType<typeof this.doraKpis>[number]['kpi'], higherIsBetter: boolean): string {
+  protected trendLabel(kpi: ReturnType<typeof this.doraKpis>[number]['kpi']): string {
     if (kpi.trend_delta === null) return '';
     const pct = Math.round(Math.abs(kpi.trend_delta) * 100);
-    const up   = kpi.trend_delta > 0;
-    const dir  = up ? '▲' : '▼';
+    const dir  = kpi.trend_delta > 0 ? '▲' : '▼';
     return `${dir} ${pct}%`;
   }
 
@@ -504,51 +513,55 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
     // Cancel previous in-flight requests
     this.subs.forEach(s => s.unsubscribe());
     this.subs = [];
-    this.loading.set(true);
+
+    // Track all 9 in-flight requests; loading clears only when every one has settled.
+    const REQUESTS = 9;
+    this.loadingCount.set(REQUESTS);
+    const done = () => this.loadingCount.update(n => Math.max(0, n - 1));
 
     // Fire all 9 requests independently; each updates its own signal on arrival.
     // No combineLatest — partial results render as they arrive.
     this.subs.push(
       this.api.getAnalyticsDora(period).subscribe({
-        next:  v => this.dora.set(v),
-        error: () => { /* non-fatal — signal stays null */ },
+        next:  v => { this.dora.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsFrequency(period).subscribe({
-        next:  v => { this.frequency.set(v); this.loading.set(false); },
-        error: () => this.loading.set(false),
+        next:  v => { this.frequency.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsChangeFailureRate(period).subscribe({
-        next:  v => this.cfr.set(v),
-        error: () => {},
+        next:  v => { this.cfr.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsDurationHistogram(period).subscribe({
-        next:  v => this.durationHistogram.set(v),
-        error: () => {},
+        next:  v => { this.durationHistogram.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsPromotionFunnel(period).subscribe({
-        next:  v => this.funnel.set(v),
-        error: () => {},
+        next:  v => { this.funnel.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsStatusDistribution(period).subscribe({
-        next:  v => this.statusDist.set(v),
-        error: () => {},
+        next:  v => { this.statusDist.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsHeatmap(period).subscribe({
-        next:  v => this.heatmap.set(v),
-        error: () => {},
+        next:  v => { this.heatmap.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsTopDeployers(period).subscribe({
-        next:  v => this.topDeployers.set(v),
-        error: () => {},
+        next:  v => { this.topDeployers.set(v); done(); },
+        error: () => done(),
       }),
       this.api.getAnalyticsIncidents(period).subscribe({
-        next:  v => this.incidents.set(v),
-        error: () => {},
+        next:  v => { this.incidents.set(v); done(); },
+        error: () => done(),
       }),
     );
   }
 
-  /** Find the label of the bin whose range contains the given minutes value. */
+  /** Find the label of the first bin whose upper bound exceeds the given minutes value (upper_minutes is exclusive). */
   private closestBinLabel(bins: AnalyticsDurationHistogram['bins'], minutes: number): string {
     for (const bin of bins) {
       if (bin.upper_minutes === null || minutes < bin.upper_minutes) return bin.label;

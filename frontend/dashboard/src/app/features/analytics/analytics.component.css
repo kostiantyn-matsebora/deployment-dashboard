@@ -37,6 +37,21 @@
   margin-left: 8px;
 }
 
+/* ── Loading bar — full-width shimmer until all 9 requests settle ── */
+
+.an-loading-bar {
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent, #6366f1) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: an-loading-sweep 1.2s linear infinite;
+}
+
+@keyframes an-loading-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* ── Period segmented control ──────────────────────────── */
 
 .an-period {

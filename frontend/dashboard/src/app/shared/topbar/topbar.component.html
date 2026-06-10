@@ -291,7 +291,8 @@
       </div>
     }
 
-    <!-- Legend popover (☷) ──────────────────────────────── -->
+    <!-- Legend popover (☷) — Matrix + Swimlanes only; hidden on Analytics (no legend needed) -->
+    @if (!isAnalytics()) {
     <div style="position: relative">
       <button
         class="icon-btn"
@@ -368,6 +369,7 @@
         </div>
       </p-popover>
     </div>
+    }
 
   </div>
 

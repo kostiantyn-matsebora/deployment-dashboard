@@ -24,6 +24,11 @@
     </div>
   </div>
 
+  <!-- ── Loading bar — visible until all 9 analytics requests have settled ── -->
+  @if (loading()) {
+    <div class="an-loading-bar" role="status" aria-label="Loading analytics data"></div>
+  }
+
   <!-- ── DORA KPI band ─────────────────────────────────── -->
   <div class="an-kpi-band" role="group" aria-label="DORA KPIs">
     @for (item of doraKpis(); track item.key) {
@@ -37,8 +42,8 @@
           </span>
           @if (item.kpi.trend_delta !== null) {
             <span class="an-trend-chip {{ trendClass(item.kpi, item.higherIsBetter) }}"
-                  [attr.aria-label]="'Trend: ' + trendLabel(item.kpi, item.higherIsBetter)">
-              {{ trendLabel(item.kpi, item.higherIsBetter) }}
+                  [attr.aria-label]="'Trend: ' + trendLabel(item.kpi)">
+              {{ trendLabel(item.kpi) }}
             </span>
           }
           @if (item.approx) {
