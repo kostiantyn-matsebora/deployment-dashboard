@@ -595,7 +595,7 @@ public sealed class AnalyticsTests
 
         Assert.Equal(2, result.Count);
         Assert.Equal("alice", result[0].Actor); // alice < bob ordinal
-        Assert.Equal("bob",   result[1].Actor);
+        Assert.Equal("bob", result[1].Actor);
     }
 
     [Fact]
