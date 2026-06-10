@@ -36,7 +36,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | `Accept` | request | optional | `application/json`, or `text/event-stream` for SSE endpoints. |
 | `Last-Event-ID` | request | SSE reconnect (deployment stream, control stream, **and** component-events stream) | Last seen event id; server replays everything strictly greater within retention window. |
 | `Retry-After` | response | `429`, `503` | Integer seconds. |
-| `ETag` / `If-None-Match` | both | `GET /api/matrix` | Weak ETag; SPA SHOULD send `If-None-Match` on poll-mode fallback. |
+| `ETag` / `If-None-Match` | both | `GET /api/matrix`, `GET /api/analytics/*` | Weak ETag; SPA SHOULD send `If-None-Match` to short-circuit unchanged reads (`304`). |
 
 ---
 
@@ -64,6 +64,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | `GET /api/control/stream` | `X-Control-API-Key` | Control stream is for trusted internal components; separates subscription privilege from ingest. |
 | `GET /api/control/events/stream` | none | Same as other reads / browser EventSource; observability. |
 | `GET /api/matrix`, `GET /api/deployments`, `GET /api/services`, `GET /api/environments` | none | Internal-only network (NFR-04); SPA never holds a secret. |
+| `GET /api/analytics/*` | none | Aggregate reads; same trust tier as the other reads. |
 | `GET /api/events/stream` | none | Same as other reads; auth would defeat browser EventSource. |
 | `GET /healthz`, `GET /readyz` | none | Probe surfaces. |
 
@@ -413,13 +414,74 @@ fetch("POST /api/control/events", {
 
 ---
 
-## 12. Examples — copy-paste minimum viable calls
+## 12. Analytics — DORA-anchored aggregate reads
+
+Server-side aggregate reads over the `deployment_events` log (issue #299). The SPA
+**MUST NOT** compute p95 / group-by over months of history client-side — these
+endpoints serve decision-grade metrics from the server.
+
+### Shape (binding for every `/api/analytics/*`)
+
+| Property | Value |
+|---|---|
+| Verb / auth | `GET`, unauthenticated — same trust tier as the other reads |
+| Granularity | **One focused endpoint per concern** — never one consolidated payload |
+| Caching | Weak `ETag` on every `200`; `If-None-Match` → `304 Not Modified` (no body) |
+| `window` param | `7d` \| `14d` \| `30d` (default `7d`); absent/out-of-enum → `7d` |
+| Resolved window | Every response embeds `window` (`AnalyticsWindow`: `days`, `from`, `to`, `retention_days`, `clamped`) |
+
+### Endpoints
+
+| Path | Concern |
+|---|---|
+| `GET /api/analytics/dora` | DORA Four Keys KPI band |
+| `GET /api/analytics/frequency` | Per-day success vs failure counts |
+| `GET /api/analytics/change-failure-rate` | Per-day CFR + `elite_threshold` (`0.15`) |
+| `GET /api/analytics/duration-histogram` | Duration bins + `p50` / `p95` |
+| `GET /api/analytics/promotion-funnel` | `dev → staging → qa → preprod → prod` count + conversion |
+| `GET /api/analytics/status-distribution` | Count per status (all 8, zero-filled) |
+| `GET /api/analytics/heatmap` | Day-of-week × hour counts (sparse) |
+| `GET /api/analytics/top-deployers` | Actor + count (desc; `limit`, default 10) |
+| `GET /api/analytics/incidents` | Worst-first restoration incidents (`limit`, default 10) |
+
+### Retention clamp (binding)
+
+`window` is **clamped server-side** to `HISTORY_RETENTION_DAYS` (default 365, min 90).
+When the requested span exceeds available retention the server narrows `days` to
+`retention_days` and sets `window.clamped = true`. The SPA surfaces the clamp in the
+period selector. Clamping is a normal `200`, never an error.
+
+### Lead-time approximation caveat (binding)
+
+True DORA lead time (commit → prod) is **not in the event log** — the store carries
+deployment-state events, not commit timestamps. `GET /api/analytics/dora` therefore
+**approximates** `lead_time` from `parent_deployments` promotion chains that reach a
+`prod` environment, and flags it `approximated: true`. The other three keys are
+`approximated: false`. Consumers MUST render the approximation label; never present
+the value as measured commit→prod lead time.
+
+### Aggregation conventions
+
+- **Terminal-only counts.** Frequency and CFR count `success` / `failure` events;
+  non-terminal statuses are excluded from those rates.
+- **Duration** = per `deployment_id`, `last(happened_at) − first(happened_at)` in
+  minutes; single-row deployments (no measurable span) are excluded.
+- **Incident** = a `failure` in a `(service, environment)` slot followed by a later
+  `success` in the same slot; `duration_minutes = restored_at − failed_at`. An
+  unresolved failure has `restored_at: null` / `duration_minutes: null` and sorts
+  first. `severity` is derived from `duration_minutes` (longer → higher; unresolved
+  → `critical`).
+- **All ordering is by `happened_at`** (emitter-supplied), consistent with §8.
+
+---
+
+## 13. Examples — copy-paste minimum viable calls
 
 See [`api-examples.md`](./api-examples.md) — ingest, matrix snapshot, SSE, fetcher cursor, control reset, control stream subscription, component event post.
 
 ---
 
-## 13. Known carry-over for implementers
+## 14. Known carry-over for implementers
 
 Discrepancies reconciled against `openapi.yaml` (D1). History:
 
