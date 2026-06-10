@@ -4,6 +4,7 @@ import {
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -34,6 +35,7 @@ echarts.use([
 type EChartsOption = Record<string, any>;
 
 import { DeploymentApiService } from '../../core/services/deployment-api.service';
+import { ThemeService } from '../../core/services/theme.service';
 import {
   ANALYTICS_PERIODS,
   AnalyticsPeriod,
@@ -63,16 +65,48 @@ const STATUS_COLORS: Record<string, string> = {
   'rejected':    '#f43f5e',
 };
 
-// DORA severity colour — matches mockup
-const SEVERITY_COLORS: Record<string, string> = {
-  low:      '#10b981',
-  medium:   '#f59e0b',
-  high:     '#ef4444',
-  critical: '#7c3aed',
-};
+// MTTR duration-bucket colours — matches mockup anRenderMttr buckets:
+//   <45 min → emerald, 45–90 min → amber, >90 min → coral.
+// severity enum is not used for colour; duration is the axis.
+const MTTR_BUCKET_COLORS = {
+  fast:   '#10b981', // <45 min
+  medium: '#f59e0b', // 45–90 min
+  slow:   '#ef4444', // >90 min
+} as const;
+
+/** Return the MTTR marker colour keyed on duration bucket, not severity. */
+function mttrColor(durationMinutes: number | null): string {
+  if (durationMinutes === null) return MTTR_BUCKET_COLORS.slow; // unresolved = worst
+  if (durationMinutes < 45)   return MTTR_BUCKET_COLORS.fast;
+  if (durationMinutes <= 90)  return MTTR_BUCKET_COLORS.medium;
+  return MTTR_BUCKET_COLORS.slow;
+}
 
 // Days of week labels for heatmap
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Resolved design-token palette for ECharts.
+ * ECharts renders to <canvas> and cannot resolve CSS custom properties,
+ * so we read the computed values from the live DOM after each theme change.
+ */
+interface ChartPalette {
+  ink0:      string;
+  ink1:      string;
+  ink2:      string;
+  glassEdge: string;
+}
+
+/** Read resolved token values from the document root after the theme is applied. */
+function resolveChartPalette(): ChartPalette {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    ink0:      style.getPropertyValue('--ink-0').trim()      || '#e9ecf4',
+    ink1:      style.getPropertyValue('--ink-1').trim()      || '#b8bdcc',
+    ink2:      style.getPropertyValue('--ink-2').trim()      || '#7c829a',
+    glassEdge: style.getPropertyValue('--glass-edge').trim() || 'rgba(255,255,255,0.06)',
+  };
+}
 
 /**
  * AnalyticsComponent — DORA-anchored deployment analytics view.
@@ -100,7 +134,8 @@ const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   providers: [provideEchartsCore({ echarts })],
 })
 export class AnalyticsComponent implements OnInit, OnDestroy {
-  private readonly api = inject(DeploymentApiService);
+  private readonly api          = inject(DeploymentApiService);
+  private readonly themeService = inject(ThemeService);
 
   // ── Period selector ──────────────────────────────────────
   protected readonly periods = ANALYTICS_PERIODS;
@@ -121,6 +156,12 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly heatmap           = signal<AnalyticsHeatmap | null>(null);
   protected readonly topDeployers      = signal<AnalyticsTopDeployers | null>(null);
   protected readonly incidents         = signal<AnalyticsIncidents | null>(null);
+
+  // ── Resolved chart palette — recomputed on theme change ──────────────────
+  // ThemeService.theme() is the reactive dependency; resolving from getComputedStyle
+  // after the effect has applied [data-theme] to <html> gives the correct token values
+  // for both explicit themes and auto (which applies light tokens via media query).
+  protected readonly chartPalette = signal<ChartPalette>(resolveChartPalette());
 
   // ── Window subtitle (from any response) ─────────────────
   protected readonly resolvedWindow = computed<AnalyticsWindow | null>(() => {
@@ -173,13 +214,16 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly freqChartOption = computed<EChartsOption | null>(() => {
     const f = this.frequency();
     if (!f) return null;
+    const p = this.chartPalette();
     const dates = f.buckets.map(b => b.date);
     return {
       tooltip:  { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend:   { data: ['Success', 'Failure'], textStyle: { color: 'var(--ink-2)' }, bottom: 0 },
-      grid:     { left: 40, right: 8, top: 8, bottom: 28 },
-      xAxis:    { type: 'category', data: dates, axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
-      yAxis:    { type: 'value', axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, splitLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      // Fix #2: move legend to top so it doesn't collide with the x-axis date labels.
+      legend:   { data: ['Success', 'Failure'], textStyle: { color: p.ink2 }, top: 0 },
+      // Fix #2: increase top to leave room for the top legend; bottom stays for x-axis labels.
+      grid:     { left: 40, right: 8, top: 28, bottom: 28 },
+      xAxis:    { type: 'category', data: dates, axisLabel: { color: p.ink2, fontSize: 10 }, axisLine: { lineStyle: { color: p.glassEdge } } },
+      yAxis:    { type: 'value', axisLabel: { color: p.ink2, fontSize: 10 }, splitLine: { lineStyle: { color: p.glassEdge } } },
       series: [
         {
           name: 'Success',
@@ -202,17 +246,18 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly cfrChartOption = computed<EChartsOption | null>(() => {
     const c = this.cfr();
     if (!c) return null;
+    const p = this.chartPalette();
     const dates = c.buckets.map(b => b.date);
     return {
       tooltip:  { trigger: 'axis' },
       grid:     { left: 40, right: 8, top: 8, bottom: 24 },
-      xAxis:    { type: 'category', data: dates, axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      xAxis:    { type: 'category', data: dates, axisLabel: { color: p.ink2, fontSize: 10 }, axisLine: { lineStyle: { color: p.glassEdge } } },
       yAxis:    {
         type: 'value',
         min: 0,
         max: 1,
-        axisLabel: { color: 'var(--ink-2)', fontSize: 10, formatter: (v: number) => `${Math.round(v * 100)}%` },
-        splitLine: { lineStyle: { color: 'var(--glass-edge)' } },
+        axisLabel: { color: p.ink2, fontSize: 10, formatter: (v: number) => `${Math.round(v * 100)}%` },
+        splitLine: { lineStyle: { color: p.glassEdge } },
       },
       series: [
         {
@@ -237,21 +282,30 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly durationChartOption = computed<EChartsOption | null>(() => {
     const h = this.durationHistogram();
     if (!h) return null;
+    const p = this.chartPalette();
     const labels = h.bins.map(b => b.label);
-    const marks: { xAxis: string; lineStyle: { type: string; color: string }; label: { formatter: string; color: string; fontSize: number } }[] = [];
+    const marks: { xAxis: string; lineStyle: { type: string; color: string }; label: { formatter: string; color: string; fontSize: number; position: string } }[] = [];
     if (h.p50_minutes != null) {
       const p50Label = this.closestBinLabel(h.bins, h.p50_minutes);
-      marks.push({ xAxis: p50Label, lineStyle: { type: 'dashed', color: '#3b82f6' }, label: { formatter: 'p50', color: '#3b82f6', fontSize: 10 } });
-    }
-    if (h.p95_minutes != null) {
+      const p95Label = h.p95_minutes != null ? this.closestBinLabel(h.bins, h.p95_minutes) : null;
+      // Task 2: when p50 and p95 land in the same bin, anchor them to opposite ends so
+      // labels never overlap. p50 → insideEndTop (below chart top), p95 → insideEndBottom.
+      // When they are in different bins the same anchors still avoid overlap.
+      const p50Position = 'insideEndTop';
+      marks.push({ xAxis: p50Label, lineStyle: { type: 'dashed', color: '#3b82f6' }, label: { formatter: 'p50', color: '#3b82f6', fontSize: 10, position: p50Position } });
+      if (h.p95_minutes != null && p95Label !== null) {
+        marks.push({ xAxis: p95Label, lineStyle: { type: 'dashed', color: '#f59e0b' }, label: { formatter: 'p95', color: '#f59e0b', fontSize: 10, position: 'insideEndBottom' } });
+      }
+    } else if (h.p95_minutes != null) {
       const p95Label = this.closestBinLabel(h.bins, h.p95_minutes);
-      marks.push({ xAxis: p95Label, lineStyle: { type: 'dashed', color: '#f59e0b' }, label: { formatter: 'p95', color: '#f59e0b', fontSize: 10 } });
+      marks.push({ xAxis: p95Label, lineStyle: { type: 'dashed', color: '#f59e0b' }, label: { formatter: 'p95', color: '#f59e0b', fontSize: 10, position: 'insideEndBottom' } });
     }
     return {
       tooltip:  { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      grid:     { left: 40, right: 8, top: 8, bottom: 24 },
-      xAxis:    { type: 'category', data: labels, axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
-      yAxis:    { type: 'value', axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, splitLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      // grid.top:28 preserves headroom for the insideEndTop p50 label below the card title.
+      grid:     { left: 40, right: 8, top: 28, bottom: 24 },
+      xAxis:    { type: 'category', data: labels, axisLabel: { color: p.ink2, fontSize: 10 }, axisLine: { lineStyle: { color: p.glassEdge } } },
+      yAxis:    { type: 'value', axisLabel: { color: p.ink2, fontSize: 10 }, splitLine: { lineStyle: { color: p.glassEdge } } },
       series: [
         {
           name: 'Deployments',
@@ -298,17 +352,26 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly donutChartOption = computed<EChartsOption | null>(() => {
     const d = this.statusDist();
     if (!d) return null;
+    const p = this.chartPalette();
     const total = d.statuses.reduce((sum, s) => sum + s.count, 0);
     const nonZero = d.statuses.filter(s => s.count > 0);
     if (!nonZero.length) return null;
     return {
-      tooltip: { trigger: 'item', formatter: (params: { name: string; value: number; percent: number }) => `${params.name}: ${params.value} (${params.percent}%)` },
+      // Task 4: appendToBody prevents the tooltip being clipped by .an-card overflow:hidden.
+      tooltip: {
+        trigger: 'item',
+        appendToBody: true,
+        formatter: (params: { name: string; value: number; percent: number }) => `${params.name}: ${params.value} (${params.percent}%)`,
+      },
       legend: { show: false },
       series: [
         {
           type: 'pie',
           radius: ['38%', '68%'],
           center: ['35%', '50%'],
+          // Task 5: minAngle ensures tiny slices (e.g. 1 of 2800) are still visible.
+          // Slight angular distortion on small slices is intentional (user decision).
+          minAngle: 6,
           data: d.statuses.map(s => ({
             name:  s.status,
             value: s.count,
@@ -327,7 +390,7 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
           style: {
             text: String(total),
             font: '600 18px JetBrains Mono',
-            fill: 'var(--ink-0)',
+            fill: p.ink0,
             textAlign: 'center',
           },
           // Offset to centre label inside the donut left-side
@@ -337,12 +400,15 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
     };
   });
 
-  // Legend rows for the donut (rendered in HTML alongside the chart)
+  // Legend rows for the donut (rendered in HTML alongside the chart).
+  // Filtered to non-zero counts to match the pie series (which also only renders
+  // non-zero slices); prevents legend rows with a dot but no corresponding slice.
+  // pct is computed from the full total so percentages remain consistent.
   protected readonly donutLegend = computed(() => {
     const d = this.statusDist();
     if (!d) return [];
     const total = d.statuses.reduce((sum, s) => sum + s.count, 0);
-    return d.statuses.map(s => ({
+    return d.statuses.filter(s => s.count > 0).map(s => ({
       status: s.status,
       count:  s.count,
       pct:    total > 0 ? Math.round((s.count / total) * 100) : 0,
@@ -353,6 +419,7 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly heatmapChartOption = computed<EChartsOption | null>(() => {
     const h = this.heatmap();
     if (!h) return null;
+    const p = this.chartPalette();
     // Build 7×24 grid from sparse cells
     const data: [number, number, number][] = [];
     for (const cell of h.cells) {
@@ -361,32 +428,28 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
     const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0') + ':00');
     return {
       tooltip: { position: 'top', formatter: (params: { value: [number, number, number] }) => `${DOW_LABELS[params.value[1]]} ${String(params.value[0]).padStart(2,'0')}:00 — ${params.value[2]} deploys` },
-      grid:    { height: '70%', top: '8%', left: 40, right: 30 },
+      // Task 1: visualMap.show:false removes the slider that was rendering below the x-axis.
+      // inRange kept so cells still shade by intensity. grid.bottom reduced to 24 (axis labels only).
+      grid:    { top: 8, bottom: 24, left: 40, right: 30, containLabel: false },
       xAxis: {
         type:      'category',
         data:      hours,
         splitArea: { show: true },
-        axisLabel: { color: 'var(--ink-2)', fontSize: 9, interval: 2 },
-        axisLine: { lineStyle: { color: 'var(--glass-edge)' } },
+        axisLabel: { color: p.ink2, fontSize: 9, interval: 2 },
+        axisLine: { lineStyle: { color: p.glassEdge } },
       },
       yAxis: {
         type:      'category',
         data:      DOW_LABELS,
         splitArea: { show: true },
-        axisLabel: { color: 'var(--ink-2)', fontSize: 10 },
-        axisLine: { lineStyle: { color: 'var(--glass-edge)' } },
+        axisLabel: { color: p.ink2, fontSize: 10 },
+        axisLine: { lineStyle: { color: p.glassEdge } },
       },
       visualMap: {
+        show: false,
         min: 0,
         max: Math.max(1, ...h.cells.map(c => c.count)),
-        calculable: true,
-        orient: 'horizontal',
-        left: 'center',
-        bottom: '2%',
         inRange: { color: ['rgba(99,102,241,0.1)', '#6366f1'] },
-        textStyle: { color: 'var(--ink-2)', fontSize: 9 },
-        itemWidth: 12,
-        itemHeight: 80,
       },
       series: [
         {
@@ -402,18 +465,20 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   protected readonly topDeployersChartOption = computed<EChartsOption | null>(() => {
     const t = this.topDeployers();
     if (!t || !t.deployers.length) return null;
+    const p = this.chartPalette();
     const sorted = [...t.deployers].reverse(); // ascending for horizontal bar (echarts bottom → top)
     return {
       tooltip:  { trigger: 'axis', axisPointer: { type: 'shadow' } },
       grid:     { left: 8, right: 40, top: 4, bottom: 4, containLabel: true },
-      xAxis:    { type: 'value', axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, splitLine: { lineStyle: { color: 'var(--glass-edge)' } } },
-      yAxis:    { type: 'category', data: sorted.map(d => d.actor), axisLabel: { color: 'var(--ink-1)', fontSize: 11 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      xAxis:    { type: 'value', axisLabel: { color: p.ink2, fontSize: 10 }, splitLine: { lineStyle: { color: p.glassEdge } } },
+      yAxis:    { type: 'category', data: sorted.map(d => d.actor), axisLabel: { color: p.ink1, fontSize: 11 }, axisLine: { lineStyle: { color: p.glassEdge } } },
       series: [
         {
           type: 'bar',
           data: sorted.map(d => d.count),
           itemStyle: { color: '#6366f1', borderRadius: [0, 3, 3, 0] },
-          label: { show: true, position: 'right', color: 'var(--ink-2)', fontSize: 10 },
+          // Fix #4: use resolved ink-2 token value for bar labels.
+          label: { show: true, position: 'right', color: p.ink2, fontSize: 10 },
         },
       ],
     };
@@ -425,6 +490,18 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
   });
 
   private subs: Subscription[] = [];
+
+  constructor() {
+    // Fix #4: re-resolve chart palette whenever the theme signal changes.
+    // ThemeService sets [data-theme] on <html> synchronously in its own constructor
+    // effect, which runs before this one (root-provided service is created first).
+    // Reading getComputedStyle here therefore always reflects the current theme.
+    effect(() => {
+      // Read the theme signal to establish the reactive dependency.
+      this.themeService.theme();
+      this.chartPalette.set(resolveChartPalette());
+    });
+  }
 
   ngOnInit(): void {
     this.fetch(this.activePeriod());
@@ -474,8 +551,11 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
     return good ? 'good' : 'bad';
   }
 
+  // Task 6: color by duration bucket (<45m/45-90m/>90m), not by severity enum.
+  // Matches mockup anRenderMttr colour logic. Unresolved incidents (null duration)
+  // are treated as worst-case (slow/coral) — they are still open.
   protected severityColor(inc: AnalyticsIncident): string {
-    return SEVERITY_COLORS[inc.severity] ?? '#94a3b8';
+    return mttrColor(inc.duration_minutes);
   }
 
   protected formatDuration(mins: number | null): string {

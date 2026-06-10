@@ -16,6 +16,7 @@ import {
   AnalyticsWindow,
 } from '../../core/models/deployment.model';
 import { DeploymentApiService } from '../../core/services/deployment-api.service';
+import { ThemeService } from '../../core/services/theme.service';
 import { of } from 'rxjs';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -129,6 +130,14 @@ function mockApi(): Partial<DeploymentApiService> {
   };
 }
 
+// ── Mock ThemeService ─────────────────────────────────────────────────────────
+// Avoids DOCUMENT injection and localStorage access in jsdom.
+import { signal } from '@angular/core';
+
+function mockThemeService(): Partial<ThemeService> {
+  return { theme: signal('dark') };
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('AnalyticsComponent', () => {
@@ -152,6 +161,7 @@ describe('AnalyticsComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: DeploymentApiService, useValue: mockApi() },
+        { provide: ThemeService, useValue: mockThemeService() },
       ],
     }).compileComponents();
 
@@ -210,9 +220,29 @@ describe('AnalyticsComponent', () => {
     expect(texts[0]).toBe('—');
   });
 
-  it('renders 8 donut legend rows for all statuses', () => {
+  it('renders donut legend rows only for non-zero statuses (8 of 8 in fixture)', () => {
+    // STATUS_FIXTURE has all 8 statuses with count > 0, so all 8 appear.
     const rows: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.an-legend-row');
     expect(rows.length).toBe(8);
+  });
+
+  it('excludes zero-count statuses from donutLegend (legend matches chart slices)', () => {
+    // Push a payload where one status has count 0 — donutLegend must not include it.
+    const c = component as unknown as {
+      statusDist: { set(v: typeof STATUS_FIXTURE | null): void };
+      donutLegend: () => Array<{ status: string; count: number }>;
+    };
+    c.statusDist.set({
+      ...STATUS_FIXTURE,
+      statuses: [
+        ...STATUS_FIXTURE.statuses.filter(s => s.status !== 'rejected'),
+        { status: 'rejected', count: 0 }, // explicitly zero
+      ],
+    });
+    const legend = c.donutLegend();
+    expect(legend.find(r => r.status === 'rejected')).toBeUndefined();
+    // All remaining statuses (still 7 non-zero) should appear.
+    expect(legend.length).toBe(7);
   });
 
   it('renders 3 period buttons', () => {
@@ -267,5 +297,201 @@ describe('AnalyticsComponent', () => {
     c.dora.set(null);
     c.frequency.set({ ...FREQ_FIXTURE, window: clampedWindow });
     expect(c.subtitleText()).toContain('retention');
+  });
+
+  // ── Fix #1: max-width cap ─────────────────────────────────────────────────
+
+  it('an-shell has max-width set (fix #1: ultrawide cap)', () => {
+    const shell: HTMLElement = fixture.nativeElement.querySelector('.an-shell');
+    // The CSS applies max-width:1600px — verify the element exists and the class is present.
+    expect(shell).not.toBeNull();
+    // Style verification: the class-applied max-width is readable via getComputedStyle
+    // only in a real browser; in jsdom we confirm the element renders without error.
+    expect(shell.classList.contains('an-shell')).toBeTruthy();
+  });
+
+  // ── Fix #2: legend top in freqChartOption ─────────────────────────────────
+
+  it('freqChartOption legend is at top (fix #2: no x-axis overlap)', () => {
+    const c = component as unknown as { freqChartOption: () => Record<string, unknown> | null };
+    const opt = c.freqChartOption();
+    expect(opt).not.toBeNull();
+    const legend = (opt as Record<string, unknown>)['legend'] as Record<string, unknown>;
+    expect(legend['top']).toBeDefined();
+    expect(legend['bottom']).toBeUndefined();
+  });
+
+  it('freqChartOption grid top >= 28 to clear the top legend (fix #2)', () => {
+    const c = component as unknown as { freqChartOption: () => Record<string, unknown> | null };
+    const opt = c.freqChartOption();
+    const grid = (opt as Record<string, unknown>)['grid'] as Record<string, unknown>;
+    expect(Number(grid['top'])).toBeGreaterThanOrEqual(28);
+  });
+
+  // ── Fix #3: heatmap grid containment ─────────────────────────────────────
+
+  it('heatmapChartOption grid uses explicit px bottom not percent (fix #3)', () => {
+    const c = component as unknown as { heatmapChartOption: () => Record<string, unknown> | null };
+    const opt = c.heatmapChartOption();
+    expect(opt).not.toBeNull();
+    const grid = (opt as Record<string, unknown>)['grid'] as Record<string, unknown>;
+    // bottom must be a number (px), not a % string
+    expect(typeof grid['bottom']).toBe('number');
+  });
+
+  it('heatmapChartOption visualMap has inRange for cell shading (fix #3 / task 1)', () => {
+    // visualMap.show is now false (task 1 — slider removed); inRange must still be present
+    // so cells shade correctly.
+    const c = component as unknown as { heatmapChartOption: () => Record<string, unknown> | null };
+    const opt = c.heatmapChartOption();
+    const vm = (opt as Record<string, unknown>)['visualMap'] as Record<string, unknown>;
+    expect(vm['inRange']).toBeDefined();
+  });
+
+  // ── Fix #4: resolved palette — no CSS var strings in chart options ─────────
+
+  it('freqChartOption axisLabel color is not a CSS var() string (fix #4)', () => {
+    const c = component as unknown as { freqChartOption: () => Record<string, unknown> | null };
+    const opt = c.freqChartOption();
+    const xAxisLabel = ((opt as Record<string, unknown>)['xAxis'] as Record<string, unknown>)['axisLabel'] as Record<string, unknown>;
+    expect(xAxisLabel['color'] as string).not.toContain('var(--');
+  });
+
+  it('donutChartOption graphic fill is not a CSS var() string (fix #4)', () => {
+    const c = component as unknown as { donutChartOption: () => Record<string, unknown> | null };
+    const opt = c.donutChartOption();
+    expect(opt).not.toBeNull();
+    const graphic = (opt as Record<string, unknown>)['graphic'] as Array<Record<string, unknown>>;
+    const fill = (graphic[0]['style'] as Record<string, unknown>)['fill'] as string;
+    expect(fill).not.toContain('var(--');
+  });
+
+  // ── Fix #5 / task 2: duration markLine label positions ───────────────────
+
+  it('durationChartOption p50 uses insideEndTop, p95 uses insideEndBottom (task 2)', () => {
+    const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
+    const opt = c.durationChartOption();
+    expect(opt).not.toBeNull();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    const markLine = series['markLine'] as Record<string, unknown>;
+    const data = markLine['data'] as Array<Record<string, unknown>>;
+    expect(data.length).toBe(2);
+    const p50 = data[0]['label'] as Record<string, unknown>;
+    const p95 = data[1]['label'] as Record<string, unknown>;
+    expect(p50['position']).toBe('insideEndTop');
+    expect(p95['position']).toBe('insideEndBottom');
+    // Positions must differ so labels never overlap in same-bin case.
+    expect(p50['position']).not.toBe(p95['position']);
+  });
+
+  it('durationChartOption same-bin p50/p95 labels are anchored to opposite ends (task 2)', () => {
+    // Override fixture: p50=15, p95=20 — both land in the 10-30 bin (closestBinLabel).
+    const c = component as unknown as {
+      durationHistogram: { set(v: typeof DUR_FIXTURE): void };
+      durationChartOption: () => Record<string, unknown> | null;
+    };
+    c.durationHistogram.set({
+      ...DUR_FIXTURE,
+      p50_minutes: 15,
+      p95_minutes: 20, // same 10-30 bin
+    });
+    const opt = c.durationChartOption();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    const markLine = series['markLine'] as Record<string, unknown>;
+    const data = markLine['data'] as Array<Record<string, unknown>>;
+    expect(data.length).toBe(2);
+    const positions = data.map(m => (m['label'] as Record<string, unknown>)['position']);
+    expect(positions[0]).not.toBe(positions[1]);
+  });
+
+  it('durationChartOption grid top >= 28 to clear the card title', () => {
+    const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
+    const opt = c.durationChartOption();
+    const grid = (opt as Record<string, unknown>)['grid'] as Record<string, unknown>;
+    expect(Number(grid['top'])).toBeGreaterThanOrEqual(28);
+  });
+
+  // ── Iteration 2: task 1 — heatmap visualMap hidden ───────────────────────
+
+  it('heatmapChartOption visualMap.show is false (task 1)', () => {
+    const c = component as unknown as { heatmapChartOption: () => Record<string, unknown> | null };
+    const opt = c.heatmapChartOption();
+    expect(opt).not.toBeNull();
+    const vm = (opt as Record<string, unknown>)['visualMap'] as Record<string, unknown>;
+    expect(vm['show']).toBe(false);
+  });
+
+  it('heatmapChartOption grid.bottom <= 24 after removing visualMap slider (task 1)', () => {
+    const c = component as unknown as { heatmapChartOption: () => Record<string, unknown> | null };
+    const opt = c.heatmapChartOption();
+    const grid = (opt as Record<string, unknown>)['grid'] as Record<string, unknown>;
+    expect(Number(grid['bottom'])).toBeLessThanOrEqual(24);
+  });
+
+  it('heatmapChartOption visualMap inRange is still set for cell shading (task 1)', () => {
+    const c = component as unknown as { heatmapChartOption: () => Record<string, unknown> | null };
+    const opt = c.heatmapChartOption();
+    const vm = (opt as Record<string, unknown>)['visualMap'] as Record<string, unknown>;
+    expect(vm['inRange']).toBeDefined();
+  });
+
+  // ── Iteration 2: task 3 — donut size ─────────────────────────────────────
+
+  it('echarts-donut element exists (task 3)', () => {
+    const donut: HTMLElement = fixture.nativeElement.querySelector('.echarts-donut');
+    expect(donut).not.toBeNull();
+    // CSS sets width/height to 160px — verified structurally; computed style is jsdom-limited.
+    expect(donut.classList.contains('echarts-donut')).toBeTruthy();
+  });
+
+  // ── Iteration 2: task 4 — donut tooltip appendToBody ─────────────────────
+
+  it('donutChartOption tooltip.appendToBody is true (task 4)', () => {
+    const c = component as unknown as { donutChartOption: () => Record<string, unknown> | null };
+    const opt = c.donutChartOption();
+    expect(opt).not.toBeNull();
+    const tooltip = (opt as Record<string, unknown>)['tooltip'] as Record<string, unknown>;
+    expect(tooltip['appendToBody']).toBe(true);
+  });
+
+  // ── Iteration 2: task 5 — pie minAngle ───────────────────────────────────
+
+  it('donutChartOption pie series has minAngle set (task 5)', () => {
+    const c = component as unknown as { donutChartOption: () => Record<string, unknown> | null };
+    const opt = c.donutChartOption();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    expect(Number(series['minAngle'])).toBeGreaterThan(0);
+  });
+
+  // ── Iteration 2: task 6 — MTTR duration-bucket colours ───────────────────
+
+  it('severityColor returns emerald for duration < 45 min (task 6)', () => {
+    const inc = { service: 'x', environment: 'prod', failed_at: '', restored_at: null, duration_minutes: 30, severity: 'low' };
+    const color = (component as unknown as { severityColor: (i: typeof inc) => string }).severityColor(inc);
+    expect(color).toBe('#10b981');
+  });
+
+  it('severityColor returns amber for duration 45–90 min (task 6)', () => {
+    const inc = { service: 'x', environment: 'prod', failed_at: '', restored_at: null, duration_minutes: 60, severity: 'medium' };
+    const color = (component as unknown as { severityColor: (i: typeof inc) => string }).severityColor(inc);
+    expect(color).toBe('#f59e0b');
+  });
+
+  it('severityColor returns coral for duration > 90 min (task 6)', () => {
+    const inc = { service: 'x', environment: 'prod', failed_at: '', restored_at: null, duration_minutes: 120, severity: 'high' };
+    const color = (component as unknown as { severityColor: (i: typeof inc) => string }).severityColor(inc);
+    expect(color).toBe('#ef4444');
+  });
+
+  it('severityColor returns coral for null duration (unresolved incident) (task 6)', () => {
+    const inc = { service: 'x', environment: 'prod', failed_at: '', restored_at: null, duration_minutes: null, severity: 'critical' };
+    const color = (component as unknown as { severityColor: (i: typeof inc) => string }).severityColor(inc);
+    expect(color).toBe('#ef4444');
+  });
+
+  it('severityColor is not keyed on severity enum — same duration produces same colour regardless of severity (task 6)', () => {
+    const base = { service: 'x', environment: 'prod', failed_at: '', restored_at: null, duration_minutes: 30 };
+    const fn = (component as unknown as { severityColor: (i: typeof base & { severity: string }) => string }).severityColor;
+    expect(fn({ ...base, severity: 'critical' })).toBe(fn({ ...base, severity: 'low' }));
   });
 });

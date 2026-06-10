@@ -240,7 +240,12 @@
     <div class="an-card an-span-6">
       <div class="an-card-head">
         <div class="an-ch-title">Time to restore</div>
-        <div class="an-ch-sub">&lt;45m &#9646; 45–90m &#9646; &gt;90m</div>
+        <!-- Task 6: coloured swatches match the duration-bucket marker colours. -->
+        <div class="an-ch-sub">
+          <span class="an-mttr-swatch" style="color:#10b981">&#9646;</span> &lt;45m &nbsp;
+          <span class="an-mttr-swatch" style="color:#f59e0b">&#9646;</span> 45–90m &nbsp;
+          <span class="an-mttr-swatch" style="color:#ef4444">&#9646;</span> &gt;90m
+        </div>
       </div>
       <div class="an-chart-body an-h-mttr">
         @if (incidentsList().length) {
