@@ -1,3 +1,4 @@
+using Dashboard.Read.Analytics;
 using Dashboard.Read.Repositories;
 using Dashboard.Read.Services;
 using Dashboard.Read.Sse;
@@ -11,6 +12,7 @@ public static class ReadServiceExtensions
     {
         services.AddScoped<IDeploymentReadRepository, DeploymentReadRepository>();
         services.AddScoped<IMatrixService, MatrixService>();
+        services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
 
         // SSE broadcaster: one singleton instance serves as both IDeploymentEventBroadcaster
         // (injected into the SSE handler) and the BackgroundService that owns the LISTEN connection.
