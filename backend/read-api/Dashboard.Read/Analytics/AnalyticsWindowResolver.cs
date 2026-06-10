@@ -23,6 +23,12 @@ internal static class AnalyticsWindowResolver
     /// When the requested span exceeds <paramref name="retentionDays"/> the effective
     /// days are clamped and <c>Clamped</c> is <c>true</c>.
     /// </para>
+    /// <para>
+    /// <c>to</c> is truncated to the start of the current UTC day so that two logically
+    /// identical requests within the same UTC day produce the same <c>from</c>/<c>to</c>,
+    /// the same serialised response, and therefore the same ETag — enabling
+    /// <c>If-None-Match → 304</c> to function correctly across requests.
+    /// </para>
     /// </summary>
     internal static AnalyticsWindow Resolve(
         string? window,
@@ -33,7 +39,9 @@ internal static class AnalyticsWindowResolver
         var clamped = requestedDays > retentionDays;
         var effectiveDays = clamped ? retentionDays : requestedDays;
 
-        var to = now;
+        // Truncate to day boundary so the ETag is stable for the full UTC day.
+        var todayUtc = now.UtcDateTime.Date;
+        var to = new DateTimeOffset(todayUtc, TimeSpan.Zero);
         var from = to.AddDays(-effectiveDays);
 
         return new AnalyticsWindow(effectiveDays, from, to, retentionDays, clamped);

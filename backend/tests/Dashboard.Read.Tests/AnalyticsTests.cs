@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Dashboard.Read.Analytics;
 using Dashboard.Shared.Contracts;
@@ -52,13 +54,30 @@ public sealed class AnalyticsTests
     }
 
     [Fact]
-    public void WindowResolver_FromToMatch_NowAndWindow()
+    public void WindowResolver_FromToMatch_DayBoundaryAndWindow()
     {
+        // now is mid-day; to must be truncated to the start of the UTC day.
         var now = new DateTimeOffset(2026, 6, 10, 12, 0, 0, TimeSpan.Zero);
+        var expectedTo = new DateTimeOffset(2026, 6, 10, 0, 0, 0, TimeSpan.Zero);
         var result = AnalyticsWindowResolver.Resolve("7d", 365, now);
 
-        Assert.Equal(now, result.To);
-        Assert.Equal(now.AddDays(-7), result.From);
+        Assert.Equal(expectedTo, result.To);
+        Assert.Equal(expectedTo.AddDays(-7), result.From);
+    }
+
+    [Fact]
+    public void WindowResolver_TwoCalls_SameDayDifferentTime_ProduceSameWindow()
+    {
+        // Two requests within the same UTC day must resolve the same from/to so their
+        // serialised responses are identical and If-None-Match → 304 works.
+        var t1 = new DateTimeOffset(2026, 6, 10, 8, 30, 0, TimeSpan.Zero);
+        var t2 = new DateTimeOffset(2026, 6, 10, 21, 59, 59, TimeSpan.Zero);
+
+        var r1 = AnalyticsWindowResolver.Resolve("7d", 365, t1);
+        var r2 = AnalyticsWindowResolver.Resolve("7d", 365, t2);
+
+        Assert.Equal(r1.From, r2.From);
+        Assert.Equal(r1.To, r2.To);
     }
 
     // ── DoraClassifier — classification ───────────────────────────────────────
@@ -356,5 +375,161 @@ public sealed class AnalyticsTests
         var delta = DoraClassifier.TrendDelta(current, prior);
         Assert.NotNull(delta);
         Assert.True(delta > 0, "trend_delta must be positive when current is larger than prior");
+    }
+
+    // ── Defect 2: ETag determinism — same-day requests must produce identical ETags ──
+
+    [Fact]
+    public void ETag_SameDayRequests_ProduceIdenticalEtags()
+    {
+        // Two requests at different times within the same UTC day must resolve the same
+        // window (day-boundary truncation) and therefore the same serialised response,
+        // so a SHA-256-based ETag matches and If-None-Match → 304 fires.
+        var t1 = new DateTimeOffset(2026, 6, 10, 9, 0, 0, TimeSpan.Zero);
+        var t2 = new DateTimeOffset(2026, 6, 10, 18, 45, 12, TimeSpan.Zero);
+
+        var w1 = AnalyticsWindowResolver.Resolve("7d", 365, t1);
+        var w2 = AnalyticsWindowResolver.Resolve("7d", 365, t2);
+
+        Assert.Equal(w1.From, w2.From);
+        Assert.Equal(w1.To, w2.To);
+
+        // Simulate the ETag helper: serialize an identical response, verify same hash.
+        var resp1 = new AnalyticsFrequencyResponse(w1, []);
+        var resp2 = new AnalyticsFrequencyResponse(w2, []);
+
+        var etag1 = ComputeWeakETag(JsonSerializer.Serialize(resp1));
+        var etag2 = ComputeWeakETag(JsonSerializer.Serialize(resp2));
+
+        Assert.Equal(etag1, etag2);
+    }
+
+    // ── Defect 1/3/4a: null-present — nullable analytics contract fields must serialise as null ──
+
+    [Fact]
+    public void AnalyticsKpi_NullTrendDelta_SerializesAsNullNotOmitted()
+    {
+        // With the global WhenWritingNull policy, trend_delta would be absent.
+        // The [JsonIgnore(Never)] override must keep it present as null.
+        var opts = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+        var kpi = new AnalyticsKpi(null, "per_day", AnalyticsClassification.Elite, null, [], false);
+        var json = JsonSerializer.Serialize(kpi, opts);
+
+        Assert.Contains("\"trend_delta\":null", json);
+        Assert.Contains("\"value\":null", json);
+    }
+
+    [Fact]
+    public void AnalyticsDurationBin_NullUpperMinutes_SerializesAsNullNotOmitted()
+    {
+        var opts = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+        var bin = new AnalyticsDurationBin("120+", 120, null, 5);
+        var json = JsonSerializer.Serialize(bin, opts);
+
+        Assert.Contains("\"upper_minutes\":null", json);
+    }
+
+    [Fact]
+    public void AnalyticsFunnelStage_NullConversion_SerializesAsNullNotOmitted()
+    {
+        var opts = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+        var stage = new AnalyticsFunnelStage("prod", 10, null);
+        var json = JsonSerializer.Serialize(stage, opts);
+
+        Assert.Contains("\"conversion\":null", json);
+    }
+
+    // ── Defect 4b: funnel conversion — exact values on a known fixture ────────
+
+    [Fact]
+    public void FunnelConversion_KnownFixture_CorrectRatios()
+    {
+        // Fixture: dev=100, staging=82, qa=60, preprod=50, prod=40.
+        // conversion at dev = staging / dev = 82/100 = 0.82
+        // conversion at staging = qa / staging = 60/82 ≈ 0.7317
+        // conversion at qa = preprod / qa = 50/60 ≈ 0.8333
+        // conversion at preprod = prod / preprod = 40/50 = 0.80
+        // conversion at prod = null (terminal)
+        var counts = new List<FunnelStageCount>
+        {
+            new("dev",     100),
+            new("staging",  82),
+            new("qa",       60),
+            new("preprod",  50),
+            new("prod",     40),
+        };
+
+        var stages = BuildFunnelStages(counts);
+
+        Assert.Equal(5, stages.Count);
+
+        Assert.Equal(0.82, stages[0].Conversion!.Value, precision: 10);         // dev
+        Assert.Equal(60.0 / 82.0, stages[1].Conversion!.Value, precision: 10); // staging
+        Assert.Equal(50.0 / 60.0, stages[2].Conversion!.Value, precision: 10); // qa
+        Assert.Equal(0.80, stages[3].Conversion!.Value, precision: 10);         // preprod
+        Assert.Null(stages[4].Conversion);                                       // prod — terminal
+    }
+
+    [Fact]
+    public void FunnelConversion_ZeroCountStage_ConversionNull()
+    {
+        // When a stage has count=0, conversion must be null (contract: "null when count is 0").
+        var counts = new List<FunnelStageCount>
+        {
+            new("dev",    50),
+            new("staging", 0), // zero → conversion null, cannot divide by zero
+            new("qa",     30),
+            new("preprod",20),
+            new("prod",   10),
+        };
+
+        var stages = BuildFunnelStages(counts);
+
+        Assert.Equal(0.0, stages[0].Conversion!.Value, precision: 10); // dev: staging(0)/dev(50)=0
+        Assert.Null(stages[1].Conversion);  // staging: count=0 → null
+        Assert.Equal(20.0 / 30.0, stages[2].Conversion!.Value, precision: 10); // qa
+        Assert.Equal(10.0 / 20.0, stages[3].Conversion!.Value, precision: 10); // preprod
+        Assert.Null(stages[4].Conversion);  // prod — terminal
+    }
+
+    // ── Private test helpers ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Mirrors the production funnel-building logic from
+    /// <c>AnalyticsEndpoints.HandlePromotionFunnelAsync</c> so the conversion
+    /// formula can be unit-tested without a running host.
+    /// </summary>
+    private static IReadOnlyList<AnalyticsFunnelStage> BuildFunnelStages(
+        IReadOnlyList<FunnelStageCount> counts)
+    {
+        var stages = new List<AnalyticsFunnelStage>(counts.Count);
+        for (var i = 0; i < counts.Count; i++)
+        {
+            var stageCount = counts[i].Count;
+            double? conversion = null;
+            if (i < counts.Count - 1 && stageCount > 0)
+                conversion = (double)counts[i + 1].Count / stageCount;
+
+            stages.Add(new AnalyticsFunnelStage(counts[i].Environment, stageCount, conversion));
+        }
+        return stages;
+    }
+
+    private static string ComputeWeakETag(string json)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+        return $"W/\"{Convert.ToHexString(hash)[..16]}\"";
     }
 }

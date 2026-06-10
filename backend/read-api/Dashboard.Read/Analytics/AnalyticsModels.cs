@@ -33,11 +33,16 @@ public enum AnalyticsClassification
 }
 
 /// <summary>One DORA key — value, unit, performance band, trend, and sparkline.</summary>
+/// <remarks>
+/// <c>Value</c> and <c>TrendDelta</c> are nullable contract fields that must serialize as
+/// explicit <c>null</c> even when the global JSON policy omits nulls — hence the
+/// <see cref="JsonIgnoreCondition.Never"/> override on each.
+/// </remarks>
 public sealed record AnalyticsKpi(
-    double? Value,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] double? Value,
     string Unit,
     AnalyticsClassification Classification,
-    double? TrendDelta,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] double? TrendDelta,
     IReadOnlyList<double> Sparkline,
     bool Approximated);
 
@@ -78,26 +83,38 @@ public sealed record AnalyticsChangeFailureRateResponse(
 // ── Duration Histogram ────────────────────────────────────────────────────────
 
 /// <summary>One histogram bin of deployment durations (minutes).</summary>
+/// <remarks>
+/// <c>UpperMinutes</c> is <c>null</c> for the open-ended top bin and must serialize as
+/// explicit <c>null</c> per contract.
+/// </remarks>
 public sealed record AnalyticsDurationBin(
     string Label,
     int LowerMinutes,
-    int? UpperMinutes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? UpperMinutes,
     int Count);
 
 /// <summary>Duration distribution (bins + percentiles).</summary>
+/// <remarks>
+/// <c>P50Minutes</c> and <c>P95Minutes</c> are nullable contract fields that must
+/// serialize as explicit <c>null</c> when no measurable deployments exist.
+/// </remarks>
 public sealed record AnalyticsDurationHistogramResponse(
     AnalyticsWindow Window,
     IReadOnlyList<AnalyticsDurationBin> Bins,
-    double? P50Minutes,
-    double? P95Minutes);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] double? P50Minutes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] double? P95Minutes);
 
 // ── Promotion Funnel ──────────────────────────────────────────────────────────
 
 /// <summary>One stage of the promotion funnel.</summary>
+/// <remarks>
+/// <c>Conversion</c> is <c>null</c> for the terminal stage and must serialize as
+/// explicit <c>null</c> per contract.
+/// </remarks>
 public sealed record AnalyticsFunnelStage(
     string Environment,
     int Count,
-    double? Conversion);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] double? Conversion);
 
 /// <summary>Promotion funnel dev → staging → qa → preprod → prod.</summary>
 public sealed record AnalyticsPromotionFunnelResponse(
@@ -161,12 +178,16 @@ public enum AnalyticsSeverity
 }
 
 /// <summary>One restoration incident — a failure later restored in the same slot.</summary>
+/// <remarks>
+/// <c>RestoredAt</c> and <c>DurationMinutes</c> are nullable contract fields that must
+/// serialize as explicit <c>null</c> for unresolved incidents.
+/// </remarks>
 public sealed record AnalyticsIncident(
     string Service,
     string Environment,
     DateTimeOffset FailedAt,
-    DateTimeOffset? RestoredAt,
-    double? DurationMinutes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] DateTimeOffset? RestoredAt,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] double? DurationMinutes,
     AnalyticsSeverity Severity);
 
 /// <summary>Worst-first restoration incidents.</summary>
