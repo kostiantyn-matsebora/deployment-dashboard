@@ -1,0 +1,377 @@
+/* =========================================================
+   Analytics view styles
+   Mirrors docs/design/mockup/index.html .an-* classes.
+   All tokens from the global design token sheet (app.css / :root).
+   ========================================================= */
+
+.an-shell {
+  padding: 12px 16px 24px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── View header ─────────────────────────────────────────── */
+
+.an-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.an-title-block .an-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-0);
+  margin: 0;
+  display: inline;
+}
+
+.an-title-block .an-sub {
+  font-size: 11px;
+  color: var(--ink-2);
+  display: inline;
+  margin-left: 8px;
+}
+
+/* ── Period segmented control ──────────────────────────── */
+
+.an-period {
+  display: flex;
+  gap: 2px;
+  background: var(--tabs-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+}
+
+.an-period-btn {
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.an-period-btn:hover { color: var(--ink-0); }
+
+.an-period-btn.is-active {
+  background: var(--glass-strong);
+  color: var(--ink-0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* ── DORA KPI band ──────────────────────────────────────── */
+
+.an-kpi-band {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .an-kpi-band { grid-template-columns: repeat(2, 1fr); }
+}
+
+.an-kpi-empty {
+  color: var(--ink-3);
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.an-kpi-card {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 0 var(--glass-edge-2) inset, 0 24px 64px -28px rgba(0, 0, 0, 0.55);
+  padding: 10px 13px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.an-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.an-kpi-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink-0);
+  line-height: 1.15;
+}
+
+.an-kpi-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* Classification chips */
+.an-class-chip {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.an-class-chip.elite  { background: var(--emerald-wash); color: var(--emerald); border: 1px solid var(--emerald-edge, rgba(16,185,129,0.3)); }
+.an-class-chip.high   { background: var(--blue-wash);    color: var(--blue);    border: 1px solid var(--blue-edge,    rgba(59,130,246,0.3)); }
+.an-class-chip.medium { background: var(--amber-wash);   color: var(--amber);   border: 1px solid var(--amber-edge,   rgba(245,158,11,0.3)); }
+.an-class-chip.low    { background: var(--coral-wash);   color: var(--coral);   border: 1px solid var(--coral-edge,   rgba(239,68,68,0.3));  }
+
+/* Trend chips */
+.an-trend-chip {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.an-trend-chip.good { background: var(--emerald-wash); color: var(--emerald); }
+.an-trend-chip.bad  { background: var(--coral-wash);   color: var(--coral); }
+.an-trend-chip.flat { background: var(--glass-edge);   color: var(--ink-2); }
+
+.an-approx-note {
+  font-size: 9.5px;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* KPI sparkline — inline SVG */
+.an-kpi-sparkline {
+  width: 100%;
+  height: 26px;
+  display: block;
+  overflow: visible;
+  color: var(--indigo, #6366f1);
+  opacity: 0.7;
+}
+
+/* ── Chart grid ─────────────────────────────────────────── */
+
+/* 12-column base grid */
+.an-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 8px;
+}
+
+/* Span helpers */
+.an-span-12 { grid-column: span 12; }
+.an-span-8  { grid-column: span 8; }
+.an-span-6  { grid-column: span 6; }
+.an-span-4  { grid-column: span 4; }
+
+@media (max-width: 1100px) {
+  .an-span-12,
+  .an-span-8,
+  .an-span-6,
+  .an-span-4 { grid-column: span 12; }
+}
+
+/* Generic chart card */
+.an-card {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 0 var(--glass-edge-2) inset, 0 24px 64px -28px rgba(0, 0, 0, 0.55);
+  padding: 11px 13px 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.an-card-head {
+  margin-bottom: 8px;
+}
+
+.an-card-head .an-ch-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-0);
+  margin: 0 0 1px;
+}
+
+.an-card-head .an-ch-sub {
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+/* Fixed-height chart bodies */
+.an-chart-body {
+  width: 100%;
+  overflow: hidden;
+  height: 160px;
+  position: relative;
+}
+
+/* Per-slot height overrides */
+.an-chart-body.an-h-freq   { height: 185px; }
+.an-chart-body.an-h-funnel { height: 175px; }
+.an-chart-body.an-h-heat   { height: 175px; }
+.an-chart-body.an-h-mttr   { height: 200px; }
+.an-chart-body.an-h-actors { height: 210px; }
+.an-chart-body.an-h-donut  { height: auto; overflow: visible; }
+
+/* ECharts containers fill their parent */
+.echarts-container {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading / empty state */
+.an-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 60px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ── Donut layout ───────────────────────────────────────── */
+
+.an-donut-wrap {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.echarts-donut {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+/* 2-column legend */
+.an-donut-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+  align-content: center;
+}
+
+.an-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--ink-1);
+  min-width: 0;
+}
+
+.an-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.an-legend-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.an-legend-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+
+.an-legend-pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  min-width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── MTTR incidents list ───────────────────────────────── */
+
+.an-incidents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.an-incident-row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  gap: 6px;
+  align-items: baseline;
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--glass-edge);
+  font-size: 12px;
+  color: var(--ink-1);
+  min-width: 0;
+}
+
+.an-incident-row:last-child { border-bottom: none; }
+
+.an-inc-sev {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.an-inc-slot {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-0);
+}
+
+.an-inc-env {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+.an-inc-dur {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+
+.an-inc-time {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}

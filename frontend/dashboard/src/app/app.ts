@@ -51,8 +51,11 @@ export class App implements OnInit, OnDestroy {
     const sub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {
+        const url = e.urlAfterRedirects;
         this.state.activeView.set(
-          e.urlAfterRedirects.startsWith('/swimlanes') ? 'swimlanes' : 'matrix',
+          url.startsWith('/swimlanes') ? 'swimlanes'
+          : url.startsWith('/analytics') ? 'analytics'
+          : 'matrix',
         );
       });
     this.subs.push(sub);

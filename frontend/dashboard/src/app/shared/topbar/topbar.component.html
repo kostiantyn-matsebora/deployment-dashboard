@@ -154,7 +154,7 @@
     }
 
     <!-- Correlation picker (Swimlanes only) ─────────────── -->
-    @if (!isMatrix()) {
+    @if (isSwimlanes()) {
       <div style="position: relative">
         <button
           class="icon-btn"
@@ -234,60 +234,62 @@
       </div>
     }
 
-    <!-- Fields picker (shared) ──────────────────────────── -->
-    <div style="position: relative">
-      <button
-        class="icon-btn"
-        [class.is-active]="fieldsPopoverOpen() || fieldsHiddenCount() > 0"
-        [title]="fieldsBtnTitle()"
-        [attr.aria-label]="fieldsBtnTitle()"
-        aria-haspopup="true"
-        (click)="toggleFieldsPopover($event)"
-      >
-        <span aria-hidden="true">▦</span>
-        @if (fieldsHiddenCount() > 0) {
-          <span class="hidden-count-badge" aria-hidden="true">{{ fieldsHiddenCount() }}</span>
-        }
-      </button>
-      <p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-        <div class="picker-content">
-          <span class="popover-title">FIELDS — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
-
-          <!-- Matrix field toggles -->
-          @if (isMatrix()) {
-            <div class="field-grid">
-              @for (f of matrixFieldDefs; track f.key) {
-                <label
-                  class="field-toggle"
-                  [class.is-on]="isMatrixFieldOn(f.key)"
-                  (click)="toggleMatrixField(f.key)"
-                >
-                  <span class="field-check" [class.checked]="isMatrixFieldOn(f.key)" aria-hidden="true"></span>
-                  <span class="field-label">{{ f.label }}</span>
-                </label>
-              }
-            </div>
+    <!-- Fields picker (Matrix + Swimlanes only — not Analytics) ─── -->
+    @if (!isAnalytics()) {
+      <div style="position: relative">
+        <button
+          class="icon-btn"
+          [class.is-active]="fieldsPopoverOpen() || fieldsHiddenCount() > 0"
+          [title]="fieldsBtnTitle()"
+          [attr.aria-label]="fieldsBtnTitle()"
+          aria-haspopup="true"
+          (click)="toggleFieldsPopover($event)"
+        >
+          <span aria-hidden="true">▦</span>
+          @if (fieldsHiddenCount() > 0) {
+            <span class="hidden-count-badge" aria-hidden="true">{{ fieldsHiddenCount() }}</span>
           }
+        </button>
+        <p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content">
+            <span class="popover-title">FIELDS — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
 
-          <!-- Swimlane field toggles -->
-          @if (!isMatrix()) {
-            <div class="field-grid">
-              @for (f of swimlaneFieldDefs; track f.key) {
-                <label
-                  class="field-toggle"
-                  [class.is-on]="isSwimlaneFieldOn(f.key)"
-                  (click)="toggleSwimlaneField(f.key)"
-                >
-                  <span class="field-check" [class.checked]="isSwimlaneFieldOn(f.key)" aria-hidden="true"></span>
-                  <span class="field-label">{{ f.label }}</span>
-                </label>
-              }
-            </div>
-          }
+            <!-- Matrix field toggles -->
+            @if (isMatrix()) {
+              <div class="field-grid">
+                @for (f of matrixFieldDefs; track f.key) {
+                  <label
+                    class="field-toggle"
+                    [class.is-on]="isMatrixFieldOn(f.key)"
+                    (click)="toggleMatrixField(f.key)"
+                  >
+                    <span class="field-check" [class.checked]="isMatrixFieldOn(f.key)" aria-hidden="true"></span>
+                    <span class="field-label">{{ f.label }}</span>
+                  </label>
+                }
+              </div>
+            }
 
-        </div>
-      </p-popover>
-    </div>
+            <!-- Swimlane field toggles -->
+            @if (isSwimlanes()) {
+              <div class="field-grid">
+                @for (f of swimlaneFieldDefs; track f.key) {
+                  <label
+                    class="field-toggle"
+                    [class.is-on]="isSwimlaneFieldOn(f.key)"
+                    (click)="toggleSwimlaneField(f.key)"
+                  >
+                    <span class="field-check" [class.checked]="isSwimlaneFieldOn(f.key)" aria-hidden="true"></span>
+                    <span class="field-label">{{ f.label }}</span>
+                  </label>
+                }
+              </div>
+            }
+
+          </div>
+        </p-popover>
+      </div>
+    }
 
     <!-- Legend popover (☷) ──────────────────────────────── -->
     <div style="position: relative">

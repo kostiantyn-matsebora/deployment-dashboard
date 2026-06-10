@@ -78,14 +78,15 @@ export class TopbarComponent {
 
   // ── View tabs ─────────────────────────────────────────────
   protected readonly viewOptions: ViewOption[] = [
-    { label: 'Matrix', value: 'matrix' },
-    { label: 'Swimlanes', value: 'swimlanes' },
+    { label: 'Matrix',     value: 'matrix' },
+    { label: 'Swimlanes',  value: 'swimlanes' },
+    { label: 'Analytics',  value: 'analytics' },
   ];
 
   protected readonly activeView = computed(() => this.state.activeView());
 
   protected onViewChange(value: string): void {
-    if (value === 'matrix' || value === 'swimlanes') {
+    if (value === 'matrix' || value === 'swimlanes' || value === 'analytics') {
       this.state.activeView.set(value);
       this.router.navigate(['/' + value]);
     }
@@ -171,7 +172,9 @@ export class TopbarComponent {
   }
 
   // ── View helpers ──────────────────────────────────────────
-  protected readonly isMatrix = computed(() => this.state.activeView() === 'matrix');
+  protected readonly isMatrix    = computed(() => this.state.activeView() === 'matrix');
+  protected readonly isSwimlanes = computed(() => this.state.activeView() === 'swimlanes');
+  protected readonly isAnalytics = computed(() => this.state.activeView() === 'analytics');
 
   // ── All environments from matrix data ─────────────────────
   protected readonly allEnvironments = computed(() =>

@@ -1,0 +1,265 @@
+<section class="an-shell" aria-label="Deployment analytics">
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <div class="an-header">
+    <div class="an-title-block">
+      <span class="an-title">Deployment analytics</span>
+      @if (subtitleText()) {
+        <span class="an-sub">DORA Four Keys &middot; {{ subtitleText() }}</span>
+      } @else {
+        <span class="an-sub">DORA Four Keys &middot; <span class="an-sub-days">{{ activePeriod() }}</span></span>
+      }
+    </div>
+
+    <!-- Period selector 7d / 14d / 30d -->
+    <div class="an-period" role="group" aria-label="Time window">
+      @for (p of periods; track p) {
+        <button
+          class="an-period-btn"
+          [class.is-active]="activePeriod() === p"
+          [attr.aria-pressed]="activePeriod() === p"
+          (click)="selectPeriod(p)"
+        >{{ p }}</button>
+      }
+    </div>
+  </div>
+
+  <!-- ── DORA KPI band ─────────────────────────────────── -->
+  <div class="an-kpi-band" role="group" aria-label="DORA KPIs">
+    @for (item of doraKpis(); track item.key) {
+      <div class="an-kpi-card" [attr.aria-label]="item.label">
+        <div class="an-kpi-label">{{ item.label }}</div>
+        <div class="an-kpi-value">{{ formatKpiValue(item.kpi) }}</div>
+        <div class="an-kpi-row">
+          <span class="an-class-chip {{ item.kpi.classification }}"
+                [attr.aria-label]="'Classification: ' + item.kpi.classification">
+            {{ item.kpi.classification }}
+          </span>
+          @if (item.kpi.trend_delta !== null) {
+            <span class="an-trend-chip {{ trendClass(item.kpi, item.higherIsBetter) }}"
+                  [attr.aria-label]="'Trend: ' + trendLabel(item.kpi, item.higherIsBetter)">
+              {{ trendLabel(item.kpi, item.higherIsBetter) }}
+            </span>
+          }
+          @if (item.approx) {
+            <span class="an-approx-note" title="Approximated from parent_deployments promotion chains">~approx</span>
+          }
+        </div>
+        <!-- Inline sparkline SVG -->
+        @if (item.kpi.sparkline.length > 1) {
+          <svg class="an-kpi-sparkline"
+               width="80" height="26"
+               viewBox="0 0 80 26"
+               preserveAspectRatio="none"
+               aria-hidden="true">
+            <path [attr.d]="sparklinePath(item.kpi.sparkline)"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linejoin="round"
+                  stroke-linecap="round" />
+          </svg>
+        }
+      </div>
+    }
+    @if (!doraKpis().length) {
+      <div class="an-kpi-empty an-span-12" aria-busy="true">Loading KPIs…</div>
+    }
+  </div>
+
+  <!-- ── Chart grid ────────────────────────────────────── -->
+  <div class="an-grid">
+
+    <!-- Row 1: Frequency (span-8) + Status donut (span-4) -->
+
+    <!-- 1. Deployment frequency — stacked bars -->
+    <div class="an-card an-span-8">
+      <div class="an-card-head">
+        <div class="an-ch-title">Deployment frequency over time</div>
+        <div class="an-ch-sub">deploys per day — success vs failure</div>
+      </div>
+      <div class="an-chart-body an-h-freq">
+        @if (freqChartOption()) {
+          <div echarts
+               [options]="freqChartOption()!"
+               [autoResize]="true"
+               class="echarts-container"
+               aria-label="Deployment frequency stacked bar chart">
+          </div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+    <!-- 5. Status distribution — donut (same row as freq) -->
+    <div class="an-card an-span-4">
+      <div class="an-card-head">
+        <div class="an-ch-title">Status distribution</div>
+        <div class="an-ch-sub">share of each status</div>
+      </div>
+      <div class="an-chart-body an-h-donut">
+        @if (donutChartOption()) {
+          <div class="an-donut-wrap">
+            <div echarts
+                 [options]="donutChartOption()!"
+                 [autoResize]="true"
+                 class="echarts-donut"
+                 aria-label="Status distribution donut chart">
+            </div>
+            <!-- Legend -->
+            <div class="an-donut-legend" role="list" aria-label="Status legend">
+              @for (row of donutLegend(); track row.status) {
+                <div class="an-legend-row" role="listitem">
+                  <span class="an-legend-dot" [style.background]="row.color" aria-hidden="true"></span>
+                  <span class="an-legend-name">{{ row.status }}</span>
+                  <span class="an-legend-count">{{ row.count }}</span>
+                  <span class="an-legend-pct">{{ row.pct }}%</span>
+                </div>
+              }
+            </div>
+          </div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+    <!-- Row 2: CFR (span-6) + Duration histogram (span-6) -->
+
+    <!-- 2. Change failure rate trend -->
+    <div class="an-card an-span-6">
+      <div class="an-card-head">
+        <div class="an-ch-title">Change failure rate trend</div>
+        <div class="an-ch-sub">daily CFR % &middot; dashed = 15% Elite threshold</div>
+      </div>
+      <div class="an-chart-body">
+        @if (cfrChartOption()) {
+          <div echarts
+               [options]="cfrChartOption()!"
+               [autoResize]="true"
+               class="echarts-container"
+               aria-label="Change failure rate trend line chart">
+          </div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+    <!-- 3. Deployment duration distribution histogram -->
+    <div class="an-card an-span-6">
+      <div class="an-card-head">
+        <div class="an-ch-title">Deployment duration distribution</div>
+        <div class="an-ch-sub">histogram (min) &middot; p50 and p95 markers</div>
+      </div>
+      <div class="an-chart-body">
+        @if (durationChartOption()) {
+          <div echarts
+               [options]="durationChartOption()!"
+               [autoResize]="true"
+               class="echarts-container"
+               aria-label="Deployment duration histogram">
+          </div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+    <!-- Row 3: Promotion funnel (span-4) + Deploy heatmap (span-8) -->
+
+    <!-- 4. Promotion funnel -->
+    <div class="an-card an-span-4">
+      <div class="an-card-head">
+        <div class="an-ch-title">Promotion funnel</div>
+        <div class="an-ch-sub">dev &rarr; prod attrition</div>
+      </div>
+      <div class="an-chart-body an-h-funnel">
+        @if (funnelChartOption()) {
+          <div echarts
+               [options]="funnelChartOption()!"
+               [autoResize]="true"
+               class="echarts-container"
+               aria-label="Promotion funnel chart">
+          </div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+    <!-- 6. Deploy heatmap — day-of-week × hour -->
+    <div class="an-card an-span-8">
+      <div class="an-card-head">
+        <div class="an-ch-title">Deploy heatmap</div>
+        <div class="an-ch-sub">day-of-week &times; hour &middot; intensity = count</div>
+      </div>
+      <div class="an-chart-body an-h-heat">
+        @if (heatmapChartOption()) {
+          <div echarts
+               [options]="heatmapChartOption()!"
+               [autoResize]="true"
+               class="echarts-container"
+               aria-label="Deployment heatmap by day and hour">
+          </div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+    <!-- Row 4: Top deployers (span-6) + MTTR incidents (span-6) -->
+
+    <!-- 8. Top deployers — horizontal bar -->
+    <div class="an-card an-span-6">
+      <div class="an-card-head">
+        <div class="an-ch-title">Top deployers</div>
+        <div class="an-ch-sub">actors by deploy count</div>
+      </div>
+      <div class="an-chart-body an-h-actors">
+        @if (topDeployersChartOption()) {
+          <div echarts
+               [options]="topDeployersChartOption()!"
+               [autoResize]="true"
+               class="echarts-container"
+               aria-label="Top deployers horizontal bar chart">
+          </div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+    <!-- 7. MTTR — recent incidents list -->
+    <div class="an-card an-span-6">
+      <div class="an-card-head">
+        <div class="an-ch-title">Time to restore</div>
+        <div class="an-ch-sub">&lt;45m &#9646; 45–90m &#9646; &gt;90m</div>
+      </div>
+      <div class="an-chart-body an-h-mttr">
+        @if (incidentsList().length) {
+          <ul class="an-incidents-list" aria-label="Restoration incidents (worst first)">
+            @for (inc of incidentsList(); track inc.service + inc.failed_at) {
+              <li class="an-incident-row">
+                <span class="an-inc-sev"
+                      [style.color]="severityColor(inc)"
+                      [attr.aria-label]="'Severity: ' + inc.severity"
+                      title="{{ inc.severity }}">&#9646;</span>
+                <span class="an-inc-slot">{{ inc.service }}<span class="an-inc-env"> / {{ inc.environment }}</span></span>
+                <span class="an-inc-dur">{{ formatDuration(inc.duration_minutes) }}</span>
+                <span class="an-inc-time">{{ formatDateTime(inc.failed_at) }}</span>
+              </li>
+            }
+          </ul>
+        } @else if (incidents()) {
+          <div class="an-chart-empty">No incidents in window</div>
+        } @else {
+          <div class="an-chart-empty" aria-busy="true">Loading…</div>
+        }
+      </div>
+    </div>
+
+  </div><!-- .an-grid -->
+
+</section><!-- .an-shell -->

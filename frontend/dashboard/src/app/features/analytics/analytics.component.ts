@@ -1,0 +1,558 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { Subscription } from 'rxjs';
+import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
+import * as echarts from 'echarts/core';
+import { BarChart, LineChart, FunnelChart, PieChart, HeatmapChart } from 'echarts/charts';
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  MarkLineComponent,
+  VisualMapComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+
+// Register only the ECharts components used by the Analytics view (tree-shaking).
+// Done here (not app.config.ts) so echarts stays in the lazy analytics chunk.
+echarts.use([
+  BarChart, LineChart, FunnelChart, PieChart, HeatmapChart,
+  GridComponent, TooltipComponent, LegendComponent, MarkLineComponent,
+  VisualMapComponent,
+  CanvasRenderer,
+]);
+// Use EChartsOption from the core tree-shaken API to avoid strict type conflicts
+// with formatter callback overloads in the full echarts type definitions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EChartsOption = Record<string, any>;
+
+import { DeploymentApiService } from '../../core/services/deployment-api.service';
+import {
+  ANALYTICS_PERIODS,
+  AnalyticsPeriod,
+  AnalyticsDora,
+  AnalyticsFrequency,
+  AnalyticsChangeFailureRate,
+  AnalyticsDurationHistogram,
+  AnalyticsPromotionFunnel,
+  AnalyticsStatusDistribution,
+  AnalyticsHeatmap,
+  AnalyticsTopDeployers,
+  AnalyticsIncidents,
+  AnalyticsWindow,
+  AnalyticsIncident,
+} from '../../core/models/deployment.model';
+
+// ── Status palette — shared with rest of the dashboard ───────────────────────
+const STATUS_COLORS: Record<string, string> = {
+  'in-progress': '#f59e0b',
+  'success':     '#10b981',
+  'failure':     '#ef4444',
+  'pending':     '#94a3b8',
+  'queued':      '#3b82f6',
+  'waiting':     '#8b5cf6',
+  'cancelled':   '#6b7280',
+  'rejected':    '#f43f5e',
+};
+
+// DORA severity colour — matches mockup
+const SEVERITY_COLORS: Record<string, string> = {
+  low:      '#10b981',
+  medium:   '#f59e0b',
+  high:     '#ef4444',
+  critical: '#7c3aed',
+};
+
+// Days of week labels for heatmap
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * AnalyticsComponent — DORA-anchored deployment analytics view.
+ *
+ * Spec: docs/design/mockup/index.html #view-analytics (.an-* classes)
+ * Contract: docs/api/openapi.yaml — tag: analytics (9 endpoints)
+ * Issue: #299
+ *
+ * Layout (12-column grid, mirrors mockup):
+ *   Row 1: frequency (span-8) | status donut (span-4)
+ *   Row 2: CFR trend (span-6) | duration histogram (span-6)
+ *   Row 3: promotion funnel (span-4) | deploy heatmap (span-8)
+ *   Row 4: top deployers (span-6) | MTTR incidents (span-6)
+ *
+ * One HTTP call per endpoint; re-fetched on period change.
+ * Read-only: no secrets, GET only; no client-side aggregation.
+ */
+@Component({
+  selector: 'app-analytics',
+  standalone: true,
+  imports: [NgxEchartsDirective],
+  templateUrl: './analytics.component.html',
+  styleUrl: './analytics.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [provideEchartsCore({ echarts })],
+})
+export class AnalyticsComponent implements OnInit, OnDestroy {
+  private readonly api = inject(DeploymentApiService);
+
+  // ── Period selector ──────────────────────────────────────
+  protected readonly periods = ANALYTICS_PERIODS;
+  protected readonly activePeriod = signal<AnalyticsPeriod>('14d');
+
+  // ── Loading state ────────────────────────────────────────
+  protected readonly loading = signal(false);
+
+  // ── Raw response signals ─────────────────────────────────
+  protected readonly dora              = signal<AnalyticsDora | null>(null);
+  protected readonly frequency         = signal<AnalyticsFrequency | null>(null);
+  protected readonly cfr               = signal<AnalyticsChangeFailureRate | null>(null);
+  protected readonly durationHistogram = signal<AnalyticsDurationHistogram | null>(null);
+  protected readonly funnel            = signal<AnalyticsPromotionFunnel | null>(null);
+  protected readonly statusDist        = signal<AnalyticsStatusDistribution | null>(null);
+  protected readonly heatmap           = signal<AnalyticsHeatmap | null>(null);
+  protected readonly topDeployers      = signal<AnalyticsTopDeployers | null>(null);
+  protected readonly incidents         = signal<AnalyticsIncidents | null>(null);
+
+  // ── Window subtitle (from any response) ─────────────────
+  protected readonly resolvedWindow = computed<AnalyticsWindow | null>(() => {
+    return this.dora()?.window ?? this.frequency()?.window ?? null;
+  });
+
+  protected readonly subtitleText = computed(() => {
+    const w = this.resolvedWindow();
+    if (!w) return '';
+    const clamped = w.clamped ? ` (clamped from retention: ${w.retention_days}d)` : '';
+    return `${w.days} days · bounded by HISTORY_RETENTION_DAYS (${w.retention_days}d)${clamped}`;
+  });
+
+  // ── DORA KPI band ────────────────────────────────────────
+  protected readonly doraKpis = computed(() => {
+    const d = this.dora();
+    if (!d) return [];
+    return [
+      {
+        key:   'deployment_frequency',
+        label: 'Deploy Frequency',
+        kpi:   d.deployment_frequency,
+        higherIsBetter: true,
+      },
+      {
+        key:   'lead_time',
+        label: 'Lead Time',
+        kpi:   d.lead_time,
+        higherIsBetter: false,
+        approx: true,
+      },
+      {
+        key:   'change_failure_rate',
+        label: 'Change Failure Rate',
+        kpi:   d.change_failure_rate,
+        higherIsBetter: false,
+      },
+      {
+        key:   'time_to_restore',
+        label: 'Time to Restore',
+        kpi:   d.time_to_restore,
+        higherIsBetter: false,
+      },
+    ];
+  });
+
+  // ── Chart options (computed from signals) ────────────────
+
+  protected readonly freqChartOption = computed<EChartsOption | null>(() => {
+    const f = this.frequency();
+    if (!f) return null;
+    const dates = f.buckets.map(b => b.date);
+    return {
+      tooltip:  { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend:   { data: ['Success', 'Failure'], textStyle: { color: 'var(--ink-2)' }, bottom: 0 },
+      grid:     { left: 40, right: 8, top: 8, bottom: 28 },
+      xAxis:    { type: 'category', data: dates, axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      yAxis:    { type: 'value', axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, splitLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      series: [
+        {
+          name: 'Success',
+          type: 'bar',
+          stack: 'total',
+          data: f.buckets.map(b => b.success),
+          itemStyle: { color: STATUS_COLORS['success'] },
+        },
+        {
+          name: 'Failure',
+          type: 'bar',
+          stack: 'total',
+          data: f.buckets.map(b => b.failure),
+          itemStyle: { color: STATUS_COLORS['failure'] },
+        },
+      ],
+    };
+  });
+
+  protected readonly cfrChartOption = computed<EChartsOption | null>(() => {
+    const c = this.cfr();
+    if (!c) return null;
+    const dates = c.buckets.map(b => b.date);
+    return {
+      tooltip:  { trigger: 'axis' },
+      grid:     { left: 40, right: 8, top: 8, bottom: 24 },
+      xAxis:    { type: 'category', data: dates, axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      yAxis:    {
+        type: 'value',
+        min: 0,
+        max: 1,
+        axisLabel: { color: 'var(--ink-2)', fontSize: 10, formatter: (v: number) => `${Math.round(v * 100)}%` },
+        splitLine: { lineStyle: { color: 'var(--glass-edge)' } },
+      },
+      series: [
+        {
+          name: 'CFR',
+          type: 'line',
+          data: c.buckets.map(b => b.rate),
+          smooth: true,
+          lineStyle: { color: STATUS_COLORS['failure'] },
+          itemStyle: { color: STATUS_COLORS['failure'] },
+          areaStyle: { color: 'rgba(239,68,68,0.12)' },
+          markLine: {
+            silent: true,
+            lineStyle: { type: 'dashed', color: '#10b981', width: 1.5 },
+            label: { formatter: '15% Elite', color: '#10b981', fontSize: 10 },
+            data: [{ yAxis: c.elite_threshold }],
+          },
+        },
+      ],
+    };
+  });
+
+  protected readonly durationChartOption = computed<EChartsOption | null>(() => {
+    const h = this.durationHistogram();
+    if (!h) return null;
+    const labels = h.bins.map(b => b.label);
+    const marks: { xAxis: string; lineStyle: { type: string; color: string }; label: { formatter: string; color: string; fontSize: number } }[] = [];
+    if (h.p50_minutes != null) {
+      const p50Label = this.closestBinLabel(h.bins, h.p50_minutes);
+      marks.push({ xAxis: p50Label, lineStyle: { type: 'dashed', color: '#3b82f6' }, label: { formatter: 'p50', color: '#3b82f6', fontSize: 10 } });
+    }
+    if (h.p95_minutes != null) {
+      const p95Label = this.closestBinLabel(h.bins, h.p95_minutes);
+      marks.push({ xAxis: p95Label, lineStyle: { type: 'dashed', color: '#f59e0b' }, label: { formatter: 'p95', color: '#f59e0b', fontSize: 10 } });
+    }
+    return {
+      tooltip:  { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid:     { left: 40, right: 8, top: 8, bottom: 24 },
+      xAxis:    { type: 'category', data: labels, axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      yAxis:    { type: 'value', axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, splitLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      series: [
+        {
+          name: 'Deployments',
+          type: 'bar',
+          data: h.bins.map(b => b.count),
+          itemStyle: { color: '#6366f1' },
+          markLine: marks.length ? { silent: true, data: marks } : undefined,
+        },
+      ],
+    };
+  });
+
+  protected readonly funnelChartOption = computed<EChartsOption | null>(() => {
+    const f = this.funnel();
+    if (!f || !f.stages.length) return null;
+    return {
+      tooltip:  { trigger: 'item' },
+      series: [
+        {
+          type: 'funnel',
+          left: '10%',
+          width: '80%',
+          top: 8,
+          bottom: 8,
+          minSize: '20%',
+          maxSize: '100%',
+          sort: 'none',
+          gap: 4,
+          label: {
+            show: true,
+            position: 'inside',
+            formatter: (params: { name: string; value: number }) => `${params.name}: ${params.value}`,
+            color: '#fff',
+            fontSize: 11,
+          },
+          data: f.stages.map(s => ({ name: s.environment, value: s.count })),
+          itemStyle: { borderWidth: 0 },
+          color: ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+        },
+      ],
+    };
+  });
+
+  protected readonly donutChartOption = computed<EChartsOption | null>(() => {
+    const d = this.statusDist();
+    if (!d) return null;
+    const total = d.statuses.reduce((sum, s) => sum + s.count, 0);
+    const nonZero = d.statuses.filter(s => s.count > 0);
+    if (!nonZero.length) return null;
+    return {
+      tooltip: { trigger: 'item', formatter: (params: { name: string; value: number; percent: number }) => `${params.name}: ${params.value} (${params.percent}%)` },
+      legend: { show: false },
+      series: [
+        {
+          type: 'pie',
+          radius: ['38%', '68%'],
+          center: ['35%', '50%'],
+          data: d.statuses.map(s => ({
+            name:  s.status,
+            value: s.count,
+            itemStyle: { color: STATUS_COLORS[s.status] ?? '#94a3b8' },
+          })),
+          label: { show: false },
+          labelLine: { show: false },
+          emphasis: { itemStyle: { shadowBlur: 8, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.4)' } },
+        },
+      ],
+      graphic: [
+        {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: String(total),
+            font: '600 18px JetBrains Mono',
+            fill: 'var(--ink-0)',
+            textAlign: 'center',
+          },
+          // Offset to centre label inside the donut left-side
+          x: -10,
+        },
+      ],
+    };
+  });
+
+  // Legend rows for the donut (rendered in HTML alongside the chart)
+  protected readonly donutLegend = computed(() => {
+    const d = this.statusDist();
+    if (!d) return [];
+    const total = d.statuses.reduce((sum, s) => sum + s.count, 0);
+    return d.statuses.map(s => ({
+      status: s.status,
+      count:  s.count,
+      pct:    total > 0 ? Math.round((s.count / total) * 100) : 0,
+      color:  STATUS_COLORS[s.status] ?? '#94a3b8',
+    }));
+  });
+
+  protected readonly heatmapChartOption = computed<EChartsOption | null>(() => {
+    const h = this.heatmap();
+    if (!h) return null;
+    // Build 7×24 grid from sparse cells
+    const data: [number, number, number][] = [];
+    for (const cell of h.cells) {
+      data.push([cell.hour, cell.day_of_week, cell.count]);
+    }
+    const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0') + ':00');
+    return {
+      tooltip: { position: 'top', formatter: (params: { value: [number, number, number] }) => `${DOW_LABELS[params.value[1]]} ${String(params.value[0]).padStart(2,'0')}:00 — ${params.value[2]} deploys` },
+      grid:    { height: '70%', top: '8%', left: 40, right: 30 },
+      xAxis: {
+        type:      'category',
+        data:      hours,
+        splitArea: { show: true },
+        axisLabel: { color: 'var(--ink-2)', fontSize: 9, interval: 2 },
+        axisLine: { lineStyle: { color: 'var(--glass-edge)' } },
+      },
+      yAxis: {
+        type:      'category',
+        data:      DOW_LABELS,
+        splitArea: { show: true },
+        axisLabel: { color: 'var(--ink-2)', fontSize: 10 },
+        axisLine: { lineStyle: { color: 'var(--glass-edge)' } },
+      },
+      visualMap: {
+        min: 0,
+        max: Math.max(1, ...h.cells.map(c => c.count)),
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: '2%',
+        inRange: { color: ['rgba(99,102,241,0.1)', '#6366f1'] },
+        textStyle: { color: 'var(--ink-2)', fontSize: 9 },
+        itemWidth: 12,
+        itemHeight: 80,
+      },
+      series: [
+        {
+          type:       'heatmap',
+          data,
+          label:      { show: false },
+          emphasis:   { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.5)' } },
+        },
+      ],
+    };
+  });
+
+  protected readonly topDeployersChartOption = computed<EChartsOption | null>(() => {
+    const t = this.topDeployers();
+    if (!t || !t.deployers.length) return null;
+    const sorted = [...t.deployers].reverse(); // ascending for horizontal bar (echarts bottom → top)
+    return {
+      tooltip:  { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid:     { left: 8, right: 40, top: 4, bottom: 4, containLabel: true },
+      xAxis:    { type: 'value', axisLabel: { color: 'var(--ink-2)', fontSize: 10 }, splitLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      yAxis:    { type: 'category', data: sorted.map(d => d.actor), axisLabel: { color: 'var(--ink-1)', fontSize: 11 }, axisLine: { lineStyle: { color: 'var(--glass-edge)' } } },
+      series: [
+        {
+          type: 'bar',
+          data: sorted.map(d => d.count),
+          itemStyle: { color: '#6366f1', borderRadius: [0, 3, 3, 0] },
+          label: { show: true, position: 'right', color: 'var(--ink-2)', fontSize: 10 },
+        },
+      ],
+    };
+  });
+
+  // ── Incidents list (rendered in HTML as a table, not echarts) ────────────
+  protected readonly incidentsList = computed(() => {
+    return this.incidents()?.incidents ?? [];
+  });
+
+  private subs: Subscription[] = [];
+
+  ngOnInit(): void {
+    this.fetch(this.activePeriod());
+  }
+
+  ngOnDestroy(): void {
+    this.subs.forEach(s => s.unsubscribe());
+  }
+
+  protected selectPeriod(p: AnalyticsPeriod): void {
+    if (p === this.activePeriod()) return;
+    this.activePeriod.set(p);
+    this.fetch(p);
+  }
+
+  // ── Formatting helpers ───────────────────────────────────
+
+  protected formatKpiValue(kpi: ReturnType<typeof this.doraKpis>[number]['kpi']): string {
+    if (kpi.value === null) return '—';
+    const v = kpi.value;
+    switch (kpi.unit) {
+      case 'per_day': return v.toFixed(1);
+      case 'hours':   return v.toFixed(1) + ' h';
+      case 'ratio':   return (v * 100).toFixed(1) + '%';
+      case 'minutes': return v.toFixed(0) + ' min';
+      default:        return String(v);
+    }
+  }
+
+  protected trendLabel(kpi: ReturnType<typeof this.doraKpis>[number]['kpi'], higherIsBetter: boolean): string {
+    if (kpi.trend_delta === null) return '';
+    const pct = Math.round(Math.abs(kpi.trend_delta) * 100);
+    const up   = kpi.trend_delta > 0;
+    const dir  = up ? '▲' : '▼';
+    return `${dir} ${pct}%`;
+  }
+
+  protected trendClass(kpi: ReturnType<typeof this.doraKpis>[number]['kpi'], higherIsBetter: boolean): string {
+    if (kpi.trend_delta === null) return 'flat';
+    const up    = kpi.trend_delta > 0;
+    const good  = higherIsBetter ? up : !up;
+    return good ? 'good' : 'bad';
+  }
+
+  protected severityColor(inc: AnalyticsIncident): string {
+    return SEVERITY_COLORS[inc.severity] ?? '#94a3b8';
+  }
+
+  protected formatDuration(mins: number | null): string {
+    if (mins === null) return '—';
+    if (mins < 60)  return `${Math.round(mins)} min`;
+    return `${(mins / 60).toFixed(1)} h`;
+  }
+
+  protected formatDateTime(iso: string): string {
+    try {
+      return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return iso;
+    }
+  }
+
+  /** Generate a compact inline SVG sparkline for a KPI. */
+  protected sparklinePath(values: number[]): string {
+    if (!values.length) return '';
+    const w = 80, h = 26, pad = 2;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+    const pts = values.map((v, i) => {
+      const x = pad + (i / (values.length - 1 || 1)) * (w - pad * 2);
+      const y = (h - pad) - ((v - min) / range) * (h - pad * 2);
+      return `${x},${y}`;
+    });
+    return `M ${pts.join(' L ')}`;
+  }
+
+  // ── Private helpers ──────────────────────────────────────
+
+  private fetch(period: AnalyticsPeriod): void {
+    // Cancel previous in-flight requests
+    this.subs.forEach(s => s.unsubscribe());
+    this.subs = [];
+    this.loading.set(true);
+
+    // Fire all 9 requests independently; each updates its own signal on arrival.
+    // No combineLatest — partial results render as they arrive.
+    this.subs.push(
+      this.api.getAnalyticsDora(period).subscribe({
+        next:  v => this.dora.set(v),
+        error: () => { /* non-fatal — signal stays null */ },
+      }),
+      this.api.getAnalyticsFrequency(period).subscribe({
+        next:  v => { this.frequency.set(v); this.loading.set(false); },
+        error: () => this.loading.set(false),
+      }),
+      this.api.getAnalyticsChangeFailureRate(period).subscribe({
+        next:  v => this.cfr.set(v),
+        error: () => {},
+      }),
+      this.api.getAnalyticsDurationHistogram(period).subscribe({
+        next:  v => this.durationHistogram.set(v),
+        error: () => {},
+      }),
+      this.api.getAnalyticsPromotionFunnel(period).subscribe({
+        next:  v => this.funnel.set(v),
+        error: () => {},
+      }),
+      this.api.getAnalyticsStatusDistribution(period).subscribe({
+        next:  v => this.statusDist.set(v),
+        error: () => {},
+      }),
+      this.api.getAnalyticsHeatmap(period).subscribe({
+        next:  v => this.heatmap.set(v),
+        error: () => {},
+      }),
+      this.api.getAnalyticsTopDeployers(period).subscribe({
+        next:  v => this.topDeployers.set(v),
+        error: () => {},
+      }),
+      this.api.getAnalyticsIncidents(period).subscribe({
+        next:  v => this.incidents.set(v),
+        error: () => {},
+      }),
+    );
+  }
+
+  /** Find the label of the bin whose range contains the given minutes value. */
+  private closestBinLabel(bins: AnalyticsDurationHistogram['bins'], minutes: number): string {
+    for (const bin of bins) {
+      if (bin.upper_minutes === null || minutes < bin.upper_minutes) return bin.label;
+    }
+    return bins.at(-1)?.label ?? '';
+  }
+}
