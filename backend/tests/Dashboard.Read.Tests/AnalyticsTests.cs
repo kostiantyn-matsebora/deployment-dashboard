@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Dashboard.Read.Analytics;
 using Dashboard.Shared.Contracts;
+using DeployerEventRow = Dashboard.Read.Analytics.AnalyticsRepository.DeployerEventRow;
 
 namespace Dashboard.Read.Tests;
 
@@ -502,6 +503,118 @@ public sealed class AnalyticsTests
         Assert.Equal(20.0 / 30.0, stages[2].Conversion!.Value, precision: 10); // qa
         Assert.Equal(10.0 / 20.0, stages[3].Conversion!.Value, precision: 10); // preprod
         Assert.Null(stages[4].Conversion);  // prod — terminal
+    }
+
+    // ── GroupTopDeployers — distinct successful deployments, credited to earliest actor ─
+
+    [Fact]
+    public void TopDeployers_MultipleEventsPerDeployment_CountsOnceForEarliestActor()
+    {
+        // queued(actorA) -> in_progress(bot) -> success(bot) for one deployment.
+        // Must count ONCE, attributed to actorA (earliest event), not bot, not 3 events.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var rows = new[]
+        {
+            new DeployerEventRow("dep-1", "actorA",    t0.AddHours(1)),
+            new DeployerEventRow("dep-1", "bot",       t0.AddHours(2)),
+            new DeployerEventRow("dep-1", "bot",       t0.AddHours(3)),
+        };
+
+        var result = AnalyticsRepository.GroupTopDeployers(rows, 10);
+
+        var row = Assert.Single(result);
+        Assert.Equal("actorA", row.Actor);
+        Assert.Equal(1, row.Count);
+    }
+
+    [Fact]
+    public void TopDeployers_NullEarliestActor_ReportedAsUnknown()
+    {
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var rows = new[]
+        {
+            new DeployerEventRow("dep-1", null,    t0.AddHours(1)),
+            new DeployerEventRow("dep-1", "bot",   t0.AddHours(2)),
+        };
+
+        var result = AnalyticsRepository.GroupTopDeployers(rows, 10);
+
+        var row = Assert.Single(result);
+        Assert.Equal("unknown", row.Actor);
+        Assert.Equal(1, row.Count);
+    }
+
+    [Fact]
+    public void TopDeployers_TwoDistinctSuccessfulDeploymentsSameActor_CountsTwo()
+    {
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var rows = new[]
+        {
+            new DeployerEventRow("dep-1", "alice", t0.AddHours(1)),
+            new DeployerEventRow("dep-2", "alice", t0.AddHours(2)),
+        };
+
+        var result = AnalyticsRepository.GroupTopDeployers(rows, 10);
+
+        var row = Assert.Single(result);
+        Assert.Equal("alice", row.Actor);
+        Assert.Equal(2, row.Count);
+    }
+
+    [Fact]
+    public void TopDeployers_LimitApplied_ReturnsTopNDescending()
+    {
+        // alice has 2, bob has 1 — limit 1 should return only alice.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var rows = new[]
+        {
+            new DeployerEventRow("dep-1", "alice", t0.AddHours(1)),
+            new DeployerEventRow("dep-2", "alice", t0.AddHours(2)),
+            new DeployerEventRow("dep-3", "bob",   t0.AddHours(3)),
+        };
+
+        var result = AnalyticsRepository.GroupTopDeployers(rows, 1);
+
+        var row = Assert.Single(result);
+        Assert.Equal("alice", row.Actor);
+        Assert.Equal(2, row.Count);
+    }
+
+    [Fact]
+    public void TopDeployers_EqualCount_OrderedByActorOrdinal()
+    {
+        // alice and bob both have 1 deployment; ordinal order: alice < bob.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var rows = new[]
+        {
+            new DeployerEventRow("dep-1", "bob",   t0.AddHours(1)),
+            new DeployerEventRow("dep-2", "alice", t0.AddHours(2)),
+        };
+
+        var result = AnalyticsRepository.GroupTopDeployers(rows, 10);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("alice", result[0].Actor); // alice < bob ordinal
+        Assert.Equal("bob",   result[1].Actor);
+    }
+
+    [Fact]
+    public void TopDeployers_SameHappenedAt_OrdinalMinActorChosen()
+    {
+        // Two events at the same time in one deployment: "zzz" and "aaa".
+        // ThenBy(Actor, Ordinal) must pick "aaa" (ordinal min) as the earliest actor.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var rows = new[]
+        {
+            new DeployerEventRow("dep-1", "zzz", t0.AddHours(1)),
+            new DeployerEventRow("dep-1", "aaa", t0.AddHours(1)), // same time, lower ordinal
+        };
+
+        var result = AnalyticsRepository.GroupTopDeployers(rows, 10);
+
+        var row = Assert.Single(result);
+        Assert.Equal("aaa", row.Actor);
+        Assert.Equal(1, row.Count);
     }
 
     // ── CollectIncidentsFromSlot — coalesce consecutive failures into one outage ─

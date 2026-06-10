@@ -154,16 +154,55 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
     public async Task<IReadOnlyList<DeployerCount>> GetTopDeployersAsync(
         DateTimeOffset from, DateTimeOffset to, int limit, CancellationToken ct)
     {
-        var rows = await db.DeploymentEvents
-            .Where(e => e.HappenedAt >= from && e.HappenedAt < to)
-            .GroupBy(e => e.Actor == null ? "unknown" : e.Actor)
-            .Select(g => new { Actor = g.Key, Count = g.Count() })
-            .OrderByDescending(r => r.Count)
-            .Take(limit)
+        // Fetch all events for deployments that have at least one Success within the window.
+        // We need events outside [from,to) only to find the earliest actor, but anchoring on
+        // the Success event's HappenedAt in [from,to) keeps window semantics deterministic.
+        var qualifyingDeploymentIds = await db.DeploymentEvents
+            .Where(e => e.Status == DeploymentStatus.Success
+                        && e.HappenedAt >= from
+                        && e.HappenedAt < to)
+            .Select(e => e.DeploymentId)
+            .Distinct()
             .ToListAsync(ct);
 
-        return rows.Select(r => new DeployerCount(r.Actor, r.Count)).ToList();
+        if (qualifyingDeploymentIds.Count == 0)
+            return [];
+
+        // Fetch (deploymentId, actor, happenedAt) for all events of qualifying deployments
+        // so we can find the earliest actor per deployment on the client side.
+        var eventRows = await db.DeploymentEvents
+            .Where(e => qualifyingDeploymentIds.Contains(e.DeploymentId))
+            .Select(e => new DeployerEventRow(e.DeploymentId, e.Actor, e.HappenedAt))
+            .ToListAsync(ct);
+
+        return GroupTopDeployers(eventRows, limit);
     }
+
+    // Pure grouping logic extracted for unit-testability (no DB, no DI).
+    // Attributes each qualifying deployment to the actor of its earliest event.
+    internal static IReadOnlyList<DeployerCount> GroupTopDeployers(
+        IEnumerable<DeployerEventRow> rows,
+        int limit)
+    {
+        return rows
+            .GroupBy(r => r.DeploymentId)
+            .Select(g =>
+            {
+                var earliest = g.OrderBy(r => r.HappenedAt).ThenBy(r => r.Actor, StringComparer.Ordinal).First();
+                return earliest.Actor ?? "unknown";
+            })
+            .GroupBy(actor => actor)
+            .Select(g => new DeployerCount(g.Key, g.Count()))
+            .OrderByDescending(d => d.Count).ThenBy(d => d.Actor, StringComparer.Ordinal)
+            .Take(limit)
+            .ToList();
+    }
+
+    /// <summary>Lightweight projection for the top-deployers query.</summary>
+    internal sealed record DeployerEventRow(
+        string DeploymentId,
+        string? Actor,
+        DateTimeOffset HappenedAt);
 
     public async Task<IReadOnlyList<IncidentRow>> GetIncidentsAsync(
         DateTimeOffset from, DateTimeOffset to, int limit, CancellationToken ct)
