@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Dashboard.Shared.Contracts;
 using Dashboard.Shared.Data;
 using Microsoft.EntityFrameworkCore;
@@ -246,46 +245,31 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
         }
     }
 
-    // S1541: the outer failure-scan + inner success-search pattern in incident pairing
-    // is irreducible below CC=10 without losing the single-pass O(n) property or
-    // breaking the used-success-index deduplication. Extracted from GetIncidentsAsync
-    // to keep each method within the per-method budget.
-    [SuppressMessage("SonarAnalyzer", "S1541",
-        Justification = "Incident-pairing loop: outer failure scan + inner success search is irreducible; extracted helper keeps per-method CC at minimum feasible.")]
+    // One incident per outage: the first Failure opens it; consecutive Failures are
+    // ignored (same outage); the next Success closes it. A Success while healthy is
+    // ignored. An open incident at end-of-slot is emitted with restoredAt = null.
     private static void CollectIncidentsFromSlot(
         string service,
         string environment,
         IReadOnlyList<SlotEvent> ordered,
         List<IncidentRow> incidents)
     {
-        var usedSuccessIndices = new HashSet<int>();
-        for (var i = 0; i < ordered.Count; i++)
+        DateTimeOffset? openedAt = null;
+        foreach (var ev in ordered)
         {
-            if (ordered[i].Status != DeploymentStatus.Failure) continue;
-
-            var successIndex = FindNextUnusedSuccess(ordered, i + 1, usedSuccessIndices);
-            if (successIndex.HasValue)
-                usedSuccessIndices.Add(successIndex.Value);
-
-            var restoredAt = successIndex.HasValue
-                ? ordered[successIndex.Value].HappenedAt
-                : (DateTimeOffset?)null;
-
-            incidents.Add(new IncidentRow(service, environment, ordered[i].HappenedAt, restoredAt));
+            if (ev.Status == DeploymentStatus.Failure)
+            {
+                openedAt ??= ev.HappenedAt; // first failure opens; further failures ignored
+            }
+            else if (ev.Status == DeploymentStatus.Success && openedAt.HasValue)
+            {
+                incidents.Add(new IncidentRow(service, environment, openedAt.Value, ev.HappenedAt));
+                openedAt = null;
+            }
         }
-    }
 
-    private static int? FindNextUnusedSuccess(
-        IReadOnlyList<SlotEvent> ordered,
-        int startIndex,
-        IReadOnlySet<int> usedIndices)
-    {
-        for (var j = startIndex; j < ordered.Count; j++)
-        {
-            if (ordered[j].Status == DeploymentStatus.Success && !usedIndices.Contains(j))
-                return j;
-        }
-        return null;
+        if (openedAt.HasValue)
+            incidents.Add(new IncidentRow(service, environment, openedAt.Value, null));
     }
 
     // ── Private projection type ───────────────────────────────────────────────

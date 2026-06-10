@@ -504,7 +504,127 @@ public sealed class AnalyticsTests
         Assert.Null(stages[4].Conversion);  // prod — terminal
     }
 
+    // ── CollectIncidentsFromSlot — coalesce consecutive failures into one outage ─
+
+    [Fact]
+    public void Incidents_FourFailuresThenSuccess_ProducesOneIncident()
+    {
+        // 4 consecutive failures then 1 success = one outage.
+        // failedAt = first failure; restoredAt = the success.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var events = new[]
+        {
+            (DeploymentStatus.Failure, t0.AddHours(1)),
+            (DeploymentStatus.Failure, t0.AddHours(2)),
+            (DeploymentStatus.Failure, t0.AddHours(3)),
+            (DeploymentStatus.Failure, t0.AddHours(4)),
+            (DeploymentStatus.Success, t0.AddHours(5)),
+        };
+
+        var incidents = CollectIncidents("svc", "qa", events);
+
+        var row = Assert.Single(incidents);
+        Assert.Equal(t0.AddHours(1), row.FailedAt);
+        Assert.Equal(t0.AddHours(5), row.RestoredAt);
+    }
+
+    [Fact]
+    public void Incidents_FailuresWithNoSuccess_ProducesOneUnrecovered()
+    {
+        // A run of failures with no trailing success = one unrecovered incident.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var events = new[]
+        {
+            (DeploymentStatus.Failure, t0.AddHours(1)),
+            (DeploymentStatus.Failure, t0.AddHours(2)),
+            (DeploymentStatus.Failure, t0.AddHours(3)),
+        };
+
+        var incidents = CollectIncidents("svc", "prod", events);
+
+        var row = Assert.Single(incidents);
+        Assert.Equal(t0.AddHours(1), row.FailedAt);
+        Assert.Null(row.RestoredAt);
+    }
+
+    [Fact]
+    public void Incidents_FailureSuccessFailureSuccess_ProducesTwoIncidents()
+    {
+        // F, S, F, S = two separate outages.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var events = new[]
+        {
+            (DeploymentStatus.Failure, t0.AddHours(1)),
+            (DeploymentStatus.Success, t0.AddHours(2)),
+            (DeploymentStatus.Failure, t0.AddHours(3)),
+            (DeploymentStatus.Success, t0.AddHours(4)),
+        };
+
+        var incidents = CollectIncidents("svc", "staging", events);
+
+        Assert.Equal(2, incidents.Count);
+        Assert.Equal(t0.AddHours(1), incidents[0].FailedAt);
+        Assert.Equal(t0.AddHours(2), incidents[0].RestoredAt);
+        Assert.Equal(t0.AddHours(3), incidents[1].FailedAt);
+        Assert.Equal(t0.AddHours(4), incidents[1].RestoredAt);
+    }
+
+    [Fact]
+    public void Incidents_TwoSlots_AreIndependent()
+    {
+        // Two different (service,env) slots must not share incident state.
+        var t0 = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var eventsA = new[]
+        {
+            (DeploymentStatus.Failure, t0.AddHours(1)),
+            (DeploymentStatus.Success, t0.AddHours(2)),
+        };
+        var eventsB = new[]
+        {
+            (DeploymentStatus.Failure, t0.AddHours(3)),
+        };
+
+        var incidentsA = CollectIncidents("payments-api", "qa", eventsA);
+        var incidentsB = CollectIncidents("payments-api", "prod", eventsB);
+
+        var rowA = Assert.Single(incidentsA);
+        Assert.Equal("qa", rowA.Environment);
+        Assert.NotNull(rowA.RestoredAt);
+
+        var rowB = Assert.Single(incidentsB);
+        Assert.Equal("prod", rowB.Environment);
+        Assert.Null(rowB.RestoredAt);
+    }
+
     // ── Private test helpers ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Mirrors <c>AnalyticsRepository.CollectIncidentsFromSlot</c> (private) so the
+    /// coalescing algorithm can be unit-tested without a running host.
+    /// </summary>
+    private static IReadOnlyList<IncidentRow> CollectIncidents(
+        string service,
+        string environment,
+        IEnumerable<(string Status, DateTimeOffset HappenedAt)> orderedEvents)
+    {
+        var incidents = new List<IncidentRow>();
+        DateTimeOffset? openedAt = null;
+        foreach (var (status, happenedAt) in orderedEvents)
+        {
+            if (status == DeploymentStatus.Failure)
+            {
+                openedAt ??= happenedAt;
+            }
+            else if (status == DeploymentStatus.Success && openedAt.HasValue)
+            {
+                incidents.Add(new IncidentRow(service, environment, openedAt.Value, happenedAt));
+                openedAt = null;
+            }
+        }
+        if (openedAt.HasValue)
+            incidents.Add(new IncidentRow(service, environment, openedAt.Value, null));
+        return incidents;
+    }
 
     /// <summary>
     /// Mirrors the production funnel-building logic from

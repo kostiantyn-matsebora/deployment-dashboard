@@ -289,6 +289,7 @@ The `.an-grid` is a 12-column grid. Each `.an-card` carries one chart. Layout ro
 - **Deploy heatmap (`span-8`).** 7 rows (day-of-week Sun–Sat) × 24 columns (UTC hour); cell intensity = `count`. Sparse — absent cells rendered as zero.
 - **Top deployers (`span-6`).** Horizontal bar / leaderboard — `actor` + `count`, descending; `limit` default 10.
 - **Time to restore (`span-6`).** Incident list — worst first (unresolved first, then longest `duration_minutes`); each row: `service`, `environment`, elapsed, severity chip (`low`/`medium`/`high`/`critical`).
+  - **Incident pairing semantics (one incident per outage).** Consecutive `Failure` events within the same `(service, environment)` slot are coalesced into a single incident: the FIRST failure opens it (`failed_at`); further failures before recovery are ignored (same outage). The next `Success` closes it (`restored_at` = that success time; duration = first-failure → first-recovery). A `Success` while no incident is open is ignored. If no closing `Success` arrives within the window, the incident is emitted with `restored_at: null` (genuinely unrecovered).
 
 ---
 
