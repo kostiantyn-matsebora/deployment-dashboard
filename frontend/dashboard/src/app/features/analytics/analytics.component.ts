@@ -95,16 +95,18 @@ interface ChartPalette {
   ink1:      string;
   ink2:      string;
   glassEdge: string;
+  chipBg:    string;
 }
 
 /** Read resolved token values from the document root after the theme is applied. */
 function resolveChartPalette(): ChartPalette {
   const style = getComputedStyle(document.documentElement);
   return {
-    ink0:      style.getPropertyValue('--ink-0').trim()      || '#e9ecf4',
-    ink1:      style.getPropertyValue('--ink-1').trim()      || '#b8bdcc',
-    ink2:      style.getPropertyValue('--ink-2').trim()      || '#7c829a',
-    glassEdge: style.getPropertyValue('--glass-edge').trim() || 'rgba(255,255,255,0.06)',
+    ink0:      style.getPropertyValue('--ink-0').trim()        || '#e9ecf4',
+    ink1:      style.getPropertyValue('--ink-1').trim()        || '#b8bdcc',
+    ink2:      style.getPropertyValue('--ink-2').trim()        || '#7c829a',
+    glassEdge: style.getPropertyValue('--glass-edge').trim()   || 'rgba(255,255,255,0.06)',
+    chipBg:    style.getPropertyValue('--glass-strong').trim() || 'rgba(28,33,48,0.70)',
   };
 }
 
@@ -284,26 +286,61 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
     if (!h) return null;
     const p = this.chartPalette();
     const labels = h.bins.map(b => b.label);
-    const marks: { xAxis: string; lineStyle: { type: string; color: string }; label: { formatter: string; color: string; fontSize: number; position: string } }[] = [];
+
+    // Shared markLine style — clean dashed line, no arrowheads.
+    // rotate:0 forces horizontal text (vertical markLines inherit 90° by default).
+    // position:'end' places the label ABOVE the plot top, inside the grid.top band
+    // (46px) that bars never reach — guarantees the chip is always fully visible
+    // regardless of bar height. offset:[4,0] nudges 4px right of the line.
+    const markLineBase = {
+      lineStyle: { type: 'dashed' as const, width: 1.5 },
+      label:     { fontSize: 13, fontWeight: 500, rotate: 0, position: 'end' as const,
+                   offset: [4, 0] as [number, number],
+                   backgroundColor: p.chipBg, padding: [2, 4] as [number, number] },
+    };
+
+    const marks: object[] = [];
+
     if (h.p50_minutes != null) {
-      const p50Label = this.closestBinLabel(h.bins, h.p50_minutes);
-      const p95Label = h.p95_minutes != null ? this.closestBinLabel(h.bins, h.p95_minutes) : null;
-      // Task 2: when p50 and p95 land in the same bin, anchor them to opposite ends so
-      // labels never overlap. p50 → insideEndTop (below chart top), p95 → insideEndBottom.
-      // When they are in different bins the same anchors still avoid overlap.
-      const p50Position = 'insideEndTop';
-      marks.push({ xAxis: p50Label, lineStyle: { type: 'dashed', color: '#3b82f6' }, label: { formatter: 'p50', color: '#3b82f6', fontSize: 10, position: p50Position } });
-      if (h.p95_minutes != null && p95Label !== null) {
-        marks.push({ xAxis: p95Label, lineStyle: { type: 'dashed', color: '#f59e0b' }, label: { formatter: 'p95', color: '#f59e0b', fontSize: 10, position: 'insideEndBottom' } });
+      const p50Bin = this.closestBinLabel(h.bins, h.p50_minutes);
+      const p95Bin = h.p95_minutes != null ? this.closestBinLabel(h.bins, h.p95_minutes) : null;
+
+      if (p95Bin !== null && p95Bin === p50Bin) {
+        // Same bin: one combined marker — both percentiles represented, neutral indigo color.
+        marks.push({
+          xAxis:     p50Bin,
+          lineStyle: { ...markLineBase.lineStyle, color: '#6366f1' },
+          label:     { ...markLineBase.label, formatter: 'p50 · p95', color: '#6366f1' },
+        });
+      } else {
+        // Different bins: individual markers, p50 emerald / p95 amber.
+        marks.push({
+          xAxis:     p50Bin,
+          lineStyle: { ...markLineBase.lineStyle, color: '#10b981' },
+          label:     { ...markLineBase.label, formatter: 'p50', color: '#10b981' },
+        });
+        if (p95Bin !== null) {
+          marks.push({
+            xAxis:     p95Bin,
+            lineStyle: { ...markLineBase.lineStyle, color: '#f59e0b' },
+            label:     { ...markLineBase.label, formatter: 'p95', color: '#f59e0b' },
+          });
+        }
       }
     } else if (h.p95_minutes != null) {
-      const p95Label = this.closestBinLabel(h.bins, h.p95_minutes);
-      marks.push({ xAxis: p95Label, lineStyle: { type: 'dashed', color: '#f59e0b' }, label: { formatter: 'p95', color: '#f59e0b', fontSize: 10, position: 'insideEndBottom' } });
+      const p95Bin = this.closestBinLabel(h.bins, h.p95_minutes);
+      marks.push({
+        xAxis:     p95Bin,
+        lineStyle: { ...markLineBase.lineStyle, color: '#f59e0b' },
+        label:     { ...markLineBase.label, formatter: 'p95', color: '#f59e0b' },
+      });
     }
+
     return {
       tooltip:  { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      // grid.top:28 preserves headroom for the insideEndTop p50 label below the card title.
-      grid:     { left: 40, right: 8, top: 28, bottom: 24 },
+      // grid.top:46 — clear horizontal band above the plot for 'end'-positioned labels.
+      // Bars are confined to the plot area below this band, so labels never overlap bars.
+      grid:     { left: 40, right: 8, top: 46, bottom: 24 },
       xAxis:    { type: 'category', data: labels, axisLabel: { color: p.ink2, fontSize: 10 }, axisLine: { lineStyle: { color: p.glassEdge } } },
       yAxis:    { type: 'value', axisLabel: { color: p.ink2, fontSize: 10 }, splitLine: { lineStyle: { color: p.glassEdge } } },
       series: [
@@ -312,7 +349,8 @@ export class AnalyticsComponent implements OnInit, OnDestroy {
           type: 'bar',
           data: h.bins.map(b => b.count),
           itemStyle: { color: '#6366f1' },
-          markLine: marks.length ? { silent: true, data: marks } : undefined,
+          // symbol at the container level reliably suppresses arrowheads on all data items.
+          markLine: marks.length ? { silent: true, symbol: ['none', 'none'], data: marks } : undefined,
         },
       ],
     };

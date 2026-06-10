@@ -366,9 +366,10 @@ describe('AnalyticsComponent', () => {
     expect(fill).not.toContain('var(--');
   });
 
-  // ── Fix #5 / task 2: duration markLine label positions ───────────────────
+  // ── Fix #5 / task 2 (updated): duration markLine readability ────────────────
 
-  it('durationChartOption p50 uses insideEndTop, p95 uses insideEndBottom (task 2)', () => {
+  it('durationChartOption different bins: two markers with distinct labels (task 2)', () => {
+    // DUR_FIXTURE: p50=15 → '10-30' bin, p95=35 → '30+' bin — different bins.
     const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
     const opt = c.durationChartOption();
     expect(opt).not.toBeNull();
@@ -376,16 +377,71 @@ describe('AnalyticsComponent', () => {
     const markLine = series['markLine'] as Record<string, unknown>;
     const data = markLine['data'] as Array<Record<string, unknown>>;
     expect(data.length).toBe(2);
-    const p50 = data[0]['label'] as Record<string, unknown>;
-    const p95 = data[1]['label'] as Record<string, unknown>;
-    expect(p50['position']).toBe('insideEndTop');
-    expect(p95['position']).toBe('insideEndBottom');
-    // Positions must differ so labels never overlap in same-bin case.
-    expect(p50['position']).not.toBe(p95['position']);
+    const labels = data.map(m => (m['label'] as Record<string, unknown>)['formatter'] as string);
+    expect(labels[0]).toBe('p50');
+    expect(labels[1]).toBe('p95');
+    // Distinct markers must target different bins.
+    expect(data[0]['xAxis']).not.toBe(data[1]['xAxis']);
   });
 
-  it('durationChartOption same-bin p50/p95 labels are anchored to opposite ends (task 2)', () => {
-    // Override fixture: p50=15, p95=20 — both land in the 10-30 bin (closestBinLabel).
+  it('durationChartOption different bins: label font size >= 12 (readability, task 2)', () => {
+    const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
+    const opt = c.durationChartOption();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    const markLine = series['markLine'] as Record<string, unknown>;
+    const data = markLine['data'] as Array<Record<string, unknown>>;
+    data.forEach(m => {
+      const fontSize = (m['label'] as Record<string, unknown>)['fontSize'] as number;
+      expect(fontSize).toBeGreaterThanOrEqual(12);
+    });
+  });
+
+  it('durationChartOption different bins: label rotate === 0 (horizontal text, no 90° inherit)', () => {
+    const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
+    const opt = c.durationChartOption();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    const markLine = series['markLine'] as Record<string, unknown>;
+    const data = markLine['data'] as Array<Record<string, unknown>>;
+    data.forEach(m => {
+      expect((m['label'] as Record<string, unknown>)['rotate']).toBe(0);
+    });
+  });
+
+  it('durationChartOption labels use position "end" (above plot top — guaranteed clear band)', () => {
+    // position:'end' + grid.top:46 ensures labels sit above the plot area where bars never reach.
+    const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
+    const opt = c.durationChartOption();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    const markLine = series['markLine'] as Record<string, unknown>;
+    const data = markLine['data'] as Array<Record<string, unknown>>;
+    data.forEach(m => {
+      expect((m['label'] as Record<string, unknown>)['position']).toBe('end');
+    });
+  });
+
+  it('durationChartOption same-bin: combined marker label rotate === 0 (horizontal text)', () => {
+    const c = component as unknown as {
+      durationHistogram: { set(v: typeof DUR_FIXTURE): void };
+      durationChartOption: () => Record<string, unknown> | null;
+    };
+    c.durationHistogram.set({ ...DUR_FIXTURE, p50_minutes: 15, p95_minutes: 20 });
+    const opt = c.durationChartOption();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    const markLine = series['markLine'] as Record<string, unknown>;
+    const data = markLine['data'] as Array<Record<string, unknown>>;
+    expect((data[0]['label'] as Record<string, unknown>)['rotate']).toBe(0);
+  });
+
+  it('durationChartOption markLine container has symbol none/none (no arrowheads)', () => {
+    const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
+    const opt = c.durationChartOption();
+    const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
+    const markLine = series['markLine'] as Record<string, unknown>;
+    expect(markLine['symbol']).toEqual(['none', 'none']);
+  });
+
+  it('durationChartOption same-bin p50/p95: exactly one combined marker (task 2)', () => {
+    // Override fixture: p50=15, p95=20 — both land in the '10-30' bin.
     const c = component as unknown as {
       durationHistogram: { set(v: typeof DUR_FIXTURE): void };
       durationChartOption: () => Record<string, unknown> | null;
@@ -399,16 +455,20 @@ describe('AnalyticsComponent', () => {
     const series = ((opt as Record<string, unknown>)['series'] as Array<Record<string, unknown>>)[0];
     const markLine = series['markLine'] as Record<string, unknown>;
     const data = markLine['data'] as Array<Record<string, unknown>>;
-    expect(data.length).toBe(2);
-    const positions = data.map(m => (m['label'] as Record<string, unknown>)['position']);
-    expect(positions[0]).not.toBe(positions[1]);
+    // Same bin → ONE marker (not two stacked/cramped ones).
+    expect(data.length).toBe(1);
+    const label = (data[0]['label'] as Record<string, unknown>)['formatter'] as string;
+    // Combined label must contain both percentile identifiers.
+    expect(label).toContain('p50');
+    expect(label).toContain('p95');
   });
 
-  it('durationChartOption grid top >= 28 to clear the card title', () => {
+  it('durationChartOption grid top >= 44 (clear band for end-positioned labels)', () => {
+    // grid.top:46 reserves a horizontal band above the plot; bars are confined below it.
     const c = component as unknown as { durationChartOption: () => Record<string, unknown> | null };
     const opt = c.durationChartOption();
     const grid = (opt as Record<string, unknown>)['grid'] as Record<string, unknown>;
-    expect(Number(grid['top'])).toBeGreaterThanOrEqual(28);
+    expect(Number(grid['top'])).toBeGreaterThanOrEqual(44);
   });
 
   // ── Iteration 2: task 1 — heatmap visualMap hidden ───────────────────────
