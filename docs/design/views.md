@@ -241,7 +241,7 @@ The Analytics view is the 3rd tab in the top-nav segmented control. All data is 
 - Three buttons: **7d**, **14d**, **30d**. Single active state (`.is-active`).
 - Sends `?window=7d|14d|30d` to every `/api/analytics/*` call.
 - When `window.clamped === true` in any response, surface the clamp indication next to the active button (e.g. subtitle reads "14 days · bounded by HISTORY_RETENTION_DAYS").
-- Default: `14d`.
+- Default selection: **14d**. The API `window` query param itself defaults to 7d when omitted, but the SPA always sends an explicit value — no contradiction with openapi.yaml / api-guidelines §12.
 
 ### DORA KPI Band
 

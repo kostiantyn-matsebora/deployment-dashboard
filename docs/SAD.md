@@ -74,7 +74,7 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 - **Hosting platform:** Azure only — all infrastructure must run on Microsoft Azure.
 - **Budget:** ≤ $30/month total (compute + database + storage combined).
 - **Network:** The system is deployed inside the organisation's internal network or a private Azure-hosted container; it is not publicly accessible.
-- **Technology stack:** Angular 20+ for the frontend; .NET 10 for all backend components.
+- **Technology stack:** Angular 21 for the frontend; .NET 10 for all backend components.
 - **Platform agnosticism:** The solution must not depend on any proprietary cloud compute model (e.g. serverless Functions). All backend components must be deployable as standard containerised applications on any OCI-compliant container host.
 
 ---

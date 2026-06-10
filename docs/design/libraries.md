@@ -48,7 +48,7 @@ With `unstyled: true`, every PrimeNG component renders bare semantic markup. You
 | `@swimlane/ngx-graph` | ^9.x | MIT | Directed graph visualization | Swimlanes view — one `<ngx-graph>` instance per service lane. Dagre layout (`orientation: 'LR'`). Custom `#nodeTemplate`, `#linkTemplate`, `#defsTemplate`. Bundles its own D3 subset. |
 | `lucide-angular` | ^0.x | ISC | Icon library | Mono-weight stroke icons for topbar controls (filter, fields, correlation, theme switch, close buttons). Tree-shakeable — import individual icons. |
 | `date-fns` | ^4.x | MIT | Date/time formatting | `formatDistanceToNow()` for elapsed display ("3h ago") on tiles/nodes. `format()` for absolute UTC in drawer/inspector. Tree-shakeable. |
-| `ngx-echarts` | ^19.x | MIT | Apache ECharts wrapper for Angular | Analytics view — all 8 charts (frequency bars, CFR trend, duration histogram, funnel, status donut, heatmap, leaderboard, incidents list). Wraps `echarts` (peer dep). Chosen for Angular-21 compatibility (see note below). |
+| `ngx-echarts` | ^21.0.0 | MIT | Apache ECharts wrapper for Angular | Analytics view — all 8 charts (frequency bars, CFR trend, duration histogram, funnel, status donut, heatmap, leaderboard, incidents list). Wraps `echarts` (peer dep). Chosen for Angular-21 compatibility (see note below). |
 | `echarts` | ^5.x | Apache-2.0 | Apache ECharts core (peer dep of `ngx-echarts`) | Chart rendering engine. Tree-shakeable via `echarts/core` + per-chart imports. |
 
 ### Angular Built-in Modules
@@ -78,7 +78,7 @@ With `unstyled: true`, every PrimeNG component renders bare semantic markup. You
   "@swimlane/ngx-graph": "^9.x",
   "lucide-angular": "^0.x",
   "date-fns": "^4.x",
-  "ngx-echarts": "^19.x",
+  "ngx-echarts": "^21.0.0",
   "echarts": "^5.x"
 }
 ```
@@ -87,4 +87,4 @@ Total added dependencies: **6 packages**. No jQuery, no standalone D3, no state-
 
 ### Angular-21 Compatibility Note
 
-**`ngx-echarts` was chosen over `@swimlane/ngx-charts`** because `@swimlane/ngx-charts` is not compatible with Angular 21 (last tested against Angular 15; the project is on Angular 21). `ngx-echarts` ^19.x follows Angular's major-version numbering convention and targets Angular 19+; Angular 21 compatibility is confirmed via peer-dep range. `echarts` ^5.x is stable and tree-shakeable via `echarts/core` imports.
+**`ngx-echarts` was chosen over `@swimlane/ngx-charts`** because `@swimlane/ngx-charts` is not compatible with Angular 21 (last tested against Angular 15; the project is on Angular 21). `ngx-echarts` ^21.0.0 follows Angular's major-version numbering convention and targets Angular 21; compatibility is confirmed via peer-dep range. `echarts` ^5.x is stable and tree-shakeable via `echarts/core` imports.

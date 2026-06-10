@@ -1,7 +1,7 @@
 ---
 title: Design
 shortTitle: Design
-intro: 'Frontend engineering design spec — tokens, components, views, behavior, data model, libraries. Stack: Angular 20+ · PrimeNG (unstyled) · ngx-graph.'
+intro: 'Frontend engineering design spec — tokens, components, views, behavior, data model, libraries. Stack: Angular 21 · PrimeNG (unstyled) · ngx-graph.'
 children:
   - /README
   - /design-tokens
