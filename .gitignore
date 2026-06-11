@@ -88,16 +88,12 @@ testing/e2e/captures/head-*.png
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
-# docs-keeper hook state: per-session tracker (SessionStart baseline + TrackedMd).
-# All per-machine runtime, never source. The wildcard form covers the
-# per-session_id files (e.g. .docs-keeper-session.<sid>.json).
-.claude/.docs-keeper-session*.json
+# docs-keeper runtime state: session trackers + capture files (per-machine, never source).
+# All per-session_id files live under this dir (session.<sid>.json, capture.<sid>.json).
+/.docs-keeper/
 # worktree lifecycle markers: written by Invoke-WorktreeCleanup.ps1 at SessionEnd
 # when a worktree has uncommitted changes. Keyed by session id.
 .claude/.worktree-state*.json
-# docs-capture entries: pending documentation items captured during sessions.
-# Persist across session end until applied or dismissed.
-.claude/.docs-capture*.json
 
 # ---- dotnet format / analyzer scratch -----------------------------------
 # `dotnet format --report` writes this at repo root when invoked manually
