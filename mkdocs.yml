@@ -86,6 +86,7 @@ extra_css:
 
 nav:
   - Home: index.md
+  - Built by Claude: built-by-ai.md
   - Quickstart: guide/quickstart.md
   - Install: guide/install.md
   - Guide:

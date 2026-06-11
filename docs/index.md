@@ -4,6 +4,7 @@ shortTitle: Home
 intro: 'Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.'
 children:
   - /guide
+  - /built-by-ai
   - /SAD
   - /FRONTEND_REQUIREMENTS
   - /API_SPECIFICATION
@@ -33,6 +34,7 @@ hide:
 [:material-rocket-launch-outline: Get started](guide/quickstart.md){ .md-button .md-button--primary }
 [:material-pipe: Integrate your CI/CD](guide/send-events.md){ .md-button }
 [:fontawesome-brands-github: GitHub](https://github.com/kostiantyn-matsebora/deployment-dashboard){ .md-button }
+[:simple-claude: Built by Claude — see how](built-by-ai/){ .md-button }
 
 </div>
 

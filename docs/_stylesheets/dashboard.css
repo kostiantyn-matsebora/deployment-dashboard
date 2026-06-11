@@ -317,3 +317,73 @@ body {
   color: var(--md-default-fg-color--lighter);
   margin-top: .4rem;
 }
+
+/* ----------------------------  Goal statement (built-by-ai)  ------------- */
+/* Oversized centered thesis panel — gives "the goal" the weight of a headline
+   rather than a small quote box. On-brand glass + indigo wash. */
+.md-typeset .dd-goal {
+  margin: 1.8rem 0 2.2rem;
+  padding: 1.5rem 1.8rem;
+  border-radius: var(--dd-radius-lg);
+  border: 1px solid var(--dd-accent-edge);
+  background-image: linear-gradient(135deg, var(--dd-accent-soft), transparent 72%);
+  background-color: var(--dd-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  backdrop-filter: blur(14px) saturate(135%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 20px 50px -28px rgba(120, 110, 255, 0.5);
+  text-align: center;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color);
+}
+.md-typeset .dd-goal p { margin: 0; }
+.md-typeset .dd-goal strong { color: var(--md-default-fg-color); font-weight: 700; }
+.md-typeset .dd-goal-label {
+  display: block;
+  font-size: .8rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--dd-accent);
+  margin-bottom: .55rem;
+}
+
+/* ----------------------------  Announcement CTA  ------------------------- */
+/* Plain headline text + a single pill link; a Claude glyph leads it. */
+.md-typeset .dd-announce-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .5em;
+  color: var(--md-primary-bg-color);
+  font-size: .82rem;
+  font-weight: 500;
+}
+.md-typeset .dd-announce-cta strong { color: var(--md-primary-bg-color); }
+.md-typeset .dd-announce-claude { display: inline-flex; align-items: center; }
+.md-typeset .dd-announce-claude svg {
+  width: 1.15em;
+  height: 1.15em;
+  fill: var(--md-primary-bg-color);
+  vertical-align: middle;
+}
+.md-typeset a.dd-announce-go {
+  display: inline-flex;
+  align-items: center;
+  padding: .14em .7em;
+  border-radius: 999px;
+  background-image: linear-gradient(135deg, #6e64ff, #5a52e0);
+  color: #fff !important;
+  font-weight: 700;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+}
+.md-typeset a.dd-announce-go:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 22px -10px rgba(120, 110, 255, 0.85);
+  transform: translateY(-1px);
+}
