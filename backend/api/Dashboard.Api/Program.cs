@@ -19,7 +19,7 @@ builder.Services.Configure<RouteHandlerOptions>(opts => opts.ThrowOnBadRequest =
 builder.AddDashboardDatabase();
 
 builder.Services.AddWriteServices();
-builder.Services.AddReadServices();
+builder.Services.AddReadServices(builder.Configuration);
 builder.Services.AddControlServices();
 
 builder.Services.AddApiCors(builder.Configuration);

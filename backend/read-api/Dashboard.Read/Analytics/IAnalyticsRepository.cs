@@ -18,7 +18,8 @@ public interface IAnalyticsRepository
 
     /// <summary>
     /// Approximated lead-time samples (hours) from <c>parent_deployments</c> promotion chains
-    /// reaching a <c>prod</c> environment within the window.
+    /// reaching the operator-configured production terminal stage
+    /// (<c>ANALYTICS_FUNNEL_ENVIRONMENTS</c>, default <c>prod</c>) within the window.
     /// Returns an empty list when no qualifying chains exist.
     /// </summary>
     Task<IReadOnlyList<double>> GetLeadTimeHourSamplesAsync(
@@ -39,7 +40,9 @@ public interface IAnalyticsRepository
 
     /// <summary>
     /// Distinct <c>deployment_id</c> counts per funnel stage environment.
-    /// Only the five canonical ladder environments are included.
+    /// The ladder is operator-configured via <c>ANALYTICS_FUNNEL_ENVIRONMENTS</c>
+    /// (default dev → staging → qa → preprod → prod); the last stage is the production terminal
+    /// that lead-time measures to.
     /// </summary>
     Task<IReadOnlyList<FunnelStageCount>> GetFunnelCountsAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct);

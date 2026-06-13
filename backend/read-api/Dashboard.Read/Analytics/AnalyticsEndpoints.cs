@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Configuration;
 
 namespace Dashboard.Read.Analytics;
 
@@ -117,11 +116,11 @@ public static class AnalyticsEndpoints
         [FromQuery] string? window,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
 
         var dailyCounts = await repo.GetDailyTerminalCountsAsync(win.From, win.To, ct);
         var ltSamples = await repo.GetLeadTimeHourSamplesAsync(win.From, win.To, ct);
@@ -185,11 +184,11 @@ public static class AnalyticsEndpoints
         [FromQuery] string? window,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var dailyCounts = await repo.GetDailyTerminalCountsAsync(win.From, win.To, ct);
 
         // Zero-fill all days in the window.
@@ -213,11 +212,11 @@ public static class AnalyticsEndpoints
         [FromQuery] string? window,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var dailyCounts = await repo.GetDailyTerminalCountsAsync(win.From, win.To, ct);
 
         var start = DateOnly.FromDateTime(win.From.UtcDateTime.Date);
@@ -240,11 +239,11 @@ public static class AnalyticsEndpoints
         [FromQuery] string? window,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var samples = await repo.GetDurationMinuteSamplesAsync(win.From, win.To, ct);
 
         var bins = BuildDurationBins(samples);
@@ -260,11 +259,11 @@ public static class AnalyticsEndpoints
         [FromQuery] string? window,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var counts = await repo.GetFunnelCountsAsync(win.From, win.To, ct);
 
         var stages = new List<AnalyticsFunnelStage>(counts.Count);
@@ -286,11 +285,11 @@ public static class AnalyticsEndpoints
         [FromQuery] string? window,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var counts = await repo.GetStatusCountsAsync(win.From, win.To, ct);
 
         var map = counts.ToDictionary(r => r.Status, r => r.Count);
@@ -308,11 +307,11 @@ public static class AnalyticsEndpoints
         [FromQuery] string? window,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var cells = await repo.GetHeatmapCellsAsync(win.From, win.To, ct);
 
         var response = new AnalyticsHeatmapResponse(
@@ -327,11 +326,11 @@ public static class AnalyticsEndpoints
         [FromQuery] int? limit,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var effectiveLimit = Math.Clamp(limit ?? 10, 1, 100);
         var deployers = await repo.GetTopDeployersAsync(win.From, win.To, effectiveLimit, ct);
 
@@ -347,11 +346,11 @@ public static class AnalyticsEndpoints
         [FromQuery] int? limit,
         [FromHeader(Name = "If-None-Match")] string? ifNoneMatch,
         IAnalyticsRepository repo,
-        IConfiguration configuration,
+        AnalyticsOptions analyticsOptions,
         HttpContext httpContext,
         CancellationToken ct)
     {
-        var win = ResolveWindow(window, configuration);
+        var win = ResolveWindow(window, analyticsOptions);
         var effectiveLimit = Math.Clamp(limit ?? 10, 1, 100);
         var rows = await repo.GetIncidentsAsync(win.From, win.To, effectiveLimit, ct);
 
@@ -371,13 +370,13 @@ public static class AnalyticsEndpoints
 
     // ── Shared helpers ────────────────────────────────────────────────────────
 
-    /// <summary>Resolves the window param and clamps to configured retention.</summary>
-    private static AnalyticsWindow ResolveWindow(string? window, IConfiguration configuration)
-    {
-        var rawRetention = configuration["HISTORY_RETENTION_DAYS"];
-        var retention = int.TryParse(rawRetention, out var r) && r >= 90 ? r : 365;
-        return AnalyticsWindowResolver.Resolve(window, retention, DateTimeOffset.UtcNow);
-    }
+    /// <summary>
+    /// Resolves the window param and clamps to the configured retention.
+    /// All configuration is sourced from the singleton <see cref="AnalyticsOptions"/>
+    /// parsed once at startup — no per-request configuration reads.
+    /// </summary>
+    private static AnalyticsWindow ResolveWindow(string? window, AnalyticsOptions analyticsOptions) =>
+        AnalyticsWindowResolver.Resolve(window, analyticsOptions.RetentionDays, DateTimeOffset.UtcNow, analyticsOptions.Granularity);
 
     /// <summary>
     /// Serialises <paramref name="response"/>, computes a weak ETag, emits it on the response,

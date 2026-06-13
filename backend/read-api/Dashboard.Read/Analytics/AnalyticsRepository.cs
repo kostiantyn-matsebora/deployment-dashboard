@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Dashboard.Shared.Contracts;
 using Dashboard.Shared.Data;
 using Microsoft.EntityFrameworkCore;
@@ -9,13 +10,14 @@ namespace Dashboard.Read.Analytics;
 /// Uses group-by / time-bucket SQL over <c>deployment_events</c> — no client-side
 /// aggregation, no event-stream replay.
 /// </summary>
-internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRepository
+internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOptions options) : IAnalyticsRepository
 {
     private static readonly string[] TerminalStatuses =
         [DeploymentStatus.Success, DeploymentStatus.Failure];
 
-    private static readonly string[] FunnelEnvironments =
-        ["dev", "staging", "qa", "preprod", "prod"];
+    // Lowercase-normalized funnel ladder from the composition root.
+    // Guaranteed non-empty by AnalyticsFunnelEnvironments.Parse — [^1] is always safe.
+    private readonly string[] _funnelEnvironments = options.FunnelEnvironments;
 
     // ── DORA Four Keys ────────────────────────────────────────────────────────
 
@@ -105,11 +107,20 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
     public async Task<IReadOnlyList<FunnelStageCount>> GetFunnelCountsAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
     {
+        Debug.Assert(_funnelEnvironments.Length > 0,
+            "Funnel environments must be non-empty — [^1] access would throw on an empty array.");
+
+        // EF Core translates string[].Contains(...) to SQL IN (...).
+        // Both sides are lowered: the configured list is pre-normalized to lowercase-invariant
+        // (by AnalyticsFunnelEnvironments.Parse) and e.Environment is lowered in SQL via LOWER()
+        // — matching regardless of the casing stored in the database.
+        // DB convention is lowercase, but an operator could configure "PrOD" and it must still match.
+        var funnelEnvs = _funnelEnvironments; // captured local — EF translates the array, not the field expression
         var rows = await db.DeploymentEvents
-            .Where(e => FunnelEnvironments.Contains(e.Environment)
+            .Where(e => funnelEnvs.Contains(e.Environment.ToLower())
                         && e.HappenedAt >= from
                         && e.HappenedAt < to)
-            .GroupBy(e => e.Environment)
+            .GroupBy(e => e.Environment.ToLower())
             .Select(g => new
             {
                 Environment = g.Key,
@@ -117,8 +128,9 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
             })
             .ToListAsync(ct);
 
+        // Keys are already lowercase on both sides — no false negatives from case mismatch.
         var map = rows.ToDictionary(r => r.Environment, r => r.Count);
-        return FunnelEnvironments
+        return _funnelEnvironments
             .Select(env => new FunnelStageCount(env, map.GetValueOrDefault(env, 0)))
             .ToList();
     }
@@ -230,8 +242,17 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
 
     private async Task<List<Shared.Entities.DeploymentEvent>> FetchProdTerminalWithParentsAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
-        => await db.DeploymentEvents
-            .Where(e => e.Environment == "prod"
+    {
+        Debug.Assert(_funnelEnvironments.Length > 0,
+            "Funnel environments must be non-empty — [^1] access would throw on an empty array.");
+
+        // Capture the production terminal stage into a local so EF Core translates the
+        // captured value directly — not an index expression — into a SQL parameter.
+        // The terminal is lowercase-normalized; compare against LOWER(e.Environment) for
+        // case-insensitive matching (DB convention is lowercase, but config may vary).
+        var prodEnv = _funnelEnvironments[^1];
+        return await db.DeploymentEvents
+            .Where(e => e.Environment.ToLower() == prodEnv
                         && TerminalStatuses.Contains(e.Status)
                         && e.HappenedAt >= from
                         && e.HappenedAt < to
@@ -239,6 +260,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db) : IAnalyticsRep
                         && e.ParentDeployments.Length > 0)
             .OrderBy(e => e.HappenedAt)
             .ToListAsync(ct);
+    }
 
     private async Task<Dictionary<string, DateTimeOffset>> FetchParentMinTimesAsync(
         List<string> parentIds, CancellationToken ct)

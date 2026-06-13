@@ -116,7 +116,11 @@ public sealed record AnalyticsFunnelStage(
     int Count,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] double? Conversion);
 
-/// <summary>Promotion funnel dev → staging → qa → preprod → prod.</summary>
+/// <summary>
+/// Promotion funnel stages in operator-configured order
+/// (<c>ANALYTICS_FUNNEL_ENVIRONMENTS</c>, default dev → staging → qa → preprod → prod).
+/// The last stage is the production terminal that lead-time measures to.
+/// </summary>
 public sealed record AnalyticsPromotionFunnelResponse(
     AnalyticsWindow Window,
     IReadOnlyList<AnalyticsFunnelStage> Stages);
