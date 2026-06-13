@@ -91,19 +91,20 @@ describe('ControlController (/_github/*)', () => {
     });
 
     it('reset:true clears the store before seeding', async () => {
-      // First seed 5 services
+      // First seed with a larger count
       await request(app.getHttpServer())
         .post('/_github/seed')
         .send({ dataset: 'random', count: 5 });
 
-      // Seed again with reset=true and count=1 — result should reflect only 1 service
+      // Seed again with reset=true — after reset the store should contain only
+      // the newly seeded data (all 10 services; count drives chains, not repos).
       const res = await request(app.getHttpServer())
         .post('/_github/seed')
         .send({ dataset: 'random', count: 1, reset: true })
         .expect(POST_EXPECTED_STATUS);
 
-      // After reset, only the 1-service random seed should be present
-      expect(res.body.repos).toBe(1);
+      // All 10 services are always created; dataset is reset (no accumulation).
+      expect(res.body.repos).toBe(10);
     });
 
     it('returns 400 for an invalid dataset value', async () => {
@@ -237,7 +238,8 @@ describe('ControlController (/_github/*)', () => {
         .send({ dataset: 'random', count: 2 })
         .expect(POST_EXPECTED_STATUS);
 
-      expect(seedRes.body.repos).toBe(2);
+      // count drives chains, not repos; all 10 services are always created.
+      expect(seedRes.body.repos).toBe(10);
       expect(seedRes.body.deployments).toBeGreaterThan(0);
 
       const clearRes = await request(app.getHttpServer())

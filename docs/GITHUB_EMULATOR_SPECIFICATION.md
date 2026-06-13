@@ -141,7 +141,7 @@ Intended for the demo driver proxy, test harnesses, and manual operation. No aut
 
 | Method · Path | Request | Response | Effect |
 |---|---|---|---|
-| `POST /_github/seed` | `{ dataset: "demo"\|"random", count?: number, reset?: boolean }` | `GithubStoreStatus` | `reset:true` clears the store first. `"demo"` loads the curated fixture (§7); `"random"` generates synthetic data (§8). `count` = number of services/workflows for random, ignored for demo. |
+| `POST /_github/seed` | `{ dataset: "demo"\|"random", count?: number, reset?: boolean }` | `GithubStoreStatus` | `reset:true` clears the store first. `"demo"` loads the curated fixture (§7); `"random"` generates synthetic data (§8). `count` = number of promotion chains for random (ignored for demo); repos always stay at 10. |
 | `POST /_github/clear` | — | `GithubStoreStatus` | Empties the store. |
 
 ### 6.3 Emission control
@@ -175,9 +175,17 @@ The fixture files loaded when `dataset: "demo"` is requested. They MUST cover:
 
 ## 8. Random set + periodic emit
 
-- Generated repos/workflows/deployments are analogous to the write-path `random-event-generator.ts` in the demo driver.
-- Generated workflow YAML includes an environment `needs` chain so parent derivation works on random data (F10 exercised).
-- Periodic emit appends new deployments (`created_at=now`) over time; the fetcher's incremental poll picks them up on the next interval.
+**Repos.** Always 10 synthetic repos (unaffected by `count`).
+
+**Promotion chains.** `count` = number of promotion chains generated (default 20). Each chain walks a 5-stage ladder — `dev → staging → qa → preprod → prod` — with per-stage attrition: every chain reaches `dev`; each subsequent stage is reached with decreasing probability (≈ 85 / 75 / 70 / 55 %), so per-stage deployment counts decrease realistically. One chain produces 1–5 deployments depending on attrition.
+
+**Timestamps.** Each chain starts at a random point in the trailing 14-day window (≥ 1 h before now). Subsequent stages in the chain advance the timestamp forward. This ensures multi-day analytics windows are populated and the day-truncated window (which excludes today) contains data.
+
+**DORA signals.** ≈ 15 % of terminal deployments are set to `failure`, producing non-zero change-failure-rate and MTTR incidents. Actors, durations, and times of day are varied across chains.
+
+**`parent_deployments` chains.** The generated workflow YAML includes a `needs` chain spanning all five stages, so `parent_deployments` resolves across the full ladder (F10 exercised on random data).
+
+**Periodic emit.** Appends new deployments (`created_at = now`) over time; the fetcher's incremental poll picks them up on the next interval.
 
 ---
 
@@ -200,7 +208,7 @@ When `SEED_ON_STARTUP=true` the emulator is immediately ready for the fetcher wi
 | Unit | `github-store.spec.ts` | Store CRUD (seed / clear / emit); per-request rate-limit decrement + hourly rollover; store independent of API data |
 | Unit | `github-rest.controller.spec.ts` | Each emulated endpoint returns the correct shape; `X-RateLimit-*` headers on every response; `Link: rel="next"` when more pages; unknown repo/deployment/run/path returns GitHub-shaped `404`; `GET .../reviews` returns review objects (empty array when none); `GET .../runs/:id` emits `conclusion` field |
 | Unit | `control.controller.spec.ts` | `seed` / `clear` / `emit` / `status` endpoints correct; seed + clear mutate the store; emit toggle works |
-| Unit | `github-random-generator.spec.ts` | Generated workflow YAML includes an environment `needs` chain; deployments have a full in-progress→success/failure lifecycle; all required fields present |
+| Unit | `github-random-generator.spec.ts` | Generated workflow YAML includes a 5-stage `needs` chain (dev→staging→qa→preprod→prod); per-stage attrition produces fewer deployments at later stages; timestamps fall within the trailing 14-day window; ≈15 % terminal failures present; all required fields present; `count` controls chain count, repos always 10 |
 | Unit | `github-fixture-loader.spec.ts` | Curated demo fixture loads without error; covers F10 (dev→staging→prod `needs` chain) and F15 (artifact-sourced version); loaded dataset matches `GithubStoreStatus` counters; all 5 new-status fixtures present (pending/queued/waiting/cancelled/rejected) with correct run conclusions and review records |
 | Integration | `fetcher-emulation.e2e.spec.ts` | Start emulator + seed demo set (`POST /_github/seed {dataset:"demo"}`); run the real fetcher-host against `http://github-emulator:3100`; real `Dashboard.Api` + Postgres; assert the dashboard shows the expected services, a non-trivial `parent_deployments` chain, and an artifact-sourced version. Realizes FETCHER_SPEC §7.2. |
 

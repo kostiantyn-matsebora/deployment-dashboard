@@ -8,15 +8,51 @@ const SERVICES = [
   'payments-api', 'platform-proxy', 'search-indexer',
 ];
 
-const ENVS    = ['dev', 'staging', 'qa', 'preprod', 'prod'];
+/** Full 5-stage promotion ladder, in order. */
+const LADDER: ReadonlyArray<string> = ['dev', 'staging', 'qa', 'preprod', 'prod'];
+
+/**
+ * Probability that a chain advances FROM this stage TO the next.
+ * dev is always entered (index 0 is irrelevant — every chain starts at dev).
+ * Each subsequent stage is reached only with its probability, modeling realistic funnel attrition.
+ */
+const ADVANCE_PROB: Record<string, number> = {
+  dev:     0.85, // probability of advancing dev → staging
+  staging: 0.75, // probability of advancing staging → qa
+  qa:      0.70, // probability of advancing qa → preprod
+  preprod: 0.55, // probability of advancing preprod → prod
+};
+
+/** Probability that a stage ends with a `failure` status (applies only to the terminal stage). */
+const FAILURE_PROB = 0.15;
+
+/** Trailing window over which chains are spread. */
+const WINDOW_DAYS = 14;
+
 const ACTORS  = ['alice', 'bob', 'mreyes', 's.harper', 'jpark', 'release-bot', 'ci-bot'];
 const VERSIONS = ['1.0.0', '1.1.0', '2.0.0-rc1', '0.8.4', '3.1.2', '0.42.0', '2.15.0'];
 const REFS    = ['refs/heads/main', 'release/1.0', 'feat/auth-refresh', 'fix/timeout'];
+
+/**
+ * Intra-stage gap ranges in minutes (time from chain start to each stage's deployment).
+ * dev is always at offset 0.
+ */
+const STAGE_OFFSET_RANGE: Record<string, [number, number]> = {
+  dev:     [0,   0],
+  staging: [15,  60],
+  qa:      [45,  150],
+  preprod: [75,  240],
+  prod:    [120, 360],
+};
 
 let _idCounter = 90_000;
 
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function randBetween(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 function hex7(): string {
@@ -30,9 +66,8 @@ function nextId(): number {
 // ── Workflow YAML builder ─────────────────────────────────────────────────────
 
 /**
- * Generates a workflow YAML with a dev→staging→prod deployment-job needs chain.
- * This ensures F10 (parent_deployments via needs graph) can be exercised on
- * random data.
+ * Generates a workflow YAML with a full dev→staging→qa→preprod→prod needs chain.
+ * This ensures F10 (parent_deployments via needs graph) is exercised on all 5 stages.
  */
 function buildWorkflowYaml(name: string): string {
   return `name: ${name}
@@ -61,8 +96,22 @@ jobs:
     steps:
       - run: echo "deploying to staging"
 
-  deploy-prod:
+  deploy-qa:
     needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - run: echo "deploying to qa"
+
+  deploy-preprod:
+    needs: deploy-qa
+    runs-on: ubuntu-latest
+    environment: preprod
+    steps:
+      - run: echo "deploying to preprod"
+
+  deploy-prod:
+    needs: deploy-preprod
     runs-on: ubuntu-latest
     environment: prod
     steps:
@@ -73,25 +122,36 @@ jobs:
 // ── Random generator ──────────────────────────────────────────────────────────
 
 /**
- * Generates `count` synthetic repos with deployments, statuses, runs,
- * workflow YAML, environments, and artifacts.
+ * Generates `count` synthetic deployment chains distributed across repos,
+ * spreading timestamps over a trailing WINDOW_DAYS window.
+ *
+ * `count` unit = number of deployment *chains* (one chain = one sha promoted
+ * through some or all of dev→staging→qa→preprod→prod with realistic funnel
+ * attrition). Each chain produces between 1 and 5 individual deployments.
+ * Use count=50 for a lightweight dataset, count=200 for a fuller DORA demo.
  *
  * Each generated service gets:
- *  - A workflow YAML with a dev→staging→prod needs chain (F10).
- *  - At least one deployment with a full lifecycle (in_progress→success/failure).
+ *  - A workflow YAML with a full dev→staging→qa→preprod→prod needs chain (F10).
+ *  - Multiple chains spread across the past WINDOW_DAYS days, NOT anchored to now.
+ *  - Funnel attrition so dev counts > staging > qa > preprod > prod.
+ *  - Failure statuses on some terminal stages (non-zero change-failure-rate).
+ *  - Varied actors and timestamp spread (heatmap / top-deployers).
  *  - At least one artifact (version.txt, F15).
  */
 export class GithubRandomGenerator {
   generate(store: GithubStore, count: number): void {
-    const serviceSlice = SERVICES.slice(0, Math.min(count, SERVICES.length));
+    // Distribute chains across all SERVICES round-robin.
+    // Each service gets at least one run, with extras spread round-robin.
+    const effectiveCount = Math.max(count, SERVICES.length);
+    const chainsPerService = Math.ceil(effectiveCount / SERVICES.length);
 
-    for (const service of serviceSlice) {
+    for (const service of SERVICES) {
       const owner = 'demo-org';
       const repoName = service;
       const repo = store.getOrCreateRepo(owner, repoName);
 
       // Environments
-      for (const envName of ENVS) {
+      for (const envName of LADDER) {
         repo.environments.push({ name: envName } as GhEnvironment);
       }
 
@@ -104,91 +164,137 @@ export class GithubRandomGenerator {
       const workflow: GhWorkflow = { id: wfId, name: wfName, path: wfPath, state: 'active' };
       repo.workflows.push(workflow);
 
-      // One run with a dev→staging→prod chain
-      const runId  = nextId();
-      const sha    = hex7();
-      const ref    = pick(REFS);
+      // Version artifact — one per repo (latest version)
       const version = pick(VERSIONS);
-      const actor  = pick(ACTORS);
 
-      const run: GhWorkflowRun = { id: runId, name: wfName, path: wfPath, head_sha: sha };
-      repo.runs.set(runId, run);
+      // Generate chainsPerService chains for this repo
+      for (let c = 0; c < chainsPerService; c++) {
+        const sha    = hex7();
+        const ref    = pick(REFS);
+        const actor  = pick(ACTORS);
+        const chainVersion = pick(VERSIONS);
 
-      // Store YAML keyed by path::sha
-      repo.workflowYaml.set(`${wfPath}::${sha}`, wfYaml);
+        const runId = nextId();
+        const run: GhWorkflowRun = { id: runId, name: wfName, path: wfPath, head_sha: sha };
+        repo.runs.set(runId, run);
+        repo.workflowYaml.set(`${wfPath}::${sha}`, wfYaml);
 
-      // Also store with each env's deployment sha (all same sha for this run)
-      const targetUrl = `http://github-emulator:3100/repos/${owner}/${repoName}/actions/runs/${runId}`;
+        const targetUrl = `http://github-emulator:3100/repos/${owner}/${repoName}/actions/runs/${runId}`;
 
-      const chainEnvs: Array<'dev' | 'staging' | 'prod'> = ['dev', 'staging', 'prod'];
-      const deployIds: number[] = [];
+        // Pick a random start time within the trailing WINDOW_DAYS window.
+        // Exclude the last hour to avoid "today" anchoring and ensure analytics
+        // day-truncated windows (which exclude today) always have data.
+        const windowMs   = WINDOW_DAYS * 24 * 60 * 60_000;
+        const minAgoMs   = 60 * 60_000; // at least 1 hour in the past
+        const chainStartMs = Date.now() - minAgoMs - Math.random() * (windowMs - minAgoMs);
 
-      chainEnvs.forEach((env, idx) => {
-        const depId = nextId();
-        deployIds.push(depId);
+        // Walk the ladder with attrition
+        const reachedStages: string[] = ['dev'];
+        for (let i = 0; i < LADDER.length - 1; i++) {
+          const currentStage = LADDER[i];
+          if (Math.random() < ADVANCE_PROB[currentStage]) {
+            reachedStages.push(LADDER[i + 1]);
+          } else {
+            break;
+          }
+        }
 
-        const minutesAgo = (chainEnvs.length - idx) * 30;
-        const createdAt  = new Date(Date.now() - minutesAgo * 60_000).toISOString();
+        // Determine if the terminal stage is a failure (some then recovered, some not)
+        const terminalIsFailure = Math.random() < FAILURE_PROB;
+        // Recovery: if it failed, ~50% chance it was later re-run (the re-run is a separate chain so
+        // MTTR can be computed between the failure and the next success on that repo)
+        // We still record the failure to ensure non-zero CFR.
 
-        const deployment: GhDeployment = {
-          id:          depId,
-          sha,
-          ref,
-          environment: env,
-          payload:     { version },
-          creator:     { login: actor },
-          created_at:  createdAt,
-        };
-        repo.deployments.push(deployment);
+        const deployIds: number[] = [];
 
-        const isLast = idx === chainEnvs.length - 1;
-        const statusCreatedAt = new Date(Date.now() - (minutesAgo - 5) * 60_000).toISOString();
+        reachedStages.forEach((env, idx) => {
+          const depId = nextId();
+          deployIds.push(depId);
 
-        // in_progress + terminal status for last env; just success for others
-        const statuses: GhDeploymentStatus[] = [];
+          // Compute this stage's timestamp as chainStart + cumulative stage offset
+          const [minOff, maxOff] = STAGE_OFFSET_RANGE[env];
+          // Spread the offset across the stage range with some randomness
+          const offsetMs = randBetween(minOff, maxOff) * 60_000;
+          const depCreatedAt = new Date(chainStartMs + offsetMs).toISOString();
 
-        if (isLast) {
+          const deployment: GhDeployment = {
+            id:          depId,
+            sha,
+            ref,
+            environment: env,
+            payload:     { version: chainVersion },
+            creator:     { login: actor },
+            created_at:  depCreatedAt,
+          };
+          repo.deployments.push(deployment);
+
+          const isTerminal = idx === reachedStages.length - 1;
+          // Status is created ~5-20 minutes after deployment creation
+          const statusDelayMs = randBetween(5, 20) * 60_000;
+          const statusCreatedAt = new Date(chainStartMs + offsetMs + statusDelayMs).toISOString();
+
+          const statuses: GhDeploymentStatus[] = [];
+
           statuses.push({
             id:         nextId(),
             state:      'in_progress',
             target_url: targetUrl,
             creator:    { login: actor },
-            created_at: new Date(Date.now() - 4 * 60_000).toISOString(),
+            created_at: depCreatedAt,
           });
-          statuses.push({
-            id:         nextId(),
-            state:      pick(['success', 'success', 'failure']),
-            target_url: targetUrl,
-            creator:    { login: actor },
-            created_at: statusCreatedAt,
-          });
-        } else {
-          statuses.push({
-            id:         nextId(),
-            state:      'success',
-            target_url: targetUrl,
-            creator:    { login: actor },
-            created_at: statusCreatedAt,
-          });
+
+          if (isTerminal && terminalIsFailure) {
+            // Terminal stage fails
+            statuses.push({
+              id:         nextId(),
+              state:      'failure',
+              target_url: targetUrl,
+              creator:    { login: actor },
+              created_at: statusCreatedAt,
+            });
+          } else {
+            // Non-terminal stages always succeed; terminal defaults to success
+            statuses.push({
+              id:         nextId(),
+              state:      'success',
+              target_url: targetUrl,
+              creator:    { login: actor },
+              created_at: statusCreatedAt,
+            });
+          }
+
+          repo.statuses.set(depId, statuses);
+        });
+
+        // Artifact on each run (version.txt, F15)
+        const artifact: GhArtifact = {
+          id:       nextId(),
+          name:     'version.txt',
+          expired:  false,
+          _content: chainVersion,
+        };
+        repo.artifacts.set(runId, [artifact]);
+      }
+
+      // Ensure at least one artifact exists on the first run (repo-level fallback)
+      if (repo.artifacts.size === 0) {
+        const firstRunId = repo.runs.keys().next().value;
+        if (firstRunId !== undefined) {
+          repo.artifacts.set(firstRunId, [{
+            id:       nextId(),
+            name:     'version.txt',
+            expired:  false,
+            _content: version,
+          }]);
         }
-
-        repo.statuses.set(depId, statuses);
-      });
-
-      // Artifact on the run (version.txt, F15)
-      const artifact: GhArtifact = {
-        id:       nextId(),
-        name:     'version.txt',
-        expired:  false,
-        _content: version,
-      };
-      repo.artifacts.set(runId, [artifact]);
+      }
     }
   }
 
   /**
    * Appends a single new deployment + in_progress→success/failure lifecycle
    * to a random repo in the store.  Used by periodic emission (§6.3).
+   * The appended deployment is timestamped at now (real-time incremental event).
    */
   appendRandomEmit(store: GithubStore): void {
     const keys = store.allRepoKeys();
