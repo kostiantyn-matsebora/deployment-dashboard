@@ -30,7 +30,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
 
     // Fixed window that all seeds fall within.
     private static readonly DateTimeOffset WindowFrom = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-    private static readonly DateTimeOffset WindowTo   = new(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset WindowTo = new(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
 
     public AnalyticsRepositoryTests()
     {
@@ -69,18 +69,18 @@ public sealed class AnalyticsRepositoryTests : IDisposable
         var repo = new AnalyticsRepository(_db, opts);
 
         await SeedAsync(
-            Ev("d1", "svc", "dev",        DeploymentStatus.Success, WindowFrom.AddDays(1)),
-            Ev("d2", "svc", "staging",    DeploymentStatus.Success, WindowFrom.AddDays(2)),
+            Ev("d1", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d2", "svc", "staging", DeploymentStatus.Success, WindowFrom.AddDays(2)),
             Ev("d3", "svc", "production", DeploymentStatus.Success, WindowFrom.AddDays(3)),
             // Outside the ladder — must be absent from results.
-            Ev("d4", "svc", "canary",     DeploymentStatus.Success, WindowFrom.AddDays(4))
+            Ev("d4", "svc", "canary", DeploymentStatus.Success, WindowFrom.AddDays(4))
         );
 
         var result = await repo.GetFunnelCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
 
         Assert.Equal(3, result.Count);
-        Assert.Equal("dev",        result[0].Environment);
-        Assert.Equal("staging",    result[1].Environment);
+        Assert.Equal("dev", result[0].Environment);
+        Assert.Equal("staging", result[1].Environment);
         Assert.Equal("production", result[2].Environment);
         // Canary must not appear.
         Assert.DoesNotContain(result, r => r.Environment == "canary");
@@ -98,8 +98,8 @@ public sealed class AnalyticsRepositoryTests : IDisposable
         await SeedAsync(
             // "dev" — 2 distinct deployment IDs.
             Ev("dep-a", "svc", "dev", DeploymentStatus.InProgress, WindowFrom.AddHours(1)),
-            Ev("dep-a", "svc", "dev", DeploymentStatus.Success,    WindowFrom.AddHours(2)),
-            Ev("dep-b", "svc", "dev", DeploymentStatus.Success,    WindowFrom.AddHours(3)),
+            Ev("dep-a", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddHours(2)),
+            Ev("dep-b", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddHours(3)),
             // "staging" — 1 deployment.
             Ev("dep-c", "svc", "staging", DeploymentStatus.Success, WindowFrom.AddHours(4)),
             // "production" — 0 deployments.
@@ -135,7 +135,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
 
         // Parent deployment in "dev" — no ParentDeployments itself.
         var parentId = "parent-001";
-        var parentAt  = WindowFrom.AddDays(1);  // 2026-01-02 00:00Z
+        var parentAt = WindowFrom.AddDays(1);  // 2026-01-02 00:00Z
 
         // Terminal event in "production" that points back to the parent.
         var prodAt = WindowFrom.AddDays(2);      // 2026-01-03 00:00Z — 24 h after parent.
@@ -187,21 +187,21 @@ public sealed class AnalyticsRepositoryTests : IDisposable
         var repo = new AnalyticsRepository(_db, opts);
 
         await SeedAsync(
-            Ev("d1", "svc", "dev",     DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d1", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
             Ev("d2", "svc", "staging", DeploymentStatus.Success, WindowFrom.AddDays(2)),
-            Ev("d3", "svc", "qa",      DeploymentStatus.Success, WindowFrom.AddDays(3)),
+            Ev("d3", "svc", "qa", DeploymentStatus.Success, WindowFrom.AddDays(3)),
             Ev("d4", "svc", "preprod", DeploymentStatus.Success, WindowFrom.AddDays(4)),
-            Ev("d5", "svc", "prod",    DeploymentStatus.Success, WindowFrom.AddDays(5))
+            Ev("d5", "svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(5))
         );
 
         var result = await repo.GetFunnelCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
 
         Assert.Equal(5, result.Count);
-        Assert.Equal("dev",     result[0].Environment);
+        Assert.Equal("dev", result[0].Environment);
         Assert.Equal("staging", result[1].Environment);
-        Assert.Equal("qa",      result[2].Environment);
+        Assert.Equal("qa", result[2].Environment);
         Assert.Equal("preprod", result[3].Environment);
-        Assert.Equal("prod",    result[4].Environment);
+        Assert.Equal("prod", result[4].Environment);
         Assert.All(result, r => Assert.Equal(1, r.Count));
     }
 
@@ -221,9 +221,9 @@ public sealed class AnalyticsRepositoryTests : IDisposable
         var repo = new AnalyticsRepository(_db, opts);
 
         await SeedAsync(
-            Ev("d1", "svc", "dev",     DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d1", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
             Ev("d2", "svc", "staging", DeploymentStatus.Success, WindowFrom.AddDays(2)),
-            Ev("d3", "svc", "prod",    DeploymentStatus.Success, WindowFrom.AddDays(3)) // lowercase in DB
+            Ev("d3", "svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(3)) // lowercase in DB
         );
 
         var result = await repo.GetFunnelCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
@@ -248,9 +248,9 @@ public sealed class AnalyticsRepositoryTests : IDisposable
         // Seed with mixed-case — real-world DB convention is lowercase, but an operator
         // might have seeded with different casing before the convention was enforced.
         await SeedAsync(
-            Ev("d1", "svc", "Dev",     DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d1", "svc", "Dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
             Ev("d2", "svc", "Staging", DeploymentStatus.Success, WindowFrom.AddDays(2)),
-            Ev("d3", "svc", "Prod",    DeploymentStatus.Success, WindowFrom.AddDays(3))
+            Ev("d3", "svc", "Prod", DeploymentStatus.Success, WindowFrom.AddDays(3))
         );
 
         var result = await repo.GetFunnelCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
@@ -273,7 +273,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
 
         var parentId = "parent-case-001";
         var parentAt = WindowFrom.AddDays(1);
-        var prodAt   = WindowFrom.AddDays(2); // 24 h after parent.
+        var prodAt = WindowFrom.AddDays(2); // 24 h after parent.
 
         await SeedAsync(
             EvWithParents("prod-case-001", "svc", "prod",    // lowercase "prod" in DB
@@ -304,12 +304,12 @@ public sealed class AnalyticsRepositoryTests : IDisposable
         DateTimeOffset happenedAt) =>
         new()
         {
-            Id             = Guid.CreateVersion7(),
-            DeploymentId   = deploymentId,
-            Service        = service,
-            Environment    = environment,
-            Status         = status,
-            HappenedAt     = happenedAt,
+            Id = Guid.CreateVersion7(),
+            DeploymentId = deploymentId,
+            Service = service,
+            Environment = environment,
+            Status = status,
+            HappenedAt = happenedAt,
         };
 
     private static DeploymentEvent EvWithParents(
@@ -321,13 +321,13 @@ public sealed class AnalyticsRepositoryTests : IDisposable
         string[] parentDeployments) =>
         new()
         {
-            Id                 = Guid.CreateVersion7(),
-            DeploymentId       = deploymentId,
-            Service            = service,
-            Environment        = environment,
-            Status             = status,
-            HappenedAt         = happenedAt,
-            ParentDeployments  = parentDeployments,
+            Id = Guid.CreateVersion7(),
+            DeploymentId = deploymentId,
+            Service = service,
+            Environment = environment,
+            Status = status,
+            HappenedAt = happenedAt,
+            ParentDeployments = parentDeployments,
         };
 
     /// <summary>

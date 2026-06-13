@@ -40,25 +40,38 @@ describe('Analytics env vars — default-stack cases (ANALYTICS_FUNNEL_ENVIRONME
   beforeAll(async () => {
     await resetAll();
 
-    const now = new Date();
-    const ago = (m: number) => new Date(now.getTime() - m * 60 * 1000).toISOString();
+    // Anchor seeds to 2 days before today's UTC midnight so they always fall inside
+    // the 7-day window regardless of the time of day the test runs.
+    //
+    // WHY NOT ago(): The DORA window is [to-7d, to) where to = today's UTC midnight.
+    // Events seeded with ago(minutes) get timestamps AFTER today's midnight (they are
+    // "now - X minutes", and now is after midnight), so they land outside the window
+    // and produce count=0 / null lead_time. Using explicit UTC day offsets avoids this.
+    const todayUtcMidnight = Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate(),
+    );
+    // 2 days before today's midnight; stagger by hours to keep events distinct.
+    const at = (daysBack: number, hours: number): string =>
+      new Date(todayUtcMidnight - daysBack * 86_400_000 + hours * 3_600_000).toISOString();
 
     // Seed events covering all 5 default funnel envs, plus one OUT-OF-FUNNEL
     // env ("canary") to verify it is excluded from funnel stage counts.
     //
     // Funnel events (2 distinct deployment IDs per env):
     const funnelEvents = [
-      { environment: 'dev',     status: 'success', deployment_id: 'av-dev-1',     happened_at: ago(300) },
-      { environment: 'dev',     status: 'success', deployment_id: 'av-dev-2',     happened_at: ago(290) },
-      { environment: 'staging', status: 'success', deployment_id: 'av-stg-1',     happened_at: ago(280) },
-      { environment: 'qa',      status: 'success', deployment_id: 'av-qa-1',      happened_at: ago(270) },
-      { environment: 'preprod', status: 'success', deployment_id: 'av-pp-1',      happened_at: ago(260) },
-      { environment: 'prod',    status: 'success', deployment_id: 'av-prod-1',    happened_at: ago(250) },
-      // Lead-time event: prod terminal with a parent in dev
-      { environment: 'prod',    status: 'success', deployment_id: 'av-lt-prod',   happened_at: ago(200), parent_deployments: ['av-lt-dev'] },
-      { environment: 'dev',     status: 'success', deployment_id: 'av-lt-dev',    happened_at: ago(400) },
+      { environment: 'dev',     status: 'success', deployment_id: 'av-dev-1',   happened_at: at(2, 1) },
+      { environment: 'dev',     status: 'success', deployment_id: 'av-dev-2',   happened_at: at(2, 2) },
+      { environment: 'staging', status: 'success', deployment_id: 'av-stg-1',   happened_at: at(2, 3) },
+      { environment: 'qa',      status: 'success', deployment_id: 'av-qa-1',    happened_at: at(2, 4) },
+      { environment: 'preprod', status: 'success', deployment_id: 'av-pp-1',    happened_at: at(2, 5) },
+      { environment: 'prod',    status: 'success', deployment_id: 'av-prod-1',  happened_at: at(2, 6) },
+      // Lead-time pair: prod terminal with a parent in dev (parent earlier than terminal).
+      { environment: 'dev',     status: 'success', deployment_id: 'av-lt-dev',  happened_at: at(3, 10) },
+      { environment: 'prod',    status: 'success', deployment_id: 'av-lt-prod', happened_at: at(2, 12), parent_deployments: ['av-lt-dev'] },
       // Out-of-funnel — must NOT appear in promotion-funnel stages
-      { environment: 'canary',  status: 'success', deployment_id: 'av-canary-1',  happened_at: ago(240) },
+      { environment: 'canary',  status: 'success', deployment_id: 'av-canary-1', happened_at: at(2, 7) },
     ];
 
     for (const ev of funnelEvents) {

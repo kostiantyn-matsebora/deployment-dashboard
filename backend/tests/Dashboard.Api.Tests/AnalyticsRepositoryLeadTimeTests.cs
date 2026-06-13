@@ -213,10 +213,10 @@ public sealed class AnalyticsRepositoryLeadTimeTests : IAsyncLifetime
         var payload = new Dictionary<string, object?>
         {
             ["deployment_id"] = deploymentId,
-            ["service"]       = service,
-            ["environment"]   = environment,
-            ["status"]        = status,
-            ["happened_at"]   = happenedAt.ToString("O"),
+            ["service"] = service,
+            ["environment"] = environment,
+            ["status"] = status,
+            ["happened_at"] = happenedAt.ToString("O"),
         };
 
         if (parentDeployments is { Length: > 0 })
