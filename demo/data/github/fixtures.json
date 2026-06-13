@@ -8,7 +8,7 @@
     "multi_run": "Services with multiple runs (auth-bff: 3300/3210/3200, order-svc: 2960/2940/2920, etc.) have a deployment object per run per env. The fetcher backfill picks the newest per (service, env).",
     "disconnected": "billing-webhook has five separate run_ids (one per env) — fully disconnected as in events.json.",
     "target_url": "Every status target_url embeds /actions/runs/{run_id} for fetcher §5.6.1 run-id extraction.",
-    "ingest_window": "INITIAL_LOOKBACK=7d from 2026-06-06 → window opens 2026-05-30. All deployments required for box-state rendering have status.created_at within this window.",
+    "ingest_window": "Timestamps are relative-shifted to seed-time at load by GithubFixtureLoader — the newest event always anchors to ~now so the dataset never ages out of INITIAL_LOOKBACK=7d. Relative spacing of all events is preserved exactly. billing-webhook/prod run 792001 is ~12 days before the newest event; it remains outside the 7-day window after shift by design.",
     "new_statuses": {
       "pending":   "payments-api prod run 4840 — single 'pending' status → maps to contract 'pending'. run 4830 'success' is the effective slot; run 4840 is the incoming next.",
       "queued":    "search-indexer prod run 1420 — single 'queued' status → maps to contract 'queued'.",

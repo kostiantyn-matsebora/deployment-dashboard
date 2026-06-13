@@ -57,6 +57,58 @@ interface ArtifactFixture {
   content: string;
 }
 
+/**
+ * Return true when relative-date shifting is enabled.
+ *
+ * Reads SEED_RELATIVE_DATES from the process environment at call time.
+ * Anything other than "false", "0", or "no" (case-insensitive) is treated as
+ * ON (including unset). OFF is used by the api-tests compose overlay so that
+ * fixed fixture dates pair correctly with the pinned FETCHER_NOW clock.
+ */
+function isRelativeShiftEnabled(): boolean {
+  const v = (process.env['SEED_RELATIVE_DATES'] ?? '').trim().toLowerCase();
+  return v !== 'false' && v !== '0' && v !== 'no';
+}
+
+/**
+ * Compute the skew (ms) needed to anchor the newest timestamp in the fixture to
+ * approximately now. Called once per loadFixture invocation so re-seeding via
+ * POST /_github/seed always anchors to the current Date.now().
+ *
+ * Considers dep.created_at, every status s.created_at, and every review
+ * r.submitted_at across all repos in the file.
+ */
+function computeSkewMs(fixture: GithubFixtureFile): number {
+  let maxMs = -Infinity;
+
+  for (const repoFixture of fixture.repos) {
+    for (const dep of repoFixture.deployments) {
+      const depMs = new Date(dep.created_at).getTime();
+      if (depMs > maxMs) maxMs = depMs;
+
+      for (const s of dep.statuses) {
+        const sMs = new Date(s.created_at).getTime();
+        if (sMs > maxMs) maxMs = sMs;
+      }
+
+      if (dep.reviews) {
+        for (const r of dep.reviews) {
+          const rMs = new Date(r.submitted_at).getTime();
+          if (rMs > maxMs) maxMs = rMs;
+        }
+      }
+    }
+  }
+
+  if (!isFinite(maxMs)) return 0;
+  return Date.now() - maxMs;
+}
+
+/** Shift an ISO-8601 timestamp string by skewMs milliseconds. */
+function shiftTs(isoStr: string, skewMs: number): string {
+  return new Date(new Date(isoStr).getTime() + skewMs).toISOString();
+}
+
 export class GithubFixtureLoader {
   load(store: GithubStore, scenariosDir: string): void {
     const githubDir = path.resolve(scenariosDir, 'github');
@@ -80,6 +132,17 @@ export class GithubFixtureLoader {
   }
 
   private loadFixture(store: GithubStore, fixture: GithubFixtureFile): void {
+    // Pre-pass: compute skew so the newest fixture event lands at approximately now.
+    // Computed fresh each call — re-seeding via POST /_github/seed re-anchors to the
+    // current Date.now() without memoisation side-effects.
+    // When SEED_RELATIVE_DATES=false/0/no shifting is disabled: ts() is the identity
+    // function so raw fixture strings reach the store verbatim. Required by the
+    // api-tests overlay which pairs fixed fixture dates with a pinned FETCHER_NOW clock
+    // for deterministic scenarios.
+    const relativeShift = isRelativeShiftEnabled();
+    const skewMs = relativeShift ? computeSkewMs(fixture) : 0;
+    const ts = relativeShift ? (isoStr: string) => shiftTs(isoStr, skewMs) : (isoStr: string) => isoStr;
+
     for (const repoFixture of fixture.repos) {
       const repo = store.getOrCreateRepo(repoFixture.owner, repoFixture.repo);
 
@@ -109,7 +172,7 @@ export class GithubFixtureLoader {
           environment: dep.environment,
           payload:     dep.payload,
           creator:     { login: dep.creator },
-          created_at:  dep.created_at,
+          created_at:  ts(dep.created_at),
         };
         repo.deployments.push(deployment);
 
@@ -119,7 +182,7 @@ export class GithubFixtureLoader {
           state:      s.state,
           target_url: `http://github-emulator:3100/repos/${repoFixture.owner}/${repoFixture.repo}/actions/runs/${dep.run_id}`,
           creator:    { login: dep.creator },
-          created_at: s.created_at,
+          created_at: ts(s.created_at),
         }));
         repo.statuses.set(dep.id, statuses);
 
@@ -169,7 +232,7 @@ export class GithubFixtureLoader {
           const reviews: GhDeploymentReview[] = dep.reviews.map(r => ({
             state:        r.state,
             user:         { login: r.user },
-            submitted_at: r.submitted_at,
+            submitted_at: ts(r.submitted_at),
           }));
           repo.reviews.set(dep.id, reviews);
         }
