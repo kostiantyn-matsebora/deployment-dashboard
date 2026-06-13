@@ -292,7 +292,14 @@ body {
 /* ----------------------------  Product screenshots  ---------------------- */
 .md-typeset .dd-shot {
   display: block;
+  /* width:100% scales to the content column; height:auto preserves aspect
+     ratio so no content is cropped horizontally or vertically.
+     max-width:100% is belt-and-suspenders — prevents the image from
+     overflowing a narrow column (e.g. guide pages with sidebar + TOC)
+     even if a parent resets width to 'auto'. */
   width: 100%;
+  max-width: 100%;
+  height: auto;
   margin: 1.2rem auto;
   border-radius: var(--dd-radius-lg);
   border: 1px solid var(--dd-glass-edge);
