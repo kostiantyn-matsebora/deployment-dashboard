@@ -285,7 +285,7 @@ The `.an-grid` is a 12-column grid. Each `.an-card` carries one chart. Layout ro
 - **Status distribution (`span-4`).** Donut chart (`.an-donut-wrap`): SVG donut + `.an-donut-legend` grid (dot / name / count / %). All 8 statuses always present (zero-filled — stable slice set).
 - **CFR trend (`span-6`).** Line chart — daily `rate` line + dashed `elite_threshold` (0.15) reference line.
 - **Duration distribution (`span-6`).** Histogram bars over duration `bins` (minutes) + `p50` and `p95` reference markers.
-- **Promotion funnel (`span-4`).** Funnel (sankey) — 5 stages `dev → staging → qa → preprod → prod`; each stage shows `count` and `conversion`.
+- **Promotion funnel (`span-4`).** Funnel (sankey) — stages defined by `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`); each stage shows `count` and `conversion`.
 - **Deploy heatmap (`span-8`).** 7 rows (day-of-week Sun–Sat) × 24 columns (UTC hour); cell intensity = `count`. Sparse — absent cells rendered as zero.
 - **Top deployers (`span-6`).** Horizontal bar / leaderboard — `actor` + `count`, descending; `limit` default 10.
   - **Metric definition.** `count` = distinct deployments that reached `Success`, credited to the actor of the deployment's EARLIEST event (the trigger). Deployments that never reached `Success` (cancelled, rejected, failure-only, etc.) are excluded. A null earliest-event actor is reported as `"unknown"`. Bots are not filtered — if a bot triggered the deployment it is the legitimate deployer.

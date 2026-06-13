@@ -101,7 +101,7 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
   - Deployment frequency over time — stacked bars, success vs failure per day (`GET /api/analytics/frequency`).
   - Change failure rate trend — daily CFR line + dashed 15% elite reference line (`GET /api/analytics/change-failure-rate`).
   - Deployment duration distribution — histogram bins (minutes) + p50 and p95 markers (`GET /api/analytics/duration-histogram`).
-  - Promotion funnel — 5-stage dev→staging→qa→preprod→prod sankey/funnel, count + conversion per stage (`GET /api/analytics/promotion-funnel`).
+  - Promotion funnel — operator-configured promotion ladder (default `dev,staging,qa,preprod,prod`) sankey/funnel, count + conversion per stage (`GET /api/analytics/promotion-funnel`).
   - Status distribution — donut of all 8 statuses, zero-filled for stable slice set (`GET /api/analytics/status-distribution`).
   - Deploy heatmap — 7-row (day-of-week) × 24-col (UTC hour) intensity grid (`GET /api/analytics/heatmap`).
   - Top deployers — leaderboard of actor + count, descending, default 10 entries (`GET /api/analytics/top-deployers`).

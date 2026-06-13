@@ -76,11 +76,13 @@ Analytics metrics are **server-computed** from the `deployment_events` log. They
 | Key | Definition | Unit | `approximated` |
 |---|---|---|---|
 | **Deployment Frequency** | Terminal `success` events per day over the window | `per_day` | false |
-| **Lead Time for Changes** | Approximated time from first event in a `parent_deployments` chain to a `prod` `success` event | `hours` | **true** |
+| **Lead Time for Changes** | Approximated time from first event in a `parent_deployments` chain to the configured production terminal `success` event | `hours` | **true** |
 | **Change Failure Rate** | `failure / (success + failure)` over terminal events in the window | `ratio` (0–1) | false |
 | **Time to Restore** | Median `restored_at − failed_at` across incidents in the window | `minutes` | false |
 
-**Lead-time approximation (binding).** True DORA lead time (commit → prod) is NOT in the event log — the store carries deployment-state events, not commit timestamps. Lead time is approximated via `parent_deployments` promotion chains that reach a `prod` environment. The API flags this with `approximated: true`; the SPA MUST surface the label.
+**Lead-time approximation (binding).** True DORA lead time (commit → prod) is NOT in the event log — the store carries deployment-state events, not commit timestamps. Lead time is approximated via `parent_deployments` promotion chains that reach the configured production terminal. The API flags this with `approximated: true`; the SPA MUST surface the label.
+
+> **Operator note.** The promotion-funnel ladder and the production terminal are operator-configured via `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`; last entry = production terminal for lead-time; values matched case-insensitively against deployment `environment`). See [Configuration — API](../guide/configuration.md#api).
 
 ### Classification Thresholds
 

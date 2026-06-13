@@ -319,8 +319,8 @@ paths:
 
         **Lead-time caveat (binding).** True DORA lead time (commit → prod) is NOT
         in the event log. `lead_time` is APPROXIMATED from `parent_deployments`
-        promotion chains that reach a `prod` environment and is flagged
-        `approximated: true`; the other three keys are `approximated: false`.
+        promotion chains that reach the production (terminal ladder) stage and is
+        flagged `approximated: true`; the other three keys are `approximated: false`.
       parameters:
         - $ref: '#/components/parameters/AnalyticsWindowParam'
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -396,13 +396,16 @@ paths:
       operationId: getAnalyticsPromotionFunnel
       summary: Promotion funnel — per-stage counts + conversion.
       description: |
-        Ordered promotion funnel `dev → staging → qa → preprod → prod`. Each stage
-        carries its `count` (distinct logical deployments that reached the stage in
-        the window) and `conversion` to the next stage (`null` for the terminal
-        `prod` stage). Backs the promotion-funnel (sankey) chart.
+        Ordered promotion funnel over an operator-configured environment ladder
+        (`ANALYTICS_FUNNEL_ENVIRONMENTS`, default `dev → staging → qa → preprod →
+        prod`). Each stage carries its `count` (distinct logical deployments that
+        reached the stage in the window) and `conversion` to the next stage (`null`
+        for the terminal production stage). Backs the promotion-funnel (sankey)
+        chart.
 
-        Stages are the canonical DORA promotion ladder; environments outside this
-        ladder are not represented as funnel stages.
+        The ladder's environments and order are configured by the deployment
+        operator; environments outside the configured ladder are not represented as
+        funnel stages.
       parameters:
         - $ref: '#/components/parameters/AnalyticsWindowParam'
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -1439,8 +1442,8 @@ components:
           type: boolean
           description: |
             `true` only on `lead_time` — it is APPROXIMATED from `parent_deployments`
-            promotion chains reaching `prod`, not measured commit→prod. `false` on
-            the other three keys.
+            promotion chains reaching the production (terminal ladder) stage, not
+            measured commit→prod. `false` on the other three keys.
 
     AnalyticsDora:
       type: object
@@ -1455,8 +1458,9 @@ components:
           $ref: '#/components/schemas/AnalyticsKpi'
           description: |
             Approximated lead time for changes (`unit: hours`, `approximated: true`).
-            Derived from `parent_deployments` promotion chains reaching `prod` — NOT
-            true commit→prod lead time, which is not in the event log.
+            Derived from `parent_deployments` promotion chains reaching the production
+            (terminal ladder) stage — NOT true commit→prod lead time, which is not in
+            the event log.
         change_failure_rate:
           $ref: '#/components/schemas/AnalyticsKpi'
           description: "Failed deployments ÷ total terminal deployments (`unit: ratio`, 0–1). `approximated: false`."
@@ -1577,7 +1581,7 @@ components:
       properties:
         environment:
           type: string
-          description: Stage environment — one of `dev` | `staging` | `qa` | `preprod` | `prod`.
+          description: "A configured promotion-ladder stage (default ladder: `dev`, `staging`, `qa`, `preprod`, `prod`)."
           examples: [staging]
         count:
           type: integer
@@ -1590,19 +1594,19 @@ components:
           maximum: 1
           description: |
             Fraction of this stage's deployments that also reached the next stage
-            (`next.count / this.count`). `null` for the terminal `prod` stage, and
-            `null` when `count` is `0`.
+            (`next.count / this.count`). `null` for the terminal (last ladder)
+            stage, and `null` when `count` is `0`.
           examples: [0.82]
 
     AnalyticsPromotionFunnel:
       type: object
       required: [window, stages]
-      description: Promotion funnel `dev → staging → qa → preprod → prod` — backs the funnel chart.
+      description: The ordered promotion-ladder stages (operator-configured; default `dev` first → `prod` last) — backs the funnel chart.
       properties:
         window: { $ref: '#/components/schemas/AnalyticsWindow' }
         stages:
           type: array
-          description: The five ordered ladder stages, `dev` first → `prod` last.
+          description: The ordered promotion-ladder stages (operator-configured; default `dev` first → `prod` last).
           items: { $ref: '#/components/schemas/AnalyticsFunnelStage' }
 
     AnalyticsStatusCount:

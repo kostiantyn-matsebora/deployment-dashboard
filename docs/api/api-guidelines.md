@@ -426,7 +426,7 @@ endpoints serve decision-grade metrics from the server.
 |---|---|
 | Verb / auth | `GET`, unauthenticated — same trust tier as the other reads |
 | Granularity | **One focused endpoint per concern** — never one consolidated payload |
-| Caching | Weak `ETag` on every `200`; `If-None-Match` → `304 Not Modified` (no body) |
+| Caching | Weak `ETag` on every `200`; `If-None-Match` → `304 Not Modified` (no body). The `window.to` boundary is truncated to stabilise the ETag — `day` (default, UTC day) or `hour` (UTC hour), configurable via `ANALYTICS_WINDOW_GRANULARITY`. |
 | `window` param | `7d` \| `14d` \| `30d` (default `7d`); absent/out-of-enum → `7d` |
 | Resolved window | Every response embeds `window` (`AnalyticsWindow`: `days`, `from`, `to`, `retention_days`, `clamped`) |
 
@@ -438,7 +438,7 @@ endpoints serve decision-grade metrics from the server.
 | `GET /api/analytics/frequency` | Per-day success vs failure counts |
 | `GET /api/analytics/change-failure-rate` | Per-day CFR + `elite_threshold` (`0.15`) |
 | `GET /api/analytics/duration-histogram` | Duration bins + `p50` / `p95` |
-| `GET /api/analytics/promotion-funnel` | `dev → staging → qa → preprod → prod` count + conversion |
+| `GET /api/analytics/promotion-funnel` | Configured promotion ladder (default `dev,staging,qa,preprod,prod`) count + conversion |
 | `GET /api/analytics/status-distribution` | Count per status (all 8, zero-filled) |
 | `GET /api/analytics/heatmap` | Day-of-week × hour counts (sparse) |
 | `GET /api/analytics/top-deployers` | Actor + count (desc; `limit`, default 10) |
@@ -455,8 +455,8 @@ period selector. Clamping is a normal `200`, never an error.
 
 True DORA lead time (commit → prod) is **not in the event log** — the store carries
 deployment-state events, not commit timestamps. `GET /api/analytics/dora` therefore
-**approximates** `lead_time` from `parent_deployments` promotion chains that reach a
-`prod` environment, and flags it `approximated: true`. The other three keys are
+**approximates** `lead_time` from `parent_deployments` promotion chains that reach the
+configured production terminal, and flags it `approximated: true`. The other three keys are
 `approximated: false`. Consumers MUST render the approximation label; never present
 the value as measured commit→prod lead time.
 
