@@ -369,15 +369,84 @@ describe('GithubFixtureLoader', () => {
     });
   });
 
-  // ── Box-state demo coverage (ingest-window 2026-05-30 → 2026-06-06) ────────
+  // ── Freshness guarantee — timestamps are relative-shifted to seed-time ──────
+  // GithubFixtureLoader shifts all timestamps so the newest event lands at ~now.
+  // These tests verify the invariant and that relative spacing is preserved.
+
+  describe('fixture date freshness (relative-shift)', () => {
+    const LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+    // Small epsilon to tolerate test execution time (<5 s).
+    const EPSILON_MS  = 5_000;
+
+    it('newest event timestamp across the store is within the fetcher default lookback of now', () => {
+      const now = Date.now();
+      let newestMs = -Infinity;
+
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+
+        for (const dep of r.deployments) {
+          const t = new Date(dep.created_at).getTime();
+          if (t > newestMs) newestMs = t;
+        }
+
+        for (const statuses of r.statuses.values()) {
+          for (const s of statuses) {
+            const t = new Date(s.created_at).getTime();
+            if (t > newestMs) newestMs = t;
+          }
+        }
+
+        for (const reviews of r.reviews.values()) {
+          for (const rv of reviews) {
+            const t = new Date(rv.submitted_at).getTime();
+            if (t > newestMs) newestMs = t;
+          }
+        }
+      }
+
+      expect(newestMs).toBeGreaterThanOrEqual(now - LOOKBACK_MS);
+      expect(newestMs).toBeLessThanOrEqual(now + EPSILON_MS);
+    });
+
+    it('relative spacing between two known events is preserved after shift', () => {
+      // payments-api/prod: dep 4830005 (success run) and dep 4840005 (pending run).
+      // Fixture values: 4830005.created_at = 2026-05-31T07:00:00Z,
+      //                 4840005.created_at = 2026-06-06T07:55:00Z
+      // Delta = 517800000 ms (5d 23h 55m).
+      const FIXTURE_DEP_4830005_ISO = '2026-05-31T07:00:00Z';
+      const FIXTURE_DEP_4840005_ISO = '2026-06-06T07:55:00Z';
+      const expectedDeltaMs =
+        new Date(FIXTURE_DEP_4840005_ISO).getTime() -
+        new Date(FIXTURE_DEP_4830005_ISO).getTime();
+
+      const r = store.getRepo('demo-org', 'payments-api')!;
+      const dep4830005 = r.deployments.find(d => d.id === 4830005)!;
+      const dep4840005 = r.deployments.find(d => d.id === 4840005)!;
+
+      expect(dep4830005).toBeDefined();
+      expect(dep4840005).toBeDefined();
+
+      const actualDeltaMs =
+        new Date(dep4840005.created_at).getTime() -
+        new Date(dep4830005.created_at).getTime();
+
+      expect(actualDeltaMs).toBe(expectedDeltaMs);
+    });
+  });
+
+  // ── Box-state demo coverage ──────────────────────────────────────────────────
   // Each sub-suite verifies that the fixture data necessary to render a specific
   // 6-box-state tile is present and correctly structured. Dates are validated
-  // to confirm they fall within the 7-day INITIAL_LOOKBACK window.
+  // to confirm they fall within the 7-day INITIAL_LOOKBACK window relative to
+  // seed time (timestamps are shifted at load — see fixture date freshness suite).
   // NOTE: prev_failed is not yet computed by the read-model; S3 vs S2 and S6 vs
   // S5 will look identical in the live app until that read-model change lands.
 
   describe('box-state demo coverage', () => {
-    const WINDOW_START = new Date('2026-05-30T00:00:00Z');
+    // Window opens 7 days before now (relative — loader shifts timestamps to seed-time).
+    const WINDOW_START = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     function withinWindow(dateStr: string): boolean {
       return new Date(dateStr) >= WINDOW_START;
