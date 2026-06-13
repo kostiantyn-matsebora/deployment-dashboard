@@ -26,7 +26,8 @@ Click any slot to open its full deployment history — every event ever recorded
 
 A DORA-anchored analytics view covering the last 7, 14, or 30 days (bounded by `HISTORY_RETENTION_DAYS`). The KPI band at the top surfaces the four DORA keys — deployment frequency, lead time (approximated from promotion chains), change failure rate, and mean time to restore — followed by eight charts: deployment frequency over time, change-failure-rate trend, deployment-duration distribution (p50/p95), promotion funnel, status distribution, deploy heatmap (day-of-week × hour), top deployers, and time-to-restore incidents.
 
-<!-- Screenshot pending: analytics-dark.png / analytics-light.png -->
+![Analytics — dark](../_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
+![Analytics — light](../_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
 
 ## :material-tune-variant: Demo control panel { #demo-control-panel }
 

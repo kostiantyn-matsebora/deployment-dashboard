@@ -52,6 +52,13 @@ hide:
     ![Swimlanes view](_assets/screenshots/swimlanes-dark.png#only-dark){ .dd-shot }
     ![Swimlanes view](_assets/screenshots/swimlanes-light.png#only-light){ .dd-shot }
 
+=== "Analytics"
+
+    DORA Four Keys — deployment frequency, lead time, change failure rate, and MTTR — plus eight supporting charts to spot delivery trends and regressions over 7, 14, or 30 days.
+
+    ![Analytics view](_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
+    ![Analytics view](_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
+
 !!! quote ""
     **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
 
