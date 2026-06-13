@@ -209,6 +209,28 @@ Edges carry the **parent node's** effective status. All 8 status values map to a
 - On attribute toggle → recalculate node dimensions → `graph.update$.next(true)` to relayout.
 - Lanes pack densely with minimal inter-lane gap (~8px margin between stacked `<ngx-graph>` instances).
 
+### Collapse / Expand (#309)
+
+**Default state.** All lanes start collapsed (persisted to `localStorage`).
+
+**Controls (Swimlanes view only):**
+- **Chevron (›)** per lane — toggles that lane between collapsed and expanded.
+- **Collapse/Expand all** button — flips every lane simultaneously.
+- **Auto-scroll to change** toggle (default ON) — when any lane (collapsed or expanded) receives a simulated event and is off-screen, scrolls it into view.
+
+**Collapsed form — vector.**
+- A collapsed lane renders via the **identical card + SVG-edge machinery** as the expanded form, restricted to the service's newest-event **vector** (root→tip chain). No separate renderer, no flex overlay, no custom arrow connectors.
+- **Algorithm:** find `tip` = node with max `happened_at`; walk backward through `parrent_deployments`; at a merge (multiple parents) follow the parent with the newest `happened_at`; stop at root. Feed the chain into the standard `partitionDAGs` → `rankNodes` → `assignTracks` → position → card → SVG-edge pipeline.
+- Only intra-chain `parrent_deployments` produce edges → no dangling arrowheads, no cross-lane edges.
+- If `tip` is isolated (no parents), the vector is a single card with no edges.
+- Lane height is computed naturally from the chain's single-track layout (same packing formula as expanded). A pure single-chain lane is **pixel-identical** collapsed vs expanded.
+
+**Expanded form.** Full multi-DAG rendering, unchanged from the base Swimlanes spec.
+
+**Interactions:**
+- State persists across reloads and Matrix ↔ Swimlanes switches.
+- "Simulate event" button appears on every lane (collapsed and expanded). It mutates the tip node's status → rebuilds via the unified renderer → flashes the tip card (collapsed = vector tip; expanded = newest-event DAG node; both located in `#cards-layer` by `data-node-id`) → auto-scrolls if the lane is off-screen and auto-scroll is ON.
+
 ---
 
 ## Analytics View Layout
