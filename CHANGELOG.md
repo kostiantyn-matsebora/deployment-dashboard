@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.10.0] - 2026-06-13
+
+### Added
+
+- **Passwordless (managed-identity) Postgres authentication.** PostgreSQL auth is now credential-optional, with the mode auto-detected from credential presence — no new toggle. With `POSTGRES_PASSWORD` set, services use the static user/password as before (the default — local Compose, CI, and tests are unchanged). With it omitted or blank, each service authenticates as its ambient cloud identity (e.g. Azure Workload Identity / Managed Identity), obtaining a short-lived access token at connection time and refreshing it transparently; `POSTGRES_USER` is then the identity's PostgreSQL role name. This removes static-secret storage and rotation for the Azure target, behind a provider-agnostic token-provider seam.
+- **Browser extension (MVP).** A cross-browser MV3 WebExtension (`frontend/extension`) that surfaces deployment status from a configured dashboard — a toolbar badge, a status filter, and a popup listing the most recent runs — with its own build and packaging CI. It is loaded manually in developer mode for now, ships outside the six published stack images, and follows its own release cycle.
+
+### Documentation
+
+- Restructured and visually redesigned the adopter guide — install, configuration, quickstart, and screenshots — with paste-safe download steps, per-profile tabbed run cards, and clearer release-pinning guidance.
+- Added a "Built by Claude" showcase page that tells the zero-to-hero story of the project as built by an AI engineering team under minimal human steering.
+
+
 ## [0.9.0] - 2026-06-06
 
 ### Added
