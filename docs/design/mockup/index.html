@@ -6156,16 +6156,16 @@ function buildSwim() {
   const PAD_RIGHT    = 30;
 
   // Chevron + label layout (SVG coordinate space = stage px, 1:1 with viewBox).
-  // SVG lane rect starts at x=14. The HTML chevron overlay aligns to
-  // overlayLeft = swim.offsetLeft + 14 (computed in buildLaneOverlays).
-  // In SVG stage coords, the chevron occupies [14 .. 14+22] = [14..36].
-  // Label must start AFTER chevron + gap so it never underlaps the pill.
-  //   svgLabelX = 14 (lane inset) + 22 (chevron width) + 8 (gap) = 44.
-  // Stored as a constant so both the SVG <text> and buildLaneOverlays
-  // use the same source of truth. If chevron size changes, update here.
-  const CHEVRON_W    = 22;    // matches .sv-chevron width:22px
-  const LABEL_INSET  = 14;    // SVG lane rect left inset (x=14)
-  const svgLabelX    = LABEL_INSET + CHEVRON_W + 8;  // = 44
+  // SVG lane rect starts at x=14. The HTML overlay wraps the chevron and
+  // has padding-left=6px (CSS .sv-lane-wrap). So the chevron's RIGHT edge in
+  // SVG stage coords = LABEL_INSET + wrap_padding_left + CHEVRON_W
+  //                  = 14 + 6 + 22 = 42.
+  // Label must clear that by at least 8px: svgLabelX = 42 + 8 = 50.
+  // Stored as a constant — if chevron size or padding changes, update here.
+  const CHEVRON_W      = 22;  // matches .sv-chevron width:22px
+  const LABEL_INSET    = 14;  // SVG lane rect left inset (x=14)
+  const WRAP_PAD_LEFT  = 6;   // .sv-lane-wrap padding-left
+  const svgLabelX      = LABEL_INSET + WRAP_PAD_LEFT + CHEVRON_W + 8;  // = 50
   const DEFAULT_W    = 156;   // fallback card width (pre-measurement)
   const DEFAULT_H    = 80;    // fallback card height (pre-measurement) — tightened after packing
   const COL_GAP      = 60;    // horizontal gap between rank columns
