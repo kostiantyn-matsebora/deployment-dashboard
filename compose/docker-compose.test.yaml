@@ -60,6 +60,8 @@ services:
   github-emulator:
     environment:
       SEED_ON_STARTUP: "false"
+      # Fixed fixture dates + pinned FETCHER_NOW require shifting OFF for deterministic scenarios.
+      SEED_RELATIVE_DATES: "false"
 
   fetcher-host:
     environment:

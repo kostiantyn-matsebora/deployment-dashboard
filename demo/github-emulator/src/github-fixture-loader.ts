@@ -58,6 +58,19 @@ interface ArtifactFixture {
 }
 
 /**
+ * Return true when relative-date shifting is enabled.
+ *
+ * Reads SEED_RELATIVE_DATES from the process environment at call time.
+ * Anything other than "false", "0", or "no" (case-insensitive) is treated as
+ * ON (including unset). OFF is used by the api-tests compose overlay so that
+ * fixed fixture dates pair correctly with the pinned FETCHER_NOW clock.
+ */
+function isRelativeShiftEnabled(): boolean {
+  const v = (process.env['SEED_RELATIVE_DATES'] ?? '').trim().toLowerCase();
+  return v !== 'false' && v !== '0' && v !== 'no';
+}
+
+/**
  * Compute the skew (ms) needed to anchor the newest timestamp in the fixture to
  * approximately now. Called once per loadFixture invocation so re-seeding via
  * POST /_github/seed always anchors to the current Date.now().
@@ -122,7 +135,13 @@ export class GithubFixtureLoader {
     // Pre-pass: compute skew so the newest fixture event lands at approximately now.
     // Computed fresh each call — re-seeding via POST /_github/seed re-anchors to the
     // current Date.now() without memoisation side-effects.
-    const skewMs = computeSkewMs(fixture);
+    // When SEED_RELATIVE_DATES=false/0/no shifting is disabled: ts() is the identity
+    // function so raw fixture strings reach the store verbatim. Required by the
+    // api-tests overlay which pairs fixed fixture dates with a pinned FETCHER_NOW clock
+    // for deterministic scenarios.
+    const relativeShift = isRelativeShiftEnabled();
+    const skewMs = relativeShift ? computeSkewMs(fixture) : 0;
+    const ts = relativeShift ? (isoStr: string) => shiftTs(isoStr, skewMs) : (isoStr: string) => isoStr;
 
     for (const repoFixture of fixture.repos) {
       const repo = store.getOrCreateRepo(repoFixture.owner, repoFixture.repo);
@@ -153,7 +172,7 @@ export class GithubFixtureLoader {
           environment: dep.environment,
           payload:     dep.payload,
           creator:     { login: dep.creator },
-          created_at:  shiftTs(dep.created_at, skewMs),
+          created_at:  ts(dep.created_at),
         };
         repo.deployments.push(deployment);
 
@@ -163,7 +182,7 @@ export class GithubFixtureLoader {
           state:      s.state,
           target_url: `http://github-emulator:3100/repos/${repoFixture.owner}/${repoFixture.repo}/actions/runs/${dep.run_id}`,
           creator:    { login: dep.creator },
-          created_at: shiftTs(s.created_at, skewMs),
+          created_at: ts(s.created_at),
         }));
         repo.statuses.set(dep.id, statuses);
 
@@ -213,7 +232,7 @@ export class GithubFixtureLoader {
           const reviews: GhDeploymentReview[] = dep.reviews.map(r => ({
             state:        r.state,
             user:         { login: r.user },
-            submitted_at: shiftTs(r.submitted_at, skewMs),
+            submitted_at: ts(r.submitted_at),
           }));
           repo.reviews.set(dep.id, reviews);
         }
