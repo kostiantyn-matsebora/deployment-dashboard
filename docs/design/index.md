@@ -1,7 +1,7 @@
 ---
 title: Design
 shortTitle: Design
-intro: 'Frontend engineering design spec — tokens, components, views, behavior, data model, libraries. Stack: Angular 20+ · PrimeNG (unstyled) · ngx-graph.'
+intro: 'Frontend engineering design spec — tokens, components, views, behavior, data model, libraries. Stack: Angular 21 · PrimeNG (unstyled) · ngx-graph.'
 children:
   - /README
   - /design-tokens
@@ -45,6 +45,7 @@ children:
 
 - [Matrix View Layout](./views.md#matrix-view-layout)
 - [Swimlanes View Layout](./views.md#swimlanes-view-layout)
+- [Analytics View Layout](./views.md#analytics-view-layout)
 - [Extension View Layout](./views.md#extension-view-layout)
 
 ### `behavior.md`
@@ -62,6 +63,7 @@ children:
 - [Attribute Visibility Pickers](./data-model.md#attribute-visibility-pickers)
 - [KPIs & Derived Values](./data-model.md#kpis--derived-values)
 - [Extension Field Usage](./data-model.md#extension-field-usage)
+- [Analytics Derived Metrics](./data-model.md#analytics-derived-metrics)
 - [Derived Field Rendering](./data-model.md#derived-field-rendering)
 
 ### `libraries.md`
@@ -70,3 +72,4 @@ children:
 - [Feature → PrimeNG Component Mapping](./libraries.md#feature--primeng-component-mapping)
 - [Full Dependency Inventory](./libraries.md#full-dependency-inventory)
 - [package.json Summary](./libraries.md#packagejson-summary)
+- [Angular-21 Compatibility Note](./libraries.md#angular-21-compatibility-note)

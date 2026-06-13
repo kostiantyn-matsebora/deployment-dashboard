@@ -3,7 +3,7 @@
 **Version:** 1.0  
 **Status:** Approved  
 **Date:** May 2026  
-**Stack:** Angular 20+ · PrimeNG (unstyled) · ngx-graph · TypeScript
+**Stack:** Angular 21 · PrimeNG (unstyled) · ngx-graph · TypeScript
 
 ---
 
@@ -22,7 +22,7 @@ This specification is the **source of truth** for frontend engineers implementin
 
 ## Technology Stack
 
-- **Framework:** Angular 20+ (standalone components)
+- **Framework:** Angular 21 (standalone components)
 - **UI Components:** PrimeNG v4+ (unstyled mode) — `p-drawer`, `p-popover`, `p-selectButton`, `p-toggleSwitch`, `p-select`, `p-checkbox`, `p-radioButton`, `pInputText`
 - **Graph Engine:** `@swimlane/ngx-graph` — dagre layout, custom node/link/defs templates
 - **Icons:** `lucide-angular` — tree-shakeable mono-weight stroke icons

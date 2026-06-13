@@ -1,8 +1,9 @@
 import { Routes } from '@angular/router';
 
 /**
- * SPA routes — two views: Matrix and Swimlanes.
+ * SPA routes — three views: Matrix, Swimlanes, Analytics.
  * Spec: docs/design/components.md §Topbar (segmented tabs)
+ * Analytics: issue #299 — DORA-anchored analytics view.
  */
 export const routes: Routes = [
   {
@@ -19,6 +20,11 @@ export const routes: Routes = [
     path: 'swimlanes',
     loadComponent: () =>
       import('./features/swimlanes/swimlanes.component').then((m) => m.SwimlanesComponent),
+  },
+  {
+    path: 'analytics',
+    loadComponent: () =>
+      import('./features/analytics/analytics.component').then((m) => m.AnalyticsComponent),
   },
   {
     path: '**',

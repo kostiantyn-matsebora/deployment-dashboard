@@ -67,6 +67,46 @@ The extension popup panel and notification toasts consume a subset of the existi
 
 ---
 
+## Analytics Derived Metrics
+
+Analytics metrics are **server-computed** from the `deployment_events` log. They are NOT part of the 11-field visible whitelist and do NOT appear on tiles, nodes, drawers, or the inspector. The SPA receives pre-aggregated responses from `/api/analytics/*` and renders them in the Analytics view only.
+
+### DORA Four Keys — Definitions
+
+| Key | Definition | Unit | `approximated` |
+|---|---|---|---|
+| **Deployment Frequency** | Terminal `success` events per day over the window | `per_day` | false |
+| **Lead Time for Changes** | Approximated time from first event in a `parent_deployments` chain to the configured production terminal `success` event | `hours` | **true** |
+| **Change Failure Rate** | `failure / (success + failure)` over terminal events in the window | `ratio` (0–1) | false |
+| **Time to Restore** | Median `restored_at − failed_at` across incidents in the window | `minutes` | false |
+
+**Lead-time approximation (binding).** True DORA lead time (commit → prod) is NOT in the event log — the store carries deployment-state events, not commit timestamps. Lead time is approximated via `parent_deployments` promotion chains that reach the configured production terminal. The API flags this with `approximated: true`; the SPA MUST surface the label.
+
+> **Operator note.** The promotion-funnel ladder and the production terminal are operator-configured via `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`; last entry = production terminal for lead-time; values matched case-insensitively against deployment `environment`). See [Configuration — API](../guide/configuration.md#api).
+
+### Classification Thresholds
+
+The server assigns each KPI a band (`AnalyticsClassification`) based on DORA industry thresholds. Bands:
+
+| Band | CSS class | Color token |
+|---|---|---|
+| `elite` | `.an-class-chip.elite` | `--emerald` |
+| `high` | `.an-class-chip.high` | `--blue` |
+| `medium` | `.an-class-chip.medium` | `--amber` |
+| `low` | `.an-class-chip.low` | `--coral` |
+
+Classification logic is server-side (in `GET /api/analytics/dora`); the SPA applies the chip class from the `classification` field verbatim.
+
+### Aggregation Conventions (server-side)
+
+- **Terminal-only.** Frequency and CFR count `success` / `failure`; non-terminal statuses (`pending`, `queued`, `waiting`, `cancelled`, `rejected`, `in-progress`) are excluded from those rates.
+- **Duration.** Per `deployment_id`: `last(happened_at) − first(happened_at)` in minutes. Single-row deployments (no measurable span) are excluded from bins and percentiles.
+- **Incident.** A `failure` in a `(service, environment)` slot followed by a later `success` in the same slot. An unresolved failure (no subsequent success in the window) has `restored_at: null` / `duration_minutes: null` and sorts first. `severity` is derived from `duration_minutes` (longer → higher; unresolved → `critical`).
+- **All ordering** by `happened_at` (emitter-supplied), consistent with §8 of `api-guidelines.md`.
+- **Window clamp.** The requested `window` is clamped server-side to `HISTORY_RETENTION_DAYS`; `window.clamped = true` when narrowed. The SPA surfaces the clamp.
+
+---
+
 ## Derived Field Rendering
 
 - The `ref` field renders as a branch name or PR number per its domain definition.

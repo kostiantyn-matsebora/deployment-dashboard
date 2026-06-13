@@ -211,6 +211,89 @@ Edges carry the **parent node's** effective status. All 8 status values map to a
 
 ---
 
+## Analytics View Layout
+
+The Analytics view is the 3rd tab in the top-nav segmented control. All data is server-side computed — the SPA fetches, renders, never aggregates client-side.
+
+### Shell Structure
+
+```css
+.an-shell {
+  /* full-width scrollable column */
+}
+.an-header {
+  /* title block + period selector, flex row */
+}
+.an-kpi-band {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  /* responsive: repeat(2, 1fr) below the tablet breakpoint */
+}
+.an-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: <token>;
+}
+```
+
+### Period Selector
+
+- Three buttons: **7d**, **14d**, **30d**. Single active state (`.is-active`).
+- Sends `?window=7d|14d|30d` to every `/api/analytics/*` call.
+- When `window.clamped === true` in any response, surface the clamp indication next to the active button (e.g. subtitle reads "14 days · bounded by HISTORY_RETENTION_DAYS").
+- Default selection: **14d**. The API `window` query param itself defaults to 7d when omitted, but the SPA always sends an explicit value — no contradiction with openapi.yaml / api-guidelines §12.
+
+### DORA KPI Band
+
+Four `.an-kpi-card` tiles in `.an-kpi-band`, one per DORA key:
+
+| Card | Key | Unit | `approximated` |
+|---|---|---|---|
+| Deployment Frequency | `deployment_frequency` | per day | false |
+| Lead Time for Changes | `lead_time` | hours | **true** |
+| Change Failure Rate | `change_failure_rate` | ratio (0–1) | false |
+| Time to Restore | `time_to_restore` | minutes | false |
+
+Each card:
+- **`.an-kpi-label`** — key name.
+- **`.an-kpi-value`** — formatted `value` + `unit`.
+- **`.an-class-chip`** — DORA performance band (`elite` / `high` / `medium` / `low`); colour-coded (emerald / blue / amber / coral).
+- **`.an-trend-chip`** — signed `trend_delta` vs prior half-window; `.good` (emerald) / `.bad` (coral) / `.flat` (neutral). Direction semantics: up is good for frequency; up is bad for CFR, lead-time, and MTTR.
+- **`.an-kpi-sparkline`** — inline SVG spark-line over the `sparkline[]` per-day series.
+- When `approximated: true` (lead time only): render a visible approximation label; never present the value as measured commit→prod lead time.
+
+### 8-Chart Grid
+
+The `.an-grid` is a 12-column grid. Each `.an-card` carries one chart. Layout row-by-row:
+
+| # | Chart | CSS span | `.an-chart-body` height modifier | API endpoint |
+|---|---|---|---|---|
+| 1 | Deployment frequency over time | `.an-span-8` | `.an-h-freq` (185 px) | `GET /api/analytics/frequency` |
+| 5 | Status distribution (donut) | `.an-span-4` | `.an-h-donut` (auto) | `GET /api/analytics/status-distribution` |
+| 2 | Change failure rate trend | `.an-span-6` | default | `GET /api/analytics/change-failure-rate` |
+| 3 | Deployment duration distribution | `.an-span-6` | default | `GET /api/analytics/duration-histogram` |
+| 4 | Promotion funnel | `.an-span-4` | `.an-h-funnel` (175 px) | `GET /api/analytics/promotion-funnel` |
+| 6 | Deploy heatmap | `.an-span-8` | `.an-h-heat` (175 px) | `GET /api/analytics/heatmap` |
+| 8 | Top deployers | `.an-span-6` | `.an-h-actors` (210 px) | `GET /api/analytics/top-deployers` |
+| 7 | Time to restore — recent incidents | `.an-span-6` | `.an-h-mttr` (200 px) | `GET /api/analytics/incidents` |
+
+**Span values** — `an-span-12` / `an-span-8` / `an-span-6` / `an-span-4` map to `grid-column: span 12/8/6/4` respectively. Below the tablet breakpoint all spans collapse to `span 12`.
+
+#### Per-chart notes
+
+- **Frequency (`span-8`).** Stacked bar chart — `success` (emerald) and `failure` (coral) per UTC day. X-axis = dates, Y-axis = count.
+- **Status distribution (`span-4`).** Donut chart (`.an-donut-wrap`): SVG donut + `.an-donut-legend` grid (dot / name / count / %). All 8 statuses always present (zero-filled — stable slice set).
+- **CFR trend (`span-6`).** Line chart — daily `rate` line + dashed `elite_threshold` (0.15) reference line.
+- **Duration distribution (`span-6`).** Histogram bars over duration `bins` (minutes) + `p50` and `p95` reference markers.
+- **Promotion funnel (`span-4`).** Funnel (sankey) — stages defined by `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`); each stage shows `count` and `conversion`.
+- **Deploy heatmap (`span-8`).** 7 rows (day-of-week Sun–Sat) × 24 columns (UTC hour); cell intensity = `count`. Sparse — absent cells rendered as zero.
+- **Top deployers (`span-6`).** Horizontal bar / leaderboard — `actor` + `count`, descending; `limit` default 10.
+  - **Metric definition.** `count` = distinct deployments that reached `Success`, credited to the actor of the deployment's EARLIEST event (the trigger). Deployments that never reached `Success` (cancelled, rejected, failure-only, etc.) are excluded. A null earliest-event actor is reported as `"unknown"`. Bots are not filtered — if a bot triggered the deployment it is the legitimate deployer.
+- **Time to restore (`span-6`).** Incident list — worst first (unresolved first, then longest `duration_minutes`); each row: `service`, `environment`, elapsed, severity chip (`low`/`medium`/`high`/`critical`).
+  - **Incident pairing semantics (one incident per outage).** Consecutive `Failure` events within the same `(service, environment)` slot are coalesced into a single incident: the FIRST failure opens it (`failed_at`); further failures before recovery are ignored (same outage). The next `Success` closes it (`restored_at` = that success time; duration = first-failure → first-recovery). A `Success` while no incident is open is ignored. If no closing `Success` arrives within the window, the incident is emitted with `restored_at: null` (genuinely unrecovered).
+
+---
+
 ## Extension View Layout
 
 The browser extension presents four distinct surfaces (no persistent canvas — each surface is self-contained):

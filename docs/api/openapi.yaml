@@ -73,6 +73,16 @@ tags:
     description: Raw deployment-event listings + lookup. Used by Swimlanes + history drawer.
   - name: discovery
     description: Distinct services and environments derived from stored data.
+  - name: analytics
+    description: |
+      DORA-anchored aggregate reads over the `deployment_events` log (issue #299).
+      A small set of **focused, ETag-cacheable** `GET`s under `/api/analytics/*`, one
+      per analytics concern — never one consolidated payload. Every endpoint takes a
+      `window` query param (`7d` | `14d` | `30d`), **clamps it server-side** to
+      `HISTORY_RETENTION_DAYS`, and echoes the resolved window
+      (`AnalyticsWindow`: `days`, `from`, `to`, `retention_days`, `clamped`).
+      Reads are unauthenticated (internal-only, same trust tier as the other reads)
+      and carry a weak `ETag`; clients SHOULD send `If-None-Match`.
   - name: stream
     description: Real-time SSE fan-out of deployment events.
   - name: fetcher
@@ -291,6 +301,197 @@ paths:
                     items: { type: string }
                 examples:
                   - { items: ["dev", "qa", "uat", "prod"] }
+
+  # ───── Analytics — DORA-anchored aggregate reads (issue #299) ─────────────
+  /api/analytics/dora:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsDora
+      summary: DORA Four Keys KPI band over the selected window.
+      description: |
+        The four DORA metrics for the resolved window, each as an `AnalyticsKpi`:
+        `deployment_frequency`, `lead_time`, `change_failure_rate`,
+        `time_to_restore`. Backs the Analytics KPI band.
+
+        Each KPI carries `value` + `unit`, a `classification`
+        (`elite` | `high` | `medium` | `low`), a `trend_delta` versus the **prior
+        half-window**, and a per-day `sparkline[]`.
+
+        **Lead-time caveat (binding).** True DORA lead time (commit → prod) is NOT
+        in the event log. `lead_time` is APPROXIMATED from `parent_deployments`
+        promotion chains that reach the production (terminal ladder) stage and is
+        flagged `approximated: true`; the other three keys are `approximated: false`.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsDora'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/frequency:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsFrequency
+      summary: Deployment frequency over time — per-day success vs failure.
+      description: |
+        One bucket per UTC day in the resolved window, each carrying `date`,
+        `success`, and `failure` counts. Backs the stacked frequency-over-time bars.
+        Counts are over terminal events (`success` | `failure`); non-terminal
+        statuses are excluded.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsFrequency'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/change-failure-rate:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsChangeFailureRate
+      summary: Change-failure-rate trend — per-day rate + elite threshold.
+      description: |
+        Per-day change-failure rate (`failure / (success + failure)`, `0` when the
+        day has no terminal events) plus the constant `elite_threshold` of `0.15`
+        for the dashed reference line. Backs the CFR trend chart.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsChangeFailureRate'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/duration-histogram:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsDurationHistogram
+      summary: Deployment-duration distribution — bins + p50 + p95.
+      description: |
+        Histogram of deployment durations (minutes) over the resolved window, plus
+        the `p50` and `p95` percentile markers. Backs the duration-distribution
+        histogram.
+
+        **Duration definition.** Per logical deployment (`deployment_id`),
+        `last(happened_at) − first(happened_at)` across its event rows, in minutes.
+        Single-row deployments (no measurable span) are excluded from both the bins
+        and the percentiles.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsDurationHistogram'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/promotion-funnel:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsPromotionFunnel
+      summary: Promotion funnel — per-stage counts + conversion.
+      description: |
+        Ordered promotion funnel over an operator-configured environment ladder
+        (`ANALYTICS_FUNNEL_ENVIRONMENTS`, default `dev → staging → qa → preprod →
+        prod`). Each stage carries its `count` (distinct logical deployments that
+        reached the stage in the window) and `conversion` to the next stage (`null`
+        for the terminal production stage). Backs the promotion-funnel (sankey)
+        chart.
+
+        The ladder's environments and order are configured by the deployment
+        operator; environments outside the configured ladder are not represented as
+        funnel stages.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsPromotionFunnel'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/status-distribution:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsStatusDistribution
+      summary: Status distribution over the 8 statuses.
+      description: |
+        Event count per `Status` over the resolved window. All eight statuses are
+        present (zero-filled) so the donut renders a stable slice set. Backs the
+        status-distribution donut.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsStatusDistribution'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/heatmap:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsHeatmap
+      summary: Deploy heatmap — day-of-week × hour counts.
+      description: |
+        Deployment counts bucketed by UTC day-of-week (`0` = Sunday … `6` =
+        Saturday) and hour (`0`–`23`). Returns a flat list of populated cells;
+        absent `(day, hour)` pairs are zero. Backs the day×hour heatmap.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsHeatmap'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/top-deployers:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsTopDeployers
+      summary: Top deployers — actor + deployment count.
+      description: |
+        Deployment counts grouped by `actor`, descending by `count`, over the
+        resolved window. Events with no `actor` are grouped under the `actor` value
+        `unknown`. Backs the top-deployers leaderboard.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 }, description: Max number of deployers returned (highest counts first). }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsTopDeployers'
+        '304':
+          $ref: '#/components/responses/NotModified'
+
+  /api/analytics/incidents:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsIncidents
+      summary: Time-to-restore incidents — worst-first.
+      description: |
+        Recent restoration incidents over the resolved window, **worst-first**
+        (longest `duration_minutes` first). An incident is a `failure` event in a
+        `(service, environment)` slot followed by a later `success` in the same
+        slot; `duration_minutes` is `restored_at − failed_at`. An unresolved
+        failure (no subsequent success in the window) has `restored_at: null` and
+        `duration_minutes: null` and sorts first. Backs the MTTR / recent-incidents
+        list.
+      parameters:
+        - $ref: '#/components/parameters/AnalyticsWindowParam'
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 }, description: Max number of incidents returned (worst first). }
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/AnalyticsIncidents'
+        '304':
+          $ref: '#/components/responses/NotModified'
 
   # ───── Stream — deployment events (browser / SPA) ─────────────────────────
   /api/events/stream:
@@ -794,6 +995,29 @@ components:
         Format: `<emitter>/<adapter>`, e.g. `dashboard-fetcher/github-actions`.
         Stored alongside the deployment event row; never rendered as an authoritative actor.
 
+    AnalyticsWindowParam:
+      name: window
+      in: query
+      schema:
+        type: string
+        enum: [7d, 14d, 30d]
+        default: 7d
+      description: |
+        Look-back window for the analytics aggregate. One of `7d` | `14d` | `30d`.
+        **Clamped server-side** to `HISTORY_RETENTION_DAYS` (default 365, min 90):
+        when the requested span exceeds available retention the server narrows it
+        and reports the effective span in the response's `AnalyticsWindow`
+        (`days` + `clamped: true`). An absent or out-of-enum value resolves to the
+        `7d` default.
+
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      schema: { type: string }
+      description: |
+        Weak ETag from a prior analytics read. When it matches the current
+        aggregate the server returns `304 Not Modified` with no body.
+
   responses:
     Unauthorized:
       description: Missing or invalid API key.
@@ -825,6 +1049,106 @@ components:
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
+
+    # ── Analytics shared responses ────────────────────────────────────────────
+    NotModified:
+      description: |
+        The analytics aggregate is unchanged since the `If-None-Match` ETag.
+        No body. The weak `ETag` is re-emitted so the client can keep validating.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the (unchanged) aggregate.
+
+    AnalyticsDora:
+      description: DORA Four Keys KPI band for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsDora' }
+
+    AnalyticsFrequency:
+      description: Per-day success/failure deployment counts for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsFrequency' }
+
+    AnalyticsChangeFailureRate:
+      description: Per-day change-failure rate + elite threshold for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsChangeFailureRate' }
+
+    AnalyticsDurationHistogram:
+      description: Deployment-duration histogram (bins + p50 + p95) for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsDurationHistogram' }
+
+    AnalyticsPromotionFunnel:
+      description: Promotion funnel (per-stage count + conversion) for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsPromotionFunnel' }
+
+    AnalyticsStatusDistribution:
+      description: Event count per status (all 8, zero-filled) for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsStatusDistribution' }
+
+    AnalyticsHeatmap:
+      description: Day-of-week × hour deployment counts for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsHeatmap' }
+
+    AnalyticsTopDeployers:
+      description: Deployment counts grouped by actor (descending) for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsTopDeployers' }
+
+    AnalyticsIncidents:
+      description: Worst-first restoration incidents for the resolved window.
+      headers:
+        ETag:
+          schema: { type: string }
+          description: Weak ETag of the aggregate. Clients SHOULD send `If-None-Match` to short-circuit unchanged reads.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AnalyticsIncidents' }
 
   schemas:
 
@@ -1037,6 +1361,380 @@ components:
             `run_number`, `sha`, `ref`, `actor`, `happened_at`, …). The frontend
             renders this as a secondary "next" badge, never as the slot's primary
             state.
+
+    # ── Analytics (issue #299) ────────────────────────────────────────────────
+
+    AnalyticsWindow:
+      type: object
+      required: [days, from, to, retention_days, clamped]
+      description: |
+        The window the server actually resolved for an analytics aggregate. Every
+        `/api/analytics/*` response embeds this so the SPA can label the period and
+        flag when retention narrowed the request.
+      properties:
+        days:
+          type: integer
+          minimum: 1
+          description: Effective span in days (after the retention clamp).
+          examples: [7]
+        from:
+          type: string
+          format: date-time
+          description: Inclusive UTC start of the resolved window (`to − days`).
+          examples: ["2026-06-03T00:00:00Z"]
+        to:
+          type: string
+          format: date-time
+          description: Exclusive UTC end of the resolved window (server "now").
+          examples: ["2026-06-10T00:00:00Z"]
+        retention_days:
+          type: integer
+          description: Effective `HISTORY_RETENTION_DAYS` the request was clamped against.
+          examples: [365]
+        clamped:
+          type: boolean
+          description: |
+            `true` when the requested `window` exceeded `retention_days` and the
+            server narrowed it (then `days == retention_days`); `false` otherwise.
+
+    AnalyticsClassification:
+      type: string
+      enum: [elite, high, medium, low]
+      description: DORA performance band for a KPI value (Elite / High / Medium / Low).
+
+    AnalyticsKpi:
+      type: object
+      required: [value, unit, classification, trend_delta, sparkline, approximated]
+      description: One DORA key — value, unit, performance band, trend, and sparkline.
+      properties:
+        value:
+          type: number
+          description: |
+            The metric value in `unit`. `null` only when the window holds no
+            qualifying events (e.g. no incidents for `time_to_restore`).
+          nullable: true
+          examples: [9.2]
+        unit:
+          type: string
+          description: |
+            Unit of `value`. One of: `per_day` (deployment_frequency),
+            `hours` (lead_time), `ratio` (change_failure_rate, 0–1),
+            `minutes` (time_to_restore).
+          examples: [per_day]
+        classification:
+          $ref: '#/components/schemas/AnalyticsClassification'
+        trend_delta:
+          type: number
+          nullable: true
+          description: |
+            Signed fractional change of `value` versus the **prior half-window**
+            (e.g. `0.12` = +12 %, `-0.08` = −8 %). `null` when the prior half-window
+            has no comparable value. Direction is raw — the SPA decides whether
+            up is good (frequency) or bad (CFR/MTTR/lead-time).
+          examples: [0.12]
+        sparkline:
+          type: array
+          description: Per-day series of the metric across the resolved window (oldest → newest), for the inline sparkline.
+          items: { type: number }
+          examples:
+            - [7, 9, 6, 11, 8, 10, 12]
+        approximated:
+          type: boolean
+          description: |
+            `true` only on `lead_time` — it is APPROXIMATED from `parent_deployments`
+            promotion chains reaching the production (terminal ladder) stage, not
+            measured commit→prod. `false` on the other three keys.
+
+    AnalyticsDora:
+      type: object
+      required: [window, deployment_frequency, lead_time, change_failure_rate, time_to_restore]
+      description: DORA Four Keys KPI band — backs the Analytics KPI band.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        deployment_frequency:
+          $ref: '#/components/schemas/AnalyticsKpi'
+          description: "Deployments per day (`unit: per_day`). `approximated: false`."
+        lead_time:
+          $ref: '#/components/schemas/AnalyticsKpi'
+          description: |
+            Approximated lead time for changes (`unit: hours`, `approximated: true`).
+            Derived from `parent_deployments` promotion chains reaching the production
+            (terminal ladder) stage — NOT true commit→prod lead time, which is not in
+            the event log.
+        change_failure_rate:
+          $ref: '#/components/schemas/AnalyticsKpi'
+          description: "Failed deployments ÷ total terminal deployments (`unit: ratio`, 0–1). `approximated: false`."
+        time_to_restore:
+          $ref: '#/components/schemas/AnalyticsKpi'
+          description: "Median time to restore after a failure (`unit: minutes`). `approximated: false`."
+
+    AnalyticsFrequencyBucket:
+      type: object
+      required: [date, success, failure]
+      description: One UTC-day bucket of terminal deployment counts.
+      properties:
+        date:
+          type: string
+          format: date
+          description: UTC calendar day (`YYYY-MM-DD`).
+          examples: ["2026-06-09"]
+        success:
+          type: integer
+          minimum: 0
+          description: Count of `success` events on this day.
+        failure:
+          type: integer
+          minimum: 0
+          description: Count of `failure` events on this day.
+
+    AnalyticsFrequency:
+      type: object
+      required: [window, buckets]
+      description: Per-day success/failure deployment counts — backs the frequency-over-time bars.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        buckets:
+          type: array
+          description: One bucket per UTC day in the window, oldest → newest.
+          items: { $ref: '#/components/schemas/AnalyticsFrequencyBucket' }
+
+    AnalyticsCfrBucket:
+      type: object
+      required: [date, rate]
+      description: One UTC-day bucket of the change-failure rate.
+      properties:
+        date:
+          type: string
+          format: date
+          examples: ["2026-06-09"]
+        rate:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "`failure / (success + failure)` for the day; `0` when the day has no terminal events."
+          examples: [0.18]
+
+    AnalyticsChangeFailureRate:
+      type: object
+      required: [window, elite_threshold, buckets]
+      description: Per-day CFR trend + the elite reference line — backs the CFR trend chart.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        elite_threshold:
+          type: number
+          description: Constant DORA "elite" CFR reference (`0.15`) for the dashed line.
+          examples: [0.15]
+        buckets:
+          type: array
+          description: One bucket per UTC day in the window, oldest → newest.
+          items: { $ref: '#/components/schemas/AnalyticsCfrBucket' }
+
+    AnalyticsDurationBin:
+      type: object
+      required: [label, lower_minutes, upper_minutes, count]
+      description: One histogram bin of deployment durations (minutes).
+      properties:
+        label:
+          type: string
+          description: Display label for the bin (e.g. `0-10`, `60+`).
+          examples: ["0-10"]
+        lower_minutes:
+          type: integer
+          minimum: 0
+          description: Inclusive lower bound of the bin, in minutes.
+          examples: [0]
+        upper_minutes:
+          type: integer
+          nullable: true
+          description: Exclusive upper bound in minutes; `null` for the open-ended top bin.
+          examples: [10]
+        count:
+          type: integer
+          minimum: 0
+          description: Number of deployments whose duration falls in this bin.
+
+    AnalyticsDurationHistogram:
+      type: object
+      required: [window, bins, p50_minutes, p95_minutes]
+      description: Duration distribution (bins + percentiles) — backs the duration histogram.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        bins:
+          type: array
+          description: Contiguous duration bins, ascending.
+          items: { $ref: '#/components/schemas/AnalyticsDurationBin' }
+        p50_minutes:
+          type: number
+          nullable: true
+          description: Median duration in minutes; `null` when no measurable deployment exists.
+          examples: [22]
+        p95_minutes:
+          type: number
+          nullable: true
+          description: 95th-percentile duration in minutes; `null` when no measurable deployment exists.
+          examples: [78]
+
+    AnalyticsFunnelStage:
+      type: object
+      required: [environment, count, conversion]
+      description: One stage of the promotion funnel.
+      properties:
+        environment:
+          type: string
+          description: "A configured promotion-ladder stage (default ladder: `dev`, `staging`, `qa`, `preprod`, `prod`)."
+          examples: [staging]
+        count:
+          type: integer
+          minimum: 0
+          description: Distinct logical deployments that reached this stage in the window.
+        conversion:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: |
+            Fraction of this stage's deployments that also reached the next stage
+            (`next.count / this.count`). `null` for the terminal (last ladder)
+            stage, and `null` when `count` is `0`.
+          examples: [0.82]
+
+    AnalyticsPromotionFunnel:
+      type: object
+      required: [window, stages]
+      description: The ordered promotion-ladder stages (operator-configured; default `dev` first → `prod` last) — backs the funnel chart.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        stages:
+          type: array
+          description: The ordered promotion-ladder stages (operator-configured; default `dev` first → `prod` last).
+          items: { $ref: '#/components/schemas/AnalyticsFunnelStage' }
+
+    AnalyticsStatusCount:
+      type: object
+      required: [status, count]
+      description: Event count for one status value.
+      properties:
+        status: { $ref: '#/components/schemas/Status' }
+        count:
+          type: integer
+          minimum: 0
+
+    AnalyticsStatusDistribution:
+      type: object
+      required: [window, statuses]
+      description: Event count per status (all 8, zero-filled) — backs the status donut.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        statuses:
+          type: array
+          minItems: 8
+          maxItems: 8
+          description: All eight `Status` values, in enum order, zero-filled.
+          items: { $ref: '#/components/schemas/AnalyticsStatusCount' }
+
+    AnalyticsHeatmapCell:
+      type: object
+      required: [day_of_week, hour, count]
+      description: One populated day-of-week × hour cell.
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: UTC day of week — `0` = Sunday … `6` = Saturday.
+        hour:
+          type: integer
+          minimum: 0
+          maximum: 23
+          description: UTC hour of day (`0`–`23`).
+        count:
+          type: integer
+          minimum: 0
+
+    AnalyticsHeatmap:
+      type: object
+      required: [window, cells]
+      description: |
+        Day-of-week × hour deployment counts — backs the heatmap. Sparse: only
+        non-zero `(day_of_week, hour)` cells are returned; absent pairs are `0`.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        cells:
+          type: array
+          items: { $ref: '#/components/schemas/AnalyticsHeatmapCell' }
+
+    AnalyticsDeployer:
+      type: object
+      required: [actor, count]
+      description: One actor's deployment count.
+      properties:
+        actor:
+          type: string
+          description: "`actor` from the event, or `unknown` when absent."
+          examples: [alice]
+        count:
+          type: integer
+          minimum: 0
+
+    AnalyticsTopDeployers:
+      type: object
+      required: [window, deployers]
+      description: Deployment counts grouped by actor (descending) — backs the leaderboard.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        deployers:
+          type: array
+          description: Highest counts first, capped at the `limit` query param.
+          items: { $ref: '#/components/schemas/AnalyticsDeployer' }
+
+    AnalyticsSeverity:
+      type: string
+      enum: [low, medium, high, critical]
+      description: |
+        Severity band of a restoration incident, derived from `duration_minutes`:
+        longer outages → higher severity. An unresolved incident
+        (`duration_minutes: null`) is `critical`.
+
+    AnalyticsIncident:
+      type: object
+      required: [service, environment, failed_at, restored_at, duration_minutes, severity]
+      description: One restoration incident — a failure later restored in the same slot.
+      properties:
+        service:
+          type: string
+          examples: [checkout]
+        environment:
+          type: string
+          examples: [prod]
+        failed_at:
+          type: string
+          format: date-time
+          description: "`happened_at` of the `failure` event that opened the incident."
+          examples: ["2026-06-08T14:02:00Z"]
+        restored_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "`happened_at` of the restoring `success` event; `null` when still unresolved in the window."
+          examples: ["2026-06-08T14:48:00Z"]
+        duration_minutes:
+          type: number
+          nullable: true
+          description: "`restored_at − failed_at` in minutes; `null` when unresolved (sorts first)."
+          examples: [46]
+        severity:
+          $ref: '#/components/schemas/AnalyticsSeverity'
+
+    AnalyticsIncidents:
+      type: object
+      required: [window, incidents]
+      description: Worst-first restoration incidents — backs the MTTR / incidents list.
+      properties:
+        window: { $ref: '#/components/schemas/AnalyticsWindow' }
+        incidents:
+          type: array
+          description: Longest `duration_minutes` first; unresolved incidents (`null`) sort first. Capped at the `limit` query param.
+          items: { $ref: '#/components/schemas/AnalyticsIncident' }
 
     # ── Fetcher ──────────────────────────────────────────────────────────────
 

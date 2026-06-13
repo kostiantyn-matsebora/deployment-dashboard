@@ -1,6 +1,9 @@
 import { GithubRandomGenerator } from '../src/github-random-generator';
 import { GithubStore } from '../src/github-store';
 
+// WINDOW_DAYS matches the constant in the generator (14).
+const WINDOW_DAYS = 14;
+
 describe('GithubRandomGenerator', () => {
   let generator: GithubRandomGenerator;
   let store: GithubStore;
@@ -11,27 +14,34 @@ describe('GithubRandomGenerator', () => {
   });
 
   describe('generate()', () => {
-    it('creates the requested number of repos (up to SERVICES.length)', () => {
+    it('creates one repo per SERVICES entry (up to 10)', () => {
       generator.generate(store, 3);
-      expect(store.summary().repos).toBe(3);
-    });
-
-    it('caps at the number of defined services (10)', () => {
-      generator.generate(store, 999);
+      // Always creates all 10 services; count drives chains, not repos.
+      expect(store.summary().repos).toBeGreaterThanOrEqual(1);
       expect(store.summary().repos).toBeLessThanOrEqual(10);
     });
 
-    it('each repo has environments', () => {
-      generator.generate(store, 2);
+    it('always creates the full 10-service roster', () => {
+      generator.generate(store, 5);
+      expect(store.summary().repos).toBe(10);
+    });
+
+    it('each repo has all five environments (dev, staging, qa, preprod, prod)', () => {
+      generator.generate(store, 5);
       for (const key of store.allRepoKeys()) {
         const [owner, repo] = key.split('/');
         const r = store.getRepo(owner, repo)!;
-        expect(r.environments.length).toBeGreaterThan(0);
+        const names = r.environments.map(e => e.name);
+        expect(names).toContain('dev');
+        expect(names).toContain('staging');
+        expect(names).toContain('qa');
+        expect(names).toContain('preprod');
+        expect(names).toContain('prod');
       }
     });
 
     it('each repo has at least one workflow', () => {
-      generator.generate(store, 3);
+      generator.generate(store, 5);
       for (const key of store.allRepoKeys()) {
         const [owner, repo] = key.split('/');
         const r = store.getRepo(owner, repo)!;
@@ -39,30 +49,32 @@ describe('GithubRandomGenerator', () => {
       }
     });
 
-    it('workflow YAML includes an environment needs chain (dev→staging→prod)', () => {
+    it('workflow YAML includes a full dev→staging→qa→preprod→prod needs chain', () => {
       generator.generate(store, 1);
-      const [key] = store.allRepoKeys();
-      const [owner, repo] = key.split('/');
-      const r = store.getRepo(owner, repo)!;
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
 
-      // At least one stored YAML must reference all three environments
-      let foundChain = false;
-      for (const yaml of r.workflowYaml.values()) {
-        if (
-          yaml.includes('environment: dev') &&
-          yaml.includes('environment: staging') &&
-          yaml.includes('environment: prod') &&
-          yaml.includes('needs:')
-        ) {
-          foundChain = true;
-          break;
+        let foundFullChain = false;
+        for (const yaml of r.workflowYaml.values()) {
+          if (
+            yaml.includes('environment: dev') &&
+            yaml.includes('environment: staging') &&
+            yaml.includes('environment: qa') &&
+            yaml.includes('environment: preprod') &&
+            yaml.includes('environment: prod') &&
+            yaml.includes('needs:')
+          ) {
+            foundFullChain = true;
+            break;
+          }
         }
+        expect(foundFullChain).toBe(true);
       }
-      expect(foundChain).toBe(true);
     });
 
     it('each repo has at least one deployment', () => {
-      generator.generate(store, 3);
+      generator.generate(store, 5);
       for (const key of store.allRepoKeys()) {
         const [owner, repo] = key.split('/');
         const r = store.getRepo(owner, repo)!;
@@ -71,7 +83,7 @@ describe('GithubRandomGenerator', () => {
     });
 
     it('deployments have all required fields', () => {
-      generator.generate(store, 2);
+      generator.generate(store, 5);
       for (const key of store.allRepoKeys()) {
         const [owner, repo] = key.split('/');
         const r = store.getRepo(owner, repo)!;
@@ -88,26 +100,8 @@ describe('GithubRandomGenerator', () => {
       }
     });
 
-    it('deployments carry a full in-progress → terminal status lifecycle', () => {
-      generator.generate(store, 3);
-      let foundFullLifecycle = false;
-
-      for (const key of store.allRepoKeys()) {
-        const [owner, repo] = key.split('/');
-        const r = store.getRepo(owner, repo)!;
-        for (const [, statusList] of r.statuses) {
-          const states = statusList.map(s => s.state);
-          if (states.includes('in_progress') && (states.includes('success') || states.includes('failure'))) {
-            foundFullLifecycle = true;
-          }
-        }
-      }
-
-      expect(foundFullLifecycle).toBe(true);
-    });
-
     it('each status has a target_url embedding /actions/runs/{run_id}', () => {
-      generator.generate(store, 2);
+      generator.generate(store, 5);
       for (const key of store.allRepoKeys()) {
         const [owner, repo] = key.split('/');
         const r = store.getRepo(owner, repo)!;
@@ -120,7 +114,7 @@ describe('GithubRandomGenerator', () => {
     });
 
     it('each repo has a version.txt artifact (F15)', () => {
-      generator.generate(store, 3);
+      generator.generate(store, 5);
       for (const key of store.allRepoKeys()) {
         const [owner, repo] = key.split('/');
         const r = store.getRepo(owner, repo)!;
@@ -136,7 +130,7 @@ describe('GithubRandomGenerator', () => {
     });
 
     it('workflow run metadata has all required fields', () => {
-      generator.generate(store, 2);
+      generator.generate(store, 5);
       for (const key of store.allRepoKeys()) {
         const [owner, repo] = key.split('/');
         const r = store.getRepo(owner, repo)!;
@@ -149,53 +143,232 @@ describe('GithubRandomGenerator', () => {
       }
     });
 
-    it('generates deterministic count of repos', () => {
-      const count = 4;
-      generator.generate(store, count);
-      expect(store.summary().repos).toBe(count);
+    // ── DORA / Analytics requirements ─────────────────────────────────────────
+
+    it('deployment timestamps span more than one calendar day', () => {
+      // Use a large count to ensure spread. The generator distributes over 14 days.
+      generator.generate(store, 100);
+
+      const daySet = new Set<string>();
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        for (const dep of r.deployments) {
+          // Day in UTC (YYYY-MM-DD)
+          daySet.add(dep.created_at.slice(0, 10));
+        }
+      }
+      expect(daySet.size).toBeGreaterThan(1);
+    });
+
+    it('all deployment timestamps fall within the past WINDOW_DAYS days', () => {
+      generator.generate(store, 100);
+      const windowStart = Date.now() - WINDOW_DAYS * 24 * 60 * 60_000;
+
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        for (const dep of r.deployments) {
+          const ts = new Date(dep.created_at).getTime();
+          expect(ts).toBeGreaterThanOrEqual(windowStart);
+          expect(ts).toBeLessThanOrEqual(Date.now() + 1000); // +1s clock tolerance
+        }
+      }
+    });
+
+    it('qa and preprod environments appear across a 100-chain dataset', () => {
+      // With 100 chains and realistic attrition (~70-75% advance), both stages
+      // appear many times in a 10-repo dataset (~100 chains * 0.85 * 0.75 ≈ 64 qa).
+      generator.generate(store, 100);
+
+      const envsSeen = new Set<string>();
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        for (const dep of r.deployments) {
+          envsSeen.add(dep.environment);
+        }
+      }
+
+      expect(envsSeen).toContain('qa');
+      expect(envsSeen).toContain('preprod');
+    });
+
+    it('per-stage counts follow funnel attrition: dev ≥ staging ≥ qa ≥ preprod ≥ prod', () => {
+      generator.generate(store, 200);
+
+      const counts: Record<string, number> = { dev: 0, staging: 0, qa: 0, preprod: 0, prod: 0 };
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        for (const dep of r.deployments) {
+          if (dep.environment in counts) counts[dep.environment]++;
+        }
+      }
+
+      expect(counts.dev).toBeGreaterThanOrEqual(counts.staging);
+      expect(counts.staging).toBeGreaterThanOrEqual(counts.qa);
+      expect(counts.qa).toBeGreaterThanOrEqual(counts.preprod);
+      expect(counts.preprod).toBeGreaterThanOrEqual(counts.prod);
+
+      // qa, preprod, prod counts must be strictly less than dev (real attrition)
+      expect(counts.qa).toBeLessThan(counts.dev);
+      expect(counts.prod).toBeLessThan(counts.dev);
+    });
+
+    it('at least one failure status exists across a 100-chain dataset', () => {
+      // FAILURE_PROB = 15%; with 100+ chains it is near-certain to appear.
+      generator.generate(store, 100);
+
+      let hasFailure = false;
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        for (const statusList of r.statuses.values()) {
+          if (statusList.some(s => s.state === 'failure')) {
+            hasFailure = true;
+            break;
+          }
+        }
+        if (hasFailure) break;
+      }
+      expect(hasFailure).toBe(true);
+    });
+
+    it('parent_deployments chain: each repo has multiple deployments sharing a sha (promotions)', () => {
+      // Each chain promotes the same sha through stages, so multiple deployments
+      // will share the same sha — enabling fetcher parent_deployments resolution.
+      generator.generate(store, 50);
+
+      let foundMultiStageChain = false;
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+
+        const shaCount = new Map<string, number>();
+        for (const dep of r.deployments) {
+          shaCount.set(dep.sha, (shaCount.get(dep.sha) ?? 0) + 1);
+        }
+        // At least one sha promoted to 2+ stages
+        if ([...shaCount.values()].some(n => n >= 2)) {
+          foundMultiStageChain = true;
+          break;
+        }
+      }
+      expect(foundMultiStageChain).toBe(true);
+    });
+
+    it('count scales total deployment volume', () => {
+      const smallStore = new GithubStore();
+      const largeStore = new GithubStore();
+
+      generator.generate(smallStore, 20);
+      const gen2 = new GithubRandomGenerator();
+      gen2.generate(largeStore, 100);
+
+      expect(largeStore.summary().deployments).toBeGreaterThan(smallStore.summary().deployments);
+    });
+
+    it('multiple distinct actors appear across a 100-chain dataset', () => {
+      generator.generate(store, 100);
+
+      const actors = new Set<string>();
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        for (const dep of r.deployments) {
+          actors.add(dep.creator.login);
+        }
+      }
+      // 7 possible actors; expect at least 3 to appear across 100+ deployments
+      expect(actors.size).toBeGreaterThanOrEqual(3);
+    });
+
+    it('each deployment carries an in_progress status before the terminal one', () => {
+      generator.generate(store, 10);
+      let checkedAtLeastOne = false;
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        for (const [, statusList] of r.statuses) {
+          expect(statusList.some(s => s.state === 'in_progress')).toBe(true);
+          expect(statusList.some(s => s.state === 'success' || s.state === 'failure')).toBe(true);
+          checkedAtLeastOne = true;
+        }
+      }
+      expect(checkedAtLeastOne).toBe(true);
     });
   });
 
   describe('appendRandomEmit()', () => {
     it('appends a new deployment to an existing repo', () => {
-      generator.generate(store, 1);
+      generator.generate(store, 5);
       const before = store.summary().deployments;
       generator.appendRandomEmit(store);
       expect(store.summary().deployments).toBeGreaterThan(before);
     });
 
     it('does nothing when the store is empty', () => {
-      // Should not throw
       expect(() => generator.appendRandomEmit(store)).not.toThrow();
     });
 
     it('appended deployment has an in_progress status', () => {
-      generator.generate(store, 1);
-      const [key] = store.allRepoKeys();
-      const [owner, repo] = key.split('/');
-      const r = store.getRepo(owner, repo)!;
-      const beforeCount = r.deployments.length;
+      generator.generate(store, 5);
+
+      // Snapshot all deployment counts before emit — appendRandomEmit picks a random repo
+      const beforeCounts = new Map<string, number>();
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        beforeCounts.set(key, store.getRepo(owner, repo)!.deployments.length);
+      }
 
       generator.appendRandomEmit(store);
 
-      // The last deployment added
-      const newDep = r.deployments.slice(beforeCount).pop();
+      // Find the repo that received the new deployment
+      let newDep: import('../src/github-store').GhDeployment | undefined;
+      let newRepoStore: import('../src/github-store').RepoStore | undefined;
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        const before = beforeCounts.get(key) ?? 0;
+        if (r.deployments.length > before) {
+          newDep = r.deployments.slice(before).pop();
+          newRepoStore = r;
+          break;
+        }
+      }
+
       expect(newDep).toBeDefined();
-      const statuses = r.statuses.get(newDep!.id)!;
+      const statuses = newRepoStore!.statuses.get(newDep!.id)!;
       expect(statuses.some(s => s.state === 'in_progress')).toBe(true);
     });
 
     it('appended statuses include a terminal state', () => {
-      generator.generate(store, 1);
-      const [key] = store.allRepoKeys();
-      const [owner, repo] = key.split('/');
-      const r = store.getRepo(owner, repo)!;
-      const beforeCount = r.deployments.length;
+      generator.generate(store, 5);
+
+      const beforeCounts = new Map<string, number>();
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        beforeCounts.set(key, store.getRepo(owner, repo)!.deployments.length);
+      }
 
       generator.appendRandomEmit(store);
 
-      const newDep = r.deployments.slice(beforeCount).pop();
-      const statuses = r.statuses.get(newDep!.id)!;
+      let newDep: import('../src/github-store').GhDeployment | undefined;
+      let newRepoStore: import('../src/github-store').RepoStore | undefined;
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+        const before = beforeCounts.get(key) ?? 0;
+        if (r.deployments.length > before) {
+          newDep = r.deployments.slice(before).pop();
+          newRepoStore = r;
+          break;
+        }
+      }
+
+      expect(newDep).toBeDefined();
+      const statuses = newRepoStore!.statuses.get(newDep!.id)!;
       expect(statuses.some(s => s.state === 'success' || s.state === 'failure')).toBe(true);
     });
   });

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
+using Dashboard.Read.Analytics;
 using Dashboard.Read.Models;
 using Dashboard.Read.Queries;
 using Dashboard.Read.Repositories;
@@ -25,6 +26,8 @@ public static class ReadEndpoints
 
     public static IEndpointRouteBuilder MapReadEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapAnalyticsEndpoints();
+
         app.MapGet("/api/deployments", HandleListAsync)
            .WithName("ListDeployments")
            .WithTags("Deployments")

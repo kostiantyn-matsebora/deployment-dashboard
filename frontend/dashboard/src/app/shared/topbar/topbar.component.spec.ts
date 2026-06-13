@@ -288,6 +288,71 @@ describe('TopbarComponent — rate-limit indicator', () => {
   });
 });
 
+// ── Legend popover guard — hidden on Analytics tab ───────────────────────────
+//
+// The legend button/popover must NOT appear when the active view is "analytics"
+// (mockup #view-analytics shows no legend button).
+// It IS shown on matrix and swimlanes.
+
+describe('TopbarComponent — legend popover guard', () => {
+  async function buildWithView(view: 'matrix' | 'swimlanes' | 'analytics') {
+    const activeViewSig = signal<'matrix' | 'swimlanes' | 'analytics'>(view);
+    const mockState: Partial<AppStateService> = {
+      activeView:             activeViewSig as never,
+      serviceFilter:          signal(''),
+      failuresOnly:           signal(false),
+      matrixVisibleFields:    signal(new Set<MatrixField>()),
+      swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
+      correlationPredicate:   signal('explicit parent' as const),
+      timeWindow:             signal('1 day' as const),
+      sseConnected:           signal(false),
+      kpi:                    signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:           signal(new Map()),
+      matrixData:             signal(null),
+      matrixColHidden:        signal(new Set<string>()),
+      matrixColOrder:         signal([] as string[]),
+    };
+    const mockTheme: Partial<ThemeService> = {
+      theme: signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent],
+      providers: [
+        { provide: AppStateService, useValue: mockState },
+        { provide: ThemeService,    useValue: mockTheme },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    const f = TestBed.createComponent(TopbarComponent);
+    f.detectChanges();
+    return f;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('legend button is visible on matrix view', async () => {
+    const f = await buildWithView('matrix');
+    const btn = Array.from<HTMLButtonElement>(f.nativeElement.querySelectorAll('button.icon-btn'))
+      .find((b: HTMLButtonElement) => b.getAttribute('aria-label') === 'Legend — status key');
+    expect(btn).toBeTruthy();
+  });
+
+  it('legend button is visible on swimlanes view', async () => {
+    const f = await buildWithView('swimlanes');
+    const btn = Array.from<HTMLButtonElement>(f.nativeElement.querySelectorAll('button.icon-btn'))
+      .find((b: HTMLButtonElement) => b.getAttribute('aria-label') === 'Legend — status key');
+    expect(btn).toBeTruthy();
+  });
+
+  it('legend button is absent on analytics view', async () => {
+    const f = await buildWithView('analytics');
+    const btn = Array.from<HTMLButtonElement>(f.nativeElement.querySelectorAll('button.icon-btn'))
+      .find((b: HTMLButtonElement) => b.getAttribute('aria-label') === 'Legend — status key');
+    expect(btn).toBeUndefined();
+  });
+});
+
 // ── localStorage hydrate/persist round-trip (Fix 2) ─────────────────────────
 
 describe('AppStateService.rateLimitMap — localStorage hydration (Fix 2)', () => {

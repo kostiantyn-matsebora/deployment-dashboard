@@ -59,8 +59,33 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public ResetConfigOverride? ResetConfig { get; init; }
 
+    /// <summary>
+    /// Optional extra flat configuration keys injected via <c>IWebHostBuilder.UseSetting</c>
+    /// so they are immediately visible through <c>WebApplicationBuilder.Configuration</c>
+    /// before <c>Build()</c> is called. This is necessary for keys read eagerly at DI
+    /// registration time (e.g. <c>ANALYTICS_FUNNEL_ENVIRONMENTS</c>, which
+    /// <c>ReadServiceExtensions.AddReadServices</c> reads during service registration).
+    /// <c>ConfigureAppConfiguration</c> fires too late for such early reads.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?>? ExtraConfiguration { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // Use "Test" environment so MigrateDatabaseAsync calls EnsureCreated instead of
+        // MigrateAsync — safe when the schema already exists (PostgresFixture ran MigrateAsync
+        // once at startup), and avoids migration-table conflicts in repeated factory inits.
+        builder.UseEnvironment("Test");
+
+        // ExtraConfiguration keys are injected via UseSetting so they are immediately
+        // visible through WebApplicationBuilder.Configuration — AddReadServices reads
+        // ANALYTICS_FUNNEL_ENVIRONMENTS eagerly at DI registration time (before Build()),
+        // which is too early for ConfigureAppConfiguration callbacks to have fired.
+        if (ExtraConfiguration is { Count: > 0 } extra)
+        {
+            foreach (var (key, value) in extra)
+                builder.UseSetting(key, value);
+        }
+
         builder.ConfigureAppConfiguration((_, config) => AddTestConfiguration(config));
         builder.ConfigureServices(services => ApplyTestServiceOverrides(services));
     }

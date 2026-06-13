@@ -23,8 +23,9 @@ children:
 - [9. Rate limiting](./api-guidelines.md#9-rate-limiting)
 - [10. Security notes](./api-guidelines.md#10-security-notes)
 - [11. Control plane — Kubernetes-style orchestration](./api-guidelines.md#11-control-plane--kubernetes-style-orchestration)
-- [12. Examples](./api-guidelines.md#12-examples--copy-paste-minimum-viable-calls) → [`api-examples.md`](./api-examples.md)
-- [13. Known carry-over for implementers](./api-guidelines.md#13-known-carry-over-for-implementers)
+- [12. Analytics — DORA-anchored aggregate reads](./api-guidelines.md#12-analytics--dora-anchored-aggregate-reads)
+- [13. Examples](./api-guidelines.md#13-examples--copy-paste-minimum-viable-calls) → [`api-examples.md`](./api-examples.md)
+- [14. Known carry-over for implementers](./api-guidelines.md#14-known-carry-over-for-implementers)
 
 ### `api-examples.md`
 

@@ -188,6 +188,137 @@ export interface RateLimitReport {
   reset_at: string | null;
 }
 
+// ── Analytics models (issue #299) ────────────────────────────────────────────
+// Contract: docs/api/openapi.yaml — AnalyticsWindow, AnalyticsKpi, …
+
+export interface AnalyticsWindow {
+  days: number;
+  from: string;
+  to: string;
+  retention_days: number;
+  clamped: boolean;
+}
+
+export type AnalyticsClassification = 'elite' | 'high' | 'medium' | 'low';
+
+/** Literal union of the units emitted by the contract (AnalyticsKpi.unit in openapi.yaml). */
+export type AnalyticsKpiUnit = 'per_day' | 'hours' | 'ratio' | 'minutes';
+
+export interface AnalyticsKpi {
+  value: number | null;
+  unit: AnalyticsKpiUnit;
+  classification: AnalyticsClassification;
+  trend_delta: number | null;
+  sparkline: number[];
+  approximated: boolean;
+}
+
+export interface AnalyticsDora {
+  window: AnalyticsWindow;
+  deployment_frequency: AnalyticsKpi;
+  lead_time: AnalyticsKpi;
+  change_failure_rate: AnalyticsKpi;
+  time_to_restore: AnalyticsKpi;
+}
+
+export interface AnalyticsFrequencyBucket {
+  date: string;
+  success: number;
+  failure: number;
+}
+
+export interface AnalyticsFrequency {
+  window: AnalyticsWindow;
+  buckets: AnalyticsFrequencyBucket[];
+}
+
+export interface AnalyticsCfrBucket {
+  date: string;
+  rate: number;
+}
+
+export interface AnalyticsChangeFailureRate {
+  window: AnalyticsWindow;
+  elite_threshold: number;
+  buckets: AnalyticsCfrBucket[];
+}
+
+export interface AnalyticsDurationBin {
+  label: string;
+  lower_minutes: number;
+  upper_minutes: number | null;
+  count: number;
+}
+
+export interface AnalyticsDurationHistogram {
+  window: AnalyticsWindow;
+  bins: AnalyticsDurationBin[];
+  p50_minutes: number | null;
+  p95_minutes: number | null;
+}
+
+export interface AnalyticsFunnelStage {
+  environment: string;
+  count: number;
+  conversion: number | null;
+}
+
+export interface AnalyticsPromotionFunnel {
+  window: AnalyticsWindow;
+  stages: AnalyticsFunnelStage[];
+}
+
+export interface AnalyticsStatusCount {
+  status: Status;
+  count: number;
+}
+
+export interface AnalyticsStatusDistribution {
+  window: AnalyticsWindow;
+  statuses: AnalyticsStatusCount[];
+}
+
+export interface AnalyticsHeatmapCell {
+  day_of_week: number;
+  hour: number;
+  count: number;
+}
+
+export interface AnalyticsHeatmap {
+  window: AnalyticsWindow;
+  cells: AnalyticsHeatmapCell[];
+}
+
+export interface AnalyticsDeployer {
+  actor: string;
+  count: number;
+}
+
+export interface AnalyticsTopDeployers {
+  window: AnalyticsWindow;
+  deployers: AnalyticsDeployer[];
+}
+
+export type AnalyticsSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface AnalyticsIncident {
+  service: string;
+  environment: string;
+  failed_at: string;
+  restored_at: string | null;
+  duration_minutes: number | null;
+  severity: AnalyticsSeverity;
+}
+
+export interface AnalyticsIncidents {
+  window: AnalyticsWindow;
+  incidents: AnalyticsIncident[];
+}
+
+/** The three valid period values for the analytics window param. */
+export const ANALYTICS_PERIODS = ['7d', '14d', '30d'] as const;
+export type AnalyticsPeriod = typeof ANALYTICS_PERIODS[number];
+
 /**
  * Full ComponentEventRecord frame delivered by GET /api/control/events/stream.
  * Source: docs/api/api-guidelines.md §11 SSE component-events stream.
