@@ -81,6 +81,40 @@ public sealed class AnalyticsTests
         Assert.Equal(r1.To, r2.To);
     }
 
+    [Fact]
+    public void WindowResolver_HourGranularity_TruncatesToHourBoundary()
+    {
+        // now is mid-hour; to must be truncated to the start of that UTC hour.
+        var now = new DateTimeOffset(2026, 6, 10, 12, 34, 56, TimeSpan.Zero);
+        var expectedTo = new DateTimeOffset(2026, 6, 10, 12, 0, 0, TimeSpan.Zero);
+
+        var result = AnalyticsWindowResolver.Resolve("7d", 365, now, AnalyticsWindowGranularity.Hour);
+
+        Assert.Equal(expectedTo, result.To);
+        Assert.Equal(expectedTo.AddDays(-7), result.From);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("unknown")]
+    [InlineData("DAY")]
+    public void WindowResolver_AbsentOrUnknownGranularity_DefaultsToDayBoundary(string? rawGranularity)
+    {
+        // Absent/unknown/empty ANALYTICS_WINDOW_GRANULARITY must preserve current day-boundary
+        // behavior — mirroring what ResolveWindow does when the env var is absent or unrecognised.
+        var granularity = string.Equals(rawGranularity, "hour", StringComparison.OrdinalIgnoreCase)
+            ? AnalyticsWindowGranularity.Hour
+            : AnalyticsWindowGranularity.Day;
+
+        var now = new DateTimeOffset(2026, 6, 10, 12, 34, 56, TimeSpan.Zero);
+        var expectedTo = new DateTimeOffset(2026, 6, 10, 0, 0, 0, TimeSpan.Zero);
+
+        var result = AnalyticsWindowResolver.Resolve("7d", 365, now, granularity);
+
+        Assert.Equal(expectedTo, result.To);
+    }
+
     // ── DoraClassifier — classification ───────────────────────────────────────
 
     [Theory]
@@ -764,5 +798,101 @@ public sealed class AnalyticsTests
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(json));
         return $"W/\"{Convert.ToHexString(hash)[..16]}\"";
+    }
+
+    // ── AnalyticsFunnelEnvironments.Parse ─────────────────────────────────────
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(",,")]
+    public void FunnelEnvironments_Parse_NullOrBlankOrOnlyCommas_ReturnsDefault(string? csv)
+    {
+        var result = AnalyticsFunnelEnvironments.Parse(csv);
+
+        Assert.Equal(AnalyticsFunnelEnvironments.Default, result);
+        Assert.Equal(5, result.Length);
+        Assert.Equal("dev", result[0]);
+        Assert.Equal("staging", result[1]);
+        Assert.Equal("qa", result[2]);
+        Assert.Equal("preprod", result[3]);
+        Assert.Equal("prod", result[4]);
+    }
+
+    [Fact]
+    public void FunnelEnvironments_Parse_CustomThreeStage_TrimmedAndLowercased()
+    {
+        // Leading/trailing spaces are trimmed and tokens are lowercased.
+        var result = AnalyticsFunnelEnvironments.Parse("dev, staging, prod");
+
+        Assert.Equal(3, result.Length);
+        Assert.Equal("dev", result[0]);
+        Assert.Equal("staging", result[1]);
+        Assert.Equal("prod", result[2]);
+        Assert.Equal("prod", result[^1]); // last entry is the production terminal
+    }
+
+    [Fact]
+    public void FunnelEnvironments_Parse_RenamedProd_LastIsProduction()
+    {
+        var result = AnalyticsFunnelEnvironments.Parse("dev,staging,production");
+
+        Assert.Equal(3, result.Length);
+        Assert.Equal("dev", result[0]);
+        Assert.Equal("staging", result[1]);
+        Assert.Equal("production", result[2]);
+        Assert.Equal("production", result[^1]); // renamed prod is the terminal
+    }
+
+    [Fact]
+    public void FunnelEnvironments_Parse_MixedCase_NormalizedToLowerInvariant()
+    {
+        // B4: case-insensitive matching — configured "PrOD" must normalize to "prod"
+        // to match the lowercase environment column convention in the database.
+        var result = AnalyticsFunnelEnvironments.Parse("Dev,Staging,PrOD");
+
+        Assert.Equal(3, result.Length);
+        Assert.Equal("dev", result[0]);
+        Assert.Equal("staging", result[1]);
+        Assert.Equal("prod", result[2]);
+    }
+
+    [Theory]
+    [InlineData("dev,PROD")]
+    [InlineData("DEV,STAGING,QA,PREPROD,PROD")]
+    [InlineData("dev, PROD")]
+    public void FunnelEnvironments_Parse_UppercaseTokens_NormalizedToLower(string csv)
+    {
+        // All tokens must emerge lowercase regardless of configured casing.
+        var result = AnalyticsFunnelEnvironments.Parse(csv);
+
+        Assert.All(result, token => Assert.Equal(token, token.ToLowerInvariant()));
+    }
+
+    [Fact]
+    public void FunnelEnvironments_Parse_EmptyTokensInMiddle_Dropped()
+    {
+        var result = AnalyticsFunnelEnvironments.Parse("dev,,staging,,prod");
+
+        Assert.Equal(3, result.Length);
+        Assert.Equal("dev", result[0]);
+        Assert.Equal("staging", result[1]);
+        Assert.Equal("prod", result[2]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(",,")]
+    [InlineData("dev,staging,prod")]
+    [InlineData("PROD")]
+    public void FunnelEnvironments_Parse_ResultIsNeverEmpty(string? csv)
+    {
+        // B3: non-empty postcondition — [^1] access must always be safe.
+        var result = AnalyticsFunnelEnvironments.Parse(csv);
+
+        Assert.True(result.Length > 0, "Parse must never return an empty array.");
     }
 }
