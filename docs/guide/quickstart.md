@@ -95,6 +95,12 @@ The gateway (`:8080`) is the **only** published port. Frontend, API, and Postgre
 
     Every slot keeps its complete deployment history; open the drawer to see it.
 
+-   :material-chart-line:{ .lg .middle } **Analytics view**
+
+    ---
+
+    Switch to the Analytics tab to see DORA Four Keys (deployment frequency, lead time, change failure rate, MTTR) and eight supporting charts across a 7 / 14 / 30-day window. See [Screenshots — Analytics](./screenshots.md#analytics) and [Configuration — API](./configuration.md#api) for the two tuning knobs.
+
 </div>
 
 Use the **Demo Driver control panel** to trigger deployment scenarios and a reset, then watch the matrix react in real time.

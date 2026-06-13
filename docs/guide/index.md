@@ -28,6 +28,7 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Deployment matrix](./screenshots.md#deployment-matrix)
 - [Swimlanes](./screenshots.md#swimlanes)
 - [History drawer](./screenshots.md#history-drawer)
+- [Analytics](./screenshots.md#analytics)
 - [Demo control panel](./screenshots.md#demo-control-panel)
 
 ### `install.md`
