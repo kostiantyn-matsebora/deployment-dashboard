@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "team-process/schemas/artifact.schema.json",
+  "title": "ARTIFACT",
+  "description": "contract -> orch -> consumers - settled interface. Canonical key order: type, spec, delta, open.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "spec", "delta"],
+  "properties": {
+    "type": { "enum": ["ARTIFACT"] },
+    "spec": { "type": "string", "minLength": 1 },
+    "delta": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "open": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

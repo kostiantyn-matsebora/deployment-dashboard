@@ -6,104 +6,200 @@ orchestrator drives the phases that exchange these in [`process.md`](process.md)
 
 Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT.
 
-- **Every cross-role message MUST be one of these forms**, emitted verbatim — never free prose.
+- **Every cross-role message MUST be one of these forms**, emitted as a **JSON object** — never free prose.
 - **Binds the orchestrator too** — `BRIEF` to dispatch, `FIX` to route — not only members.
-- **Each form is a table:** **field name** · **what belongs** (the info) · **constraint** (the governing rule).
-- **Fixed row order; omit empty rows.**
+- **Each form is a JSON object** keyed by a `"type"` discriminator (one of the six, uppercase).
+- **Multi-value fields are JSON arrays.** What reads as a bulleted list is encoded as an array.
+- **Some fields nest** one level: `BRIEF.spec`, `REVIEW.remarks[]`, `FINDING.options[]`, `FIX.failure` — objects/arrays-of-objects, not flattened strings.
 
-**Emitted rendering.** Render every form with `scripts/hooks/Format-ProtocolForm.ps1` — it owns the
-layout rules (one `•` item per row; field name on its first row only, blank on continuation rows;
-columns auto-aligned; a full-width `-----` rule after each field block; never `<br>`). **Never
-hand-align the table** — the `SendMessage` guard rejects misaligned output. Invoke without shell
-quoting pain:
+## Wire format
 
-1. **Write the simple form to a temp file** — first line the tag, then one `field: value` line per
-   field; for a multi-value field write `field:` alone and put each value on its own indented line below.
-2. **Render:** `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file>`
-   (or pipe the form text in via stdin).
+- **Schema is the contract.** Each form's machine-readable shape lives as a JSON Schema under
+  [`schemas/`](schemas/) (`brief` · `result` · `review` · `finding` · `fix` · `artifact`).
+  `additionalProperties:false` — extra or renamed fields are rejected.
+- **Omit empty optional fields** — don't send `null` or `[]`; leave the key out.
+- **The per-form tables below are the authoring source** (field · meaning · constraint · examples);
+  the schema is the enforcement source. They are kept in lock-step.
+
+**Emit + validate.** Build the JSON, then validate/normalize it with
+`scripts/hooks/Format-ProtocolForm.ps1` — it validates against the schema (plus the one cross-field
+rule), canonicalizes key order, drops empty optional fields, and pretty-prints. The `SendMessage`
+guard rejects any non-conforming message.
+
+1. **Write the form JSON to a temp file** (rough order/casing is fine — the normalizer fixes it).
+2. **Normalize:** `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file>`
+   (or pipe the JSON in via stdin). Non-zero exit + a stderr message means it's invalid — fix and retry.
 3. **Send the stdout verbatim** as the `SendMessage` body.
 
-Simple-form input (left) → rendered output (right); the script renders all six the same way:
-
-```
-RESULT                          RESULT
-role: backend                   | role    | • backend                                     |
-changed:                        -----------------------------------------------------------
-  GithubActionsAdapter.cs       | changed | • GithubActionsAdapter.cs                     |
-  BackfillRunner.cs             |         | • BackfillRunner.cs                           |
-gate:                           -----------------------------------------------------------
-  build ok                      | gate    | • build ok                                    |
-  264/264 tests                 |         | • 264/264 tests                               |
-notes: extracted HTTP adapter   -----------------------------------------------------------
-block: none                     | notes   | • extracted HTTP adapter                      |
-                                -----------------------------------------------------------
-                                | block   | • none                                        |
-                                -----------------------------------------------------------
+```jsonc
+// rough input (unordered, lowercase type, empty optionals)   ->   normalized output sent verbatim
+{ "gate":["build ok","264/264"], "type":"result",                 {
+  "changed":["A.cs"], "role":"backend", "notes":[] }                "type": "RESULT",
+                                                                    "role": "backend",
+                                                                    "changed": ["A.cs"],
+                                                                    "gate": ["build ok", "264/264"]
+                                                                  }
 ```
 
-**BRIEF** — orch → role · dispatch
+`role` (in `RESULT`/`REVIEW`) is one of: `contract` · `backend` · `frontend` · `infrastructure` · `testing` · `docs`.
 
-| Field | What belongs | Constraint |
-|---|---|---|
-| spec | • owning spec path#section<br>• acceptance gate it sets | docs-first target; required |
-| lane | • glob(s) the role may touch | nothing outside it |
-| task | • the change to make | one line, imperative |
-| gate | • self-verify set | build + unit + lint |
-| seed | • diagnosis/theory to test first | optional; omit if none |
+---
 
-**RESULT** — role → orch · hand-back
+## BRIEF — orch → role · dispatch
 
-| Field | What belongs | Constraint |
-|---|---|---|
-| role | • the reporting role | one of the role names |
-| changed | • files touched | in-lane only |
-| gate | • actual gate outcomes | real counts (`build ok`, `unit 12/12`); never "should pass" |
-| notes | • key design decisions | ≤3 |
-| follow | • out-of-lane needs / deferred | omit if none |
-| block | • blocker pointer | `none` or `see FINDING` |
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"BRIEF"` | `"BRIEF"` |
+| spec | owning spec `{path, gate}` | required; `path` = spec`#section`, `gate` = the acceptance gate it sets | `{"path":"docs/api/openapi.yaml#deployments","gate":"tile shows next-status badge"}` · `{"path":"docs/frontend/swimlane.md#collapse","gate":"chevron toggles the row"}` |
+| lane | glob(s) the role may touch | array, ≥1; nothing outside it | `["frontend/dashboard/src/app/swimlane/**"]` · `["backend/Dashboard.Api/**","backend/shared/**"]` |
+| task | the change to make | one line, imperative | `"Add a collapse chevron per service row"` · `"Extract the HTTP adapter from BackfillRunner"` |
+| gate | self-verify set | array, ≥1; build + unit + lint | `["build","unit","lint"]` · `["build ok","ng test 18/18"]` |
+| seed | diagnosis/theory to test first | optional; omit if none | `"check ToJsonPointer for DRY"` · `"suspect ETag tie-break ordering"` |
 
-**REVIEW** — reviewer → orch · role-bar walk (pre-implementation scoping *or* pre-testing peer review)
+```json
+{
+  "type": "BRIEF",
+  "spec": { "path": "docs/frontend/swimlane.md#collapse", "gate": "chevron toggles the row" },
+  "lane": ["frontend/dashboard/src/app/swimlane/**"],
+  "task": "Add a collapse chevron per service row",
+  "gate": ["build", "unit", "lint"],
+  "seed": "reuse the rate-limit popover pattern"
+}
+```
 
-| Field | What belongs | Constraint |
-|---|---|---|
-| role | • the reviewing competency | a role name; reviewer ≠ that lane's implementer |
-| scope | • lanes/files reviewed | the change set in this competency |
-| checked | • touched symbols × dimensions walked | required; the full bar per symbol, not a skim |
-| verdict | • `pass` / `changes-requested` | `pass` only with zero remarks; invalid without `checked` |
-| remarks | • each: principle/smell · location `file:line` · required change | omit if `pass`; cite the role's non-negotiables. When scoping, `remarks` = the refactor backlog |
-| block | • blocker pointer | `none` or `see FINDING` |
+---
 
-**FINDING** — role → orch · blocker / contradiction / impossible
+## RESULT — role → orch · hand-back
 
-| Field | What belongs | Constraint |
-|---|---|---|
-| where | • file or spec at fault | path or spec ref |
-| issue | • the problem | one of: contradiction / impossible / missing input |
-| options | • viable paths | ≥2 (a / b) |
-| need | • the decision required | one line |
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"RESULT"` | `"RESULT"` |
+| role | the reporting role | one of the role names | `"backend"` · `"frontend"` |
+| changed | files touched | array, ≥1; in-lane only | `["GithubActionsAdapter.cs","BackfillRunner.cs"]` · `["swimlane.component.ts"]` |
+| gate | actual gate outcomes | array, ≥1; real counts, never "should pass" | `["build ok","unit 12/12"]` · `["build ok","ng test 18/18","lint clean"]` |
+| notes | key design decisions | optional array, ≤3 | `["extracted HTTP adapter"]` · `["coalesced failures into one incident"]` |
+| follow | out-of-lane needs / deferred | optional array; omit if none | `["needs openapi delta for status-vector"]` · `["E2E deferred to #306"]` |
+| block | blocker pointer | optional; `"none"` or `"see FINDING"` | `"none"` · `"see FINDING"` |
 
-**FIX** — orch → role · fix-loop assignment
+```json
+{
+  "type": "RESULT",
+  "role": "backend",
+  "changed": ["GithubActionsAdapter.cs", "BackfillRunner.cs"],
+  "gate": ["build ok", "264/264 tests"],
+  "notes": ["extracted HTTP adapter"],
+  "block": "none"
+}
+```
 
-| Field | What belongs | Constraint |
-|---|---|---|
-| test | • failing test id | exact id |
-| expect | • expected behavior | — |
-| actual | • observed behavior | — |
-| suspect | • likely layer / file | a route hint, not a fix |
+---
 
-**ARTIFACT** — contract → orch → consumers · settled interface
+## REVIEW — reviewer → orch · role-bar walk
 
-| Field | What belongs | Constraint |
-|---|---|---|
-| spec | • committed contract path | committed, not chat |
-| delta | • resources / operations changed | — |
-| open | • questions needing a decision | omit if none |
+Pre-implementation scoping *or* pre-testing peer review — same form.
+
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"REVIEW"` | `"REVIEW"` |
+| role | the reviewing competency | a role name; reviewer ≠ that lane's implementer | `"backend"` · `"frontend"` |
+| scope | lanes/files reviewed | array, ≥1; the change set in this competency | `["backend/fetcher/**"]` · `["BackfillRunner.cs","DeploymentMapper.cs"]` |
+| checked | touched symbols × dimensions walked | array, ≥1; the full bar per symbol, not a skim | `["Run() 136 lines × SRP","Map() × DRY"]` · `["PollLoop × SOLID/smells"]` |
+| verdict | the outcome | `"pass"` or `"changes-requested"` | `"pass"` · `"changes-requested"` |
+| remarks | each issue `{smell, location, change}` | array of objects; **required when `changes-requested`, forbidden when `pass`**; cite the role's non-negotiables. When scoping = the refactor backlog | `[{"smell":"S1541 complexity","location":"BackfillRunner.cs:42","change":"extract cursor-advance"}]` |
+| block | blocker pointer | optional; `"none"` or `"see FINDING"` | `"none"` · `"see FINDING"` |
+
+```json
+{
+  "type": "REVIEW",
+  "role": "backend",
+  "scope": ["backend/fetcher/**"],
+  "checked": ["BackfillRunner.Run() 136 lines × SRP", "DeploymentMapper.Map() × DRY"],
+  "verdict": "changes-requested",
+  "remarks": [
+    { "smell": "S1541 cyclomatic complexity", "location": "BackfillRunner.cs:42", "change": "extract cursor-advance into a method" }
+  ],
+  "block": "none"
+}
+```
+
+---
+
+## FINDING — role → orch · blocker / contradiction / impossible
+
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"FINDING"` | `"FINDING"` |
+| where | file or spec at fault | path or spec ref | `"docs/api/openapi.yaml#errors"` · `"BackfillRunner.cs:88"` |
+| issue | the problem | one of: `"contradiction"` · `"impossible"` · `"missing input"` | `"contradiction"` · `"missing input"` |
+| options | viable paths, each `{id, path}` | array of objects, ≥2 | `[{"id":"a","path":"return 409 on conflict"},{"id":"b","path":"return 422 with error body"}]` |
+| need | the decision required | one line | `"Which status for a write conflict?"` · `"Confirm the retention window"` |
+
+```json
+{
+  "type": "FINDING",
+  "where": "docs/api/openapi.yaml#errors",
+  "issue": "contradiction",
+  "options": [
+    { "id": "a", "path": "return 409 on conflict" },
+    { "id": "b", "path": "return 422 with an error body" }
+  ],
+  "need": "Which status for a write conflict?"
+}
+```
+
+---
+
+## FIX — orch → role · fix-loop assignment
+
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"FIX"` | `"FIX"` |
+| failure | the defect `{test, expect, actual}` | required object; `test` = exact failing id, `expect`/`actual` = behaviors | `{"test":"swimlane.spec.ts > collapses on click","expect":"chevron rotates 90°","actual":"no rotation"}` |
+| suspect | likely layer / file | required; a route hint, not a fix | `"swimlane.component.ts toggle handler"` · `"PgListenBroadcaster base"` |
+
+```json
+{
+  "type": "FIX",
+  "failure": {
+    "test": "swimlane.spec.ts > collapses on click",
+    "expect": "chevron rotates 90°",
+    "actual": "no rotation"
+  },
+  "suspect": "swimlane.component.ts toggle handler"
+}
+```
+
+---
+
+## ARTIFACT — contract → orch → consumers · settled interface
+
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"ARTIFACT"` | `"ARTIFACT"` |
+| spec | committed contract path | committed, not chat | `"docs/api/openapi.yaml"` · `"frontend/extension/manifest.json"` |
+| delta | resources / operations changed | array, ≥1 | `["+ GET /services/{id}/status-vector"]` · `["~ DeploymentEvent.effectiveStatus enum"]` |
+| open | questions needing a decision | optional array; omit if none | `["pagination for status-vector?"]` |
+
+```json
+{
+  "type": "ARTIFACT",
+  "spec": "docs/api/openapi.yaml",
+  "delta": ["+ GET /services/{id}/status-vector", "~ DeploymentEvent.effectiveStatus enum"],
+  "open": ["pagination for status-vector?"]
+}
+```
+
+---
+
+## Rules
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
 - A `BRIEF` **references** the role's typed form here (`RESULT`/`REVIEW`/…); it MUST NOT restate or
   invent a hand-back shape — restating competes with the protocol, itself a breach.
-- A hand-back not in its typed form (extra/renamed fields, prose values, notes over the limit) is
-  returned **UNREAD** — the orchestrator **MUST** reply *re-emit as `RESULT`/`REVIEW`* and **MUST NOT** parse the prose.
+- A hand-back that is not valid typed-form JSON (not JSON, unknown `type`, extra/renamed fields,
+  missing required fields, wrong value types) is returned **UNREAD** — the orchestrator **MUST** reply
+  *re-emit as `RESULT`/`REVIEW`* and **MUST NOT** parse it.
+- `REVIEW.verdict` is `"pass"` **only** with zero remarks; `"changes-requested"` requires ≥1 remark.
 - A `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer;
   loop until every competency `pass`es (see [`process.md`](process.md) *Review loop*). Peer review precedes `testing`.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop

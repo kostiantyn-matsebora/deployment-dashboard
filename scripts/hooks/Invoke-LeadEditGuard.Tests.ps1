@@ -58,8 +58,8 @@ Describe 'Test-PathInGlobs' {
     }
 
     It 'skips blank lines and comments without error' {
-        $globs = @('# comment', '', '.claude/run/**')
-        Test-PathInGlobs -RelPath '.claude/run/ledger.md' -Globs $globs | Should -BeTrue
+        $globs = @('# comment', '', '.team-process/run/**')
+        Test-PathInGlobs -RelPath '.team-process/run/session.json' -Globs $globs | Should -BeTrue
     }
 }
 
@@ -89,12 +89,12 @@ Describe 'Get-LeadLaneGlobs' {
         $globs = Get-LeadLaneGlobs -Root 'C:\nonexistent-path-xyz'
         $globs | Should -Contain '.claude/team-process/**'
         $globs | Should -Contain '.claude/settings.json'
-        $globs | Should -Contain '.claude-lead-lane'
+        $globs | Should -Contain '.team-process/**'
     }
 
-    It 'returns override file content when .claude-lead-lane exists' {
+    It 'returns override file content when .team-process/lead-lane exists' {
         $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) "llg-test-$(New-Guid)"
-        New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $tmpRoot '.team-process') -Force | Out-Null
         try {
             $overrideContent = @(
                 '# my custom whitelist',
@@ -102,7 +102,7 @@ Describe 'Get-LeadLaneGlobs' {
                 'custom/path/**',
                 'another/path/*.md'
             )
-            Set-Content -LiteralPath (Join-Path $tmpRoot '.claude-lead-lane') -Value $overrideContent -Encoding utf8NoBOM
+            Set-Content -LiteralPath (Join-Path $tmpRoot '.team-process' 'lead-lane') -Value $overrideContent -Encoding utf8NoBOM
 
             $globs = Get-LeadLaneGlobs -Root $tmpRoot
             $globs | Should -HaveCount 2
@@ -140,10 +140,7 @@ Describe 'Get-LeadEditDecision' {
                 '.claude/*.md',
                 '.claude/settings.json',
                 '.claude/settings.local.json',
-                '.claude/run/**',
-                '.claude-team-active',
-                '.claude-lane',
-                '.claude-lead-lane'
+                '.team-process/**'
             )
         }
 
@@ -161,8 +158,8 @@ Describe 'Get-LeadEditDecision' {
             $d.Block | Should -BeFalse
         }
 
-        It 'allows editing .claude/run/ledger.md' {
-            $d = Get-LeadEditDecision -RelPath '.claude/run/ledger.md' `
+        It 'allows editing .team-process/run/session.json (runtime state)' {
+            $d = Get-LeadEditDecision -RelPath '.team-process/run/session.json' `
                                       -IsSubagent $false -UnderRoot $true -Globs $script:DefaultGlobs
             $d.Block | Should -BeFalse
         }
@@ -173,8 +170,8 @@ Describe 'Get-LeadEditDecision' {
             $d.Block | Should -BeFalse
         }
 
-        It 'allows editing .claude-lead-lane itself' {
-            $d = Get-LeadEditDecision -RelPath '.claude-lead-lane' `
+        It 'allows editing .team-process/lead-lane itself' {
+            $d = Get-LeadEditDecision -RelPath '.team-process/lead-lane' `
                                       -IsSubagent $false -UnderRoot $true -Globs $script:DefaultGlobs
             $d.Block | Should -BeFalse
         }

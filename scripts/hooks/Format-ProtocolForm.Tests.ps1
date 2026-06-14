@@ -4,155 +4,203 @@
 BeforeAll {
     $script:ScriptPath = (Resolve-Path (Join-Path $PSScriptRoot 'Format-ProtocolForm.ps1')).Path
     . $script:ScriptPath -AsLibrary
-}
 
-# ============================================================
-Describe 'ConvertTo-FormFields' {
+    # Real schema dir (functions default here too; passed explicitly for clarity).
+    $script:SchemaDir = (Resolve-Path (Join-Path $PSScriptRoot '..' '..' '.claude' 'team-process' 'schemas')).Path
 
-    It 'parses a single field with a same-line value' {
-        $fields = ConvertTo-FormFields -Text "RESULT`nrole: backend"
-        $fields.Count | Should -Be 1
-        $fields[0].Name | Should -Be 'role'
-        $fields[0].Items[0] | Should -Be 'backend'
+    function New-FormJson { param($Obj) $Obj | ConvertTo-Json -Depth 10 }
+
+    $script:ResultObj = [ordered]@{
+        type = 'RESULT'; role = 'backend'
+        changed = @('A.cs', 'B.cs'); gate = @('build ok', '264/264 tests')
     }
-
-    It 'parses a field with multiple indented items' {
-        $text = "RESULT`nchanged:`n  PollLoop.cs`n  ControlStream.cs"
-        $fields = ConvertTo-FormFields -Text $text
-        $fields.Count | Should -Be 1
-        $fields[0].Items.Count | Should -Be 2
-        $fields[0].Items[0] | Should -Be 'PollLoop.cs'
-        $fields[0].Items[1] | Should -Be 'ControlStream.cs'
+    $script:ReviewPassObj = [ordered]@{
+        type = 'REVIEW'; role = 'backend'; scope = @('B.cs')
+        checked = @('Run() x SRP'); verdict = 'pass'
     }
-
-    It 'strips leading bullet characters from items' {
-        $text = "RESULT`ngate:`n  • build ok`n  • 12/12 tests"
-        $fields = ConvertTo-FormFields -Text $text
-        $fields[0].Items[0] | Should -Be 'build ok'
-        $fields[0].Items[1] | Should -Be '12/12 tests'
+    $script:ReviewChangesObj = [ordered]@{
+        type = 'REVIEW'; role = 'backend'; scope = @('B.cs'); checked = @('Run() x SRP')
+        verdict = 'changes-requested'
+        remarks = @(@{ smell = 'S1541'; location = 'B.cs:42'; change = 'extract' })
     }
-
-    It 'parses multiple fields in order' {
-        $text = "RESULT`nrole: backend`nchanged: PollLoop.cs`ngate: build ok"
-        $fields = ConvertTo-FormFields -Text $text
-        $fields.Count | Should -Be 3
-        $fields[0].Name | Should -Be 'role'
-        $fields[1].Name | Should -Be 'changed'
-        $fields[2].Name | Should -Be 'gate'
+    $script:BriefObj = [ordered]@{
+        type = 'BRIEF'; spec = @{ path = 'docs/x#y'; gate = 'tile shows badge' }
+        lane = @('frontend/**'); task = 'do it'; gate = @('build', 'unit')
     }
-
-    It 'skips the tag line and blank lines' {
-        $text = "RESULT`n`nrole: backend`n`ngate: build ok"
-        $fields = ConvertTo-FormFields -Text $text
-        $fields.Count | Should -Be 2
+    $script:FindingObj = [ordered]@{
+        type = 'FINDING'; where = 'openapi.yaml#errors'; issue = 'contradiction'
+        options = @(@{ id = 'a'; path = '409' }, @{ id = 'b'; path = '422' }); need = 'which?'
+    }
+    $script:FixObj = [ordered]@{
+        type = 'FIX'; failure = @{ test = 't'; expect = 'e'; actual = 'a' }; suspect = 's.cs'
+    }
+    $script:ArtifactObj = [ordered]@{
+        type = 'ARTIFACT'; spec = 'docs/api/openapi.yaml'; delta = @('GET /things')
     }
 }
 
 # ============================================================
-Describe 'Format-ProtocolForm — output structure' {
+Describe 'Test-ProtocolJson — valid forms pass' {
 
-    BeforeAll {
-        $script:SimpleResult = @'
-RESULT
-role: backend
-changed:
-  PollLoop.cs
-  ControlStream.cs
-gate: build ok
-'@
-        $script:Output = Format-ProtocolForm -Text $script:SimpleResult
-        $script:OutputLines = $script:Output -split "`r?`n"
+    It 'accepts a well-formed RESULT' {
+        (Test-ProtocolJson -Json (New-FormJson $script:ResultObj) -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
     }
-
-    It 'first line is the form tag' {
-        $script:OutputLines[0] | Should -Be 'RESULT'
+    It 'accepts a REVIEW with pass verdict and no remarks' {
+        (Test-ProtocolJson -Json (New-FormJson $script:ReviewPassObj) -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
     }
-
-    It 'field name appears only on the first row of that field' {
-        $roleLines = $script:OutputLines | Where-Object { $_ -match '^\| role' }
-        $roleLines.Count | Should -Be 1
+    It 'accepts a REVIEW changes-requested with nested remarks' {
+        (Test-ProtocolJson -Json (New-FormJson $script:ReviewChangesObj) -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
     }
-
-    It 'continuation rows have a blank field cell' {
-        # changed has 2 items — second row should have blank first cell
-        $blankFieldRows = $script:OutputLines | Where-Object { $_ -match '^\|\s+\|' }
-        $blankFieldRows.Count | Should -BeGreaterOrEqual 1
+    It 'accepts a BRIEF with nested spec' {
+        (Test-ProtocolJson -Json (New-FormJson $script:BriefObj) -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
     }
-
-    It 'every table row starts with a pipe and contains exactly 3 pipes' {
-        $tableRows = $script:OutputLines | Where-Object { $_ -match '^\|' }
-        foreach ($row in $tableRows) {
-            ($row.ToCharArray() | Where-Object { $_ -eq '|' }).Count | Should -Be 3
-        }
+    It 'accepts a FINDING with nested options' {
+        (Test-ProtocolJson -Json (New-FormJson $script:FindingObj) -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
     }
-
-    It 'emits a dash rule after each field block' {
-        $dashRules = $script:OutputLines | Where-Object { $_ -match '^-+$' }
-        # 3 fields → 3 dash rules
-        $dashRules.Count | Should -Be 3
+    It 'accepts a FIX with nested failure' {
+        (Test-ProtocolJson -Json (New-FormJson $script:FixObj) -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
     }
-
-    It 'all dash rules have the same width as the table rows' {
-        $tableRows = $script:OutputLines | Where-Object { $_ -match '^\|' }
-        $rowWidth  = $tableRows[0].Length
-        $dashRules = $script:OutputLines | Where-Object { $_ -match '^-+$' }
-        foreach ($rule in $dashRules) {
-            $rule.Length | Should -Be $rowWidth
-        }
+    It 'accepts an ARTIFACT' {
+        (Test-ProtocolJson -Json (New-FormJson $script:ArtifactObj) -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
     }
-
-    It 'all table rows have equal length (columns aligned)' {
-        $tableRows = $script:OutputLines | Where-Object { $_ -match '^\|' }
-        $widths    = $tableRows | ForEach-Object { $_.Length } | Sort-Object -Unique
-        $widths.Count | Should -Be 1
-    }
-
-    It 'every item cell starts with a bullet character' {
-        $tableRows = $script:OutputLines | Where-Object { $_ -match '^\|' }
-        foreach ($row in $tableRows) {
-            # Second cell (between 2nd and 3rd pipe) must start with •
-            if ($row -match '^\|\s.*?\|\s*(?<cell>.*?)\s*\|$') {
-                $cell = $Matches['cell'].Trim()
-                if ($cell -ne '') {
-                    $cell[0] | Should -Be ([char]0x2022)
-                }
-            }
-        }
+    It 'normalizes a lowercase type discriminator' {
+        $obj = [ordered]@{ type = 'result'; role = 'backend'; changed = @('A.cs'); gate = @('ok') }
+        $r = Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeTrue
+        $r.Type | Should -Be 'RESULT'
     }
 }
 
 # ============================================================
-Describe 'Format-ProtocolForm — all six form tags' {
+Describe 'Test-ProtocolJson — invalid forms block' {
 
-    It 'renders REVIEW tag correctly' {
-        $out = Format-ProtocolForm -Text "REVIEW`nrole: backend`nscope: x`nchecked: y`nverdict: pass"
-        $out | Should -Match '^REVIEW'
+    It 'rejects non-JSON text' {
+        $r = Test-ProtocolJson -Json 'Please re-run iteration 2.' -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+        $r.Errors -join ' ' | Should -Match 'JSON'
     }
-
-    It 'renders BRIEF tag correctly' {
-        $out = Format-ProtocolForm -Text "BRIEF`nspec: docs/index.md`nlane: backend/**`ntask: do the thing`ngate: build ok"
-        $out | Should -Match '^BRIEF'
-        $out | Should -Match 'spec'
+    It 'rejects a JSON array at top level' {
+        $r = Test-ProtocolJson -Json '[1,2,3]' -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+        $r.Errors -join ' ' | Should -Match 'single JSON object'
     }
-
-    It 'renders FINDING tag correctly' {
-        $out = Format-ProtocolForm -Text "FINDING`nwhere: x.cs`nissue: contradiction`noptions:`n  a\n  b`nneed: decision"
-        $out | Should -Match '^FINDING'
+    It 'rejects an unknown type' {
+        $r = Test-ProtocolJson -Json '{ "type": "MEMO", "x": 1 }' -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+        $r.Errors -join ' ' | Should -Match 'type'
     }
-
-    It 'renders FIX tag correctly' {
-        $out = Format-ProtocolForm -Text "FIX`ntest: MyTest`nexpect: green`nactual: red`nsuspect: x.cs"
-        $out | Should -Match '^FIX'
+    It 'rejects a RESULT missing a mandatory field (changed)' {
+        $obj = [ordered]@{ type = 'RESULT'; role = 'backend'; gate = @('ok') }
+        (Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir).Ok | Should -BeFalse
     }
-
-    It 'renders ARTIFACT tag correctly' {
-        $out = Format-ProtocolForm -Text "ARTIFACT`nspec: docs/api/openapi.yaml`ndelta: GET /things"
-        $out | Should -Match '^ARTIFACT'
+    It 'rejects an extra/renamed field (additionalProperties:false)' {
+        $obj = [ordered]@{ type = 'FIX'; failure = @{ test = 't'; expect = 'e'; actual = 'a' }; suspect = 's'; bogus = 1 }
+        $r = Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+        $r.Errors -join ' ' | Should -Match 'bogus'
     }
+    It 'rejects a scalar where an array is required (changed)' {
+        $r = Test-ProtocolJson -Json '{ "type":"RESULT","role":"backend","changed":"A.cs","gate":["ok"] }' -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+    }
+    It 'rejects an invalid role enum value' {
+        $obj = [ordered]@{ type = 'RESULT'; role = 'wizard'; changed = @('A.cs'); gate = @('ok') }
+        (Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir).Ok | Should -BeFalse
+    }
+    It 'rejects a REVIEW with an invalid verdict' {
+        $obj = [ordered]@{ type = 'REVIEW'; role = 'backend'; scope = @('B.cs'); checked = @('x'); verdict = 'maybe' }
+        (Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir).Ok | Should -BeFalse
+    }
+    It 'rejects a remark missing a nested key (change)' {
+        $obj = [ordered]@{
+            type = 'REVIEW'; role = 'backend'; scope = @('B.cs'); checked = @('x')
+            verdict = 'changes-requested'; remarks = @(@{ smell = 'S1541'; location = 'B.cs:42' })
+        }
+        $r = Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+        $r.Errors -join ' ' | Should -Match 'change'
+    }
+    It 'rejects a FINDING with fewer than two options' {
+        $obj = [ordered]@{ type = 'FINDING'; where = 'x'; issue = 'contradiction'; options = @(@{ id = 'a'; path = 'p' }); need = 'n' }
+        (Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir).Ok | Should -BeFalse
+    }
+}
 
-    It 'returns input as-is when no form tag is found' {
-        $raw = 'Some random text without a tag'
-        Format-ProtocolForm -Text $raw | Should -Be $raw
+# ============================================================
+Describe 'Test-ProtocolJson — REVIEW cross-field rule (verdict vs remarks)' {
+
+    It 'rejects verdict pass with remarks present' {
+        $obj = [ordered]@{
+            type = 'REVIEW'; role = 'backend'; scope = @('B.cs'); checked = @('x'); verdict = 'pass'
+            remarks = @(@{ smell = 'a'; location = 'b'; change = 'c' })
+        }
+        $r = Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+        $r.Errors -join ' ' | Should -Match 'zero remarks'
+    }
+    It 'rejects verdict changes-requested with no remarks' {
+        $obj = [ordered]@{ type = 'REVIEW'; role = 'backend'; scope = @('B.cs'); checked = @('x'); verdict = 'changes-requested' }
+        $r = Test-ProtocolJson -Json (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $r.Ok | Should -BeFalse
+        $r.Errors -join ' ' | Should -Match 'at least one remark'
+    }
+}
+
+# ============================================================
+Describe 'ConvertTo-OrderedByKeys / Test-EmptyFormValue' {
+
+    It 'orders known keys first and appends unknown keys' {
+        $o = [pscustomobject]@{ gate = 'g'; type = 'RESULT'; extra = 'x'; role = 'backend' }
+        $ordered = ConvertTo-OrderedByKeys -Object $o -Keys @('type', 'role', 'gate')
+        @($ordered.Keys) | Should -Be @('type', 'role', 'gate', 'extra')
+    }
+    It 'treats null, empty string, and empty array as empty' {
+        Test-EmptyFormValue -Value $null | Should -BeTrue
+        Test-EmptyFormValue -Value '' | Should -BeTrue
+        Test-EmptyFormValue -Value @() | Should -BeTrue
+    }
+    It 'treats non-empty values as non-empty' {
+        Test-EmptyFormValue -Value 'x' | Should -BeFalse
+        Test-EmptyFormValue -Value @('a') | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Format-ProtocolForm — normalization' {
+
+    It 'reorders top-level keys to canonical order' {
+        $messy = '{ "gate":["ok"], "type":"RESULT", "changed":["A.cs"], "role":"backend" }'
+        $out = Format-ProtocolForm -Text $messy -SchemaDir $script:SchemaDir
+        $obj = $out | ConvertFrom-Json
+        @($obj.PSObject.Properties.Name) | Should -Be @('type', 'role', 'changed', 'gate')
+    }
+    It 'drops empty optional array fields (notes/follow)' {
+        # Empty optional arrays are schema-valid; the normalizer drops them.
+        # (Empty optional SCALARS like block:"" are rejected by schema minLength, not dropped.)
+        $obj = [ordered]@{ type = 'RESULT'; role = 'backend'; changed = @('A.cs'); gate = @('ok'); notes = @(); follow = @() }
+        $out = Format-ProtocolForm -Text (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $names = @(($out | ConvertFrom-Json).PSObject.Properties.Name)
+        $names | Should -Not -Contain 'notes'
+        $names | Should -Not -Contain 'follow'
+    }
+    It 'orders nested spec keys (path before gate)' {
+        $obj = [ordered]@{ type = 'BRIEF'; spec = @{ gate = 'g'; path = 'p' }; lane = @('x/**'); task = 't'; gate = @('build') }
+        $out = Format-ProtocolForm -Text (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $spec = ($out | ConvertFrom-Json).spec
+        @($spec.PSObject.Properties.Name) | Should -Be @('path', 'gate')
+    }
+    It 'orders nested remark keys (smell, location, change)' {
+        $obj = [ordered]@{
+            type = 'REVIEW'; role = 'backend'; scope = @('B.cs'); checked = @('x'); verdict = 'changes-requested'
+            remarks = @(@{ change = 'c'; location = 'l'; smell = 's' })
+        }
+        $out = Format-ProtocolForm -Text (New-FormJson $obj) -SchemaDir $script:SchemaDir
+        $remark = ($out | ConvertFrom-Json).remarks[0]
+        @($remark.PSObject.Properties.Name) | Should -Be @('smell', 'location', 'change')
+    }
+    It 'throws on invalid input with a descriptive message' {
+        { Format-ProtocolForm -Text '{ "type":"RESULT" }' -SchemaDir $script:SchemaDir } |
+            Should -Throw '*Invalid RESULT*'
     }
 }
 
@@ -160,70 +208,43 @@ Describe 'Format-ProtocolForm — all six form tags' {
 Describe 'Resolve-FormText — input source resolution' {
 
     It 'prefers -Text over -InputFile' {
-        Resolve-FormText -Text 'inline' -InputFile 'does-not-exist.txt' | Should -Be 'inline'
+        Resolve-FormText -Text 'inline' -InputFile 'does-not-exist.json' | Should -Be 'inline'
     }
-
-    It 'reads the form from -InputFile when -Text is empty' {
-        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).txt"
+    It 'reads from -InputFile when -Text is empty' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).json"
         try {
-            Set-Content -LiteralPath $tmp -Value "RESULT`nrole: backend`nchanged: x.cs`ngate: ok" -NoNewline
-            $text = Resolve-FormText -Text '' -InputFile $tmp
-            $text | Should -Match 'role: backend'
+            Set-Content -LiteralPath $tmp -Value '{ "type":"RESULT" }' -NoNewline
+            Resolve-FormText -Text '' -InputFile $tmp | Should -Match '"type":"RESULT"'
         }
         finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
     }
-
     It 'throws a clear error when -InputFile does not exist' {
-        { Resolve-FormText -Text '' -InputFile 'C:\nope\missing-form.txt' } |
-            Should -Throw '*InputFile not found*'
+        { Resolve-FormText -Text '' -InputFile 'C:\nope\missing-form.json' } | Should -Throw '*InputFile not found*'
     }
-
-    # Note: the no-source path (-Text/-InputFile both empty) falls through to a
-    # blocking stdin read by design — it is only reached by genuine pipe usage
-    # (`Get-Content form.txt | …`, which closes on EOF). It is intentionally NOT
-    # unit-tested here: exercising it in a redirected-stdin host would block.
 }
 
 # ============================================================
 Describe 'Format-ProtocolForm.ps1 — -InputFile end to end (real process)' {
 
-    It 'renders an aligned table from a file via the script entry point' {
-        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).txt"
+    It 'normalizes a valid form from a file via the script entry point' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).json"
         try {
-            $form = "RESULT`nrole: backend`nchanged:`n  a.cs`n  b.cs`ngate: build ok"
-            Set-Content -LiteralPath $tmp -Value $form -NoNewline
-            $out    = (& $script:ScriptPath -InputFile $tmp) -join "`n"
-            $lines  = $out -split "`r?`n"
-            $out    | Should -Match '^RESULT'
-            $out    | Should -Match '\| role\s+\|'
-            # All table rows aligned → identical length.
-            $rows   = @($lines | Where-Object { $_ -match '^\|' })
-            $rows.Count | Should -BeGreaterThan 0
-            $widths = $rows | ForEach-Object { $_.Length } | Sort-Object -Unique
-            @($widths).Count | Should -Be 1
+            Set-Content -LiteralPath $tmp -Value '{ "gate":["build ok"], "type":"result", "changed":["a.cs"], "role":"backend" }' -NoNewline
+            $out = (pwsh -NoProfile -File $script:ScriptPath -InputFile $tmp) -join "`n"
+            $LASTEXITCODE | Should -Be 0
+            $out | Should -Match '"type": "RESULT"'
         }
         finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
     }
-}
 
-# ============================================================
-Describe 'Format-ProtocolForm — single vs multiple items' {
-
-    It 'single-item field produces exactly one data row and one dash rule' {
-        $out = Format-ProtocolForm -Text "RESULT`nrole: backend`nchanged: x.cs`ngate: ok"
-        $lines = $out -split "`r?`n"
-        $dataRows  = @($lines | Where-Object { $_ -match '^\|' })
-        $dashRules = @($lines | Where-Object { $_ -match '^-+$' })
-        $dataRows.Count  | Should -Be 3  # one row per field
-        $dashRules.Count | Should -Be 3  # one rule per field
-    }
-
-    It 'multi-item field produces correct number of rows' {
-        $text = "RESULT`nrole: backend`nchanged:`n  a.cs`n  b.cs`n  c.cs`ngate: ok"
-        $out  = Format-ProtocolForm -Text $text
-        $lines = $out -split "`r?`n"
-        $dataRows = @($lines | Where-Object { $_ -match '^\|' })
-        # role=1, changed=3, gate=1 → 5 rows
-        $dataRows.Count | Should -Be 5
+    It 'exits non-zero and writes the error to stderr on invalid input' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).json"
+        try {
+            Set-Content -LiteralPath $tmp -Value '{ "type":"RESULT" }' -NoNewline
+            $err = (pwsh -NoProfile -File $script:ScriptPath -InputFile $tmp 2>&1) -join "`n"
+            $LASTEXITCODE | Should -Be 1
+            $err | Should -Match 'Invalid RESULT'
+        }
+        finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
     }
 }

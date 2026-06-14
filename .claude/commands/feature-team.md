@@ -51,9 +51,11 @@ explicit confirmation*).
 ## 2 — Spawn (after approval)
 
 - **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description = the issue
-  summary. *(A `PostToolUse(TeamCreate)` hook auto-writes the `.claude-team-active` marker; the
-  team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn below
-  MUST set `team_name`, or it is rejected as an in-session downgrade.)*
+  summary. *(A `PostToolUse(TeamCreate)` hook writes the durable session record
+  `.team-process/run/session.json`; the team-mode guard then blocks any foreign in-session
+  `Agent`/Task subagent — every member spawn below MUST set `team_name`, or it is rejected as an
+  in-session downgrade. The record persists across reboots; see [`process.md`](../team-process/process.md)
+  → *Session state & resume*.)*
 - **Spawn each member** via the `Agent` tool to execute [`/implement`](implement.md) in its lane:
   - `team_name` = the team · `name` = a stable, referenceable label (e.g. `backend`) ·
     `subagent_type` = the mapped agent above.
@@ -87,8 +89,9 @@ explicit confirmation*).
   owning member; loop until green.
 - Run [`/ship`](ship.md) — commit in logical groups → branch → open/update PR → watch CI green.
   Never push the default branch.
-- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook clears the
-  `.claude-team-active` marker; `SessionStart` also clears any stale marker.)*
+- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook removes the session record.
+  On a fresh session a leftover record is NOT auto-cleared — `SessionStart` reminds you to resume or
+  abandon it; abandon a stale one with `Invoke-TeamModeGuard.ps1 -EndSession`.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 
