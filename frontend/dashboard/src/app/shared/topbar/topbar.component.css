@@ -249,6 +249,39 @@
 .toggle.is-on .switch { background: var(--coral); }
 .toggle.is-on .switch::after { transform: translateX(14px); background: #fff; }
 
+/* ── Swimlanes auto-scroll toggle — accent ON colour (not coral) (#309) ─── */
+.swim-autoscroll-toggle.is-on {
+  color: rgba(var(--accent-rgb), 0.90);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.10);
+}
+.swim-autoscroll-toggle.is-on .switch { background: rgba(var(--accent-rgb), 1); }
+
+/* ── Swimlane control group: divider + inner row (#309) ─────────────────── */
+/* Wraps Collapse/Expand-all + Auto-scroll so they read as one unit, clearly
+   separated from the rate-limit chip to the left and the correlation picker
+   to the right by matching the .hdr-filter border-left separator pattern. */
+.swim-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1px solid var(--glass-edge);
+}
+
+/* Collapse/Expand-all button — wider to fit label (#309) */
+.swim-collapse-btn {
+  width: auto;
+  padding: 0 10px;
+  gap: 5px;
+  font-size: 12.5px;
+}
+.swim-collapse-label {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* ── Theme switcher ─────────────────────────────────────── */
 .theme-switch {
   display: inline-flex;

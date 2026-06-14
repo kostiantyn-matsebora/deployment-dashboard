@@ -248,3 +248,14 @@
   font-weight: 600;
   opacity: 0.85;
 }
+
+/* ── Change-emphasis flash (#309) ─────────────────────────── */
+@keyframes card-flash {
+  0%   { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.85), 0 0 24px rgba(var(--accent-rgb), 0.55); }
+  60%  { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.40), 0 0 14px rgba(var(--accent-rgb), 0.25); }
+  100% { box-shadow: none; }
+}
+
+.vis-card.is-flashing {
+  animation: card-flash 0.6s ease-out forwards;
+}

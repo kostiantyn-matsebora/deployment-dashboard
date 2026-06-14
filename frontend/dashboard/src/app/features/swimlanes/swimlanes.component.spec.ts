@@ -1,5 +1,6 @@
 import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { TestBed }                 from '@angular/core/testing';
+import { vi }                      from 'vitest';
 
 import { SwimlanesComponent, SwimLane } from './swimlanes.component';
 import { AppStateService }               from '../../core/services/app-state.service';
@@ -64,39 +65,75 @@ function getLanes(c: SwimlanesComponent): SwimLane[] {
   return (c as unknown as { lanes(): SwimLane[] }).lanes();
 }
 
+/** Read the protected `flashingIds` signal. */
+function getFlashingIds(c: SwimlanesComponent): Set<string> {
+  return (c as unknown as { flashingIds(): Set<string> }).flashingIds();
+}
+
 // ── Shared TestBed setup ─────────────────────────────────────────────────────
 
 describe('SwimlanesComponent', () => {
-  let component:     SwimlanesComponent;
-  let matrixSignal:  ReturnType<typeof signal<Matrix | null>>;
-  let predSignal:    ReturnType<typeof signal<CorrelationPredicate>>;
-  let twSignal:      ReturnType<typeof signal<TimeWindow>>;
+  let component:                  SwimlanesComponent;
+  let fixture:                    ReturnType<typeof TestBed.createComponent<SwimlanesComponent>>;
+  let matrixSignal:               ReturnType<typeof signal<Matrix | null>>;
+  let predSignal:                 ReturnType<typeof signal<CorrelationPredicate>>;
+  let twSignal:                   ReturnType<typeof signal<TimeWindow>>;
+  let lastEffectiveEventSignal:   ReturnType<typeof signal<DeploymentEvent | null>>;
+  /** Reference to the mock AppStateService — used by collapse tests to mutate signals. */
+  let mockSvcRef:                 Partial<AppStateService>;
+
+  afterEach(() => {
+    fixture?.destroy();
+    TestBed.resetTestingModule();
+  });
 
   beforeEach(async () => {
-    _seq         = 0;
-    matrixSignal = signal<Matrix | null>(null);
-    predSignal   = signal<CorrelationPredicate>('explicit parent');
-    twSignal     = signal<TimeWindow>('1 day');
+    _seq                      = 0;
+    matrixSignal              = signal<Matrix | null>(null);
+    predSignal                = signal<CorrelationPredicate>('explicit parent');
+    twSignal                  = signal<TimeWindow>('1 day');
+    lastEffectiveEventSignal  = signal<DeploymentEvent | null>(null);
 
-    const mockSvc: Partial<AppStateService> = {
+    mockSvcRef = {
       matrixData:             matrixSignal,
       correlationPredicate:   predSignal,
       timeWindow:             twSignal,
       swimlaneVisibleFields:  signal<Set<SwimlaneField>>(new Set()),
-      selectedNodeId:         { set: () => {} } as never,
-      selectedEvent:          { set: () => {} } as never,
+      selectedNodeId:         signal<string | null>(null),
+      selectedEvent:          signal<DeploymentEvent | null>(null),
+      selectedNextEvent:      signal<DeploymentEvent | null>(null),
       sseConnected:           signal(false),
+      // #309 collapse/expand + SSE wiring signals
+      collapsedLanes:         signal(new Set<string>()),
+      autoScrollOnChange:     signal(true),
+      lastEffectiveEvent:     lastEffectiveEventSignal,
+      initDefaultCollapsed:   () => {},
+      toggleLaneCollapsed:    () => {},
+      collapseAllLanes:       () => {},
+      expandAllLanes:         () => {},
     };
 
     await TestBed.configureTestingModule({
       imports:   [SwimlanesComponent],
-      providers: [{ provide: AppStateService, useValue: mockSvc }],
-      // Skip rendering of NgxGraph / VisCard / InspectorPanel — logic-only test.
+      providers: [{ provide: AppStateService, useValue: mockSvcRef }],
+      // NgxGraphModule is aliased to a lightweight stub via vitest.config.ts
+      // (resolve.alias → src/testing/ngx-graph.stub.ts) so the real dagre /
+      // webcola layout engine is never loaded into the jsdom worker.
+      // NO_ERRORS_SCHEMA suppresses template errors for VisCard / InspectorPanel
+      // (child components — logic tests do not need their rendered output).
       schemas:   [NO_ERRORS_SCHEMA],
-    }).compileComponents();
+    })
+    // Replace the SVG-heavy template with an empty shell so Angular does not
+    // JIT-compile ngx-graph / foreignObject / vis-card markup into jsdom DOM.
+    // All logic under test (signals, computeds, effects, methods) is unaffected;
+    // no test asserts on rendered DOM output.  Combined with maxForks:1 and the
+    // swimlanes.logic.spec.ts split, this keeps each fork's peak heap under the
+    // NODE_OPTIONS ceiling configured by CI.
+    .overrideComponent(SwimlanesComponent, { set: { template: '' } })
+    .compileComponents();
 
-    const fixture = TestBed.createComponent(SwimlanesComponent);
-    component     = fixture.componentInstance;
+    fixture   = TestBed.createComponent(SwimlanesComponent);
+    component = fixture.componentInstance;
     fixture.detectChanges();
   });
 
@@ -156,155 +193,80 @@ describe('SwimlanesComponent', () => {
     });
   });
 
-  // ── Edge building: explicit parent predicate ─────────────────────────────
+  // ── SSE live-change wiring (#309) ────────────────────────────────────────
+  //
+  // Verifies that:
+  // (a) onSseChange() flashes the tip card for the matching lane
+  // (b) onSseChange() is a no-op for an unknown service
+  // (c) the lastEffectiveEvent effect calls onSseChange for effective events
+  // (d) the effect does NOT call onSseChange when the signal is null
+  //
+  // Note: these tests call onSseChange() directly (or spy on it) to avoid
+  // triggering a full ngx-graph re-render inside the effect flush, which
+  // causes an OOM in the jsdom vitest environment when loaded alongside the
+  // rest of the test suite.
 
-  describe('buildEdges — explicit parent', () => {
-    it('draws an edge from parent to child via parent_deployments', () => {
-      const devEv = mkEv('dev');
-      const qaEv  = mkEv('qa', { parents: [devEv.deployment_id] });
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: { dev: { current: devEv }, qa: { current: qaEv } },
-      }]));
+  describe('SSE live-change wiring — onSseChange + lastEffectiveEvent (#309)', () => {
+    let svcEv: DeploymentEvent;
 
-      const links = getLanes(component).flatMap(l => l.dags.flatMap(d => d.links));
-      expect(links).toHaveLength(1);
-      expect(links[0].source).toBe(devEv.id);
-      expect(links[0].target).toBe(qaEv.id);
+    beforeEach(() => {
+      svcEv = mkEv('dev', { service: 'svc', status: 'success' });
+      matrixSignal.set(mkMatrix([{ service: 'svc', slots: { dev: { current: svcEv } } }]));
     });
 
-    it('ignores parent_deployments that reference events not in the node pool', () => {
-      const qaEv = mkEv('qa', { parents: ['dep-not-in-matrix'] });
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: { qa: { current: qaEv } },
-      }]));
+    it('onSseChange for the lane service adds its tipId to flashingIds', () => {
+      // Confirm no flash initially
+      expect(getFlashingIds(component).size).toBe(0);
 
-      const links = getLanes(component).flatMap(l => l.dags.flatMap(d => d.links));
-      expect(links).toHaveLength(0);
-    });
-
-    it('supports fan-out: one node with two downstream children', () => {
-      const devEv     = mkEv('dev');
-      const stagingEv = mkEv('staging', { parents: [devEv.deployment_id] });
-      const qaEv      = mkEv('qa',      { parents: [devEv.deployment_id] });
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: {
-          dev:     { current: devEv },
-          staging: { current: stagingEv },
-          qa:      { current: qaEv },
-        },
-      }]));
-
-      const links = getLanes(component).flatMap(l => l.dags.flatMap(d => d.links));
-      expect(links).toHaveLength(2);
-      expect(links.every(l => l.source === devEv.id)).toBe(true);
-    });
-
-    it('supports fan-in: one node with two parents (merge node)', () => {
-      const stagingEv = mkEv('staging');
-      const qaEv      = mkEv('qa');
-      const preprodEv = mkEv('preprod', {
-        parents: [stagingEv.deployment_id, qaEv.deployment_id],
-      });
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: {
-          staging: { current: stagingEv },
-          qa:      { current: qaEv },
-          preprod: { current: preprodEv },
-        },
-      }]));
-
-      const links = getLanes(component).flatMap(l => l.dags.flatMap(d => d.links));
-      expect(links).toHaveLength(2);
-      expect(links.every(l => l.target === preprodEv.id)).toBe(true);
-    });
-  });
-
-  // ── DAG partitioning ─────────────────────────────────────────────────────
-
-  describe('partitionDags', () => {
-    it('places connected events in the same DAG', () => {
-      const devEv = mkEv('dev');
-      const qaEv  = mkEv('qa', { parents: [devEv.deployment_id] });
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: { dev: { current: devEv }, qa: { current: qaEv } },
-      }]));
-
+      // The lane has a single event → it IS the tip
       const lane = getLanes(component).find(l => l.service === 'svc')!;
-      expect(lane.dags).toHaveLength(1);
+      expect(lane.tipId).not.toBeNull();
+
+      // Invoke the public method directly (bypasses Angular effect scheduling)
+      component.onSseChange('svc');
+
+      // flashCard() adds tipId synchronously; the 600ms setTimeout clear is async
+      expect(getFlashingIds(component).has(lane.tipId!)).toBe(true);
     });
 
-    it('splits disconnected events into separate DAGs', () => {
-      const devEv  = mkEv('dev');
-      const prodEv = mkEv('prod'); // no link to devEv
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: { dev: { current: devEv }, prod: { current: prodEv } },
-      }]));
-
-      const lane = getLanes(component).find(l => l.service === 'svc')!;
-      expect(lane.dags).toHaveLength(2);
-    });
-  });
-
-  // ── Regression: last_successful orphan nodes ─────────────────────────────
-
-  describe('regression — last_successful orphan nodes (GitHub bug)', () => {
-    it('does not produce orphan nodes when last_successful references history outside the matrix', () => {
-      // Reproduces the prod/preprod double-node bug:
-      //   slot.current  = run-A in-progress  (becomes the current node ✓)
-      //   slot.last_successful = run-B success, parent=[dep-from-run-B-history]
-      //     → dep-from-run-B-history is NOT in the matrix
-      //     → before the fix: last_successful became an orphan disconnected node
-      //     → after the fix: last_successful is excluded entirely
-      const current  = mkEv('prod', { status: 'in-progress' });
-      const lastSucc = mkEv('prod', {
-        status: 'success',
-        parents: ['dep-historical-outside-matrix'],
-      });
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: { prod: { current, last_successful: lastSucc } },
-      }]));
-
-      const lanes = getLanes(component);
-      const ids   = allNodeIds(lanes);
-
-      // Only the current node — no orphan.
-      expect(ids).toEqual([current.id]);
-
-      // Single DAG containing only the current node.
-      const lane = lanes.find(l => l.service === 'svc')!;
-      expect(lane.dags).toHaveLength(1);
-      expect(lane.dags[0].nodes).toHaveLength(1);
-      expect(lane.dags[0].links).toHaveLength(0);
+    it('onSseChange for an unknown service does not flash any id', () => {
+      component.onSseChange('no-such-service');
+      expect(getFlashingIds(component).size).toBe(0);
     });
 
-    it('same-service slots with last_successful each produce exactly one node', () => {
-      // Multiple envs where each has a non-success current + last_successful
-      const prodCurrent  = mkEv('prod',   { status: 'failure' });
-      const prodLast     = mkEv('prod',   { status: 'success', parents: ['external-1'] });
-      const preprodCurrent = mkEv('preprod', { status: 'failure' });
-      const preprodLast    = mkEv('preprod', { status: 'success', parents: ['external-2'] });
+    it('onSseChange for a different service does not flash svc tipId', () => {
+      matrixSignal.set(mkMatrix([
+        { service: 'svc',       slots: { dev:  { current: mkEv('dev',  { service: 'svc'       }) } } },
+        { service: 'other-svc', slots: { prod: { current: mkEv('prod', { service: 'other-svc', status: 'failure' }) } } },
+      ]));
 
-      matrixSignal.set(mkMatrix([{
-        service: 'svc',
-        slots: {
-          prod:   { current: prodCurrent,   last_successful: prodLast },
-          preprod: { current: preprodCurrent, last_successful: preprodLast },
-        },
-      }]));
+      component.onSseChange('other-svc');
 
-      const ids = allNodeIds(getLanes(component));
-      expect(ids).toContain(prodCurrent.id);
-      expect(ids).toContain(preprodCurrent.id);
-      expect(ids).not.toContain(prodLast.id);
-      expect(ids).not.toContain(preprodLast.id);
-      expect(ids).toHaveLength(2);
+      const svcLane = getLanes(component).find(l => l.service === 'svc')!;
+      if (svcLane.tipId) {
+        expect(getFlashingIds(component).has(svcLane.tipId)).toBe(false);
+      }
+    });
+
+    it('lastEffectiveEvent effect calls onSseChange for effective events', () => {
+      const spy = vi.spyOn(component, 'onSseChange');
+      spy.mockClear();
+
+      // Set signal to an effective event — the effect must call onSseChange
+      lastEffectiveEventSignal.set(mkEv('dev', { service: 'svc', status: 'success' }));
+      TestBed.flushEffects();
+
+      expect(spy).toHaveBeenCalledWith('svc');
+    });
+
+    it('lastEffectiveEvent effect does NOT call onSseChange when signal is null', () => {
+      const spy = vi.spyOn(component, 'onSseChange');
+      spy.mockClear();
+
+      lastEffectiveEventSignal.set(null);
+      TestBed.flushEffects();
+
+      expect(spy).not.toHaveBeenCalled();
     });
   });
 });
