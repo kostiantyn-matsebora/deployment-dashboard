@@ -222,10 +222,19 @@ describe('SwimlanesComponent', () => {
       const lane = getLanes(component).find(l => l.service === 'svc')!;
       expect(lane.tipId).not.toBeNull();
 
-      // Invoke the public method directly (bypasses Angular effect scheduling)
-      component.onSseChange('svc');
+      // flashCard() defers adding the tipId behind two rAF ticks so the
+      // new DOM node is painted before the animation class is applied (#309 fix).
+      // In jsdom, requestAnimationFrame is not a real paint-tied API —
+      // spy on it to call callbacks synchronously so the unit test can verify
+      // the signal update without fighting jsdom's rAF polyfill timing.
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((cb) => { cb(0); return 0; });
+      try {
+        component.onSseChange('svc');
+      } finally {
+        rafSpy.mockRestore();
+      }
 
-      // flashCard() adds tipId synchronously; the 600ms setTimeout clear is async
       expect(getFlashingIds(component).has(lane.tipId!)).toBe(true);
     });
 

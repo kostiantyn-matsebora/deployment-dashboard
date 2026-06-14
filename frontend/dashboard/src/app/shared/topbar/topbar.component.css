@@ -270,16 +270,23 @@
   border-left: 1px solid var(--glass-edge);
 }
 
-/* Collapse/Expand-all button — wider to fit label (#309) */
-.swim-collapse-btn {
-  width: auto;
-  padding: 0 10px;
-  gap: 5px;
-  font-size: 12.5px;
-}
-.swim-collapse-label {
+/* Collapse/Expand-all pill button — matches mockup .sv-collapse-all-btn (#309) */
+.swim-collapse-all-btn {
+  appearance: none;
+  border: 1px solid var(--glass-edge);
+  background: var(--input-bg);
+  color: var(--ink-1);
+  border-radius: 999px;
+  padding: 5px 12px;
   font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
   white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.swim-collapse-all-btn:hover {
+  color: var(--ink-0);
+  border-color: var(--glass-edge-2);
 }
 
 /* ── Theme switcher ─────────────────────────────────────── */

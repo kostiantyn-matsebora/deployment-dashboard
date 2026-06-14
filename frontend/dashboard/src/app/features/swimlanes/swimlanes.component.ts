@@ -155,7 +155,30 @@ export class SwimlanesComponent {
       queueMicrotask(() => this._update$.next());
     });
 
-    // Default all lanes to collapsed when matrix data first loads (#309).
+    // Evict stale dagContent entries whenever collapse state changes (#309).
+    //
+    // Problem: dagContent caches per-dag {width, height} measured by ngx-graph
+    // after layout. When a lane is collapsed, ngx-graph measures only the vector
+    // nodes → small height stored. When the lane is expanded, viewFor() still
+    // returns the old cached height, constraining the SVG viewport so the extra
+    // nodes are invisible. Fix: on every collapsedLanes change, drop dagContent
+    // entries for ALL dags so ngx-graph re-measures at the new node set.
+    //
+    // Use untracked() for the dagContent write to avoid triggering stageW
+    // (which reads dagContent) as a dependency of this effect.
+    effect(() => {
+      this.state.collapsedLanes(); // track collapse state changes
+      const allLanes = untracked(() => this.lanes());
+      if (!allLanes.length) return;
+      untracked(() => {
+        // Drop all cached heights; ngx-graph will re-report them via onStateChange.
+        this.dagContent.set(new Map());
+      });
+    });
+
+    // Default new lanes to collapsed when matrix data loads (#309).
+    // initDefaultCollapsed is idempotent: it only acts on services not yet in
+    // the persisted "known" set, so expand/collapse choices are never overridden.
     effect(() => {
       const lanes = this.lanes();
       if (lanes.length > 0) {
@@ -193,14 +216,6 @@ export class SwimlanesComponent {
 
   protected toggleCollapsed(service: string): void {
     this.state.toggleLaneCollapsed(service);
-  }
-
-  protected collapseAll(): void {
-    this.state.collapseAllLanes(this.lanes().map(l => l.service));
-  }
-
-  protected expandAll(): void {
-    this.state.expandAllLanes();
   }
 
   protected readonly autoScrollOnChange = computed(() => this.state.autoScrollOnChange());
@@ -272,7 +287,6 @@ export class SwimlanesComponent {
     const lane = this.lanesView().find(l => l.service === service);
     if (!lane) return;
 
-    const collapsed = this.isCollapsed(service);
     // The card to flash: tip card when collapsed, the same tip node in expanded form.
     // `tipId` is always the newest-event node, valid in both states.
     const flashId = lane.tipId;
@@ -280,30 +294,42 @@ export class SwimlanesComponent {
 
     // Auto-scroll: bring the lane into view if it is off-screen.
     if (this.state.autoScrollOnChange()) {
-      this.scrollLaneIntoView(service, collapsed);
+      this.scrollLaneIntoView(service);
     }
   }
 
   /**
-   * Add `flashId` to the flashing set for 600 ms, then remove it.
+   * Add `flashId` to the flashing set for 1200 ms, then remove it.
    * The template binds `.is-flashing` on cards whose id is in this set.
+   *
+   * We defer adding the id by two rAF ticks so the DOM node re-rendered
+   * by ngx-graph (following the matrixData update that triggered this call)
+   * has committed to the layout before the CSS animation starts.  Without
+   * this deferral the animation is applied to the OLD element just before
+   * it is torn down, or to the NEW element at tick-0 before the browser
+   * has painted it — both cases cause the flash to be invisible in practice.
    */
   private flashCard(nodeId: string): void {
-    const s = new Set(this.flashingIds());
-    s.add(nodeId);
-    this.flashingIds.set(s);
-    setTimeout(() => {
-      const next = new Set(this.flashingIds());
-      next.delete(nodeId);
-      this.flashingIds.set(next);
-    }, 600);
+    // First rAF: ngx-graph relayout scheduled; second rAF: paint committed.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const s = new Set(this.flashingIds());
+        s.add(nodeId);
+        this.flashingIds.set(s);
+        setTimeout(() => {
+          const next = new Set(this.flashingIds());
+          next.delete(nodeId);
+          this.flashingIds.set(next);
+        }, 1200);
+      });
+    });
   }
 
   /**
    * Scroll the lane element for `service` into view if it is outside the
    * visible viewport. Uses `data-swim-service` attributes set in the template.
    */
-  private scrollLaneIntoView(service: string, _collapsed: boolean): void {
+  private scrollLaneIntoView(service: string): void {
     // CSS.escape is unavailable in jsdom (vitest); service names are safe
     // API identifiers so a plain attribute selector is fine as a fallback.
     const escaped = typeof CSS !== 'undefined' ? CSS.escape(service) : service;

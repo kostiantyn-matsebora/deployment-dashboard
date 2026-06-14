@@ -49,6 +49,7 @@ const K = {
   colOrder:          'dd:colOrder',
   colHidden:         'dd:colHidden',
   swimCollapsed:     'dd:swimCollapsed',
+  swimKnown:         'dd:swimKnown',
   swimAutoScroll:    'dd:swimAutoScroll',
 } as const;
 
@@ -410,14 +411,39 @@ export class AppStateService {
   }
 
   /**
-   * Ensure all known services start collapsed when the matrix first loads
-   * and the persisted set is empty (fresh install / cleared storage).
-   * Called once when matrixData becomes non-null.
+   * Ensure every service starts collapsed the first time it is seen.
+   * Services already in the "known" set were previously shown to the user
+   * and their collapsed/expanded state is already persisted — leave them alone.
+   * New services (not in the known set) default to collapsed.
+   *
+   * Called each time the swimlane lane list first becomes non-empty.
    */
   initDefaultCollapsed(services: string[]): void {
-    if (this.collapsedLanes().size === 0 && services.length > 0) {
-      this.collapsedLanes.set(new Set(services));
+    if (!services.length) return;
+
+    // Restore the set of services whose state has already been persisted.
+    const knownRaw = this.tryGet(K.swimKnown);
+    const known = new Set<string>(
+      knownRaw ? (JSON.parse(knownRaw) as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+    );
+
+    // Any service not yet known defaults to collapsed.
+    const newServices = services.filter(s => !known.has(s));
+    if (newServices.length === 0) return;
+
+    // Collapse the new ones and mark them known.
+    const collapsed = new Set(this.collapsedLanes());
+    for (const s of newServices) {
+      collapsed.add(s);
+      known.add(s);
     }
+    this.collapsedLanes.set(collapsed);
+    try { localStorage.setItem(K.swimKnown, JSON.stringify([...known])); } catch { /* quota */ }
+  }
+
+  /** Raw localStorage get — null when absent or storage unavailable. */
+  private tryGet(key: string): string | null {
+    try { return localStorage.getItem(key); } catch { return null; }
   }
 
   // ── Column order + visibility helpers ────────────────────────────────────

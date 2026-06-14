@@ -37,7 +37,7 @@
               (click)="toggleCollapsed(lane.service)"
               [attr.aria-label]="(isCollapsed(lane.service) ? 'Expand' : 'Collapse') + ' lane ' + lane.service"
               [attr.title]="(isCollapsed(lane.service) ? 'Expand' : 'Collapse') + ' lane '"
-              aria-expanded="{{!isCollapsed(lane.service)}}"
+              [attr.aria-expanded]="!isCollapsed(lane.service)"
             >›</button>
             <span class="lane-svc">{{ lane.service }}</span>
           </div>
