@@ -8,6 +8,16 @@ children:
   - /architecture-c4.svg
   - /architecture-c4-dark.drawio
   - /architecture-c4-dark.svg
+  - /zero-to-hero.drawio
+  - /zero-to-hero.svg
+  - /how-it-works-judgment.drawio
+  - /how-it-works-judgment.svg
+  - /how-it-works-enforcement.drawio
+  - /how-it-works-enforcement.svg
+  - /what-its-made-of.drawio
+  - /what-its-made-of.svg
+  - /process-issue-299.drawio
+  - /process-issue-299.svg
   - /fetcher-rate-limit
   - /github-emulation
   - /reset-choreography
