@@ -19,7 +19,7 @@ Development and test mock for the Deployment Dashboard backend. Implements the f
 |---|---|
 | Runtime | Node.js / TypeScript |
 | Framework | NestJS 10 + Express |
-| Default port | `3000` (override via `PORT` env var) |
+| Default port | `3002` (override via `PORT` env var) |
 | State | In-memory only — resets on restart |
 | Location | `frontend/mock/` |
 
@@ -83,7 +83,7 @@ Single `EventStore` singleton shared across all request handlers.
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `PORT` | `3000` | HTTP listen port |
+| `PORT` | `3002` | HTTP listen port |
 | `API_KEY` | `dev-secret` | Shared secret for write + fetcher endpoints |
 
 `API_KEY` is validated on every request that carries `X-Api-Key`. Missing or mismatched → `401` `application/problem+json`.
@@ -266,24 +266,24 @@ The panel calls `/_mock/emit` and `/_mock/demo` for state reads and mutations; c
 
 ```ts
 // Global beforeEach — restore clean slate
-await fetch('http://localhost:3000/_mock/reset', { method: 'POST' });
+await fetch('http://localhost:3002/_mock/reset', { method: 'POST' });
 
 // Enable SSE emission for a test that needs live events
-await fetch('http://localhost:3000/_mock/emit', {
+await fetch('http://localhost:3002/_mock/emit', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ enabled: true }),
 });
 
 // Hide demo data for a write-path test that needs an empty store
-await fetch('http://localhost:3000/_mock/demo', {
+await fetch('http://localhost:3002/_mock/demo', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ enabled: false }),
 });
 
 // Ingest a test event
-await fetch('http://localhost:3000/api/deployments', {
+await fetch('http://localhost:3002/api/deployments', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'X-Api-Key': 'test-key' },
   body: JSON.stringify({
@@ -296,7 +296,7 @@ await fetch('http://localhost:3000/api/deployments', {
 });
 
 // Subscribe to the ingest feed
-const source = new EventSource('http://localhost:3000/_mock/stream');
+const source = new EventSource('http://localhost:3002/_mock/stream');
 source.addEventListener('ingest', (e) => {
   const { event, source, received_at } = JSON.parse(e.data);
 });

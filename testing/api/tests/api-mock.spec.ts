@@ -4,14 +4,14 @@
  * Contract source of truth: docs/api/openapi.yaml
  * Mock spec:                docs/MOCK_SPECIFICATION.md
  *
- * Prerequisite: mock server running on port 3000.
+ * Prerequisite: mock server running on port 3002.
  *   cd frontend/mock && npm run start:dev
  *
  * Run:
  *   cd testing/api && npx jest
  */
 
-const BASE    = 'http://localhost:3000';
+const BASE    = 'http://localhost:3002';
 const API_KEY = 'dev-secret';           // MOCK_SPECIFICATION.md §4
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────

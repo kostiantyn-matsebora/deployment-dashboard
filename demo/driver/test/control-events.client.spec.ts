@@ -1,6 +1,6 @@
 import { ControlEventsClient } from '../src/control/control-events.client';
 
-const BASE_URL     = 'http://localhost:3000';
+const BASE_URL     = 'http://localhost:3002';
 const API_KEY      = 'api-secret';
 const COMPONENT_ID = 'demo-driver';
 const RESET_ID     = '01J9F4WZK3W9G2T6X4QH3DKQF6';

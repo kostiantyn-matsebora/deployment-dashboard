@@ -24,7 +24,7 @@ COPY --from=builder /app/dist ./dist
 COPY data/ /app/data/
 
 ENV PORT=3001
-ENV WRITE_API_URL=http://localhost:3000
+ENV WRITE_API_URL=http://localhost:3002
 ENV API_KEY=dev-secret
 ENV SCENARIOS_DIR=/app/data
 ENV EMIT_DELAY_MS=0
