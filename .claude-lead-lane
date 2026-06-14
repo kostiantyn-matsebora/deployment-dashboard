@@ -1,0 +1,26 @@
+# Lead/orchestrator edit whitelist (consumed by scripts/hooks/Invoke-LeadEditGuard.ps1).
+# One glob per line; blank lines and # comments ignored. Presence of this file REPLACES
+# the built-in default list, so the defaults are restated below.
+
+# --- built-in defaults (orchestration assets the lead authors) ---
+.claude/team-process/**
+.claude/bindings/**
+.claude/agents/**
+.claude/commands/**
+.claude/skills/**
+.claude/*.md
+.claude/settings.json
+.claude/settings.local.json
+.claude/run/**
+.claude-team-active
+.claude-lane
+.claude-lead-lane
+
+# --- protocol enforcement hooks (the JSON protocol's normalizer + guard) ---
+# The team-process communication protocol spans protocol.md (spec, already in-lane via
+# team-process/**) and these hook scripts that validate it. Authored as one unit by the
+# orchestrator who owns the framework; scoped to the protocol-form files only.
+scripts/hooks/Format-ProtocolForm.ps1
+scripts/hooks/Format-ProtocolForm.Tests.ps1
+scripts/hooks/Invoke-ProtocolFormGuard.ps1
+scripts/hooks/Invoke-ProtocolFormGuard.Tests.ps1

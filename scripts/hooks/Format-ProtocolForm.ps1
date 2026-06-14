@@ -2,243 +2,267 @@
 
 <#
 .SYNOPSIS
-    Renders a typed protocol form (REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT)
-    as an aligned 2-column table per process.md "Emitted rendering".
+    Validates and normalizes a typed protocol form (REVIEW / RESULT / BRIEF / FINDING /
+    FIX / ARTIFACT) as JSON per protocol.md. Single source of validation truth — the
+    SendMessage guard (Invoke-ProtocolFormGuard.ps1) dot-sources this with -AsLibrary.
 
 .DESCRIPTION
-    Input is a simple form text:
-        Line 1:     the form tag (e.g. RESULT)
-        Subsequent: field lines and indented bullet lines, e.g.
-                        role: backend
-                        changed:
-                          PollLoop.cs
-                          ControlStream.cs
-                        gate: build ok
+    Input is a JSON object carrying a "type" discriminator (one of the six forms). The
+    structural contract for each form lives as a JSON Schema under
+    .claude/team-process/schemas/<form>.schema.json; this script validates the input
+    against the matching schema (Test-Json -Schema) plus the one cross-field rule schema
+    cannot express (REVIEW: verdict 'pass' <=> zero remarks).
 
-    Field lines are detected as "<fieldname>:" (with or without a same-line value).
-    Bullet items are lines following a field header (indented or blank-separated),
-    or the same-line value of a field header. Each item becomes one row.
-
-    Output layout:
-        RESULT
-        | role    | • backend       |
-        ---------------------------------
-        | changed | • PollLoop.cs   |
-        |         | • ControlStream |
-        ---------------------------------
-        | gate    | • build ok      |
-        ---------------------------------
-
-    Rules:
-      - Field name appears on its first row only; blank on continuation rows.
-      - One bullet item per row (• prefix added if absent).
-      - Columns auto-padded so every | lines up.
-      - Full-width dash rule after each field block.
+    On success the JSON is NORMALIZED: keys reordered to canonical order, empty optional
+    fields dropped, nested objects (spec / failure / remarks[] / options[]) ordered, and
+    pretty-printed. Agents write rough JSON, run it through here, and send the stdout
+    verbatim as the SendMessage body.
 
 .PARAMETER Text
-    The simple form text to render (inline string).
+    The form JSON to validate/normalize (inline string).
 
 .PARAMETER InputFile
-    Path to a file holding the simple form text. Preferred over -Text from a shell:
-    write the form to a temp file (no embedded-newline / bullet quoting to fight),
-    then render it in one clean command.
+    Path to a file holding the form JSON. Preferred over -Text from a shell.
+
+.PARAMETER SchemaDir
+    Override the schema directory (tests). Defaults to the repo's
+    .claude/team-process/schemas relative to this script.
 
 .PARAMETER AsLibrary
-    Define functions without executing entry block (for Pester).
+    Define functions without executing the entry block (for Pester / guard reuse).
 
 .EXAMPLE
-    # Robust shell flow — no quoting hell:
-    #   1. Write the simple form to a file (Write tool, or here-string):
-    #          RESULT
-    #          role: backend
-    #          changed:
-    #            GithubActionsAdapter.cs
-    #            BackfillRunner.cs
-    #          gate: build ok
-    #   2. Render it:
-    pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile form.txt
-    #   3. Send the stdout verbatim as the SendMessage body.
+    # Robust shell flow:
+    #   1. Write the form JSON to a file (Write tool or here-string):
+    #          { "type": "RESULT", "role": "backend",
+    #            "changed": ["GithubActionsAdapter.cs"], "gate": ["build ok", "264/264 tests"] }
+    #   2. Normalize it:
+    pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile form.json
+    #   3. Send its stdout VERBATIM as the SendMessage body.
 
 .EXAMPLE
-    # stdin also works:
-    Get-Content form.txt -Raw | pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1
+    Get-Content form.json -Raw | pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1
 #>
 
 [CmdletBinding()]
 param(
     [string]$Text,
     [string]$InputFile,
+    [string]$SchemaDir,
     [switch]$AsLibrary
 )
 
-# Parse a simple form into an ordered list of [field, items[]] pairs.
-# Each item is a string (without leading bullet — caller adds it).
-function ConvertTo-FormFields {
-    param([string]$Text)
-
-    $lines   = $Text -split "`r?`n"
-    $fields  = [System.Collections.Generic.List[hashtable]]::new()
-    $current = $null
-
-    # Skip the tag line (first non-empty line).
-    $skippedTag = $false
-
-    foreach ($raw in $lines) {
-        $ln = $raw.TrimEnd()
-
-        if (-not $skippedTag) {
-            $t = $ln.Trim()
-            if ($t -eq '') { continue }
-            # First non-empty line is the tag — skip it.
-            $skippedTag = $true
-            continue
-        }
-
-        $t = $ln.Trim()
-        if ($t -eq '') { continue }
-
-        # Field header: "fieldname:" optionally followed by a same-line value.
-        if ($t -match '^(?<name>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(?<val>.*)$') {
-            $name = $Matches['name']
-            $val  = $Matches['val'].Trim()
-            $current = @{ Name = $name; Items = [System.Collections.Generic.List[string]]::new() }
-            [void]$fields.Add($current)
-            if ($val -ne '') {
-                # Strip leading bullet if already present.
-                $item = $val -replace '^[•\*\-]\s*', ''
-                if ($item -ne '') { [void]$current.Items.Add($item) }
-            }
-            continue
-        }
-
-        # Continuation / bullet line under the current field.
-        if ($null -ne $current) {
-            $item = $t -replace '^[•\*\-]\s*', ''
-            if ($item -ne '') { [void]$current.Items.Add($item) }
-        }
-    }
-
-    # Return the list as a single object (comma operator prevents enumeration).
-    , $fields
+# The six typed forms and their canonical top-level key order (type first).
+$script:FormKeyOrder = @{
+    BRIEF    = @('type', 'spec', 'lane', 'task', 'gate', 'seed')
+    RESULT   = @('type', 'role', 'changed', 'gate', 'notes', 'follow', 'block')
+    REVIEW   = @('type', 'role', 'scope', 'checked', 'verdict', 'remarks', 'block')
+    FINDING  = @('type', 'where', 'issue', 'options', 'need')
+    FIX      = @('type', 'failure', 'suspect')
+    ARTIFACT = @('type', 'spec', 'delta', 'open')
 }
 
-# Render parsed fields as the aligned 2-column table.
-function Format-FieldTable {
+# Optional keys per form — dropped on normalize when empty (null / '' / empty array).
+$script:FormOptionalKeys = @{
+    BRIEF    = @('seed')
+    RESULT   = @('notes', 'follow', 'block')
+    REVIEW   = @('remarks', 'block')
+    FINDING  = @()
+    FIX      = @()
+    ARTIFACT = @('open')
+}
+
+# Canonical key order for nested objects, keyed by the parent path token.
+$script:NestedKeyOrder = @{
+    spec    = @('path', 'gate')                # BRIEF.spec
+    failure = @('test', 'expect', 'actual')    # FIX.failure
+    remark  = @('smell', 'location', 'change') # REVIEW.remarks[] item
+    option  = @('id', 'path')                  # FINDING.options[] item
+}
+
+function Get-ProtocolSchemaDir {
+    param([string]$Override)
+    if (-not [string]::IsNullOrWhiteSpace($Override)) { return $Override }
+    # scripts/hooks -> repo root -> .claude/team-process/schemas
+    return (Join-Path $PSScriptRoot '..' '..' '.claude' 'team-process' 'schemas')
+}
+
+# Reorder a PSCustomObject's properties into $keys order; unknown keys appended in
+# their original order. Returns an [ordered] hashtable.
+function ConvertTo-OrderedByKeys {
+    param($Object, [string[]]$Keys)
+    $ordered = [ordered]@{}
+    $present = @($Object.PSObject.Properties.Name)
+    foreach ($k in $Keys) {
+        if ($present -contains $k) { $ordered[$k] = $Object.$k }
+    }
+    foreach ($k in $present) {
+        if (-not $ordered.Contains($k)) { $ordered[$k] = $Object.$k }
+    }
+    return $ordered
+}
+
+# True when a field value counts as empty for the drop-optional rule.
+function Test-EmptyFormValue {
+    param($Value)
+    if ($null -eq $Value) { return $true }
+    if ($Value -is [string]) { return [string]::IsNullOrWhiteSpace($Value) }
+    if ($Value -is [System.Collections.IEnumerable]) {
+        return (@($Value).Count -eq 0)
+    }
+    return $false
+}
+
+# Parse + validate a form JSON. Returns a hashtable:
+#   Ok (bool), Type (string|null), Object (PSCustomObject|null), Errors (string[]).
+function Test-ProtocolJson {
     param(
-        [System.Collections.Generic.List[hashtable]]$Fields,
-        [string]$Tag
+        [string]$Json,
+        [string]$SchemaDir
     )
 
-    $bullet = [char]0x2022
+    $result = @{ Ok = $false; Type = $null; Object = $null; Errors = @() }
 
-    # Build a flat list of rows: [fieldName, itemText] — fieldName blank on continuation.
-    $rows = [System.Collections.Generic.List[hashtable]]::new()
-    foreach ($f in $Fields) {
-        $items = if ($f.Items.Count -gt 0) { $f.Items } else { @('') }
-        $first = $true
-        foreach ($item in $items) {
-            [void]$rows.Add(@{
-                Field = if ($first) { $f.Name } else { '' }
-                Item  = if ($item -ne '') { "$bullet $item" } else { '' }
-            })
-            $first = $false
+    if ([string]::IsNullOrWhiteSpace($Json)) {
+        $result.Errors = @('empty message')
+        return $result
+    }
+
+    # 1. Parse.
+    $obj = $null
+    try { $obj = $Json | ConvertFrom-Json -ErrorAction Stop }
+    catch {
+        $result.Errors = @("not valid JSON: $($_.Exception.Message)")
+        return $result
+    }
+    if ($obj -isnot [psobject] -or $obj -is [System.Array]) {
+        $result.Errors = @('top level must be a single JSON object')
+        return $result
+    }
+    $result.Object = $obj
+
+    # 2. Discriminator.
+    $type = if ($obj.PSObject.Properties.Name -contains 'type') { [string]$obj.type } else { '' }
+    $type = $type.ToUpper()
+    if (-not $script:FormKeyOrder.ContainsKey($type)) {
+        $valid = ($script:FormKeyOrder.Keys | Sort-Object) -join ' / '
+        $result.Errors = @("missing or unknown ""type"" (got '$($obj.type)') - must be one of: $valid")
+        return $result
+    }
+    $result.Type = $type
+    # Canonicalize the discriminator's casing on the object so a lowercase 'result'
+    # validates and normalizes the same as 'RESULT'.
+    $obj.type = $type
+
+    # 3. Schema validation (against the case-normalized object).
+    $dir = Get-ProtocolSchemaDir -Override $SchemaDir
+    $schemaPath = Join-Path $dir ("{0}.schema.json" -f $type.ToLower())
+    if (-not (Test-Path -LiteralPath $schemaPath)) {
+        $result.Errors = @("schema not found for $type at $schemaPath")
+        return $result
+    }
+    $schema = Get-Content -LiteralPath $schemaPath -Raw
+    $jsonForSchema = $obj | ConvertTo-Json -Depth 8
+    $schemaErrors = $null
+    $ok = $jsonForSchema | Test-Json -Schema $schema -ErrorVariable schemaErrors -ErrorAction SilentlyContinue
+    if (-not $ok) {
+        $msgs = @($schemaErrors | ForEach-Object { ($_.ToString() -replace '^The JSON is not valid with the schema:\s*', '').Trim() })
+        if ($msgs.Count -eq 0) { $msgs = @("does not match the $type schema") }
+        $result.Errors = $msgs
+        return $result
+    }
+
+    # 4. Cross-field rule schema cannot express: REVIEW verdict <-> remarks.
+    if ($type -eq 'REVIEW') {
+        $remarkCount = if ($obj.PSObject.Properties.Name -contains 'remarks') { @($obj.remarks).Count } else { 0 }
+        if ($obj.verdict -eq 'pass' -and $remarkCount -gt 0) {
+            $result.Errors = @("verdict 'pass' requires zero remarks (found $remarkCount) - use 'changes-requested'")
+            return $result
+        }
+        if ($obj.verdict -eq 'changes-requested' -and $remarkCount -eq 0) {
+            $result.Errors = @("verdict 'changes-requested' requires at least one remark")
+            return $result
         }
     }
 
-    if ($rows.Count -eq 0) {
-        return $Tag
-    }
-
-    # Column widths.
-    $fieldW = ($rows | ForEach-Object { $_.Field.Length } | Measure-Object -Maximum).Maximum
-    $itemW  = ($rows | ForEach-Object { $_.Item.Length  } | Measure-Object -Maximum).Maximum
-
-    # Minimum useful widths.
-    if ($fieldW -lt 4) { $fieldW = 4 }
-    if ($itemW  -lt 4) { $itemW  = 4 }
-
-    # Full-width dash rule: "| field-pad | item-pad |"
-    # Total row length: 2 (| + space) + fieldW + 3 ( + space + | + space) + itemW + 2 (space + |)
-    $totalWidth = 2 + $fieldW + 3 + $itemW + 2
-    $dashRule   = '-' * $totalWidth
-
-    $sb = [System.Text.StringBuilder]::new()
-    [void]$sb.AppendLine($Tag)
-
-    # Track field boundaries to emit dash rules.
-    $fieldIndex = 0
-    $fieldBoundaryRows = [System.Collections.Generic.List[int]]::new()
-    foreach ($f in $Fields) {
-        $count = if ($f.Items.Count -gt 0) { $f.Items.Count } else { 1 }
-        $fieldIndex += $count
-        [void]$fieldBoundaryRows.Add($fieldIndex - 1)
-    }
-
-    for ($i = 0; $i -lt $rows.Count; $i++) {
-        $r         = $rows[$i]
-        $fieldCell = $r.Field.PadRight($fieldW)
-        $itemCell  = $r.Item.PadRight($itemW)
-        [void]$sb.AppendLine("| $fieldCell | $itemCell |")
-        if ($fieldBoundaryRows.Contains($i)) {
-            [void]$sb.AppendLine($dashRule)
-        }
-    }
-
-    # Remove the trailing newline added by the last AppendLine.
-    return $sb.ToString().TrimEnd("`r", "`n")
+    $result.Ok = $true
+    return $result
 }
 
-# Resolve the form text from the three accepted sources, in priority order:
-# explicit -Text, then -InputFile (file contents), then redirected stdin.
-function Resolve-FormText {
+# Normalize a validated form object: canonical key order, drop empty optionals,
+# order nested objects. Returns an [ordered] hashtable ready for ConvertTo-Json.
+function ConvertTo-NormalizedForm {
+    param($Object, [string]$Type)
+
+    $optional = $script:FormOptionalKeys[$Type]
+    $ordered  = ConvertTo-OrderedByKeys -Object $Object -Keys $script:FormKeyOrder[$Type]
+
+    $final = [ordered]@{}
+    foreach ($key in $ordered.Keys) {
+        $val = $ordered[$key]
+        if ($optional -contains $key -and (Test-EmptyFormValue -Value $val)) { continue }
+
+        switch ($key) {
+            'spec' {
+                # BRIEF.spec is a nested object; ARTIFACT.spec is a plain string.
+                if ($val -is [psobject] -and $val -isnot [string]) {
+                    $val = ConvertTo-OrderedByKeys -Object $val -Keys $script:NestedKeyOrder.spec
+                }
+            }
+            'failure' {
+                $val = ConvertTo-OrderedByKeys -Object $val -Keys $script:NestedKeyOrder.failure
+            }
+            'remarks' {
+                $val = @($val | ForEach-Object { ConvertTo-OrderedByKeys -Object $_ -Keys $script:NestedKeyOrder.remark })
+            }
+            'options' {
+                $val = @($val | ForEach-Object { ConvertTo-OrderedByKeys -Object $_ -Keys $script:NestedKeyOrder.option })
+            }
+        }
+        $final[$key] = $val
+    }
+    return $final
+}
+
+# Entry point — validate then normalize a form JSON string. Throws on invalid input
+# with all collected errors joined; returns pretty-printed canonical JSON on success.
+function Format-ProtocolForm {
     param(
         [string]$Text,
-        [string]$InputFile
+        [string]$SchemaDir
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($Text)) { return $Text }
-
-    if (-not [string]::IsNullOrWhiteSpace($InputFile)) {
-        if (-not (Test-Path -LiteralPath $InputFile)) {
-            throw "InputFile not found: $InputFile"
-        }
-        return (Get-Content -LiteralPath $InputFile -Raw)
+    $check = Test-ProtocolJson -Json $Text -SchemaDir $SchemaDir
+    if (-not $check.Ok) {
+        $label = if ($check.Type) { $check.Type } else { 'form' }
+        throw "Invalid ${label}: $(($check.Errors) -join '; ')"
     }
 
-    if ([Console]::IsInputRedirected) {
-        return [Console]::In.ReadToEnd()
-    }
-
-    return ''
+    $normalized = ConvertTo-NormalizedForm -Object $check.Object -Type $check.Type
+    return ($normalized | ConvertTo-Json -Depth 8)
 }
 
-# Entry point — render a simple form text to an aligned table string.
-function Format-ProtocolForm {
-    param([string]$Text)
-
-    $lines = $Text -split "`r?`n"
-    $tag   = $null
-    foreach ($ln in $lines) {
-        $t = $ln.Trim()
-        if ($t -eq '') { continue }
-        if ($t -match '^#?\s*(REVIEW|RESULT|BRIEF|FINDING|FIX|ARTIFACT)\b') {
-            $tag = $Matches[1].ToUpper()
-        }
-        break
+# Resolve the form text from -Text, then -InputFile, then redirected stdin.
+function Resolve-FormText {
+    param([string]$Text, [string]$InputFile)
+    if (-not [string]::IsNullOrWhiteSpace($Text)) { return $Text }
+    if (-not [string]::IsNullOrWhiteSpace($InputFile)) {
+        if (-not (Test-Path -LiteralPath $InputFile)) { throw "InputFile not found: $InputFile" }
+        return (Get-Content -LiteralPath $InputFile -Raw)
     }
-
-    if (-not $tag) {
-        # No recognized tag — return as-is.
-        return $Text
-    }
-
-    $fields = ConvertTo-FormFields -Text $Text
-    return Format-FieldTable -Fields $fields -Tag $tag
+    if ([Console]::IsInputRedirected) { return [Console]::In.ReadToEnd() }
+    return ''
 }
 
 if (-not $AsLibrary) {
     $formText = Resolve-FormText -Text $Text -InputFile $InputFile
-    if (-not [string]::IsNullOrWhiteSpace($formText)) {
-        Format-ProtocolForm -Text $formText
+    if ([string]::IsNullOrWhiteSpace($formText)) { exit 0 }
+    try {
+        Format-ProtocolForm -Text $formText -SchemaDir $SchemaDir
     }
+    catch {
+        [Console]::Error.WriteLine($_.Exception.Message)
+        exit 1
+    }
+    exit 0
 }
