@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.11.0] - 2026-06-14
+
 ### Added
 
 - **Analytics view — DORA Four Keys dashboard.** A third dashboard view (alongside Matrix and Swimlanes) surfacing deployment frequency, lead time (approximated from `parent_deployments` promotion chains), change failure rate, and mean time to restore (MTTR). Supported by eight charts: deployment frequency over time, change-failure-rate trend, deployment-duration distribution (p50/p95), promotion funnel (per-stage counts + conversion), status distribution, deploy heatmap (day-of-week × hour), top deployers, and time-to-restore incidents. The period control covers 7 / 14 / 30 days, bounded by `HISTORY_RETENTION_DAYS`.
