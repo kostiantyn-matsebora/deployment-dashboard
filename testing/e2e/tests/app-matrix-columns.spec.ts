@@ -2,7 +2,7 @@
  * Live-app E2E — Matrix environment-column controls.
  *
  * Runs against the Angular SPA at http://localhost:4200 (proxied to the
- * NestJS mock on :3000). Mock data has 5 environments: dev, staging, qa,
+ * NestJS mock on :3002). Mock data has 5 environments: dev, staging, qa,
  * preprod, prod — confirmed from demo/data/events.json + store.ts ENV_ORDER.
  *
  * localStorage keys (from AppStateService):

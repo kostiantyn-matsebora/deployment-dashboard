@@ -15,7 +15,7 @@ export interface AppConfig {
 export function getConfig(): AppConfig {
   return {
     port:               parseInt(process.env.PORT                ?? '3001',  10),
-    writeApiUrl:        process.env.WRITE_API_URL                ?? 'http://localhost:3000',
+    writeApiUrl:        process.env.WRITE_API_URL                ?? 'http://localhost:3002',
     apiKey:             process.env.API_KEY                      ?? 'dev-secret',
     controlApiKey:      process.env.CONTROL_API_KEY              ?? 'dev-secret',
     componentId:        process.env.COMPONENT_ID                 ?? 'demo-driver',

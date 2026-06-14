@@ -2,7 +2,7 @@
  * Live-app E2E — Analytics view (issue #299).
  *
  * Runs against the Angular SPA at http://localhost:4200
- * (proxied through the NestJS mock on :3000, which serves fixed analytics fixtures).
+ * (proxied through the NestJS mock on :3002, which serves fixed analytics fixtures).
  *
  * Spec / contract:
  *   frontend/dashboard/src/app/features/analytics/analytics.component.html
