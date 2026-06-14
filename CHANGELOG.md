@@ -6,11 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.11.0] - 2026-06-14
+
 ### Added
 
 - **Analytics view — DORA Four Keys dashboard.** A third dashboard view (alongside Matrix and Swimlanes) surfacing deployment frequency, lead time (approximated from `parent_deployments` promotion chains), change failure rate, and mean time to restore (MTTR). Supported by eight charts: deployment frequency over time, change-failure-rate trend, deployment-duration distribution (p50/p95), promotion funnel (per-stage counts + conversion), status distribution, deploy heatmap (day-of-week × hour), top deployers, and time-to-restore incidents. The period control covers 7 / 14 / 30 days, bounded by `HISTORY_RETENTION_DAYS`.
 - **`ANALYTICS_WINDOW_GRANULARITY` config var.** Controls the UTC boundary the analytics window is truncated to (`day` | `hour`), governing ETag stability and data freshness. See [Configuration — API](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/configuration/#api).
 - **`ANALYTICS_FUNNEL_ENVIRONMENTS` config var.** Comma-separated, ordered promotion-funnel ladder; the last entry is the production terminal used for DORA lead-time measurement. Values matched case-insensitively against the deployment `environment` field. See [Configuration — API](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/configuration/#api).
+
+### Fixed
+
+- **Demo dashboard no longer empties out as time passes.** The github-emulator seeded its deployments with hard-coded absolute timestamps, which eventually aged past the fetcher's initial lookback window — so a fresh demo (or a reset + re-seed) could backfill nothing and render an empty dashboard. Seed timestamps are now shifted relative to load time (anchoring the newest event to "now"), so the demo always presents recent activity.
 
 ## [0.10.0] - 2026-06-13
 
