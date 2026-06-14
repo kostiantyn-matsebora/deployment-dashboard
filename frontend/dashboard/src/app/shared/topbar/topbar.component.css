@@ -249,6 +249,46 @@
 .toggle.is-on .switch { background: var(--coral); }
 .toggle.is-on .switch::after { transform: translateX(14px); background: #fff; }
 
+/* ── Swimlanes auto-scroll toggle — accent ON colour (not coral) (#309) ─── */
+.swim-autoscroll-toggle.is-on {
+  color: rgba(var(--accent-rgb), 0.90);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.10);
+}
+.swim-autoscroll-toggle.is-on .switch { background: rgba(var(--accent-rgb), 1); }
+
+/* ── Swimlane control group: divider + inner row (#309) ─────────────────── */
+/* Wraps Collapse/Expand-all + Auto-scroll so they read as one unit, clearly
+   separated from the rate-limit chip to the left and the correlation picker
+   to the right by matching the .hdr-filter border-left separator pattern. */
+.swim-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1px solid var(--glass-edge);
+}
+
+/* Collapse/Expand-all pill button — matches mockup .sv-collapse-all-btn (#309) */
+.swim-collapse-all-btn {
+  appearance: none;
+  border: 1px solid var(--glass-edge);
+  background: var(--input-bg);
+  color: var(--ink-1);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.swim-collapse-all-btn:hover {
+  color: var(--ink-0);
+  border-color: var(--glass-edge-2);
+}
+
 /* ── Theme switcher ─────────────────────────────────────── */
 .theme-switch {
   display: inline-flex;

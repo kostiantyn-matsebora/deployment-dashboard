@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.12.0] - 2026-06-14
+
+### Added
+
+- **Swimlanes — collapsible service lanes.** Each service lane in the Swimlanes view can now collapse to a compact single-chain "vector" (the deployment chain ending at the service's newest event) and expand back to the full promotion DAG — via per-lane chevrons plus Collapse-all / Expand-all controls. An Auto-scroll-to-change toggle (on by default) keeps the latest change in view, and a card flashes to highlight a live status change in either state. Per-lane collapse state and the auto-scroll preference persist across reloads (lanes start collapsed). This is a Swimlanes-view enhancement only — no API or contract change.
+
 ## [0.11.0] - 2026-06-14
 
 ### Added

@@ -142,6 +142,19 @@ flowchart TB
 | Positioning | CSS grid cell (flow) | Managed by ngx-graph dagre layout (SVG `<g>` transform) |
 | Selection | Click → history drawer | Click → Inspector panel + accent ring |
 
+### Collapsed Lane Vector
+
+When a swimlane is collapsed, it renders a **vector** — not a new compact component, but the same vis-cards reused in a horizontal chain.
+
+**Definition.** The vector is the linear chain of vis-cards ending at the service's newest event (`tip`):
+- **tip** = node with max `happened_at` across all service nodes.
+- Built by walking backward through `parrent_deployments` from `tip` to the root. At a merge (multiple parents), follow the parent with the newest `happened_at`.
+- Rendered root→tip, left-to-right, with arrow connectors between consecutive cards.
+- All other DAG branches are hidden while collapsed.
+- If `tip` is isolated (no parents), the vector is that single card.
+
+**Visual.** Cards are identical to the expanded vis-cards — same markup, same status styling (status-accent left bar, glass background, field rendering). Edges between cards are the same status-colored SVG arrows produced by the expanded renderer (not custom arrow connectors or a bespoke flex overlay). The collapsed vector runs through the identical `partitionDAGs` → `rankNodes` → `assignTracks` → position → card → SVG-edge pipeline as the expanded form, restricted to the chain nodes.
+
 ---
 
 ## History Drawer

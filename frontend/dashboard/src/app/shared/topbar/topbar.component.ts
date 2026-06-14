@@ -176,6 +176,36 @@ export class TopbarComponent {
   protected readonly isSwimlanes = computed(() => this.state.activeView() === 'swimlanes');
   protected readonly isAnalytics = computed(() => this.state.activeView() === 'analytics');
 
+  // ── Swimlanes collapse/expand controls (#309) ─────────────
+  /** True when all lanes are expanded (collapsed set is empty). */
+  protected readonly allExpanded = computed(() => this.state.collapsedLanes().size === 0);
+
+  /**
+   * True when at least one lane exists and all of them are collapsed.
+   * Uses matrixData for service list since we don't own lanes directly.
+   */
+  protected readonly allCollapsed = computed(() => {
+    const services = this.state.matrixData()?.rows.map(r => r.service) ?? [];
+    if (!services.length) return false;
+    const collapsed = this.state.collapsedLanes();
+    return services.every(s => collapsed.has(s));
+  });
+
+  protected readonly autoScrollOnChange = computed(() => this.state.autoScrollOnChange());
+
+  protected toggleCollapseAll(): void {
+    const services = this.state.matrixData()?.rows.map(r => r.service) ?? [];
+    if (this.allCollapsed()) {
+      this.state.expandAllLanes();
+    } else {
+      this.state.collapseAllLanes(services);
+    }
+  }
+
+  protected toggleAutoScroll(): void {
+    this.state.autoScrollOnChange.set(!this.state.autoScrollOnChange());
+  }
+
   // ── All environments from matrix data ─────────────────────
   protected readonly allEnvironments = computed(() =>
     this.state.matrixData()?.environments ?? []
