@@ -73,6 +73,29 @@ unchanged; teams never replace it — opt-in escalation only.** Full matrix + ru
 **Mode is sticky — no silent downgrade.** The substrate chosen at launch holds for the whole run;
 need to change it → surface as a decision, never slide back to in-session subagents silently.
 
+## Session state & resume
+
+A spawned-team run persists a durable record at `.team-process/run/session.json` (gitignored
+runtime state) so it **survives a session boundary or reboot**. This is what makes "mode is sticky"
+hold across a fresh session instead of decaying into in-session subagent spawns.
+
+- **Lifecycle.** Written on `TeamCreate`, removed on `TeamDelete`. Its **existence = team mode
+  active**; the team-mode guard keys off it.
+- **The run ledger IS this file.** The orchestrator enriches it (roster · phase · per-wave
+  changed/decided/deferred) as the run proceeds — the same authoritative state the
+  *Single-integrator model* mandates, now persisted instead of living only in context. Shape:
+  [`schemas/session.schema.json`](schemas/session.schema.json).
+- **SessionStart reminds, never wipes.** On a fresh session it injects a resume summary
+  (team · branch · phase · ledger) as context — so the lead re-attaches rather than forgetting it
+  was mid-run.
+- **Enforcement persists too.** While the record exists, the team-mode guard blocks foreground
+  in-session `Agent`/`Task` spawns (use `team_name`) — across reboots, not only within one session.
+- **Resume reconstructs from the ledger.** A reboot kills the live members; resuming re-creates the
+  team and re-dispatches the in-flight wave from the ledger — the file is the durable truth, the
+  live team is rebuilt.
+- **Abandon explicitly.** A stale session (run abandoned, no `TeamDelete` fired) is cleared with
+  `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession`.
+
 ## Autonomy
 
 "Autonomous mode" is a licence over **effort**, not over the **merge gate**. It means *act

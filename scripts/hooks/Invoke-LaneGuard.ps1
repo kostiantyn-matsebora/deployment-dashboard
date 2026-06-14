@@ -3,11 +3,11 @@
 <#
 .SYNOPSIS
     PreToolUse(Edit|Write|MultiEdit|NotebookEdit) hook — enforces the "stay in your
-    lane" rule. If the worktree root holds a `.claude-lane` file (written by the lead
-    when a member is spawned), edits are allowed only to paths matching one of its
-    globs. No `.claude-lane` (e.g. the lead's main worktree) → no restriction.
+    lane" rule. If the worktree root holds a `.team-process/run/lane` file (written by
+    the lead when a member is spawned), edits are allowed only to paths matching one of
+    its globs. No lane file (e.g. the lead's main worktree) → no restriction.
 
-    `.claude-lane` format: one glob per line; blank lines and `#` comments ignored.
+    `.team-process/run/lane` format: one glob per line; blank lines and `#` comments ignored.
     Globs: `*` = within a path segment, `**` = across segments, `?` = one char.
     Example:
         backend/fetcher/**
@@ -103,7 +103,7 @@ if (-not $AsLibrary) {
     if (-not $root) { $root = (Get-Location).Path }
     $root = ([string]$root).Trim()
 
-    $laneFile = Join-Path $root '.claude-lane'
+    $laneFile = Join-Path $root '.team-process' 'run' 'lane'
     if (-not (Test-Path -LiteralPath $laneFile)) { exit 0 }
 
     $lines = Get-Content -LiteralPath $laneFile -ErrorAction SilentlyContinue

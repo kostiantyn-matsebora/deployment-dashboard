@@ -4,121 +4,177 @@
 BeforeAll {
     $script:ScriptPath = (Resolve-Path (Join-Path $PSScriptRoot 'Invoke-TeamModeGuard.ps1')).Path
     . $script:ScriptPath -AsLibrary
+    $script:SchemaFile = (Resolve-Path (Join-Path $PSScriptRoot '..' '..' '.claude' 'team-process' 'schemas' 'session.schema.json')).Path
+    $script:FixedNow = [datetime]'2026-06-14T12:00:00Z'
+
+    function New-TmpRoot {
+        $r = Join-Path ([System.IO.Path]::GetTempPath()) "tmg-$(New-Guid)"
+        New-Item -ItemType Directory -Path $r -Force | Out-Null
+        return $r
+    }
 }
 
 # ============================================================
 Describe 'Get-TeamModeDecision' {
 
-    It 'allows when caller is a subagent (even with marker present)' {
-        $d = Get-TeamModeDecision -IsSubagent $true -MarkerPresent $true -HasTeamName $false
-        $d.Block | Should -BeFalse
+    It 'allows a subagent caller (even with an active session)' {
+        (Get-TeamModeDecision -IsSubagent $true -SessionActive $true -HasTeamName $false).Block | Should -BeFalse
     }
-
-    It 'allows when no team-active marker is present' {
-        $d = Get-TeamModeDecision -IsSubagent $false -MarkerPresent $false -HasTeamName $false
-        $d.Block | Should -BeFalse
+    It 'allows when no session is active' {
+        (Get-TeamModeDecision -IsSubagent $false -SessionActive $false -HasTeamName $false).Block | Should -BeFalse
     }
-
-    It 'allows when marker is present and team_name is set (member spawn)' {
-        $d = Get-TeamModeDecision -IsSubagent $false -MarkerPresent $true -HasTeamName $true
-        $d.Block | Should -BeFalse
+    It 'allows a member spawn (session active + team_name set)' {
+        (Get-TeamModeDecision -IsSubagent $false -SessionActive $true -HasTeamName $true).Block | Should -BeFalse
     }
-
-    It 'blocks when marker present and no team_name (foreground subagent spawn)' {
-        $d = Get-TeamModeDecision -IsSubagent $false -MarkerPresent $true -HasTeamName $false
-        $d.Block  | Should -BeTrue
+    It 'blocks a foreground in-session subagent when a session is active' {
+        $d = Get-TeamModeDecision -IsSubagent $false -SessionActive $true -HasTeamName $false
+        $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'Team mode is active'
-        $d.Reason | Should -Match 'SendMessage'
-        $d.Reason | Should -Match "team_name"
+        $d.Reason | Should -Match 'team_name'
+        $d.Reason | Should -Match 'EndSession'
     }
-
-    It 'subagent caller is allowed even when team_name is absent' {
-        $d = Get-TeamModeDecision -IsSubagent $true -MarkerPresent $true -HasTeamName $false
-        $d.Block | Should -BeFalse
-    }
-
-    It 'no marker + team_name present still allowed (no team active yet)' {
-        $d = Get-TeamModeDecision -IsSubagent $false -MarkerPresent $false -HasTeamName $true
-        $d.Block | Should -BeFalse
+    It 'allows team_name present without an active session yet' {
+        (Get-TeamModeDecision -IsSubagent $false -SessionActive $false -HasTeamName $true).Block | Should -BeFalse
     }
 }
 
 # ============================================================
-Describe 'SetMarker / ClearMarker round-trip' {
-
-    BeforeAll {
-        $script:TmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) "tmg-test-$(New-Guid)"
-        New-Item -ItemType Directory -Path $script:TmpRoot -Force | Out-Null
-        $script:Marker = Join-Path $script:TmpRoot '.claude-team-active'
+Describe 'Path helpers' {
+    It 'session file is under .team-process/run' {
+        (Get-SessionFilePath -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/run/session\.json$'
     }
-
-    AfterAll {
-        Remove-Item -Recurse -Force -LiteralPath $script:TmpRoot -ErrorAction SilentlyContinue
-    }
-
-    It '-SetMarker creates the marker file' {
-        # Drive the entry block directly: override $root resolution with env stub
-        # We cannot easily inject $root, so drive via a helper wrapper that calls Set-Content
-        # on our temp path — mirror what the entry block does.
-        Set-Content -LiteralPath $script:Marker -Value 'active' -Encoding utf8NoBOM
-        Test-Path -LiteralPath $script:Marker | Should -BeTrue
-    }
-
-    It 'marker file contains expected content' {
-        Get-Content -LiteralPath $script:Marker | Should -Be 'active'
-    }
-
-    It '-ClearMarker removes the marker file' {
-        Remove-Item -LiteralPath $script:Marker -Force -ErrorAction SilentlyContinue
-        Test-Path -LiteralPath $script:Marker | Should -BeFalse
-    }
-
-    It '-ClearMarker is idempotent when marker absent' {
-        # Should not throw if file already gone
-        { Remove-Item -LiteralPath $script:Marker -Force -ErrorAction SilentlyContinue } |
-            Should -Not -Throw
+    It 'lane file is under .team-process/run' {
+        (Get-LaneFilePath -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/run/lane$'
     }
 }
 
 # ============================================================
-Describe 'Entry block: PreToolUse mode via subprocess' {
+Describe 'Get-TeamCreateName' {
+    It 'reads tool_input.team_name' {
+        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{ team_name = 'feat-9' } }) | Should -Be 'feat-9'
+    }
+    It 'falls back to tool_input.name' {
+        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{ name = 'feat-x' } }) | Should -Be 'feat-x'
+    }
+    It 'reads from tool_response when tool_input lacks it' {
+        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{}; tool_response = [pscustomobject]@{ team = 'feat-r' } }) | Should -Be 'feat-r'
+    }
+    It 'returns empty when no name is present' {
+        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{} }) | Should -Be ''
+    }
+}
 
-    BeforeAll {
-        # Resolve absolute path to guard script
-        $script:GuardScript = (Resolve-Path (Join-Path $PSScriptRoot 'Invoke-TeamModeGuard.ps1')).Path
-        $script:TmpRoot2    = Join-Path ([System.IO.Path]::GetTempPath()) "tmg-entry-$(New-Guid)"
-        New-Item -ItemType Directory -Path $script:TmpRoot2 -Force | Out-Null
-        $script:Marker2 = Join-Path $script:TmpRoot2 '.claude-team-active'
+# ============================================================
+Describe 'New-SessionRecord' {
+    It 'builds a fresh record with phase=created and matching timestamps' {
+        $r = New-SessionRecord -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $null
+        $r.team | Should -Be 'feat-1'
+        $r.branch | Should -Be 'feat/x'
+        $r.phase | Should -Be 'created'
+        $r.createdAt | Should -Be $r.updatedAt
+    }
+    It 'omits roster and ledger when empty' {
+        $r = New-SessionRecord -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $null
+        $r.Contains('roster') | Should -BeFalse
+        $r.Contains('ledger') | Should -BeFalse
+    }
+    It 'falls back to team=unknown when none supplied' {
+        (New-SessionRecord -Team '' -Branch '' -Now $script:FixedNow -Existing $null).team | Should -Be 'unknown'
+    }
+    It 'preserves createdAt, ledger, roster, issue on re-create (merge)' {
+        $existing = [pscustomobject]@{
+            team = 'feat-1'; branch = 'feat/x'; issue = '#42'; phase = 'implement'
+            createdAt = '2026-01-01T00:00:00Z'; updatedAt = '2026-01-01T00:00:00Z'
+            roster = @([pscustomobject]@{ role = 'backend' }); ledger = @([pscustomobject]@{ wave = 1 })
+        }
+        $r = New-SessionRecord -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $existing
+        $r.createdAt | Should -Be '2026-01-01T00:00:00Z'
+        $r.phase     | Should -Be 'implement'
+        $r.issue     | Should -Be '#42'
+        @($r.roster).Count | Should -Be 1
+        @($r.ledger).Count | Should -Be 1
+        $r.updatedAt | Should -Not -Be $r.createdAt
+    }
+}
 
-        # Helper: run the script in a subprocess with injected stdin JSON.
-        # We cannot override git rev-parse to return our temp root, so we test
-        # via Get-TeamModeDecision (pure function) for correctness, and the
-        # subprocess tests validate that the entry block plumbing (stdin→JSON→
-        # block output) wires correctly when NO marker is present in the real repo.
+# ============================================================
+Describe 'Get-SessionReminder' {
+    It 'summarizes the record and names the abandon command' {
+        $rec = [pscustomobject]@{ team = 'feat-1'; branch = 'feat/x'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z' }
+        $msg = Get-SessionReminder -Record $rec
+        $msg | Should -Match 'feat-1'
+        $msg | Should -Match 'feat/x'
+        $msg | Should -Match 'implement'
+        $msg | Should -Match 'EndSession'
+        $msg | Should -Match 'RESUME'
+    }
+}
+
+# ============================================================
+Describe 'Set/Clear/Get session round-trip (temp root)' {
+
+    It 'Set-TeamSession writes a schema-valid session.json' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
+            $file = Get-SessionFilePath -Root $root
+            Test-Path -LiteralPath $file | Should -BeTrue
+            (Get-Content -LiteralPath $file -Raw | Test-Json -SchemaFile $script:SchemaFile) | Should -BeTrue
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
 
-    AfterAll {
-        Remove-Item -Recurse -Force -LiteralPath $script:TmpRoot2 -ErrorAction SilentlyContinue
+    It 'Set-TeamSession merges (preserves createdAt, advances updatedAt) on re-create' {
+        $root = New-TmpRoot
+        try {
+            $rec1 = Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now ([datetime]'2026-01-01T00:00:00Z')
+            $rec2 = Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow
+            # createdAt preserved verbatim across the JSON round-trip; updatedAt moved on.
+            $rec2.createdAt | Should -Be $rec1.createdAt
+            $rec2.updatedAt | Should -Not -Be $rec1.updatedAt
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
 
-    It 'entry block: empty stdin exits 0 with no output' {
-        $result = '' | pwsh -NonInteractive -NoProfile -File $script:GuardScript 2>$null
+    It 'Get-SessionStartContext yields additionalContext when active, empty when not' {
+        $root = New-TmpRoot
+        try {
+            (Get-SessionStartContext -Root $root) | Should -Be ''
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
+            $ctx = Get-SessionStartContext -Root $root
+            $ctx | Should -Match 'additionalContext'
+            $ctx | Should -Match 'SessionStart'
+            $ctx | Should -Match 'feat-1'
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It 'Clear-TeamSession removes session + lane and is idempotent' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
+            Set-Content -LiteralPath (Get-LaneFilePath -Root $root) -Value 'backend/**'
+            Clear-TeamSession -Root $root
+            Test-Path -LiteralPath (Get-SessionFilePath -Root $root) | Should -BeFalse
+            Test-Path -LiteralPath (Get-LaneFilePath -Root $root) | Should -BeFalse
+            { Clear-TeamSession -Root $root } | Should -Not -Throw
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+}
+
+# ============================================================
+Describe 'Entry block plumbing (subprocess)' {
+
+    It 'empty stdin exits 0 with no output' {
+        $result = '' | pwsh -NonInteractive -NoProfile -File $script:ScriptPath 2>$null
         $LASTEXITCODE | Should -Be 0
-        $result       | Should -BeNullOrEmpty
+        $result | Should -BeNullOrEmpty
     }
-
-    It 'entry block: no team-active marker → no block JSON even with no team_name' {
-        # Real repo root has no .claude-team-active on this branch (no active team)
-        $payload = @{
-            tool_name  = 'Agent'
-            agent_type = ''
-            agent_id   = ''
-            tool_input = @{ team_name = '' }
-        } | ConvertTo-Json -Compress
-
-        $result = $payload | pwsh -NonInteractive -NoProfile -File $script:GuardScript 2>$null
+    It 'no active session in the real repo → no block JSON' {
+        $payload = @{ tool_name = 'Agent'; agent_type = ''; agent_id = ''; tool_input = @{ team_name = '' } } | ConvertTo-Json -Compress
+        $result = $payload | pwsh -NonInteractive -NoProfile -File $script:ScriptPath 2>$null
         $LASTEXITCODE | Should -Be 0
-        # Without a marker file the decision is "allow" → no block JSON written
         $result | Should -BeNullOrEmpty
     }
 }

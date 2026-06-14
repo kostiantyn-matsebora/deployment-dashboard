@@ -7,7 +7,7 @@
     orchestration whitelist. Subagents pass straight through; their lane is
     enforced by the existing LaneGuard.
 
-    Whitelist source: <root>/.claude-lead-lane if present (one glob per line;
+    Whitelist source: <root>/.team-process/lead-lane if present (one glob per line;
     blank lines and # comments ignored); otherwise the built-in DEFAULT list.
 .PARAMETER AsLibrary
     Define functions without executing entry block (for Pester).
@@ -62,7 +62,7 @@ function Get-RelativePath {
 
 function Get-LeadLaneGlobs {
     param([string]$Root)
-    $overrideFile = Join-Path $Root '.claude-lead-lane'
+    $overrideFile = Join-Path $Root '.team-process' 'lead-lane'
     if (Test-Path -LiteralPath $overrideFile) {
         $lines = Get-Content -LiteralPath $overrideFile -ErrorAction SilentlyContinue
         return @($lines | Where-Object {
@@ -78,10 +78,7 @@ function Get-LeadLaneGlobs {
         '.claude/*.md',
         '.claude/settings.json',
         '.claude/settings.local.json',
-        '.claude/run/**',
-        '.claude-team-active',
-        '.claude-lane',
-        '.claude-lead-lane'
+        '.team-process/**'
     )
 }
 
