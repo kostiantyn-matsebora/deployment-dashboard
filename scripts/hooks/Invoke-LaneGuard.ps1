@@ -69,14 +69,24 @@ function Get-RelativePath {
     return $f
 }
 
+# A member's hand-back outbox is NOT part of its code lane; allow writes there so the
+# file-based protocol (typed forms dropped in the session directory) is not blocked.
+function Test-PathIsOutbox {
+    param([string]$RelPath)
+    $p = ($RelPath -replace '\\', '/')
+    if ($p.StartsWith('./')) { $p = $p.Substring(2) }
+    return ($p -match '(^|/)\.team-process/run/sessions/[^/]+/outbox/')
+}
+
 function Get-LaneGuardDecision {
     param([string]$RelPath, [string[]]$Lanes)
     $active = Get-ActiveLanes -Lines $Lanes
     if ($active.Count -eq 0) { return @{ Block = $false } }
+    if (Test-PathIsOutbox -RelPath $RelPath) { return @{ Block = $false } }
     if (Test-PathInLanes -RelPath $RelPath -Lanes $active) { return @{ Block = $false } }
     return @{
         Block  = $true
-        Reason = "Out of lane: '$RelPath' is not in your assigned lane(s): $($active -join ', '). Stay in your lane — hand cross-lane needs back to the lead via RESULT.follow."
+        Reason = "Out of lane: '$RelPath' is not in your assigned lane(s): $($active -join ', '). Stay in your lane — hand cross-lane needs back to the lead via RESULT.follow (write it to your session outbox)."
     }
 }
 

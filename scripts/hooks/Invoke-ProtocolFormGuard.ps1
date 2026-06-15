@@ -60,14 +60,62 @@ function Get-SendMessageText {
     return ''
 }
 
+# A file-based hand-back is sent as a POINTER: { "type": "<FORM>", "ref": "<path to the
+# outbox file>" }. The full typed form lives in the file (durable, in the session dir);
+# the SendMessage just wakes the orchestrator. Presence of a "ref" key = pointer intent.
+function Get-PointerInfo {
+    param([string]$Text)
+    $info = @{ IsPointer = $false; Type = ''; Ref = ''; ExtraKeys = @() }
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $info }
+    $o = $null
+    try { $o = $Text | ConvertFrom-Json -ErrorAction Stop } catch { return $info }
+    if ($null -eq $o -or $o -is [System.Array] -or $o -isnot [psobject]) { return $info }
+    $names = @($o.PSObject.Properties.Name)
+    if ($names -notcontains 'ref') { return $info }
+    $info.IsPointer = $true
+    $info.Type      = if ($names -contains 'type') { [string]$o.type } else { '' }
+    $info.Ref       = [string]$o.ref
+    $info.ExtraKeys = @($names | Where-Object { $_ -notin @('type', 'ref') })
+    return $info
+}
+
 function Get-ProtocolFormDecision {
     param(
         [string]$Text,
-        [string]$SchemaDir
+        [string]$SchemaDir,
+        [string]$Root
     )
     # Empty / whitespace — includes object protocol-response messages flattened to ''.
     # Not a cross-role hand-back; allow.
     if ([string]::IsNullOrWhiteSpace($Text)) { return @{ Block = $false } }
+
+    # Pointer hand-back: validate the REFERENCED outbox file, not the message.
+    $ptr = Get-PointerInfo -Text $Text
+    if ($ptr.IsPointer) {
+        if ($ptr.ExtraKeys.Count -gt 0) {
+            return @{ Block = $true; Reason = "A file-based hand-back pointer must be exactly { type, ref } - remove: $($ptr.ExtraKeys -join ', '). $(Get-RenderRecipe)" }
+        }
+        if ([string]::IsNullOrWhiteSpace($ptr.Ref)) {
+            return @{ Block = $true; Reason = "Hand-back pointer 'ref' is empty - set it to the absolute path of the outbox form file. $(Get-RenderRecipe)" }
+        }
+        $path = $ptr.Ref
+        if (-not [System.IO.Path]::IsPathRooted($path) -and -not [string]::IsNullOrWhiteSpace($Root)) {
+            $path = Join-Path $Root $path
+        }
+        if (-not (Test-Path -LiteralPath $path)) {
+            return @{ Block = $true; Reason = "Hand-back pointer 'ref' not found: '$($ptr.Ref)'. Write the typed form to your session outbox first, then point at it. $(Get-RenderRecipe)" }
+        }
+        $content = Get-Content -LiteralPath $path -Raw
+        $fcheck  = Test-ProtocolJson -Json $content -SchemaDir $SchemaDir
+        if (-not $fcheck.Ok) {
+            $label = if ($fcheck.Type) { $fcheck.Type } else { 'referenced form' }
+            return @{ Block = $true; Reason = "Malformed $label at '$($ptr.Ref)' - $(($fcheck.Errors) -join '; '). $(Get-RenderRecipe)" }
+        }
+        if ($ptr.Type -and $fcheck.Type -and ($ptr.Type.ToUpper() -ne $fcheck.Type.ToUpper())) {
+            return @{ Block = $true; Reason = "Pointer type '$($ptr.Type)' does not match the referenced form '$($fcheck.Type)'. $(Get-RenderRecipe)" }
+        }
+        return @{ Block = $false }
+    }
 
     $check = Test-ProtocolJson -Json $Text -SchemaDir $SchemaDir
     if ($check.Ok) { return @{ Block = $false } }
@@ -95,7 +143,12 @@ if (-not $guardAsLibrary) {
         catch { $null = $_ }
     }
 
-    $decision = Get-ProtocolFormDecision -Text $text
+    # Root resolves a relative pointer 'ref' (absolute refs are used cross-worktree).
+    $root = (& git rev-parse --show-toplevel 2>$null) | Select-Object -First 1
+    if (-not $root) { $root = (Get-Location).Path }
+    $root = ([string]$root).Trim()
+
+    $decision = Get-ProtocolFormDecision -Text $text -Root $root
 
     if ($decision.Block) {
         $json = @{ decision = 'block'; reason = $decision.Reason } | ConvertTo-Json -Compress

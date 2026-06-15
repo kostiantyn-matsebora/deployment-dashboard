@@ -107,4 +107,32 @@ Describe 'Get-LaneGuardDecision' {
     It 'blocks an out-of-worktree absolute path' {
         (Get-LaneGuardDecision -RelPath '/elsewhere/Y.cs' -Lanes @('backend/fetcher/**')).Block | Should -BeTrue
     }
+
+    It 'allows a write to the session outbox even when out of code lane' {
+        (Get-LaneGuardDecision -RelPath '.team-process/run/sessions/feat-1/outbox/backend.RESULT.json' -Lanes @('backend/fetcher/**')).Block | Should -BeFalse
+    }
+
+    It 'allows an absolute-path outbox write (cross-worktree hand-back)' {
+        (Get-LaneGuardDecision -RelPath '/tmp/wt/.team-process/run/sessions/feat-1/outbox/backend.RESULT.json' -Lanes @('backend/fetcher/**')).Block | Should -BeFalse
+    }
+
+    It 'still blocks a non-outbox .team-process write out of lane' {
+        (Get-LaneGuardDecision -RelPath '.team-process/run/sessions/feat-1/session.json' -Lanes @('backend/fetcher/**')).Block | Should -BeTrue
+    }
+}
+
+# ============================================================
+Describe 'Test-PathIsOutbox' {
+    It 'matches a relative outbox path' {
+        Test-PathIsOutbox -RelPath '.team-process/run/sessions/feat-1/outbox/x.json' | Should -BeTrue
+    }
+    It 'matches an absolute outbox path' {
+        Test-PathIsOutbox -RelPath '/wt/.team-process/run/sessions/feat-1/outbox/x.json' | Should -BeTrue
+    }
+    It 'does not match the session record itself' {
+        Test-PathIsOutbox -RelPath '.team-process/run/sessions/feat-1/session.json' | Should -BeFalse
+    }
+    It 'does not match an ordinary product path' {
+        Test-PathIsOutbox -RelPath 'backend/fetcher/X.cs' | Should -BeFalse
+    }
 }
