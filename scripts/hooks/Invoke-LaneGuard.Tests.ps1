@@ -119,6 +119,34 @@ Describe 'Get-LaneGuardDecision' {
     It 'still blocks a non-outbox .team-process write out of lane' {
         (Get-LaneGuardDecision -RelPath '.team-process/run/sessions/feat-1/session.json' -Lanes @('backend/fetcher/**')).Block | Should -BeTrue
     }
+
+    It 'blocks a .. traversal that escapes the outbox exemption' {
+        $d = Get-LaneGuardDecision -RelPath '.team-process/run/sessions/feat-1/outbox/../../../../backend/Program.cs' -Lanes @('backend/fetcher/**')
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'traversal'
+    }
+
+    It 'blocks a .. traversal that escapes the lane glob' {
+        $d = Get-LaneGuardDecision -RelPath 'backend/fetcher/../control-api/X.cs' -Lanes @('backend/fetcher/**')
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'traversal'
+    }
+}
+
+# ============================================================
+Describe 'Test-PathHasDotDot' {
+    It 'detects a .. segment' {
+        Test-PathHasDotDot -RelPath 'a/../b.cs' | Should -BeTrue
+    }
+    It 'detects a leading ..' {
+        Test-PathHasDotDot -RelPath '../escape.cs' | Should -BeTrue
+    }
+    It 'does not flag a filename that merely contains dots' {
+        Test-PathHasDotDot -RelPath 'backend/My..Weird..Name.cs' | Should -BeFalse
+    }
+    It 'does not flag an ordinary path' {
+        Test-PathHasDotDot -RelPath 'backend/fetcher/X.cs' | Should -BeFalse
+    }
 }
 
 # ============================================================

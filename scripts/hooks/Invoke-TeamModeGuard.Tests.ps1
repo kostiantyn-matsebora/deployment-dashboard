@@ -68,6 +68,27 @@ Describe 'ConvertTo-SessionId' {
     It 'falls back to unknown for blank input' {
         ConvertTo-SessionId -Team '' | Should -Be 'unknown'
     }
+    It 'rejects dot-only traversal ids (.. / . / ...)' {
+        ConvertTo-SessionId -Team '..'  | Should -Be 'unknown'
+        ConvertTo-SessionId -Team '.'   | Should -Be 'unknown'
+        ConvertTo-SessionId -Team '...' | Should -Be 'unknown'
+    }
+    It 'collapses path separators so a traversal cannot survive' {
+        # '/' -> '-'; result is one safe segment with no bare '..' between separators.
+        $id = ConvertTo-SessionId -Team '../../etc'
+        $id | Should -Be '..-..-etc'
+        Test-SafeSessionId -Id $id | Should -BeTrue
+    }
+}
+
+# ============================================================
+Describe 'Test-SafeSessionId' {
+    It 'accepts a normal id' { Test-SafeSessionId -Id 'feat-321' | Should -BeTrue }
+    It 'rejects ..'         { Test-SafeSessionId -Id '..' | Should -BeFalse }
+    It 'rejects .'          { Test-SafeSessionId -Id '.'  | Should -BeFalse }
+    It 'rejects a separator' { Test-SafeSessionId -Id '../x' | Should -BeFalse }
+    It 'rejects a backslash' { Test-SafeSessionId -Id 'a\b' | Should -BeFalse }
+    It 'rejects blank'      { Test-SafeSessionId -Id '' | Should -BeFalse }
 }
 
 # ============================================================
@@ -242,6 +263,32 @@ Describe 'Set/Clear/Get session round-trip (temp root)' {
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
 
+    It 'Clear-TeamSession refuses a traversal id and deletes nothing outside sessions/<id>' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b1' -Now $script:FixedNow | Out-Null
+            $runDir = Get-TeamProcessRunDir -Root $root
+            # A '..' id would resolve to run/ (the parent of sessions/) under naive removal.
+            Clear-TeamSession -Root $root -Id '..'
+            Test-Path -LiteralPath $runDir | Should -BeTrue -Because 'run/ must survive a .. id'
+            Test-Path -LiteralPath (Get-SessionFilePath -Root $root -Id 'feat-1') | Should -BeTrue
+            Clear-TeamSession -Root $root -Id '../../x'   # also a no-op, no throw
+            Test-Path -LiteralPath $runDir | Should -BeTrue
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It 'Set-TeamSession preserves an existing freeform workflow when re-created without -Workflow' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'task-2' -Workflow 'freeform' -Branch 'b' -Now $script:FixedNow | Out-Null
+            # SetMarker now passes -Workflow through raw (empty) on re-create.
+            $rec = Set-TeamSession -Root $root -Team 'task-2' -Branch 'b' -Now $script:FixedNow
+            $rec.workflow | Should -Be 'freeform'
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
     It 'Clear-TeamSession (no id) removes all sessions + lane and is idempotent' {
         $root = New-TmpRoot
         try {
@@ -276,11 +323,19 @@ Describe 'Sync-LaneFromSession' {
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
-    It 'returns null when the role is absent from the roster' {
+    It 'returns null AND does not write run/lane when the role is absent from the roster' {
         $root = New-TmpRoot
         try {
             Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
             Sync-LaneFromSession -Root $root -Id 'feat-1' -Role 'frontend' | Should -BeNullOrEmpty
+            Test-Path -LiteralPath (Get-LaneFilePath -Root $root) | Should -BeFalse
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+    It 'returns null for an unsafe id (traversal guard)' {
+        $root = New-TmpRoot
+        try {
+            Sync-LaneFromSession -Root $root -Id '..' -Role 'backend' | Should -BeNullOrEmpty
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
@@ -315,5 +370,83 @@ Describe 'Entry block plumbing (subprocess)' {
         $result = $payload | pwsh -NonInteractive -NoProfile -File $script:ScriptPath 2>$null
         $LASTEXITCODE | Should -Be 0
         $result | Should -BeNullOrEmpty
+    }
+}
+
+# ============================================================
+# End-to-end entry-block dispatch. Push-Location to a temp NON-git dir so the script's
+# `git rev-parse --show-toplevel` fails and it falls back to the CWD — the real repo is
+# never touched. (System temp is not a git repo on CI runners or dev boxes.)
+Describe 'Entry block dispatch (subprocess, temp root)' {
+
+    It 'PreToolUse BLOCKS a foreground subagent (no team_name) when a session is active' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow | Out-Null
+            $payload = @{ tool_name = 'Agent'; agent_type = ''; agent_id = ''; tool_input = @{ team_name = '' } } | ConvertTo-Json -Compress
+            Push-Location $root
+            try { $out = ($payload | pwsh -NonInteractive -NoProfile -File $script:ScriptPath) -join "`n" }
+            finally { Pop-Location }
+            $out | Should -Match '"decision":\s*"block"'
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It 'PreToolUse ALLOWS a member spawn (team_name set) when a session is active' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow | Out-Null
+            $payload = @{ tool_name = 'Agent'; agent_type = ''; agent_id = ''; tool_input = @{ team_name = 'feat-1' } } | ConvertTo-Json -Compress
+            Push-Location $root
+            try { $out = ($payload | pwsh -NonInteractive -NoProfile -File $script:ScriptPath) -join "`n" }
+            finally { Pop-Location }
+            $out.Trim() | Should -BeNullOrEmpty
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It '-EndSession -Id .. is a no-op via the entry block (run/ + other sessions survive)' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow | Out-Null
+            $runDir = Get-TeamProcessRunDir -Root $root
+            Push-Location $root
+            try { pwsh -NonInteractive -NoProfile -File $script:ScriptPath -EndSession -Id '..' | Out-Null }
+            finally { Pop-Location }
+            Test-Path -LiteralPath $runDir | Should -BeTrue
+            Test-Path -LiteralPath (Get-SessionFilePath -Root $root -Id 'feat-1') | Should -BeTrue
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It '-ClearMarker removes only the named team session via the entry block' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow | Out-Null
+            Set-TeamSession -Root $root -Team 'task-2' -Workflow 'freeform' -Branch 'b' -Now $script:FixedNow | Out-Null
+            $payload = @{ tool_input = @{ team_name = 'feat-1' } } | ConvertTo-Json -Compress
+            Push-Location $root
+            try { $payload | pwsh -NonInteractive -NoProfile -File $script:ScriptPath -ClearMarker | Out-Null }
+            finally { Pop-Location }
+            Test-Path -LiteralPath (Get-SessionFilePath -Root $root -Id 'feat-1') | Should -BeFalse
+            Test-Path -LiteralPath (Get-SessionFilePath -Root $root -Id 'task-2') | Should -BeTrue
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It '-SyncLane projects run/lane from the roster via the entry block' {
+        $root = New-TmpRoot
+        try {
+            $rec = Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow
+            $rec | Add-Member -NotePropertyName roster -NotePropertyValue @(
+                [pscustomobject]@{ role = 'backend'; lane = 'backend/Dashboard.Api/**' }
+            ) -Force
+            Set-Content -LiteralPath (Get-SessionFilePath -Root $root -Id 'feat-1') -Value ($rec | ConvertTo-Json -Depth 8)
+            Push-Location $root
+            try { pwsh -NonInteractive -NoProfile -File $script:ScriptPath -SyncLane -Id 'feat-1' -Role 'backend' | Out-Null }
+            finally { Pop-Location }
+            (Get-Content -LiteralPath (Get-LaneFilePath -Root $root) -Raw) | Should -Match 'backend/Dashboard\.Api/\*\*'
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
 }

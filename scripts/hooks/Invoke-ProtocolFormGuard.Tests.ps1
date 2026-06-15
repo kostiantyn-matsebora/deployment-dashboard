@@ -121,6 +121,22 @@ Describe 'Get-PointerInfo' {
 }
 
 # ============================================================
+Describe 'Test-RefInOutbox' {
+    It 'accepts a path inside a session outbox' {
+        Test-RefInOutbox -Path '/wt/.team-process/run/sessions/feat-1/outbox/backend.RESULT.json' | Should -BeTrue
+    }
+    It 'accepts a Windows-separator outbox path' {
+        Test-RefInOutbox -Path 'C:\wt\.team-process\run\sessions\feat-1\outbox\backend.RESULT.json' | Should -BeTrue
+    }
+    It 'rejects a path outside any outbox' {
+        Test-RefInOutbox -Path '/wt/secret.txt' | Should -BeFalse
+    }
+    It 'rejects the session record itself (not the outbox)' {
+        Test-RefInOutbox -Path '/wt/.team-process/run/sessions/feat-1/session.json' | Should -BeFalse
+    }
+}
+
+# ============================================================
 Describe 'Get-ProtocolFormDecision — file-based hand-back pointers' {
 
     BeforeEach {
@@ -145,10 +161,30 @@ Describe 'Get-ProtocolFormDecision — file-based hand-back pointers' {
         (Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$rel"" }" -Root $script:PtrRoot).Block | Should -BeFalse
     }
 
-    It 'blocks a pointer whose ref file does not exist' {
-        $d = Get-ProtocolFormDecision -Text '{ "type":"RESULT","ref":"/no/such/file.json" }'
+    It 'blocks a pointer whose (in-outbox) ref file does not exist' {
+        $missing = (Join-Path $script:Outbox 'missing.RESULT.json') -replace '\\', '/'
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$missing"" }"
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'not found'
+    }
+
+    It 'blocks a pointer whose ref is OUTSIDE any session outbox (no arbitrary-file read)' {
+        $secret = (Join-Path $script:PtrRoot 'secret.txt') -replace '\\', '/'
+        Set-Content -LiteralPath $secret -Value 'TOPSECRET'
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$secret"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'outbox'
+        $d.Reason | Should -Not -Match 'TOPSECRET'   # no content leak in the reason
+    }
+
+    It 'blocks a pointer whose ref uses .. to escape the outbox' {
+        # A valid form parked outside the outbox, reached via traversal from inside it.
+        $outside = Join-Path $script:PtrRoot 'evil.RESULT.json'
+        Set-Content -LiteralPath $outside -Value $script:ValidResult
+        $traverse = ($script:Outbox -replace '\\', '/') + '/../../../../evil.RESULT.json'
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$traverse"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'outbox'
     }
 
     It 'blocks a pointer to a malformed form file' {

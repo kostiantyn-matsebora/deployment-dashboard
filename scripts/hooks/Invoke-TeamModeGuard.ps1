@@ -62,13 +62,27 @@ function Get-LaneFilePath        { param([string]$Root) return (Join-Path (Get-T
 function Get-LegacySessionFilePath { param([string]$Root) return (Join-Path (Get-TeamProcessRunDir $Root) 'session.json') }
 
 # Sanitize a team name into a filesystem-safe session id (the record's filename stem).
+# Path-separator chars collapse to '-'; a dot-only result (., .., ...) is rejected so a
+# crafted name can never resolve to a parent directory under -Recurse removal.
 function ConvertTo-SessionId {
     param([string]$Team)
     $t = [string]$Team
     if ([string]::IsNullOrWhiteSpace($t)) { return 'unknown' }
     $id = ($t.Trim() -replace '[^A-Za-z0-9._-]', '-').Trim('-')
     if ([string]::IsNullOrWhiteSpace($id)) { return 'unknown' }
+    if ($id -match '^\.+$') { return 'unknown' }   # '.', '..', '...' -> traversal guard
     return $id
+}
+
+# A session id is safe iff it is a single path segment of the allowed charset and not
+# dot-only. Backstop before any filesystem op that builds a path from an id — even if a
+# future caller forgets ConvertTo-SessionId, a '..'/'/'-bearing id cannot delete a parent.
+function Test-SafeSessionId {
+    param([string]$Id)
+    if ([string]::IsNullOrWhiteSpace($Id)) { return $false }
+    if ($Id -notmatch '^[A-Za-z0-9._-]+$') { return $false }   # rejects '/', '\', spaces
+    if ($Id -match '^\.+$') { return $false }                   # rejects '.', '..', '...'
+    return $true
 }
 
 function Get-SessionDir {
@@ -222,6 +236,8 @@ function Set-TeamSession {
 function Clear-TeamSession {
     param([string]$Root, [string]$Id)
     if ($Id) {
+        # Refuse an unsafe id outright — never let a '..'/separator id reach -Recurse removal.
+        if (-not (Test-SafeSessionId -Id $Id)) { return }
         $d = Get-SessionDir -Root $Root -Id $Id
         if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
     }
@@ -239,6 +255,7 @@ function Clear-TeamSession {
 # Project a member's lane from the session roster into run/lane. Returns the written globs (or $null).
 function Sync-LaneFromSession {
     param([string]$Root, [string]$Id, [string]$Role)
+    if (-not (Test-SafeSessionId -Id $Id)) { return $null }
     $rec = Read-SessionRecord -Path (Get-SessionFilePath -Root $Root -Id $Id)
     if (-not $rec -or -not $rec.roster) { return $null }
     $entry = @($rec.roster) | Where-Object { $_.role -eq $Role } | Select-Object -First 1
@@ -279,8 +296,10 @@ if (-not $AsLibrary) {
         $team   = if ($payload) { Get-TeamCreateName -Payload $payload } else { '' }
         $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null) | Select-Object -First 1
         $branch = ([string]$branch).Trim()
-        $wf     = if ($Workflow) { $Workflow } else { 'feature-team' }
-        Set-TeamSession -Root $root -Team $team -Workflow $wf -Branch $branch -Now (Get-Date) | Out-Null
+        # Pass -Workflow through RAW (empty when not supplied) so New-SessionRecord can
+        # PRESERVE an existing record's workflow on re-create and default only a brand-new
+        # record to feature-team. Defaulting here would clobber a freeform session.
+        Set-TeamSession -Root $root -Team $team -Workflow $Workflow -Branch $branch -Now (Get-Date) | Out-Null
         exit 0
     }
 
@@ -300,12 +319,14 @@ if (-not $AsLibrary) {
     }
 
     if ($EndSession) {
-        if ($Id) { Clear-TeamSession -Root $root -Id $Id } else { Clear-TeamSession -Root $root }
+        # Sanitize the id through the same gate as TeamCreate names — a raw '..' must
+        # never reach -Recurse removal.
+        if ($Id) { Clear-TeamSession -Root $root -Id (ConvertTo-SessionId -Team $Id) } else { Clear-TeamSession -Root $root }
         exit 0
     }
 
     if ($SyncLane) {
-        Sync-LaneFromSession -Root $root -Id $Id -Role $Role | Out-Null
+        Sync-LaneFromSession -Root $root -Id (ConvertTo-SessionId -Team $Id) -Role $Role | Out-Null
         exit 0
     }
 

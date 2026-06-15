@@ -79,6 +79,14 @@ function Get-PointerInfo {
     return $info
 }
 
+# A pointer 'ref' must resolve INSIDE a session outbox — never an arbitrary file. Tested
+# on the canonicalized (..-collapsed) absolute path.
+function Test-RefInOutbox {
+    param([string]$Path)
+    $p = ([string]$Path -replace '\\', '/')
+    return ($p -match '/\.team-process/run/sessions/[^/]+/outbox/[^/]')
+}
+
 function Get-ProtocolFormDecision {
     param(
         [string]$Text,
@@ -102,9 +110,18 @@ function Get-ProtocolFormDecision {
         if (-not [System.IO.Path]::IsPathRooted($path) -and -not [string]::IsNullOrWhiteSpace($Root)) {
             $path = Join-Path $Root $path
         }
-        if (-not (Test-Path -LiteralPath $path)) {
+        # Canonicalize (collapses any '..') and require the result to live inside a session
+        # outbox. Binds the pointer to the session tree: no arbitrary-file read / confused
+        # deputy, and no traversal out of the outbox.
+        $full = $null
+        try { $full = [System.IO.Path]::GetFullPath($path) } catch { $full = $null }
+        if (-not $full -or -not (Test-RefInOutbox -Path $full)) {
+            return @{ Block = $true; Reason = "Hand-back pointer 'ref' must resolve to a file under .team-process/run/sessions/<id>/outbox/ - got '$($ptr.Ref)'. $(Get-RenderRecipe)" }
+        }
+        if (-not (Test-Path -LiteralPath $full)) {
             return @{ Block = $true; Reason = "Hand-back pointer 'ref' not found: '$($ptr.Ref)'. Write the typed form to your session outbox first, then point at it. $(Get-RenderRecipe)" }
         }
+        $path = $full
         $content = Get-Content -LiteralPath $path -Raw
         $fcheck  = Test-ProtocolJson -Json $content -SchemaDir $SchemaDir
         if (-not $fcheck.Ok) {
