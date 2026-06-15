@@ -45,7 +45,9 @@ right roles and owning the integration nobody else can.
 
 Hub-and-spoke; formats in [`protocol.md`](../protocol.md).
 
-- **Member → orchestrator:** `RESULT` / `FINDING`.
+- **Member → orchestrator:** `RESULT` / `FINDING` — delivered as a **file in the session outbox** plus a
+  `{ type, ref }` pointer `SendMessage`. Drain it: read the file by `ref`, fold into the run ledger, then
+  delete the outbox file. See [`protocol.md`](../protocol.md) → *Hand-back delivery*.
 - **Orchestrator → member:** `BRIEF` / `FIX`; the orchestrator synthesizes.
 - **Member ↔ member:** only via the `contract` role to settle an interface, captured as an `ARTIFACT`.
 
