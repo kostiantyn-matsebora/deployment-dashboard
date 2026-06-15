@@ -101,6 +101,118 @@ Describe 'Get-ProtocolFormDecision — invalid forms block' {
 }
 
 # ============================================================
+Describe 'Get-PointerInfo' {
+    It 'detects a {type, ref} pointer' {
+        $p = Get-PointerInfo -Text '{ "type":"RESULT","ref":"/tmp/x.json" }'
+        $p.IsPointer | Should -BeTrue
+        $p.Type | Should -Be 'RESULT'
+        $p.Ref  | Should -Be '/tmp/x.json'
+        $p.ExtraKeys.Count | Should -Be 0
+    }
+    It 'flags extra keys beyond type/ref' {
+        (Get-PointerInfo -Text '{ "type":"RESULT","ref":"/tmp/x.json","role":"backend" }').ExtraKeys | Should -Contain 'role'
+    }
+    It 'is not a pointer when ref is absent (a full form)' {
+        (Get-PointerInfo -Text '{ "type":"RESULT","role":"backend" }').IsPointer | Should -BeFalse
+    }
+    It 'is not a pointer for free prose' {
+        (Get-PointerInfo -Text 'just text').IsPointer | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Test-RefInOutbox' {
+    It 'accepts a path inside a session outbox' {
+        Test-RefInOutbox -Path '/wt/.team-process/run/sessions/feat-1/outbox/backend.RESULT.json' | Should -BeTrue
+    }
+    It 'accepts a Windows-separator outbox path' {
+        Test-RefInOutbox -Path 'C:\wt\.team-process\run\sessions\feat-1\outbox\backend.RESULT.json' | Should -BeTrue
+    }
+    It 'rejects a path outside any outbox' {
+        Test-RefInOutbox -Path '/wt/secret.txt' | Should -BeFalse
+    }
+    It 'rejects the session record itself (not the outbox)' {
+        Test-RefInOutbox -Path '/wt/.team-process/run/sessions/feat-1/session.json' | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Get-ProtocolFormDecision — file-based hand-back pointers' {
+
+    BeforeEach {
+        $script:PtrRoot = Join-Path ([System.IO.Path]::GetTempPath()) "pfg-$(New-Guid)"
+        $script:Outbox  = Join-Path $script:PtrRoot '.team-process/run/sessions/feat-1/outbox'
+        New-Item -ItemType Directory -Path $script:Outbox -Force | Out-Null
+    }
+    AfterEach {
+        Remove-Item -Recurse -Force -LiteralPath $script:PtrRoot -ErrorAction SilentlyContinue
+    }
+
+    It 'passes a pointer to a valid RESULT file (absolute ref)' {
+        $f = Join-Path $script:Outbox 'backend.RESULT.json'
+        Set-Content -LiteralPath $f -Value $script:ValidResult
+        (Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$($f -replace '\\','/')"" }").Block | Should -BeFalse
+    }
+
+    It 'resolves a relative ref against -Root' {
+        $f = Join-Path $script:Outbox 'backend.RESULT.json'
+        Set-Content -LiteralPath $f -Value $script:ValidResult
+        $rel = '.team-process/run/sessions/feat-1/outbox/backend.RESULT.json'
+        (Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$rel"" }" -Root $script:PtrRoot).Block | Should -BeFalse
+    }
+
+    It 'blocks a pointer whose (in-outbox) ref file does not exist' {
+        $missing = (Join-Path $script:Outbox 'missing.RESULT.json') -replace '\\', '/'
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$missing"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'not found'
+    }
+
+    It 'blocks a pointer whose ref is OUTSIDE any session outbox (no arbitrary-file read)' {
+        $secret = (Join-Path $script:PtrRoot 'secret.txt') -replace '\\', '/'
+        Set-Content -LiteralPath $secret -Value 'TOPSECRET'
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$secret"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'outbox'
+        $d.Reason | Should -Not -Match 'TOPSECRET'   # no content leak in the reason
+    }
+
+    It 'blocks a pointer whose ref uses .. to escape the outbox' {
+        # A valid form parked outside the outbox, reached via traversal from inside it.
+        $outside = Join-Path $script:PtrRoot 'evil.RESULT.json'
+        Set-Content -LiteralPath $outside -Value $script:ValidResult
+        $traverse = ($script:Outbox -replace '\\', '/') + '/../../../../evil.RESULT.json'
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$traverse"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'outbox'
+    }
+
+    It 'blocks a pointer to a malformed form file' {
+        $f = Join-Path $script:Outbox 'backend.RESULT.json'
+        Set-Content -LiteralPath $f -Value '{ "type":"RESULT","role":"backend" }'  # missing changed/gate
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$($f -replace '\\','/')"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'RESULT'
+    }
+
+    It 'blocks a pointer with extra keys' {
+        $f = Join-Path $script:Outbox 'backend.RESULT.json'
+        Set-Content -LiteralPath $f -Value $script:ValidResult
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$($f -replace '\\','/')"",""role"":""backend"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'type, ref'
+    }
+
+    It 'blocks when the pointer type disagrees with the file form' {
+        $f = Join-Path $script:Outbox 'backend.RESULT.json'
+        Set-Content -LiteralPath $f -Value $script:ValidResult
+        $d = Get-ProtocolFormDecision -Text "{ ""type"":""REVIEW"",""ref"":""$($f -replace '\\','/')"" }"
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'does not match'
+    }
+}
+
+# ============================================================
 Describe 'Get-RenderRecipe — block reasons carry the JSON recipe' {
 
     It 'recipe names the six forms, the schema location, and the normalizer invocation' {

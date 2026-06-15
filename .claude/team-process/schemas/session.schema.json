@@ -2,24 +2,31 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "team-process/schemas/session.schema.json",
   "title": "team-process session record",
-  "description": "Durable run ledger for a /feature-team session. Written initial-minimal by the team-mode hook on TeamCreate; enriched by the orchestrator as the run proceeds (roster, phase, ledger). Its existence at .team-process/run/session.json = team mode active. Read on SessionStart to resume + remind. Most fields optional so the minimal hook-written record validates.",
+  "description": "Durable run ledger for one team-process session. Each concurrent run owns a directory .team-process/run/sessions/<id>/ (id = sanitized team name) holding this session.json plus outbox/ for member hand-backs. The EXISTENCE of any sessions/<id>/session.json = team mode active. Written initial-minimal by the team-mode hook on TeamCreate; enriched by the orchestrator as the run proceeds (roster, phase, ledger). Read on SessionStart to resume + remind. 'workflow' classifies how to resume (feature-team vs freeform). Most fields optional so the minimal hook-written record validates.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["team", "createdAt"],
+  "required": ["id", "workflow", "team", "createdAt"],
   "properties": {
+    "id": { "type": "string", "minLength": 1, "description": "Session id = the record's filename stem; sanitized team name ([A-Za-z0-9._-])." },
+    "workflow": {
+      "type": "string",
+      "description": "Which workflow produced this session — drives how resume continues.",
+      "enum": ["feature-team", "freeform"]
+    },
     "team": { "type": "string", "minLength": 1, "description": "TeamCreate name (also the team_name members must set)." },
     "branch": { "type": "string", "description": "Git branch the run targets." },
     "issue": { "type": "string", "description": "Owning issue / spec ref, e.g. '#321'." },
+    "task": { "type": "string", "description": "Freeform: the scheduled-task description. Omitted for feature-team (its spec is the issue)." },
     "phase": {
       "type": "string",
-      "description": "Current process.md phase.",
-      "enum": ["created", "intake", "contract", "plan-dispatch", "implement", "integrate", "review-loop", "fix-loop", "ship", "done"]
+      "minLength": 1,
+      "description": "Resume cursor. feature-team uses the process.md phase enum; freeform uses any non-empty string."
     },
     "createdAt": { "type": "string", "description": "ISO-8601 timestamp the session opened." },
     "updatedAt": { "type": "string", "description": "ISO-8601 timestamp of the last ledger update." },
     "roster": {
       "type": "array",
-      "description": "Spawned members and their lanes.",
+      "description": "Spawned members and their lanes. Source of truth for run/lane (projected via -SyncLane).",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -46,5 +53,21 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "description": "feature-team sessions follow the process.md phase vocabulary; freeform sessions may use any non-empty phase string.",
+      "if": {
+        "properties": { "workflow": { "const": "feature-team" } },
+        "required": ["workflow"]
+      },
+      "then": {
+        "properties": {
+          "phase": {
+            "enum": ["created", "intake", "contract", "plan-dispatch", "implement", "integrate", "review-loop", "fix-loop", "ship", "done"]
+          }
+        }
+      }
+    }
+  ]
 }
