@@ -52,9 +52,10 @@ explicit confirmation*).
 
 - **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description = the issue
   summary. *(A `PostToolUse(TeamCreate)` hook writes the durable session record
-  `.team-process/run/session.json`; the team-mode guard then blocks any foreign in-session
-  `Agent`/Task subagent — every member spawn below MUST set `team_name`, or it is rejected as an
-  in-session downgrade. The record persists across reboots; see [`process.md`](../team-process/process.md)
+  `.team-process/run/sessions/<id>.json` with `workflow: feature-team` (`<id>` = sanitized team name);
+  the team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn
+  below MUST set `team_name`, or it is rejected as an in-session downgrade. The record persists across
+  reboots; concurrent runs coexist as distinct files; see [`process.md`](../team-process/process.md)
   → *Session state & resume*.)*
 - **Spawn each member** via the `Agent` tool to execute [`/implement`](implement.md) in its lane:
   - `team_name` = the team · `name` = a stable, referenceable label (e.g. `backend`) ·
@@ -69,9 +70,12 @@ explicit confirmation*).
 
 ## 3 — Coordinate (hub-and-spoke)
 
-- Members report to the lead on completion (changes, lane touched, gate results, blockers). Peer
-  `SendMessage` is reserved for **contract negotiation** (contract ↔ consumers); the outcome is
-  recorded in the `ARTIFACT`, not left as chat.
+- Members report to the lead on completion (changes, lane touched, gate results, blockers) as a
+  **file + pointer**: the typed form is written to `.team-process/run/sessions/<id>/outbox/<role>.<TYPE>.json`
+  and a `{ type, ref }` pointer is sent via `SendMessage`. **Drain each wave** — read the outbox file by
+  `ref`, fold it into the ledger, then delete it (see [`protocol.md`](../team-process/protocol.md) →
+  *Hand-back delivery*). Peer `SendMessage` is reserved for **contract negotiation** (contract ↔
+  consumers); the outcome is recorded in the `ARTIFACT`, not left as chat.
 - **Verify state after every wave** — re-check repo/worktree state; catch out-of-lane edits, stray
   commits, mixed EOL before they compound.
 
@@ -89,9 +93,10 @@ explicit confirmation*).
   owning member; loop until green.
 - Run [`/ship`](ship.md) — commit in logical groups → branch → open/update PR → watch CI green.
   Never push the default branch.
-- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook removes the session record.
-  On a fresh session a leftover record is NOT auto-cleared — `SessionStart` reminds you to resume or
-  abandon it; abandon a stale one with `Invoke-TeamModeGuard.ps1 -EndSession`.)*
+- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook removes that team's session
+  record. On a fresh session a leftover record is NOT auto-cleared — `SessionStart` reminds you to
+  resume or abandon it; abandon a stale one by id with
+  `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>`.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 

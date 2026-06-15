@@ -29,7 +29,8 @@ guard rejects any non-conforming message.
 1. **Write the form JSON to a temp file** (rough order/casing is fine — the normalizer fixes it).
 2. **Normalize:** `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file>`
    (or pipe the JSON in via stdin). Non-zero exit + a stderr message means it's invalid — fix and retry.
-3. **Send the stdout verbatim** as the `SendMessage` body.
+3. **Send the stdout verbatim** as the `SendMessage` body — *or*, for a member OUTPUT form, write it to
+   the session outbox and send a pointer instead (see *Hand-back delivery* below).
 
 ```jsonc
 // rough input (unordered, lowercase type, empty optionals)   ->   normalized output sent verbatim
@@ -42,6 +43,31 @@ guard rejects any non-conforming message.
 ```
 
 `role` (in `RESULT`/`REVIEW`) is one of: `contract` · `backend` · `frontend` · `infrastructure` · `testing` · `docs`.
+
+---
+
+## Hand-back delivery — file + pointer (member → orch)
+
+A member's OUTPUT form (`RESULT` · `REVIEW` · `FINDING` · `ARTIFACT`) is delivered as a **file in the
+session directory**, not inline in the message. The file is the durable payload; `SendMessage` carries
+only a pointer that wakes the orchestrator. (`BRIEF`/`FIX` are orchestrator dispatch — unchanged.)
+
+1. **Write the normalized form** to the outbox in the member's own worktree:
+   `.team-process/run/sessions/<id>/outbox/<role>.<TYPE>.json` — `<id>` = the `team_name` sanitized,
+   `<TYPE>` = the form (e.g. `backend.RESULT.json`).
+2. **Send the pointer** as the `SendMessage` body — exactly `{ "type": "<FORM>", "ref": "<ABSOLUTE path
+   to the file>" }`, no other keys. The guard validates the *referenced file* against its schema; a
+   missing / malformed file or a `type`↔file mismatch is **blocked**.
+3. **Orchestrator drains.** Reads the file by `ref` (cross-worktree read), folds it into the run ledger,
+   then deletes the outbox file.
+
+- **Why a file.** Durable · auditable · survives a compacted or dropped session — the ledger, not the
+  conversation, is the source of truth.
+- **Absolute `ref`.** Worktree-isolated members have a separate filesystem; the absolute path lets the
+  orchestrator read the file. A relative `ref` resolves against the repo root.
+- **Lane exemption.** The outbox is not part of a member's code lane; the lane guard allows writes under
+  `**/.team-process/run/sessions/*/outbox/**`.
+- **Back-compat.** A full typed form sent inline (no `ref`) still validates and is accepted.
 
 ---
 
@@ -205,3 +231,6 @@ Pre-implementation scoping *or* pre-testing peer review — same form.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see [`process.md`](process.md) *Fix loop*).
 - Members **MUST NOT** commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
+- A member OUTPUT form is handed back as a **file + pointer** (see *Hand-back delivery*): the typed form
+  is written to the session outbox and the `SendMessage` body is the `{ type, ref }` pointer. A pointer
+  whose referenced file is missing/malformed, or whose `type` disagrees with the file, is returned UNREAD.
