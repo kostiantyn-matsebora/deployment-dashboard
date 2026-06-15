@@ -75,18 +75,17 @@ need to change it → surface as a decision, never slide back to in-session suba
 
 ## Session state & resume
 
-Each team-process run persists its own durable record at `.team-process/run/sessions/<id>.json`
-(gitignored runtime state; `<id>` = the sanitized team name) so it **survives a session boundary or
-reboot**. This is what makes "mode is sticky" hold across a fresh session instead of decaying into
-in-session subagent spawns. **One record per run** — concurrent runs in the same worktree coexist as
-distinct files.
+Each team-process run owns a directory `.team-process/run/sessions/<id>/` (gitignored runtime state;
+`<id>` = the sanitized team name) holding `session.json` (the durable record) and `outbox/` (member
+hand-backs). It **survives a session boundary or reboot** — this is what makes "mode is sticky" hold
+across a fresh session instead of decaying into in-session subagent spawns. **One directory per run** —
+concurrent runs in the same worktree coexist as distinct directories.
 
-- **Per-session, named by id.** The id is the sanitized `TeamCreate` name (it equals each member's
-  `team_name`). Re-creating the same team merges into its existing record (preserves
-  `createdAt`/`roster`/`ledger`).
-- **Existence-of-any = team mode active.** The team-mode guard blocks foreground in-session
-  `Agent`/`Task` spawns whenever **any** session record exists (use `team_name`) — across reboots,
-  not only within one session. A legacy single-file `run/session.json` is still read for back-compat.
+- **Per-session, named by id.** The id is the sanitized `TeamCreate` name (it equals each member's `team_name`).
+  - Re-creating the same team merges into its existing `session.json` (preserves `createdAt`/`roster`/`ledger`).
+- **Existence-of-any = team mode active.** The team-mode guard blocks foreground in-session `Agent`/`Task` spawns whenever **any** session record exists (use `team_name`).
+  - Enforcement spans reboots, not only the current session.
+  - A legacy single-file `run/session.json` is still read for back-compat.
 - **Workflow classifier.** Each record carries `workflow` (`feature-team` | `freeform`) so resume
   knows how to continue. `feature-team` follows the phase enum below; `freeform` uses a free-form
   phase string.

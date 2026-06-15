@@ -178,7 +178,7 @@ Describe 'Get-SessionReminder' {
 # ============================================================
 Describe 'Set/Clear/Get session round-trip (temp root)' {
 
-    It 'Set-TeamSession writes a schema-valid record under sessions/<id>.json' {
+    It 'Set-TeamSession writes a schema-valid record under sessions/<id>/session.json' {
         $root = New-TmpRoot
         try {
             Set-TeamSession -Root $root -Team 'feat-1' -Workflow 'feature-team' -Branch 'feat/x' -Now $script:FixedNow | Out-Null

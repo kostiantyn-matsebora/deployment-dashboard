@@ -231,6 +231,7 @@ Pre-implementation scoping *or* pre-testing peer review — same form.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see [`process.md`](process.md) *Fix loop*).
 - Members **MUST NOT** commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
-- A member OUTPUT form is handed back as a **file + pointer** (see *Hand-back delivery*): the typed form
-  is written to the session outbox and the `SendMessage` body is the `{ type, ref }` pointer. A pointer
-  whose referenced file is missing/malformed, or whose `type` disagrees with the file, is returned UNREAD.
+- A member OUTPUT form is handed back as a **file + pointer** (see *Hand-back delivery*):
+  - The typed form is written to the session outbox.
+  - The `SendMessage` body is the `{ type, ref }` pointer.
+  - A pointer whose referenced file is missing/malformed, or whose `type` disagrees with the file, is returned UNREAD.

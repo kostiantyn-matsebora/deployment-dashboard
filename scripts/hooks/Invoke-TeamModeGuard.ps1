@@ -199,7 +199,7 @@ function Get-SessionReminder {
 $lines
 RESUME, do not restart: continue each run from its ledger; spawn members with team_name set, never
 foreground in-session subagents (the team-mode guard will block them). Records live at
-.team-process/run/sessions/<id>.json. To ABANDON one: pwsh -NoProfile -File
+.team-process/run/sessions/<id>/session.json. To ABANDON one: pwsh -NoProfile -File
 scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>. See
 .claude/team-process/process.md -> 'Session state & resume'.
 "@.Trim()

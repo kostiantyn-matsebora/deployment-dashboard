@@ -52,10 +52,10 @@ explicit confirmation*).
 
 - **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description = the issue
   summary. *(A `PostToolUse(TeamCreate)` hook writes the durable session record
-  `.team-process/run/sessions/<id>.json` with `workflow: feature-team` (`<id>` = sanitized team name);
-  the team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn
+  `.team-process/run/sessions/<id>/session.json` with `workflow: feature-team` (`<id>` = sanitized team
+  name); the team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn
   below MUST set `team_name`, or it is rejected as an in-session downgrade. The record persists across
-  reboots; concurrent runs coexist as distinct files; see [`process.md`](../team-process/process.md)
+  reboots; concurrent runs coexist as distinct directories; see [`process.md`](../team-process/process.md)
   → *Session state & resume*.)*
 - **Spawn each member** via the `Agent` tool to execute [`/implement`](implement.md) in its lane:
   - `team_name` = the team · `name` = a stable, referenceable label (e.g. `backend`) ·
