@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.12.1] - 2026-06-15
+
+### Fixed
+
+- **Managed-identity Postgres connections now enforce SSL.** The assembled connection string omitted the `SslMode` keyword, so Npgsql fell back to its `Prefer` default (silent non-SSL) — which Azure Database for PostgreSQL rejects for AAD / managed-identity users, with no knob to force it. Managed-identity connections now default to `SslMode=Require`, so AAD auth works out of the box; static-password mode is unchanged (local/bundled non-SSL container still works). A new `POSTGRES_SSL_MODE` env var (and matching `Postgres:SslMode` appsettings key) overrides the SSL mode for either auth mode, passed verbatim to Npgsql. See [Configuration](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/configuration/#postgresql-auth-modes).
+
 ## [0.12.0] - 2026-06-14
 
 ### Added
