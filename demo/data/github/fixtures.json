@@ -1,5 +1,5 @@
 {
-  "_doc": {
+    "_doc": {
     "purpose": "Curated GitHub fixture mirroring demo/data/events.json exactly — 10 services, same envs, same sha/ref/version/actor/status outcomes.",
     "f10": "payments-api has a full dev→staging→qa→preprod→prod deployment-job needs chain. auth-bff, catalog-edge, ledger-projector, notification-worker, order-svc also have multi-env needs chains matching their events.json topologies.",
     "f15": "search-indexer uses artifact:version.txt on every deployment (F15). Artifact content matches the version string from events.json.",
@@ -7,7 +7,26 @@
     "run_ids": "run_id values are taken from events.json run_number fields so target_url patterns are consistent.",
     "multi_run": "Services with multiple runs (auth-bff: 3300/3210/3200, order-svc: 2960/2940/2920, etc.) have a deployment object per run per env. The fetcher backfill picks the newest per (service, env).",
     "disconnected": "billing-webhook has five separate run_ids (one per env) — fully disconnected as in events.json.",
-    "target_url": "Every status target_url embeds /actions/runs/{run_id} for fetcher §5.6.1 run-id extraction."
+    "target_url": "Every status target_url embeds /actions/runs/{run_id} for fetcher §5.6.1 run-id extraction.",
+    "ingest_window": "Timestamps are relative-shifted to seed-time at load by GithubFixtureLoader — the newest event always anchors to ~now so the dataset never ages out of INITIAL_LOOKBACK=7d. Relative spacing of all events is preserved exactly. billing-webhook/prod run 792001 is ~12 days before the newest event; it remains outside the 7-day window after shift by design.",
+    "new_statuses": {
+      "pending":   "payments-api prod run 4840 — single 'pending' status → maps to contract 'pending'. run 4830 'success' is the effective slot; run 4840 is the incoming next.",
+      "queued":    "search-indexer prod run 1420 — single 'queued' status → maps to contract 'queued'.",
+      "waiting":   "billing-webhook prod run 826 — single 'waiting' status → maps to contract 'waiting'.",
+      "cancelled": "ledger-projector prod run 1831 — 'failure' status + run_conclusion 'cancelled' → fetcher ResolveFailureStatusAsync detects cancelled run → contract 'cancelled'.",
+      "rejected":  "catalog-edge prod run 5161 — 'failure' status + reviews [{state: rejected}] → fetcher reviews endpoint → contract 'rejected'."
+    },
+    "box_state_slots": {
+      "S1_success_only":                     "payments-api/dev — run 4830 success (2026-05-31), no newer deployment",
+      "S2_running_last_successful":           "auth-bff/qa — run 3200001 success (2026-06-01, moved into window), run 3300003 in_progress (2026-05-31). prev_failed=false (prev terminal=success).",
+      "S3_running_failed_last_successful":    "ledger-projector/qa — run 1815001 success (2026-06-01), run 1823001 failure (2026-06-02), run 1828001 in_progress (2026-06-03). prev_failed=true (prev terminal=failure).",
+      "S4_failure_last_successful":           "notification-worker/staging — run 3081001 success (2026-06-02, moved into window), run 3110002 failure (2026-05-31)",
+      "S5_running_no_prior":                  "platform-proxy/staging — run 6200002 in_progress (2026-05-31), only deployment for that slot",
+      "S6_running_failed_no_prior":           "billing-webhook/staging — run 820001 failure (2026-06-01), run 825001 in_progress (2026-06-03). prev_failed=true (prev terminal=failure, no success history).",
+      "never_deployed":                       "billing-webhook/prod — run 826001 waiting (2026-06-06) is the only ingested deployment; run 792001 success is 2026-05-25 (outside window, not ingested) → current=waiting (context status), next absent → never-deployed neutral tile",
+      "effective_plus_next_badge":            "payments-api/prod — run 4830005 success + run 4840005 pending. Also: ledger-projector/prod run 1802002 success + run 1831001 cancelled; catalog-edge/prod run 5145002 success (2026-06-02) + run 5161001 rejected",
+      "empty_slot":                           "platform-proxy/qa — in environments list but no deployments"
+    }
   },
   "repos": [
 
@@ -93,6 +112,20 @@
           "statuses": [
             { "id": 48305001, "state": "in_progress", "created_at": "2026-05-31T07:00:30Z" },
             { "id": 48305002, "state": "success",     "created_at": "2026-05-31T07:04:00Z" }
+          ]
+        },
+        {
+          "_note": "NEW STATUS: pending — run 4840 queued for prod; run 4830 success remains the effective slot.",
+          "id": 4840005,
+          "sha": "0b1c2d3",
+          "ref": "release/2.16",
+          "environment": "prod",
+          "payload": { "version": "v2.16.0-rc1" },
+          "creator": "mreyes",
+          "created_at": "2026-06-06T07:55:00Z",
+          "run_id": 4840,
+          "statuses": [
+            { "id": 48400051, "state": "pending", "created_at": "2026-06-06T07:55:30Z" }
           ]
         }
       ]
@@ -186,6 +219,21 @@
             { "id": 14105002, "state": "success",     "created_at": "2026-05-31T06:44:00Z" }
           ],
           "artifact": { "id": 99005, "name": "version.txt", "content": "v0.8.0" }
+        },
+        {
+          "_note": "NEW STATUS: queued — run 1420 waiting to dispatch for prod.",
+          "id": 1420005,
+          "sha": "b2c3d4e",
+          "ref": "release/0.8",
+          "environment": "prod",
+          "payload": null,
+          "creator": "mreyes",
+          "created_at": "2026-06-06T06:52:00Z",
+          "run_id": 1420,
+          "statuses": [
+            { "id": 14200051, "state": "queued", "created_at": "2026-06-06T06:52:30Z" }
+          ],
+          "artifact": { "id": 99020, "name": "version.txt", "content": "v0.8.0" }
         }
       ]
     },
@@ -193,7 +241,7 @@
     {
       "owner": "demo-org",
       "repo": "auth-bff",
-      "_note": "PARTIAL — run 3300 (v3.3.0) dev→staging, qa in-progress; run 3210 (v3.2.4) preprod→prod; run 3200 (v3.2.4) lone qa success.",
+      "_note": "PARTIAL — run 3300 (v3.3.0) dev→staging, qa in-progress; run 3210 (v3.2.4) preprod→prod; run 3200 (v3.2.4) lone qa success (moved to 2026-06-01 to be inside 7-day ingest window → S2 demo slot).",
       "workflows": [
         {
           "id": 1003,
@@ -233,58 +281,62 @@
           ]
         },
         {
+          "_note": "S2 current running — moved to 2026-06-04 so it is newer than the run 3200001 success anchor (S2: running + last successful).",
           "id": 3300003,
           "sha": "c1d2e3f",
           "ref": "feat/oauth-rotate",
           "environment": "qa",
           "payload": { "version": "v3.3.0" },
           "creator": "s.harper",
-          "created_at": "2026-05-31T07:56:00Z",
+          "created_at": "2026-06-04T07:56:00Z",
           "run_id": 3300,
           "statuses": [
-            { "id": 33003001, "state": "in_progress", "created_at": "2026-05-31T07:56:30Z" }
+            { "id": 33003001, "state": "in_progress", "created_at": "2026-06-04T07:56:30Z" }
           ]
         },
         {
+          "_note": "S2 last-successful anchor — moved to 2026-06-01 so it falls inside the 7-day ingest window; run 3300003 in_progress is the current, this success is the split-bottom.",
           "id": 3200001,
           "sha": "93a4b5c",
           "ref": "release/3.2",
           "environment": "qa",
           "payload": { "version": "v3.2.4" },
           "creator": "release-bot",
-          "created_at": "2026-05-25T02:00:00Z",
+          "created_at": "2026-06-01T02:00:00Z",
           "run_id": 3200,
           "statuses": [
-            { "id": 32001001, "state": "in_progress", "created_at": "2026-05-25T02:00:30Z" },
-            { "id": 32001002, "state": "success",     "created_at": "2026-05-25T02:04:00Z" }
+            { "id": 32001001, "state": "in_progress", "created_at": "2026-06-01T02:00:30Z" },
+            { "id": 32001002, "state": "success",     "created_at": "2026-06-01T02:04:00Z" }
           ]
         },
         {
+          "_note": "Moved to 2026-06-03 (inside ingest window) so auth-bff/preprod shows S1 success.",
           "id": 3210001,
           "sha": "93a4b5c",
           "ref": "release/3.2",
           "environment": "preprod",
           "payload": { "version": "v3.2.4" },
           "creator": "release-bot",
-          "created_at": "2026-05-27T04:00:00Z",
+          "created_at": "2026-06-03T04:00:00Z",
           "run_id": 3210,
           "statuses": [
-            { "id": 32101001, "state": "in_progress", "created_at": "2026-05-27T04:00:30Z" },
-            { "id": 32101002, "state": "success",     "created_at": "2026-05-27T04:04:00Z" }
+            { "id": 32101001, "state": "in_progress", "created_at": "2026-06-03T04:00:30Z" },
+            { "id": 32101002, "state": "success",     "created_at": "2026-06-03T04:04:00Z" }
           ]
         },
         {
+          "_note": "Moved to 2026-06-03 (inside ingest window) so auth-bff/prod shows S1 success.",
           "id": 3210002,
           "sha": "93a4b5c",
           "ref": "release/3.2",
           "environment": "prod",
           "payload": { "version": "v3.2.4" },
           "creator": "release-bot",
-          "created_at": "2026-05-28T04:00:00Z",
+          "created_at": "2026-06-03T05:00:00Z",
           "run_id": 3210,
           "statuses": [
-            { "id": 32102001, "state": "in_progress", "created_at": "2026-05-28T04:00:30Z" },
-            { "id": 32102002, "state": "success",     "created_at": "2026-05-28T04:04:00Z" }
+            { "id": 32102001, "state": "in_progress", "created_at": "2026-06-03T05:00:30Z" },
+            { "id": 32102002, "state": "success",     "created_at": "2026-06-03T05:04:00Z" }
           ]
         }
       ]
@@ -380,7 +432,7 @@
     {
       "owner": "demo-org",
       "repo": "billing-webhook",
-      "_note": "FULLY DISCONNECTED — every env from a different run (822/825/810/801/792), no parents. staging is in-progress (no actor in events.json → creator matches best effort).",
+      "_note": "FULLY DISCONNECTED — every env from a different run (822/820/825/810/801/792/826), no parents. staging: run 820001 failure (2026-06-03) then run 825001 in_progress → S6 demo slot (running+prev-failed, no success). prod: run 826001 waiting only (run 792001 is outside window) → never-deployed demo slot.",
       "workflows": [
         {
           "id": 1005,
@@ -406,16 +458,32 @@
           ]
         },
         {
+          "_note": "S6 prev-failed — failure before the running deployment; no prior success exists for this slot (S6 demo: running+prev-failed, no success).",
+          "id": 820001,
+          "sha": "7d8e9f0",
+          "ref": "feat/retry-jitter",
+          "environment": "staging",
+          "payload": { "version": "v1.4.0" },
+          "creator": "ci-bot",
+          "created_at": "2026-06-01T07:00:00Z",
+          "run_id": 820,
+          "statuses": [
+            { "id": 8201001, "state": "in_progress", "created_at": "2026-06-01T07:00:30Z" },
+            { "id": 8201002, "state": "failure",     "created_at": "2026-06-01T07:04:00Z" }
+          ]
+        },
+        {
+          "_note": "S6 running — in_progress after the failure (newer); no success history for this slot.",
           "id": 825001,
           "sha": "7d8e9f0",
           "ref": "feat/retry-jitter",
           "environment": "staging",
           "payload": { "version": "v1.4.0" },
           "creator": "ci-bot",
-          "created_at": "2026-05-31T07:55:00Z",
+          "created_at": "2026-06-03T07:55:00Z",
           "run_id": 825,
           "statuses": [
-            { "id": 8251001, "state": "in_progress", "created_at": "2026-05-31T07:55:30Z" }
+            { "id": 8251001, "state": "in_progress", "created_at": "2026-06-03T07:55:30Z" }
           ]
         },
         {
@@ -459,6 +527,20 @@
             { "id": 7921001, "state": "in_progress", "created_at": "2026-05-25T07:00:30Z" },
             { "id": 7921002, "state": "success",     "created_at": "2026-05-25T07:04:00Z" }
           ]
+        },
+        {
+          "_note": "NEW STATUS: waiting — run 826 awaiting environment gate approval for prod.",
+          "id": 826001,
+          "sha": "6e7f8a1",
+          "ref": "feat/retry-jitter-v2",
+          "environment": "prod",
+          "payload": { "version": "v1.4.1-rc1" },
+          "creator": "l.osman",
+          "created_at": "2026-06-06T07:58:00Z",
+          "run_id": 826,
+          "statuses": [
+            { "id": 8260011, "state": "waiting", "created_at": "2026-06-06T07:58:30Z" }
+          ]
         }
       ]
     },
@@ -466,7 +548,7 @@
     {
       "owner": "demo-org",
       "repo": "catalog-edge",
-      "_note": "PARTIAL — run 5160 (v5.0.0-rc2) dev→staging, qa in-progress (no actor). run 5145 (v4.18.7) preprod→prod.",
+      "_note": "PARTIAL — run 5160 (v5.0.0-rc2) dev→staging, qa in-progress (no actor). run 5145 (v4.18.7) preprod→prod (moved to 2026-06-02 inside ingest window). prod: run 5145002 success + run 5161001 rejected → effective+next badge demo slot.",
       "workflows": [
         {
           "id": 1006,
@@ -519,31 +601,51 @@
           ]
         },
         {
+          "_note": "Moved to 2026-06-02 (inside ingest window) so catalog-edge/preprod shows S1 success.",
           "id": 5145001,
           "sha": "3e0f1a2",
           "ref": "release/4.18",
           "environment": "preprod",
           "payload": { "version": "v4.18.7" },
           "creator": "release-bot",
-          "created_at": "2026-05-29T08:00:00Z",
+          "created_at": "2026-06-02T08:00:00Z",
           "run_id": 5145,
           "statuses": [
-            { "id": 51451001, "state": "in_progress", "created_at": "2026-05-29T08:00:30Z" },
-            { "id": 51451002, "state": "success",     "created_at": "2026-05-29T08:04:00Z" }
+            { "id": 51451001, "state": "in_progress", "created_at": "2026-06-02T08:00:30Z" },
+            { "id": 51451002, "state": "success",     "created_at": "2026-06-02T08:04:00Z" }
           ]
         },
         {
+          "_note": "Moved to 2026-06-02 (inside ingest window); paired with run 5161001 rejected → effective+next badge demo (S1+rejected_next).",
           "id": 5145002,
           "sha": "3e0f1a2",
           "ref": "release/4.18",
           "environment": "prod",
           "payload": { "version": "v4.18.7" },
           "creator": "release-bot",
-          "created_at": "2026-05-29T09:00:00Z",
+          "created_at": "2026-06-02T09:00:00Z",
           "run_id": 5145,
           "statuses": [
-            { "id": 51452001, "state": "in_progress", "created_at": "2026-05-29T09:00:30Z" },
-            { "id": 51452002, "state": "success",     "created_at": "2026-05-29T09:04:00Z" }
+            { "id": 51452001, "state": "in_progress", "created_at": "2026-06-02T09:00:30Z" },
+            { "id": 51452002, "state": "success",     "created_at": "2026-06-02T09:04:00Z" }
+          ]
+        },
+        {
+          "_note": "NEW STATUS: rejected — reviewer denied the prod environment gate. GitHub writes failure on the deployment_status. Fetcher reads /deployments/{id}/reviews, finds state=rejected via ResolveFailureStatusAsync.",
+          "id": 5161001,
+          "sha": "2d9e0f1",
+          "ref": "feat/v5-rewrite",
+          "environment": "prod",
+          "payload": { "version": "v5.0.0-rc2" },
+          "creator": "tcheng",
+          "created_at": "2026-06-06T07:59:00Z",
+          "run_id": 5161,
+          "statuses": [
+            { "id": 51610011, "state": "in_progress", "created_at": "2026-06-06T07:59:30Z" },
+            { "id": 51610012, "state": "failure",     "created_at": "2026-06-06T08:01:00Z" }
+          ],
+          "reviews": [
+            { "state": "rejected", "user": "sec-approver", "submitted_at": "2026-06-06T08:00:45Z" }
           ]
         }
       ]
@@ -552,7 +654,7 @@
     {
       "owner": "demo-org",
       "repo": "ledger-projector",
-      "_note": "PARTIAL — run 1830 (v2.0.1) dev→staging. run 1823 qa failure. run 1828 qa in-progress (no actor/version). run 1802 (v1.9.8) preprod→prod.",
+      "_note": "PARTIAL — run 1830 (v2.0.1) dev→staging. run 1815 (v1.9.9) qa success (S3 anchor). run 1823 qa failure. run 1828 qa in-progress (no actor/version). run 1802 (v1.9.8) preprod→prod.",
       "workflows": [
         {
           "id": 1007,
@@ -592,30 +694,47 @@
           ]
         },
         {
+          "_note": "S3 last-successful anchor — oldest of the three qa deployments; the baseline run that succeeded.",
+          "id": 1815001,
+          "sha": "3a4b5c6",
+          "ref": "release/1.9",
+          "environment": "qa",
+          "payload": { "version": "v1.9.9" },
+          "creator": "r.iyer",
+          "created_at": "2026-06-01T05:00:00Z",
+          "run_id": 1815,
+          "statuses": [
+            { "id": 18151001, "state": "in_progress", "created_at": "2026-06-01T05:00:30Z" },
+            { "id": 18151002, "state": "success",     "created_at": "2026-06-01T05:04:00Z" }
+          ]
+        },
+        {
+          "_note": "S3 prev-failed — failure after the success anchor, before the current running deployment.",
           "id": 1823001,
           "sha": "5b6c7d8",
           "ref": "fix/skew-projection",
           "environment": "qa",
           "payload": null,
           "creator": "r.iyer",
-          "created_at": "2026-05-31T06:30:00Z",
+          "created_at": "2026-06-02T06:30:00Z",
           "run_id": 1823,
           "statuses": [
-            { "id": 18231001, "state": "in_progress", "created_at": "2026-05-31T06:30:30Z" },
-            { "id": 18231002, "state": "failure",     "created_at": "2026-05-31T06:34:00Z" }
+            { "id": 18231001, "state": "in_progress", "created_at": "2026-06-02T06:30:30Z" },
+            { "id": 18231002, "state": "failure",     "created_at": "2026-06-02T06:34:00Z" }
           ]
         },
         {
+          "_note": "S3 current running — newest; retry after the failure.",
           "id": 1828001,
           "sha": "5b6c7d8",
           "ref": "fix/skew-projection",
           "environment": "qa",
           "payload": null,
           "creator": "ci-bot",
-          "created_at": "2026-05-31T07:48:00Z",
+          "created_at": "2026-06-03T07:48:00Z",
           "run_id": 1828,
           "statuses": [
-            { "id": 18281001, "state": "in_progress", "created_at": "2026-05-31T07:48:30Z" }
+            { "id": 18281001, "state": "in_progress", "created_at": "2026-06-03T07:48:30Z" }
           ]
         },
         {
@@ -645,6 +764,22 @@
             { "id": 18022001, "state": "in_progress", "created_at": "2026-05-31T04:00:30Z" },
             { "id": 18022002, "state": "success",     "created_at": "2026-05-31T04:04:00Z" }
           ]
+        },
+        {
+          "_note": "NEW STATUS: cancelled — run 1831 concluded as cancelled; GitHub writes failure on the deployment_status. Fetcher cross-references run.conclusion=cancelled via ResolveFailureStatusAsync.",
+          "id": 1831001,
+          "sha": "6b7c8d9",
+          "ref": "main",
+          "environment": "prod",
+          "payload": { "version": "v2.0.2-rc1" },
+          "creator": "r.iyer",
+          "created_at": "2026-06-06T07:57:00Z",
+          "run_id": 1831,
+          "run_conclusion": "cancelled",
+          "statuses": [
+            { "id": 18310011, "state": "in_progress", "created_at": "2026-06-06T07:57:30Z" },
+            { "id": 18310012, "state": "failure",     "created_at": "2026-06-06T07:59:00Z" }
+          ]
         }
       ]
     },
@@ -652,7 +787,7 @@
     {
       "owner": "demo-org",
       "repo": "notification-worker",
-      "_note": "PARTIAL — run 3110 (v1.9.1) dev→staging(FAILURE). run 3081 (staging success, no version). run 3076 (v1.8.4) qa→preprod. run 3041 (v1.8.3) prod lone.",
+      "_note": "PARTIAL — run 3110 (v1.9.1) dev→staging(FAILURE). run 3081 (staging success, no version, moved to 2026-06-02 for S4). run 3076 (v1.8.4) qa→preprod. run 3041 (v1.8.3) prod lone (moved to 2026-06-01).",
       "workflows": [
         {
           "id": 1008,
@@ -678,31 +813,33 @@
           ]
         },
         {
+          "_note": "S4 current failure — moved to 2026-06-04 so it is newer than the run 3081001 success anchor (S4: failure + last successful).",
           "id": 3110002,
           "sha": "b2c3d4e",
           "ref": "main",
           "environment": "staging",
           "payload": { "version": "v1.9.1" },
           "creator": "akhan",
-          "created_at": "2026-05-31T07:22:00Z",
+          "created_at": "2026-06-04T07:22:00Z",
           "run_id": 3110,
           "statuses": [
-            { "id": 31102001, "state": "in_progress", "created_at": "2026-05-31T07:22:30Z" },
-            { "id": 31102002, "state": "failure",     "created_at": "2026-05-31T07:26:00Z" }
+            { "id": 31102001, "state": "in_progress", "created_at": "2026-06-04T07:22:30Z" },
+            { "id": 31102002, "state": "failure",     "created_at": "2026-06-04T07:26:00Z" }
           ]
         },
         {
+          "_note": "S4 last-successful anchor — moved to 2026-06-02 (safely inside ingest window); run 3110002 failure is the current, this success is the split-bottom.",
           "id": 3081001,
           "sha": "9f8e7d6",
           "ref": "release/1.8",
           "environment": "staging",
           "payload": null,
           "creator": "release-bot",
-          "created_at": "2026-05-30T06:00:00Z",
+          "created_at": "2026-06-02T06:00:00Z",
           "run_id": 3081,
           "statuses": [
-            { "id": 30811001, "state": "in_progress", "created_at": "2026-05-30T06:00:30Z" },
-            { "id": 30811002, "state": "success",     "created_at": "2026-05-30T06:04:00Z" }
+            { "id": 30811001, "state": "in_progress", "created_at": "2026-06-02T06:00:30Z" },
+            { "id": 30811002, "state": "success",     "created_at": "2026-06-02T06:04:00Z" }
           ]
         },
         {
@@ -734,17 +871,18 @@
           ]
         },
         {
+          "_note": "Moved to 2026-06-01 (inside ingest window) so notification-worker/prod shows S1 success.",
           "id": 3041001,
           "sha": "8e7d6c5",
           "ref": "release/1.8",
           "environment": "prod",
           "payload": { "version": "v1.8.3" },
           "creator": "release-bot",
-          "created_at": "2026-05-28T03:00:00Z",
+          "created_at": "2026-06-01T03:00:00Z",
           "run_id": 3041,
           "statuses": [
-            { "id": 30411001, "state": "in_progress", "created_at": "2026-05-28T03:00:30Z" },
-            { "id": 30411002, "state": "success",     "created_at": "2026-05-28T03:04:00Z" }
+            { "id": 30411001, "state": "in_progress", "created_at": "2026-06-01T03:00:30Z" },
+            { "id": 30411002, "state": "success",     "created_at": "2026-06-01T03:04:00Z" }
           ]
         }
       ]

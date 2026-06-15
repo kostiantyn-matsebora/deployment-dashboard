@@ -597,9 +597,9 @@ function Invoke-DocsKeeperMaintenance {
 function Get-DocsKeeperSessionPath {
     [CmdletBinding()]
     param([string]$RepoRoot, [string]$SessionId)
-    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.docs-keeper' } else { '.docs-keeper' }
     $sid = Get-SafeSessionId -SessionId $SessionId
-    $name = if ($sid) { ".docs-keeper-session.$sid.json" } else { '.docs-keeper-session.json' }
+    $name = if ($sid) { "session.$sid.json" } else { 'session.json' }
     return (Join-Path $dir $name)
 }
 
@@ -646,13 +646,13 @@ function Read-MergedDocsKeeperSessions {
         [scriptblock]$SessionFileLister,
         [scriptblock]$SessionFileReader
     )
-    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.docs-keeper' } else { '.docs-keeper' }
 
     if (-not $SessionFileLister) {
         $capturedDir = $dir
         $SessionFileLister = {
             if (-not (Test-Path -LiteralPath $capturedDir)) { return @() }
-            @(Get-ChildItem -LiteralPath $capturedDir -Filter '.docs-keeper-session*.json' -ErrorAction SilentlyContinue |
+            @(Get-ChildItem -LiteralPath $capturedDir -Filter 'session*.json' -ErrorAction SilentlyContinue |
               ForEach-Object { $_.FullName })
         }.GetNewClosure()
     }
@@ -747,10 +747,13 @@ if (-not $AsLibrary) {
         -EnforcementMode $EnforcementMode
 
     if ($result.ExitCode -ne 0 -and $result.Message) {
+        # Block mode: stderr is surfaced by Claude Code on exit 2.
         [Console]::Error.WriteLine($result.Message)
     }
     elseif ($result.ExitCode -eq 0 -and $result.Message) {
-        [Console]::Error.WriteLine($result.Message)
+        # Warn mode: exit 0 — Claude Code ignores stderr on exit 0.
+        # Emit systemMessage on stdout so the user sees it.
+        [Console]::Out.WriteLine((@{ systemMessage = $result.Message } | ConvertTo-Json -Compress))
     }
     exit $result.ExitCode
 }

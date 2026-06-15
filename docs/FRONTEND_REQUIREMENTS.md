@@ -32,6 +32,19 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - The Swimlanes attribute picker exposes 8 toggles: `environment`, `version`, `run_url`, `sha`, `run_number`, `ref`, `actor`, `happened_at`. `parent_deployments` is intentionally absent — the graph edges convey it.
 - Both attribute pickers default to all options ON.
 
+### Column visibility and order (Matrix only)
+
+- The Matrix view provides a column visibility picker (Columns button, `⊞`) that lets the user show or hide individual environment columns.
+- Hiding an environment column fully removes it from the grid (header + all cells); no placeholder column remains.
+- The last visible environment column cannot be hidden.
+- Visible environment columns are draggable to reorder via a `⠿` grip handle on each column header.
+- A "Show all · reset order" action in the Columns popover restores all columns to visible and resets to the default column order.
+- Column visibility (hidden set) and column order persist client-side to `localStorage` keys `dd:colHidden` and `dd:colOrder`.
+- Both persistence keys are cleared by "Show all · reset order".
+- On reload, persisted column state is restored; a stale `colOrder` (environment set changed) falls back to the default order.
+- The Fields button and Columns button each display an accent active state plus a numeric count badge when their respective hidden counts are greater than zero. The badge and accent clear when the count returns to zero.
+- Each button's tooltip reflects the current hidden count: `"Fields — N field(s) hidden"` / `"Columns — N environment(s) hidden"` when N > 0; default label text when N = 0.
+
 ### Details surfaces
 
 - Clicking any slot in the Matrix view opens a side drawer showing the per-slot deployment history.
@@ -46,9 +59,56 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - The auto theme mode resolves the active theme via the system `prefers-color-scheme` media query.
 - The user's theme selection persists across reloads via `localStorage`.
 
+### Operational telemetry — fetcher rate-limit indicator
+
+> **Scope.** This subsection governs a **fetcher operational telemetry surface** in the header. It is distinct from deployment data. The 11-field deployment whitelist (see Data → Visible-field whitelist) governs deployment elements (tiles, nodes, drawers, inspector) and does **not** apply to this indicator.
+
+Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.md), [`docs/api/api-guidelines.md`](../api/api-guidelines.md) §11 "Rate-limit report payload".
+
+**Stream.** The SPA subscribes to `GET /api/control/events/stream` (SSE, event name `component`), filters frames where `event_type === "rate-limit"`, and maintains a **per-adapter map** keyed by `payload.adapter` (last-value-wins per adapter; no history).
+
+**Visibility.** Chips are rendered only after the first qualifying event arrives; absent on initial load. The last-known per-adapter map persists to `localStorage` (key `dd.rateLimit`) and is hydrated on init so chips appear immediately after reload.
+
+**Chips (`.hdr-icons` group).** One compact icon-button per adapter, sorted alphabetically by adapter name. Each displays inline `own_used / own_budget`. Clicking opens that adapter's `p-popover` with the full breakdown. With a single adapter the header looks identical to the single-chip design.
+
+**Popover fields (per chip).**
+- `adapter` — CI/CD adapter name; always present.
+- `own_used / own_budget` — fetcher's own request usage vs self-throttle budget; displays `—` for null values.
+- Usage bar — visual proportion of `own_used / own_budget`; rendered only when `own_budget > 0`; never divides by zero.
+- `ci_remaining / ci_limit` — CI/CD-wide remaining vs total quota; displays `—` for null values.
+- `reset_at` — window rollover time as local clock string; displays `—` when null.
+- `state` badge — `running` (green) or `paused` (amber); styled distinctly.
+
+**Null safety.** Any null numeric or time field renders as an em-dash (`—`). No `NaN` may appear in the UI.
+
+**Live/SSE indicator.** `sseConnected` reflects `EventSource` connection state: `true` on `onopen`, `false` on `onerror` or when the connection is closed. It is independent of data-event arrival — the indicator stays green during idle periods between deployment events (e.g., `: ping` heartbeats keep the connection alive but do not fire JS events).
+
 ### Live interactions
 
 - Hovering any version anywhere in the Matrix amber-highlights every tile across environments where the same version is deployed.
+
+### Analytics view
+
+- The dashboard provides a third view — **Analytics** — accessible via the top-nav segmented control as a 3rd tab alongside Matrix and Swimlanes.
+- The Analytics view is **read-only** — no user writes; CI/CD writes are the sole data source.
+- The period selector exposes three windows: **7d**, **14d**, **30d**; only one may be active at a time.
+- The active window is **bounded server-side** by `HISTORY_RETENTION_DAYS`; when `window.clamped === true` the SPA surfaces the clamp in the period selector subtitle ("bounded by HISTORY_RETENTION_DAYS").
+- All aggregation is **server-side**; the SPA MUST NOT compute p95 / group-by / frequency counts over raw deployment history client-side.
+- The DORA KPI band displays **four keys**: Deployment Frequency (`per_day`), Lead Time for Changes (`hours`), Change Failure Rate (`ratio`), and Time to Restore (`minutes`).
+- Each DORA KPI card renders: formatted value + unit, a performance classification chip (`elite` / `high` / `medium` / `low`), a signed trend chip vs the prior half-window (direction semantics: up = good for frequency; up = bad for CFR, lead-time, MTTR), and a per-day sparkline.
+- The Lead Time card MUST display a visible approximation label; the value MUST NOT be presented as measured commit→prod lead time (source: `api-guidelines.md` §12 lead-time caveat).
+- The chart grid contains **8 charts** backed by the 9 focused analytics endpoints:
+  - Deployment frequency over time — stacked bars, success vs failure per day (`GET /api/analytics/frequency`).
+  - Change failure rate trend — daily CFR line + dashed 15% elite reference line (`GET /api/analytics/change-failure-rate`).
+  - Deployment duration distribution — histogram bins (minutes) + p50 and p95 markers (`GET /api/analytics/duration-histogram`).
+  - Promotion funnel — operator-configured promotion ladder (default `dev,staging,qa,preprod,prod`) sankey/funnel, count + conversion per stage (`GET /api/analytics/promotion-funnel`).
+  - Status distribution — donut of all 8 statuses, zero-filled for stable slice set (`GET /api/analytics/status-distribution`).
+  - Deploy heatmap — 7-row (day-of-week) × 24-col (UTC hour) intensity grid (`GET /api/analytics/heatmap`).
+  - Top deployers — leaderboard of actor + count, descending, default 10 entries (`GET /api/analytics/top-deployers`).
+  - Time to restore — recent incidents list, worst-first; each row shows service, environment, elapsed, severity chip (`GET /api/analytics/incidents`).
+- The DORA KPI band data comes from `GET /api/analytics/dora` (a 9th endpoint — not one of the 8 charts).
+- Every analytics GET carries a weak `ETag`; the SPA SHOULD send `If-None-Match` for `304` short-circuit on unchanged data.
+- The Analytics view uses `ngx-echarts` (`echarts` as peer) for all 8 chart renders. See `docs/design/libraries.md` for rationale and version.
 
 ## Visual
 
@@ -126,8 +186,10 @@ Requirements distilled from design-iteration conversations. One requirement per 
 ### Control surfaces
 
 - The filter input and failures-only toggle are persistent inline elements in the Matrix header.
-- The fields picker, correlation picker, and time-window control are on-demand header icon-button popovers.
+- The fields picker, columns picker, correlation picker, and time-window control are on-demand header icon-button popovers.
+- The columns picker icon button is hidden when the Swimlanes view is active.
 - The theme switcher is a persistent header control.
+- Every interactive topbar control carries a concise hover tooltip.
 - Popover surfaces render above all canvas content via z-index without being clipped by stacking contexts.
 
 ## Data

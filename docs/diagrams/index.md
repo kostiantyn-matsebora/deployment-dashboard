@@ -6,6 +6,19 @@ children:
   - /architecture-c4
   - /architecture-c4.drawio
   - /architecture-c4.svg
+  - /architecture-c4-dark.drawio
+  - /architecture-c4-dark.svg
+  - /zero-to-hero.drawio
+  - /zero-to-hero.svg
+  - /how-it-works-judgment.drawio
+  - /how-it-works-judgment.svg
+  - /how-it-works-enforcement.drawio
+  - /how-it-works-enforcement.svg
+  - /what-its-made-of.drawio
+  - /what-its-made-of.svg
+  - /process-issue-299.drawio
+  - /process-issue-299.svg
+  - /fetcher-rate-limit
   - /github-emulation
   - /reset-choreography
 ---
@@ -13,6 +26,13 @@ children:
 ## Contents — `architecture-c4.md`
 
 - [Component diagram (C4)](./architecture-c4.md#component-diagram-c4)
+
+## Contents — `fetcher-rate-limit.md`
+
+- [Diagram A — Emit and fan-out sequence](./fetcher-rate-limit.md#diagram-a--emit-and-fan-out-sequence)
+- [Diagram B — Consumer topology](./fetcher-rate-limit.md#diagram-b--consumer-topology)
+- [Payload — `event_type: "rate-limit"`](./fetcher-rate-limit.md#payload--event_type-rate-limit)
+- [Decisions (locked)](./fetcher-rate-limit.md#decisions-locked)
 
 ## Contents — `reset-choreography.md`
 

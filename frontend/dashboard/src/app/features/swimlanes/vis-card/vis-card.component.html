@@ -6,6 +6,7 @@
   class="vis-card"
   [class]="statusClass()"
   [class.is-selected]="isSelected()"
+  [class.is-flashing]="isFlashing()"
   (click)="onClick()"
   role="button"
   [attr.aria-label]="event().service + ' ' + event().environment + ' ' + (event().version || '')"
@@ -15,8 +16,19 @@
 >
 
   <!-- Row 1: version (left) + happened_at (right via margin-left:auto) -->
-  @if (showTopRow()) {
+  @if (showTopRow() || isNeverDeployed()) {
     <div class="vc-ver-row">
+      <!-- Never-deployed status chip — neutral card; status hue on chip only -->
+      @if (isNeverDeployed()) {
+        <span
+          class="ctx-badge cb-{{ event().status }}"
+          [attr.aria-label]="event().status"
+          style="flex-shrink:0;margin-right:6px"
+        >
+          <span aria-hidden="true">{{ ctxIcon(event().status) }}</span>
+          <span>{{ event().status }}</span>
+        </span>
+      }
       @if (show('version') && event().version) {
         <span class="vc-ver">{{ event().version }}</span>
       }
@@ -61,5 +73,21 @@
       <span class="vc-env">{{ event().environment }}</span>
     }
   </div>
+
+  <!-- Context badge — from slot.next (pending/queued/waiting/cancelled/rejected) -->
+  @if (ctxStatus()) {
+    <div class="ctx-row">
+      <span
+        class="ctx-badge cb-{{ ctxStatus() }}"
+        [attr.aria-label]="ctxStatus()! + (ctxVersion() ? ' ' + ctxVersion() : '')"
+      >
+        <span aria-hidden="true">{{ ctxIcon(ctxStatus()!) }}</span>
+        <span>{{ ctxStatus() }}</span>
+        @if (ctxVersion()) {
+          <span class="ctx-ver">{{ ctxVersion() }}</span>
+        }
+      </span>
+    </div>
+  }
 
 </div>

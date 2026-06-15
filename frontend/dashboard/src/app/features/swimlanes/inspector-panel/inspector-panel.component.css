@@ -207,3 +207,46 @@
   border: 1px solid rgba(var(--accent-rgb), 0.30);
   color: rgba(var(--accent-rgb), 1);
 }
+
+/* ── Next deployment section ──────────────────────────────── */
+.insp-sep-dotted {
+  grid-column: 1 / -1;
+  border-top: 1px dotted var(--glass-edge-2);
+  margin: 6px 0 1px;
+}
+
+.next-k {
+  color: var(--ink-2);
+  opacity: 0.75;
+}
+
+/* ── Context status chips (pending/queued/waiting/cancelled/rejected) ── */
+.insp-status.chip-pending {
+  background: rgba(var(--slate-rgb, 139, 147, 173), 0.14);
+  border: 1px solid rgba(var(--slate-rgb, 139, 147, 173), 0.38);
+  color: var(--slate);
+}
+
+.insp-status.chip-queued {
+  background: rgba(var(--blue-rgb, 74, 163, 240), 0.14);
+  border: 1px solid rgba(var(--blue-rgb, 74, 163, 240), 0.38);
+  color: var(--blue);
+}
+
+.insp-status.chip-waiting {
+  background: rgba(var(--violet-rgb, 154, 133, 255), 0.14);
+  border: 1px solid rgba(var(--violet-rgb, 154, 133, 255), 0.38);
+  color: var(--violet);
+}
+
+.insp-status.chip-cancelled {
+  background: rgba(var(--grey-rgb, 154, 160, 181), 0.14);
+  border: 1px solid rgba(var(--grey-rgb, 154, 160, 181), 0.38);
+  color: var(--grey);
+}
+
+.insp-status.chip-rejected {
+  background: rgba(var(--rose-rgb, 207, 128, 149), 0.14);
+  border: 1px solid rgba(var(--rose-rgb, 207, 128, 149), 0.38);
+  color: var(--rose);
+}

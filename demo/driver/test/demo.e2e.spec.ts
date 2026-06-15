@@ -6,14 +6,14 @@
  *   docs/MOCK_SPECIFICATION.md         §6 (control surface)
  *
  * Prerequisites (both must be running):
- *   cd frontend/mock   && npm run start:dev   # mock  → :3000
+ *   cd frontend/mock   && npm run start:dev   # mock  → :3002
  *   cd demo/driver     && npm run start:dev   # driver → :3001
  *
  * Run:
  *   cd demo/driver && npm run test:e2e
  */
 
-const MOCK_URL   = process.env.MOCK_URL          ?? 'http://localhost:3000';
+const MOCK_URL   = process.env.MOCK_URL          ?? 'http://localhost:3002';
 const DRIVER_URL = process.env.DEMO_DRIVER_URL   ?? 'http://localhost:3001';
 
 /** Maximum time (ms) to poll for state == done before failing. */

@@ -12,7 +12,7 @@
  *   always remain visible.
  */
 import { Subject } from 'rxjs';
-import type { DemoData, DemoEvent as DemoEventShape, DemoSseTemplate } from './demo-types';
+import type { DemoData, DemoEvent as DemoEventShape, DemoSseTemplate, DemoStatus } from './demo-types';
 
 // ── Feed entry (control panel + /_mock/stream) ────────────────────────────────
 
@@ -34,7 +34,7 @@ export interface DeploymentEvent {
   deployment_id: string;
   service: string;
   environment: string;
-  status: 'in-progress' | 'success' | 'failure';
+  status: DemoStatus;
   happened_at: string;
   version?: string;
   run_url?: string;
@@ -164,7 +164,7 @@ class EventStore {
   matrix(serviceFilter?: string): {
     generated_at: string;
     environments: string[];
-    rows: Array<{ service: string; slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent }> }>;
+    rows: Array<{ service: string; slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent; next?: DeploymentEvent }> }>;
   } {
     let rows = this.visible();
     if (serviceFilter) rows = rows.filter((e) => e.service === serviceFilter);
@@ -174,6 +174,7 @@ class EventStore {
     for (const e of rows) { serviceSet.add(e.service); envSet.add(e.environment); }
 
     const ENV_ORDER = ['dev', 'staging', 'qa', 'preprod', 'prod'];
+    const EFFECTIVE_STATUSES = new Set(['success', 'in-progress', 'failure']);
     const services = [...serviceSet].sort();
     const environments = [...envSet].sort((a, b) => {
       const ia = ENV_ORDER.indexOf(a), ib = ENV_ORDER.indexOf(b);
@@ -184,26 +185,42 @@ class EventStore {
     });
 
     const matrixRows = services.map((service) => {
-      const slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent; prev_failed?: boolean }> = {};
+      const slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent; prev_failed?: boolean; next?: DeploymentEvent }> = {};
       for (const env of environments) {
         const slotEvents = rows
           .filter((e) => e.service === service && e.environment === env)
           .sort((a, b) => new Date(b.happened_at).getTime() - new Date(a.happened_at).getTime());
         if (slotEvents.length === 0) continue;
-        const current = wire(slotEvents[0]);
-        const lastSuccessfulRaw = current.status === 'success' ? undefined : slotEvents.find((e) => e.status === 'success');
+
+        // Separate effective (success/in-progress/failure) from context (pending/queued/waiting/cancelled/rejected)
+        const effectiveEvents = slotEvents.filter((e) => EFFECTIVE_STATUSES.has(e.status));
+        const contextEvents   = slotEvents.filter((e) => !EFFECTIVE_STATUSES.has(e.status));
+
+        // current must always be an effective status; fall back to first overall if no effective event exists
+        const currentRaw = effectiveEvents[0] ?? slotEvents[0];
+        const current = wire(currentRaw);
+
+        // next: most-recent context-status event that is newer than current
+        const currentTs = new Date(currentRaw.happened_at).getTime();
+        const nextRaw = contextEvents.find(
+          (e) => new Date(e.happened_at).getTime() > currentTs
+        );
+        const next = nextRaw ? wire(nextRaw) : undefined;
+
+        const lastSuccessfulRaw = current.status === 'success' ? undefined : effectiveEvents.find((e) => e.status === 'success');
         const lastSuccessful = lastSuccessfulRaw ? wire(lastSuccessfulRaw) : undefined;
 
         let prevFailed = false;
         if (current.status !== 'success') {
-          const searchUntil = lastSuccessfulRaw ? slotEvents.indexOf(lastSuccessfulRaw) : slotEvents.length;
-          prevFailed = slotEvents.slice(1, searchUntil).some((e) => e.status === 'failure');
+          const searchUntil = lastSuccessfulRaw ? effectiveEvents.indexOf(lastSuccessfulRaw) : effectiveEvents.length;
+          prevFailed = effectiveEvents.slice(1, searchUntil).some((e) => e.status === 'failure');
         }
 
         slots[env] = {
           current,
           ...(lastSuccessful ? { last_successful: lastSuccessful } : {}),
           ...(prevFailed ? { prev_failed: true } : {}),
+          ...(next ? { next } : {}),
         };
       }
       return { service, slots };

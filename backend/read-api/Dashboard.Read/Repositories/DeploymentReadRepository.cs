@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Dashboard.Read.Cursors;
 using Dashboard.Read.Queries;
 using Dashboard.Shared.Contracts;
@@ -50,50 +51,77 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
     public async Task<DeploymentEvent?> GetByIdAsync(Guid id, CancellationToken ct)
         => await db.DeploymentEvents.FindAsync([id], ct);
 
-    public async Task<IReadOnlyList<DeploymentEvent>> GetCurrentPerSlotAsync(
+    public Task<IReadOnlyList<DeploymentEvent>> GetEffectivePerSlotAsync(
+        string? serviceFilter, CancellationToken ct)
+        // Effective = in-progress | success | failure. Latest effective per slot.
+        => LatestPerSlotByStatusAsync(
+            serviceFilter,
+            [DeploymentStatus.InProgress, DeploymentStatus.Success, DeploymentStatus.Failure],
+            ct);
+
+    public Task<IReadOnlyList<DeploymentEvent>> GetLatestNonEffectivePerSlotAsync(
+        string? serviceFilter, CancellationToken ct)
+        // Non-effective = pending | queued | waiting | cancelled | rejected. Latest per slot.
+        => LatestPerSlotByStatusAsync(
+            serviceFilter,
+            [
+                DeploymentStatus.Pending, DeploymentStatus.Queued, DeploymentStatus.Waiting,
+                DeploymentStatus.Cancelled, DeploymentStatus.Rejected,
+            ],
+            ct);
+
+    public Task<IReadOnlyList<DeploymentEvent>> GetLastSuccessfulPerSlotAsync(
+        string? serviceFilter, CancellationToken ct)
+        // Last successful per slot.
+        => LatestPerSlotByStatusAsync(serviceFilter, [DeploymentStatus.Success], ct);
+
+    // S1541: The correlated NOT-EXISTS pattern requires checking (a) latest terminal per slot
+    // and (b) latest effective event in-progress above it — two nested existence sub-queries
+    // whose branches are not independently extractable without destroying the LINQ-to-SQL
+    // translation.  Cyclomatic complexity is irreducible for this query shape.
+    [SuppressMessage("SonarAnalyzer", "S1541", Justification = "Correlated NOT-EXISTS sub-queries for prev_failed rule: cyclomatic complexity is irreducible without breaking LINQ-to-SQL translation.")]
+    public async Task<IReadOnlyList<DeploymentEvent>> GetLatestTerminalBeforeCurrentPerSlotAsync(
         string? serviceFilter, CancellationToken ct)
     {
         var q = db.DeploymentEvents.AsQueryable();
         if (serviceFilter is not null)
             q = q.Where(e => e.Service == serviceFilter);
 
-        // "Current" = events where no newer event exists in the same (service, environment) slot.
-        // The correlated NOT EXISTS translates to SQL on both Postgres and SQLite.
-        var rawCurrent = await q
-            .Where(e => !db.DeploymentEvents.Any(e2 =>
-                e2.Service == e.Service &&
-                e2.Environment == e.Environment &&
-                e2.HappenedAt > e.HappenedAt))
-            .ToListAsync(ct);
+        // Terminal = success | failure.
+        var terminalStatuses = new[] { DeploymentStatus.Success, DeploymentStatus.Failure };
 
-        // In-memory tiebreak: if multiple events share the max happened_at in a slot,
-        // keep the one with the greatest Id (most recently inserted UUIDv7).
-        return rawCurrent
-            .GroupBy(e => (e.Service, e.Environment))
-            .Select(g => g.OrderByDescending(e => e.Id).First())
-            .ToList();
-    }
+        // We want: the latest terminal event per slot, provided that:
+        //   (a) the latest EFFECTIVE event in the same slot is in-progress (prev_failed is
+        //       only meaningful when current is in-progress), AND
+        //   (b) no newer terminal event exists in the same slot
+        //       (i.e. this event IS the latest terminal).
+        //
+        // Effective = in-progress | success | failure.
+        var effectiveStatuses = new[] { DeploymentStatus.InProgress, DeploymentStatus.Success, DeploymentStatus.Failure };
 
-    public async Task<IReadOnlyList<DeploymentEvent>> GetLastSuccessfulPerSlotAsync(
-        string? serviceFilter, CancellationToken ct)
-    {
-        var q = db.DeploymentEvents.AsQueryable();
-        if (serviceFilter is not null)
-            q = q.Where(e => e.Service == serviceFilter);
-
-        var rawLastSuccessful = await q
-            .Where(e => e.Status == DeploymentStatus.Success &&
+        var rawTerminal = await q
+            .Where(e => terminalStatuses.Contains(e.Status) &&
+                        // (b) This is the latest terminal event in the slot.
                         !db.DeploymentEvents.Any(e2 =>
                             e2.Service == e.Service &&
                             e2.Environment == e.Environment &&
-                            e2.Status == DeploymentStatus.Success &&
-                            e2.HappenedAt > e.HappenedAt))
+                            terminalStatuses.Contains(e2.Status) &&
+                            e2.HappenedAt > e.HappenedAt) &&
+                        // (a) The latest effective event in this slot is in-progress.
+                        db.DeploymentEvents.Any(e2 =>
+                            e2.Service == e.Service &&
+                            e2.Environment == e.Environment &&
+                            e2.Status == DeploymentStatus.InProgress &&
+                            e2.HappenedAt > e.HappenedAt &&
+                            !db.DeploymentEvents.Any(e3 =>
+                                e3.Service == e.Service &&
+                                e3.Environment == e.Environment &&
+                                effectiveStatuses.Contains(e3.Status) &&
+                                e3.HappenedAt > e2.HappenedAt)))
             .ToListAsync(ct);
 
-        return rawLastSuccessful
-            .GroupBy(e => (e.Service, e.Environment))
-            .Select(g => g.OrderByDescending(e => e.Id).First())
-            .ToList();
+        // In-memory tiebreak: keep the event with the greatest Id per slot.
+        return LatestPerSlot(rawTerminal);
     }
 
     public async Task<IReadOnlyList<string>> GetDistinctServicesAsync(CancellationToken ct)
@@ -124,4 +152,38 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
 
         return await q.OrderBy(e => e.Id).ToListAsync(ct);
     }
+
+    /// <summary>
+    /// In-memory tiebreak: given multiple events per slot (same max happened_at),
+    /// keep the one with the greatest Id (most recently inserted UUIDv7).
+    /// </summary>
+    /// <summary>
+    /// Latest event per slot whose status is in <paramref name="statuses"/>: the row for which
+    /// no newer same-set event exists in the same (service, environment) slot. The correlated
+    /// NOT EXISTS translates to SQL on both Postgres and SQLite.
+    /// </summary>
+    private async Task<IReadOnlyList<DeploymentEvent>> LatestPerSlotByStatusAsync(
+        string? serviceFilter, string[] statuses, CancellationToken ct)
+    {
+        var q = db.DeploymentEvents.AsQueryable();
+        if (serviceFilter is not null)
+            q = q.Where(e => e.Service == serviceFilter);
+
+        var raw = await q
+            .Where(e => statuses.Contains(e.Status) &&
+                        !db.DeploymentEvents.Any(e2 =>
+                            e2.Service == e.Service &&
+                            e2.Environment == e.Environment &&
+                            statuses.Contains(e2.Status) &&
+                            e2.HappenedAt > e.HappenedAt))
+            .ToListAsync(ct);
+
+        return LatestPerSlot(raw);
+    }
+
+    private static IReadOnlyList<DeploymentEvent> LatestPerSlot(List<DeploymentEvent> raw) =>
+        raw
+            .GroupBy(e => (e.Service, e.Environment))
+            .Select(g => g.OrderByDescending(e => e.Id).First())
+            .ToList();
 }

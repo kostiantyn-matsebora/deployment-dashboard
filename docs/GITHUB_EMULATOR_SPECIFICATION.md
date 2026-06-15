@@ -87,13 +87,14 @@ Per-repo shape:
 
 ## 5. Emulated GitHub REST surface — `/`
 
-Paths are served at the service root (no prefix). The fetcher points `GITHUB__BASE_URL=http://github-emulator:3100`; its root-relative paths resolve directly.
+Paths are served at the service root (no prefix). The fetcher points `GITHUB_BASE_URL=http://github-emulator:3100`; its root-relative paths resolve directly.
 
 | Method | Path | Response shape | FETCHER_SPEC ref |
 |---|---|---|---|
 | `GET` | `/repos/{owner}/{repo}/deployments?environment=&per_page=&page=` | Array of deployment objects (`id`, `sha`, `ref`, `environment`, `payload`, `creator.login`, `created_at`); newest-first; filtered by `environment` when present; paginated (`Link rel=next` when more pages remain). | §5.1, §5.8.2 |
 | `GET` | `/repos/{owner}/{repo}/deployments/{id}/statuses` | Array of status objects (`id`, `state`, `target_url`, `creator.login`, `created_at`); newest-first. | §5.1 |
-| `GET` | `/repos/{owner}/{repo}/actions/runs/{run_id}` | Run metadata (`id`, `name`, `path`, `head_sha`). | §5.6.2 |
+| `GET` | `/repos/{owner}/{repo}/deployments/{id}/reviews` | Array of review objects (`state`, `user.login`, `submitted_at`); empty array when no reviews. Used by `ResolveFailureStatusAsync` to detect `rejected`. | §5.3 |
+| `GET` | `/repos/{owner}/{repo}/actions/runs/{run_id}` | Run metadata (`id`, `name`, `path`, `head_sha`, `conclusion`). `conclusion` is `null` while in-progress; `"cancelled"` | `"success"` | `"failure"` etc. when finished. Used by `ResolveFailureStatusAsync` to detect `cancelled`. | §5.3, §5.6.2 |
 | `GET` | `/repos/{owner}/{repo}/contents/{path}?ref={sha}` | `{ content: "<base64 workflow YAML>", encoding: "base64" }`. | §5.6.2 |
 | `GET` | `/repos/{owner}/{repo}/actions/workflows?per_page=100` | `{ total_count, workflows: [{ id, name, path, state }] }`. | §5.8.2 |
 | `GET` | `/repos/{owner}/{repo}/environments` | `{ total_count, environments: [{ name }] }`. | §5.8.2 |
@@ -140,7 +141,7 @@ Intended for the demo driver proxy, test harnesses, and manual operation. No aut
 
 | Method · Path | Request | Response | Effect |
 |---|---|---|---|
-| `POST /_github/seed` | `{ dataset: "demo"\|"random", count?: number, reset?: boolean }` | `GithubStoreStatus` | `reset:true` clears the store first. `"demo"` loads the curated fixture (§7); `"random"` generates synthetic data (§8). `count` = number of services/workflows for random, ignored for demo. |
+| `POST /_github/seed` | `{ dataset: "demo"\|"random", count?: number, reset?: boolean }` | `GithubStoreStatus` | `reset:true` clears the store first. `"demo"` loads the curated fixture (§7); `"random"` generates synthetic data (§8). `count` = number of promotion chains for random (ignored for demo); repos always stay at 10. |
 | `POST /_github/clear` | — | `GithubStoreStatus` | Empties the store. |
 
 ### 6.3 Emission control
@@ -160,14 +161,31 @@ The fixture files loaded when `dataset: "demo"` is requested. They MUST cover:
 - At least one workflow with a dev→staging→prod deployment-job `needs` chain, so `parent_deployments` resolves a real chain per FETCHER_SPEC §5.6 (F10).
 - At least one service whose version comes from a `version.txt` artifact to exercise `artifact:` resolution (FETCHER_SPEC §5.7, F15).
 - A spread of `success`, `failure`, and `in-progress` status lifecycles across deployments.
+- All 5 new statuses from issue #268 (one fixture deployment each):
+
+| Contract status | Repo | Deployment | Mechanism |
+|---|---|---|---|
+| `pending` | `payments-api` | id 4840005, run 4840, env prod | single `pending` status; run 4830 `success` is the effective slot |
+| `queued` | `search-indexer` | id 1420005, run 1420, env prod | single `queued` status |
+| `waiting` | `billing-webhook` | id 826001, run 826, env prod | single `waiting` status |
+| `cancelled` | `ledger-projector` | id 1831001, run 1831, env prod | `failure` status + `run_conclusion: "cancelled"` → `ResolveFailureStatusAsync` reads `run.conclusion` |
+| `rejected` | `catalog-edge` | id 5161001, run 5161, env prod | `failure` status + `reviews: [{state:"rejected"}]` → `ResolveFailureStatusAsync` reads `/deployments/{id}/reviews` |
 
 ---
 
 ## 8. Random set + periodic emit
 
-- Generated repos/workflows/deployments are analogous to the write-path `random-event-generator.ts` in the demo driver.
-- Generated workflow YAML includes an environment `needs` chain so parent derivation works on random data (F10 exercised).
-- Periodic emit appends new deployments (`created_at=now`) over time; the fetcher's incremental poll picks them up on the next interval.
+**Repos.** Always 10 synthetic repos (unaffected by `count`).
+
+**Promotion chains.** `count` = number of promotion chains generated (default 20). Each chain walks a 5-stage ladder — `dev → staging → qa → preprod → prod` — with per-stage attrition: every chain reaches `dev`; each subsequent stage is reached with decreasing probability (≈ 85 / 75 / 70 / 55 %), so per-stage deployment counts decrease realistically. One chain produces 1–5 deployments depending on attrition.
+
+**Timestamps.** Each chain starts at a random point in the trailing 14-day window (≥ 1 h before now). Subsequent stages in the chain advance the timestamp forward. This ensures multi-day analytics windows are populated and the day-truncated window (which excludes today) contains data.
+
+**DORA signals.** ≈ 15 % of terminal deployments are set to `failure`, producing non-zero change-failure-rate and MTTR incidents. Actors, durations, and times of day are varied across chains.
+
+**`parent_deployments` chains.** The generated workflow YAML includes a `needs` chain spanning all five stages, so `parent_deployments` resolves across the full ladder (F10 exercised on random data).
+
+**Periodic emit.** Appends new deployments (`created_at = now`) over time; the fetcher's incremental poll picks them up on the next interval.
 
 ---
 
@@ -188,10 +206,10 @@ When `SEED_ON_STARTUP=true` the emulator is immediately ready for the fetcher wi
 | Layer | File | Scope |
 |---|---|---|
 | Unit | `github-store.spec.ts` | Store CRUD (seed / clear / emit); per-request rate-limit decrement + hourly rollover; store independent of API data |
-| Unit | `github-rest.controller.spec.ts` | Each emulated endpoint returns the correct shape; `X-RateLimit-*` headers on every response; `Link: rel="next"` when more pages; unknown repo/deployment/run/path returns GitHub-shaped `404` |
+| Unit | `github-rest.controller.spec.ts` | Each emulated endpoint returns the correct shape; `X-RateLimit-*` headers on every response; `Link: rel="next"` when more pages; unknown repo/deployment/run/path returns GitHub-shaped `404`; `GET .../reviews` returns review objects (empty array when none); `GET .../runs/:id` emits `conclusion` field |
 | Unit | `control.controller.spec.ts` | `seed` / `clear` / `emit` / `status` endpoints correct; seed + clear mutate the store; emit toggle works |
-| Unit | `github-random-generator.spec.ts` | Generated workflow YAML includes an environment `needs` chain; deployments have a full in-progress→success/failure lifecycle; all required fields present |
-| Unit | `github-fixture-loader.spec.ts` | Curated demo fixture loads without error; covers F10 (dev→staging→prod `needs` chain) and F15 (artifact-sourced version); loaded dataset matches `GithubStoreStatus` counters |
+| Unit | `github-random-generator.spec.ts` | Generated workflow YAML includes a 5-stage `needs` chain (dev→staging→qa→preprod→prod); per-stage attrition produces fewer deployments at later stages; timestamps fall within the trailing 14-day window; ≈15 % terminal failures present; all required fields present; `count` controls chain count, repos always 10 |
+| Unit | `github-fixture-loader.spec.ts` | Curated demo fixture loads without error; covers F10 (dev→staging→prod `needs` chain) and F15 (artifact-sourced version); loaded dataset matches `GithubStoreStatus` counters; all 5 new-status fixtures present (pending/queued/waiting/cancelled/rejected) with correct run conclusions and review records |
 | Integration | `fetcher-emulation.e2e.spec.ts` | Start emulator + seed demo set (`POST /_github/seed {dataset:"demo"}`); run the real fetcher-host against `http://github-emulator:3100`; real `Dashboard.Api` + Postgres; assert the dashboard shows the expected services, a non-trivial `parent_deployments` chain, and an artifact-sourced version. Realizes FETCHER_SPEC §7.2. |
 
 ---

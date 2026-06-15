@@ -33,30 +33,10 @@ public sealed class ControlStreamListener(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var connected = false;
+            bool connected;
             try
             {
-                await foreach (var frame in streamClient.StreamAsync(lastEventId, stoppingToken))
-                {
-                    connected = true;
-
-                    if (frame.IsPing)
-                    {
-                        // Heartbeat — no action, just keeps read-idle timer reset (§5.10.2).
-                        continue;
-                    }
-
-                    // Track last-seen id for reconnect (§5.10.2).
-                    if (!string.IsNullOrEmpty(frame.Id))
-                        lastEventId = frame.Id;
-
-                    if (frame.EventType is null || frame.Data is null)
-                        continue;
-
-                    await HandleEventAsync(frame.EventType, frame.Data, stoppingToken);
-                }
-
-                // Stream ended cleanly (EOF) — reset backoff on clean completion.
+                (connected, lastEventId) = await ConsumeStreamAsync(lastEventId, stoppingToken);
                 if (connected)
                     backoff = BackoffMin;
             }
@@ -69,20 +49,57 @@ public sealed class ControlStreamListener(
                 logger.LogWarning(ex,
                     "[ControlStream] Stream disconnected; reconnecting with Last-Event-ID={LastId} in {Backoff}s",
                     lastEventId, (int)backoff.TotalSeconds);
+                connected = false;
             }
 
-            // Exponential backoff before reconnect; reset to minimum after a successful connect.
-            try { await Task.Delay(backoff, stoppingToken); }
-            catch (OperationCanceledException) { break; }
-
-            if (!connected)
-                backoff = backoff < BackoffMax
-                    ? TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, BackoffMax.TotalSeconds))
-                    : BackoffMax;
-            else
-                backoff = BackoffMin;
+            if (!await DelayBackoffAsync(backoff, stoppingToken)) break;
+            backoff = NextBackoff(connected, backoff);
         }
     }
+
+    // Consumes one stream connection until EOF. Returns true when at least one frame was received
+    // (used to decide whether to reset backoff). Throws on cancellation or stream error.
+    // Consumes one stream connection until EOF. Returns (connected, updatedLastEventId).
+    // connected=true when at least one frame was received (used to decide whether to reset backoff).
+    // Throws on cancellation or stream error.
+    private async Task<(bool Connected, string? LastEventId)> ConsumeStreamAsync(
+        string? lastEventId, CancellationToken ct)
+    {
+        var connected = false;
+        await foreach (var frame in streamClient.StreamAsync(lastEventId, ct))
+        {
+            connected = true;
+
+            if (frame.IsPing)
+            {
+                // Heartbeat — no action, just keeps read-idle timer reset (§5.10.2).
+                continue;
+            }
+
+            // Track last-seen id for reconnect (§5.10.2).
+            if (!string.IsNullOrEmpty(frame.Id))
+                lastEventId = frame.Id;
+
+            if (frame.EventType is null || frame.Data is null)
+                continue;
+
+            await HandleEventAsync(frame.EventType, frame.Data, ct);
+        }
+
+        return (connected, lastEventId);
+    }
+
+    // Waits for the current backoff duration. Returns false when cancelled.
+    private static async Task<bool> DelayBackoffAsync(TimeSpan backoff, CancellationToken ct)
+    {
+        try { await Task.Delay(backoff, ct); return true; }
+        catch (OperationCanceledException) { return false; }
+    }
+
+    // Returns the next backoff value: minimum after a clean connect, doubled (capped) otherwise.
+    private static TimeSpan NextBackoff(bool connected, TimeSpan current) =>
+        connected ? BackoffMin
+            : TimeSpan.FromSeconds(Math.Min(current.TotalSeconds * 2, BackoffMax.TotalSeconds));
 
     private async Task HandleEventAsync(string eventType, string data, CancellationToken ct)
     {

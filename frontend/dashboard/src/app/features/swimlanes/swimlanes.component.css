@@ -106,12 +106,44 @@
   overflow: hidden;
 }
 
-/* Service name: top-left corner of the lane rectangle. */
+/* Service name cell: chevron + label, top-left of the lane rectangle. */
 .lane-svc-cell {
-  flex: 0 0 130px;
+  flex: 0 0 140px;
   display: flex;
   align-items: flex-start;
-  padding: 12px 12px 0 14px;
+  padding: 10px 8px 0 10px;
+  gap: 4px;
+}
+
+/* Chevron collapse/expand button (#309). */
+.lane-chevron {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--ink-3);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s ease, transform 0.2s ease;
+  transform: rotate(0deg); /* collapsed = › pointing right */
+  line-height: 1;
+  margin-top: 0;
+}
+
+.lane-chevron.is-expanded {
+  transform: rotate(90deg); /* expanded = › rotated down */
+  color: rgba(var(--accent-rgb), 0.80);
+}
+
+.lane-chevron:hover {
+  color: var(--ink-1);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .lane-svc {
@@ -123,6 +155,7 @@
   /* Left accent bar */
   border-left: 2px solid rgba(var(--accent-rgb), 0.45);
   padding-left: 10px;
+  margin-top: 1px;
 }
 
 /* Graph area: stacks each independent chain (one ngx-graph per DAG).

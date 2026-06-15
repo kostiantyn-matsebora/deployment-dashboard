@@ -25,24 +25,25 @@ public sealed class GithubCursorTests
     }
 
     [Fact]
-    public void SinceFor_UnknownRepo_FallsBackToNowMinusLookback()
+    public void SinceFor_UnknownRepo_FallsBackToSuppliedNowMinusLookback()
     {
         var cursor = new GithubCursor();
         var lookback = TimeSpan.FromDays(7);
+        var now = new DateTimeOffset(2026, 6, 6, 12, 0, 0, TimeSpan.Zero);
 
-        var since = cursor.SinceFor("new/repo", lookback);
+        var since = cursor.SinceFor("new/repo", lookback, now);
 
-        var expected = DateTimeOffset.UtcNow - lookback;
-        Assert.True(Math.Abs((since - expected).TotalSeconds) < 2);
+        // Uses the caller-supplied clock, not wall-clock now (pinnable for tests/fixtures).
+        Assert.Equal(now - lookback, since);
     }
 
     [Fact]
-    public void SinceFor_KnownRepo_ReturnsStoredValue()
+    public void SinceFor_KnownRepo_ReturnsStoredValue_IgnoringNow()
     {
         var stored = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var cursor = new GithubCursor().WithRepo("acme/api", stored);
 
-        Assert.Equal(stored, cursor.SinceFor("acme/api", TimeSpan.FromDays(7)));
+        Assert.Equal(stored, cursor.SinceFor("acme/api", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
     }
 
     [Fact]
@@ -237,5 +238,48 @@ public sealed class GithubCursorTests
         // Backfill section must still be present after updating repos.
         Assert.NotNull(cursor.BackfillFor("acme/api"));
         Assert.Equal(anchor.AddHours(-1), cursor.Repos["acme/web"].Since);
+    }
+
+    // ── IsEmpty (reset clean-slate / first-run detection — §5.10.5) ───────────
+
+    [Fact]
+    public void IsEmpty_TrueForFreshCursor()
+    {
+        Assert.True(new GithubCursor().IsEmpty);
+    }
+
+    [Fact]
+    public void IsEmpty_TrueAfterDecodingEmptyEncodedCursor()
+    {
+        // An empty backfill encodes to a non-null {"repos":{}} string; it must STILL read
+        // as empty so the next poll re-backfills instead of switching to incremental.
+        var encoded = new GithubCursor().Encode();
+        Assert.True(GithubCursor.Decode(encoded).IsEmpty);
+    }
+
+    [Fact]
+    public void IsEmpty_TrueAfterEmptyBackfillComplete()
+    {
+        // A backfill that found no events (maxSince=null) leaves no repo high-water mark,
+        // so the cursor stays empty and the next cycle re-backfills.
+        var cursor = new GithubCursor()
+            .WithBackfillEnvDone("acme/api", DateTimeOffset.UtcNow, "dev")
+            .WithBackfillComplete("acme/api", null);
+        Assert.True(cursor.IsEmpty);
+    }
+
+    [Fact]
+    public void IsEmpty_FalseWhenRepoHasHighWaterMark()
+    {
+        var cursor = new GithubCursor().WithRepo("acme/api", DateTimeOffset.UtcNow);
+        Assert.False(cursor.IsEmpty);
+    }
+
+    [Fact]
+    public void IsEmpty_FalseWhileBackfilling()
+    {
+        var cursor = new GithubCursor()
+            .WithBackfillEnvDone("acme/api", DateTimeOffset.UtcNow, "dev");
+        Assert.False(cursor.IsEmpty);
     }
 }

@@ -43,4 +43,14 @@ internal sealed class BoundedLruCache<TKey, TValue>(int maxSize) where TKey : no
             }
         }
     }
+
+    /// <summary>Drops all entries — used to reset fetch state on the reset saga (§5.10.5).</summary>
+    public void Clear()
+    {
+        lock (_lock)
+        {
+            _lookup.Clear();
+            _order.Clear();
+        }
+    }
 }

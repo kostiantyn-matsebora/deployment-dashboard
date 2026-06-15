@@ -8,7 +8,7 @@ async function bootstrap() {
   // Allow the Angular dev server (port 4200) to call the mock.
   app.enableCors({ origin: 'http://localhost:4200', credentials: false });
 
-  const port = process.env.PORT ?? 3000;
+  const port = process.env.PORT ?? 3002;
   await app.listen(port);
   console.log(`[mock] Deployment Dashboard mock API running on http://localhost:${port}`);
 }

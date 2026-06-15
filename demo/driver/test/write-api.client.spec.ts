@@ -1,6 +1,6 @@
 import { WriteApiClient } from '../src/write-api/write-api.client';
 
-const BASE_URL  = 'http://localhost:3000';
+const BASE_URL  = 'http://localhost:3002';
 const API_KEY   = 'test-key';
 const REPORTER  = 'demo-driver/demo-set';
 const noSleep   = async () => {};

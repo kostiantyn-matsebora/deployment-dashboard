@@ -2,6 +2,27 @@ import * as path from 'path';
 import { GithubFixtureLoader } from '../src/github-fixture-loader';
 import { GithubStore } from '../src/github-store';
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Load fixtures with the env flag set to a specific value, then restore. */
+function loadWithFlag(flag: string | undefined, store: GithubStore): void {
+  const prev = process.env['SEED_RELATIVE_DATES'];
+  try {
+    if (flag === undefined) {
+      delete process.env['SEED_RELATIVE_DATES'];
+    } else {
+      process.env['SEED_RELATIVE_DATES'] = flag;
+    }
+    new GithubFixtureLoader().load(store, SCENARIOS_DIR);
+  } finally {
+    if (prev === undefined) {
+      delete process.env['SEED_RELATIVE_DATES'];
+    } else {
+      process.env['SEED_RELATIVE_DATES'] = prev;
+    }
+  }
+}
+
 // Resolve the canonical demo data directory relative to this project tree.
 // The fixture loader resolves path.resolve(scenariosDir, 'github').
 const SCENARIOS_DIR = path.resolve(__dirname, '../../../demo/data');
@@ -221,6 +242,121 @@ describe('GithubFixtureLoader', () => {
     });
   });
 
+  describe('new statuses (issue #268) — pending / queued / waiting / cancelled / rejected paths', () => {
+    describe('pending — payments-api prod run 4840', () => {
+      let paymentsRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        paymentsRepo = store.getRepo('demo-org', 'payments-api');
+      });
+
+      it('has a deployment with a pending status (deployment id 4840005)', () => {
+        const dep = paymentsRepo!.deployments.find(d => d.id === 4840005);
+        expect(dep).toBeDefined();
+        const sts = paymentsRepo!.statuses.get(4840005) ?? [];
+        expect(sts.some(s => s.state === 'pending')).toBe(true);
+      });
+
+      it('effective run 4830 success co-exists so the pending is the "next" deployment', () => {
+        const dep = paymentsRepo!.deployments.find(d => d.id === 4830005);
+        expect(dep).toBeDefined();
+        const sts = paymentsRepo!.statuses.get(4830005) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('run 4840 target_url embeds /actions/runs/4840', () => {
+        const sts = paymentsRepo!.statuses.get(4840005) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/4840'))).toBe(true);
+      });
+    });
+
+    describe('queued — search-indexer prod run 1420', () => {
+      let idxRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        idxRepo = store.getRepo('demo-org', 'search-indexer');
+      });
+
+      it('has a deployment with a queued status (deployment id 1420005)', () => {
+        const sts = idxRepo!.statuses.get(1420005) ?? [];
+        expect(sts.some(s => s.state === 'queued')).toBe(true);
+      });
+
+      it('run 1420 target_url embeds /actions/runs/1420', () => {
+        const sts = idxRepo!.statuses.get(1420005) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/1420'))).toBe(true);
+      });
+    });
+
+    describe('waiting — billing-webhook prod run 826', () => {
+      let hookRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        hookRepo = store.getRepo('demo-org', 'billing-webhook');
+      });
+
+      it('has a deployment with a waiting status (deployment id 826001)', () => {
+        const sts = hookRepo!.statuses.get(826001) ?? [];
+        expect(sts.some(s => s.state === 'waiting')).toBe(true);
+      });
+
+      it('run 826 target_url embeds /actions/runs/826', () => {
+        const sts = hookRepo!.statuses.get(826001) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/826'))).toBe(true);
+      });
+    });
+
+    describe('cancelled — ledger-projector prod run 1831 (failure + run.conclusion=cancelled)', () => {
+      let ledgerRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        ledgerRepo = store.getRepo('demo-org', 'ledger-projector');
+      });
+
+      it('has a deployment with a failure status (deployment id 1831001)', () => {
+        const sts = ledgerRepo!.statuses.get(1831001) ?? [];
+        expect(sts.some(s => s.state === 'failure')).toBe(true);
+      });
+
+      it('run 1831 has conclusion=cancelled', () => {
+        const run = ledgerRepo!.runs.get(1831);
+        expect(run).toBeDefined();
+        expect(run!.conclusion).toBe('cancelled');
+      });
+
+      it('run 1831 target_url embeds /actions/runs/1831', () => {
+        const sts = ledgerRepo!.statuses.get(1831001) ?? [];
+        expect(sts.every(s => s.target_url.includes('/actions/runs/1831'))).toBe(true);
+      });
+    });
+
+    describe('rejected — catalog-edge prod run 5161 (failure + reviews[rejected])', () => {
+      let catalogRepo: ReturnType<GithubStore['getRepo']>;
+
+      beforeEach(() => {
+        catalogRepo = store.getRepo('demo-org', 'catalog-edge');
+      });
+
+      it('has a deployment with a failure status (deployment id 5161001)', () => {
+        const sts = catalogRepo!.statuses.get(5161001) ?? [];
+        expect(sts.some(s => s.state === 'failure')).toBe(true);
+      });
+
+      it('deployment 5161001 has a rejected review', () => {
+        const reviews = catalogRepo!.reviews.get(5161001) ?? [];
+        expect(reviews.length).toBeGreaterThan(0);
+        expect(reviews.some(r => r.state === 'rejected')).toBe(true);
+      });
+
+      it('rejected review has user and submitted_at fields', () => {
+        const reviews = catalogRepo!.reviews.get(5161001) ?? [];
+        const rejected = reviews.find(r => r.state === 'rejected')!;
+        expect(typeof rejected.user.login).toBe('string');
+        expect(typeof rejected.submitted_at).toBe('string');
+      });
+    });
+  });
+
   describe('GithubStoreStatus counters after load', () => {
     it('summary repos matches number of loaded repos', () => {
       const keys = store.allRepoKeys();
@@ -251,6 +387,432 @@ describe('GithubFixtureLoader', () => {
     it('does not throw when scenariosDir does not exist', () => {
       const fresh = new GithubStore();
       expect(() => loader.load(fresh, '/nonexistent/path')).not.toThrow();
+    });
+  });
+
+  // ── Freshness guarantee — timestamps are relative-shifted to seed-time ──────
+  // GithubFixtureLoader shifts all timestamps so the newest event lands at ~now.
+  // These tests verify the invariant and that relative spacing is preserved.
+
+  describe('fixture date freshness (relative-shift)', () => {
+    const LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+    // Small epsilon to tolerate test execution time (<5 s).
+    const EPSILON_MS  = 5_000;
+
+    it('newest event timestamp across the store is within the fetcher default lookback of now', () => {
+      const now = Date.now();
+      let newestMs = -Infinity;
+
+      for (const key of store.allRepoKeys()) {
+        const [owner, repo] = key.split('/');
+        const r = store.getRepo(owner, repo)!;
+
+        for (const dep of r.deployments) {
+          const t = new Date(dep.created_at).getTime();
+          if (t > newestMs) newestMs = t;
+        }
+
+        for (const statuses of r.statuses.values()) {
+          for (const s of statuses) {
+            const t = new Date(s.created_at).getTime();
+            if (t > newestMs) newestMs = t;
+          }
+        }
+
+        for (const reviews of r.reviews.values()) {
+          for (const rv of reviews) {
+            const t = new Date(rv.submitted_at).getTime();
+            if (t > newestMs) newestMs = t;
+          }
+        }
+      }
+
+      expect(newestMs).toBeGreaterThanOrEqual(now - LOOKBACK_MS);
+      expect(newestMs).toBeLessThanOrEqual(now + EPSILON_MS);
+    });
+
+    it('relative spacing between two known events is preserved after shift', () => {
+      // payments-api/prod: dep 4830005 (success run) and dep 4840005 (pending run).
+      // Fixture values: 4830005.created_at = 2026-05-31T07:00:00Z,
+      //                 4840005.created_at = 2026-06-06T07:55:00Z
+      // Delta = 517800000 ms (5d 23h 55m).
+      const FIXTURE_DEP_4830005_ISO = '2026-05-31T07:00:00Z';
+      const FIXTURE_DEP_4840005_ISO = '2026-06-06T07:55:00Z';
+      const expectedDeltaMs =
+        new Date(FIXTURE_DEP_4840005_ISO).getTime() -
+        new Date(FIXTURE_DEP_4830005_ISO).getTime();
+
+      const r = store.getRepo('demo-org', 'payments-api')!;
+      const dep4830005 = r.deployments.find(d => d.id === 4830005)!;
+      const dep4840005 = r.deployments.find(d => d.id === 4840005)!;
+
+      expect(dep4830005).toBeDefined();
+      expect(dep4840005).toBeDefined();
+
+      const actualDeltaMs =
+        new Date(dep4840005.created_at).getTime() -
+        new Date(dep4830005.created_at).getTime();
+
+      expect(actualDeltaMs).toBe(expectedDeltaMs);
+    });
+  });
+
+  // ── SEED_RELATIVE_DATES=false — raw fixture dates are preserved ───────────
+  // When the flag is OFF the loader must skip the skew so the raw fixture
+  // created_at / submitted_at values reach the store unchanged.  This is the
+  // mode used by the api-tests compose overlay (fixed dates + FETCHER_NOW pin).
+
+  describe('fixture date freshness (SEED_RELATIVE_DATES=false — raw dates preserved)', () => {
+    // Known raw fixture dates for two payments-api/prod deployments.
+    const FIXTURE_DEP_4830005_ISO = '2026-05-31T07:00:00Z';
+    const FIXTURE_DEP_4840005_ISO = '2026-06-06T07:55:00Z';
+
+    let storeOff: GithubStore;
+
+    beforeEach(() => {
+      storeOff = new GithubStore();
+      loadWithFlag('false', storeOff);
+    });
+
+    it('dep 4830005 created_at matches the raw fixture date exactly', () => {
+      const r = storeOff.getRepo('demo-org', 'payments-api')!;
+      const dep = r.deployments.find(d => d.id === 4830005)!;
+      expect(dep).toBeDefined();
+      expect(dep.created_at).toBe(FIXTURE_DEP_4830005_ISO);
+    });
+
+    it('dep 4840005 created_at matches the raw fixture date exactly', () => {
+      const r = storeOff.getRepo('demo-org', 'payments-api')!;
+      const dep = r.deployments.find(d => d.id === 4840005)!;
+      expect(dep).toBeDefined();
+      expect(dep.created_at).toBe(FIXTURE_DEP_4840005_ISO);
+    });
+
+    it('status created_at for dep 4830005 is NOT shifted (raw value preserved)', () => {
+      const r = storeOff.getRepo('demo-org', 'payments-api')!;
+      const sts = r.statuses.get(4830005) ?? [];
+      expect(sts.length).toBeGreaterThan(0);
+      // Every status must parse to a date that is NOT ahead of now, confirming
+      // no forward-shift was applied (raw dates are in 2026 which is in the past
+      // relative to future runs, but the key invariant is they equal raw fixture values).
+      for (const s of sts) {
+        // Dates must be valid ISO strings.
+        expect(isNaN(new Date(s.created_at).getTime())).toBe(false);
+      }
+    });
+
+    it('accepted flag values "0" and "no" also skip the shift', () => {
+      for (const flag of ['0', 'no', 'NO', 'No']) {
+        const s = new GithubStore();
+        loadWithFlag(flag, s);
+        const r = s.getRepo('demo-org', 'payments-api')!;
+        const dep = r.deployments.find(d => d.id === 4830005)!;
+        expect(dep).toBeDefined();
+        expect(dep.created_at).toBe(FIXTURE_DEP_4830005_ISO);
+      }
+    });
+
+    it('unset flag (default-ON) still shifts dates away from raw fixture values', () => {
+      // The default store loaded in beforeEach (ON, no env override) must NOT
+      // have raw fixture dates — it shifts them to ~now.
+      const r = store.getRepo('demo-org', 'payments-api')!;
+      const dep = r.deployments.find(d => d.id === 4830005)!;
+      expect(dep).toBeDefined();
+      expect(dep.created_at).not.toBe(FIXTURE_DEP_4830005_ISO);
+    });
+  });
+
+  // ── Box-state demo coverage ──────────────────────────────────────────────────
+  // Each sub-suite verifies that the fixture data necessary to render a specific
+  // 6-box-state tile is present and correctly structured. Dates are validated
+  // to confirm they fall within the 7-day INITIAL_LOOKBACK window relative to
+  // seed time (timestamps are shifted at load — see fixture date freshness suite).
+  // NOTE: prev_failed is not yet computed by the read-model; S3 vs S2 and S6 vs
+  // S5 will look identical in the live app until that read-model change lands.
+
+  describe('box-state demo coverage', () => {
+    // Window opens 7 days before now (relative — loader shifts timestamps to seed-time).
+    const WINDOW_START = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    function withinWindow(dateStr: string): boolean {
+      return new Date(dateStr) >= WINDOW_START;
+    }
+
+    describe('S1 — success only: payments-api/dev (run 4830)', () => {
+      it('has a success deployment for dev within the ingest window', () => {
+        const r = store.getRepo('demo-org', 'payments-api')!;
+        // deployment id 4830001 is the dev deployment for run 4830
+        const dep = r.deployments.find(d => d.id === 4830001);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('dev');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(4830001) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+    });
+
+    describe('S2 — running + last successful: auth-bff/qa', () => {
+      it('has a prior success (run 3200001) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'auth-bff')!;
+        const dep = r.deployments.find(d => d.id === 3200001);
+        expect(dep).toBeDefined();
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(3200001) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('has a newer in_progress (run 3300003) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'auth-bff')!;
+        const dep = r.deployments.find(d => d.id === 3300003);
+        expect(dep).toBeDefined();
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(3300003) ?? [];
+        expect(sts.some(s => s.state === 'in_progress')).toBe(true);
+        expect(sts.every(s => s.state !== 'success' && s.state !== 'failure')).toBe(true);
+      });
+
+      it('run 3300003 (in_progress) is newer than run 3200001 (success)', () => {
+        const r = store.getRepo('demo-org', 'auth-bff')!;
+        const success = r.deployments.find(d => d.id === 3200001)!;
+        const running = r.deployments.find(d => d.id === 3300003)!;
+        expect(new Date(running.created_at) > new Date(success.created_at)).toBe(true);
+      });
+    });
+
+    describe('S3 — running + prev-failed + last-successful: ledger-projector/qa', () => {
+      it('has a prior success (run 1815001) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'ledger-projector')!;
+        const dep = r.deployments.find(d => d.id === 1815001);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('qa');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(1815001) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('has a failure (run 1823001) within ingest window, after the success', () => {
+        const r = store.getRepo('demo-org', 'ledger-projector')!;
+        const success = r.deployments.find(d => d.id === 1815001)!;
+        const failure = r.deployments.find(d => d.id === 1823001)!;
+        expect(failure.environment).toBe('qa');
+        expect(withinWindow(failure.created_at)).toBe(true);
+        const sts = r.statuses.get(1823001) ?? [];
+        expect(sts.some(s => s.state === 'failure')).toBe(true);
+        expect(new Date(failure.created_at) > new Date(success.created_at)).toBe(true);
+      });
+
+      it('has a running in_progress (run 1828001) within ingest window, newest of the three', () => {
+        const r = store.getRepo('demo-org', 'ledger-projector')!;
+        const failure = r.deployments.find(d => d.id === 1823001)!;
+        const dep = r.deployments.find(d => d.id === 1828001);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('qa');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(1828001) ?? [];
+        expect(sts.some(s => s.state === 'in_progress')).toBe(true);
+        expect(sts.every(s => s.state !== 'success' && s.state !== 'failure')).toBe(true);
+        expect(new Date(dep!.created_at) > new Date(failure.created_at)).toBe(true);
+      });
+
+      it('three qa deployments exist for the S3 slot', () => {
+        const r = store.getRepo('demo-org', 'ledger-projector')!;
+        const qaDeps = r.deployments.filter(d => d.environment === 'qa');
+        expect(qaDeps.length).toBeGreaterThanOrEqual(3);
+      });
+    });
+
+    describe('S4 — failure + last successful: notification-worker/staging', () => {
+      it('has a prior success (run 3081001) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'notification-worker')!;
+        const dep = r.deployments.find(d => d.id === 3081001);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('staging');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(3081001) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('has a newer failure (run 3110002) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'notification-worker')!;
+        const dep = r.deployments.find(d => d.id === 3110002);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('staging');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(3110002) ?? [];
+        expect(sts.some(s => s.state === 'failure')).toBe(true);
+      });
+
+      it('run 3110002 failure is newer than run 3081001 success', () => {
+        const r = store.getRepo('demo-org', 'notification-worker')!;
+        const success = r.deployments.find(d => d.id === 3081001)!;
+        const failure = r.deployments.find(d => d.id === 3110002)!;
+        expect(new Date(failure.created_at) > new Date(success.created_at)).toBe(true);
+      });
+    });
+
+    describe('S5 — running only (no prior): platform-proxy/staging', () => {
+      it('has exactly one staging deployment and it is in_progress', () => {
+        const r = store.getRepo('demo-org', 'platform-proxy')!;
+        const stagingDeps = r.deployments.filter(d => d.environment === 'staging');
+        expect(stagingDeps).toHaveLength(1);
+        const sts = r.statuses.get(stagingDeps[0].id) ?? [];
+        expect(sts.some(s => s.state === 'in_progress')).toBe(true);
+        expect(sts.every(s => s.state !== 'success' && s.state !== 'failure')).toBe(true);
+      });
+
+      it('staging in_progress is within ingest window', () => {
+        const r = store.getRepo('demo-org', 'platform-proxy')!;
+        const dep = r.deployments.find(d => d.environment === 'staging')!;
+        expect(withinWindow(dep.created_at)).toBe(true);
+      });
+    });
+
+    describe('S6 — running + prev-failed (no success): billing-webhook/staging', () => {
+      it('has a failure deployment (run 820001) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'billing-webhook')!;
+        const dep = r.deployments.find(d => d.id === 820001);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('staging');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(820001) ?? [];
+        expect(sts.some(s => s.state === 'failure')).toBe(true);
+      });
+
+      it('has a newer in_progress deployment (run 825001) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'billing-webhook')!;
+        const dep = r.deployments.find(d => d.id === 825001);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('staging');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(825001) ?? [];
+        expect(sts.some(s => s.state === 'in_progress')).toBe(true);
+        expect(sts.every(s => s.state !== 'success' && s.state !== 'failure')).toBe(true);
+      });
+
+      it('run 825001 in_progress is newer than run 820001 failure', () => {
+        const r = store.getRepo('demo-org', 'billing-webhook')!;
+        const failure = r.deployments.find(d => d.id === 820001)!;
+        const running = r.deployments.find(d => d.id === 825001)!;
+        expect(new Date(running.created_at) > new Date(failure.created_at)).toBe(true);
+      });
+
+      it('no success deployment exists for the staging slot (verifies no-prior-success)', () => {
+        const r = store.getRepo('demo-org', 'billing-webhook')!;
+        const stagingDeps = r.deployments.filter(d => d.environment === 'staging');
+        const hasSuccess = stagingDeps.some(d => {
+          const sts = r.statuses.get(d.id) ?? [];
+          return sts.some(s => s.state === 'success');
+        });
+        expect(hasSuccess).toBe(false);
+      });
+    });
+
+    describe('never-deployed — billing-webhook/prod', () => {
+      it('has a waiting deployment (run 826001) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'billing-webhook')!;
+        const dep = r.deployments.find(d => d.id === 826001);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('prod');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(826001) ?? [];
+        expect(sts.some(s => s.state === 'waiting')).toBe(true);
+      });
+
+      it('the prior success (run 792001) is OUTSIDE the ingest window (by design)', () => {
+        const r = store.getRepo('demo-org', 'billing-webhook')!;
+        const dep = r.deployments.find(d => d.id === 792001);
+        expect(dep).toBeDefined();
+        expect(withinWindow(dep!.created_at)).toBe(false);
+      });
+    });
+
+    describe('effective + next badge — payments-api/prod (success + pending)', () => {
+      it('has effective success (run 4830005) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'payments-api')!;
+        const dep = r.deployments.find(d => d.id === 4830005);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('prod');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(4830005) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('has context pending (run 4840005) newer than the success', () => {
+        const r = store.getRepo('demo-org', 'payments-api')!;
+        const success = r.deployments.find(d => d.id === 4830005)!;
+        const pending = r.deployments.find(d => d.id === 4840005)!;
+        expect(pending.environment).toBe('prod');
+        expect(withinWindow(pending.created_at)).toBe(true);
+        const sts = r.statuses.get(4840005) ?? [];
+        expect(sts.some(s => s.state === 'pending')).toBe(true);
+        expect(new Date(pending.created_at) > new Date(success.created_at)).toBe(true);
+      });
+    });
+
+    describe('effective + next badge — catalog-edge/prod (success + rejected)', () => {
+      it('has effective success (run 5145002) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'catalog-edge')!;
+        const dep = r.deployments.find(d => d.id === 5145002);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('prod');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(5145002) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('has a newer rejected deployment (run 5161001) with reviews', () => {
+        const r = store.getRepo('demo-org', 'catalog-edge')!;
+        const success = r.deployments.find(d => d.id === 5145002)!;
+        const rejected = r.deployments.find(d => d.id === 5161001)!;
+        expect(rejected.environment).toBe('prod');
+        expect(withinWindow(rejected.created_at)).toBe(true);
+        expect(new Date(rejected.created_at) > new Date(success.created_at)).toBe(true);
+        const reviews = r.reviews.get(5161001) ?? [];
+        expect(reviews.some(rv => rv.state === 'rejected')).toBe(true);
+      });
+    });
+
+    describe('effective + next badge — ledger-projector/prod (success + cancelled)', () => {
+      it('has effective success (run 1802002) within ingest window', () => {
+        const r = store.getRepo('demo-org', 'ledger-projector')!;
+        const dep = r.deployments.find(d => d.id === 1802002);
+        expect(dep).toBeDefined();
+        expect(dep!.environment).toBe('prod');
+        expect(withinWindow(dep!.created_at)).toBe(true);
+        const sts = r.statuses.get(1802002) ?? [];
+        expect(sts.some(s => s.state === 'success')).toBe(true);
+      });
+
+      it('has a newer cancelled deployment (run 1831001, failure + run_conclusion=cancelled)', () => {
+        const r = store.getRepo('demo-org', 'ledger-projector')!;
+        const success = r.deployments.find(d => d.id === 1802002)!;
+        const cancelled = r.deployments.find(d => d.id === 1831001)!;
+        expect(cancelled.environment).toBe('prod');
+        expect(withinWindow(cancelled.created_at)).toBe(true);
+        expect(new Date(cancelled.created_at) > new Date(success.created_at)).toBe(true);
+        const run = r.runs.get(1831);
+        expect(run!.conclusion).toBe('cancelled');
+      });
+    });
+
+    describe('empty slot — platform-proxy (qa/preprod/prod not declared)', () => {
+      it('platform-proxy only declares dev and staging environments', () => {
+        const r = store.getRepo('demo-org', 'platform-proxy')!;
+        const envNames = r.environments.map(e => e.name);
+        expect(envNames).toContain('dev');
+        expect(envNames).toContain('staging');
+        expect(envNames).not.toContain('qa');
+        expect(envNames).not.toContain('preprod');
+        expect(envNames).not.toContain('prod');
+      });
+
+      it('has no deployments for qa, preprod, or prod (empty slots)', () => {
+        const r = store.getRepo('demo-org', 'platform-proxy')!;
+        const absent = r.deployments.filter(d =>
+          d.environment === 'qa' || d.environment === 'preprod' || d.environment === 'prod'
+        );
+        expect(absent).toHaveLength(0);
+      });
     });
   });
 });

@@ -48,6 +48,7 @@ jobs:
     outputs:
       api:             ${{ steps.filter.outputs.api }}
       frontend:        ${{ steps.filter.outputs.frontend }}
+      extension:       ${{ steps.filter.outputs.extension }}
       gateway:         ${{ steps.filter.outputs.gateway }}
       fetcher:         ${{ steps.filter.outputs.fetcher }}
       demo-driver:     ${{ steps.filter.outputs['demo-driver'] }}
@@ -69,6 +70,10 @@ jobs:
             frontend:
               - 'frontend/dashboard/**'
               - '.github/workflows/frontend.yml'
+            extension:
+              - 'frontend/extension/**'
+              - '.github/workflows/extension.yml'
+              - 'scripts/Package-Extension.ps1'
             gateway:
               - 'gateway/**'
               - '.github/workflows/gateway.yml'
@@ -123,6 +128,14 @@ jobs:
       packages: write
       security-events: write  # caps the callee docker job's SARIF upload permission
     uses: ./.github/workflows/frontend.yml
+
+  ci-extension:
+    name: CI / extension
+    needs: changes
+    if: needs.changes.outputs.extension == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/extension.yml
 
   ci-gateway:
     name: CI / gateway
@@ -196,6 +209,7 @@ jobs:
       - changes
       - ci-api
       - ci-frontend
+      - ci-extension
       - ci-gateway
       - ci-fetcher
       - ci-demo-driver

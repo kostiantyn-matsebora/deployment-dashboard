@@ -13,7 +13,7 @@ public sealed class EventMapperTests
     {
         var (deployment, status) = MakeFixtures();
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.Success, "Deploy API", null, [], EmptyServiceMap);
+            DeploymentStatus.Success, new EventMappingContext("Deploy API", null, [], EmptyServiceMap));
 
         Assert.Equal("gh-deploy-42", ev.DeploymentId);
     }
@@ -23,7 +23,7 @@ public sealed class EventMapperTests
     {
         var (deployment, status) = MakeFixtures();
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.Success, "My Workflow", null, [], EmptyServiceMap);
+            DeploymentStatus.Success, new EventMappingContext("My Workflow", null, [], EmptyServiceMap));
 
         Assert.Equal("My Workflow", ev.Service);
     }
@@ -33,7 +33,7 @@ public sealed class EventMapperTests
     {
         var (deployment, status) = MakeFixtures(targetUrl: "https://github.com/acme/api/actions/runs/99/jobs/1");
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.Success, null, null, [], EmptyServiceMap);
+            DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
 
         Assert.Equal("99", ev.RunNumber);
     }
@@ -43,7 +43,7 @@ public sealed class EventMapperTests
     {
         var (deployment, status) = MakeFixtures(targetUrl: null);
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.Success, null, null, [], EmptyServiceMap);
+            DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
 
         Assert.Null(ev.RunNumber);
     }
@@ -54,7 +54,7 @@ public sealed class EventMapperTests
         var (deployment, status) = MakeFixtures();
         var parents = new[] { "gh-deploy-1", "gh-deploy-2" };
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.InProgress, null, null, parents, EmptyServiceMap);
+            DeploymentStatus.InProgress, new EventMappingContext(null, null, parents, EmptyServiceMap));
 
         Assert.Equal(parents, ev.ParentDeployments);
     }
@@ -64,7 +64,7 @@ public sealed class EventMapperTests
     {
         var (deployment, status) = MakeFixtures();
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.Success, null, null, [], EmptyServiceMap);
+            DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
 
         Assert.Null(ev.ParentDeployments);
     }
@@ -85,7 +85,7 @@ public sealed class EventMapperTests
             CreatedAt = DateTimeOffset.UtcNow
         };
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.Success, null, null, [], EmptyServiceMap);
+            DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
 
         Assert.Equal("ci-user", ev.Actor);
     }
@@ -106,7 +106,7 @@ public sealed class EventMapperTests
             CreatedAt = DateTimeOffset.UtcNow
         };
         var ev = EventMapper.Map(deployment, status, "acme/api",
-            DeploymentStatus.Success, null, null, [], EmptyServiceMap);
+            DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
 
         Assert.Equal("deploy-bot", ev.Actor);
     }

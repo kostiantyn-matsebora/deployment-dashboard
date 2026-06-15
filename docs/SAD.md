@@ -74,7 +74,7 @@ Teams using any CI/CD tool (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, et
 - **Hosting platform:** Azure only — all infrastructure must run on Microsoft Azure.
 - **Budget:** ≤ $30/month total (compute + database + storage combined).
 - **Network:** The system is deployed inside the organisation's internal network or a private Azure-hosted container; it is not publicly accessible.
-- **Technology stack:** Angular 20+ for the frontend; .NET 10 for all backend components.
+- **Technology stack:** Angular 21 for the frontend; .NET 10 for all backend components.
 - **Platform agnosticism:** The solution must not depend on any proprietary cloud compute model (e.g. serverless Functions). All backend components must be deployable as standard containerised applications on any OCI-compliant container host.
 
 ---
@@ -86,6 +86,8 @@ The project is a **microservices architecture** — Write API, Read API, Fetcher
 > 1. **Microservices architecture.** Write API, Read API, Fetcher, Frontend SPA, and App Gateway are distinct services with distinct concerns. Decomposition at the project + boundary level.
 
 > 2. **Separation of concerns (CQRS) consolidation in container** write and read api separated as two different components but consolidated as container.
+
+> 3. **Passwordless Postgres auth (managed identity).** For the Azure cloud target (NFR-01 / NFR-06), the stack auto-detects auth mode from credential presence: omit `POSTGRES_PASSWORD` and the API authenticates as its ambient Azure Workload / Managed Identity, obtaining a short-lived access token at connection time refreshed transparently — no static password in the environment. Set `POSTGRES_PASSWORD` to use static credentials (default for local Compose, CI, and tests). The seam is provider-agnostic. See [Configuration — PostgreSQL: auth modes](guide/configuration.md#postgresql-auth-modes).
 
 
 ---

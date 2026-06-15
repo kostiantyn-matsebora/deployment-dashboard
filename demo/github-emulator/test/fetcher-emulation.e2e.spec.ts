@@ -28,10 +28,17 @@
  *  5. Assert an artifact-sourced version on a search-indexer deployment:
  *       GET http://localhost:5000/api/services/search-indexer/deployments?per_page=1
  *     IMPORTANT: payments-api versions will be null because
- *       GITHUB__VERSION_SOURCE=artifact:version.txt and payments-api has NO artifacts
+ *       GITHUB_VERSION_SOURCE=artifact:version.txt and payments-api has NO artifacts
  *       (it uses payload.version instead).
  *     search-indexer has version.txt artifacts → its version field should be non-null
  *     (e.g. "v0.8.0").
+ *
+ *  6. (Regression guard — fixture freshness → fetcher ingest pipe)
+ *     After seed, the /api/services list must be non-empty, proving that the
+ *     fixture timestamps shifted by the loader fall within the fetcher's 7-day
+ *     INITIAL_LOOKBACK window so at least one deployment_event is ingested.
+ *     Regression for: seed newest event aged out → maxSince=(null) for all repos
+ *     → deployment_events=0 → empty dashboard + runaway re-backfill every cycle.
  *
  * This test is SKIPPED in the unit test run. The jest config in package.json
  * excludes *.e2e.spec.ts via testPathIgnorePatterns, so this file is only
@@ -39,7 +46,7 @@
  *
  * Stack services required:
  *   - github-emulator  at http://localhost:3100
- *   - Dashboard.Fetcher.Host (configured with GITHUB__BASE_URL=http://github-emulator:3100)
+ *   - Dashboard.Fetcher.Host (configured with GITHUB_BASE_URL=http://github-emulator:3100)
  *   - Dashboard.Api           at http://localhost:5000
  *   - Postgres (upstream of Dashboard.Api)
  */
@@ -155,7 +162,7 @@ describe.skip(
 
     // ── Test 5: payments-api versions are null (no artifacts — see IMPORTANT note) ──
 
-    it('payments-api versions are null (GITHUB__VERSION_SOURCE=artifact:version.txt, no artifacts)', async () => {
+    it('payments-api versions are null (GITHUB_VERSION_SOURCE=artifact:version.txt, no artifacts)', async () => {
       requireStack();
 
       const res = await fetch(
@@ -168,6 +175,55 @@ describe.skip(
       for (const item of data.items) {
         expect(item.version).toBeNull();
       }
+    }, POLL_TIMEOUT);
+
+    // ── Test 6: Regression guard — fixture freshness → fetcher ingest pipe ──────
+    // Verifies the fix for: seed newest event aged out of the fetcher's 7-day
+    // INITIAL_LOOKBACK window → maxSince=(null) for all repos → deployment_events=0
+    // → empty dashboard + runaway re-backfill every cycle.
+    //
+    // After a fresh seed, the fixture loader shifts timestamps so the newest event
+    // lands at ~now. The fetcher must therefore produce a real maxSince and ingest
+    // at least one deployment event, which the /api/services list reflects.
+
+    it('fixture freshness: /api/services is non-empty after seed (regression guard — maxSince null fix)', async () => {
+      requireStack();
+
+      // Re-seed to ensure timestamps are anchored to this test run's Date.now().
+      const seedRes = await fetch(`${EMULATOR_URL}/_github/seed`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ dataset: 'demo', reset: true }),
+      });
+      expect(seedRes.ok).toBe(true);
+
+      // Verify seeded_at is within 30 s of now — confirms the loader anchored timestamps.
+      const statusRes = await fetch(`${EMULATOR_URL}/_github/status`);
+      const status = await statusRes.json() as { seeded_at: string };
+      const seededAt = new Date(status.seeded_at).getTime();
+      expect(seededAt).toBeGreaterThan(Date.now() - 30_000);
+
+      // Poll /api/services until at least one service appears (fetcher ingested events)
+      // or the deadline expires. A non-empty list proves maxSince was not null.
+      const deadline = Date.now() + POLL_TIMEOUT;
+      let serviceNames: string[] = [];
+      while (Date.now() < deadline) {
+        try {
+          const res  = await fetch(`${API_URL}/api/services`);
+          const data = await res.json() as { items: string[] | { name: string }[] };
+          // Handle both string[] and {name}[] shapes the API may return.
+          serviceNames = Array.isArray(data.items)
+            ? data.items.map(i => (typeof i === 'string' ? i : i.name))
+            : [];
+        } catch {
+          // not ready yet — keep polling
+        }
+        if (serviceNames.length > 0) break;
+        await new Promise(r => setTimeout(r, 5_000));
+      }
+
+      // At least one service must be present — empty list means deployment_events=0.
+      expect(serviceNames.length).toBeGreaterThan(0);
     }, POLL_TIMEOUT);
   },
 );

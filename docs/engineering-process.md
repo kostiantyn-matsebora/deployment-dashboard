@@ -2,7 +2,9 @@
 
 **Status:** Draft · **Date:** 2026-06-01
 
-Defines specialist-routing for every change in this repo. Stack-agnostic; suitable for extraction to a shared engineering-team framework.
+Defines specialist-routing for every change in this repo. Stack-agnostic. This page is the
+project-specific routing surface (concrete agents); the generalized, portable version of it
+is the orchestration kit — see *Orchestration playbook* below.
 
 ---
 
@@ -21,8 +23,11 @@ Route each change to the specialist that owns it:
 | Tests + verification | `testing-specialist` |
 | Markdown docs / `index.md` / sources-of-truth | `docs-keeper` |
 
-## Rules
+## Orchestration playbook
 
-- **Surface before launch.** Present the dispatch plan (which agents + scope) before starting. For N parallel agents, get explicit user confirmation first.
-- **Parallelize only independent slices.** Serialize coupled or shared-file edits — or isolate them in separate git worktrees — to avoid git index contention.
-- **Inline execution is the exception.** Reserve main-loop execution for trivial edits, orchestration itself, and conversational turns. Substantive changes go to the owning specialist.
+The routing table above is the only project-specific surface. The orchestration **mechanics**
+— launch rules, execution modes (in-session subagents vs spawned team), phases, and the fix
+loop — live once in the portable kit `.claude/team-process/process.md`, with the typed
+communication protocol (`BRIEF` / `RESULT` / `FINDING` / `FIX` / `ARTIFACT`) in its `protocol.md`
+companion and the standing guardrails in `guardrails.md` (generic role names; this repo's
+role→agent mapping and per-role stack/lanes/gates are in `CLAUDE.md` § *Project bindings*).

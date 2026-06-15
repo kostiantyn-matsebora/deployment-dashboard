@@ -6,9 +6,10 @@ namespace Dashboard.Fetcher.Tests.Mapping;
 public sealed class StatusMapperTests
 {
     [Theory]
-    [InlineData("queued", DeploymentStatus.InProgress)]
-    [InlineData("pending", DeploymentStatus.InProgress)]
+    [InlineData("pending", DeploymentStatus.Pending)]
+    [InlineData("queued", DeploymentStatus.Queued)]
     [InlineData("in_progress", DeploymentStatus.InProgress)]
+    [InlineData("waiting", DeploymentStatus.Waiting)]
     [InlineData("success", DeploymentStatus.Success)]
     [InlineData("failure", DeploymentStatus.Failure)]
     [InlineData("error", DeploymentStatus.Failure)]

@@ -1,6 +1,6 @@
 import { ControlApiClient } from '../src/write-api/control-api.client';
 
-const BASE_URL    = 'http://localhost:3000';
+const BASE_URL    = 'http://localhost:3002';
 const CONTROL_KEY = 'ctrl-key';
 const RESET_ID    = '01J9F4WZK3W9G2T6X4QH3DKQF6';
 

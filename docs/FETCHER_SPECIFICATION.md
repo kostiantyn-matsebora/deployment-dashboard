@@ -46,12 +46,13 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F9 | **Config-driven; base URL overridable.** Repos + service/version mapping + GitHub base URL from env. | Integration repoints the GitHub base URL at a mock; production points at `api.github.com`. |
 | F10 | **`parent_deployments` derived from workflow `needs` graph.** The adapter fetches the workflow YAML for each run, parses the deployment-job subgraph (`environment:` + `needs:`), and resolves parent edges to `deployment_id` values (§5.6). Any resolution failure → `parent_deployments = []`; ingest is never blocked. | Reproduces the deployment graph GitHub surfaces in the Actions Run UI. `explicit parent` is the Swimlanes default correlation predicate — accurate population here makes it work out of the box. |
 | F11 | **Workflow graph cached in-memory per `(repo, run_id)`.** Bounded LRU (≤ 200 entries). Cache entry includes workflow `name` (used as service identity), `path`, `head_sha`, and parsed deployment-job subgraph. | Avoids re-fetching the workflow YAML for each status event that shares a run; workflow runs are immutable so no invalidation is needed. |
-| F12 | **Service identity = workflow YAML `name:` field**, resolved via the run's `path` (e.g. `.github/workflows/deploy.yml`) → the active workflow with that path → its YAML `name:` field. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB__SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: path→workflow-name lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; SERVICE_MAP handles edge cases without restructuring the pipeline. |
-| F13 | **Backfill fills the last `BACKFILL_DEPTH` status events per `(service, environment)` slot** (default 2). Enumerates active workflows and environments per repo; paginates deployments newest-first. For each candidate deployment, fetches its statuses and counts the mapped ones (§5.3; unmapped states like `waiting`/`inactive` don't count). Stops scanning a slot once `eventsSoFar ≥ BACKFILL_DEPTH`. After collecting candidate events, trims to the `BACKFILL_DEPTH` latest by `status.created_at` per slot before posting. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress when its service is already at depth or is unknown or has zero mapped statuses. The YAML graph is fetched **only** for deployments contributing kept events; discarded deployments cost only statuses + run-metadata. `BACKFILL_MAX_AGE` is the hard backstop. | Controls how many history drawer entries seed each slot at startup; status-event count matches what the history drawer shows. No-progress stop and defer-YAML bounds API cost as before. |
+| F12 | **Service identity = workflow YAML `name:` field**, resolved via the run's `path` (e.g. `.github/workflows/deploy.yml`) → the active workflow with that path → its YAML `name:` field. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB_SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: path→workflow-name lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; SERVICE_MAP handles edge cases without restructuring the pipeline. |
+| F13 | **Backfill fills the last `BACKFILL_DEPTH` status events per `(service, environment)` slot** (default 2). Enumerates active workflows and environments per repo; paginates deployments newest-first. For each candidate deployment, fetches its statuses and counts the mapped ones (§5.3; `inactive` is skipped and does not count; `waiting` now maps to a real status event and counts toward depth like the other pre-run states `pending`/`queued` — consistent with the invariant that the status-event count matches what the history drawer shows). Stops scanning a slot once `eventsSoFar ≥ BACKFILL_DEPTH`. After collecting candidate events, trims to the `BACKFILL_DEPTH` latest by `status.created_at` per slot before posting. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress when its service is already at depth or is unknown or has zero mapped statuses. The YAML graph is fetched **only** for deployments contributing kept events; discarded deployments cost only statuses + run-metadata. `BACKFILL_MAX_AGE` is the hard backstop. | Controls how many history drawer entries seed each slot at startup; status-event count matches what the history drawer shows. No-progress stop and defer-YAML bounds API cost as before. |
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
-| F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB__RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB__RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
+| F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB_RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB_RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
 | F17 | **Control-plane participant (gated on CONTROL_API_KEY).** When `CONTROL_API_KEY` is set, a second long-lived task subscribes to `GET /api/control/stream` with exponential backoff on failures (1 s → 2 s → 4 s … capped 30 s). When `CONTROL_API_KEY` is empty, the subscriber is never started and a startup log message records the absence. Reacts to: drain + ack on `reset-initiated`, drop cursor + backfill + report `running` on `reset-completed`. Still **just a consumer** of the existing control-plane contract — no backend change (F1, SAD §3). | Prevents 404-looping when the API's control surface is disabled (empty key); backoff avoids hammering on transient failures. |
+| F18 | **Per-cycle rate-limit reporting.** After every successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to `POST /api/control/events`. Reuses the existing `ComponentEventClient` transport. Skipped when snapshot is null (before the first GitHub response). Not gated on `CONTROL_API_KEY` — always active when `API_KEY` is present. Non-fatal: POST failures are logged and swallowed so reporting never breaks the poll loop. | Operators and end-users can observe CI/CD quota consumption in real time without backend change. The snapshot already exists (F16); this adds only the emit step. |
 
 ---
 
@@ -178,10 +179,26 @@ One **GitHub deployment status** → one **event row** (matches the append-only 
 
 | GitHub `state` | Contract `status` |
 |---|---|
-| `queued`, `pending`, `in_progress` | `in-progress` |
+| `pending` | `pending` |
+| `queued` | `queued` |
+| `in_progress` | `in-progress` |
+| `waiting` | `waiting` |
 | `success` | `success` |
-| `failure`, `error` | `failure` |
+| `failure`, `error` | `failure` (but see *cancelled/rejected quirk* below) |
 | `inactive` | *(skipped — supersession marker, not a transition)* |
+
+**Settled mapping decisions (intentional — not gaps):**
+- **`error` collapses into `failure`.** GitHub's `error` (the deployment couldn't be processed — a system/integration-level problem) vs `failure` (the deploy ran and failed) is a distinction with no operator consequence here: both are terminal "did not succeed" outcomes and the viewer's reaction is identical. `error` is also rare on Actions-driven deployments (mostly emitted by third-party deploy integrations). Not promoted to its own contract status; preserve the raw state in event metadata if granularity is ever needed.
+- **`inactive` is skipped.** It is not a deploy outcome — it is GitHub bookkeeping marking a deployment as no longer the live one (auto-set on a prior `success` when a newer `success` supersedes it in the same environment). The dashboard's "latest deployment per environment" model already captures supersession via the newer deployment it *does* ingest, so emitting `inactive` would be redundant and semantically wrong. (Edge case — a deployment deactivated *without* a replacement, e.g. teardown of an ephemeral environment — would leave a stale tile; out of scope, would be a deliberate "show env as empty" feature, not a fix.)
+
+#### Cancelled and rejected — derived beyond the status pipeline
+
+GitHub's `deployment_status.state` enum has no `cancelled` or `rejected` value. The closed set is: `error` / `failure` / `inactive` / `in_progress` / `queued` / `pending` / `success` (plus `waiting` in webhook payloads). A cancelled run or a reviewer-denied environment gate is written by GitHub as `failure`; the real signal lives one level up:
+
+- **`cancelled`.** The fetcher cross-references the associated workflow run's `conclusion` field. The run object is already cached per `(repo, run_id)` (F11). A `cancelled` conclusion on a deployment whose status mapped to `failure` is re-emitted as `cancelled`.
+- **`rejected`.** Read from the environment pending-deployment-reviews API (`state: rejected`) for `waiting` deployments denied by a reviewer. This is the only signal that distinguishes a reviewer rejection from a cancellation.
+
+These are derived statuses resolved after the `StatusMapper` step — not a change to the mapping table above.
 
 ### 5.4 Cursor shape (opaque to the backend)
 
@@ -224,7 +241,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 | Condition | Behaviour |
 |---|---|
 | `deployment.Id` in terminal cache | Skip `GET /deployments/{id}/statuses` entirely. Still include the deployment in the `envToDeploymentId` map (§5.6.4) using the cached `runId` so parent edges remain resolvable. Contributes no new events. |
-| Not in cache | Fetch statuses as normal. After fetch: if the latest status (newest-first ordering from GitHub) is terminal, record `deploymentId → runId` in the cache. |
+| Not in cache | Fetch statuses as normal. After fetch: select the status with the maximum `created_at` as the latest (the endpoint's array ordering is not guaranteed); if that status is terminal, record `deploymentId → runId` in the cache. |
 | First appearance of any `deployment.Id` | Always fetched (id never in cache). |
 | Non-terminal latest status | NOT cached; re-fetched every cycle until terminal. |
 
@@ -240,7 +257,9 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 
 **Mechanism (`GithubClient.GetPagedConditionalAsync<T>`).**
 
-`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. Pages 2+ are fetched unconditionally. A `304` does not count against the GitHub rate-limit (F8/F16) but IS still recorded by the fetcher's own-request budget counter (it is still an HTTP request).
+`If-None-Match` is sent on **page 1 only**. A page-1 `304` means the whole list is unchanged — GitHub returns items newest-first, so any new item would change page 1. A `304` is free: GitHub does not charge it against the quota (`X-RateLimit-Remaining` is unchanged), so it is **NOT** counted by the fetcher's own-request budget counter (`own_used`). The budget still processes the `X-RateLimit-Reset` / `X-RateLimit-Limit` / `X-RateLimit-Remaining` headers unconditionally so the snapshot stays current.
+
+**Early-stop at the cutoff window (deployments list only).** The deployments-list fetch passes a `stopBefore` predicate (`d.CreatedAt < cutoff`) to `GetPagedConditionalAsync`. GitHub returns deployments newest-first, so once a deployment older than `cutoff` is encountered the pager stops immediately: that item and all subsequent items on the same page are excluded, and no further pages are requested. This mirrors the bounded scan behaviour of backfill (§5.8.2) and prevents a page-1 change on a large repo from paging through the full deployment history to reach the cutoff.
 
 **Instance caches** (both persist across cycles; adapter is a DI singleton):
 - `_deploymentsListCache` — per-repo `(etag, windowed deployments snapshot)`. Capacity 64 entries, LRU eviction.
@@ -251,10 +270,10 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 | Condition | Behaviour |
 |---|---|
 | Deployments list `304` | Reuse cached windowed snapshot. Per-deployment status checks still run normally — a list `304` never skips status re-checks. |
-| Deployments list `200` | Apply `cutoff` window to fresh items; refresh cache only when a `ETag` header is present. |
+| Deployments list `200` | Pager stops at the cutoff (early-stop, newest-first); result is already windowed. Cache when an `ETag` header is present. |
 | Deployment in terminal cache | Skip `GET /deployments/{id}/statuses` entirely (§5.5.1); terminal-skip wins — the conditional path never runs for it. |
 | Non-terminal deployment statuses `304` | Reuse cached `runId` for the env→deploymentId map (§5.6.4); emit no events (list is byte-identical and the cursor has advanced past every cached status's `created_at`). Deployment stays eligible for future conditional fetches — not promoted to terminal. |
-| Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If latest status is terminal, also record in the terminal cache (§5.5.1). |
+| Non-terminal deployment statuses `200` | Process statuses normally; store new ETag + extracted `runId` in `_statusEtagCache`. If the status with the maximum `created_at` is terminal, also record in the terminal cache (§5.5.1). |
 
 **Graceful degradation.** When the server omits the `ETag` header on a `200` response (e.g. the `github-emulator`), nothing is cached and every subsequent cycle is a normal unconditional fetch — correctness is unaffected.
 
@@ -441,17 +460,19 @@ ResolveService(workflowName, repo):
 
 #### Discovery (startup)
 
-1. If `GITHUB__RATE_LIMIT` is set → `total_limit = GITHUB__RATE_LIMIT`.
+1. If `GITHUB_RATE_LIMIT` is set → `total_limit = GITHUB_RATE_LIMIT`.
 2. Else → `GET /rate_limit` (same auth headers as §5.1); read `resources.core.limit` → `total_limit`.
 3. On non-2xx or parse error → log warning; `total_limit = 5000` (GitHub authenticated PAT default).
-4. `budget = floor(total_limit × GITHUB__RATE_LIMIT_BUDGET_PCT / 100)`.
+4. `budget = floor(total_limit × GITHUB_RATE_LIMIT_BUDGET_PCT / 100)`.
 
 #### Per-request enforcement
 
 After every HTTP call to the GitHub API:
 
-1. Increment the fetcher's **own request counter** (one per call).
-2. Read `X-RateLimit-Reset` → `reset_at` (UTC). If the new `reset_at` is later than the previously observed one AND is in the past, the window has rolled over — reset own counter to 0 before incrementing.
+1. Read `X-RateLimit-Reset` → `reset_at` (UTC). The window has rolled over when **`now ≥ previously-observed reset_at`** AND the new `reset_at` is later than the previously observed one — reset own counter to 0. (`X-RateLimit-Reset` always points to the end of the *current* window, i.e. always in the future; checking whether the new value is in the past would never fire.)
+2. Update `_resetAt` unconditionally (even for 304 responses).
+3. Increment the fetcher's **own request counter** — **only for quota-consuming responses** (all except `304 Not Modified`). A `304` is free (GitHub does not charge it; `X-RateLimit-Remaining` is unchanged), so counting it would over-report usage and over-throttle against F16's "must not monopolise a shared token" rationale.
+4. Capture `X-RateLimit-Limit` / `X-RateLimit-Remaining` unconditionally for the F18 snapshot.
 
 If `own_count ≥ budget`:
 
@@ -512,10 +533,10 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 | Part | Value |
 |---|---|
-| Headers | `X-Api-Key: <API_KEY>`, `X-Component-Id: dashboard-fetcher`, `Content-Type: application/json; charset=utf-8` |
-| Body | `{ "event_type": "reset-ack", "state": "paused", "occurred_at": "<now UTC RFC 3339>", "payload": { "reset_id": "<reset-initiated event id>" } }` |
+| Headers | `X-Api-Key: <API_KEY>`, `X-Component-Id: dashboard-fetcher`, **`X-Correlation-Id: <reset-initiated event id>` (required)**, `Content-Type: application/json; charset=utf-8` |
+| Body | `{ "event_type": "reset-ack", "state": "paused", "occurred_at": "<now UTC RFC 3339>" }` |
 
-- `reset_id` = the `id` of the received `reset-initiated` event (the orchestrator correlates the ack to the in-flight cycle by this value).
+- `X-Correlation-Id` = the `id` of the received `reset-initiated` event (the received frame's `correlation_id`, which at the origin equals its own `id`). **This IS the ack-gate key** — the orchestrator correlates the ack to the in-flight cycle by this value. There is no `payload.reset_id` body field. A missing/invalid `X-Correlation-Id` is recorded but does not count toward the gate.
 - Expected response `204`. Treat `4xx`/`5xx`/transport error as non-fatal: log, stay paused, await `reset-completed` (the orchestrator proceeds on `AckTimeoutSeconds` regardless — the reset is not blocked by a lost ack).
 
 #### 5.10.5 Recovery on `reset-completed`
@@ -528,8 +549,8 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 | Part | Value |
 |---|---|
-| Headers | `X-Api-Key`, `X-Component-Id: dashboard-fetcher`, `Content-Type` |
-| Body | `{ "event_type": "status", "state": "running", "occurred_at": "<now UTC>", "payload": { "reset_id": "<reset-completed reset_id>" } }` |
+| Headers | `X-Api-Key`, `X-Component-Id: dashboard-fetcher`, `X-Correlation-Id: <reset-completed correlation_id>` (optional, recommended — correlates recovery to the same process), `Content-Type` |
+| Body | `{ "event_type": "status", "state": "running", "occurred_at": "<now UTC>" }` |
 
 > The reset linkage to backfill is **implicit by design**: the fetcher does not call a "backfill" API: it simply drops the cursor and lets the existing F14 null-cursor path do the work. This keeps the reset handler tiny and reuses the tested backfill flow.
 
@@ -541,6 +562,56 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | Fetcher down for the entire reset cycle | On next startup the poll loop sees an empty store + `404` cursor and **backfills anyway** (F14) — no event needed; the reset self-heals via the same null-cursor path. |
 | Ack POST fails | Stay paused; orchestrator proceeds on `AckTimeoutSeconds`. Recovery still triggers on the eventual `reset-completed`. |
 | `reset-completed` arrives while already running (duplicate/replay) | Idempotent: dropping an already-advanced cursor and re-checking state at worst re-backfills the most-recent slot per `(service, environment)` — duplicates are acceptable (F5, append-only). |
+
+---
+
+### 5.11 Per-cycle rate-limit reporting (F18)
+
+After each successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to the existing `POST /api/control/events` surface. See [`api/api-guidelines.md`](api/api-guidelines.md) §11 "Rate-limit report payload" and [`diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md).
+
+**Multi-adapter note.** With multiple adapters each adapter emits its own `rate-limit` event carrying a distinct `payload.adapter` value under the shared `component_id`. Consumers must key on `payload.adapter`, not on `component_id`, to distinguish per-adapter counters.
+
+#### Trigger and gate
+
+| Condition | Behaviour |
+|---|---|
+| Snapshot present after `PollOnceAsync` | Post `rate-limit` event immediately. |
+| Snapshot null (before first GitHub response) | Skip — no all-null reports. |
+| `CONTROL_API_KEY` absent | **Not** a gate — the report uses `X-Api-Key` (same as ingest); always active when `API_KEY` is present. |
+
+#### Extended `RateLimitSnapshot`
+
+`RateLimitSnapshot` carries two additional fields populated from GitHub response headers after each call (`GithubClient` → `RateLimitBudget.RecordAndWaitIfNeededAsync`):
+
+| Field | Source | Null when |
+|---|---|---|
+| `CiLimit` | `X-RateLimit-Limit` | Before first GitHub response. |
+| `CiRemaining` | `X-RateLimit-Remaining` | Before first GitHub response. |
+
+Existing fields (`Used`, `Budget`, `ResetAt`) are unchanged.
+
+#### Payload mapping
+
+The `payload` object maps the snapshot to the api-guidelines `rate-limit` contract:
+
+| Payload field | Source |
+|---|---|
+| `adapter` | `ICiCdAdapter.AdapterId` (e.g. `github-actions`) |
+| `ci_limit` | `snapshot.CiLimit` (null when not yet received) |
+| `ci_remaining` | `snapshot.CiRemaining` (null when not yet received) |
+| `own_budget` | `snapshot.Budget` |
+| `own_used` | `snapshot.Used` |
+| `reset_at` | `snapshot.ResetAt`; serialised as RFC 3339 UTC; **null** when `ResetAt == DateTimeOffset.MinValue` |
+
+`state` = `"running"` normally. The delegate closure in DI supplies the adapter id and state; `PollLoop` itself remains free of the `Control` namespace dependency.
+
+#### Resilience
+
+Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level and swallowed. The poll loop continues regardless. This mirrors `PostAckAsync` / `PostRunningAsync` behaviour (§5.10.4, §5.10.5).
+
+#### Wiring (no `Orchestration` → `Control` dependency)
+
+`PollLoop` accepts an optional `Func<RateLimitSnapshot, CancellationToken, Task>? reportCycleAsync` parameter. `Program.cs` DI wires it to `IComponentEventClient.PostRateLimitAsync`, closing over the adapter id. This preserves the existing dependency direction: `Control` → `Orchestration`, never the reverse.
 
 ---
 
@@ -557,21 +628,19 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
 | `BACKFILL_MAX_AGE` | `30.00:00:00` | how far back backfill scans per environment; defaults to `INITIAL_LOOKBACK` |
 | `BACKFILL_DEPTH` | `2` | number of latest status events to seed per `(service, environment)` slot during backfill (F13); default 2 |
-| `GITHUB__BaseUrl` | `https://api.github.com` | overridable for the integration mock |
-| `GITHUB__Token` | *(secret)* | PAT / GitHub App token |
-| `GITHUB__Repos` | `acme/api,acme/web` | repos to poll |
-| `GITHUB__ServiceMap` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
-| `GITHUB__VersionSource` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
-| `GITHUB__RateLimit` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
-| `GITHUB__RateLimitBudgetPct` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
+| `GITHUB_BASE_URL` | `https://api.github.com` | overridable for the integration mock |
+| `GITHUB_TOKEN` | *(secret)* | PAT / GitHub App token |
+| `GITHUB_REPOS` | `acme/api,acme/web` | repos to poll |
+| `GITHUB_SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
+| `GITHUB_VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
+| `GITHUB_RATE_LIMIT` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
+| `GITHUB_RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
 
-Adapter config is namespaced (`GITHUB__…`) so a second adapter (`AZDO__…`, `JENKINS__…`) drops in without collision.
-
-> **Env var binding rule.** The segment after `__` must match the C# property name exactly (PascalCase). .NET config maps `__` to a section separator and binds by property name — not by SCREAMING_SNAKE. Example: `GITHUB__BaseUrl` → section `GitHub`, property `BaseUrl`; `GITHUB__BASE_URL` does NOT bind and the property keeps its default.
+> **Explicit-binding vars.** All vars in this table are read explicitly by name — `FetcherOptionsEnv.ApplyEnvOverrides` (for the fetcher vars) and `GithubAdapterOptionsEnv.ApplyEnvOverrides` (for the `GITHUB_*` vars). The appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it. A missing or unparseable value leaves the property at its default without throwing.
 
 **Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
-**Demo mode.** Set `GITHUB__BaseUrl=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB__Token` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed.
+**Demo mode.** Set `GITHUB_BASE_URL=http://github-emulator:3100` (the `github-emulator` service — [`GITHUB_EMULATOR_SPECIFICATION.md`](GITHUB_EMULATOR_SPECIFICATION.md)) and `GITHUB_TOKEN` to any placeholder value (the emulator does not validate it). No other fetcher config change is needed.
 
 ### 6.1 Functional readiness — `GET /readyz`
 
@@ -588,7 +657,13 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
     "last_success_at": "<RFC 3339 UTC>" | null,
     "last_error": "<string>" | null,
     "paused_for_reset": false,
-    "rate_limit": { "used": 150, "budget": 1500, "reset_at": "<RFC 3339 UTC>" } | null
+    "rate_limit": {
+      "used": 150,
+      "budget": 1500,
+      "reset_at": "<RFC 3339 UTC>",
+      "ci_limit": 5000,
+      "ci_remaining": 4830
+    } | null
   }
 }
 ```
@@ -631,7 +706,7 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 
 **Backfill:** all services covered on first page (early exit); rarely-deployed service found on page 2 (pagination); service not deployed to env within `BACKFILL_MAX_AGE` (skipped); `BACKFILL=true` overwrites existing cursor; events posted oldest-first.
 
-**Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB__RateLimit` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
+**Rate-limit budget:** `GET /rate_limit` response → correct `total_limit` and `budget`; `GITHUB_RATE_LIMIT` set → discovery call skipped; `GET /rate_limit` non-2xx → `total_limit = 5000`; `budget = floor(total_limit × pct / 100)` (boundary cases: pct = 1, pct = 100); adapter pauses until `reset_at + 1 s` when `used ≥ budget`; internal counter resets to 0 after window rollover; backfill and normal poll share the same budget counter.
 
 **Conditional requests (ETag, §5.5.2):**
 - In-flight statuses `304` across cycles → no event emitted in cycle 2; `If-None-Match` was sent for the statuses URL.
@@ -639,17 +714,26 @@ Reflects actual GitHub poll-cycle health. Distinct from the liveness `/health` w
 - Deployments-list `304` → cached snapshot reused; per-deployment status endpoint still called in cycle 2 (list `304` does not skip status checks).
 - Parent edge preserved when staging statuses return `304` in cycle 2 — prod event resolves `parent_deployments` via the cached `runId`.
 - No ETag from server → no `If-None-Match` sent on the next cycle; no `304`s served (graceful degradation, behaviour identical to unconditional fetch).
-- Rate-limit budget still increments its own-request counter for `304` responses.
+- Rate-limit budget does **NOT** increment the own counter for `304` responses (304 consumes no quota); a `200` does. Rollover bookkeeping and header capture (`X-RateLimit-Limit` / `X-RateLimit-Remaining`) remain unconditional.
 
 **Control-plane participation (F17, §5.10):**
-- `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at, payload.reset_id}` where `reset_id` = the `reset-initiated` event id.
-- `reset-completed` received → in-memory cursor dropped; next `GET /api/fetcher/state` mock returns `404` → backfill (F14) triggered; `status`/`running` event posted afterwards with `payload.reset_id` = the `reset-completed` reset_id.
+- `reset-initiated` received → poll loop paused (no further `FetchAsync` / ingest POST) AND `reset-ack` posted with headers `X-Api-Key` + `X-Component-Id: dashboard-fetcher` + **`X-Correlation-Id` = the `reset-initiated` event id** + `Content-Type`, body `{event_type:reset-ack, state:paused, occurred_at}` (no `payload.reset_id`).
+- `reset-completed` received → in-memory cursor dropped; next `GET /api/fetcher/state` mock returns `404` → backfill (F14) triggered; `status`/`running` event posted afterwards with `X-Correlation-Id` = the `reset-completed` `correlation_id`.
 - `reset-started` received → **no** ack, no extra POST, poll loop stays paused (asserts no redundant handling).
 - Unknown `event:` type → no-op (no POST, poll loop unaffected).
 - Reconnect after a dropped stream sends `Last-Event-ID` = last seen event id.
 - `: ping` frame → treated as heartbeat, no event dispatched.
 - Ack POST returns non-2xx → subscriber stays paused, does not throw, still recovers on subsequent `reset-completed`.
 - Component id overridden via `COMPONENT_ID` → header reflects the override.
+
+**Per-cycle rate-limit reporting (F18, §5.11):**
+- `RateLimitBudget.CiLimit` and `CiRemaining` are null before the first GitHub response; populated from `X-RateLimit-Limit` / `X-RateLimit-Remaining` on first response; updated on subsequent responses; remain null when headers are absent.
+- `PostRateLimitAsync` emits body with `event_type:"rate-limit"`, correct `state`, `occurred_at`; payload contains `adapter`, `ci_limit`, `ci_remaining`, `own_budget`, `own_used`, `reset_at`; `reset_at` is null when snapshot `ResetAt == DateTimeOffset.MinValue`; `X-Api-Key` and `X-Component-Id` headers present.
+- `PostRateLimitAsync` non-2xx response → does not throw.
+- `PostRateLimitAsync` transport error → does not throw.
+- Per-cycle `reportCycleAsync` delegate fires once per successful cycle when snapshot is non-null.
+- Per-cycle `reportCycleAsync` delegate NOT invoked when snapshot is null.
+- `reportCycleAsync` throws → loop continues next cycle (non-fatal).
 
 **Functional readiness indicator (§6.1):**
 - Initial state → `LastOutcome = null`, `LastSuccessAt = null`, `IsPausedForReset = false`.
@@ -675,7 +759,7 @@ Real fetcher-host against the `github-emulator` + real `Dashboard.Api` + Postgre
 - Populated `parent_deployments` on a two-environment chain.
 - Backfill populates `(service, environment)` slots correctly.
 - NFR-03 latency envelope.
-- **Full reset cycle (F17, §5.10)** against the **real** API + Postgres: fetcher subscribes to `GET /api/control/stream`; operator triggers `POST /api/control/reset`; assert the fetcher (a) receives `reset-initiated` and posts a `reset-ack` (`paused`, correct `reset_id`) visible via `GET /api/control/events`; (b) on `reset-completed` drops its cursor, re-backfills against the mock GitHub API after the store + `fetcher_state` were cleared, and posts a `status`/`running` event. Confirms the orchestrator counts the `dashboard-fetcher` ack and the store is re-populated post-reset.
+- **Full reset cycle (F17, §5.10)** against the **real** API + Postgres: fetcher subscribes to `GET /api/control/stream`; operator triggers `POST /api/control/reset`; assert the fetcher (a) receives `reset-initiated` and posts a `reset-ack` (`paused`, correct `X-Correlation-Id`) visible via `GET /api/control/events`; (b) on `reset-completed` drops its cursor, re-backfills against the mock GitHub API after the store + `fetcher_state` were cleared, and posts a `status`/`running` event. Confirms the orchestrator counts the `dashboard-fetcher` ack and the store is re-populated post-reset.
 
 ---
 

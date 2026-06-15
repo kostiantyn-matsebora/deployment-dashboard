@@ -1,14 +1,10 @@
 /**
- * DemoService unit tests — focused on startIngest({reset:true}) ordering.
+ * DemoService unit tests — focused on startIngest ordering and per-run correlation.
  *
  * Verifies that:
- *  1. awaitCycleComplete is called before the runner starts when reset:true
- *     and resetApi() returns a reset_id.
- *  2. The runner does NOT start until awaitCycleComplete resolves.
- *  3. When resetApi() fails (ok=false), ingest proceeds without waiting.
- *  4. When resetApi() returns ok=true but no reset_id, ingest proceeds with
- *     a warning and no wait.
- *  5. When reset:false, resetApi() is never called.
+ *  1. startIngest generates a run_id and posts run-start + run-complete events.
+ *  2. Two distinct startIngest calls produce two distinct run_ids.
+ *  3. Ingest does NOT trigger a reset (no resetApi call).
  */
 
 import { Subject } from 'rxjs';
@@ -27,11 +23,24 @@ jest.mock('../src/write-api/control-api.client', () => ({
 }));
 
 // Mock ControlEventsClient (registered in onModuleInit — must be constructible).
+// Track the last constructed instance so tests can inspect calls.
+let mockEventsClientInstance: {
+  postResetAck:      jest.Mock;
+  postStatusRunning: jest.Mock;
+  postRunStart:      jest.Mock;
+  postRunComplete:   jest.Mock;
+} | null = null;
+
 jest.mock('../src/control/control-events.client', () => ({
-  ControlEventsClient: jest.fn().mockImplementation(() => ({
-    postResetAck:      jest.fn().mockResolvedValue(undefined),
-    postStatusRunning: jest.fn().mockResolvedValue(undefined),
-  })),
+  ControlEventsClient: jest.fn().mockImplementation(() => {
+    mockEventsClientInstance = {
+      postResetAck:      jest.fn().mockResolvedValue(undefined),
+      postStatusRunning: jest.fn().mockResolvedValue(undefined),
+      postRunStart:      jest.fn().mockResolvedValue(undefined),
+      postRunComplete:   jest.fn().mockResolvedValue(undefined),
+    };
+    return mockEventsClientInstance;
+  }),
 }));
 
 // Mock scenario-loader so no filesystem access is required.
@@ -62,8 +71,6 @@ jest.mock('../src/write-api/write-api.client', () => ({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const RESET_ID = '01J9F4WZK3W9G2T6X4QH3DKQF6';
-
 function makeCoordinator(): jest.Mocked<ResetCoordinator> {
   return {
     resetState:           'idle',
@@ -81,10 +88,11 @@ function makeCoordinator(): jest.Mocked<ResetCoordinator> {
 
 function makeEmitService(): jest.Mocked<EmitService> {
   return {
-    emitting: false,
-    stream$:  new Subject(),
-    enable:   jest.fn(),
-    disable:  jest.fn(),
+    emitting:        false,
+    stream$:         new Subject(),
+    enable:          jest.fn(),
+    disable:         jest.fn(),
+    setEventsClient: jest.fn(),
     onModuleDestroy: jest.fn(),
   } as unknown as jest.Mocked<EmitService>;
 }
@@ -105,12 +113,12 @@ describe('DemoService.startIngest', () => {
     jest.clearAllMocks();
   });
 
-  describe('reset:false (default)', () => {
+  describe('ingest never triggers a reset (#9)', () => {
     it('does not call resetApi, expectCycle, or awaitCycleComplete', async () => {
       const coord = makeCoordinator();
       const svc   = makeService(coord, makeEmitService());
 
-      await svc.startIngest({ dataset: 'demo', reset: false });
+      await svc.startIngest({ dataset: 'demo' });
 
       expect(mockResetApi).not.toHaveBeenCalled();
       expect(coord.expectCycle).not.toHaveBeenCalled();
@@ -118,117 +126,8 @@ describe('DemoService.startIngest', () => {
     });
   });
 
-  describe('reset:true — happy path', () => {
-    it('calls resetApi() → expectCycle() → awaitCycleComplete() → runner.run in order', async () => {
-      const callOrder: string[] = [];
-
-      mockResetApi.mockImplementation(async () => {
-        callOrder.push('resetApi');
-        return { ok: true, http_status: 202, reset_id: RESET_ID };
-      });
-
-      const coord = makeCoordinator();
-      coord.expectCycle.mockImplementation(() => {
-        callOrder.push('expectCycle');
-      });
-      coord.awaitCycleComplete.mockImplementation(async () => {
-        callOrder.push('awaitCycleComplete');
-      });
-
-      const svc = makeService(coord, makeEmitService());
-
-      // Spy on ScenarioRunner.run to record when it's invoked.
-      const runner = (svc as any).runner;
-      const originalRun = runner.run.bind(runner);
-      runner.run = jest.fn().mockImplementation(async (...args: unknown[]) => {
-        callOrder.push('runner.run');
-        return originalRun(...args);
-      });
-
-      await svc.startIngest({ dataset: 'demo', reset: true });
-
-      expect(callOrder).toEqual(['resetApi', 'expectCycle', 'awaitCycleComplete', 'runner.run']);
-    });
-
-    it('passes the reset_id from resetApi() to expectCycle()', async () => {
-      mockResetApi.mockResolvedValue({ ok: true, http_status: 202, reset_id: RESET_ID });
-
-      const coord = makeCoordinator();
-      const svc   = makeService(coord, makeEmitService());
-
-      await svc.startIngest({ dataset: 'demo', reset: true });
-
-      expect(coord.expectCycle).toHaveBeenCalledWith(RESET_ID);
-    });
-
-    it('passes the reset_id from resetApi() to awaitCycleComplete()', async () => {
-      mockResetApi.mockResolvedValue({ ok: true, http_status: 202, reset_id: RESET_ID });
-
-      const coord = makeCoordinator();
-      const svc   = makeService(coord, makeEmitService());
-
-      await svc.startIngest({ dataset: 'demo', reset: true });
-
-      expect(coord.awaitCycleComplete).toHaveBeenCalledWith(RESET_ID);
-    });
-
-    it('returns running status after the runner has started', async () => {
-      mockResetApi.mockResolvedValue({ ok: true, http_status: 202, reset_id: RESET_ID });
-
-      const coord = makeCoordinator();
-      const svc   = makeService(coord, makeEmitService());
-
-      const status = await svc.startIngest({ dataset: 'demo', reset: true });
-
-      // Status is returned immediately after the fire-and-forget runner starts.
-      expect(['running', 'idle', 'done']).toContain(status.state);
-    });
-  });
-
-  describe('reset:true — resetApi() failure', () => {
-    it('proceeds to ingest without calling expectCycle or awaitCycleComplete when resetApi ok=false', async () => {
-      mockResetApi.mockResolvedValue({ ok: false, http_status: 500 });
-
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const coord   = makeCoordinator();
-      const svc     = makeService(coord, makeEmitService());
-
-      await svc.startIngest({ dataset: 'demo', reset: true });
-
-      expect(coord.expectCycle).not.toHaveBeenCalled();
-      expect(coord.awaitCycleComplete).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('pre-ingest API reset returned HTTP'),
-      );
-
-      warnSpy.mockRestore();
-    });
-  });
-
-  describe('reset:true — resetApi() returns ok but no reset_id', () => {
-    it('proceeds to ingest without calling expectCycle or awaitCycleComplete and logs a warning', async () => {
-      mockResetApi.mockResolvedValue({ ok: true, http_status: 202, reset_id: undefined });
-
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const coord   = makeCoordinator();
-      const svc     = makeService(coord, makeEmitService());
-
-      await svc.startIngest({ dataset: 'demo', reset: true });
-
-      expect(coord.expectCycle).not.toHaveBeenCalled();
-      expect(coord.awaitCycleComplete).not.toHaveBeenCalled();
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('no reset_id'),
-      );
-
-      warnSpy.mockRestore();
-    });
-  });
-
   describe('idempotency', () => {
-    it('returns current status without re-triggering reset when already running', async () => {
-      mockResetApi.mockResolvedValue({ ok: true, http_status: 202, reset_id: RESET_ID });
-
+    it('returns current status without re-starting when already running', async () => {
       const coord = makeCoordinator();
       const svc   = makeService(coord, makeEmitService());
 
@@ -236,11 +135,8 @@ describe('DemoService.startIngest', () => {
       const runner = (svc as any).runner;
       (runner as any)._state = 'running';
 
-      const status = await svc.startIngest({ dataset: 'demo', reset: true });
+      const status = await svc.startIngest({ dataset: 'demo' });
 
-      // resetApi and awaitCycleComplete ARE still called (reset happens before
-      // idempotency check per the implementation), but the runner is not started again.
-      // The key invariant: runner.run is not called a second time.
       expect(status.state).toBe('running');
     });
   });
@@ -308,5 +204,74 @@ describe('DemoService — emit delay clamping (CodeQL js/resource-exhaustion)', 
     await svc.startIngest({ dataset: 'demo', delay_ms: 250 });
 
     expect(delayArg(spy)).toBe(250);
+  });
+});
+
+describe('DemoService — per-run component-event correlation (§4.12)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockEventsClientInstance = null;
+  });
+
+  it('posts a run-start event before the runner completes', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+
+    await svc.startIngest({ dataset: 'demo' });
+
+    // Allow microtasks to drain so fire-and-forget postRunStart resolves.
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(mockEventsClientInstance!.postRunStart).toHaveBeenCalledTimes(1);
+    const [runId, detail] = mockEventsClientInstance!.postRunStart.mock.calls[0];
+    expect(typeof runId).toBe('string');
+    expect(runId.length).toBeGreaterThan(0);
+    expect(detail).toContain('ingest');
+  });
+
+  it('posts a run-complete event after the runner finishes', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+
+    await svc.startIngest({ dataset: 'demo' });
+
+    // Allow the runner's async run to complete and trigger postRunComplete.
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(mockEventsClientInstance!.postRunComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('run-start and run-complete share the same run_id (carried in X-Correlation-Id)', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+
+    await svc.startIngest({ dataset: 'demo' });
+
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setImmediate(resolve));
+
+    const startRunId    = mockEventsClientInstance!.postRunStart.mock.calls[0][0];
+    const completeRunId = mockEventsClientInstance!.postRunComplete.mock.calls[0][0];
+    expect(startRunId).toBe(completeRunId);
+  });
+
+  it('two distinct startIngest calls produce two distinct run_ids', async () => {
+    const svc = makeService(makeCoordinator(), makeEmitService());
+
+    // First run: must reach done before second can start (idempotency guard).
+    await svc.startIngest({ dataset: 'demo' });
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setImmediate(resolve));
+
+    // Force runner back to idle so second startIngest is not rejected.
+    const runner = (svc as any).runner;
+    runner._state = 'idle';
+
+    const runId1 = mockEventsClientInstance!.postRunStart.mock.calls[0][0];
+
+    await svc.startIngest({ dataset: 'demo' });
+    await new Promise(resolve => setImmediate(resolve));
+
+    const runId2 = mockEventsClientInstance!.postRunStart.mock.calls[1][0];
+
+    expect(runId1).not.toBe(runId2);
   });
 });

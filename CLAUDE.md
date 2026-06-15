@@ -23,7 +23,7 @@
 
 ## Solution directory structure
 
-Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway). The tree below is authoritative; reserved slots are listed separately.
+The tree below is authoritative — *Present today* vs *Reserved* are split into the two tables.
 
 **Present today:**
 
@@ -31,7 +31,7 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 |---|---|
 | `docs/` | All design + contract documentation (see *Sources of truth*). |
 | `backend/[service]` | Backend services (`Dashboard.Api` + endpoint-group libs, `Dashboard.Fetcher` + host, shared, tests). |
-| `frontend/[application]` | Angular SPA (`dashboard`) + `mock` server. |
+| `frontend/[application]` | Angular SPA (`dashboard`) + `mock` server + `extension` (MV3 WebExtension). |
 | `demo/` | `driver` (demo-orchestration service) + `github-emulator` (GitHub REST emulator for fetcher demo/CI) + `data` (scenario seeds). |
 | `gateway/` | nginx App Gateway config. |
 | `testing/[type]` | Testing solutions (`api`, `e2e`). |
@@ -51,35 +51,59 @@ Services are implemented (backend, frontend, fetcher, mock, demo-driver, gateway
 - Exception: user explicitly instructs a direct push to `main`.
 - Default when user says "push": push the current branch, not `main`.
 
+## GitHub issues
+
+**Never open a blank/free-form issue** (blank issues are disabled). Before filing:
+
+1. **Classify.** Bug (broken / regressed) vs Feature (new capability / improvement).
+2. **Fill the matching template** in `.github/ISSUE_TEMPLATE/` — Bug → `bug-report.md`, Feature → `feature-request.md`. Honor its `title:` prefix + `labels:`, and fill **every** section heading it defines (don't invent or drop sections — the template is the source of truth for sections).
+3. **Security reports** are not issues — route to the private advisory link in `config.yml`.
+
 ## Agent dispatch
 
 Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
 
-## Code intelligence (Serena-first)
+Each agent is a **project-agnostic anchor** to its generic role in `.claude/team-process/roles/*` (mission, principles, guardrails, communication protocol, tool-output economy). The **project-specific bindings** below are the *only* place stack lives — agents carry no stack.
 
-The Serena MCP server (`mcp__serena__*`) exposes symbol-level retrieval and editing via language servers (C# / TypeScript / PowerShell). **Prefer it over `Read` / `Grep` wherever code symbols apply** — it returns targeted symbols, not whole files, cutting token use across agent turns.
+## Project bindings
 
-**Load before use (mandatory).** Serena's tools are *deferred* — their schemas are unloaded, so they cannot be called until fetched. At the start of any code task, load them via `ToolSearch` (e.g. `select:mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols`). Skip this and agents silently default to `Grep` / `Read`; this step is what makes the preference below take effect.
+Per-role stack, file lanes, and gate commands live **one file per role** under `.claude/bindings/`.
+**Each role reads ONLY its own file** into context — not the whole set.
 
-- **Understand code.** `get_symbols_overview` (a file's top-level symbols), then `find_symbol` (locate; `depth=1` for members, `include_body` only when you need the source).
-- **Trace impact before editing a shared symbol.** `find_referencing_symbols` / `find_implementations` / `find_declaration` — not a grep-and-read sweep.
-- **Edit code.** `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` instead of full-file rewrites.
-- **Fall back to `Read` / `Grep`** for declarative/non-code files (YAML, JSON, Dockerfiles, configs), exact line-range reads, or content Serena's LSPs don't index well (e.g. PowerShell beyond the fallback tier). For **Markdown docs** prefer the markdown MCP (see *Docs intelligence* below), not `Read`.
+| Role | Agent | Binding |
+|---|---|---|
+| contract | `api-architect` | [`.claude/bindings/contract.md`](.claude/bindings/contract.md) |
+| backend | `backend-developer` | [`.claude/bindings/backend.md`](.claude/bindings/backend.md) |
+| frontend | `frontend-developer` | [`.claude/bindings/frontend.md`](.claude/bindings/frontend.md) |
+| infrastructure | `deployment-engineer` | [`.claude/bindings/infrastructure.md`](.claude/bindings/infrastructure.md) |
+| testing | `testing-specialist` | [`.claude/bindings/testing.md`](.claude/bindings/testing.md) |
+| docs | `docs-keeper` | [`.claude/bindings/docs.md`](.claude/bindings/docs.md) |
 
-## Docs intelligence (markdown-first)
+**Tool-output-economy guardrail** (`.claude/team-process/guardrails.md`) — shared across all roles; apply to every command:
+- Capture output; branch on the exit code.
+- Surface only the aggregate (success) or the failing slice (failure) — never the full log.
 
-The markdown MCP server (`mcp__markdown__*`, `ofershap/mcp-server-markdown`) exposes structural, embedding-free section retrieval over `.md` files via the heading tree. **Prefer it over `Read` wherever a doc section applies** — it returns one section, not the whole file, cutting token use across agent turns. The docs analogue of *Code intelligence* above; paths resolve against the project root, so pass relative paths (`docs/index.md`).
+## Code & docs intelligence (MCP)
 
-**Load before use (mandatory).** Its tools are *deferred* — load via `ToolSearch` (e.g. `select:mcp__markdown__list_headings,mcp__markdown__get_section,mcp__markdown__search_docs`). Skip this and agents silently default to `Read`; this step is what makes the preference below take effect.
+Purpose-routed MCP servers return targeted symbols/sections (callers, dependents, tests, doc
+headings), not whole files — **prefer them over `Read` / `Grep`** for code and `.md`. Servers:
+**tokensave** (code research/impact) · **serena** (symbol-level editing) · **code-review-graph**
+(change review) · **markdown** (`.md` section retrieval).
 
-- **Map, then extract.** `list_headings` (a file's heading tree / TOC) before reading, then `get_section` to pull only the target heading's content — pairs with the index-first navigation in *Sources of truth*.
-- **Locate across docs.** `list_files` (enumerate `.md`) + `search_docs` (case-insensitive keyword scan, **not** semantic) to find the file, then `get_section` to extract.
-- **Address by heading TEXT, not anchor slug.** `get_section(file, "Sources of truth")`, never `"sources-of-truth"` — `index.md` cross-links use `#slugs`, so convert slug → heading text before calling.
-- **Fall back to `Read`** for whole-file reads, content not delimited by headings, exact line-range reads, or frontmatter-only needs (or use `get_frontmatter`).
+**External library docs → context7** (not the local-repo servers above). For up-to-date docs/APIs of a
+**third-party** framework or library (Angular, EF Core, PrimeNG, nginx, …): `resolve-library-id` →
+`get-library-docs`. Use it instead of recalling APIs from memory; **never** for this repo's own code (use
+tokensave/serena).
+
+**Load before use (mandatory).** All expose *deferred* tools — uncallable until fetched via
+`ToolSearch` (e.g. `select:mcp__tokensave__tokensave_context,mcp__markdown__get_section`). Skip
+this and agents silently fall back to `Grep` / `Read`.
+
+**Routing table, per-server notes, and `Read`/`Grep` fallbacks:** [`.claude/mcp-routing.md`](.claude/mcp-routing.md).
 
 ## Scripts
 
-Following rules MUST be followed for every script in this repository (build / install / dev tooling / CI helpers / one-off automation):
+**Binding** for every script — build / install / dev tooling / CI helpers / one-off automation:
 
 - **Language.** PowerShell (`.ps1` / `.psm1`). Target **PowerShell 7+** (Core) for cross-platform parity (Windows / Linux / macOS).
 - **No alternative shells.** No `bash` / `sh` / `zsh` / `cmd` / `python` scripts as the primary deliverable. Single-line invocations inside CI YAML are exempt.
@@ -92,12 +116,22 @@ Following rules MUST be followed for every script in this repository (build / in
 - **CI gate.** `Invoke-Pester` recurses the repo root and discovers every `*.Tests.ps1`; a red suite blocks merge.
 - **Library-mode hook.** Scripts intended for hook / pipeline reuse expose a `-AsLibrary` switch that defines functions without executing the entry block, so Pester can dot-source pure functions safely.
 
+## Adopter site (the docs website is a product surface)
+
+`docs/` → MkDocs Material → GitHub Pages is the **adopter-facing showcase** — public, aimed at end users / prospective adopters, with an advertisement role (`mkdocs.yml`: *"Documentation for adopters"*). It is NOT internal reference, and "update adopter docs" is NOT a clerical task. This is the deliberate exception to reference-doc minimalism below.
+
+- **Significance-proportional.** Document a user-facing feature in proportion to its weight — a new primary view / page is a headline change, never a footnote.
+- **Show it like its peers.** Present a new feature where existing ones live — the home showcase (`docs/index.md`) and `guide/screenshots.md` — the same way they are: a real screenshot, side-by-side, equal prominence.
+- **Done-test.** If the feature isn't visible on the home page beside its peers (with a screenshot), it is NOT documented — regardless of green gates or a passing review.
+- **Verify by viewing.** Confirm against the rendered page (serve locally / open it), never just that bytes were added or CI passed.
+
 ## Context economy and documentation authoring rules
 
-Following rules MUST be followed always for any kind of project documentation and LLM assets:
+**Binding** for all project documentation and LLM assets:
 
 - **Concise + LLM-optimized.** Cut filler, marketing tone, "in this section we will explore" preambles. Every sentence earns its tokens.
 - **Structure over prose — binding here, not aspirational.** Convert prose into the smallest readable structure that preserves every rule:
   - Steps → numbered list. Choices / mappings → table. "X means Y" → `**X.** Y` on its own line.
   - Multi-rule bullet ("do A; also B; warn C") → parent + sub-bullets, one rule per line.
   - Prose paragraph stating > 2 rules → restructure.
+

@@ -54,9 +54,11 @@ public sealed class GithubCursor
     /// <summary>
     /// Returns the high-water mark for <paramref name="repo"/>,
     /// falling back to <c>now − initialLookback</c> when not present (F7).
+    /// <paramref name="now"/> is supplied by the caller (the fetcher clock) so a pinned
+    /// test clock keeps the window stable against static fixtures.
     /// </summary>
-    public DateTimeOffset SinceFor(string repo, TimeSpan initialLookback) =>
-        Repos.TryGetValue(repo, out var c) ? c.Since : DateTimeOffset.UtcNow - initialLookback;
+    public DateTimeOffset SinceFor(string repo, TimeSpan initialLookback, DateTimeOffset now) =>
+        Repos.TryGetValue(repo, out var c) ? c.Since : now - initialLookback;
 
     /// <summary>Returns a new cursor with the repo's high-water mark advanced.</summary>
     public GithubCursor WithRepo(string repo, DateTimeOffset since) =>
@@ -69,6 +71,16 @@ public sealed class GithubCursor
     // ── backfill helpers ──────────────────────────────────────────────────────
 
     /// <summary>True when any repo still has an active backfill marker.</summary>
+    /// <summary>
+    /// True when the cursor carries no per-repo high-water mark and no active backfill —
+    /// i.e. it is semantically a first-run cursor. An empty backfill (no events found) still
+    /// encodes to a non-null but empty cursor (<c>{"repos":{}}</c>); treating that as empty
+    /// lets the next poll re-backfill rather than silently switch to incremental, so a reset
+    /// (which clears every repo mark) yields a genuine clean slate (§5.10.5).
+    /// </summary>
+    [JsonIgnore]
+    public bool IsEmpty => Repos.Count == 0 && !IsBackfilling;
+
     public bool IsBackfilling => Backfill is { Count: > 0 };
 
     /// <summary>

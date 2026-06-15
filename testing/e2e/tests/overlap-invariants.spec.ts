@@ -134,6 +134,40 @@ const COMBOS_UNDER_TEST: ComboUnderTest[] = [
     ],
   },
 
+  // ── iteration-1: analytics KPI band (#299) ───────────────────────────────
+
+  {
+    id: 'analytics-kpi-band-dark',
+    description: 'Analytics view — KPI band cards must not overlap — dark theme',
+    setup: async (page) => {
+      await page.goto('http://localhost:4200/analytics');
+      await page.waitForSelector('.an-kpi-card', { timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    overlapGroups: [
+      {
+        label: 'KPI band cards',
+        selector: '.an-kpi-card',
+      },
+    ],
+  },
+
+  {
+    id: 'analytics-chart-grid-dark',
+    description: 'Analytics view — chart grid cards must not overlap — dark theme',
+    setup: async (page) => {
+      await page.goto('http://localhost:4200/analytics');
+      await page.waitForSelector('.an-card', { timeout: 20_000 });
+      await page.waitForTimeout(600);
+    },
+    overlapGroups: [
+      {
+        label: 'chart grid cards',
+        selector: '.an-grid .an-card',
+      },
+    ],
+  },
+
   // ── iteration-0: swimlanes with minimal fields ────────────────────────────
 
   {

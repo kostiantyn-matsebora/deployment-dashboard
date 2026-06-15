@@ -1,0 +1,54 @@
+name: extension
+
+on:
+  # Push to main: runs test + build (no Docker publish — extension is a zip, not a container).
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/extension/**'
+      - '.github/workflows/extension.yml'
+  # Called by ci.yml (the _ci-green orchestrator) for PR checks.
+  # workflow_call carries no path filter — the orchestrator's paths-filter decides
+  # whether to invoke this workflow.
+  workflow_call:
+
+jobs:
+  # ── Build & Test ────────────────────────────────────────────────────────────
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/extension
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/extension/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Package extension
+        shell: pwsh
+        run: |
+          & ../../scripts/Package-Extension.ps1 -DistPath dist -OutputDir dist-zips
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload extension zips
+        uses: actions/upload-artifact@v7
+        with:
+          name: extension-zips
+          path: frontend/extension/dist-zips/*.zip
+          if-no-files-found: error

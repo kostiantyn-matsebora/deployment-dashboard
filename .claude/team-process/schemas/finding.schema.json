@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "team-process/schemas/finding.schema.json",
+  "title": "FINDING",
+  "description": "role -> orch - blocker / contradiction / impossible. Canonical key order: type, where, issue, options, need.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "where", "issue", "options", "need"],
+  "properties": {
+    "type": { "enum": ["FINDING"] },
+    "where": { "type": "string", "minLength": 1 },
+    "issue": { "enum": ["contradiction", "impossible", "missing input"] },
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "need": { "type": "string", "minLength": 1 }
+  }
+}

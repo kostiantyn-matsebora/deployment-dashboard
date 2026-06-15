@@ -82,6 +82,16 @@ Describe 'Set-SvgWhiteBackground' {
         $twice = Set-SvgWhiteBackground -Content $once
         ([regex]::Matches($twice, 'id="svg-bg"')).Count | Should -Be 1
     }
+
+    It 'flattens draw.io light-dark label backgrounds to the baked colour' {
+        # draw.io emits white label backgrounds via light-dark(); on a dark card
+        # the stripped color-scheme would resolve them to white and hide labels.
+        $svg = '<svg viewBox="0 0 10 10"><g><text style="background-color: ' +
+        'light-dark(#ffffff, var(--ge-dark-color, #121212));">x</text></g></svg>'
+        $out = Set-SvgWhiteBackground -Content $svg -Color '#161b22'
+        $out | Should -Match 'background-color: #161b22'
+        $out | Should -Not -Match 'light-dark\(#ffffff'
+    }
 }
 
 # ============================================================

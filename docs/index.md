@@ -4,6 +4,7 @@ shortTitle: Home
 intro: 'Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees.'
 children:
   - /guide
+  - /built-by-ai
   - /SAD
   - /FRONTEND_REQUIREMENTS
   - /API_SPECIFICATION
@@ -12,6 +13,7 @@ children:
   - /MOCK_SPECIFICATION
   - /DEMO_DRIVER_SPECIFICATION
   - /GITHUB_EMULATOR_SPECIFICATION
+  - /EXTENSION_SPECIFICATION
   - /api
   - /design
   - /diagrams
@@ -32,11 +34,30 @@ hide:
 [:material-rocket-launch-outline: Get started](guide/quickstart.md){ .md-button .md-button--primary }
 [:material-pipe: Integrate your CI/CD](guide/send-events.md){ .md-button }
 [:fontawesome-brands-github: GitHub](https://github.com/kostiantyn-matsebora/deployment-dashboard){ .md-button }
+[:simple-claude: Built by Claude — see how](built-by-ai/){ .md-button }
 
 </div>
 
-![The live deployment matrix](_assets/screenshots/matrix-dark.png#only-dark){ .dd-shot }
-![The live deployment matrix](_assets/screenshots/matrix-light.png#only-light){ .dd-shot }
+=== "Matrix"
+
+    One row per service, one column per environment. Each tile shows version, status, actor, elapsed time, and a link to the CI/CD run.
+
+    ![Matrix view](_assets/screenshots/matrix-dark.png#only-dark){ .dd-shot }
+    ![Matrix view](_assets/screenshots/matrix-light.png#only-light){ .dd-shot }
+
+=== "Swimlanes"
+
+    Per-service deployment graphs — see how a version flows from `dev` through to `prod`, with branching topology and status-colored edges.
+
+    ![Swimlanes view](_assets/screenshots/swimlanes-dark.png#only-dark){ .dd-shot }
+    ![Swimlanes view](_assets/screenshots/swimlanes-light.png#only-light){ .dd-shot }
+
+=== "Analytics"
+
+    DORA Four Keys — deployment frequency, lead time, change failure rate, and MTTR — plus eight supporting charts to spot delivery trends and regressions over 7, 14, or 30 days.
+
+    ![Analytics view](_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
+    ![Analytics view](_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
 
 !!! quote ""
     **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
@@ -123,20 +144,14 @@ curl -X POST "$DASHBOARD_URL/api/deployments" \
 
 [:octicons-arrow-right-24: GitHub Actions, Azure DevOps, GitLab & Jenkins examples](guide/send-events.md)
 
-## Two views of the same truth
+## Architecture at a glance
 
-=== "Matrix"
+A handful of containers behind one gateway: a stateless .NET API tier, PostgreSQL as the append-only source of truth, and an optional pull-mode Fetcher. The **gateway is the only public surface** — reads are internal-only and the SPA holds no secrets.
 
-    One row per service, one column per environment. Each tile shows version, status, actor, elapsed time, and a link to the CI/CD run.
+[![Component diagram of the Deployment Dashboard runtime](diagrams/architecture-c4.svg#only-light){ .dd-shot .dd-diagram }](diagrams/architecture-c4.svg)
+[![Component diagram of the Deployment Dashboard runtime](diagrams/architecture-c4-dark.svg#only-dark){ .dd-shot .dd-diagram }](diagrams/architecture-c4-dark.svg)
 
-    ![Matrix view](_assets/screenshots/matrix-dark.png#only-dark){ .dd-shot }
-    ![Matrix view](_assets/screenshots/matrix-light.png#only-light){ .dd-shot }
-
-=== "Swimlanes"
-
-    Per-service deployment graphs — see how a version flows from `dev` through to `prod`, with branching topology and status-colored edges.
-
-    ![Swimlanes view](_assets/screenshots/swimlanes-dark.png){ .dd-shot }
+[:octicons-arrow-right-24: Architecture overview & the security model](guide/architecture-overview.md)
 
 ## Explore the docs
 

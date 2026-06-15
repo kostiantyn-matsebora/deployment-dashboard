@@ -3,7 +3,7 @@
 ## Adoption
 
 **Do I have to change my pipelines?**
-No — you add one HTTP `POST` step. Nothing else changes. See [Integrate your CI/CD](./send-events.md). If you can't touch the pipeline at all, the optional [Fetcher](./install.md#deployment-shapes-compose-profiles) polls the CI/CD API and posts for you.
+No — you add one HTTP `POST` step. Nothing else changes. See [Integrate your CI/CD](./send-events.md). If you can't touch the pipeline at all, the optional [Fetcher](./install.md#deployment-shapes) polls the CI/CD API and posts for you.
 
 **Which CI/CD tools are supported?**
 Any tool that can make an HTTP POST (GitHub Actions, Azure DevOps, Jenkins, GitLab CI, …). Ingest is tool-agnostic. Pull mode currently has a GitHub Actions adapter.
@@ -15,7 +15,7 @@ No. It's read-only / notification-only — a view of state, not a deployment eng
 No. They're discovered from the events you post. A new `service`/`environment` appears automatically.
 
 **How long is history kept?**
-Per `HISTORY_RETENTION_DAYS` (minimum 90; default 30 for demo; 365 recommended for production). See [Configuration](./configuration.md).
+Per `HISTORY_RETENTION_DAYS` (default 365; minimum 90 — smaller values are clamped up). Pruned daily by a background job. See [Configuration](./configuration.md).
 
 ## Troubleshooting
 
@@ -41,6 +41,9 @@ The DB is unreachable, a required `LISTEN` channel isn't attached, or a reset is
 
 **Duplicate rows after a retry.**
 Expected — ingest is append-only, retries append. The matrix still shows the latest; the history drawer shows every row. Make retries idempotent on your side if you want to avoid history noise. See [Integrate your CI/CD](./send-events.md#append-only-semantics).
+
+**Fetcher gets `403` against an org repo even though the token is valid.**
+Two common causes: (1) the org enforces SAML SSO and the token hasn't been authorized for it; (2) the token was recently rotated and the new token starts unauthorized — re-authorize before deploying. The `X-GitHub-SSO` header on the 403 contains the authorization URL. If the org also disables fine-grained PATs, a classic PAT with `repo` scope is the required path. See [GitHub token scope](./install.md#2-configure--run) for the full setup, including the re-authorize-after-rotation requirement.
 
 ## Still stuck?
 

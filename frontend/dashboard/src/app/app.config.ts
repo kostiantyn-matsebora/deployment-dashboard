@@ -9,6 +9,9 @@ import { routes } from './app.routes';
 /**
  * Application-level providers.
  * PrimeNG configured in unstyled mode — all styling via design tokens.
+ * ECharts (ngx-echarts) is provided at the AnalyticsComponent level so that
+ * the echarts library stays in the lazy analytics chunk and does NOT inflate the
+ * initial bundle. provideEchartsCore is declared in analytics.component.ts.
  * Spec: docs/design/libraries.md §PrimeNG Unstyled Mode — Configuration
  */
 export const appConfig: ApplicationConfig = {

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Npgsql;
 
 namespace Dashboard.Api.Tests.Helpers;
 
@@ -58,62 +59,110 @@ internal sealed class TestApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public ResetConfigOverride? ResetConfig { get; init; }
 
+    /// <summary>
+    /// Optional extra flat configuration keys injected via <c>IWebHostBuilder.UseSetting</c>
+    /// so they are immediately visible through <c>WebApplicationBuilder.Configuration</c>
+    /// before <c>Build()</c> is called. This is necessary for keys read eagerly at DI
+    /// registration time (e.g. <c>ANALYTICS_FUNNEL_ENVIRONMENTS</c>, which
+    /// <c>ReadServiceExtensions.AddReadServices</c> reads during service registration).
+    /// <c>ConfigureAppConfiguration</c> fires too late for such early reads.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?>? ExtraConfiguration { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration((_, config) =>
+        // Use "Test" environment so MigrateDatabaseAsync calls EnsureCreated instead of
+        // MigrateAsync — safe when the schema already exists (PostgresFixture ran MigrateAsync
+        // once at startup), and avoids migration-table conflicts in repeated factory inits.
+        builder.UseEnvironment("Test");
+
+        // ExtraConfiguration keys are injected via UseSetting so they are immediately
+        // visible through WebApplicationBuilder.Configuration — AddReadServices reads
+        // ANALYTICS_FUNNEL_ENVIRONMENTS eagerly at DI registration time (before Build()),
+        // which is too early for ConfigureAppConfiguration callbacks to have fired.
+        if (ExtraConfiguration is { Count: > 0 } extra)
         {
-            var values = new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Postgres"] = _connectionString,
-                ["API_KEY"] = TestApiKey,
-            };
+            foreach (var (key, value) in extra)
+                builder.UseSetting(key, value);
+        }
 
-            // Explicitly null out the key when not included so that any value from
-            // appsettings.Development.json (which WebApplicationFactory loads by default)
-            // does not leak through.
-            values["CONTROL_API_KEY"] = IncludeControlKey ? TestControlApiKey : null;
+        builder.ConfigureAppConfiguration((_, config) => AddTestConfiguration(config));
+        builder.ConfigureServices(services => ApplyTestServiceOverrides(services));
+    }
 
-            config.AddInMemoryCollection(values);
-        });
+    /// <summary>
+    /// Injects flat POSTGRES_* keys derived from the Testcontainer connection string
+    /// (production path: <c>PostgresConnectionString.Resolve</c>) plus the test API keys.
+    /// Extracted to keep <see cref="ConfigureWebHost"/> within the cognitive-complexity budget.
+    /// </summary>
+    private void AddTestConfiguration(IConfigurationBuilder config)
+    {
+        // Parse the Testcontainer connection string into its constituent parts and inject
+        // them as flat POSTGRES_* keys — the same form the application reads at runtime.
+        // This drives PostgresConnectionString.Resolve through the identical production
+        // path; no ConnectionStrings:Postgres key is set anywhere.
+        var csb = new NpgsqlConnectionStringBuilder(_connectionString);
 
-        builder.ConfigureServices(services =>
+        var values = new Dictionary<string, string?>
         {
-            if (ResetConfig is { } rc)
-            {
-                // Apply Reset overrides imperatively via PostConfigure rather than through
-                // configuration keys. The .NET configuration binder MERGES array indices onto
-                // the ResetOptions default initializer (["dashboard-fetcher","demo-driver"])
-                // instead of replacing the array, so a config-key override of ExpectedComponents
-                // would leave stale default entries (and empty slots) in the bound array — the
-                // orchestrator would then wait on acks the test never sends. PostConfigure runs
-                // after binding and lets us replace the array wholesale, deterministically.
-                services.PostConfigure<ResetOptions>(o =>
-                {
-                    if (rc.AckTimeoutSeconds.HasValue)
-                        o.AckTimeoutSeconds = rc.AckTimeoutSeconds.Value;
-                    if (rc.ExpectedComponents is { } components)
-                        o.ExpectedComponents = components;
-                    if (rc.GateMaxTtlSeconds.HasValue)
-                        o.GateMaxTtlSeconds = rc.GateMaxTtlSeconds.Value;
-                });
-            }
+            ["POSTGRES_HOST"] = csb.Host ?? "localhost",
+            ["POSTGRES_PORT"] = (csb.Port != 0 ? csb.Port : 5432).ToString(),
+            ["POSTGRES_DB"] = csb.Database ?? string.Empty,
+            ["POSTGRES_USER"] = csb.Username ?? string.Empty,
+            ["POSTGRES_PASSWORD"] = csb.Password ?? string.Empty,
+            ["API_KEY"] = TestApiKey,
+        };
 
-            if (!UseRealNotifier)
-            {
-                // Replace Postgres notifier with no-op so tests that don't need SSE fan-out
-                // don't depend on the LISTEN connection being established.
-                services.RemoveAll<IDeploymentNotifier>();
-                services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
-            }
+        // Explicitly null out the key when not included so that any value from
+        // appsettings.Development.json (which WebApplicationFactory loads by default)
+        // does not leak through.
+        values["CONTROL_API_KEY"] = IncludeControlKey ? TestControlApiKey : null;
 
-            if (ForcedResetState is not null)
+        config.AddInMemoryCollection(values);
+    }
+
+    /// <summary>
+    /// Applies per-test-class service overrides: optional <see cref="ResetOptions"/>
+    /// post-configuration, no-op notifier swap, and forced reset-state stub.
+    /// Extracted to keep <see cref="ConfigureWebHost"/> within the cognitive-complexity budget.
+    /// </summary>
+    private void ApplyTestServiceOverrides(IServiceCollection services)
+    {
+        if (ResetConfig is { } rc)
+        {
+            // Apply Reset overrides imperatively via PostConfigure rather than through
+            // configuration keys. The .NET configuration binder MERGES array indices onto
+            // the ResetOptions default initializer (["dashboard-fetcher","demo-driver"])
+            // instead of replacing the array, so a config-key override of ExpectedComponents
+            // would leave stale default entries (and empty slots) in the bound array — the
+            // orchestrator would then wait on acks the test never sends. PostConfigure runs
+            // after binding and lets us replace the array wholesale, deterministically.
+            services.PostConfigure<ResetOptions>(o =>
             {
-                // Replace the real ResetStateListener singleton with a controllable stub.
-                // This lets tests verify the 503 gate path without going through NOTIFY/LISTEN.
-                services.RemoveAll<IResetStateProvider>();
-                services.AddSingleton<IResetStateProvider>(ForcedResetState);
-            }
-        });
+                if (rc.AckTimeoutSeconds.HasValue)
+                    o.AckTimeoutSeconds = rc.AckTimeoutSeconds.Value;
+                if (rc.ExpectedComponents is { } components)
+                    o.ExpectedComponents = components;
+                if (rc.GateMaxTtlSeconds.HasValue)
+                    o.GateMaxTtlSeconds = rc.GateMaxTtlSeconds.Value;
+            });
+        }
+
+        if (!UseRealNotifier)
+        {
+            // Replace Postgres notifier with no-op so tests that don't need SSE fan-out
+            // don't depend on the LISTEN connection being established.
+            services.RemoveAll<IDeploymentNotifier>();
+            services.AddScoped<IDeploymentNotifier, NullDeploymentNotifier>();
+        }
+
+        if (ForcedResetState is not null)
+        {
+            // Replace the real ResetStateListener singleton with a controllable stub.
+            // This lets tests verify the 503 gate path without going through NOTIFY/LISTEN.
+            services.RemoveAll<IResetStateProvider>();
+            services.AddSingleton<IResetStateProvider>(ForcedResetState);
+        }
     }
 
     /// <summary>Applies EF migrations against the shared Postgres instance.</summary>

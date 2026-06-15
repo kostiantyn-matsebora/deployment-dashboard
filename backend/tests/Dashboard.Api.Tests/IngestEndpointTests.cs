@@ -135,7 +135,7 @@ public sealed class IngestEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Post_InvalidStatus_Returns422()
     {
-        var res = await _client.SendAsync(BuildPost(MinimalPayload("pending")));
+        var res = await _client.SendAsync(BuildPost(MinimalPayload("bogus-status")));
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();

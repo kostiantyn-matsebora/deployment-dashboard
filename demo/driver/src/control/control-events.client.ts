@@ -4,14 +4,19 @@ export interface ResetAckPayload {
   event_type:  'reset-ack';
   state:       'paused';
   occurred_at: string;
-  payload:     { reset_id: string };
 }
 
 export interface StatusPayload {
   event_type:  'status';
   state:       'running';
   occurred_at: string;
-  payload:     { reset_id: string };
+}
+
+export interface RunStatusPayload {
+  event_type:  'status';
+  state:       'running' | 'idle';
+  occurred_at: string;
+  payload?:    { detail: string };
 }
 
 /**
@@ -39,9 +44,8 @@ export class ControlEventsClient {
       event_type:  'reset-ack',
       state:       'paused',
       occurred_at: new Date().toISOString(),
-      payload:     { reset_id: resetId },
     };
-    await this._postEvent(body);
+    await this._postEvent(body, resetId);
   }
 
   async postStatusRunning(resetId: string): Promise<void> {
@@ -49,21 +53,50 @@ export class ControlEventsClient {
       event_type:  'status',
       state:       'running',
       occurred_at: new Date().toISOString(),
-      payload:     { reset_id: resetId },
     };
-    await this._postEvent(body);
+    await this._postEvent(body, resetId);
   }
 
-  private async _postEvent(body: ResetAckPayload | StatusPayload): Promise<void> {
+  /** Post a run-start status event (event_type=status, state=running) correlated by runId. */
+  async postRunStart(runId: string, detail?: string): Promise<void> {
+    const body: RunStatusPayload = {
+      event_type:  'status',
+      state:       'running',
+      occurred_at: new Date().toISOString(),
+      ...(detail !== undefined ? { payload: { detail } } : {}),
+    };
+    await this._postEvent(body, runId);
+  }
+
+  /** Post a run-complete status event (event_type=status, state=idle) correlated by runId. */
+  async postRunComplete(runId: string): Promise<void> {
+    const body: RunStatusPayload = {
+      event_type:  'status',
+      state:       'idle',
+      occurred_at: new Date().toISOString(),
+    };
+    await this._postEvent(body, runId);
+  }
+
+  private async _postEvent(
+    body: ResetAckPayload | StatusPayload | RunStatusPayload,
+    correlationId?: string,
+  ): Promise<void> {
+    const headers: Record<string, string> = {
+      'Content-Type':   'application/json; charset=utf-8',
+      'X-Api-Key':      this.apiKey,
+      'X-Component-Id': this.componentId,
+    };
+
+    if (correlationId !== undefined) {
+      headers['X-Correlation-Id'] = correlationId;
+    }
+
     try {
       await this._fetch(`${this.writeApiUrl}/api/control/events`, {
-        method:  'POST',
-        headers: {
-          'Content-Type':   'application/json; charset=utf-8',
-          'X-Api-Key':      this.apiKey,
-          'X-Component-Id': this.componentId,
-        },
-        body: JSON.stringify(body),
+        method: 'POST',
+        headers,
+        body:   JSON.stringify(body),
       });
     } catch (err) {
       console.warn('[demo-driver] control-events POST failed:', err);

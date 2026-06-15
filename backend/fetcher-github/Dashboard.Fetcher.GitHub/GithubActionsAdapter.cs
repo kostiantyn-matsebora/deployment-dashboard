@@ -5,9 +5,7 @@ using Dashboard.Fetcher.GitHub.Cursor;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
-using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
-using Microsoft.Extensions.Logging;
 
 namespace Dashboard.Fetcher.GitHub;
 
@@ -19,10 +17,8 @@ public sealed class GithubActionsAdapter(
     GithubClient github,
     GithubAdapterOptions options,
     FetcherOptions fetcherOptions,
-    WorkflowGraphCache graphCache,
-    VersionResolver versionResolver,
     BackfillRunner backfillRunner,
-    ILogger<GithubActionsAdapter> logger) : ICiCdAdapter
+    DeploymentStatusEventMapper statusEventMapper) : ICiCdAdapter
 {
     // Persists across poll cycles (adapter is a DI singleton) — see §5.5 poll-efficiency note.
     private readonly TerminalDeploymentCache _terminalCache = new();
@@ -43,8 +39,12 @@ public sealed class GithubActionsAdapter(
     {
         var decoded = GithubCursor.Decode(cursor);
 
-        // Backfill when: no cursor, BACKFILL=true flag, or an active backfill marker exists (resume).
-        var shouldBackfill = cursor is null || fetcherOptions.Backfill || decoded.IsBackfilling;
+        // Backfill when: no cursor, a semantically-empty cursor (no repo high-water marks —
+        // e.g. right after a reset, or after an empty backfill that found no events), the
+        // BACKFILL flag, or an active backfill marker (resume). Treating an empty cursor as a
+        // first run keeps a reset a true clean slate: data that (re-)appears afterwards is
+        // fully backfilled instead of being missed by incremental polling (§5.10.5).
+        var shouldBackfill = cursor is null || decoded.IsEmpty || fetcherOptions.Backfill || decoded.IsBackfilling;
 
         if (shouldBackfill)
         {
@@ -56,6 +56,18 @@ public sealed class GithubActionsAdapter(
         yield return await PollAsync(decoded, ct);
     }
 
+    /// <summary>
+    /// Reset saga (§5.10.5): drop all dedup caches so the post-reset backfill re-emits
+    /// every deployment from a clean slate. Without this, the terminal-deployment and
+    /// ETag caches survive the reset and suppress re-emission (304 / terminal-skip).
+    /// </summary>
+    public void ResetState()
+    {
+        _terminalCache.Clear();
+        _deploymentsListCache.Clear();
+        _statusEtagCache.Clear();
+    }
+
     // ── normal poll ───────────────────────────────────────────────────────────
 
     private async Task<FetchResult> PollAsync(GithubCursor cursor, CancellationToken ct)
@@ -65,7 +77,7 @@ public sealed class GithubActionsAdapter(
 
         foreach (var repo in options.RepoList)
         {
-            var since = cursor.SinceFor(repo, fetcherOptions.InitialLookback);
+            var since = cursor.SinceFor(repo, fetcherOptions.InitialLookback, fetcherOptions.UtcNow);
             var (events, maxSince) = await PollRepoAsync(repo, since, ct);
             allEvents.AddRange(events);
 
@@ -83,11 +95,58 @@ public sealed class GithubActionsAdapter(
         var (owner, repoName) = SplitRepo(repo);
         var serviceMap = options.ServiceMapDict;
         var cutoff = since - TimeSpan.FromDays(1);  // margin for delayed status events
+        var ctx = new RepoFetchContext(owner, repoName, repo, since);
 
         // Step 1: collect deployments in the window via conditional list request (F8 / §5.4).
         var deployments = await FetchDeploymentsWindowAsync(owner, repoName, repo, cutoff, ct);
 
         // Step 2: fetch statuses for each deployment (conditional for in-flight, skip for terminal).
+        var (reusedRunIds, allStatuses) = await FetchDeploymentStatusesAsync(owner, repoName, deployments, ct);
+
+        // Step 3: build envToDeploymentId for parent derivation (§5.6.4).
+        var envMap = DeploymentStatusEventMapper.BuildEnvMap(deployments, reusedRunIds, allStatuses);
+
+        // Step 4: map new status events (status.created_at > since).
+        return await statusEventMapper.MapStatusEventsAsync(ctx, serviceMap, deployments, reusedRunIds, allStatuses, envMap, ct);
+    }
+
+    /// <summary>
+    /// Fetches the deployments list for a repo using a conditional request (F8 / §5.5.2).
+    /// On 304, reuses the cached snapshot (newest-first, already windowed).
+    /// On 200, paginates only until the cutoff is crossed (early-stop, newest-first) and
+    /// caches the windowed result when an ETag is present.
+    /// </summary>
+    private async Task<List<GhDeployment>> FetchDeploymentsWindowAsync(
+        string owner, string repoName, string repo, DateTimeOffset cutoff, CancellationToken ct)
+    {
+        _deploymentsListCache.TryGet(repo, out var cached);
+
+        var result = await github.GetPagedConditionalAsync<GhDeployment>(
+            $"/repos/{owner}/{repoName}/deployments",
+            cached.ETag, ct,
+            stopBefore: d => d.CreatedAt < cutoff);
+
+        if (result.NotModified)
+            return new List<GhDeployment>(cached.Deployments);
+
+        var windowed = new List<GhDeployment>(result.Items);
+
+        if (result.ETag is not null)
+            _deploymentsListCache.Set(repo, (result.ETag, windowed));
+
+        return windowed;
+    }
+
+    /// <summary>
+    /// Fetches statuses for each deployment: skips terminal (cache hit), reuses ETag-304 hits,
+    /// and issues a conditional HTTP request for in-flight deployments.
+    /// Returns the reused-run-id map and the freshly-fetched status lists.
+    /// </summary>
+    private async Task<(Dictionary<long, long?> ReusedRunIds, Dictionary<long, List<GhDeploymentStatus>> AllStatuses)>
+        FetchDeploymentStatusesAsync(
+            string owner, string repoName,
+            List<GhDeployment> deployments, CancellationToken ct)
+    {
         // reusedRunIds: deployments whose statuses were NOT re-fetched this cycle but whose
         // run_id is known — both terminal-cache hits AND etag-304 hits populate this map.
         // Used to build the env→deploymentId map (§5.6.4) and to skip event emission.
@@ -118,8 +177,8 @@ public sealed class GithubActionsAdapter(
             var statuses = new List<GhDeploymentStatus>(result.Items);
             allStatuses[d.Id] = statuses;
 
-            // Statuses are returned newest-first; the first entry is the latest.
-            var latestStatus = statuses.Count > 0 ? statuses[0] : null;
+            // Select the true latest by created_at — the endpoint's array ordering is not guaranteed.
+            var latestStatus = statuses.Count > 0 ? statuses.MaxBy(s => s.CreatedAt) : null;
             var extractedRunId = latestStatus is not null
                 ? EventMapper.ExtractRunId(latestStatus.TargetUrl)
                 : null;
@@ -131,149 +190,10 @@ public sealed class GithubActionsAdapter(
                 _terminalCache.Record(d.Id, extractedRunId);
         }
 
-        // Step 3: build envToDeploymentId for parent derivation (§5.6.4).
-        // Includes freshly-fetched, cached-terminal, and etag-304-reused deployments
-        // so that parent edges to finished/unchanged environments remain resolvable.
-        var envMapEntries = deployments.SelectMany<GhDeployment, (long DeploymentId, string Environment, DateTimeOffset CreatedAt, long? RunId)>(d =>
-        {
-            if (reusedRunIds.TryGetValue(d.Id, out var reusedRunId))
-                return [(d.Id, d.Environment, d.CreatedAt, reusedRunId)];
-
-            return allStatuses.GetValueOrDefault(d.Id, [])
-                .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
-                .Where(r => r.HasValue)
-                .Take(1)
-                .Select(r => (d.Id, d.Environment, d.CreatedAt, r));
-        });
-
-        var envMap = ParentDerivation.BuildEnvToDeploymentIdMap(envMapEntries);
-
-        // Step 4: map new status events (status.created_at > since).
-        // Only freshly-fetched (non-terminal, non-304) deployments can have new events.
-        var events = new List<DeploymentEventIngest>();
-        var maxSince = since;
-
-        foreach (var deployment in deployments)
-        {
-            if (reusedRunIds.ContainsKey(deployment.Id))
-                continue; // terminal or 304 — statuses not re-fetched, no new events
-
-            var statuses = allStatuses.GetValueOrDefault(deployment.Id, []);
-
-            foreach (var status in statuses)
-            {
-                if (status.CreatedAt <= since)
-                    continue;
-
-                var contractStatus = StatusMapper.Map(status.State);
-                if (contractStatus is null)
-                    continue;
-
-                var runId = EventMapper.ExtractRunId(status.TargetUrl);
-                WorkflowGraph? graph = null;
-                if (runId.HasValue)
-                {
-                    try
-                    {
-                        graph = await graphCache.GetOrFetchGraphAsync(
-                            owner, repoName, runId.Value, github, ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex,
-                            "[{Repo}] workflow graph fetch failed for run {RunId}", repo, runId);
-                    }
-                }
-
-                var parentDeployments = DeriveParents(deployment, runId, graph, envMap);
-
-                string? version = null;
-                try
-                {
-                    version = await versionResolver.ResolveAsync(
-                        owner, repoName, deployment, status, ct);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex,
-                        "[{Repo}] version resolution failed for deployment {Id}", repo, deployment.Id);
-                }
-
-                events.Add(EventMapper.Map(
-                    deployment, status, repo, contractStatus,
-                    graph?.WorkflowName, version, parentDeployments, serviceMap));
-
-                if (status.CreatedAt > maxSince)
-                    maxSince = status.CreatedAt;
-            }
-        }
-
-        return (events, maxSince);
-    }
-
-    /// <summary>
-    /// Fetches the deployments list for a repo using a conditional request (F8).
-    /// On 304, reuses the cached snapshot (newest-first, already windowed).
-    /// On 200, fetches fresh items, applies the cutoff window, and caches when an ETag is present.
-    /// </summary>
-    private async Task<List<GhDeployment>> FetchDeploymentsWindowAsync(
-        string owner, string repoName, string repo, DateTimeOffset cutoff, CancellationToken ct)
-    {
-        _deploymentsListCache.TryGet(repo, out var cached);
-
-        var result = await github.GetPagedConditionalAsync<GhDeployment>(
-            $"/repos/{owner}/{repoName}/deployments",
-            cached.ETag, ct);
-
-        if (result.NotModified)
-            return new List<GhDeployment>(cached.Deployments);
-
-        // Apply window cutoff — items are newest-first from GitHub.
-        var windowed = new List<GhDeployment>();
-        foreach (var d in result.Items)
-        {
-            if (d.CreatedAt < cutoff)
-                break;
-            windowed.Add(d);
-        }
-
-        if (result.ETag is not null)
-            _deploymentsListCache.Set(repo, (result.ETag, windowed));
-
-        return windowed;
+        return (reusedRunIds, allStatuses);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
-
-    private static string[] DeriveParents(
-        GhDeployment deployment,
-        long? runId,
-        WorkflowGraph? graph,
-        Dictionary<long, Dictionary<string, string>> envMap)
-    {
-        if (runId is null || graph is null)
-            return [];
-
-        var deployJob = graph.DeploymentJobs.Values
-            .FirstOrDefault(j => j.Environment == deployment.Environment);
-        if (deployJob is null)
-            return [];
-
-        var parentJobIds = ParentDerivation.FindParentDeploymentJobIds(
-            deployJob, graph.DeploymentJobs, graph.AllJobs);
-
-        if (!envMap.TryGetValue(runId.Value, out var resolvedEnvMap))
-            return [];
-
-        return parentJobIds
-            .Select(id => graph.DeploymentJobs.TryGetValue(id, out var j) ? j.Environment : null)
-            .Where(env => env is not null)
-            .Select(env => resolvedEnvMap.TryGetValue(env!, out var ghId) ? ghId : null)
-            .Where(id => id is not null)
-            .Select(id => id!)
-            .Distinct()
-            .ToArray();
-    }
 
     private static (string Owner, string Repo) SplitRepo(string repo)
     {
@@ -281,3 +201,13 @@ public sealed class GithubActionsAdapter(
         return parts.Length == 2 ? (parts[0], parts[1]) : ("", repo);
     }
 }
+
+/// <summary>
+/// Scalar context for a single repo poll cycle — owner, repo name, repo slug, and since cursor.
+/// Groups the 4 scalars passed into MapStatusEventsAsync to reduce the parameter list.
+/// </summary>
+internal readonly record struct RepoFetchContext(
+    string Owner,
+    string RepoName,
+    string Repo,
+    DateTimeOffset Since);

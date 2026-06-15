@@ -17,10 +17,28 @@
       [style.grid-template-columns]="gridColumns()"
     >
 
-      <!-- Header row: empty service-column corner + env tags -->
+      <!-- Header row: empty service-column corner + one header cell per
+           visible env. Cells are direct grid children (no wrapper) so the
+           CSS grid track widths align with the body columns below.
+           Each header is draggable=true; native HTML5 DnD drives reorder. -->
       <div class="col-head col-corner"></div>
       @for (env of environments(); track env) {
-        <div class="col-head"><span class="env-tag">{{ env }}</span></div>
+        <div
+          class="col-head col-draggable"
+          draggable="true"
+          [class.is-dragging]="draggedEnv() === env"
+          [class.is-drag-over]="dragOverEnv() === env && draggedEnv() !== env"
+          [attr.aria-label]="'Column: ' + env + '. Drag to reorder.'"
+          title="Drag to reorder"
+          (dragstart)="onDragStart(env, $event)"
+          (dragover)="onDragOver(env, $event)"
+          (dragleave)="onDragLeave(env)"
+          (drop)="onDrop(env, $event)"
+          (dragend)="onDragEnd()"
+        >
+          <span class="col-drag-grip" aria-hidden="true" title="Drag to reorder">⠿</span>
+          <span class="env-tag">{{ env }}</span>
+        </div>
       }
 
       <!-- Service rows -->
@@ -29,7 +47,7 @@
         <!-- Row header — sticky left column -->
         <div class="row-head row" [attr.data-svc]="row.service">{{ row.service }}</div>
 
-        <!-- Slot tiles for each environment -->
+        <!-- Slot tiles for each visible ordered environment -->
         @for (env of environments(); track env) {
           <div class="row" [attr.data-svc]="row.service">
             @if (row.slots[env]) {

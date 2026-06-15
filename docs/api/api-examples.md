@@ -81,6 +81,10 @@ Content-Type: application/json
       "service": "service-a",
       "slots": {
         "dev":  { "current": { ... status:"success" ... } },
+        "qa": {
+          "current":         { ... status:"success", version:"1.4.3" ... },
+          "next":            { ... status:"queued",  version:"1.4.4" ... }
+        },
         "prod": {
           "current":         { ... status:"failure", version:"1.4.3" ... },
           "last_successful": { ... status:"success", version:"1.4.2" ... }

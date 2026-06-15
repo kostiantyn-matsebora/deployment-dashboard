@@ -6,15 +6,20 @@ BeforeAll {
     . $script:HookPath -AsLibrary
 }
 
-Describe 'Get-DocsCaptureFilePath' {
-    It 'no sid -> path ends in .docs-capture.json' {
+Describe 'Get-DocsCaptureFilePath (new .docs-keeper layout)' {
+    It 'no sid -> path ends in capture.json' {
         $result = Get-DocsCaptureFilePath -RepoRoot '/repo' -SessionId ''
-        $result | Should -Match '\.docs-capture\.json$'
-        $result | Should -Not -Match '\.docs-capture\.\.'
+        $result | Should -Match 'capture\.json$'
+        $result | Should -Not -Match 'capture\.\.'
     }
-    It 'with sid "abc" -> path ends in .docs-capture.abc.json' {
+    It 'with sid "abc" -> path ends in capture.abc.json' {
         $result = Get-DocsCaptureFilePath -RepoRoot '/repo' -SessionId 'abc'
-        $result | Should -Match '\.docs-capture\.abc\.json$'
+        $result | Should -Match 'capture\.abc\.json$'
+    }
+    It 'path is inside .docs-keeper not .claude' {
+        $result = Get-DocsCaptureFilePath -RepoRoot '/repo' -SessionId 'abc'
+        $result | Should -Match '\.docs-keeper'
+        $result | Should -Not -Match '\.claude'
     }
 }
 

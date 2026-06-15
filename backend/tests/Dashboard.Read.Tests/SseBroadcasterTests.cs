@@ -1,8 +1,8 @@
 using Dashboard.Read.Sse;
 using Dashboard.Shared.Entities;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 
 namespace Dashboard.Read.Tests;
 
@@ -23,9 +23,10 @@ public sealed class SseBroadcasterTests
         // which is never invoked by these tests.
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
-        var config = new ConfigurationBuilder().Build();
+        // These tests never open a Postgres connection; supply a dummy data source.
+        var dataSource = NpgsqlDataSource.Create("Host=localhost");
         var logger = NullLogger<DeploymentEventBroadcaster>.Instance;
-        return new DeploymentEventBroadcaster(scopeFactory, config, logger);
+        return new DeploymentEventBroadcaster(scopeFactory, dataSource, logger);
     }
 
     private static DeploymentEvent MakeEvent(string service = "svc-a") => new()
