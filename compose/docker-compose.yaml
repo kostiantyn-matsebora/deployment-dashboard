@@ -67,11 +67,15 @@ services:
         published: "${GATEWAY_PORT:-8080}"
         protocol: tcp
     environment:
+      # DNS resolver for variable-based proxy_pass locations (demo-driver — optional).
+      # Docker Compose uses the embedded DNS resolver; override for other platforms.
+      # Azure Container Apps: set DNS_RESOLVER=168.63.129.16 (Azure internal DNS).
+      DNS_RESOLVER: "${DNS_RESOLVER:-127.0.0.11}"
       # Internal API upstream — fixed to the api service name in this network.
       API_UPSTREAM: "api:8080"
       # Internal frontend upstream.  The frontend image (nginx:alpine) listens
-      # on :80.  Requests to / return 502 until the frontend container is
-      # running; all /api/* and probe routes work without it.
+      # on :80.  Startup-resolved via the upstream block; gateway depends_on:
+      # frontend (service_healthy) ensures the name resolves at start.
       FRONTEND_UPSTREAM: "${FRONTEND_UPSTREAM:-frontend:80}"
       # The gateway template references ${DEMO_DRIVER_UPSTREAM} for the /demo/*
       # locations. A default is supplied here so envsubst always produces a
