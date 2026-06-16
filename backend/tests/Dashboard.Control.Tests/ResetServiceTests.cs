@@ -73,11 +73,11 @@ public sealed class ResetServiceTests : IDisposable
     };
 
     /// <summary>Forcibly writes a non-idle cycle directly, bypassing the atomic claim path.</summary>
-    private async Task SeedCycleAsync(string state, Guid? resetId = null)
+    private async Task SeedCycleAsync(string state, Guid? correlationId = null)
     {
         var cycle = await _cycleRepo.LoadAsync(CancellationToken.None);
         cycle.State = state;
-        cycle.ResetId = resetId ?? Guid.CreateVersion7();
+        cycle.CorrelationId = correlationId ?? Guid.CreateVersion7();
         cycle.StartedAt = DateTimeOffset.UtcNow;
         cycle.DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(10);
         await _cycleRepo.SaveAsync(cycle, CancellationToken.None);
@@ -177,19 +177,19 @@ public sealed class ResetServiceTests : IDisposable
     {
         var cycle = await _cycleRepo.LoadAsync(CancellationToken.None);
         Assert.Equal(ResetState.Idle, cycle.State);
-        Assert.Null(cycle.ResetId);
+        Assert.Null(cycle.CorrelationId);
     }
 
     [Fact]
     public async Task CycleRepository_Save_ThenLoad_RoundtripsState()
     {
-        var resetId = Guid.CreateVersion7();
+        var correlationId = Guid.CreateVersion7();
         var now = DateTimeOffset.UtcNow;
         var cycle = new ResetCycle
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = resetId,
+            CorrelationId = correlationId,
             ExpectedComponents = ["a", "b"],
             AcksReceived = ["a"],
             StartedAt = now,
@@ -201,8 +201,10 @@ public sealed class ResetServiceTests : IDisposable
         var loaded = await _cycleRepo.LoadAsync(CancellationToken.None);
 
         Assert.Equal(ResetState.Draining, loaded.State);
-        Assert.Equal(resetId, loaded.ResetId);
+        Assert.Equal(correlationId, loaded.CorrelationId);
+        Assert.NotNull(loaded.ExpectedComponents);
         Assert.Equal(["a", "b"], loaded.ExpectedComponents);
+        Assert.NotNull(loaded.AcksReceived);
         Assert.Equal(["a"], loaded.AcksReceived);
     }
 
@@ -229,7 +231,7 @@ public sealed class ResetServiceTests : IDisposable
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
             ExpectedComponents = ["x"],
             AcksReceived = [],
             StartedAt = DateTimeOffset.UtcNow,
@@ -253,7 +255,7 @@ public sealed class ResetServiceTests : IDisposable
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
             ExpectedComponents = ["x"],
             AcksReceived = [],
             StartedAt = DateTimeOffset.UtcNow,
@@ -276,7 +278,7 @@ public sealed class ResetServiceTests : IDisposable
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
             ExpectedComponents = ["x"],
             AcksReceived = [],
             StartedAt = DateTimeOffset.UtcNow,
@@ -297,7 +299,7 @@ public sealed class ResetServiceTests : IDisposable
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
             ExpectedComponents = ["x"],
             AcksReceived = [],
             StartedAt = DateTimeOffset.UtcNow,
@@ -313,7 +315,7 @@ public sealed class ResetServiceTests : IDisposable
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
             ExpectedComponents = ["x"],
             AcksReceived = [],
             StartedAt = DateTimeOffset.UtcNow,
@@ -333,7 +335,7 @@ public sealed class ResetServiceTests : IDisposable
 
         Assert.NotNull(result);
         Assert.Equal(ResetState.Draining, result.State);
-        Assert.NotEqual(Guid.Empty, result.ResetId);
+        Assert.NotEqual(Guid.Empty, result.CorrelationId);
     }
 
     [Fact]
@@ -357,11 +359,13 @@ public sealed class ResetServiceTests : IDisposable
         var ev = Assert.Single(events);
         Assert.Equal("reset-initiated", ev.Type);
         Assert.Equal("*", ev.Component);
-        Assert.Equal(acceptance!.ResetId, ev.Id);
+        Assert.Equal(acceptance!.CorrelationId, ev.Id);
+        // reset-initiated carries its own id as correlation_id.
+        Assert.Equal(acceptance.CorrelationId, ev.CorrelationId);
 
         var announced = Assert.Single(_notifier.Notified);
         Assert.Equal("reset-initiated", announced.Type);
-        Assert.Equal(acceptance.ResetId, announced.Id);
+        Assert.Equal(acceptance.CorrelationId, announced.Id);
     }
 
     [Fact]
@@ -407,7 +411,7 @@ public sealed class ResetServiceTests : IDisposable
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
             ExpectedComponents = ["dashboard-fetcher", "demo-driver"],
             AcksReceived = ["dashboard-fetcher", "demo-driver"],
         };
@@ -423,7 +427,7 @@ public sealed class ResetServiceTests : IDisposable
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
             ExpectedComponents = ["dashboard-fetcher", "demo-driver"],
             AcksReceived = ["dashboard-fetcher"],
         };
@@ -489,13 +493,13 @@ public sealed class ResetServiceTests : IDisposable
     public async Task Reconciler_AbortLogic_OrphanedDrainingCycle_IsAbortedAndReturnsIdle()
     {
         // Seed a draining cycle whose deadline is in the past.
-        var resetId = Guid.CreateVersion7();
+        var correlationId = Guid.CreateVersion7();
         var pastDeadline = DateTimeOffset.UtcNow.AddSeconds(-30);
         var cycle = new ResetCycle
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = resetId,
+            CorrelationId = correlationId,
             ExpectedComponents = ["dashboard-fetcher"],
             AcksReceived = [],
             StartedAt = pastDeadline.AddSeconds(-30),
@@ -510,7 +514,7 @@ public sealed class ResetServiceTests : IDisposable
 
         // Abort: set state to idle, clear fields.
         loaded.State = ResetState.Idle;
-        loaded.ResetId = null;
+        loaded.CorrelationId = null;
         loaded.ExpectedComponents = null;
         loaded.AcksReceived = null;
         loaded.StartedAt = null;
@@ -520,19 +524,19 @@ public sealed class ResetServiceTests : IDisposable
         _db.ChangeTracker.Clear();
         var afterAbort = await _cycleRepo.LoadAsync(CancellationToken.None);
         Assert.Equal(ResetState.Idle, afterAbort.State);
-        Assert.Null(afterAbort.ResetId);
+        Assert.Null(afterAbort.CorrelationId);
     }
 
     [Fact]
     public async Task Reconciler_AbortLogic_PastDeadlineResettingCycle_IsAbortedAndGateReleased()
     {
-        var resetId = Guid.CreateVersion7();
+        var correlationId = Guid.CreateVersion7();
         var pastDeadline = DateTimeOffset.UtcNow.AddSeconds(-5);
         var cycle = new ResetCycle
         {
             Id = 1,
             State = ResetState.Resetting,
-            ResetId = resetId,
+            CorrelationId = correlationId,
             StartedAt = pastDeadline.AddSeconds(-60),
             DeadlineAt = pastDeadline,
         };
@@ -542,7 +546,7 @@ public sealed class ResetServiceTests : IDisposable
         // Simulate reconciler abort.
         var loaded = await _cycleRepo.LoadAsync(CancellationToken.None);
         loaded.State = ResetState.Idle;
-        loaded.ResetId = null;
+        loaded.CorrelationId = null;
         loaded.ExpectedComponents = null;
         loaded.AcksReceived = null;
         loaded.StartedAt = null;
@@ -559,13 +563,13 @@ public sealed class ResetServiceTests : IDisposable
     public async Task Reconciler_AbortLogic_ActiveCycleWithinTtl_IsNotAborted()
     {
         // A cycle whose DeadlineAt is still in the future must not be aborted.
-        var resetId = Guid.CreateVersion7();
+        var correlationId = Guid.CreateVersion7();
         var futureDeadline = DateTimeOffset.UtcNow.AddSeconds(30);
         var cycle = new ResetCycle
         {
             Id = 1,
             State = ResetState.Draining,
-            ResetId = resetId,
+            CorrelationId = correlationId,
             StartedAt = DateTimeOffset.UtcNow.AddSeconds(-5),
             DeadlineAt = futureDeadline,
         };
@@ -581,17 +585,17 @@ public sealed class ResetServiceTests : IDisposable
     // ── reset-ack NOTIFY shape ────────────────────────────────────────────────
 
     [Fact]
-    public void ResetAckNotifyShape_ContainsComponentIdAndResetId()
+    public void ResetAckNotifyShape_ContainsComponentIdAndCorrelationId()
     {
         var componentId = "dashboard-fetcher";
-        var resetId = Guid.CreateVersion7().ToString();
+        var correlationId = Guid.CreateVersion7().ToString();
 
         var payload = System.Text.Json.JsonSerializer.Serialize(
-            new { component_id = componentId, reset_id = resetId });
+            new { component_id = componentId, correlation_id = correlationId });
 
         var doc = System.Text.Json.JsonDocument.Parse(payload);
         Assert.Equal(componentId, doc.RootElement.GetProperty("component_id").GetString());
-        Assert.Equal(resetId, doc.RootElement.GetProperty("reset_id").GetString());
+        Assert.Equal(correlationId, doc.RootElement.GetProperty("correlation_id").GetString());
     }
 
     // ── Fix D: ApplicationStopping token is wired ─────────────────────────────

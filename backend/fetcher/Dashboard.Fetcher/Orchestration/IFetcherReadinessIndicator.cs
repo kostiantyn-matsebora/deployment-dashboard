@@ -60,7 +60,14 @@ public enum PollOutcome
 }
 
 /// <summary>Snapshot of GitHub rate-limit state at the time of the last poll response.</summary>
-/// <param name="Used">Requests consumed in the current window.</param>
-/// <param name="Budget">Maximum allowed requests per window for this fetcher.</param>
+/// <param name="Used">Fetcher's own request count since the start of the current window (F16).</param>
+/// <param name="Budget">Maximum requests the fetcher may consume per window (floor of quota × budget %).</param>
 /// <param name="ResetAt">UTC timestamp when the window resets; <c>DateTimeOffset.MinValue</c> if not yet received.</param>
-public sealed record RateLimitSnapshot(int Used, int Budget, DateTimeOffset ResetAt);
+/// <param name="CiLimit">Total hourly quota for the token from <c>X-RateLimit-Limit</c>; <c>null</c> before the first GitHub response.</param>
+/// <param name="CiRemaining">CI/CD-wide remaining quota from <c>X-RateLimit-Remaining</c> (all consumers); <c>null</c> before the first GitHub response.</param>
+public sealed record RateLimitSnapshot(
+    int Used,
+    int Budget,
+    DateTimeOffset ResetAt,
+    int? CiLimit = null,
+    int? CiRemaining = null);

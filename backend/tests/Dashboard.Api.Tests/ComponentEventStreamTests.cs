@@ -91,6 +91,42 @@ public sealed class ComponentEventStreamTests : IAsyncLifetime
         return events;
     }
 
+    /// <summary>
+    /// Reads SSE lines from <paramref name="reader"/> until the first <c>data:</c> frame
+    /// arrives, capturing the preceding <c>event:</c> name via <paramref name="onEventName"/>.
+    /// Terminates on cancellation, EOF, or after completing the <paramref name="received"/> TCS.
+    /// Extracted to keep <see cref="Stream_Live_ReceivesComponentEventFrame"/> within the
+    /// cognitive-complexity budget.
+    /// </summary>
+    private static async Task ReadFirstEventFrameAsync(
+        StreamReader reader,
+        TaskCompletionSource<JsonElement> received,
+        Action<string?> onEventName,
+        CancellationToken ct)
+    {
+        string? pendingEventName = null;
+        while (!ct.IsCancellationRequested)
+        {
+            string? line;
+            try { line = await reader.ReadLineAsync(ct); }
+            catch (OperationCanceledException) { break; }
+
+            if (line is null) break;
+            if (line.StartsWith(": ")) continue;    // heartbeat / comment
+            if (line.StartsWith("event: "))
+            {
+                pendingEventName = line[7..];
+                continue;
+            }
+            if (line.StartsWith("data: "))
+            {
+                onEventName(pendingEventName);
+                received.TrySetResult(JsonSerializer.Deserialize<JsonElement>(line[6..]));
+                break;
+            }
+        }
+    }
+
     // ── Auth — no X-Api-Key required ─────────────────────────────────────────
 
     [Fact]
@@ -212,30 +248,9 @@ public sealed class ComponentEventStreamTests : IAsyncLifetime
         string? receivedEventName = null;
         var received = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var readTask = Task.Run(async () =>
-        {
-            string? pendingEventName = null;
-            while (!cts.IsCancellationRequested)
-            {
-                string? line;
-                try { line = await reader.ReadLineAsync(cts.Token); }
-                catch (OperationCanceledException) { break; }
-
-                if (line is null) break;
-                if (line.StartsWith(": ")) continue;    // heartbeat / comment
-                if (line.StartsWith("event: "))
-                {
-                    pendingEventName = line[7..];
-                    continue;
-                }
-                if (line.StartsWith("data: "))
-                {
-                    receivedEventName = pendingEventName;
-                    received.TrySetResult(JsonSerializer.Deserialize<JsonElement>(line[6..]));
-                    break;
-                }
-            }
-        }, cts.Token);
+        var readTask = Task.Run(
+            () => ReadFirstEventFrameAsync(reader, received, r => receivedEventName = r, cts.Token),
+            cts.Token);
 
         // Allow the broadcaster's LISTEN connection to attach.
         await Task.Delay(2000, cts.Token);
@@ -258,5 +273,101 @@ public sealed class ComponentEventStreamTests : IAsyncLifetime
 
         cts.Cancel();
         try { await readTask; } catch (OperationCanceledException) { }
+    }
+
+    // ── correlation_id on SSE frame ───────────────────────────────────────────
+
+    [Fact]
+    public async Task Stream_CorrelationId_NullWhenHeaderAbsent()
+    {
+        // POST without X-Correlation-Id — row stores NULL.
+        await PostEventAsync("corr-absent");
+
+        // Replay from Guid.Empty to get the event back.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var res = await _client.SendAsync(
+            StreamRequest(lastEventId: Guid.Empty.ToString()),
+            HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        await using var stream = await res.Content.ReadAsStreamAsync(cts.Token);
+        var frames = await ReadDataFramesAsync(stream, count: 1, cts.Token);
+
+        Assert.True(frames.Count >= 1, "Expected at least one replayed frame.");
+        var frame = frames.First(f => f.GetProperty("component_id").GetString() == "corr-absent");
+
+        // correlation_id MUST be present on every frame — even as null (§ api-guidelines.md).
+        Assert.True(
+            frame.TryGetProperty("correlation_id", out var prop),
+            "Frame must include 'correlation_id' field even when null.");
+        Assert.Equal(JsonValueKind.Null, prop.ValueKind);
+    }
+
+    // ── detail/payload null-omission unchanged ────────────────────────────────────
+
+    [Fact]
+    public async Task Stream_NullDetailAndPayload_OmittedFromFrame_CorrelationIdStillPresent()
+    {
+        // Post without detail or payload — both must be absent from the serialised frame
+        // while correlation_id is force-included (even as null).
+        await PostEventAsync("corr-null-detail");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var res = await _client.SendAsync(
+            StreamRequest(lastEventId: Guid.Empty.ToString()),
+            HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        await using var stream = await res.Content.ReadAsStreamAsync(cts.Token);
+        var frames = await ReadDataFramesAsync(stream, count: 1, cts.Token);
+
+        Assert.True(frames.Count >= 1, "Expected at least one replayed frame.");
+        var frame = frames.First(f => f.GetProperty("component_id").GetString() == "corr-null-detail");
+
+        // detail and payload must be absent (WhenWritingNull serialiser option).
+        Assert.False(frame.TryGetProperty("detail", out _), "Null detail must be omitted from frame.");
+        Assert.False(frame.TryGetProperty("payload", out _), "Null payload must be omitted from frame.");
+
+        // correlation_id must always be present — even as null (JsonIgnore(Never)).
+        Assert.True(
+            frame.TryGetProperty("correlation_id", out var corrProp),
+            "correlation_id must be present even when null.");
+        Assert.Equal(JsonValueKind.Null, corrProp.ValueKind);
+    }
+
+    [Fact]
+    public async Task Stream_CorrelationId_EchoedWhenHeaderPresent()
+    {
+        const string correlationValue = "test-correlation-abc";
+
+        // POST with X-Correlation-Id set.
+        var req = new HttpRequestMessage(HttpMethod.Post, "/api/control/events")
+        {
+            Content = JsonContent.Create(new
+            {
+                event_type = "status",
+                state = "running",
+                occurred_at = "2026-05-31T10:00:00Z",
+            }),
+        };
+        req.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
+        req.Headers.Add("X-Component-Id", "corr-present");
+        req.Headers.Add("X-Correlation-Id", correlationValue);
+
+        var postRes = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.NoContent, postRes.StatusCode);
+
+        // Replay from Guid.Empty to retrieve the stored event.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var res = await _client.SendAsync(
+            StreamRequest(lastEventId: Guid.Empty.ToString()),
+            HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        await using var stream = await res.Content.ReadAsStreamAsync(cts.Token);
+        var frames = await ReadDataFramesAsync(stream, count: 1, cts.Token);
+
+        Assert.True(frames.Count >= 1, "Expected at least one replayed frame.");
+        var frame = frames.First(f => f.GetProperty("component_id").GetString() == "corr-present");
+
+        // correlation_id MUST be echoed verbatim.
+        Assert.True(
+            frame.TryGetProperty("correlation_id", out var prop),
+            "Frame must include 'correlation_id' field.");
+        Assert.Equal(correlationValue, prop.GetString());
     }
 }

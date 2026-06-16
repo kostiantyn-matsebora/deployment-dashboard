@@ -21,7 +21,7 @@ export interface GhDeployment {
 
 export interface GhDeploymentStatus {
   id: number;
-  state: 'queued' | 'pending' | 'in_progress' | 'success' | 'failure' | 'error' | 'inactive';
+  state: 'queued' | 'pending' | 'in_progress' | 'waiting' | 'success' | 'failure' | 'error' | 'inactive';
   target_url: string;
   creator: GhActor;
   created_at: string; // ISO-8601 UTC
@@ -32,6 +32,8 @@ export interface GhWorkflowRun {
   name: string;
   path: string;
   head_sha: string;
+  /** Run conclusion — "success" | "failure" | "cancelled" | "timed_out" | null (in-progress). */
+  conclusion?: string | null;
 }
 
 export interface GhWorkflow {
@@ -43,6 +45,13 @@ export interface GhWorkflow {
 
 export interface GhEnvironment {
   name: string;
+}
+
+export interface GhDeploymentReview {
+  /** "approved" | "rejected" */
+  state: string;
+  user: { login: string };
+  submitted_at: string;
 }
 
 export interface GhArtifact {
@@ -67,6 +76,8 @@ export interface RepoStore {
   environments: GhEnvironment[];
   /** Keyed by run_id */
   artifacts: Map<number, GhArtifact[]>;
+  /** Keyed by deployment id — reviewer decisions for environment gates */
+  reviews: Map<number, GhDeploymentReview[]>;
 }
 
 // ── Store singleton ───────────────────────────────────────────────────────────
@@ -92,6 +103,7 @@ export class GithubStore {
         workflowYaml: new Map(),
         environments: [],
         artifacts: new Map(),
+        reviews: new Map(),
       });
     }
     return this.repos.get(key)!;

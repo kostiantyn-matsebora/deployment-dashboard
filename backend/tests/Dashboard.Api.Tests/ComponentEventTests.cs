@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dashboard.Api.Tests.Helpers;
+using Dashboard.Shared.Data;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Dashboard.Api.Tests;
 
@@ -142,6 +144,99 @@ public sealed class ComponentEventTests : IAsyncLifetime
     {
         var res = await _client.SendAsync(PostRequest(componentId: "demo-driver"));
         Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+    }
+
+    // ── X-Correlation-Id validation (422) ────────────────────────────────────────
+
+    [Fact]
+    public async Task Post_CorrelationIdOver128Chars_Returns422WithPointer()
+    {
+        // 129 chars — exceeds the 128-char limit.
+        var req = PostRequest(componentId: "demo-driver");
+        req.Headers.Add("X-Correlation-Id", new string('a', 129));
+
+        var res = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var errors = body.GetProperty("errors");
+        Assert.True(
+            errors.EnumerateArray().Any(e => e.GetProperty("pointer").GetString() == "/X-Correlation-Id"),
+            "422 body must include an error with pointer /X-Correlation-Id.");
+    }
+
+    [Fact]
+    public async Task Post_CorrelationIdLen1_Returns204()
+    {
+        // Boundary: length 1 is the minimum valid value.
+        var req = PostRequest(componentId: "demo-driver");
+        req.Headers.Add("X-Correlation-Id", "x");
+
+        var res = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_CorrelationIdLen128_Returns204()
+    {
+        // Boundary: length 128 is the maximum valid value.
+        var req = PostRequest(componentId: "demo-driver");
+        req.Headers.Add("X-Correlation-Id", new string('a', 128));
+
+        var res = await _client.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_NoCorrelationId_Returns204()
+    {
+        // Absent header is allowed — must not cause an error.
+        var res = await _client.SendAsync(PostRequest(componentId: "demo-driver"));
+        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+    }
+
+    // ── Persistence assertions ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Post_WithCorrelationId_PersistsValueOnRow()
+    {
+        const string correlationValue = "persist-check-abc";
+
+        var req = PostRequest(componentId: "persist-check-driver");
+        req.Headers.Add("X-Correlation-Id", correlationValue);
+
+        var res = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        var row = db.ComponentEvents
+            .Where(e => e.ComponentId == "persist-check-driver")
+            .OrderByDescending(e => e.ReceivedAt)
+            .First();
+
+        Assert.Equal(correlationValue, row.CorrelationId);
+    }
+
+    [Fact]
+    public async Task Post_WithoutCorrelationId_PersistsNullOnRow()
+    {
+        var req = PostRequest(componentId: "persist-null-driver");
+        // No X-Correlation-Id header.
+
+        var res = await _client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        var row = db.ComponentEvents
+            .Where(e => e.ComponentId == "persist-null-driver")
+            .OrderByDescending(e => e.ReceivedAt)
+            .First();
+
+        Assert.Null(row.CorrelationId);
     }
 
 }

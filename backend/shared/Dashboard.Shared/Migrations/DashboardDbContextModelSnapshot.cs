@@ -33,6 +33,11 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("text")
                         .HasColumnName("component_id");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("correlation_id");
+
                     b.Property<string>("Detail")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)")
@@ -70,6 +75,10 @@ namespace Dashboard.Shared.Migrations
                         .IsDescending(false, true, true)
                         .HasDatabaseName("ix_ce_component_received_id");
 
+                    b.HasIndex("CorrelationId")
+                        .HasDatabaseName("ix_ce_correlation_id")
+                        .HasFilter("correlation_id IS NOT NULL");
+
                     b.ToTable("component_events", (string)null);
                 });
 
@@ -88,9 +97,9 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("occurred_at");
 
-                    b.Property<Guid?>("ResetId")
+                    b.Property<Guid?>("CorrelationId")
                         .HasColumnType("uuid")
-                        .HasColumnName("reset_id");
+                        .HasColumnName("correlation_id");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -229,9 +238,9 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("text[]")
                         .HasColumnName("expected_components");
 
-                    b.Property<Guid?>("ResetId")
+                    b.Property<Guid?>("CorrelationId")
                         .HasColumnType("uuid")
-                        .HasColumnName("reset_id");
+                        .HasColumnName("correlation_id");
 
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamptz")

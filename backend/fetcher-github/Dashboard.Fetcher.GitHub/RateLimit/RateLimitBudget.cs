@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using Dashboard.Fetcher.GitHub.Models;
 using Microsoft.Extensions.Logging;
@@ -9,9 +10,11 @@ namespace Dashboard.Fetcher.GitHub.RateLimit;
 /// exhausted (F16 / F3).
 ///
 /// Budget = floor(total_limit × pct / 100).
-/// Own-count is incremented per GitHub API call — NOT read from <c>X-RateLimit-Used</c>
+/// Own-count is incremented per quota-consuming GitHub API call (excludes 304 Not Modified,
+/// which GitHub does not charge) — NOT read from <c>X-RateLimit-Used</c>
 /// (which counts all consumers of the token, not only this fetcher process).
-/// After a rate-limit window rolls over (<c>X-RateLimit-Reset</c> has passed) the own
+/// After a rate-limit window rolls over (now has passed the previously-observed
+/// <c>X-RateLimit-Reset</c> and the response carries a newer reset timestamp) the own
 /// counter is reset to zero so the next window starts fresh.
 /// Shared across backfill and normal poll.
 /// </summary>
@@ -20,12 +23,16 @@ public sealed class RateLimitBudget
     private readonly int _budget;
     private int _ownCount;
     private DateTimeOffset _resetAt = DateTimeOffset.MinValue;
+    private int? _ciLimit;
+    private int? _ciRemaining;
     private readonly ILogger<RateLimitBudget> _logger;
+    private readonly Func<DateTimeOffset> _utcNow;
 
-    private RateLimitBudget(int budget, ILogger<RateLimitBudget> logger)
+    private RateLimitBudget(int budget, ILogger<RateLimitBudget> logger, Func<DateTimeOffset> utcNow)
     {
         _budget = budget;
         _logger = logger;
+        _utcNow = utcNow;
     }
 
     /// <summary>Maximum budget requests per window.</summary>
@@ -41,7 +48,19 @@ public sealed class RateLimitBudget
     public DateTimeOffset ResetAt => _resetAt;
 
     /// <summary>
-    /// Initialises the budget: reads GITHUB__RATE_LIMIT when set,
+    /// CI/CD API total hourly quota from <c>X-RateLimit-Limit</c>;
+    /// <c>null</c> before the first GitHub response (F18 / §5.11).
+    /// </summary>
+    public int? CiLimit => _ciLimit;
+
+    /// <summary>
+    /// CI/CD-wide remaining quota from <c>X-RateLimit-Remaining</c> (all consumers);
+    /// <c>null</c> before the first GitHub response (F18 / §5.11).
+    /// </summary>
+    public int? CiRemaining => _ciRemaining;
+
+    /// <summary>
+    /// Initialises the budget: reads GITHUB_RATE_LIMIT when set,
     /// otherwise calls GET /rate_limit; falls back to 5 000 on failure (F16).
     /// </summary>
     public static async Task<RateLimitBudget> CreateAsync(
@@ -49,7 +68,8 @@ public sealed class RateLimitBudget
         int configuredLimit,
         int budgetPct,
         ILogger<RateLimitBudget> logger,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<DateTimeOffset>? utcNow = null)
     {
         var totalLimit = configuredLimit > 0
             ? configuredLimit
@@ -59,30 +79,50 @@ public sealed class RateLimitBudget
         logger.LogInformation("[RateLimit] total_limit={Total} budget_pct={Pct} budget={Budget}",
             totalLimit, budgetPct, budget);
 
-        return new RateLimitBudget(budget, logger);
+        return new RateLimitBudget(budget, logger, utcNow ?? (() => DateTimeOffset.UtcNow));
     }
 
     /// <summary>
     /// Called after every GitHub API response.
-    /// Increments the own-request counter; resets it when the rate-limit window has rolled over.
+    /// Increments the own-request counter for quota-consuming responses only (not 304);
+    /// resets it when the rate-limit window has rolled over.
     /// Pauses until reset_at + 1s when own count reaches the budget.
+    /// Also captures <c>X-RateLimit-Limit</c> / <c>X-RateLimit-Remaining</c> for the F18 snapshot.
     /// </summary>
     public async Task RecordAndWaitIfNeededAsync(HttpResponseMessage response, CancellationToken ct)
     {
         var responseResetAt = ReadResetAt(response);
+        var now = _utcNow();
 
-        // Roll over own-count when the window has passed.
-        if (responseResetAt > _resetAt && responseResetAt <= DateTimeOffset.UtcNow)
+        // Roll over own-count when the previously-observed window has expired AND the
+        // response carries a newer reset timestamp confirming a fresh window has started.
+        // X-RateLimit-Reset always points to the FUTURE (end of the current window), so
+        // checking responseResetAt <= now would almost never fire. The correct signal is:
+        //   now >= _resetAt  (the old window has passed)
+        //   responseResetAt > _resetAt  (the server confirms we are in a new window)
+        if (_resetAt != DateTimeOffset.MinValue && now >= _resetAt && responseResetAt > _resetAt)
             _ownCount = 0;
 
         _resetAt = responseResetAt;
-        _ownCount++;
+
+        // 304 Not Modified consumes no GitHub quota — X-RateLimit-Remaining is unchanged.
+        // Count only quota-consuming responses toward own usage and the self-throttle
+        // budget (§5.5.2 / F16). The rollover and header-capture above remain unconditional
+        // because 304 responses still carry reset-at and Limit/Remaining headers.
+        if (response.StatusCode != HttpStatusCode.NotModified)
+            _ownCount++;
+
+        // Capture CI/CD-wide quota fields for the per-cycle rate-limit event (F18 / §5.11).
+        if (TryGetIntHeader(response, "X-RateLimit-Limit", out var ciLimit))
+            _ciLimit = ciLimit;
+        if (TryGetIntHeader(response, "X-RateLimit-Remaining", out var ciRemaining))
+            _ciRemaining = ciRemaining;
 
         if (_ownCount < _budget)
             return;
 
         var waitUntil = _resetAt.AddSeconds(1);
-        var delay = waitUntil - DateTimeOffset.UtcNow;
+        var delay = waitUntil - _utcNow();
 
         _logger.LogInformation(
             "[RateLimit] budget exhausted (own_count={Count}/{Budget}); sleeping until {WaitUntil}",
@@ -137,6 +177,14 @@ public sealed class RateLimitBudget
             return value is not null;
         }
         value = null;
+        return false;
+    }
+
+    private static bool TryGetIntHeader(HttpResponseMessage response, string name, out int value)
+    {
+        if (TryGetHeader(response, name, out var raw) && int.TryParse(raw, out value))
+            return true;
+        value = 0;
         return false;
     }
 }

@@ -10,7 +10,7 @@
   </div>
 
   <!-- View tabs ──────────────────────────────────────────── -->
-  <nav class="tabs" role="tablist">
+  <nav class="tabs" role="tablist" aria-label="View selection">
     <p-selectButton
       [options]="viewOptions"
       optionLabel="label"
@@ -58,6 +58,7 @@
         [ngModel]="serviceFilter()"
         (ngModelChange)="onFilterChange($event)"
         aria-label="Filter services by name"
+        title="Filter services by name"
       />
       <label
         class="toggle hdr-fail-toggle"
@@ -66,6 +67,7 @@
         role="switch"
         [attr.aria-checked]="failuresOnly()"
         aria-label="Show failures only"
+        title="Show failures only"
       >
         <span class="switch"></span>
         <span>Failures only</span>
@@ -92,14 +94,101 @@
   <!-- Icon buttons + popovers ────────────────────────────── -->
   <div class="hdr-icons">
 
+    <!-- Rate-limit chips — one per adapter (shown only when reports have arrived) ── -->
+    @for (entry of rateLimitEntries(); track entry[0]; let i = $index) {
+      <div style="position: relative">
+        <button
+          class="icon-btn rl-chip"
+          [class.is-active]="isRateLimitPopoverOpen(entry[0])"
+          title="Fetcher CI/CD rate-limit usage ({{ entry[0] }})"
+          aria-label="Fetcher rate-limit usage for {{ entry[0] }}: {{ chipLabel(entry[1]) }}"
+          aria-haspopup="true"
+          (click)="toggleRateLimitPopover(entry[0], $event, i)"
+        >
+          <span class="rl-chip-icon" aria-hidden="true">⧖</span>
+          <span class="rl-chip-label">{{ chipLabel(entry[1]) }}</span>
+        </button>
+        <p-popover #rateLimitPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content rl-popover-content">
+            <span class="popover-title">FETCHER RATE LIMIT</span>
+
+            <!-- Adapter + state row -->
+            <div class="rl-row">
+              <span class="rl-field-label">Adapter</span>
+              <span class="rl-field-value">{{ entry[1].adapter }}</span>
+              <span
+                class="rl-state-badge"
+                [class.is-paused]="entry[1].state === 'paused'"
+                role="status"
+                [attr.aria-label]="'Fetcher state: ' + entry[1].state"
+              >{{ entry[1].state }}</span>
+            </div>
+
+            <!-- Own usage bar + values -->
+            <div class="rl-section">
+              <div class="rl-row">
+                <span class="rl-field-label">Own usage</span>
+                <span class="rl-field-value mono">{{ fmtNum(entry[1].own_used) }} / {{ fmtNum(entry[1].own_budget) }}</span>
+              </div>
+              @if (ownBudgetPct(entry[1]) !== null) {
+                <div class="rl-bar-track" role="progressbar" [attr.aria-valuenow]="ownBudgetPct(entry[1])" aria-valuemin="0" aria-valuemax="100" [attr.aria-label]="'Own budget used: ' + ownBudgetPct(entry[1]) + '%'">
+                  <div class="rl-bar-fill" [style.width.%]="ownBudgetPct(entry[1])"></div>
+                </div>
+              }
+            </div>
+
+            <!-- CI quota -->
+            <div class="rl-row">
+              <span class="rl-field-label">CI quota</span>
+              <span class="rl-field-value mono">{{ fmtNum(entry[1].ci_remaining) }} / {{ fmtNum(entry[1].ci_limit) }}</span>
+            </div>
+
+            <!-- Reset time -->
+            <div class="rl-row">
+              <span class="rl-field-label">Resets at</span>
+              <span class="rl-field-value mono">{{ formatResetAt(entry[1].reset_at) }}</span>
+            </div>
+          </div>
+        </p-popover>
+      </div>
+    }
+
+    <!-- Swimlanes-only: Collapse/Expand-all + Auto-scroll toggle (#309) ──── -->
+    @if (isSwimlanes()) {
+      <div class="swim-controls" role="group" aria-label="Swimlane controls">
+        <!-- Collapse/Expand-all button — pill, matches mockup .sv-collapse-all-btn (#309) -->
+        <button
+          class="swim-collapse-all-btn"
+          [title]="allCollapsed() ? 'Expand all lanes' : 'Collapse all lanes'"
+          [attr.aria-label]="allCollapsed() ? 'Expand all lanes' : 'Collapse all lanes'"
+          (click)="toggleCollapseAll()"
+        >{{ allCollapsed() ? '⊞ Expand all' : '⊟ Collapse all' }}</button>
+
+        <!-- Auto-scroll toggle -->
+        <label
+          class="toggle swim-autoscroll-toggle"
+          [class.is-on]="autoScrollOnChange()"
+          (click)="toggleAutoScroll()"
+          role="switch"
+          [attr.aria-checked]="autoScrollOnChange()"
+          aria-label="Auto-scroll to change"
+          title="Auto-scroll to change when off-screen (default ON)"
+        >
+          <span class="switch"></span>
+          <span>Auto-scroll</span>
+        </label>
+      </div>
+    }
+
     <!-- Correlation picker (Swimlanes only) ─────────────── -->
-    @if (!isMatrix()) {
+    @if (isSwimlanes()) {
       <div style="position: relative">
         <button
           class="icon-btn"
           [class.is-active]="correlationPopoverOpen()"
           title="Correlation &amp; time window"
-          aria-label="Correlation"
+          aria-label="Correlation and time window"
+          aria-haspopup="true"
           (click)="toggleCorrelationPopover($event)"
         >
           <span aria-hidden="true">⇆</span>
@@ -130,56 +219,184 @@
       </div>
     }
 
-    <!-- Fields picker (shared) ──────────────────────────── -->
+    <!-- Columns picker (matrix-only — show/hide environments) ──────────────── -->
+    @if (isMatrix()) {
+      <div style="position: relative">
+        <button
+          class="icon-btn"
+          [class.is-active]="columnsPopoverOpen() || colHiddenCount() > 0"
+          [title]="columnsBtnTitle()"
+          [attr.aria-label]="columnsBtnTitle()"
+          aria-haspopup="true"
+          (click)="toggleColumnsPopover($event)"
+        >
+          <span aria-hidden="true">⊞</span>
+          @if (colHiddenCount() > 0) {
+            <span class="hidden-count-badge" aria-hidden="true">{{ colHiddenCount() }}</span>
+          }
+        </button>
+        <p-popover #columnsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content">
+            <span class="popover-title">COLUMNS — Matrix</span>
+            <div class="field-grid field-grid--single">
+              @for (env of allEnvironments(); track env) {
+                <label
+                  class="field-toggle"
+                  [class.is-on]="isColVisible(env)"
+                  (click)="toggleColHidden(env)"
+                >
+                  <span class="field-check" [class.checked]="isColVisible(env)" aria-hidden="true"></span>
+                  <span class="field-label">{{ env }}</span>
+                </label>
+              }
+            </div>
+            <div class="hint">Tip: drag a column header to reorder.</div>
+            <button
+              class="cols-reset-btn"
+              (click)="resetColumns()"
+              aria-label="Show all environments and reset column order"
+            >Show all · reset order</button>
+          </div>
+        </p-popover>
+      </div>
+    }
+
+    <!-- Fields picker (Matrix + Swimlanes only — not Analytics) ─── -->
+    @if (!isAnalytics()) {
+      <div style="position: relative">
+        <button
+          class="icon-btn"
+          [class.is-active]="fieldsPopoverOpen() || fieldsHiddenCount() > 0"
+          [title]="fieldsBtnTitle()"
+          [attr.aria-label]="fieldsBtnTitle()"
+          aria-haspopup="true"
+          (click)="toggleFieldsPopover($event)"
+        >
+          <span aria-hidden="true">▦</span>
+          @if (fieldsHiddenCount() > 0) {
+            <span class="hidden-count-badge" aria-hidden="true">{{ fieldsHiddenCount() }}</span>
+          }
+        </button>
+        <p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content">
+            <span class="popover-title">FIELDS — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
+
+            <!-- Matrix field toggles -->
+            @if (isMatrix()) {
+              <div class="field-grid">
+                @for (f of matrixFieldDefs; track f.key) {
+                  <label
+                    class="field-toggle"
+                    [class.is-on]="isMatrixFieldOn(f.key)"
+                    (click)="toggleMatrixField(f.key)"
+                  >
+                    <span class="field-check" [class.checked]="isMatrixFieldOn(f.key)" aria-hidden="true"></span>
+                    <span class="field-label">{{ f.label }}</span>
+                  </label>
+                }
+              </div>
+            }
+
+            <!-- Swimlane field toggles -->
+            @if (isSwimlanes()) {
+              <div class="field-grid">
+                @for (f of swimlaneFieldDefs; track f.key) {
+                  <label
+                    class="field-toggle"
+                    [class.is-on]="isSwimlaneFieldOn(f.key)"
+                    (click)="toggleSwimlaneField(f.key)"
+                  >
+                    <span class="field-check" [class.checked]="isSwimlaneFieldOn(f.key)" aria-hidden="true"></span>
+                    <span class="field-label">{{ f.label }}</span>
+                  </label>
+                }
+              </div>
+            }
+
+          </div>
+        </p-popover>
+      </div>
+    }
+
+    <!-- Legend popover (☷) — Matrix + Swimlanes only; hidden on Analytics (no legend needed) -->
+    @if (!isAnalytics()) {
     <div style="position: relative">
       <button
         class="icon-btn"
-        [class.is-active]="fieldsPopoverOpen()"
-        title="Fields"
-        aria-label="Fields"
-        (click)="toggleFieldsPopover($event)"
+        [class.is-active]="legendPopoverOpen()"
+        title="Legend — status key"
+        aria-label="Legend — status key"
+        aria-haspopup="true"
+        (click)="toggleLegendPopover($event)"
       >
-        <span aria-hidden="true">▦</span>
+        <span aria-hidden="true">☷</span>
       </button>
-      <p-popover #fieldsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-        <div class="picker-content">
-          <span class="popover-title">FIELDS — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
+      <p-popover #legendPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+        <div class="picker-content legend-content">
+          <span class="popover-title">LEGEND — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
 
-          <!-- Matrix field toggles -->
-          @if (isMatrix()) {
-            <div class="field-grid">
-              @for (f of matrixFieldDefs; track f.key) {
-                <label
-                  class="field-toggle"
-                  [class.is-on]="isMatrixFieldOn(f.key)"
-                  (click)="toggleMatrixField(f.key)"
-                >
-                  <span class="field-check" [class.checked]="isMatrixFieldOn(f.key)" aria-hidden="true"></span>
-                  <span class="field-label">{{ f.label }}</span>
-                </label>
-              }
+          <!-- Effective statuses -->
+          <div class="lg-group">
+            <span class="lg-group-label">Effective</span>
+            <div class="lg-item">
+              <span class="lg-ic s-success" aria-hidden="true">✓</span>
+              <span class="lg-sw sw-success" aria-hidden="true"></span>
+              <span class="lg-nm">success</span>
+              <span class="lg-ds">deployment completed</span>
             </div>
-          }
+            <div class="lg-item">
+              <span class="lg-ic s-progress" aria-hidden="true">◴</span>
+              <span class="lg-sw sw-progress" aria-hidden="true"></span>
+              <span class="lg-nm">in-progress</span>
+              <span class="lg-ds">running now</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-failure" aria-hidden="true">✕</span>
+              <span class="lg-sw sw-failure" aria-hidden="true"></span>
+              <span class="lg-nm">failure</span>
+              <span class="lg-ds">run failed</span>
+            </div>
+          </div>
 
-          <!-- Swimlane field toggles -->
-          @if (!isMatrix()) {
-            <div class="field-grid">
-              @for (f of swimlaneFieldDefs; track f.key) {
-                <label
-                  class="field-toggle"
-                  [class.is-on]="isSwimlaneFieldOn(f.key)"
-                  (click)="toggleSwimlaneField(f.key)"
-                >
-                  <span class="field-check" [class.checked]="isSwimlaneFieldOn(f.key)" aria-hidden="true"></span>
-                  <span class="field-label">{{ f.label }}</span>
-                </label>
-              }
+          <!-- Context statuses -->
+          <div class="lg-group">
+            <span class="lg-group-label">Context (next)</span>
+            <div class="lg-item">
+              <span class="lg-ic s-pending" aria-hidden="true">○</span>
+              <span class="lg-sw sw-pending" aria-hidden="true"></span>
+              <span class="lg-nm">pending</span>
+              <span class="lg-ds">waiting to queue</span>
             </div>
-          }
+            <div class="lg-item">
+              <span class="lg-ic s-queued" aria-hidden="true">≡</span>
+              <span class="lg-sw sw-queued" aria-hidden="true"></span>
+              <span class="lg-nm">queued</span>
+              <span class="lg-ds">in the queue</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-waiting" aria-hidden="true">◷</span>
+              <span class="lg-sw sw-waiting" aria-hidden="true"></span>
+              <span class="lg-nm">waiting</span>
+              <span class="lg-ds">waiting for approval</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-cancelled" aria-hidden="true">⊘</span>
+              <span class="lg-sw sw-cancelled" aria-hidden="true"></span>
+              <span class="lg-nm">cancelled</span>
+              <span class="lg-ds">run cancelled</span>
+            </div>
+            <div class="lg-item">
+              <span class="lg-ic s-rejected" aria-hidden="true">⊗</span>
+              <span class="lg-sw sw-rejected" aria-hidden="true"></span>
+              <span class="lg-nm">rejected</span>
+              <span class="lg-ds">approval rejected</span>
+            </div>
+          </div>
 
         </div>
       </p-popover>
     </div>
+    }
 
   </div>
 
@@ -188,6 +405,7 @@
     class="live-pill"
     [class.is-live]="sseConnected()"
     role="status"
+    title="Server-sent events — live deployment updates"
     [attr.aria-label]="sseConnected() ? 'Live updates connected' : 'Connecting to live updates'"
   >
     <span class="live-dot" aria-hidden="true"></span>

@@ -2,7 +2,9 @@ namespace Dashboard.Control.Options;
 
 /// <summary>
 /// Configuration for the reset choreography state machine, bound from the <c>Reset</c> appsettings
-/// section and overridable via environment variables (<c>Reset__AckTimeoutSeconds</c>, etc.) per §9.
+/// section and overridable via flat SCREAMING_SNAKE environment variables
+/// (<c>RESET_ACK_TIMEOUT_SECONDS</c>, <c>RESET_GATE_MAX_TTL_SECONDS</c>,
+/// <c>RESET_EXPECTED_COMPONENTS</c> as a CSV) per §9.
 /// </summary>
 public sealed class ResetOptions
 {
@@ -10,7 +12,7 @@ public sealed class ResetOptions
 
     /// <summary>
     /// Max seconds to wait for component acks before forcing <c>draining → resetting</c> (D13).
-    /// Default: 10 s.
+    /// Default: 10 s. Override via <c>RESET_ACK_TIMEOUT_SECONDS</c> env var.
     /// </summary>
     public int AckTimeoutSeconds { get; set; } = 10;
 
@@ -19,12 +21,14 @@ public sealed class ResetOptions
     /// at cycle start. The effective default (<c>["dashboard-fetcher", "demo-driver"]</c>, D13) is
     /// supplied by <c>appsettings.json</c>, NOT a C# initializer here.
     ///
+    /// Override via <c>RESET_EXPECTED_COMPONENTS</c> env var (CSV string — comma-separated component
+    /// ids, trimmed, empty entries dropped — replaces the array wholesale when non-empty).
+    ///
     /// This MUST stay empty. The .NET configuration binder <b>appends</b> config-bound array
     /// elements onto the property's existing value rather than replacing it. A non-empty
-    /// initializer would therefore survive every config/env override (e.g.
-    /// <c>Reset__ExpectedComponents__0=…</c>), leaving phantom entries in the bound array and
-    /// making the ack gate wait on components that never ack. Keeping it empty lets
-    /// <c>appsettings.json</c> / environment fully define the set.
+    /// initializer would therefore survive every config override, leaving phantom entries in the
+    /// bound array and making the ack gate wait on components that never ack. Keeping it empty
+    /// lets <c>appsettings.json</c> fully define the default set.
     /// </summary>
     public string[] ExpectedComponents { get; set; } = [];
 
@@ -34,7 +38,7 @@ public sealed class ResetOptions
     /// state is written to <c>idle</c>, a <c>reset-completed</c> control-stream event is emitted
     /// so connected components can recover, and the Postgres advisory lock is released.
     /// Prevents a hung DB call (e.g. a blocked TRUNCATE) wedging ingest indefinitely (D12).
-    /// Default: 60 s.
+    /// Default: 60 s. Override via <c>RESET_GATE_MAX_TTL_SECONDS</c> env var.
     /// </summary>
     public int GateMaxTtlSeconds { get; set; } = 60;
 }

@@ -26,10 +26,49 @@ export default defineConfig({
     deviceScaleFactor: 1,
   },
 
-  projects: [
+  /**
+   * webServer array: starts mock backend + Angular app for the live-app project.
+   * reuseExistingServer: !CI means local runs reuse already-running servers,
+   * CI always does a fresh boot.
+   */
+  webServer: [
     {
-      name: 'chromium',
+      command: 'npm --prefix ../../frontend/mock run start:dev',
+      url: 'http://localhost:3002/readyz',
+      reuseExistingServer: !process.env['CI'],
+      timeout: 60_000,
+    },
+    {
+      command: 'npm --prefix ../../frontend/dashboard start',
+      url: 'http://localhost:4200',
+      reuseExistingServer: !process.env['CI'],
+      timeout: 120_000,
+    },
+  ],
+
+  projects: [
+    /**
+     * mockup — file:// tests against the static design mockup.
+     * These tests navigate to MOCKUP_URL directly and do NOT use baseURL.
+     * The webServer block runs regardless; that is acceptable overhead.
+     */
+    {
+      name: 'mockup',
       use: { ...devices['Desktop Chrome'] },
+      testMatch: /mockup-.*\.spec\.ts|overlap-invariants\.spec\.ts/,
+    },
+
+    /**
+     * live-app — tests against the running Angular SPA at http://localhost:4200.
+     * baseURL is set so tests can use page.goto('/') instead of full URLs.
+     */
+    {
+      name: 'live-app',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:4200',
+      },
+      testMatch: /app-.*\.spec\.ts/,
     },
   ],
 });

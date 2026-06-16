@@ -28,6 +28,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write  # required for SARIF upload to the Security tab
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +81,31 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
 
-      - name: Build and push
+      # ── Step 1: Build locally (load into Docker daemon for scanning) ───────
+      # Scan before push: the image is loaded but not pushed yet.
+      # GHA layer cache is populated here; the push step below is a cache hit.
+      - name: Build (local load for scanning)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Step 2: Trivy vulnerability scan ──────────────────────────────────
+      # Each matrix entry gets a unique SARIF category so results from different
+      # services do not overwrite each other in the GitHub Security tab.
+      - name: Trivy scan
+        uses: ./.github/actions/trivy-scan
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:scan
+          category: trivy-release-${{ matrix.key }}
+
+      # ── Step 3: Push (cache hit — no rebuild, just export + push) ─────────
+      - name: Push to GHCR
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
@@ -91,12 +116,87 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # ── Demo gateway image ────────────────────────────────────────────────────────
+  # Runs after the `images` job so the production gateway image is already pushed
+  # to GHCR before this job FROMs it (matrix jobs run in parallel — gateway-demo
+  # cannot safely FROM a prod image that may not be pushed yet).
+  # PROD_IMAGE is set to the stripped semver so the FROM pulls the exact
+  # release version rather than `latest`.
+  gateway-demo:
+    name: Image (gateway-demo)
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write  # required for SARIF upload to the Security tab
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version (strip leading v)
+        id: ver
+        run: echo "version=$(echo '${{ github.ref_name }}' | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway-demo
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      # ── Step 1: Build locally (load into Docker daemon for scanning) ───────
+      - name: Build (local load for scanning)
+        uses: docker/build-push-action@v7
+        with:
+          context: gateway
+          file: gateway/Dockerfile.demo
+          push: false
+          load: true
+          tags: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway-demo:scan
+          build-args: PROD_IMAGE=ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway:${{ steps.ver.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Step 2: Trivy vulnerability scan ──────────────────────────────────
+      - name: Trivy scan
+        uses: ./.github/actions/trivy-scan
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway-demo:scan
+          category: trivy-release-gateway-demo
+
+      # ── Step 3: Push (cache hit — no rebuild, just export + push) ─────────
+      - name: Push to GHCR
+        uses: docker/build-push-action@v7
+        with:
+          context: gateway
+          file: gateway/Dockerfile.demo
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: PROD_IMAGE=ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway:${{ steps.ver.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ── Release ────────────────────────────────────────────────────────────────────
   # Runs once after all images are pushed: extract release notes, bundle the
   # compose stack, and publish the GitHub Release.
   release:
     name: GitHub Release
-    needs: images
+    needs: [images, gateway-demo]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -181,7 +281,7 @@ jobs:
   # with the image job above.
   compose-artifacts:
     name: Compose OCI artifacts
-    needs: images
+    needs: [images, gateway-demo]
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -87,6 +87,12 @@
   box-shadow: 0 0 12px var(--coral-glow);
 }
 
+/* ── N: never-deployed — neutral/grey card (no health colour) ─
+   Mirrors .vis-card.s-never-deployed in the mockup.
+   The context status rides on a chip in the ver-row.           */
+.vis-card.s-never-deployed { border-color: var(--glass-edge); }
+.vis-card.s-never-deployed::before { background: var(--ink-3); box-shadow: none; }
+
 /* ── Selected node ring ───────────────────────────────────── */
 .vis-card.is-selected {
   box-shadow:
@@ -183,6 +189,12 @@
   white-space: nowrap;
 }
 
+/* ── Context badge row — spans full card width ───────────── */
+.vis-card .ctx-row {
+  grid-column: 1 / -1;
+  margin-top: 3px;
+}
+
 /* ── Field glyphs & typography ────────────────────────────── */
 .glyph {
   color: var(--ink-3);
@@ -228,4 +240,38 @@
   font-size: 9.5px;
   color: var(--ink-1);
   white-space: nowrap;
+}
+
+/* ── Context badge version text ───────────────────────────── */
+.ctx-badge .ctx-ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* ── Change-emphasis flash (#309) ─────────────────────────── */
+@keyframes card-flash {
+  0%   {
+    box-shadow:
+      0 0 0 3px rgba(var(--accent-rgb), 0.95),
+      0 0 32px 6px rgba(var(--accent-rgb), 0.65);
+    background-color: rgba(var(--accent-rgb), 0.18);
+    border-color: rgba(var(--accent-rgb), 0.85);
+  }
+  30%  {
+    box-shadow:
+      0 0 0 3px rgba(var(--accent-rgb), 0.70),
+      0 0 20px 4px rgba(var(--accent-rgb), 0.40);
+    background-color: rgba(var(--accent-rgb), 0.10);
+    border-color: rgba(var(--accent-rgb), 0.60);
+  }
+  100% {
+    box-shadow: none;
+    background-color: transparent;
+    border-color: var(--glass-edge);
+  }
+}
+
+.vis-card.is-flashing {
+  animation: card-flash 1.2s ease-out forwards;
 }

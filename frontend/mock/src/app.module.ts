@@ -6,6 +6,7 @@ import { DiscoveryController } from './discovery/discovery.controller';
 import { EventsController } from './events/events.controller';
 import { FetcherController } from './fetcher/fetcher.controller';
 import { MockController } from './mock/mock.controller';
+import { AnalyticsController } from './analytics/analytics.controller';
 
 @Module({
   controllers: [
@@ -16,6 +17,7 @@ import { MockController } from './mock/mock.controller';
     EventsController,
     FetcherController,
     MockController,
+    AnalyticsController,
   ],
 })
 export class AppModule {}

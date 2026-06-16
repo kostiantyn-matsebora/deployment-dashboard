@@ -1,0 +1,243 @@
+/* Popup styles — Deployment Dashboard extension
+   Tokens extracted from frontend/dashboard/src/styles/tokens.css (dark theme default).
+   The extension runs in its own document; no Angular/PrimeNG in scope. */
+
+/* ── Design token subset (dark theme) ────────────────────────── */
+:root {
+  --bg-0:        #0b0d14;
+  --bg-1:        #0e1119;
+  --glass:        rgba(22, 26, 38, 0.55);
+  --glass-strong: rgba(28, 33, 48, 0.70);
+  --glass-edge:   rgba(255, 255, 255, 0.06);
+  --glass-edge-2: rgba(255, 255, 255, 0.10);
+  --ink-0:  #e9ecf4;
+  --ink-1:  #b8bdcc;
+  --ink-2:  #7c829a;
+  --ink-3:  #555b73;
+  --emerald:       #34d29a;
+  --emerald-deep:  #1e8e66;
+  --emerald-wash:  rgba(52, 210, 154, 0.18);
+  --emerald-edge:  rgba(52, 210, 154, 0.55);
+  --amber:       #f5a524;
+  --amber-wash:  rgba(245, 165, 36, 0.20);
+  --amber-edge:  rgba(245, 165, 36, 0.65);
+  --coral:       #ff5d5d;
+  --coral-wash:  rgba(255, 93, 93, 0.20);
+  --coral-edge:  rgba(255, 93, 93, 0.60);
+  --slate:       #8b93ad;
+  --slate-wash:  rgba(139, 147, 173, 0.15);
+  --slate-edge:  rgba(139, 147, 173, 0.50);
+  --blue:        #4aa3f0;
+  --blue-wash:   rgba(74, 163, 240, 0.15);
+  --blue-edge:   rgba(74, 163, 240, 0.50);
+  --violet:      #9a85ff;
+  --violet-wash: rgba(154, 133, 255, 0.15);
+  --violet-edge: rgba(154, 133, 255, 0.50);
+  --grey:        #9aa0b5;
+  --grey-wash:   rgba(154, 160, 181, 0.15);
+  --grey-edge:   rgba(154, 160, 181, 0.45);
+  --rose:        #cf8095;
+  --rose-wash:   rgba(207, 128, 149, 0.15);
+  --rose-edge:   rgba(207, 128, 149, 0.50);
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --input-bg: rgba(10, 12, 20, 0.55);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* [hidden] must override display:flex / display:block on .state-panel and .event-card;
+   without this every state panel renders simultaneously regardless of the hidden attribute. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-width: 360px;
+  max-width: 360px;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--ink-0);
+  background: var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+}
+
+.popup-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 80px;
+}
+
+/* ── States ─────────────────────────────────────────────────── */
+.state-panel {
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.state-panel p { margin: 0; font-size: 13px; }
+
+.ink-2 { color: var(--ink-2); }
+.ink-3 { color: var(--ink-3); }
+
+/* ── Glass surface ───────────────────────────────────────────── */
+.glass-base {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  border: 1px solid var(--glass-edge);
+}
+
+/* ── Event card ──────────────────────────────────────────────── */
+.event-card {
+  margin: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-0);
+}
+
+.card-meta,
+.card-actor,
+.card-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-1);
+}
+
+.meta-item { color: var(--ink-1); }
+.meta-sep  { color: var(--ink-3); }
+.elapsed   { font-size: 12px; }
+.utc       { font-size: 11px; }
+
+.mono { font-family: 'JetBrains Mono', 'Fira Mono', monospace; }
+
+.card-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+/* ── Status chip — matches SPA styles.css .status-chip ───────── */
+.status-chip {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+.status-chip.s-success  { color: var(--emerald); border-color: var(--emerald-edge); background: var(--emerald-wash); }
+.status-chip.s-failure  { color: var(--coral);   border-color: var(--coral-edge);   background: var(--coral-wash);   }
+.status-chip.s-progress { color: var(--amber);   border-color: var(--amber-edge);   background: var(--amber-wash);   }
+.status-chip.s-pending  { color: var(--slate);   border-color: var(--slate-edge);   background: var(--slate-wash);   }
+.status-chip.s-queued   { color: var(--blue);    border-color: var(--blue-edge);    background: var(--blue-wash);    }
+.status-chip.s-waiting  { color: var(--violet);  border-color: var(--violet-edge);  background: var(--violet-wash);  }
+.status-chip.s-cancelled{ color: var(--grey);    border-color: var(--grey-edge);    background: var(--grey-wash);    }
+.status-chip.s-rejected { color: var(--rose);    border-color: var(--rose-edge);    background: var(--rose-wash);    }
+
+/* ── Run link — matches SPA styles.css .hist-link ────────────── */
+.hist-link {
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 11px;
+  border-bottom: 1px dashed var(--ink-3);
+}
+.hist-link:hover { color: var(--ink-0); border-color: var(--ink-1); }
+
+/* ── Event list ──────────────────────────────────────────────── */
+.event-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Compact event row — one deployment per row */
+.event-row {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.event-row:last-child { border-bottom: none; }
+
+.event-row .row-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.event-row .row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-1);
+  flex-wrap: wrap;
+}
+
+.event-row .row-time {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.event-row .row-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+.popup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-top: 1px solid var(--glass-edge);
+}
+
+.footer-dashboard {
+  font-size: 11px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-3);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+}
+.icon-btn:hover { color: var(--ink-1); background: var(--glass-edge); }
+
+/* ── Link button ─────────────────────────────────────────────── */
+.link-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 12px;
+  text-decoration: underline;
+  padding: 0;
+}
+.link-btn:hover { color: var(--ink-0); }

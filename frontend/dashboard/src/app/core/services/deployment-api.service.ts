@@ -1,7 +1,22 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, fromEventPattern } from 'rxjs';
-import { DeploymentEvent, DeploymentEventPage, Matrix } from '../models/deployment.model';
+import {
+  AnalyticsChangeFailureRate,
+  AnalyticsDora,
+  AnalyticsDurationHistogram,
+  AnalyticsHeatmap,
+  AnalyticsIncidents,
+  AnalyticsPeriod,
+  AnalyticsPromotionFunnel,
+  AnalyticsStatusDistribution,
+  AnalyticsTopDeployers,
+  AnalyticsFrequency,
+  ComponentEventRecord,
+  DeploymentEvent,
+  DeploymentEventPage,
+  Matrix,
+} from '../models/deployment.model';
 
 export interface ListDeploymentsParams {
   service?: string;
@@ -67,7 +82,7 @@ export class DeploymentApiService {
    * EventSource automatically sends Last-Event-ID on reconnect; the server
    * replays missed events from that cursor (spec §7 SSE + LISTEN/NOTIFY).
    */
-  streamEvents(options?: { service?: string }): Observable<DeploymentEvent> {
+  streamEvents(options?: { service?: string; onOpen?: () => void; onError?: () => void }): Observable<DeploymentEvent> {
     let url = '/api/events/stream';
     if (options?.service) {
       url += `?service=${encodeURIComponent(options.service)}`;
@@ -76,6 +91,8 @@ export class DeploymentApiService {
     return fromEventPattern<DeploymentEvent>(
       (handler) => {
         const es = new EventSource(url);
+        es.onopen  = () => options?.onOpen?.();
+        es.onerror = () => options?.onError?.();
         es.addEventListener('deployment', (event: Event) => {
           const msg = event as MessageEvent;
           try {
@@ -102,5 +119,91 @@ export class DeploymentApiService {
       url += `?service=${encodeURIComponent(options.service)}`;
     }
     return new EventSource(url);
+  }
+
+  // ── Analytics endpoints (issue #299) ─────────────────────────────────────
+  // Contract: docs/api/openapi.yaml — tag: analytics
+  // One focused GET per aggregate; no client-side aggregation.
+
+  private analyticsParams(period: AnalyticsPeriod): HttpParams {
+    return new HttpParams().set('window', period);
+  }
+
+  /** GET /api/analytics/dora — DORA Four Keys KPI band. */
+  getAnalyticsDora(period: AnalyticsPeriod): Observable<AnalyticsDora> {
+    return this.http.get<AnalyticsDora>('/api/analytics/dora', { params: this.analyticsParams(period) });
+  }
+
+  /** GET /api/analytics/frequency — per-day success/failure counts. */
+  getAnalyticsFrequency(period: AnalyticsPeriod): Observable<AnalyticsFrequency> {
+    return this.http.get<AnalyticsFrequency>('/api/analytics/frequency', { params: this.analyticsParams(period) });
+  }
+
+  /** GET /api/analytics/change-failure-rate — per-day CFR + elite threshold. */
+  getAnalyticsChangeFailureRate(period: AnalyticsPeriod): Observable<AnalyticsChangeFailureRate> {
+    return this.http.get<AnalyticsChangeFailureRate>('/api/analytics/change-failure-rate', { params: this.analyticsParams(period) });
+  }
+
+  /** GET /api/analytics/duration-histogram — bins + p50 + p95. */
+  getAnalyticsDurationHistogram(period: AnalyticsPeriod): Observable<AnalyticsDurationHistogram> {
+    return this.http.get<AnalyticsDurationHistogram>('/api/analytics/duration-histogram', { params: this.analyticsParams(period) });
+  }
+
+  /** GET /api/analytics/promotion-funnel — ordered funnel stages. */
+  getAnalyticsPromotionFunnel(period: AnalyticsPeriod): Observable<AnalyticsPromotionFunnel> {
+    return this.http.get<AnalyticsPromotionFunnel>('/api/analytics/promotion-funnel', { params: this.analyticsParams(period) });
+  }
+
+  /** GET /api/analytics/status-distribution — event count per status (8, zero-filled). */
+  getAnalyticsStatusDistribution(period: AnalyticsPeriod): Observable<AnalyticsStatusDistribution> {
+    return this.http.get<AnalyticsStatusDistribution>('/api/analytics/status-distribution', { params: this.analyticsParams(period) });
+  }
+
+  /** GET /api/analytics/heatmap — day-of-week × hour counts (sparse). */
+  getAnalyticsHeatmap(period: AnalyticsPeriod): Observable<AnalyticsHeatmap> {
+    return this.http.get<AnalyticsHeatmap>('/api/analytics/heatmap', { params: this.analyticsParams(period) });
+  }
+
+  /** GET /api/analytics/top-deployers — actor counts, descending. */
+  getAnalyticsTopDeployers(period: AnalyticsPeriod, limit = 10): Observable<AnalyticsTopDeployers> {
+    const params = this.analyticsParams(period).set('limit', limit);
+    return this.http.get<AnalyticsTopDeployers>('/api/analytics/top-deployers', { params });
+  }
+
+  /** GET /api/analytics/incidents — worst-first restoration incidents. */
+  getAnalyticsIncidents(period: AnalyticsPeriod, limit = 10): Observable<AnalyticsIncidents> {
+    const params = this.analyticsParams(period).set('limit', limit);
+    return this.http.get<AnalyticsIncidents>('/api/analytics/incidents', { params });
+  }
+
+  /**
+   * GET /api/control/events/stream — SSE fan-out of component events.
+   *
+   * Returns a live Observable<ComponentEventRecord>. Caller is responsible for
+   * unsubscribing (which closes the EventSource).
+   *
+   * Event name on the wire is "component" (not "message").
+   * Source: docs/api/api-guidelines.md §11 SSE component-events stream.
+   */
+  streamComponentEvents(): Observable<ComponentEventRecord> {
+    const url = '/api/control/events/stream';
+
+    return fromEventPattern<ComponentEventRecord>(
+      (handler) => {
+        const es = new EventSource(url);
+        es.addEventListener('component', (event: Event) => {
+          const msg = event as MessageEvent;
+          try {
+            handler(JSON.parse(msg.data) as ComponentEventRecord);
+          } catch {
+            // malformed event — skip
+          }
+        });
+        return es;
+      },
+      (_handler, es: EventSource) => {
+        es.close();
+      },
+    );
   }
 }

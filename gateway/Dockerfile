@@ -5,10 +5,16 @@ FROM nginxinc/nginx-unprivileged:stable-alpine
 USER root
 # curl — used by the Docker healthcheck (CMD-SHELL curl /health).
 RUN apk add --no-cache curl
+# Patch OS packages to the latest in the pinned Alpine minor so the published
+# image isn't gated on the base image catching up to Alpine's security repo
+# (the Trivy CI gate fails on fixed CRITICAL/HIGH OS CVEs — e.g. CVE-2026-45447).
+RUN apk upgrade --no-cache
 USER nginx
 
-# Restrict envsubst to our two upstream vars so nginx's own
-# $host / $uri / $scheme / $proxy_add_x_forwarded_for etc. are not wiped.
-ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM|DEMO_DRIVER_UPSTREAM)$'
+# Restrict envsubst to our vars so nginx's own $host / $uri / $scheme /
+# $proxy_add_x_forwarded_for etc. are not wiped.
+# Demo vars (DNS_RESOLVER, DEMO_DRIVER_UPSTREAM) are NOT in this filter —
+# they belong to the demo-gateway image (Dockerfile.demo) only.
+ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM)$'
 
 COPY default.conf.template /etc/nginx/templates/default.conf.template

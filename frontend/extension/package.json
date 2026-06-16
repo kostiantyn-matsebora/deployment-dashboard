@@ -1,0 +1,22 @@
+{
+  "name": "deployment-dashboard-extension",
+  "version": "0.1.0",
+  "description": "Browser extension for the Deployment Dashboard — read-only client surface.",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "webextension-polyfill": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/webextension-polyfill": "^0.12.3",
+    "typescript": "~5.9.2",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  }
+}

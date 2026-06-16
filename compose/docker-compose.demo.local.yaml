@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Demo-gateway local-build override.
+#
+# Problem this file solves:
+#   docker-compose.local.yaml builds the PRODUCTION gateway from branch source
+#   (image: deployment-dashboard-gateway:local).  Under compose last-file-wins,
+#   that entry overrides the `image:` swap that docker-compose.demo.yaml applies
+#   (ghcr.io/.../gateway-demo:...).  Net result: the demo profile runs the prod
+#   gateway, which has no /demo/* routes — 17 integration tests fail.
+#
+# Fix:
+#   This overlay re-applies the demo-gateway build on top of the local prod
+#   build.  It FROMs the locally-built prod image
+#   (deployment-dashboard-gateway:local) via the PROD_IMAGE build-arg, so no
+#   GHCR pull is needed and the demo build is entirely local.
+#   The prod image is guaranteed to exist by the time compose builds this
+#   service because docker-compose.local.yaml (earlier in COMPOSE_FILE) defines
+#   the gateway build and compose processes the chain in order.
+#
+# Usage (local dev with demo profile):
+#   # Build the production gateway base first (Dockerfile.demo FROMs it):
+#   docker build -f gateway/Dockerfile -t deployment-dashboard-gateway:local gateway
+#
+#   docker compose \
+#     -f compose/docker-compose.yaml \
+#     -f compose/docker-compose.demo.yaml \
+#     -f compose/docker-compose.local.yaml \
+#     -f compose/docker-compose.demo.local.yaml \
+#     --profile demo up --build
+#
+# pull_policy: never prevents compose from attempting a registry pull;
+# the image is built locally from Dockerfile.demo.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  gateway:
+    image: deployment-dashboard-gateway-demo:local
+    pull_policy: never
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile.demo
+      args:
+        PROD_IMAGE: deployment-dashboard-gateway:local

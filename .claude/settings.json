@@ -11,8 +11,22 @@
   "worktree": {
     "bgIsolation": "worktree"
   },
+  "statusLine": {
+    "type": "command",
+    "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/statusline/Show-StatusLine.ps1\""
+  },
   "hooks": {
     "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -OnSessionStart",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "",
         "hooks": [
@@ -28,23 +42,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeLifecycle.ps1\" -SnapshotSession",
-            "timeout": 30
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || echo 'Not a git repo, skipping'",
+            "timeout": 10
           }
         ]
       }
     ],
     "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeEntryGuard.ps1\" -CheckEntry",
-            "timeout": 5
-          }
-        ]
-      },
       {
         "matcher": "Bash",
         "hooks": [
@@ -64,16 +68,76 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-LaneGuard.ps1\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-LeadEditGuard.ps1\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-ProtocolFormGuard.ps1\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-ProtocolFormGuard.ps1\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TokensaveGuard.ps1\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "EnterWorktree",
+        "matcher": "TeamCreate",
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeEntryGuard.ps1\" -ClearEntry",
-            "timeout": 5
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -SetMarker",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "TeamDelete",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -ClearMarker",
+            "timeout": 10
           }
         ]
       },
@@ -84,6 +148,16 @@
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -MarkRevised",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || true",
+            "timeout": 30
           }
         ]
       }
@@ -119,16 +193,6 @@
           {
             "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -SessionEnd",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-WorktreeLifecycle.ps1\" -SessionEnd",
             "timeout": 30
           }
         ]

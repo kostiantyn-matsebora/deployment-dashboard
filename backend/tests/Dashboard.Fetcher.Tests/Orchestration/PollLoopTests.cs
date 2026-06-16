@@ -330,6 +330,28 @@ public sealed class PollLoopTests
         await state.DidNotReceive().PutAsync("github-actions", "cursor-3", Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// Reset-saga clean-slate step: DropCursorAndResume must reset the adapter's in-memory
+    /// fetch state (caches) — not just drop the cursor — so the post-reset backfill re-emits
+    /// from scratch rather than reverting to incremental with warm caches (§5.10.5).
+    /// </summary>
+    [Fact]
+    public void DropCursorAndResume_ResetsAdapterState()
+    {
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+        var ingest = Substitute.For<IIngestClient>();
+        var state = Substitute.For<IFetcherStateClient>();
+
+        var loop = new PollLoop(adapter, ingest, state,
+            pollInterval: TimeSpan.FromMilliseconds(10),
+            NullLogger<PollLoop>.Instance);
+
+        loop.DropCursorAndResume();
+
+        adapter.Received(1).ResetState();
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>

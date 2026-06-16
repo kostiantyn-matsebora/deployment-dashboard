@@ -3,13 +3,13 @@
  *
  * Spec references:
  *   docs/diagrams/reset-choreography.md — flow + locked decisions
- *   docs/API_SPECIFICATION.md §5 (endpoints), §9 (Reset:* config), §10 phase 11
+ *   docs/API_SPECIFICATION.md §5 (endpoints), §9 (RESET_* config), §10 phase 11
  *   docs/api/api-guidelines.md §11 (control-plane model)
  *
  * Stack under test: Dashboard.Api + PostgreSQL + demo-driver (no fetcher).
- *   Reset__AckTimeoutSeconds  = 3          (compose/docker-compose.test.yaml)
- *   Reset__ExpectedComponents = [api-test-reset]  (single synthetic component)
- *   Reset__GateMaxTtlSeconds  = 15
+ *   RESET_ACK_TIMEOUT_SECONDS  = 3              (compose/docker-compose.test.yaml)
+ *   RESET_EXPECTED_COMPONENTS  = api-test-reset (single synthetic component, CSV)
+ *   RESET_GATE_MAX_TTL_SECONDS = 15
  *
  * The real demo-driver is in the compose stack but NOT in ExpectedComponents,
  * so its acks are ignored by the gate.  The test suite drives completion by
@@ -40,17 +40,17 @@ import {
 /**
  * Post a reset-ack from the synthetic "api-test-reset" component id.
  * This unblocks the orchestrator's ack gate for the current test cycle.
+ * The gate keys solely on the X-Correlation-Id header (payload.reset_id retired).
  */
-async function postTestAck(resetId: string): Promise<void> {
+async function postTestAck(correlationId: string): Promise<void> {
   const res = await post(
     '/api/control/events',
     {
       event_type:  'reset-ack',
       state:       'paused',
       occurred_at: new Date().toISOString(),
-      payload:     { reset_id: resetId },
     },
-    { 'X-Api-Key': API_KEY, 'X-Component-Id': 'api-test-reset' },
+    { 'X-Api-Key': API_KEY, 'X-Component-Id': 'api-test-reset', 'X-Correlation-Id': correlationId },
   );
   if (res.status !== 204) {
     throw new Error(`reset-ack -> ${res.status}: ${await res.text()}`);
@@ -64,7 +64,7 @@ describe('Reset choreography — POST /api/control/reset', () => {
   beforeAll(() => resetAll());
 
   describe('1. 202 response shape', () => {
-    it('returns 202 with reset_id (uuid), state:"draining", accepted_at', async () => {
+    it('returns 202 with correlation_id (uuid), state:"draining", accepted_at', async () => {
       // Open the stream first to unblock ourselves from the draining phase.
       const completedPromise = readControlSseUntil(
         f => f.event === 'reset-completed',
@@ -76,23 +76,23 @@ describe('Reset choreography — POST /api/control/reset', () => {
       });
       expect(res.status).toBe(202);
 
-      const body = await res.json() as { reset_id: string; state: string; accepted_at: string };
+      const body = await res.json() as { correlation_id: string; state: string; accepted_at: string };
       expect(body).toMatchObject({
-        reset_id:    expect.stringMatching(/^[0-9a-f-]{36}$/i),
-        state:       'draining',
-        accepted_at: expect.any(String),
+        correlation_id: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+        state:          'draining',
+        accepted_at:    expect.any(String),
       });
       // accepted_at must be a valid ISO timestamp.
       expect(new Date(body.accepted_at).getTime()).not.toBeNaN();
 
       // Drive to completion so the next test starts clean.
-      await postTestAck(body.reset_id);
+      await postTestAck(body.correlation_id);
       await completedPromise;
     });
   });
 
   describe('2. SSE event sequence — reset-initiated → reset-started → reset-completed', () => {
-    it('emits all three events in order and correlates reset_id', async () => {
+    it('emits all three events in order and correlates correlation_id', async () => {
       // Collect from the zero UUID so we don't miss events emitted before our
       // connection is established (Last-Event-ID replay from control_stream_events).
       // We open the collector BEFORE posting the reset.
@@ -107,10 +107,10 @@ describe('Reset choreography — POST /api/control/reset', () => {
         'X-Control-API-Key': CONTROL_KEY,
       });
       expect(res.status).toBe(202);
-      const { reset_id } = await res.json() as { reset_id: string };
+      const { correlation_id: correlationId } = await res.json() as { correlation_id: string };
 
       // Send ack promptly so the cycle progresses without waiting the full 3 s.
-      await postTestAck(reset_id);
+      await postTestAck(correlationId);
 
       const frames = await collectorPromise;
 
@@ -122,18 +122,19 @@ describe('Reset choreography — POST /api/control/reset', () => {
              f.event === 'reset-completed',
       );
 
-      // Locate the specific frames for this cycle by reset_id.
+      // Locate the specific frames for this cycle by correlation_id.
+      // reset-initiated: its SSE id field equals correlation_id (id IS the correlation_id).
       const initiated = phaseFrames.find(f => {
         if (f.event !== 'reset-initiated') return false;
-        try { return JSON.parse(f.data!).id === reset_id; } catch { return false; }
+        try { return JSON.parse(f.data!).id === correlationId; } catch { return false; }
       });
       const started = phaseFrames.find(f => {
         if (f.event !== 'reset-started') return false;
-        try { return JSON.parse(f.data!).reset_id === reset_id; } catch { return false; }
+        try { return JSON.parse(f.data!).correlation_id === correlationId; } catch { return false; }
       });
       const completed = phaseFrames.find(f => {
         if (f.event !== 'reset-completed') return false;
-        try { return JSON.parse(f.data!).reset_id === reset_id; } catch { return false; }
+        try { return JSON.parse(f.data!).correlation_id === correlationId; } catch { return false; }
       });
 
       expect(initiated).toBeDefined();
@@ -141,22 +142,23 @@ describe('Reset choreography — POST /api/control/reset', () => {
       expect(completed).toBeDefined();
 
       // Event id correlations (D16 / §10 phase 11):
-      //   reset-initiated.data.id === reset_id (the row id IS the reset_id)
-      //   reset-started.data.reset_id === reset_id
-      //   reset-completed.data.reset_id === reset_id
+      //   reset-initiated.data.id === correlationId (the row id IS the correlation_id)
+      //   reset-started.data.correlation_id === correlationId
+      //   reset-completed.data.correlation_id === correlationId
       const initiatedData = JSON.parse(initiated!.data!);
       const startedData   = JSON.parse(started!.data!);
       const completedData = JSON.parse(completed!.data!);
 
-      expect(initiatedData.id).toBe(reset_id);
+      expect(initiatedData.id).toBe(correlationId);
+      expect(initiatedData.correlation_id).toBe(correlationId);
       expect(initiatedData.component).toBe('*');
       expect(initiatedData.type).toBe('reset-initiated');
 
-      expect(startedData.reset_id).toBe(reset_id);
+      expect(startedData.correlation_id).toBe(correlationId);
       expect(startedData.component).toBe('*');
       expect(startedData.type).toBe('reset-started');
 
-      expect(completedData.reset_id).toBe(reset_id);
+      expect(completedData.correlation_id).toBe(correlationId);
       expect(completedData.component).toBe('*');
       expect(completedData.type).toBe('reset-completed');
 
@@ -183,17 +185,17 @@ describe('Reset choreography — POST /api/control/reset', () => {
         'X-Control-API-Key': CONTROL_KEY,
       });
       expect(res.status).toBe(202);
-      const { reset_id } = await res.json() as { reset_id: string };
+      const { correlation_id: correlationId } = await res.json() as { correlation_id: string };
 
       const ackSentAt = Date.now();
-      await postTestAck(reset_id);
+      await postTestAck(correlationId);
 
       const frames = await collectorPromise;
 
       // Find the reset-started frame for this cycle.
       const started = frames.find(f => {
         if (f.event !== 'reset-started') return false;
-        try { return JSON.parse(f.data!).reset_id === reset_id; } catch { return false; }
+        try { return JSON.parse(f.data!).correlation_id === correlationId; } catch { return false; }
       });
       expect(started).toBeDefined();
 
@@ -222,7 +224,7 @@ describe('Reset choreography — POST /api/control/reset', () => {
         'X-Control-API-Key': CONTROL_KEY,
       });
       expect(res.status).toBe(202);
-      const { reset_id } = await res.json() as { reset_id: string };
+      const { correlation_id: correlationId } = await res.json() as { correlation_id: string };
 
       // Deliberately do NOT post a reset-ack.
 
@@ -230,7 +232,7 @@ describe('Reset choreography — POST /api/control/reset', () => {
 
       const completed = frames.find(f => {
         if (f.event !== 'reset-completed') return false;
-        try { return JSON.parse(f.data!).reset_id === reset_id; } catch { return false; }
+        try { return JSON.parse(f.data!).correlation_id === correlationId; } catch { return false; }
       });
       expect(completed).toBeDefined();
 
@@ -254,7 +256,7 @@ describe('Reset choreography — POST /api/control/reset', () => {
         'X-Control-API-Key': CONTROL_KEY,
       });
       expect(first.status).toBe(202);
-      const { reset_id } = await first.json() as { reset_id: string };
+      const { correlation_id: correlationId } = await first.json() as { correlation_id: string };
 
       // Second reset while the first is draining — must be 409.
       const second = await post('/api/control/reset', undefined, {
@@ -263,7 +265,7 @@ describe('Reset choreography — POST /api/control/reset', () => {
       expect(second.status).toBe(409);
 
       // Drive the first cycle to completion for test isolation.
-      await postTestAck(reset_id);
+      await postTestAck(correlationId);
       await completedPromise;
     });
   });

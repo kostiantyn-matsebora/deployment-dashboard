@@ -24,6 +24,14 @@ public sealed class FetcherOptions
     public TimeSpan BackfillMaxAge { get; set; } = TimeSpan.Zero;
 
     /// <summary>
+    /// Optional fixed clock for window computation (test seam, via <c>FETCHER_NOW</c>).
+    /// When set, the backfill anchor and the <c>now − InitialLookback</c> fallback use
+    /// this instant instead of wall-clock now, so static fixtures with hardcoded dates
+    /// never age out of the lookback window. Unset in production → real <c>UtcNow</c>.
+    /// </summary>
+    public DateTimeOffset? NowOverride { get; set; }
+
+    /// <summary>
     /// <c>X-Control-API-Key</c> for <c>GET /api/control/stream</c>.
     /// Distinct from <c>API_KEY</c> per §5.10.2 / api-guidelines §4 (D8).
     /// </summary>
@@ -38,6 +46,9 @@ public sealed class FetcherOptions
 
     public TimeSpan EffectiveBackfillMaxAge =>
         BackfillMaxAge > TimeSpan.Zero ? BackfillMaxAge : InitialLookback;
+
+    /// <summary>Current instant for window computation — <see cref="NowOverride"/> when set, else wall clock.</summary>
+    public DateTimeOffset UtcNow => NowOverride ?? DateTimeOffset.UtcNow;
 
     public TimeSpan PollInterval => TimeSpan.FromSeconds(PollIntervalSeconds);
 }

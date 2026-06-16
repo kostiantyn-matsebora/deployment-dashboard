@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.Reflection;
+using System.Text.Json.Serialization;
 using Dashboard.Shared.Contracts;
 using Dashboard.Write.Validation;
 
@@ -24,9 +27,14 @@ public sealed class IngestValidatorTests
         Assert.Empty(_validator.Validate(ValidBody()));
 
     [Theory]
+    [InlineData("pending")]
+    [InlineData("queued")]
     [InlineData("in-progress")]
+    [InlineData("waiting")]
     [InlineData("success")]
     [InlineData("failure")]
+    [InlineData("cancelled")]
+    [InlineData("rejected")]
     public void Validate_AllValidStatuses_NoStatusFailure(string status)
     {
         var failures = _validator.Validate(ValidBody() with { Status = status });
@@ -34,9 +42,9 @@ public sealed class IngestValidatorTests
     }
 
     [Theory]
-    [InlineData("pending")]
-    [InlineData("queued")]
     [InlineData("SUCCESS")]
+    [InlineData("In-Progress")]
+    [InlineData("FAILURE")]
     public void Validate_InvalidStatus_ReturnsStatusFailure(string status)
     {
         var failures = _validator.Validate(ValidBody() with { Status = status });
@@ -147,5 +155,61 @@ public sealed class IngestValidatorTests
     {
         var body = ValidBody() with { Sha = new string('x', 129) };
         Assert.Contains(_validator.Validate(body), f => f.Pointer == "/sha");
+    }
+
+    // ── ToJsonPointer drift guard ────────────────────────────────────────────
+    // For every string property on DeploymentEventIngest that carries both
+    // [JsonPropertyName] and [MaxLength], trigger a MaxLength violation and assert
+    // the returned pointer equals "/" + [JsonPropertyName].Name.
+    // This test MUST FAIL if a [JsonPropertyName] attribute is dropped (the pointer
+    // would fall back to "/{CLR name}", e.g. "/DeploymentId" instead of "/deployment_id").
+
+    public static IEnumerable<object[]> StringPropertiesWithJsonNameAndMaxLength()
+    {
+        foreach (var prop in typeof(DeploymentEventIngest).GetProperties())
+        {
+            var jsonAttr = prop.GetCustomAttribute<JsonPropertyNameAttribute>();
+            var maxLenAttr = prop.GetCustomAttribute<MaxLengthAttribute>();
+            if (jsonAttr is null || maxLenAttr is null) continue;
+            // Nullable reference types (string?) share the same underlying type as string.
+            if (prop.PropertyType != typeof(string)) continue;
+
+            yield return [prop.Name, jsonAttr.Name, maxLenAttr.Length];
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(StringPropertiesWithJsonNameAndMaxLength))]
+    public void Validate_StringPropertyExceedsMaxLength_PointerMatchesJsonPropertyName(
+        string clrName, string expectedJsonName, int maxLength)
+    {
+        // Build a body with this one string property set to maxLength+1 chars.
+        // All required fields are pre-filled via ValidBody(); we override via record with.
+        var overlong = new string('x', maxLength + 1);
+        var body = clrName switch
+        {
+            nameof(DeploymentEventIngest.DeploymentId) => ValidBody() with { DeploymentId = overlong },
+            nameof(DeploymentEventIngest.Service) => ValidBody() with { Service = overlong },
+            nameof(DeploymentEventIngest.Environment) => ValidBody() with { Environment = overlong },
+            nameof(DeploymentEventIngest.Version) => ValidBody() with { Version = overlong },
+            nameof(DeploymentEventIngest.RunUrl) => ValidBody() with { RunUrl = overlong },
+            nameof(DeploymentEventIngest.RunNumber) => ValidBody() with { RunNumber = overlong },
+            nameof(DeploymentEventIngest.Actor) => ValidBody() with { Actor = overlong },
+            nameof(DeploymentEventIngest.Ref) => ValidBody() with { Ref = overlong },
+            nameof(DeploymentEventIngest.Sha) => ValidBody() with { Sha = overlong },
+            _ => throw new InvalidOperationException(
+                $"Property '{clrName}' has [MaxLength] but is not handled in the drift-guard switch. " +
+                "Update this test when DeploymentEventIngest gains a new string property."),
+        };
+
+        var expectedPointer = "/" + expectedJsonName;
+        var failures = _validator.Validate(body);
+
+        // xUnit Assert.Contains has no message overload; use True with a descriptive message instead.
+        Assert.True(
+            failures.Any(f => f.Pointer == expectedPointer),
+            $"Expected pointer '{expectedPointer}' for CLR property '{clrName}' " +
+            $"(json name: '{expectedJsonName}'). If this fails, check that [JsonPropertyName(\"{expectedJsonName}\")] " +
+            $"is still on {nameof(DeploymentEventIngest)}.{clrName}.");
     }
 }

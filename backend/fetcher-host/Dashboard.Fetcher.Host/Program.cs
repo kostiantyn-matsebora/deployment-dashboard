@@ -3,7 +3,9 @@ using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.Control;
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
+using Dashboard.Fetcher.GitHub.Configuration;
 using Dashboard.Fetcher.GitHub.Graph;
+using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Fetcher.Host.Workers;
@@ -18,12 +20,15 @@ var builder = WebApplication.CreateBuilder(args);
 var fetcherOptions = new FetcherOptions();
 builder.Configuration.Bind(fetcherOptions);
 
-// Allow env-var overrides for control-plane keys (§6).
-fetcherOptions.ControlApiKey = builder.Configuration["CONTROL_API_KEY"] ?? fetcherOptions.ControlApiKey;
-fetcherOptions.ComponentId = builder.Configuration["COMPONENT_ID"] ?? fetcherOptions.ComponentId;
+// Apply explicit SCREAMING_SNAKE env-var overrides (§6).
+// Top-level vars do not bind through .NET's PascalCase rule and must be read explicitly.
+FetcherOptionsEnv.ApplyEnvOverrides(builder.Configuration, fetcherOptions);
 
 var githubOptions = new GithubAdapterOptions();
 builder.Configuration.GetSection("GitHub").Bind(githubOptions);
+
+// Apply flat GITHUB_* env-var overrides so env wins over appsettings (§6).
+GithubAdapterOptionsEnv.ApplyEnvOverrides(builder.Configuration, githubOptions);
 
 // Resolve BackfillMaxAge from InitialLookback when not explicitly set.
 if (githubOptions.BackfillMaxAge == TimeSpan.Zero)
@@ -106,7 +111,9 @@ builder.Services.AddSingleton<VersionResolver>(sp => new VersionResolver(
     sp.GetRequiredService<WorkflowGraphCache>(),
     sp.GetRequiredService<GithubClient>()));
 
+builder.Services.AddSingleton<BackfillEventBuilder>();
 builder.Services.AddSingleton<BackfillRunner>();
+builder.Services.AddSingleton<DeploymentStatusEventMapper>();
 builder.Services.AddSingleton<GithubActionsAdapter>();
 builder.Services.AddSingleton<ICiCdAdapter>(sp => sp.GetRequiredService<GithubActionsAdapter>());
 
@@ -120,19 +127,34 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
     var logFactory = sp.GetRequiredService<ILoggerFactory>();
     var readiness = sp.GetRequiredService<FetcherReadinessIndicator>();
     var rateLimitBudget = sp.GetRequiredService<RateLimitBudget>();
+    var componentEvents = sp.GetRequiredService<IComponentEventClient>();
 
+    // Snapshot includes ci_limit / ci_remaining for F18 (§5.11).
     Func<RateLimitSnapshot?> snapshotFactory = () =>
-        new RateLimitSnapshot(rateLimitBudget.Used, rateLimitBudget.Budget, rateLimitBudget.ResetAt);
+        new RateLimitSnapshot(
+            rateLimitBudget.Used,
+            rateLimitBudget.Budget,
+            rateLimitBudget.ResetAt,
+            rateLimitBudget.CiLimit,
+            rateLimitBudget.CiRemaining);
 
     return adapters
-        .Select(adapter => new PollLoop(
-            adapter,
-            ingest,
-            state,
-            fetcherOptions.PollInterval,
-            logFactory.CreateLogger<PollLoop>(),
-            readiness,
-            snapshotFactory))
+        .Select(adapter =>
+        {
+            // Delegate closes over the adapter id so IComponentEventClient carries it
+            // without changing the Orchestration → Control dependency direction (F18).
+            Func<RateLimitSnapshot, CancellationToken, Task> reportCycleAsync =
+                (snapshot, ct) => componentEvents.PostRateLimitAsync(
+                    snapshot, adapter.AdapterId, "running", ct);
+
+            return new PollLoop(
+                adapter,
+                ingest,
+                state,
+                fetcherOptions.PollInterval,
+                logFactory.CreateLogger<PollLoop>(),
+                new PollLoopReporting(readiness, snapshotFactory, reportCycleAsync));
+        })
         .ToList()
         .AsReadOnly();
 });
@@ -166,7 +188,23 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 // Decision: 503 when last_outcome is auth_failed or error AND the loop is NOT paused for reset.
 //           200 in all other cases (ok, rate_limited, paused-for-reset, never-polled).
 // Paused-for-reset is an expected healthy transient — must NOT read as failed.
-app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
+app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) => BuildReadyzResult(indicator));
+
+await app.RunAsync();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+static string? OutcomeLabel(PollOutcome? outcome) => outcome switch
+{
+    PollOutcome.Ok => "ok",
+    PollOutcome.AuthFailed => "auth_failed",
+    PollOutcome.RateLimited => "rate_limited",
+    PollOutcome.Error => "error",
+    null => null,
+    _ => outcome.ToString()?.ToLowerInvariant(),
+};
+
+static IResult BuildReadyzResult(IFetcherReadinessIndicator indicator)
 {
     var outcome = indicator.LastOutcome;
     var paused = indicator.IsPausedForReset;
@@ -175,14 +213,7 @@ app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
         outcome is PollOutcome.AuthFailed or PollOutcome.Error;
 
     var status = outcome is PollOutcome.Ok ? "ready" : "degraded";
-
-    var rl = indicator.RateLimit;
-    object? rateLimitPayload = rl is null ? null : new
-    {
-        used = rl.Used,
-        budget = rl.Budget,
-        reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
-    };
+    var rateLimitPayload = BuildRateLimitPayload(indicator.RateLimit);
 
     var body = new
     {
@@ -201,18 +232,14 @@ app.MapGet("/readyz", (IFetcherReadinessIndicator indicator) =>
     return isHardFailure
         ? Results.Json(body, statusCode: StatusCodes.Status503ServiceUnavailable)
         : Results.Ok(body);
-});
+}
 
-await app.RunAsync();
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-static string? OutcomeLabel(PollOutcome? outcome) => outcome switch
-{
-    PollOutcome.Ok => "ok",
-    PollOutcome.AuthFailed => "auth_failed",
-    PollOutcome.RateLimited => "rate_limited",
-    PollOutcome.Error => "error",
-    null => null,
-    _ => outcome.ToString()?.ToLowerInvariant(),
-};
+static object? BuildRateLimitPayload(RateLimitSnapshot? rl) =>
+    rl is null ? null : new
+    {
+        used = rl.Used,
+        budget = rl.Budget,
+        reset_at = rl.ResetAt == DateTimeOffset.MinValue ? (DateTimeOffset?)null : rl.ResetAt,
+        ci_limit = rl.CiLimit,
+        ci_remaining = rl.CiRemaining,
+    };

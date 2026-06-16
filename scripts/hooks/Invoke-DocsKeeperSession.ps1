@@ -10,14 +10,15 @@
 
     SnapshotSession mode (-SnapshotSession switch):
       Wired as a Claude Code SessionStart hook. Captures HEAD + the
-      already-dirty path set to `.claude/.docs-keeper-session.<sid>.json`
+      already-dirty path set to `.docs-keeper/session.<sid>.json`
       so the Track hook can isolate THIS session's doc edits. Also surfaces
       unrevised files from prior sessions and pending captures. Never blocks.
 
     SessionEnd mode (-SessionEnd switch):
       Wired as a Claude Code SessionEnd hook. Deletes this session's
-      per-session state files (unless TrackedMd has unrevised entries, which
-      are forwarded). Surfaces captured docs as a systemMessage. Never blocks.
+      per-session state files (unless TrackedMd has unrevised entries that
+      still differ from HEAD, which are forwarded). Surfaces captured docs
+      as a systemMessage. Never blocks.
 
     Track mode (-Track switch):
       Wired as the Stop hook. Records session-edited .md files into the
@@ -250,9 +251,9 @@ function Format-SessionStartProposal {
 function Get-DocsCaptureFilePath {
     [CmdletBinding()]
     param([string]$RepoRoot, [string]$SessionId)
-    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.docs-keeper' } else { '.docs-keeper' }
     $sid = Get-SafeSessionId -SessionId $SessionId
-    $name = if ($sid) { ".docs-capture.$sid.json" } else { '.docs-capture.json' }
+    $name = if ($sid) { "capture.$sid.json" } else { 'capture.json' }
     return (Join-Path $dir $name)
 }
 
@@ -316,7 +317,7 @@ function Format-CaptureProposal {
 
 function Find-PendingCaptureFiles {
     <#
-        Pure. Scans .claude/ for .docs-capture.*.json files whose session id does
+        Pure. Scans .docs-keeper/ for capture.*.json files whose session id does
         NOT match $CurrentSessionId. Returns array of parsed capture hashtables
         that have at least one entry in captures.
     #>
@@ -327,19 +328,19 @@ function Find-PendingCaptureFiles {
         [scriptblock]$DirLister,
         [scriptblock]$FileReader
     )
-    $claudeDir = if ($RepoRoot) { '.claude' } else { '.claude' }
+    $stateDir = if ($RepoRoot) { '.docs-keeper' } else { '.docs-keeper' }
     $safeCurrent = Get-SafeSessionId -SessionId $CurrentSessionId
 
-    $dirEntries = @(& $DirLister $claudeDir)
+    $dirEntries = @(& $DirLister $stateDir)
     $results = @()
     foreach ($entry in $dirEntries) {
         if ($entry.IsDir) { continue }
         $name = [string]$entry.Name
-        if ($name -notmatch '^\.docs-capture\.(.+)\.json$') { continue }
+        if ($name -notmatch '^capture\.(.+)\.json$') { continue }
         $fileSid = $matches[1]
         if ($fileSid -eq $safeCurrent) { continue }
 
-        $relPath = "$claudeDir/$name"
+        $relPath = "$stateDir/$name"
         $raw = & $FileReader $relPath
         if ([string]::IsNullOrWhiteSpace($raw)) { continue }
         try {
@@ -369,9 +370,9 @@ function Find-PendingCaptureFiles {
 function Get-DocsKeeperSessionPath {
     [CmdletBinding()]
     param([string]$RepoRoot, [string]$SessionId)
-    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.docs-keeper' } else { '.docs-keeper' }
     $sid = Get-SafeSessionId -SessionId $SessionId
-    $name = if ($sid) { ".docs-keeper-session.$sid.json" } else { '.docs-keeper-session.json' }
+    $name = if ($sid) { "session.$sid.json" } else { 'session.json' }
     return (Join-Path $dir $name)
 }
 
@@ -404,7 +405,7 @@ function Read-DocsKeeperSession {
 function Write-DocsKeeperSession {
     <#
         Writes the full session object @{ Head; Dirty; TrackedMd } to the
-        .docs-keeper-session.<sid>.json file. Creates .claude/ dir if absent.
+        .docs-keeper/session.<sid>.json file. Creates .docs-keeper/ dir if absent.
     #>
     [CmdletBinding()]
     param([string]$RepoRoot, [string]$SessionId, [hashtable]$Session)
@@ -416,21 +417,17 @@ function Write-DocsKeeperSession {
 
 function Get-LeftoverSessionFiles {
     <#
-        Impure. Finds all .docs-keeper-session.*.json files under .claude/ whose
+        Impure. Finds all session.*.json files under .docs-keeper/ whose
         session id does NOT match $CurrentSessionId. Returns array of file paths.
     #>
     [CmdletBinding()]
     param([string]$RepoRoot, [string]$CurrentSessionId)
-    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.docs-keeper' } else { '.docs-keeper' }
     if (-not (Test-Path -LiteralPath $dir)) { return @() }
     $safeCurrent = Get-SafeSessionId -SessionId $CurrentSessionId
     $results = @()
-    foreach ($f in (Get-ChildItem -LiteralPath $dir -Filter '.docs-keeper-session.*.json' -File -ErrorAction SilentlyContinue)) {
-        if ($f.Name -match '^\\.docs-keeper-session\\.(.+)\\.json$') {
-            $fileSid = $matches[1]
-            if ($fileSid -ne $safeCurrent) { $results += $f.FullName }
-        }
-        elseif ($f.Name -match '^\.docs-keeper-session\.(.+)\.json$') {
+    foreach ($f in (Get-ChildItem -LiteralPath $dir -Filter 'session.*.json' -File -ErrorAction SilentlyContinue)) {
+        if ($f.Name -match '^session\.(.+)\.json$') {
             $fileSid = $matches[1]
             if ($fileSid -ne $safeCurrent) { $results += $f.FullName }
         }
@@ -438,37 +435,100 @@ function Get-LeftoverSessionFiles {
     return $results
 }
 
+function Test-TrackerHasPendingWork {
+    <#
+        Pure-ish predicate. Returns $true iff the tracker has at least one entry
+        where revised: false AND `git diff HEAD -- <path>` returns non-empty output.
+        Injectable $GitCommandRunner for Pester coverage.
+    #>
+    [CmdletBinding()]
+    param(
+        [hashtable]$Tracker,
+        [scriptblock]$GitCommandRunner,
+        [string]$Head = 'HEAD'
+    )
+    if (-not $Tracker -or -not $Tracker.TrackedMd -or $Tracker.TrackedMd.Count -eq 0) {
+        return $false
+    }
+    foreach ($entry in $Tracker.TrackedMd.GetEnumerator()) {
+        if (-not [bool]$entry.Value.revised) {
+            try {
+                $diffOut = & $GitCommandRunner @('diff', $Head, '--', $entry.Key) 2>$null
+                if ($diffOut) { return $true }
+            }
+            catch { $null = $_ }
+        }
+    }
+    return $false
+}
+
 function Remove-DocsSessionState {
     <#
         SessionEnd cleanup.
-        - If TrackedMd has any revised: false entries -> keep the session file
-          (it carries forward to the next session).
-        - If all TrackedMd entries are revised: true, or TrackedMd is empty ->
-          delete the session file.
+        - CURRENT session file: delete unless Test-TrackerHasPendingWork is true
+          (at least one revised:false entry still differs from HEAD).
+        - EACH leftover session file: delete when Test-TrackerHasPendingWork is
+          false; keep when true (still has work to carry forward).
         - Delete the legacy attempts file if it still exists (backward compat).
+        Best-effort; never throws.
     #>
     [CmdletBinding()]
-    param([string]$RepoRoot, [string]$SessionId)
+    param(
+        [string]$RepoRoot,
+        [string]$SessionId,
+        [scriptblock]$GitCommandRunner
+    )
 
+    if (-not $GitCommandRunner) {
+        $capturedRoot = $RepoRoot
+        $GitCommandRunner = {
+            param([string[]]$Argv)
+            if ($capturedRoot) { & git -C $capturedRoot @Argv } else { & git @Argv }
+        }.GetNewClosure()
+    }
+
+    # Current session file.
     $sessionFile = Get-DocsKeeperSessionPath -RepoRoot $RepoRoot -SessionId $SessionId
     if (Test-Path -LiteralPath $sessionFile) {
-        $session = Read-DocsKeeperSession -RepoRoot $RepoRoot -SessionId $SessionId
-        $hasUnrevised = $false
-        if ($session -and $session.TrackedMd -and $session.TrackedMd.Count -gt 0) {
-            foreach ($entry in $session.TrackedMd.Values) {
-                if (-not [bool]$entry.revised) { $hasUnrevised = $true; break }
+        try {
+            $session = Read-DocsKeeperSession -RepoRoot $RepoRoot -SessionId $SessionId
+            $hasPending = Test-TrackerHasPendingWork -Tracker $session -GitCommandRunner $GitCommandRunner
+            if (-not $hasPending) {
+                Remove-Item -LiteralPath $sessionFile -Force -ErrorAction SilentlyContinue
             }
         }
-        if (-not $hasUnrevised) {
-            Remove-Item -LiteralPath $sessionFile -Force -ErrorAction SilentlyContinue
+        catch { $null = $_ }
+    }
+
+    # Leftover session files from other sessions.
+    $leftovers = @(Get-LeftoverSessionFiles -RepoRoot $RepoRoot -CurrentSessionId $SessionId)
+    foreach ($leftoverPath in $leftovers) {
+        try {
+            $raw = Get-Content -LiteralPath $leftoverPath -Raw -ErrorAction SilentlyContinue
+            if ([string]::IsNullOrWhiteSpace($raw)) {
+                Remove-Item -LiteralPath $leftoverPath -Force -ErrorAction SilentlyContinue
+                continue
+            }
+            $o = $raw | ConvertFrom-Json -ErrorAction Stop
+            $trackedMd = @{}
+            if ($o.TrackedMd) {
+                foreach ($prop in $o.TrackedMd.PSObject.Properties) {
+                    $trackedMd[$prop.Name] = @{ revised = [bool]$prop.Value.revised }
+                }
+            }
+            $leftoverTracker = @{ Head = [string]$o.Head; Dirty = @(); TrackedMd = $trackedMd }
+            $hasPending = Test-TrackerHasPendingWork -Tracker $leftoverTracker -GitCommandRunner $GitCommandRunner
+            if (-not $hasPending) {
+                Remove-Item -LiteralPath $leftoverPath -Force -ErrorAction SilentlyContinue
+            }
         }
-        # If $hasUnrevised, keep the file so next session picks it up.
+        catch { $null = $_ }
     }
 
     # Backward compat: remove legacy attempts file if present.
-    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.claude' } else { '.claude' }
+    $dir = if ($RepoRoot) { Join-Path $RepoRoot '.docs-keeper' } else { '.docs-keeper' }
     $sid = Get-SafeSessionId -SessionId $SessionId
-    $attemptsName = if ($sid) { ".docs-keeper-attempts.$sid.json" } else { '.docs-keeper-attempts.json' }
+    $attemptsName = if ($sid) { "attempts.$sid.json" } else { 'attempts.json' }
     $attemptsFile = Join-Path $dir $attemptsName
     if (Test-Path -LiteralPath $attemptsFile) {
         Remove-Item -LiteralPath $attemptsFile -Force -ErrorAction SilentlyContinue
@@ -509,6 +569,8 @@ function Invoke-SessionSnapshot {
         SessionStart hook: capture HEAD + the already-dirty path set so the Track
         hook can isolate THIS session's doc edits. Also surfaces unrevised files
         from prior sessions. Best-effort; never blocks.
+        Returns the leftover-proposal string (empty string when none), so the
+        caller can combine it with other proposals into a single emission.
     #>
     [CmdletBinding()]
     param(
@@ -568,10 +630,11 @@ function Invoke-SessionSnapshot {
         }
         catch { $null = $_ }
     }
+
     if ($unrevisedByFile.Count -gt 0) {
-        $proposal = Format-SessionStartProposal -UnrevisedByFile $unrevisedByFile
-        [Console]::Out.WriteLine((@{ additionalContext = $proposal } | ConvertTo-Json -Compress))
+        return (Format-SessionStartProposal -UnrevisedByFile $unrevisedByFile)
     }
+    return ''
 }
 
 # ---------- Entry block ----------
@@ -668,10 +731,14 @@ if (-not $AsLibrary) {
 
     # -SnapshotSession: capture the per-session baseline, then exit cleanly.
     if ($SnapshotSession) {
-        try { Invoke-SessionSnapshot -RepoRoot $RepoRoot -SessionId $SessionId -GitCommandRunner $GitCommandRunner -SnapshotWriter $SnapshotWriter }
+        $leftoverProposal = ''
+        try {
+            $leftoverProposal = Invoke-SessionSnapshot -RepoRoot $RepoRoot -SessionId $SessionId -GitCommandRunner $GitCommandRunner -SnapshotWriter $SnapshotWriter
+        }
         catch { $null = $_ }
 
         # Surface pending captures from prior sessions.
+        $captureProposal = ''
         try {
             $capturedRoot2 = $RepoRoot
             $dl = if ($DirLister) { $DirLister } else {
@@ -694,19 +761,36 @@ if (-not $AsLibrary) {
             }
             $pendingCaptures = @(Find-PendingCaptureFiles -RepoRoot $RepoRoot -CurrentSessionId $SessionId -DirLister $dl -FileReader $fr)
             if ($pendingCaptures.Count -gt 0) {
-                $proposal = Format-CaptureProposal -CaptureFiles $pendingCaptures
-                if ($proposal) {
-                    [Console]::Out.WriteLine((@{ additionalContext = $proposal } | ConvertTo-Json -Compress))
-                }
+                $captureProposal = Format-CaptureProposal -CaptureFiles $pendingCaptures
             }
         }
         catch { $null = $_ }
+
+        # Combine proposals and emit a single JSON object.
+        $parts = @($leftoverProposal, $captureProposal) | Where-Object { -not [string]::IsNullOrEmpty($_) }
+        if ($parts.Count -gt 0) {
+            $combined = $parts -join "`n`n"
+            [Console]::Out.WriteLine((@{
+                systemMessage    = $combined
+                hookSpecificOutput = @{
+                    hookEventName    = 'SessionStart'
+                    additionalContext = $combined
+                }
+            } | ConvertTo-Json -Compress -Depth 5))
+        }
         exit 0
     }
 
     # -SessionEnd: delete this session's per-session state files, then exit.
     if ($SessionEnd) {
-        try { Remove-DocsSessionState -RepoRoot $RepoRoot -SessionId $SessionId } catch { $null = $_ }
+        $capturedRoot = $RepoRoot
+        $runner = if ($GitCommandRunner) { $GitCommandRunner } else {
+            {
+                param([string[]]$Argv)
+                if ($capturedRoot) { & git -C $capturedRoot @Argv } else { & git @Argv }
+            }.GetNewClosure()
+        }
+        try { Remove-DocsSessionState -RepoRoot $RepoRoot -SessionId $SessionId -GitCommandRunner $runner } catch { $null = $_ }
 
         # Surface captured docs as a systemMessage.
         try {

@@ -34,16 +34,7 @@ internal sealed class ResetService(
 
         // Build the draining row up-front; TryClaimIdleAsync writes it atomically only if
         // the current row is idle (affected-rows == 0 → 409, no separate read needed).
-        var claimedCycle = new ResetCycle
-        {
-            Id = 1,
-            State = ResetState.Draining,
-            ResetId = resetId,
-            ExpectedComponents = opts.ExpectedComponents,
-            AcksReceived = [],
-            StartedAt = now,
-            DeadlineAt = now.AddSeconds(opts.AckTimeoutSeconds),
-        };
+        var claimedCycle = BuildClaimedCycle(resetId, now, opts);
 
         var claimed = await cycleRepository.TryClaimIdleAsync(claimedCycle, ct);
         if (!claimed)
@@ -52,17 +43,11 @@ internal sealed class ResetService(
             return null;
         }
 
-        var initiatedEvent = new ControlStreamEvent
-        {
-            Id = resetId, // Per spec: reset-initiated event id IS the reset_id correlated by others.
-            Type = "reset-initiated",
-            Component = "*",
-            OccurredAt = now,
-        };
+        var initiatedEvent = BuildInitiatedEvent(resetId, now);
         await controlStream.InsertAsync(initiatedEvent, ct);
         await notifier.NotifyAsync(initiatedEvent, ct);
 
-        logger.LogInformation("Reset initiated: reset_id={ResetId}.", resetId);
+        logger.LogInformation("Reset initiated: correlation_id={CorrelationId}.", resetId);
 
         // Fire-and-forget the orchestrator on the thread pool.
         // Pass ApplicationStopping so the drive aborts cleanly on graceful shutdown (Fix D).
@@ -71,4 +56,27 @@ internal sealed class ResetService(
 
         return new ResetAcceptance(resetId, ResetState.Draining, now);
     }
+
+    private static ResetCycle BuildClaimedCycle(Guid resetId, DateTimeOffset now, ResetOptions opts) =>
+        new()
+        {
+            Id = 1,
+            State = ResetState.Draining,
+            CorrelationId = resetId,
+            ExpectedComponents = opts.ExpectedComponents,
+            AcksReceived = [],
+            StartedAt = now,
+            DeadlineAt = now.AddSeconds(opts.AckTimeoutSeconds),
+        };
+
+    private static ControlStreamEvent BuildInitiatedEvent(Guid resetId, DateTimeOffset now) =>
+        new()
+        {
+            Id = resetId, // Per spec: reset-initiated event id IS the correlation_id carried by others.
+            Type = "reset-initiated",
+            Component = "*",
+            // reset-initiated carries its own id as correlation_id; downstream frames echo it.
+            CorrelationId = resetId,
+            OccurredAt = now,
+        };
 }

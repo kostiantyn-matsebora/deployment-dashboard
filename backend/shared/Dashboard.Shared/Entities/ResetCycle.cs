@@ -12,13 +12,17 @@ public sealed class ResetCycle
     /// <summary>Current phase: <c>idle</c> | <c>draining</c> | <c>resetting</c>.</summary>
     public required string State { get; set; }
 
-    /// <summary>Id of the current cycle's <c>reset-initiated</c> event; <c>null</c> when <c>idle</c>.</summary>
-    public Guid? ResetId { get; set; }
+    /// <summary>
+    /// Correlation id — the id of this cycle's <c>reset-initiated</c> event.
+    /// <c>null</c> when <c>idle</c>. Carried on <c>reset-started</c> and <c>reset-completed</c>
+    /// frames and matched by the ack gate against the <c>X-Correlation-Id</c> header.
+    /// </summary>
+    public Guid? CorrelationId { get; set; }
 
     /// <summary>Snapshot of <c>ExpectedComponents</c> at cycle start.</summary>
     public string[]? ExpectedComponents { get; set; }
 
-    /// <summary>Component ids that have posted <c>reset-ack</c> for the active <c>ResetId</c>.</summary>
+    /// <summary>Component ids that have posted <c>reset-ack</c> for the active <c>CorrelationId</c>.</summary>
     public string[]? AcksReceived { get; set; }
 
     /// <summary>Server timestamp when the cycle entered <c>draining</c>.</summary>

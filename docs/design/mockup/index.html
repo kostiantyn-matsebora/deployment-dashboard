@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Deployment Dashboard — Variant C — Glassy Dark Monitoring</title>
+<title>Deployment Dashboard — Monitoring · Live</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -73,6 +73,42 @@
     --coral-glow:   rgba(255, 93, 93, 0.38);
     --coral-edge:   rgba(255, 93, 93, 0.60);
 
+    /* NEW — Scheme B status hues (issue #268) */
+    --slate:        #8b93ad;
+    --slate-wash:   rgba(139, 147, 173, 0.14);
+    --slate-glow:   rgba(139, 147, 173, 0.28);
+    --slate-edge:   rgba(139, 147, 173, 0.45);
+
+    --blue:         #4aa3f0;
+    --blue-wash:    rgba(74, 163, 240, 0.16);
+    --blue-glow:    rgba(74, 163, 240, 0.35);
+    --blue-edge:    rgba(74, 163, 240, 0.50);
+
+    --violet:       #9a85ff;
+    --violet-wash:  rgba(154, 133, 255, 0.16);
+    --violet-glow:  rgba(154, 133, 255, 0.35);
+    --violet-edge:  rgba(154, 133, 255, 0.50);
+
+    --grey:         #9aa0b5;
+    --grey-wash:    rgba(255, 255, 255, 0.05);
+    --grey-glow:    transparent;
+    --grey-edge:    rgba(255, 255, 255, 0.18);
+
+    --rose:         #cf8095;
+    --rose-wash:    rgba(207, 128, 149, 0.15);
+    --rose-glow:    rgba(207, 128, 149, 0.28);
+    --rose-edge:    rgba(207, 128, 149, 0.48);
+
+    /* Semantic status-hue aliases — used by var(--${status}) in JS icon tints */
+    --success:     var(--emerald);
+    --failure:     var(--coral);
+    --in-progress: var(--amber);
+    --pending:     var(--slate);
+    --queued:      var(--blue);
+    --waiting:     var(--violet);
+    --cancelled:   var(--grey);
+    --rejected:    var(--rose);
+
     --neutral-wash: rgba(255, 255, 255, 0.03);
 
     /* additional structural tokens consumed below */
@@ -135,6 +171,42 @@
     --coral-glow:   rgba(255, 93, 93, 0.25);
     --coral-edge:   rgba(255, 93, 93, 0.50);
 
+    /* NEW — Scheme B status hues (issue #268) */
+    --slate:        #5e667e;
+    --slate-wash:   rgba(94, 102, 126, 0.12);
+    --slate-glow:   rgba(94, 102, 126, 0.22);
+    --slate-edge:   rgba(94, 102, 126, 0.42);
+
+    --blue:         #2b7fd0;
+    --blue-wash:    rgba(43, 127, 208, 0.12);
+    --blue-glow:    rgba(43, 127, 208, 0.24);
+    --blue-edge:    rgba(43, 127, 208, 0.46);
+
+    --violet:       #6f55cf;
+    --violet-wash:  rgba(111, 85, 207, 0.12);
+    --violet-glow:  rgba(111, 85, 207, 0.24);
+    --violet-edge:  rgba(111, 85, 207, 0.46);
+
+    --grey:         #6a7088;
+    --grey-wash:    rgba(20, 24, 40, 0.05);
+    --grey-glow:    transparent;
+    --grey-edge:    rgba(20, 24, 40, 0.16);
+
+    --rose:         #b05f76;
+    --rose-wash:    rgba(176, 95, 118, 0.12);
+    --rose-glow:    rgba(176, 95, 118, 0.22);
+    --rose-edge:    rgba(176, 95, 118, 0.46);
+
+    /* Semantic status-hue aliases — used by var(--${status}) in JS icon tints */
+    --success:     var(--emerald);
+    --failure:     var(--coral);
+    --in-progress: var(--amber);
+    --pending:     var(--slate);
+    --queued:      var(--blue);
+    --waiting:     var(--violet);
+    --cancelled:   var(--grey);
+    --rejected:    var(--rose);
+
     --neutral-wash: rgba(20, 24, 40, 0.03);
 
     --grid-line:        rgba(20, 24, 40, 0.05);
@@ -194,6 +266,42 @@
       --coral-wash:   rgba(255, 93, 93, 0.13);
       --coral-glow:   rgba(255, 93, 93, 0.25);
       --coral-edge:   rgba(255, 93, 93, 0.50);
+
+      /* NEW — Scheme B status hues (issue #268) — same as light block */
+      --slate:        #5e667e;
+      --slate-wash:   rgba(94, 102, 126, 0.12);
+      --slate-glow:   rgba(94, 102, 126, 0.22);
+      --slate-edge:   rgba(94, 102, 126, 0.42);
+
+      --blue:         #2b7fd0;
+      --blue-wash:    rgba(43, 127, 208, 0.12);
+      --blue-glow:    rgba(43, 127, 208, 0.24);
+      --blue-edge:    rgba(43, 127, 208, 0.46);
+
+      --violet:       #6f55cf;
+      --violet-wash:  rgba(111, 85, 207, 0.12);
+      --violet-glow:  rgba(111, 85, 207, 0.24);
+      --violet-edge:  rgba(111, 85, 207, 0.46);
+
+      --grey:         #6a7088;
+      --grey-wash:    rgba(20, 24, 40, 0.05);
+      --grey-glow:    transparent;
+      --grey-edge:    rgba(20, 24, 40, 0.16);
+
+      --rose:         #b05f76;
+      --rose-wash:    rgba(176, 95, 118, 0.12);
+      --rose-glow:    rgba(176, 95, 118, 0.22);
+      --rose-edge:    rgba(176, 95, 118, 0.46);
+
+      /* Semantic status-hue aliases — used by var(--${status}) in JS icon tints */
+      --success:     var(--emerald);
+      --failure:     var(--coral);
+      --in-progress: var(--amber);
+      --pending:     var(--slate);
+      --queued:      var(--blue);
+      --waiting:     var(--violet);
+      --cancelled:   var(--grey);
+      --rejected:    var(--rose);
 
       --neutral-wash: rgba(20, 24, 40, 0.03);
 
@@ -538,6 +646,82 @@
   }
   .icon-btn.has-active .badge-dot { display: block; }
 
+  /* ----- rate-limit chip (⧖ label inline inside the icon-btn) ----- */
+  .rl-chip {
+    width: auto;
+    padding: 0 10px;
+    gap: 5px;
+    font-size: 13px;
+  }
+  .rl-chip-icon { font-size: 14px; line-height: 1; }
+  .rl-chip-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-1);
+    letter-spacing: 0.2px;
+  }
+  .rl-chip:hover .rl-chip-label,
+  .rl-chip.is-active .rl-chip-label { color: var(--ink-0); }
+
+  /* rate-limit popover rows */
+  .rl-popover { min-width: 290px; }
+  .rl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+  }
+  .rl-row:last-child { margin-bottom: 0; }
+  .rl-field-label {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    min-width: 68px;
+    flex-shrink: 0;
+  }
+  .rl-field-value {
+    font-size: 12px;
+    color: var(--ink-0);
+  }
+  .rl-field-value.mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+  }
+  .rl-state-badge {
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--emerald-wash);
+    border: 1px solid var(--emerald-edge);
+    color: var(--emerald);
+  }
+  .rl-state-badge.is-paused {
+    background: var(--amber-wash);
+    border-color: var(--amber-edge);
+    color: var(--amber);
+  }
+  .rl-section { margin-bottom: 7px; }
+  .rl-bar-track {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--glass-edge);
+    overflow: hidden;
+    margin-top: 5px;
+  }
+  .rl-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(to right, rgba(var(--accent-rgb),0.6), rgba(var(--accent-rgb),1));
+    transition: width .3s ease;
+  }
+
   /* popover surface */
   .popover {
     position: absolute;
@@ -765,7 +949,11 @@
     padding: 2px 8px 6px;
     text-align: center;
     border-bottom: 1px solid var(--glass-edge);
+    position: relative;
+    cursor: grab;
+    user-select: none;
   }
+  .col-head:active { cursor: grabbing; }
   .col-head .env-tag {
     display: inline-block;
     padding: 3px 10px;
@@ -801,6 +989,69 @@
     border-left: 2px solid rgba(var(--accent-rgb), 0.35);
     padding-left: 10px;
   }
+  /* Drag grip glyph — always visible so columns read as reorderable */
+  .col-drag-grip {
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1;
+    margin-right: 4px;
+    flex-shrink: 0;
+    cursor: grab;
+    user-select: none;
+    transition: color .15s ease;
+  }
+  .col-head:hover .col-drag-grip { color: var(--ink-1); }
+  .col-head.dragging .col-drag-grip { cursor: grabbing; }
+
+  .col-head.drag-over {
+    background: rgba(var(--accent-rgb), 0.10);
+    border-bottom-color: rgba(var(--accent-rgb), 0.6);
+    outline: 1px dashed rgba(var(--accent-rgb), 0.45);
+    outline-offset: -1px;
+  }
+  .col-head.dragging { opacity: 0.45; }
+  /* Shared hidden-count badge — used by both Columns and Fields buttons */
+  .hidden-count-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    background: rgba(var(--accent-rgb), 0.85);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    line-height: 14px;
+    text-align: center;
+    pointer-events: none;
+    display: none;           /* shown only when hidden count > 0 */
+  }
+  .hidden-count-badge.is-visible { display: block; }
+
+  /* "Show all / reset order" link inside the Columns popover */
+  .cols-reset-link {
+    display: block;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--glass-edge);
+    font-size: 11px;
+    color: rgba(var(--accent-rgb), 0.85);
+    cursor: pointer;
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    font-family: inherit;
+    text-align: left;
+    width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+    transition: color .15s ease;
+  }
+  .cols-reset-link:hover { color: rgba(var(--accent-rgb), 1); }
 
   /* ----- slot card (base) -----
      Tile sizing is DYNAMIC: min-height ≈ size of bare 6-box-state chrome
@@ -856,6 +1107,18 @@
     font-size: 13px;
     display: flex; align-items: center; justify-content: center;
     height: 100%;
+  }
+
+  /* state — never effectively deployed on this env (only a non-effective
+     deployment exists yet). NEUTRAL/grey surface — the tile colour means
+     "deployment health", and there is none yet; the actual status rides on a
+     chip. Distinct from .slot.empty ("—" = no deployment events at all). */
+  .slot.s-never-deployed {
+    background: var(--slot-empty-bg);
+  }
+  .slot.s-never-deployed::before {
+    background: var(--ink-3);
+    box-shadow: none;
   }
 
   /* state — success */
@@ -1030,6 +1293,34 @@
     font-family: 'Inter', sans-serif;
   }
   .warn-badge .warn-icon { font-size: 10px; }
+
+  /* context badge — layered on top-right corner of matrix tile or vis-card.
+     Shows deployment context (pending/queued/waiting/cancelled/rejected) that
+     is NOT the effective environment state. Keeps the tile primary state intact. */
+  .ctx-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px 1px 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0.1px;
+    white-space: nowrap;
+    pointer-events: none;
+    border: 1px solid transparent;
+  }
+  /* Context badge lives on its OWN row, in normal flow, so it never overlaps
+     the headline meta (actor/time, which sit top-right of the version row). */
+  .ctx-row { display: flex; align-items: center; margin-top: 4px; }
+  .vis-card .ctx-row { margin-top: 3px; }
+  /* Per-status badge tint — uses existing hue tokens */
+  .ctx-badge.cb-pending   { color: var(--slate);  border-color: var(--slate-edge);  background: var(--slate-wash); }
+  .ctx-badge.cb-queued    { color: var(--blue);   border-color: var(--blue-edge);   background: var(--blue-wash); }
+  .ctx-badge.cb-waiting   { color: var(--violet); border-color: var(--violet-edge); background: var(--violet-wash); }
+  .ctx-badge.cb-cancelled { color: var(--grey);   border-color: var(--grey-edge);   background: var(--grey-wash); }
+  .ctx-badge.cb-rejected  { color: var(--rose);   border-color: var(--rose-edge);   background: var(--rose-wash); }
 
   .failed-line {
     display: flex; align-items: center; gap: 8px;
@@ -1295,6 +1586,11 @@
     box-shadow: 0 0 0 1px rgba(255,93,93,0.10), 0 10px 24px -14px var(--coral-glow);
   }
   .vis-card.s-failure::before { background: var(--coral); box-shadow: 0 0 12px var(--coral-glow); }
+  /* never effectively deployed — neutral/grey card (no health colour); the
+     status rides on a chip. Mirrors the matrix .slot.s-never-deployed. */
+  .vis-card.s-never-deployed { border-color: var(--glass-edge); }
+  .vis-card.s-never-deployed::before { background: var(--ink-3); box-shadow: none; }
+
   .vis-card.is-selected {
     box-shadow:
       0 0 0 2px rgba(var(--accent-rgb),0.55),
@@ -1436,6 +1732,657 @@
     pointer-events: none;
   }
   .vis-stage .cards-layer .vis-card { pointer-events: auto; }
+
+  /* ===== ANALYTICS VIEW ===== */
+
+  /* Layout */
+  .an-shell {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* View header — compact single line */
+  .an-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .an-title-block .an-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-0);
+    margin: 0;
+    display: inline;
+  }
+  .an-title-block .an-sub {
+    font-size: 11px;
+    color: var(--ink-2);
+    display: inline;
+    margin-left: 8px;
+  }
+
+  /* Period segmented control */
+  .an-period {
+    display: flex;
+    gap: 2px;
+    background: var(--tabs-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+  }
+  .an-period-btn {
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  .an-period-btn:hover { color: var(--ink-0); }
+  .an-period-btn.is-active {
+    background: var(--glass-strong);
+    color: var(--ink-0);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+
+  /* DORA KPI band */
+  .an-kpi-band {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 900px) {
+    .an-kpi-band { grid-template-columns: repeat(2, 1fr); }
+  }
+  .an-kpi-card {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+    box-shadow: 0 1px 0 var(--glass-edge-2) inset, 0 24px 64px -28px rgba(0,0,0,0.55);
+    padding: 10px 13px 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .an-kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .an-kpi-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink-0);
+    line-height: 1.15;
+  }
+  .an-kpi-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .an-class-chip {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .an-class-chip.elite  { background: var(--emerald-wash); color: var(--emerald); border: 1px solid var(--emerald-edge); }
+  .an-class-chip.high   { background: var(--blue-wash);    color: var(--blue);    border: 1px solid var(--blue-edge); }
+  .an-class-chip.medium { background: var(--amber-wash);   color: var(--amber);   border: 1px solid var(--amber-edge); }
+  .an-class-chip.low    { background: var(--coral-wash);   color: var(--coral);   border: 1px solid var(--coral-edge); }
+  .an-trend-chip {
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .an-trend-chip.good { background: var(--emerald-wash); color: var(--emerald); }
+  .an-trend-chip.bad  { background: var(--coral-wash);   color: var(--coral); }
+  .an-trend-chip.flat { background: var(--glass-edge);   color: var(--ink-2); }
+  .an-kpi-sparkline { width: 100%; height: 26px; display: block; overflow: visible; }
+
+  /* Chart grid — 12-column base; span classes control placement */
+  .an-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 8px;
+  }
+  /* Span helpers */
+  .an-span-12 { grid-column: span 12; }
+  .an-span-6  { grid-column: span 6; }
+  .an-span-4  { grid-column: span 4; }
+  .an-span-8  { grid-column: span 8; }
+  @media (max-width: 1100px) {
+    .an-span-12, .an-span-8, .an-span-6, .an-span-4 { grid-column: span 12; }
+  }
+
+  /* Generic chart card */
+  .an-card {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-md);
+    box-shadow: 0 1px 0 var(--glass-edge-2) inset, 0 24px 64px -28px rgba(0,0,0,0.55);
+    padding: 11px 13px 12px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .an-card-head {
+    margin-bottom: 8px;
+  }
+  .an-card-head .an-ch-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-0);
+    margin: 0 0 1px;
+  }
+  .an-card-head .an-ch-sub {
+    font-size: 11.5px;
+    color: var(--ink-2);
+  }
+  /* Fixed-height chart bodies — SVG fills the box exactly.
+     height:100% on svg requires a definite height on the container. */
+  .an-chart-body {
+    width: 100%;
+    overflow: hidden;
+    /* default: CFR / duration (span-6 row) */
+    height: 160px;
+  }
+  .an-chart-body svg {
+    display: block;
+    width: 100%;
+    height: 100%;   /* fills the fixed container — NOT auto */
+    overflow: visible;
+  }
+  /* Per-slot height overrides */
+  .an-chart-body.an-h-freq   { height: 185px; }  /* span-8 frequency bar chart */
+  .an-chart-body.an-h-funnel { height: 175px; }  /* funnel — 5 rows × 30px */
+  .an-chart-body.an-h-heat   { height: 175px; }  /* heatmap — 7 rows × 24 cols */
+  .an-chart-body.an-h-mttr   { height: 200px; }  /* incidents list — 7 rows × 27px */
+  .an-chart-body.an-h-actors { height: 210px; }  /* deployers leaderboard — 8 rows × 24px */
+  /* Donut body: let the grid layout size it; no fixed height needed */
+  .an-chart-body.an-h-donut  { height: auto; overflow: visible; }
+
+  /* Donut card: donut LEFT, legend RIGHT — side-by-side, no dead space */
+  .an-donut-wrap {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 12px;
+  }
+  .an-donut-svg { flex-shrink: 0; }
+  /* 2-column legend: each row is name | count | % */
+  .an-donut-legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 10px;
+    align-content: center;
+  }
+  .an-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--ink-1);
+    min-width: 0;
+  }
+  .an-legend-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .an-legend-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .an-legend-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-2);
+    flex-shrink: 0;
+  }
+  .an-legend-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    min-width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* =========================================================
+     EXTENSION VIEW
+     The view is centred at ~360px to mimic popup form factor.
+     All tokens are shared with the rest of the design system.
+     ========================================================= */
+
+  .ext-shell {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding-bottom: 32px;
+  }
+
+  /* Shared section title inside the extension view */
+  .ext-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--ink-2);
+    margin: 0 0 10px;
+  }
+
+  /* Wrapper that enforces popup width for each surface block */
+  .ext-block {
+    width: 360px;
+    max-width: 100%;
+  }
+
+  /* Shared glass card used for popup surfaces */
+  .ext-card {
+    background: var(--popover-bg);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge-2);
+    border-radius: var(--radius-md);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 24px 60px -22px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  /* ---- Surface 1: Toolbar badge states ---- */
+  .ext-badge-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .ext-badge-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .ext-badge-icon {
+    position: relative;
+    width: 36px; height: 36px;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge-2);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 1px 0 var(--glass-edge-2) inset;
+  }
+  .ext-badge-count {
+    position: absolute;
+    top: -5px; right: -7px;
+    min-width: 16px; height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    text-align: center;
+    line-height: 16px;
+    box-shadow: 0 0 0 2px var(--bg-0);
+  }
+  .ext-badge-count.is-inflight {
+    background: var(--amber);
+    color: #1a1000;
+  }
+  .ext-badge-count.is-failed {
+    background: var(--coral);
+    color: #fff;
+  }
+  .ext-badge-label {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .ext-badge-logo {
+    display: block;      /* removes inline baseline gap */
+    pointer-events: none;
+  }
+
+  /* Outer glow on the icon for failed state */
+  .ext-badge-icon.is-failed-state {
+    border-color: var(--coral-edge);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 0 10px -2px var(--coral-glow);
+  }
+  .ext-badge-icon.is-inflight-state {
+    border-color: var(--amber-edge);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 0 10px -2px var(--amber-glow);
+  }
+
+  /* ---- Surface 2: Browser notification toast ---- */
+  .ext-notif {
+    padding: 12px 14px 11px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .ext-notif + .ext-notif {
+    border-top: 1px solid var(--glass-edge);
+  }
+  /* clickable toast body — mirrors WebExtension notification action button */
+  .ext-notif-link {
+    display: flex;       /* override <a> inline default */
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .ext-notif-link:hover { background: var(--glass-edge); }
+  .ext-notif-icon {
+    width: 32px; height: 32px;
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .ext-notif-icon.is-success { background: var(--emerald-wash); border: 1px solid var(--emerald-edge); }
+  .ext-notif-icon.is-failed  { background: var(--coral-wash);   border: 1px solid var(--coral-edge); }
+  .ext-notif-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .ext-notif-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-0);
+    margin-bottom: 2px;
+    line-height: 1.3;
+  }
+  .ext-notif-sub {
+    font-size: 11px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.4;
+  }
+  .ext-notif-time {
+    font-size: 10px;
+    color: var(--ink-3);
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  /* Emphasis variant: prod failure gets a left accent bar */
+  .ext-notif.is-prod-failure {
+    border-left: 3px solid var(--coral);
+    padding-left: 11px;
+  }
+
+  /* ---- Surface 3: Latest-change popup panel ---- */
+  .ext-popup-head {
+    padding: 11px 14px 9px;
+    border-bottom: 1px solid var(--glass-edge);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ext-popup-head-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-0);
+    letter-spacing: 0.2px;
+    flex: 1;
+  }
+  .ext-popup-head-sub {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ext-popup-body {
+    padding: 12px 14px 13px;
+  }
+  .ext-popup-fields {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 7px;
+    column-gap: 10px;
+    font-size: 11.5px;
+    align-items: baseline;
+  }
+  .ext-popup-fields .k {
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .ext-popup-fields .v {
+    color: var(--ink-0);
+    font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
+    min-width: 0;
+  }
+  .ext-popup-fields .v.muted { color: var(--ink-2); }
+  .ext-popup-sep {
+    grid-column: 1 / -1;
+    border-top: 1px dotted var(--glass-edge-2);
+    margin: 4px 0 1px;
+  }
+  .ext-popup-actions {
+    padding: 9px 14px 11px;
+    border-top: 1px solid var(--glass-edge);
+    display: flex;
+    gap: 8px;
+  }
+  /* Unified button — replaces .ext-action-btn and .ext-config-save */
+  .ext-btn {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-edge-2);
+    background: var(--input-bg);
+    color: var(--ink-1);
+    font-size: 11.5px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .ext-btn:hover { color: var(--ink-0); border-color: rgba(var(--accent-rgb), 0.5); }
+  /* Primary variant: accent fill (used for "Open dashboard" and "Save") */
+  .ext-btn.is-primary {
+    background: rgba(var(--accent-rgb), 0.15);
+    border-color: rgba(var(--accent-rgb), 0.45);
+    color: var(--ink-0);
+    font-weight: 600;
+  }
+  .ext-btn.is-primary:hover { background: rgba(var(--accent-rgb), 0.22); }
+  /* Flex variant: fills available width in a flex row (popup actions) */
+  .ext-btn.is-flex { flex: 1; }
+
+  /* ---- Surface 4: Config view ---- */
+  .ext-config-body {
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .ext-config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .ext-config-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  /* Inline hint text beside a config label — resets label's uppercase/tracking */
+  .ext-config-label-hint {
+    font-size: 10.5px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink-3);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ext-config-input {
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-sm);
+    padding: 7px 11px;
+    color: var(--ink-0);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .ext-config-input:focus {
+    outline: 0;
+    border-color: rgba(var(--accent-rgb), 0.6);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+  }
+  .ext-config-hint {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ext-config-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 2px;
+  }
+  .ext-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px 3px 9px;
+    background: var(--glass);
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-1);
+  }
+  .ext-filter-chip-x {
+    color: var(--ink-3);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    margin-left: 1px;
+  }
+  .ext-filter-chip-x:hover { color: var(--coral); }
+  .ext-config-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 2px;
+  }
+
+  /* ---- Watch config section (promoted from Option B) ---- */
+
+  /* Bordered inset block for the watch-filter controls */
+  .ext-option-block {
+    border: 1px solid var(--glass-edge-2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  /* Visual dim when the master switch is OFF */
+  .ext-option-block.is-paused {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  /* Axis sub-label row */
+  .ext-option-axis-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ink-2);
+  }
+
+  /* Segmented mode control row */
+  .ext-option-mode-row {
+    display: flex;
+  }
+  .ext-mode-seg {
+    display: flex;
+    gap: 2px;
+    background: var(--tabs-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    backdrop-filter: blur(12px) saturate(130%);
+    -webkit-backdrop-filter: blur(12px) saturate(130%);
+  }
+  .ext-mode-seg .an-period-btn {
+    font-size: 11px;
+    padding: 3px 9px;
+    white-space: nowrap;
+  }
+
+  /* Caption showing resulting watch set */
+  .ext-option-caption {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* "+ add / + exclude" inline dashed-pill button */
+  .ext-filter-add {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px dashed var(--glass-edge-2);
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-3);
+    cursor: pointer;
+    transition: color .12s, border-color .12s;
+  }
+  .ext-filter-add:hover { color: var(--ink-1); border-color: rgba(var(--accent-rgb), 0.4); }
 
   /* =========================================================
      VISUALISATION VIEW
@@ -1625,6 +2572,13 @@
     display: flex; align-items: center; gap: 8px;
     margin: 4px 0 12px;
   }
+  /* dotted separator that splits the live deployment fields from the
+     "next deployment" group at the bottom of the inspector grid */
+  .insp-grid .insp-sep {
+    grid-column: 1 / -1;
+    border-top: 1px dotted var(--glass-edge-2);
+    margin: 6px 0 1px;
+  }
 
   .vis-canvas {
     padding: 18px 18px 14px;
@@ -1675,6 +2629,115 @@
     display: block;
     width: 100%;
     height: auto;
+  }
+
+  /* =========================================================
+     SWIMLANE COLLAPSE / EXPAND  (issue #309)
+     ========================================================= */
+
+  /* Lane-header overlay — rendered in the HTML lane-head row built by buildSwim.
+     Sits above the SVG in a flex bar: [chevron] [service name] [status vector] [sim-btn] */
+  .sv-lane-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px 5px 4px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    z-index: 2;            /* above SVG layer */
+    pointer-events: none;  /* children opt-in */
+  }
+  .sv-chevron {
+    appearance: none;
+    /* Visible on the dark lane surface: brighter border + translucent white wash */
+    border: 1px solid rgba(255,255,255,0.20);
+    background: rgba(255,255,255,0.07);
+    padding: 0 4px;
+    cursor: pointer;
+    color: var(--ink-0);
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+    pointer-events: auto;
+    transition: color .15s ease, transform .15s ease, background .15s ease, border-color .15s ease;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+  }
+  .sv-chevron:hover { color: #fff; border-color: rgba(var(--accent-rgb),0.6); background: rgba(var(--accent-rgb),0.15); }
+  /* Expanded lane: chevron points down; collapsed: right */
+  .sv-chevron.is-expanded { transform: rotate(90deg); }
+
+  /* Flash animation — plays on the tip card when a lane's event fires (collapsed or expanded) */
+  @keyframes svFlash {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
+    25%  { box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.55), 0 0 18px rgba(var(--accent-rgb), 0.45); }
+    60%  { box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.25); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
+  }
+  .vis-card.sv-flash { animation: svFlash 0.85s ease-out forwards; }
+
+  /* Simulate-event button — tasteful, vis-icon-button style */
+  .sv-sim-btn {
+    appearance: none;
+    background: var(--field-toggle-bg);
+    border: 1px solid var(--glass-edge);
+    color: var(--ink-2);
+    border-radius: 7px;
+    padding: 2px 8px;
+    font-size: 10.5px;
+    font-family: 'Inter', system-ui, sans-serif;
+    cursor: pointer;
+    flex-shrink: 0;
+    pointer-events: auto;
+    white-space: nowrap;
+    transition: color .15s, border-color .15s, background .15s;
+    letter-spacing: 0.2px;
+  }
+  .sv-sim-btn:hover { color: var(--ink-0); border-color: var(--glass-edge-2); background: rgba(var(--accent-rgb),0.08); }
+
+  /* env label inside vector — matches vc-env but smaller */
+  .sv-env {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink-0);
+    text-transform: lowercase;
+    flex-shrink: 0;
+  }
+
+  /* Collapse-all button and auto-scroll toggle — reuse .toggle primitive */
+  .sv-collapse-all-btn {
+    appearance: none;
+    border: 1px solid var(--glass-edge);
+    background: var(--input-bg);
+    color: var(--ink-1);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .15s, border-color .15s, background .15s;
+    pointer-events: auto;
+  }
+  .sv-collapse-all-btn:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+
+  /* Auto-scroll toggle — use .toggle base, tinted with accent when on */
+  #sv-autoscroll-toggle.toggle.is-on {
+    color: rgba(var(--accent-rgb), 1);
+    border-color: rgba(var(--accent-rgb), 0.45);
+    background: rgba(var(--accent-rgb), 0.10);
+  }
+  #sv-autoscroll-toggle.toggle.is-on .switch { background: rgba(var(--accent-rgb), 1); }
+
+  /* Lane overlay wrapper — positioned absolute by JS over the SVG lane rect */
+  .sv-lane-wrap {
+    position: absolute;
   }
 
   /* =========================================================
@@ -1768,9 +2831,15 @@
     border-radius: 50%;
     margin-top: 5px;
   }
-  .hist-entry.s-success .pip  { background: var(--emerald); box-shadow: 0 0 10px var(--emerald-glow); }
-  .hist-entry.s-failure .pip  { background: var(--coral);   box-shadow: 0 0 10px var(--coral-glow); }
-  .hist-entry.s-progress .pip { background: var(--amber);   box-shadow: 0 0 10px var(--amber-glow); }
+  .hist-entry.s-success .pip   { background: var(--emerald); box-shadow: 0 0 10px var(--emerald-glow); }
+  .hist-entry.s-failure .pip   { background: var(--coral);   box-shadow: 0 0 10px var(--coral-glow); }
+  .hist-entry.s-progress .pip  { background: var(--amber);   box-shadow: 0 0 10px var(--amber-glow); }
+  /* Scheme B pips (issue #268) */
+  .hist-entry.s-pending .pip   { background: var(--slate);   box-shadow: 0 0 8px var(--slate-glow); }
+  .hist-entry.s-queued .pip    { background: var(--blue);    box-shadow: 0 0 8px var(--blue-glow); }
+  .hist-entry.s-waiting .pip   { background: var(--violet);  box-shadow: 0 0 8px var(--violet-glow); }
+  .hist-entry.s-cancelled .pip { background: var(--grey);    box-shadow: none; }
+  .hist-entry.s-rejected .pip  { background: var(--rose);    box-shadow: 0 0 8px var(--rose-glow); }
 
   .hist-main { display: flex; flex-direction: column; gap: 4px; }
   .hist-main .l1 {
@@ -1802,9 +2871,15 @@
     border-radius: 999px;
     border: 1px solid;
   }
-  .status-chip.s-success  { color: var(--emerald); border-color: rgba(52,210,154,0.5);  background: rgba(52,210,154,0.10); }
-  .status-chip.s-failure  { color: var(--coral);   border-color: rgba(255,93,93,0.5);   background: rgba(255,93,93,0.10); }
-  .status-chip.s-progress { color: var(--amber);   border-color: rgba(245,165,36,0.5);  background: rgba(245,165,36,0.10); }
+  .status-chip.s-success   { color: var(--emerald); border-color: rgba(52,210,154,0.5);   background: rgba(52,210,154,0.10); }
+  .status-chip.s-failure   { color: var(--coral);   border-color: rgba(255,93,93,0.5);    background: rgba(255,93,93,0.10); }
+  .status-chip.s-progress  { color: var(--amber);   border-color: rgba(245,165,36,0.5);   background: rgba(245,165,36,0.10); }
+  /* Scheme B chips (issue #268) */
+  .status-chip.s-pending   { color: var(--slate);   border-color: var(--slate-edge);      background: var(--slate-wash); }
+  .status-chip.s-queued    { color: var(--blue);    border-color: var(--blue-edge);       background: var(--blue-wash); }
+  .status-chip.s-waiting   { color: var(--violet);  border-color: var(--violet-edge);     background: var(--violet-wash); }
+  .status-chip.s-cancelled { color: var(--grey);    border-color: var(--grey-edge);       background: var(--grey-wash); }
+  .status-chip.s-rejected  { color: var(--rose);    border-color: var(--rose-edge);       background: var(--rose-wash); }
 
   .hist-link {
     color: var(--ink-2);
@@ -1895,6 +2970,137 @@
   .matrix.is-filtered .row.is-hidden { display: contents; }
   .row.is-hidden > * { display: none !important; }
 
+  /* =========================================================
+     LEGEND POPOVER — deployment status key (issue #268)
+     ========================================================= */
+  .lg-group {
+    font-size: 10px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+    margin: 12px 0 5px;
+  }
+  .lg-group:first-of-type { margin-top: 0; }
+  .lg-item {
+    display: grid;
+    grid-template-columns: 16px 12px 1fr;
+    align-items: center;
+    gap: 9px;
+    padding: 3px 0;
+  }
+  .lg-item .lg-ic {
+    font-size: 13px;
+    text-align: center;
+    line-height: 1;
+  }
+  .lg-item .lg-sw {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+  .lg-item .lg-txt {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .lg-item .lg-nm {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--ink-0);
+  }
+  .lg-item .lg-ds {
+    font-size: 10.5px;
+    color: var(--ink-2);
+  }
+  /* per-status colour assignment for legend icon + swatch */
+  .lg-item.s-success  .lg-ic { color: var(--emerald); }
+  .lg-item.s-success  .lg-sw { background: var(--emerald); box-shadow: 0 0 7px var(--emerald-glow); }
+  .lg-item.s-progress .lg-ic { color: var(--amber); }
+  .lg-item.s-progress .lg-sw { background: var(--amber);   box-shadow: 0 0 7px var(--amber-glow); }
+  .lg-item.s-failure  .lg-ic { color: var(--coral); }
+  .lg-item.s-failure  .lg-sw { background: var(--coral);   box-shadow: 0 0 7px var(--coral-glow); }
+  .lg-item.s-pending  .lg-ic { color: var(--slate); }
+  .lg-item.s-pending  .lg-sw { background: var(--slate);   box-shadow: 0 0 6px var(--slate-glow); }
+  .lg-item.s-queued   .lg-ic { color: var(--blue); }
+  .lg-item.s-queued   .lg-sw { background: var(--blue);    box-shadow: 0 0 6px var(--blue-glow); }
+  .lg-item.s-waiting  .lg-ic { color: var(--violet); }
+  .lg-item.s-waiting  .lg-sw { background: var(--violet);  box-shadow: 0 0 6px var(--violet-glow); }
+  .lg-item.s-cancelled .lg-ic { color: var(--grey); }
+  .lg-item.s-cancelled .lg-sw { background: var(--grey);   box-shadow: none; }
+  .lg-item.s-rejected  .lg-ic { color: var(--rose); }
+  .lg-item.s-rejected  .lg-sw { background: var(--rose);   box-shadow: 0 0 6px var(--rose-glow); }
+
+  /* ---- legend example-list rows ---- */
+  /* Two-column row: left = rendered example snippet, right = meaning text */
+  .lg-ex {
+    display: grid;
+    grid-template-columns: 148px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+  }
+  .lg-ex-l {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    gap: 3px;
+    flex-wrap: nowrap;
+  }
+  .lg-ex-r {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    line-height: 1.35;
+    min-width: 0;
+  }
+  /* tiny split-tile swatch: top accent band + neutral bottom band */
+  .lg-split-swatch {
+    display: inline-flex;
+    flex-direction: column;
+    width: 30px;
+    height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--glass-edge-2);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .lg-split-swatch .sw-top {
+    flex: 1;
+    background: linear-gradient(180deg, var(--amber-wash), rgba(245,165,36,0.08));
+    border-bottom: 1px dashed var(--divider-dash);
+  }
+  .lg-split-swatch .sw-bot {
+    flex: 1;
+    background: var(--neutral-wash);
+  }
+  /* tiny empty-slot swatch */
+  .lg-empty-swatch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 26px;
+    border-radius: 5px;
+    border: 1px solid var(--glass-edge);
+    background: var(--slot-empty-bg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-3);
+    flex-shrink: 0;
+  }
+  /* arrow glyph for Edges row */
+  .lg-arrow {
+    display: inline-flex;
+    align-items: center;
+    font-size: 15px;
+    color: var(--ink-2);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+  }
+  /* pop-legend scrolls when content is tall */
+  #pop-legend { max-height: 80vh; overflow-y: auto; }
+
   /* Bug 4: hairline divider between service rows — applied to every grid cell
      (both row-head and tile cells, which share the .row class). Theme-tokenized
      via --glass-edge so it works in dark/light/auto. The divider sits 4px below
@@ -1918,13 +3124,15 @@
       <div class="brand-mark"></div>
       <div>
         <div class="brand-name">Deployment Dashboard</div>
-        <div class="brand-sub">Variant C · Glassy Dark</div>
+        <div class="brand-sub">Monitoring · Live</div>
       </div>
     </div>
 
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-view="matrix" role="tab">Matrix</button>
-      <button class="tab" data-view="vis" role="tab">Swimlanes</button>
+      <button class="tab is-active" data-view="matrix" role="tab" title="Matrix view — service × environment grid" aria-label="Matrix view">Matrix</button>
+      <button class="tab" data-view="vis" role="tab" title="Swimlanes view — deployment DAGs per service" aria-label="Swimlanes view">Swimlanes</button>
+      <button class="tab" data-view="analytics" role="tab" title="Analytics view — DORA metrics &amp; deployment trends" aria-label="Analytics view">Analytics</button>
+      <button class="tab" data-view="extension" role="tab" title="Extension view — browser extension MVP surfaces" aria-label="Extension view">Extension</button>
     </nav>
 
     <div class="topbar-spacer"></div>
@@ -1938,8 +3146,8 @@
 
     <!-- Inline matrix filter (persistent, no popover) -->
     <div class="hdr-filter" id="hdr-matrix-filter">
-      <input type="text" class="input hdr-filter-input" id="svc-filter" placeholder="filter services…" autocomplete="off" spellcheck="false">
-      <label class="toggle hdr-fail-toggle" id="fail-toggle">
+      <input type="text" class="input hdr-filter-input" id="svc-filter" placeholder="filter services…" autocomplete="off" spellcheck="false" title="Filter service rows by name" aria-label="Filter services by name">
+      <label class="toggle hdr-fail-toggle" id="fail-toggle" title="Show only services with at least one failure" aria-label="Show failures only">
         <span class="switch"></span>
         <span>Failures only</span>
       </label>
@@ -1954,8 +3162,49 @@
     </div>
 
     <div class="hdr-icons">
+
+      <!-- Rate-limit chip — one per adapter (static fixture: github-actions) -->
+      <div style="position:relative" id="hdr-rl-chip">
+        <button class="icon-btn rl-chip" id="btn-ratelimit" title="Fetcher CI/CD rate-limit usage (github-actions)" aria-label="Fetcher rate-limit usage for github-actions" aria-haspopup="true">
+          <span class="rl-chip-icon" aria-hidden="true">⧖</span>
+          <span class="rl-chip-label">38/60</span>
+        </button>
+        <div class="popover rl-popover" id="pop-ratelimit" role="dialog" aria-label="Fetcher rate-limit">
+          <div class="popover-title">Fetcher Rate Limit</div>
+          <div class="rl-row">
+            <span class="rl-field-label">Adapter</span>
+            <span class="rl-field-value">github-actions</span>
+            <span class="rl-state-badge" role="status" aria-label="Fetcher state: running">running</span>
+          </div>
+          <div class="rl-section">
+            <div class="rl-row">
+              <span class="rl-field-label">Own usage</span>
+              <span class="rl-field-value mono">38 / 60</span>
+            </div>
+            <div class="rl-bar-track" role="progressbar" aria-valuenow="63" aria-valuemin="0" aria-valuemax="100" aria-label="Own budget used: 63%">
+              <div class="rl-bar-fill" style="width:63%"></div>
+            </div>
+          </div>
+          <div class="rl-row">
+            <span class="rl-field-label">CI quota</span>
+            <span class="rl-field-value mono">4820 / 5000</span>
+          </div>
+          <div class="rl-row">
+            <span class="rl-field-label">Resets at</span>
+            <span class="rl-field-value mono">2026-06-04T15:00:00Z</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Visualisation-only icons -->
-      <div style="position:relative; display:none" id="hdr-vis-icons">
+      <div style="position:relative; display:none" id="hdr-vis-icons" class="hdr-icons">
+        <!-- Collapse/expand all lanes -->
+        <button class="sv-collapse-all-btn" id="btn-collapse-all" title="Collapse or expand all swimlanes" aria-label="Collapse all lanes">⊟ Collapse all</button>
+        <!-- Auto-scroll-to-change toggle — default ON -->
+        <label class="toggle is-on" id="sv-autoscroll-toggle" title="When a lane's status changes while off-screen, scroll it into view (collapsed or expanded)" aria-label="Auto-scroll to change" style="white-space:nowrap;cursor:pointer">
+          <span class="switch" aria-hidden="true"></span>
+          Auto-scroll
+        </label>
         <button class="icon-btn" id="btn-correlation" title="Correlation &amp; time window" aria-label="Correlation">
           <span aria-hidden="true">⇆</span>
         </button>
@@ -1975,6 +3224,9 @@
               </label>
               <label class="predicate" data-p="version" role="radio" aria-checked="false">
                 <span class="radio"></span><span class="pred-name">same version</span>
+              </label>
+              <label class="predicate" data-p="ref" role="radio" aria-checked="false">
+                <span class="radio"></span><span class="pred-name">same ref</span>
               </label>
               <label class="predicate is-on" data-p="parent" role="radio" aria-checked="true">
                 <span class="radio"></span><span class="pred-name">explicit parent</span>
@@ -1996,10 +3248,25 @@
         </div>
       </div>
 
+      <!-- Columns picker (matrix-only — show/hide + reorder hint) -->
+      <div style="position:relative" id="hdr-cols-btn">
+        <button class="icon-btn" id="btn-columns" title="Columns — show/hide environments" aria-label="Columns" aria-haspopup="true">
+          <span aria-hidden="true">⊞</span>
+          <span class="hidden-count-badge" id="col-hidden-badge" aria-hidden="true"></span>
+        </button>
+        <div class="popover" id="pop-columns" role="dialog" aria-label="Column visibility">
+          <div class="popover-title">Columns — Matrix</div>
+          <div class="fields-grid" id="cols-grid-matrix"></div>
+          <div class="hint" style="margin-top:8px">Tip: drag a column header to reorder.</div>
+          <button class="cols-reset-link" id="btn-cols-reset" aria-label="Show all environments and reset column order">Show all · reset order</button>
+        </div>
+      </div>
+
       <!-- Fields picker (shared icon-button, popover content swaps per view) -->
       <div style="position:relative">
-        <button class="icon-btn" id="btn-fields" title="Fields" aria-label="Fields">
+        <button class="icon-btn" id="btn-fields" title="Fields — toggle visible data fields" aria-label="Fields — toggle visible data fields">
           <span aria-hidden="true">▦</span>
+          <span class="hidden-count-badge" id="fields-hidden-badge" aria-hidden="true"></span>
         </button>
         <div class="popover" id="pop-fields" role="dialog" aria-label="Visible fields">
           <div class="popover-title" id="pop-fields-title">Visible fields — Matrix</div>
@@ -2008,9 +3275,140 @@
           <div class="hint" id="pop-fields-hint">component &amp; environment are implicit (row × column). status is shown via the colored container.</div>
         </div>
       </div>
+
+      <!-- Legend — per-view anatomy key + status reference. Swaps content on view change,
+           mirroring the Fields popover pattern. -->
+      <div style="position:relative">
+        <button class="icon-btn" id="btn-legend" title="Legend — how to read a deployment" aria-label="Legend — how to read a deployment" aria-haspopup="true">
+          <span aria-hidden="true">☷</span>
+        </button>
+        <div class="popover" id="pop-legend" role="dialog" aria-label="Deployment legend" style="min-width:300px;right:0">
+          <div class="popover-title" id="pop-legend-title">Legend — Matrix</div>
+
+          <!-- ===== MATRIX legend ===== -->
+          <div id="legend-matrix">
+            <div class="lg-group">Environment state (tile colour)</div>
+            <div class="lg-item s-success">
+              <span class="lg-ic">✓</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">success</span><span class="lg-ds">deployed OK</span></span>
+            </div>
+            <div class="lg-item s-progress">
+              <span class="lg-ic">◴</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">in-progress</span><span class="lg-ds">actively deploying</span></span>
+            </div>
+            <div class="lg-item s-failure">
+              <span class="lg-ic">✕</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">failure</span><span class="lg-ds">deploy ran and failed</span></span>
+            </div>
+            <div class="lg-group">Next deployment (badge · history)</div>
+            <div class="lg-item s-pending">
+              <span class="lg-ic">○</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">pending</span><span class="lg-ds">created, not started</span></span>
+            </div>
+            <div class="lg-item s-queued">
+              <span class="lg-ic">≡</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">queued</span><span class="lg-ds">queued to run</span></span>
+            </div>
+            <div class="lg-item s-waiting">
+              <span class="lg-ic">◷</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">waiting</span><span class="lg-ds">blocked on approval / wait timer</span></span>
+            </div>
+            <div class="lg-item s-cancelled">
+              <span class="lg-ic">⊘</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">cancelled</span><span class="lg-ds">run cancelled</span></span>
+            </div>
+            <div class="lg-item s-rejected">
+              <span class="lg-ic">⊗</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">rejected</span><span class="lg-ds">reviewer denied — never ran</span></span>
+            </div>
+
+            <div class="lg-group">Tile contents</div>
+            <div id="legend-matrix-fields"></div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="ctx-badge cb-waiting" style="pointer-events:none">◷ waiting v2.5.0-rc1</span></div>
+              <div class="lg-ex-r">next badge — incoming or attempted deploy on top of the live state</div>
+            </div>
+            <div class="lg-group">Tile layouts</div>
+            <div class="lg-ex">
+              <div class="lg-ex-l">
+                <div class="lg-split-swatch"><div class="sw-top"></div><div class="sw-bot"></div></div>
+              </div>
+              <div class="lg-ex-r">split — current state (top) over the last successful deploy (bottom); what's actually live</div>
+            </div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="warn-badge"><span class="warn-icon">⚠</span> prev. failed</span></div>
+              <div class="lg-ex-r">latest attempt failed; an older success is still live</div>
+            </div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><div class="lg-empty-swatch">—</div></div>
+              <div class="lg-ex-r">empty — no deployments for this service × environment</div>
+            </div>
+          </div>
+
+          <!-- ===== SWIMLANES legend ===== -->
+          <div id="legend-vis" style="display:none">
+            <div class="lg-group">Environment state (card colour)</div>
+            <div class="lg-item s-success">
+              <span class="lg-ic">✓</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">success</span><span class="lg-ds">deployed OK</span></span>
+            </div>
+            <div class="lg-item s-progress">
+              <span class="lg-ic">◴</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">in-progress</span><span class="lg-ds">actively deploying</span></span>
+            </div>
+            <div class="lg-item s-failure">
+              <span class="lg-ic">✕</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">failure</span><span class="lg-ds">deploy ran and failed</span></span>
+            </div>
+            <div class="lg-group">Next deployment (badge · history)</div>
+            <div class="lg-item s-pending">
+              <span class="lg-ic">○</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">pending</span><span class="lg-ds">created, not started</span></span>
+            </div>
+            <div class="lg-item s-queued">
+              <span class="lg-ic">≡</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">queued</span><span class="lg-ds">queued to run</span></span>
+            </div>
+            <div class="lg-item s-waiting">
+              <span class="lg-ic">◷</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">waiting</span><span class="lg-ds">blocked on approval / wait timer</span></span>
+            </div>
+            <div class="lg-item s-cancelled">
+              <span class="lg-ic">⊘</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">cancelled</span><span class="lg-ds">run cancelled</span></span>
+            </div>
+            <div class="lg-item s-rejected">
+              <span class="lg-ic">⊗</span><span class="lg-sw"></span>
+              <span class="lg-txt"><span class="lg-nm">rejected</span><span class="lg-ds">reviewer denied — never ran</span></span>
+            </div>
+
+            <div class="lg-group">Card contents</div>
+            <div id="legend-vis-fields"></div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="ctx-badge cb-waiting" style="pointer-events:none">◷ waiting v2.5.0-rc1</span></div>
+              <div class="lg-ex-r">next badge — incoming or attempted deploy on top of this state</div>
+            </div>
+            <div class="lg-group">Collapsed lane — vector</div>
+            <div class="lg-ex">
+              <div class="lg-ex-l" style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:9px;border:1px solid var(--emerald-edge);border-radius:6px;padding:1px 5px;color:var(--emerald);font-family:'JetBrains Mono',monospace">✓ v2.14.1</span>
+                <span style="font-size:11px;color:var(--ink-3)">→</span>
+                <span style="font-size:9px;border:1px solid var(--amber-edge);border-radius:6px;padding:1px 5px;color:var(--amber);font-family:'JetBrains Mono',monospace">◴ v2.14.3</span>
+              </div>
+              <div class="lg-ex-r">collapsed lane — chain of real vis-cards from root to newest event (tip), rendered by the same card + SVG-edge machinery as the expanded DAG; click chevron (›) to expand to full DAG. ⚡ Simulate event flashes the tip card and auto-scrolls in both collapsed and expanded states.</div>
+            </div>
+            <div class="lg-group">Edges</div>
+            <div class="lg-ex">
+              <div class="lg-ex-l"><span class="lg-arrow">→</span></div>
+              <div class="lg-ex-r">parent → child (same release flowing across services/envs); correlation predicate set in the Correlation popover</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
 
-    <div class="live-pill">
+    <div class="live-pill" title="Server-sent events — live deployment updates" aria-label="Live connection status">
       <span class="live-dot"></span>
       <span>SSE live</span>
     </div>
@@ -2021,15 +3419,7 @@
 
     <div class="matrix-shell fields-rich" id="matrix-shell">
       <div class="matrix" id="matrix">
-        <!-- header row -->
-        <div></div>
-        <div class="col-head"><span class="env-tag">dev</span></div>
-        <div class="col-head"><span class="env-tag">staging</span></div>
-        <div class="col-head"><span class="env-tag">qa</span></div>
-        <div class="col-head"><span class="env-tag">preprod</span></div>
-        <div class="col-head"><span class="env-tag">prod</span></div>
-
-        <!-- ROWS POPULATED BY JS -->
+        <!-- header row and body rows are fully built by renderMatrix() in JS -->
       </div>
     </div>
   </section>
@@ -2056,6 +3446,313 @@
         <div class="insp-grid" id="insp-grid"></div>
       </aside>
     </div>
+  </section>
+
+  <!-- ============== ANALYTICS VIEW ============== -->
+  <section class="view" id="view-analytics">
+    <div class="an-shell">
+
+      <!-- Header -->
+      <div class="an-header">
+        <div class="an-title-block">
+          <div class="an-title">Deployment analytics</div>
+          <div class="an-sub">DORA Four Keys &middot; <span id="an-sub-days">14</span> days &middot; bounded by HISTORY_RETENTION_DAYS</div>
+        </div>
+        <div class="an-period" role="group" aria-label="Time window">
+          <button class="an-period-btn" data-days="7"  aria-pressed="false">7d</button>
+          <button class="an-period-btn is-active" data-days="14" aria-pressed="true">14d</button>
+          <button class="an-period-btn" data-days="30" aria-pressed="false">30d</button>
+        </div>
+      </div>
+
+      <!-- DORA KPI band -->
+      <div class="an-kpi-band" id="an-kpi-band">
+        <!-- Rendered by renderAnalytics() -->
+      </div>
+
+      <!-- Chart grid — 12-col base
+           Row 1 (170px): frequency (8) + donut (4)
+           Row 2 (150px): CFR (6) + duration (6)
+           Row 3 (160px): funnel (4) + heatmap (8)
+           Row 4 (160px): deployers (6) + restore (6)
+      -->
+      <div class="an-grid">
+
+        <!-- 1. Deployment frequency — span-8 -->
+        <div class="an-card an-span-8">
+          <div class="an-card-head">
+            <div class="an-ch-title">Deployment frequency over time</div>
+            <div class="an-ch-sub" id="an-freq-sub">deploys per day — success vs failure</div>
+          </div>
+          <div class="an-chart-body an-h-freq" id="an-chart-freq"></div>
+        </div>
+
+        <!-- 5. Status distribution (donut) — span-4 same row as freq -->
+        <div class="an-card an-span-4">
+          <div class="an-card-head">
+            <div class="an-ch-title">Status distribution</div>
+            <div class="an-ch-sub">share of each status</div>
+          </div>
+          <div class="an-chart-body an-h-donut" id="an-chart-donut"></div>
+        </div>
+
+        <!-- 2. Change failure rate — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Change failure rate trend</div>
+            <div class="an-ch-sub">daily CFR % &middot; dashed = 15% Elite threshold</div>
+          </div>
+          <div class="an-chart-body" id="an-chart-cfr"></div>
+        </div>
+
+        <!-- 3. Duration distribution — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Deployment duration distribution</div>
+            <div class="an-ch-sub">histogram (min) &middot; p50 and p95 markers</div>
+          </div>
+          <div class="an-chart-body" id="an-chart-dur"></div>
+        </div>
+
+        <!-- 4. Promotion funnel — span-4 -->
+        <div class="an-card an-span-4">
+          <div class="an-card-head">
+            <div class="an-ch-title">Promotion funnel</div>
+            <div class="an-ch-sub">dev &rarr; prod attrition</div>
+          </div>
+          <div class="an-chart-body an-h-funnel" id="an-chart-funnel"></div>
+        </div>
+
+        <!-- 6. Deploy heatmap — span-8 -->
+        <div class="an-card an-span-8">
+          <div class="an-card-head">
+            <div class="an-ch-title">Deploy heatmap</div>
+            <div class="an-ch-sub">day-of-week &times; hour &middot; intensity = count</div>
+          </div>
+          <div class="an-chart-body an-h-heat" id="an-chart-heat"></div>
+        </div>
+
+        <!-- 8. Top deployers — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Top deployers</div>
+            <div class="an-ch-sub">actors by deploy count</div>
+          </div>
+          <div class="an-chart-body an-h-actors" id="an-chart-actors"></div>
+        </div>
+
+        <!-- 7. MTTR — recent incidents — span-6 -->
+        <div class="an-card an-span-6">
+          <div class="an-card-head">
+            <div class="an-ch-title">Time to restore</div>
+            <div class="an-ch-sub">&lt;45m &#9646; 45-90m &#9646; &gt;90m</div>
+          </div>
+          <div class="an-chart-body an-h-mttr" id="an-chart-mttr"></div>
+        </div>
+
+      </div><!-- .an-grid -->
+    </div><!-- .an-shell -->
+  </section>
+
+  <!-- ============== EXTENSION VIEW ============== -->
+  <section class="view" id="view-extension">
+    <div class="ext-shell">
+
+      <!-- ---- 1. Toolbar badge states ---- -->
+      <div class="ext-block">
+        <div class="ext-section-title">Toolbar badge — states</div>
+        <div class="ext-badge-row">
+
+          <!-- Idle / neutral: no active deployments -->
+          <div class="ext-badge-item">
+            <div class="ext-badge-icon" title="Idle — no active or failed deployments" aria-label="Toolbar badge: idle">
+              <img src="../logo/logo-mark-transparent.svg" width="32" height="32" alt="" aria-hidden="true" class="ext-badge-logo">
+            </div>
+            <span class="ext-badge-label">Idle</span>
+          </div>
+
+          <!-- In-flight: 3 running deployments -->
+          <div class="ext-badge-item">
+            <div class="ext-badge-icon is-inflight-state" title="3 deployments in progress" aria-label="Toolbar badge: 3 in-flight">
+              <img src="../logo/logo-mark-transparent.svg" width="32" height="32" alt="" aria-hidden="true" class="ext-badge-logo">
+              <span class="ext-badge-count is-inflight" aria-label="3 in progress">3</span>
+            </div>
+            <span class="ext-badge-label">3 in-flight</span>
+          </div>
+
+          <!-- Failed: 2 failures -->
+          <div class="ext-badge-item">
+            <div class="ext-badge-icon is-failed-state" title="2 deployment failures" aria-label="Toolbar badge: 2 failed">
+              <img src="../logo/logo-mark-transparent.svg" width="32" height="32" alt="" aria-hidden="true" class="ext-badge-logo">
+              <span class="ext-badge-count is-failed" aria-label="2 failed">2</span>
+            </div>
+            <span class="ext-badge-label">2 failed</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ---- 2. Browser notification toasts ---- -->
+      <div class="ext-block">
+        <div class="ext-section-title">Browser notification toasts</div>
+        <div class="ext-card">
+
+          <!-- Standard: new successful deployment — body + "View run" action both link to the CI/CD run.
+               ARIA: live-region role (status) is on the non-interactive wrapper div, NOT the <a>.
+               ARIA 1.2 forbids live-region roles on interactive elements; in production the
+               notification is surfaced by the browser notifications API, not a DOM live region. -->
+          <div role="status" aria-label="Notification: payments-api deployed to staging">
+            <a class="ext-notif ext-notif-link" href="#" aria-label="Open run #1482 for payments-api staging deployment">
+              <div class="ext-notif-icon is-success" aria-hidden="true">&#10003;</div>
+              <div class="ext-notif-body">
+                <div class="ext-notif-title">payments-api deployed to staging</div>
+                <div class="ext-notif-sub">v2.14.3 &middot; alice &middot; <span class="hist-link" aria-hidden="true">View run #1482 &#x2197;</span></div>
+              </div>
+              <div class="ext-notif-time">just now</div>
+            </a>
+          </div>
+
+          <!-- Emphasis: prod failure.
+               ARIA: live-region role (alert) on the wrapper div; <a> is interactive only. -->
+          <div role="alert" aria-label="Alert: auth-service failed in prod">
+            <a class="ext-notif is-prod-failure ext-notif-link" href="#" aria-label="Open run #887 for auth-service prod failure">
+              <div class="ext-notif-icon is-failed" aria-hidden="true">&#10005;</div>
+              <div class="ext-notif-body">
+                <div class="ext-notif-title">auth-service failed in prod</div>
+                <div class="ext-notif-sub">v3.0.1 &middot; bob &middot; <span class="hist-link" aria-hidden="true">View run #887 &#x2197;</span></div>
+              </div>
+              <div class="ext-notif-time">2m ago</div>
+            </a>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ---- 3. Latest-change popup panel ---- -->
+      <div class="ext-block">
+        <div class="ext-section-title">Latest-change popup panel</div>
+        <div class="ext-card">
+
+          <!-- Panel header: service + environment crumb -->
+          <div class="ext-popup-head">
+            <div class="ext-popup-head-title">payments-api</div>
+            <div class="ext-popup-head-sub">prod</div>
+            <span class="status-chip s-success">success</span>
+          </div>
+
+          <!-- Deployment fields -->
+          <div class="ext-popup-body">
+            <div class="ext-popup-fields">
+              <span class="k">Version</span>
+              <span class="v">v2.14.3</span>
+
+              <span class="k">Actor</span>
+              <span class="v">alice</span>
+
+              <span class="k">SHA</span>
+              <span class="v muted">a1b2c3d4</span>
+
+              <span class="k">Run</span>
+              <span class="v"><a class="hist-link" href="#" title="Open CI/CD run #1482">#1482</a></span>
+
+              <div class="ext-popup-sep"></div>
+
+              <span class="k">Elapsed</span>
+              <span class="v">4m 32s</span>
+
+              <span class="k">Happened</span>
+              <span class="v muted">2026-06-09T14:22:00Z</span>
+            </div>
+          </div>
+
+          <!-- Actions: open full dashboard or CI/CD run -->
+          <div class="ext-popup-actions">
+            <button class="ext-btn is-flex" type="button">Open run #1482</button>
+            <button class="ext-btn is-flex is-primary" type="button">Open dashboard</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ---- 4. Configuration view ---- -->
+      <div class="ext-block">
+        <div class="ext-section-title">Configuration</div>
+        <div class="ext-card">
+          <div class="ext-config-body">
+
+            <!-- Dashboard base URL -->
+            <div class="ext-config-field">
+              <label class="ext-config-label" for="ext-url-input">Dashboard base URL</label>
+              <input id="ext-url-input" class="ext-config-input" type="url"
+                     placeholder="https://dashboard.example.com"
+                     value="https://dashboard.example.com"
+                     aria-label="Dashboard base URL" autocomplete="off" spellcheck="false">
+              <span class="ext-config-hint">SSE and read endpoints are derived from this origin.</span>
+            </div>
+
+            <!-- Master switch — gates all SSE consumption + badge + notifications.
+                 Default ON. When OFF the watch-filter block below dims (opacity+pointer-events). -->
+            <div class="ext-config-field">
+              <div class="ext-config-label">Extension state</div>
+              <label class="toggle is-on" id="ext-master-toggle" aria-label="Extension watching state">
+                <span class="switch"></span>
+                <span id="ext-master-label">Watching — consuming events</span>
+              </label>
+              <span class="ext-config-hint">Off = paused: no SSE, no badge updates, no notifications.</span>
+            </div>
+
+            <!-- Watch filter — include/exclude segmented mode (promoted from Option B).
+                 Dimmed and non-interactive while master switch is OFF. -->
+            <div class="ext-option-block" id="ext-watch-config" aria-label="Watch filter configuration">
+
+              <!-- Services axis -->
+              <div class="ext-option-axis-label">
+                Services
+                <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+              </div>
+              <div class="ext-option-mode-row" role="group" aria-label="Service watch mode">
+                <div class="ext-mode-seg">
+                  <button class="an-period-btn is-active" type="button">Watch all except</button>
+                  <button class="an-period-btn" type="button">Watch only</button>
+                </div>
+              </div>
+              <div class="ext-config-filter-chips" aria-label="Excluded services">
+                <span class="ext-filter-chip">analytics<span class="ext-filter-chip-x" role="button" aria-label="Remove analytics" title="Remove">&#215;</span></span>
+                <span class="ext-filter-chip">reports<span class="ext-filter-chip-x" role="button" aria-label="Remove reports" title="Remove">&#215;</span></span>
+                <button class="ext-filter-add" type="button" aria-label="Add service exclusion">+ exclude</button>
+              </div>
+              <div class="ext-option-caption">Watching 6 of 8 services</div>
+
+              <!-- Environments axis -->
+              <div class="ext-option-axis-label">
+                Environments
+                <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+              </div>
+              <div class="ext-option-mode-row" role="group" aria-label="Environment watch mode">
+                <div class="ext-mode-seg">
+                  <button class="an-period-btn" type="button">Watch all except</button>
+                  <button class="an-period-btn is-active" type="button">Watch only</button>
+                </div>
+              </div>
+              <div class="ext-config-filter-chips" aria-label="Watched environments">
+                <span class="ext-filter-chip">prod<span class="ext-filter-chip-x" role="button" aria-label="Remove prod" title="Remove">&#215;</span></span>
+                <span class="ext-filter-chip">preprod<span class="ext-filter-chip-x" role="button" aria-label="Remove preprod" title="Remove">&#215;</span></span>
+                <span class="ext-filter-chip">staging<span class="ext-filter-chip-x" role="button" aria-label="Remove staging" title="Remove">&#215;</span></span>
+                <button class="ext-filter-add" type="button" aria-label="Add environment">+ add</button>
+              </div>
+              <div class="ext-option-caption">Watching prod, preprod, staging</div>
+
+            </div>
+
+            <div class="ext-config-actions">
+              <button class="ext-btn is-primary" type="button">Save</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div><!-- .ext-shell -->
   </section>
 
 </div>
@@ -2125,7 +3822,7 @@ const SLOTS = {
                                     last:    { id:'3c4d5e6f7081', version: '',       ref:'release/1.8',                       actor: 'release-bot', elapsed: '11h ago', sha:'9f8e7d6', run_number:3081, run_url:'https://ci.internal/runs/3081', parents:1 } },
   'notification-worker|qa':       { state: 'success', current: { id:'4d5e6f708192', version: 'v1.8.4', ref:'release/1.8',         actor: 'akhan',       elapsed: '9h ago',  sha:'9f8e7d6', run_number:3076, run_url:'https://ci.internal/runs/3076', parents:1 } },
   'notification-worker|preprod':  { state: 'success', current: { id:'5e6f70819203', version: 'v1.8.4', ref:'release/1.8',         actor: 'release-bot', elapsed: '1d ago',  sha:'9f8e7d6', run_number:3060, run_url:'https://ci.internal/runs/3060', parents:1 } },
-  'notification-worker|prod':     { state: 'success', current: { id:'6f7081920314', version: 'v1.8.3', ref:'release/1.8',         actor: 'release-bot', elapsed: '3d ago',  sha:'8e7d6c5', run_number:3041, run_url:'https://ci.internal/runs/3041', parents:1 } },
+  'notification-worker|prod':     { state: 'success', context: 'rejected', current: { id:'6f7081920314', version: 'v1.8.4', ref:'release/1.8', actor: 'akhan', elapsed: '9h ago', sha:'9f8e7d6', run_number:3076, run_url:'https://ci.internal/runs/3076', parents:1 } },
 
   // auth-bff
   'auth-bff|dev':      { state: 'run-fail-last',
@@ -2144,7 +3841,7 @@ const SLOTS = {
                           current: { id:'4d8f9250a1b7', version: 'v0.41.2', ref:'#7912',                                                              elapsed: '6m ago',  sha:'c8d9e0f', run_number:2955, run_url:'https://ci.internal/runs/2955', parents:1 },
                           last:    { id:'5e90a361b2c8', version: 'v0.41.1', ref:'main',                actor: 'jpark',                                elapsed: '4h ago',  sha:'b7c8d9e', run_number:2935, run_url:'https://ci.internal/runs/2935', parents:2 } },
   'order-svc|qa':       { state: 'success', current: { id:'6fa1b472c3d9', version: 'v0.41.1', ref:'main',                  actor: 'jpark',             elapsed: '2h ago',  sha:'b7c8d9e', run_number:2938, run_url:'https://ci.internal/runs/2938', parents:1 } },
-  'order-svc|preprod':  { state: 'success', current: { id:'70b2c583d4ea', version: 'v0.41.0', ref:'release/0.41',         actor: 'release-bot',       elapsed: '11h ago', sha:'a6b7c8d', run_number:2920, run_url:'https://ci.internal/runs/2920', parents:1 } },
+  'order-svc|preprod':  { state: 'never-deployed', status: 'waiting', current: { id:'aa11bb22cc33', version: 'v0.41.2', ref:'release/0.41',         actor: 'release-bot',       elapsed: 'just now', sha:'a6b7c8d', run_number:2921, run_url:'https://ci.internal/runs/2921', parents:1 } },
   'order-svc|prod':     { state: 'fail-last',
                           current: { id:'81c3d694e5fb', version: 'v0.41.0', ref:'release/0.41',                                                       elapsed: '52m ago', sha:'a6b7c8d', run_number:2945, run_url:'https://ci.internal/runs/2945', parents:1 },
                           // bottom-section fallback DEMO step 3: no version, no sha, ref present → falls to ref
@@ -2164,21 +3861,23 @@ const SLOTS = {
   'ledger-projector|qa':       { state: 'run-fail-only',
                                   current: { id:'1a5260c2184e', version: '', ref:'fix/skew-projection',                                              elapsed: '12m ago', sha:'5b6c7d8', run_number:1828, run_url:'https://ci.internal/runs/1828', parents:0 } },
   'ledger-projector|preprod':  { state: 'success', current: { id:'2b6371d3295f', version: 'v1.9.8', ref:'release/1.9',     actor: 'release-bot',    elapsed: '8h ago',  sha:'39a4b5c', run_number:1802, run_url:'https://ci.internal/runs/1802', parents:1 } },
-  'ledger-projector|prod':     { state: 'success', current: { id:'3c7482e43a60', version: 'v1.9.8', ref:'release/1.9',     actor: 'release-bot',    elapsed: '1d ago',  sha:'39a4b5c', run_number:1790, run_url:'https://ci.internal/runs/1790', parents:1 } },
+  'ledger-projector|prod':     { state: 'success', context: 'cancelled', current: { id:'3c7482e43a60', version: 'v1.9.8', ref:'release/1.9', actor: 'release-bot', elapsed: '4h ago', sha:'39a4b5c', run_number:1795, run_url:'https://ci.internal/runs/1795', parents:1 } },
 
   // search-indexer
   'search-indexer|dev':      { state: 'success', current: { id:'4d8593f54b71', version: 'v0.7.12', ref:'#5021',              actor: 'mreyes',        elapsed: '3m ago',  sha:'6c7d8e9', run_number:1402, run_url:'https://ci.internal/runs/1402', parents:1 } },
   'search-indexer|staging':  { state: 'success', current: { id:'5e96a4065c82', version: 'v0.7.12', ref:'#5021',              actor: 'mreyes',        elapsed: '44m ago', sha:'6c7d8e9', run_number:1400, run_url:'https://ci.internal/runs/1400', parents:1 } },
   'search-indexer|qa':       { state: 'success', current: { id:'6fa7b5176d93', version: 'v0.7.11', ref:'main',                actor: 'mreyes',        elapsed: '4h ago',  sha:'5b6c7d8', run_number:1391, run_url:'https://ci.internal/runs/1391', parents:1 } },
-  'search-indexer|preprod':  { state: 'success', current: { id:'70b8c6287ea4', version: 'v0.7.10', ref:'release/0.7',         actor: 'release-bot',   elapsed: '2d ago',  sha:'4a5b6c7', run_number:1378, run_url:'https://ci.internal/runs/1378', parents:1 } },
-  'search-indexer|prod':     { state: 'success', current: { id:'81c9d7398fb5', version: 'v0.7.10', ref:'release/0.7',         actor: 'release-bot',   elapsed: '5d ago',  sha:'4a5b6c7', run_number:1370, run_url:'https://ci.internal/runs/1370', parents:1 } },
+  'search-indexer|preprod':  { state: 'success', context: 'pending', contextVersion: 'v0.7.12', current: { id:'70b8c6287ea4', version: 'v0.7.11', ref:'release/0.7', actor: 'release-bot', elapsed: '4h ago', sha:'5b6c7d8', run_number:1391, run_url:'https://ci.internal/runs/1391', parents:1 } },
+  'search-indexer|prod':     { state: 'success', context: 'queued', contextVersion: 'v0.7.12', current: { id:'81c9d7398fb5', version: 'v0.7.11', ref:'release/0.7', actor: 'release-bot', elapsed: '4h ago', sha:'5b6c7d8', run_number:1391, run_url:'https://ci.internal/runs/1391', parents:1 } },
 
   // billing-webhook
   'billing-webhook|dev':      { state: 'success', current: { id:'92d0e84a90c6', version: 'v1.4.0', ref:'feat/retry-jitter', actor: 'l.osman',        elapsed: '15m ago', sha:'7d8e9f0', run_number:822, run_url:'https://ci.internal/runs/822', parents:1 } },
   'billing-webhook|staging':  { state: 'running-only',
                                 current: { id:'a3e1f95ba1d7', version: 'v1.4.0', ref:'feat/retry-jitter',                                              elapsed: '5m ago',  sha:'7d8e9f0', run_number:825, run_url:'https://ci.internal/runs/825', parents:1 } },
-  'billing-webhook|qa':       { state: 'success', current: { id:'b4f20a6cb2e8', version: 'v1.3.9', ref:'#1188',              actor: 'l.osman',        elapsed: '6h ago',  sha:'6c7d8e9', run_number:810, run_url:'https://ci.internal/runs/810', parents:1 } },
-  'billing-webhook|preprod':  { state: 'success', current: { id:'c5031b7dc3f9', version: 'v1.3.9', ref:'#1188',              actor: 'release-bot',    elapsed: '1d ago',  sha:'6c7d8e9', run_number:801, run_url:'https://ci.internal/runs/801', parents:1 } },
+  'billing-webhook|qa':       { state: 'success', context: 'waiting', contextVersion: 'v1.4.0', current: { id:'b4f20a6cb2e8', version: 'v1.3.9', ref:'main', actor: 'l.osman', elapsed: '1d ago', sha:'6c8e5d1', run_number:820, run_url:'https://ci.internal/runs/820', parents:1 } },
+  // S4-no-prior: fail-last with NO last field → full coral tile, no split/divider (box-state parity demo)
+  'billing-webhook|preprod':  { state: 'fail-last',
+                                current: { id:'e7f30b8dc4a1', version: 'v1.3.9', ref:'feat/retry-jitter', actor: 'l.osman', elapsed: '2h ago', sha:'6c7d8e9', run_number:818, run_url:'https://ci.internal/runs/818', parents:0 } },
   'billing-webhook|prod':     { state: 'success', current: { id:'d6142c8ed40a', version: 'v1.3.8', ref:'release/1.3',         actor: 'release-bot',    elapsed: '6d ago',  sha:'5b6c7d8', run_number:792, run_url:'https://ci.internal/runs/792', parents:0 } },
 };
 
@@ -2187,7 +3886,8 @@ const SX_MARK = {
   'billing-webhook|dev':            'S1',
   'order-svc|staging':              'S2',
   'auth-bff|dev':                   'S3',
-  'notification-worker|staging':    'S4',
+  'notification-worker|staging':    'S4 (split — has last_successful)',
+  'billing-webhook|preprod':        'S4-no-prior (full coral — no last_successful)',
   'catalog-edge|qa':                'S5',
   'ledger-projector|qa':            'S6',
 };
@@ -2198,14 +3898,13 @@ const SX_MARK = {
    for matrix (row × col); environment is toggleable for visualisation.
    ================================================================= */
 const MATRIX_FIELDS = [
-  { key: 'version',             label: 'version' },
-  { key: 'run_url',             label: 'run_url' },
-  { key: 'sha',                 label: 'sha' },
-  { key: 'run_number',          label: 'run_number' },
-  { key: 'ref',                 label: 'ref' },
-  { key: 'actor',               label: 'actor' },
-  { key: 'happened_at',         label: 'happened_at' },
-  { key: 'parrent_deployments', label: 'parrent_deployments' },
+  { key: 'version',     label: 'version' },
+  { key: 'run_url',     label: 'run_url' },
+  { key: 'sha',         label: 'sha' },
+  { key: 'run_number',  label: 'run_number' },
+  { key: 'ref',         label: 'ref' },
+  { key: 'actor',       label: 'actor' },
+  { key: 'happened_at', label: 'happened_at' },
 ];
 // parrent_deployments is intentionally NOT in VIS_FIELDS — the swimlane
 // graph already renders parent relationships as edges, so the "↵ N parents"
@@ -2437,15 +4136,141 @@ function renderLastIdentifier(rec) {
 }
 
 /* =================================================================
+   MATRIX COLUMN CONTROL — show/hide + reorder + localStorage persistence
+   ================================================================= */
+
+/* Column order persisted to mx.colOrder (JSON array — permutation of ENVS).
+   Hidden set persisted to mx.colHidden (comma-separated env names).
+   Visible envs = colOrder filtered by those NOT in colHidden. */
+const MX_ORDER_KEY  = 'mx.colOrder';
+const MX_HIDDEN_KEY = 'mx.colHidden';
+
+function loadColOrder() {
+  try {
+    const raw = localStorage.getItem(MX_ORDER_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      // validate: must be a permutation of ENVS (handles added/removed envs gracefully)
+      if (Array.isArray(arr) && arr.length === ENVS.length && ENVS.every(e => arr.includes(e))) {
+        return arr;
+      }
+    }
+  } catch (_) {}
+  return [...ENVS];
+}
+
+function saveColOrder(order) {
+  try { localStorage.setItem(MX_ORDER_KEY, JSON.stringify(order)); } catch (_) {}
+}
+
+function loadColHidden() {
+  try {
+    const raw = localStorage.getItem(MX_HIDDEN_KEY);
+    if (raw) return new Set(raw.split(',').filter(Boolean));
+  } catch (_) {}
+  return new Set();
+}
+
+function saveColHidden(set) {
+  try { localStorage.setItem(MX_HIDDEN_KEY, [...set].join(',')); } catch (_) {}
+}
+
+// Mutable state — initialised from localStorage
+let colOrder  = loadColOrder();
+let colHidden = loadColHidden();
+
+/* Visible envs: colOrder with hidden entries removed. */
+function visibleEnvs() {
+  return colOrder.filter(env => !colHidden.has(env));
+}
+
+/* Recompute grid-template-columns from visibleEnvs().
+   Service-name column is always 180px; each visible env column sizes to content. */
+function computeGridCols() {
+  const n = visibleEnvs().length;
+  if (n === 0) return '180px';
+  return '180px ' + Array(n).fill('minmax(140px, max-content)').join(' ');
+}
+
+/* =================================================================
    RENDER MATRIX
    ================================================================= */
 const matrixEl = document.getElementById('matrix');
 
-function renderMatrix() {
-  // Remove any existing rows (keep header divs — first 6 nodes)
-  while (matrixEl.children.length > 6) matrixEl.removeChild(matrixEl.lastChild);
+/* drag state */
+let dragSrcEnv = null;
 
-  SERVICES.forEach((svc) => {
+function renderMatrix() {
+  matrixEl.innerHTML = '';
+  matrixEl.style.gridTemplateColumns = computeGridCols();
+
+  const visible = visibleEnvs();
+
+  // ---- Corner cell (row 1, col 1) — empty spacer ----
+  matrixEl.appendChild(document.createElement('div'));
+
+  // ---- Column headers (row 1, cols 2..N) — visible envs only ----
+  visible.forEach(env => {
+    const head = document.createElement('div');
+    head.className = 'col-head';
+    head.dataset.env = env;
+    head.setAttribute('draggable', 'true');
+    head.setAttribute('aria-label', 'Column: ' + env + '. Drag to reorder.');
+    head.title = 'Drag to reorder';
+
+    // Grip glyph — visible drag affordance
+    const grip = document.createElement('span');
+    grip.className = 'col-drag-grip';
+    grip.setAttribute('aria-hidden', 'true');
+    grip.textContent = '⠿';
+
+    const tag = document.createElement('span');
+    tag.className = 'env-tag';
+    tag.textContent = env;
+
+    head.appendChild(grip);
+    head.appendChild(tag);
+
+    // Drag-and-drop handlers
+    head.addEventListener('dragstart', e => {
+      dragSrcEnv = env;
+      head.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', env);
+    });
+    head.addEventListener('dragend', () => {
+      dragSrcEnv = null;
+      head.classList.remove('dragging');
+      document.querySelectorAll('.col-head.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+    head.addEventListener('dragover', e => {
+      if (!dragSrcEnv || dragSrcEnv === env) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.col-head.drag-over').forEach(el => { if (el !== head) el.classList.remove('drag-over'); });
+      head.classList.add('drag-over');
+    });
+    head.addEventListener('dragleave', () => head.classList.remove('drag-over'));
+    head.addEventListener('drop', e => {
+      e.preventDefault();
+      head.classList.remove('drag-over');
+      if (!dragSrcEnv || dragSrcEnv === env) return;
+      const fromIdx = colOrder.indexOf(dragSrcEnv);
+      const toIdx   = colOrder.indexOf(env);
+      if (fromIdx === -1 || toIdx === -1) return;
+      colOrder.splice(fromIdx, 1);
+      colOrder.splice(toIdx, 0, dragSrcEnv);
+      saveColOrder(colOrder);
+      dragSrcEnv = null;
+      renderMatrix();
+      buildColsPicker(); // keep picker checkboxes in sync with new order
+    });
+
+    matrixEl.appendChild(head);
+  });
+
+  // ---- Service rows — visible envs only ----
+  SERVICES.forEach(svc => {
     const rowFrag = document.createDocumentFragment();
     const rowMarker = document.createElement('div');
     rowMarker.className = 'row-head row';
@@ -2453,13 +4278,12 @@ function renderMatrix() {
     rowMarker.dataset.svc = svc;
     rowFrag.appendChild(rowMarker);
 
-    ENVS.forEach(env => {
+    visible.forEach(env => {
       const key = `${svc}|${env}`;
-      const slot = SLOTS[key];
       const cell = document.createElement('div');
       cell.className = 'row';
       cell.dataset.svc = svc;
-      cell.appendChild(renderSlot(svc, env, slot, key));
+      cell.appendChild(renderSlot(svc, env, SLOTS[key], key));
       rowFrag.appendChild(cell);
     });
 
@@ -2474,6 +4298,54 @@ function v(version) {
   s.textContent = version;
   s.dataset.version = version;
   return s;
+}
+
+/* =================================================================
+   SHARED STATUS ICON MAP (single source of truth — tiles + vis-cards + legend)
+   All 8 statuses. In-progress uses the animated .spinner element; this map
+   stores the static glyph shown in vis-cards / legend (◴ = partial-clock).
+   ================================================================= */
+const STATUS_ICONS = {
+  'success':     '✓',
+  'failure':     '✕',
+  'in-progress': '◴',   /* static glyph for vis-card / legend; tiles use .spinner */
+  'pending':     '○',
+  'queued':      '≡',
+  'waiting':     '◷',
+  'cancelled':   '⊘',
+  'rejected':    '⊗',
+};
+
+/* Helper — create a small status-icon span tinted with var(--<status>). */
+function statusIcon(status, extraStyle) {
+  const ic = document.createElement('span');
+  ic.setAttribute('aria-hidden', 'true');
+  ic.style.cssText = `font-size:12px;line-height:1;color:var(--${status});flex-shrink:0${extraStyle ? ';' + extraStyle : ''}`;
+  ic.textContent = STATUS_ICONS[status] || '';
+  return ic;
+}
+
+/* Context badge — the small secondary pill ('additional context' layered on the
+   effective tile/card state). Icon + status word + optional incoming version.
+   Always lives on its OWN row (.ctx-row) so it never overlaps the headline meta. */
+function ctxBadge(context, version) {
+  const badge = document.createElement('span');
+  badge.className = `ctx-badge cb-${context}`;
+  badge.setAttribute('aria-label', version ? `${context} ${version}` : context);
+  const ic = document.createElement('span');
+  ic.setAttribute('aria-hidden', 'true');
+  ic.textContent = STATUS_ICONS[context] || '';
+  badge.appendChild(ic);
+  const lbl = document.createElement('span');
+  lbl.textContent = context;
+  badge.appendChild(lbl);
+  if (version) {
+    const vt = document.createElement('span');
+    vt.textContent = version;
+    vt.style.cssText = 'font-family:"JetBrains Mono",monospace;font-weight:600;opacity:0.85';
+    badge.appendChild(vt);
+  }
+  return badge;
 }
 
 function renderSlot(svc, env, slot, key) {
@@ -2500,40 +4372,29 @@ function renderSlot(svc, env, slot, key) {
   const st = slot.state;
 
   if (st === 'success') {
-    /* ---------- S1 — full green: headline row (version + actor + happened_at)
-       then packed mid-row (ref + sha | run_url + run_number) then parents.
-       Headline meta only attaches when the version itself is rendered, so
-       toggling version off cleanly drops the whole headline row. */
+    /* ---------- S1 — full green: ✓ icon + version headline + meta. */
     const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    const verLine = document.createElement('div');
+    verLine.className = 'ver-row';
+    verLine.appendChild(statusIcon('success'));
     if (matrixFieldsOn.has('version') && slot.current.version) {
-      const verLine = document.createElement('div');
-      verLine.className = 'ver-row';
       verLine.appendChild(v(slot.current.version));
-      if (headlineMeta) verLine.appendChild(headlineMeta);
-      wrap.appendChild(verLine);
-    } else if (headlineMeta) {
-      // version off but meta still wanted → standalone meta row
-      const metaLine = document.createElement('div');
-      metaLine.className = 'ver-row';
-      metaLine.appendChild(headlineMeta);
-      wrap.appendChild(metaLine);
     }
+    if (headlineMeta) verLine.appendChild(headlineMeta);
+    wrap.appendChild(verLine);
     const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
     if (attrs) wrap.appendChild(attrs);
   }
 
   else if (st === 'running-only') {
-    /* ---------- S5 — full orange: spinner + version (if ON) + headline meta;
-       running-line itself wraps so actor/time can ride to the right of the
-       version on the same physical row when space allows. */
+    /* ---------- S5 — full orange: spinner + version (if ON) + headline meta.
+       When version is off → spinner + meta only; no word fallback. */
     const line = document.createElement('div');
     line.className = 'running-line';
     const sp = document.createElement('span'); sp.className = 'spinner';
     line.appendChild(sp);
     if (matrixFieldsOn.has('version') && slot.current.version) {
       line.appendChild(v(slot.current.version));
-    } else {
-      const lbl = document.createElement('span'); lbl.className = 'failed-tag'; lbl.textContent = 'Running'; line.appendChild(lbl);
     }
     const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
     if (headlineMeta) line.appendChild(headlineMeta);
@@ -2597,30 +4458,39 @@ function renderSlot(svc, env, slot, key) {
   }
 
   else if (st === 'fail-last') {
-    /* ---------- S4 — split: top red + Failed tag + version + meta; bottom = single fallback identifier.
-       failed-line wraps so actor/time ride alongside the version. */
-    wrap.classList.add('split');
-    const top = document.createElement('div'); top.className = 'sec-top is-failed';
-    const tl = document.createElement('div'); tl.className = 'failed-line';
-    const tag = document.createElement('span');
-    tag.className = 'failed-tag';
-    tag.textContent = 'Failed';
-    tl.appendChild(tag);
-    if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
-    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
-    if (headlineMeta) tl.appendChild(headlineMeta);
-    top.appendChild(tl);
-    const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
-    if (tAttrs) top.appendChild(tAttrs);
-    wrap.appendChild(top);
-
-    const div = document.createElement('div'); div.className = 'divider';
-    wrap.appendChild(div);
-
-    const bot = document.createElement('div'); bot.className = 'sec-bot';
-    const last = renderLastIdentifier(slot.last);
-    if (last) bot.appendChild(last);
-    wrap.appendChild(bot);
+    /* ---------- S4 — failure: ✕ icon replaces the "Failed" word.
+       When slot.last present: SPLIT (top red section; bottom = last-successful identifier).
+       When slot.last absent: FULL coral tile — icon + version + meta, no split. */
+    if (slot.last) {
+      // Split variant
+      wrap.classList.add('split');
+      const top = document.createElement('div'); top.className = 'sec-top is-failed';
+      const tl = document.createElement('div'); tl.className = 'failed-line';
+      tl.appendChild(statusIcon('failure'));
+      if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
+      const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+      if (headlineMeta) tl.appendChild(headlineMeta);
+      top.appendChild(tl);
+      const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+      if (tAttrs) top.appendChild(tAttrs);
+      wrap.appendChild(top);
+      const divEl = document.createElement('div'); divEl.className = 'divider';
+      wrap.appendChild(divEl);
+      const bot = document.createElement('div'); bot.className = 'sec-bot';
+      const last = renderLastIdentifier(slot.last);
+      if (last) bot.appendChild(last);
+      wrap.appendChild(bot);
+    } else {
+      // Full coral tile — no split, no divider, no bottom section
+      const tl = document.createElement('div'); tl.className = 'failed-line';
+      tl.appendChild(statusIcon('failure'));
+      if (matrixFieldsOn.has('version') && slot.current.version) tl.appendChild(v(slot.current.version));
+      const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+      if (headlineMeta) tl.appendChild(headlineMeta);
+      wrap.appendChild(tl);
+      const tAttrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+      if (tAttrs) wrap.appendChild(tAttrs);
+    }
   }
 
   else if (st === 'run-fail-only') {
@@ -2639,6 +4509,36 @@ function renderSlot(svc, env, slot, key) {
     // S6: no running version, no bottom. Other selected attrs (sha/run_number/ref/run_url/parents) still rendered.
     const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
     if (attrs) wrap.appendChild(attrs);
+  }
+
+  else if (st === 'never-deployed') {
+    /* ---------- Never effectively deployed on this env: the only deployment so
+       far is a non-effective status (pending/queued/waiting/cancelled/rejected),
+       with no prior success/in-progress/failure. The tile is NEUTRAL/grey (no
+       health to colour by) and carries the actual status on a chip. */
+    const line = document.createElement('div');
+    line.className = 'ver-row';
+    const chip = document.createElement('span');
+    chip.className = 'status-chip ' + statusKlass(slot.status);
+    chip.textContent = `${STATUS_ICONS[slot.status] || ''} ${slot.status}`;
+    line.appendChild(chip);
+    if (matrixFieldsOn.has('version') && slot.current.version) {
+      line.appendChild(v(slot.current.version));
+    }
+    const headlineMeta = renderHeadlineMeta(slot.current, matrixFieldsOn);
+    if (headlineMeta) line.appendChild(headlineMeta);
+    wrap.appendChild(line);
+    const attrs = renderAttrs(slot.current, matrixFieldsOn, { skipMeta: true });
+    if (attrs) wrap.appendChild(attrs);
+  }
+
+  // Context badge — deployment context layered on the effective tile state.
+  // slot.context = 'pending' | 'queued' | 'waiting' | 'cancelled' | 'rejected'
+  if (slot.context) {
+    const row = document.createElement('div');
+    row.className = 'ctx-row';
+    row.appendChild(ctxBadge(slot.context, slot.contextVersion));
+    wrap.appendChild(row);
   }
 
   return wrap;
@@ -2716,14 +4616,28 @@ function setView(view) {
   currentView = view;
   document.getElementById('view-matrix').classList.toggle('is-active', view === 'matrix');
   document.getElementById('view-vis').classList.toggle('is-active', view === 'vis');
-  // inline matrix filter is matrix-only; vis view hides it (filter doesn't apply to DAG)
+  document.getElementById('view-analytics').classList.toggle('is-active', view === 'analytics');
+  document.getElementById('view-extension').classList.toggle('is-active', view === 'extension');
+  // inline matrix filter + columns picker are matrix-only
   document.getElementById('hdr-matrix-filter').style.display = view === 'matrix' ? 'flex' : 'none';
-  document.getElementById('hdr-vis-icons').style.display    = view === 'vis'    ? '' : 'none';
+  document.getElementById('hdr-cols-btn').style.display      = view === 'matrix' ? ''     : 'none';
+  document.getElementById('hdr-vis-icons').style.display     = view === 'vis'    ? ''     : 'none';
+  // Fields + Legend buttons hidden on analytics and extension (no per-cell fields there)
+  const hideFields = view === 'analytics' || view === 'extension';
+  document.getElementById('btn-fields').parentElement.style.display  = hideFields ? 'none' : '';
+  document.getElementById('btn-legend').parentElement.style.display  = hideFields ? 'none' : '';
   // Fields popover content swaps per view
   document.getElementById('fields-grid-matrix').style.display = view === 'matrix' ? '' : 'none';
   document.getElementById('fields-grid-vis').style.display    = view === 'vis'    ? '' : 'none';
   document.getElementById('pop-fields-title').textContent =
     view === 'matrix' ? 'Visible fields — Matrix' : 'Visible fields — Swimlanes';
+  // Legend popover content swaps per view (mirrors Fields pattern)
+  document.getElementById('legend-matrix').style.display = view === 'matrix' ? '' : 'none';
+  document.getElementById('legend-vis').style.display    = view === 'vis'    ? '' : 'none';
+  document.getElementById('pop-legend-title').textContent =
+    view === 'matrix' ? 'Legend — Matrix' : 'Legend — Swimlanes';
+  // Fields badge reflects the active view's hidden-field count
+  syncFieldsBtn();
   // close any open popover when switching
   closeAllPopovers();
 
@@ -2734,6 +4648,11 @@ function setView(view) {
     window.__visNodeDims = null;
     buildSwim();
     selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
+  }
+
+  // Analytics: render (or re-render on focus)
+  if (view === 'analytics') {
+    renderAnalytics(typeof anCurrentDays !== 'undefined' ? anCurrentDays : 14);
   }
 }
 document.querySelectorAll('.tab').forEach(t => {
@@ -2748,10 +4667,14 @@ document.querySelectorAll('.tab').forEach(t => {
    POPOVERS — click-outside / ESC / re-click to close
    ================================================================= */
 /* Filter popover removed — filter controls are inline in the header now.
-   Vis correlation popover and shared fields-picker popover remain. */
+   Rate-limit chip popover, columns picker (matrix-only), vis correlation popover,
+   and shared fields-picker popover remain. */
 const POPOVERS = [
+  { btn: 'btn-ratelimit',   pop: 'pop-ratelimit' },
+  { btn: 'btn-columns',     pop: 'pop-columns' },
   { btn: 'btn-correlation', pop: 'pop-correlation' },
   { btn: 'btn-fields',      pop: 'pop-fields' },
+  { btn: 'btn-legend',      pop: 'pop-legend' },
 ];
 function closeAllPopovers() {
   POPOVERS.forEach(({btn, pop}) => {
@@ -2799,9 +4722,11 @@ function buildFieldsPicker(containerId, fields, fieldsOn, onChange) {
   });
 }
 buildFieldsPicker('fields-grid-matrix', MATRIX_FIELDS, matrixFieldsOn, () => {
+  syncFieldsBtn();
   renderMatrix();
 });
 buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
+  syncFieldsBtn();
   // Field toggle → clear cached dims so the measurement pass remeasures
   // against the new content. This cascades into lane geometry.
   window.__visNodeDims = null;
@@ -2809,8 +4734,886 @@ buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
   // preserve selection ring after rebuild
   selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
 });
+
+/* =================================================================
+   LEGEND FIELD ROWS — programmatic, from fieldSpan + real classes
+   Uses the same renderer the tiles/cards use so examples can't drift.
+   ================================================================= */
+(function buildLegendFields() {
+  /* Sample record covering all fields */
+  const ALL_ON = new Set(['version','run_url','sha','run_number','ref','actor',
+                          'happened_at','environment','parrent_deployments']);
+  const sampleRec = {
+    version:    'v2.14.3',
+    run_url:    'https://ci.internal/runs/4821',
+    sha:        '7d3e2a1',
+    run_number: 4821,
+    ref:        'release/2.14',
+    actor:      'mreyes',
+    elapsed:    '2h ago',
+    parents:    1,
+  };
+  const sampleEnv = 'staging';
+
+  /* Short meaning for each field key */
+  const MEANING = {
+    version:     'version — currently deployed',
+    run_url:     'run_url — link to the CI run',
+    sha:         'sha — commit deployed',
+    run_number:  'run_number — CI run number',
+    ref:         'ref — branch or tag',
+    actor:       'actor — who triggered the deploy',
+    happened_at: 'happened_at — when it ran',
+    environment: 'environment — which env it ran in',
+  };
+
+  /* Build one .lg-ex row: left = example element, right = meaning text */
+  function exRow(leftEl, meaning) {
+    const row = document.createElement('div');
+    row.className = 'lg-ex';
+    const l = document.createElement('div');
+    l.className = 'lg-ex-l';
+    l.appendChild(leftEl);
+    const r = document.createElement('div');
+    r.className = 'lg-ex-r';
+    r.textContent = meaning;
+    row.appendChild(l);
+    row.appendChild(r);
+    return row;
+  }
+
+  /* ---- matrix tile ---- */
+  (function() {
+    const container = document.getElementById('legend-matrix-fields');
+    if (!container) return;
+
+    MATRIX_FIELDS.forEach(({ key }) => {
+      let leftEl;
+      if (key === 'version') {
+        /* Tile renders version as a .ver span */
+        const s = document.createElement('span');
+        s.className = 'ver';
+        s.style.cssText = 'cursor:default;pointer-events:none';
+        s.textContent = sampleRec.version;
+        leftEl = s;
+      } else if (key === 'actor') {
+        /* Tile places actor in .ver-meta via renderHeadlineMeta */
+        const wrap = document.createElement('span');
+        wrap.className = 'ver-meta';
+        const el = fieldSpan('actor', sampleRec, ALL_ON);
+        if (el) wrap.appendChild(el);
+        leftEl = wrap;
+      } else if (key === 'happened_at') {
+        /* Tile places happened_at in .ver-meta alongside actor */
+        const wrap = document.createElement('span');
+        wrap.className = 'ver-meta';
+        const el = fieldSpan('happened_at', sampleRec, ALL_ON);
+        if (el) wrap.appendChild(el);
+        leftEl = wrap;
+      } else {
+        /* All other fields: run_url, sha, run_number, ref — via fieldSpan */
+        leftEl = fieldSpan(key, sampleRec, ALL_ON) || document.createElement('span');
+      }
+      container.appendChild(exRow(leftEl, MEANING[key] || key));
+    });
+  })();
+
+  /* ---- vis-card ---- */
+  (function() {
+    const container = document.getElementById('legend-vis-fields');
+    if (!container) return;
+
+    VIS_FIELDS.forEach(({ key }) => {
+      let leftEl;
+      if (key === 'environment') {
+        /* Card renders env as .vc-env div */
+        const d = document.createElement('div');
+        d.className = 'vc-env';
+        d.textContent = sampleEnv;
+        /* vc-env is normally scoped inside vis-card; inline the critical styles
+           so it renders correctly when standing alone in the legend */
+        d.style.cssText = 'font-family:"Inter",system-ui,sans-serif;font-size:11px;font-weight:600;color:var(--ink-0);text-transform:lowercase;display:inline-flex;align-items:center;gap:5px;white-space:nowrap';
+        leftEl = d;
+      } else if (key === 'version') {
+        /* Card renders version as .vc-ver div */
+        const d = document.createElement('div');
+        d.className = 'vc-ver';
+        d.textContent = sampleRec.version;
+        /* vc-ver scoped inside vis-card; inline critical styles */
+        d.style.cssText = 'font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:500;color:var(--ink-2);white-space:nowrap';
+        leftEl = d;
+      } else {
+        /* run_url, sha, run_number, ref, actor, happened_at — via fieldSpan */
+        leftEl = fieldSpan(key, sampleRec, ALL_ON) || document.createElement('span');
+      }
+      container.appendChild(exRow(leftEl, MEANING[key] || key));
+    });
+  })();
+})();
+
+/* =================================================================
+   COLUMNS PICKER — show/hide environments (matrix-only)
+   One checkbox row per env (same field-toggle styling as Fields picker).
+   Order follows colOrder so the picker always reflects the current sequence.
+   Edge case: prevent hiding the last visible environment.
+   ================================================================= */
+
+/* Shared helper — syncs one icon-button's is-active state, count badge,
+   title, and aria-label based on a hidden count n.
+   zeroTitle / zeroAria: strings used when n === 0.
+   noun: singular noun for the thing being hidden (e.g. "field", "environment"). */
+function syncIconBtn(btnId, badgeId, n, zeroTitle, zeroAria, noun) {
+  const btn   = document.getElementById(btnId);
+  const badge = document.getElementById(badgeId);
+  if (!btn || !badge) return;
+  if (n > 0) {
+    btn.classList.add('is-active');
+    badge.textContent = n;
+    badge.classList.add('is-visible');
+    const label = n === 1 ? '1 ' + noun + ' hidden' : n + ' ' + noun + 's hidden';
+    btn.title = btn.title.replace(/\s*—.*$/, '') + ' — ' + label;
+    btn.setAttribute('aria-label', btn.title + '. Click to manage.');
+  } else {
+    btn.classList.remove('is-active');
+    badge.textContent = '';
+    badge.classList.remove('is-visible');
+    btn.title = zeroTitle;
+    btn.setAttribute('aria-label', zeroAria);
+  }
+}
+
+/* Keep the Columns button in sync with the current colHidden state. */
+function syncColsBtn() {
+  syncIconBtn(
+    'btn-columns', 'col-hidden-badge',
+    colHidden.size,
+    'Columns — show/hide environments',
+    'Columns — show/hide environments',
+    'environment'
+  );
+}
+
+/* Keep the Fields button in sync with the current view's hidden-field count.
+   Matrix: counts OFF fields in matrixFieldsOn (total = MATRIX_FIELDS.length).
+   Swimlanes: counts OFF fields in visFieldsOn (total = VIS_FIELDS.length). */
+function syncFieldsBtn() {
+  const isMatrix = (currentView === 'matrix');
+  const total    = isMatrix ? MATRIX_FIELDS.length : VIS_FIELDS.length;
+  const on       = isMatrix ? matrixFieldsOn.size  : visFieldsOn.size;
+  const n        = total - on;
+  syncIconBtn(
+    'btn-fields', 'fields-hidden-badge',
+    n,
+    'Fields — toggle visible data fields',
+    'Fields — toggle visible data fields',
+    'field'
+  );
+}
+
+function buildColsPicker() {
+  const container = document.getElementById('cols-grid-matrix');
+  container.innerHTML = '';
+  colOrder.forEach(env => {
+    const isOn = !colHidden.has(env);
+    const lbl = document.createElement('label');
+    lbl.className = 'field-toggle' + (isOn ? ' is-on' : '');
+    lbl.innerHTML = `<span class="chk"></span><span>${env}</span>`;
+    lbl.addEventListener('click', e => {
+      e.preventDefault();
+      const currentlyOn = !colHidden.has(env);
+      // Prevent hiding the last visible env
+      if (currentlyOn && visibleEnvs().length <= 1) return;
+      if (currentlyOn) colHidden.add(env);
+      else colHidden.delete(env);
+      saveColHidden(colHidden);
+      lbl.classList.toggle('is-on', !colHidden.has(env));
+      syncColsBtn();
+      renderMatrix();
+    });
+    container.appendChild(lbl);
+  });
+  syncColsBtn();
+}
+buildColsPicker();
+
+// "Show all · reset order" button inside the Columns popover
+document.getElementById('btn-cols-reset').addEventListener('click', e => {
+  e.stopPropagation();
+  colOrder  = [...ENVS];
+  colHidden = new Set();
+  try { localStorage.removeItem(MX_ORDER_KEY);  } catch (_) {}
+  try { localStorage.removeItem(MX_HIDDEN_KEY); } catch (_) {}
+  buildColsPicker();  // rebuilds picker + calls syncColsBtn()
+  renderMatrix();
+});
+
 // initial view sync
 setView('matrix');
+
+/* =================================================================
+   ANALYTICS VIEW — DORA Four Keys
+   All data is deterministic (seeded PRNG, no Math.random / Date.now).
+   Prefix: an* / AN_* / .an-*
+   ================================================================= */
+
+/* ---- Seeded PRNG (mulberry32) ---- */
+function anMulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ---- Generate 30-day fixture dataset (once, fixed seed) ---- */
+const AN_SEED = 1337;
+const AN_ACTORS = ['mreyes','akhan','s.harper','jpark','tcheng','r.iyer','l.osman','release-bot'];
+// release-bot gets ~3x weight
+const AN_ACTOR_WEIGHTS = [2,2,2,2,2,2,2,6];
+
+(function buildAnData() {
+  const rng = anMulberry32(AN_SEED);
+  const rand = () => rng();
+
+  // Weighted actor pick
+  const actorTotal = AN_ACTOR_WEIGHTS.reduce((a,b)=>a+b,0);
+  function pickActor() {
+    let r = rand() * actorTotal, cum = 0;
+    for (let i=0; i<AN_ACTORS.length; i++) { cum+=AN_ACTOR_WEIGHTS[i]; if (r<cum) return AN_ACTORS[i]; }
+    return AN_ACTORS[AN_ACTORS.length-1];
+  }
+
+  window.AN_DAYS = []; // index 0 = oldest (day -29), index 29 = today
+
+  for (let d=0; d<30; d++) {
+    const total = Math.round(4 + rand()*14);          // 4–18 deploys
+    const failures = Math.round(rand() * total * 0.28); // 0–28% CFR
+    // Duration array (minutes) — mostly 5–45, occasional long tail
+    const durations = Array.from({length: total}, () => {
+      const base = 5 + rand()*40;
+      return rand() < 0.07 ? base + 40 + rand()*60 : base; // 7% long-tail
+    }).sort((a,b)=>a-b);
+    // Lead time (hours, dev→prod median) — 6h to 72h
+    const lead = 6 + rand()*66;
+    // MTTR (minutes) — 10 to 180
+    const restore = 10 + rand()*170;
+    // 24-slot hour histogram — business hours weighted
+    const hourHist = Array.from({length:24}, (_,h) => {
+      const biz = (h>=9 && h<=18) ? 3 : 0.3;
+      return Math.round(rand() * biz * total * 0.15);
+    });
+    // Actor attribution for this day
+    const actorCounts = {};
+    AN_ACTORS.forEach(a => actorCounts[a]=0);
+    for (let i=0; i<total; i++) { actorCounts[pickActor()]++; }
+    // Small status counts
+    const inProgress = Math.round(rand()*2);
+    const queued     = Math.round(rand()*1.5);
+    const pending    = Math.round(rand()*1.5);
+    const waiting    = Math.round(rand()*1);
+    const cancelled  = Math.round(rand()*1);
+    const rejected   = Math.round(rand()*1);
+
+    window.AN_DAYS.push({ total, failures, durations, lead, restore,
+      hourHist, actorCounts, inProgress, queued, pending, waiting, cancelled, rejected });
+  }
+
+  // Fixed incidents list (~9 recent)
+  const incRng = anMulberry32(AN_SEED + 7);
+  const incEnvs = ['staging','preprod','prod'];
+  window.AN_INCIDENTS = Array.from({length:9}, () => ({
+    service: SERVICES[Math.floor(incRng()*SERVICES.length)],
+    env:     incEnvs[Math.floor(incRng()*incEnvs.length)],
+    downMinutes: Math.round(10 + incRng()*170),
+  }));
+})();
+
+/* ---- Window aggregation ---- */
+function anWindowData(days) {
+  const slice = window.AN_DAYS.slice(-days);
+  let total=0, failures=0, allDurs=[], allLead=[], allRestore=[];
+  const actorTotals = {};
+  AN_ACTORS.forEach(a => actorTotals[a]=0);
+  const hourHist = new Array(24).fill(0);
+  let inP=0, queued=0, pending=0, waiting=0, cancelled=0, rejected=0;
+  const freqSeries=[], cfrSeries=[];
+
+  slice.forEach(d => {
+    total    += d.total;
+    failures += d.failures;
+    allDurs   = allDurs.concat(d.durations);
+    allLead.push(d.lead);
+    allRestore.push(d.restore);
+    AN_ACTORS.forEach(a => actorTotals[a]+=(d.actorCounts[a]||0));
+    d.hourHist.forEach((v,h) => hourHist[h]+=v);
+    inP      += d.inProgress;
+    queued   += d.queued;
+    pending  += d.pending;
+    waiting  += d.waiting;
+    cancelled+= d.cancelled;
+    rejected += d.rejected;
+    freqSeries.push({ total: d.total, failures: d.failures });
+    cfrSeries.push(d.total > 0 ? (d.failures/d.total)*100 : 0);
+  });
+
+  allDurs.sort((a,b)=>a-b);
+  allLead.sort((a,b)=>a-b);
+  allRestore.sort((a,b)=>a-b);
+  function median(arr) { if (!arr.length) return 0; const m=Math.floor(arr.length/2); return arr.length%2 ? arr[m] : (arr[m-1]+arr[m])/2; }
+  function pct(arr,p) { if (!arr.length) return 0; return arr[Math.min(arr.length-1, Math.floor(arr.length*p/100))]; }
+
+  return {
+    days, total, failures,
+    cfr: total>0 ? (failures/total)*100 : 0,
+    leadMedian: median(allLead),
+    restoreMedian: median(allRestore),
+    allDurs, durP50: pct(allDurs,50), durP95: pct(allDurs,95),
+    actorTotals,
+    hourHist,
+    inP, queued, pending, waiting, cancelled, rejected,
+    freqSeries, cfrSeries,
+    // per-day lead/restore for sparklines
+    leadSeries: slice.map(d=>d.lead),
+    restoreSeries: slice.map(d=>d.restore),
+  };
+}
+
+/* ---- CSS variable reader (resolves tokens at paint time for SVG fills) ---- */
+function anCssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/* ---- Inline SVG helpers ---- */
+function anPolyline(pts, color, opacity, strokeW) {
+  if (!pts.length) return '';
+  const d = pts.map(([x,y])=>`${x},${y}`).join(' ');
+  return `<polyline points="${d}" fill="none" stroke="${color}" stroke-width="${strokeW||1.5}" opacity="${opacity||1}" stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+function anArea(pts, color, h, opacity) {
+  if (!pts.length) return '';
+  const d = `M${pts[0][0]},${h} ` + pts.map(([x,y])=>`L${x},${y}`).join(' ') + ` L${pts[pts.length-1][0]},${h} Z`;
+  return `<path d="${d}" fill="${color}" opacity="${opacity||0.18}"/>`;
+}
+
+/* ---- Sparkline for KPI cards ---- */
+function anSparkline(series, color, w, h) {
+  if (!series.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const min=Math.min(...series), max=Math.max(...series);
+  const range=max-min || 1;
+  const pad=2;
+  const pts = series.map((v,i)=>[
+    pad + i*(w-pad*2)/(series.length-1 || 1),
+    pad + (1-(v-min)/range)*(h-pad*2)
+  ]);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" class="an-kpi-sparkline">
+    ${anArea(pts, color, h, 0.18)}
+    ${anPolyline(pts, color, 0.9, 1.5)}
+  </svg>`;
+}
+
+/* ---- DORA classification ---- */
+function anFreqClass(perDay) {
+  if (perDay>=1)    return {label:'Elite',  cls:'elite'};
+  if (perDay>=1/7)  return {label:'High',   cls:'high'};
+  if (perDay>=1/30) return {label:'Medium', cls:'medium'};
+  return              {label:'Low',    cls:'low'};
+}
+function anLeadClass(hours) {
+  if (hours<24)  return {label:'Elite',  cls:'elite'};
+  if (hours<168) return {label:'High',   cls:'high'};
+  if (hours<730) return {label:'Medium', cls:'medium'};
+  return           {label:'Low',    cls:'low'};
+}
+function anCfrClass(pct) {
+  if (pct<=15) return {label:'Elite',  cls:'elite'};
+  if (pct<=30) return {label:'High',   cls:'high'};
+  if (pct<=45) return {label:'Medium', cls:'medium'};
+  return         {label:'Low',    cls:'low'};
+}
+function anMttrClass(mins) {
+  if (mins<60)   return {label:'Elite',  cls:'elite'};
+  if (mins<1440) return {label:'High',   cls:'high'};
+  if (mins<10080)return {label:'Medium', cls:'medium'};
+  return           {label:'Low',    cls:'low'};
+}
+
+/* ---- Format helpers ---- */
+function anFmtHours(h) {
+  if (h<24) return `${h.toFixed(1)}h`;
+  const d=Math.floor(h/24), rem=Math.round(h%24);
+  return rem>0 ? `${d}d ${rem}h` : `${d}d`;
+}
+function anFmtMins(m) {
+  if (m<60) return `${Math.round(m)}m`;
+  const h=Math.floor(m/60), rem=Math.round(m%60);
+  return rem>0 ? `${h}h ${rem}m` : `${h}h`;
+}
+function anTrend(series, higherGood) {
+  if (series.length < 2) return {label:'—', cls:'flat'};
+  const half=Math.floor(series.length/2);
+  const first=series.slice(0,half), second=series.slice(half);
+  const avg=arr=>arr.reduce((a,b)=>a+b,0)/arr.length;
+  const a1=avg(first), a2=avg(second);
+  if (!a1) return {label:'—', cls:'flat'};
+  const delta=(a2-a1)/a1;
+  if (Math.abs(delta)<0.02) return {label:'±0%', cls:'flat'};
+  const up=delta>0;
+  const good=(higherGood ? up : !up);
+  const pctStr=(up?'↑':'↓')+Math.abs(Math.round(delta*100))+'%';
+  return {label:pctStr, cls:good?'good':'bad'};
+}
+
+/* ---- KPI band render ---- */
+function anRenderKpiBand(data) {
+  const band = document.getElementById('an-kpi-band');
+  const freq = data.total/data.days;
+  const freqCl  = anFreqClass(freq);
+  const leadCl  = anLeadClass(data.leadMedian);
+  const cfrCl   = anCfrClass(data.cfr);
+  const mttrCl  = anMttrClass(data.restoreMedian);
+
+  const freqTr  = anTrend(data.freqSeries.map(d=>d.total), true);
+  const leadTr  = anTrend(data.leadSeries, false);
+  const cfrTr   = anTrend(data.cfrSeries, false);
+  const mttrTr  = anTrend(data.restoreSeries, false);
+
+  const emerald=anCssVar('--emerald'), coral=anCssVar('--coral'),
+        amber=anCssVar('--amber'), blue=anCssVar('--blue');
+
+  function card(label, value, cls, trend, sparkSeries, sparkColor) {
+    return `<div class="an-kpi-card">
+      <div class="an-kpi-label">${label}</div>
+      <div class="an-kpi-value">${value}</div>
+      <div class="an-kpi-row">
+        <span class="an-class-chip ${cls.cls}">${cls.label}</span>
+        <span class="an-trend-chip ${trend.cls}">${trend.label}</span>
+      </div>
+      ${anSparkline(sparkSeries, sparkColor, 200, 26)}
+    </div>`;
+  }
+
+  band.innerHTML =
+    card('Deployment Frequency', `${freq.toFixed(1)}/day`, freqCl, freqTr,
+         data.freqSeries.map(d=>d.total), emerald) +
+    card('Lead Time for Changes', anFmtHours(data.leadMedian), leadCl, leadTr,
+         data.leadSeries, blue) +
+    card('Change Failure Rate', `${data.cfr.toFixed(1)}%`, cfrCl, cfrTr,
+         data.cfrSeries, coral) +
+    card('Time to Restore (MTTR)', anFmtMins(data.restoreMedian), mttrCl, mttrTr,
+         data.restoreSeries, amber);
+}
+
+/* ---- Chart 1: Deployment frequency over time (stacked bars) ---- */
+function anRenderFreq(data) {
+  const el=document.getElementById('an-chart-freq');
+  // W = actual rendered pixel width → coordinate space matches 1:1, no text distortion
+  const W=Math.max(el.offsetWidth||800, 200);
+  const H=185, PL=40, PR=86, PT=12, PB=26;
+  const cw=W-PL-PR, ch=H-PT-PB;
+  const series=data.freqSeries, n=series.length;
+  const maxV=Math.max(...series.map(d=>d.total), 1);
+  const gridLines=[0,Math.round(maxV/2),maxV];
+  const barW=Math.max(2, (cw/n)*0.62);
+  const gap=(cw/n);
+  const emerald=anCssVar('--emerald'), coral=anCssVar('--coral');
+  const gridCol=anCssVar('--grid-line'), ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axis Y labels: 13px ink-1
+  gridLines.forEach(v=>{
+    const y=PT+ch-(v/maxV)*ch;
+    svg+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="${gridCol}" stroke-width="1"/>`;
+    svg+=`<text x="${PL-5}" y="${y+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${v}</text>`;
+  });
+
+  series.forEach((d,i)=>{
+    const x=PL+i*gap+(gap-barW)/2;
+    const succH=(d.total>0)?(((d.total-d.failures)/d.total)*ch*(d.total/maxV)):0;
+    const failH=(d.total>0)?((d.failures/d.total)*ch*(d.total/maxV)):0;
+    const yFail=PT+ch-succH-failH;
+    const ySucc=PT+ch-succH;
+    if (failH>0) svg+=`<rect x="${x}" y="${yFail}" width="${barW}" height="${failH}" rx="1.5" fill="${coral}" opacity="0.85"/>`;
+    if (succH>0) svg+=`<rect x="${x}" y="${ySucc}" width="${barW}" height="${succH}" rx="1.5" fill="${emerald}" opacity="0.85"/>`;
+  });
+
+  // Date tick labels: 13px ink-1
+  const tickEvery=Math.max(1,Math.floor(n/6));
+  const today=new Date(2026,5,9);
+  for(let i=0;i<n;i++){
+    if(i%tickEvery!==0 && i!==n-1) continue;
+    const dayOffset=n-1-i;
+    const d=new Date(today); d.setDate(d.getDate()-dayOffset);
+    const x=PL+i*gap+gap/2;
+    svg+=`<text x="${x}" y="${H-6}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${d.getMonth()+1}/${d.getDate()}</text>`;
+  }
+
+  // Legend in right gutter: 14px ink-1
+  const lx=W-PR+8;
+  svg+=`<rect x="${lx}" y="${PT+2}" width="10" height="10" rx="1.5" fill="${emerald}" opacity="0.85"/>`;
+  svg+=`<text x="${lx+14}" y="${PT+11}" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">success</text>`;
+  svg+=`<rect x="${lx}" y="${PT+20}" width="10" height="10" rx="1.5" fill="${coral}" opacity="0.85"/>`;
+  svg+=`<text x="${lx+14}" y="${PT+29}" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">failure</text>`;
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 2: CFR trend line ---- */
+function anRenderCfr(data) {
+  const el=document.getElementById('an-chart-cfr');
+  const W=Math.max(el.offsetWidth||400, 200);
+  const H=160, PL=42, PR=34, PT=12, PB=26;
+  const cw=W-PL-PR, ch=H-PT-PB;
+  const series=data.cfrSeries, n=series.length;
+  const maxV=Math.max(...series, 20);
+  const gridCol=anCssVar('--grid-line'), ink1=anCssVar('--ink-1');
+  const coral=anCssVar('--coral'), amber=anCssVar('--amber');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axis Y labels: 13px ink-1
+  [0,Math.round(maxV/2),maxV].forEach(v=>{
+    const y=PT+ch-(v/maxV)*ch;
+    svg+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="${gridCol}" stroke-width="1"/>`;
+    svg+=`<text x="${PL-5}" y="${y+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${Math.round(v)}%</text>`;
+  });
+
+  if (15<=maxV) {
+    const yThr=PT+ch-(15/maxV)*ch;
+    svg+=`<line x1="${PL}" y1="${yThr}" x2="${W-PR}" y2="${yThr}" stroke="${amber}" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7"/>`;
+    svg+=`<text x="${W-PR+3}" y="${yThr+5}" font-size="13" font-weight="500" fill="${amber}" opacity="0.9" font-family="'Inter',sans-serif">15%</text>`;
+  }
+
+  const pts=series.map((v,i)=>[PL+i*(cw/(n-1||1)), PT+ch-(v/maxV)*ch]);
+  svg+=anArea(pts, coral, H-PB, 0.2);
+  svg+=anPolyline(pts, coral, 0.9, 1.8);
+  pts.forEach(([x,y])=>{
+    svg+=`<circle cx="${x}" cy="${y}" r="2.5" fill="${coral}" opacity="0.85"/>`;
+  });
+
+  // Date tick labels: 13px ink-1
+  const today=new Date(2026,5,9);
+  const tickEvery=Math.max(1,Math.floor(n/5));
+  for(let i=0;i<n;i++){
+    if(i%tickEvery!==0 && i!==n-1) continue;
+    const dayOffset=n-1-i;
+    const d=new Date(today); d.setDate(d.getDate()-dayOffset);
+    svg+=`<text x="${PL+i*(cw/(n-1||1))}" y="${H-6}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${(d.getMonth()+1)}/${d.getDate()}</text>`;
+  }
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 3: Duration distribution histogram ---- */
+function anRenderDuration(data) {
+  const el=document.getElementById('an-chart-dur');
+  const W=Math.max(el.offsetWidth||400, 200);
+  const H=160, PL=40, PR=12, PT=12, PB=26;
+  const cw=W-PL-PR, ch=H-PT-PB;
+  const labels=['0-10','10-20','20-30','30-40','40-50','50-60','60+'];
+  const counts=new Array(labels.length).fill(0);
+  data.allDurs.forEach(d=>{
+    let bi=Math.min(Math.floor(d/10), labels.length-1);
+    counts[bi]++;
+  });
+  const maxC=Math.max(...counts,1);
+  const barW=cw/labels.length*0.76, gap=cw/labels.length;
+  const blue=anCssVar('--blue'), gridCol=anCssVar('--grid-line');
+  const ink1=anCssVar('--ink-1'), emerald=anCssVar('--emerald'), amber=anCssVar('--amber');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axis Y labels: 13px ink-1
+  [0,Math.round(maxC/2),maxC].forEach(v=>{
+    const y=PT+ch-(v/maxC)*ch;
+    svg+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="${gridCol}" stroke-width="1"/>`;
+    svg+=`<text x="${PL-5}" y="${y+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${v}</text>`;
+  });
+
+  // Bucket (category) labels: 14px ink-1
+  counts.forEach((c,i)=>{
+    const x=PL+i*gap+(gap-barW)/2;
+    const bh=(c/maxC)*ch;
+    svg+=`<rect x="${x}" y="${PT+ch-bh}" width="${barW}" height="${bh}" rx="2" fill="${blue}" opacity="0.80"/>`;
+    svg+=`<text x="${x+barW/2}" y="${H-5}" text-anchor="middle" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${labels[i]}</text>`;
+  });
+
+  // p50/p95 marker labels: 13px ink-1
+  const p50Bucket=Math.min(Math.floor(data.durP50/10), labels.length-1);
+  const xp50=PL+p50Bucket*gap+gap/2;
+  svg+=`<line x1="${xp50}" y1="${PT}" x2="${xp50}" y2="${PT+ch}" stroke="${emerald}" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.9"/>`;
+  svg+=`<text x="${xp50+3}" y="${PT+13}" font-size="13" font-weight="500" fill="${emerald}" font-family="'Inter',sans-serif">p50</text>`;
+
+  const p95Bucket=Math.min(Math.floor(data.durP95/10), labels.length-1);
+  const xp95=PL+p95Bucket*gap+gap/2;
+  if (p95Bucket!==p50Bucket) {
+    svg+=`<line x1="${xp95}" y1="${PT}" x2="${xp95}" y2="${PT+ch}" stroke="${amber}" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.9"/>`;
+    svg+=`<text x="${xp95+3}" y="${PT+13}" font-size="13" font-weight="500" fill="${amber}" font-family="'Inter',sans-serif">p95</text>`;
+  }
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 4: Promotion funnel ---- */
+function anRenderFunnel(data) {
+  const el=document.getElementById('an-chart-funnel');
+  const W=Math.max(el.offsetWidth||400, 200);
+  // PL sized for longest env name at 14px Inter (~7.5px/char): "preprod"=7 → 63px
+  const PL=68, PR=44, PT=6, PB=6;
+  const cw=W-PL-PR, rowH=26, rowGap=6;
+  const n=5;
+  const svgH=n*(rowH+rowGap)+PT+PB;
+  const rng2=anMulberry32(AN_SEED+3+data.days);
+  const counts=[data.total];
+  for(let i=1;i<n;i++) counts.push(Math.round(counts[i-1]*(0.68+rng2()*0.18)));
+  const maxC=counts[0]||1;
+  const emerald=anCssVar('--emerald'), ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${svgH}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+  ENVS.forEach((env,i)=>{
+    const y=PT+i*(rowH+rowGap);
+    const bw=(counts[i]/maxC)*cw;
+    const alpha=0.55+0.45*(counts[i]/maxC);
+    svg+=`<rect x="${PL}" y="${y}" width="${bw}" height="${rowH}" rx="3" fill="${emerald}" opacity="${alpha.toFixed(2)}"/>`;
+    // Category label: 14px ink-1
+    svg+=`<text x="${PL-6}" y="${y+rowH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${env}</text>`;
+    // Count value: 14px ink-1
+    svg+=`<text x="${PL+bw+5}" y="${y+rowH/2+5}" font-size="14" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${counts[i]}</text>`;
+    if (i<n-1) {
+      const conv=counts[i]>0?Math.round(counts[i+1]/counts[i]*100):0;
+      // Conversion rate: 13px ink-1
+      svg+=`<text x="${W-5}" y="${y+rowH+rowGap/2+5}" text-anchor="end" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${conv}%</text>`;
+    }
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 5: Status donut — donut LEFT, 2-col legend RIGHT ---- */
+function anRenderDonut(data) {
+  // PROP 4: enlarged donut to fill span-4 card (~160px)
+  const CX=80, CY=80, R=68, RI=46, SIZE=160;
+  const statuses=[
+    {key:'success',    color:anCssVar('--emerald'), count:data.total-data.failures},
+    {key:'failure',    color:anCssVar('--coral'),   count:data.failures},
+    {key:'in-progress',color:anCssVar('--amber'),   count:data.inP},
+    {key:'queued',     color:anCssVar('--blue'),     count:data.queued},
+    {key:'pending',    color:anCssVar('--slate'),    count:data.pending},
+    {key:'waiting',    color:anCssVar('--violet'),   count:data.waiting},
+    {key:'cancelled',  color:anCssVar('--grey'),     count:data.cancelled},
+    {key:'rejected',   color:anCssVar('--rose'),     count:data.rejected},
+  ].filter(s=>s.count>0);
+
+  const grandTotal=statuses.reduce((a,s)=>a+s.count,0)||1;
+  const ink2=anCssVar('--ink-2'), ink0=anCssVar('--ink-0');
+
+  function arc(cx,cy,r,startAngle,endAngle) {
+    const s=startAngle*Math.PI/180, e=endAngle*Math.PI/180;
+    const x1=cx+r*Math.cos(s), y1=cy+r*Math.sin(s);
+    const x2=cx+r*Math.cos(e), y2=cy+r*Math.sin(e);
+    const large=(endAngle-startAngle)>180?1:0;
+    return `M${x1},${y1} A${r},${r},0,${large},1,${x2},${y2}`;
+  }
+
+  let svgPaths='', angle=-90;
+  statuses.forEach(s=>{
+    const sweep=(s.count/grandTotal)*360;
+    if (sweep<0.5) return;
+    const endAngle=angle+sweep;
+    const dOuter=arc(CX,CY,R,angle,endAngle);
+    const dInner=arc(CX,CY,RI,endAngle,angle);
+    const path=`${dOuter} L${CX+RI*Math.cos(endAngle*Math.PI/180)},${CY+RI*Math.sin(endAngle*Math.PI/180)} ${dInner} Z`;
+    svgPaths+=`<path d="${path}" fill="${s.color}" opacity="0.88"/>`;
+    angle=endAngle;
+  });
+
+  const donutSvg=`<svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" class="an-donut-svg" xmlns="http://www.w3.org/2000/svg">
+    ${svgPaths}
+    <text x="${CX}" y="${CY-4}" text-anchor="middle" font-size="18" font-weight="600" fill="${ink0}" font-family="'JetBrains Mono',monospace">${grandTotal}</text>
+    <text x="${CX}" y="${CY+14}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink0}" font-family="'Inter',sans-serif">total</text>
+  </svg>`;
+
+  // Legend rows — 2-col grid via CSS (.an-donut-legend)
+  const legendRows=statuses.map(s=>`<div class="an-legend-row">
+    <span class="an-legend-dot" style="background:${s.color}"></span>
+    <span class="an-legend-name">${s.key}</span>
+    <span class="an-legend-count">${s.count}</span>
+    <span class="an-legend-pct">${Math.round(s.count/grandTotal*100)}%</span>
+  </div>`).join('');
+
+  document.getElementById('an-chart-donut').innerHTML=`
+    <div class="an-donut-wrap">
+      ${donutSvg}
+      <div class="an-donut-legend">${legendRows}</div>
+    </div>`;
+}
+
+/* ---- Chart 6: Deploy heatmap — fixed-height, fills container width ---- */
+function anRenderHeat(data) {
+  const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const el=document.getElementById('an-chart-heat');
+  // Use real container width for viewBox so cells are never stretched/smeared
+  const containerW=Math.max(el.offsetWidth||700, 200);
+  // Compute cell size from available width
+  const PL=38, PR=4, PT=20, PB=20;
+  const gridW=containerW-PL-PR;
+  // cellW derived from available space for 24 cols (gap=2)
+  const cellW=Math.floor((gridW-23*2)/24);
+  const cellH=Math.min(cellW, 16); // keep cells roughly square, cap at 16px
+  const gap=2;
+  const W=containerW;
+  const H=PT+(cellH+gap)*7+PB;
+
+  const rng3=anMulberry32(AN_SEED+11+data.days);
+  const mat=Array.from({length:7},()=>new Array(24).fill(0));
+  for(let h=0;h<24;h++){
+    const total=data.hourHist[h]||0;
+    for(let t=0;t<total;t++){
+      const dayWeights=[3,3,3,3,2,0.6,0.4];
+      const dayTotal=dayWeights.reduce((a,b)=>a+b,0);
+      let r=rng3()*dayTotal, cum=0, dd=0;
+      for(;dd<7;dd++){cum+=dayWeights[dd]; if(r<cum) break;}
+      mat[dd][h]++;
+    }
+  }
+  const maxCell=Math.max(...mat.flat(),1);
+  const accentRgb=anCssVar('--accent-rgb');
+  const ink1=anCssVar('--ink-1');
+
+  // viewBox W == containerW → preserveAspectRatio="none" is a 1:1 map, no text distortion
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Hour tick labels: 13px ink-1
+  for(let h=0;h<24;h+=3){
+    const x=PL+h*(cellW+gap)+cellW/2;
+    svg+=`<text x="${x}" y="${PT-4}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${h}h</text>`;
+  }
+  // Day labels: 14px ink-1
+  DAYS.forEach((day,d)=>{
+    const y=PT+d*(cellH+gap);
+    svg+=`<text x="${PL-5}" y="${y+cellH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${day}</text>`;
+    for(let h=0;h<24;h++){
+      const x=PL+h*(cellW+gap);
+      const alpha=mat[d][h]>0 ? 0.1+0.8*(mat[d][h]/maxCell) : 0;
+      if (alpha>0) {
+        svg+=`<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="2" fill="rgba(${accentRgb},${alpha.toFixed(2)})"/>`;
+      } else {
+        svg+=`<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" rx="2" fill="rgba(120,110,255,0.04)"/>`;
+      }
+    }
+  });
+  svg+=`<text x="${W/2}" y="${H-4}" text-anchor="middle" font-size="13" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">hour of day (UTC)</text>`;
+
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 7: MTTR incidents ---- */
+function anRenderMttr() {
+  const el=document.getElementById('an-chart-mttr');
+  const W=Math.max(el.offsetWidth||300, 150);
+  const PT=6, PB=4, PR=4, rowH=24, rowGap=4;
+
+  // Sort worst-first, cap at 7 rows
+  const incidents=[...window.AN_INCIDENTS].sort((a,b)=>b.downMinutes-a.downMinutes).slice(0,7);
+  const maxM=Math.max(...incidents.map(i=>i.downMinutes),90);
+
+  // Full untruncated label: "service / env" — no slicing
+  const labels=incidents.map(inc=>`${inc.service} / ${inc.env}`);
+
+  // Gutter sized for longest label at 14px Inter (~7.5px/char)
+  const CH_WIDTH=7.5;
+  const longestLbl=labels.reduce((a,b)=>b.length>a.length?b:a,'');
+  const PL=Math.min(Math.round(longestLbl.length*CH_WIDTH)+12, Math.round(W*0.52));
+
+  const cw=W-PL-PR;
+  const svgH=incidents.length*(rowH+rowGap)+PT+PB;
+
+  const emerald=anCssVar('--emerald'), amber=anCssVar('--amber'), coral=anCssVar('--coral');
+  const ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${svgH}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+  incidents.forEach((inc,i)=>{
+    const y=PT+i*(rowH+rowGap);
+    const bw=Math.max(2,(inc.downMinutes/maxM)*cw);
+    const color=inc.downMinutes<45?emerald:(inc.downMinutes<=90?amber:coral);
+    // Row label: 14px ink-1 font-weight 500
+    svg+=`<text x="${PL-7}" y="${y+rowH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${labels[i]}</text>`;
+    svg+=`<rect x="${PL}" y="${y+2}" width="${bw}" height="${rowH-4}" rx="2" fill="${color}" opacity="0.85"/>`;
+    // Duration value: 14px ink-1 font-weight 500
+    svg+=`<text x="${PL+bw+6}" y="${y+rowH/2+5}" font-size="14" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${anFmtMins(inc.downMinutes)}</text>`;
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Chart 8: Top deployers ---- */
+function anRenderActors(data) {
+  const el=document.getElementById('an-chart-actors');
+  const W=Math.max(el.offsetWidth||300, 150);
+  const sorted=AN_ACTORS.map(a=>({name:a, count:data.actorTotals[a]||0}))
+    .sort((a,b)=>b.count-a.count).slice(0,8);
+  // Gutter sized to longest actor name at 14px Inter (~7.5px/char)
+  const CH_WIDTH=7.5;
+  const longestName=sorted.reduce((a,b)=>b.name.length>a.length?b.name:a,'');
+  const PL=Math.min(Math.round(longestName.length*CH_WIDTH)+12, Math.round(W*0.50));
+  const PR=Math.round(W*0.18), PT=4, rowH=22, rowGap=4;
+  const H=PT+sorted.length*(rowH+rowGap)+6;
+  const maxC=sorted[0]?.count||1;
+  const cw=W-PL-PR;
+  const accentRgb=anCssVar('--accent-rgb'), ink1=anCssVar('--ink-1');
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">`;
+  sorted.forEach((actor,i)=>{
+    const y=PT+i*(rowH+rowGap);
+    const bw=Math.max(2,(actor.count/maxC)*cw);
+    const alpha=0.35+0.55*(actor.count/maxC);
+    // Name label: 14px ink-1 weight 500
+    svg+=`<text x="${PL-7}" y="${y+rowH/2+5}" text-anchor="end" font-size="14" font-weight="500" fill="${ink1}" font-family="'Inter',sans-serif">${actor.name}</text>`;
+    svg+=`<rect x="${PL}" y="${y+2}" width="${bw}" height="${rowH-4}" rx="2" fill="rgba(${accentRgb},${alpha.toFixed(2)})"/>`;
+    // Count value: 14px ink-1 weight 500
+    svg+=`<text x="${PL+bw+6}" y="${y+rowH/2+5}" font-size="14" font-weight="500" fill="${ink1}" font-family="'JetBrains Mono',monospace">${actor.count}</text>`;
+  });
+  svg+='</svg>';
+  el.innerHTML=svg;
+}
+
+/* ---- Period control ---- */
+var anCurrentDays = 14;
+document.querySelectorAll('.an-period-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    anCurrentDays=parseInt(btn.dataset.days,10);
+    renderAnalytics(anCurrentDays);
+  });
+});
+
+/* ---- Main render entry point ---- */
+function renderAnalytics(days) {
+  anCurrentDays=days;
+  // Update sub-header text
+  const subEl=document.getElementById('an-sub-days');
+  if (subEl) subEl.textContent=days;
+  // Mark active period button
+  document.querySelectorAll('.an-period-btn').forEach(b=>{
+    const active=parseInt(b.dataset.days,10)===days;
+    b.classList.toggle('is-active',active);
+    b.setAttribute('aria-pressed', String(active));
+  });
+  const data=anWindowData(days);
+  anRenderKpiBand(data);
+  anRenderFreq(data);
+  anRenderCfr(data);
+  anRenderDuration(data);
+  anRenderFunnel(data);
+  anRenderDonut(data);
+  anRenderHeat(data);
+  anRenderMttr();
+  anRenderActors(data);
+}
 
 /* =================================================================
    DRAWER — history (domain-model fields only)
@@ -2822,14 +5625,28 @@ const histEl = document.getElementById('hist');
 
 function makeHistory(svc, env) {
   // synthetic per (svc, env), domain-model-only — full 11-field records
-  const seedVer = (SLOTS[`${svc}|${env}`] && (SLOTS[`${svc}|${env}`].current.version || SLOTS[`${svc}|${env}`].last?.version)) || 'v1.0.0';
+  const slot = SLOTS[`${svc}|${env}`];
+  // Never-deployed slot: only ONE deployment exists (a single non-effective
+  // status), so history shows exactly that one event — no synthetic priors.
+  if (slot && slot.state === 'never-deployed') {
+    const c = slot.current;
+    return [{
+      id: c.id, component: svc, environment: env, version: c.version,
+      status: slot.status, run_url: c.run_url,
+      sha: c.sha, run_number: c.run_number, ref: c.ref, actor: c.actor,
+      happened_at: '2026-06-06T07:58:30Z', elapsed: c.elapsed || 'just now',
+      parrent_deployments: [],
+    }];
+  }
+  const seedVer = (slot && (slot.current.version || slot.last?.version)) || 'v1.0.0';
   const major = seedVer;
+  const slotState = slot?.state;
   const topStatus =
-    SLOTS[`${svc}|${env}`]?.state.startsWith('run') ? 'in-progress' :
-    SLOTS[`${svc}|${env}`]?.state === 'fail-last'   ? 'failure'     : 'success';
+    slotState?.startsWith('run')              ? 'in-progress' :
+    slotState === 'fail-last'                 ? 'failure'     : 'success';
 
   // ids: 12-hex tail; used internally for parent joins only (NOT rendered visibly)
-  return [
+  const entries = [
     { id: '9f4c8b21e7a3', component: svc, environment: env, version: major,
       status: topStatus, run_url: 'https://ci.internal/runs/4821',
       sha: '7d3e2a1', run_number: 4821, ref: 'feat/auth-refactor', actor: 'mreyes',
@@ -2841,19 +5658,19 @@ function makeHistory(svc, env) {
       happened_at: '2026-05-27T11:08:42Z', elapsed: '6h ago',
       parrent_deployments: ['5a2c4d10ffba'] },
     { id: '5a2c4d10ffba', component: svc, environment: env, version: bumpVer(major, -1),
-      status: 'success', run_url: 'https://ci.internal/runs/4808',
+      status: 'rejected', run_url: 'https://ci.internal/runs/4809',
+      sha: '6b9f0a3', run_number: 4809, ref: 'feat/auth-refactor', actor: 's.harper',
+      happened_at: '2026-05-27T09:10:00Z', elapsed: '8h ago',
+      parrent_deployments: ['4e8b1f7a3c20'] },
+    { id: '4e8b1f7a3c20', component: svc, environment: env, version: bumpVer(major, -1),
+      status: 'cancelled', run_url: 'https://ci.internal/runs/4808',
       sha: '6b9f0a3', run_number: 4808, ref: 'main', actor: 's.harper',
       happened_at: '2026-05-27T08:51:17Z', elapsed: '9h ago',
-      parrent_deployments: ['4e8b1f7a3c20'] },
-    { id: '4e8b1f7a3c20', component: svc, environment: env, version: bumpVer(major, -2),
-      status: 'success', run_url: 'https://ci.internal/runs/4792',
-      sha: '5a2c4d1', run_number: 4792, ref: 'release/2.14', actor: 'release-bot',
-      happened_at: '2026-05-26T20:14:33Z', elapsed: '1d ago',
       parrent_deployments: ['3d7a6c2b15ee'] },
     { id: '3d7a6c2b15ee', component: svc, environment: env, version: bumpVer(major, -2),
-      status: 'failure', run_url: 'https://ci.internal/runs/4787',
-      sha: '4e8b1f7', run_number: 4787, ref: '#4101', actor: 'release-bot',
-      happened_at: '2026-05-25T12:02:09Z', elapsed: '2d ago',
+      status: 'waiting', run_url: 'https://ci.internal/runs/4792',
+      sha: '5a2c4d1', run_number: 4792, ref: 'release/2.14', actor: 'release-bot',
+      happened_at: '2026-05-26T20:14:33Z', elapsed: '1d ago',
       parrent_deployments: ['c1f8023ab9d4'] },
     { id: 'c1f8023ab9d4', component: svc, environment: env, version: bumpVer(major, -3),
       status: 'success', run_url: 'https://ci.internal/runs/4760',
@@ -2861,6 +5678,22 @@ function makeHistory(svc, env) {
       happened_at: '2026-05-22T09:30:55Z', elapsed: '5d ago',
       parrent_deployments: [] },
   ];
+
+  // A deployment context (incoming waiting/queued/pending, or a cancelled/rejected
+  // attempt) is the MOST RECENT event for the slot — prepend it so the history's
+  // latest entry matches the matrix context badge.
+  if (slot?.context) {
+    entries.unshift({
+      id: 'ctx00beef0001', component: svc, environment: env,
+      version: slot.contextVersion || bumpVer(major, 1),
+      status: slot.context, run_url: 'https://ci.internal/runs/4830',
+      sha: '8e4f3b2', run_number: 4830, ref: 'main', actor: 'release-bot',
+      happened_at: '2026-05-27T15:40:00Z', elapsed: '40m ago',
+      parrent_deployments: ['9f4c8b21e7a3'],
+    });
+  }
+
+  return entries;
 }
 function bumpVer(v, delta) {
   // crude — last numeric -> shift by delta
@@ -2877,9 +5710,7 @@ function openDrawer(svc, env, opts) {
   const entries = makeHistory(svc, env);
   entries.forEach((h, idx) => {
     const e = document.createElement('div');
-    const klass =
-      h.status === 'success'    ? 's-success'  :
-      h.status === 'failure'    ? 's-failure'  : 's-progress';
+    const klass = statusKlass(h.status);
     e.className = `hist-entry ${klass}` + (opts.markFirst && idx === 0 ? ' pre-opened' : '');
 
     const parentsHtml = h.parrent_deployments.length
@@ -2935,7 +5766,54 @@ document.addEventListener('keydown', e => {
      - isolated node  (auth-bff graph B; catalog-edge graph C)
    Domain-model fields only — 11 per node.
    ================================================================= */
+
+/* ----- Collapse / expand state (#309) -----
+   laneCollapsed: Map<svc, boolean> — true = collapsed, false = expanded.
+   Default: ALL lanes start collapsed.
+   Persisted to localStorage key `dd:laneCollapsed` (JSON object svc→bool).
+   autoScroll: whether to scroll a changed lane into view (collapsed or expanded).
+   Persisted to localStorage key `dd:laneAutoScroll`.
+*/
 const SWIM_SERVICES = ['payments-api', 'auth-bff', 'order-svc', 'catalog-edge'];
+
+// Load persisted collapse state — default ALL collapsed.
+const laneCollapsed = (function () {
+  const m = new Map();
+  try {
+    const stored = JSON.parse(localStorage.getItem('dd:laneCollapsed') || '{}');
+    SWIM_SERVICES.forEach(s => {
+      // If key absent in stored, default to true (collapsed).
+      m.set(s, stored[s] !== false);
+    });
+  } catch (_) {
+    SWIM_SERVICES.forEach(s => m.set(s, true));
+  }
+  return m;
+})();
+
+function persistLaneCollapsed() {
+  try {
+    const obj = {};
+    laneCollapsed.forEach((v, k) => { obj[k] = v; });
+    localStorage.setItem('dd:laneCollapsed', JSON.stringify(obj));
+  } catch (_) { /* private mode / file:// */ }
+}
+
+// Auto-scroll preference — default ON.
+let laneAutoScroll = (function () {
+  try {
+    const v = localStorage.getItem('dd:laneAutoScroll');
+    return v === null ? true : v === 'true';
+  } catch (_) { return true; }
+})();
+
+function persistAutoScroll() {
+  try { localStorage.setItem('dd:laneAutoScroll', String(laneAutoScroll)); } catch (_) { }
+}
+
+// Expose the last buildSwim layout result for overlay positioning.
+let _lastSvcLayouts = null;
+let _lastSwimH = 0;
 
 // Each node carries all 11 domain-model fields.
 // `col` is the time-bucket (0..7). `parrent_deployments` are intra-lane only.
@@ -3026,10 +5904,10 @@ const VIS_NODES = [
     happened_at: '2026-05-26T05:42:11Z', elapsed: '1d ago',
     parrent_deployments: ['o1b3c4d5e6f7'], col: 2 },
   { id: 'o4e6f7a8b9c0', component: 'order-svc', environment: 'preprod',
-    version: 'v0.41.1', status: 'success', run_url: 'https://ci.internal/runs/2935',
-    sha: 'd4e5f6a', run_number: 2935, ref: 'release/0.41', actor: 'release-bot',
-    happened_at: '2026-05-26T19:08:55Z', elapsed: '22h ago',
-    parrent_deployments: ['o2c4d5e6f7a8', 'o3d5e6f7a8b9'], col: 4 },
+    version: 'v0.41.2', status: 'waiting', neverDeployed: true, run_url: 'https://ci.internal/runs/2921',
+    sha: 'a6b7c8d', run_number: 2921, ref: 'release/0.41', actor: 'release-bot',
+    happened_at: '2026-06-06T07:58:30Z', elapsed: 'just now',
+    parrent_deployments: [], col: 4 },
   { id: 'o5f7a8b9c0d1', component: 'order-svc', environment: 'prod',
     version: 'v0.41.2', status: 'in-progress', run_url: 'https://ci.internal/runs/2948',
     sha: 'e5f6a7b', run_number: 2948, ref: '#7912', actor: 'jpark',
@@ -3068,6 +5946,38 @@ const VIS_NODES = [
     sha: '3e0f1a2', run_number: 5145, ref: 'release/4.18', actor: 'release-bot',
     happened_at: '2026-05-27T03:20:45Z', elapsed: '14h ago',
     parrent_deployments: [], col: 6 },
+
+  /* --- Scheme B demo nodes (issue #268) — context badges on success primary state --- */
+  { id: 'n1pending0001', component: 'auth-bff', environment: 'dev',
+    version: 'v3.2.6', status: 'success', context: 'pending', contextVersion: 'v3.2.7-rc1', contextRunUrl: 'https://ci.internal/runs/3262', contextRunNumber: 3262,
+    run_url: 'https://ci.internal/runs/3260',
+    sha: 'a1b2c3e', run_number: 3255, ref: 'release/3.2', actor: 'release-bot',
+    happened_at: '2026-05-27T16:00:00Z', elapsed: '55m ago',
+    parrent_deployments: [], col: 8 },
+  { id: 'n2queued0002', component: 'order-svc', environment: 'dev',
+    version: 'v0.41.2', status: 'success', context: 'queued', contextVersion: 'v0.41.3-rc1', contextRunUrl: 'https://ci.internal/runs/2960', contextRunNumber: 2960,
+    run_url: 'https://ci.internal/runs/2958',
+    sha: 'b2c3d4f', run_number: 2958, ref: 'feat/cart-merge', actor: 'jpark',
+    happened_at: '2026-05-27T16:30:00Z', elapsed: '25m ago',
+    parrent_deployments: [], col: 8 },
+  { id: 'n3waiting0003', component: 'payments-api', environment: 'staging',
+    version: 'v2.14.3', status: 'success', context: 'waiting', contextVersion: 'v2.14.4-rc1', contextRunUrl: 'https://ci.internal/runs/4830', contextRunNumber: 4830,
+    run_url: 'https://ci.internal/runs/4825',
+    sha: 'c3d4e5g', run_number: 4825, ref: 'release/2.14', actor: 'mreyes',
+    happened_at: '2026-05-27T15:45:00Z', elapsed: '70m ago',
+    parrent_deployments: [], col: 8 },
+  { id: 'n4cancelled004', component: 'catalog-edge', environment: 'qa',
+    version: 'v5.0.0-rc1', status: 'success', context: 'cancelled', contextVersion: 'v5.0.0-rc2', contextRunUrl: 'https://ci.internal/runs/5160', contextRunNumber: 5160,
+    run_url: 'https://ci.internal/runs/5155',
+    sha: 'd4e5f6h', run_number: 5155, ref: 'feat/v5-rewrite', actor: 'tcheng',
+    happened_at: '2026-05-27T14:00:00Z', elapsed: '3h ago',
+    parrent_deployments: ['c4d1e2f3a4b5'], col: 5 },
+  { id: 'n5rejected0005', component: 'auth-bff', environment: 'staging',
+    version: 'v3.2.6', status: 'success', context: 'rejected',
+    run_url: 'https://ci.internal/runs/3258',
+    sha: 'e5f6a7c', run_number: 3258, ref: 'release/3.2', actor: 's.harper',
+    happened_at: '2026-05-27T12:00:00Z', elapsed: '5h ago',
+    parrent_deployments: ['n1pending0001'], col: 9 },
 ];
 
 // Pre-selected inspector node
@@ -3077,7 +5987,17 @@ const VIS_BY_ID = {};
 VIS_NODES.forEach(n => { VIS_BY_ID[n.id] = n; });
 
 function statusKlass(s) {
-  return s === 'success' ? 's-success' : s === 'failure' ? 's-failure' : 's-progress';
+  switch (s) {
+    case 'success':     return 's-success';
+    case 'failure':     return 's-failure';
+    case 'in-progress': return 's-progress';
+    case 'pending':     return 's-pending';
+    case 'queued':      return 's-queued';
+    case 'waiting':     return 's-waiting';
+    case 'cancelled':   return 's-cancelled';
+    case 'rejected':    return 's-rejected';
+    default:            return 's-progress';
+  }
 }
 
 /* -----------------------------------------------------------------
@@ -3217,6 +6137,14 @@ function assignTracks(dagNodes, ranks) {
 function buildSwim() {
   const swim = document.getElementById('swim');
 
+  // Clear stale position data from all nodes before layout.
+  // n.x / n.y are set directly on shared VIS_NODE objects; if a previous
+  // expanded run wrote positions for nodes that are NOT in the current
+  // collapsed node set, those nodes still pass the `n.x !== undefined`
+  // guard in the cards-render loop and get rendered as stale cards.
+  // Resetting here ensures only nodes positioned in THIS pass get cards.
+  VIS_NODES.forEach(n => { delete n.x; delete n.y; delete n._w; delete n._h; });
+
   // -------- layout constants --------
   // Packing: lane heights pack densely — lane height = sub-row content + minimal
   // padding. Inter-lane gap reduced. LANE_MIN_H lowered so empty/short lanes
@@ -3226,6 +6154,18 @@ function buildSwim() {
   const PAD_BOT      = 12;
   const PAD_LEFT     = 170;   // room for lane label
   const PAD_RIGHT    = 30;
+
+  // Chevron + label layout (SVG coordinate space = stage px, 1:1 with viewBox).
+  // SVG lane rect starts at x=14. The HTML overlay wraps the chevron and
+  // has padding-left=6px (CSS .sv-lane-wrap). So the chevron's RIGHT edge in
+  // SVG stage coords = LABEL_INSET + wrap_padding_left + CHEVRON_W
+  //                  = 14 + 6 + 22 = 42.
+  // Label must clear that by at least 8px: svgLabelX = 42 + 8 = 50.
+  // Stored as a constant — if chevron size or padding changes, update here.
+  const CHEVRON_W      = 22;  // matches .sv-chevron width:22px
+  const LABEL_INSET    = 14;  // SVG lane rect left inset (x=14)
+  const WRAP_PAD_LEFT  = 6;   // .sv-lane-wrap padding-left
+  const svgLabelX      = LABEL_INSET + WRAP_PAD_LEFT + CHEVRON_W + 8;  // = 50
   const DEFAULT_W    = 156;   // fallback card width (pre-measurement)
   const DEFAULT_H    = 80;    // fallback card height (pre-measurement) — tightened after packing
   const COL_GAP      = 60;    // horizontal gap between rank columns
@@ -3242,7 +6182,17 @@ function buildSwim() {
   const dimOf = id => dimMap.get(id) || { w: DEFAULT_W, h: DEFAULT_H };
 
   const svcLayouts = SWIM_SERVICES.map(svc => {
-    const svcNodes = VIS_NODES.filter(n => n.component === svc);
+    const collapsed = laneCollapsed.get(svc) !== false; // default true
+
+    // Collapsed lane: restrict the effective node set to the newest-event
+    // vector (root→tip chain) so the IDENTICAL layout machinery runs over
+    // only those nodes. Edges among chain members come naturally from their
+    // parrent_deployments; no other-DAG or cross-lane edges can exist.
+    // Expanded lane: full node set as before.
+    const svcNodes = collapsed
+      ? buildCollapsedVector(svc)
+      : VIS_NODES.filter(n => n.component === svc);
+
     const dags = partitionDAGs(svcNodes);
 
     // for each DAG: rank, tracks, max rank, max track
@@ -3279,9 +6229,22 @@ function buildSwim() {
     });
     const totalDagsH = dagInfos.reduce((s, di) => s + di.subRowH, 0)
       + Math.max(0, dagInfos.length - 1) * DAG_GAP;
+    // Lane height is always computed naturally from the node set (collapsed or not).
+    // Collapsed: single-chain nodes → single DAG → one track → compact height.
+    // No hardcoded COLLAPSED_H: the chain's natural height IS the collapsed height.
     const laneH = Math.max(LANE_MIN_H, totalDagsH + LANE_PAD_TB * 2);
 
-    return { svc, dagInfos, laneH };
+    // Track the tip node id (newest-event node) for flash targeting after simulate event.
+    // Collapsed: last node of the vector chain. Expanded: newest node across all service nodes.
+    const tipNodeId = (() => {
+      const pool = collapsed ? buildCollapsedVector(svc) : VIS_NODES.filter(n => n.component === svc);
+      if (!pool.length) return null;
+      return pool.reduce((best, n) =>
+        (n.happened_at || '') > (best.happened_at || '') ? n : best
+      ).id;
+    })();
+
+    return { svc, dagInfos, laneH, collapsed, tipNodeId };
   });
 
   // total stage height — sum of lane heights + packed inter-lane gaps
@@ -3369,7 +6332,7 @@ function buildSwim() {
               rx="12" ry="12"
               fill="${laneFill}"
               stroke="${laneEdge}" />
-        <text x="28" y="${y + 20}" font-family="JetBrains Mono, monospace"
+        <text x="${svgLabelX}" y="${y + 20}" font-family="JetBrains Mono, monospace"
               font-size="12.5" font-weight="600" fill="${ink1}"
               letter-spacing="0.2">${L.svc}</text>
       `;
@@ -3436,15 +6399,20 @@ function buildSwim() {
   swim.style.setProperty('--stage-w', stageW);
   swim.style.setProperty('--stage-h', H);
 
+  // Store for overlay builder
+  _lastSvcLayouts = svcLayouts;
+  _lastSwimH = H;
+
   // Cards layer uses percentage coords so it tracks the SVG's scaled coord space
   const cards = document.getElementById('cards-layer');
   VIS_NODES.forEach(n => {
-    if (n.x === undefined || n.y === undefined) return; // not in any service shown
+    if (n.x === undefined || n.y === undefined) return; // not in active node set
     const card = document.createElement('div');
-    const klass = statusKlass(n.status);
+    const klass = n.neverDeployed ? 's-never-deployed' : statusKlass(n.status);
     const selected = n.id === PRESELECTED_NODE_ID ? ' is-selected' : '';
     card.className = `vis-card ${klass}${selected}`;
     card.dataset.nodeId = n.id;
+    card.dataset.component = n.component;
     card.style.left = (n.x / stageW * 100) + '%';
     card.style.top  = (n.y / H * 100) + '%';
 
@@ -3458,11 +6426,25 @@ function buildSwim() {
       parents: n.parrent_deployments.length,
     };
 
-    // Top row: version (left) + happened_at (right via margin-left:auto).
-    // Row is emitted if EITHER field is present so neither is silently dropped
-    // when the other is toggled off via the picker.
+    // Top row: status icon (always) + version (left) + happened_at (right via margin-left:auto).
+    // For in-progress we use the static ◴ glyph (no animated spinner on vis-cards).
     const verRow = document.createElement('div');
     verRow.className = 'vc-ver-row';
+    // Status indicator. Never-deployed nodes use a status CHIP (the card is
+    // neutral); all others use the tinted primary icon.
+    if (n.neverDeployed) {
+      const chip = document.createElement('span');
+      chip.className = 'status-chip ' + statusKlass(n.status);
+      chip.style.cssText = 'flex-shrink:0;margin-right:6px';
+      chip.textContent = `${STATUS_ICONS[n.status] || ''} ${n.status}`;
+      verRow.appendChild(chip);
+    } else {
+      const vcIc = document.createElement('span');
+      vcIc.setAttribute('aria-hidden', 'true');
+      vcIc.style.cssText = 'font-size:11px;line-height:1;color:var(--' + n.status + ');flex-shrink:0;margin-right:4px';
+      vcIc.textContent = STATUS_ICONS[n.status] || '';
+      verRow.appendChild(vcIc);
+    }
     if (visFieldsOn.has('version') && n.version) {
       const ver = document.createElement('div');
       ver.className = 'vc-ver';
@@ -3472,6 +6454,15 @@ function buildSwim() {
     const tim = fieldSpan('happened_at', rec, visFieldsOn);
     if (tim) verRow.appendChild(tim);
     if (verRow.childElementCount) card.appendChild(verRow);
+
+    // Context badge — incoming/attempted deployment layered on the effective
+    // card state; its own row so it never collides with the version-row time.
+    if (n.context) {
+      const ctxRow = document.createElement('div');
+      ctxRow.className = 'ctx-row';
+      ctxRow.appendChild(ctxBadge(n.context, n.contextVersion));
+      card.appendChild(ctxRow);
+    }
 
     // Mid grid — happened_at + sha are excluded:
     //   happened_at rides on the version row (top-right)
@@ -3497,6 +6488,9 @@ function buildSwim() {
   // If the vis view is hidden (display:none), getBoundingClientRect returns
   // 0×0 — skip the re-layout; we'll get a proper measurement when the user
   // switches to vis (setView hook re-runs buildSwim with the view visible).
+  // Build HTML lane overlays (chevron + status vector / lane-head label)
+  buildLaneOverlays(svcLayouts, H, stageW);
+
   if (!buildSwim._reentering) {
     const dimMap = new Map();
     let anyMeasured = false;
@@ -3515,6 +6509,311 @@ function buildSwim() {
     }
   }
 }
+
+/* =================================================================
+   LANE OVERLAYS — collapse/expand chevrons + collapsed vector
+   (#309)
+   ================================================================= */
+
+/* Walk backward from tip through parrent_deployments to build the
+   linear chain ending at the newest event for a service.
+
+   Algorithm:
+   1. Find tip = node with max happened_at among all service nodes.
+   2. Walk backward: from current node, pick the parent (within this
+      service) with the newest happened_at. Stop when no parent exists.
+   3. Return chain in root→tip order (reversed from the walk).
+*/
+function buildCollapsedVector(svc) {
+  const svcNodes = VIS_NODES.filter(n => n.component === svc);
+  if (!svcNodes.length) return [];
+
+  // Step 1: find tip
+  const tip = svcNodes.reduce((best, n) =>
+    (n.happened_at || '') > (best.happened_at || '') ? n : best
+  );
+
+  // Step 2: walk backward
+  const chain = [tip];
+  const ids = new Set(svcNodes.map(n => n.id));
+  let cur = tip;
+  const visited = new Set([tip.id]);
+
+  while (cur.parrent_deployments && cur.parrent_deployments.length > 0) {
+    // Filter to intra-service parents only
+    const candidates = cur.parrent_deployments
+      .map(pid => VIS_BY_ID[pid])
+      .filter(p => p && ids.has(p.id) && !visited.has(p.id));
+    if (!candidates.length) break;
+    // At a merge (multiple parents), follow the one with newest happened_at
+    const best = candidates.reduce((b, p) =>
+      (p.happened_at || '') > (b.happened_at || '') ? p : b
+    );
+    chain.push(best);
+    visited.add(best.id);
+    cur = best;
+  }
+
+  // Return root→tip (reverse of the backward walk)
+  return chain.reverse();
+}
+
+/* Inject HTML overlays per lane on top of the SVG stage.
+   Cards and SVG edges for BOTH collapsed and expanded lanes are rendered
+   by the main buildSwim machinery (collapsed lanes use the vector chain
+   as their node set; expanded lanes use all service nodes). This overlay
+   adds only the chevron toggle and the Simulate-event demo button.
+   The tip node id is carried from svcLayouts so the sim button can target
+   the correct card in #cards-layer.
+
+   Overlays are attached to .vis-canvas (NOT #vis-stage) so that
+   width:calc(100%-28px) tracks the visible canvas width, not the full
+   1340px stage width. This keeps the right-aligned sim button on screen
+   even when the stage extends past the canvas right edge.
+   Top position = swim.offsetTop (vis-head + margin-bottom) + laneTop.
+*/
+function buildLaneOverlays(svcLayouts, H, stageW) {
+  const canvas = document.querySelector('.vis-canvas');
+  const swim   = document.getElementById('swim');
+  if (!canvas || !swim) return;
+  // Remove any previously-injected overlays from either parent
+  canvas.querySelectorAll('.sv-lane-wrap').forEach(el => el.remove());
+  const stage = document.getElementById('vis-stage');
+  if (stage) stage.querySelectorAll('.sv-lane-wrap').forEach(el => el.remove());
+
+  // Compute offsets relative to .vis-canvas (position:relative — the
+  // positioned ancestor for absolute children).
+  //   swimTop  = swim.offsetTop  (vis-head height + margin-bottom + canvas padding)
+  //   swimLeft = swim.offsetLeft (canvas padding-left)
+  // The SVG lane rect is drawn at x=14 within #vis-stage. #vis-stage is a
+  // direct child of #swim (also a direct child of .vis-canvas), so:
+  //   stageLeft = swimLeft + stage.offsetLeft  (stage has no extra left offset,
+  //               but reading it explicitly keeps this robust to layout changes)
+  // overlay left = stageLeft + 14  →  chevron sits 14px inside the lane rect,
+  // matching x=14 in SVG space.  Width is capped to canvas width (not stage
+  // width) so the right-aligned sim button stays on screen without scrolling.
+  const swimTop   = swim.offsetTop;
+  const swimLeft  = swim.offsetLeft;
+  const stageEl   = document.getElementById('vis-stage');
+  const stageLeft = swimLeft + (stageEl ? stageEl.offsetLeft : 0);
+  const overlayLeft = stageLeft + 14;   // matches SVG lane rect x=14
+
+  svcLayouts.forEach(L => {
+    const wrap = document.createElement('div');
+    wrap.className = 'sv-lane-wrap';
+    wrap.dataset.svc = L.svc;
+    if (L.tipNodeId) wrap.dataset.tipNodeId = L.tipNodeId;
+    // top  = swimTop + laneTop  (lane y within SVG stage)
+    // left = stageLeft + 14     (aligns with SVG lane rect left edge)
+    // width = canvas width - 2×14  (caps at visible viewport; sim btn stays on screen)
+    wrap.style.cssText = `
+      position: absolute;
+      left: ${overlayLeft}px;
+      top: ${swimTop + L.laneTop}px;
+      width: calc(100% - ${overlayLeft + 14}px);
+      height: ${L.laneH - 4}px;
+      pointer-events: none;
+      z-index: 3;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 4px 10px 0 6px;
+      box-sizing: border-box;
+    `;
+
+    // Chevron button (always present — top-left of the lane)
+    const chev = document.createElement('button');
+    chev.className = 'sv-chevron' + (L.collapsed ? '' : ' is-expanded');
+    chev.setAttribute('aria-label', L.collapsed ? `Expand ${L.svc}` : `Collapse ${L.svc}`);
+    chev.setAttribute('title', L.collapsed ? `Expand ${L.svc}` : `Collapse ${L.svc}`);
+    chev.textContent = '›';
+    chev.style.pointerEvents = 'auto';
+    chev.addEventListener('click', () => toggleLane(L.svc));
+    wrap.appendChild(chev);
+
+    // Simulate-event button — shown in both collapsed and expanded lanes.
+    // Right-aligned (margin-left:auto) within the canvas-width wrap so it
+    // never scrolls off-screen. The SVG service-name label at x=28 in the
+    // stage is unobstructed: the chevron is ~22px, the sim button is at the
+    // far right of the visible canvas, leaving the label area clear.
+    const simBtn = document.createElement('button');
+    simBtn.className = 'sv-sim-btn';
+    simBtn.textContent = '⚡ Simulate event';
+    simBtn.setAttribute('title', `Simulate a status change for ${L.svc}`);
+    simBtn.style.cssText = 'pointer-events:auto;margin-left:auto';
+    simBtn.addEventListener('click', () => simulateEvent(L.svc));
+    wrap.appendChild(simBtn);
+
+    canvas.appendChild(wrap);
+  });
+}
+
+/* Toggle a single lane between collapsed and expanded */
+function toggleLane(svc) {
+  const isCollapsed = laneCollapsed.get(svc) !== false;
+  laneCollapsed.set(svc, !isCollapsed);
+  persistLaneCollapsed();
+  window.__visNodeDims = null; // force remeasure
+  buildSwim();
+  if (typeof selectVisNode === 'function' && currentSelectedNodeId) {
+    selectVisNode(currentSelectedNodeId);
+  }
+}
+
+/* Collapse/expand ALL lanes */
+function collapseAll(collapse) {
+  SWIM_SERVICES.forEach(s => laneCollapsed.set(s, collapse));
+  persistLaneCollapsed();
+  window.__visNodeDims = null;
+  buildSwim();
+}
+
+/* =================================================================
+   SIMULATE EVENT — demonstrates live behaviors (§ req 3 + 4 + 5)
+   Injects a GENUINELY NEW deployment event node for the service,
+   making it the new tip (newest happened_at). The new node parents
+   off the current tip so the collapsed vector chain extends to it.
+   buildCollapsedVector then naturally picks the new node as tip.
+   Flash the new tip card; auto-scroll if lane is off-screen.
+   Works in both collapsed and expanded states.
+   ================================================================= */
+const SIM_STATUS_CYCLE = ['success', 'failure', 'in-progress', 'waiting'];
+const _simCycleIdx = {};
+const _simEnvIdx   = {};  // per-service counter for cycling alternate environments
+let   _simNodeSeq  = 0;   // monotonic counter for unique node ids
+
+// Rotating version bump helpers — increment the patch segment of the
+// current tip's version so the new event has a visibly different version.
+function _bumpVersion(ver) {
+  if (!ver) return 'v0.0.1';
+  const m = ver.match(/^(v?\d+\.\d+\.)(\d+)(.*)$/);
+  if (m) return m[1] + (parseInt(m[2], 10) + 1) + (m[3] || '');
+  return ver + '-sim';
+}
+
+function simulateEvent(svc) {
+  // Find current tip (newest event) for this service — it becomes the parent.
+  const svcNodes = VIS_NODES.filter(n => n.component === svc);
+  if (!svcNodes.length) return;
+  const oldTip = svcNodes.reduce((best, n) =>
+    (n.happened_at || '') > (best.happened_at || '') ? n : best
+  );
+  const oldTipId = oldTip.id;
+
+  // Advance status cycle
+  if (_simCycleIdx[svc] === undefined) _simCycleIdx[svc] = 0;
+  _simCycleIdx[svc] = (_simCycleIdx[svc] + 1) % SIM_STATUS_CYCLE.length;
+  const newStatus  = SIM_STATUS_CYCLE[_simCycleIdx[svc]];
+  const newVersion = _bumpVersion(oldTip.version);
+
+  // Build a new ISOLATED node (no parents) so buildCollapsedVector switches
+  // to it as a fresh DAG root rather than extending the existing chain.
+  // Pick an environment DIFFERENT from the current tip so it visually changes.
+  const SIM_ENVS = ['dev', 'staging', 'prod', 'preprod', 'qa'];
+  const tipEnv   = (oldTip.environment || '').toLowerCase();
+  const otherEnvs = SIM_ENVS.filter(e => e !== tipEnv);
+  // Rotate through the other environments deterministically per service.
+  if (_simEnvIdx[svc] === undefined) _simEnvIdx[svc] = 0;
+  const newEnv = otherEnvs[_simEnvIdx[svc] % otherEnvs.length];
+  _simEnvIdx[svc] = (_simEnvIdx[svc] + 1) % otherEnvs.length;
+
+  _simNodeSeq++;
+  const newId = `sim${_simNodeSeq}_${svc.replace(/[^a-z]/g, '')}`;
+  const now   = new Date().toISOString();
+  const newNode = {
+    id:                   newId,
+    component:            svc,
+    environment:          newEnv,              // different env → isolated DAG
+    version:              newVersion,
+    status:               newStatus,
+    run_url:              oldTip.run_url || '',
+    sha:                  Math.random().toString(16).slice(2, 9),
+    run_number:           (oldTip.run_number || 0) + _simNodeSeq,
+    ref:                  oldTip.ref || 'main',
+    actor:                oldTip.actor || 'sim-bot',
+    happened_at:          now,
+    elapsed:              'just now',
+    parrent_deployments:  [],   // isolated root — no parent → own DAG branch
+    col:                  0,    // fresh column, not extending the old chain
+  };
+
+  // Register in the live data arrays so buildSwim and buildCollapsedVector
+  // pick it up as the new tip.
+  VIS_NODES.push(newNode);
+  VIS_BY_ID[newId] = newNode;
+
+  // Rebuild — forces remeasure so the new card gets sized correctly.
+  window.__visNodeDims = null;
+  buildSwim();
+
+  // Flash the NEW tip card.
+  const tipCard = document.querySelector(`#cards-layer .vis-card[data-node-id="${newId}"]`);
+  if (tipCard) {
+    tipCard.classList.remove('sv-flash');
+    void tipCard.offsetWidth; // force reflow to restart CSS animation
+    tipCard.classList.add('sv-flash');
+    tipCard.addEventListener('animationend', () => tipCard.classList.remove('sv-flash'), { once: true });
+  }
+
+  // Auto-scroll — bring the lane into view if off-screen and toggle is ON.
+  if (laneAutoScroll) {
+    const laneWrap = document.querySelector(`.sv-lane-wrap[data-svc="${svc}"]`);
+    if (laneWrap) {
+      const rect = laneWrap.getBoundingClientRect();
+      const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+      if (!inView) {
+        laneWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+}
+
+/* =================================================================
+   COLLAPSE-ALL + AUTO-SCROLL control wiring
+   ================================================================= */
+(function wireCollapseControls() {
+  const btnCollapseAll = document.getElementById('btn-collapse-all');
+  const autoScrollToggle = document.getElementById('sv-autoscroll-toggle');
+
+  if (btnCollapseAll) {
+    // Track whether all lanes are currently collapsed
+    function updateCollapseAllBtn() {
+      const allCollapsed = SWIM_SERVICES.every(s => laneCollapsed.get(s) !== false);
+      btnCollapseAll.textContent = allCollapsed ? '⊞ Expand all' : '⊟ Collapse all';
+    }
+
+    btnCollapseAll.addEventListener('click', () => {
+      const allCollapsed = SWIM_SERVICES.every(s => laneCollapsed.get(s) !== false);
+      collapseAll(!allCollapsed); // flip
+      updateCollapseAllBtn();
+    });
+
+    // Keep button label in sync on each rebuild
+    const origBuildSwim = buildSwim;
+    // Patch: update button after rebuild (done via MutationObserver on #swim)
+    const mo = new MutationObserver(() => updateCollapseAllBtn());
+    const swimEl = document.getElementById('swim');
+    if (swimEl) mo.observe(swimEl, { childList: true, subtree: false });
+    updateCollapseAllBtn();
+  }
+
+  if (autoScrollToggle) {
+    // Sync initial state
+    function applyAutoScrollUI() {
+      autoScrollToggle.classList.toggle('is-on', laneAutoScroll);
+      const sw = autoScrollToggle.querySelector('.switch');
+      // The .toggle .switch::after CSS handles the knob position; is-on drives it.
+    }
+    applyAutoScrollUI();
+
+    autoScrollToggle.addEventListener('click', () => {
+      laneAutoScroll = !laneAutoScroll;
+      persistAutoScroll();
+      applyAutoScrollUI();
+    });
+  }
+})();
+
 buildSwim();
 
 /* =================================================================
@@ -3533,12 +6832,11 @@ function selectVisNode(id) {
 
 function renderInspector(n) {
   document.getElementById('insp-crumbs').textContent = `${n.component} · ${n.environment}`;
-  const klass =
-    n.status === 'success'    ? 's-success'  :
-    n.status === 'failure'    ? 's-failure'  : 's-progress';
+  const klass = statusKlass(n.status);
+  // Header carries just the version; status + context live as badge-valued grid
+  // rows below (avoids cramming chips beside a long version).
   document.getElementById('insp-status-row').innerHTML =
-    `<span class="status-chip ${klass}">${n.status}</span>` +
-    `<span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-0)">${n.version}</span>`;
+    `<span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-0)">${n.version}</span>`;
 
   const parentsHtml = n.parrent_deployments.length
     ? n.parrent_deployments.map(pid => `<span class="pid" style="display:inline-block;margin-right:4px;padding:1px 6px;border-radius:4px;background:rgba(120,110,255,0.10);border:1px solid rgba(120,110,255,0.30);color:var(--ink-1)">${shortId(pid)}</span>`).join('')
@@ -3549,7 +6847,7 @@ function renderInspector(n) {
     <span class="k">component</span>     <span class="v">${n.component}</span>
     <span class="k">environment</span>   <span class="v">${n.environment}</span>
     <span class="k">version</span>       <span class="v">${n.version}</span>
-    <span class="k">status</span>        <span class="v">${n.status}</span>
+    <span class="k">status</span>        <span class="v"><span class="status-chip ${klass}">${STATUS_ICONS[n.status] || ''} ${n.status}</span></span>
     <span class="k">run_url</span>       <span class="v"><a class="run-link" href="${n.run_url}" target="_blank" rel="noreferrer">run #${n.run_number} &#x2197;</a></span>
     <span class="k">sha</span>           <span class="v">${n.sha}</span>
     <span class="k">run_number</span>    <span class="v">${n.run_number}</span>
@@ -3557,6 +6855,10 @@ function renderInspector(n) {
     <span class="k">actor</span>         <span class="v">${n.actor}</span>
     <span class="k">happened_at</span>   <span class="v">${n.elapsed} <span class="muted">&mdash; ${n.happened_at}</span></span>
     <span class="k">parrent_deployments</span> <span class="v parents">${parentsHtml}</span>
+    ${n.context ? `<span class="insp-sep"></span>
+    <span class="k">next status</span>   <span class="v"><span class="status-chip ${statusKlass(n.context)}">${STATUS_ICONS[n.context] || ''} ${n.context}</span></span>
+    ${n.contextVersion ? `<span class="k">next version</span>  <span class="v">${n.contextVersion}</span>` : ''}
+    ${n.contextRunUrl ? `<span class="k">next run_url</span>  <span class="v"><a class="run-link" href="${n.contextRunUrl}" target="_blank" rel="noreferrer">run #${n.contextRunNumber} &#x2197;</a></span>` : ''}` : ''}
   `;
 }
 

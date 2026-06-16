@@ -116,6 +116,14 @@ function Set-SvgWhiteBackground {
     $svg = $svg -replace 'background-color:\s*transparent', "background-color:$Color"
     $svg = $svg -replace 'background:\s*transparent', "background:$Color"
 
+    # 1b) draw.io renders every HTML label background as
+    #     light-dark(#ffffff, var(--ge-dark-color, #121212)). With the
+    #     color-scheme hint stripped above, browsers resolve that to the light
+    #     branch (#ffffff) — a white box behind every label. On a white card that
+    #     is invisible; on a dark card it hides the (light) label text. Pin those
+    #     label backgrounds to the same baked colour so labels read on either.
+    $svg = $svg.Replace('light-dark(#ffffff, var(--ge-dark-color, #121212))', $Color)
+
     # 2) Paint a backing rect as the first child so the colour is baked into the
     #    rendered image (covers <img>/raster contexts, not just the CSS canvas).
     if ($svg -notmatch 'id="svg-bg"') {

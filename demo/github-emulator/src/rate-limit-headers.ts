@@ -61,6 +61,22 @@ export function applyRateLimitHeaders(res: Response, budget: RateLimitBudget = g
 }
 
 /**
+ * Writes X-RateLimit-* headers WITHOUT consuming a unit from the budget.
+ *
+ * Use for:
+ *  - `304 Not Modified` conditional-request responses (GitHub does not charge
+ *    conditional hits against the rate-limit quota).
+ *  - `GET /rate_limit` (GitHub exempt — checking remaining budget is free).
+ */
+export function applyRateLimitHeadersReadOnly(res: Response, budget: RateLimitBudget = globalBudget): void {
+  const snap = budget.snapshot();
+  res.setHeader('X-RateLimit-Limit',     String(snap.limit));
+  res.setHeader('X-RateLimit-Remaining', String(snap.remaining));
+  res.setHeader('X-RateLimit-Used',      String(snap.used));
+  res.setHeader('X-RateLimit-Reset',     String(snap.reset));
+}
+
+/**
  * Adds a Link header pointing to the next page when one exists.
  * baseUrl should be the full path including existing query parameters.
  */

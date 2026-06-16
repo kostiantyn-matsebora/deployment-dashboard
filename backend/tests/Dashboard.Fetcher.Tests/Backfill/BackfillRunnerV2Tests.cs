@@ -759,12 +759,15 @@ public sealed class BackfillRunnerV2Tests
             graphCache,
             githubClient);
 
+        var eventBuilder = new BackfillEventBuilder(
+            githubClient, graphCache, versionResolver,
+            NullLogger<BackfillEventBuilder>.Instance);
+
         var runner = new BackfillRunner(
             githubClient,
             adapterOptions,
             fetcherOptions,
-            graphCache,
-            versionResolver,
+            eventBuilder,
             NullLogger<BackfillRunner>.Instance);
 
         return (runner, graphCache);

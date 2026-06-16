@@ -65,7 +65,7 @@ describe('GET /api/control/stream', () => {
     const data = JSON.parse(frame.data as string);
     expect(data.type).toBe('reset-completed');
     expect(data.component).toBe('*');
-    expect(data.reset_id).toBeTruthy();
+    expect(data.correlation_id).toBeTruthy();
   });
 
   it('replays persisted control-stream events after Last-Event-ID', async () => {

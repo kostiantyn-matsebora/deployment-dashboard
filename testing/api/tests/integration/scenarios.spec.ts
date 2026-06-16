@@ -21,7 +21,10 @@ describe('Scenario: demo dataset', () => {
   beforeEach(() => waitForDemoReady());
 
   it('seeds the API so discovery, listing and matrix are populated', async () => {
-    const res = await demoPost('/ingest', { dataset: 'demo', reset: true });
+    // Clear the slate before seeding — demo ingest no longer triggers a reset.
+    await resetAll();
+    await waitForDemoReady();
+    const res = await demoPost('/ingest', { dataset: 'demo' });
     expect(res.status).toBe(200);
 
     const final = await waitForIngest();
@@ -42,7 +45,10 @@ describe('Scenario: random dataset', () => {
   beforeEach(() => waitForDemoReady());
 
   it(`materialises ${COUNT} services with full per-slot status coverage`, async () => {
-    const res = await demoPost('/ingest', { dataset: 'random', reset: true, count: COUNT });
+    // Clear the slate before seeding — demo ingest no longer triggers a reset.
+    await resetAll();
+    await waitForDemoReady();
+    const res = await demoPost('/ingest', { dataset: 'random', count: COUNT });
     expect(res.status).toBe(200);
 
     const final = await waitForIngest();

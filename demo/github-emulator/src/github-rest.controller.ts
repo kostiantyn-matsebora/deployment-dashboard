@@ -5,7 +5,8 @@ import { Request, Response } from 'express';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const archiver = require('archiver') as typeof import('archiver');
 import { GithubStoreService } from './github-store.service';
-import { applyRateLimitHeaders, applyLinkHeader, globalBudget } from './rate-limit-headers';
+import { applyRateLimitHeaders, applyRateLimitHeadersReadOnly, applyLinkHeader, globalBudget } from './rate-limit-headers';
+import { computeEtag } from './etag';
 
 const NOT_FOUND_BODY = {
   message:           'Not Found',
@@ -20,7 +21,8 @@ export class GithubRestController {
 
   @Get('rate_limit')
   getRateLimit(@Res() res: Response): void {
-    applyRateLimitHeaders(res);
+    // GET /rate_limit is exempt from rate-limit charges (GitHub semantics).
+    applyRateLimitHeadersReadOnly(res);
     const snap = globalBudget.snapshot();
     res.json({
       resources: {
@@ -43,12 +45,12 @@ export class GithubRestController {
     @Query('environment') environment: string | undefined,
     @Query('per_page')    perPageStr:  string | undefined,
     @Query('page')        pageStr:     string | undefined,
-    @Res() res: Response,
+    @Req()  req: Request,
+    @Res()  res: Response,
   ): void {
-    applyRateLimitHeaders(res);
-
     const repoStore = this.storeService.getStore().getRepo(owner, repo);
     if (!repoStore) {
+      applyRateLimitHeaders(res);
       res.status(404).json(NOT_FOUND_BODY);
       return;
     }
@@ -67,10 +69,8 @@ export class GithubRestController {
     const start   = (page - 1) * perPage;
     const paged   = items.slice(start, start + perPage);
 
-    applyLinkHeader(res, owner, repo, 'deployments', page, perPage, items.length);
-
     // Strip internal fields before responding
-    res.json(paged.map(d => ({
+    const body = paged.map(d => ({
       id:          d.id,
       sha:         d.sha,
       ref:         d.ref,
@@ -78,13 +78,84 @@ export class GithubRestController {
       payload:     d.payload,
       creator:     d.creator,
       created_at:  d.created_at,
-    })));
+    }));
+
+    // Conditional-request handling (page 1 only — fetcher sends If-None-Match on page 1).
+    // A 304 does NOT consume rate-limit budget (GitHub semantics).
+    const etag = computeEtag(body);
+    if (page === 1) {
+      res.setHeader('ETag', etag);
+      const ifNoneMatch = req.headers['if-none-match'];
+      if (ifNoneMatch === etag) {
+        applyRateLimitHeadersReadOnly(res);
+        res.status(304).end();
+        return;
+      }
+    }
+
+    applyRateLimitHeaders(res);
+    applyLinkHeader(res, owner, repo, 'deployments', page, perPage, items.length);
+    res.json(body);
   }
 
   // ── GET /repos/:owner/:repo/deployments/:id/statuses ──────────────────────
 
   @Get('repos/:owner/:repo/deployments/:id/statuses')
   listStatuses(
+    @Param('owner') owner: string,
+    @Param('repo')  repo:  string,
+    @Param('id')    idStr: string,
+    @Req()  req: Request,
+    @Res()  res: Response,
+  ): void {
+    const repoStore = this.storeService.getStore().getRepo(owner, repo);
+    if (!repoStore) {
+      applyRateLimitHeaders(res);
+      res.status(404).json(NOT_FOUND_BODY);
+      return;
+    }
+
+    const id = parseInt(idStr, 10);
+    const statuses = repoStore.statuses.get(id);
+
+    if (!statuses) {
+      applyRateLimitHeaders(res);
+      res.status(404).json(NOT_FOUND_BODY);
+      return;
+    }
+
+    // Newest-first
+    const sorted = [...statuses].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    const body = sorted.map(s => ({
+      id:         s.id,
+      state:      s.state,
+      target_url: s.target_url,
+      creator:    s.creator,
+      created_at: s.created_at,
+    }));
+
+    // Conditional-request handling.
+    // A 304 does NOT consume rate-limit budget (GitHub semantics).
+    const etag = computeEtag(body);
+    res.setHeader('ETag', etag);
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (ifNoneMatch === etag) {
+      applyRateLimitHeadersReadOnly(res);
+      res.status(304).end();
+      return;
+    }
+
+    applyRateLimitHeaders(res);
+    res.json(body);
+  }
+
+  // ── GET /repos/:owner/:repo/deployments/:id/reviews ───────────────────────
+
+  @Get('repos/:owner/:repo/deployments/:id/reviews')
+  listReviews(
     @Param('owner') owner: string,
     @Param('repo')  repo:  string,
     @Param('id')    idStr: string,
@@ -98,25 +169,13 @@ export class GithubRestController {
       return;
     }
 
-    const id = parseInt(idStr, 10);
-    const statuses = repoStore.statuses.get(id);
+    const id      = parseInt(idStr, 10);
+    const reviews = repoStore.reviews.get(id) ?? [];
 
-    if (!statuses) {
-      res.status(404).json(NOT_FOUND_BODY);
-      return;
-    }
-
-    // Newest-first
-    const sorted = [...statuses].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
-
-    res.json(sorted.map(s => ({
-      id:         s.id,
-      state:      s.state,
-      target_url: s.target_url,
-      creator:    s.creator,
-      created_at: s.created_at,
+    res.json(reviews.map(r => ({
+      state:        r.state,
+      user:         r.user,
+      submitted_at: r.submitted_at,
     })));
   }
 
@@ -146,10 +205,11 @@ export class GithubRestController {
     }
 
     res.json({
-      id:       run.id,
-      name:     run.name,
-      path:     run.path,
-      head_sha: run.head_sha,
+      id:         run.id,
+      name:       run.name,
+      path:       run.path,
+      head_sha:   run.head_sha,
+      conclusion: run.conclusion ?? null,
     });
   }
 

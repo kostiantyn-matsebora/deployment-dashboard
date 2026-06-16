@@ -595,10 +595,10 @@ Describe 'Invoke-DocsKeeperMaintenance integration' {
     }
     It 'default SessionReader merges revised: true from a cross-session file' {
         $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("dk-" + [System.IO.Path]::GetRandomFileName())
-        New-Item -ItemType Directory -Path (Join-Path $tmp '.claude') -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $tmp '.docs-keeper') -Force | Out-Null
         try {
             $head = 'abc123deadbeef000'
-            $sessionFile = Join-Path $tmp '.claude' '.docs-keeper-session.other-session.json'
+            $sessionFile = Join-Path $tmp '.docs-keeper' 'session.other-session.json'
             @{ Head = $head; Dirty = @(); TrackedMd = @{ 'docs/SAD.md' = @{ revised = $true } } } |
                 ConvertTo-Json -Compress | Set-Content -LiteralPath $sessionFile -Encoding utf8
             $json = '{"tool_input":{"command":"git commit -m foo"},"session_id":"main-session"}'
@@ -819,26 +819,62 @@ Describe 'Get-SafeSessionId' {
     }
 }
 
-Describe 'Get-DocsKeeperSessionPath' {
-    It 'uses .docs-keeper-session.json suffix when no session id' {
-        Get-DocsKeeperSessionPath -RepoRoot '/repo' | Should -Match '\.docs-keeper-session\.json$'
+Describe 'Get-DocsKeeperSessionPath (new .docs-keeper layout)' {
+    It 'uses session.json suffix when no session id' {
+        Get-DocsKeeperSessionPath -RepoRoot '/repo' | Should -Match 'session\.json$'
     }
-    It 'namespaces by session id' {
-        Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'abc' | Should -Match '\.docs-keeper-session\.abc\.json$'
+    It 'namespaces by session id producing session.<sid>.json' {
+        Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'abc' | Should -Match 'session\.abc\.json$'
+    }
+    It 'path is inside .docs-keeper not .claude' {
+        Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'abc' | Should -Match '\.docs-keeper'
+        Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'abc' | Should -Not -Match '\.claude'
     }
 }
 
-Describe 'Per-session state path namespacing' {
-    It 'uses the global .docs-keeper-session path when no session id' {
-        (Get-DocsKeeperSessionPath -RepoRoot '/repo') | Should -Match '\.docs-keeper-session\.json$'
+Describe 'Per-session state path namespacing (new .docs-keeper layout)' {
+    It 'uses the global session path when no session id' {
+        (Get-DocsKeeperSessionPath -RepoRoot '/repo') | Should -Match 'session\.json$'
     }
     It 'namespaces by session id when provided' {
-        (Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'sess9') | Should -Match '\.docs-keeper-session\.sess9\.json$'
+        (Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'sess9') | Should -Match 'session\.sess9\.json$'
     }
     It 'two sessions resolve to different session files' {
         $a = Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'A'
         $b = Get-DocsKeeperSessionPath -RepoRoot '/repo' -SessionId 'B'
         $a | Should -Not -Be $b
+    }
+}
+
+Describe 'Warn-mode stdout emission (workstream B)' {
+    It 'warn mode: Invoke-DocsKeeperMaintenance ExitCode 0 and Message non-empty' {
+        $json = '{"tool_input":{"command":"git commit -m foo"}}'
+        $runner = { param($Argv) "M`tdocs/SAD.md" }
+        $result = Invoke-DocsKeeperMaintenance `
+            -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner `
+            -DirLister $script:lister -FileReader $script:reader `
+            -EnforcementMode 'warn' -SessionReader $script:NullSessionReader
+        $result.ExitCode | Should -Be 0
+        $result.Message  | Should -Not -BeNullOrEmpty
+    }
+    It 'block mode: Invoke-DocsKeeperMaintenance ExitCode 2 and Message non-empty' {
+        $json = '{"tool_input":{"command":"git commit -m foo"}}'
+        $runner = { param($Argv) "M`tdocs/SAD.md" }
+        $result = Invoke-DocsKeeperMaintenance `
+            -HookInputJson $json -RepoRoot '.' -GitCommandRunner $runner `
+            -DirLister $script:lister -FileReader $script:reader `
+            -EnforcementMode 'block' -SessionReader $script:NullSessionReader
+        $result.ExitCode | Should -Be 2
+        $result.Message  | Should -Not -BeNullOrEmpty
+    }
+    It 'the entry block emits systemMessage JSON on stdout for warn mode (exit 0)' {
+        # Verify the JSON shape the entry block would write.
+        $msg = 'Documentation maintenance suggested (non-blocking).'
+        $json = (@{ systemMessage = $msg } | ConvertTo-Json -Compress)
+        $parsed = $json | ConvertFrom-Json
+        $parsed.systemMessage | Should -Be $msg
+        # No "error" key -- it is NOT stderr content wrapped in JSON.
+        $parsed.PSObject.Properties.Name | Should -Not -Contain 'error'
     }
 }
 

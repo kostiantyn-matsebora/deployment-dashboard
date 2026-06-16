@@ -123,19 +123,19 @@ export async function resetAll(): Promise<void> {
     throw new Error(`control reset -> ${res.status}: ${await res.text()}`);
   }
 
-  const body = await res.json() as { reset_id: string };
-  const resetId = body.reset_id;
+  const body = await res.json() as { correlation_id: string };
+  const correlationId = body.correlation_id;
 
   // Acknowledge from the synthetic test component so the gate closes promptly.
+  // The gate keys solely on the X-Correlation-Id header (payload.reset_id retired).
   const ackRes = await post(
     '/api/control/events',
     {
       event_type:  'reset-ack',
       state:       'paused',
       occurred_at: new Date().toISOString(),
-      payload:     { reset_id: resetId },
     },
-    { 'X-Api-Key': API_KEY, 'X-Component-Id': 'api-test-reset' },
+    { 'X-Api-Key': API_KEY, 'X-Component-Id': 'api-test-reset', 'X-Correlation-Id': correlationId },
   );
   if (ackRes.status !== 204) {
     throw new Error(`reset-ack -> ${ackRes.status}: ${await ackRes.text()}`);

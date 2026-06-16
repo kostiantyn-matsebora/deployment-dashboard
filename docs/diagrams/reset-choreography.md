@@ -12,7 +12,9 @@ Choreography-driven, event-based system-state reset across `Dashboard.Api` and i
 | `reset-started` | Acks in OR timeout elapsed | `*` | Reset window opened; ingest briefly returns `503`. |
 | `reset-completed` | Data cleared, gates released | `*` | Recover: clear state, re-ingest/backfill, unblock, report `running`. |
 
-Acks are `POST /api/control/events` with `event_type: reset-ack`, `state: paused`, `payload.reset_id` correlating to the `reset-initiated` event id.
+**`correlation_id` — the universal process id (#265).** It originates at `reset-initiated` (where `correlation_id == id`) and is carried by every downstream command frame (`reset-started` / `reset-completed`) and component event (`reset-ack`, post-reset `status`), so the whole saga shares one filterable key. Each event keeps its own unique `id` (PK / SSE cursor), **distinct** from `correlation_id`; there is no `reset_id` field.
+
+Acks are `POST /api/control/events` with `event_type: reset-ack`, `state: paused`, and the **required** header `X-Correlation-Id: <reset-initiated id>`. The orchestrator gates on `correlation_id` (the stored header value, matched against the in-flight cycle). A reset-ack with a missing/mismatched `correlation_id` is recorded but does not count toward the gate (see [`API_SPECIFICATION.md` §7 Channel 3](../API_SPECIFICATION.md#channel-3--component_acks-reset-ack-fan-in)).
 
 ## Sequence
 
@@ -29,9 +31,9 @@ sequenceDiagram
 
     Op->>API: POST /api/control/reset
     activate API
-    Note over API: idle → draining<br/>advisory lock · reset_id = uuidv7
-    API->>DB: emit reset-initiated {id: reset_id, component:"*"}
-    API-->>Op: 202 Accepted {reset_id, state: draining}
+    Note over API: idle → draining<br/>advisory lock · correlation_id = reset-initiated id (uuidv7)
+    API->>DB: emit reset-initiated {id, correlation_id: id, component:"*"}
+    API-->>Op: 202 Accepted {correlation_id, state: draining}
     deactivate API
     Note over API: reset → 409 · ingest STILL OPEN
 
@@ -40,13 +42,13 @@ sequenceDiagram
 
     par Fetcher drains
         F->>F: stop poll loop + ingestion
-        F->>API: POST /api/control/events {reset-ack, paused, reset_id}
+        F->>API: POST /api/control/events {reset-ack, paused} · X-Correlation-Id
     and Demo driver drains
         D->>D: block /demo/ API · stop emit · UI banner
-        D->>API: POST /api/control/events {reset-ack, paused, reset_id}
+        D->>API: POST /api/control/events {reset-ack, paused} · X-Correlation-Id
     end
 
-    Note over API: orchestrator counts acks for reset_id
+    Note over API: orchestrator counts acks for correlation_id
     alt both acks in (fetcher + demo-driver)
         DB-->>API: ack(fetcher) + ack(demo-driver)
     else AckTimeoutSeconds (default 10s) elapses
@@ -54,11 +56,11 @@ sequenceDiagram
     end
 
     Note over API: draining → resetting · ingest gate ON
-    API->>DB: emit reset-started {reset_id}
+    API->>DB: emit reset-started {correlation_id}
     Note over API: POST /api/deployments → 503 (brief)
     API->>DB: clear deployment history + fetcher cursors
     Note over API: gates OFF · resetting → idle · reset reopens
-    API->>DB: emit reset-completed {reset_id}
+    API->>DB: emit reset-completed {correlation_id}
 
     DB-->>F: reset-completed
     DB-->>D: reset-completed
@@ -99,7 +101,7 @@ stateDiagram-v2
 | 2 | Proceed when **both** acks (fetcher + demo-driver) are in **OR** `AckTimeoutSeconds` elapses; default **10 s**. |
 | 3 | Reset clears **only** `deployment_events` + `fetcher_state`; control/component tables left to the 2 h retention job. |
 | 4 | Event types `reset-initiated` / `reset-started` / `reset-completed`; the legacy `reset` type is dropped (no alias). |
-| 5 | Ack = `POST /api/control/events` `{event_type: reset-ack, state: paused, payload.reset_id}`. |
+| 5 | Ack = `POST /api/control/events` `{event_type: reset-ack, state: paused}` + **required** header `X-Correlation-Id` = the `reset-initiated` id. The ack-gate keys on `correlation_id` (#265, Option A — `reset_id` retired everywhere). A missing/mismatched `correlation_id` is recorded but does not count toward the gate. |
 | 6 | No status endpoint — reset progress is observable via the control-stream events only. |
 
 Config keys (appsettings + env override): `AckTimeoutSeconds` (default 10), `ExpectedComponents` (default `dashboard-fetcher`, `demo-driver`), `GateMaxTtlSeconds` (default 60).

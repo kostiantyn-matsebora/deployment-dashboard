@@ -1,17 +1,17 @@
 {
   "/api": {
-    "target": "http://localhost:3000",
+    "target": "http://localhost:3002",
     "secure": false,
     "changeOrigin": true,
     "logLevel": "info"
   },
   "/healthz": {
-    "target": "http://localhost:3000",
+    "target": "http://localhost:3002",
     "secure": false,
     "changeOrigin": true
   },
   "/readyz": {
-    "target": "http://localhost:3000",
+    "target": "http://localhost:3002",
     "secure": false,
     "changeOrigin": true
   }

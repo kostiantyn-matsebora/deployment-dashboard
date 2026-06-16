@@ -20,9 +20,13 @@ public sealed record MatrixRow(
     IReadOnlyDictionary<string, MatrixSlot> Slots);
 
 /// <summary>
-/// One cell in the matrix — the current event and (when applicable) the last successful event.
-/// <see cref="LastSuccessful"/> is omitted from JSON when <c>null</c> (global WhenWritingNull policy).
+/// One cell in the matrix — the current effective event and (when applicable) the last
+/// successful event and/or the latest non-effective event.
+/// <see cref="LastSuccessful"/> and <see cref="Next"/> are omitted from JSON when <c>null</c>
+/// (global WhenWritingNull policy).
 /// </summary>
 public sealed record MatrixSlot(
     DeploymentEvent Current,
-    DeploymentEvent? LastSuccessful);
+    DeploymentEvent? LastSuccessful,
+    DeploymentEvent? Next = null,
+    bool PrevFailed = false);

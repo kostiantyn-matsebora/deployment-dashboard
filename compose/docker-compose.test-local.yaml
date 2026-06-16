@@ -1,0 +1,20 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Test-local override — swaps the API to the locally-built test image and
+# exposes the stack on port 8082 to avoid colliding with the running :8080 demo.
+#
+# Usage (from compose/):
+#   docker compose -f docker-compose.yaml -f docker-compose.demo.yaml \
+#                  -f docker-compose.test.yaml -f docker-compose.test-local.yaml \
+#                  -p dd-test --profile demo up -d --build --wait
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  api:
+    image: deployment-dashboard-api:test
+    pull_policy: never
+
+  gateway:
+    ports:
+      - target: 8080
+        published: "8082"
+        protocol: tcp

@@ -6,6 +6,7 @@ using Dashboard.Fetcher.Configuration;
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Cursor;
+using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
@@ -337,6 +338,87 @@ public sealed class TerminalCachePollTests
         Assert.Contains($"gh-deploy-{StagingDeployId}", prodEvent.ParentDeployments);
     }
 
+    // ── 5. Reset saga: ResetState clears caches so data is re-emitted (§5.10.5) ──
+
+    /// <summary>
+    /// After a deployment goes terminal (cached) in cycle 1, the reset saga's clean-slate
+    /// step — <see cref="GithubActionsAdapter.ResetState"/> — must clear the terminal cache
+    /// so the SAME deployment's /statuses are re-fetched and its event is RE-emitted on the
+    /// next poll. Without it, a post-reset fetch silently skips the data the dashboard lost.
+    /// </summary>
+    [Fact]
+    public async Task ResetState_ClearsTerminalCache_StatusesRefetchedAndEventReemitted()
+    {
+        // Same window for both cycles so the success status stays mappable (createdAt > since).
+        var since = DateTimeOffset.UtcNow.AddHours(-2);
+
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+        var successStatus = MakeStatus(deployId: 1, state: "success", runId: RunId, createdAt: since.AddMinutes(30));
+
+        var urlMap = BuildUrlMap(
+            deploymentsForWindow: [deployment],
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>> { [1] = [successStatus] },
+            runId: RunId);
+
+        var handler = new CountingFakeGithubHandler(urlMap);
+        var adapter = BuildAdapter(handler);
+
+        var cursor = new GithubCursor().WithRepo(FullRepo, since).Encode();
+
+        // Cycle 1: statuses fetched, event emitted, deployment cached as terminal.
+        var events1 = await DrainPollAsync(adapter, cursor);
+        var statusCallsAfterCycle1 = handler.StatusCalls(deploymentId: 1);
+
+        // Reset saga clean-slate step.
+        adapter.ResetState();
+
+        // Cycle 2 (same window): cache cleared → statuses re-fetched → event re-emitted.
+        var events2 = await DrainPollAsync(adapter, cursor);
+        var statusCallsAfterCycle2 = handler.StatusCalls(deploymentId: 1);
+
+        Assert.Contains(events1, e => e.DeploymentId == "gh-deploy-1");
+        Assert.True(statusCallsAfterCycle2 > statusCallsAfterCycle1,
+            $"ResetState must clear the terminal cache so /statuses is re-fetched. " +
+            $"Cycle1={statusCallsAfterCycle1}, Cycle2={statusCallsAfterCycle2}");
+        Assert.Contains(events2, e => e.DeploymentId == "gh-deploy-1");
+    }
+
+    // ── 6. Empty (non-null) cursor re-enters the backfill path (§5.10.5) ────────
+
+    /// <summary>
+    /// An empty-but-non-null cursor — what a reset's empty backfill leaves behind
+    /// (<c>{"repos":{}}</c>) — must re-enter the BACKFILL path, not incremental poll, so
+    /// data appearing after the reset is fully backfilled. Backfill lists /environments;
+    /// incremental poll never does, so /environments calls distinguish the two paths.
+    /// </summary>
+    [Fact]
+    public async Task EmptyCursor_TakesBackfillPath_NotIncrementalPoll()
+    {
+        var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+        var status = MakeStatus(deployId: 1, state: "success", runId: RunId, createdAt: DateTimeOffset.UtcNow.AddHours(-1));
+        var urlMap = BuildUrlMap(
+            deploymentsForWindow: [deployment],
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>> { [1] = [status] },
+            runId: RunId);
+
+        // Empty cursor → backfill.
+        var emptyHandler = new CountingFakeGithubHandler(urlMap);
+        var emptyAdapter = BuildAdapter(emptyHandler);
+        var emptyCursor = new GithubCursor().Encode(); // non-null {"repos":{}}
+        await DrainPollAsync(emptyAdapter, emptyCursor);
+
+        // Repo-marked cursor → incremental poll.
+        var pollHandler = new CountingFakeGithubHandler(urlMap);
+        var pollAdapter = BuildAdapter(pollHandler);
+        var markedCursor = new GithubCursor().WithRepo(FullRepo, DateTimeOffset.UtcNow.AddHours(-2)).Encode();
+        await DrainPollAsync(pollAdapter, markedCursor);
+
+        var envPath = $"/repos/{Owner}/{Repo}/environments";
+        Assert.True(emptyHandler.PathCalls(envPath) >= 1,
+            "Empty cursor must take the backfill path (which lists /environments).");
+        Assert.Equal(0, pollHandler.PathCalls(envPath));
+    }
+
     // ── infrastructure ────────────────────────────────────────────────────────
 
     private static GhDeployment MakeDeployment(long id, string env, int daysAgo) =>
@@ -395,14 +477,19 @@ public sealed class TerminalCachePollTests
         };
         var versionResolver = new VersionResolver(
             VersionSourceConfig.Default, graphCache, githubClient);
-
+        var eventBuilder = new BackfillEventBuilder(
+            githubClient, graphCache, versionResolver,
+            NullLogger<BackfillEventBuilder>.Instance);
         var backfillRunner = new BackfillRunner(
-            githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, NullLogger<BackfillRunner>.Instance);
+            githubClient, adapterOptions, fetcherOptions,
+            eventBuilder, NullLogger<BackfillRunner>.Instance);
+        var statusEventMapper = new DeploymentStatusEventMapper(
+            githubClient, graphCache, versionResolver,
+            NullLogger<DeploymentStatusEventMapper>.Instance);
 
         return new GithubActionsAdapter(
-            githubClient, adapterOptions, fetcherOptions, graphCache,
-            versionResolver, backfillRunner, NullLogger<GithubActionsAdapter>.Instance);
+            githubClient, adapterOptions, fetcherOptions,
+            backfillRunner, statusEventMapper);
     }
 
     private const string WorkflowYaml = """
@@ -480,6 +567,13 @@ public sealed class TerminalCachePollTests
         public int StatusCalls(long deploymentId)
         {
             var suffix = $"/repos/{Owner}/{Repo}/deployments/{deploymentId}/statuses";
+            lock (_calls)
+                return _calls.Count(c => StripSuffix(c).Equals(suffix, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Number of requests whose stripped path equals <paramref name="suffix"/>.</summary>
+        public int PathCalls(string suffix)
+        {
             lock (_calls)
                 return _calls.Count(c => StripSuffix(c).Equals(suffix, StringComparison.OrdinalIgnoreCase));
         }

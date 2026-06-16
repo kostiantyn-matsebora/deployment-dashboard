@@ -37,10 +37,15 @@ jobs:
     env:
       # docker compose reads these automatically — every `docker compose` call
       # below needs no -f / --profile flags and stays in sync.
-      #   base      — service definitions + gateway port :8080
-      #   demo      — insecure demo credentials (API_KEY / CONTROL_API_KEY / pg)
-      #   local     — build images from branch source instead of pulling GHCR
-      COMPOSE_FILE: compose/docker-compose.yaml:compose/docker-compose.demo.yaml:compose/docker-compose.local.yaml:compose/docker-compose.test.yaml
+      #   base       — service definitions + gateway port :8080
+      #   demo       — insecure demo credentials (API_KEY / CONTROL_API_KEY / pg)
+      #   local      — build images from branch source instead of pulling GHCR
+      #   demo.local — re-applies the demo-gateway build on the local prod image;
+      #                without this, local.yaml's prod gateway build wins last-file-
+      #                wins over demo.yaml's image swap, so /demo/* routes are absent
+      COMPOSE_FILE: compose/docker-compose.yaml:compose/docker-compose.demo.yaml:compose/docker-compose.local.yaml:compose/docker-compose.demo.local.yaml:compose/docker-compose.test.yaml
+      # Enables the demo-gateway routing assertions in gateway-routing.spec.ts.
+      DEMO_GATEWAY: '1'
       # Full stack: db + api + demo-driver + gateway + github-emulator + fetcher-host.
       COMPOSE_PROFILES: db,api,demo-driver,gateway,github-emulator,fetcher-host
       # Fast live-emission cadence so the emission scenario doesn't wait 8s/tick.
@@ -62,6 +67,9 @@ jobs:
       - name: Install test deps
         working-directory: testing/api
         run: npm ci
+
+      - name: Build production gateway base (demo gateway FROMs it)
+        run: docker build -f gateway/Dockerfile -t deployment-dashboard-gateway:local gateway
 
       - name: Build & start stack (db + api + demo-driver + gateway + github-emulator + fetcher-host)
         run: docker compose up -d --build --wait --wait-timeout 300

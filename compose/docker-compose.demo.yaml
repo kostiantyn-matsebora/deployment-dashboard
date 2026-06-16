@@ -13,11 +13,18 @@
 
 services:
 
-  # Demo-only: route /demo/* to the in-stack demo-driver. The base gateway has no
-  # DEMO_DRIVER_UPSTREAM, so /demo/* 502s in production; this supplies it for demo.
+  # Demo-only: swap the production gateway image for the demo-gateway image.
+  # The demo-gateway image (Dockerfile.demo) layers on top of the production image
+  # and adds demo.snippet.template, which activates /demo/* routing at runtime.
+  # DNS_RESOLVER and DEMO_DRIVER_UPSTREAM are required by the snippet's resolver
+  # directive and variable-based proxy_pass; they are absent from the prod image.
   gateway:
+    image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway-demo:${DASHBOARD_VERSION:-latest}
     environment:
       DEMO_DRIVER_UPSTREAM: "demo-driver:3001"
+      # 127.0.0.11 is the Docker embedded DNS — correct default for Compose.
+      # Override with 168.63.129.16 for Azure Container Apps if running demo there.
+      DNS_RESOLVER: "${DNS_RESOLVER:-127.0.0.11}"
     depends_on:
       demo-driver:
         condition: service_healthy
@@ -28,7 +35,11 @@ services:
       API_KEY: demo-api-key
       # Insecure demo default — enables POST /api/control/reset for local evaluation.
       CONTROL_API_KEY: demo-control-key
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=deployment_dashboard;Username=dashboard;Password=changeme"
+      POSTGRES_HOST:     "postgres"
+      POSTGRES_PORT:     "5432"
+      POSTGRES_DB:       "deployment_dashboard"
+      POSTGRES_USER:     "dashboard"
+      POSTGRES_PASSWORD: "changeme"
 
   # ── Demo Driver (demo-only simulator — defined here, not in the base) ────────
   demo-driver:
@@ -89,13 +100,12 @@ services:
       # Short poll interval for demo responsiveness.
       POLL_INTERVAL_SECONDS: "10"
       # Repoint the fetcher at the in-stack github-emulator instead of api.github.com.
-      # Key after __ must match the C# property name (PascalCase) — see docker-compose.yaml comment.
-      GITHUB__BaseUrl: "http://github-emulator:3100"
-      GITHUB__Token: "demo-token"
-      GITHUB__Repos: "demo-org/auth-bff,demo-org/billing-webhook,demo-org/catalog-edge,demo-org/data-pipeline,demo-org/ledger-projector,demo-org/notification-worker,demo-org/order-svc,demo-org/payments-api,demo-org/platform-proxy,demo-org/search-indexer"
-      GITHUB__VersionSource: "artifact:version.txt"
-      GITHUB__RateLimit: "${GITHUB_SIM_RATE_LIMIT:-5000}"
-      GITHUB__RateLimitBudgetPct: "80"
+      GITHUB_BASE_URL: "http://github-emulator:3100"
+      GITHUB_TOKEN: "demo-token"
+      GITHUB_REPOS: "demo-org/auth-bff,demo-org/billing-webhook,demo-org/catalog-edge,demo-org/data-pipeline,demo-org/ledger-projector,demo-org/notification-worker,demo-org/order-svc,demo-org/payments-api,demo-org/platform-proxy,demo-org/search-indexer"
+      GITHUB_VERSION_SOURCE: "artifact:version.txt"
+      GITHUB_RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
+      GITHUB_RATE_LIMIT_BUDGET_PCT: "80"
     # Demo-only dependency — the emulator does not exist in production.
     depends_on:
       github-emulator:

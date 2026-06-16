@@ -226,6 +226,6 @@ public sealed class FetcherReadinessIndicatorTests
             adapter, ingest, state,
             pollInterval: TimeSpan.FromHours(1),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PollLoop>.Instance,
-            readiness);
+            readiness is null ? null : new PollLoopReporting(readiness, null, null));
     }
 }

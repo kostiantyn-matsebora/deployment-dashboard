@@ -249,6 +249,46 @@
 .toggle.is-on .switch { background: var(--coral); }
 .toggle.is-on .switch::after { transform: translateX(14px); background: #fff; }
 
+/* ── Swimlanes auto-scroll toggle — accent ON colour (not coral) (#309) ─── */
+.swim-autoscroll-toggle.is-on {
+  color: rgba(var(--accent-rgb), 0.90);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.10);
+}
+.swim-autoscroll-toggle.is-on .switch { background: rgba(var(--accent-rgb), 1); }
+
+/* ── Swimlane control group: divider + inner row (#309) ─────────────────── */
+/* Wraps Collapse/Expand-all + Auto-scroll so they read as one unit, clearly
+   separated from the rate-limit chip to the left and the correlation picker
+   to the right by matching the .hdr-filter border-left separator pattern. */
+.swim-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1px solid var(--glass-edge);
+}
+
+/* Collapse/Expand-all pill button — matches mockup .sv-collapse-all-btn (#309) */
+.swim-collapse-all-btn {
+  appearance: none;
+  border: 1px solid var(--glass-edge);
+  background: var(--input-bg);
+  color: var(--ink-1);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.swim-collapse-all-btn:hover {
+  color: var(--ink-0);
+  border-color: var(--glass-edge-2);
+}
+
 /* ── Theme switcher ─────────────────────────────────────── */
 .theme-switch {
   display: inline-flex;
@@ -407,16 +447,18 @@
   min-width: 260px;
 }
 
-:host ::ng-deep .glass-popover .p-popover-content {
-  padding: 14px 14px 12px;
-}
-
 /* ── Picker content wrapper ──────────────────────────────── */
+/* Inset padding lives on OUR wrapper, not PrimeNG's content section: newer
+   PrimeNG renders [data-pc-section="content"] (there is no .p-popover-content),
+   so a ::ng-deep .p-popover-content rule is dead and the content sits flush to
+   the panel border on all sides. Padding here insets every picker popover
+   (Columns / Fields / Correlation) uniformly; matches .rl-popover-content. */
 .picker-content {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 220px;
+  padding: 14px 14px 12px;
 }
 
 .popover-title {
@@ -436,18 +478,29 @@
   gap: 4px 8px;
 }
 
+/* Single-column variant for the Columns picker where env names can be long. */
+.field-grid--single {
+  grid-template-columns: 1fr;
+}
+
 .field-toggle {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 5px 8px;
+  /* Fix #1: reserve the border in the base so box size is constant on/off.
+     .field-toggle.is-on sets only border-color — border-width never changes,
+     so the content box never shrinks and text can never overlap the border. */
+  border: 1px solid transparent;
   border-radius: 7px;
   cursor: pointer;
   user-select: none;
-  transition: background 0.12s ease;
+  transition: background 0.12s ease, border-color 0.12s ease;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   color: var(--ink-2);
+  /* Fix #3: prevent the flex container itself from overflowing its grid cell. */
+  min-width: 0;
 }
 
 .field-toggle:hover {
@@ -458,7 +511,8 @@
 .field-toggle.is-on {
   background: rgba(var(--accent-rgb), 0.12);
   color: var(--ink-0);
-  border: 1px solid rgba(var(--accent-rgb), 0.30);
+  /* Fix #1: only change color — width already reserved above. */
+  border-color: rgba(var(--accent-rgb), 0.30);
 }
 
 /* Custom checkbox dot */
@@ -490,6 +544,9 @@
 
 .field-label {
   letter-spacing: 0.2px;
+  /* Fix #3: flex child can shrink; long names wrap rather than overflow. */
+  min-width: 0;
+  word-break: break-word;
 }
 
 /* ── Correlation predicate list ──────────────────────────── */
@@ -547,6 +604,76 @@
   background: rgba(var(--accent-rgb), 1);
 }
 
+/* ── Rate-limit chip + popover ───────────────────────────── */
+.icon-btn.rl-chip { width: auto; padding: 0 10px; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.rl-chip-icon { font-size: 13px; line-height: 1; flex-shrink: 0; }
+.rl-chip-label { letter-spacing: 0.2px; white-space: nowrap; }
+/* rl-popover-content: inset padding is inherited from the shared .picker-content
+   base (single source of truth); only the rate-limit-specific deltas live here. */
+.rl-popover-content { min-width: 240px; gap: 6px; }
+.rl-section { display: flex; flex-direction: column; gap: 5px; }
+.rl-row { display: flex; align-items: center; gap: 8px; }
+.rl-field-label { font-size: 10.5px; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; min-width: 72px; }
+.rl-field-value { font-size: 12px; color: var(--ink-0); flex: 1; }
+.rl-field-value.mono { font-family: 'JetBrains Mono', monospace; }
+.rl-state-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; background: rgba(52, 210, 154, 0.12); border: 1px solid rgba(52, 210, 154, 0.35); color: var(--emerald); flex-shrink: 0; }
+.rl-state-badge.is-paused { background: rgba(255, 191, 0, 0.12); border-color: rgba(255, 191, 0, 0.4); color: var(--amber); }
+.rl-bar-track { width: 100%; height: 5px; border-radius: 999px; background: var(--glass-edge); overflow: hidden; }
+.rl-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.7), rgba(var(--accent-rgb), 1)); transition: width 0.3s ease; }
+
+/* ── Hidden-count badge (Columns + Fields buttons) ──────────────────────── */
+/* Positioned inside icon-btn; shown only when items are hidden. */
+.hidden-count-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.9);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+  pointer-events: none;
+  border: 1.5px solid var(--glass);
+}
+
+/* ── Columns popover reset link ──────────────────────────── */
+.cols-reset-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: rgba(var(--accent-rgb), 0.9);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  letter-spacing: 0.2px;
+  transition: color 0.12s ease;
+  margin-top: 4px;
+  border-top: 1px solid var(--glass-edge);
+  padding-top: 8px;
+}
+
+.cols-reset-btn:hover {
+  color: rgba(var(--accent-rgb), 1);
+}
+
+/* ── Popover hint text ───────────────────────────────────── */
+.hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.2px;
+}
+
 /* ── Time window row ─────────────────────────────────────── */
 .tw-row {
   display: flex;
@@ -586,4 +713,77 @@
   background: var(--input-bg);
   border: 1px solid var(--glass-edge-2);
   border-radius: 7px;
+}
+
+/* ── Legend popover ──────────────────────────────────────── */
+.legend-content { min-width: 220px; gap: 10px; }
+
+.lg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lg-group-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--glass-edge);
+  margin-bottom: 2px;
+}
+
+.lg-item {
+  display: grid;
+  grid-template-columns: 14px 10px 1fr auto;
+  column-gap: 7px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.lg-ic {
+  font-size: 11px;
+  text-align: center;
+  line-height: 1;
+}
+
+.lg-ic.s-success   { color: var(--emerald); }
+.lg-ic.s-progress  { color: var(--amber); }
+.lg-ic.s-failure   { color: var(--coral); }
+.lg-ic.s-pending   { color: var(--slate); }
+.lg-ic.s-queued    { color: var(--blue); }
+.lg-ic.s-waiting   { color: var(--violet); }
+.lg-ic.s-cancelled { color: var(--grey); }
+.lg-ic.s-rejected  { color: var(--rose); }
+
+.lg-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.lg-sw.sw-success   { background: var(--emerald-wash); border: 1px solid var(--emerald-edge); }
+.lg-sw.sw-progress  { background: var(--amber-wash);   border: 1px solid var(--amber-edge); }
+.lg-sw.sw-failure   { background: var(--coral-wash);   border: 1px solid var(--coral-edge); }
+.lg-sw.sw-pending   { background: var(--slate-wash);   border: 1px solid var(--slate-edge); }
+.lg-sw.sw-queued    { background: var(--blue-wash);    border: 1px solid var(--blue-edge); }
+.lg-sw.sw-waiting   { background: var(--violet-wash);  border: 1px solid var(--violet-edge); }
+.lg-sw.sw-cancelled { background: var(--grey-wash);    border: 1px solid var(--grey-edge); }
+.lg-sw.sw-rejected  { background: var(--rose-wash);    border: 1px solid var(--rose-edge); }
+
+.lg-nm {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+
+.lg-ds {
+  font-size: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  text-align: right;
 }

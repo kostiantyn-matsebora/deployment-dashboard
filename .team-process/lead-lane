@@ -1,0 +1,34 @@
+# Lead/orchestrator edit whitelist (consumed by scripts/hooks/Invoke-LeadEditGuard.ps1).
+# One glob per line; blank lines and # comments ignored. Presence of this file REPLACES
+# the built-in default list, so the defaults are restated below.
+#
+# This file is COMMITTED policy (hand-authored). Runtime STATE lives under
+# .team-process/sessions/ (+ the lane file) and is gitignored.
+
+# --- built-in defaults (orchestration assets the lead authors) ---
+.claude/team-process/**
+.claude/bindings/**
+.claude/agents/**
+.claude/commands/**
+.claude/skills/**
+.claude/*.md
+.claude/settings.json
+.claude/settings.local.json
+.team-process/**
+
+# --- team-process enforcement hooks (the framework's own guards) ---
+# These hook scripts ARE the team-process enforcement arm; authored as one unit by the
+# orchestrator who owns the framework.
+scripts/hooks/Format-ProtocolForm.ps1
+scripts/hooks/Format-ProtocolForm.Tests.ps1
+scripts/hooks/Invoke-ProtocolFormGuard.ps1
+scripts/hooks/Invoke-ProtocolFormGuard.Tests.ps1
+scripts/hooks/Invoke-LeadEditGuard.ps1
+scripts/hooks/Invoke-LeadEditGuard.Tests.ps1
+scripts/hooks/Invoke-LaneGuard.ps1
+scripts/hooks/Invoke-LaneGuard.Tests.ps1
+scripts/hooks/Invoke-TeamModeGuard.ps1
+scripts/hooks/Invoke-TeamModeGuard.Tests.ps1
+
+# --- repo-level config the framework touches ---
+.gitignore

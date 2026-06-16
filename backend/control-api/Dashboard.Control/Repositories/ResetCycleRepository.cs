@@ -27,7 +27,7 @@ internal sealed class ResetCycleRepository(DashboardDbContext db) : IResetCycleR
             .Where(r => r.Id == FixedId && r.State == ResetState.Idle)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(r => r.State, claimedCycle.State)
-                .SetProperty(r => r.ResetId, claimedCycle.ResetId)
+                .SetProperty(r => r.CorrelationId, claimedCycle.CorrelationId)
                 .SetProperty(r => r.ExpectedComponents, claimedCycle.ExpectedComponents)
                 .SetProperty(r => r.AcksReceived, claimedCycle.AcksReceived)
                 .SetProperty(r => r.StartedAt, claimedCycle.StartedAt)
@@ -48,7 +48,7 @@ internal sealed class ResetCycleRepository(DashboardDbContext db) : IResetCycleR
         else
         {
             existing.State = cycle.State;
-            existing.ResetId = cycle.ResetId;
+            existing.CorrelationId = cycle.CorrelationId;
             existing.ExpectedComponents = cycle.ExpectedComponents;
             existing.AcksReceived = cycle.AcksReceived;
             existing.StartedAt = cycle.StartedAt;

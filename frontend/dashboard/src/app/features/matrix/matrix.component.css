@@ -126,6 +126,44 @@
   flex-direction: column;
 }
 
+/* ── Column drag-and-drop (native HTML5) ─────────────────── */
+
+/* Grip glyph — always visible so columns read as reorderable */
+.col-drag-grip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-3);
+  cursor: grab;
+  margin-right: 5px;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+  line-height: 1;
+  user-select: none;
+}
+
+.col-draggable:hover .col-drag-grip {
+  color: var(--ink-1);
+}
+
+/* grabbing cursor while drag is active */
+.col-draggable.is-dragging .col-drag-grip {
+  cursor: grabbing;
+}
+
+/* Source cell faded while its drag is in flight */
+.col-draggable.is-dragging {
+  opacity: 0.45;
+  transition: opacity 0.1s ease;
+}
+
+/* Drop target indicator — accent left-border stripe */
+.col-draggable.is-drag-over {
+  border-left: 3px solid rgba(var(--accent-rgb), 0.85);
+  background: rgba(var(--accent-rgb), 0.08);
+  border-radius: 4px;
+}
+
 /* ── Empty slot ───────────────────────────────────────────── */
 .slot.empty {
   /* flex: 1 1 auto — mirrors .slot in tile CSS; fills the .row flex column

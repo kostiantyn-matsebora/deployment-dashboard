@@ -86,8 +86,10 @@ extra_css:
 
 nav:
   - Home: index.md
+  - Built by Claude: built-by-ai.md
   - Quickstart: guide/quickstart.md
-  - Using the Dashboard:
+  - Install: guide/install.md
+  - Guide:
       - guide/index.md
       - Quickstart: guide/quickstart.md
       - Screenshots: guide/screenshots.md
@@ -98,7 +100,6 @@ nav:
       - FAQ & troubleshooting: guide/faq.md
   - Development & reference:
       - Architecture (SAD): SAD.md
-      - Engineering process: engineering-process.md
       - API contract:
           - Overview: api/index.md
           - Guidelines: api/api-guidelines.md

@@ -10,7 +10,7 @@ import {
   output,
 } from '@angular/core';
 
-import { DeploymentEvent, SwimlaneField } from '../../../core/models/deployment.model';
+import { DeploymentEvent, isContextStatus, SwimlaneField } from '../../../core/models/deployment.model';
 import { TimeAgoPipe } from '../../../shared/pipes/time-ago.pipe';
 
 /** Real rendered size of a node card, reported to the swimlane layout. */
@@ -50,6 +50,20 @@ export class VisCardComponent {
   readonly visibleFields = input.required<Set<SwimlaneField>>();
   /** True when this node is the currently selected node in the inspector. */
   readonly isSelected = input<boolean>(false);
+  /**
+   * True while the card should display a brief flash animation (change-emphasis
+   * on SSE update). Driven by `SwimlanesComponent.flashingIds` signal (#309).
+   */
+  readonly isFlashing = input<boolean>(false);
+  /** Optional context-status next event for this node's slot (from slot.next). */
+  readonly nextEvent = input<DeploymentEvent | null>(null);
+  /**
+   * True when this node's slot is never-deployed: `current` is a context
+   * status with no effective baseline. Set by the parent (SwimlanesComponent)
+   * which has access to `slot.last_successful`; the vis-card cannot derive
+   * this from the event alone.
+   */
+  readonly neverDeployed = input<boolean>(false);
 
   /** Emitted when the card is clicked — parent handles inspector state. */
   readonly nodeClick = output<DeploymentEvent>();
@@ -88,13 +102,46 @@ export class VisCardComponent {
 
   // ── Derived ─────────────────────────────────────────────────
 
+  /**
+   * True when this node's slot is never-deployed: driven by the `neverDeployed`
+   * input from the parent (which has access to slot.last_successful). Renders a
+   * neutral/grey card + status chip. Mirrors .vis-card.s-never-deployed.
+   */
+  protected readonly isNeverDeployed = computed<boolean>(() => this.neverDeployed());
+
   protected readonly statusClass = computed<string>(() => {
+    if (this.isNeverDeployed()) return 's-never-deployed';
     switch (this.event().status) {
       case 'success':     return 's-success';
       case 'in-progress': return 's-progress';
       default:            return 's-failure';
     }
   });
+
+  /**
+   * Context status from slot.next (pending/queued/waiting/cancelled/rejected),
+   * if any. Only reads slot.next — the never-deployed case is handled via
+   * isNeverDeployed() + statusClass(), not via ctxStatus().
+   */
+  protected readonly ctxStatus = computed<string | null>(() => {
+    const next = this.nextEvent();
+    return next && isContextStatus(next.status) ? next.status : null;
+  });
+
+  /** Version of the context-status next event (for the badge label). */
+  protected readonly ctxVersion = computed<string | undefined>(() => {
+    const next = this.nextEvent();
+    if (next && isContextStatus(next.status)) return next.version;
+    return undefined;
+  });
+
+  /** Icon glyph for a context status. */
+  protected ctxIcon(status: string): string {
+    const icons: Record<string, string> = {
+      'pending': '○', 'queued': '≡', 'waiting': '◷', 'cancelled': '⊘', 'rejected': '⊗',
+    };
+    return icons[status] ?? '';
+  }
 
   /** True when Row 1 (version / happened_at) should render. */
   protected readonly showTopRow = computed<boolean>(() => {
