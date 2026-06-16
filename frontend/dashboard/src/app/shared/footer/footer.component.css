@@ -18,6 +18,12 @@
   border-top: 1px solid var(--glass-edge);
 }
 
+/* Light theme: raise body-text contrast from ~2.5:1 (ink-3) to ~4.6:1 (ink-2) — WCAG AA */
+:host-context([data-theme="light"]) .site-footer,
+:host-context([data-theme="auto"]) .site-footer {
+  color: var(--ink-2);
+}
+
 .sf-left {
   display: flex;
   align-items: center;
