@@ -101,3 +101,14 @@ Set by [`docker-compose.demo.yaml`](https://github.com/kostiantyn-matsebora/depl
 | `GITHUB_SIM_RATE_LIMIT` | no | `5000` | Simulated GitHub hourly request quota the emulator advertises. |
 
 Other demo vars (`WRITE_API_URL`, `FETCHER_URL`, `GITHUB_EMULATOR_URL`, `MOCK_URL`, `PORT`, `SEED_ON_STARTUP`, `SCENARIOS_DIR`) are fixed internal wiring set by the overlay and are not meant to be overridden.
+
+### Demo-gateway image vars
+
+The `demo` profile uses the `deployment-dashboard-gateway-demo` image instead of the production gateway. Two additional vars are specific to that image and are set by the demo overlay:
+
+| Var | Default (in image) | Set by demo overlay | Purpose |
+|---|---|---|---|
+| `DNS_RESOLVER` | `127.0.0.11` | `127.0.0.11` (override with `168.63.129.16` for Azure Container Apps) | DNS resolver for variable-based `proxy_pass` in the demo snippet — required because the demo-driver is an optional service. |
+| `DEMO_DRIVER_UPSTREAM` | — | `demo-driver:3001` | Demo driver upstream `host:port`. |
+
+These vars are **absent from the production gateway image** — its `NGINX_ENVSUBST_FILTER` excludes them.

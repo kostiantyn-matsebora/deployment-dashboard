@@ -5,17 +5,19 @@
 # pull_policy: never prevents docker compose up from pulling or rebuilding;
 # images are only (re)built when you run docker compose ... build explicitly.
 #
-# Usage:
+# Usage (production profile):
 #   docker compose -f compose/docker-compose.yaml \
-#                  -f compose/docker-compose.demo.yaml \
 #                  -f compose/docker-compose.local.yaml \
-#                  --profile demo up
+#                  up --build
 #
-# To build all images up front:
+# Usage (demo profile — also add demo.local to rebuild the demo-gateway image
+#         from the local prod source; without it the prod gateway wins and
+#         /demo/* routes are absent):
 #   docker compose -f compose/docker-compose.yaml \
 #                  -f compose/docker-compose.demo.yaml \
 #                  -f compose/docker-compose.local.yaml \
-#                  --profile demo build
+#                  -f compose/docker-compose.demo.local.yaml \
+#                  --profile demo up --build
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
