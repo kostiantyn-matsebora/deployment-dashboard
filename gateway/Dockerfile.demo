@@ -1,0 +1,28 @@
+# Demo-gateway image — layered on top of the production gateway image.
+#
+# The production image (Dockerfile) contains no demo concerns.  This image adds
+# demo.snippet.template, which the stock nginx entrypoint renders to
+# conf.d/demo.snippet at container start.  That file is picked up by the
+# `include /etc/nginx/conf.d/*.snippet;` directive inside the production
+# server{} block, activating /demo/* routing without modifying production config.
+#
+# Build ARG — the full production image reference to layer on.
+#   CI (gateway.yml):   PROD_IMAGE=ghcr.io/.../gateway:scan   (daemon-local scan build)
+#   CI (release.yml):   PROD_IMAGE=ghcr.io/.../gateway:<ver>  (pushed release image)
+#   Local/api-tests:    PROD_IMAGE=deployment-dashboard-gateway:local  (branch source build)
+# Default points at the published latest for plain `docker build` without args.
+ARG PROD_IMAGE=ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest
+FROM ${PROD_IMAGE}
+
+# Demo-specific env vars.
+# DNS_RESOLVER: 127.0.0.11 = Docker embedded DNS (Compose default).
+#               168.63.129.16 = Azure internal DNS (Container Apps).
+# Required by the variable-based proxy_pass locations in demo.snippet (resolver directive).
+ENV DNS_RESOLVER='127.0.0.11'
+
+# Widen envsubst filter to include demo vars in addition to the prod vars.
+ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM|DEMO_DRIVER_UPSTREAM|DNS_RESOLVER)$'
+
+# Copy the demo snippet template; the stock entrypoint renders it to
+# /etc/nginx/conf.d/demo.snippet at start, which the server{} include picks up.
+COPY demo.snippet.template /etc/nginx/templates/demo.snippet.template
