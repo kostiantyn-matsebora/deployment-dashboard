@@ -13,9 +13,8 @@ USER nginx
 
 # Restrict envsubst to our vars so nginx's own $host / $uri / $scheme /
 # $proxy_add_x_forwarded_for etc. are not wiped.
-# DNS_RESOLVER: 127.0.0.11 = Docker embedded DNS (Compose default);
-#               168.63.129.16 = Azure internal DNS (Container Apps).
-ENV DNS_RESOLVER='127.0.0.11'
-ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM|DEMO_DRIVER_UPSTREAM|DNS_RESOLVER)$'
+# Demo vars (DNS_RESOLVER, DEMO_DRIVER_UPSTREAM) are NOT in this filter —
+# they belong to the demo-gateway image (Dockerfile.demo) only.
+ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM)$'
 
 COPY default.conf.template /etc/nginx/templates/default.conf.template

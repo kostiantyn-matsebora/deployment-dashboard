@@ -14,7 +14,8 @@ on:
   workflow_call:
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway
+  IMAGE:      ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway
+  IMAGE_DEMO: ghcr.io/${{ github.repository_owner }}/deployment-dashboard-gateway-demo
 
 jobs:
   # Config-only image — no unit tests (GW2).
@@ -43,7 +44,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata
+      # ── Production gateway ─────────────────────────────────────────────────
+
+      - name: Docker metadata (prod)
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -53,7 +56,8 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       # ── Step 1: Build locally (load into Docker daemon for scanning) ───────
-      - name: Build (local load for scanning)
+      - name: Build prod (local load for scanning)
+        id: build-prod
         uses: docker/build-push-action@v7
         with:
           context: gateway
@@ -65,14 +69,14 @@ jobs:
           cache-to: type=gha,mode=max
 
       # ── Step 2: Trivy vulnerability scan ──────────────────────────────────
-      - name: Trivy scan
+      - name: Trivy scan (prod)
         uses: ./.github/actions/trivy-scan
         with:
           image-ref: ${{ env.IMAGE }}:scan
           category: trivy-gateway
 
       # ── Step 3: Push (main only, cache hit — no rebuild) ──────────────────
-      - name: Push to GHCR
+      - name: Push prod to GHCR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7
         with:
@@ -81,5 +85,58 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Demo gateway (layers on the prod image) ────────────────────────────
+      # The demo image FROMs the prod image; build the prod image first so the
+      # demo build can reference it locally (load: true above populates the daemon).
+      # PROD_IMAGE resolves the FROM ARG in Dockerfile.demo to the scan tag
+      # built above so the demo build is entirely local (no pull from GHCR needed).
+
+      - name: Docker metadata (demo)
+        id: meta-demo
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_DEMO }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build demo (local load for scanning)
+        uses: docker/build-push-action@v7
+        with:
+          context: gateway
+          file: gateway/Dockerfile.demo
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_DEMO }}:scan
+          build-args: |
+            PROD_IMAGE=${{ env.IMAGE }}:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan (demo)
+        uses: ./.github/actions/trivy-scan
+        with:
+          image-ref: ${{ env.IMAGE_DEMO }}:scan
+          category: trivy-gateway-demo
+
+      - name: Push demo to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: gateway
+          file: gateway/Dockerfile.demo
+          push: true
+          tags: ${{ steps.meta-demo.outputs.tags }}
+          labels: ${{ steps.meta-demo.outputs.labels }}
+          # Use the GHCR `latest` tag for the prod base: the prod push step (run
+          # just above on the same main push) has already pushed
+          # ghcr.io/.../gateway:latest to GHCR, making it pullable by BuildKit in
+          # container mode. The scan tag is local-daemon-only and not available to
+          # the BuildKit builder for push.
+          build-args: |
+            PROD_IMAGE=${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
