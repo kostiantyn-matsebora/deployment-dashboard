@@ -136,6 +136,10 @@ services:
       RESET_ACK_TIMEOUT_SECONDS: "${RESET_ACK_TIMEOUT_SECONDS:-}"
       RESET_GATE_MAX_TTL_SECONDS: "${RESET_GATE_MAX_TTL_SECONDS:-}"
       RESET_EXPECTED_COMPONENTS: "${RESET_EXPECTED_COMPONENTS:-}"
+      # Stack version surfaced via GET /api/version → UI footer.  Reuses the same
+      # variable that selects the image tag, so one DASHBOARD_VERSION=0.13.1 sets both.
+      # Empty (unset) → backend falls back to "0.0.0-dev" (single source of fallback truth).
+      DASHBOARD_VERSION: "${DASHBOARD_VERSION:-}"
     depends_on:
       postgres:
         condition: service_healthy

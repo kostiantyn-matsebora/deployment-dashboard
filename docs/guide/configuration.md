@@ -6,7 +6,7 @@ Every environment variable, grouped by concern. Source of truth: [`compose/.env.
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `DASHBOARD_VERSION` | no | `latest` | Image tag applied to all six stack images. **Set without a leading `v`** — the git tag `v0.13.1` publishes images as `0.13.1`. `latest` tracks the newest push to main. For a reproducible deploy, pin to a published release (e.g. `0.13.1`). |
+| `DASHBOARD_VERSION` | no | `latest` | **Dual role.** (1) Image tag applied to all six stack images — `latest` tracks the newest push to main; pin to a published release for reproducible deploys (e.g. `0.13.1`). **Set without a leading `v`** — the git tag `v0.13.1` publishes images as `0.13.1`. (2) Version string surfaced in the dashboard UI footer via `GET /api/version`. When unset (empty), the API falls back to `0.0.0-dev`. One `DASHBOARD_VERSION=0.13.1` sets both the image tag and the version the UI reports. |
 
 See [Install — Pinning a release version](./install.md#pinning-a-release-version) for the full workflow, and [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md) for the release process.
 
