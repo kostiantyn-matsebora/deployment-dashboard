@@ -1,5 +1,6 @@
 using Dashboard.Api.Endpoints;
 using Dashboard.Api.Extensions;
+using Dashboard.Api.Version;
 using Dashboard.Control;
 using Dashboard.Read;
 using Dashboard.Write;
@@ -17,6 +18,8 @@ builder.Services.AddDashboardProblemDetails();
 builder.Services.Configure<RouteHandlerOptions>(opts => opts.ThrowOnBadRequest = true);
 
 builder.AddDashboardDatabase();
+
+builder.Services.AddSingleton<IAppVersionProvider, AssemblyAppVersionProvider>();
 
 builder.Services.AddWriteServices();
 builder.Services.AddReadServices(builder.Configuration);

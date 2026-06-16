@@ -4,6 +4,7 @@ EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
+ARG VERSION=0.0.0-dev
 WORKDIR /src
 
 COPY ["api/Dashboard.Api/Dashboard.Api.csproj",                   "api/Dashboard.Api/"]
@@ -17,11 +18,12 @@ RUN dotnet restore "api/Dashboard.Api/Dashboard.Api.csproj"
 COPY . .
 
 RUN dotnet build "api/Dashboard.Api/Dashboard.Api.csproj" \
-    -c $BUILD_CONFIGURATION -o /app/build --no-restore
+    -c $BUILD_CONFIGURATION -o /app/build --no-restore -p:Version=${VERSION}
 
 FROM build AS publish
+ARG VERSION=0.0.0-dev
 RUN dotnet publish "api/Dashboard.Api/Dashboard.Api.csproj" \
-    -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false
+    -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false -p:Version=${VERSION}
 
 FROM base AS final
 WORKDIR /app

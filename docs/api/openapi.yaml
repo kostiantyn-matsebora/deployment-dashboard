@@ -975,10 +975,11 @@ paths:
         It exposes only non-sensitive build metadata and must be readable by the
         unauthenticated SPA, exactly like the ops probes (`/healthz`, `/readyz`).
 
-        The value is the `DASHBOARD_VERSION` env var configured on the API container
-        (e.g. `0.13.1`). When that variable is unset the API returns a dev fallback
-        string (`0.0.0-dev`). The string is free-form — a semver, a commit SHA, or
-        the `0.0.0-dev` fallback — and is never parsed by the client.
+        The value is the deployed build version of the running API, stamped into the
+        assembly at image-build time (e.g. `0.13.1`). Unstamped builds — local/dev or
+        `:latest`/`main` images — report the `0.0.0-dev` fallback. The string is
+        free-form — a semver, a commit SHA, or the `0.0.0-dev` fallback — and is never
+        parsed by the client.
       responses:
         '200':
           $ref: '#/components/responses/Version'
@@ -2010,10 +2011,10 @@ components:
       required: [version]
       additionalProperties: false
       description: |
-        The deployed build version of the running API. `version` is the
-        `DASHBOARD_VERSION` env var on the API container, or the `0.0.0-dev`
-        fallback when unset. Free-form (semver, commit SHA, or the fallback) and
-        never parsed by the client.
+        The deployed build version of the running API. `version` is stamped into the
+        assembly at image-build time, or the `0.0.0-dev` fallback for unstamped
+        builds (local/dev, `:latest`/`main`). Free-form (semver, commit SHA, or the
+        fallback) and never parsed by the client.
       properties:
         version:
           type: string

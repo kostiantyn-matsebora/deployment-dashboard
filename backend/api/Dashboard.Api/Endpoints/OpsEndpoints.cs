@@ -1,3 +1,4 @@
+using Dashboard.Api.Version;
 using Dashboard.Control;
 using Dashboard.Control.Sse;
 using Dashboard.Read;
@@ -6,7 +7,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace Dashboard.Api.Endpoints;
 
@@ -17,8 +17,6 @@ namespace Dashboard.Api.Endpoints;
 /// </summary>
 internal static class OpsEndpoints
 {
-    private const string VersionFallback = "0.0.0-dev";
-
     internal static IEndpointRouteBuilder MapOpsEndpoints(this IEndpointRouteBuilder app)
     {
         // Liveness probe: process is up. Returns {"status":"ok"} per the OpenAPI contract.
@@ -32,12 +30,9 @@ internal static class OpsEndpoints
            .WithTags("ops")
            .WithSummary("Readiness probe");
 
-        // Deployed build version — unauthenticated; reads DASHBOARD_VERSION env var (§5 meta).
-        app.MapGet("/api/version", (IConfiguration config) =>
-            {
-                var version = config["DASHBOARD_VERSION"];
-                return Results.Ok(new { version = string.IsNullOrEmpty(version) ? VersionFallback : version });
-            })
+        // Deployed build version — unauthenticated; returns the assembly's baked-in version (§5 meta).
+        app.MapGet("/api/version", (IAppVersionProvider versionProvider) =>
+                Results.Ok(new { version = versionProvider.Version }))
            .WithTags("meta")
            .WithSummary("Deployed build version.");
 
