@@ -18,6 +18,9 @@
 #   the gateway build and compose processes the chain in order.
 #
 # Usage (local dev with demo profile):
+#   # Build the production gateway base first (Dockerfile.demo FROMs it):
+#   docker build -f gateway/Dockerfile -t deployment-dashboard-gateway:local gateway
+#
 #   docker compose \
 #     -f compose/docker-compose.yaml \
 #     -f compose/docker-compose.demo.yaml \
