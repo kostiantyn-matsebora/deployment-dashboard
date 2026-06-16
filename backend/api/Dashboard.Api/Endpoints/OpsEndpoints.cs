@@ -6,15 +6,19 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Dashboard.Api.Endpoints;
 
 /// <summary>
-/// Operational probes (<c>/healthz</c>, <c>/readyz</c>) — kept out of the composition root so
-/// <c>Program.cs</c> stays a flat list of registrations and mappings (one altitude).
+/// Operational probes (<c>/healthz</c>, <c>/readyz</c>) and meta endpoints (<c>/api/version</c>)
+/// — kept out of the composition root so <c>Program.cs</c> stays a flat list of registrations
+/// and mappings (one altitude).
 /// </summary>
 internal static class OpsEndpoints
 {
+    private const string VersionFallback = "0.0.0-dev";
+
     internal static IEndpointRouteBuilder MapOpsEndpoints(this IEndpointRouteBuilder app)
     {
         // Liveness probe: process is up. Returns {"status":"ok"} per the OpenAPI contract.
@@ -27,6 +31,15 @@ internal static class OpsEndpoints
         app.MapGet("/readyz", HandleReadyzAsync)
            .WithTags("ops")
            .WithSummary("Readiness probe");
+
+        // Deployed build version — unauthenticated; reads DASHBOARD_VERSION env var (§5 meta).
+        app.MapGet("/api/version", (IConfiguration config) =>
+            {
+                var version = config["DASHBOARD_VERSION"];
+                return Results.Ok(new { version = string.IsNullOrEmpty(version) ? VersionFallback : version });
+            })
+           .WithTags("meta")
+           .WithSummary("Deployed build version.");
 
         return app;
     }

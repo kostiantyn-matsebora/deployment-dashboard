@@ -171,6 +171,47 @@ public sealed class OpsEndpointsUnitTests : IAsyncLifetime
         Assert.Equal("ok", body.GetProperty("status").GetString());
     }
 
+    // ── /api/version ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetVersion_WhenDashboardVersionSet_Returns200WithConfiguredVersion()
+    {
+        await using var factory = new VersionTestFactory(dashboardVersion: "1.2.3");
+        using var client = factory.CreateClient();
+
+        var res = await client.GetAsync("/api/version");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal("1.2.3", body.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task GetVersion_WhenDashboardVersionUnset_Returns200WithDevFallback()
+    {
+        await using var factory = new VersionTestFactory(dashboardVersion: null);
+        using var client = factory.CreateClient();
+
+        var res = await client.GetAsync("/api/version");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal("0.0.0-dev", body.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task GetVersion_WhenDashboardVersionEmpty_Returns200WithDevFallback()
+    {
+        await using var factory = new VersionTestFactory(dashboardVersion: "");
+        using var client = factory.CreateClient();
+
+        var res = await client.GetAsync("/api/version");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal("0.0.0-dev", body.GetProperty("version").GetString());
+    }
+
     // ── Stubs ─────────────────────────────────────────────────────────────────
 
     private sealed class StubReadinessIndicator : IReadinessIndicator
@@ -318,6 +359,67 @@ public sealed class OpsEndpointsUnitTests : IAsyncLifetime
 
                 services.RemoveAll<IComponentEventReadinessIndicator>();
                 services.AddSingleton(componentEvent);
+            });
+        }
+    }
+
+    // ── /api/version factory ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Minimal in-process factory for the <c>GET /api/version</c> tests.
+    /// Boots the app with SQLite (same as <see cref="ReadyzTestFactory"/>) and optionally
+    /// sets <c>DASHBOARD_VERSION</c> in configuration to drive the env-var path or the
+    /// <c>0.0.0-dev</c> fallback path.
+    /// </summary>
+    private sealed class VersionTestFactory(string? dashboardVersion)
+        : WebApplicationFactory<Program>
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Test");
+
+            builder.UseSetting("API_KEY", "unit-test-key");
+            builder.UseSetting("CONTROL_API_KEY", "unit-test-control-key");
+            builder.UseSetting("POSTGRES_HOST", "localhost");
+            builder.UseSetting("POSTGRES_PORT", "5432");
+            builder.UseSetting("POSTGRES_DB", "test");
+            builder.UseSetting("POSTGRES_USER", "test");
+            builder.UseSetting("POSTGRES_PASSWORD", "test");
+
+            if (dashboardVersion is not null)
+                builder.UseSetting("DASHBOARD_VERSION", dashboardVersion);
+
+            builder.ConfigureServices(services =>
+            {
+                // Swap Postgres for in-memory SQLite — same technique as ReadyzTestFactory.
+                var toRemove = services
+                    .Where(d =>
+                        d.ServiceType == typeof(DashboardDbContext) ||
+                        d.ServiceType == typeof(DbContextOptions<DashboardDbContext>) ||
+                        d.ServiceType == typeof(DbContextOptions) ||
+                        (d.ServiceType.IsGenericType &&
+                         d.ServiceType.GetGenericTypeDefinition() == typeof(IDbContextOptionsConfiguration<>) &&
+                         d.ServiceType.GetGenericArguments()[0] == typeof(DashboardDbContext)))
+                    .ToList();
+
+                foreach (var d in toRemove)
+                    services.Remove(d);
+
+                services.AddDbContext<DashboardDbContext>(o =>
+                    o.UseSqlite("DataSource=:memory:"));
+
+                // Stubs for all readiness indicators so the app starts cleanly.
+                services.RemoveAll<IReadinessIndicator>();
+                services.AddSingleton<IReadinessIndicator>(new StubReadinessIndicator());
+
+                services.RemoveAll<IControlReadinessIndicator>();
+                services.AddSingleton<IControlReadinessIndicator>(new StubControlReadinessIndicator());
+
+                services.RemoveAll<IAckReadinessIndicator>();
+                services.AddSingleton<IAckReadinessIndicator>(new StubAckReadinessIndicator());
+
+                services.RemoveAll<IComponentEventReadinessIndicator>();
+                services.AddSingleton<IComponentEventReadinessIndicator>(new StubComponentEventReadinessIndicator());
             });
         }
     }
