@@ -53,21 +53,24 @@ session directory**, not inline in the message. The file is the durable payload;
 only a pointer that wakes the orchestrator. (`BRIEF`/`FIX` are orchestrator dispatch — unchanged.)
 
 1. **Write the normalized form** to the outbox in the member's own worktree:
-   `.team-process/run/sessions/<id>/outbox/<role>.<TYPE>.json` — `<id>` = the `team_name` sanitized,
+   `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json` — `<id>` = the `team_name` sanitized,
    `<TYPE>` = the form (e.g. `backend.RESULT.json`).
 2. **Send the pointer** as the `SendMessage` body — exactly `{ "type": "<FORM>", "ref": "<ABSOLUTE path
    to the file>" }`, no other keys. The guard validates the *referenced file* against its schema; a
    missing / malformed file or a `type`↔file mismatch is **blocked**.
 3. **Orchestrator drains.** Reads the file by `ref` (cross-worktree read), folds it into the run ledger,
    then deletes the outbox file.
+- **Orchestrator injects `<id>` and outbox path.** Every BRIEF includes the literal `<id>` value and the absolute path to the outbox directory — members MUST use them verbatim, never derive `<id>` from the team name themselves.
+- **Never hand back as a terminal/chat message.** Write the typed form to the outbox file first, then send the `{ type, ref }` pointer. A plain-text message or chat-embedded JSON is not a valid hand-back.
 
 - **Why a file.** Durable · auditable · survives a compacted or dropped session — the ledger, not the
   conversation, is the source of truth.
 - **Absolute `ref`.** Worktree-isolated members have a separate filesystem; the absolute path lets the
   orchestrator read the file. A relative `ref` resolves against the repo root.
 - **Lane exemption.** The outbox is not part of a member's code lane; the lane guard allows writes under
-  `**/.team-process/run/sessions/*/outbox/**`.
+  `**/.team-process/sessions/*/outbox/**`.
 - **Back-compat.** A full typed form sent inline (no `ref`) still validates and is accepted.
+- **Write-time guard.** The outbox-write guard (`Invoke-ProtocolFormGuard.ps1`) rejects any non-JSON or non-typed-form Write to the outbox at write time — not only when the pointer SendMessage fires. Writing prose, markdown, or `.txt` to the outbox is blocked immediately.
 
 ---
 

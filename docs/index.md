@@ -17,7 +17,6 @@ children:
   - /api
   - /design
   - /diagrams
-  - /engineering-process
 hide:
   - navigation
   - toc

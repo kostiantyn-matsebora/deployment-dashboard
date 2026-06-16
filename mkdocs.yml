@@ -100,7 +100,6 @@ nav:
       - FAQ & troubleshooting: guide/faq.md
   - Development & reference:
       - Architecture (SAD): SAD.md
-      - Engineering process: engineering-process.md
       - API contract:
           - Overview: api/index.md
           - Guidelines: api/api-guidelines.md
