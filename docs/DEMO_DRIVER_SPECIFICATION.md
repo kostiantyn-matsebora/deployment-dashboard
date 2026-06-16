@@ -666,10 +666,10 @@ npm run start:dev
 | Aspect | Spec |
 |---|---|
 | Image | Multi-stage Dockerfile in `demo/driver/`. Stage 1: `node:lts-alpine` builds TypeScript. Stage 2: `node:lts-alpine` runs the compiled output. |
-| Gateway path | Proxied by App Gateway at `location /demo/` â†’ `DEMO_DRIVER_UPSTREAM` (see [`GATEWAY_SPECIFICATION.md`](GATEWAY_SPECIFICATION.md)). |
-| SSE | `/demo/stream`, `/demo/deployments-stream`, `/demo/control-stream`, and `/demo/control-events` require the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). |
-| Port | Container listens on `PORT` (default `3001`); `DEMO_DRIVER_UPSTREAM` in the gateway is `demo-driver:3001`. |
-| Panel access | Direct: `http://localhost:3001/demo/`. Via gateway: `http://gateway/demo/`. |
+| Gateway path | Proxied by the **demo-gateway image** (`gateway/Dockerfile.demo`) at `location /demo/` â†’ `DEMO_DRIVER_UPSTREAM`. The `/demo/*` routes are absent from the production gateway image — they are activated via the `*.snippet` include mechanism only when the demo-gateway image is used (see [`GATEWAY_SPECIFICATION.md`](GATEWAY_SPECIFICATION.md) §3, §4). |
+| SSE | `/demo/stream`, `/demo/deployments-stream`, `/demo/control-stream`, and `/demo/control-events` require the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). The `/demo/stream` and `/demo/control-stream` SSE blocks live in `gateway/demo.snippet.template`. |
+| Port | Container listens on `PORT` (default `3001`); `DEMO_DRIVER_UPSTREAM` in the demo-gateway is `demo-driver:3001`. |
+| Panel access | Direct: `http://localhost:3001/demo/`. Via demo-gateway: `http://gateway/demo/`. |
 
 ---
 
