@@ -3,11 +3,11 @@
 <#
 .SYNOPSIS
     PreToolUse(Edit|Write|MultiEdit|NotebookEdit) hook — enforces the "stay in your
-    lane" rule. If the worktree root holds a `.team-process/run/lane` file (written by
+    lane" rule. If the worktree root holds a `.team-process/lane` file (written by
     the lead when a member is spawned), edits are allowed only to paths matching one of
     its globs. No lane file (e.g. the lead's main worktree) → no restriction.
 
-    `.team-process/run/lane` format: one glob per line; blank lines and `#` comments ignored.
+    `.team-process/lane` format: one glob per line; blank lines and `#` comments ignored.
     Globs: `*` = within a path segment, `**` = across segments, `?` = one char.
     Example:
         backend/fetcher/**
@@ -75,7 +75,7 @@ function Test-PathIsOutbox {
     param([string]$RelPath)
     $p = ($RelPath -replace '\\', '/')
     if ($p.StartsWith('./')) { $p = $p.Substring(2) }
-    return ($p -match '(^|/)\.team-process/run/sessions/[^/]+/outbox/')
+    return ($p -match '(^|/)\.team-process/sessions/[^/]+/outbox/')
 }
 
 # True if the path contains a '..' segment. A lane / outbox match is a STRING test, so a
@@ -128,7 +128,7 @@ if (-not $AsLibrary) {
     if (-not $root) { $root = (Get-Location).Path }
     $root = ([string]$root).Trim()
 
-    $laneFile = Join-Path $root '.team-process' 'run' 'lane'
+    $laneFile = Join-Path $root '.team-process' 'lane'
     if (-not (Test-Path -LiteralPath $laneFile)) { exit 0 }
 
     $lines = Get-Content -LiteralPath $laneFile -ErrorAction SilentlyContinue

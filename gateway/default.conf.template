@@ -1,21 +1,23 @@
+# Frontend upstream — startup-resolved; gateway depends_on: frontend (service_healthy).
+# Container Apps: set FRONTEND_UPSTREAM to the FQDN assigned by the platform.
+upstream frontend    { server ${FRONTEND_UPSTREAM}; }
+
 # API upstream — always resolvable before gateway starts (depends_on: api).
-upstream api { server ${API_UPSTREAM}; }
+upstream api         { server ${API_UPSTREAM}; }
 
 server {
     listen 8080;
     server_tokens off;
     client_max_body_size 256k;
 
-    # Docker's embedded DNS resolver — enables lazy resolution of $fe (frontend)
-    # and $dd (demo-driver).  Gateway starts cleanly even when those optional
-    # containers are not yet running; requests return 502 until they are available.
-    resolver 127.0.0.11 valid=10s ipv6=off;
-
-    # Inherited by every proxy_pass location that declares no proxy_set_header
-    # of its own (nginx resets the inherited set the moment a location defines any
-    # proxy_set_header directive — see the SSE block which re-declares all four).
+    # Server-level proxy defaults — do NOT set Host here.
+    # nginx cancels server-level proxy_set_header inheritance the moment a
+    # location declares any proxy_set_header of its own, so every proxy
+    # location re-declares Host + forwarded headers in full (see each block).
+    # ACA fix: $host is the gateway's public hostname; ACA's internal Envoy
+    # routes by Host header to the upstream FQDN — so Host must be the target
+    # FQDN, set per-location, never the public-facing $host.
     proxy_http_version 1.1;
-    proxy_set_header   Host              $host;
     proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header   X-Forwarded-Proto $scheme;
 
@@ -31,26 +33,11 @@ server {
     # Every buffering / batching layer is disabled (spec §5, NFR-03: 5 s delivery).
     # proxy_set_header is re-declared in full because any declaration in a location
     # block cancels the server-level inheritance.
+    # Host set to upstream FQDN — required for ACA Envoy routing (see note above).
     location = /api/events/stream {
         proxy_pass                 http://api;
         proxy_http_version         1.1;
-        proxy_set_header           Host              $host;
-        proxy_set_header           X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header           X-Forwarded-Proto $scheme;
-        proxy_set_header           Connection        '';
-        proxy_buffering            off;
-        proxy_cache                off;
-        gzip                       off;
-        proxy_read_timeout         3600s;
-        chunked_transfer_encoding  on;
-    }
-
-    # ── Demo driver SSE stream (spec §5 — same settings, upstream = demo-driver) ─
-    location = /demo/stream {
-        set                        $dd http://${DEMO_DRIVER_UPSTREAM};
-        proxy_pass                 $dd;
-        proxy_http_version         1.1;
-        proxy_set_header           Host              $host;
+        proxy_set_header           Host              ${API_UPSTREAM};
         proxy_set_header           X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header           X-Forwarded-Proto $scheme;
         proxy_set_header           Connection        '';
@@ -63,34 +50,64 @@ server {
 
     # ── API — JSON read/write; default buffering ────────────────────────────────
     location /api/ {
-        proxy_pass http://api;
-    }
-
-    # ── Demo driver — control API + panel (§4, D9) ──────────────────────────────
-    # Variable-based proxy_pass defers DNS resolution so the gateway starts
-    # cleanly when the demo-driver container is not running (opt-in service).
-    location /demo/ {
-        set        $dd http://${DEMO_DRIVER_UPSTREAM};
-        proxy_pass $dd;
+        proxy_pass       http://api;
+        proxy_set_header Host              ${API_UPSTREAM};
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # ── Ops probes — proxied to API (GW4) ──────────────────────────────────────
-    location = /healthz { proxy_pass http://api; }
-    location = /readyz  { proxy_pass http://api; }
+    location = /healthz {
+        proxy_pass       http://api;
+        proxy_set_header Host              ${API_UPSTREAM};
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location = /readyz {
+        proxy_pass       http://api;
+        proxy_set_header Host              ${API_UPSTREAM};
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
     # ── API docs — Scalar reference UI + OpenAPI document (read-only, GW10) ──────
     # Reachable through the single public surface; same default buffering as /api/.
     # Bare /scalar redirects to /scalar/v1; the SPA must not swallow these paths.
-    location = /scalar  { proxy_pass http://api; }
-    location /scalar/   { proxy_pass http://api; }
-    location /openapi/  { proxy_pass http://api; }
+    location = /scalar {
+        proxy_pass       http://api;
+        proxy_set_header Host              ${API_UPSTREAM};
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location /scalar/ {
+        proxy_pass       http://api;
+        proxy_set_header Host              ${API_UPSTREAM};
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    location /openapi/ {
+        proxy_pass       http://api;
+        proxy_set_header Host              ${API_UPSTREAM};
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
     # ── Frontend SPA ────────────────────────────────────────────────────────────
     # try_files fallback is owned by the frontend container (GW3).
-    # Variable-based proxy_pass defers DNS resolution so the gateway starts
-    # cleanly before the frontend service exists (resolver directive above).
+    # Startup-resolved via the `upstream frontend` block above — no variable
+    # proxy_pass needed; the gateway depends_on: frontend (service_healthy) so the
+    # name is always resolvable at start. On Azure Container Apps this form is
+    # required: variable proxy_pass does not resolve FQDN upstreams correctly.
     location / {
-        set        $fe http://${FRONTEND_UPSTREAM};
-        proxy_pass $fe;
+        proxy_pass       http://frontend;
+        proxy_set_header Host              ${FRONTEND_UPSTREAM};
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # ── Demo extension point ────────────────────────────────────────────────────
+    # Zero matches in production = legal nginx no-op.
+    # The demo-gateway image (Dockerfile.demo) adds demo.snippet (via COPY of
+    # demo.snippet.template which envsubst renders to conf.d/demo.snippet at start).
+    include /etc/nginx/conf.d/*.snippet;
 }

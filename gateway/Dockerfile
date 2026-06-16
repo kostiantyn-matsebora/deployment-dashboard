@@ -11,8 +11,10 @@ RUN apk add --no-cache curl
 RUN apk upgrade --no-cache
 USER nginx
 
-# Restrict envsubst to our two upstream vars so nginx's own
-# $host / $uri / $scheme / $proxy_add_x_forwarded_for etc. are not wiped.
-ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM|DEMO_DRIVER_UPSTREAM)$'
+# Restrict envsubst to our vars so nginx's own $host / $uri / $scheme /
+# $proxy_add_x_forwarded_for etc. are not wiped.
+# Demo vars (DNS_RESOLVER, DEMO_DRIVER_UPSTREAM) are NOT in this filter —
+# they belong to the demo-gateway image (Dockerfile.demo) only.
+ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM)$'
 
 COPY default.conf.template /etc/nginx/templates/default.conf.template

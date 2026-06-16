@@ -5,17 +5,17 @@
     Multi-mode hook that enforces "mode is sticky" for team-process sessions and
     persists resumable, per-session run records.
 
-    Each concurrent run owns a directory .team-process/run/sessions/<id>/ (gitignored
+    Each concurrent run owns a directory .team-process/sessions/<id>/ (gitignored
     runtime state; <id> = sanitized team name) holding session.json (the ledger) and
     outbox/ (member typed-form hand-backs). The EXISTENCE of ANY sessions/<id>/session.json
     = team mode is active. A record is the durable run ledger: the hook
-    writes an initial record on TeamCreate; the orchestrator enriches it (roster,
-    phase, ledger) as the run proceeds; it is read on SessionStart to resume +
-    remind rather than wiped. 'workflow' classifies how to resume (feature-team vs
-    freeform). The session roster is the source of truth for run/lane, which is a
-    generated projection (see -SyncLane).
+    writes an initial record (and creates the outbox dir) on TeamCreate; the orchestrator
+    enriches it (roster, phase, ledger) as the run proceeds; it is read on SessionStart
+    to resume + remind rather than wiped. 'workflow' classifies how to resume
+    (feature-team vs freeform). The session roster is the source of truth for the lane
+    file, which is a generated projection (see -SyncLane).
 
-    A legacy single-file record at .team-process/run/session.json (pre-multi-session)
+    A legacy single-file record at .team-process/session.json (pre-multi-session)
     is still read as one active session for back-compat.
 
     Modes:
@@ -56,10 +56,10 @@ param(
     [string]$Workflow
 )
 
-function Get-TeamProcessRunDir   { param([string]$Root) return (Join-Path $Root '.team-process' 'run') }
-function Get-SessionsDir         { param([string]$Root) return (Join-Path (Get-TeamProcessRunDir $Root) 'sessions') }
-function Get-LaneFilePath        { param([string]$Root) return (Join-Path (Get-TeamProcessRunDir $Root) 'lane') }
-function Get-LegacySessionFilePath { param([string]$Root) return (Join-Path (Get-TeamProcessRunDir $Root) 'session.json') }
+function Get-TeamProcessBaseDir  { param([string]$Root) return (Join-Path $Root '.team-process') }
+function Get-SessionsDir         { param([string]$Root) return (Join-Path (Get-TeamProcessBaseDir $Root) 'sessions') }
+function Get-LaneFilePath        { param([string]$Root) return (Join-Path (Get-TeamProcessBaseDir $Root) 'lane') }
+function Get-LegacySessionFilePath { param([string]$Root) return (Join-Path (Get-TeamProcessBaseDir $Root) 'session.json') }
 
 # Sanitize a team name into a filesystem-safe session id (the record's filename stem).
 # Path-separator chars collapse to '-'; a dot-only result (., .., ...) is rejected so a
@@ -213,7 +213,7 @@ function Get-SessionReminder {
 $lines
 RESUME, do not restart: continue each run from its ledger; spawn members with team_name set, never
 foreground in-session subagents (the team-mode guard will block them). Records live at
-.team-process/run/sessions/<id>/session.json. To ABANDON one: pwsh -NoProfile -File
+.team-process/sessions/<id>/session.json. To ABANDON one: pwsh -NoProfile -File
 scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>. See
 .claude/team-process/process.md -> 'Session state & resume'.
 "@.Trim()
@@ -228,6 +228,10 @@ function Set-TeamSession {
     $record      = New-SessionRecord -Id $id -Team $Team -Workflow $Workflow -Branch $Branch -Now $Now -Existing $existing
     $dir         = Get-SessionDir -Root $Root -Id $id
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    # Create the outbox up front so a member that shares this worktree (non-isolated run)
+    # always finds the hand-back directory; worktree-isolated members mkdir their own.
+    $outbox = Get-OutboxDir -Root $Root -Id $id
+    if (-not (Test-Path -LiteralPath $outbox)) { New-Item -ItemType Directory -Force -Path $outbox | Out-Null }
     Set-Content -LiteralPath $sessionFile -Value ($record | ConvertTo-Json -Depth 8) -Encoding utf8NoBOM
     return $record
 }
@@ -263,7 +267,7 @@ function Sync-LaneFromSession {
     # roster[].lane may carry one glob or several (comma/newline-separated).
     $globs = @([regex]::Split([string]$entry.lane, '[,\r\n]+') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     if ($globs.Count -eq 0) { return $null }
-    $dir = Get-TeamProcessRunDir -Root $Root
+    $dir = Get-TeamProcessBaseDir -Root $Root
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
     Set-Content -LiteralPath (Get-LaneFilePath -Root $Root) -Value ($globs -join "`n") -Encoding utf8NoBOM
     return $globs

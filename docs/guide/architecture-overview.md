@@ -41,13 +41,13 @@ A C4 component-level view of the runtime system (demo/eval components omitted). 
 
 | Component | Stack | Role |
 |---|---|---|
-| App Gateway | nginx | Only published port (`:8080`). Routes to frontend + API; handles SSE buffering. |
+| App Gateway | nginx | Only published port (`:8080`). Routes to frontend + API; handles SSE buffering. Deploys to Azure Container Apps unchanged. |
 | Frontend | Angular 20, served by nginx | The SPA. Static files, no runtime build. Holds no secrets. |
 | API (Write + Read) | .NET 10 | Write = API-key-gated ingest; Read = unauthenticated matrix/history/SSE. Stateless. |
 | Fetcher *(optional)* | .NET 10 | Pull-mode: polls a CI/CD API (GitHub Actions today) → posts via the push endpoint. |
 | PostgreSQL | — | Event store + `LISTEN/NOTIFY` fan-out bus. |
 
-The repo also ships demo-only components (Demo Driver, GitHub Emulator, Mock server) used for evaluation and testing — see [Development & reference](../index.md).
+The repo also ships demo-only components (Demo Driver, GitHub Emulator, Mock server) used for evaluation and testing — see [Development & reference](../index.md). The **demo profile** uses a separate `gateway-demo` image that layers `/demo/*` routing on top of the production gateway image; production deployments carry no demo routes.
 
 ## Key design properties
 

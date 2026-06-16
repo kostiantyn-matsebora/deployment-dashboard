@@ -117,7 +117,7 @@ cd testing/api && npm ci && npm run test:integration
 
 ### Specialist routing
 
-Changes are routed to the area specialist (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`). See [`docs/engineering-process.md`](docs/engineering-process.md). For API features, [`docs/api/openapi.yaml`](docs/api/openapi.yaml) is the contract source of truth — update it first.
+Changes are routed to the area specialist (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`). See [`.claude/team-process/process.md`](.claude/team-process/process.md). For API features, [`docs/api/openapi.yaml`](docs/api/openapi.yaml) is the contract source of truth — update it first.
 
 ### Scripts
 
