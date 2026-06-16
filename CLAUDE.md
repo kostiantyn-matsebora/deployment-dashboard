@@ -19,7 +19,7 @@
 | Type | Source | Role |
 |---|---|---|
 | `root-index` | [docs/index.md](docs/index.md) | Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees. |
-| `engineering-process` | [docs/engineering-process.md](docs/engineering-process.md) | Agent-dispatch / specialist-routing convention. |
+| `team-process` | [.claude/team-process/process.md](.claude/team-process/process.md) | Agent-dispatch / specialist-routing convention — routing table, phases, session state, and guardrails. |
 
 ## Solution directory structure
 
@@ -61,7 +61,7 @@ The tree below is authoritative — *Present today* vs *Reserved* are split into
 
 ## Agent dispatch
 
-Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [docs/engineering-process.md](docs/engineering-process.md).
+Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [.claude/team-process/process.md](.claude/team-process/process.md).
 
 Each agent is a **project-agnostic anchor** to its generic role in `.claude/team-process/roles/*` (mission, principles, guardrails, communication protocol, tool-output economy). The **project-specific bindings** below are the *only* place stack lives — agents carry no stack.
 
@@ -80,6 +80,7 @@ Per-role stack, file lanes, and gate commands live **one file per role** under `
 | docs | `docs-keeper` | [`.claude/bindings/docs.md`](.claude/bindings/docs.md) |
 
 **Tool-output-economy guardrail** (`.claude/team-process/guardrails.md`) — shared across all roles; apply to every command:
+
 - Capture output; branch on the exit code.
 - Surface only the aggregate (success) or the failing slice (failure) — never the full log.
 
@@ -134,4 +135,3 @@ this and agents silently fall back to `Grep` / `Read`.
   - Steps → numbered list. Choices / mappings → table. "X means Y" → `**X.** Y` on its own line.
   - Multi-rule bullet ("do A; also B; warn C") → parent + sub-bullets, one rule per line.
   - Prose paragraph stating > 2 rules → restructure.
-

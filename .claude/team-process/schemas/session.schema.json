@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "team-process/schemas/session.schema.json",
   "title": "team-process session record",
-  "description": "Durable run ledger for one team-process session. Each concurrent run owns a directory .team-process/run/sessions/<id>/ (id = sanitized team name) holding this session.json plus outbox/ for member hand-backs. The EXISTENCE of any sessions/<id>/session.json = team mode active. Written initial-minimal by the team-mode hook on TeamCreate; enriched by the orchestrator as the run proceeds (roster, phase, ledger). Read on SessionStart to resume + remind. 'workflow' classifies how to resume (feature-team vs freeform). Most fields optional so the minimal hook-written record validates.",
+  "description": "Durable run ledger for one team-process session. Each concurrent run owns a directory .team-process/sessions/<id>/ (id = sanitized team name) holding this session.json plus outbox/ for member hand-backs. The EXISTENCE of any sessions/<id>/session.json = team mode active. Written initial-minimal by the team-mode hook on TeamCreate; enriched by the orchestrator as the run proceeds (roster, phase, ledger). Read on SessionStart to resume + remind. 'workflow' classifies how to resume (feature-team vs freeform). Most fields optional so the minimal hook-written record validates.",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "workflow", "team", "createdAt"],

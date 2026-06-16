@@ -1,0 +1,60 @@
+# Demo extension snippet — included inside the production server{} block via
+# the `include /etc/nginx/conf.d/*.snippet;` directive in default.conf.template.
+# This file is ONLY present in the demo-gateway image (Dockerfile.demo); it is
+# absent from the production image, making the include a no-op there (legal in nginx).
+#
+# DNS resolver — required for variable-based proxy_pass (demo-driver is optional;
+# variable proxy_pass defers DNS resolution so the gateway starts cleanly when
+# demo-driver is not running, returning 502 until it becomes available).
+#   Docker Compose (embedded DNS):    DNS_RESOLVER=127.0.0.11  (default)
+#   Azure Container Apps (Azure DNS): DNS_RESOLVER=168.63.129.16
+# valid=10s means nginx re-resolves at most once per 10 s so transient restarts
+# of optional containers recover quickly without a gateway restart.
+resolver ${DNS_RESOLVER} valid=10s ipv6=off;
+
+# ── Demo driver SSE streams (spec §5 — same settings, upstream = demo-driver) ──
+# Variable-based proxy_pass: demo-driver is an optional service. The resolver
+# directive above enables lazy resolution so the gateway starts cleanly when
+# demo-driver is not running; requests return 502 until it is available.
+# proxy_set_header re-declared in full (any location-level declaration cancels
+# server-level inheritance). Host set to upstream FQDN for ACA Envoy routing.
+location = /demo/stream {
+    set                        $dd http://${DEMO_DRIVER_UPSTREAM};
+    proxy_pass                 $dd;
+    proxy_http_version         1.1;
+    proxy_set_header           Host              ${DEMO_DRIVER_UPSTREAM};
+    proxy_set_header           X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header           X-Forwarded-Proto $scheme;
+    proxy_set_header           Connection        '';
+    proxy_buffering            off;
+    proxy_cache                off;
+    gzip                       off;
+    proxy_read_timeout         3600s;
+    chunked_transfer_encoding  on;
+}
+
+location = /demo/control-stream {
+    set                        $dd http://${DEMO_DRIVER_UPSTREAM};
+    proxy_pass                 $dd;
+    proxy_http_version         1.1;
+    proxy_set_header           Host              ${DEMO_DRIVER_UPSTREAM};
+    proxy_set_header           X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header           X-Forwarded-Proto $scheme;
+    proxy_set_header           Connection        '';
+    proxy_buffering            off;
+    proxy_cache                off;
+    gzip                       off;
+    proxy_read_timeout         3600s;
+    chunked_transfer_encoding  on;
+}
+
+# ── Demo driver — control API + panel (§4, D9) ──────────────────────────────────
+# Variable-based proxy_pass defers DNS resolution so the gateway starts cleanly
+# when the demo-driver container is not running (opt-in service).
+location /demo/ {
+    set              $dd http://${DEMO_DRIVER_UPSTREAM};
+    proxy_pass       $dd;
+    proxy_set_header Host              ${DEMO_DRIVER_UPSTREAM};
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
