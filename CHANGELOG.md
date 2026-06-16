@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.13.0] - 2026-06-16
+
+### Changed
+
+- **The gateway now deploys to Azure Container Apps as well as Docker Compose, from a single config — no per-platform edits.** The production gateway sets the proxied `Host` header per-location to the upstream FQDN (Azure Container Apps' internal ingress routes by `Host`; the gateway's public hostname would 404 at the upstream), resolves the API and frontend upstreams at startup, and no longer carries the Docker-only DNS resolver. The same image routes `/`, `/api/*`, and the SSE stream correctly on both platforms.
+
+### Added
+
+- **Separate demo-gateway image.** Demo-only `/demo/*` routing now lives in a dedicated `…-gateway-demo` image layered on top of the production gateway, so the production image carries no demo routes, DNS resolver, or demo-driver upstream. The `demo` Compose profile selects the demo image automatically; no adopter action is required.
+
 ## [0.12.1] - 2026-06-15
 
 ### Fixed
