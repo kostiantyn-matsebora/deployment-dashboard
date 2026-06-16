@@ -35,6 +35,12 @@ The demo profile ships a **Demo Driver** control panel (`/demo/`): ingest the cu
 
 ![Demo Driver control panel](../_assets/screenshots/demo-panel-dark.png){ .dd-shot }
 
+## :material-dock-bottom: Footer { #footer }
+
+A fixed glass footer persists across all views. The left side shows the running version (sourced from `GET /api/version`, prefixed `v`) and a **Documentation** link. The right side carries the copyright and MIT License attribution.
+
+![Dashboard footer](../_assets/screenshots/footer.png){ .dd-shot }
+
 ---
 
 Want to see it for yourself? It's one command:
