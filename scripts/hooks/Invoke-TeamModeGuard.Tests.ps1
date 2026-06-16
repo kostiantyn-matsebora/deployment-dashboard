@@ -41,19 +41,22 @@ Describe 'Get-TeamModeDecision' {
 # ============================================================
 Describe 'Path helpers' {
     It 'session file is sessions/<id>/session.json' {
-        (Get-SessionFilePath -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/run/sessions/feat-9/session\.json$'
+        (Get-SessionFilePath -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/sessions/feat-9/session\.json$'
     }
     It 'session dir is sessions/<id>' {
-        (Get-SessionDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/run/sessions/feat-9$'
+        (Get-SessionDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/sessions/feat-9$'
     }
     It 'outbox dir is sessions/<id>/outbox' {
-        (Get-OutboxDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/run/sessions/feat-9/outbox$'
+        (Get-OutboxDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/sessions/feat-9/outbox$'
     }
-    It 'sessions dir is under .team-process/run' {
-        (Get-SessionsDir -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/run/sessions$'
+    It 'sessions dir is directly under .team-process (no run/ layer)' {
+        (Get-SessionsDir -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/sessions$'
     }
-    It 'lane file is under .team-process/run' {
-        (Get-LaneFilePath -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/run/lane$'
+    It 'lane file is directly under .team-process (no run/ layer)' {
+        (Get-LaneFilePath -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/lane$'
+    }
+    It 'legacy single-file is .team-process/session.json' {
+        (Get-LegacySessionFilePath -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/session\.json$'
     }
 }
 
@@ -210,6 +213,15 @@ Describe 'Set/Clear/Get session round-trip (temp root)' {
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
 
+    It 'Set-TeamSession creates the outbox dir up front' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
+            Test-Path -LiteralPath (Get-OutboxDir -Root $root -Id 'feat-1') | Should -BeTrue
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
     It 'Set-TeamSession merges (preserves createdAt, advances updatedAt) on re-create' {
         $root = New-TmpRoot
         try {
@@ -267,13 +279,13 @@ Describe 'Set/Clear/Get session round-trip (temp root)' {
         $root = New-TmpRoot
         try {
             Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b1' -Now $script:FixedNow | Out-Null
-            $runDir = Get-TeamProcessRunDir -Root $root
-            # A '..' id would resolve to run/ (the parent of sessions/) under naive removal.
+            $baseDir = Get-TeamProcessBaseDir -Root $root
+            # A '..' id would resolve to .team-process/ (the parent of sessions/) under naive removal.
             Clear-TeamSession -Root $root -Id '..'
-            Test-Path -LiteralPath $runDir | Should -BeTrue -Because 'run/ must survive a .. id'
+            Test-Path -LiteralPath $baseDir | Should -BeTrue -Because '.team-process/ must survive a .. id'
             Test-Path -LiteralPath (Get-SessionFilePath -Root $root -Id 'feat-1') | Should -BeTrue
             Clear-TeamSession -Root $root -Id '../../x'   # also a no-op, no throw
-            Test-Path -LiteralPath $runDir | Should -BeTrue
+            Test-Path -LiteralPath $baseDir | Should -BeTrue
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
@@ -305,7 +317,7 @@ Describe 'Set/Clear/Get session round-trip (temp root)' {
 
 # ============================================================
 Describe 'Sync-LaneFromSession' {
-    It 'projects a role lane from the roster into run/lane' {
+    It 'projects a role lane from the roster into the lane file' {
         $root = New-TmpRoot
         try {
             $rec = Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow
@@ -323,7 +335,7 @@ Describe 'Sync-LaneFromSession' {
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
-    It 'returns null AND does not write run/lane when the role is absent from the roster' {
+    It 'returns null AND does not write the lane file when the role is absent from the roster' {
         $root = New-TmpRoot
         try {
             Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
@@ -343,13 +355,13 @@ Describe 'Sync-LaneFromSession' {
 
 # ============================================================
 Describe 'Legacy single-file back-compat' {
-    It 'reads a legacy run/session.json as one active session' {
+    It 'reads a legacy .team-process/session.json as one active session' {
         $root = New-TmpRoot
         try {
-            $runDir = Join-Path $root '.team-process' 'run'
-            New-Item -ItemType Directory -Path $runDir -Force | Out-Null
+            $baseDir = Join-Path $root '.team-process'
+            New-Item -ItemType Directory -Path $baseDir -Force | Out-Null
             $legacy = [ordered]@{ id = 'old-1'; workflow = 'feature-team'; team = 'old-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z' }
-            Set-Content -LiteralPath (Join-Path $runDir 'session.json') -Value ($legacy | ConvertTo-Json -Depth 8)
+            Set-Content -LiteralPath (Join-Path $baseDir 'session.json') -Value ($legacy | ConvertTo-Json -Depth 8)
             (Test-AnySessionActive -Root $root) | Should -BeTrue
             (Get-SessionStartContext -Root $root) | Should -Match 'old-1'
         }
@@ -405,15 +417,15 @@ Describe 'Entry block dispatch (subprocess, temp root)' {
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
 
-    It '-EndSession -Id .. is a no-op via the entry block (run/ + other sessions survive)' {
+    It '-EndSession -Id .. is a no-op via the entry block (.team-process/ + other sessions survive)' {
         $root = New-TmpRoot
         try {
             Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow | Out-Null
-            $runDir = Get-TeamProcessRunDir -Root $root
+            $baseDir = Get-TeamProcessBaseDir -Root $root
             Push-Location $root
             try { pwsh -NonInteractive -NoProfile -File $script:ScriptPath -EndSession -Id '..' | Out-Null }
             finally { Pop-Location }
-            Test-Path -LiteralPath $runDir | Should -BeTrue
+            Test-Path -LiteralPath $baseDir | Should -BeTrue
             Test-Path -LiteralPath (Get-SessionFilePath -Root $root -Id 'feat-1') | Should -BeTrue
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
@@ -434,7 +446,7 @@ Describe 'Entry block dispatch (subprocess, temp root)' {
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }
 
-    It '-SyncLane projects run/lane from the roster via the entry block' {
+    It '-SyncLane projects the lane file from the roster via the entry block' {
         $root = New-TmpRoot
         try {
             $rec = Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow
