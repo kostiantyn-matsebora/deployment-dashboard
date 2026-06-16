@@ -3,7 +3,7 @@
 # the built-in default list, so the defaults are restated below.
 #
 # This file is COMMITTED policy (hand-authored). Runtime STATE lives under
-# .team-process/run/ and is gitignored.
+# .team-process/sessions/ (+ the lane file) and is gitignored.
 
 # --- built-in defaults (orchestration assets the lead authors) ---
 .claude/team-process/**
