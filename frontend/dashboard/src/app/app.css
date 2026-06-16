@@ -3,5 +3,5 @@
   display: block;
   max-width: 100%;
   margin: 0 auto;
-  padding: 14px 18px 24px;
+  padding: 14px 18px 80px; /* bottom clearance for fixed footer */
 }

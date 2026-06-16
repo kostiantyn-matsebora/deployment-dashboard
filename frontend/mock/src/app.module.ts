@@ -7,7 +7,6 @@ import { EventsController } from './events/events.controller';
 import { FetcherController } from './fetcher/fetcher.controller';
 import { MockController } from './mock/mock.controller';
 import { AnalyticsController } from './analytics/analytics.controller';
-
 @Module({
   controllers: [
     AppController,

@@ -323,6 +323,11 @@ export class AppController {
     res.send(CONTROL_HTML);
   }
 
+  @Get('api/version')
+  version() {
+    return { version: '0.13.1' };
+  }
+
   @Get('healthz')
   healthz() {
     return { status: 'ok' };

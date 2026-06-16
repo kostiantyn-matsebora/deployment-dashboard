@@ -40,6 +40,11 @@ export interface ListDeploymentsParams {
 export class DeploymentApiService {
   private readonly http = inject(HttpClient);
 
+  /** GET /api/version — deployed application version string. */
+  getVersion(): Observable<{ version: string }> {
+    return this.http.get<{ version: string }>('/api/version');
+  }
+
   /** GET /api/matrix — denormalised services × environments snapshot. */
   getMatrix(service?: string): Observable<Matrix> {
     let params = new HttpParams();

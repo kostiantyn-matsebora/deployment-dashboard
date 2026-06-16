@@ -1,0 +1,10 @@
+<footer class="site-footer">
+  <span class="sf-left">
+    @if (version() !== '…') {
+      <span class="brand-ver-chip" title="Deployed version">v{{ version() }}</span>
+    }
+    <a [href]="docsUrl" target="_blank" rel="noopener">Documentation</a>
+  </span>
+  <span class="sf-spacer"></span>
+  <span class="sf-right">© 2026 <a [href]="authorUrl" target="_blank" rel="noopener">&#64;kostiantyn-matsebora</a> · <a [href]="licenseUrl" target="_blank" rel="noopener">MIT License</a></span>
+</footer>
