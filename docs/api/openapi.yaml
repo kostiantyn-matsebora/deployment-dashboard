@@ -23,6 +23,7 @@ info:
         - `POST /api/control/events` — single inbound endpoint; all components post their events here. Gated by `X-Api-Key`; component identified by `X-Component-Id` header; optional `X-Correlation-Id` header groups the event with a control command.
         - `GET  /api/control/events/stream` — SSE fan-out of component-reported events; `Last-Event-ID` replay within 2 h window. Unauthenticated.
       - **Ops** — `/healthz`, `/readyz`.
+      - **Meta** — `/api/version` (deployed build version; unauthenticated).
 
     **Communication model (Kubernetes-style).**
     The API is the single source of truth for state and orchestration.
@@ -99,6 +100,8 @@ tags:
       `GET /api/control/events/stream` is unauthenticated.
   - name: ops
     description: Liveness + readiness probes.
+  - name: meta
+    description: Non-sensitive build metadata (deployed version). Unauthenticated.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Security
@@ -958,6 +961,28 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  # ───── Meta — deployed build version ──────────────────────────────────────
+  /api/version:
+    get:
+      tags: [meta]
+      operationId: getVersion
+      summary: Deployed build version.
+      description: |
+        Returns the deployed build version string of the running API, for the SPA
+        to display in its footer.
+
+        **Unauthenticated — public read.** No `X-Api-Key` and no `X-Control-API-Key`.
+        It exposes only non-sensitive build metadata and must be readable by the
+        unauthenticated SPA, exactly like the ops probes (`/healthz`, `/readyz`).
+
+        The value is the `DASHBOARD_VERSION` env var configured on the API container
+        (e.g. `0.13.1`). When that variable is unset the API returns a dev fallback
+        string (`0.0.0-dev`). The string is free-form — a semver, a commit SHA, or
+        the `0.0.0-dev` fallback — and is never parsed by the client.
+      responses:
+        '200':
+          $ref: '#/components/responses/Version'
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Components
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1049,6 +1074,12 @@ components:
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
+
+    Version:
+      description: The deployed build version.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/VersionResponse' }
 
     # ── Analytics shared responses ────────────────────────────────────────────
     NotModified:
@@ -1973,6 +2004,23 @@ components:
             properties:
               pointer: { type: string, description: JSON Pointer into the request body. }
               message: { type: string }
+
+    VersionResponse:
+      type: object
+      required: [version]
+      additionalProperties: false
+      description: |
+        The deployed build version of the running API. `version` is the
+        `DASHBOARD_VERSION` env var on the API container, or the `0.0.0-dev`
+        fallback when unset. Free-form (semver, commit SHA, or the fallback) and
+        never parsed by the client.
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Free-form build version string (semver, SHA, or `0.0.0-dev`).
+          examples: ["0.13.1"]
 
   examples:
 

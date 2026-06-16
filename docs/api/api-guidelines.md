@@ -67,6 +67,7 @@ Companion to [`openapi.yaml`](./openapi.yaml). Binding for every implementer of 
 | `GET /api/analytics/*` | none | Aggregate reads; same trust tier as the other reads. |
 | `GET /api/events/stream` | none | Same as other reads; auth would defeat browser EventSource. |
 | `GET /healthz`, `GET /readyz` | none | Probe surfaces. |
+| `GET /api/version` | none | Non-sensitive build metadata; readable by the unauthenticated SPA, same trust tier as the probes. |
 
 The dev/local fake key is configured in the API container's environment and is **never** embedded in the SPA bundle.
 
