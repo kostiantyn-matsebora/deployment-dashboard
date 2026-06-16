@@ -32,6 +32,7 @@ right roles and owning the integration nobody else can.
    get explicit confirmation.
 4. **Dispatch.** One `BRIEF` per role; parallel only on disjoint lanes; worktree-isolate
    coupled/shared work.
+   - **Inject `<id>` + outbox path.** Every BRIEF to a member includes the literal session `<id>` value and the absolute path to the outbox directory (`C:\..\.team-process\sessions\<id>\outbox\` in the worktree); members MUST NOT derive `<id>` themselves.
 5. **Verify after every wave.** Re-check repo state — out-of-lane edits, rogue commits,
    mixed EOL — before they compound.
 6. **Integrate & verify.** Merge lanes; have `testing` run the wider net (API/integration/
@@ -45,9 +46,12 @@ right roles and owning the integration nobody else can.
 
 Hub-and-spoke; formats in [`protocol.md`](../protocol.md).
 
-- **Member → orchestrator:** `RESULT` / `FINDING`.
+- **Member → orchestrator:** `RESULT` / `FINDING` — delivered as a **file in the session outbox** plus a
+  `{ type, ref }` pointer `SendMessage`. Drain it: read the file by `ref`, fold into the run ledger, then
+  delete the outbox file. See [`protocol.md`](../protocol.md) → *Hand-back delivery*.
 - **Orchestrator → member:** `BRIEF` / `FIX`; the orchestrator synthesizes.
 - **Member ↔ member:** only via the `contract` role to settle an interface, captured as an `ARTIFACT`.
+- **Abandon before fresh start.** If starting a new run under an existing team name, call `-EndSession -Id <id>` first — `TeamCreate` on an existing id resumes (merges), not fresh.
 
 ## Context economy
 

@@ -6,7 +6,7 @@ Every environment variable, grouped by concern. Source of truth: [`compose/.env.
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `DASHBOARD_VERSION` | no | `latest` | Image tag applied to all six stack images. **Set without a leading `v`** — the git tag `v0.10.0` publishes images as `0.10.0`. `latest` tracks the newest push to main. For a reproducible deploy, pin to a published release (e.g. `0.10.0`). |
+| `DASHBOARD_VERSION` | no | `latest` | Image tag applied to all six stack images. **Set without a leading `v`** — the git tag `v0.13.0` publishes images as `0.13.0`. `latest` tracks the newest push to main. For a reproducible deploy, pin to a published release (e.g. `0.13.0`). |
 
 See [Install — Pinning a release version](./install.md#pinning-a-release-version) for the full workflow, and [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md) for the release process.
 
@@ -34,6 +34,7 @@ Used by `full`, `full-pull`, and `demo`.
 | `POSTGRES_USER` | **yes** | — | Database user / cloud identity DB role name. |
 | `POSTGRES_PASSWORD` | conditional | — | Database password. Set for static-credential auth (local/CI). **Omit or leave empty** to activate managed-identity passwordless auth. See [Auth modes](#postgresql-auth-modes) below. |
 | `POSTGRES_DB` | no | `deployment_dashboard` | Database name. |
+| `POSTGRES_SSL_MODE` | no | managed-identity: `Require`; password: *(omitted)* | Npgsql `SslMode` override. Passed verbatim when set. Valid values (case-insensitive): `Disable`, `Allow`, `Prefer`, `Require`, `VerifyCA`, `VerifyFull`. See [Auth modes](#postgresql-auth-modes). |
 
 ## :material-database-outline: PostgreSQL: external profiles { #postgresql-external-profiles }
 
@@ -45,6 +46,7 @@ Used by `standalone` and `standalone-pull`.
 | `POSTGRES_PORT` | no | `5432` | External PostgreSQL port. |
 | `POSTGRES_USER` | **yes** | — | Database user / cloud identity DB role name. |
 | `POSTGRES_PASSWORD` | conditional | — | Database password. Set for static-credential auth (local/CI). **Omit or leave empty** to activate managed-identity passwordless auth. See [Auth modes](#postgresql-auth-modes) below. |
+| `POSTGRES_SSL_MODE` | no | managed-identity: `Require`; password: *(omitted)* | Npgsql `SslMode` override. Passed verbatim when set. Valid values (case-insensitive): `Disable`, `Allow`, `Prefer`, `Require`, `VerifyCA`, `VerifyFull`. See [Auth modes](#postgresql-auth-modes). |
 
 ## :material-shield-key-outline: PostgreSQL: auth modes { #postgresql-auth-modes }
 
@@ -54,6 +56,12 @@ Auth mode is **auto-detected from credential presence** — no explicit toggle.
 |---|---|---|
 | Set (non-empty) | Static password | `POSTGRES_USER` + `POSTGRES_PASSWORD` used verbatim. Default behavior; suitable for local Compose, CI, and tests. |
 | Omitted / empty | Managed identity | No static password. The service authenticates as its ambient cloud identity (e.g. Azure Workload Identity / Managed Identity) and obtains a short-lived access token at connection time, refreshed transparently. Set `POSTGRES_USER` to the identity's PostgreSQL role name. |
+
+**SSL mode.** Precedence: `POSTGRES_SSL_MODE` env → `Postgres:SslMode` appsettings.
+
+- **Unset, managed-identity mode:** `SslMode=Require` (Azure-managed PostgreSQL enforces TLS; explicit opt-out requires `POSTGRES_SSL_MODE=Disable`).
+- **Unset, static-password mode:** `SslMode` omitted (local/bundled non-SSL container unchanged).
+- **Set:** value passed verbatim to Npgsql regardless of auth mode.
 
 !!! tip "Cloud deployment — Azure target (NFR-01 / NFR-06)"
     Omit `POSTGRES_PASSWORD` to eliminate static credential management. The seam is provider-agnostic; any identity system that supplies a bearer token to the Npgsql password provider is compatible.
@@ -93,3 +101,14 @@ Set by [`docker-compose.demo.yaml`](https://github.com/kostiantyn-matsebora/depl
 | `GITHUB_SIM_RATE_LIMIT` | no | `5000` | Simulated GitHub hourly request quota the emulator advertises. |
 
 Other demo vars (`WRITE_API_URL`, `FETCHER_URL`, `GITHUB_EMULATOR_URL`, `MOCK_URL`, `PORT`, `SEED_ON_STARTUP`, `SCENARIOS_DIR`) are fixed internal wiring set by the overlay and are not meant to be overridden.
+
+### Demo-gateway image vars
+
+The `demo` profile uses the `deployment-dashboard-gateway-demo` image instead of the production gateway. Two additional vars are specific to that image and are set by the demo overlay:
+
+| Var | Default (in image) | Set by demo overlay | Purpose |
+|---|---|---|---|
+| `DNS_RESOLVER` | `127.0.0.11` | `127.0.0.11` (override with `168.63.129.16` for Azure Container Apps) | DNS resolver for variable-based `proxy_pass` in the demo snippet — required because the demo-driver is an optional service. |
+| `DEMO_DRIVER_UPSTREAM` | — | `demo-driver:3001` | Demo driver upstream `host:port`. |
+
+These vars are **absent from the production gateway image** — its `NGINX_ENVSUBST_FILTER` excludes them.

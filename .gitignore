@@ -1,3 +1,11 @@
+# ---- team-process runtime state -----------------------------------------
+# Machine-local session state (per-session run ledger + outbox, subagent lane) written
+# by the team-mode hooks. Ephemeral + resumable; never committed. The committed policy
+# file .team-process/lead-lane stays tracked (only the runtime paths below are ignored).
+/.team-process/sessions/
+/.team-process/lane
+/.team-process/session.json
+
 # ---- Secrets (never commit) ---------------------------------------------
 # Local-dev configuration is inline in dev_env/docker-compose.local.yml —
 # no .env files are used here. The patterns below are a defence-in-depth

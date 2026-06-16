@@ -38,16 +38,19 @@ function sortEnvs(envs: string[]): string[] {
 
 /** localStorage keys — prefixed to avoid collisions with other apps. */
 const K = {
-  view:           'dd:view',
-  svcFilter:      'dd:svcFilter',
-  failOnly:       'dd:failOnly',
-  matFields:      'dd:matFields',
-  swFields:       'dd:swFields',
-  correlation:    'dd:correlation',
-  timeWindow:     'dd:timeWindow',
-  rateLimit:      'dd.rateLimit',
-  colOrder:       'dd:colOrder',
-  colHidden:      'dd:colHidden',
+  view:              'dd:view',
+  svcFilter:         'dd:svcFilter',
+  failOnly:          'dd:failOnly',
+  matFields:         'dd:matFields',
+  swFields:          'dd:swFields',
+  correlation:       'dd:correlation',
+  timeWindow:        'dd:timeWindow',
+  rateLimit:         'dd.rateLimit',
+  colOrder:          'dd:colOrder',
+  colHidden:         'dd:colHidden',
+  swimCollapsed:     'dd:swimCollapsed',
+  swimKnown:         'dd:swimKnown',
+  swimAutoScroll:    'dd:swimAutoScroll',
 } as const;
 
 /**
@@ -171,6 +174,47 @@ export class AppStateService {
    */
   readonly matrixData = signal<Matrix | null>(null);
 
+  /**
+   * Last effective (non-context) deployment event applied via `applyDeploymentEvent`.
+   * Set to `ev` only when `ev.status` is NOT a context status (success / in-progress /
+   * failure). Context-only events (pending / queued / waiting / cancelled / rejected)
+   * do NOT update this signal — they change only `slot.next` in the matrix and
+   * represent pipeline gates, not a service's latest deployment status.
+   *
+   * Consumers (e.g. SwimlanesComponent) watch this signal in an `effect` to react
+   * to live status changes without firing on context-only updates. Transient — not
+   * persisted to localStorage.
+   *
+   * Spec: docs/design/views.md §Collapse / Expand (#309) — flash + auto-scroll
+   */
+  readonly lastEffectiveEvent = signal<DeploymentEvent | null>(null);
+
+  // ── Swimlanes collapse/expand state (#309) ───────────────────────────────
+  /**
+   * Set of service names whose lane is currently collapsed.
+   * Default: ALL services collapsed (populated lazily when matrix data loads).
+   * Persisted to localStorage; restored across view switches and reloads.
+   *
+   * Spec: docs/design/views.md §Collapse / Expand (#309)
+   */
+  readonly collapsedLanes = signal<Set<string>>(
+    this.ls(K.swimCollapsed, v => {
+      const arr: unknown = JSON.parse(v);
+      if (!Array.isArray(arr)) return null;
+      return new Set((arr as unknown[]).filter((x): x is string => typeof x === 'string'));
+    }, new Set<string>()),
+  );
+
+  /**
+   * Whether to auto-scroll a lane into view when it receives a new SSE event
+   * and is currently off-screen. Default ON.
+   *
+   * Spec: docs/design/views.md §Collapse / Expand (#309)
+   */
+  readonly autoScrollOnChange = signal<boolean>(
+    this.ls(K.swimAutoScroll, v => v === 'true' ? true : v === 'false' ? false : null, true),
+  );
+
   // ── Matrix column order + visibility ────────────────────────────────────
   /**
    * Persisted column order: a permutation of all environment names last seen.
@@ -221,8 +265,10 @@ export class AppStateService {
     effect(() => this.save(K.correlation, this.correlationPredicate()));
     effect(() => this.save(K.timeWindow,  this.timeWindow()));
     effect(() => this.save(K.rateLimit,   JSON.stringify(Object.fromEntries(this.rateLimitMap()))));
-    effect(() => this.save(K.colOrder,    JSON.stringify(this.matrixColOrder())));
-    effect(() => this.save(K.colHidden,   [...this.matrixColHidden()].join(',')));
+    effect(() => this.save(K.colOrder,      JSON.stringify(this.matrixColOrder())));
+    effect(() => this.save(K.colHidden,     [...this.matrixColHidden()].join(',')));
+    effect(() => this.save(K.swimCollapsed, JSON.stringify([...this.collapsedLanes()])));
+    effect(() => this.save(K.swimAutoScroll, String(this.autoScrollOnChange())));
 
     // ── Seed column order whenever matrix data loads / envs change ─────
     // Runs on first load (GET /api/matrix) and on every SSE event that
@@ -319,6 +365,14 @@ export class AppStateService {
       : sortEnvs([...matrix.environments, ev.environment]);
 
     this.matrixData.set({ ...matrix, generated_at: new Date().toISOString(), environments, rows });
+
+    // Notify swimlane live-update watchers (#309): only for effective events.
+    // Context events change slot.next only (gate status, not deployment outcome)
+    // and must NOT trigger flash/auto-scroll — the spec states "new status arrives
+    // over SSE" meaning an effective status change.
+    if (!isContextStatus(ev.status)) {
+      this.lastEffectiveEvent.set(ev);
+    }
   }
 
   // ── Field toggle helpers ──────────────────────────────────
@@ -332,6 +386,64 @@ export class AppStateService {
     const s = new Set(this.swimlaneVisibleFields());
     s.has(field) ? s.delete(field) : s.add(field);
     this.swimlaneVisibleFields.set(s);
+  }
+
+  // ── Collapse/expand helpers (#309) ────────────────────────────────────────
+
+  /** Toggle a single lane's collapsed state. */
+  toggleLaneCollapsed(service: string): void {
+    const s = new Set(this.collapsedLanes());
+    s.has(service) ? s.delete(service) : s.add(service);
+    this.collapsedLanes.set(s);
+  }
+
+  /**
+   * Collapse all lanes. Caller passes the current service list so that
+   * newly added services (not yet in the persisted set) are also covered.
+   */
+  collapseAllLanes(services: string[]): void {
+    this.collapsedLanes.set(new Set(services));
+  }
+
+  /** Expand all lanes. */
+  expandAllLanes(): void {
+    this.collapsedLanes.set(new Set());
+  }
+
+  /**
+   * Ensure every service starts collapsed the first time it is seen.
+   * Services already in the "known" set were previously shown to the user
+   * and their collapsed/expanded state is already persisted — leave them alone.
+   * New services (not in the known set) default to collapsed.
+   *
+   * Called each time the swimlane lane list first becomes non-empty.
+   */
+  initDefaultCollapsed(services: string[]): void {
+    if (!services.length) return;
+
+    // Restore the set of services whose state has already been persisted.
+    const knownRaw = this.tryGet(K.swimKnown);
+    const known = new Set<string>(
+      knownRaw ? (JSON.parse(knownRaw) as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+    );
+
+    // Any service not yet known defaults to collapsed.
+    const newServices = services.filter(s => !known.has(s));
+    if (newServices.length === 0) return;
+
+    // Collapse the new ones and mark them known.
+    const collapsed = new Set(this.collapsedLanes());
+    for (const s of newServices) {
+      collapsed.add(s);
+      known.add(s);
+    }
+    this.collapsedLanes.set(collapsed);
+    try { localStorage.setItem(K.swimKnown, JSON.stringify([...known])); } catch { /* quota */ }
+  }
+
+  /** Raw localStorage get — null when absent or storage unavailable. */
+  private tryGet(key: string): string | null {
+    try { return localStorage.getItem(key); } catch { return null; }
   }
 
   // ── Column order + visibility helpers ────────────────────────────────────

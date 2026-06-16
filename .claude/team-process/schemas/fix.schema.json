@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "team-process/schemas/fix.schema.json",
+  "title": "FIX",
+  "description": "orch -> role - fix-loop assignment. Canonical key order: type, failure, suspect. 'failure' groups the observed defect; 'suspect' is a routing hint, not a fix.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "failure", "suspect"],
+  "properties": {
+    "type": { "enum": ["FIX"] },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test", "expect", "actual"],
+      "properties": {
+        "test": { "type": "string", "minLength": 1 },
+        "expect": { "type": "string", "minLength": 1 },
+        "actual": { "type": "string", "minLength": 1 }
+      }
+    },
+    "suspect": { "type": "string", "minLength": 1 }
+  }
+}

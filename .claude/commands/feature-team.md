@@ -51,25 +51,33 @@ explicit confirmation*).
 ## 2 — Spawn (after approval)
 
 - **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description = the issue
-  summary. *(A `PostToolUse(TeamCreate)` hook auto-writes the `.claude-team-active` marker; the
-  team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn below
-  MUST set `team_name`, or it is rejected as an in-session downgrade.)*
+  summary. *(A `PostToolUse(TeamCreate)` hook writes the durable session record
+  `.team-process/sessions/<id>/session.json` with `workflow: feature-team` (`<id>` = sanitized team
+  name); the team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn
+  below MUST set `team_name`, or it is rejected as an in-session downgrade. The record persists across
+  reboots; concurrent runs coexist as distinct directories; see [`process.md`](../team-process/process.md)
+  → *Session state & resume*.)*
+  *(Before `TeamCreate`: if a stale same-id session already exists, call `-EndSession -Id <id>` first — re-creating without clearing merges (resume path), not fresh.)*
 - **Spawn each member** via the `Agent` tool to execute [`/implement`](implement.md) in its lane:
-  - `team_name` = the team · `name` = a stable, referenceable label (e.g. `backend`) ·
-    `subagent_type` = the mapped agent above.
+  - `team_name` = the team · `name` = the **role** (e.g. `backend`) or role-prefixed with a short task hint (e.g. `backend: extract HTTP adapter`) — the role must be the leading token so it is visible in the agent statusline; never set `name` to only the task · `subagent_type` = the mapped agent above.
   - `isolation: "worktree"` for every member that writes code in parallel (prevents same-file clobbers).
   - `run_in_background: true` so the lead can coordinate while members work.
   - **Prompt = scoped brief:** owning spec + the member's named lane + "inherit your role file
     `.claude/team-process/roles/<role>.md` and its guardrails" + the `/implement` self-verify gate
     (build + own-change unit tests + lint, actual counts) + "do NOT commit/push; hand back to the lead."
+    + "The session id is `<literal-id-value>`; your outbox is `<absolute-path-to-outbox-dir>` — use these verbatim, do NOT derive them from the team name. If running in a worktree, run `New-Item -ItemType Directory -Force -Path '<outbox-path>'` before writing your hand-back."
+    + "NEVER return prose, markdown, or a .txt file as your final message — write the typed form to your outbox file first, then send the { type, ref } pointer."
 - **Assign work.** Create the task list (one task per lane); contract member first if cross-layer —
   its `ARTIFACT` unblocks the rest.
 
 ## 3 — Coordinate (hub-and-spoke)
 
-- Members report to the lead on completion (changes, lane touched, gate results, blockers). Peer
-  `SendMessage` is reserved for **contract negotiation** (contract ↔ consumers); the outcome is
-  recorded in the `ARTIFACT`, not left as chat.
+- Members report to the lead on completion (changes, lane touched, gate results, blockers) as a
+  **file + pointer**: the typed form is written to `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json`
+  and a `{ type, ref }` pointer is sent via `SendMessage`. **Drain each wave** — read the outbox file by
+  `ref`, fold it into the ledger, then delete it (see [`protocol.md`](../team-process/protocol.md) →
+  *Hand-back delivery*). Peer `SendMessage` is reserved for **contract negotiation** (contract ↔
+  consumers); the outcome is recorded in the `ARTIFACT`, not left as chat.
 - **Verify state after every wave** — re-check repo/worktree state; catch out-of-lane edits, stray
   commits, mixed EOL before they compound.
 
@@ -87,8 +95,10 @@ explicit confirmation*).
   owning member; loop until green.
 - Run [`/ship`](ship.md) — commit in logical groups → branch → open/update PR → watch CI green.
   Never push the default branch.
-- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook clears the
-  `.claude-team-active` marker; `SessionStart` also clears any stale marker.)*
+- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook removes that team's session
+  record. On a fresh session a leftover record is NOT auto-cleared — `SessionStart` reminds you to
+  resume or abandon it; abandon a stale one by id with
+  `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>`.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 

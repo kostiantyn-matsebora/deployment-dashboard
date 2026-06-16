@@ -248,3 +248,30 @@
   font-weight: 600;
   opacity: 0.85;
 }
+
+/* ── Change-emphasis flash (#309) ─────────────────────────── */
+@keyframes card-flash {
+  0%   {
+    box-shadow:
+      0 0 0 3px rgba(var(--accent-rgb), 0.95),
+      0 0 32px 6px rgba(var(--accent-rgb), 0.65);
+    background-color: rgba(var(--accent-rgb), 0.18);
+    border-color: rgba(var(--accent-rgb), 0.85);
+  }
+  30%  {
+    box-shadow:
+      0 0 0 3px rgba(var(--accent-rgb), 0.70),
+      0 0 20px 4px rgba(var(--accent-rgb), 0.40);
+    background-color: rgba(var(--accent-rgb), 0.10);
+    border-color: rgba(var(--accent-rgb), 0.60);
+  }
+  100% {
+    box-shadow: none;
+    background-color: transparent;
+    border-color: var(--glass-edge);
+  }
+}
+
+.vis-card.is-flashing {
+  animation: card-flash 1.2s ease-out forwards;
+}

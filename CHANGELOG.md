@@ -6,11 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.13.0] - 2026-06-16
+
+### Changed
+
+- **The gateway now deploys to Azure Container Apps as well as Docker Compose, from a single config — no per-platform edits.** The production gateway sets the proxied `Host` header per-location to the upstream FQDN (Azure Container Apps' internal ingress routes by `Host`; the gateway's public hostname would 404 at the upstream), resolves the API and frontend upstreams at startup, and no longer carries the Docker-only DNS resolver. The same image routes `/`, `/api/*`, and the SSE stream correctly on both platforms.
+
+### Added
+
+- **Separate demo-gateway image.** Demo-only `/demo/*` routing now lives in a dedicated `…-gateway-demo` image layered on top of the production gateway, so the production image carries no demo routes, DNS resolver, or demo-driver upstream. The `demo` Compose profile selects the demo image automatically; no adopter action is required.
+
+## [0.12.1] - 2026-06-15
+
+### Fixed
+
+- **Managed-identity Postgres connections now enforce SSL.** The assembled connection string omitted the `SslMode` keyword, so Npgsql fell back to its `Prefer` default (silent non-SSL) — which Azure Database for PostgreSQL rejects for AAD / managed-identity users, with no knob to force it. Managed-identity connections now default to `SslMode=Require`, so AAD auth works out of the box; static-password mode is unchanged (local/bundled non-SSL container still works). A new `POSTGRES_SSL_MODE` env var (and matching `Postgres:SslMode` appsettings key) overrides the SSL mode for either auth mode, passed verbatim to Npgsql. See [Configuration](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/configuration/#postgresql-auth-modes).
+
+## [0.12.0] - 2026-06-14
+
+### Added
+
+- **Swimlanes — collapsible service lanes.** Each service lane in the Swimlanes view can now collapse to a compact single-chain "vector" (the deployment chain ending at the service's newest event) and expand back to the full promotion DAG — via per-lane chevrons plus Collapse-all / Expand-all controls. An Auto-scroll-to-change toggle (on by default) keeps the latest change in view, and a card flashes to highlight a live status change in either state. Per-lane collapse state and the auto-scroll preference persist across reloads (lanes start collapsed). This is a Swimlanes-view enhancement only — no API or contract change.
+
+## [0.11.0] - 2026-06-14
+
 ### Added
 
 - **Analytics view — DORA Four Keys dashboard.** A third dashboard view (alongside Matrix and Swimlanes) surfacing deployment frequency, lead time (approximated from `parent_deployments` promotion chains), change failure rate, and mean time to restore (MTTR). Supported by eight charts: deployment frequency over time, change-failure-rate trend, deployment-duration distribution (p50/p95), promotion funnel (per-stage counts + conversion), status distribution, deploy heatmap (day-of-week × hour), top deployers, and time-to-restore incidents. The period control covers 7 / 14 / 30 days, bounded by `HISTORY_RETENTION_DAYS`.
 - **`ANALYTICS_WINDOW_GRANULARITY` config var.** Controls the UTC boundary the analytics window is truncated to (`day` | `hour`), governing ETag stability and data freshness. See [Configuration — API](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/configuration/#api).
 - **`ANALYTICS_FUNNEL_ENVIRONMENTS` config var.** Comma-separated, ordered promotion-funnel ladder; the last entry is the production terminal used for DORA lead-time measurement. Values matched case-insensitively against the deployment `environment` field. See [Configuration — API](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/configuration/#api).
+
+### Fixed
+
+- **Demo dashboard no longer empties out as time passes.** The github-emulator seeded its deployments with hard-coded absolute timestamps, which eventually aged past the fetcher's initial lookback window — so a fresh demo (or a reset + re-seed) could backfill nothing and render an empty dashboard. Seed timestamps are now shifted relative to load time (anchoring the newest event to "now"), so the demo always presents recent activity.
 
 ## [0.10.0] - 2026-06-13
 

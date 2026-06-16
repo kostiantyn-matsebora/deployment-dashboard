@@ -1,7 +1,6 @@
 # Orchestration Process
 
-Generalized from a proven in-repo dispatch convention (`engineering-process.md`). One
-**orchestrator** routes a multi-layer change across role-specialists. Project-agnostic.
+One **orchestrator** routes a multi-layer change across role-specialists. Project-agnostic.
 Pairs with [`roles/`](roles/). Every role inherits two companions:
 
 - [`protocol.md`](protocol.md) — typed communication forms.
@@ -73,6 +72,40 @@ unchanged; teams never replace it — opt-in escalation only.** Full matrix + ru
 **Mode is sticky — no silent downgrade.** The substrate chosen at launch holds for the whole run;
 need to change it → surface as a decision, never slide back to in-session subagents silently.
 
+## Session state & resume
+
+Each team-process run owns a directory `.team-process/sessions/<id>/` (gitignored runtime state;
+`<id>` = the sanitized team name) holding `session.json` (the durable record) and `outbox/` (member
+hand-backs). It **survives a session boundary or reboot** — this is what makes "mode is sticky" hold
+across a fresh session instead of decaying into in-session subagent spawns. **One directory per run** —
+concurrent runs in the same worktree coexist as distinct directories.
+
+- **Per-session, named by id.** The id is the sanitized `TeamCreate` name (it equals each member's `team_name`).
+  - Re-creating the same team merges into its existing `session.json` (preserves `createdAt`/`roster`/`ledger`).
+  - **Start fresh (new run).** If a stale same-id session exists, call `-EndSession -Id <id>` before `TeamCreate` — re-creating without first abandoning the old record MERGES (resume path), not a clean start. Abandon all by omitting `-Id`.
+- **Existence-of-any = team mode active.** The team-mode guard blocks foreground in-session `Agent`/`Task` spawns whenever **any** session record exists (use `team_name`).
+  - Enforcement spans reboots, not only the current session.
+  - A legacy single-file `session.json` is still read for back-compat.
+- **Workflow classifier.** Each record carries `workflow` (`feature-team` | `freeform`) so resume
+  knows how to continue. `feature-team` follows the phase enum below; `freeform` uses a free-form
+  phase string.
+- **The run ledger IS this file.** The orchestrator enriches it (roster · phase · per-wave
+  changed/decided/deferred) as the run proceeds — the same authoritative state the
+  *Single-integrator model* mandates, now persisted instead of living only in context. Shape:
+  [`schemas/session.schema.json`](schemas/session.schema.json).
+- **The session is the source of truth for lanes.** `lane` (read by the lane guard) is a
+  **generated projection** of a member's `roster[].lane` — never hand-maintained. Project it with
+  `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -SyncLane -Id <id> -Role <role>`.
+- **SessionStart reminds, never wipes.** On a fresh session it injects a resume summary listing
+  **every** active run (id · workflow · branch · phase · ledger) as context — so the lead re-attaches
+  rather than forgetting it was mid-run.
+- **Resume reconstructs from the ledger.** A reboot kills the live members; resuming re-creates the
+  team and re-dispatches the in-flight wave from the ledger — the file is the durable truth, the
+  live team is rebuilt.
+- **Abandon explicitly.** A stale session (run abandoned, no `TeamDelete` fired) is cleared by id
+  with `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>` (omit
+  `-Id` to abandon all).
+
 ## Autonomy
 
 "Autonomous mode" is a licence over **effort**, not over the **merge gate**. It means *act
@@ -133,6 +166,12 @@ The 6 typed forms (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ART
 rendering, and rules — live in [`protocol.md`](protocol.md). Every cross-role message MUST be one of
 them, emitted verbatim; a non-conforming hand-back is returned **UNREAD** for re-emit. The
 orchestrator emits `BRIEF`/`FIX` and reads the rest; it never parses prose hand-backs.
+
+**Member OUTPUT forms are files, not inline messages.** A `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` is
+written to the session outbox `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json`; the
+`SendMessage` body is a `{ type, ref }` pointer that wakes the orchestrator. The orchestrator reads the
+file by `ref`, folds it into the run ledger, then deletes it. See [`protocol.md`](protocol.md) →
+*Hand-back delivery*.
 
 ## Phases
 

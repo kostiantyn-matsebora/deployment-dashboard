@@ -153,6 +153,33 @@
       </div>
     }
 
+    <!-- Swimlanes-only: Collapse/Expand-all + Auto-scroll toggle (#309) ──── -->
+    @if (isSwimlanes()) {
+      <div class="swim-controls" role="group" aria-label="Swimlane controls">
+        <!-- Collapse/Expand-all button — pill, matches mockup .sv-collapse-all-btn (#309) -->
+        <button
+          class="swim-collapse-all-btn"
+          [title]="allCollapsed() ? 'Expand all lanes' : 'Collapse all lanes'"
+          [attr.aria-label]="allCollapsed() ? 'Expand all lanes' : 'Collapse all lanes'"
+          (click)="toggleCollapseAll()"
+        >{{ allCollapsed() ? '⊞ Expand all' : '⊟ Collapse all' }}</button>
+
+        <!-- Auto-scroll toggle -->
+        <label
+          class="toggle swim-autoscroll-toggle"
+          [class.is-on]="autoScrollOnChange()"
+          (click)="toggleAutoScroll()"
+          role="switch"
+          [attr.aria-checked]="autoScrollOnChange()"
+          aria-label="Auto-scroll to change"
+          title="Auto-scroll to change when off-screen (default ON)"
+        >
+          <span class="switch"></span>
+          <span>Auto-scroll</span>
+        </label>
+      </div>
+    }
+
     <!-- Correlation picker (Swimlanes only) ─────────────── -->
     @if (isSwimlanes()) {
       <div style="position: relative">

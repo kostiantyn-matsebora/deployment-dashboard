@@ -2632,6 +2632,115 @@
   }
 
   /* =========================================================
+     SWIMLANE COLLAPSE / EXPAND  (issue #309)
+     ========================================================= */
+
+  /* Lane-header overlay — rendered in the HTML lane-head row built by buildSwim.
+     Sits above the SVG in a flex bar: [chevron] [service name] [status vector] [sim-btn] */
+  .sv-lane-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px 5px 4px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    z-index: 2;            /* above SVG layer */
+    pointer-events: none;  /* children opt-in */
+  }
+  .sv-chevron {
+    appearance: none;
+    /* Visible on the dark lane surface: brighter border + translucent white wash */
+    border: 1px solid rgba(255,255,255,0.20);
+    background: rgba(255,255,255,0.07);
+    padding: 0 4px;
+    cursor: pointer;
+    color: var(--ink-0);
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+    pointer-events: auto;
+    transition: color .15s ease, transform .15s ease, background .15s ease, border-color .15s ease;
+    border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+  }
+  .sv-chevron:hover { color: #fff; border-color: rgba(var(--accent-rgb),0.6); background: rgba(var(--accent-rgb),0.15); }
+  /* Expanded lane: chevron points down; collapsed: right */
+  .sv-chevron.is-expanded { transform: rotate(90deg); }
+
+  /* Flash animation — plays on the tip card when a lane's event fires (collapsed or expanded) */
+  @keyframes svFlash {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
+    25%  { box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.55), 0 0 18px rgba(var(--accent-rgb), 0.45); }
+    60%  { box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.25); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); }
+  }
+  .vis-card.sv-flash { animation: svFlash 0.85s ease-out forwards; }
+
+  /* Simulate-event button — tasteful, vis-icon-button style */
+  .sv-sim-btn {
+    appearance: none;
+    background: var(--field-toggle-bg);
+    border: 1px solid var(--glass-edge);
+    color: var(--ink-2);
+    border-radius: 7px;
+    padding: 2px 8px;
+    font-size: 10.5px;
+    font-family: 'Inter', system-ui, sans-serif;
+    cursor: pointer;
+    flex-shrink: 0;
+    pointer-events: auto;
+    white-space: nowrap;
+    transition: color .15s, border-color .15s, background .15s;
+    letter-spacing: 0.2px;
+  }
+  .sv-sim-btn:hover { color: var(--ink-0); border-color: var(--glass-edge-2); background: rgba(var(--accent-rgb),0.08); }
+
+  /* env label inside vector — matches vc-env but smaller */
+  .sv-env {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--ink-0);
+    text-transform: lowercase;
+    flex-shrink: 0;
+  }
+
+  /* Collapse-all button and auto-scroll toggle — reuse .toggle primitive */
+  .sv-collapse-all-btn {
+    appearance: none;
+    border: 1px solid var(--glass-edge);
+    background: var(--input-bg);
+    color: var(--ink-1);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .15s, border-color .15s, background .15s;
+    pointer-events: auto;
+  }
+  .sv-collapse-all-btn:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+
+  /* Auto-scroll toggle — use .toggle base, tinted with accent when on */
+  #sv-autoscroll-toggle.toggle.is-on {
+    color: rgba(var(--accent-rgb), 1);
+    border-color: rgba(var(--accent-rgb), 0.45);
+    background: rgba(var(--accent-rgb), 0.10);
+  }
+  #sv-autoscroll-toggle.toggle.is-on .switch { background: rgba(var(--accent-rgb), 1); }
+
+  /* Lane overlay wrapper — positioned absolute by JS over the SVG lane rect */
+  .sv-lane-wrap {
+    position: absolute;
+  }
+
+  /* =========================================================
      HISTORY DRAWER
      ========================================================= */
   .drawer-overlay {
@@ -3088,7 +3197,14 @@
       </div>
 
       <!-- Visualisation-only icons -->
-      <div style="position:relative; display:none" id="hdr-vis-icons">
+      <div style="position:relative; display:none" id="hdr-vis-icons" class="hdr-icons">
+        <!-- Collapse/expand all lanes -->
+        <button class="sv-collapse-all-btn" id="btn-collapse-all" title="Collapse or expand all swimlanes" aria-label="Collapse all lanes">⊟ Collapse all</button>
+        <!-- Auto-scroll-to-change toggle — default ON -->
+        <label class="toggle is-on" id="sv-autoscroll-toggle" title="When a lane's status changes while off-screen, scroll it into view (collapsed or expanded)" aria-label="Auto-scroll to change" style="white-space:nowrap;cursor:pointer">
+          <span class="switch" aria-hidden="true"></span>
+          Auto-scroll
+        </label>
         <button class="icon-btn" id="btn-correlation" title="Correlation &amp; time window" aria-label="Correlation">
           <span aria-hidden="true">⇆</span>
         </button>
@@ -3271,6 +3387,15 @@
             <div class="lg-ex">
               <div class="lg-ex-l"><span class="ctx-badge cb-waiting" style="pointer-events:none">◷ waiting v2.5.0-rc1</span></div>
               <div class="lg-ex-r">next badge — incoming or attempted deploy on top of this state</div>
+            </div>
+            <div class="lg-group">Collapsed lane — vector</div>
+            <div class="lg-ex">
+              <div class="lg-ex-l" style="display:flex;align-items:center;gap:4px">
+                <span style="font-size:9px;border:1px solid var(--emerald-edge);border-radius:6px;padding:1px 5px;color:var(--emerald);font-family:'JetBrains Mono',monospace">✓ v2.14.1</span>
+                <span style="font-size:11px;color:var(--ink-3)">→</span>
+                <span style="font-size:9px;border:1px solid var(--amber-edge);border-radius:6px;padding:1px 5px;color:var(--amber);font-family:'JetBrains Mono',monospace">◴ v2.14.3</span>
+              </div>
+              <div class="lg-ex-r">collapsed lane — chain of real vis-cards from root to newest event (tip), rendered by the same card + SVG-edge machinery as the expanded DAG; click chevron (›) to expand to full DAG. ⚡ Simulate event flashes the tip card and auto-scrolls in both collapsed and expanded states.</div>
             </div>
             <div class="lg-group">Edges</div>
             <div class="lg-ex">
@@ -5641,7 +5766,54 @@ document.addEventListener('keydown', e => {
      - isolated node  (auth-bff graph B; catalog-edge graph C)
    Domain-model fields only — 11 per node.
    ================================================================= */
+
+/* ----- Collapse / expand state (#309) -----
+   laneCollapsed: Map<svc, boolean> — true = collapsed, false = expanded.
+   Default: ALL lanes start collapsed.
+   Persisted to localStorage key `dd:laneCollapsed` (JSON object svc→bool).
+   autoScroll: whether to scroll a changed lane into view (collapsed or expanded).
+   Persisted to localStorage key `dd:laneAutoScroll`.
+*/
 const SWIM_SERVICES = ['payments-api', 'auth-bff', 'order-svc', 'catalog-edge'];
+
+// Load persisted collapse state — default ALL collapsed.
+const laneCollapsed = (function () {
+  const m = new Map();
+  try {
+    const stored = JSON.parse(localStorage.getItem('dd:laneCollapsed') || '{}');
+    SWIM_SERVICES.forEach(s => {
+      // If key absent in stored, default to true (collapsed).
+      m.set(s, stored[s] !== false);
+    });
+  } catch (_) {
+    SWIM_SERVICES.forEach(s => m.set(s, true));
+  }
+  return m;
+})();
+
+function persistLaneCollapsed() {
+  try {
+    const obj = {};
+    laneCollapsed.forEach((v, k) => { obj[k] = v; });
+    localStorage.setItem('dd:laneCollapsed', JSON.stringify(obj));
+  } catch (_) { /* private mode / file:// */ }
+}
+
+// Auto-scroll preference — default ON.
+let laneAutoScroll = (function () {
+  try {
+    const v = localStorage.getItem('dd:laneAutoScroll');
+    return v === null ? true : v === 'true';
+  } catch (_) { return true; }
+})();
+
+function persistAutoScroll() {
+  try { localStorage.setItem('dd:laneAutoScroll', String(laneAutoScroll)); } catch (_) { }
+}
+
+// Expose the last buildSwim layout result for overlay positioning.
+let _lastSvcLayouts = null;
+let _lastSwimH = 0;
 
 // Each node carries all 11 domain-model fields.
 // `col` is the time-bucket (0..7). `parrent_deployments` are intra-lane only.
@@ -5965,6 +6137,14 @@ function assignTracks(dagNodes, ranks) {
 function buildSwim() {
   const swim = document.getElementById('swim');
 
+  // Clear stale position data from all nodes before layout.
+  // n.x / n.y are set directly on shared VIS_NODE objects; if a previous
+  // expanded run wrote positions for nodes that are NOT in the current
+  // collapsed node set, those nodes still pass the `n.x !== undefined`
+  // guard in the cards-render loop and get rendered as stale cards.
+  // Resetting here ensures only nodes positioned in THIS pass get cards.
+  VIS_NODES.forEach(n => { delete n.x; delete n.y; delete n._w; delete n._h; });
+
   // -------- layout constants --------
   // Packing: lane heights pack densely — lane height = sub-row content + minimal
   // padding. Inter-lane gap reduced. LANE_MIN_H lowered so empty/short lanes
@@ -5974,6 +6154,18 @@ function buildSwim() {
   const PAD_BOT      = 12;
   const PAD_LEFT     = 170;   // room for lane label
   const PAD_RIGHT    = 30;
+
+  // Chevron + label layout (SVG coordinate space = stage px, 1:1 with viewBox).
+  // SVG lane rect starts at x=14. The HTML overlay wraps the chevron and
+  // has padding-left=6px (CSS .sv-lane-wrap). So the chevron's RIGHT edge in
+  // SVG stage coords = LABEL_INSET + wrap_padding_left + CHEVRON_W
+  //                  = 14 + 6 + 22 = 42.
+  // Label must clear that by at least 8px: svgLabelX = 42 + 8 = 50.
+  // Stored as a constant — if chevron size or padding changes, update here.
+  const CHEVRON_W      = 22;  // matches .sv-chevron width:22px
+  const LABEL_INSET    = 14;  // SVG lane rect left inset (x=14)
+  const WRAP_PAD_LEFT  = 6;   // .sv-lane-wrap padding-left
+  const svgLabelX      = LABEL_INSET + WRAP_PAD_LEFT + CHEVRON_W + 8;  // = 50
   const DEFAULT_W    = 156;   // fallback card width (pre-measurement)
   const DEFAULT_H    = 80;    // fallback card height (pre-measurement) — tightened after packing
   const COL_GAP      = 60;    // horizontal gap between rank columns
@@ -5990,7 +6182,17 @@ function buildSwim() {
   const dimOf = id => dimMap.get(id) || { w: DEFAULT_W, h: DEFAULT_H };
 
   const svcLayouts = SWIM_SERVICES.map(svc => {
-    const svcNodes = VIS_NODES.filter(n => n.component === svc);
+    const collapsed = laneCollapsed.get(svc) !== false; // default true
+
+    // Collapsed lane: restrict the effective node set to the newest-event
+    // vector (root→tip chain) so the IDENTICAL layout machinery runs over
+    // only those nodes. Edges among chain members come naturally from their
+    // parrent_deployments; no other-DAG or cross-lane edges can exist.
+    // Expanded lane: full node set as before.
+    const svcNodes = collapsed
+      ? buildCollapsedVector(svc)
+      : VIS_NODES.filter(n => n.component === svc);
+
     const dags = partitionDAGs(svcNodes);
 
     // for each DAG: rank, tracks, max rank, max track
@@ -6027,9 +6229,22 @@ function buildSwim() {
     });
     const totalDagsH = dagInfos.reduce((s, di) => s + di.subRowH, 0)
       + Math.max(0, dagInfos.length - 1) * DAG_GAP;
+    // Lane height is always computed naturally from the node set (collapsed or not).
+    // Collapsed: single-chain nodes → single DAG → one track → compact height.
+    // No hardcoded COLLAPSED_H: the chain's natural height IS the collapsed height.
     const laneH = Math.max(LANE_MIN_H, totalDagsH + LANE_PAD_TB * 2);
 
-    return { svc, dagInfos, laneH };
+    // Track the tip node id (newest-event node) for flash targeting after simulate event.
+    // Collapsed: last node of the vector chain. Expanded: newest node across all service nodes.
+    const tipNodeId = (() => {
+      const pool = collapsed ? buildCollapsedVector(svc) : VIS_NODES.filter(n => n.component === svc);
+      if (!pool.length) return null;
+      return pool.reduce((best, n) =>
+        (n.happened_at || '') > (best.happened_at || '') ? n : best
+      ).id;
+    })();
+
+    return { svc, dagInfos, laneH, collapsed, tipNodeId };
   });
 
   // total stage height — sum of lane heights + packed inter-lane gaps
@@ -6117,7 +6332,7 @@ function buildSwim() {
               rx="12" ry="12"
               fill="${laneFill}"
               stroke="${laneEdge}" />
-        <text x="28" y="${y + 20}" font-family="JetBrains Mono, monospace"
+        <text x="${svgLabelX}" y="${y + 20}" font-family="JetBrains Mono, monospace"
               font-size="12.5" font-weight="600" fill="${ink1}"
               letter-spacing="0.2">${L.svc}</text>
       `;
@@ -6184,15 +6399,20 @@ function buildSwim() {
   swim.style.setProperty('--stage-w', stageW);
   swim.style.setProperty('--stage-h', H);
 
+  // Store for overlay builder
+  _lastSvcLayouts = svcLayouts;
+  _lastSwimH = H;
+
   // Cards layer uses percentage coords so it tracks the SVG's scaled coord space
   const cards = document.getElementById('cards-layer');
   VIS_NODES.forEach(n => {
-    if (n.x === undefined || n.y === undefined) return; // not in any service shown
+    if (n.x === undefined || n.y === undefined) return; // not in active node set
     const card = document.createElement('div');
     const klass = n.neverDeployed ? 's-never-deployed' : statusKlass(n.status);
     const selected = n.id === PRESELECTED_NODE_ID ? ' is-selected' : '';
     card.className = `vis-card ${klass}${selected}`;
     card.dataset.nodeId = n.id;
+    card.dataset.component = n.component;
     card.style.left = (n.x / stageW * 100) + '%';
     card.style.top  = (n.y / H * 100) + '%';
 
@@ -6268,6 +6488,9 @@ function buildSwim() {
   // If the vis view is hidden (display:none), getBoundingClientRect returns
   // 0×0 — skip the re-layout; we'll get a proper measurement when the user
   // switches to vis (setView hook re-runs buildSwim with the view visible).
+  // Build HTML lane overlays (chevron + status vector / lane-head label)
+  buildLaneOverlays(svcLayouts, H, stageW);
+
   if (!buildSwim._reentering) {
     const dimMap = new Map();
     let anyMeasured = false;
@@ -6286,6 +6509,311 @@ function buildSwim() {
     }
   }
 }
+
+/* =================================================================
+   LANE OVERLAYS — collapse/expand chevrons + collapsed vector
+   (#309)
+   ================================================================= */
+
+/* Walk backward from tip through parrent_deployments to build the
+   linear chain ending at the newest event for a service.
+
+   Algorithm:
+   1. Find tip = node with max happened_at among all service nodes.
+   2. Walk backward: from current node, pick the parent (within this
+      service) with the newest happened_at. Stop when no parent exists.
+   3. Return chain in root→tip order (reversed from the walk).
+*/
+function buildCollapsedVector(svc) {
+  const svcNodes = VIS_NODES.filter(n => n.component === svc);
+  if (!svcNodes.length) return [];
+
+  // Step 1: find tip
+  const tip = svcNodes.reduce((best, n) =>
+    (n.happened_at || '') > (best.happened_at || '') ? n : best
+  );
+
+  // Step 2: walk backward
+  const chain = [tip];
+  const ids = new Set(svcNodes.map(n => n.id));
+  let cur = tip;
+  const visited = new Set([tip.id]);
+
+  while (cur.parrent_deployments && cur.parrent_deployments.length > 0) {
+    // Filter to intra-service parents only
+    const candidates = cur.parrent_deployments
+      .map(pid => VIS_BY_ID[pid])
+      .filter(p => p && ids.has(p.id) && !visited.has(p.id));
+    if (!candidates.length) break;
+    // At a merge (multiple parents), follow the one with newest happened_at
+    const best = candidates.reduce((b, p) =>
+      (p.happened_at || '') > (b.happened_at || '') ? p : b
+    );
+    chain.push(best);
+    visited.add(best.id);
+    cur = best;
+  }
+
+  // Return root→tip (reverse of the backward walk)
+  return chain.reverse();
+}
+
+/* Inject HTML overlays per lane on top of the SVG stage.
+   Cards and SVG edges for BOTH collapsed and expanded lanes are rendered
+   by the main buildSwim machinery (collapsed lanes use the vector chain
+   as their node set; expanded lanes use all service nodes). This overlay
+   adds only the chevron toggle and the Simulate-event demo button.
+   The tip node id is carried from svcLayouts so the sim button can target
+   the correct card in #cards-layer.
+
+   Overlays are attached to .vis-canvas (NOT #vis-stage) so that
+   width:calc(100%-28px) tracks the visible canvas width, not the full
+   1340px stage width. This keeps the right-aligned sim button on screen
+   even when the stage extends past the canvas right edge.
+   Top position = swim.offsetTop (vis-head + margin-bottom) + laneTop.
+*/
+function buildLaneOverlays(svcLayouts, H, stageW) {
+  const canvas = document.querySelector('.vis-canvas');
+  const swim   = document.getElementById('swim');
+  if (!canvas || !swim) return;
+  // Remove any previously-injected overlays from either parent
+  canvas.querySelectorAll('.sv-lane-wrap').forEach(el => el.remove());
+  const stage = document.getElementById('vis-stage');
+  if (stage) stage.querySelectorAll('.sv-lane-wrap').forEach(el => el.remove());
+
+  // Compute offsets relative to .vis-canvas (position:relative — the
+  // positioned ancestor for absolute children).
+  //   swimTop  = swim.offsetTop  (vis-head height + margin-bottom + canvas padding)
+  //   swimLeft = swim.offsetLeft (canvas padding-left)
+  // The SVG lane rect is drawn at x=14 within #vis-stage. #vis-stage is a
+  // direct child of #swim (also a direct child of .vis-canvas), so:
+  //   stageLeft = swimLeft + stage.offsetLeft  (stage has no extra left offset,
+  //               but reading it explicitly keeps this robust to layout changes)
+  // overlay left = stageLeft + 14  →  chevron sits 14px inside the lane rect,
+  // matching x=14 in SVG space.  Width is capped to canvas width (not stage
+  // width) so the right-aligned sim button stays on screen without scrolling.
+  const swimTop   = swim.offsetTop;
+  const swimLeft  = swim.offsetLeft;
+  const stageEl   = document.getElementById('vis-stage');
+  const stageLeft = swimLeft + (stageEl ? stageEl.offsetLeft : 0);
+  const overlayLeft = stageLeft + 14;   // matches SVG lane rect x=14
+
+  svcLayouts.forEach(L => {
+    const wrap = document.createElement('div');
+    wrap.className = 'sv-lane-wrap';
+    wrap.dataset.svc = L.svc;
+    if (L.tipNodeId) wrap.dataset.tipNodeId = L.tipNodeId;
+    // top  = swimTop + laneTop  (lane y within SVG stage)
+    // left = stageLeft + 14     (aligns with SVG lane rect left edge)
+    // width = canvas width - 2×14  (caps at visible viewport; sim btn stays on screen)
+    wrap.style.cssText = `
+      position: absolute;
+      left: ${overlayLeft}px;
+      top: ${swimTop + L.laneTop}px;
+      width: calc(100% - ${overlayLeft + 14}px);
+      height: ${L.laneH - 4}px;
+      pointer-events: none;
+      z-index: 3;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 4px 10px 0 6px;
+      box-sizing: border-box;
+    `;
+
+    // Chevron button (always present — top-left of the lane)
+    const chev = document.createElement('button');
+    chev.className = 'sv-chevron' + (L.collapsed ? '' : ' is-expanded');
+    chev.setAttribute('aria-label', L.collapsed ? `Expand ${L.svc}` : `Collapse ${L.svc}`);
+    chev.setAttribute('title', L.collapsed ? `Expand ${L.svc}` : `Collapse ${L.svc}`);
+    chev.textContent = '›';
+    chev.style.pointerEvents = 'auto';
+    chev.addEventListener('click', () => toggleLane(L.svc));
+    wrap.appendChild(chev);
+
+    // Simulate-event button — shown in both collapsed and expanded lanes.
+    // Right-aligned (margin-left:auto) within the canvas-width wrap so it
+    // never scrolls off-screen. The SVG service-name label at x=28 in the
+    // stage is unobstructed: the chevron is ~22px, the sim button is at the
+    // far right of the visible canvas, leaving the label area clear.
+    const simBtn = document.createElement('button');
+    simBtn.className = 'sv-sim-btn';
+    simBtn.textContent = '⚡ Simulate event';
+    simBtn.setAttribute('title', `Simulate a status change for ${L.svc}`);
+    simBtn.style.cssText = 'pointer-events:auto;margin-left:auto';
+    simBtn.addEventListener('click', () => simulateEvent(L.svc));
+    wrap.appendChild(simBtn);
+
+    canvas.appendChild(wrap);
+  });
+}
+
+/* Toggle a single lane between collapsed and expanded */
+function toggleLane(svc) {
+  const isCollapsed = laneCollapsed.get(svc) !== false;
+  laneCollapsed.set(svc, !isCollapsed);
+  persistLaneCollapsed();
+  window.__visNodeDims = null; // force remeasure
+  buildSwim();
+  if (typeof selectVisNode === 'function' && currentSelectedNodeId) {
+    selectVisNode(currentSelectedNodeId);
+  }
+}
+
+/* Collapse/expand ALL lanes */
+function collapseAll(collapse) {
+  SWIM_SERVICES.forEach(s => laneCollapsed.set(s, collapse));
+  persistLaneCollapsed();
+  window.__visNodeDims = null;
+  buildSwim();
+}
+
+/* =================================================================
+   SIMULATE EVENT — demonstrates live behaviors (§ req 3 + 4 + 5)
+   Injects a GENUINELY NEW deployment event node for the service,
+   making it the new tip (newest happened_at). The new node parents
+   off the current tip so the collapsed vector chain extends to it.
+   buildCollapsedVector then naturally picks the new node as tip.
+   Flash the new tip card; auto-scroll if lane is off-screen.
+   Works in both collapsed and expanded states.
+   ================================================================= */
+const SIM_STATUS_CYCLE = ['success', 'failure', 'in-progress', 'waiting'];
+const _simCycleIdx = {};
+const _simEnvIdx   = {};  // per-service counter for cycling alternate environments
+let   _simNodeSeq  = 0;   // monotonic counter for unique node ids
+
+// Rotating version bump helpers — increment the patch segment of the
+// current tip's version so the new event has a visibly different version.
+function _bumpVersion(ver) {
+  if (!ver) return 'v0.0.1';
+  const m = ver.match(/^(v?\d+\.\d+\.)(\d+)(.*)$/);
+  if (m) return m[1] + (parseInt(m[2], 10) + 1) + (m[3] || '');
+  return ver + '-sim';
+}
+
+function simulateEvent(svc) {
+  // Find current tip (newest event) for this service — it becomes the parent.
+  const svcNodes = VIS_NODES.filter(n => n.component === svc);
+  if (!svcNodes.length) return;
+  const oldTip = svcNodes.reduce((best, n) =>
+    (n.happened_at || '') > (best.happened_at || '') ? n : best
+  );
+  const oldTipId = oldTip.id;
+
+  // Advance status cycle
+  if (_simCycleIdx[svc] === undefined) _simCycleIdx[svc] = 0;
+  _simCycleIdx[svc] = (_simCycleIdx[svc] + 1) % SIM_STATUS_CYCLE.length;
+  const newStatus  = SIM_STATUS_CYCLE[_simCycleIdx[svc]];
+  const newVersion = _bumpVersion(oldTip.version);
+
+  // Build a new ISOLATED node (no parents) so buildCollapsedVector switches
+  // to it as a fresh DAG root rather than extending the existing chain.
+  // Pick an environment DIFFERENT from the current tip so it visually changes.
+  const SIM_ENVS = ['dev', 'staging', 'prod', 'preprod', 'qa'];
+  const tipEnv   = (oldTip.environment || '').toLowerCase();
+  const otherEnvs = SIM_ENVS.filter(e => e !== tipEnv);
+  // Rotate through the other environments deterministically per service.
+  if (_simEnvIdx[svc] === undefined) _simEnvIdx[svc] = 0;
+  const newEnv = otherEnvs[_simEnvIdx[svc] % otherEnvs.length];
+  _simEnvIdx[svc] = (_simEnvIdx[svc] + 1) % otherEnvs.length;
+
+  _simNodeSeq++;
+  const newId = `sim${_simNodeSeq}_${svc.replace(/[^a-z]/g, '')}`;
+  const now   = new Date().toISOString();
+  const newNode = {
+    id:                   newId,
+    component:            svc,
+    environment:          newEnv,              // different env → isolated DAG
+    version:              newVersion,
+    status:               newStatus,
+    run_url:              oldTip.run_url || '',
+    sha:                  Math.random().toString(16).slice(2, 9),
+    run_number:           (oldTip.run_number || 0) + _simNodeSeq,
+    ref:                  oldTip.ref || 'main',
+    actor:                oldTip.actor || 'sim-bot',
+    happened_at:          now,
+    elapsed:              'just now',
+    parrent_deployments:  [],   // isolated root — no parent → own DAG branch
+    col:                  0,    // fresh column, not extending the old chain
+  };
+
+  // Register in the live data arrays so buildSwim and buildCollapsedVector
+  // pick it up as the new tip.
+  VIS_NODES.push(newNode);
+  VIS_BY_ID[newId] = newNode;
+
+  // Rebuild — forces remeasure so the new card gets sized correctly.
+  window.__visNodeDims = null;
+  buildSwim();
+
+  // Flash the NEW tip card.
+  const tipCard = document.querySelector(`#cards-layer .vis-card[data-node-id="${newId}"]`);
+  if (tipCard) {
+    tipCard.classList.remove('sv-flash');
+    void tipCard.offsetWidth; // force reflow to restart CSS animation
+    tipCard.classList.add('sv-flash');
+    tipCard.addEventListener('animationend', () => tipCard.classList.remove('sv-flash'), { once: true });
+  }
+
+  // Auto-scroll — bring the lane into view if off-screen and toggle is ON.
+  if (laneAutoScroll) {
+    const laneWrap = document.querySelector(`.sv-lane-wrap[data-svc="${svc}"]`);
+    if (laneWrap) {
+      const rect = laneWrap.getBoundingClientRect();
+      const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+      if (!inView) {
+        laneWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+}
+
+/* =================================================================
+   COLLAPSE-ALL + AUTO-SCROLL control wiring
+   ================================================================= */
+(function wireCollapseControls() {
+  const btnCollapseAll = document.getElementById('btn-collapse-all');
+  const autoScrollToggle = document.getElementById('sv-autoscroll-toggle');
+
+  if (btnCollapseAll) {
+    // Track whether all lanes are currently collapsed
+    function updateCollapseAllBtn() {
+      const allCollapsed = SWIM_SERVICES.every(s => laneCollapsed.get(s) !== false);
+      btnCollapseAll.textContent = allCollapsed ? '⊞ Expand all' : '⊟ Collapse all';
+    }
+
+    btnCollapseAll.addEventListener('click', () => {
+      const allCollapsed = SWIM_SERVICES.every(s => laneCollapsed.get(s) !== false);
+      collapseAll(!allCollapsed); // flip
+      updateCollapseAllBtn();
+    });
+
+    // Keep button label in sync on each rebuild
+    const origBuildSwim = buildSwim;
+    // Patch: update button after rebuild (done via MutationObserver on #swim)
+    const mo = new MutationObserver(() => updateCollapseAllBtn());
+    const swimEl = document.getElementById('swim');
+    if (swimEl) mo.observe(swimEl, { childList: true, subtree: false });
+    updateCollapseAllBtn();
+  }
+
+  if (autoScrollToggle) {
+    // Sync initial state
+    function applyAutoScrollUI() {
+      autoScrollToggle.classList.toggle('is-on', laneAutoScroll);
+      const sw = autoScrollToggle.querySelector('.switch');
+      // The .toggle .switch::after CSS handles the knob position; is-on drives it.
+    }
+    applyAutoScrollUI();
+
+    autoScrollToggle.addEventListener('click', () => {
+      laneAutoScroll = !laneAutoScroll;
+      persistAutoScroll();
+      applyAutoScrollUI();
+    });
+  }
+})();
+
 buildSwim();
 
 /* =================================================================

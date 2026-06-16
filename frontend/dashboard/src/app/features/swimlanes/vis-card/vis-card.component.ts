@@ -50,6 +50,11 @@ export class VisCardComponent {
   readonly visibleFields = input.required<Set<SwimlaneField>>();
   /** True when this node is the currently selected node in the inspector. */
   readonly isSelected = input<boolean>(false);
+  /**
+   * True while the card should display a brief flash animation (change-emphasis
+   * on SSE update). Driven by `SwimlanesComponent.flashingIds` signal (#309).
+   */
+  readonly isFlashing = input<boolean>(false);
   /** Optional context-status next event for this node's slot (from slot.next). */
   readonly nextEvent = input<DeploymentEvent | null>(null);
   /**

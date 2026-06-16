@@ -2,7 +2,7 @@
  * Live-app E2E — Never-deployed slot rendering (issue #268).
  *
  * Runs against the Angular SPA at http://localhost:4200 backed by the NestJS
- * mock on :3000. The mock data includes a never-deployed slot at
+ * mock on :3002. The mock data includes a never-deployed slot at
  * platform-proxy|qa (status: waiting, no effective baseline, no slot.next).
  *
  * Asserts:

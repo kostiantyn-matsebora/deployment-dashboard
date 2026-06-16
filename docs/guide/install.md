@@ -66,7 +66,7 @@ cp .env.example .env
     Replace the trailing `\` line-continuations with backticks (`` ` ``).
 
 !!! tip "Pin a release"
-    Replace `main` in the URLs with the tag (e.g. `.../v0.10.0/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
+    Replace `main` in the URLs with the tag (e.g. `.../v0.13.0/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
 
 ## 2. Configure & run
 
@@ -219,13 +219,19 @@ See [Configuration](./configuration.md) for every environment variable.
 By default the stack pulls `latest` (tracks `main`). For a reproducible deploy, pin in `.env`:
 
 ```dotenv
-DASHBOARD_VERSION=0.10.0
+DASHBOARD_VERSION=0.13.0
 ```
 
 !!! warning "No leading `v`"
-    The git tag `v0.10.0` publishes images as `0.10.0`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
+    The git tag `v0.13.0` publishes images as `0.13.0`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
 
 ## Hosting notes
 
 !!! info ""
     The reference target is **Azure** (≤ $30/month, container-based — [SAD §5–6](../SAD.md#5-non-functional-requirements)), but nothing is Azure-specific: every component is a standard OCI container. Terraform modules for Azure are planned (`infrastructure/`, not yet present).
+
+!!! tip "Azure Container Apps"
+    The gateway deploys to ACA unchanged — the same image used in Docker Compose. Each proxy location sets the `Host` header to the upstream FQDN so ACA's internal Envoy routes correctly; no ACA-specific config is needed.
+
+!!! note "Demo gateway image"
+    The production profiles above use `deployment-dashboard-gateway`. The **demo profile** uses a separate `deployment-dashboard-gateway-demo` image that layers `/demo/*` routing on top of the production image. Production deployments carry no demo routes or demo-driver configuration.

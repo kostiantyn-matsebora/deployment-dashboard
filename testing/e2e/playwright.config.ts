@@ -34,7 +34,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'npm --prefix ../../frontend/mock run start:dev',
-      url: 'http://localhost:3000/readyz',
+      url: 'http://localhost:3002/readyz',
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
     },

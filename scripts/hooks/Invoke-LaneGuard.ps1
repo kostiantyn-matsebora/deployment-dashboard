@@ -3,11 +3,11 @@
 <#
 .SYNOPSIS
     PreToolUse(Edit|Write|MultiEdit|NotebookEdit) hook — enforces the "stay in your
-    lane" rule. If the worktree root holds a `.claude-lane` file (written by the lead
-    when a member is spawned), edits are allowed only to paths matching one of its
-    globs. No `.claude-lane` (e.g. the lead's main worktree) → no restriction.
+    lane" rule. If the worktree root holds a `.team-process/lane` file (written by
+    the lead when a member is spawned), edits are allowed only to paths matching one of
+    its globs. No lane file (e.g. the lead's main worktree) → no restriction.
 
-    `.claude-lane` format: one glob per line; blank lines and `#` comments ignored.
+    `.team-process/lane` format: one glob per line; blank lines and `#` comments ignored.
     Globs: `*` = within a path segment, `**` = across segments, `?` = one char.
     Example:
         backend/fetcher/**
@@ -69,14 +69,39 @@ function Get-RelativePath {
     return $f
 }
 
+# A member's hand-back outbox is NOT part of its code lane; allow writes there so the
+# file-based protocol (typed forms dropped in the session directory) is not blocked.
+function Test-PathIsOutbox {
+    param([string]$RelPath)
+    $p = ($RelPath -replace '\\', '/')
+    if ($p.StartsWith('./')) { $p = $p.Substring(2) }
+    return ($p -match '(^|/)\.team-process/sessions/[^/]+/outbox/')
+}
+
+# True if the path contains a '..' segment. A lane / outbox match is a STRING test, so a
+# traversal like 'outbox/../../../backend/X.cs' would otherwise be exempted yet resolve
+# outside the lane. Reject '..' up front — edits never legitimately need it.
+function Test-PathHasDotDot {
+    param([string]$RelPath)
+    $p = ($RelPath -replace '\\', '/')
+    return (@($p -split '/') -contains '..')
+}
+
 function Get-LaneGuardDecision {
     param([string]$RelPath, [string[]]$Lanes)
     $active = Get-ActiveLanes -Lines $Lanes
     if ($active.Count -eq 0) { return @{ Block = $false } }
+    if (Test-PathHasDotDot -RelPath $RelPath) {
+        return @{
+            Block  = $true
+            Reason = "Path traversal rejected: '$RelPath' contains a '..' segment. Use a normalized in-lane path — '..' cannot be used to escape a lane or the outbox."
+        }
+    }
+    if (Test-PathIsOutbox -RelPath $RelPath) { return @{ Block = $false } }
     if (Test-PathInLanes -RelPath $RelPath -Lanes $active) { return @{ Block = $false } }
     return @{
         Block  = $true
-        Reason = "Out of lane: '$RelPath' is not in your assigned lane(s): $($active -join ', '). Stay in your lane — hand cross-lane needs back to the lead via RESULT.follow."
+        Reason = "Out of lane: '$RelPath' is not in your assigned lane(s): $($active -join ', '). Stay in your lane — hand cross-lane needs back to the lead via RESULT.follow (write it to your session outbox)."
     }
 }
 
@@ -103,7 +128,7 @@ if (-not $AsLibrary) {
     if (-not $root) { $root = (Get-Location).Path }
     $root = ([string]$root).Trim()
 
-    $laneFile = Join-Path $root '.claude-lane'
+    $laneFile = Join-Path $root '.team-process' 'lane'
     if (-not (Test-Path -LiteralPath $laneFile)) { exit 0 }
 
     $lines = Get-Content -LiteralPath $laneFile -ErrorAction SilentlyContinue

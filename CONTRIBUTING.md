@@ -39,10 +39,10 @@ docker compose \
 
 Run only the part you're changing — outside containers, with native hot-reload and a debugger attached.
 
-**Frontend SPA + mock API — no backend, no database.** The SPA's dev proxy (`frontend/dashboard/proxy.conf.json`) forwards `/api`, `/healthz`, `/readyz` to the **mock server** (`frontend/mock/`, port `3000`) — an in-memory fake of the read API (matrix, deployments, services/environments, fetcher state, the `GET /api/events/stream` SSE feed) with a `/_mock/*` surface to seed data. The SPA runs standalone against realistic data + live SSE; no .NET, no Postgres.
+**Frontend SPA + mock API — no backend, no database.** The SPA's dev proxy (`frontend/dashboard/proxy.conf.json`) forwards `/api`, `/healthz`, `/readyz` to the **mock server** (`frontend/mock/`, port `3002`) — an in-memory fake of the read API (matrix, deployments, services/environments, fetcher state, the `GET /api/events/stream` SSE feed) with a `/_mock/*` surface to seed data. The SPA runs standalone against realistic data + live SSE; no .NET, no Postgres.
 
 ```bash
-# Terminal 1 — mock API on http://localhost:3000
+# Terminal 1 — mock API on http://localhost:3002
 cd frontend/mock && npm ci && npm run start:dev
 
 # Terminal 2 — SPA on http://localhost:4200 (hot reload; proxy.conf.json auto-loaded)
@@ -65,17 +65,17 @@ POSTGRES_HOST=localhost POSTGRES_USER=dev POSTGRES_PASSWORD=dev \
 > The API assembles its connection from `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` (defaults: `postgres` / `5432` / `deployment_dashboard`).
 > PowerShell: set them on their own lines first — `$env:POSTGRES_HOST="localhost"; $env:POSTGRES_USER="dev"; $env:POSTGRES_PASSWORD="dev"` — then `dotnet run --project api/Dashboard.Api`.
 
-To point the **SPA at the real API** instead of the mock, change the `target` in `frontend/dashboard/proxy.conf.json` from `http://localhost:3000` to `http://localhost:5205`.
+To point the **SPA at the real API** instead of the mock, change the `target` in `frontend/dashboard/proxy.conf.json` from `http://localhost:3002` to `http://localhost:5205`.
 
 **Other components** — NestJS via `npm ci && npm run start:dev`, .NET via `dotnet run`:
 
 | Component | From | Runs on | Key env (dev defaults) |
 |---|---|---|---|
-| Demo Driver | `demo/driver/` | `http://localhost:3001/demo/` | `WRITE_API_URL` (`:3000`), `API_KEY`, `CONTROL_API_KEY`, `GITHUB_EMULATOR_URL` (`:3100`) |
+| Demo Driver | `demo/driver/` | `http://localhost:3001/demo/` | `WRITE_API_URL` (`:3002`), `API_KEY`, `CONTROL_API_KEY`, `GITHUB_EMULATOR_URL` (`:3100`) |
 | GitHub Emulator | `demo/github-emulator/` | `http://localhost:3100` | — |
 | Fetcher (pull mode) | `backend/` → `dotnet run --project fetcher/Dashboard.Fetcher` | worker (no HTTP port) | `GITHUB_*`, `WRITE_API_URL` — see [Configuration](docs/guide/configuration.md) |
 
-Point a component's `WRITE_API_URL` at the mock (`:3000`) or the real API (`:5205`) as needed.
+Point a component's `WRITE_API_URL` at the mock (`:3002`) or the real API (`:5205`) as needed.
 
 ### Test & build (per area)
 
@@ -117,7 +117,7 @@ cd testing/api && npm ci && npm run test:integration
 
 ### Specialist routing
 
-Changes are routed to the area specialist (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`). See [`docs/engineering-process.md`](docs/engineering-process.md). For API features, [`docs/api/openapi.yaml`](docs/api/openapi.yaml) is the contract source of truth — update it first.
+Changes are routed to the area specialist (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`). See [`.claude/team-process/process.md`](.claude/team-process/process.md). For API features, [`docs/api/openapi.yaml`](docs/api/openapi.yaml) is the contract source of truth — update it first.
 
 ### Scripts
 

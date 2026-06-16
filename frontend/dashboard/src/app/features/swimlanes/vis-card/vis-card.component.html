@@ -6,6 +6,7 @@
   class="vis-card"
   [class]="statusClass()"
   [class.is-selected]="isSelected()"
+  [class.is-flashing]="isFlashing()"
   (click)="onClick()"
   role="button"
   [attr.aria-label]="event().service + ' ' + event().environment + ' ' + (event().version || '')"

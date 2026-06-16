@@ -97,67 +97,37 @@ The human owns only **direction** and **acceptance**. Everything in between is t
 
 ## Zero to hero
 
-**The hero is the shipping product — and the method built to produce it.** The arc: an idea on half a page → a tested, documented, shipping system.
-
-```mermaid
-flowchart LR
-    R[1 · Napkin RFP<br/>½ page] --> A[2 · Architecture + mockup<br/>SAD + interactive prototype]
-    A --> P[3 · The process<br/>roles · hand-offs · hooks]
-    P --> S[4 · The product<br/>delivered issue-by-issue]
-```
-
-1. **Napkin brief** — half a page: what it should do, and the constraints.
-2. **Architecture & design** — AI wrote the full architecture document and an interactive mockup *first*.
-3. **The process itself** — AI built the *team* that builds the product. **This framework is the reusable asset.**
-4. **The product** — delivered feature by feature. **The output of the process, not a one-off.**
-
-→ **Idea to working MVP: 3 days — built by one person and an AI team.**
+![Zero to Hero — a half-page brief becomes a shipped product](diagrams/zero-to-hero.svg){ .dd-shot }
 
 ## How it works: judgment + enforcement
 
-Two layers — **instructions** for judgment, **hooks** for guarantees.
+**Built the way Anthropic recommends building agents** — in the team's own terms:
+
+- **Orchestrator-workers (hub & spoke)** — a lead plus specialist roles.
+- **Isolated contexts** — each specialist works disposably; the lead stays lean.
+- **Typed protocol** — every cross-role hand-off is a schema-checked message.
+- **Deterministic guardrails** — the rules are enforced by programs, not goodwill.
+
+Two layers carry it — **judgment** decides, **enforcement** guarantees:
 
 === "Layer 1 · Judgment"
 
-    An **orchestrator** breaks the work down and routes each piece to the specialist that owns it — like a senior human team.
+    A **lead agent orchestrates** — it plans the work, routes each slice to the **role that owns it**, and integrates what comes back. One coordinator, many specialists.
 
-    ```mermaid
-    flowchart TB
-        H[Human · goal + approval] --> O((Orchestrator))
-        O --> C[Contract]
-        O --> B[Backend]
-        O --> F[Frontend]
-        O --> D[Deployment]
-        O --> T[Testing]
-        O --> K[Docs]
-    ```
+    ![Judgment — the orchestrator routes work to specialist roles](diagrams/how-it-works-judgment.svg){ .dd-shot }
+
+    - **The lead coordinates, never codes** — it dispatches and integrates; it never edits a role's files.
+    - **Roles own lanes** — each holds its own non-negotiable bar; parallel only on disjoint files.
+    - **Typed hand-offs** — `BRIEF` down; `RESULT` · `REVIEW` · `FINDING` · `ARTIFACT` up; `FIX` for the loop.
 
 === "Layer 2 · Enforcement"
 
-    Critical rules are enforced by **hooks** — deterministic programs that run automatically and **block** any rule-break. The AI can't talk past them.
+    Judgment can be argued with; **hooks can't** — small deterministic programs run at every key moment and **block** any rule-break. The AI can't talk past them.
 
-    ```mermaid
-    flowchart LR
-        AI[AI attempts an action] --> G1{In its lane?}
-        G1 -->|pass| G2{Report well-formed?}
-        G2 -->|pass| G3{Docs synced + tests green?}
-        G3 -->|pass| M[Allowed / Merged]
-        G1 -->|block| AI
-        G2 -->|block| AI
-        G3 -->|block| AI
-    ```
+    ![Enforcement — every action runs the hooks gauntlet](diagrams/how-it-works-enforcement.svg){ .dd-shot }
 
-| The rule | Enforced automatically by a hook |
-|---|---|
-| **Stay in your lane** | edits to unassigned files are blocked |
-| **Lead doesn't code** | the orchestrator can't edit product files |
-| **Disciplined hand-offs** | malformed reports are rejected unread |
-| **Workers never commit** | only the integrator can commit / ship |
-| **Docs never go stale** | a commit that desyncs docs is blocked |
-| **Never ship red** | one failing test blocks the merge |
-
-!!! tip "Ten such hooks"
-    Each is an independently **tested** program, wired in at every key moment — session start, before each edit, before each message, before every commit.
+    !!! tip "Ten such hooks"
+        Each is an independently **tested** program, wired in at every key moment — session start, before each edit, before each message, before every commit.
 
 ## What the solution is made of
 
@@ -185,25 +155,13 @@ Two layers — **instructions** for judgment, **hooks** for guarantees.
 
 </div>
 
-```mermaid
-flowchart TB
-    subgraph JUDGMENT["Judgment — the AI"]
-        PRR[Process and roles] --- AG[Specialist agents]
-    end
-    subgraph ENFORCE["Enforcement — deterministic"]
-        HK[Hooks] --- DK[Docs-keeper] --- CIQ[Code intelligence]
-    end
-    JUDGMENT --> ENFORCE
-```
+![What the solution is made of — five building blocks in two layers](diagrams/what-its-made-of.svg){ .dd-shot }
 
 ## The process in action: issue #299
 
 **A DORA analytics view — contract to shipped — in ~2.5 hours.** A recent, ordinary example: a new analytics tab with the four industry-standard delivery metrics, eight charts, and new server-side endpoints.
 
-```mermaid
-flowchart LR
-    CT[Contract] --> BE[Backend] --> FE[Frontend] --> DC[Docs] --> FX[Review + fix] --> TS[Tests] --> PR[Pull request]
-```
+![Issue #299 — contract first, parallel build, a review/test fix-loop, then ship](diagrams/process-issue-299.svg){ .dd-shot }
 
 - **~6,500 lines across 41 files** — API contract, backend, web UI, spec, and full test coverage.
 - **Self-corrected** mid-flight through the review-and-fix loop.
@@ -248,3 +206,6 @@ flowchart LR
 One person and AI built a shipping product — a half-page idea became a working **MVP in 3 days**, plus a reusable engineering process that builds the next product too. The breakthrough isn't a smarter model — it's **instructions for judgment + hooks for guarantees**.
 
 </div>
+
+!!! quote ":simple-claude: Even this page"
+    This showcase — every word and all five diagrams — was written and drawn by the same Claude team it describes. Meta, but true.

@@ -3,8 +3,10 @@ import {
   Component,
   computed,
   effect,
+  ElementRef,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { NgxGraphModule, Node as NgxNode, Edge as NgxEdge, NgxGraphStates } from '@swimlane/ngx-graph';
@@ -85,6 +87,10 @@ export interface SwimDag {
 export interface SwimLane {
   service: string;
   dags: SwimDag[];
+  /** Node ids in the newest-event vector (root→tip chain). */
+  vectorIds: Set<string>;
+  /** Node id of the vector tip (newest event in the service). */
+  tipId: string | null;
 }
 
 /**
@@ -110,6 +116,7 @@ export interface SwimLane {
 })
 export class SwimlanesComponent {
   protected readonly state = inject(AppStateService);
+  private   readonly host  = inject(ElementRef<HTMLElement>);
 
   protected readonly dagreSettings = DAGRE_SETTINGS;
   protected readonly timeWindows   = TIME_WINDOWS;
@@ -117,6 +124,12 @@ export class SwimlanesComponent {
   // ── Update trigger for ngx-graph relayout ─────────────────
   private  readonly _update$ = new Subject<void>();
   readonly updateTrigger$    = this._update$.asObservable();
+
+  /**
+   * Set of card node ids that are currently flashing (change-emphasis).
+   * Each id is added on SSE update, removed after 600 ms by a cleanup timeout.
+   */
+  protected readonly flashingIds = signal<Set<string>>(new Set());
 
   /**
    * Per-DAG content size as reported by ngx-graph's own `graphDims` after each
@@ -136,12 +149,100 @@ export class SwimlanesComponent {
   });
 
   constructor() {
-    // Relayout whenever the lane set changes (matrix update / view switch).
+    // Relayout whenever the rendered lane set changes (matrix update / view switch / collapse toggle).
     effect(() => {
-      this.lanes(); // track
+      this.lanesView(); // track
       queueMicrotask(() => this._update$.next());
     });
+
+    // Evict stale dagContent entries whenever collapse state changes (#309).
+    //
+    // Problem: dagContent caches per-dag {width, height} measured by ngx-graph
+    // after layout. When a lane is collapsed, ngx-graph measures only the vector
+    // nodes → small height stored. When the lane is expanded, viewFor() still
+    // returns the old cached height, constraining the SVG viewport so the extra
+    // nodes are invisible. Fix: on every collapsedLanes change, drop dagContent
+    // entries for ALL dags so ngx-graph re-measures at the new node set.
+    //
+    // Use untracked() for the dagContent write to avoid triggering stageW
+    // (which reads dagContent) as a dependency of this effect.
+    effect(() => {
+      this.state.collapsedLanes(); // track collapse state changes
+      const allLanes = untracked(() => this.lanes());
+      if (!allLanes.length) return;
+      untracked(() => {
+        // Drop all cached heights; ngx-graph will re-report them via onStateChange.
+        this.dagContent.set(new Map());
+      });
+    });
+
+    // Default new lanes to collapsed when matrix data loads (#309).
+    // initDefaultCollapsed is idempotent: it only acts on services not yet in
+    // the persisted "known" set, so expand/collapse choices are never overridden.
+    effect(() => {
+      const lanes = this.lanes();
+      if (lanes.length > 0) {
+        this.state.initDefaultCollapsed(lanes.map(l => l.service));
+      }
+    });
+
+    /**
+     * Live change emphasis + auto-scroll (#309).
+     *
+     * Reacts to `lastEffectiveEvent` — set only by `applyDeploymentEvent` for
+     * non-context statuses (success / in-progress / failure). Context-only events
+     * (pending / queued / waiting / cancelled / rejected) do NOT update this
+     * signal, so they cannot trigger flash or scroll here. This is the structural
+     * guard: the filter lives in AppStateService, not in a template check.
+     *
+     * `onSseChange` reads several reactive signals (lanesView, collapsedLanes,
+     * autoScrollOnChange) and writes `flashingIds` via `flashCard`.  Without
+     * `untracked`, every signal read inside `onSseChange` becomes a dependency
+     * of THIS effect.  The write to `flashingIds` (a new Set object each call)
+     * then dirtifies the effect immediately, causing an infinite re-run loop
+     * that OOMs the V8 heap.  `untracked` constrains the effect's dependency
+     * set to `lastEffectiveEvent` only — the correct semantic.
+     */
+    effect(() => {
+      const ev = this.state.lastEffectiveEvent();
+      if (ev) untracked(() => this.onSseChange(ev.service));
+    });
   }
+
+  // ── Collapsed lane helpers (#309) ────────────────────────
+  protected isCollapsed(service: string): boolean {
+    return this.state.collapsedLanes().has(service);
+  }
+
+  protected toggleCollapsed(service: string): void {
+    this.state.toggleLaneCollapsed(service);
+  }
+
+  protected readonly autoScrollOnChange = computed(() => this.state.autoScrollOnChange());
+
+  /**
+   * For each lane, produce DAGs restricted to the vector chain when collapsed,
+   * or the full DAG set when expanded. This is the rendered lane set.
+   */
+  protected readonly lanesView = computed<SwimLane[]>(() => {
+    const lanes    = this.lanes();
+    const collapsed = this.state.collapsedLanes();
+    if (!collapsed.size) return lanes;
+
+    return lanes.map(lane => {
+      if (!collapsed.has(lane.service)) return lane;
+      // Collapsed: restrict each DAG to only the vector chain nodes.
+      const vids = lane.vectorIds;
+      const collapsedDags = lane.dags
+        .map(dag => ({
+          ...dag,
+          nodes: dag.nodes.filter(n => vids.has(n.id)),
+          links: dag.links.filter(l => vids.has(l.source) && vids.has(l.target)),
+        }))
+        .filter(dag => dag.nodes.length > 0);
+      return { ...lane, dags: collapsedDags };
+    });
+  });
 
   /** ngx-graph [view] for a chain: uniform stage width × that chain's own height. */
   protected viewFor(dagId: string): [number, number] {
@@ -161,6 +262,8 @@ export class SwimlanesComponent {
 
     // Patch the live node object in place so dagre sees the true size; mutating
     // here (not in the computed) avoids a measure→recompute→measure loop.
+    // Search the full lane set (not lanesView) so collapsed vector cards still
+    // update their dimensions for when the lane is expanded.
     outer:
     for (const lane of this.lanes()) {
       for (const dag of lane.dags) {
@@ -169,6 +272,74 @@ export class SwimlanesComponent {
       }
     }
     this._update$.next();
+  }
+
+  // ── Flash + auto-scroll (SSE live change, #309) ───────────
+
+  /**
+   * Called when an SSE event arrives for a given service+environment.
+   * Flashes the relevant card and scrolls the lane into view if off-screen.
+   *
+   * The parent app shell calls this method after `applyDeploymentEvent`
+   * so the matrix is already updated before we derive the tip.
+   */
+  onSseChange(service: string): void {
+    const lane = this.lanesView().find(l => l.service === service);
+    if (!lane) return;
+
+    // The card to flash: tip card when collapsed, the same tip node in expanded form.
+    // `tipId` is always the newest-event node, valid in both states.
+    const flashId = lane.tipId;
+    if (flashId) this.flashCard(flashId);
+
+    // Auto-scroll: bring the lane into view if it is off-screen.
+    if (this.state.autoScrollOnChange()) {
+      this.scrollLaneIntoView(service);
+    }
+  }
+
+  /**
+   * Add `flashId` to the flashing set for 1200 ms, then remove it.
+   * The template binds `.is-flashing` on cards whose id is in this set.
+   *
+   * We defer adding the id by two rAF ticks so the DOM node re-rendered
+   * by ngx-graph (following the matrixData update that triggered this call)
+   * has committed to the layout before the CSS animation starts.  Without
+   * this deferral the animation is applied to the OLD element just before
+   * it is torn down, or to the NEW element at tick-0 before the browser
+   * has painted it — both cases cause the flash to be invisible in practice.
+   */
+  private flashCard(nodeId: string): void {
+    // First rAF: ngx-graph relayout scheduled; second rAF: paint committed.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const s = new Set(this.flashingIds());
+        s.add(nodeId);
+        this.flashingIds.set(s);
+        setTimeout(() => {
+          const next = new Set(this.flashingIds());
+          next.delete(nodeId);
+          this.flashingIds.set(next);
+        }, 1200);
+      });
+    });
+  }
+
+  /**
+   * Scroll the lane element for `service` into view if it is outside the
+   * visible viewport. Uses `data-swim-service` attributes set in the template.
+   */
+  private scrollLaneIntoView(service: string): void {
+    // CSS.escape is unavailable in jsdom (vitest); service names are safe
+    // API identifiers so a plain attribute selector is fine as a fallback.
+    const escaped = typeof CSS !== 'undefined' ? CSS.escape(service) : service;
+    const el = this.host.nativeElement.querySelector(
+      `[data-swim-service="${escaped}"]`,
+    ) as HTMLElement | null;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+    if (!inView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   /**
@@ -309,9 +480,78 @@ export class SwimlanesComponent {
         );
 
         const links = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
-        const dags = this.partitionDags(service, nodes, links);
-        return { service, dags };
+        const dags  = this.partitionDags(service, nodes, links);
+
+        // Build the collapsed vector: newest-event chain (#309).
+        // Pass `links` so the vector uses the same parent graph as the edges,
+        // regardless of which correlation predicate is active.
+        const { vectorIds, tipId } = this.buildCollapsedVector(svcEvents, nodeById, links);
+
+        return { service, dags, vectorIds, tipId };
       });
+  }
+
+  /**
+   * Compute the collapsed vector for a service lane (#309).
+   *
+   * Algorithm (spec: docs/design/views.md §Collapse / Expand):
+   *   1. tip = node with the latest `happened_at`.
+   *   2. Walk backward through the edge graph (links are source→target = parent→child;
+   *      reverse to target→[sources] for the backward walk). At a merge (multiple
+   *      incoming edges) follow the source with the newest `happened_at`.
+   *   3. Collect every node id in the chain (root→tip).
+   *
+   * Uses `links` (already built by buildEdges) instead of raw `parent_deployments`
+   * so the vector always uses the same connectivity as the rendered edges, regardless
+   * of which correlation predicate is active.
+   *
+   * Returns the set of node ids in the chain plus the tip's id.
+   */
+  private buildCollapsedVector(
+    events:  DeploymentEvent[],
+    nodeById: Map<string, DeploymentEvent>,
+    links:   NgxEdge[],
+  ): { vectorIds: Set<string>; tipId: string | null } {
+    if (!events.length) return { vectorIds: new Set(), tipId: null };
+
+    // 1. Find tip: node with the latest happened_at.
+    const tip = events.reduce((best, ev) =>
+      new Date(ev.happened_at) > new Date(best.happened_at) ? ev : best,
+    );
+    const tipId = tip.id;
+
+    // 2. Build reverse adjacency: child-id → [parent-ids] from the edge list.
+    //    Links are directed source→target (parent→child) so reversing gives us
+    //    parent lookups without touching parent_deployments at all.
+    const parents = new Map<string, string[]>();
+    for (const link of links) {
+      const existing = parents.get(link.target);
+      if (existing) {
+        existing.push(link.source);
+      } else {
+        parents.set(link.target, [link.source]);
+      }
+    }
+
+    // 3. Walk backward from tip, choosing the newest parent at each merge.
+    const chain = new Set<string>();
+    let curId: string | undefined = tipId;
+    const visited = new Set<string>();
+    while (curId && !visited.has(curId)) {
+      visited.add(curId);
+      chain.add(curId);
+      const parentIds: string[] = parents.get(curId) ?? [];
+      if (!parentIds.length) break;
+      // At a merge follow the parent with the newest happened_at.
+      curId = parentIds.reduce((bestId: string, pid: string) => {
+        const best = nodeById.get(bestId);
+        const p    = nodeById.get(pid);
+        if (!best || !p) return bestId;
+        return new Date(p.happened_at) > new Date(best.happened_at) ? pid : bestId;
+      });
+    }
+
+    return { vectorIds: chain, tipId };
   }
 
   /**

@@ -56,6 +56,10 @@ version → sha → ref → run_number
 | Hover `.ver` | All tiles | Amber-highlight all `.ver` spans and their parent `.slot`s that share the same version string. |
 | Click Matrix tile | Drawer | Open history drawer for that (service, environment) slot. Overlay + slide-in animation. History shows all 8 statuses as distinct entries (pip in status hue); `next` deployment leads the list. |
 | Click Swimlane node | Inspector | Select node (accent ring). Inspector shows effective deployment's fields first, dotted separator, then `next` group (if present). |
+| Click chevron (›) | Swimlane lane | Toggle lane collapsed ↔ expanded. Collapsed shows vector (chain of real vis-cards ending at newest event). State persists to `localStorage`. |
+| Click "Collapse/Expand all" | All swimlane lanes | Flip every lane simultaneously. Button label updates to reflect current state. |
+| Click "Auto-scroll to change" toggle | Swimlane behavior | Toggle ON/OFF. When ON + lane off-screen: "Simulate event" scrolls lane into view after event fires — in both collapsed and expanded states. Persists to `localStorage`. |
+| Click "Simulate event" | Lane tip card (any state) | Advance tip node's status, rebuild via the unified renderer, flash the tip card (`svFlash` animation) — collapsed = vector tip card, expanded = newest-event DAG node card. Scroll lane into view if auto-scroll ON and lane off-screen. |
 | Click icon button | Popover | Toggle popover open/closed. Close any other open popover first. |
 | Click field toggle | View content | Toggle field on/off in the active view. Tiles/nodes resize. Swimlanes recompute layout. |
 | Click predicate radio | Correlation picker | Single-select. Disable time-window when "explicit parent" is selected. |

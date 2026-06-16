@@ -17,6 +17,20 @@ namespace Dashboard.Shared.Configuration;
 ///         <c>Database=deployment_dashboard</c>, empty username/password.</item>
 /// </list>
 /// <para>
+/// <b>SSL mode (<c>POSTGRES_SSL_MODE</c> / <c>Postgres:SslMode</c>).</b>
+/// Resolution precedence: <c>POSTGRES_SSL_MODE</c> env var → <c>Postgres:SslMode</c> appsettings.
+/// Whitespace is treated as absent (consistent with other knobs).
+/// </para>
+/// <list type="bullet">
+///   <item>Managed-identity mode + no value configured → <c>SslMode=Require</c> appended.</item>
+///   <item>Managed-identity mode + value configured → <c>SslMode=&lt;value&gt;</c> appended.</item>
+///   <item>Password mode + no value configured → <c>SslMode</c> keyword omitted (unchanged).</item>
+///   <item>Password mode + value configured → <c>SslMode=&lt;value&gt;</c> appended.</item>
+/// </list>
+/// <para>
+/// The value is passed verbatim; Npgsql parses SSL mode case-insensitively.
+/// </para>
+/// <para>
 /// This helper is the single authoritative source for connection-string assembly.
 /// All callers — <c>Program.cs</c>, design-time EF factory, test harness — must go
 /// through it; no ad-hoc string concatenation elsewhere.
@@ -48,13 +62,19 @@ public static class PostgresConnectionString
         var database = Resolve(configuration, "POSTGRES_DB", "Postgres:Database", DefaultDatabase);
         var username = Resolve(configuration, "POSTGRES_USER", "Postgres:Username", string.Empty);
 
+        var sslMode = Resolve(configuration, "POSTGRES_SSL_MODE", "Postgres:SslMode", string.Empty);
+
         if (authMode == PostgresAuthMode.ManagedIdentity)
-            return $"Host={host};Port={port};Database={database};Username={username}";
+        {
+            var effectiveSslMode = string.IsNullOrWhiteSpace(sslMode) ? "Require" : sslMode;
+            return $"Host={host};Port={port};Database={database};Username={username};SslMode={effectiveSslMode}";
+        }
 
         // Resolved via the shared helper so auth-mode detection and connection-string
         // assembly always use the same precedence (env var → appsettings → empty).
         var password = ResolvePassword(configuration);
-        return $"Host={host};Port={port};Database={database};Username={username};Password={password}";
+        var sslSuffix = string.IsNullOrWhiteSpace(sslMode) ? string.Empty : $";SslMode={sslMode}";
+        return $"Host={host};Port={port};Database={database};Username={username};Password={password}{sslSuffix}";
     }
 
     /// <summary>

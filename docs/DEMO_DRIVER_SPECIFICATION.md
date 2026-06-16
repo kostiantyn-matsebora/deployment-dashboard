@@ -41,12 +41,12 @@ The mock server is unchanged. The demo driver supplements it for cases where a b
 |---|---|---|
 | D1 | **Node.js / TypeScript / NestJS** â€” same stack as mock. | Shares `demo/data/events.json` loader; no new runtime dependency. |
 | D2 | Location: **`frontend/demo-driver/`** | Consistent with mock's position as dev/demo tooling; follows `frontend/[application]` path convention. |
-| D3 | **Target URL configurable** via `WRITE_API_URL`. | Works against mock (`:3000`) or real backend without code change. |
+| D3 | **Target URL configurable** via `WRITE_API_URL`. | Works against mock (`:3002`) or real backend without code change. |
 | D4 | Control API prefix: **`/demo/`** (not `/api/`). | Keeps driver control surface separate from the application API namespace. |
 | D5 | **Scenario file format** reuses `demo/data/events.json` schema. | No new format; existing `events[]` + `elapsed_minutes` field is the scenario definition. |
 | D6 | `elapsed_minutes â†’ happened_at`: **`Date.now() - elapsed_minutes * 60_000`** at run time. | Matches mock loader behaviour; events land correctly relative to "now" on the target backend. |
 | D7 | **Sequential POST** with configurable inter-event delay (`EMIT_DELAY_MS`, default `0`). | `0` = bulk load (seed); `> 0` = paced emission for live demo effect. |
-| D8 | Default port **`3001`**. | Avoids collision with mock at `:3000`. |
+| D8 | Default port **`3001`**. | Avoids collision with mock at `:3002`. |
 | D9 | **Panel path `GET /demo/`** â€” NestJS serves everything under `/demo/*`. | No nginx path-stripping required; gateway proxies `location /demo/` without a trailing-slash rewrite. |
 | D10 | **Demo-driver participates in the API-driven reset choreography** as the `demo-driver` component â€” subscribes to `GET /api/control/stream`, acks `reset-initiated`, blocks its own `/demo/` surface, reports `running` on `reset-completed`. | The API orchestrates a system-wide reset (see [`reset-choreography.md`](diagrams/reset-choreography.md)); the driver is a first-class participant ("Demo Driver" in the choreography), distinct from the existing operator-triggered `POST /demo/api-reset` proxy (Â§4.5). Component id `demo-driver` matches the API's default `Reset:ExpectedComponents`. Degrades gracefully: against a target with no control stream (e.g. the mock) the subscriber fails to connect, logs, and retries â€” it never crashes the driver. |
 | G1 | **GitHub emulation lives in a SEPARATE `github-emulator` service** (`demo/github-emulator/`), not in the driver. | Per-adapter isolation â€” future ADO/Jenkins emulators become sibling services, each at its own root, with no path-prefix or port collision and no fetcher change required. |
@@ -602,7 +602,7 @@ Panel behaviour:
 | Var | Default | Purpose |
 |---|---|---|
 | `PORT` | `3001` | HTTP listen port |
-| `WRITE_API_URL` | `http://localhost:3000` | Base URL of the Write API target |
+| `WRITE_API_URL` | `http://localhost:3002` | Base URL of the Write API target |
 | `API_KEY` | `dev-secret` | Shared secret; sent as `X-Api-Key` on every ingest request **and** on `POST /api/control/events` (reset-ack / status) â€” Â§4.7. No new key needed. |
 | `CONTROL_API_KEY` | `dev-secret` | Secret for `X-Control-API-Key` on `POST /api/control/reset` (Â§4.5) **and** on the `GET /api/control/stream` subscriber (Â§4.7). No new key needed. |
 | `COMPONENT_ID` | `demo-driver` | Component identity sent as `X-Component-Id` on `POST /api/control/events` and as `?component=` on the control-stream subscription. Default matches the API's `Reset:ExpectedComponents`; overriding it will exclude the driver from ack-counting â€” change only with intent. |
@@ -666,10 +666,10 @@ npm run start:dev
 | Aspect | Spec |
 |---|---|
 | Image | Multi-stage Dockerfile in `demo/driver/`. Stage 1: `node:lts-alpine` builds TypeScript. Stage 2: `node:lts-alpine` runs the compiled output. |
-| Gateway path | Proxied by App Gateway at `location /demo/` â†’ `DEMO_DRIVER_UPSTREAM` (see [`GATEWAY_SPECIFICATION.md`](GATEWAY_SPECIFICATION.md)). |
-| SSE | `/demo/stream`, `/demo/deployments-stream`, `/demo/control-stream`, and `/demo/control-events` require the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). |
-| Port | Container listens on `PORT` (default `3001`); `DEMO_DRIVER_UPSTREAM` in the gateway is `demo-driver:3001`. |
-| Panel access | Direct: `http://localhost:3001/demo/`. Via gateway: `http://gateway/demo/`. |
+| Gateway path | Proxied by the **demo-gateway image** (`gateway/Dockerfile.demo`) at `location /demo/` â†’ `DEMO_DRIVER_UPSTREAM`. The `/demo/*` routes are absent from the production gateway image — they are activated via the `*.snippet` include mechanism only when the demo-gateway image is used (see [`GATEWAY_SPECIFICATION.md`](GATEWAY_SPECIFICATION.md) §3, §4). |
+| SSE | `/demo/stream`, `/demo/deployments-stream`, `/demo/control-stream`, and `/demo/control-events` require the same proxy SSE block as `/api/events/stream` (buffering off, `proxy_read_timeout 3600s`). The `/demo/stream` and `/demo/control-stream` SSE blocks live in `gateway/demo.snippet.template`. |
+| Port | Container listens on `PORT` (default `3001`); `DEMO_DRIVER_UPSTREAM` in the demo-gateway is `demo-driver:3001`. |
+| Panel access | Direct: `http://localhost:3001/demo/`. Via demo-gateway: `http://gateway/demo/`. |
 
 ---
 
