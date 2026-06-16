@@ -6,7 +6,7 @@ Every environment variable, grouped by concern. Source of truth: [`compose/.env.
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `DASHBOARD_VERSION` | no | `latest` | Image tag applied to all six stack images. **Set without a leading `v`** — the git tag `v0.12.1` publishes images as `0.12.1`. `latest` tracks the newest push to main. For a reproducible deploy, pin to a published release (e.g. `0.12.1`). |
+| `DASHBOARD_VERSION` | no | `latest` | Image tag applied to all six stack images. **Set without a leading `v`** — the git tag `v0.13.0` publishes images as `0.13.0`. `latest` tracks the newest push to main. For a reproducible deploy, pin to a published release (e.g. `0.13.0`). |
 
 See [Install — Pinning a release version](./install.md#pinning-a-release-version) for the full workflow, and [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md) for the release process.
 
@@ -101,3 +101,14 @@ Set by [`docker-compose.demo.yaml`](https://github.com/kostiantyn-matsebora/depl
 | `GITHUB_SIM_RATE_LIMIT` | no | `5000` | Simulated GitHub hourly request quota the emulator advertises. |
 
 Other demo vars (`WRITE_API_URL`, `FETCHER_URL`, `GITHUB_EMULATOR_URL`, `MOCK_URL`, `PORT`, `SEED_ON_STARTUP`, `SCENARIOS_DIR`) are fixed internal wiring set by the overlay and are not meant to be overridden.
+
+### Demo-gateway image vars
+
+The `demo` profile uses the `deployment-dashboard-gateway-demo` image instead of the production gateway. Two additional vars are specific to that image and are set by the demo overlay:
+
+| Var | Default (in image) | Set by demo overlay | Purpose |
+|---|---|---|---|
+| `DNS_RESOLVER` | `127.0.0.11` | `127.0.0.11` (override with `168.63.129.16` for Azure Container Apps) | DNS resolver for variable-based `proxy_pass` in the demo snippet — required because the demo-driver is an optional service. |
+| `DEMO_DRIVER_UPSTREAM` | — | `demo-driver:3001` | Demo driver upstream `host:port`. |
+
+These vars are **absent from the production gateway image** — its `NGINX_ENVSUBST_FILTER` excludes them.
