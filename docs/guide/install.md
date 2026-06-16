@@ -229,3 +229,9 @@ DASHBOARD_VERSION=0.12.1
 
 !!! info ""
     The reference target is **Azure** (≤ $30/month, container-based — [SAD §5–6](../SAD.md#5-non-functional-requirements)), but nothing is Azure-specific: every component is a standard OCI container. Terraform modules for Azure are planned (`infrastructure/`, not yet present).
+
+!!! tip "Azure Container Apps"
+    The gateway deploys to ACA unchanged — the same image used in Docker Compose. Each proxy location sets the `Host` header to the upstream FQDN so ACA's internal Envoy routes correctly; no ACA-specific config is needed.
+
+!!! note "Demo gateway image"
+    The production profiles above use `deployment-dashboard-gateway`. The **demo profile** uses a separate `deployment-dashboard-gateway-demo` image that layers `/demo/*` routing on top of the production image. Production deployments carry no demo routes or demo-driver configuration.
