@@ -104,17 +104,12 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build demo (local load for scanning)
-        uses: docker/build-push-action@v7
-        with:
-          context: gateway
-          file: gateway/Dockerfile.demo
-          push: false
-          load: true
-          tags: ${{ env.IMAGE_DEMO }}:scan
-          build-args: |
-            PROD_IMAGE=${{ env.IMAGE }}:scan
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          docker build \
+            --build-arg PROD_IMAGE=${{ env.IMAGE }}:scan \
+            -f gateway/Dockerfile.demo \
+            -t ${{ env.IMAGE_DEMO }}:scan \
+            gateway
 
       - name: Trivy scan (demo)
         uses: ./.github/actions/trivy-scan
