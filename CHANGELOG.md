@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.13.1] - 2026-06-16
+
+### Changed
+
+- **Routine dependency maintenance.** Bumped build- and runtime dependencies across the frontend and demo packages — including `form-data`, `tar`, `esbuild`/`vite`, `hono`, `jest`, and the Node base image — to pick up upstream security and bug-fix releases. No functional, API, or contract change.
+
 ## [0.13.0] - 2026-06-16
 
 ### Changed
