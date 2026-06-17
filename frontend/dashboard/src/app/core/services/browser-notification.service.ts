@@ -1,12 +1,26 @@
-import { effect, inject, Injectable } from '@angular/core';
-import { AppStateService } from './app-state.service';
+import { DestroyRef, inject, Injectable } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationPrefsService } from './notification-prefs.service';
-import { DeploymentEvent } from '../models/deployment.model';
+import { DeploymentApiService } from './deployment-api.service';
+import { DeploymentEvent, ComponentEventRecord } from '../models/deployment.model';
 
 /**
- * BrowserNotificationService — fires OS-level browser notifications for deployment events.
+ * BrowserNotificationService — fires OS-level browser notifications for deployment
+ * and component events via the raw SSE streams.
  *
  * Spec: docs/design/mockup/index.html #pop-notif, docs/EXTENSION_SPECIFICATION.md §4.3
+ *
+ * Sources:
+ *  - DeploymentApiService.streamEvents() — all 8 deployment statuses
+ *  - DeploymentApiService.streamComponentEvents() — fetcher lifecycle alerts
+ *
+ * Replay guard (SSE replays missed events on reconnect):
+ *  - Startup high-water-mark: `startedAt` is set at construction time (ISO string).
+ *    Events whose `happened_at` / `occurred_at` is strictly before this mark are
+ *    treated as replayed history and silently skipped.
+ *  - Bounded fired-ID set: the last MAX_SEEN_IDS event IDs are tracked to de-dup
+ *    any event that arrives twice within a session (network blip, duplicate delivery).
+ *    The set is pruned when it reaches the cap to prevent unbounded growth.
  *
  * Permission contract:
  *  - `Notification.requestPermission()` is called ONLY from `requestPermission()`,
@@ -14,32 +28,43 @@ import { DeploymentEvent } from '../models/deployment.model';
  *  - On subsequent events, we check `Notification.permission === 'granted'` without
  *    re-requesting; if denied we degrade silently (no console spam, no broken UI).
  *
- * Transition + de-dup:
- *  - Watches `AppStateService.lastEffectiveEvent` (effective status transitions only;
- *    context statuses pending/queued/waiting/cancelled/rejected do NOT update this signal).
- *  - De-dupes by tracking the last fired event ID so re-renders do not double-fire.
- *
  * Feature detection:
  *  - `'Notification' in window` — degrades when API is absent.
  *  - Secure context not enforced here; browser blocks requestPermission on non-HTTPS.
  *
- * Click: focuses the window and opens `run_url` in a new tab when available.
+ * Click: focuses the window and opens `run_url` / `component_url` in a new tab when
+ * available.
  */
 @Injectable({ providedIn: 'root' })
 export class BrowserNotificationService {
-  private readonly state = inject(AppStateService);
+  private readonly api   = inject(DeploymentApiService);
   private readonly prefs = inject(NotificationPrefsService);
+  private readonly destroyRef = inject(DestroyRef);
 
-  /** Last event ID for which a notification was fired or considered (de-dup guard). */
-  private lastSeenId: string | null = null;
+  /** ISO timestamp recorded at construction — events before this are SSE replays. */
+  private readonly startedAt: string = new Date().toISOString();
+
+  /** Max number of IDs retained in the de-dup set. */
+  private static readonly MAX_SEEN_IDS = 500;
+
+  /** sessionStorage key for the persisted seen-ID set. */
+  private static readonly SESSION_KEY = 'dd:notifSeenIds';
+
+  /**
+   * Bounded set of event IDs for which a notification was already fired or skipped.
+   * Persisted to sessionStorage so a page reload within the same tab session does not
+   * re-notify for events that were already processed before the reload.
+   */
+  private readonly seenIds: Set<string> = this.loadSeenIds();
 
   constructor() {
-    // React to every new effective deployment event pushed via SSE.
-    effect(() => {
-      const ev = this.state.lastEffectiveEvent();
-      if (!ev) return;
-      this.onEvent(ev);
-    });
+    this.api.streamEvents()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(ev => this.onDeploymentEvent(ev));
+
+    this.api.streamComponentEvents()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(ev => this.onComponentEvent(ev));
   }
 
   /**
@@ -71,22 +96,101 @@ export class BrowserNotificationService {
 
   // ── Private ───────────────────────────────────────────────────────────────
 
-  private onEvent(ev: DeploymentEvent): void {
-    // De-dup: the signal may re-fire with the same value on re-renders.
-    if (ev.id === this.lastSeenId) return;
-    this.lastSeenId = ev.id;
+  private onDeploymentEvent(ev: DeploymentEvent): void {
+    // Replay guard: skip events that predate this session.
+    if (ev.happened_at < this.startedAt) return;
+
+    // De-dup: skip if we've already processed this ID.
+    if (this.hasSeen(ev.id)) return;
+    this.markSeen(ev.id);
 
     if (!this.prefs.shouldNotify(ev.status, ev.service, ev.environment)) return;
     if (!this.isSupported()) return;
-    // Permission must already be granted — we never re-request here.
     if (Notification.permission !== 'granted') return;
 
-    this.fire(ev);
+    this.fireDeployment(ev);
   }
 
-  private fire(ev: DeploymentEvent): void {
+  private onComponentEvent(ev: ComponentEventRecord): void {
+    // Replay guard: skip events that predate this session.
+    if (ev.occurred_at < this.startedAt) return;
+
+    // De-dup.
+    if (this.hasSeen(ev.id)) return;
+    this.markSeen(ev.id);
+
+    if (!this.prefs.prefs().enabled) return;
+    if (!this.isSupported()) return;
+    if (Notification.permission !== 'granted') return;
+
+    // Only notify on meaningful state transitions (not routine heartbeats).
+    if (!this.isNoteworthyComponentEvent(ev)) return;
+
+    this.fireComponent(ev);
+  }
+
+  /**
+   * Returns true for component events the user should see as a notification.
+   * Currently: fetcher paused (reset in progress) or resumed (running after pause).
+   */
+  private isNoteworthyComponentEvent(ev: ComponentEventRecord): boolean {
+    return ev.state === 'paused' || ev.state === 'running';
+  }
+
+  private hasSeen(id: string): boolean {
+    return this.seenIds.has(id);
+  }
+
+  /**
+   * Add an ID to the bounded de-dup set and persist to sessionStorage.
+   * When the set reaches MAX_SEEN_IDS, prune the oldest half (FIFO approximation
+   * via iteration order of insertion into a Set).
+   */
+  private markSeen(id: string): void {
+    if (this.seenIds.size >= BrowserNotificationService.MAX_SEEN_IDS) {
+      // Delete the first (oldest) MAX_SEEN_IDS / 2 entries.
+      const pruneCount = BrowserNotificationService.MAX_SEEN_IDS / 2;
+      let pruned = 0;
+      for (const oldId of this.seenIds) {
+        this.seenIds.delete(oldId);
+        if (++pruned >= pruneCount) break;
+      }
+    }
+    this.seenIds.add(id);
+    this.persistSeenIds();
+  }
+
+  private loadSeenIds(): Set<string> {
     try {
-      const { title, body, tag } = this.buildContent(ev);
+      const raw = sessionStorage.getItem(BrowserNotificationService.SESSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          return new Set<string>(
+            (parsed as unknown[]).filter((x): x is string => typeof x === 'string'),
+          );
+        }
+      }
+    } catch {
+      // sessionStorage unavailable or malformed — start clean
+    }
+    return new Set<string>();
+  }
+
+  private persistSeenIds(): void {
+    try {
+      sessionStorage.setItem(
+        BrowserNotificationService.SESSION_KEY,
+        JSON.stringify([...this.seenIds]),
+      );
+    } catch {
+      // sessionStorage unavailable — fire-and-forget
+    }
+  }
+
+  private fireDeployment(ev: DeploymentEvent): void {
+    try {
+      const { title, body, tag } = this.buildDeploymentContent(ev);
       const notif = new Notification(title, {
         body,
         tag,
@@ -96,9 +200,7 @@ export class BrowserNotificationService {
       if (ev.run_url) {
         const runUrl = ev.run_url;
         notif.onclick = () => {
-          try {
-            window.focus();
-          } catch { /* non-fatal */ }
+          try { window.focus(); } catch { /* non-fatal */ }
           window.open(runUrl, '_blank', 'noopener,noreferrer');
           notif.close();
         };
@@ -113,13 +215,31 @@ export class BrowserNotificationService {
     }
   }
 
+  private fireComponent(ev: ComponentEventRecord): void {
+    try {
+      const { title, body, tag } = this.buildComponentContent(ev);
+      const notif = new Notification(title, {
+        body,
+        tag,
+        icon: '/assets/logo/logo.svg',
+        requireInteraction: false,
+      });
+      notif.onclick = () => {
+        try { window.focus(); } catch { /* non-fatal */ }
+        notif.close();
+      };
+    } catch {
+      // Degrade silently.
+    }
+  }
+
   /**
    * Build browser Notification title + body for a deployment event.
    *
    * Mirrors buildNotification() in frontend/extension/src/shared/notifications.ts.
    * Inlined to avoid a cross-workspace package dependency.
    */
-  private buildContent(ev: DeploymentEvent): { title: string; body: string; tag: string } {
+  private buildDeploymentContent(ev: DeploymentEvent): { title: string; body: string; tag: string } {
     const { service, environment, version, status, run_number } = ev;
     const versionLabel = version    ? ` ${version}`           : '';
     const runLabel     = run_number ? ` (run #${run_number})` : '';
@@ -162,9 +282,55 @@ export class BrowserNotificationService {
     return { title, body, tag };
   }
 
+  /** Build notification content for a component event (fetcher lifecycle). */
+  private buildComponentContent(ev: ComponentEventRecord): { title: string; body: string; tag: string } {
+    const componentId = ev.component_id ?? 'fetcher';
+    const tag         = `dd-component-${componentId}`;
+
+    let title: string;
+    let body: string;
+
+    if (ev.state === 'paused') {
+      title = 'Fetcher paused';
+      body  = `${componentId} is paused — reset in progress`;
+    } else {
+      // running
+      title = 'Fetcher resumed';
+      body  = `${componentId} is running`;
+    }
+
+    return { title, body, tag };
+  }
+
   /** Mirrors isProdLike() from the extension shared module. */
   private isProdLike(environment: string): boolean {
     const lower = environment.toLowerCase();
     return lower === 'prod' || lower === 'production' || lower.startsWith('prod-');
+  }
+
+  // ── Test helpers (package-private via type cast) ──────────────────────────
+
+  /**
+   * @internal For testing — push a deployment event directly without an active EventSource.
+   */
+  _simulateDeploymentEvent(ev: DeploymentEvent): void {
+    this.onDeploymentEvent(ev);
+  }
+
+  /**
+   * @internal For testing — push a component event directly without an active EventSource.
+   */
+  _simulateComponentEvent(ev: ComponentEventRecord): void {
+    this.onComponentEvent(ev);
+  }
+
+  /** @internal For testing — inspect current seen-ID set. */
+  _seenIdCount(): number {
+    return this.seenIds.size;
+  }
+
+  /** @internal For testing — override startup timestamp to simulate "past" or "future" events. */
+  _setStartedAt(ts: string): void {
+    (this as unknown as { startedAt: string }).startedAt = ts;
   }
 }

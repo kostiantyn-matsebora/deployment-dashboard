@@ -12,21 +12,31 @@
  *   - sseConnected liveness: signal reflects open/error, not event arrival (Fix 3)
  *   - localStorage hydrate/persist round-trip (Fix 2)
  *
+ * Notification UX (#271):
+ *   - toggleNotifEnabled → requestPermission on first enable
+ *   - toggleNotifStatus add/remove
+ *   - addNotifServiceChip adds + clears input + no duplicate
+ *   - Enter-key adds chip
+ *   - notifEnabled() drives the .has-active badge-dot class binding
+ *
  * Strategy: provide a mock AppStateService with writable signals; feed the
  * component reports directly without hitting a real EventSource.
  * NO_ERRORS_SCHEMA skips PrimeNG rendering.
  */
 import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { TestBed }                   from '@angular/core/testing';
+import { RouterModule }              from '@angular/router';
+import { vi }                        from 'vitest';
 
 import { TopbarComponent }  from './topbar.component';
 import { AppStateService }  from '../../core/services/app-state.service';
 import { ThemeService }     from '../../core/services/theme.service';
-import { NotificationPrefsService } from '../../core/services/notification-prefs.service';
+import { NotificationPrefsService, NotifPrefs } from '../../core/services/notification-prefs.service';
 import { BrowserNotificationService } from '../../core/services/browser-notification.service';
 import {
   MatrixField,
   RateLimitReport,
+  Status,
   SwimlaneField,
   Theme,
 } from '../../core/models/deployment.model';
@@ -472,5 +482,200 @@ describe('AppStateService.rateLimitMap — localStorage hydration (Fix 2)', () =
     expect(service.rateLimitMap().size).toBe(0);
 
     TestBed.resetTestingModule();
+  });
+});
+
+// ── TopbarComponent notification UX tests (#271) ─────────────────────────────
+//
+// Covers:
+//   - toggleNotifEnabled → calls requestPermission on first enable
+//   - toggleNotifStatus: add and remove a status
+//   - addNotifServiceChip: adds chip, clears input, rejects duplicate
+//   - Enter-key on service input adds chip
+//   - notifEnabled() computed: true drives .has-active on the bell button
+
+describe('TopbarComponent — notification UX (#271)', () => {
+  let component: TopbarComponent;
+  let prefsSignal: ReturnType<typeof signal<NotifPrefs>>;
+  let requestPermissionSpy: ReturnType<typeof vi.fn>;
+
+  // Build a fully functional mocked NotifPrefs so mutations are observable.
+  function buildMockPrefs(enabled = false): {
+    prefs: ReturnType<typeof signal<NotifPrefs>>;
+    updatePrefs: (patch: Partial<NotifPrefs>) => void;
+  } {
+    const s = signal<NotifPrefs>({
+      enabled,
+      statuses: ['success', 'failure'] as Status[],
+      serviceMode: 'watch-all-except',
+      serviceChips: [],
+      envMode: 'watch-all-except',
+      envChips: [],
+    });
+    const updatePrefs = (patch: Partial<NotifPrefs>) => {
+      s.set({ ...s(), ...patch });
+    };
+    return { prefs: s, updatePrefs };
+  }
+
+  beforeEach(async () => {
+    requestPermissionSpy = vi.fn().mockResolvedValue('granted' as NotificationPermission);
+
+    const { prefs, updatePrefs } = buildMockPrefs(false);
+    prefsSignal = prefs;
+
+    const mockState: Partial<AppStateService> = {
+      activeView:             signal('matrix' as const),
+      serviceFilter:          signal(''),
+      failuresOnly:           signal(false),
+      matrixVisibleFields:    signal(new Set<MatrixField>()),
+      swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
+      correlationPredicate:   signal('explicit parent' as const),
+      timeWindow:             signal('1 day' as const),
+      sseConnected:           signal(false),
+      kpi:                    signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:           signal(new Map()),
+      matrixData:             signal(null),
+      matrixColHidden:        signal(new Set<string>()),
+      matrixColOrder:         signal([] as string[]),
+      collapsedLanes:         signal(new Set<string>()),
+      autoScrollOnChange:     signal(true),
+      lastEffectiveEvent:     signal(null) as never,
+    };
+
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs: prefsSignal as never,
+      updatePrefs,
+      shouldNotify: () => false,
+    };
+
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => true,
+      requestPermission: requestPermissionSpy as unknown as () => Promise<NotificationPermission>,
+      currentPermission: 'default' as const,
+    };
+
+    const mockTheme: Partial<ThemeService> = {
+      theme: signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent, RouterModule.forRoot([])],
+      providers: [
+        { provide: AppStateService,            useValue: mockState         },
+        { provide: ThemeService,               useValue: mockTheme         },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs    },
+        { provide: BrowserNotificationService, useValue: mockNotifService  },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TopbarComponent);
+    component     = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  // ── toggleNotifEnabled ──────────────────────────────────────────────────
+
+  describe('toggleNotifEnabled()', () => {
+    it('calls requestPermission when enabling for the first time (enabled was false)', async () => {
+      expect(prefsSignal().enabled).toBe(false);
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      expect(prefsSignal().enabled).toBe(true);
+      expect(requestPermissionSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call requestPermission when disabling', async () => {
+      // First enable.
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      requestPermissionSpy.mockClear();
+      // Now disable.
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      expect(prefsSignal().enabled).toBe(false);
+      expect(requestPermissionSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── toggleNotifStatus ────────────────────────────────────────────────────
+
+  describe('toggleNotifStatus()', () => {
+    it('adds a status when it is not yet in the list', () => {
+      // Remove 'failure' to give a clean starting state.
+      priv<(s: Status) => void>(component, 'toggleNotifStatus').call(component, 'failure');
+      expect(prefsSignal().statuses).not.toContain('failure');
+
+      priv<(s: Status) => void>(component, 'toggleNotifStatus').call(component, 'pending');
+      expect(prefsSignal().statuses).toContain('pending');
+    });
+
+    it('removes a status when it is already in the list', () => {
+      // 'success' starts enabled by default in the mock prefs.
+      priv<(s: Status) => void>(component, 'toggleNotifStatus').call(component, 'success');
+      expect(prefsSignal().statuses).not.toContain('success');
+    });
+  });
+
+  // ── addNotifServiceChip ──────────────────────────────────────────────────
+
+  describe('addNotifServiceChip()', () => {
+    it('adds the chip when input is non-empty', () => {
+      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('my-service');
+      priv<() => void>(component, 'addNotifServiceChip').call(component);
+      expect(prefsSignal().serviceChips).toContain('my-service');
+    });
+
+    it('clears the input after adding', () => {
+      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('my-service');
+      priv<() => void>(component, 'addNotifServiceChip').call(component);
+      expect(priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput')()).toBe('');
+    });
+
+    it('does NOT add a duplicate chip', () => {
+      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('svc-a');
+      priv<() => void>(component, 'addNotifServiceChip').call(component);
+      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('svc-a');
+      priv<() => void>(component, 'addNotifServiceChip').call(component);
+      expect(prefsSignal().serviceChips.filter(c => c === 'svc-a')).toHaveLength(1);
+    });
+
+    it('does NOT add when input is blank', () => {
+      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('  ');
+      priv<() => void>(component, 'addNotifServiceChip').call(component);
+      expect(prefsSignal().serviceChips).toHaveLength(0);
+    });
+  });
+
+  // ── Enter key ────────────────────────────────────────────────────────────
+
+  describe('onNotifServiceKeydown() — Enter key adds chip', () => {
+    it('adds chip on Enter keydown', () => {
+      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('key-svc');
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      priv<(e: KeyboardEvent) => void>(component, 'onNotifServiceKeydown').call(component, event);
+      expect(prefsSignal().serviceChips).toContain('key-svc');
+    });
+
+    it('does NOT add chip on other key', () => {
+      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('key-svc');
+      const event = new KeyboardEvent('keydown', { key: 'a', bubbles: true });
+      priv<(e: KeyboardEvent) => void>(component, 'onNotifServiceKeydown').call(component, event);
+      expect(prefsSignal().serviceChips).toHaveLength(0);
+    });
+  });
+
+  // ── notifEnabled badge-dot ────────────────────────────────────────────────
+
+  describe('notifEnabled() computed — badge-dot class', () => {
+    it('notifEnabled() is false when prefs.enabled is false', () => {
+      expect(priv<() => boolean>(component, 'notifEnabled')()).toBe(false);
+    });
+
+    it('notifEnabled() is true after enabling', () => {
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      expect(priv<() => boolean>(component, 'notifEnabled')()).toBe(true);
+    });
   });
 });

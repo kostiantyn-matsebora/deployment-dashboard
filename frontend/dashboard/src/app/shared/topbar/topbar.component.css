@@ -1024,24 +1024,34 @@
   margin-top: 2px;
 }
 
-.notif-save-btn {
+/* ── ext-btn — shared button (mirrors .ext-btn in the mockup / extension) ── */
+.ext-btn {
   appearance: none;
-  background: rgba(var(--accent-rgb), 0.18);
-  border: 1px solid rgba(var(--accent-rgb), 0.45);
-  border-radius: 7px;
-  padding: 5px 16px;
-  color: var(--ink-0);
+  background: transparent;
+  border: 1px solid var(--glass-edge-2);
+  border-radius: var(--radius-sm);
+  padding: 5px 14px;
+  color: var(--ink-1);
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  font-weight: 600;
   cursor: pointer;
-  transition: background .15s, border-color .15s;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s, background .15s;
 }
 
-.notif-save-btn:hover {
-  background: rgba(var(--accent-rgb), 0.28);
-  border-color: rgba(var(--accent-rgb), 0.65);
+.ext-btn:hover {
+  color: var(--ink-0);
+  border-color: rgba(var(--accent-rgb), 0.5);
 }
+
+.ext-btn.is-primary {
+  background: rgba(var(--accent-rgb), 0.15);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  color: var(--ink-0);
+  font-weight: 600;
+}
+
+.ext-btn.is-primary:hover { background: rgba(var(--accent-rgb), 0.22); }
 
 /* Master toggle — emerald ON to signal "notifications live" */
 .notif-master-toggle.is-on {

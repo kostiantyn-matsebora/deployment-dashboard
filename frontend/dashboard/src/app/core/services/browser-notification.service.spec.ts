@@ -8,36 +8,58 @@
  *   - requestPermission() returns 'denied' when API is absent
  *   - Notification NOT fired when prefs.enabled is false
  *   - Notification NOT fired when permission is not 'granted'
- *   - Notification NOT fired when status not in filter
  *   - Notification fired when enabled + granted + passes filters
  *   - De-dup: same event ID does not fire twice
- *   - click-to-focus: window.focus() called on notification click
- *   - buildContent: title/body/tag for all 8 statuses (transition detection)
+ *   - Replay guard: events older than startedAt are skipped
+ *   - Bounded seenIds: set is pruned when cap is reached
+ *   - buildDeploymentContent: title/body/tag for all 8 statuses
  *   - isProdLike: prod / production / prod-xyz all match
+ *   - Component event: fires for paused/running state transitions
+ *   - Component event: skipped when prefs disabled or irrelevant state
+ *   - Component event: replay guard applies
  */
 
-import { TestBed }     from '@angular/core/testing';
-import { signal }      from '@angular/core';
+import { Subject } from 'rxjs';
+import { TestBed } from '@angular/core/testing';
 
 import { BrowserNotificationService } from './browser-notification.service';
-import { AppStateService }            from './app-state.service';
-import { NotificationPrefsService }   from './notification-prefs.service';
-import { DeploymentEvent }            from '../models/deployment.model';
+import { DeploymentApiService }        from './deployment-api.service';
+import { NotificationPrefsService }    from './notification-prefs.service';
+import {
+  ComponentEventRecord,
+  DeploymentEvent,
+} from '../models/deployment.model';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+/** Build a minimal valid DeploymentEvent whose happened_at is in the future. */
 function mkEvent(overrides: Partial<DeploymentEvent> = {}): DeploymentEvent {
   return {
-    id:           'uuid-1',
+    id:            'uuid-1',
     deployment_id: 'dep-1',
-    service:      'payments-api',
-    environment:  'prod',
-    version:      'v1.2.3',
-    status:       'success',
-    happened_at:  '2026-06-17T10:00:00Z',
-    run_url:      'https://ci.example.com/runs/42',
-    run_number:   '42',
-    actor:        'alice',
+    service:       'payments-api',
+    environment:   'prod',
+    version:       'v1.2.3',
+    status:        'success',
+    // Future timestamp — won't be filtered by the startup high-water-mark.
+    happened_at:   new Date(Date.now() + 60_000).toISOString(),
+    run_url:       'https://ci.example.com/runs/42',
+    run_number:    '42',
+    actor:         'alice',
+    ...overrides,
+  };
+}
+
+/** Build a minimal ComponentEventRecord. */
+function mkComponentEvent(overrides: Partial<ComponentEventRecord> = {}): ComponentEventRecord {
+  return {
+    id:           'cev-1',
+    component_id: 'fetcher-main',
+    event_type:   'state_change',
+    state:        'paused',
+    occurred_at:  new Date(Date.now() + 60_000).toISOString(),
+    received_at:  new Date(Date.now() + 60_000).toISOString(),
+    payload:      null,
     ...overrides,
   };
 }
@@ -50,7 +72,6 @@ function priv<T>(obj: BrowserNotificationService, key: string): T {
 // ── Notification API mock ──────────────────────────────────────────────────
 
 interface NotifMock {
-  Notification: typeof Notification;
   instances: Array<{ title: string; options: NotificationOptions; onclick: (() => void) | null }>;
   resetPermission(p: NotificationPermission): void;
 }
@@ -97,35 +118,37 @@ function removeNotifMock(): void {
 // ── Shared test setup ──────────────────────────────────────────────────────
 
 describe('BrowserNotificationService', () => {
-  let lastEffectiveEvent: ReturnType<typeof signal<DeploymentEvent | null>>;
-  let notifMock:          NotifMock;
+  let notifMock:         NotifMock;
+  let deploymentEvents$: Subject<DeploymentEvent>;
+  let componentEvents$:  Subject<ComponentEventRecord>;
 
   function createService(prefOverrides: {
     enabled?: boolean;
     statuses?: string[];
   } = {}): BrowserNotificationService {
-    // Mock AppStateService — expose only what BrowserNotificationService needs.
-    lastEffectiveEvent = signal<DeploymentEvent | null>(null);
-    const mockState: Partial<AppStateService> = {
-      lastEffectiveEvent: lastEffectiveEvent as AppStateService['lastEffectiveEvent'],
+    deploymentEvents$ = new Subject<DeploymentEvent>();
+    componentEvents$  = new Subject<ComponentEventRecord>();
+
+    const mockApi: Partial<DeploymentApiService> = {
+      streamEvents:          () => deploymentEvents$.asObservable(),
+      streamComponentEvents: () => componentEvents$.asObservable(),
     };
 
-    // Mock NotificationPrefsService with controllable shouldNotify.
     const mockPrefs: Partial<NotificationPrefsService> = {
       shouldNotify: (status, service, environment) => {
         if (prefOverrides.enabled === false) return false;
         if (prefOverrides.statuses && !prefOverrides.statuses.includes(status)) return false;
-        // Default pass-through
         void service; void environment;
-        return prefOverrides.enabled ?? true;
+        return (prefOverrides.enabled ?? true) === true;
       },
-      prefs: signal({ enabled: prefOverrides.enabled ?? true, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      prefs: (() => ({ enabled: prefOverrides.enabled ?? true, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] })) as any,
     };
 
     TestBed.configureTestingModule({
       providers: [
         BrowserNotificationService,
-        { provide: AppStateService,          useValue: mockState },
+        { provide: DeploymentApiService,     useValue: mockApi   },
         { provide: NotificationPrefsService, useValue: mockPrefs },
       ],
     });
@@ -135,11 +158,14 @@ describe('BrowserNotificationService', () => {
 
   beforeEach(() => {
     notifMock = installNotifMock('granted');
+    // Clear sessionStorage de-dup state between tests.
+    try { sessionStorage.clear(); } catch { /* ignore */ }
   });
 
   afterEach(() => {
     removeNotifMock();
     TestBed.resetTestingModule();
+    try { sessionStorage.clear(); } catch { /* ignore */ }
   });
 
   // ── isSupported ──────────────────────────────────────────────────────────
@@ -201,8 +227,8 @@ describe('BrowserNotificationService', () => {
 
   describe('notification suppressed when prefs.enabled is false', () => {
     it('does not construct a Notification when enabled is false', () => {
-      const svc = createService({ enabled: false });
-      lastEffectiveEvent.set(mkEvent());
+      createService({ enabled: false });
+      deploymentEvents$.next(mkEvent());
       expect(notifMock.instances).toHaveLength(0);
     });
   });
@@ -212,15 +238,37 @@ describe('BrowserNotificationService', () => {
   describe('notification suppressed without granted permission', () => {
     it('does not fire when permission is denied', () => {
       notifMock.resetPermission('denied');
-      const svc = createService({ enabled: true });
-      lastEffectiveEvent.set(mkEvent());
+      createService({ enabled: true });
+      deploymentEvents$.next(mkEvent());
       expect(notifMock.instances).toHaveLength(0);
     });
 
-    it('does not fire when permission is default (not yet requested)', () => {
+    it('does not fire when permission is default', () => {
       notifMock.resetPermission('default');
-      const svc = createService({ enabled: true });
-      lastEffectiveEvent.set(mkEvent());
+      createService({ enabled: true });
+      deploymentEvents$.next(mkEvent());
+      expect(notifMock.instances).toHaveLength(0);
+    });
+  });
+
+  // ── Replay guard ──────────────────────────────────────────────────────────
+
+  describe('replay guard', () => {
+    it('skips deployment events whose happened_at is before service startedAt', () => {
+      createService({ enabled: true });
+      deploymentEvents$.next(mkEvent({ id: 'old-1', happened_at: '2020-01-01T00:00:00Z' }));
+      expect(notifMock.instances).toHaveLength(0);
+    });
+
+    it('fires deployment events whose happened_at is after service startedAt', () => {
+      createService({ enabled: true });
+      deploymentEvents$.next(mkEvent({ id: 'new-1' })); // future timestamp from mkEvent
+      expect(notifMock.instances).toHaveLength(1);
+    });
+
+    it('skips component events whose occurred_at is before startedAt', () => {
+      createService({ enabled: true });
+      componentEvents$.next(mkComponentEvent({ id: 'cev-old', occurred_at: '2020-01-01T00:00:00Z' }));
       expect(notifMock.instances).toHaveLength(0);
     });
   });
@@ -228,29 +276,23 @@ describe('BrowserNotificationService', () => {
   // ── Notification fired correctly ───────────────────────────────────────────
 
   describe('notification fires when enabled + granted + passes filters', () => {
-    it('constructs a Notification on a qualifying event', async () => {
-      notifMock.resetPermission('granted');
-      const svc = createService({ enabled: true });
-      lastEffectiveEvent.set(mkEvent({ status: 'success' }));
-      await TestBed.flushEffects();
-      expect(notifMock.instances.length).toBeGreaterThanOrEqual(1);
+    it('constructs a Notification on a qualifying deployment event', () => {
+      createService({ enabled: true });
+      deploymentEvents$.next(mkEvent({ status: 'success', id: 'fire-1' }));
+      expect(notifMock.instances).toHaveLength(1);
     });
 
-    it('notification title contains service and environment', async () => {
-      notifMock.resetPermission('granted');
+    it('notification title contains service and environment', () => {
       createService({ enabled: true });
-      lastEffectiveEvent.set(mkEvent({ service: 'checkout', environment: 'staging' }));
-      await TestBed.flushEffects();
-      expect(notifMock.instances.length).toBeGreaterThanOrEqual(1);
+      deploymentEvents$.next(mkEvent({ service: 'checkout', environment: 'staging', id: 'fire-2' }));
+      expect(notifMock.instances).toHaveLength(1);
       expect(notifMock.instances[0].title).toContain('checkout');
       expect(notifMock.instances[0].title).toContain('staging');
     });
 
-    it('notification body contains version and run number', async () => {
-      notifMock.resetPermission('granted');
+    it('notification body contains version and run number', () => {
       createService({ enabled: true });
-      lastEffectiveEvent.set(mkEvent({ version: 'v3.0.0', run_number: '99' }));
-      await TestBed.flushEffects();
+      deploymentEvents$.next(mkEvent({ version: 'v3.0.0', run_number: '99', id: 'fire-3' }));
       expect(notifMock.instances[0].options.body).toContain('v3.0.0');
       expect(notifMock.instances[0].options.body).toContain('run #99');
     });
@@ -259,36 +301,53 @@ describe('BrowserNotificationService', () => {
   // ── De-dup: same event ID does not double-fire ─────────────────────────────
 
   describe('de-duplication', () => {
-    it('does not fire twice for the same event ID', async () => {
-      notifMock.resetPermission('granted');
-      const svc = createService({ enabled: true });
+    it('does not fire twice for the same event ID', () => {
+      createService({ enabled: true });
       const ev = mkEvent({ id: 'same-uuid' });
-      lastEffectiveEvent.set(ev);
-      await TestBed.flushEffects();
-      // Simulate signal re-fire with same value (Angular may re-run effects).
-      priv<(ev: DeploymentEvent) => void>(svc, 'onEvent').call(svc, ev);
+      deploymentEvents$.next(ev);
+      deploymentEvents$.next(ev); // duplicate delivery
       expect(notifMock.instances).toHaveLength(1);
     });
 
-    it('fires for a second event with a different ID', async () => {
-      notifMock.resetPermission('granted');
+    it('fires for a second event with a different ID', () => {
       createService({ enabled: true });
-      lastEffectiveEvent.set(mkEvent({ id: 'uuid-a', status: 'success' }));
-      await TestBed.flushEffects();
-      lastEffectiveEvent.set(mkEvent({ id: 'uuid-b', status: 'failure' }));
-      await TestBed.flushEffects();
-      // Two distinct events → two notifications (one per event ID).
+      deploymentEvents$.next(mkEvent({ id: 'uuid-a', status: 'success' }));
+      deploymentEvents$.next(mkEvent({ id: 'uuid-b', status: 'failure' }));
       expect(notifMock.instances).toHaveLength(2);
     });
   });
 
-  // ── buildContent — title / body / tag for all statuses ────────────────────
+  // ── Bounded seenIds set ───────────────────────────────────────────────────
 
-  describe('buildContent()', () => {
+  describe('bounded seenIds', () => {
+    it('prunes the set when MAX_SEEN_IDS is exceeded and continues firing', () => {
+      const svc = createService({ enabled: true });
+      const MAX = 500; // matches BrowserNotificationService.MAX_SEEN_IDS
+
+      // Fire MAX+1 events — the (MAX+1)th triggers pruning because markSeen
+      // checks `seenIds.size >= MAX` BEFORE adding, which is true at size=MAX.
+      for (let i = 0; i <= MAX; i++) {
+        deploymentEvents$.next(mkEvent({ id: `fill-${i}` }));
+      }
+      expect(notifMock.instances).toHaveLength(MAX + 1);
+
+      // The seenIds set should have been pruned to approximately MAX/2.
+      const seenSize = priv<Set<string>>(svc, 'seenIds').size;
+      expect(seenSize).toBeLessThan(MAX);
+
+      // Firing one more after pruning still works.
+      deploymentEvents$.next(mkEvent({ id: 'after-prune' }));
+      expect(notifMock.instances).toHaveLength(MAX + 2);
+    });
+  });
+
+  // ── buildDeploymentContent — title / body / tag for all statuses ──────────
+
+  describe('buildDeploymentContent()', () => {
     function build(ev: Partial<DeploymentEvent>): { title: string; body: string; tag: string } {
       const svc = createService({ enabled: true });
       return priv<(ev: DeploymentEvent) => { title: string; body: string; tag: string }>(
-        svc, 'buildContent',
+        svc, 'buildDeploymentContent',
       ).call(svc, mkEvent(ev));
     }
 
@@ -372,5 +431,43 @@ describe('BrowserNotificationService', () => {
     it('does NOT match "staging"', () => expect(isProd('staging')).toBe(false));
     it('does NOT match "dev"', ()     => expect(isProd('dev')).toBe(false));
     it('does NOT match "preprod"', () => expect(isProd('preprod')).toBe(false));
+  });
+
+  // ── Component event notifications ─────────────────────────────────────────
+
+  describe('component event notifications', () => {
+    it('fires a notification when fetcher transitions to paused', () => {
+      createService({ enabled: true });
+      componentEvents$.next(mkComponentEvent({ id: 'cev-paused', state: 'paused' }));
+      expect(notifMock.instances).toHaveLength(1);
+      expect(notifMock.instances[0].title).toContain('Fetcher paused');
+    });
+
+    it('fires a notification when fetcher transitions to running', () => {
+      createService({ enabled: true });
+      componentEvents$.next(mkComponentEvent({ id: 'cev-running', state: 'running' }));
+      expect(notifMock.instances).toHaveLength(1);
+      expect(notifMock.instances[0].title).toContain('Fetcher resumed');
+    });
+
+    it('does NOT fire for component events when master prefs are disabled', () => {
+      createService({ enabled: false });
+      componentEvents$.next(mkComponentEvent({ id: 'cev-disabled' }));
+      expect(notifMock.instances).toHaveLength(0);
+    });
+
+    it('does NOT fire for unknown/irrelevant component event states', () => {
+      createService({ enabled: true });
+      componentEvents$.next(mkComponentEvent({ id: 'cev-heartbeat', state: 'heartbeat' }));
+      expect(notifMock.instances).toHaveLength(0);
+    });
+
+    it('de-dups component events by ID', () => {
+      createService({ enabled: true });
+      const cev = mkComponentEvent({ id: 'cev-dup', state: 'paused' });
+      componentEvents$.next(cev);
+      componentEvents$.next(cev); // duplicate
+      expect(notifMock.instances).toHaveLength(1);
+    });
   });
 });
