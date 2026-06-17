@@ -303,31 +303,64 @@ public sealed class BackfillRunnerV2Tests
 
     // ── F1: no-progress stop ─────────────────────────────────────────────────
 
+    /// <summary>
+    /// Stall-stop via GENUINE no-data deployments (unknown service), not already-full slots.
+    /// Covers the stall mechanism itself — NOT the #349 starvation regression (that is
+    /// <see cref="StarvationRegression_QuietServiceIsNotStarvedByBusyService"/>).
+    ///
+    /// Setup: TWO known services — "Deploy API" (has deploy 1, fills slot) and "Deploy Worker"
+    /// (has ZERO deployments). This keeps filled.Count (1) &lt; allServiceNames.Count (2) for
+    /// the entire scan, so the all-slots-full short-circuit (#349) NEVER fires.
+    ///
+    /// Deploys 2-22 resolve to "Unknown Service" (not in any workflow), so each one genuinely
+    /// increments consecutiveNoProgress. After 20 hits (deploys 2-21) the stall counter reaches
+    /// StallWindow and the scan breaks — deploy 22 is never reached.
+    ///
+    /// CountingFakeGithubHandler is used so we can assert that the stall path (NOT the
+    /// short-circuit) is what stops the scan: deploy 22's status URL must never be fetched.
+    /// </summary>
     [Fact]
-    public async Task NoProgressStop_HaltsAfterStallWindow()
+    public async Task NoProgressStop_HaltsAfterStallWindow_ViaUnknownService()
     {
-        // One service (depth=1), then 25 more deployments for unknown/already-filled service.
-        // Scanning should stop after the 1 kept + StallWindow=20 consecutive no-progress.
+        // deploy 1 → known service "Deploy API", fills depth=1 slot.
+        // "Deploy Worker" is a second registered workflow with ZERO deployments;
+        //   this keeps filled.Count < allServiceNames.Count so the all-slots-full
+        //   short-circuit does not fire.
+        // deploys 2-22 → their runs resolve to "Unknown Service" (not in either workflow) →
+        //   each bumps consecutiveNoProgress; after 20 hits the scan must stop.
+        // deploy 22 must NEVER be reached (stall fires after deploys 2-21).
+        const long unknownRunBase = 200L;
         var keptDeploy = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
-        var extraDeploys = Enumerable.Range(2, 25)
+
+        // 21 unknown-service deployments (only 20 are needed to hit StallWindow; #22 proves stop).
+        var unknownDeploys = Enumerable.Range(2, 21)
             .Select(i => MakeDeployment(id: i, env: "prod", daysAgo: i))
             .ToList();
 
         var allDeploys = new List<GhDeployment> { keptDeploy };
-        allDeploys.AddRange(extraDeploys);
+        allDeploys.AddRange(unknownDeploys);
 
         var statusesById = new Dictionary<long, List<GhDeploymentStatus>>
         {
             [1] = [MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24)],
         };
-        // All extra deploys also have status for same service (already at depth=1 event)
-        foreach (var d in extraDeploys)
-            statusesById[d.Id] = [MakeStatus(deployId: d.Id, state: "success", runId: RunId + d.Id, hoursAgo: (int)(d.Id * 24))];
+        // Each unknown deploy has a success status (so statuses ARE fetched), but the
+        // run resolves to "Unknown Service" which is NOT in allServiceNames.
+        foreach (var d in unknownDeploys)
+            statusesById[d.Id] = [MakeStatus(deployId: d.Id, state: "success", runId: unknownRunBase + d.Id, hoursAgo: (int)(d.Id * 24))];
 
-        // Register the same run for all extra deployments (same service, so they all hit
-        // the "already filled" branch and increment consecutiveNoProgress).
+        // Register TWO workflows: "Deploy API" (has deploy 1) + "Deploy Worker" (zero deploys).
+        // Two workflows → allServiceNames.Count == 2; only 1 slot ever fills (Deploy API) →
+        // filled.Count stays at 1 < 2, so the all-slots-full short-circuit never fires.
+        var workerWorkflow = new GhWorkflow
+        {
+            Id = 2,
+            Name = "Deploy Worker",
+            Path = ".github/workflows/deploy-worker.yml",
+            State = "active",
+        };
         var urlMap = BuildUrlMap(
-            workflows: [MakeWorkflow("Deploy API")],
+            workflows: [MakeWorkflow("Deploy API"), workerWorkflow],
             environments: ["prod"],
             deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
             {
@@ -336,20 +369,345 @@ public sealed class BackfillRunnerV2Tests
             statusesById: statusesById,
             workflowRunId: RunId);
 
-        // Add run metadata for extra deploys (they all resolve to same service).
-        for (var i = 2; i <= 26; i++)
+        // Unknown deploys' runs reference "Unknown Service" (not in any active workflow),
+        // so service resolution returns a name not in allServiceNames → genuinely increments
+        // consecutiveNoProgress each iteration.
+        for (var i = 2; i <= 22; i++)
         {
-            urlMap[$"/repos/{Owner}/{Repo}/actions/runs/{RunId + i}"] =
-                new GhWorkflowRun { Id = RunId + i, Name = "Deploy API", Path = ".github/workflows/deploy.yml", HeadSha = "abc" };
+            urlMap[$"/repos/{Owner}/{Repo}/actions/runs/{unknownRunBase + i}"] =
+                new GhWorkflowRun { Id = unknownRunBase + i, Name = "Unknown Service", Path = ".github/workflows/unknown.yml", HeadSha = "abc" };
         }
+
+        var handler = new CountingFakeGithubHandler(urlMap);
+        var (runner, _) = BuildRunner(handler, depth: 1);
+        var (events, _) = await DrainAsync(runner);
+
+        // Only the kept deploy's event is emitted.
+        Assert.Single(events);
+        Assert.Equal("gh-deploy-1", events[0].DeploymentId);
+
+        // The scan must have stopped before fetching statuses for deploy 22 (the 21st unknown).
+        // StallWindow=20: after deploys 2-21 (20 unknowns) the counter reaches 20 and the loop
+        // breaks BEFORE processing deploy 22 — via the stall path, not the short-circuit.
+        var statusUrlForDeploy22 = $"/repos/{Owner}/{Repo}/deployments/22/statuses";
+        Assert.DoesNotContain(handler.Calls, c => c.StartsWith(statusUrlForDeploy22));
+    }
+
+    // ── #349 all-slots-full short-circuit: scan stops at saturation ───────────
+
+    /// <summary>
+    /// Guards the all-slots-full short-circuit added for issue #349 (F13).
+    ///
+    /// Setup: one env ("prod"), two known services both filled to depth=1.
+    ///   - Deploy 1: "Deploy API" — fills its slot.
+    ///   - Deploy 2: "Deploy Worker" — fills its slot.
+    ///   → filled.Count (2) == allServiceNames.Count (2) and all values >= depth.
+    ///   - Deploy 3 (post-saturation): "Deploy API" again, still in-window.
+    ///
+    /// Assert: the scan stops at saturation before fetching deploy 3's statuses.
+    /// The all-slots-full break fires AFTER deploy 2, so deploy 3's status URL
+    /// (/deployments/3/statuses) is never called.
+    ///
+    /// Also asserts kept event count == 2 (one per filled slot).
+    /// </summary>
+    [Fact]
+    public async Task AllSlotsFull_ScanStopsAtSaturation()
+    {
+        var apiWorkflow = new GhWorkflow
+        {
+            Id = 1,
+            Name = "Deploy API",
+            Path = ".github/workflows/deploy-api.yml",
+            State = "active",
+        };
+        var workerWorkflow = new GhWorkflow
+        {
+            Id = 2,
+            Name = "Deploy Worker",
+            Path = ".github/workflows/deploy-worker.yml",
+            State = "active",
+        };
+
+        const long apiRunId = 100L;
+        const long workerRunId = 200L;
+        const long extraRunId = 300L;
+
+        // Deploy 1: "Deploy API" (fills slot).
+        // Deploy 2: "Deploy Worker" (fills slot → all slots full).
+        // Deploy 3: "Deploy API" again — post-saturation; must NEVER be status-fetched.
+        var deploy1 = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
+        var deploy2 = MakeDeployment(id: 2, env: "prod", daysAgo: 2);
+        var deploy3 = MakeDeployment(id: 3, env: "prod", daysAgo: 3);
+
+        var urlMap = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            [$"/repos/{Owner}/{Repo}/actions/workflows"] = new GhWorkflowListResponse
+            {
+                Workflows = [apiWorkflow, workerWorkflow],
+            },
+            [$"/repos/{Owner}/{Repo}/environments"] = new GhEnvironmentListResponse
+            {
+                Environments = [new GhEnvironment { Name = "prod" }],
+            },
+            [$"/repos/{Owner}/{Repo}/deployments?environment=prod"] =
+                new List<GhDeployment> { deploy1, deploy2, deploy3 },
+            [$"/repos/{Owner}/{Repo}/deployments/1/statuses"] =
+                new List<GhDeploymentStatus> { MakeStatus(deployId: 1, state: "success", runId: apiRunId, hoursAgo: 24) },
+            [$"/repos/{Owner}/{Repo}/deployments/2/statuses"] =
+                new List<GhDeploymentStatus> { MakeStatus(deployId: 2, state: "success", runId: workerRunId, hoursAgo: 48) },
+            [$"/repos/{Owner}/{Repo}/deployments/3/statuses"] =
+                new List<GhDeploymentStatus> { MakeStatus(deployId: 3, state: "success", runId: extraRunId, hoursAgo: 72) },
+            [$"/repos/{Owner}/{Repo}/actions/runs/{apiRunId}"] =
+                new GhWorkflowRun { Id = apiRunId, Name = "Deploy API", Path = ".github/workflows/deploy-api.yml", HeadSha = "abc" },
+            [$"/repos/{Owner}/{Repo}/actions/runs/{workerRunId}"] =
+                new GhWorkflowRun { Id = workerRunId, Name = "Deploy Worker", Path = ".github/workflows/deploy-worker.yml", HeadSha = "abc" },
+            [$"/repos/{Owner}/{Repo}/actions/runs/{extraRunId}"] =
+                new GhWorkflowRun { Id = extraRunId, Name = "Deploy API", Path = ".github/workflows/deploy-api.yml", HeadSha = "abc" },
+            [$"/repos/{Owner}/{Repo}/contents/.github/workflows/deploy-api.yml"] = new GhWorkflowFileContent
+            {
+                Content = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("""
+                    name: Deploy API
+                    jobs:
+                      deploy-prod:
+                        environment: prod
+                        runs-on: ubuntu-latest
+                        steps: []
+                    """)),
+                Encoding = "base64",
+            },
+            [$"/repos/{Owner}/{Repo}/contents/.github/workflows/deploy-worker.yml"] = new GhWorkflowFileContent
+            {
+                Content = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("""
+                    name: Deploy Worker
+                    jobs:
+                      deploy-prod:
+                        environment: prod
+                        runs-on: ubuntu-latest
+                        steps: []
+                    """)),
+                Encoding = "base64",
+            },
+        };
+
+        var handler = new CountingFakeGithubHandler(urlMap);
+        var (runner, _) = BuildRunner(handler, depth: 1);
+        var (events, _) = await DrainAsync(runner);
+
+        // Both filled slots must contribute exactly one event each.
+        Assert.Equal(2, events.Count);
+        var deploymentIds = events.Select(e => e.DeploymentId).ToHashSet();
+        Assert.Contains("gh-deploy-1", deploymentIds);
+        Assert.Contains("gh-deploy-2", deploymentIds);
+
+        // Deploy 3's status URL must never have been fetched: the all-slots-full short-circuit
+        // fires after deploy 2 fills the last slot, before the loop processes deploy 3.
+        var statusUrlForDeploy3 = $"/repos/{Owner}/{Repo}/deployments/3/statuses";
+        Assert.DoesNotContain(handler.Calls, c => c.StartsWith(statusUrlForDeploy3));
+    }
+
+    // ── #349 regression: busy service must NOT starve a quiet service ─────────
+
+    /// <summary>
+    /// Starvation regression guard for issue #349.
+    ///
+    /// Setup: one env ("prod") with TWO services via distinct workflows.
+    ///   - "Deploy API"    (busy):  depth+20 = 21 deployments, all newest-first, all filling
+    ///                              the slot immediately after the first one is processed.
+    ///   - "Deploy Worker" (quiet): 1 deployment appearing AFTER the 21 busy ones in page
+    ///                              order, still within the cutoff window.
+    ///
+    /// Under the OLD code: each already-full "Deploy API" deployment bumped consecutiveNoProgress
+    /// → after 20 hits the scan stopped, "Deploy Worker" never reached → starvation.
+    ///
+    /// Under the NEW code: already-full slots are skipped via `continue` WITHOUT bumping the
+    /// counter → the scan pages past all 21 "Deploy API" deployments and reaches "Deploy Worker".
+    ///
+    /// This test MUST FAIL on old code and PASS on new code.
+    /// </summary>
+    [Fact]
+    public async Task StarvationRegression_QuietServiceIsNotStarvedByBusyService()
+    {
+        // Two distinct workflows, one per service.
+        var apiWorkflow = new GhWorkflow
+        {
+            Id = 1,
+            Name = "Deploy API",
+            Path = ".github/workflows/deploy-api.yml",
+            State = "active",
+        };
+        var workerWorkflow = new GhWorkflow
+        {
+            Id = 2,
+            Name = "Deploy Worker",
+            Path = ".github/workflows/deploy-worker.yml",
+            State = "active",
+        };
+
+        // "Deploy API" gets 21 deployments (id 1-21); depth=1, so slot is filled after id=1.
+        // Deploys 2-21 are already-full → skipped silently (no stall bump) under new code.
+        const long apiRunBase = 100L;
+        var apiDeploys = Enumerable.Range(1, 21)
+            .Select(i => MakeDeployment(id: i, env: "prod", daysAgo: i))
+            .ToList();
+
+        // "Deploy Worker" gets 1 deployment (id 22), appearing after the 21 API ones.
+        const long workerRunId = 500L;
+        var workerDeploy = MakeDeployment(id: 22, env: "prod", daysAgo: 22);
+
+        var allDeploys = new List<GhDeployment>();
+        allDeploys.AddRange(apiDeploys);
+        allDeploys.Add(workerDeploy);
+
+        var statusesById = new Dictionary<long, List<GhDeploymentStatus>>();
+        foreach (var d in apiDeploys)
+            statusesById[d.Id] = [MakeStatus(deployId: d.Id, state: "success", runId: apiRunBase + d.Id, hoursAgo: (int)(d.Id * 24))];
+        statusesById[22] = [MakeStatus(deployId: 22, state: "success", runId: workerRunId, hoursAgo: 22 * 24)];
+
+        // Build a URL map with both workflows registered.
+        var yamlApiBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("""
+            name: Deploy API
+            jobs:
+              deploy-prod:
+                environment: prod
+                runs-on: ubuntu-latest
+                steps: []
+            """));
+        var yamlWorkerBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("""
+            name: Deploy Worker
+            jobs:
+              deploy-prod:
+                environment: prod
+                runs-on: ubuntu-latest
+                steps: []
+            """));
+
+        var urlMap = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            [$"/repos/{Owner}/{Repo}/actions/workflows"] = new GhWorkflowListResponse
+            {
+                Workflows = [apiWorkflow, workerWorkflow],
+            },
+            [$"/repos/{Owner}/{Repo}/environments"] = new GhEnvironmentListResponse
+            {
+                Environments = [new GhEnvironment { Name = "prod" }],
+            },
+            [$"/repos/{Owner}/{Repo}/deployments?environment=prod"] = allDeploys,
+            [$"/repos/{Owner}/{Repo}/contents/.github/workflows/deploy-api.yml"] = new GhWorkflowFileContent
+            {
+                Content = yamlApiBase64,
+                Encoding = "base64",
+            },
+            [$"/repos/{Owner}/{Repo}/contents/.github/workflows/deploy-worker.yml"] = new GhWorkflowFileContent
+            {
+                Content = yamlWorkerBase64,
+                Encoding = "base64",
+            },
+        };
+
+        // Register run metadata for all API deployments.
+        foreach (var d in apiDeploys)
+            urlMap[$"/repos/{Owner}/{Repo}/actions/runs/{apiRunBase + d.Id}"] =
+                new GhWorkflowRun { Id = apiRunBase + d.Id, Name = "Deploy API", Path = ".github/workflows/deploy-api.yml", HeadSha = "abc" };
+
+        // Register run metadata for the Worker deployment.
+        urlMap[$"/repos/{Owner}/{Repo}/actions/runs/{workerRunId}"] =
+            new GhWorkflowRun { Id = workerRunId, Name = "Deploy Worker", Path = ".github/workflows/deploy-worker.yml", HeadSha = "abc" };
+
+        // Register all statuses.
+        foreach (var (id, statuses) in statusesById)
+            urlMap[$"/repos/{Owner}/{Repo}/deployments/{id}/statuses"] = statuses;
 
         var handler = new FakeGithubHandler(urlMap);
         var (runner, _) = BuildRunner(handler, depth: 1);
         var (events, _) = await DrainAsync(runner);
 
-        // Only 1 event kept (depth=1 status event). Scanning stopped after stall window.
+        // Both services must have contributed an event.
+        var deploymentIds = events.Select(e => e.DeploymentId).ToHashSet();
+        Assert.Contains("gh-deploy-1", deploymentIds);   // "Deploy API" — newest, fills slot
+        Assert.Contains("gh-deploy-22", deploymentIds);  // "Deploy Worker" — was starved under old code
+
+        // Verify service names so we confirm the quiet slot was actually filled.
+        var serviceNames = events.Select(e => e.Service).ToHashSet();
+        Assert.Contains("Deploy API", serviceNames);
+        Assert.Contains("Deploy Worker", serviceNames);
+    }
+
+    // ── #349 window-respect: cutoff must short-circuit before status fetch ─────
+
+    /// <summary>
+    /// Window-respect constraint: when a quiet (service, env) slot has fewer than depth
+    /// deployments inside the cutoff window, the scan must NOT page past the cutoff to top
+    /// up the slot. The age-cutoff break (`if (deployment.CreatedAt &lt; ctx.Cutoff) break`)
+    /// is the hard boundary.
+    ///
+    /// Setup: "Deploy Worker" has 1 in-window deployment (id 1) and 1 older-than-cutoff
+    /// deployment (id 2). depth=2. Assert:
+    ///   (a) Only 1 event emitted (the in-window one).
+    ///   (b) No status fetch ever issued for deployment id 2 (the out-of-window one).
+    /// </summary>
+    [Fact]
+    public async Task WindowRespect_CutoffBreaks_BeforeStatusFetchForOlderDeployment()
+    {
+        // BackfillMaxAge=30d → cutoff = now-30d. Place deploy 2 just beyond that boundary.
+        var inWindow = MakeDeployment(id: 1, env: "staging", daysAgo: 1);
+        // daysAgo=31 puts CreatedAt just past the 30-day BackfillMaxAge cutoff.
+        var outOfWindow = MakeDeployment(id: 2, env: "staging", daysAgo: 31);
+
+        var statusInWindow = MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24);
+
+        // Status for the out-of-window deployment — must NEVER be fetched.
+        var statusOutOfWindow = MakeStatus(deployId: 2, state: "success", runId: RunId + 1, hoursAgo: 31 * 24);
+
+        var urlMap = BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy Worker")],
+            environments: ["staging"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["staging"] = [inWindow, outOfWindow],
+            },
+            statusesById: new Dictionary<long, List<GhDeploymentStatus>>
+            {
+                [1] = [statusInWindow],
+                [2] = [statusOutOfWindow],
+            },
+            workflowRunId: RunId);
+
+        // Override the workflow YAML to use "Deploy Worker" as the name.
+        var workerYamlBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("""
+            name: Deploy Worker
+            jobs:
+              deploy-staging:
+                environment: staging
+                runs-on: ubuntu-latest
+                steps: []
+            """));
+        urlMap[$"/repos/{Owner}/{Repo}/contents/.github/workflows/deploy.yml"] = new GhWorkflowFileContent
+        {
+            Content = workerYamlBase64,
+            Encoding = "base64",
+        };
+        // Override the workflow list so "Deploy Worker" is the active service name.
+        urlMap[$"/repos/{Owner}/{Repo}/actions/workflows"] = new GhWorkflowListResponse
+        {
+            Workflows =
+            [
+                new GhWorkflow { Id = 1, Name = "Deploy Worker", Path = ".github/workflows/deploy.yml", State = "active" },
+            ],
+        };
+
+        var handler = new CountingFakeGithubHandler(urlMap);
+        var (runner, _) = BuildRunner(handler, depth: 2);
+        var (events, _) = await DrainAsync(runner);
+
+        // (a) Only 1 event: the in-window deployment (slot gets fewer than depth — correct).
+        Assert.NotEmpty(events);
         Assert.Single(events);
         Assert.Equal("gh-deploy-1", events[0].DeploymentId);
+
+        // (b) The out-of-window deployment's status URL must never have been fetched.
+        //     The cutoff break fires on deployment.CreatedAt before FetchAllStatusesAsync is called.
+        var statusUrlForDeploy2 = $"/repos/{Owner}/{Repo}/deployments/2/statuses";
+        Assert.DoesNotContain(handler.Calls, c => c.StartsWith(statusUrlForDeploy2));
     }
 
     // ── F1: YAML fetched only for kept deployments ───────────────────────────
