@@ -325,7 +325,7 @@ export class AppController {
 
   @Get('api/version')
   version() {
-    return { version: '0.13.1' };
+    return { version: 'v0.13.1' };
   }
 
   @Get('healthz')

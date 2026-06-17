@@ -27,6 +27,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Default dev/local/test version; Docker release build overrides via -p:Version=<semver>. -->
     <Version>0.0.0-dev</Version>
+    <!-- Prevent the SDK from appending +<commit-sha> to InformationalVersion automatically.
+         Release builds stamp the exact value via -p:InformationalVersion=<value>. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
 </Project>

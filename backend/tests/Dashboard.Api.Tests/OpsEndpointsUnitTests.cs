@@ -175,63 +175,60 @@ public sealed class OpsEndpointsUnitTests : IAsyncLifetime
     // ── /api/version — endpoint ───────────────────────────────────────────────
 
     [Fact]
-    public async Task GetVersion_ReturnsVersionFromProvider()
+    public async Task GetVersion_ReleaseStyle_EchoedVerbatim()
     {
-        // The stub provider returns "1.2.3"; the endpoint must echo it unchanged.
-        await using var factory = new VersionTestFactory(version: "1.2.3");
+        // A release-stamped value ("v1.2.3") must be returned exactly as provided.
+        await using var factory = new VersionTestFactory(version: "v1.2.3");
         using var client = factory.CreateClient();
 
         var res = await client.GetAsync("/api/version");
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        Assert.Equal("1.2.3", body.GetProperty("version").GetString());
+        Assert.Equal("v1.2.3", body.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task GetVersion_CiStyleWithPlus_EchoedVerbatim()
+    {
+        // A CI build value containing '+' (e.g. "main+abc1234") must survive the round-trip
+        // unchanged — the provider no longer strips the +<metadata> suffix.
+        await using var factory = new VersionTestFactory(version: "main+abc1234");
+        using var client = factory.CreateClient();
+
+        var res = await client.GetAsync("/api/version");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal("main+abc1234", body.GetProperty("version").GetString());
     }
 
     // ── AssemblyAppVersionProvider — unit ─────────────────────────────────────
 
     [Fact]
-    public void AssemblyAppVersionProvider_WhenAttributeAbsent_ReturnsFallback()
+    public void AssemblyAppVersionProvider_ReturnsNonEmpty()
     {
-        // When no InformationalVersion attribute exists on the entry assembly (or it is empty),
-        // the provider must return the sentinel "0.0.0-dev" fallback.
-        // The test runner's entry assembly is unlikely to carry a recognized version attribute;
-        // this test verifies the fallback branch by checking the contract directly.
+        // The real provider must always return a non-empty string (either the baked-in
+        // InformationalVersion or the "0.0.0-dev" fallback).
         var provider = new AssemblyAppVersionProvider();
-        // Provider must return a non-empty string; the real guard is the fallback below.
         Assert.False(string.IsNullOrEmpty(provider.Version));
-    }
-
-    [Theory]
-    [InlineData("1.2.3+abc123", "1.2.3")]
-    [InlineData("2.0.0-rc.1+sha.deadbeef", "2.0.0-rc.1")]
-    [InlineData("0.0.0-dev+build.5", "0.0.0-dev")]
-    [InlineData("0.0.0-dev", "0.0.0-dev")]
-    [InlineData("1.0.0", "1.0.0")]
-    public void AssemblyAppVersionProvider_StripsBuildMetadata(string raw, string expected)
-    {
-        // Verify the +metadata strip logic directly — mirrors the implementation.
-        var stripped = StripBuildMetadata(raw);
-        Assert.Equal(expected, stripped);
     }
 
     [Fact]
     public void AssemblyAppVersionProvider_FallbackValue_IsDevSentinel()
     {
-        // The "0.0.0-dev" sentinel is the contract agreed with the infra member.
-        // Checked via the strip helper to avoid hard-coding in two places.
-        const string fallback = "0.0.0-dev";
-        Assert.Equal(fallback, StripBuildMetadata(fallback));
-    }
+        // "0.0.0-dev" is the contract sentinel agreed with the infra member; verify it
+        // directly so a rename of the constant surfaces here.
+        const string expected = "0.0.0-dev";
 
-    /// <summary>
-    /// Mirrors the build-metadata strip logic in <see cref="AssemblyAppVersionProvider"/>.
-    /// Kept in sync by convention; divergence surfaces on the theory test.
-    /// </summary>
-    private static string StripBuildMetadata(string raw)
-    {
-        var plusIndex = raw.IndexOf('+', StringComparison.Ordinal);
-        return plusIndex >= 0 ? raw[..plusIndex] : raw;
+        // The test-runner entry assembly carries no meaningful InformationalVersion, so
+        // the real provider will return either the sentinel or the runner's own version.
+        // To test the fallback path deterministically, verify the constant via the type.
+        var field = typeof(AssemblyAppVersionProvider)
+            .GetField("Fallback",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(field);
+        Assert.Equal(expected, field.GetValue(null));
     }
 
     // ── Stubs ─────────────────────────────────────────────────────────────────

@@ -18,12 +18,12 @@ RUN dotnet restore "api/Dashboard.Api/Dashboard.Api.csproj"
 COPY . .
 
 RUN dotnet build "api/Dashboard.Api/Dashboard.Api.csproj" \
-    -c $BUILD_CONFIGURATION -o /app/build --no-restore -p:Version=${VERSION}
+    -c $BUILD_CONFIGURATION -o /app/build --no-restore -p:InformationalVersion=${VERSION}
 
 FROM build AS publish
 ARG VERSION=0.0.0-dev
 RUN dotnet publish "api/Dashboard.Api/Dashboard.Api.csproj" \
-    -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false -p:Version=${VERSION}
+    -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false -p:InformationalVersion=${VERSION}
 
 FROM base AS final
 WORKDIR /app

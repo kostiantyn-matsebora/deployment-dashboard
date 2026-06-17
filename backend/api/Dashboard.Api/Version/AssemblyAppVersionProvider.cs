@@ -4,8 +4,8 @@ namespace Dashboard.Api.Version;
 
 /// <summary>
 /// Returns <see cref="AssemblyInformationalVersionAttribute.InformationalVersion"/> of the
-/// entry assembly, stripping any <c>+&lt;build-metadata&gt;</c> suffix appended by SourceLink.
-/// Falls back to <c>"0.0.0-dev"</c> when the attribute is absent or empty.
+/// entry assembly as-is (e.g. <c>v0.13.1</c> for a release build, <c>main+a947098</c> for
+/// a CI build). Falls back to <c>"0.0.0-dev"</c> when the attribute is absent or empty.
 /// </summary>
 internal sealed class AssemblyAppVersionProvider : IAppVersionProvider
 {
@@ -19,11 +19,6 @@ internal sealed class AssemblyAppVersionProvider : IAppVersionProvider
             ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion;
 
-        if (string.IsNullOrEmpty(raw))
-            return Fallback;
-
-        // Strip +<build-metadata> (e.g. "+abc1234" appended by SourceLink).
-        var plusIndex = raw.IndexOf('+', StringComparison.Ordinal);
-        return plusIndex >= 0 ? raw[..plusIndex] : raw;
+        return string.IsNullOrEmpty(raw) ? Fallback : raw;
     }
 }

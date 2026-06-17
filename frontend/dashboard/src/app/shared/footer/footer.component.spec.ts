@@ -3,8 +3,8 @@
  *
  * Covers:
  *   - version chip hidden while loading (initial '…' value)
- *   - version chip renders with 'v' prefix after a successful API response
- *   - falls back to '0.0.0-dev' when GET /api/version errors
+ *   - version chip renders verbatim — no 'v' added by the component
+ *   - falls back to '0.0.0-dev' (not 'v0.0.0-dev') when GET /api/version errors
  *   - Documentation link href resolves to the docs URL
  *   - Author link href resolves to the GitHub profile URL
  *   - MIT License link href resolves to the LICENSE URL
@@ -68,7 +68,7 @@ describe('FooterComponent', () => {
         providers: [
           provideHttpClient(),
           provideHttpClientTesting(),
-          { provide: DeploymentApiService, useValue: mkApi('0.13.1') },
+          { provide: DeploymentApiService, useValue: mkApi('v0.13.1') },
         ],
       }).compileComponents();
 
@@ -81,7 +81,7 @@ describe('FooterComponent', () => {
 
       // Trigger ngOnInit (synchronous emit updates the signal).
       fixture.detectChanges();
-      expect(ver()).toBe('0.13.1');
+      expect(ver()).toBe('v0.13.1');
     });
 
     it('chip is absent in the DOM while version signal is "…"', async () => {
@@ -110,20 +110,28 @@ describe('FooterComponent', () => {
   // ── version chip — happy path ───────────────────────────────────────────────
 
   describe('version chip — successful fetch', () => {
-    it('renders "v" + version string after a successful getVersion response', async () => {
-      const fixture = await buildFixture(mkApi('0.13.1'));
+    it('renders version string verbatim (release form) after a successful getVersion response', async () => {
+      const fixture = await buildFixture(mkApi('v0.13.1'));
 
       const chip: HTMLElement | null = fixture.nativeElement.querySelector('.brand-ver-chip');
       expect(chip).not.toBeNull();
       expect(chip!.textContent!.trim()).toBe('v0.13.1');
     });
 
-    it('version signal is set to the API-returned value', async () => {
-      const fixture   = await buildFixture(mkApi('1.2.3'));
+    it('renders version string verbatim (CI/main build form)', async () => {
+      const fixture = await buildFixture(mkApi('main+abc1234'));
+
+      const chip: HTMLElement | null = fixture.nativeElement.querySelector('.brand-ver-chip');
+      expect(chip).not.toBeNull();
+      expect(chip!.textContent!.trim()).toBe('main+abc1234');
+    });
+
+    it('version signal is set to the API-returned value verbatim', async () => {
+      const fixture   = await buildFixture(mkApi('v1.2.3'));
       const component = fixture.componentInstance;
 
       const ver = (component as unknown as Record<string, () => string>)['version'];
-      expect(ver()).toBe('1.2.3');
+      expect(ver()).toBe('v1.2.3');
     });
   });
 
@@ -138,13 +146,13 @@ describe('FooterComponent', () => {
       expect(ver()).toBe('0.0.0-dev');
     });
 
-    it('chip renders with the fallback "v0.0.0-dev" after a fetch error', async () => {
+    it('chip renders verbatim fallback "0.0.0-dev" (no added "v") after a fetch error', async () => {
       const fixture = await buildFixture(mkApi('error'));
       fixture.detectChanges();
 
       const chip: HTMLElement | null = fixture.nativeElement.querySelector('.brand-ver-chip');
       expect(chip).not.toBeNull();
-      expect(chip!.textContent!.trim()).toBe('v0.0.0-dev');
+      expect(chip!.textContent!.trim()).toBe('0.0.0-dev');
     });
   });
 
@@ -154,7 +162,7 @@ describe('FooterComponent', () => {
     let fixture: ComponentFixture<FooterComponent>;
 
     beforeEach(async () => {
-      fixture = await buildFixture(mkApi('0.13.1'));
+      fixture = await buildFixture(mkApi('v0.13.1'));
     });
 
     it('Documentation link resolves to the adopter docs site URL', () => {

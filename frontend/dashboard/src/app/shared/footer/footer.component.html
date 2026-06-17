@@ -1,7 +1,7 @@
 <footer class="site-footer">
   <span class="sf-left">
     @if (version() !== '…') {
-      <span class="brand-ver-chip" aria-label="Deployed version: v{{ version() }}">v{{ version() }}</span>
+      <span class="brand-ver-chip" aria-label="Deployed version: {{ version() }}">{{ version() }}</span>
     }
     <a [href]="docsUrl" target="_blank" rel="noopener">Documentation</a>
   </span>

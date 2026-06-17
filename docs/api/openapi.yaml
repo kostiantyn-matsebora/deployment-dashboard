@@ -975,11 +975,15 @@ paths:
         It exposes only non-sensitive build metadata and must be readable by the
         unauthenticated SPA, exactly like the ops probes (`/healthz`, `/readyz`).
 
-        The value is the deployed build version of the running API, stamped into the
-        assembly at image-build time (e.g. `0.13.1`). Unstamped builds — local/dev or
-        `:latest`/`main` images — report the `0.0.0-dev` fallback. The string is
-        free-form — a semver, a commit SHA, or the `0.0.0-dev` fallback — and is never
-        parsed by the client.
+        The value is the API's deployed build version, baked into the assembly at
+        image-build time and reflecting how the image was built:
+          - **Release images** (`:X.Y.Z`) report the release version with a leading
+            `v` — e.g. `v0.13.1`.
+          - **CI / `:latest` / `main` images** report `main+<short-sha>` — e.g.
+            `main+a947098`.
+          - **`0.0.0-dev`** appears only for genuinely local / unstamped builds.
+
+        The string is free-form and is never parsed by the client.
       responses:
         '200':
           $ref: '#/components/responses/Version'
@@ -2011,17 +2015,18 @@ components:
       required: [version]
       additionalProperties: false
       description: |
-        The deployed build version of the running API. `version` is stamped into the
-        assembly at image-build time, or the `0.0.0-dev` fallback for unstamped
-        builds (local/dev, `:latest`/`main`). Free-form (semver, commit SHA, or the
-        fallback) and never parsed by the client.
+        The API's deployed build version, baked into the assembly at image-build
+        time and reflecting how the image was built: release images (`:X.Y.Z`)
+        report `vX.Y.Z` (e.g. `v0.13.1`), CI / `:latest` / `main` images report
+        `main+<short-sha>` (e.g. `main+a947098`), and `0.0.0-dev` appears only for
+        genuinely local / unstamped builds. Free-form and never parsed by the client.
       properties:
         version:
           type: string
           minLength: 1
           maxLength: 100
-          description: Free-form build version string (semver, SHA, or `0.0.0-dev`).
-          examples: ["0.13.1"]
+          description: Free-form build version string (`vX.Y.Z`, `main+<sha>`, or `0.0.0-dev`).
+          examples: ["v0.13.1"]
 
   examples:
 
