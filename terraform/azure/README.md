@@ -20,18 +20,14 @@ Deploy the [Deployment Dashboard](https://kostiantyn-matsebora.github.io/deploym
 - **Gateway**: Optional Easy Auth (Entra ID, off by default)
 - **Secrets in Key Vault**: Read via managed identity
 
-### DNS / Service Discovery
 
-The gateway nginx uses `resolver 168.63.129.16` (Azure DNS) instead of Docker's `127.0.0.11`. Container Apps provides automatic DNS resolution for app names within the environment.
 
 ## Prerequisites
 
 - Azure CLI authenticated (`az login`)
 - Terraform >= 1.5
-- `rdbms-connect` Azure CLI extension (for PostgreSQL provisioning)
 
 ```bash
-az extension add --name rdbms-connect
 ```
 
 ## Quick Start
@@ -104,7 +100,6 @@ terraform apply
 ## Known Limitations
 
 - Terraform provider enforces `/21` subnet (Azure accepts `/27`): [GitHub #24596](https://github.com/hashicorp/terraform-provider-azurerm/issues/24596)
-- `az postgres flexible-server execute` requires `rdbms-connect` extension
 - PostgreSQL region restrictions may apply (check with `az postgres flexible-server list-skus`)
 - The Container Apps Environment `maximum_count` must be `0` for Consumption profiles (API returns `0` regardless of config)
 
@@ -120,7 +115,6 @@ terraform/azure/
 ├── keyvault.tf             # Key Vault + secrets
 ├── container-apps.tf       # Managed identity + 4 container apps
 ├── easy-auth.tf            # Entra ID app registration + auth config
-├── nginx-config.tf         # Gateway nginx template (Azure DNS resolver)
 ├── outputs.tf              # All outputs
 ├── terraform.tfvars.example # Example variables
 └── README.md               # This file

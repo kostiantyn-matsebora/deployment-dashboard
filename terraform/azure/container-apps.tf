@@ -36,13 +36,6 @@ resource "azurerm_container_app" "gateway" {
     identity            = azurerm_user_assigned_identity.main.id
   }
 
-  # Nginx template override — stored as a Container App secret, mounted as a file
-  # IMPORTANT: Do NOT base64-encode — Container Apps writes secret values as-is to volume files
-  secret {
-    name  = "nginx-template"
-    value = local.gateway_nginx_template
-  }
-
   # Entra ID client secret for Easy Auth (only when enabled)
   # Stored directly as value to avoid cycle (app reg needs gateway FQDN)
   dynamic "secret" {
@@ -75,12 +68,6 @@ resource "azurerm_container_app" "gateway" {
   }
 
   template {
-    # Volume: mount the nginx template secret as a file
-    volume {
-      name         = "nginx-config"
-      storage_type = "Secret"
-    }
-
     container {
       name   = "gateway"
       image  = "ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:${var.dashboard_version}"
@@ -98,12 +85,6 @@ resource "azurerm_container_app" "gateway" {
       env {
         name  = "DEMO_DRIVER_UPSTREAM"
         value = "unused:3001"
-      }
-
-      volume_mounts {
-        name     = "nginx-config"
-        path     = "/etc/nginx/templates/default.conf.template"
-        sub_path = "nginx-template"
       }
     }
 
