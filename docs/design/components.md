@@ -35,9 +35,10 @@ flowchart LR
 | Icon buttons — Fields (▦) | Custom | Shared (Matrix + Swimlanes). Opens Fields picker popover. Shows accent state + hidden-count badge when any fields are OFF. Tooltip: `Fields — toggle visible data fields` (normal); `Fields — N field(s) hidden` when N > 0. |
 | Icon buttons — Columns (⊞) | Custom | **Matrix-only** (hidden in Swimlanes). Opens Columns picker popover. Shows accent state + hidden-count badge when any environments are hidden. Tooltip: `Columns — show/hide environments` (normal); `Columns — N environment(s) hidden` when N > 0. |
 | Icon buttons — Correlation (⇆) | Custom | **Swimlanes-only**. Opens Correlation picker popover. |
+| Bell toggle (🔔) | Custom | Enables/disables browser notifications. Toggling ON for the first time triggers the browser permission prompt (lazy — never on load). Hidden when the Notifications API is unsupported, permission is denied, or the context is insecure. Tooltip: `Notifications — enable/disable desktop alerts`. |
 | Live indicator | Custom | Green dot with `pulseRing` animation (1.8s). Shows SSE connection status. |
 
-**Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, and the Live pill.
+**Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, bell toggle, and the Live pill.
 
 **Hidden-count badge.** Fields and Columns buttons share the same badge mechanism: when the hidden count N > 0, the button gains `.is-active` accent styling and a small filled count badge (`.hidden-count-badge`) positioned top-right on the icon. When N = 0, the badge is hidden and styling reverts to default.
 
@@ -267,6 +268,22 @@ On-demand dropdown panels anchored to icon buttons. `z-index: 20` inside topbar'
 - Single-select — shared `ngModel`.
 - Below: time-window `p-select` with options: 5 min, 1 hr, 1 day, 7 days.
 - Time-window is **disabled** when `explicit parent` is selected.
+
+### Notification Preferences Popover
+
+Accessible from the bell toggle area when notifications are enabled. Three independent filter axes.
+
+**Status filter.** One `p-checkbox` per deployment status (all 8). Checked = notify on that status. Default: all ON.
+
+**Service filter.**
+- Mode toggle: `Watch all` / `Watch only`.
+- `Watch all` mode shows an exclusion list (services to skip); `Watch only` mode shows an inclusion list.
+- Per-service rows derived from the current deployment data.
+- Default: `Watch all`, empty exclusion list.
+
+**Environment filter.** Same structure as the Service filter, keyed by environment name.
+
+**Persistence.** All three axes persisted to `localStorage` (key `dd.notifPrefs`). Restored on init.
 
 ---
 

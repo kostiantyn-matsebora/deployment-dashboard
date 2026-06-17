@@ -59,6 +59,7 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - A theme switcher in the header provides three modes — dark, light, auto.
 - The auto theme mode resolves the active theme via the system `prefers-color-scheme` media query.
 - The user's theme selection persists across reloads via `localStorage`.
+- A **bell toggle** in the header enables/disables browser notifications. Toggling ON for the first time triggers the browser permission request (lazy permission). The toggle reflects the current enabled state. When the browser does not support notifications, the permission is denied, or the page is not in a secure context, the toggle is hidden or disabled.
 
 ### Footer
 
@@ -94,6 +95,38 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 **Null safety.** Any null numeric or time field renders as an em-dash (`—`). No `NaN` may appear in the UI.
 
 **Live/SSE indicator.** `sseConnected` reflects `EventSource` connection state: `true` on `onopen`, `false` on `onerror` or when the connection is closed. It is independent of data-event arrival — the indicator stays green during idle periods between deployment events (e.g., `: ping` heartbeats keep the connection alive but do not fire JS events).
+
+### Browser notifications
+
+> **Scope.** Opt-in desktop notifications driven by the existing deployment SSE stream — no new backend.
+
+**Permission model.**
+- Permission is requested **lazily** — only when the user first enables notifications via the topbar bell toggle.
+- Permission is never requested on page load.
+- The feature degrades silently when the browser does not support the Web Notifications API, when the user denies permission, or when the page runs in an insecure context.
+
+**Event coverage.**
+- Notifications fire on **status transitions** only: initial load, SSE replay, and backfill events are suppressed.
+- All 8 deployment statuses are covered.
+- De-duplication: one logical change produces exactly one notification.
+
+**Notification payload.**
+- Content: service name · environment · version · status label.
+- Clicking a notification focuses the dashboard tab and opens the related CI/CD run (`run_url`).
+
+**Three independent filter axes** (all persisted to `localStorage`):
+
+| Axis | Options |
+|---|---|
+| Status | Per-status enable/disable (all 8 deployment statuses) |
+| Service | Watch-all-except list OR watch-only list |
+| Environment | Watch-all-except list OR watch-only list |
+
+**Data source.** The existing `GET /api/events/stream` (deployment SSE) — no new API endpoints.
+
+**Scope limits.**
+- Foreground and backgrounded tab only — no service worker, no push notifications.
+- No persistence of notification history in the SPA.
 
 ### Live interactions
 
@@ -201,6 +234,8 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 - The fields picker, columns picker, correlation picker, and time-window control are on-demand header icon-button popovers.
 - The columns picker icon button is hidden when the Swimlanes view is active.
 - The theme switcher is a persistent header control.
+- The bell toggle is a persistent header control; clicking it toggles notifications on/off.
+- When notifications are enabled, a **notification settings popover** is accessible from the bell button area: it exposes the three filter axes (Status, Service, Environment), each with its toggle set.
 - Every interactive topbar control carries a concise hover tooltip.
 - Popover surfaces render above all canvas content via z-index without being clipped by stacking contexts.
 

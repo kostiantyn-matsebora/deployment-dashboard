@@ -29,6 +29,13 @@ A DORA-anchored analytics view covering the last 7, 14, or 30 days (bounded by `
 ![Analytics — dark](../_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
 ![Analytics — light](../_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
 
+## :material-bell-outline: Browser notifications { #browser-notifications }
+
+Opt-in desktop notifications triggered by deployment status transitions. Enable the bell toggle in the topbar — the browser permission is requested once, lazily. Filter notifications by status, service, and environment via the notification preferences popover.
+
+![Browser notifications — dark](../_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
+![Browser notifications — light](../_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
+
 ## :material-tune-variant: Demo control panel { #demo-control-panel }
 
 The demo profile ships a **Demo Driver** control panel (`/demo/`): ingest the curated or random dataset, seed the GitHub emulator, drive live emission, trigger a system reset, and watch the deployment feed and component event streams in real time.

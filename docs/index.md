@@ -58,6 +58,13 @@ hide:
     ![Analytics view](_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
     ![Analytics view](_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
 
+=== "Notifications"
+
+    Opt-in desktop notifications for every status transition — filtered by status, service, and environment. Enable the bell toggle once; the browser stays in the loop even when the tab is in the background.
+
+    ![Notifications](_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
+    ![Notifications](_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
+
 !!! quote ""
     **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
 
@@ -88,6 +95,12 @@ hide:
     ---
 
     Server-Sent Events push every state change to every open browser within seconds. The matrix updates itself — no refresh, no stale tab.
+
+-   :material-bell-outline:{ .lg .middle .dd-emerald } **Stay notified — without watching the screen**
+
+    ---
+
+    Enable the bell toggle once and get a desktop notification on every deployment status change, even when the tab is backgrounded. Filter by status, service, and environment. No browser extension required.
 
 -   :material-history:{ .lg .middle .dd-indigo } **Full history, append-only**
 

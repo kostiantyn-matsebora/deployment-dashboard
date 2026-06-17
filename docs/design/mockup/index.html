@@ -746,6 +746,38 @@
     transition: width .3s ease;
   }
 
+  /* ----- notification popover — reuses .ext-option-block / .ext-filter-chip / .toggle / .ext-btn ----- */
+  .notif-popover { min-width: 320px; }
+
+  /* status chips grid — 4-col narrow pill grid (status axis only, no segmented mode) */
+  .notif-status-chips {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 6px;
+  }
+  /* status chip: reuse .ext-filter-chip visual + tint by status colour when on */
+  .notif-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px 4px 9px;
+    background: var(--glass);
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-1);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .notif-status-chip:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .notif-status-chip.is-on {
+    color: var(--ink-0);
+    border-color: rgba(var(--status-rgb, var(--accent-rgb)), 0.55);
+    background: rgba(var(--status-rgb, var(--accent-rgb)), 0.12);
+  }
+
   /* popover surface */
   .popover {
     position: absolute;
@@ -3429,7 +3461,111 @@
 
         </div>
       </div>
-    </div>
+
+      <!-- Notification bell — persistent icon-button; has-active = coral dot when notifications ON -->
+      <div style="position:relative">
+        <button class="icon-btn has-active" id="btn-notif"
+                title="Notification settings — browser alerts on deployment events"
+                aria-label="Notification settings" aria-haspopup="true">
+          <!-- monochrome stroke bell inheriting currentColor, matching ⊞ ▦ ☷ weight -->
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+               stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7.5 1.5a4 4 0 0 1 4 4v2.5l1 1.5H2.5l1-1.5V5.5a4 4 0 0 1 4-4z"/>
+            <path d="M6 11.5a1.5 1.5 0 0 0 3 0"/>
+          </svg>
+          <span class="badge-dot" aria-hidden="true"></span>
+        </button>
+        <div class="popover notif-popover" id="pop-notif" role="dialog" aria-label="Notification settings">
+          <div class="popover-title">Browser Notifications</div>
+
+          <!-- Master enable switch — same visual pattern as ext-master-toggle -->
+          <label class="toggle is-on" id="notif-master-toggle"
+                 title="Enable or disable all browser notifications" aria-label="Enable notifications">
+            <span class="switch" aria-hidden="true"></span>
+            <span id="notif-master-label-txt">Notify — browser alerts</span>
+          </label>
+          <span class="ext-config-hint" style="display:block;margin-top:4px;margin-bottom:8px">Off = no browser notifications fired for any event.</span>
+
+          <!-- Filter block — dims (is-paused) when master is OFF -->
+          <div class="ext-option-block" id="notif-filters-area">
+
+            <!-- Status axis — FIRST (issue #271 requirement) -->
+            <div class="ext-option-axis-label">
+              Status
+              <span class="ext-config-label-hint">(select statuses that trigger a notification)</span>
+            </div>
+            <div class="notif-status-chips">
+              <!-- success  emerald  34,210,154 -->
+              <span class="notif-status-chip is-on" style="--status-rgb:34,210,154"
+                    role="checkbox" aria-checked="true" data-notif-status="success">success</span>
+              <!-- failure  coral  255,93,93 -->
+              <span class="notif-status-chip is-on" style="--status-rgb:255,93,93"
+                    role="checkbox" aria-checked="true" data-notif-status="failure">failure</span>
+              <!-- in-progress  amber  245,165,36 -->
+              <span class="notif-status-chip" style="--status-rgb:245,165,36"
+                    role="checkbox" aria-checked="false" data-notif-status="in-progress">in-progress</span>
+              <!-- pending  slate  139,147,173 -->
+              <span class="notif-status-chip" style="--status-rgb:139,147,173"
+                    role="checkbox" aria-checked="false" data-notif-status="pending">pending</span>
+              <!-- queued  blue  74,163,240 -->
+              <span class="notif-status-chip" style="--status-rgb:74,163,240"
+                    role="checkbox" aria-checked="false" data-notif-status="queued">queued</span>
+              <!-- waiting  violet  154,133,255 -->
+              <span class="notif-status-chip" style="--status-rgb:154,133,255"
+                    role="checkbox" aria-checked="false" data-notif-status="waiting">waiting</span>
+              <!-- cancelled  grey  154,160,181 -->
+              <span class="notif-status-chip" style="--status-rgb:154,160,181"
+                    role="checkbox" aria-checked="false" data-notif-status="cancelled">cancelled</span>
+              <!-- rejected  rose  207,128,149 -->
+              <span class="notif-status-chip" style="--status-rgb:207,128,149"
+                    role="checkbox" aria-checked="false" data-notif-status="rejected">rejected</span>
+            </div>
+
+            <!-- Services axis -->
+            <div class="ext-option-axis-label">
+              Services
+              <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+            </div>
+            <div class="ext-option-mode-row" role="group" aria-label="Service notify mode">
+              <div class="ext-mode-seg">
+                <button class="an-period-btn is-active" type="button">Watch all except</button>
+                <button class="an-period-btn" type="button">Watch only</button>
+              </div>
+            </div>
+            <div class="ext-config-filter-chips" aria-label="Excluded services">
+              <span class="ext-filter-chip">analytics<span class="ext-filter-chip-x" role="button" aria-label="Remove analytics" title="Remove">&#215;</span></span>
+              <button class="ext-filter-add" type="button" aria-label="Add service exclusion">+ exclude</button>
+            </div>
+            <div class="ext-option-caption">Watching 7 of 8 services</div>
+
+            <!-- Environments axis -->
+            <div class="ext-option-axis-label">
+              Environments
+              <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+            </div>
+            <div class="ext-option-mode-row" role="group" aria-label="Environment notify mode">
+              <div class="ext-mode-seg">
+                <button class="an-period-btn" type="button">Watch all except</button>
+                <button class="an-period-btn is-active" type="button">Watch only</button>
+              </div>
+            </div>
+            <div class="ext-config-filter-chips" aria-label="Watched environments">
+              <span class="ext-filter-chip">prod<span class="ext-filter-chip-x" role="button" aria-label="Remove prod" title="Remove">&#215;</span></span>
+              <span class="ext-filter-chip">preprod<span class="ext-filter-chip-x" role="button" aria-label="Remove preprod" title="Remove">&#215;</span></span>
+              <button class="ext-filter-add" type="button" aria-label="Add environment">+ add</button>
+            </div>
+            <div class="ext-option-caption">Watching prod, preprod</div>
+
+          </div><!-- /notif-filters-area -->
+
+          <div class="ext-config-actions" style="margin-top:10px">
+            <button class="ext-btn is-primary" type="button">Save</button>
+          </div>
+
+        </div><!-- /pop-notif -->
+      </div><!-- /notif wrapper -->
+
+    </div><!-- /hdr-icons -->
 
     <div class="live-pill" title="Server-sent events — live deployment updates" aria-label="Live connection status">
       <span class="live-dot"></span>
@@ -4707,6 +4843,7 @@ const POPOVERS = [
   { btn: 'btn-correlation', pop: 'pop-correlation' },
   { btn: 'btn-fields',      pop: 'pop-fields' },
   { btn: 'btn-legend',      pop: 'pop-legend' },
+  { btn: 'btn-notif',       pop: 'pop-notif' },
 ];
 function closeAllPopovers() {
   POPOVERS.forEach(({btn, pop}) => {
@@ -6949,6 +7086,46 @@ function computeKPIs() {
   document.getElementById('kpi-failed').textContent   = failed;
 }
 computeKPIs();
+
+/* =================================================================
+   NOTIFICATION SETTINGS — master toggle + per-status chip toggles
+   ================================================================= */
+(function setupNotifications() {
+  const btn         = document.getElementById('btn-notif');
+  const masterLbl   = document.getElementById('notif-master-toggle');
+  const masterTxt   = document.getElementById('notif-master-label-txt');
+  const filtersArea = document.getElementById('notif-filters-area');
+  if (!btn || !masterLbl || !filtersArea) return;
+
+  let notifEnabled = true; // master ON by default (matches initial HTML state)
+
+  function syncBell() {
+    // coral badge-dot visible when notifications are ON (has-active drives .badge-dot display)
+    btn.classList.toggle('has-active', notifEnabled);
+    masterLbl.classList.toggle('is-on', notifEnabled);
+    masterTxt.textContent = notifEnabled ? 'Notify — browser alerts' : 'Notify — off';
+    // dims the filter block without blocking pointer on chips inside
+    filtersArea.classList.toggle('is-paused', !notifEnabled);
+  }
+
+  // Master toggle click
+  masterLbl.addEventListener('click', e => {
+    e.preventDefault();
+    notifEnabled = !notifEnabled;
+    syncBell();
+  });
+
+  // Per-status chip toggles
+  document.querySelectorAll('.notif-status-chip').forEach(chip => {
+    chip.addEventListener('click', e => {
+      e.preventDefault();
+      const on = chip.classList.toggle('is-on');
+      chip.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  });
+
+  syncBell();
+})();
 
 /* =================================================================
    THEME SWITCHER — dark / light / auto
