@@ -3,6 +3,7 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { Subscription, filter } from 'rxjs';
 
 import { TopbarComponent } from './shared/topbar/topbar.component';
+import { FooterComponent } from './shared/footer/footer.component';
 import { AppStateService } from './core/services/app-state.service';
 import { DeploymentApiService } from './core/services/deployment-api.service';
 import { RateLimitReport } from './core/models/deployment.model';
@@ -24,7 +25,7 @@ import { RateLimitReport } from './core/models/deployment.model';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, TopbarComponent],
+  imports: [RouterOutlet, TopbarComponent, FooterComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

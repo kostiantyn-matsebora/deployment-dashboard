@@ -203,6 +203,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 | control-events | `POST /api/control/events` | `X-Api-Key` + `X-Component-Id` (+ optional `X-Correlation-Id`) | append 1 row to `component_events`; `component_id` from header (D9); optional `correlation_id` from `X-Correlation-Id` (opaque ≤ 128, nullable); `NOTIFY component_events <id>`; `413` > 8 KiB payload; `422` on missing/invalid `X-Component-Id` or `X-Correlation-Id` > 128 chars → `204` |
 | control-events-stream | `GET /api/control/events/stream` | none | SSE; `event: component`; `id:` = row id (UUIDv7); `Last-Event-ID` replay from `component_events` (2 h window); `: ping`/15 s; fresh connect = live only; no query filters |
 | ops | `GET /healthz`, `GET /readyz` | none | liveness / readiness (DB reachable + all four LISTEN channels attached: `deployment_events`, `control_events`, `component_acks`, `component_events` — D10, D12) |
+| meta | `GET /api/version` | none | deployed build version → `{ version }`; baked into the API assembly at image-build time, reflecting how the image was built — release images (`:X.Y.Z`) → `vX.Y.Z` (e.g. `v0.13.1`), CI / `:latest` / `main` → `main+<short-sha>` (e.g. `main+a947098`), `0.0.0-dev` only for genuinely local / unstamped builds; free-form, never parsed by the client; for the SPA footer |
 
 ---
 

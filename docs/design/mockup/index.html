@@ -375,8 +375,32 @@
        Cap is comfortable on ultrawide, but no longer the dominant constraint. */
     max-width: 100%;
     margin: 0 auto;
-    padding: 14px 18px 24px;
+    padding: 14px 18px 80px; /* bottom clearance for fixed footer */
   }
+
+  /* ----- site footer (fixed glass bar) — #340 ── */
+  .site-footx {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 18px;
+    font-size: 10.5px; color: var(--ink-3); letter-spacing: .3px;
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border-top: 1px solid var(--glass-edge);
+  }
+  .site-footx .sf-left { display: flex; align-items: center; gap: 10px; }
+  .site-footx .sf-spacer { flex: 1; }
+  .brand-ver-chip {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; line-height: 1; color: var(--ink-1);
+    padding: 3px 8px; border-radius: 999px;
+    background: var(--input-bg); border: 1px solid var(--glass-edge);
+    letter-spacing: .2px;
+  }
+  .site-footx a { color: var(--ink-2); text-decoration: none; }
+  .site-footx a:hover { color: var(--ink-1); }
 
   /* ----- top header bar ----- */
   .topbar {
@@ -3124,7 +3148,6 @@
       <div class="brand-mark"></div>
       <div>
         <div class="brand-name">Deployment Dashboard</div>
-        <div class="brand-sub">Monitoring · Live</div>
       </div>
     </div>
 
@@ -3756,6 +3779,15 @@
   </section>
 
 </div>
+
+<footer class="site-footx">
+  <span class="sf-left">
+    <span class="brand-ver-chip" title="Deployed version">v0.13.1</span>
+    <a href="https://kostiantyn-matsebora.github.io/deployment-dashboard/" target="_blank" rel="noopener">Documentation</a>
+  </span>
+  <span class="sf-spacer"></span>
+  <span class="sf-right">© 2026 <a href="https://github.com/kostiantyn-matsebora" target="_blank" rel="noopener">@kostiantyn-matsebora</a> · <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a></span>
+</footer>
 
 <!-- ============== DRAWER ============== -->
 <div class="drawer-overlay" id="overlay"></div>

@@ -53,11 +53,23 @@ Requirements distilled from design-iteration conversations. One requirement per 
 
 ### Header surfaces
 
+- The header displays only the application brand name ("Deployment Dashboard") — no sub-line, no docs icon in the topbar.
 - A KPI strip in the header surfaces services count, environments count, in-flight count, and failed count, all derived from rendered data.
 - A live/SSE indicator surfaces real-time connection status in the header.
 - A theme switcher in the header provides three modes — dark, light, auto.
 - The auto theme mode resolves the active theme via the system `prefers-color-scheme` media query.
 - The user's theme selection persists across reloads via `localStorage`.
+
+### Footer
+
+- A fixed glass footer bar is anchored to the viewport bottom and persists across all views.
+- The footer left side contains:
+  - A **version chip** sourced from `GET /api/version`; displayed as `v` + version string.
+  - A **Documentation** link.
+- The footer right side contains the copyright line `© 2026 @kostiantyn-matsebora · MIT License`.
+- The version chip is hidden while the version response is loading.
+- On `GET /api/version` error or non-200 response the version chip falls back to `0.0.0-dev`.
+- Source: `GET /api/version` (unauthenticated); response `{ version: string }`.
 
 ### Operational telemetry — fetcher rate-limit indicator
 

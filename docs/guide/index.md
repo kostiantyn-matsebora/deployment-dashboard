@@ -30,6 +30,7 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [History drawer](./screenshots.md#history-drawer)
 - [Analytics](./screenshots.md#analytics)
 - [Demo control panel](./screenshots.md#demo-control-panel)
+- [Footer](./screenshots.md#footer)
 
 ### `install.md`
 
