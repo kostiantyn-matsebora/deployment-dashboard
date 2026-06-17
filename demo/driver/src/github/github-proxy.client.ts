@@ -34,7 +34,10 @@ export class GithubProxyClient {
     const config = getConfig();
     const url    = `${config.githubEmulatorUrl}/_github/${path}`;
 
-    const init: RequestInit = { method };
+    const init: RequestInit = {
+      method,
+      signal: AbortSignal.timeout(config.githubEmulatorTimeoutMs),
+    };
     if (body !== undefined) {
       init.headers = { 'Content-Type': 'application/json' };
       init.body    = JSON.stringify(body);
@@ -44,6 +47,12 @@ export class GithubProxyClient {
     try {
       response = await (globalThis.fetch as typeof fetch)(url, init);
     } catch (err) {
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        console.warn(
+          `[demo-driver] github-proxy ${method} /_github/${path} timed out after ${config.githubEmulatorTimeoutMs}ms`,
+        );
+        return { status: 504, body: { error: 'upstream timeout' } };
+      }
       console.warn(`[demo-driver] github-proxy ${method} /_github/${path} network error:`, err);
       return { status: 502, body: { error: 'upstream network error' } };
     }
