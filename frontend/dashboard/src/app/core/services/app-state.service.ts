@@ -15,6 +15,7 @@ import {
   TimeWindow,
   isContextStatus,
 } from '../models/deployment.model';
+import { applyGlobFilter } from '../utils/glob.util';
 
 export interface Kpi {
   services: number;
@@ -22,6 +23,9 @@ export interface Kpi {
   inFlight: number;
   failed: number;
 }
+
+/** Filter mode for the services picker — mirrors svcFilterMode in mockup. */
+export type ServiceFilterMode = 'exclude' | 'include';
 
 /** Canonical environment sort order; unknowns sort alphabetically after. */
 const ENV_ORDER = ['dev', 'staging', 'qa', 'preprod', 'prod'];
@@ -41,6 +45,8 @@ const K = {
   view:              'dd:view',
   svcFilter:         'dd:svcFilter',
   failOnly:          'dd:failOnly',
+  svcFilterMode:     'dd:svcFilterMode',
+  svcPatterns:       'dd:svcPatterns',
   matFields:         'dd:matFields',
   swFields:          'dd:swFields',
   correlation:       'dd:correlation',
@@ -77,6 +83,34 @@ export class AppStateService {
   );
   readonly failuresOnly = signal<boolean>(
     this.ls(K.failOnly, v => v === 'true' ? true : v === 'false' ? false : null, false),
+  );
+
+  /**
+   * Glob pattern filter mode for the services picker.
+   * exclude = "Show all except" (default); include = "Show only".
+   * Persisted under dd:svcFilterMode.
+   * Spec: docs/design/mockup/index.html §buildSvcsPicker / §visibleServices
+   */
+  readonly serviceFilterMode = signal<ServiceFilterMode>(
+    this.ls(K.svcFilterMode, v => (v === 'include' ? 'include' : null), 'exclude'),
+  );
+
+  /**
+   * Glob pattern list for the services picker.
+   * Each entry is a glob string (e.g. '*-api', 'auth-bff').
+   * Empty list → all services visible (blank = all).
+   * Persisted under dd:svcPatterns (JSON array).
+   * Spec: docs/design/mockup/index.html §svcPatterns
+   */
+  readonly servicePatterns = signal<string[]>(
+    this.ls(K.svcPatterns, v => {
+      const arr: unknown = JSON.parse(v);
+      if (!Array.isArray(arr)) return null;
+      const patterns = (arr as unknown[]).filter(
+        (x): x is string => typeof x === 'string' && x.length > 0,
+      );
+      return patterns;
+    }, []),
   );
 
   // ── Field visibility (all ON by default per spec) ─────────
@@ -241,25 +275,43 @@ export class AppStateService {
   );
 
   // ── KPIs ─────────────────────────────────────────────────
+  /**
+   * KPIs derived from visible services × visible environments.
+   * Respects the glob service filter (serviceFilterMode + servicePatterns)
+   * and the column hidden set (matrixColHidden), matching mockup §computeKPIs.
+   */
   readonly kpi = computed<Kpi>(() => {
     const matrix = this.matrixData();
     if (!matrix) return { services: 0, environments: 0, inFlight: 0, failed: 0 };
 
+    const visSvcs = new Set(this.visibleServices(matrix.rows.map((r) => r.service)));
+    const hidden  = this.matrixColHidden();
+
+    const svcSet = new Set<string>();
+    const envSet = new Set<string>();
     let inFlight = 0, failed = 0;
+
     for (const row of matrix.rows) {
-      for (const slot of Object.values(row.slots)) {
+      if (!visSvcs.has(row.service)) continue;
+      for (const [env, slot] of Object.entries(row.slots)) {
+        if (hidden.has(env)) continue;
+        svcSet.add(row.service);
+        envSet.add(env);
         if (slot.current.status === 'in-progress') inFlight++;
         else if (slot.current.status === 'failure')  failed++;
       }
     }
-    return { services: matrix.rows.length, environments: matrix.environments.length, inFlight, failed };
+
+    return { services: svcSet.size, environments: envSet.size, inFlight, failed };
   });
 
   constructor() {
     // ── Persist user preferences on every change ──────────
-    effect(() => this.save(K.view,        this.activeView()));
-    effect(() => this.save(K.svcFilter,   this.serviceFilter()));
-    effect(() => this.save(K.failOnly,    String(this.failuresOnly())));
+    effect(() => this.save(K.view,           this.activeView()));
+    effect(() => this.save(K.svcFilter,      this.serviceFilter()));
+    effect(() => this.save(K.failOnly,       String(this.failuresOnly())));
+    effect(() => this.save(K.svcFilterMode,  this.serviceFilterMode()));
+    effect(() => this.save(K.svcPatterns,    JSON.stringify(this.servicePatterns())));
     effect(() => this.save(K.matFields,   JSON.stringify([...this.matrixVisibleFields()])));
     effect(() => this.save(K.swFields,    JSON.stringify([...this.swimlaneVisibleFields()])));
     effect(() => this.save(K.correlation, this.correlationPredicate()));
@@ -439,6 +491,23 @@ export class AppStateService {
     }
     this.collapsedLanes.set(collapsed);
     try { localStorage.setItem(K.swimKnown, JSON.stringify([...known])); } catch { /* quota */ }
+  }
+
+  // ── Services glob filter ─────────────────────────────────
+
+  /**
+   * Derive the visible service list from `allServices` applying the current
+   * glob filter mode + patterns.
+   *
+   * exclude mode: show everything EXCEPT services matching a pattern.
+   * include mode: show ONLY services matching a pattern.
+   * Empty pattern list → return all services (blank = all).
+   * Last-visible guard via applyGlobFilter: always returns at least one item.
+   *
+   * Spec: docs/design/mockup/index.html §visibleServices
+   */
+  visibleServices(allServices: string[]): string[] {
+    return applyGlobFilter(allServices, this.serviceFilterMode(), this.servicePatterns());
   }
 
   /** Raw localStorage get — null when absent or storage unavailable. */

@@ -367,6 +367,102 @@ describe('AppStateService — column order + hidden-set', () => {
     });
 
   });
+
+  // ── serviceFilterMode + servicePatterns + visibleServices ────────────────
+
+  describe('serviceFilterMode + servicePatterns defaults', () => {
+    it('serviceFilterMode defaults to "exclude"', () => {
+      expect(service.serviceFilterMode()).toBe('exclude');
+    });
+
+    it('servicePatterns defaults to empty array', () => {
+      expect(service.servicePatterns()).toEqual([]);
+    });
+
+    it('persists serviceFilterMode to localStorage via effect', async () => {
+      service.serviceFilterMode.set('include');
+      await TestBed.flushEffects();
+      const stored = localStorage.getItem('dd:svcFilterMode');
+      expect(stored).toBe('include');
+    });
+
+    it('restores serviceFilterMode from localStorage on next init', async () => {
+      service.serviceFilterMode.set('include');
+      await TestBed.flushEffects();
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({}).compileComponents();
+      const fresh = TestBed.inject(AppStateService);
+      expect(fresh.serviceFilterMode()).toBe('include');
+    });
+
+    it('persists servicePatterns to localStorage via effect', async () => {
+      service.servicePatterns.set(['*-api', 'checkout']);
+      await TestBed.flushEffects();
+      const stored = localStorage.getItem('dd:svcPatterns');
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored!)).toEqual(['*-api', 'checkout']);
+    });
+
+    it('restores servicePatterns from localStorage on next init', async () => {
+      service.servicePatterns.set(['payments-*']);
+      await TestBed.flushEffects();
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({}).compileComponents();
+      const fresh = TestBed.inject(AppStateService);
+      expect(fresh.servicePatterns()).toEqual(['payments-*']);
+    });
+
+    it('falls back to [] when stored servicePatterns is invalid JSON', async () => {
+      localStorage.setItem('dd:svcPatterns', 'not-json{{');
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({}).compileComponents();
+      const fresh = TestBed.inject(AppStateService);
+      expect(fresh.servicePatterns()).toEqual([]);
+    });
+  });
+
+  describe('visibleServices()', () => {
+    it('returns all services when patterns is empty (exclude mode)', () => {
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set([]);
+      expect(service.visibleServices(['svc-a', 'svc-b', 'svc-c'])).toEqual(['svc-a', 'svc-b', 'svc-c']);
+    });
+
+    it('returns all services when patterns is empty (include mode)', () => {
+      service.serviceFilterMode.set('include');
+      service.servicePatterns.set([]);
+      expect(service.visibleServices(['svc-a', 'svc-b', 'svc-c'])).toEqual(['svc-a', 'svc-b', 'svc-c']);
+    });
+
+    it('exclude mode: filters out services matching the glob pattern', () => {
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set(['*-api']);
+      const result = service.visibleServices(['payments-api', 'auth-api', 'checkout']);
+      expect(result).toEqual(['checkout']);
+    });
+
+    it('include mode: keeps only services matching the glob pattern', () => {
+      service.serviceFilterMode.set('include');
+      service.servicePatterns.set(['*-api']);
+      const result = service.visibleServices(['payments-api', 'auth-api', 'checkout']);
+      expect(result).toEqual(['payments-api', 'auth-api']);
+    });
+
+    it('last-visible guard: never returns empty array (falls back to all)', () => {
+      service.serviceFilterMode.set('include');
+      service.servicePatterns.set(['no-match-*']);
+      const result = service.visibleServices(['payments-api', 'auth-api']);
+      // No services match — guard returns all
+      expect(result).toEqual(['payments-api', 'auth-api']);
+    });
+
+    it('exact string pattern matches exactly (backward-compatible)', () => {
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set(['checkout']);
+      const result = service.visibleServices(['payments-api', 'checkout', 'auth-api']);
+      expect(result).toEqual(['payments-api', 'auth-api']);
+    });
+  });
 });
 
 // ── Badge count derivations — TopbarComponent helpers ─────────────────────────
@@ -400,6 +496,9 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       activeView,
       serviceFilter:        signal(''),
       failuresOnly:         signal(false),
+      serviceFilterMode:    signal('exclude' as const),
+      servicePatterns:      signal([] as string[]),
+      visibleServices:      (svcs: string[]) => svcs,
       matrixVisibleFields,
       swimlaneVisibleFields,
       correlationPredicate: signal('explicit parent' as const),

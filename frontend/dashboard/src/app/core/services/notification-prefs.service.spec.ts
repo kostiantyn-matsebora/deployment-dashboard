@@ -171,6 +171,55 @@ describe('NotificationPrefsService', () => {
     });
   });
 
+  // ── shouldNotify — service axis glob matching ─────────────────────────────
+
+  describe('shouldNotify — service axis glob matching', () => {
+    it('watch-all-except: glob "*-api" excludes all services ending in -api', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-all-except',
+        serviceChips: ['*-api'],
+      });
+      expect(svc.shouldNotify('success', 'payments-api', 'prod')).toBe(false);
+      expect(svc.shouldNotify('success', 'auth-api',     'prod')).toBe(false);
+      expect(svc.shouldNotify('success', 'checkout',     'prod')).toBe(true);
+    });
+
+    it('watch-only: glob "*-api" includes only services ending in -api', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-only',
+        serviceChips: ['*-api'],
+      });
+      expect(svc.shouldNotify('success', 'payments-api', 'prod')).toBe(true);
+      expect(svc.shouldNotify('success', 'auth-api',     'prod')).toBe(true);
+      expect(svc.shouldNotify('success', 'checkout',     'prod')).toBe(false);
+    });
+
+    it('glob "?" matches exactly one character', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-only',
+        serviceChips: ['sv?'],
+      });
+      expect(svc.shouldNotify('success', 'svc', 'prod')).toBe(true);
+      expect(svc.shouldNotify('success', 'svcc', 'prod')).toBe(false);
+    });
+
+    it('glob matching is case-insensitive', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-only',
+        serviceChips: ['*-API'],
+      });
+      expect(svc.shouldNotify('success', 'payments-api', 'prod')).toBe(true);
+    });
+  });
+
   // ── shouldNotify — environment axis ───────────────────────────────────────
 
   describe('shouldNotify — environment axis', () => {
@@ -199,6 +248,30 @@ describe('NotificationPrefsService', () => {
         envChips: ['prod', 'preprod'],
       });
       expect(svc.shouldNotify('success', 'svc', 'prod')).toBe(true);
+      expect(svc.shouldNotify('success', 'svc', 'dev')).toBe(false);
+    });
+
+    it('watch-all-except: glob "prod*" excludes prod and production', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:  true,
+        envMode:  'watch-all-except',
+        envChips: ['prod*'],
+      });
+      expect(svc.shouldNotify('success', 'svc', 'prod')).toBe(false);
+      expect(svc.shouldNotify('success', 'svc', 'production')).toBe(false);
+      expect(svc.shouldNotify('success', 'svc', 'dev')).toBe(true);
+    });
+
+    it('watch-only: glob "prod*" includes prod and production but not dev', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:  true,
+        envMode:  'watch-only',
+        envChips: ['prod*'],
+      });
+      expect(svc.shouldNotify('success', 'svc', 'prod')).toBe(true);
+      expect(svc.shouldNotify('success', 'svc', 'production')).toBe(true);
       expect(svc.shouldNotify('success', 'svc', 'dev')).toBe(false);
     });
   });
