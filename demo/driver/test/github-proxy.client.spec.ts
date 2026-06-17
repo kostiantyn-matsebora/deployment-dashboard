@@ -9,6 +9,7 @@
  *  - Body passed through verbatim on POST.
  *  - Upstream non-2xx status surfaced as-is.
  *  - Network error (unreachable upstream) → 502.
+ *  - Upstream timeout (fetch rejects with TimeoutError) → 504.
  */
 
 import * as http from 'http';
@@ -71,6 +72,7 @@ describe('GithubProxyClient', () => {
   afterEach(() => {
     // Reset env so other tests are not affected
     delete process.env.GITHUB_EMULATOR_URL;
+    delete process.env.GITHUB_EMULATOR_TIMEOUT_MS;
   });
 
   describe('GET requests', () => {
@@ -192,6 +194,89 @@ describe('GithubProxyClient', () => {
         expect(req.url).toBe('/_github/emit');
         // URL must not contain double-slash (e.g. /_github//emit)
         expect(req.url).not.toContain('//');
+      } finally {
+        await stub.close();
+      }
+    });
+  });
+
+  describe('timeout handling', () => {
+    let originalFetch: typeof globalThis.fetch;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+    });
+
+    afterEach(() => {
+      // Restore the real fetch after each substitution
+      globalThis.fetch = originalFetch;
+    });
+
+    it('returns 504 when fetch rejects with a TimeoutError on GET', async () => {
+      process.env.GITHUB_EMULATOR_URL     = 'http://127.0.0.1:1';
+      process.env.GITHUB_EMULATOR_TIMEOUT_MS = '50';
+
+      const timeoutError  = new Error('The operation was aborted due to timeout');
+      timeoutError.name   = 'TimeoutError';
+      globalThis.fetch    = () => Promise.reject(timeoutError);
+
+      const client = new GithubProxyClient();
+      const result = await client.get('status');
+
+      expect(result.status).toBe(504);
+      expect(result.body).toMatchObject({ error: 'upstream timeout' });
+    });
+
+    it('returns 504 when fetch rejects with a TimeoutError on POST', async () => {
+      process.env.GITHUB_EMULATOR_URL     = 'http://127.0.0.1:1';
+      process.env.GITHUB_EMULATOR_TIMEOUT_MS = '50';
+
+      const timeoutError  = new Error('The operation was aborted due to timeout');
+      timeoutError.name   = 'TimeoutError';
+      globalThis.fetch    = () => Promise.reject(timeoutError);
+
+      const client = new GithubProxyClient();
+      const result = await client.post('emit', { enabled: true });
+
+      expect(result.status).toBe(504);
+      expect(result.body).toMatchObject({ error: 'upstream timeout' });
+    });
+
+    it('still returns 502 for non-timeout network errors', async () => {
+      process.env.GITHUB_EMULATOR_URL = 'http://127.0.0.1:1';
+
+      const networkError = new Error('connection refused');
+      // name is 'Error', not 'TimeoutError' — should fall through to 502
+      globalThis.fetch   = () => Promise.reject(networkError);
+
+      const client = new GithubProxyClient();
+      const result = await client.get('status');
+
+      expect(result.status).toBe(502);
+      expect(result.body).toMatchObject({ error: 'upstream network error' });
+    });
+
+    it('passes AbortSignal.timeout to fetch with the configured timeout', async () => {
+      process.env.GITHUB_EMULATOR_URL        = 'http://127.0.0.1:1';
+      process.env.GITHUB_EMULATOR_TIMEOUT_MS = '7000';
+
+      let capturedSignal: AbortSignal | undefined;
+      const stub = makeStubServer(200, {});
+      await listenStub(stub);
+
+      try {
+        process.env.GITHUB_EMULATOR_URL = stub.baseUrl();
+        globalThis.fetch = (url: RequestInfo | URL, init?: RequestInit) => {
+          capturedSignal = init?.signal ?? undefined;
+          // delegate to the real fetch so the stub responds normally
+          return originalFetch(url, { ...init, signal: undefined });
+        };
+
+        const client = new GithubProxyClient();
+        await client.get('status');
+
+        expect(capturedSignal).toBeDefined();
+        expect(capturedSignal!.aborted).toBe(false);
       } finally {
         await stub.close();
       }
