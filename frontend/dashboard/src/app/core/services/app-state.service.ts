@@ -48,7 +48,6 @@ const K = {
   rateLimit:         'dd.rateLimit',
   colOrder:          'dd:colOrder',
   colHidden:         'dd:colHidden',
-  svcHidden:         'dd:svcHidden',
   swimCollapsed:     'dd:swimCollapsed',
   swimKnown:         'dd:swimKnown',
   swimAutoScroll:    'dd:swimAutoScroll',
@@ -216,20 +215,6 @@ export class AppStateService {
     this.ls(K.swimAutoScroll, v => v === 'true' ? true : v === 'false' ? false : null, true),
   );
 
-  // ── Service visibility ────────────────────────────────────────────────────
-  /**
-   * Set of service names that the user has hidden.
-   * Guard: must always leave at least one service visible.
-   * Stale entries (services no longer in the matrix) are silently ignored by
-   * `visibleServices()`.
-   */
-  readonly matrixSvcHidden = signal<Set<string>>(
-    this.ls(K.svcHidden, v => {
-      if (!v) return null;
-      return new Set(v.split(',').filter(Boolean));
-    }, new Set<string>()),
-  );
-
   // ── Matrix column order + visibility ────────────────────────────────────
   /**
    * Persisted column order: a permutation of all environment names last seen.
@@ -256,36 +241,18 @@ export class AppStateService {
   );
 
   // ── KPIs ─────────────────────────────────────────────────
-  /**
-   * KPIs computed over the intersection of visible services × visible environments.
-   * Both `matrixSvcHidden` and `matrixColHidden` are respected so the chip values
-   * reflect what is actually on screen.
-   */
   readonly kpi = computed<Kpi>(() => {
     const matrix = this.matrixData();
     if (!matrix) return { services: 0, environments: 0, inFlight: 0, failed: 0 };
 
-    const svcHidden = this.matrixSvcHidden();
-    const colHidden = this.matrixColHidden();
-
-    const visibleRows = matrix.rows.filter(r => !svcHidden.has(r.service));
-    const visibleEnvs = matrix.environments.filter(e => !colHidden.has(e));
-
     let inFlight = 0, failed = 0;
-    for (const row of visibleRows) {
-      for (const env of visibleEnvs) {
-        const slot = row.slots[env];
-        if (!slot) continue;
+    for (const row of matrix.rows) {
+      for (const slot of Object.values(row.slots)) {
         if (slot.current.status === 'in-progress') inFlight++;
         else if (slot.current.status === 'failure')  failed++;
       }
     }
-    return {
-      services:     visibleRows.length,
-      environments: visibleEnvs.length,
-      inFlight,
-      failed,
-    };
+    return { services: matrix.rows.length, environments: matrix.environments.length, inFlight, failed };
   });
 
   constructor() {
@@ -300,7 +267,6 @@ export class AppStateService {
     effect(() => this.save(K.rateLimit,   JSON.stringify(Object.fromEntries(this.rateLimitMap()))));
     effect(() => this.save(K.colOrder,      JSON.stringify(this.matrixColOrder())));
     effect(() => this.save(K.colHidden,     [...this.matrixColHidden()].join(',')));
-    effect(() => this.save(K.svcHidden,     [...this.matrixSvcHidden()].join(',')));
     effect(() => this.save(K.swimCollapsed, JSON.stringify([...this.collapsedLanes()])));
     effect(() => this.save(K.swimAutoScroll, String(this.autoScrollOnChange())));
 
@@ -543,44 +509,6 @@ export class AppStateService {
   resetColumns(allEnvs: string[]): void {
     this.matrixColHidden.set(new Set());
     this.matrixColOrder.set(sortEnvs([...allEnvs]));
-  }
-
-  // ── Service visibility helpers ────────────────────────────────────────────
-
-  /**
-   * Toggle service visibility. Refuses to hide the last visible service.
-   * `allSvcs` is passed so the guard can check against the current data set.
-   * Stale entries in the hidden set (for services no longer in allSvcs) do
-   * not count toward visibility.
-   */
-  toggleSvcHidden(svc: string, allSvcs: string[]): void {
-    const hidden  = new Set(this.matrixSvcHidden());
-    const visible = allSvcs.filter(s => !hidden.has(s));
-    if (!hidden.has(svc)) {
-      // Attempting to hide — guard: must leave at least one visible
-      if (visible.length <= 1) return;
-      hidden.add(svc);
-    } else {
-      hidden.delete(svc);
-    }
-    this.matrixSvcHidden.set(hidden);
-  }
-
-  /**
-   * Show all services. Clears the hidden set.
-   */
-  resetServices(): void {
-    this.matrixSvcHidden.set(new Set());
-  }
-
-  /**
-   * Filter `allSvcs` to those not in the hidden set.
-   * Stale entries in the hidden set (for services absent from `allSvcs`) are
-   * silently ignored so the list never goes empty due to stale persistence.
-   */
-  visibleServices(allSvcs: string[]): string[] {
-    const hidden = this.matrixSvcHidden();
-    return allSvcs.filter(s => !hidden.has(s));
   }
 
   /**

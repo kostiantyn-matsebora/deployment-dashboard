@@ -54,21 +54,14 @@ export class MatrixComponent {
     return `180px repeat(${n}, minmax(140px, max-content))`;
   });
 
-  // ── All services from the data ────────────────────────────
-  protected readonly allServices = computed(() =>
-    this.state.matrixData()?.rows.map(r => r.service) ?? []
-  );
-
   protected readonly filteredRows = computed(() => {
     const matrix = this.state.matrixData();
     if (!matrix) return [];
 
     const filter   = this.state.serviceFilter().toLowerCase().trim();
     const failOnly = this.state.failuresOnly();
-    const svcHidden = this.state.matrixSvcHidden();
 
     return matrix.rows.filter((row) => {
-      if (svcHidden.has(row.service)) return false;
       if (filter && !row.service.toLowerCase().includes(filter)) return false;
       if (failOnly) {
         const hasFail = Object.values(row.slots).some((s) => {

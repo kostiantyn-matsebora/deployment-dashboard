@@ -442,15 +442,8 @@ export class SwimlanesComponent {
     const predicate = this.state.correlationPredicate();
     const tw        = this.state.timeWindow();
     const fields    = this.state.swimlaneVisibleFields();
-    const svcHidden = this.state.matrixSvcHidden();
 
-    // Filter out hidden services before building lanes.
-    const visibleByService = new Map(
-      [...byService.entries()].filter(([svc]) => !svcHidden.has(svc)),
-    );
-    if (!visibleByService.size) return [];
-
-    return this.buildLanes(visibleByService, predicate, tw, fields);
+    return this.buildLanes(byService, predicate, tw, fields);
   });
 
   // ── Lane building ─────────────────────────────────────────

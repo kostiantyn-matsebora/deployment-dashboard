@@ -216,47 +216,6 @@
       </div>
     }
 
-    <!-- Services picker (Matrix + Swimlanes — show/hide service rows/lanes) ── -->
-    @if (!isAnalytics()) {
-      <div style="position: relative">
-        <button
-          class="icon-btn"
-          [class.is-active]="servicesPopoverOpen() || svcHiddenCount() > 0"
-          [title]="servicesBtnTitle()"
-          [attr.aria-label]="servicesBtnTitle()"
-          aria-haspopup="true"
-          (click)="toggleServicesPopover($event)"
-        >
-          <span aria-hidden="true">⊟</span>
-          @if (svcHiddenCount() > 0) {
-            <span class="hidden-count-badge" aria-hidden="true">{{ svcHiddenCount() }}</span>
-          }
-        </button>
-        <p-popover #servicesPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-          <div class="picker-content">
-            <span class="popover-title">SERVICES — {{ isMatrix() ? 'Matrix' : 'Swimlanes' }}</span>
-            <div class="field-grid field-grid--single">
-              @for (svc of allServices(); track svc) {
-                <label
-                  class="field-toggle"
-                  [class.is-on]="isSvcVisible(svc)"
-                  (click)="toggleSvcHidden(svc)"
-                >
-                  <span class="field-check" [class.checked]="isSvcVisible(svc)" aria-hidden="true"></span>
-                  <span class="field-label">{{ svc }}</span>
-                </label>
-              }
-            </div>
-            <button
-              class="cols-reset-btn"
-              (click)="resetServices()"
-              aria-label="Show all services"
-            >Show all</button>
-          </div>
-        </p-popover>
-      </div>
-    }
-
     <!-- Columns picker (matrix-only — show/hide environments) ──────────────── -->
     @if (isMatrix()) {
       <div style="position: relative">

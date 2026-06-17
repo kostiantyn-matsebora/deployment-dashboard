@@ -86,7 +86,6 @@ describe('TopbarComponent — rate-limit indicator', () => {
       matrixData:             signal(null),
       matrixColHidden:        signal(new Set<string>()),
       matrixColOrder:         signal([] as string[]),
-      matrixSvcHidden:        signal(new Set<string>()),
       // #309 collapse/expand signals
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
@@ -343,7 +342,6 @@ describe('TopbarComponent — legend popover guard', () => {
       matrixData:             signal(null),
       matrixColHidden:        signal(new Set<string>()),
       matrixColOrder:         signal([] as string[]),
-      matrixSvcHidden:        signal(new Set<string>()),
       // #309 collapse/expand signals
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
@@ -540,7 +538,6 @@ describe('TopbarComponent — notification UX (#271)', () => {
       matrixData:             signal(null),
       matrixColHidden:        signal(new Set<string>()),
       matrixColOrder:         signal([] as string[]),
-      matrixSvcHidden:        signal(new Set<string>()),
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
       lastEffectiveEvent:     signal(null) as never,

@@ -223,171 +223,6 @@ describe('AppStateService — column order + hidden-set', () => {
     });
   });
 
-  // ── toggleSvcHidden ───────────────────────────────────────────────────────
-
-  describe('toggleSvcHidden()', () => {
-    it('hides a visible service', () => {
-      service.matrixSvcHidden.set(new Set());
-      service.toggleSvcHidden('svc-b', ['svc-a', 'svc-b', 'svc-c']);
-      expect(service.matrixSvcHidden().has('svc-b')).toBe(true);
-    });
-
-    it('reveals a hidden service', () => {
-      service.matrixSvcHidden.set(new Set(['svc-b']));
-      service.toggleSvcHidden('svc-b', ['svc-a', 'svc-b', 'svc-c']);
-      expect(service.matrixSvcHidden().has('svc-b')).toBe(false);
-    });
-
-    it('last-visible guard: refuses to hide the only visible service', () => {
-      service.matrixSvcHidden.set(new Set(['svc-b', 'svc-c']));
-      // Only 'svc-a' is visible; hiding it must be a no-op
-      service.toggleSvcHidden('svc-a', ['svc-a', 'svc-b', 'svc-c']);
-      expect(service.matrixSvcHidden().has('svc-a')).toBe(false); // still visible
-    });
-
-    it('allows hiding down to exactly 1 visible service', () => {
-      service.matrixSvcHidden.set(new Set(['svc-c']));
-      // 'svc-a' and 'svc-b' visible; hiding 'svc-b' leaves 1 — allowed
-      service.toggleSvcHidden('svc-b', ['svc-a', 'svc-b', 'svc-c']);
-      expect(service.matrixSvcHidden().has('svc-b')).toBe(true);
-    });
-  });
-
-  // ── resetServices ─────────────────────────────────────────────────────────
-
-  describe('resetServices()', () => {
-    it('clears the hidden service set', () => {
-      service.matrixSvcHidden.set(new Set(['svc-a', 'svc-b']));
-      service.resetServices();
-      expect(service.matrixSvcHidden().size).toBe(0);
-    });
-  });
-
-  // ── visibleServices ───────────────────────────────────────────────────────
-
-  describe('visibleServices()', () => {
-    it('returns all services when none are hidden', () => {
-      service.matrixSvcHidden.set(new Set());
-      expect(service.visibleServices(['svc-a', 'svc-b', 'svc-c']))
-        .toEqual(['svc-a', 'svc-b', 'svc-c']);
-    });
-
-    it('filters out hidden services', () => {
-      service.matrixSvcHidden.set(new Set(['svc-b']));
-      expect(service.visibleServices(['svc-a', 'svc-b', 'svc-c']))
-        .toEqual(['svc-a', 'svc-c']);
-    });
-
-    it('tolerates stale hidden entries (service no longer in allSvcs)', () => {
-      // 'old-svc' is in the hidden set but no longer present in the data
-      service.matrixSvcHidden.set(new Set(['old-svc', 'svc-b']));
-      expect(service.visibleServices(['svc-a', 'svc-b', 'svc-c']))
-        .toEqual(['svc-a', 'svc-c']);
-    });
-
-    it('returns all services when only stale entries are hidden', () => {
-      service.matrixSvcHidden.set(new Set(['gone-1', 'gone-2']));
-      expect(service.visibleServices(['svc-a', 'svc-b']))
-        .toEqual(['svc-a', 'svc-b']);
-    });
-  });
-
-  // ── svcHidden persistence round-trip ─────────────────────────────────────
-
-  it('persists matrixSvcHidden to localStorage via effect', async () => {
-    service.matrixSvcHidden.set(new Set(['svc-a', 'svc-c']));
-    await TestBed.flushEffects();
-    const stored = localStorage.getItem('dd:svcHidden');
-    expect(stored).not.toBeNull();
-    const parts = stored!.split(',');
-    expect(parts).toContain('svc-a');
-    expect(parts).toContain('svc-c');
-  });
-
-  it('restores matrixSvcHidden from localStorage on next init', async () => {
-    localStorage.setItem('dd:svcHidden', 'svc-a,svc-b');
-    TestBed.resetTestingModule();
-    await TestBed.configureTestingModule({}).compileComponents();
-    const fresh = TestBed.inject(AppStateService);
-    expect(fresh.matrixSvcHidden().has('svc-a')).toBe(true);
-    expect(fresh.matrixSvcHidden().has('svc-b')).toBe(true);
-    expect(fresh.matrixSvcHidden().has('svc-c')).toBe(false);
-  });
-
-  // ── kpi recompute over visible services × visible environments ────────────
-
-  describe('kpi — filtered by svcHidden + colHidden', () => {
-    const ev = (id: string, svc: string, env: string, status: 'in-progress' | 'success' | 'failure') => ({
-      id, service: svc, environment: env, status, deployment_id: `d${id}`, happened_at: '',
-    });
-    const makeMatrix = () => ({
-      generated_at: '2026-06-17T00:00:00Z',
-      environments: ['dev', 'prod'],
-      rows: [
-        {
-          service: 'svc-a',
-          slots: {
-            dev:  { current: ev('1', 'svc-a', 'dev',  'in-progress') },
-            prod: { current: ev('2', 'svc-a', 'prod', 'success') },
-          },
-        },
-        {
-          service: 'svc-b',
-          slots: {
-            dev:  { current: ev('3', 'svc-b', 'dev',  'failure') },
-            prod: { current: ev('4', 'svc-b', 'prod', 'in-progress') },
-          },
-        },
-      ],
-    });
-
-    it('counts all services + envs when nothing is hidden', async () => {
-      service.matrixData.set(makeMatrix());
-      service.matrixSvcHidden.set(new Set());
-      service.matrixColHidden.set(new Set());
-      await TestBed.flushEffects();
-      const kpi = service.kpi();
-      expect(kpi.services).toBe(2);
-      expect(kpi.environments).toBe(2);
-      expect(kpi.inFlight).toBe(2); // svc-a/dev + svc-b/prod
-      expect(kpi.failed).toBe(1);   // svc-b/dev
-    });
-
-    it('excludes hidden services from kpi counts', async () => {
-      service.matrixData.set(makeMatrix());
-      service.matrixSvcHidden.set(new Set(['svc-b']));
-      service.matrixColHidden.set(new Set());
-      await TestBed.flushEffects();
-      const kpi = service.kpi();
-      expect(kpi.services).toBe(1);
-      expect(kpi.inFlight).toBe(1); // only svc-a/dev
-      expect(kpi.failed).toBe(0);
-    });
-
-    it('excludes hidden environments from kpi counts', async () => {
-      service.matrixData.set(makeMatrix());
-      service.matrixSvcHidden.set(new Set());
-      service.matrixColHidden.set(new Set(['prod']));
-      await TestBed.flushEffects();
-      const kpi = service.kpi();
-      expect(kpi.environments).toBe(1);
-      expect(kpi.inFlight).toBe(1); // svc-a/dev only (svc-b/prod hidden)
-      expect(kpi.failed).toBe(1);   // svc-b/dev still visible
-    });
-
-    it('respects both svcHidden and colHidden simultaneously', async () => {
-      service.matrixData.set(makeMatrix());
-      service.matrixSvcHidden.set(new Set(['svc-b']));
-      service.matrixColHidden.set(new Set(['prod']));
-      await TestBed.flushEffects();
-      const kpi = service.kpi();
-      expect(kpi.services).toBe(1);      // svc-a only
-      expect(kpi.environments).toBe(1);  // dev only
-      expect(kpi.inFlight).toBe(1);      // svc-a/dev
-      expect(kpi.failed).toBe(0);
-    });
-  });
-
   // ── syncColOrder ──────────────────────────────────────────────────────────
 
   describe('syncColOrder()', () => {
@@ -551,8 +386,6 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
   let activeView:            ReturnType<typeof signal<'matrix' | 'swimlanes'>>;
   let matrixColHidden:       ReturnType<typeof signal<Set<string>>>;
   let matrixColOrder:        ReturnType<typeof signal<string[]>>;
-  let matrixSvcHidden:       ReturnType<typeof signal<Set<string>>>;
-  let matrixData:            ReturnType<typeof signal<{ environments: string[]; rows: { service: string }[] } | null>>;
 
   beforeEach(async () => {
     localStorage.clear();
@@ -562,8 +395,6 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
     activeView            = signal<'matrix' | 'swimlanes'>('matrix');
     matrixColHidden       = signal(new Set<string>());
     matrixColOrder        = signal([] as string[]);
-    matrixSvcHidden       = signal(new Set<string>());
-    matrixData            = signal(null);
 
     const mockState: Partial<AppStateService> = {
       activeView,
@@ -576,18 +407,15 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       sseConnected:         signal(false),
       kpi:                  signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
       rateLimitMap:         signal(new Map<string, RateLimitReport>()),
-      matrixData:           matrixData as never,
+      matrixData:           signal(null),
       matrixColHidden,
       matrixColOrder,
-      matrixSvcHidden,
       lastEffectiveEvent:   signal(null) as never,
       collapsedLanes:       signal(new Set<string>()),
       autoScrollOnChange:   signal(true),
       orderedVisibleEnvironments: (_envs: string[]) => [],
       toggleColHidden: (_env: string, _all: string[]) => {},
       resetColumns: (_all: string[]) => {},
-      toggleSvcHidden: (_svc: string, _all: string[]) => {},
-      resetServices: () => {},
       expandAllLanes:   () => {},
       collapseAllLanes: (_services: string[]) => {},
     };
@@ -728,56 +556,6 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       const title = priv<() => string>(component, 'columnsBtnTitle')();
       expect(title).toContain('2');
       expect(title).toContain('environments hidden');
-    });
-  });
-
-  // ── svcHiddenCount ────────────────────────────────────────────────────────
-
-  describe('svcHiddenCount()', () => {
-    it('is 0 when nothing is hidden', () => {
-      matrixSvcHidden.set(new Set());
-      matrixData.set({ environments: [], rows: [{ service: 'svc-a' }, { service: 'svc-b' }] } as never);
-      expect(priv<() => number>(component, 'svcHiddenCount')()).toBe(0);
-    });
-
-    it('counts only hidden services that exist in current data', () => {
-      matrixData.set({ environments: [], rows: [{ service: 'svc-a' }, { service: 'svc-b' }] } as never);
-      // 'old-svc' is stale — not in the data, must not count
-      matrixSvcHidden.set(new Set(['svc-a', 'old-svc']));
-      expect(priv<() => number>(component, 'svcHiddenCount')()).toBe(1);
-    });
-
-    it('returns correct count when multiple services are hidden', () => {
-      matrixData.set({ environments: [], rows: [{ service: 'svc-a' }, { service: 'svc-b' }, { service: 'svc-c' }] } as never);
-      matrixSvcHidden.set(new Set(['svc-a', 'svc-c']));
-      expect(priv<() => number>(component, 'svcHiddenCount')()).toBe(2);
-    });
-  });
-
-  // ── servicesBtnTitle ──────────────────────────────────────────────────────
-
-  describe('servicesBtnTitle()', () => {
-    it('returns generic title when nothing is hidden', () => {
-      matrixSvcHidden.set(new Set());
-      matrixData.set({ environments: [], rows: [{ service: 'svc-a' }] } as never);
-      const title = priv<() => string>(component, 'servicesBtnTitle')();
-      expect(title).toContain('show/hide');
-    });
-
-    it('returns count in title when 1 service is hidden (singular)', () => {
-      matrixData.set({ environments: [], rows: [{ service: 'svc-a' }, { service: 'svc-b' }] } as never);
-      matrixSvcHidden.set(new Set(['svc-a']));
-      const title = priv<() => string>(component, 'servicesBtnTitle')();
-      expect(title).toContain('1');
-      expect(title).toContain('service hidden');
-    });
-
-    it('returns count in title when 2 services are hidden (plural)', () => {
-      matrixData.set({ environments: [], rows: [{ service: 'svc-a' }, { service: 'svc-b' }, { service: 'svc-c' }] } as never);
-      matrixSvcHidden.set(new Set(['svc-a', 'svc-b']));
-      const title = priv<() => string>(component, 'servicesBtnTitle')();
-      expect(title).toContain('2');
-      expect(title).toContain('services hidden');
     });
   });
 });

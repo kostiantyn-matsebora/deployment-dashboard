@@ -98,7 +98,6 @@ describe('SwimlanesComponent — edges & DAGs', () => {
       selectedEvent:          signal<DeploymentEvent | null>(null),
       selectedNextEvent:      signal<DeploymentEvent | null>(null),
       sseConnected:           signal(false),
-      matrixSvcHidden:        signal(new Set<string>()),
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
       lastEffectiveEvent:     signal<DeploymentEvent | null>(null),
