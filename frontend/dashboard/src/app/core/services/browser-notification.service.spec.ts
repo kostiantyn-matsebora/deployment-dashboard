@@ -69,6 +69,18 @@ function priv<T>(obj: BrowserNotificationService, key: string): T {
   return (obj as unknown as Record<string, T>)[key];
 }
 
+/**
+ * Minimal test subclass — exposes the protected `startedAt` field so tests can
+ * set an explicit high-water-mark without an unsafe cast.
+ */
+class TestBrowserNotificationService extends BrowserNotificationService {
+  constructor(startedAt: string) {
+    super();
+    // `startedAt` is protected readonly — accessible from the subclass.
+    (this as unknown as { startedAt: string }).startedAt = startedAt;
+  }
+}
+
 // ── Notification API mock ──────────────────────────────────────────────────
 
 interface NotifMock {
@@ -314,6 +326,39 @@ describe('BrowserNotificationService', () => {
       deploymentEvents$.next(mkEvent({ id: 'uuid-a', status: 'success' }));
       deploymentEvents$.next(mkEvent({ id: 'uuid-b', status: 'failure' }));
       expect(notifMock.instances).toHaveLength(2);
+    });
+
+    it('de-dup survives a page reload — seenIds round-trip via sessionStorage', () => {
+      // ── First "page load": fire N events and let them persist to sessionStorage.
+      const eventIds = ['reload-1', 'reload-2', 'reload-3'];
+      createService({ enabled: true });
+      for (const id of eventIds) {
+        deploymentEvents$.next(mkEvent({ id }));
+      }
+      // All 3 notifications fired on first load.
+      expect(notifMock.instances).toHaveLength(eventIds.length);
+
+      // Verify sessionStorage was written.
+      const raw = sessionStorage.getItem('dd:notifSeenIds');
+      expect(raw).not.toBeNull();
+      const stored: string[] = JSON.parse(raw!);
+      for (const id of eventIds) {
+        expect(stored).toContain(id);
+      }
+
+      // ── Second "page load": create a fresh service in a new TestBed.
+      TestBed.resetTestingModule();
+      notifMock.instances.length = 0; // reset spy without clearing sessionStorage
+
+      // New service reads seenIds from sessionStorage on construction.
+      const svc2 = createService({ enabled: true });
+      void svc2; // used only to trigger the constructor subscription
+
+      // Re-send the same event IDs — none should produce a new Notification.
+      for (const id of eventIds) {
+        deploymentEvents$.next(mkEvent({ id }));
+      }
+      expect(notifMock.instances).toHaveLength(0);
     });
   });
 

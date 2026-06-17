@@ -41,8 +41,19 @@ export class BrowserNotificationService {
   private readonly prefs = inject(NotificationPrefsService);
   private readonly destroyRef = inject(DestroyRef);
 
-  /** ISO timestamp recorded at construction — events before this are SSE replays. */
-  private readonly startedAt: string = new Date().toISOString();
+  /**
+   * ISO timestamp recorded at construction.
+   *
+   * Events at or after this instant are treated as live transitions and will be
+   * processed normally (subject to de-dup and permission gates).
+   * Events strictly before this instant are treated as SSE replay / backfill and
+   * are silently skipped so the user is not re-notified for historical activity.
+   *
+   * Comparison is done via `Date.getTime()` (numeric milliseconds) rather than
+   * lexicographic string comparison so non-UTC offsets and lower-precision ISO
+   * values (e.g. no sub-second component) are handled correctly.
+   */
+  protected startedAt: string = new Date().toISOString();
 
   /** Max number of IDs retained in the de-dup set. */
   private static readonly MAX_SEEN_IDS = 500;
@@ -98,7 +109,11 @@ export class BrowserNotificationService {
 
   private onDeploymentEvent(ev: DeploymentEvent): void {
     // Replay guard: skip events that predate this session.
-    if (ev.happened_at < this.startedAt) return;
+    // Use numeric comparison so non-UTC / lower-precision ISO strings are handled correctly.
+    // NaN (unparseable date) is treated as "not older" — fail open to the seen-ID + permission gates.
+    const happenedMs = new Date(ev.happened_at).getTime();
+    const startedMs  = new Date(this.startedAt).getTime();
+    if (!isNaN(happenedMs) && happenedMs < startedMs) return;
 
     // De-dup: skip if we've already processed this ID.
     if (this.hasSeen(ev.id)) return;
@@ -113,7 +128,11 @@ export class BrowserNotificationService {
 
   private onComponentEvent(ev: ComponentEventRecord): void {
     // Replay guard: skip events that predate this session.
-    if (ev.occurred_at < this.startedAt) return;
+    // Use numeric comparison so non-UTC / lower-precision ISO strings are handled correctly.
+    // NaN (unparseable date) is treated as "not older" — fail open to the seen-ID + permission gates.
+    const occurredMs = new Date(ev.occurred_at).getTime();
+    const startedMs  = new Date(this.startedAt).getTime();
+    if (!isNaN(occurredMs) && occurredMs < startedMs) return;
 
     // De-dup.
     if (this.hasSeen(ev.id)) return;
@@ -329,8 +348,4 @@ export class BrowserNotificationService {
     return this.seenIds.size;
   }
 
-  /** @internal For testing — override startup timestamp to simulate "past" or "future" events. */
-  _setStartedAt(ts: string): void {
-    (this as unknown as { startedAt: string }).startedAt = ts;
-  }
 }
