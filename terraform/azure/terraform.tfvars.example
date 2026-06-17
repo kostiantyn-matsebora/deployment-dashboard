@@ -1,0 +1,20 @@
+# Core
+location            = "northeurope"
+resource_group_name = "rg-deployment-dashboard"
+environment         = "dev"
+
+# Images — pin to a specific release tag (e.g. "0.12.1")
+dashboard_version = "0.12.1"
+
+# PostgreSQL
+pg_sku_name    = "B_Standard_B1ms"
+pg_admin_login = "pgadmin"
+
+# GitHub Fetcher (comma-separated owner/repo list, empty = disabled)
+github_repos = ""
+
+# Easy Auth — set to true to require Entra ID login on the gateway
+enable_easy_auth = false
+
+# IP whitelisting (empty = fully public)
+# allowed_ip_ranges = ["203.0.113.0/24"]
