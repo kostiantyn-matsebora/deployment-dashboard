@@ -88,7 +88,7 @@ jobs:
       # ── Step 1: Build locally (load into Docker daemon for scanning) ───────
       # Scan before push: the image is loaded but not pushed yet.
       # GHA layer cache is populated here; the push step below is a cache hit.
-      # build-args: VERSION is passed only for the api image (bakes the release
+      # build-args: APP_VERSION is passed only for the api image (bakes the release
       # version with a leading v into the assembly's InformationalVersion, e.g.
       # v0.13.1); other images ignore it.
       - name: Build (local load for scanning)
@@ -99,7 +99,7 @@ jobs:
           push: false
           load: true
           tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:scan
-          build-args: ${{ matrix.key == 'api' && format('VERSION=v{0}', steps.ver.outputs.version) || '' }}
+          build-args: ${{ matrix.key == 'api' && format('APP_VERSION=v{0}', steps.ver.outputs.version) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -121,7 +121,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.key == 'api' && format('VERSION=v{0}', steps.ver.outputs.version) || '' }}
+          build-args: ${{ matrix.key == 'api' && format('APP_VERSION=v{0}', steps.ver.outputs.version) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
