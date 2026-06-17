@@ -2,22 +2,20 @@ import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NotificationPrefsService } from './notification-prefs.service';
 import { DeploymentApiService } from './deployment-api.service';
-import { DeploymentEvent, ComponentEventRecord } from '../models/deployment.model';
+import { DeploymentEvent } from '../models/deployment.model';
 
 /**
  * BrowserNotificationService — fires OS-level browser notifications for deployment
- * and component events via the raw SSE streams.
+ * events via the raw SSE stream.
  *
  * Spec: docs/design/mockup/index.html #pop-notif, docs/EXTENSION_SPECIFICATION.md §4.3
  *
- * Sources:
- *  - DeploymentApiService.streamEvents() — all 8 deployment statuses
- *  - DeploymentApiService.streamComponentEvents() — fetcher lifecycle alerts
+ * Source: DeploymentApiService.streamEvents() — all 8 deployment statuses.
  *
  * Replay guard (SSE replays missed events on reconnect):
  *  - Startup high-water-mark: `startedAt` is set at construction time (ISO string).
- *    Events whose `happened_at` / `occurred_at` is strictly before this mark are
- *    treated as replayed history and silently skipped.
+ *    Events whose `happened_at` is strictly before this mark are treated as
+ *    replayed history and silently skipped.
  *  - Bounded fired-ID set: the last MAX_SEEN_IDS event IDs are tracked to de-dup
  *    any event that arrives twice within a session (network blip, duplicate delivery).
  *    The set is pruned when it reaches the cap to prevent unbounded growth.
@@ -32,8 +30,7 @@ import { DeploymentEvent, ComponentEventRecord } from '../models/deployment.mode
  *  - `'Notification' in window` — degrades when API is absent.
  *  - Secure context not enforced here; browser blocks requestPermission on non-HTTPS.
  *
- * Click: focuses the window and opens `run_url` / `component_url` in a new tab when
- * available.
+ * Click: focuses the window and opens `run_url` in a new tab when available.
  */
 @Injectable({ providedIn: 'root' })
 export class BrowserNotificationService {
@@ -72,10 +69,6 @@ export class BrowserNotificationService {
     this.api.streamEvents()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(ev => this.onDeploymentEvent(ev));
-
-    this.api.streamComponentEvents()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(ev => this.onComponentEvent(ev));
   }
 
   /**
@@ -124,36 +117,6 @@ export class BrowserNotificationService {
     if (Notification.permission !== 'granted') return;
 
     this.fireDeployment(ev);
-  }
-
-  private onComponentEvent(ev: ComponentEventRecord): void {
-    // Replay guard: skip events that predate this session.
-    // Use numeric comparison so non-UTC / lower-precision ISO strings are handled correctly.
-    // NaN (unparseable date) is treated as "not older" — fail open to the seen-ID + permission gates.
-    const occurredMs = new Date(ev.occurred_at).getTime();
-    const startedMs  = new Date(this.startedAt).getTime();
-    if (!isNaN(occurredMs) && occurredMs < startedMs) return;
-
-    // De-dup.
-    if (this.hasSeen(ev.id)) return;
-    this.markSeen(ev.id);
-
-    if (!this.prefs.prefs().enabled) return;
-    if (!this.isSupported()) return;
-    if (Notification.permission !== 'granted') return;
-
-    // Only notify on meaningful state transitions (not routine heartbeats).
-    if (!this.isNoteworthyComponentEvent(ev)) return;
-
-    this.fireComponent(ev);
-  }
-
-  /**
-   * Returns true for component events the user should see as a notification.
-   * Currently: fetcher paused (reset in progress) or resumed (running after pause).
-   */
-  private isNoteworthyComponentEvent(ev: ComponentEventRecord): boolean {
-    return ev.state === 'paused' || ev.state === 'running';
   }
 
   private hasSeen(id: string): boolean {
@@ -234,24 +197,6 @@ export class BrowserNotificationService {
     }
   }
 
-  private fireComponent(ev: ComponentEventRecord): void {
-    try {
-      const { title, body, tag } = this.buildComponentContent(ev);
-      const notif = new Notification(title, {
-        body,
-        tag,
-        icon: '/assets/logo/logo.svg',
-        requireInteraction: false,
-      });
-      notif.onclick = () => {
-        try { window.focus(); } catch { /* non-fatal */ }
-        notif.close();
-      };
-    } catch {
-      // Degrade silently.
-    }
-  }
-
   /**
    * Build browser Notification title + body for a deployment event.
    *
@@ -301,26 +246,6 @@ export class BrowserNotificationService {
     return { title, body, tag };
   }
 
-  /** Build notification content for a component event (fetcher lifecycle). */
-  private buildComponentContent(ev: ComponentEventRecord): { title: string; body: string; tag: string } {
-    const componentId = ev.component_id ?? 'fetcher';
-    const tag         = `dd-component-${componentId}`;
-
-    let title: string;
-    let body: string;
-
-    if (ev.state === 'paused') {
-      title = 'Fetcher paused';
-      body  = `${componentId} is paused — reset in progress`;
-    } else {
-      // running
-      title = 'Fetcher resumed';
-      body  = `${componentId} is running`;
-    }
-
-    return { title, body, tag };
-  }
-
   /** Mirrors isProdLike() from the extension shared module. */
   private isProdLike(environment: string): boolean {
     const lower = environment.toLowerCase();
@@ -334,13 +259,6 @@ export class BrowserNotificationService {
    */
   _simulateDeploymentEvent(ev: DeploymentEvent): void {
     this.onDeploymentEvent(ev);
-  }
-
-  /**
-   * @internal For testing — push a component event directly without an active EventSource.
-   */
-  _simulateComponentEvent(ev: ComponentEventRecord): void {
-    this.onComponentEvent(ev);
   }
 
   /** @internal For testing — inspect current seen-ID set. */

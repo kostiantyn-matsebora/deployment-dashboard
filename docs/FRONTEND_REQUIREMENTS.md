@@ -98,7 +98,7 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 
 ### Browser notifications
 
-> **Scope.** Opt-in desktop notifications driven by the existing SSE streams — no new backend.
+> **Scope.** Opt-in desktop notifications driven by the existing deployment SSE stream — no new backend.
 
 **Permission model.**
 - Permission is requested **lazily** — only when the user first enables notifications via the topbar bell toggle.
@@ -108,7 +108,6 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 **Event coverage.**
 - Notifications fire on **status transitions** only: initial load, SSE replay, and backfill events are suppressed.
 - All 8 deployment statuses are covered.
-- Component lifecycle events (fetcher `paused` / `running`) are covered.
 - De-duplication: one logical change produces exactly one notification.
 
 **Notification payload.**
@@ -123,7 +122,7 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 | Service | Watch-all-except list OR watch-only list |
 | Environment | Watch-all-except list OR watch-only list |
 
-**Data source.** The existing `GET /api/events/stream` (deployment SSE) and `GET /api/control/events/stream` (component SSE) — no new API endpoints.
+**Data source.** The existing `GET /api/events/stream` (deployment SSE) — no new API endpoints.
 
 **Scope limits.**
 - Foreground and backgrounded tab only — no service worker, no push notifications.

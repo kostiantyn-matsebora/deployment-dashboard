@@ -31,7 +31,7 @@ A DORA-anchored analytics view covering the last 7, 14, or 30 days (bounded by `
 
 ## :material-bell-outline: Browser notifications { #browser-notifications }
 
-Opt-in desktop notifications triggered by deployment status transitions and fetcher component lifecycle events. Enable the bell toggle in the topbar — the browser permission is requested once, lazily. Filter notifications by status, service, and environment via the notification preferences popover.
+Opt-in desktop notifications triggered by deployment status transitions. Enable the bell toggle in the topbar — the browser permission is requested once, lazily. Filter notifications by status, service, and environment via the notification preferences popover.
 
 ![Browser notifications — dark](../_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
 ![Browser notifications — light](../_assets/screenshots/notifications-light.png#only-light){ .dd-shot }

@@ -14,9 +14,6 @@
  *   - Bounded seenIds: set is pruned when cap is reached
  *   - buildDeploymentContent: title/body/tag for all 8 statuses
  *   - isProdLike: prod / production / prod-xyz all match
- *   - Component event: fires for paused/running state transitions
- *   - Component event: skipped when prefs disabled or irrelevant state
- *   - Component event: replay guard applies
  */
 
 import { Subject } from 'rxjs';
@@ -25,10 +22,7 @@ import { TestBed } from '@angular/core/testing';
 import { BrowserNotificationService } from './browser-notification.service';
 import { DeploymentApiService }        from './deployment-api.service';
 import { NotificationPrefsService }    from './notification-prefs.service';
-import {
-  ComponentEventRecord,
-  DeploymentEvent,
-} from '../models/deployment.model';
+import { DeploymentEvent } from '../models/deployment.model';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -50,35 +44,9 @@ function mkEvent(overrides: Partial<DeploymentEvent> = {}): DeploymentEvent {
   };
 }
 
-/** Build a minimal ComponentEventRecord. */
-function mkComponentEvent(overrides: Partial<ComponentEventRecord> = {}): ComponentEventRecord {
-  return {
-    id:           'cev-1',
-    component_id: 'fetcher-main',
-    event_type:   'state_change',
-    state:        'paused',
-    occurred_at:  new Date(Date.now() + 60_000).toISOString(),
-    received_at:  new Date(Date.now() + 60_000).toISOString(),
-    payload:      null,
-    ...overrides,
-  };
-}
-
 /** Access protected / private members via type cast. */
 function priv<T>(obj: BrowserNotificationService, key: string): T {
   return (obj as unknown as Record<string, T>)[key];
-}
-
-/**
- * Minimal test subclass — exposes the protected `startedAt` field so tests can
- * set an explicit high-water-mark without an unsafe cast.
- */
-class TestBrowserNotificationService extends BrowserNotificationService {
-  constructor(startedAt: string) {
-    super();
-    // `startedAt` is protected readonly — accessible from the subclass.
-    (this as unknown as { startedAt: string }).startedAt = startedAt;
-  }
 }
 
 // ── Notification API mock ──────────────────────────────────────────────────
@@ -132,18 +100,15 @@ function removeNotifMock(): void {
 describe('BrowserNotificationService', () => {
   let notifMock:         NotifMock;
   let deploymentEvents$: Subject<DeploymentEvent>;
-  let componentEvents$:  Subject<ComponentEventRecord>;
 
   function createService(prefOverrides: {
     enabled?: boolean;
     statuses?: string[];
   } = {}): BrowserNotificationService {
     deploymentEvents$ = new Subject<DeploymentEvent>();
-    componentEvents$  = new Subject<ComponentEventRecord>();
 
     const mockApi: Partial<DeploymentApiService> = {
-      streamEvents:          () => deploymentEvents$.asObservable(),
-      streamComponentEvents: () => componentEvents$.asObservable(),
+      streamEvents: () => deploymentEvents$.asObservable(),
     };
 
     const mockPrefs: Partial<NotificationPrefsService> = {
@@ -276,12 +241,6 @@ describe('BrowserNotificationService', () => {
       createService({ enabled: true });
       deploymentEvents$.next(mkEvent({ id: 'new-1' })); // future timestamp from mkEvent
       expect(notifMock.instances).toHaveLength(1);
-    });
-
-    it('skips component events whose occurred_at is before startedAt', () => {
-      createService({ enabled: true });
-      componentEvents$.next(mkComponentEvent({ id: 'cev-old', occurred_at: '2020-01-01T00:00:00Z' }));
-      expect(notifMock.instances).toHaveLength(0);
     });
   });
 
@@ -478,41 +437,4 @@ describe('BrowserNotificationService', () => {
     it('does NOT match "preprod"', () => expect(isProd('preprod')).toBe(false));
   });
 
-  // ── Component event notifications ─────────────────────────────────────────
-
-  describe('component event notifications', () => {
-    it('fires a notification when fetcher transitions to paused', () => {
-      createService({ enabled: true });
-      componentEvents$.next(mkComponentEvent({ id: 'cev-paused', state: 'paused' }));
-      expect(notifMock.instances).toHaveLength(1);
-      expect(notifMock.instances[0].title).toContain('Fetcher paused');
-    });
-
-    it('fires a notification when fetcher transitions to running', () => {
-      createService({ enabled: true });
-      componentEvents$.next(mkComponentEvent({ id: 'cev-running', state: 'running' }));
-      expect(notifMock.instances).toHaveLength(1);
-      expect(notifMock.instances[0].title).toContain('Fetcher resumed');
-    });
-
-    it('does NOT fire for component events when master prefs are disabled', () => {
-      createService({ enabled: false });
-      componentEvents$.next(mkComponentEvent({ id: 'cev-disabled' }));
-      expect(notifMock.instances).toHaveLength(0);
-    });
-
-    it('does NOT fire for unknown/irrelevant component event states', () => {
-      createService({ enabled: true });
-      componentEvents$.next(mkComponentEvent({ id: 'cev-heartbeat', state: 'heartbeat' }));
-      expect(notifMock.instances).toHaveLength(0);
-    });
-
-    it('de-dups component events by ID', () => {
-      createService({ enabled: true });
-      const cev = mkComponentEvent({ id: 'cev-dup', state: 'paused' });
-      componentEvents$.next(cev);
-      componentEvents$.next(cev); // duplicate
-      expect(notifMock.instances).toHaveLength(1);
-    });
-  });
 });
