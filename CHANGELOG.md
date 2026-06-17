@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.14.0] - 2026-06-17
+
+### Added
+
+- **Deployed version and a documentation link, surfaced in the dashboard footer.** A new fixed footer shows the running version and links to the official documentation, and the header is simplified to the brand name. The version is served by a new unauthenticated `GET /api/version` and baked into the API image at build time, so it reflects exactly what is deployed with no extra configuration: published releases report `vX.Y.Z`, `:latest` / `main` builds report `main+<commit>`, and local builds report `0.0.0-dev`.
+
 ## [0.13.1] - 2026-06-16
 
 ### Changed
