@@ -103,6 +103,7 @@ describe('SwimlanesComponent', () => {
       selectedEvent:          signal<DeploymentEvent | null>(null),
       selectedNextEvent:      signal<DeploymentEvent | null>(null),
       sseConnected:           signal(false),
+      matrixSvcHidden:        signal(new Set<string>()),
       // #309 collapse/expand + SSE wiring signals
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),

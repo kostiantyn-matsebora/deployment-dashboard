@@ -74,6 +74,7 @@ export class TopbarComponent {
   // Popovers
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
   protected readonly columnsPopover       = viewChild<Popover>('columnsPopover');
+  protected readonly servicesPopover      = viewChild<Popover>('servicesPopover');
   protected readonly correlationPopover   = viewChild<Popover>('correlationPopover');
   protected readonly legendPopover        = viewChild<Popover>('legendPopover');
   protected readonly notifPopover         = viewChild<Popover>('notifPopover');
@@ -82,6 +83,7 @@ export class TopbarComponent {
   // Popover open state (for icon-btn.is-active highlight)
   protected readonly fieldsPopoverOpen      = signal(false);
   protected readonly columnsPopoverOpen     = signal(false);
+  protected readonly servicesPopoverOpen    = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
   protected readonly legendPopoverOpen      = signal(false);
   protected readonly notifPopoverOpen       = signal(false);
@@ -222,6 +224,11 @@ export class TopbarComponent {
     this.state.matrixData()?.environments ?? []
   );
 
+  // ── All services from matrix data ─────────────────────────
+  protected readonly allServices = computed(() =>
+    this.state.matrixData()?.rows.map(r => r.service) ?? []
+  );
+
   // ── Column hidden count (badge for Columns button) ────────
   protected readonly colHiddenCount = computed(() =>
     this.state.matrixColHidden().size
@@ -233,6 +240,22 @@ export class TopbarComponent {
     return n > 0
       ? `Columns — ${n} environment${n === 1 ? '' : 's'} hidden`
       : 'Columns — show/hide environments';
+  });
+
+  // ── Service hidden count (badge for Services button) ──────
+  protected readonly svcHiddenCount = computed(() => {
+    // Only count hidden entries that still exist in the current service list
+    const hidden = this.state.matrixSvcHidden();
+    const all    = this.allServices();
+    return all.filter(s => hidden.has(s)).length;
+  });
+
+  /** Title / aria label for the Services button, reflecting hidden count. */
+  protected readonly servicesBtnTitle = computed(() => {
+    const n = this.svcHiddenCount();
+    return n > 0
+      ? `Services — ${n} service${n === 1 ? '' : 's'} hidden`
+      : 'Services — show/hide services';
   });
 
   // ── Fields hidden count (per-view; badge for Fields button) ──────────────
@@ -307,6 +330,19 @@ export class TopbarComponent {
     this.state.resetColumns(this.allEnvironments());
   }
 
+  // ── Services picker ───────────────────────────────────────
+  protected isSvcVisible(svc: string): boolean {
+    return !this.state.matrixSvcHidden().has(svc);
+  }
+
+  protected toggleSvcHidden(svc: string): void {
+    this.state.toggleSvcHidden(svc, this.allServices());
+  }
+
+  protected resetServices(): void {
+    this.state.resetServices();
+  }
+
   // ── Correlation picker ────────────────────────────────────
   protected readonly correlationPredicates = CORRELATION_PREDICATES;
 
@@ -330,6 +366,14 @@ export class TopbarComponent {
     if (p) {
       p.toggle(event);
       this.columnsPopoverOpen.update(v => !v);
+    }
+  }
+
+  protected toggleServicesPopover(event: MouseEvent): void {
+    const p = this.servicesPopover();
+    if (p) {
+      p.toggle(event);
+      this.servicesPopoverOpen.update(v => !v);
     }
   }
 
