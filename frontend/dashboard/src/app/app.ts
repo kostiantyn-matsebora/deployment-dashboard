@@ -6,6 +6,7 @@ import { TopbarComponent } from './shared/topbar/topbar.component';
 import { FooterComponent } from './shared/footer/footer.component';
 import { AppStateService } from './core/services/app-state.service';
 import { DeploymentApiService } from './core/services/deployment-api.service';
+import { BrowserNotificationService } from './core/services/browser-notification.service';
 import { RateLimitReport } from './core/models/deployment.model';
 
 /**
@@ -30,9 +31,11 @@ import { RateLimitReport } from './core/models/deployment.model';
   styleUrl: './app.css',
 })
 export class App implements OnInit, OnDestroy {
-  private readonly state  = inject(AppStateService);
-  private readonly api    = inject(DeploymentApiService);
-  private readonly router = inject(Router);
+  private readonly state         = inject(AppStateService);
+  private readonly api           = inject(DeploymentApiService);
+  private readonly router        = inject(Router);
+  // Inject to activate the effect that watches lastEffectiveEvent and fires notifications.
+  private readonly _notifications = inject(BrowserNotificationService);
 
   private subs: Subscription[] = [];
 

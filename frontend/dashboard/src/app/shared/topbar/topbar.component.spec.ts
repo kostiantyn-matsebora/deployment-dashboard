@@ -22,6 +22,8 @@ import { TestBed }                   from '@angular/core/testing';
 import { TopbarComponent }  from './topbar.component';
 import { AppStateService }  from '../../core/services/app-state.service';
 import { ThemeService }     from '../../core/services/theme.service';
+import { NotificationPrefsService } from '../../core/services/notification-prefs.service';
+import { BrowserNotificationService } from '../../core/services/browser-notification.service';
 import {
   MatrixField,
   RateLimitReport,
@@ -77,6 +79,8 @@ describe('TopbarComponent — rate-limit indicator', () => {
       // #309 collapse/expand signals
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
+      // #271 browser-notifications
+      lastEffectiveEvent:     signal(null) as never,
     };
 
     const mockTheme: Partial<ThemeService> = {
@@ -84,11 +88,25 @@ describe('TopbarComponent — rate-limit indicator', () => {
       setTheme: () => {},
     };
 
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
+
     await TestBed.configureTestingModule({
       imports:   [TopbarComponent],
       providers: [
-        { provide: AppStateService, useValue: mockState },
-        { provide: ThemeService,    useValue: mockTheme },
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -317,16 +335,30 @@ describe('TopbarComponent — legend popover guard', () => {
       // #309 collapse/expand signals
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
+      // #271 browser-notifications
+      lastEffectiveEvent:     signal(null) as never,
     };
     const mockTheme: Partial<ThemeService> = {
       theme: signal<Theme>('dark'),
       setTheme: () => {},
     };
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
     await TestBed.configureTestingModule({
       imports:   [TopbarComponent],
       providers: [
-        { provide: AppStateService, useValue: mockState },
-        { provide: ThemeService,    useValue: mockTheme },
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();

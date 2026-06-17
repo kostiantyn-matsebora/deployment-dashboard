@@ -395,6 +395,194 @@
     </div>
     }
 
+    <!-- Notification bell — monochrome SVG, badge-dot when notifications enabled -->
+    <div style="position: relative">
+      <button
+        class="icon-btn"
+        [class.is-active]="notifPopoverOpen()"
+        [class.has-active]="notifEnabled()"
+        title="Notification settings — browser alerts on deployment events"
+        aria-label="Notification settings"
+        aria-haspopup="true"
+        (click)="toggleNotifPopover($event)"
+      >
+        <!-- Monochrome stroke bell — inherits currentColor at 15px, matching peer ⊞ ▦ ☷ -->
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+             stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7.5 1.5a4 4 0 0 1 4 4v2.5l1 1.5H2.5l1-1.5V5.5a4 4 0 0 1 4-4z"/>
+          <path d="M6 11.5a1.5 1.5 0 0 0 3 0"/>
+        </svg>
+        <span class="badge-dot" aria-hidden="true"></span>
+      </button>
+      <p-popover #notifPopover [dismissable]="true" appendTo="body" styleClass="glass-popover notif-popover">
+        <div class="picker-content notif-content">
+          <span class="popover-title">BROWSER NOTIFICATIONS</span>
+
+          <!-- Master enable toggle -->
+          <label
+            class="toggle notif-master-toggle"
+            [class.is-on]="notifEnabled()"
+            (click)="toggleNotifEnabled()"
+            role="switch"
+            [attr.aria-checked]="notifEnabled()"
+            aria-label="Enable browser notifications"
+          >
+            <span class="switch" aria-hidden="true"></span>
+            <span>{{ notifEnabled() ? 'Notify — browser alerts' : 'Notify — off' }}</span>
+          </label>
+          <span class="notif-hint">Off = no browser notifications fired for any event.</span>
+
+          <!-- Filter block — dims when master is OFF -->
+          <div class="notif-filters" [class.is-paused]="!notifEnabled()">
+
+            <!-- Status axis — first (issue #271 spec) -->
+            <div class="notif-axis-label">
+              Status
+              <span class="notif-axis-hint">(select statuses that trigger a notification)</span>
+            </div>
+            <div class="notif-status-chips">
+              @for (s of notifStatuses; track s) {
+                <span
+                  class="notif-status-chip"
+                  [class.is-on]="isNotifStatusOn(s)"
+                  [attr.data-status]="s"
+                  role="checkbox"
+                  [attr.aria-checked]="isNotifStatusOn(s)"
+                  [attr.aria-label]="s"
+                  (click)="toggleNotifStatus(s)"
+                >{{ s }}</span>
+              }
+            </div>
+
+            <!-- Services axis -->
+            <div class="notif-axis-label">
+              Services
+              <span class="notif-axis-hint">(optional — blank = all)</span>
+            </div>
+            <div class="notif-mode-row" role="group" aria-label="Service notify mode">
+              <div class="notif-mode-seg">
+                <button
+                  class="notif-period-btn"
+                  [class.is-active]="notifServiceMode() === 'watch-all-except'"
+                  type="button"
+                  (click)="setNotifServiceMode('watch-all-except')"
+                >Watch all except</button>
+                <button
+                  class="notif-period-btn"
+                  [class.is-active]="notifServiceMode() === 'watch-only'"
+                  type="button"
+                  (click)="setNotifServiceMode('watch-only')"
+                >Watch only</button>
+              </div>
+            </div>
+            <div class="notif-filter-chips" aria-label="Service filter chips">
+              @for (chip of notifServiceChips(); track chip) {
+                <span class="notif-chip">
+                  {{ chip }}
+                  <span
+                    class="notif-chip-x"
+                    role="button"
+                    [attr.aria-label]="'Remove ' + chip"
+                    title="Remove"
+                    (click)="removeNotifServiceChip(chip)"
+                  >&#215;</span>
+                </span>
+              }
+            </div>
+            <div class="notif-add-row">
+              <input
+                class="notif-add-input"
+                type="text"
+                placeholder="service name…"
+                autocomplete="off"
+                spellcheck="false"
+                [ngModel]="notifServiceInput()"
+                (ngModelChange)="notifServiceInput.set($event)"
+                (keydown)="onNotifServiceKeydown($event)"
+                aria-label="Add service to filter"
+              />
+              <button
+                class="notif-add-btn"
+                type="button"
+                (click)="addNotifServiceChip()"
+                aria-label="Add service"
+              >+ add</button>
+            </div>
+            <div class="notif-caption">{{ notifServiceCaption() }}</div>
+
+            <!-- Environments axis -->
+            <div class="notif-axis-label">
+              Environments
+              <span class="notif-axis-hint">(optional — blank = all)</span>
+            </div>
+            <div class="notif-mode-row" role="group" aria-label="Environment notify mode">
+              <div class="notif-mode-seg">
+                <button
+                  class="notif-period-btn"
+                  [class.is-active]="notifEnvMode() === 'watch-all-except'"
+                  type="button"
+                  (click)="setNotifEnvMode('watch-all-except')"
+                >Watch all except</button>
+                <button
+                  class="notif-period-btn"
+                  [class.is-active]="notifEnvMode() === 'watch-only'"
+                  type="button"
+                  (click)="setNotifEnvMode('watch-only')"
+                >Watch only</button>
+              </div>
+            </div>
+            <div class="notif-filter-chips" aria-label="Environment filter chips">
+              @for (chip of notifEnvChips(); track chip) {
+                <span class="notif-chip">
+                  {{ chip }}
+                  <span
+                    class="notif-chip-x"
+                    role="button"
+                    [attr.aria-label]="'Remove ' + chip"
+                    title="Remove"
+                    (click)="removeNotifEnvChip(chip)"
+                  >&#215;</span>
+                </span>
+              }
+            </div>
+            <div class="notif-add-row">
+              <input
+                class="notif-add-input"
+                type="text"
+                placeholder="environment name…"
+                autocomplete="off"
+                spellcheck="false"
+                [ngModel]="notifEnvInput()"
+                (ngModelChange)="notifEnvInput.set($event)"
+                (keydown)="onNotifEnvKeydown($event)"
+                aria-label="Add environment to filter"
+              />
+              <button
+                class="notif-add-btn"
+                type="button"
+                (click)="addNotifEnvChip()"
+                aria-label="Add environment"
+              >+ add</button>
+            </div>
+            <div class="notif-caption">{{ notifEnvCaption() }}</div>
+
+          </div><!-- /notif-filters -->
+
+          <!-- Save — writes prefs to localStorage (effect fires automatically, but
+               explicit Save closes the popover and confirms intent per mockup) -->
+          <div class="notif-actions">
+            <button
+              class="notif-save-btn"
+              type="button"
+              (click)="toggleNotifPopover($event)"
+              aria-label="Save notification preferences"
+            >Save</button>
+          </div>
+
+        </div><!-- /notif-content -->
+      </p-popover>
+    </div>
+
   </div>
 
   <!-- Live pill ───────────────────────────────────────────── -->

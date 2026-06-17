@@ -376,6 +376,8 @@ import { NO_ERRORS_SCHEMA }   from '@angular/core';
 import { TopbarComponent }    from '../../shared/topbar/topbar.component';
 import { ThemeService }       from './theme.service';
 import { RateLimitReport }    from '../models/deployment.model';
+import { NotificationPrefsService } from './notification-prefs.service';
+import { BrowserNotificationService } from './browser-notification.service';
 
 describe('TopbarComponent — badge counts + Columns picker', () => {
   let component: TopbarComponent;
@@ -408,9 +410,14 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       matrixData:           signal(null),
       matrixColHidden,
       matrixColOrder,
+      lastEffectiveEvent:   signal(null) as never,
+      collapsedLanes:       signal(new Set<string>()),
+      autoScrollOnChange:   signal(true),
       orderedVisibleEnvironments: (_envs: string[]) => [],
       toggleColHidden: (_env: string, _all: string[]) => {},
       resetColumns: (_all: string[]) => {},
+      expandAllLanes:   () => {},
+      collapseAllLanes: (_services: string[]) => {},
     };
 
     const mockTheme: Partial<ThemeService> = {
@@ -418,11 +425,26 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       setTheme: () => {},
     };
 
+    // Minimal stubs for services injected by TopbarComponent that are not
+    // under test here — prevents their constructor effects from running.
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:        () => false,
+      requestPermission:  () => Promise.resolve('denied' as const),
+      currentPermission:  'default' as const,
+    };
+
     await TestBed.configureTestingModule({
       imports:   [TopbarComponent],
       providers: [
-        { provide: AppStateService, useValue: mockState },
-        { provide: ThemeService,    useValue: mockTheme },
+        { provide: AppStateService,          useValue: mockState       },
+        { provide: ThemeService,             useValue: mockTheme       },
+        { provide: NotificationPrefsService, useValue: mockNotifPrefs  },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();

@@ -9,12 +9,19 @@ import { Popover } from 'primeng/popover';
 import { AppStateService } from '../../core/services/app-state.service';
 import { ThemeService } from '../../core/services/theme.service';
 import {
+  NotificationPrefsService,
+  NOTIFICATION_STATUSES,
+  NotifFilterMode,
+} from '../../core/services/notification-prefs.service';
+import { BrowserNotificationService } from '../../core/services/browser-notification.service';
+import {
   CORRELATION_PREDICATES,
   CorrelationPredicate,
   MATRIX_FIELDS,
   MatrixField,
   RateLimitReport,
   SWIMLANE_FIELDS,
+  Status,
   SwimlaneField,
   Theme,
 } from '../../core/models/deployment.model';
@@ -58,15 +65,18 @@ interface ThemeOption {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TopbarComponent {
-  protected readonly state        = inject(AppStateService);
-  protected readonly themeService = inject(ThemeService);
-  protected readonly router       = inject(Router);
+  protected readonly state           = inject(AppStateService);
+  protected readonly themeService    = inject(ThemeService);
+  protected readonly notifPrefs      = inject(NotificationPrefsService);
+  protected readonly notifService    = inject(BrowserNotificationService);
+  protected readonly router          = inject(Router);
 
   // Popovers
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
   protected readonly columnsPopover       = viewChild<Popover>('columnsPopover');
   protected readonly correlationPopover   = viewChild<Popover>('correlationPopover');
   protected readonly legendPopover        = viewChild<Popover>('legendPopover');
+  protected readonly notifPopover         = viewChild<Popover>('notifPopover');
   protected readonly rateLimitPopovers    = viewChildren<Popover>('rateLimitPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
@@ -74,6 +84,7 @@ export class TopbarComponent {
   protected readonly columnsPopoverOpen     = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
   protected readonly legendPopoverOpen      = signal(false);
+  protected readonly notifPopoverOpen       = signal(false);
   protected readonly rateLimitPopoverOpen   = signal<Map<string, boolean>>(new Map());
 
   // ── View tabs ─────────────────────────────────────────────
@@ -346,6 +357,122 @@ export class TopbarComponent {
       const current = new Map(this.rateLimitPopoverOpen());
       current.set(adapter, !(current.get(adapter) ?? false));
       this.rateLimitPopoverOpen.set(current);
+    }
+  }
+
+  protected toggleNotifPopover(event: MouseEvent): void {
+    const p = this.notifPopover();
+    if (p) {
+      p.toggle(event);
+      this.notifPopoverOpen.update(v => !v);
+    }
+  }
+
+  // ── Notification prefs ────────────────────────────────────
+
+  /** All 8 statuses in display order. */
+  protected readonly notifStatuses: Status[] = NOTIFICATION_STATUSES;
+
+  /** Derived: true when notifications are enabled (for badge-dot display). */
+  protected readonly notifEnabled = computed(() => this.notifPrefs.prefs().enabled);
+
+  protected toggleNotifEnabled(): void {
+    const enabling = !this.notifPrefs.prefs().enabled;
+    this.notifPrefs.updatePrefs({ enabled: enabling });
+    // Request permission lazily on first explicit opt-in.
+    if (enabling) {
+      void this.notifService.requestPermission();
+    }
+  }
+
+  protected isNotifStatusOn(s: Status): boolean {
+    return this.notifPrefs.prefs().statuses.includes(s);
+  }
+
+  protected toggleNotifStatus(s: Status): void {
+    const current = this.notifPrefs.prefs().statuses;
+    const updated = current.includes(s)
+      ? current.filter(x => x !== s)
+      : [...current, s];
+    this.notifPrefs.updatePrefs({ statuses: updated });
+  }
+
+  protected readonly notifServiceMode = computed(() => this.notifPrefs.prefs().serviceMode);
+  protected readonly notifServiceChips = computed(() => this.notifPrefs.prefs().serviceChips);
+  protected readonly notifServiceCaption = computed(() => {
+    const p = this.notifPrefs.prefs();
+    if (!p.serviceChips.length) return 'Watching all services';
+    const verb = p.serviceMode === 'watch-all-except' ? 'Excluding' : 'Watching only';
+    return `${verb}: ${p.serviceChips.join(', ')}`;
+  });
+
+  protected setNotifServiceMode(mode: NotifFilterMode): void {
+    this.notifPrefs.updatePrefs({ serviceMode: mode });
+  }
+
+  protected removeNotifServiceChip(chip: string): void {
+    this.notifPrefs.updatePrefs({
+      serviceChips: this.notifPrefs.prefs().serviceChips.filter(x => x !== chip),
+    });
+  }
+
+  protected readonly notifEnvMode = computed(() => this.notifPrefs.prefs().envMode);
+  protected readonly notifEnvChips = computed(() => this.notifPrefs.prefs().envChips);
+  protected readonly notifEnvCaption = computed(() => {
+    const p = this.notifPrefs.prefs();
+    if (!p.envChips.length) return 'Watching all environments';
+    const verb = p.envMode === 'watch-all-except' ? 'Excluding' : 'Watching only';
+    return `${verb}: ${p.envChips.join(', ')}`;
+  });
+
+  protected setNotifEnvMode(mode: NotifFilterMode): void {
+    this.notifPrefs.updatePrefs({ envMode: mode });
+  }
+
+  protected removeNotifEnvChip(chip: string): void {
+    this.notifPrefs.updatePrefs({
+      envChips: this.notifPrefs.prefs().envChips.filter(x => x !== chip),
+    });
+  }
+
+  // ── Notification filter chip add inputs ─────────────────
+  /** Transient input value for the "add service" field. */
+  protected notifServiceInput = signal('');
+  /** Transient input value for the "add environment" field. */
+  protected notifEnvInput = signal('');
+
+  protected addNotifServiceChip(): void {
+    const value = this.notifServiceInput().trim();
+    if (!value) return;
+    const existing = this.notifPrefs.prefs().serviceChips;
+    if (!existing.includes(value)) {
+      this.notifPrefs.updatePrefs({ serviceChips: [...existing, value] });
+    }
+    this.notifServiceInput.set('');
+  }
+
+  protected addNotifEnvChip(): void {
+    const value = this.notifEnvInput().trim();
+    if (!value) return;
+    const existing = this.notifPrefs.prefs().envChips;
+    if (!existing.includes(value)) {
+      this.notifPrefs.updatePrefs({ envChips: [...existing, value] });
+    }
+    this.notifEnvInput.set('');
+  }
+
+  /** Handle Enter key on add-service / add-environment inputs. */
+  protected onNotifServiceKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.addNotifServiceChip();
+    }
+  }
+
+  protected onNotifEnvKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.addNotifEnvChip();
     }
   }
 }
