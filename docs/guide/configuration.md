@@ -81,6 +81,7 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 | `GITHUB_RATE_LIMIT_BUDGET_PCT` | no | `30` | Percent of the GitHub hourly quota the fetcher may consume (1–100). |
 | `GITHUB_RATE_LIMIT` | no | `0` | Total hourly GitHub request quota. `0` = auto-discover via `GET /rate_limit` on startup (F16). |
 | `GITHUB_SERVICE_MAP` | no | (empty) | Optional service-identity overrides: comma-sep `key=value`. Key without `/` = workflow-level; key with `/` = repo-level (§5.8.3). |
+| *(no var)* | — | *(auto)* | The fetcher sets `namespace` on every deployment event it posts. For GitHub, `namespace` = the repository name (e.g. `acme/api` repo → `namespace: "acme/api"`). No configuration is required; existing `GITHUB_REPOS` entries are used as-is. Services from different repos that share a workflow name appear as distinct `(namespace, service)` rows in the dashboard and are disambiguated via the `namespace/service` prefix when there is a name collision. |
 | `POLL_INTERVAL_SECONDS` | no | `30` | Poll cadence (the demo profile uses `10`). |
 | `BACKFILL` | no | `false` | Force a one-time backfill run regardless of cursor state (F14). |
 | `INITIAL_LOOKBACK` | no | `7.00:00:00` | Normal-poll first-run lookback (TimeSpan `d.hh:mm:ss`); also backfill fallback when `BACKFILL_MAX_AGE` is unset (F7). |

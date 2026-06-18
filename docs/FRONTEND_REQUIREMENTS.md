@@ -52,10 +52,16 @@ Requirements distilled from design-iteration conversations. One requirement per 
   - A **mode segmented control**: "Show all except" (exclude mode) or "Show only" (include mode).
   - A list of **removable pattern chips** — one chip per active pattern, each with a remove (`×`) button.
   - An **inline text input** with an autocomplete dropdown populated from known service names.
+- **Service identity.** Each slot is keyed by `(namespace, service)`. Services with a non-null `namespace` have the composite identity `namespace/service`. Services with no namespace are identified by the bare `service` name.
+- **Namespace display (render-on-collision).** A `namespace/` prefix is rendered in the Matrix row label and Swimlanes lane label **only** when two or more services share the same name under different namespaces; otherwise the bare service name is shown.
 - **Glob syntax:** `*` matches any sequence of characters; `?` matches any single character. All other characters are literal. Matching is case-insensitive.
+- **Pattern matching rules:**
+  - A pattern **containing `/`** is matched against the full `namespace/service` string.
+  - A pattern **without `/`** is matched against the `service` segment alone, across all namespaces — backward-compatible with all existing saved patterns.
 - A service is **visible** when:
   - Exclude mode: it does not match any active pattern (or no patterns are set — show all).
   - Include mode: it matches at least one active pattern (or no patterns are set — show all).
+- **Autocomplete** is populated from composite identities (`namespace/service` for namespaced rows, bare name for null-namespace rows) derived from received data — no configuration required.
 - Hiding a service **fully removes** its Matrix row and Swimlanes lane — no placeholder remains.
 - The existing inline "filter services…" text input (substring match) and "Failures only" pill toggle coexist with this filter independently.
 - The **KPI stat chips** (SERVICES / ENVS / IN-FLIGHT / FAILED) recompute over visible services × visible environments — the glob service filter and the Columns env filter both affect the counts.
