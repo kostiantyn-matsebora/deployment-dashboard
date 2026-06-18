@@ -246,7 +246,7 @@ WHERE  run_url IS NOT NULL
 
             var expected = new Dictionary<string, string>
             {
-                [emulatorDepId]   = "emu-repo",
+                [emulatorDepId] = "emu-repo",
                 [enterpriseDepId] = "ent-repo",
             };
 
