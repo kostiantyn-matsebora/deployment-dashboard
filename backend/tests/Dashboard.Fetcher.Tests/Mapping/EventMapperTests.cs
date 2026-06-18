@@ -137,10 +137,16 @@ public sealed class EventMapperTests
     // ── NamespaceParser ───────────────────────────────────────────────────────
 
     [Theory]
+    // github.com web URL
     [InlineData("https://github.com/acme/api/actions/runs/7/jobs/1", "api")]
     [InlineData("https://github.com/my-org/my-repo/actions/runs/99", "my-repo")]
-    [InlineData("https://github.com/owner/repo", "repo")]
-    public void NamespaceParser_GithubUrl_ExtractsRepoName(string url, string expected)
+    // REST / api.github.com URL (repos prefix)
+    [InlineData("https://api.github.com/repos/my-org/my-repo/actions/runs/99", "my-repo")]
+    // Local emulator URL (http + repos prefix)
+    [InlineData("http://github-emulator:3100/repos/demo-org/auth-bff/actions/runs/3300", "auth-bff")]
+    // GitHub Enterprise custom host
+    [InlineData("https://github.mycompany.com/acme/api/actions/runs/7", "api")]
+    public void NamespaceParser_ActionsRunUrl_ExtractsRepoName(string url, string expected)
     {
         Assert.Equal(expected, NamespaceParser.ParseFromRunUrl(url));
     }
@@ -149,7 +155,9 @@ public sealed class EventMapperTests
     [InlineData(null)]
     [InlineData("https://jenkins.example.com/job/deploy/42")]
     [InlineData("https://circleci.com/gh/org/repo/123")]
-    public void NamespaceParser_NonGithubOrNullUrl_ReturnsNull(string? url)
+    // Plain github.com repo URL without /actions/ segment yields null
+    [InlineData("https://github.com/owner/repo")]
+    public void NamespaceParser_NoActionsSegmentOrNull_ReturnsNull(string? url)
     {
         Assert.Null(NamespaceParser.ParseFromRunUrl(url));
     }

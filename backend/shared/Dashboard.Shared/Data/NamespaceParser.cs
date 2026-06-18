@@ -3,21 +3,22 @@ using System.Text.RegularExpressions;
 namespace Dashboard.Shared.Data;
 
 /// <summary>
-/// Parses the <c>namespace</c> value from a CI/CD run URL.
-/// For GitHub: extracts the repository short name from
-/// <c>https://github.com/{owner}/{repo}/...</c>.
+/// Parses the <c>namespace</c> value from a GitHub Actions run URL.
+/// Derives the repository short name from the path segment immediately before
+/// <c>/actions/</c>, regardless of host (github.com, api.github.com,
+/// enterprise hosts, or local emulators).
 /// Used by the fetcher and mirrors the backfill SQL in the EF migration.
 /// </summary>
 public static partial class NamespaceParser
 {
-    [GeneratedRegex(@"^https://github\.com/[^/]+/([^/]+)", RegexOptions.Compiled)]
+    [GeneratedRegex(@"/([^/]+)/actions/", RegexOptions.Compiled)]
     private static partial Regex GithubRepoRegex();
 
     private static readonly Regex GithubRepoPattern = GithubRepoRegex();
 
     /// <summary>
-    /// Returns the namespace derived from <paramref name="runUrl"/>, or <c>null</c>
-    /// when the URL is null or does not match a recognised GitHub run URL pattern.
+    /// Returns the repository short name derived from <paramref name="runUrl"/>, or <c>null</c>
+    /// when the URL is null or does not contain a <c>/actions/</c> path segment.
     /// </summary>
     public static string? ParseFromRunUrl(string? runUrl)
     {

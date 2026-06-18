@@ -17,13 +17,15 @@ namespace Dashboard.Shared.Migrations
                 maxLength: 128,
                 nullable: true);
 
-            // Backfill: parse GitHub run_url `https://github.com/{owner}/{repo}/...`
-            // and set namespace = {repo}.  Rows with no parseable GitHub URL stay null.
+            // Backfill: extract the repo short name from any GitHub Actions run_url by
+            // matching the path segment immediately before /actions/ — works for github.com,
+            // api.github.com, enterprise hosts, and local emulators alike.
+            // Rows whose run_url contains no /actions/ segment stay null.
             migrationBuilder.Sql(@"
 UPDATE deployment_events
-SET    namespace = (regexp_match(run_url, '^https://github\.com/[^/]+/([^/]+)'))[1]
+SET    namespace = (regexp_match(run_url, '/([^/]+)/actions/'))[1]
 WHERE  run_url IS NOT NULL
-  AND  run_url LIKE 'https://github.com/%';
+  AND  run_url LIKE '%/actions/%';
 ");
         }
 
