@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **Fetcher now reports GitHub API usage/rate-limit statistics during backfill (#361).** The per-cycle `rate-limit` usage report was emitted only at the end of a poll cycle. Because backfill runs as one long cycle that streams many chunks (one per repo×env), no usage stats appeared until the entire backfill finished — leaving operators blind to quota burn during the fetcher's heaviest-consumption phase. The report now fires per backfill chunk, so the dashboard's rate-limit indicator updates continuously throughout backfill; a normal poll still emits exactly one report per cycle.
 
 
+## [0.16.2] - 2026-06-18
+
+### Fixed
+
+- **Dashboard no longer exhausts the browser's per-host connection limit (#363).** The SPA opened three long-lived SSE (`EventSource`) connections per tab — two of them duplicate deployment-event streams — so two open tabs reached the browser's six-connections-per-host HTTP/1.1 limit and pages would hang indefinitely on refresh. The deployment-event and component-event streams are now multicast over a single shared `EventSource` each (one deployment + one component per tab), so multiple tabs can be open without exhausting connections. The always-on browser-notification subscription reuses the shared deployment stream instead of opening its own.
+
+
 ## [0.16.1] - 2026-06-18
 
 ### Fixed
