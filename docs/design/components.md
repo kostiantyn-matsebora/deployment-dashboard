@@ -254,6 +254,34 @@ On-demand dropdown panels anchored to icon buttons. `z-index: 20` inside topbar'
 - **"Show all · reset order" action:** a text-button at the bottom of the popover restores all environments to visible and resets the column order to the default environment order. Clears both `localStorage` keys.
 - **Persistence:** hidden set persisted to `localStorage` key `dd:colHidden`. Restored on load.
 
+### Pattern Filter (services + notifications)
+
+A reusable glob pattern filter widget used at three sites: the topbar Services popover (Matrix + Swimlanes) and the Notification Preferences Popover (service axis + environment axis).
+
+**Structure.**
+- **Mode segmented control** — two segments:
+  - Services board: "Show all except" (exclude) / "Show only" (include).
+  - Notification axes: "Watch all except" (exclude) / "Watch only" (include).
+- **Pattern chips** — one removable chip per active pattern; each chip has a `×` remove button.
+- **Inline input + autocomplete dropdown** — freetext entry with a dropdown populated from known service (or environment) names; selecting or confirming adds a chip.
+
+**Glob syntax.** `*` = any sequence of characters, `?` = any single character. All other characters are literal. Matching is case-insensitive.
+
+**Visibility logic.**
+- Exclude mode: an item is visible when it does not match any active pattern (empty pattern list = show all).
+- Include mode: an item is visible when it matches at least one active pattern (empty pattern list = show all).
+
+**Persistence.**
+
+| Site | Keys |
+|---|---|
+| Services board (Matrix + Swimlanes) | `dd:svcFilterMode`, `dd:svcPatterns` |
+| Notification service + environment axes | `dd.notifPrefs` (bundled with other notif prefs) |
+
+**Source.** `frontend/dashboard/src/app/shared/pattern-filter/`, `frontend/dashboard/src/app/core/utils/glob.util.ts`.
+
+---
+
 ### Fields Picker
 
 - Shared between views; title and toggle list swap on view switch.
@@ -275,13 +303,9 @@ Accessible from the bell toggle area when notifications are enabled. Three indep
 
 **Status filter.** One `p-checkbox` per deployment status (all 8). Checked = notify on that status. Default: all ON.
 
-**Service filter.**
-- Mode toggle: `Watch all` / `Watch only`.
-- `Watch all` mode shows an exclusion list (services to skip); `Watch only` mode shows an inclusion list.
-- Per-service rows derived from the current deployment data.
-- Default: `Watch all`, empty exclusion list.
+**Service filter.** A [Pattern Filter](#pattern-filter-services--notifications) widget — mode "Watch all except" (exclude) / "Watch only" (include) + pattern chips + autocomplete input. Default: "Watch all except", empty pattern list.
 
-**Environment filter.** Same structure as the Service filter, keyed by environment name.
+**Environment filter.** Same Pattern Filter widget, keyed by environment name. Default: "Watch all except", empty pattern list.
 
 **Persistence.** All three axes persisted to `localStorage` (key `dd.notifPrefs`). Restored on init.
 
