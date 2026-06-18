@@ -151,11 +151,24 @@ export class TopbarComponent {
     return this.state.buildServiceSuggestions(rows);
   });
 
-  /** Badge count: number of services hidden by the current filter. */
+  /**
+   * Distinct matrix-row identities (namespace + service pairs).
+   * Used as the denominator for badge/caption counts so that autocomplete
+   * suggestions (bare names + namespaces + composites in allServiceNames) do
+   * not inflate the total.
+   */
+  private readonly rowIdentities = computed(() =>
+    this.state.matrixData()?.rows.map((r) => ({
+      service:   r.service,
+      namespace: r.namespace ?? null,
+    })) ?? [],
+  );
+
+  /** Badge count: number of distinct matrix rows hidden by the current filter. */
   protected readonly svcHiddenCount = computed(() => {
-    const all  = this.allServiceNames();
+    const all = this.rowIdentities();
     if (!all.length) return 0;
-    const vis  = this.state.visibleServices(all);
+    const vis = this.state.visibleServiceIdentities(all);
     return all.length - vis.length;
   });
 
@@ -169,10 +182,10 @@ export class TopbarComponent {
 
   /** Caption line shown inside the services picker popover. */
   protected readonly servicesCaption = computed(() => {
-    const all      = this.allServiceNames();
+    const all      = this.rowIdentities();
     const patterns = this.servicePatterns();
     if (!patterns.length) return `Showing all ${all.length} service${all.length === 1 ? '' : 's'}`;
-    const vis    = this.state.visibleServices(all);
+    const vis    = this.state.visibleServiceIdentities(all);
     const hidden = all.length - vis.length;
     if (this.serviceFilterMode() === 'exclude') {
       return hidden === 0

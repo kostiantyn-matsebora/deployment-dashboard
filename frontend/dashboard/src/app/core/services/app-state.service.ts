@@ -299,7 +299,7 @@ export class AppStateService {
       if (!visIds.has(`${row.namespace ?? ''}|${row.service}`)) continue;
       for (const [env, slot] of Object.entries(row.slots)) {
         if (hidden.has(env)) continue;
-        svcSet.add(row.service);
+        svcSet.add(`${row.namespace ?? ''}|${row.service}`);
         envSet.add(env);
         if (slot.current.status === 'in-progress') inFlight++;
         else if (slot.current.status === 'failure')  failed++;

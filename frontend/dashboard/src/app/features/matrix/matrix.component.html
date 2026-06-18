@@ -42,7 +42,7 @@
       }
 
       <!-- Service rows -->
-      @for (row of filteredRows(); track row.service) {
+      @for (row of filteredRows(); track (row.namespace ?? '') + '|' + row.service) {
 
         <!-- Row header — sticky left column; render-on-collision prefixes namespace/ -->
         <div class="row-head row" [attr.data-svc]="row.service">{{ rowLabel(row.service, row.namespace) }}</div>

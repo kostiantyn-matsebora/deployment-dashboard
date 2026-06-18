@@ -26,7 +26,7 @@
       <!-- Body scrolls horizontally; header stays put -->
       <div class="vis-stage-body">
         <div class="vis-stage-inner">
-      @for (lane of lanesView(); track lane.service) {
+      @for (lane of lanesView(); track (lane.namespace ?? '') + '|' + lane.service) {
         <div class="lane" [attr.data-swim-service]="lane.service">
 
           <!-- Service name cell: chevron toggle + label -->

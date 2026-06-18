@@ -438,6 +438,39 @@ describe('AppStateService — column order + hidden-set', () => {
       };
     }
 
+    it('counts both namespace/service rows as distinct services (composite key fix, #353)', async () => {
+      // Two rows with the same service name "api" but different namespaces.
+      // Without the composite key fix, svcSet.add(row.service) counted them as
+      // one service; with the fix svcSet.add(`${ns}|${service}`) counts both.
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set([]);
+      service.matrixColHidden.set(new Set());
+
+      service.matrixData.set({
+        generated_at: new Date().toISOString(),
+        environments: ['dev'],
+        rows: [
+          {
+            service:   'api',
+            namespace: 'team-a',
+            slots: { dev: makeSlot('success') },
+          },
+          {
+            service:   'api',
+            namespace: 'team-b',
+            slots: { dev: makeSlot('success') },
+          },
+        ],
+      });
+
+      await TestBed.flushEffects();
+
+      const result = service.kpi();
+      // Both rows must be counted as distinct identities → services = 2
+      expect(result.services).toBe(2);
+      expect(result.environments).toBe(1);
+    });
+
     it('counts only the visible 2×2 intersection when 1 env is hidden and 1 service excluded', async () => {
       // Scenario: 3 services × 3 envs; exclude 'excluded-svc' via glob; hide 'dev' column.
       // Visible intersection = {svc-a, svc-b} × {staging, prod} = 4 slots.
