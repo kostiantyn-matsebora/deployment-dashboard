@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.16.0] - 2026-06-18
+
 ### Added
 
 - **Services and notifications glob filter (#351).** The services board (Matrix + Swimlanes) and notification preferences now filter services and environments using case-insensitive glob patterns (`*` any chars, `?` one char) instead of exact string matching. Notification service/environment filter chips changed from case-sensitive exact membership (#271) to case-insensitive glob, allowing patterns like `*-api` or `prod*`.
