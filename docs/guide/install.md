@@ -66,7 +66,7 @@ cp .env.example .env
     Replace the trailing `\` line-continuations with backticks (`` ` ``).
 
 !!! tip "Pin a release"
-    Replace `main` in the URLs with the tag (e.g. `.../v0.16.1/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
+    Replace `main` in the URLs with the tag (e.g. `.../v0.16.2/compose/...`) — see [Pinning a release version](#pinning-a-release-version).
 
 ## 2. Configure & run
 
@@ -219,11 +219,11 @@ See [Configuration](./configuration.md) for every environment variable.
 By default the stack pulls `latest` (tracks `main`). For a reproducible deploy, pin in `.env`:
 
 ```dotenv
-DASHBOARD_VERSION=0.16.1
+DASHBOARD_VERSION=0.16.2
 ```
 
 !!! warning "No leading `v`"
-    The git tag `v0.16.1` publishes images as `0.16.1`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
+    The git tag `v0.16.2` publishes images as `0.16.2`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
 
 ## Hosting notes
 

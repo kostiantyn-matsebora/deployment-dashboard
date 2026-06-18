@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.16.2] - 2026-06-18
+
 ### Fixed
 
 - **Dashboard no longer exhausts the browser's per-host connection limit (#363).** The SPA opened three long-lived SSE (`EventSource`) connections per tab — two of them duplicate deployment-event streams — so two open tabs reached the browser's six-connections-per-host HTTP/1.1 limit and pages would hang indefinitely on refresh. The deployment-event and component-event streams are now multicast over a single shared `EventSource` each (one deployment + one component per tab), so multiple tabs can be open without exhausting connections. The always-on browser-notification subscription reuses the shared deployment stream instead of opening its own.
