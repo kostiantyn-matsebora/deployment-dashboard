@@ -29,6 +29,14 @@ A DORA-anchored analytics view covering the last 7, 14, or 30 days (bounded by `
 ![Analytics — dark](../_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
 ![Analytics — light](../_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
 
+## :material-filter-outline: Services filter { #services-filter }
+
+Glob pattern filter for services: type a pattern (`front-*`, `checkout`, etc.), pick "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads. The same widget appears in the notification preferences popover for service and environment axes.
+
+![Services glob filter — services board](../_assets/screenshots/services-filter-dark.png){ .dd-shot }
+
+![Services glob filter — notifications](../_assets/screenshots/services-filter-notifications-dark.png){ .dd-shot }
+
 ## :material-bell-outline: Browser notifications { #browser-notifications }
 
 Opt-in desktop notifications triggered by deployment status transitions. Enable the bell toggle in the topbar — the browser permission is requested once, lazily. Filter notifications by status, service, and environment via the notification preferences popover.

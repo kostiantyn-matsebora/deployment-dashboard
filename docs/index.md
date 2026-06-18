@@ -58,6 +58,12 @@ hide:
     ![Analytics view](_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
     ![Analytics view](_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
 
+=== "Services filter"
+
+    Narrow the board to exactly the services you care about — type a glob pattern (`front-*`, `? checkout`, or any literal name), choose "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads. The same widget powers the notification service and environment filters.
+
+    ![Services glob filter](_assets/screenshots/services-filter-dark.png){ .dd-shot }
+
 === "Notifications"
 
     Opt-in desktop notifications for every status transition — filtered by status, service, and environment. Enable the bell toggle once; the browser stays in the loop even when the tab is in the background.

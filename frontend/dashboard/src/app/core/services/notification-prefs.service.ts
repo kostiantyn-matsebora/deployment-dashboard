@@ -1,5 +1,6 @@
 import { effect, Injectable, signal } from '@angular/core';
 import { Status } from '../models/deployment.model';
+import { matchesAny } from '../utils/glob.util';
 
 /** All 8 deployment statuses in the order shown in the notification prefs popover. */
 export const NOTIFICATION_STATUSES: Status[] = [
@@ -86,16 +87,23 @@ export class NotificationPrefsService {
     return true;
   }
 
+  /**
+   * Returns true when `value` passes the given mode+chips filter.
+   *
+   * NOTE: matching changed from case-sensitive exact membership (#271) to
+   * case-insensitive glob via matchesAny (#351, intentional behavior change).
+   */
   private matchesAxis(value: string, mode: NotifFilterMode, chips: string[]): boolean {
     if (chips.length === 0) {
       // blank = all (regardless of mode)
       return true;
     }
+    const matched = matchesAny(value, chips);
     if (mode === 'watch-all-except') {
-      return !chips.includes(value);
+      return !matched;
     }
     // watch-only
-    return chips.includes(value);
+    return matched;
   }
 
   private readStored(): NotifPrefs {
