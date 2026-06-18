@@ -751,7 +751,7 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
     {
         // A null-namespace slot and a named-namespace slot for the same service
         // are two independent identity slots — neither should suppress the other.
-        var nullNs  = await SeedAsync(service: "api", environment: "dev",
+        var nullNs = await SeedAsync(service: "api", environment: "dev",
             status: DeploymentStatus.Success, @namespace: null);
         var namedNs = await SeedAsync(service: "api", environment: "dev",
             status: DeploymentStatus.Failure, @namespace: "org-a");
