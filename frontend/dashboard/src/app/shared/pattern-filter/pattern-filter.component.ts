@@ -31,6 +31,9 @@ import { FormsModule } from '@angular/forms';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PatternFilterComponent {
+  /** Counter used to generate unique ids across multiple component instances. */
+  private static _instanceCount = 0;
+
   // ── Inputs ────────────────────────────────────────────────
   /** Current filter mode value. */
   readonly mode = input.required<'exclude' | 'include'>();
@@ -75,6 +78,12 @@ export class PatternFilterComponent {
     return all.filter((s) => s.toLowerCase().includes(q)).slice(0, 8);
   });
 
+  /**
+   * Stable DOM id for the autocomplete listbox — referenced by aria-controls.
+   * Uses a per-component unique suffix so multiple instances on a page don't clash.
+   */
+  protected readonly dropdownId = `pf-listbox-${PatternFilterComponent._instanceCount++}`;
+
   /** True when the dropdown should show. Open when:
    *  - There are name-match items, OR
    *  - There's a glob query (always show verbatim row), OR
@@ -90,6 +99,16 @@ export class PatternFilterComponent {
   protected readonly hasGlobQuery = computed<boolean>(() => {
     const q = this.inputValue().trim();
     return q.includes('*') || q.includes('?');
+  });
+
+  /**
+   * The id of the currently highlighted option, or null when nothing is
+   * highlighted. Bound to aria-activedescendant on the input.
+   */
+  protected readonly activeOptionId = computed<string | null>(() => {
+    const idx = this.activeIdx();
+    if (idx < 0) return null;
+    return `${this.dropdownId}-opt-${idx}`;
   });
 
   // ── Mode toggle ───────────────────────────────────────────

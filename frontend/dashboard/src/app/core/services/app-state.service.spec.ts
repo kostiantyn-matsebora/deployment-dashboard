@@ -421,6 +421,73 @@ describe('AppStateService — column order + hidden-set', () => {
     });
   });
 
+  // ── kpi() — combined glob filter + hidden column ──────────────────────────
+
+  describe('kpi() — service glob filter combined with hidden env column', () => {
+    /** Build a minimal MatrixSlot with the given status. */
+    function makeSlot(status: 'success' | 'in-progress' | 'failure') {
+      return {
+        current: {
+          id: crypto.randomUUID(),
+          deployment_id: '1',
+          service: '',
+          environment: '',
+          status,
+          happened_at: new Date().toISOString(),
+        },
+      };
+    }
+
+    it('counts only the visible 2×2 intersection when 1 env is hidden and 1 service excluded', async () => {
+      // Scenario: 3 services × 3 envs; exclude 'excluded-svc' via glob; hide 'dev' column.
+      // Visible intersection = {svc-a, svc-b} × {staging, prod} = 4 slots.
+      // svc-a/staging = in-progress, svc-b/prod = failure; all others = success.
+
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set(['excluded-svc']);
+      service.matrixColHidden.set(new Set(['dev']));
+
+      service.matrixData.set({
+        generated_at: new Date().toISOString(),
+        environments: ['dev', 'staging', 'prod'],
+        rows: [
+          {
+            service: 'svc-a',
+            slots: {
+              dev:     makeSlot('success'),
+              staging: makeSlot('in-progress'),
+              prod:    makeSlot('success'),
+            },
+          },
+          {
+            service: 'svc-b',
+            slots: {
+              dev:     makeSlot('success'),
+              staging: makeSlot('success'),
+              prod:    makeSlot('failure'),
+            },
+          },
+          {
+            service: 'excluded-svc',
+            slots: {
+              dev:     makeSlot('in-progress'),
+              staging: makeSlot('failure'),
+              prod:    makeSlot('in-progress'),
+            },
+          },
+        ],
+      });
+
+      await TestBed.flushEffects();
+
+      const result = service.kpi();
+      expect(result.services).toBe(2);      // svc-a + svc-b (excluded-svc filtered out)
+      expect(result.environments).toBe(2);  // staging + prod (dev hidden)
+      expect(result.inFlight).toBe(1);      // svc-a/staging only
+      expect(result.failed).toBe(1);        // svc-b/prod only
+    });
+  });
+
   describe('visibleServices()', () => {
     it('returns all services when patterns is empty (exclude mode)', () => {
       service.serviceFilterMode.set('exclude');

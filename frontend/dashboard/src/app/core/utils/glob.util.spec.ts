@@ -53,6 +53,43 @@ describe('globMatch', () => {
     expect(globMatch('a+b', 'ab')).toBe(false);
   });
 
+  it('escapes ( ) in pattern — literal grouping chars', () => {
+    expect(globMatch('a(b)', 'a(b)')).toBe(true);
+    expect(globMatch('a(b)', 'ab')).toBe(false);   // parentheses are not a regex group
+  });
+
+  it('escapes [ ] in pattern — literal bracket chars', () => {
+    expect(globMatch('a[b]', 'a[b]')).toBe(true);
+    expect(globMatch('a[b]', 'ab')).toBe(false);   // brackets are not a character class
+  });
+
+  it('escapes | in pattern — literal pipe, not alternation', () => {
+    expect(globMatch('a|b', 'a|b')).toBe(true);
+    expect(globMatch('a|b', 'a')).toBe(false);     // pipe does not mean "or"
+    expect(globMatch('a|b', 'b')).toBe(false);
+  });
+
+  it('escapes { } in pattern — literal brace chars', () => {
+    expect(globMatch('a{2}', 'a{2}')).toBe(true);
+    expect(globMatch('a{2}', 'aa')).toBe(false);   // braces are not a quantifier
+  });
+
+  it('escapes ^ in pattern — literal caret', () => {
+    expect(globMatch('^start', '^start')).toBe(true);
+    expect(globMatch('^start', 'start')).toBe(false);
+  });
+
+  it('escapes $ in pattern — literal dollar', () => {
+    expect(globMatch('end$', 'end$')).toBe(true);
+    expect(globMatch('end$', 'end')).toBe(false);
+  });
+
+  it('anchors pattern: does not match a longer string (no implicit wildcard)', () => {
+    expect(globMatch('api', 'api')).toBe(true);
+    expect(globMatch('api', 'apixyz')).toBe(false);   // no suffix wildcard
+    expect(globMatch('api', 'prefixapi')).toBe(false); // no prefix wildcard
+  });
+
   it('handles combined * and ?', () => {
     expect(globMatch('*-?vc', 'auth-svc')).toBe(true);
     expect(globMatch('*-?vc', 'auth-service')).toBe(false);

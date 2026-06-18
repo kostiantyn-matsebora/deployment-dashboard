@@ -45,10 +45,14 @@
     <input
       class="pf-input"
       type="text"
+      role="combobox"
       placeholder="type name or *-glob…"
       autocomplete="off"
       spellcheck="false"
       aria-label="Pattern (glob: * any, ? one char)"
+      [attr.aria-expanded]="dropdownOpen()"
+      [attr.aria-controls]="dropdownId"
+      [attr.aria-activedescendant]="activeOptionId()"
       [ngModel]="inputValue()"
       (ngModelChange)="onInputChange($event)"
       (keydown)="onKeydown($event)"
@@ -57,10 +61,11 @@
     />
     <!-- Autocomplete dropdown -->
     @if (dropdownOpen()) {
-      <div class="pf-dropdown" role="listbox" aria-label="Suggestions" (click)="$event.stopPropagation()">
+      <div [id]="dropdownId" class="pf-dropdown" role="listbox" aria-label="Suggestions" (click)="$event.stopPropagation()">
         <!-- Verbatim glob row — shown first when query has glob chars -->
         @if (hasGlobQuery()) {
           <div
+            [id]="dropdownId + '-opt-0'"
             class="pf-ac-item"
             role="option"
             [class.is-active]="isHighlighted(0)"
@@ -71,6 +76,7 @@
         <!-- Name-match rows -->
         @for (item of dropdownItems(); track item; let i = $index) {
           <div
+            [id]="dropdownId + '-opt-' + (hasGlobQuery() ? i + 1 : i)"
             class="pf-ac-item"
             role="option"
             [class.is-active]="isHighlighted(hasGlobQuery() ? i + 1 : i)"
