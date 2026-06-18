@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.16.1] - 2026-06-18
+
+### Fixed
+
+- **Backfill no longer lets a high-volume service starve quieter ones (#349).** The per-environment backfill scan treated an already-full service slot as "no progress", so a busy service could exhaust the stall window before quieter services in the same environment were scanned — leaving their deployment history under-filled after a reset/seed. The stall heuristic now counts only genuine no-data deployments and fills each service/environment slot independently (with an all-slots-full short-circuit); the configured age window remains the hard time boundary.
+
+
 ## [0.16.0] - 2026-06-18
 
 ### Added
