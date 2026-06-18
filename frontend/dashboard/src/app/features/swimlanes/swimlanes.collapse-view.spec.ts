@@ -107,7 +107,8 @@ describe('SwimlanesComponent — lanesView collapse filtering (#309)', () => {
       toggleLaneCollapsed:    () => {},
       collapseAllLanes:       () => {},
       expandAllLanes:         () => {},
-      visibleServices:        (svcs: string[]) => svcs,
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
     };
 
     await TestBed.configureTestingModule({

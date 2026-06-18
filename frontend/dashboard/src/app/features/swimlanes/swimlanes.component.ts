@@ -86,6 +86,18 @@ export interface SwimDag {
 
 export interface SwimLane {
   service: string;
+  /**
+   * Optional CI/CD namespace (mirrors MatrixRow.namespace).
+   * Identity = `namespace/service` when present; bare `service` when null.
+   */
+  namespace: string | null | undefined;
+  /**
+   * Display label for the lane header (render-on-collision, issue #353).
+   * Set to `namespace/service` only when the same service name appears under
+   * more than one namespace in the current lane set; bare service otherwise.
+   * Null-namespace lanes always show the bare service name.
+   */
+  label: string;
   dags: SwimDag[];
   /** Node ids in the newest-event vector (root→tip chain). */
   vectorIds: Set<string>;
@@ -408,10 +420,19 @@ export class SwimlanesComponent {
   });
 
   // ── Events extracted from shared matrix snapshot ──────────
-  private readonly eventsFromMatrix = computed<Map<string, DeploymentEvent[]>>(() => {
+
+  /**
+   * Key used in the by-lane map — `namespace|service` for namespace-aware rows,
+   * `|service` for null-namespace rows. Stable across composites.
+   */
+  private laneKey(service: string, namespace: string | null | undefined): string {
+    return `${namespace ?? ''}|${service}`;
+  }
+
+  private readonly eventsFromMatrix = computed<Map<string, { service: string; namespace: string | null; events: DeploymentEvent[] }>>(() => {
     const matrix = this.state.matrixData();
-    const byService = new Map<string, DeploymentEvent[]>();
-    if (!matrix) return byService;
+    const byLane = new Map<string, { service: string; namespace: string | null; events: DeploymentEvent[] }>();
+    if (!matrix) return byLane;
 
     for (const row of matrix.rows) {
       const events: DeploymentEvent[] = [];
@@ -428,27 +449,35 @@ export class SwimlanesComponent {
         }
       }
 
-      if (events.length) byService.set(row.service, events);
+      if (events.length) {
+        byLane.set(
+          this.laneKey(row.service, row.namespace),
+          { service: row.service, namespace: row.namespace ?? null, events },
+        );
+      }
     }
 
-    return byService;
+    return byLane;
   });
 
   // ── Swimlane lanes ────────────────────────────────────────
   protected readonly lanes = computed<SwimLane[]>(() => {
-    const byService = this.eventsFromMatrix();
-    if (!byService.size) return [];
+    const byLane = this.eventsFromMatrix();
+    if (!byLane.size) return [];
 
     const predicate = this.state.correlationPredicate();
     const tw        = this.state.timeWindow();
     const fields    = this.state.swimlaneVisibleFields();
 
-    // Apply glob service filter — mirrors matrix.component filteredRows
-    const allSvcs = [...byService.keys()];
-    const visSvcs = new Set(this.state.visibleServices(allSvcs));
+    // Apply composite glob service filter — mirrors matrix.component filteredRows (issue #353)
+    const allIds = [...byLane.values()].map((v) => ({ service: v.service, namespace: v.namespace }));
+    const visIds = new Set(
+      this.state.visibleServiceIdentities(allIds)
+        .map((i) => this.laneKey(i.service, i.namespace)),
+    );
 
     const filtered = new Map(
-      [...byService.entries()].filter(([svc]) => visSvcs.has(svc)),
+      [...byLane.entries()].filter(([key]) => visIds.has(key)),
     );
 
     return this.buildLanes(filtered, predicate, tw, fields);
@@ -457,7 +486,7 @@ export class SwimlanesComponent {
   // ── Lane building ─────────────────────────────────────────
 
   private buildLanes(
-    byService: Map<string, DeploymentEvent[]>,
+    byLane: Map<string, { service: string; namespace: string | null; events: DeploymentEvent[] }>,
     predicate: CorrelationPredicate,
     timeWindow: TimeWindow,
     fields: Set<SwimlaneField>,
@@ -468,35 +497,49 @@ export class SwimlanesComponent {
     // ResizeObserver. No field-based width/height math here.
     void fields;
 
-    return [...byService.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([service, svcEvents]) => {
-        const nodes: NgxNode[] = svcEvents.map((ev) => ({
-          id:        ev.id,
-          label:     ev.version ?? ev.environment,
-          data:      ev,
-          // Seed from last measured size (or a neutral default). ngx-graph
-          // overwrites this with the real card size on measure / relayout.
-          dimension: { ...(DIM_CACHE.get(ev.id) ?? SEED_DIMS) },
-        }));
+    // Build all visible lanes first so render-on-collision can look across them.
+    const entries = [...byLane.values()].sort((a, b) => a.service.localeCompare(b.service));
 
-        const depIdToNodeId = new Map<string, string>(
-          svcEvents.map((ev) => [ev.deployment_id, ev.id]),
-        );
-        const nodeById = new Map<string, DeploymentEvent>(
-          svcEvents.map((ev) => [ev.id, ev]),
-        );
+    // Collision detection: service names that appear under >1 distinct non-null namespace.
+    const namespacesForService = new Map<string, Set<string>>();
+    for (const { service, namespace } of entries) {
+      if (!namespace) continue;
+      const ns = namespacesForService.get(service) ?? new Set<string>();
+      ns.add(namespace);
+      namespacesForService.set(service, ns);
+    }
 
-        const links = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
-        const dags  = this.partitionDags(service, nodes, links);
+    return entries.map(({ service, namespace, events: svcEvents }) => {
+      const nodes: NgxNode[] = svcEvents.map((ev) => ({
+        id:        ev.id,
+        label:     ev.version ?? ev.environment,
+        data:      ev,
+        // Seed from last measured size (or a neutral default). ngx-graph
+        // overwrites this with the real card size on measure / relayout.
+        dimension: { ...(DIM_CACHE.get(ev.id) ?? SEED_DIMS) },
+      }));
 
-        // Build the collapsed vector: newest-event chain (#309).
-        // Pass `links` so the vector uses the same parent graph as the edges,
-        // regardless of which correlation predicate is active.
-        const { vectorIds, tipId } = this.buildCollapsedVector(svcEvents, nodeById, links);
+      const depIdToNodeId = new Map<string, string>(
+        svcEvents.map((ev) => [ev.deployment_id, ev.id]),
+      );
+      const nodeById = new Map<string, DeploymentEvent>(
+        svcEvents.map((ev) => [ev.id, ev]),
+      );
 
-        return { service, dags, vectorIds, tipId };
-      });
+      const links = this.buildEdges(svcEvents, predicate, twMs, depIdToNodeId, nodeById);
+      const dags  = this.partitionDags(service, nodes, links);
+
+      // Build the collapsed vector: newest-event chain (#309).
+      // Pass `links` so the vector uses the same parent graph as the edges,
+      // regardless of which correlation predicate is active.
+      const { vectorIds, tipId } = this.buildCollapsedVector(svcEvents, nodeById, links);
+
+      // Render-on-collision label (issue #353): prefix only when collision exists.
+      const hasCollision = namespace && (namespacesForService.get(service)?.size ?? 0) > 1;
+      const label = hasCollision ? `${namespace}/${service}` : service;
+
+      return { service, namespace, label, dags, vectorIds, tipId };
+    });
   }
 
   /**

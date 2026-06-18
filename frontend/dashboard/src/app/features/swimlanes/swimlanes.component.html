@@ -39,7 +39,7 @@
               [attr.title]="(isCollapsed(lane.service) ? 'Expand' : 'Collapse') + ' lane '"
               [attr.aria-expanded]="!isCollapsed(lane.service)"
             >›</button>
-            <span class="lane-svc">{{ lane.service }}</span>
+            <span class="lane-svc">{{ lane.label }}</span>
           </div>
 
           <!-- Lane graph: one ngx-graph PER independent chain (DAG), stacked.

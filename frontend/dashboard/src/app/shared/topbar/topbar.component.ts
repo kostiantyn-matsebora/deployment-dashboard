@@ -141,10 +141,15 @@ export class TopbarComponent {
   /** Current glob patterns for the services picker. */
   protected readonly servicePatterns   = computed(() => this.state.servicePatterns());
 
-  /** All service names from matrix data — autocomplete suggestions. */
-  protected readonly allServiceNames = computed(() =>
-    this.state.matrixData()?.rows.map((r) => r.service) ?? []
-  );
+  /**
+   * Autocomplete suggestions for the services pattern filter (issue #353).
+   * Includes: bare service names, distinct namespaces, and `namespace/service` composites.
+   * Bare names come first for backward compatibility; namespaced composites follow.
+   */
+  protected readonly allServiceNames = computed(() => {
+    const rows = this.state.matrixData()?.rows ?? [];
+    return this.state.buildServiceSuggestions(rows);
+  });
 
   /** Badge count: number of services hidden by the current filter. */
   protected readonly svcHiddenCount = computed(() => {

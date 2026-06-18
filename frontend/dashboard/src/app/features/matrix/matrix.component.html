@@ -44,8 +44,8 @@
       <!-- Service rows -->
       @for (row of filteredRows(); track row.service) {
 
-        <!-- Row header — sticky left column -->
-        <div class="row-head row" [attr.data-svc]="row.service">{{ row.service }}</div>
+        <!-- Row header — sticky left column; render-on-collision prefixes namespace/ -->
+        <div class="row-head row" [attr.data-svc]="row.service">{{ rowLabel(row.service, row.namespace) }}</div>
 
         <!-- Slot tiles for each visible ordered environment -->
         @for (env of environments(); track env) {
