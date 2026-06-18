@@ -567,7 +567,7 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 
 ### 5.11 Per-cycle rate-limit reporting (F18)
 
-After each successful poll cycle, when a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to the existing `POST /api/control/events` surface. See [`api/api-guidelines.md`](api/api-guidelines.md) §11 "Rate-limit report payload" and [`diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md).
+When a `RateLimitSnapshot` is available, the fetcher posts a `rate-limit` component event to the existing `POST /api/control/events` surface. **Emission cadence:** once per cycle for a normal poll; once per repo×env chunk during backfill (continuous visibility throughout a long backfill, not only at completion). See [`api/api-guidelines.md`](api/api-guidelines.md) §11 "Rate-limit report payload" and [`diagrams/fetcher-rate-limit.md`](diagrams/fetcher-rate-limit.md).
 
 **Multi-adapter note.** With multiple adapters each adapter emits its own `rate-limit` event carrying a distinct `payload.adapter` value under the shared `component_id`. Consumers must key on `payload.adapter`, not on `component_id`, to distinguish per-adapter counters.
 
