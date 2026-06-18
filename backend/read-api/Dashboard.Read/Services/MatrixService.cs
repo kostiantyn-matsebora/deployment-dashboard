@@ -147,6 +147,7 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
                 .SelectMany(r => r.Slots
                     .OrderBy(kv => kv.Key, StringComparer.Ordinal)
                     .Select(kv =>
+                        // Namespace is null or a non-empty repo name; null interpolates as empty string here — safe given the stored invariant (never empty-string).
                         $"{r.Namespace}/{r.Service}/{kv.Key}={kv.Value.Current.Id}:{kv.Value.LastSuccessful?.Id}:{kv.Value.Next?.Id}\n")));
 
         var fingerprint = envPart + rowPart;

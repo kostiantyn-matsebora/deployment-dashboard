@@ -23,8 +23,7 @@ namespace Dashboard.Shared.Migrations
 UPDATE deployment_events
 SET    namespace = (regexp_match(run_url, '^https://github\.com/[^/]+/([^/]+)'))[1]
 WHERE  run_url IS NOT NULL
-  AND  run_url LIKE 'https://github.com/%'
-  AND  namespace IS NULL;
+  AND  run_url LIKE 'https://github.com/%';
 ");
         }
 
