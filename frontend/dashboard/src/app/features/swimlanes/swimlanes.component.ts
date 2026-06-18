@@ -443,7 +443,15 @@ export class SwimlanesComponent {
     const tw        = this.state.timeWindow();
     const fields    = this.state.swimlaneVisibleFields();
 
-    return this.buildLanes(byService, predicate, tw, fields);
+    // Apply glob service filter — mirrors matrix.component filteredRows
+    const allSvcs = [...byService.keys()];
+    const visSvcs = new Set(this.state.visibleServices(allSvcs));
+
+    const filtered = new Map(
+      [...byService.entries()].filter(([svc]) => visSvcs.has(svc)),
+    );
+
+    return this.buildLanes(filtered, predicate, tw, fields);
   });
 
   // ── Lane building ─────────────────────────────────────────

@@ -105,6 +105,7 @@ describe('SwimlanesComponent — edges & DAGs', () => {
       toggleLaneCollapsed:    () => {},
       collapseAllLanes:       () => {},
       expandAllLanes:         () => {},
+      visibleServices:        (svcs: string[]) => svcs,
     };
 
     await TestBed.configureTestingModule({

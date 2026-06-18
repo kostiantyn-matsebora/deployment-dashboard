@@ -91,6 +91,45 @@
   <!-- Icon buttons + popovers ────────────────────────────── -->
   <div class="hdr-icons">
 
+    <!-- Services picker (Matrix + Swimlanes only) ───────────────────────────── -->
+    @if (isMatrix() || isSwimlanes()) {
+      <div style="position: relative">
+        <button
+          class="icon-btn"
+          [class.is-active]="servicesPopoverOpen() || svcHiddenCount() > 0"
+          [title]="servicesBtnTitle()"
+          [attr.aria-label]="servicesBtnTitle()"
+          aria-haspopup="true"
+          (click)="toggleServicesPopover($event)"
+        >
+          <span aria-hidden="true">☰</span>
+          @if (svcHiddenCount() > 0) {
+            <span class="hidden-count-badge" aria-hidden="true">{{ svcHiddenCount() }}</span>
+          }
+        </button>
+        <p-popover #servicesPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content" style="min-width: 260px">
+            <span class="popover-title">SERVICES</span>
+            <app-pattern-filter
+              [mode]="serviceFilterMode()"
+              [patterns]="servicePatterns()"
+              [suggestions]="allServiceNames()"
+              excludeLabel="Show all except"
+              includeLabel="Show only"
+              [caption]="servicesCaption()"
+              (modeChange)="onServiceFilterModeChange($event)"
+              (patternsChange)="onServicePatternsChange($event)"
+            />
+            <button
+              class="cols-reset-btn"
+              (click)="resetServicesFilter()"
+              aria-label="Clear all patterns and show all services"
+            >Show all</button>
+          </div>
+        </p-popover>
+      </div>
+    }
+
     <!-- Rate-limit chips — one per adapter (shown only when reports have arrived) ── -->
     @for (entry of rateLimitEntries(); track entry[0]; let i = $index) {
       <div style="position: relative">
@@ -459,112 +498,32 @@
               Services
               <span class="notif-axis-hint">(optional — blank = all)</span>
             </div>
-            <div class="notif-mode-row" role="group" aria-label="Service notify mode">
-              <div class="notif-mode-seg">
-                <button
-                  class="notif-period-btn"
-                  [class.is-active]="notifServiceMode() === 'watch-all-except'"
-                  type="button"
-                  (click)="setNotifServiceMode('watch-all-except')"
-                >Watch all except</button>
-                <button
-                  class="notif-period-btn"
-                  [class.is-active]="notifServiceMode() === 'watch-only'"
-                  type="button"
-                  (click)="setNotifServiceMode('watch-only')"
-                >Watch only</button>
-              </div>
-            </div>
-            <div class="notif-filter-chips" aria-label="Service filter chips">
-              @for (chip of notifServiceChips(); track chip) {
-                <span class="notif-chip">
-                  {{ chip }}
-                  <span
-                    class="notif-chip-x"
-                    role="button"
-                    [attr.aria-label]="'Remove ' + chip"
-                    title="Remove"
-                    (click)="removeNotifServiceChip(chip)"
-                  >&#215;</span>
-                </span>
-              }
-            </div>
-            <div class="notif-add-row">
-              <input
-                class="notif-add-input"
-                type="text"
-                placeholder="service name…"
-                autocomplete="off"
-                spellcheck="false"
-                [ngModel]="notifServiceInput()"
-                (ngModelChange)="notifServiceInput.set($event)"
-                (keydown)="onNotifServiceKeydown($event)"
-                aria-label="Add service to filter"
-              />
-              <button
-                class="notif-add-btn"
-                type="button"
-                (click)="addNotifServiceChip()"
-                aria-label="Add service"
-              >+ add</button>
-            </div>
-            <div class="notif-caption">{{ notifServiceCaption() }}</div>
+            <app-pattern-filter
+              [mode]="notifServiceMode() === 'watch-all-except' ? 'exclude' : 'include'"
+              [patterns]="notifServiceChips()"
+              [suggestions]="allServiceNames()"
+              excludeLabel="Watch all except"
+              includeLabel="Watch only"
+              [caption]="notifServiceCaption()"
+              (modeChange)="setNotifServiceMode($event === 'exclude' ? 'watch-all-except' : 'watch-only')"
+              (patternsChange)="onNotifServicePatternsChange($event)"
+            />
 
             <!-- Environments axis -->
-            <div class="notif-axis-label">
+            <div class="notif-axis-label" style="margin-top: 8px">
               Environments
               <span class="notif-axis-hint">(optional — blank = all)</span>
             </div>
-            <div class="notif-mode-row" role="group" aria-label="Environment notify mode">
-              <div class="notif-mode-seg">
-                <button
-                  class="notif-period-btn"
-                  [class.is-active]="notifEnvMode() === 'watch-all-except'"
-                  type="button"
-                  (click)="setNotifEnvMode('watch-all-except')"
-                >Watch all except</button>
-                <button
-                  class="notif-period-btn"
-                  [class.is-active]="notifEnvMode() === 'watch-only'"
-                  type="button"
-                  (click)="setNotifEnvMode('watch-only')"
-                >Watch only</button>
-              </div>
-            </div>
-            <div class="notif-filter-chips" aria-label="Environment filter chips">
-              @for (chip of notifEnvChips(); track chip) {
-                <span class="notif-chip">
-                  {{ chip }}
-                  <span
-                    class="notif-chip-x"
-                    role="button"
-                    [attr.aria-label]="'Remove ' + chip"
-                    title="Remove"
-                    (click)="removeNotifEnvChip(chip)"
-                  >&#215;</span>
-                </span>
-              }
-            </div>
-            <div class="notif-add-row">
-              <input
-                class="notif-add-input"
-                type="text"
-                placeholder="environment name…"
-                autocomplete="off"
-                spellcheck="false"
-                [ngModel]="notifEnvInput()"
-                (ngModelChange)="notifEnvInput.set($event)"
-                (keydown)="onNotifEnvKeydown($event)"
-                aria-label="Add environment to filter"
-              />
-              <button
-                class="notif-add-btn"
-                type="button"
-                (click)="addNotifEnvChip()"
-                aria-label="Add environment"
-              >+ add</button>
-            </div>
-            <div class="notif-caption">{{ notifEnvCaption() }}</div>
+            <app-pattern-filter
+              [mode]="notifEnvMode() === 'watch-all-except' ? 'exclude' : 'include'"
+              [patterns]="notifEnvChips()"
+              [suggestions]="allEnvironments()"
+              excludeLabel="Watch all except"
+              includeLabel="Watch only"
+              [caption]="notifEnvCaption()"
+              (modeChange)="setNotifEnvMode($event === 'exclude' ? 'watch-all-except' : 'watch-only')"
+              (patternsChange)="onNotifEnvPatternsChange($event)"
+            />
 
           </div><!-- /notif-filters -->
 

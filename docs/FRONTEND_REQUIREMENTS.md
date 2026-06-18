@@ -45,6 +45,22 @@ Requirements distilled from design-iteration conversations. One requirement per 
 - The Fields button and Columns button each display an accent active state plus a numeric count badge when their respective hidden counts are greater than zero. The badge and accent clear when the count returns to zero.
 - Each button's tooltip reflects the current hidden count: `"Fields — N field(s) hidden"` / `"Columns — N environment(s) hidden"` when N > 0; default label text when N = 0.
 
+### Service filter — glob patterns (Matrix + Swimlanes)
+
+- Both Matrix and Swimlanes views provide a **glob pattern filter** for services, accessible via a topbar **Services** button that opens a popover.
+- The popover contains:
+  - A **mode segmented control**: "Show all except" (exclude mode) or "Show only" (include mode).
+  - A list of **removable pattern chips** — one chip per active pattern, each with a remove (`×`) button.
+  - An **inline text input** with an autocomplete dropdown populated from known service names.
+- **Glob syntax:** `*` matches any sequence of characters; `?` matches any single character. All other characters are literal. Matching is case-insensitive.
+- A service is **visible** when:
+  - Exclude mode: it does not match any active pattern (or no patterns are set — show all).
+  - Include mode: it matches at least one active pattern (or no patterns are set — show all).
+- Hiding a service **fully removes** its Matrix row and Swimlanes lane — no placeholder remains.
+- The existing inline "filter services…" text input (substring match) and "Failures only" pill toggle coexist with this filter independently.
+- The **KPI stat chips** (SERVICES / ENVS / IN-FLIGHT / FAILED) recompute over visible services × visible environments — the glob service filter and the Columns env filter both affect the counts.
+- Mode and pattern list persist to `localStorage` keys `dd:svcFilterMode` and `dd:svcPatterns`.
+
 ### Details surfaces
 
 - Clicking any slot in the Matrix view opens a side drawer showing the per-slot deployment history.
@@ -119,8 +135,10 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 | Axis | Options |
 |---|---|
 | Status | Per-status enable/disable (all 8 deployment statuses) |
-| Service | Watch-all-except list OR watch-only list |
-| Environment | Watch-all-except list OR watch-only list |
+| Service | Glob pattern filter — "Watch all except" (exclude) OR "Watch only" (include) mode; same widget as the services board filter |
+| Environment | Glob pattern filter — "Watch all except" (exclude) OR "Watch only" (include) mode; same widget as the services board filter |
+
+**Glob matching (service and environment axes).** Pattern syntax: `*` = any chars, `?` = one char, case-insensitive. Matching upgraded from exact-match to glob in #351.
 
 **Data source.** The existing `GET /api/events/stream` (deployment SSE) — no new API endpoints.
 

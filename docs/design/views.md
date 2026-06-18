@@ -24,6 +24,18 @@
 - **Service filter:** inline `pInputText` in topbar. Case-insensitive substring match against component name. Matching toggles `.is-hidden` on `.row` elements.
 - **Failures-only:** inline `p-toggleSwitch` pill. When ON, hides service rows that have no failed states (fail-last, run-fail-last, run-fail-only).
 
+### Service Controls (glob filter — Matrix + Swimlanes)
+
+A topbar **Services** button opens a [Pattern Filter](./components.md#pattern-filter-services--notifications) popover. Active on both Matrix and Swimlanes views.
+
+- **Mode:** "Show all except" (exclude) or "Show only" (include), selectable via a segmented control.
+- **Chips:** one removable chip per active glob pattern.
+- **Input:** freetext with autocomplete dropdown from known service names.
+- Hiding a service fully removes its Matrix row or Swimlanes lane — no placeholder remains.
+- The **KPI stat chips** (SERVICES / ENVS / IN-FLIGHT / FAILED) recompute over visible services × visible environments; the glob service filter and the env Columns filter both contribute.
+- Coexists with the inline text filter and "Failures only" toggle independently.
+- Persists to `localStorage` keys `dd:svcFilterMode` (mode string) and `dd:svcPatterns` (JSON array of pattern strings).
+
 ### Column Controls
 
 #### Show / Hide

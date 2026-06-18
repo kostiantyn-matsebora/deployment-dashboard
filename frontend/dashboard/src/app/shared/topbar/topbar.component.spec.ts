@@ -76,6 +76,9 @@ describe('TopbarComponent — rate-limit indicator', () => {
       activeView:             signal('matrix' as const),
       serviceFilter:          signal(''),
       failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:        (svcs: string[]) => svcs,
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -332,6 +335,9 @@ describe('TopbarComponent — legend popover guard', () => {
       activeView:             activeViewSig as never,
       serviceFilter:          signal(''),
       failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:        (svcs: string[]) => svcs,
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -528,6 +534,9 @@ describe('TopbarComponent — notification UX (#271)', () => {
       activeView:             signal('matrix' as const),
       serviceFilter:          signal(''),
       failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:        (svcs: string[]) => svcs,
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -618,51 +627,29 @@ describe('TopbarComponent — notification UX (#271)', () => {
     });
   });
 
-  // ── addNotifServiceChip ──────────────────────────────────────────────────
+  // ── onNotifServicePatternsChange ─────────────────────────────────────────
+  // The notification chip input is now handled by PatternFilterComponent.
+  // TopbarComponent receives patternsChange output and delegates to updatePrefs.
 
-  describe('addNotifServiceChip()', () => {
-    it('adds the chip when input is non-empty', () => {
-      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('my-service');
-      priv<() => void>(component, 'addNotifServiceChip').call(component);
-      expect(prefsSignal().serviceChips).toContain('my-service');
+  describe('onNotifServicePatternsChange()', () => {
+    it('updates serviceChips in prefs', () => {
+      priv<(chips: string[]) => void>(component, 'onNotifServicePatternsChange').call(component, ['my-service', '*-api']);
+      expect(prefsSignal().serviceChips).toEqual(['my-service', '*-api']);
     });
 
-    it('clears the input after adding', () => {
-      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('my-service');
-      priv<() => void>(component, 'addNotifServiceChip').call(component);
-      expect(priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput')()).toBe('');
-    });
-
-    it('does NOT add a duplicate chip', () => {
-      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('svc-a');
-      priv<() => void>(component, 'addNotifServiceChip').call(component);
-      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('svc-a');
-      priv<() => void>(component, 'addNotifServiceChip').call(component);
-      expect(prefsSignal().serviceChips.filter(c => c === 'svc-a')).toHaveLength(1);
-    });
-
-    it('does NOT add when input is blank', () => {
-      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('  ');
-      priv<() => void>(component, 'addNotifServiceChip').call(component);
-      expect(prefsSignal().serviceChips).toHaveLength(0);
+    it('clears serviceChips when called with empty array', () => {
+      priv<(chips: string[]) => void>(component, 'onNotifServicePatternsChange').call(component, ['x']);
+      priv<(chips: string[]) => void>(component, 'onNotifServicePatternsChange').call(component, []);
+      expect(prefsSignal().serviceChips).toEqual([]);
     });
   });
 
-  // ── Enter key ────────────────────────────────────────────────────────────
+  // ── onNotifEnvPatternsChange ─────────────────────────────────────────────
 
-  describe('onNotifServiceKeydown() — Enter key adds chip', () => {
-    it('adds chip on Enter keydown', () => {
-      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('key-svc');
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
-      priv<(e: KeyboardEvent) => void>(component, 'onNotifServiceKeydown').call(component, event);
-      expect(prefsSignal().serviceChips).toContain('key-svc');
-    });
-
-    it('does NOT add chip on other key', () => {
-      priv<ReturnType<typeof signal<string>>>(component, 'notifServiceInput').set('key-svc');
-      const event = new KeyboardEvent('keydown', { key: 'a', bubbles: true });
-      priv<(e: KeyboardEvent) => void>(component, 'onNotifServiceKeydown').call(component, event);
-      expect(prefsSignal().serviceChips).toHaveLength(0);
+  describe('onNotifEnvPatternsChange()', () => {
+    it('updates envChips in prefs', () => {
+      priv<(chips: string[]) => void>(component, 'onNotifEnvPatternsChange').call(component, ['prod', 'staging']);
+      expect(prefsSignal().envChips).toEqual(['prod', 'staging']);
     });
   });
 

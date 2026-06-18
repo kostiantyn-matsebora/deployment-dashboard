@@ -49,7 +49,7 @@ Default: **all ON**.
 | **In-flight** | Count of slots where state ∈ {running-only, run-last, run-fail-last, run-fail-only} | `.is-warn` (amber text) |
 | **Failed** | Count of slots where state ∈ {fail-last, run-fail-only} | `.is-bad` (coral text) |
 
-KPI counts derive purely from the whitelisted fields — no invented metrics.
+KPI counts derive from visible data only — filtered by the glob service filter (`dd:svcFilterMode` / `dd:svcPatterns`) and the Columns env filter (`dd:colHidden`). No invented metrics.
 
 ## Extension Field Usage
 

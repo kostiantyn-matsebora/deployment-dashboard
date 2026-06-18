@@ -1,0 +1,100 @@
+<!-- Mode segmented control -->
+<div class="pf-mode-seg" role="group" [attr.aria-label]="'Filter mode'">
+  <button
+    class="pf-mode-btn"
+    type="button"
+    [class.is-active]="mode() === 'exclude'"
+    (click)="onModeClick('exclude')"
+  >{{ excludeLabel() }}</button>
+  <button
+    class="pf-mode-btn"
+    type="button"
+    [class.is-active]="mode() === 'include'"
+    (click)="onModeClick('include')"
+  >{{ includeLabel() }}</button>
+</div>
+
+<!-- Chip list -->
+<div class="pf-chips" aria-label="Filter patterns">
+  @for (p of patterns(); track p) {
+    <span class="pf-chip">
+      {{ p }}
+      <span
+        class="pf-chip-x"
+        role="button"
+        [attr.aria-label]="'Remove ' + p"
+        title="Remove"
+        (click)="removeChip(p)"
+      >&#215;</span>
+    </span>
+  }
+  <!-- "+ add pattern" button -->
+  @if (!inputOpen()) {
+    <button
+      class="pf-add-btn"
+      type="button"
+      aria-label="Add pattern"
+      (click)="openInput()"
+    >+ add pattern</button>
+  }
+</div>
+
+<!-- Inline input + autocomplete (visible when open) -->
+@if (inputOpen()) {
+  <div class="pf-input-row" (click)="$event.stopPropagation()">
+    <input
+      class="pf-input"
+      type="text"
+      role="combobox"
+      placeholder="type name or *-glob…"
+      autocomplete="off"
+      spellcheck="false"
+      aria-label="Pattern (glob: * any, ? one char)"
+      [attr.aria-expanded]="dropdownOpen()"
+      [attr.aria-controls]="dropdownId"
+      [attr.aria-activedescendant]="activeOptionId()"
+      [ngModel]="inputValue()"
+      (ngModelChange)="onInputChange($event)"
+      (keydown)="onKeydown($event)"
+      (blur)="onBlur()"
+      autofocus
+    />
+    <!-- Autocomplete dropdown -->
+    @if (dropdownOpen()) {
+      <div [id]="dropdownId" class="pf-dropdown" role="listbox" aria-label="Suggestions" (click)="$event.stopPropagation()">
+        <!-- Verbatim glob row — shown first when query has glob chars -->
+        @if (hasGlobQuery()) {
+          <div
+            [id]="dropdownId + '-opt-0'"
+            class="pf-ac-item"
+            role="option"
+            [class.is-active]="isHighlighted(0)"
+            [attr.aria-selected]="isHighlighted(0)"
+            (mousedown)="$event.preventDefault(); commitGlobVerbatim()"
+          >{{ inputValue().trim() }}&nbsp;&nbsp;<span class="pf-ac-hint">(glob pattern)</span></div>
+        }
+        <!-- Name-match rows -->
+        @for (item of dropdownItems(); track item; let i = $index) {
+          <div
+            [id]="dropdownId + '-opt-' + (hasGlobQuery() ? i + 1 : i)"
+            class="pf-ac-item"
+            role="option"
+            [class.is-active]="isHighlighted(hasGlobQuery() ? i + 1 : i)"
+            [attr.aria-selected]="isHighlighted(hasGlobQuery() ? i + 1 : i)"
+            (mousedown)="$event.preventDefault(); commitFromDropdown(item)"
+          >{{ item }}</div>
+        }
+        <!-- No-match hint when query typed, no glob, no name matches -->
+        @if (dropdownItems().length === 0 && !hasGlobQuery() && inputValue().trim()) {
+          <div class="pf-ac-hint-row">No matches — press Enter to add as exact pattern</div>
+        }
+      </div>
+    }
+    <span class="pf-input-hint">* any · ? one char · Enter to add · Esc to cancel</span>
+  </div>
+}
+
+<!-- Caption -->
+@if (caption()) {
+  <div class="pf-caption">{{ caption() }}</div>
+}
