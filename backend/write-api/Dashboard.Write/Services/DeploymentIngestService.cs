@@ -31,6 +31,7 @@ internal sealed class DeploymentIngestService(
             Id = Guid.CreateVersion7(),
             DeploymentId = body.DeploymentId,
             Service = body.Service,
+            Namespace = body.Namespace,
             Environment = body.Environment,
             Version = body.Version,
             Status = body.Status,

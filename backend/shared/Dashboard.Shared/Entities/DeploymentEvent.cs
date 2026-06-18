@@ -14,6 +14,9 @@ public sealed class DeploymentEvent
 
     public required string Service { get; set; }
 
+    /// <summary>CI/CD-agnostic grouping prefix. For GitHub, the repository short name (owner/repo → repo). Max 128 chars. Null when not supplied by the emitter.</summary>
+    public string? Namespace { get; set; }
+
     public required string Environment { get; set; }
 
     /// <summary>Free-form version string (semver, SHA, build number). Max 50 chars.</summary>
