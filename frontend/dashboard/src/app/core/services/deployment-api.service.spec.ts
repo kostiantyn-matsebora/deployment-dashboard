@@ -1,22 +1,23 @@
 /**
- * DeploymentApiService — rate-limit stream unit tests.
+ * DeploymentApiService — unit tests.
  *
- * Tests the filtering + mapping logic that the App uses when calling
- * streamComponentEvents():
- *   - rate-limit event_type → per-adapter map entry updated (Fix 4)
- *   - other event_types     → map left unchanged (last-value-wins)
- *   - null payload          → ignored
- *   - two adapters retained, not overwritten (Fix 4)
- *   - sseConnected set true on onopen, false on onerror (Fix 3)
+ * Covers:
+ *   - rate-limit filtering + per-adapter map keying (App.connectComponentEvents logic)
+ *   - sseConnected liveness via deploymentConnectionState$ Subject (App.connectSSE)
+ *   - Shared EventSource multicast: N subscribers to the unfiltered stream open
+ *     exactly ONE EventSource (the core fix for issue #363).
+ *   - Filtered stream (service=X) opens its own EventSource, independent of the
+ *     shared stream.
  *
- * EventSource is not available in the Vitest/jsdom environment. We test the
- * App-level integration logic directly by simulating the Observable it consumes.
- *
- * This approach mirrors the swimlanes.component.spec.ts pattern: inject a mock
- * service and feed signals; no real network connections.
+ * EventSource is not available in the Vitest/jsdom environment for the liveness
+ * and App-logic tests. Those tests simulate the observable/callback layer directly.
+ * The multicast test stubs the EventSource constructor via globalThis.
  */
 import { signal }             from '@angular/core';
+import { TestBed }            from '@angular/core/testing';
+import { Subject }            from 'rxjs';
 import { ComponentEventRecord, RateLimitReport } from '../models/deployment.model';
+import { DeploymentApiService } from './deployment-api.service';
 
 // ── Helper — build a ComponentEventRecord ────────────────────────────────────
 
@@ -214,56 +215,217 @@ describe('App.connectComponentEvents — rate-limit filtering + per-adapter keyi
   });
 });
 
-// ── SSE liveness — sseConnected reflects connection state (Fix 3) ────────────
+// ── SSE liveness — sseConnected reflects connection state ─────────────────────
+//
+// App.connectSSE() now subscribes to api.deploymentConnectionState$ rather than
+// passing onOpen/onError callbacks to streamEvents(). These tests verify that
+// the Subject-based connection-state reporting correctly drives state.sseConnected.
 
-describe('App.connectSSE — sseConnected liveness (Fix 3)', () => {
-  it('sseConnected is set true by onOpen callback (simulates EventSource.onopen)', () => {
+describe('App.connectSSE — sseConnected liveness via deploymentConnectionState$', () => {
+  it('sseConnected is set true when connectionState$ emits "connected"', () => {
     const sseConnected = signal<boolean>(false);
+    const connectionState$ = new Subject<'connected' | 'error'>();
 
-    // Simulate the onOpen callback that App passes to streamEvents().
-    const onOpen = () => sseConnected.set(true);
-    onOpen();
+    connectionState$.subscribe((s) => sseConnected.set(s === 'connected'));
+    connectionState$.next('connected');
 
     expect(sseConnected()).toBe(true);
   });
 
-  it('sseConnected is set false by onError callback (simulates EventSource.onerror)', () => {
+  it('sseConnected is set false when connectionState$ emits "error"', () => {
     const sseConnected = signal<boolean>(true);
+    const connectionState$ = new Subject<'connected' | 'error'>();
 
-    // Simulate the onError callback.
-    const onError = () => sseConnected.set(false);
-    onError();
+    connectionState$.subscribe((s) => sseConnected.set(s === 'connected'));
+    connectionState$.next('error');
 
     expect(sseConnected()).toBe(false);
   });
 
   it('sseConnected stays true even when no deployment events arrive', () => {
     const sseConnected = signal<boolean>(false);
+    const connectionState$ = new Subject<'connected' | 'error'>();
 
-    // Connection opens → true.
-    const onOpen = () => sseConnected.set(true);
-    onOpen();
+    connectionState$.subscribe((s) => sseConnected.set(s === 'connected'));
+    connectionState$.next('connected');
 
-    // No events arrive — sseConnected must remain true (Fix 3: not event-arrival-gated).
+    // No events arrive — sseConnected must remain true.
     expect(sseConnected()).toBe(true);
   });
 
   it('applyDeploymentEvent is called WITHOUT toggling sseConnected (separation of concerns)', () => {
-    // In the fixed App.connectSSE(), sseConnected is managed by onOpen/onError only.
-    // The `next` handler calls applyDeploymentEvent but does NOT touch sseConnected.
+    // connectSSE() has two separate subscriptions:
+    //  1. streamEvents().subscribe → applyDeploymentEvent (does NOT touch sseConnected)
+    //  2. deploymentConnectionState$.subscribe → sseConnected.set(...)
     const sseConnected = signal<boolean>(false);
     let applyCount = 0;
 
-    const onOpen = () => sseConnected.set(true);
-    // Simulate next handler — does NOT set sseConnected.
-    const onNext = () => { applyCount++; };
+    // Simulate the two-subscription pattern from App.connectSSE().
+    const connectionState$ = new Subject<'connected' | 'error'>();
+    connectionState$.subscribe((s) => sseConnected.set(s === 'connected'));
 
-    onOpen();
+    const onNext = () => { applyCount++; /* does NOT touch sseConnected */ };
+
+    connectionState$.next('connected');
     onNext(); // event arrives
     onNext(); // another event
 
-    // sseConnected is still true (set by onopen, not reset by events).
+    // sseConnected is still true (set by connectionState$, not reset by events).
     expect(sseConnected()).toBe(true);
     expect(applyCount).toBe(2);
+  });
+});
+
+// ── Shared EventSource multicast (issue #363) ─────────────────────────────────
+//
+// Core fix: multiple subscribers to the unfiltered deployment stream must share
+// ONE EventSource. Likewise for the component stream.
+
+describe('DeploymentApiService — shared EventSource multicast (issue #363)', () => {
+  /** Minimal EventSource stub that records how many instances were created. */
+  interface EsStub {
+    onopen:  ((e: Event) => void) | null;
+    onerror: ((e: Event) => void) | null;
+    close: () => void;
+    addEventListener: (type: string, listener: EventListenerOrEventListenerObject) => void;
+  }
+
+  let esInstances: EsStub[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let originalEventSource: any;
+
+  function installEsStub(): void {
+    esInstances = [];
+    originalEventSource = (globalThis as Record<string, unknown>)['EventSource'];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const EsClass = function (this: EsStub, _url: string) {
+      this.onopen  = null;
+      this.onerror = null;
+      this.close   = () => { /* no-op */ };
+      this.addEventListener = () => { /* no-op */ };
+      esInstances.push(this);
+    } as unknown as typeof EventSource;
+
+    (globalThis as Record<string, unknown>)['EventSource'] = EsClass;
+  }
+
+  function removeEsStub(): void {
+    if (originalEventSource !== undefined) {
+      (globalThis as Record<string, unknown>)['EventSource'] = originalEventSource;
+    } else {
+      delete (globalThis as Record<string, unknown>)['EventSource'];
+    }
+  }
+
+  beforeEach(() => {
+    installEsStub();
+    TestBed.configureTestingModule({});
+  });
+
+  afterEach(() => {
+    removeEsStub();
+    TestBed.resetTestingModule();
+  });
+
+  it('N subscribers to the unfiltered deployment stream open exactly ONE EventSource', () => {
+    const svc = TestBed.inject(DeploymentApiService);
+
+    // Two independent subscribers — simulates App + BrowserNotificationService.
+    const sub1 = svc.streamEvents().subscribe();
+    const sub2 = svc.streamEvents().subscribe();
+
+    expect(esInstances).toHaveLength(1);
+
+    sub1.unsubscribe();
+    sub2.unsubscribe();
+  });
+
+  it('three subscribers to the component stream open exactly ONE EventSource', () => {
+    const svc = TestBed.inject(DeploymentApiService);
+
+    const sub1 = svc.streamComponentEvents().subscribe();
+    const sub2 = svc.streamComponentEvents().subscribe();
+    const sub3 = svc.streamComponentEvents().subscribe();
+
+    expect(esInstances).toHaveLength(1);
+
+    sub1.unsubscribe();
+    sub2.unsubscribe();
+    sub3.unsubscribe();
+  });
+
+  it('filtered stream (service=X) opens its own EventSource, separate from the shared stream', () => {
+    const svc = TestBed.inject(DeploymentApiService);
+
+    // Unfiltered shared stream → 1 EventSource.
+    const sub1 = svc.streamEvents().subscribe();
+
+    // Filtered stream → 1 additional EventSource (different URL).
+    const sub2 = svc.streamEvents({ service: 'payments-api' }).subscribe();
+
+    expect(esInstances).toHaveLength(2);
+
+    sub1.unsubscribe();
+    sub2.unsubscribe();
+  });
+
+  it('both streams together open exactly TWO EventSources (not three)', () => {
+    const svc = TestBed.inject(DeploymentApiService);
+
+    // Unfiltered deployment stream — shared.
+    const sub1 = svc.streamEvents().subscribe();
+    const sub2 = svc.streamEvents().subscribe();
+
+    // Component stream — separately shared.
+    const sub3 = svc.streamComponentEvents().subscribe();
+    const sub4 = svc.streamComponentEvents().subscribe();
+
+    // 2 EventSources total: one for deployments, one for components.
+    expect(esInstances).toHaveLength(2);
+
+    sub1.unsubscribe();
+    sub2.unsubscribe();
+    sub3.unsubscribe();
+    sub4.unsubscribe();
+  });
+
+  it('deploymentConnectionState$ emits "connected" when the shared EventSource opens', () => {
+    const svc = TestBed.inject(DeploymentApiService);
+    const states: string[] = [];
+    // BehaviorSubject replays its seed ('error') on subscription before any
+    // EventSource-driven value arrives — the last emitted value is what matters.
+    const stateSub = svc.deploymentConnectionState$.subscribe((s) => states.push(s));
+
+    // Subscribe to the shared stream to trigger EventSource creation.
+    const sub1 = svc.streamEvents().subscribe();
+
+    // Simulate the EventSource firing onopen.
+    expect(esInstances).toHaveLength(1);
+    esInstances[0].onopen?.(new Event('open'));
+
+    expect(states.at(-1)).toBe('connected');
+
+    sub1.unsubscribe();
+    stateSub.unsubscribe();
+  });
+
+  it('deploymentConnectionState$ emits "error" when the shared EventSource errors', () => {
+    const svc = TestBed.inject(DeploymentApiService);
+    const states: string[] = [];
+    // BehaviorSubject replays its seed ('error') on subscription; the EventSource
+    // onerror then emits a second 'error'.
+    // states[0] = BehaviorSubject seed 'error'; states[1] = onerror-driven 'error'.
+    const stateSub = svc.deploymentConnectionState$.subscribe((s) => states.push(s));
+
+    const sub1 = svc.streamEvents().subscribe();
+
+    esInstances[0].onerror?.(new Event('error'));
+
+    expect(states).toHaveLength(2);
+    expect(states[1]).toBe('error');
+
+    sub1.unsubscribe();
+    stateSub.unsubscribe();
   });
 });
