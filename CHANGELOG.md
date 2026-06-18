@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.16.3] - 2026-06-18
+
 ### Fixed
 
 - **Fetcher now reports GitHub API usage/rate-limit statistics during backfill (#361).** The per-cycle `rate-limit` usage report was emitted only at the end of a poll cycle. Because backfill runs as one long cycle that streams many chunks (one per repo×env), no usage stats appeared until the entire backfill finished — leaving operators blind to quota burn during the fetcher's heaviest-consumption phase. The report now fires per backfill chunk, so the dashboard's rate-limit indicator updates continuously throughout backfill; a normal poll still emits exactly one report per cycle.
