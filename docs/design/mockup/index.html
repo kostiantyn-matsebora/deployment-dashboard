@@ -746,6 +746,38 @@
     transition: width .3s ease;
   }
 
+  /* ----- notification popover — reuses .ext-option-block / .ext-filter-chip / .toggle / .ext-btn ----- */
+  .notif-popover { min-width: 320px; }
+
+  /* status chips grid — 4-col narrow pill grid (status axis only, no segmented mode) */
+  .notif-status-chips {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 6px;
+  }
+  /* status chip: reuse .ext-filter-chip visual + tint by status colour when on */
+  .notif-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px 4px 9px;
+    background: var(--glass);
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-1);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .notif-status-chip:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .notif-status-chip.is-on {
+    color: var(--ink-0);
+    border-color: rgba(var(--status-rgb, var(--accent-rgb)), 0.55);
+    background: rgba(var(--status-rgb, var(--accent-rgb)), 0.12);
+  }
+
   /* popover surface */
   .popover {
     position: absolute;
@@ -2408,6 +2440,62 @@
   }
   .ext-filter-add:hover { color: var(--ink-1); border-color: rgba(var(--accent-rgb), 0.4); }
 
+  /* Pattern input row — inline text field + autocomplete dropdown */
+  .pat-input-row {
+    display: none; /* shown by JS when + add is clicked */
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+    position: relative;
+  }
+  .pat-input-row.is-open { display: flex; }
+  .pat-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-0);
+    outline: none;
+    transition: border-color .12s;
+  }
+  .pat-input:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+  .pat-input-hint {
+    font-size: 10px;
+    color: var(--ink-3);
+    line-height: 1.3;
+  }
+  /* Autocomplete suggestion dropdown */
+  .ac-dropdown {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0; right: 0;
+    background: var(--panel-bg, var(--glass));
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    overflow: hidden;
+    z-index: 200;
+    display: none;
+  }
+  .ac-dropdown.is-open { display: block; }
+  .ac-item {
+    padding: 5px 10px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-1);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background .08s;
+  }
+  .ac-item:hover, .ac-item.is-active { background: rgba(var(--accent-rgb), 0.15); color: var(--ink-0); }
+  .ac-item-hint { font-size: 10px; color: var(--ink-3); font-family: inherit; padding: 4px 10px 5px; }
+
   /* =========================================================
      VISUALISATION VIEW
      ========================================================= */
@@ -3271,6 +3359,41 @@
         </div>
       </div>
 
+      <!-- Services picker (matrix + swimlanes — pattern-based include/exclude filter) -->
+      <div style="position:relative" id="hdr-svcs-btn">
+        <button class="icon-btn" id="btn-services" title="Services — filter services" aria-label="Services" aria-haspopup="true">
+          <span aria-hidden="true">☰</span>
+          <span class="hidden-count-badge" id="svc-hidden-badge" aria-hidden="true"></span>
+        </button>
+        <div class="popover" id="pop-services" role="dialog" aria-label="Service filter" style="min-width:280px">
+          <div class="popover-title">Services</div>
+          <!-- Mode segmented control -->
+          <div class="ext-option-mode-row" role="group" aria-label="Service filter mode" style="margin-bottom:6px">
+            <div class="ext-mode-seg" id="svc-mode-seg">
+              <button class="an-period-btn is-active" type="button" data-svc-mode="exclude" id="svc-mode-exclude">Show all except</button>
+              <button class="an-period-btn" type="button" data-svc-mode="include" id="svc-mode-include">Show only</button>
+            </div>
+          </div>
+          <!-- Pattern chips -->
+          <div class="ext-config-filter-chips" id="svc-pattern-chips" aria-label="Service patterns">
+            <!-- chips injected by JS -->
+            <button class="ext-filter-add" type="button" id="btn-svc-add-pattern" aria-label="Add service pattern">+ add pattern</button>
+          </div>
+          <!-- Inline pattern input + autocomplete (hidden until + add pattern clicked) -->
+          <div class="pat-input-row" id="svc-pattern-input-row">
+            <input type="text" class="pat-input" id="svc-pattern-input"
+                   placeholder="type name or *-api glob…"
+                   aria-label="Service pattern (glob: * any, ? one char)" spellcheck="false" autocomplete="off">
+            <div class="ac-dropdown" id="svc-ac-dropdown" role="listbox" aria-label="Matching services"></div>
+            <span class="pat-input-hint">* any · ? one char · Enter to add · Esc to cancel</span>
+          </div>
+          <!-- Result caption -->
+          <div class="ext-option-caption" id="svc-filter-caption" style="margin-top:6px"></div>
+          <!-- Show all reset -->
+          <button class="cols-reset-link" id="btn-svcs-reset" aria-label="Clear all patterns and show all services" style="margin-top:8px">Show all</button>
+        </div>
+      </div>
+
       <!-- Columns picker (matrix-only — show/hide + reorder hint) -->
       <div style="position:relative" id="hdr-cols-btn">
         <button class="icon-btn" id="btn-columns" title="Columns — show/hide environments" aria-label="Columns" aria-haspopup="true">
@@ -3429,7 +3552,122 @@
 
         </div>
       </div>
-    </div>
+
+      <!-- Notification bell — persistent icon-button; has-active = coral dot when notifications ON -->
+      <div style="position:relative">
+        <button class="icon-btn has-active" id="btn-notif"
+                title="Notification settings — browser alerts on deployment events"
+                aria-label="Notification settings" aria-haspopup="true">
+          <!-- monochrome stroke bell inheriting currentColor, matching ⊞ ▦ ☷ weight -->
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+               stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7.5 1.5a4 4 0 0 1 4 4v2.5l1 1.5H2.5l1-1.5V5.5a4 4 0 0 1 4-4z"/>
+            <path d="M6 11.5a1.5 1.5 0 0 0 3 0"/>
+          </svg>
+          <span class="badge-dot" aria-hidden="true"></span>
+        </button>
+        <div class="popover notif-popover" id="pop-notif" role="dialog" aria-label="Notification settings">
+          <div class="popover-title">Browser Notifications</div>
+
+          <!-- Master enable switch — same visual pattern as ext-master-toggle -->
+          <label class="toggle is-on" id="notif-master-toggle"
+                 title="Enable or disable all browser notifications" aria-label="Enable notifications">
+            <span class="switch" aria-hidden="true"></span>
+            <span id="notif-master-label-txt">Notify — browser alerts</span>
+          </label>
+          <span class="ext-config-hint" style="display:block;margin-top:4px;margin-bottom:8px">Off = no browser notifications fired for any event.</span>
+
+          <!-- Filter block — dims (is-paused) when master is OFF -->
+          <div class="ext-option-block" id="notif-filters-area">
+
+            <!-- Status axis — FIRST (issue #271 requirement) -->
+            <div class="ext-option-axis-label">
+              Status
+              <span class="ext-config-label-hint">(select statuses that trigger a notification)</span>
+            </div>
+            <div class="notif-status-chips">
+              <!-- success  emerald  34,210,154 -->
+              <span class="notif-status-chip is-on" style="--status-rgb:34,210,154"
+                    role="checkbox" aria-checked="true" data-notif-status="success">success</span>
+              <!-- failure  coral  255,93,93 -->
+              <span class="notif-status-chip is-on" style="--status-rgb:255,93,93"
+                    role="checkbox" aria-checked="true" data-notif-status="failure">failure</span>
+              <!-- in-progress  amber  245,165,36 -->
+              <span class="notif-status-chip" style="--status-rgb:245,165,36"
+                    role="checkbox" aria-checked="false" data-notif-status="in-progress">in-progress</span>
+              <!-- pending  slate  139,147,173 -->
+              <span class="notif-status-chip" style="--status-rgb:139,147,173"
+                    role="checkbox" aria-checked="false" data-notif-status="pending">pending</span>
+              <!-- queued  blue  74,163,240 -->
+              <span class="notif-status-chip" style="--status-rgb:74,163,240"
+                    role="checkbox" aria-checked="false" data-notif-status="queued">queued</span>
+              <!-- waiting  violet  154,133,255 -->
+              <span class="notif-status-chip" style="--status-rgb:154,133,255"
+                    role="checkbox" aria-checked="false" data-notif-status="waiting">waiting</span>
+              <!-- cancelled  grey  154,160,181 -->
+              <span class="notif-status-chip" style="--status-rgb:154,160,181"
+                    role="checkbox" aria-checked="false" data-notif-status="cancelled">cancelled</span>
+              <!-- rejected  rose  207,128,149 -->
+              <span class="notif-status-chip" style="--status-rgb:207,128,149"
+                    role="checkbox" aria-checked="false" data-notif-status="rejected">rejected</span>
+            </div>
+
+            <!-- Services axis -->
+            <div class="ext-option-axis-label">
+              Services
+              <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+            </div>
+            <div class="ext-option-mode-row" role="group" aria-label="Service notify mode">
+              <div class="ext-mode-seg" id="notif-svc-mode-seg">
+                <button class="an-period-btn is-active" type="button" data-notif-svc-mode="exclude">Watch all except</button>
+                <button class="an-period-btn" type="button" data-notif-svc-mode="include">Watch only</button>
+              </div>
+            </div>
+            <div class="ext-config-filter-chips" id="notif-svc-chips" aria-label="Service patterns">
+              <button class="ext-filter-add" type="button" id="btn-notif-svc-add" aria-label="Add service pattern">+ add pattern</button>
+            </div>
+            <div class="pat-input-row" id="notif-svc-input-row">
+              <input type="text" class="pat-input" id="notif-svc-input"
+                     placeholder="type name or *-api glob…"
+                     aria-label="Service pattern (glob: * any, ? one char)" spellcheck="false" autocomplete="off">
+              <div class="ac-dropdown" id="notif-svc-ac" role="listbox" aria-label="Matching services"></div>
+              <span class="pat-input-hint">* any · ? one char · Enter to add · Esc to cancel</span>
+            </div>
+            <div class="ext-option-caption" id="notif-svc-caption">Watching all services</div>
+
+            <!-- Environments axis -->
+            <div class="ext-option-axis-label">
+              Environments
+              <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+            </div>
+            <div class="ext-option-mode-row" role="group" aria-label="Environment notify mode">
+              <div class="ext-mode-seg" id="notif-env-mode-seg">
+                <button class="an-period-btn is-active" type="button" data-notif-env-mode="exclude">Watch all except</button>
+                <button class="an-period-btn" type="button" data-notif-env-mode="include">Watch only</button>
+              </div>
+            </div>
+            <div class="ext-config-filter-chips" id="notif-env-chips" aria-label="Environment patterns">
+              <button class="ext-filter-add" type="button" id="btn-notif-env-add" aria-label="Add environment pattern">+ add pattern</button>
+            </div>
+            <div class="pat-input-row" id="notif-env-input-row">
+              <input type="text" class="pat-input" id="notif-env-input"
+                     placeholder="type name or prod* glob…"
+                     aria-label="Environment pattern (glob: * any, ? one char)" spellcheck="false" autocomplete="off">
+              <div class="ac-dropdown" id="notif-env-ac" role="listbox" aria-label="Matching environments"></div>
+              <span class="pat-input-hint">* any · ? one char · Enter to add · Esc to cancel</span>
+            </div>
+            <div class="ext-option-caption" id="notif-env-caption">Watching all environments</div>
+
+          </div><!-- /notif-filters-area -->
+
+          <div class="ext-config-actions" style="margin-top:10px">
+            <button class="ext-btn is-primary" type="button">Save</button>
+          </div>
+
+        </div><!-- /pop-notif -->
+      </div><!-- /notif wrapper -->
+
+    </div><!-- /hdr-icons -->
 
     <div class="live-pill" title="Server-sent events — live deployment updates" aria-label="Live connection status">
       <span class="live-dot"></span>
@@ -4301,8 +4539,8 @@ function renderMatrix() {
     matrixEl.appendChild(head);
   });
 
-  // ---- Service rows — visible envs only ----
-  SERVICES.forEach(svc => {
+  // ---- Service rows — visible envs × visible services only ----
+  visibleServices().forEach(svc => {
     const rowFrag = document.createDocumentFragment();
     const rowMarker = document.createElement('div');
     rowMarker.className = 'row-head row';
@@ -4576,6 +4814,23 @@ function renderSlot(svc, env, slot, key) {
   return wrap;
 }
 
+/* Services picker state — declared here so visibleServices() is usable
+   from renderMatrix() below; picker functions and constants follow after the Columns block. */
+const MX_SVC_MODE_KEY     = 'mx.svcMode';
+const MX_SVC_PATTERNS_KEY = 'mx.svcPatterns';
+
+let svcFilterMode = (function () {
+  try { return localStorage.getItem(MX_SVC_MODE_KEY) === 'include' ? 'include' : 'exclude'; } catch (_) { return 'exclude'; }
+})();
+
+let svcPatterns = (function () {
+  try {
+    const raw = localStorage.getItem(MX_SVC_PATTERNS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter(p => typeof p === 'string' && p.length > 0) : [];
+  } catch (_) { return []; }
+})();
+
 renderMatrix();
 
 /* =================================================================
@@ -4654,6 +4909,8 @@ function setView(view) {
   document.getElementById('hdr-matrix-filter').style.display = view === 'matrix' ? 'flex' : 'none';
   document.getElementById('hdr-cols-btn').style.display      = view === 'matrix' ? ''     : 'none';
   document.getElementById('hdr-vis-icons').style.display     = view === 'vis'    ? ''     : 'none';
+  // services picker is visible on matrix + swimlanes; hidden on analytics + extension
+  document.getElementById('hdr-svcs-btn').style.display = (view === 'matrix' || view === 'vis') ? '' : 'none';
   // Fields + Legend buttons hidden on analytics and extension (no per-cell fields there)
   const hideFields = view === 'analytics' || view === 'extension';
   document.getElementById('btn-fields').parentElement.style.display  = hideFields ? 'none' : '';
@@ -4703,10 +4960,12 @@ document.querySelectorAll('.tab').forEach(t => {
    and shared fields-picker popover remain. */
 const POPOVERS = [
   { btn: 'btn-ratelimit',   pop: 'pop-ratelimit' },
+  { btn: 'btn-services',    pop: 'pop-services' },
   { btn: 'btn-columns',     pop: 'pop-columns' },
   { btn: 'btn-correlation', pop: 'pop-correlation' },
   { btn: 'btn-fields',      pop: 'pop-fields' },
   { btn: 'btn-legend',      pop: 'pop-legend' },
+  { btn: 'btn-notif',       pop: 'pop-notif' },
 ];
 function closeAllPopovers() {
   POPOVERS.forEach(({btn, pop}) => {
@@ -4961,6 +5220,7 @@ function buildColsPicker() {
       lbl.classList.toggle('is-on', !colHidden.has(env));
       syncColsBtn();
       renderMatrix();
+      computeKPIs();
     });
     container.appendChild(lbl);
   });
@@ -4977,6 +5237,363 @@ document.getElementById('btn-cols-reset').addEventListener('click', e => {
   try { localStorage.removeItem(MX_HIDDEN_KEY); } catch (_) {}
   buildColsPicker();  // rebuilds picker + calls syncColsBtn()
   renderMatrix();
+  computeKPIs();
+});
+
+/* =================================================================
+   SERVICES PICKER — pattern-based include/exclude filter
+   Scales to any number of services via glob patterns (*, ?)
+   instead of a per-service checkbox list.
+
+   The picker uses:
+     svcFilterMode    : 'exclude' | 'include'
+     svcPatterns      : string[]  — glob patterns (e.g. '*-api', 'auth-bff')
+
+   visibleServices() re-evaluates from SERVICES × mode × patterns every call.
+   Persisted to localStorage keys:
+     mx.svcMode     : 'exclude' | 'include'
+     mx.svcPatterns : JSON array of pattern strings
+   ================================================================= */
+
+/* State (MX_SVC_MODE_KEY, MX_SVC_PATTERNS_KEY, svcFilterMode, svcPatterns)
+   declared above at first renderMatrix() call. */
+
+/* Persist current filter state. */
+function saveSvcFilter() {
+  try {
+    localStorage.setItem(MX_SVC_MODE_KEY, svcFilterMode);
+    localStorage.setItem(MX_SVC_PATTERNS_KEY, JSON.stringify(svcPatterns));
+  } catch (_) {}
+}
+
+/* Glob match: supports * (any substring) and ? (any single char).
+   Case-insensitive. */
+function svcGlobMatch(pattern, name) {
+  // Escape regex special chars except * and ?
+  const re = new RegExp(
+    '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                 .replace(/\*/g, '.*')
+                 .replace(/\?/g, '.') + '$',
+    'i'
+  );
+  return re.test(name);
+}
+
+/* Returns true if service name matches ANY of svcPatterns. */
+function svcMatchesAnyPattern(name) {
+  return svcPatterns.some(p => svcGlobMatch(p, name));
+}
+
+/* Derive the visible service list from SERVICES × mode × patterns.
+   exclude mode: show everything EXCEPT names matching a pattern.
+   include mode: show ONLY names matching a pattern (empty patterns = show all).
+   Last-visible guard: always show at least 1 service. */
+function visibleServices() {
+  if (svcPatterns.length === 0) return [...SERVICES];
+  let visible;
+  if (svcFilterMode === 'exclude') {
+    visible = SERVICES.filter(s => !svcMatchesAnyPattern(s));
+  } else {
+    visible = SERVICES.filter(s => svcMatchesAnyPattern(s));
+  }
+  // Guard: never return an empty list
+  return visible.length > 0 ? visible : [...SERVICES];
+}
+
+/* Derive visible swim services from SWIM_SERVICES × same filter. */
+function visibleSwimServices() {
+  if (svcPatterns.length === 0) return [...SWIM_SERVICES];
+  let visible;
+  if (svcFilterMode === 'exclude') {
+    visible = SWIM_SERVICES.filter(s => !svcMatchesAnyPattern(s));
+  } else {
+    visible = SWIM_SERVICES.filter(s => svcMatchesAnyPattern(s));
+  }
+  return visible.length > 0 ? visible : [...SWIM_SERVICES];
+}
+
+/* Rebuild all views after filter change. */
+function applySvcFilter() {
+  renderMatrix();
+  computeKPIs();
+  if (currentView === 'vis') {
+    window.__visNodeDims = null;
+    buildSwim();
+  }
+}
+
+/* Recompute caption text: "Showing N of M services" or mode-specific hint. */
+function svcCaption() {
+  const vis = visibleServices();
+  const total = SERVICES.length;
+  if (svcPatterns.length === 0) return `Showing all ${total} services`;
+  const hidden = total - vis.length;
+  if (svcFilterMode === 'exclude') {
+    return hidden === 0
+      ? `Showing all ${total} services`
+      : `Hiding ${hidden} of ${total} · showing ${vis.length}`;
+  } else {
+    return vis.length === total
+      ? `Showing all ${total} services`
+      : `Showing ${vis.length} of ${total} services`;
+  }
+}
+
+/* =================================================================
+   SHARED PATTERN WIDGET — reusable chip list + glob input + autocomplete
+   Used by: Services picker, Notification services axis, Notification envs axis.
+
+   makePatternWidget(cfg) wires a complete add/remove/autocomplete UX onto
+   existing DOM elements (all must be present in the HTML).
+
+   cfg = {
+     chipsId      : id of the .ext-config-filter-chips container
+     addBtnId     : id of the .ext-filter-add button
+     inputRowId   : id of the .pat-input-row wrapper
+     inputId      : id of the .pat-input <input>
+     dropdownId   : id of the .ac-dropdown list
+     captionId    : id of the .ext-option-caption element
+     suggestions  : string[]  — full candidate list for autocomplete
+     getPatterns  : () => string[]     — current pattern list (read)
+     setPatterns  : (arr) => void      — update pattern list + persist + side-effects
+     getCaption   : () => string       — caption text to display after any change
+     onChipChange : () => void         — called after any add/remove (re-renders etc.)
+   }
+   ================================================================= */
+function makePatternWidget(cfg) {
+  const chipsEl   = document.getElementById(cfg.chipsId);
+  const addBtn    = document.getElementById(cfg.addBtnId);
+  const inputRow  = document.getElementById(cfg.inputRowId);
+  const input     = document.getElementById(cfg.inputId);
+  const dropdown  = document.getElementById(cfg.dropdownId);
+  const captionEl = document.getElementById(cfg.captionId);
+
+  if (!chipsEl || !addBtn || !inputRow || !input || !dropdown) return;
+
+  let activeIdx = -1; // keyboard-navigated row in the dropdown
+
+  /* ---- Autocomplete ---- */
+  function getFilteredSuggestions(q) {
+    const already = new Set(cfg.getPatterns());
+    if (!q) {
+      // Show all candidates not already added (up to 8)
+      return cfg.suggestions.filter(s => !already.has(s)).slice(0, 8);
+    }
+    // Fuzzy-prefix: items whose name contains the query string (case-insensitive).
+    // Also keep items that would be matched by the typed glob if it contains *.
+    const lower = q.toLowerCase();
+    return cfg.suggestions
+      .filter(s => !already.has(s) && s.toLowerCase().includes(lower))
+      .slice(0, 8);
+  }
+
+  function renderDropdown(q) {
+    const items = getFilteredSuggestions(q);
+    activeIdx = -1;
+    if (items.length === 0 && !q) {
+      dropdown.classList.remove('is-open');
+      dropdown.innerHTML = '';
+      return;
+    }
+    dropdown.innerHTML = '';
+    const hasGlob = q && (q.includes('*') || q.includes('?'));
+
+    // Verbatim glob row — always first when query contains glob chars
+    if (hasGlob) {
+      const verbatim = document.createElement('div');
+      verbatim.className = 'ac-item';
+      verbatim.setAttribute('role', 'option');
+      verbatim.setAttribute('aria-selected', 'false');
+      verbatim.textContent = `${q}  (glob pattern)`;
+      verbatim.addEventListener('mousedown', e => {
+        e.preventDefault();
+        commitValue(q);
+      });
+      dropdown.appendChild(verbatim);
+    }
+
+    if (items.length === 0 && !hasGlob) {
+      if (q) {
+        // Typed text, no glob chars, no name matches — "no match" hint
+        const hint = document.createElement('div');
+        hint.className = 'ac-item-hint';
+        hint.textContent = 'No matches — press Enter to add as exact pattern';
+        dropdown.appendChild(hint);
+      }
+    } else {
+      items.forEach(name => {
+        const row = document.createElement('div');
+        row.className = 'ac-item';
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', 'false');
+        row.textContent = name;
+        row.addEventListener('mousedown', e => {
+          e.preventDefault();
+          commitValue(name);
+        });
+        dropdown.appendChild(row);
+      });
+    }
+    dropdown.classList.toggle('is-open', dropdown.children.length > 0);
+  }
+
+  function highlightItem(idx) {
+    const rows = dropdown.querySelectorAll('.ac-item');
+    rows.forEach((r, i) => r.classList.toggle('is-active', i === idx));
+  }
+
+  /* ---- Chip rendering ---- */
+  function renderChip(pattern) {
+    const chip = document.createElement('span');
+    chip.className = 'ext-filter-chip';
+    chip.setAttribute('data-pattern', pattern);
+    chip.innerHTML = `${pattern}<span class="ext-filter-chip-x" role="button" aria-label="Remove ${pattern}" title="Remove">&#215;</span>`;
+    chip.querySelector('.ext-filter-chip-x').addEventListener('click', e => {
+      e.stopPropagation();
+      cfg.setPatterns(cfg.getPatterns().filter(p => p !== pattern));
+      chip.remove();
+      if (captionEl) captionEl.textContent = cfg.getCaption();
+      cfg.onChipChange();
+    });
+    chipsEl.insertBefore(chip, addBtn);
+  }
+
+  /* ---- Commit a value (from Enter, suggestion click, or blur) ---- */
+  function commitValue(val) {
+    const trimmed = val.trim();
+    closeInput();
+    if (!trimmed || cfg.getPatterns().includes(trimmed)) return;
+    cfg.setPatterns([...cfg.getPatterns(), trimmed]);
+    renderChip(trimmed);
+    if (captionEl) captionEl.textContent = cfg.getCaption();
+    cfg.onChipChange();
+  }
+
+  function closeInput() {
+    inputRow.classList.remove('is-open');
+    dropdown.classList.remove('is-open');
+    dropdown.innerHTML = '';
+    input.value = '';
+    activeIdx = -1;
+  }
+
+  /* ---- Wire events ---- */
+  // "+ add pattern" opens the input
+  addBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    inputRow.classList.add('is-open');
+    input.value = '';
+    input.focus();
+    renderDropdown('');
+  });
+
+  input.addEventListener('input', () => renderDropdown(input.value.trim()));
+
+  input.addEventListener('keydown', e => {
+    const rows = dropdown.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, rows.length - 1);
+      highlightItem(activeIdx);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, -1);
+      highlightItem(activeIdx);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIdx >= 0 && rows[activeIdx]) {
+        commitValue(rows[activeIdx].textContent.replace(/\s*\(glob pattern\)$/, ''));
+      } else {
+        commitValue(input.value);
+      }
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      closeInput();
+    }
+  });
+
+  // Blur: commit typed value if input row is still open
+  input.addEventListener('blur', () => {
+    // Delay so mousedown on ac-item fires first
+    setTimeout(() => {
+      if (inputRow.classList.contains('is-open')) commitValue(input.value);
+    }, 120);
+  });
+
+  // Prevent clicks inside the input row from closing the popover
+  inputRow.addEventListener('click', e => e.stopPropagation());
+  dropdown.addEventListener('click', e => e.stopPropagation());
+
+  /* ---- Public rebuild — called by buildSvcsPicker() and notif setup ---- */
+  return {
+    rebuildChips(patterns) {
+      chipsEl.querySelectorAll('.ext-filter-chip').forEach(c => c.remove());
+      patterns.forEach(p => renderChip(p));
+      if (captionEl) captionEl.textContent = cfg.getCaption();
+    },
+  };
+}
+
+/* Keep the Services button badge + title in sync. */
+function syncSvcsBtn() {
+  const n = SERVICES.length - visibleServices().length;
+  syncIconBtn(
+    'btn-services', 'svc-hidden-badge',
+    n,
+    'Services — filter services',
+    'Services — filter services',
+    'service'
+  );
+}
+
+/* Build / rebuild the Services picker chip list + mode buttons. */
+function buildSvcsPicker() {
+  document.getElementById('svc-mode-exclude').classList.toggle('is-active', svcFilterMode === 'exclude');
+  document.getElementById('svc-mode-include').classList.toggle('is-active', svcFilterMode === 'include');
+  svcWidget.rebuildChips(svcPatterns);
+  syncSvcsBtn();
+}
+
+// Instantiate the Services picker widget
+const svcWidget = makePatternWidget({
+  chipsId:     'svc-pattern-chips',
+  addBtnId:    'btn-svc-add-pattern',
+  inputRowId:  'svc-pattern-input-row',
+  inputId:     'svc-pattern-input',
+  dropdownId:  'svc-ac-dropdown',
+  captionId:   'svc-filter-caption',
+  suggestions: SERVICES,
+  getPatterns: () => svcPatterns,
+  setPatterns: arr => { svcPatterns = arr; saveSvcFilter(); },
+  getCaption:  svcCaption,
+  onChipChange: () => { syncSvcsBtn(); applySvcFilter(); },
+});
+buildSvcsPicker();
+
+// Mode toggle — "Show all except" / "Show only"
+document.getElementById('svc-mode-seg').addEventListener('click', e => {
+  const btn = e.target.closest('[data-svc-mode]');
+  if (!btn) return;
+  e.stopPropagation();
+  const mode = btn.dataset.svcMode;
+  if (mode === svcFilterMode) return;
+  svcFilterMode = mode;
+  saveSvcFilter();
+  document.getElementById('svc-mode-exclude').classList.toggle('is-active', mode === 'exclude');
+  document.getElementById('svc-mode-include').classList.toggle('is-active', mode === 'include');
+  document.getElementById('svc-filter-caption').textContent = svcCaption();
+  syncSvcsBtn();
+  applySvcFilter();
+});
+
+// "Show all" reset button
+document.getElementById('btn-svcs-reset').addEventListener('click', e => {
+  e.stopPropagation();
+  svcPatterns   = [];
+  svcFilterMode = 'exclude';
+  saveSvcFilter();
+  buildSvcsPicker();
+  applySvcFilter();
 });
 
 // initial view sync
@@ -6213,7 +6830,7 @@ function buildSwim() {
   const dimMap = window.__visNodeDims || new Map();
   const dimOf = id => dimMap.get(id) || { w: DEFAULT_W, h: DEFAULT_H };
 
-  const svcLayouts = SWIM_SERVICES.map(svc => {
+  const svcLayouts = visibleSwimServices().map(svc => {
     const collapsed = laneCollapsed.get(svc) !== false; // default true
 
     // Collapsed lane: restrict the effective node set to the newest-event
@@ -6933,11 +7550,14 @@ document.querySelectorAll('.predicate').forEach(p => {
    KPI BAR — derive from fixture (no invented metrics)
    ================================================================= */
 function computeKPIs() {
-  const svcSet = new Set();
-  const envSet = new Set();
+  const visSvcs = new Set(visibleServices());
+  const visEnvs = new Set(visibleEnvs());
+  const svcSet  = new Set();
+  const envSet  = new Set();
   let inflight = 0, failed = 0;
   Object.entries(SLOTS).forEach(([key, slot]) => {
     const [svc, env] = key.split('|');
+    if (!visSvcs.has(svc) || !visEnvs.has(env)) return;
     svcSet.add(svc); envSet.add(env);
     if (slot.state === 'running-only' || slot.state === 'run-last' ||
         slot.state === 'run-fail-last' || slot.state === 'run-fail-only') inflight++;
@@ -6949,6 +7569,156 @@ function computeKPIs() {
   document.getElementById('kpi-failed').textContent   = failed;
 }
 computeKPIs();
+
+/* =================================================================
+   NOTIFICATION SETTINGS — master toggle + per-status chip toggles
+   ================================================================= */
+(function setupNotifications() {
+  const btn         = document.getElementById('btn-notif');
+  const masterLbl   = document.getElementById('notif-master-toggle');
+  const masterTxt   = document.getElementById('notif-master-label-txt');
+  const filtersArea = document.getElementById('notif-filters-area');
+  if (!btn || !masterLbl || !filtersArea) return;
+
+  let notifEnabled = true; // master ON by default (matches initial HTML state)
+
+  function syncBell() {
+    // coral badge-dot visible when notifications are ON (has-active drives .badge-dot display)
+    btn.classList.toggle('has-active', notifEnabled);
+    masterLbl.classList.toggle('is-on', notifEnabled);
+    masterTxt.textContent = notifEnabled ? 'Notify — browser alerts' : 'Notify — off';
+    // dims the filter block without blocking pointer on chips inside
+    filtersArea.classList.toggle('is-paused', !notifEnabled);
+  }
+
+  // Master toggle click
+  masterLbl.addEventListener('click', e => {
+    e.preventDefault();
+    notifEnabled = !notifEnabled;
+    syncBell();
+  });
+
+  // Per-status chip toggles
+  document.querySelectorAll('.notif-status-chip').forEach(chip => {
+    chip.addEventListener('click', e => {
+      e.preventDefault();
+      const on = chip.classList.toggle('is-on');
+      chip.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  });
+
+  syncBell();
+})();
+
+/* =================================================================
+   NOTIFICATION FILTER AXES — services + environments
+   Wire the include/exclude pattern chips + glob autocomplete for both
+   axes inside the browser-notifications popover.
+   These axes are display-only in the mockup (no real notification
+   filtering), but the chip/pattern/autocomplete interaction is fully live.
+   ================================================================= */
+(function setupNotifFilters() {
+  /* ---- Shared caption helpers ---- */
+  function notifCaption(patterns, mode, allItems, noun) {
+    if (patterns.length === 0) return `Watching all ${noun}s`;
+    // Expand glob patterns against allItems to count matches
+    const matched = allItems.filter(s =>
+      patterns.some(p => svcGlobMatch(p, s))
+    );
+    if (mode === 'exclude') {
+      const watching = allItems.length - matched.length;
+      return watching === allItems.length
+        ? `Watching all ${noun}s`
+        : `Watching ${watching} of ${allItems.length} ${noun}s`;
+    } else {
+      return matched.length === 0
+        ? `Watching no ${noun}s`
+        : matched.length === allItems.length
+          ? `Watching all ${noun}s`
+          : `Watching ${matched.length} of ${allItems.length} ${noun}s`;
+    }
+  }
+
+  /* ---- Services axis ---- */
+  let notifSvcMode     = 'exclude';
+  let notifSvcPatterns = [];
+
+  function notifSvcCaption() {
+    return notifCaption(notifSvcPatterns, notifSvcMode, SERVICES, 'service');
+  }
+
+  const notifSvcWidget = makePatternWidget({
+    chipsId:     'notif-svc-chips',
+    addBtnId:    'btn-notif-svc-add',
+    inputRowId:  'notif-svc-input-row',
+    inputId:     'notif-svc-input',
+    dropdownId:  'notif-svc-ac',
+    captionId:   'notif-svc-caption',
+    suggestions: SERVICES,
+    getPatterns: () => notifSvcPatterns,
+    setPatterns: arr => { notifSvcPatterns = arr; },
+    getCaption:  notifSvcCaption,
+    onChipChange: () => {},  // display-only; no dashboard re-render
+  });
+  notifSvcWidget.rebuildChips(notifSvcPatterns);
+
+  // Mode toggle
+  const notifSvcSeg = document.getElementById('notif-svc-mode-seg');
+  if (notifSvcSeg) {
+    notifSvcSeg.addEventListener('click', e => {
+      const btn = e.target.closest('[data-notif-svc-mode]');
+      if (!btn) return;
+      e.stopPropagation();
+      const mode = btn.dataset.notifSvcMode;
+      if (mode === notifSvcMode) return;
+      notifSvcMode = mode;
+      notifSvcSeg.querySelectorAll('[data-notif-svc-mode]').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.notifSvcMode === mode)
+      );
+      document.getElementById('notif-svc-caption').textContent = notifSvcCaption();
+    });
+  }
+
+  /* ---- Environments axis ---- */
+  let notifEnvMode     = 'exclude';
+  let notifEnvPatterns = [];
+
+  function notifEnvCaption() {
+    return notifCaption(notifEnvPatterns, notifEnvMode, ENVS, 'environment');
+  }
+
+  const notifEnvWidget = makePatternWidget({
+    chipsId:     'notif-env-chips',
+    addBtnId:    'btn-notif-env-add',
+    inputRowId:  'notif-env-input-row',
+    inputId:     'notif-env-input',
+    dropdownId:  'notif-env-ac',
+    captionId:   'notif-env-caption',
+    suggestions: ENVS,
+    getPatterns: () => notifEnvPatterns,
+    setPatterns: arr => { notifEnvPatterns = arr; },
+    getCaption:  notifEnvCaption,
+    onChipChange: () => {},
+  });
+  notifEnvWidget.rebuildChips(notifEnvPatterns);
+
+  // Mode toggle
+  const notifEnvSeg = document.getElementById('notif-env-mode-seg');
+  if (notifEnvSeg) {
+    notifEnvSeg.addEventListener('click', e => {
+      const btn = e.target.closest('[data-notif-env-mode]');
+      if (!btn) return;
+      e.stopPropagation();
+      const mode = btn.dataset.notifEnvMode;
+      if (mode === notifEnvMode) return;
+      notifEnvMode = mode;
+      notifEnvSeg.querySelectorAll('[data-notif-env-mode]').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.notifEnvMode === mode)
+      );
+      document.getElementById('notif-env-caption').textContent = notifEnvCaption();
+    });
+  }
+})();
 
 /* =================================================================
    THEME SWITCHER — dark / light / auto

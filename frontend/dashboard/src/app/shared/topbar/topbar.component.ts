@@ -6,8 +6,14 @@ import { SelectButton } from 'primeng/selectbutton';
 import { InputText } from 'primeng/inputtext';
 import { Popover } from 'primeng/popover';
 
-import { AppStateService } from '../../core/services/app-state.service';
+import { AppStateService, ServiceFilterMode } from '../../core/services/app-state.service';
 import { ThemeService } from '../../core/services/theme.service';
+import {
+  NotificationPrefsService,
+  NOTIFICATION_STATUSES,
+  NotifFilterMode,
+} from '../../core/services/notification-prefs.service';
+import { BrowserNotificationService } from '../../core/services/browser-notification.service';
 import {
   CORRELATION_PREDICATES,
   CorrelationPredicate,
@@ -15,9 +21,12 @@ import {
   MatrixField,
   RateLimitReport,
   SWIMLANE_FIELDS,
+  Status,
   SwimlaneField,
   Theme,
 } from '../../core/models/deployment.model';
+import { PatternFilterComponent } from '../pattern-filter/pattern-filter.component';
+import { matchesAny } from '../../core/utils/glob.util';
 
 interface ViewOption {
   label: string;
@@ -52,21 +61,26 @@ interface ThemeOption {
     SelectButton,
     InputText,
     Popover,
+    PatternFilterComponent,
   ],
   templateUrl: './topbar.component.html',
   styleUrl: './topbar.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TopbarComponent {
-  protected readonly state        = inject(AppStateService);
-  protected readonly themeService = inject(ThemeService);
-  protected readonly router       = inject(Router);
+  protected readonly state           = inject(AppStateService);
+  protected readonly themeService    = inject(ThemeService);
+  protected readonly notifPrefs      = inject(NotificationPrefsService);
+  protected readonly notifService    = inject(BrowserNotificationService);
+  protected readonly router          = inject(Router);
 
   // Popovers
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
   protected readonly columnsPopover       = viewChild<Popover>('columnsPopover');
   protected readonly correlationPopover   = viewChild<Popover>('correlationPopover');
   protected readonly legendPopover        = viewChild<Popover>('legendPopover');
+  protected readonly notifPopover         = viewChild<Popover>('notifPopover');
+  protected readonly servicesPopover      = viewChild<Popover>('servicesPopover');
   protected readonly rateLimitPopovers    = viewChildren<Popover>('rateLimitPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
@@ -74,6 +88,8 @@ export class TopbarComponent {
   protected readonly columnsPopoverOpen     = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
   protected readonly legendPopoverOpen      = signal(false);
+  protected readonly notifPopoverOpen       = signal(false);
+  protected readonly servicesPopoverOpen    = signal(false);
   protected readonly rateLimitPopoverOpen   = signal<Map<string, boolean>>(new Map());
 
   // ── View tabs ─────────────────────────────────────────────
@@ -117,6 +133,72 @@ export class TopbarComponent {
 
   protected onFailuresOnlyChange(value: boolean): void {
     this.state.failuresOnly.set(value);
+  }
+
+  // ── Services picker (glob include/exclude filter) ─────────
+  /** Current glob filter mode for the services picker. */
+  protected readonly serviceFilterMode = computed(() => this.state.serviceFilterMode());
+  /** Current glob patterns for the services picker. */
+  protected readonly servicePatterns   = computed(() => this.state.servicePatterns());
+
+  /** All service names from matrix data — autocomplete suggestions. */
+  protected readonly allServiceNames = computed(() =>
+    this.state.matrixData()?.rows.map((r) => r.service) ?? []
+  );
+
+  /** Badge count: number of services hidden by the current filter. */
+  protected readonly svcHiddenCount = computed(() => {
+    const all  = this.allServiceNames();
+    if (!all.length) return 0;
+    const vis  = this.state.visibleServices(all);
+    return all.length - vis.length;
+  });
+
+  /** Title / aria label for the Services button, reflecting hidden count. */
+  protected readonly servicesBtnTitle = computed(() => {
+    const n = this.svcHiddenCount();
+    return n > 0
+      ? `Services — ${n} service${n === 1 ? '' : 's'} hidden`
+      : 'Services — filter services';
+  });
+
+  /** Caption line shown inside the services picker popover. */
+  protected readonly servicesCaption = computed(() => {
+    const all      = this.allServiceNames();
+    const patterns = this.servicePatterns();
+    if (!patterns.length) return `Showing all ${all.length} service${all.length === 1 ? '' : 's'}`;
+    const vis    = this.state.visibleServices(all);
+    const hidden = all.length - vis.length;
+    if (this.serviceFilterMode() === 'exclude') {
+      return hidden === 0
+        ? `Showing all ${all.length} services`
+        : `Hiding ${hidden} of ${all.length} · showing ${vis.length}`;
+    } else {
+      return vis.length === all.length
+        ? `Showing all ${all.length} services`
+        : `Showing ${vis.length} of ${all.length} services`;
+    }
+  });
+
+  protected onServiceFilterModeChange(mode: ServiceFilterMode): void {
+    this.state.serviceFilterMode.set(mode);
+  }
+
+  protected onServicePatternsChange(patterns: string[]): void {
+    this.state.servicePatterns.set(patterns);
+  }
+
+  protected resetServicesFilter(): void {
+    this.state.servicePatterns.set([]);
+    this.state.serviceFilterMode.set('exclude');
+  }
+
+  protected toggleServicesPopover(event: MouseEvent): void {
+    const p = this.servicesPopover();
+    if (p) {
+      p.toggle(event);
+      this.servicesPopoverOpen.update((v) => !v);
+    }
   }
 
   // ── KPIs ──────────────────────────────────────────────────
@@ -348,4 +430,113 @@ export class TopbarComponent {
       this.rateLimitPopoverOpen.set(current);
     }
   }
+
+  protected toggleNotifPopover(event: MouseEvent): void {
+    const p = this.notifPopover();
+    if (p) {
+      p.toggle(event);
+      this.notifPopoverOpen.update(v => !v);
+    }
+  }
+
+  // ── Notification prefs ────────────────────────────────────
+
+  /** All 8 statuses in display order. */
+  protected readonly notifStatuses: Status[] = NOTIFICATION_STATUSES;
+
+  /** Derived: true when notifications are enabled (for badge-dot display). */
+  protected readonly notifEnabled = computed(() => this.notifPrefs.prefs().enabled);
+
+  protected toggleNotifEnabled(): void {
+    const enabling = !this.notifPrefs.prefs().enabled;
+    this.notifPrefs.updatePrefs({ enabled: enabling });
+    // Request permission lazily on first explicit opt-in.
+    if (enabling) {
+      void this.notifService.requestPermission();
+    }
+  }
+
+  protected isNotifStatusOn(s: Status): boolean {
+    return this.notifPrefs.prefs().statuses.includes(s);
+  }
+
+  protected toggleNotifStatus(s: Status): void {
+    const current = this.notifPrefs.prefs().statuses;
+    const updated = current.includes(s)
+      ? current.filter(x => x !== s)
+      : [...current, s];
+    this.notifPrefs.updatePrefs({ statuses: updated });
+  }
+
+  protected readonly notifServiceMode = computed(() => this.notifPrefs.prefs().serviceMode);
+  protected readonly notifServiceChips = computed(() => this.notifPrefs.prefs().serviceChips);
+  protected readonly notifServiceCaption = computed(() => {
+    const p       = this.notifPrefs.prefs();
+    const allSvcs = this.allServiceNames();
+    if (!p.serviceChips.length) return 'Watching all services';
+    const matched = allSvcs.filter((s) => matchesAny(s, p.serviceChips));
+    if (p.serviceMode === 'watch-all-except') {
+      const watching = allSvcs.length - matched.length;
+      return watching === allSvcs.length
+        ? 'Watching all services'
+        : `Watching ${watching} of ${allSvcs.length} services`;
+    } else {
+      return matched.length === 0
+        ? 'Watching no services'
+        : matched.length === allSvcs.length
+          ? 'Watching all services'
+          : `Watching ${matched.length} of ${allSvcs.length} services`;
+    }
+  });
+
+  protected setNotifServiceMode(mode: NotifFilterMode): void {
+    this.notifPrefs.updatePrefs({ serviceMode: mode });
+  }
+
+  protected onNotifServicePatternsChange(chips: string[]): void {
+    this.notifPrefs.updatePrefs({ serviceChips: chips });
+  }
+
+  protected removeNotifServiceChip(chip: string): void {
+    this.notifPrefs.updatePrefs({
+      serviceChips: this.notifPrefs.prefs().serviceChips.filter(x => x !== chip),
+    });
+  }
+
+  protected readonly notifEnvMode = computed(() => this.notifPrefs.prefs().envMode);
+  protected readonly notifEnvChips = computed(() => this.notifPrefs.prefs().envChips);
+  protected readonly notifEnvCaption = computed(() => {
+    const p       = this.notifPrefs.prefs();
+    const allEnvs = this.allEnvironments();
+    if (!p.envChips.length) return 'Watching all environments';
+    const matched = allEnvs.filter((e) => matchesAny(e, p.envChips));
+    if (p.envMode === 'watch-all-except') {
+      const watching = allEnvs.length - matched.length;
+      return watching === allEnvs.length
+        ? 'Watching all environments'
+        : `Watching ${watching} of ${allEnvs.length} environments`;
+    } else {
+      return matched.length === 0
+        ? 'Watching no environments'
+        : matched.length === allEnvs.length
+          ? 'Watching all environments'
+          : `Watching ${matched.length} of ${allEnvs.length} environments`;
+    }
+  });
+
+  protected setNotifEnvMode(mode: NotifFilterMode): void {
+    this.notifPrefs.updatePrefs({ envMode: mode });
+  }
+
+  protected onNotifEnvPatternsChange(chips: string[]): void {
+    this.notifPrefs.updatePrefs({ envChips: chips });
+  }
+
+  protected removeNotifEnvChip(chip: string): void {
+    this.notifPrefs.updatePrefs({
+      envChips: this.notifPrefs.prefs().envChips.filter(x => x !== chip),
+    });
+  }
+
 }
+

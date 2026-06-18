@@ -35,9 +35,10 @@ flowchart LR
 | Icon buttons — Fields (▦) | Custom | Shared (Matrix + Swimlanes). Opens Fields picker popover. Shows accent state + hidden-count badge when any fields are OFF. Tooltip: `Fields — toggle visible data fields` (normal); `Fields — N field(s) hidden` when N > 0. |
 | Icon buttons — Columns (⊞) | Custom | **Matrix-only** (hidden in Swimlanes). Opens Columns picker popover. Shows accent state + hidden-count badge when any environments are hidden. Tooltip: `Columns — show/hide environments` (normal); `Columns — N environment(s) hidden` when N > 0. |
 | Icon buttons — Correlation (⇆) | Custom | **Swimlanes-only**. Opens Correlation picker popover. |
+| Bell toggle (🔔) | Custom | Enables/disables browser notifications. Toggling ON for the first time triggers the browser permission prompt (lazy — never on load). Hidden when the Notifications API is unsupported, permission is denied, or the context is insecure. Tooltip: `Notifications — enable/disable desktop alerts`. |
 | Live indicator | Custom | Green dot with `pulseRing` animation (1.8s). Shows SSE connection status. |
 
-**Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, and the Live pill.
+**Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, bell toggle, and the Live pill.
 
 **Hidden-count badge.** Fields and Columns buttons share the same badge mechanism: when the hidden count N > 0, the button gains `.is-active` accent styling and a small filled count badge (`.hidden-count-badge`) positioned top-right on the icon. When N = 0, the badge is hidden and styling reverts to default.
 
@@ -253,6 +254,34 @@ On-demand dropdown panels anchored to icon buttons. `z-index: 20` inside topbar'
 - **"Show all · reset order" action:** a text-button at the bottom of the popover restores all environments to visible and resets the column order to the default environment order. Clears both `localStorage` keys.
 - **Persistence:** hidden set persisted to `localStorage` key `dd:colHidden`. Restored on load.
 
+### Pattern Filter (services + notifications)
+
+A reusable glob pattern filter widget used at three sites: the topbar Services popover (Matrix + Swimlanes) and the Notification Preferences Popover (service axis + environment axis).
+
+**Structure.**
+- **Mode segmented control** — two segments:
+  - Services board: "Show all except" (exclude) / "Show only" (include).
+  - Notification axes: "Watch all except" (exclude) / "Watch only" (include).
+- **Pattern chips** — one removable chip per active pattern; each chip has a `×` remove button.
+- **Inline input + autocomplete dropdown** — freetext entry with a dropdown populated from known service (or environment) names; selecting or confirming adds a chip.
+
+**Glob syntax.** `*` = any sequence of characters, `?` = any single character. All other characters are literal. Matching is case-insensitive.
+
+**Visibility logic.**
+- Exclude mode: an item is visible when it does not match any active pattern (empty pattern list = show all).
+- Include mode: an item is visible when it matches at least one active pattern (empty pattern list = show all).
+
+**Persistence.**
+
+| Site | Keys |
+|---|---|
+| Services board (Matrix + Swimlanes) | `dd:svcFilterMode`, `dd:svcPatterns` |
+| Notification service + environment axes | `dd.notifPrefs` (bundled with other notif prefs) |
+
+**Source.** `frontend/dashboard/src/app/shared/pattern-filter/`, `frontend/dashboard/src/app/core/utils/glob.util.ts`.
+
+---
+
 ### Fields Picker
 
 - Shared between views; title and toggle list swap on view switch.
@@ -267,6 +296,18 @@ On-demand dropdown panels anchored to icon buttons. `z-index: 20` inside topbar'
 - Single-select — shared `ngModel`.
 - Below: time-window `p-select` with options: 5 min, 1 hr, 1 day, 7 days.
 - Time-window is **disabled** when `explicit parent` is selected.
+
+### Notification Preferences Popover
+
+Accessible from the bell toggle area when notifications are enabled. Three independent filter axes.
+
+**Status filter.** One `p-checkbox` per deployment status (all 8). Checked = notify on that status. Default: all ON.
+
+**Service filter.** A [Pattern Filter](#pattern-filter-services--notifications) widget — mode "Watch all except" (exclude) / "Watch only" (include) + pattern chips + autocomplete input. Default: "Watch all except", empty pattern list.
+
+**Environment filter.** Same Pattern Filter widget, keyed by environment name. Default: "Watch all except", empty pattern list.
+
+**Persistence.** All three axes persisted to `localStorage` (key `dd.notifPrefs`). Restored on init.
 
 ---
 

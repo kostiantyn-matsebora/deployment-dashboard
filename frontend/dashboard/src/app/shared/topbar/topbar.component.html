@@ -91,6 +91,45 @@
   <!-- Icon buttons + popovers ────────────────────────────── -->
   <div class="hdr-icons">
 
+    <!-- Services picker (Matrix + Swimlanes only) ───────────────────────────── -->
+    @if (isMatrix() || isSwimlanes()) {
+      <div style="position: relative">
+        <button
+          class="icon-btn"
+          [class.is-active]="servicesPopoverOpen() || svcHiddenCount() > 0"
+          [title]="servicesBtnTitle()"
+          [attr.aria-label]="servicesBtnTitle()"
+          aria-haspopup="true"
+          (click)="toggleServicesPopover($event)"
+        >
+          <span aria-hidden="true">☰</span>
+          @if (svcHiddenCount() > 0) {
+            <span class="hidden-count-badge" aria-hidden="true">{{ svcHiddenCount() }}</span>
+          }
+        </button>
+        <p-popover #servicesPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
+          <div class="picker-content" style="min-width: 260px">
+            <span class="popover-title">SERVICES</span>
+            <app-pattern-filter
+              [mode]="serviceFilterMode()"
+              [patterns]="servicePatterns()"
+              [suggestions]="allServiceNames()"
+              excludeLabel="Show all except"
+              includeLabel="Show only"
+              [caption]="servicesCaption()"
+              (modeChange)="onServiceFilterModeChange($event)"
+              (patternsChange)="onServicePatternsChange($event)"
+            />
+            <button
+              class="cols-reset-btn"
+              (click)="resetServicesFilter()"
+              aria-label="Clear all patterns and show all services"
+            >Show all</button>
+          </div>
+        </p-popover>
+      </div>
+    }
+
     <!-- Rate-limit chips — one per adapter (shown only when reports have arrived) ── -->
     @for (entry of rateLimitEntries(); track entry[0]; let i = $index) {
       <div style="position: relative">
@@ -394,6 +433,114 @@
       </p-popover>
     </div>
     }
+
+    <!-- Notification bell — monochrome SVG, badge-dot when notifications enabled -->
+    <div style="position: relative">
+      <button
+        class="icon-btn"
+        [class.is-active]="notifPopoverOpen()"
+        [class.has-active]="notifEnabled()"
+        title="Notification settings — browser alerts on deployment events"
+        aria-label="Notification settings"
+        aria-haspopup="true"
+        (click)="toggleNotifPopover($event)"
+      >
+        <!-- Monochrome stroke bell — inherits currentColor at 15px, matching peer ⊞ ▦ ☷ -->
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+             stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7.5 1.5a4 4 0 0 1 4 4v2.5l1 1.5H2.5l1-1.5V5.5a4 4 0 0 1 4-4z"/>
+          <path d="M6 11.5a1.5 1.5 0 0 0 3 0"/>
+        </svg>
+        <span class="badge-dot" aria-hidden="true"></span>
+      </button>
+      <p-popover #notifPopover [dismissable]="true" appendTo="body" styleClass="glass-popover notif-popover">
+        <div class="picker-content notif-content">
+          <span class="popover-title">BROWSER NOTIFICATIONS</span>
+
+          <!-- Master enable toggle -->
+          <label
+            class="toggle notif-master-toggle"
+            [class.is-on]="notifEnabled()"
+            (click)="toggleNotifEnabled()"
+            role="switch"
+            [attr.aria-checked]="notifEnabled()"
+            aria-label="Enable browser notifications"
+          >
+            <span class="switch" aria-hidden="true"></span>
+            <span>{{ notifEnabled() ? 'Notify — browser alerts' : 'Notify — off' }}</span>
+          </label>
+          <span class="notif-hint">Off = no browser notifications fired for any event.</span>
+
+          <!-- Filter block — dims when master is OFF -->
+          <div class="notif-filters" [class.is-paused]="!notifEnabled()">
+
+            <!-- Status axis — first (issue #271 spec) -->
+            <div class="notif-axis-label">
+              Status
+              <span class="notif-axis-hint">(select statuses that trigger a notification)</span>
+            </div>
+            <div class="notif-status-chips">
+              @for (s of notifStatuses; track s) {
+                <span
+                  class="notif-status-chip"
+                  [class.is-on]="isNotifStatusOn(s)"
+                  [attr.data-status]="s"
+                  role="checkbox"
+                  [attr.aria-checked]="isNotifStatusOn(s)"
+                  [attr.aria-label]="s"
+                  (click)="toggleNotifStatus(s)"
+                >{{ s }}</span>
+              }
+            </div>
+
+            <!-- Services axis -->
+            <div class="notif-axis-label">
+              Services
+              <span class="notif-axis-hint">(optional — blank = all)</span>
+            </div>
+            <app-pattern-filter
+              [mode]="notifServiceMode() === 'watch-all-except' ? 'exclude' : 'include'"
+              [patterns]="notifServiceChips()"
+              [suggestions]="allServiceNames()"
+              excludeLabel="Watch all except"
+              includeLabel="Watch only"
+              [caption]="notifServiceCaption()"
+              (modeChange)="setNotifServiceMode($event === 'exclude' ? 'watch-all-except' : 'watch-only')"
+              (patternsChange)="onNotifServicePatternsChange($event)"
+            />
+
+            <!-- Environments axis -->
+            <div class="notif-axis-label" style="margin-top: 8px">
+              Environments
+              <span class="notif-axis-hint">(optional — blank = all)</span>
+            </div>
+            <app-pattern-filter
+              [mode]="notifEnvMode() === 'watch-all-except' ? 'exclude' : 'include'"
+              [patterns]="notifEnvChips()"
+              [suggestions]="allEnvironments()"
+              excludeLabel="Watch all except"
+              includeLabel="Watch only"
+              [caption]="notifEnvCaption()"
+              (modeChange)="setNotifEnvMode($event === 'exclude' ? 'watch-all-except' : 'watch-only')"
+              (patternsChange)="onNotifEnvPatternsChange($event)"
+            />
+
+          </div><!-- /notif-filters -->
+
+          <!-- Save — writes prefs to localStorage (effect fires automatically, but
+               explicit Save closes the popover and confirms intent per mockup) -->
+          <div class="notif-actions">
+            <button
+              class="ext-btn is-primary"
+              type="button"
+              (click)="toggleNotifPopover($event)"
+              aria-label="Save notification preferences"
+            >Save</button>
+          </div>
+
+        </div><!-- /notif-content -->
+      </p-popover>
+    </div>
 
   </div>
 

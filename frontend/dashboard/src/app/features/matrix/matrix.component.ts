@@ -58,11 +58,17 @@ export class MatrixComponent {
     const matrix = this.state.matrixData();
     if (!matrix) return [];
 
-    const filter   = this.state.serviceFilter().toLowerCase().trim();
-    const failOnly = this.state.failuresOnly();
+    const filter    = this.state.serviceFilter().toLowerCase().trim();
+    const failOnly  = this.state.failuresOnly();
+    const allSvcs   = matrix.rows.map((r) => r.service);
+    const visSvcs   = new Set(this.state.visibleServices(allSvcs));
 
     return matrix.rows.filter((row) => {
+      // Glob service filter (picker)
+      if (!visSvcs.has(row.service)) return false;
+      // Text search filter (inline input)
       if (filter && !row.service.toLowerCase().includes(filter)) return false;
+      // Failures-only toggle
       if (failOnly) {
         const hasFail = Object.values(row.slots).some((s) => {
           const st = deriveBoxState(s);

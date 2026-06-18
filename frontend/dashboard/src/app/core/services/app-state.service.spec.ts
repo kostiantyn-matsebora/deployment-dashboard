@@ -367,6 +367,169 @@ describe('AppStateService — column order + hidden-set', () => {
     });
 
   });
+
+  // ── serviceFilterMode + servicePatterns + visibleServices ────────────────
+
+  describe('serviceFilterMode + servicePatterns defaults', () => {
+    it('serviceFilterMode defaults to "exclude"', () => {
+      expect(service.serviceFilterMode()).toBe('exclude');
+    });
+
+    it('servicePatterns defaults to empty array', () => {
+      expect(service.servicePatterns()).toEqual([]);
+    });
+
+    it('persists serviceFilterMode to localStorage via effect', async () => {
+      service.serviceFilterMode.set('include');
+      await TestBed.flushEffects();
+      const stored = localStorage.getItem('dd:svcFilterMode');
+      expect(stored).toBe('include');
+    });
+
+    it('restores serviceFilterMode from localStorage on next init', async () => {
+      service.serviceFilterMode.set('include');
+      await TestBed.flushEffects();
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({}).compileComponents();
+      const fresh = TestBed.inject(AppStateService);
+      expect(fresh.serviceFilterMode()).toBe('include');
+    });
+
+    it('persists servicePatterns to localStorage via effect', async () => {
+      service.servicePatterns.set(['*-api', 'checkout']);
+      await TestBed.flushEffects();
+      const stored = localStorage.getItem('dd:svcPatterns');
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored!)).toEqual(['*-api', 'checkout']);
+    });
+
+    it('restores servicePatterns from localStorage on next init', async () => {
+      service.servicePatterns.set(['payments-*']);
+      await TestBed.flushEffects();
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({}).compileComponents();
+      const fresh = TestBed.inject(AppStateService);
+      expect(fresh.servicePatterns()).toEqual(['payments-*']);
+    });
+
+    it('falls back to [] when stored servicePatterns is invalid JSON', async () => {
+      localStorage.setItem('dd:svcPatterns', 'not-json{{');
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({}).compileComponents();
+      const fresh = TestBed.inject(AppStateService);
+      expect(fresh.servicePatterns()).toEqual([]);
+    });
+  });
+
+  // ── kpi() — combined glob filter + hidden column ──────────────────────────
+
+  describe('kpi() — service glob filter combined with hidden env column', () => {
+    /** Build a minimal MatrixSlot with the given status. */
+    function makeSlot(status: 'success' | 'in-progress' | 'failure') {
+      return {
+        current: {
+          id: crypto.randomUUID(),
+          deployment_id: '1',
+          service: '',
+          environment: '',
+          status,
+          happened_at: new Date().toISOString(),
+        },
+      };
+    }
+
+    it('counts only the visible 2×2 intersection when 1 env is hidden and 1 service excluded', async () => {
+      // Scenario: 3 services × 3 envs; exclude 'excluded-svc' via glob; hide 'dev' column.
+      // Visible intersection = {svc-a, svc-b} × {staging, prod} = 4 slots.
+      // svc-a/staging = in-progress, svc-b/prod = failure; all others = success.
+
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set(['excluded-svc']);
+      service.matrixColHidden.set(new Set(['dev']));
+
+      service.matrixData.set({
+        generated_at: new Date().toISOString(),
+        environments: ['dev', 'staging', 'prod'],
+        rows: [
+          {
+            service: 'svc-a',
+            slots: {
+              dev:     makeSlot('success'),
+              staging: makeSlot('in-progress'),
+              prod:    makeSlot('success'),
+            },
+          },
+          {
+            service: 'svc-b',
+            slots: {
+              dev:     makeSlot('success'),
+              staging: makeSlot('success'),
+              prod:    makeSlot('failure'),
+            },
+          },
+          {
+            service: 'excluded-svc',
+            slots: {
+              dev:     makeSlot('in-progress'),
+              staging: makeSlot('failure'),
+              prod:    makeSlot('in-progress'),
+            },
+          },
+        ],
+      });
+
+      await TestBed.flushEffects();
+
+      const result = service.kpi();
+      expect(result.services).toBe(2);      // svc-a + svc-b (excluded-svc filtered out)
+      expect(result.environments).toBe(2);  // staging + prod (dev hidden)
+      expect(result.inFlight).toBe(1);      // svc-a/staging only
+      expect(result.failed).toBe(1);        // svc-b/prod only
+    });
+  });
+
+  describe('visibleServices()', () => {
+    it('returns all services when patterns is empty (exclude mode)', () => {
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set([]);
+      expect(service.visibleServices(['svc-a', 'svc-b', 'svc-c'])).toEqual(['svc-a', 'svc-b', 'svc-c']);
+    });
+
+    it('returns all services when patterns is empty (include mode)', () => {
+      service.serviceFilterMode.set('include');
+      service.servicePatterns.set([]);
+      expect(service.visibleServices(['svc-a', 'svc-b', 'svc-c'])).toEqual(['svc-a', 'svc-b', 'svc-c']);
+    });
+
+    it('exclude mode: filters out services matching the glob pattern', () => {
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set(['*-api']);
+      const result = service.visibleServices(['payments-api', 'auth-api', 'checkout']);
+      expect(result).toEqual(['checkout']);
+    });
+
+    it('include mode: keeps only services matching the glob pattern', () => {
+      service.serviceFilterMode.set('include');
+      service.servicePatterns.set(['*-api']);
+      const result = service.visibleServices(['payments-api', 'auth-api', 'checkout']);
+      expect(result).toEqual(['payments-api', 'auth-api']);
+    });
+
+    it('last-visible guard: never returns empty array (falls back to all)', () => {
+      service.serviceFilterMode.set('include');
+      service.servicePatterns.set(['no-match-*']);
+      const result = service.visibleServices(['payments-api', 'auth-api']);
+      // No services match — guard returns all
+      expect(result).toEqual(['payments-api', 'auth-api']);
+    });
+
+    it('exact string pattern matches exactly (backward-compatible)', () => {
+      service.serviceFilterMode.set('exclude');
+      service.servicePatterns.set(['checkout']);
+      const result = service.visibleServices(['payments-api', 'checkout', 'auth-api']);
+      expect(result).toEqual(['payments-api', 'auth-api']);
+    });
+  });
 });
 
 // ── Badge count derivations — TopbarComponent helpers ─────────────────────────
@@ -376,6 +539,8 @@ import { NO_ERRORS_SCHEMA }   from '@angular/core';
 import { TopbarComponent }    from '../../shared/topbar/topbar.component';
 import { ThemeService }       from './theme.service';
 import { RateLimitReport }    from '../models/deployment.model';
+import { NotificationPrefsService } from './notification-prefs.service';
+import { BrowserNotificationService } from './browser-notification.service';
 
 describe('TopbarComponent — badge counts + Columns picker', () => {
   let component: TopbarComponent;
@@ -398,6 +563,9 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       activeView,
       serviceFilter:        signal(''),
       failuresOnly:         signal(false),
+      serviceFilterMode:    signal('exclude' as const),
+      servicePatterns:      signal([] as string[]),
+      visibleServices:      (svcs: string[]) => svcs,
       matrixVisibleFields,
       swimlaneVisibleFields,
       correlationPredicate: signal('explicit parent' as const),
@@ -408,9 +576,14 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       matrixData:           signal(null),
       matrixColHidden,
       matrixColOrder,
+      lastEffectiveEvent:   signal(null) as never,
+      collapsedLanes:       signal(new Set<string>()),
+      autoScrollOnChange:   signal(true),
       orderedVisibleEnvironments: (_envs: string[]) => [],
       toggleColHidden: (_env: string, _all: string[]) => {},
       resetColumns: (_all: string[]) => {},
+      expandAllLanes:   () => {},
+      collapseAllLanes: (_services: string[]) => {},
     };
 
     const mockTheme: Partial<ThemeService> = {
@@ -418,11 +591,26 @@ describe('TopbarComponent — badge counts + Columns picker', () => {
       setTheme: () => {},
     };
 
+    // Minimal stubs for services injected by TopbarComponent that are not
+    // under test here — prevents their constructor effects from running.
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:        () => false,
+      requestPermission:  () => Promise.resolve('denied' as const),
+      currentPermission:  'default' as const,
+    };
+
     await TestBed.configureTestingModule({
       imports:   [TopbarComponent],
       providers: [
-        { provide: AppStateService, useValue: mockState },
-        { provide: ThemeService,    useValue: mockTheme },
+        { provide: AppStateService,          useValue: mockState       },
+        { provide: ThemeService,             useValue: mockTheme       },
+        { provide: NotificationPrefsService, useValue: mockNotifPrefs  },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();

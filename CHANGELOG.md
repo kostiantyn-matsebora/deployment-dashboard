@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+
+- **Services and notifications glob filter (#351).** The services board (Matrix + Swimlanes) and notification preferences now filter services and environments using case-insensitive glob patterns (`*` any chars, `?` one char) instead of exact string matching. Notification service/environment filter chips changed from case-sensitive exact membership (#271) to case-insensitive glob, allowing patterns like `*-api` or `prod*`.
+
+## [0.15.0] - 2026-06-17
+
+### Added
+
+- **Opt-in desktop browser notifications for deployment status changes.** A new bell toggle in the dashboard top bar enables native desktop notifications (Web Notifications API) that fire when a deployment changes status, driven by the existing live event stream — no backend and no extra configuration. A settings popover mirrors the controls from the browser extension: a master on/off switch plus per-status, per-service, and per-environment filters, all persisted in the browser. Notifications stay off until you enable them and grant the browser permission.
 
 ## [0.14.0] - 2026-06-17
 
