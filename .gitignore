@@ -127,3 +127,6 @@ site/
 
 # serena MCP server local working dir (auto-generated)
 .serena/
+
+# playwright MCP server local output dir (auto-generated)
+.playwright-mcp/

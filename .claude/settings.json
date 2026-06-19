@@ -24,18 +24,6 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/scripts/hooks/install-dependencies.sh\"",
-            "timeout": 180,
-            "statusMessage": "Installing remote-env dependencies"
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -OnSessionStart",
             "timeout": 10
           }

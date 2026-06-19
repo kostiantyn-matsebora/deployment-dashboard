@@ -174,6 +174,7 @@ STUB
   chmod +x "$SANDBOX/mcp-server-markdown"
 
   # playwright-mcp stub — pre-installs a working playwright-mcp.
+  # Accepts all subcommands (including "install-browser chrome-for-testing") and exits 0.
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright-mcp"
   chmod +x "$SANDBOX/playwright-mcp"
 
@@ -652,6 +653,41 @@ NPMSTUB
   [ "$status" -eq 0 ]
   # The chromium-failure warning must appear in stderr output.
   [[ "$output" == *"chromium download failed"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 20b. playwright: MCP browser download failure is non-fatal — script still exits 0
+# ---------------------------------------------------------------------------
+
+@test "playwright MCP browser non-fatal: chrome-for-testing download fails but script exits 0" {
+  # Trigger the install path by removing playwright-mcp; keep a failing playwright-mcp stub
+  # for the browser sub-step while the npm stub writes a fresh bin for the post-install check.
+
+  # Remove playwright-mcp so the idempotency check fails and npm runs.
+  rm -f "$SANDBOX/playwright-mcp"
+
+  # Override npm stub: write the post-install playwright-mcp inline via printf (bash builtin,
+  # always available under env -i).  The written stub exits 1 on install-browser to simulate
+  # a failed cdn download, and exits 0 for all other invocations.
+  cat > "$SANDBOX/npm" << NPMSTUB
+#!$BASH_BIN
+echo "npm" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  printf '#!$BASH_BIN\nif [ "\$1" = "install-browser" ]; then exit 1; fi\nexit 0\n' > "$SANDBOX/playwright-mcp"
+  chmod +x "$SANDBOX/playwright-mcp"
+fi
+NPMSTUB
+  chmod +x "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  # MCP browser failure must NOT abort the bootstrap.
+  [ "$status" -eq 0 ]
+  # The chrome-for-testing failure warning must appear in stderr output.
+  [[ "$output" == *"chrome-for-testing download failed"* ]]
 }
 
 # ---------------------------------------------------------------------------

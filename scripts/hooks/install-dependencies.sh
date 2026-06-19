@@ -195,6 +195,15 @@ else
     echo "install-dependencies.sh: chromium download failed (is cdn.playwright.dev in the network egress allowlist?) — continuing; install it later with 'playwright install chromium'." >&2
   fi
 
+  # Install the browser the @playwright/mcp server itself resolves (NON-FATAL — egress-gated).
+  # @playwright/mcp bundles its own playwright-core, which may expect a DIFFERENT chromium
+  # build than the system `playwright` CLI (e.g. chrome-for-testing v1226 vs chromium v1228).
+  # Installing via the MCP's own installer guarantees the build it looks for at runtime exists,
+  # otherwise it fails with: Browser "chrome-for-testing" is not installed.
+  if ! playwright-mcp install-browser chrome-for-testing >&2; then
+    echo "install-dependencies.sh: chrome-for-testing download failed (is cdn.playwright.dev in the network egress allowlist?) — continuing; install it later with 'playwright-mcp install-browser chrome-for-testing'." >&2
+  fi
+
   # Verify — confirm BOTH bins are now on PATH (browser availability is not checked here).
   if ! command -v playwright-mcp >/dev/null 2>&1; then
     echo "install-dependencies.sh: installation completed but playwright-mcp is still not on PATH." >&2
