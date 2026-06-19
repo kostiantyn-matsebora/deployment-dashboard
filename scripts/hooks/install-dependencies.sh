@@ -83,7 +83,16 @@ else
     $_sudo dpkg -i "$_tmp_deb" >&2
     rm -f "$_tmp_deb"
 
-    $_sudo apt-get update -qq >&2
+    # Refresh ONLY the Microsoft repo list. A blanket `apt-get update` aborts the
+    # whole bootstrap (set -e) whenever an unrelated third-party repo shipped in
+    # the base image is unreachable under the remote network policy — e.g. the
+    # deadsnakes / ondrej PPAs returning HTTP 403. Scoping the update to
+    # packages.microsoft.com keeps pwsh installable regardless of other repos'
+    # health.
+    $_sudo apt-get update -qq \
+      -o Dir::Etc::sourcelist="sources.list.d/microsoft-prod.list" \
+      -o Dir::Etc::sourceparts="-" \
+      -o APT::Get::List-Cleanup="0" >&2
     $_sudo apt-get install -y powershell >&2
 
   elif command -v snap >/dev/null 2>&1; then
