@@ -73,7 +73,11 @@ jobs:
         working-directory: testing/e2e
 
       - name: Install (mock)
-        run: npm ci
+        # --legacy-peer-deps: frontend/mock lockfile has a pre-existing NestJS peer-dep
+        # mismatch (@nestjs/common vs @nestjs/core minor version skew) that causes npm ci
+        # to abort with ERESOLVE. The flag suppresses the conflict without altering the
+        # installed tree; all other Install steps install cleanly without it.
+        run: npm ci --legacy-peer-deps
         working-directory: frontend/mock
 
       - name: Install (extension)
