@@ -126,6 +126,15 @@ this and agents silently fall back to `Grep` / `Read`.
 - **Done-test.** If the feature isn't visible on the home page beside its peers (with a screenshot), it is NOT documented — regardless of green gates or a passing review.
 - **Verify by viewing.** Confirm against the rendered page (serve locally / open it), never just that bytes were added or CI passed.
 
+## Plan format (binding)
+
+Every plan file must follow this structure, in order:
+
+1. **Context** — why the change is needed (1–3 sentences).
+2. **Summary** — high-level steps as a numbered list, one line each (scannable without reading details).
+3. **Details** — per-step breakdown: exact old/new content, file paths, rationale.
+4. **Verification** — how to confirm the changes are correct.
+
 ## Context economy and documentation authoring rules
 
 **Binding** for all project documentation and LLM assets:

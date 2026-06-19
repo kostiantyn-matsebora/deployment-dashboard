@@ -1,13 +1,8 @@
 # Team Process Kit
 
-A portable definition of how a small fleet of role-specialist agents collaborate on a
-non-trivial change under one orchestrator. Drop into any repo spanning **frontend + backend +
-infrastructure** (or a subset). Defines *who does what and how they coordinate* — not the
-technology.
+Portable orchestration framework: one lead, N role-specialists, any stack. Defines *who does what and how they coordinate* — not the technology.
 
-The **core** (`process.md` · `protocol.md` · `guardrails.md` · `roles/`) is stack-, domain-, and
-**runtime-agnostic**; the only client-specific wiring is one labeled *Claude Code binding* in
-`process.md` (and the reference agents below), which another agent runtime can swap.
+**Core** (`process.md` · `protocol.md` · `guardrails.md` · `roles/`) is stack-, domain-, and runtime-agnostic. Only client-specific wiring: one *Claude Code binding* in `process.md` (and the reference agents below), swappable by runtime.
 
 ## Layout
 
@@ -26,13 +21,11 @@ Roles: [`orchestrator`](roles/orchestrator.md) · [`contract`](roles/contract.md
 
 ## Reuse in a new project
 
-1. **Copy** `.claude/team-process/` in verbatim — it carries no project specifics.
-2. **Anchor** your agent definitions to the role files (see *Anchoring*).
-3. **Set project bindings once** in your root prompt (`CLAUDE.md` / `AGENTS.md`): owning-spec
-   locations (docs-first target), line-ending + formatter convention, the CI gates self-verify runs.
+1. **Copy** `.claude/team-process/` verbatim — carries no project specifics.
+2. **Anchor** agent definitions to the role files (see *Anchoring*).
+3. **Set project bindings once** in the root prompt (`CLAUDE.md` / `AGENTS.md`): owning-spec locations, line-ending + formatter, CI gates.
 
-The kit is the **generic layer**; your agents + root prompt are the **project layer**. Update
-the kit when a lesson is universal; update the project layer when it's local.
+**Kit = generic layer; agents + root prompt = project layer.** Update kit for universal lessons; project layer for local ones.
 
 ## Anchoring (generic role → project agent)
 
@@ -50,19 +43,15 @@ reference implementation** (`.claude/agents/*.md`); another runtime maps its own
 | main loop (no agent file) | [`orchestrator`](roles/orchestrator.md) |
 
 The agent's **body** is vendor- and project-agnostic — just the anchor:
-`Role anchor: team-process/roles/<role>.md — inherit its full definition (mission, principles,
-guardrails, communication protocol, tool-output economy, self-verify gate). Project bindings
-come from the host root prompt.`
+`Role anchor: team-process/roles/<role>.md — inherit its full definition (mission, principles, guardrails, communication protocol, tool-output economy, self-verify gate). Project bindings come from the host root prompt.`
 
-**Per-vendor glue** (extension, location, frontmatter) is the only thing that differs — the body copies as-is:
+Per-vendor glue (extension, location, frontmatter) is the only thing that differs — body copies as-is:
 
 | Runtime | Agent file | Spawn primitive |
 |---|---|---|
 | Claude Code | `.claude/agents/<role>.md` | `Agent`/Task · `/feature-team` → `TeamCreate` |
 | GitHub Copilot | `.github/agents/<role>.agent.md` | `@<role>` · `/fleet` |
 
-Keep `agents/` and `team-process/` under the **same parent** so the relative anchor (`../team-process/roles/…`) resolves regardless of whether that parent is `.claude/` or `.github/`. See `process.md` → *Execution modes* for the full binding per runtime.
+Keep `agents/` and `team-process/` under the **same parent** so `../team-process/roles/…` resolves for both. See *Execution modes* in `process.md` for the full runtime binding.
 
-**Project specifics never live in the agent.** Stack, exact build/test/lint/format commands,
-file lanes, and CI gates go once into the root prompt's *Project bindings* section; the agent
-reads them at runtime. This is what keeps agents portable across repos.
+**Project specifics never live in the agent.** Stack, build/test/lint/format commands, file lanes, CI gates → root prompt's *Project bindings* section only.
