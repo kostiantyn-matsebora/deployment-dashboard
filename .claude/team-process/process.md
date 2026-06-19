@@ -75,8 +75,9 @@ need to change it → surface as a decision, never slide back to in-session suba
 ## Session state & resume
 
 Each team-process run owns a directory `.team-process/sessions/<id>/` (gitignored runtime state;
-`<id>` = the sanitized team name) holding `session.json` (the durable record) and `outbox/` (member
-hand-backs). It **survives a session boundary or reboot** — this is what makes "mode is sticky" hold
+`<id>` = the sanitized team name) holding `session.json` (the durable record), `inbox/` (orchestrator
+dispatches — `BRIEF`/`FIX`) and `outbox/` (member hand-backs). It **survives a session boundary or
+reboot** — this is what makes "mode is sticky" hold
 across a fresh session instead of decaying into in-session subagent spawns. **One directory per run** —
 concurrent runs in the same worktree coexist as distinct directories.
 
@@ -167,11 +168,12 @@ rendering, and rules — live in [`protocol.md`](protocol.md). Every cross-role 
 them, emitted verbatim; a non-conforming hand-back is returned **UNREAD** for re-emit. The
 orchestrator emits `BRIEF`/`FIX` and reads the rest; it never parses prose hand-backs.
 
-**Member OUTPUT forms are files, not inline messages.** A `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` is
-written to the session outbox `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json`; the
-`SendMessage` body is a `{ type, ref }` pointer that wakes the orchestrator. The orchestrator reads the
-file by `ref`, folds it into the run ledger, then deletes it. See [`protocol.md`](protocol.md) →
-*Hand-back delivery*.
+**Every cross-role message is a file, not an inline message — both directions.** Dispatch
+(`BRIEF`/`FIX`) is written to the member's `inbox`; hand-back (`RESULT`/`REVIEW`/`FINDING`/`ARTIFACT`)
+to its `outbox` (`.team-process/sessions/<id>/{inbox,outbox}/<role>.<TYPE>.json`). The pointer is
+`{ type, ref }` — the `SendMessage` body, or (for the spawning `BRIEF`) named in the spawn prompt. The
+reader resolves the `ref`, folds it into its working set (the orchestrator → the run ledger), then
+deletes the box file. See [`protocol.md`](protocol.md) → *Message delivery*.
 
 ## Phases
 

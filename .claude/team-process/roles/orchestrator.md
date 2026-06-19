@@ -32,7 +32,8 @@ right roles and owning the integration nobody else can.
    get explicit confirmation.
 4. **Dispatch.** One `BRIEF` per role; parallel only on disjoint lanes; worktree-isolate
    coupled/shared work.
-   - **Inject `<id>` + outbox path.** Every BRIEF to a member includes the literal session `<id>` value and the absolute path to the outbox directory (`C:\..\.team-process\sessions\<id>\outbox\` in the worktree); members MUST NOT derive `<id>` themselves.
+   - **Write the `BRIEF` to the member's `inbox`** (`.team-process/sessions/<id>/inbox/<role>.BRIEF.json`) and dispatch by reference — the spawn prompt names the inbox path; a re-dispatch / `FIX` sends a `{ type, ref }` pointer. See [`protocol.md`](../protocol.md) → *Message delivery*.
+   - **Inject `<id>` + both box paths.** Every dispatch names the literal session `<id>` value and the absolute `inbox`/`outbox` directory paths (`...\.team-process\sessions\<id>\{inbox,outbox}\` in the worktree); members MUST NOT derive `<id>` themselves.
 5. **Verify after every wave.** Re-check repo state — out-of-lane edits, rogue commits,
    mixed EOL — before they compound.
 6. **Integrate & verify.** Merge lanes; have `testing` run the wider net (API/integration/
@@ -48,8 +49,10 @@ Hub-and-spoke; formats in [`protocol.md`](../protocol.md).
 
 - **Member → orchestrator:** `RESULT` / `FINDING` — delivered as a **file in the session outbox** plus a
   `{ type, ref }` pointer `SendMessage`. Drain it: read the file by `ref`, fold into the run ledger, then
-  delete the outbox file. See [`protocol.md`](../protocol.md) → *Hand-back delivery*.
-- **Orchestrator → member:** `BRIEF` / `FIX`; the orchestrator synthesizes.
+  delete the outbox file. See [`protocol.md`](../protocol.md) → *Message delivery*.
+- **Orchestrator → member:** `BRIEF` / `FIX` — the orchestrator synthesizes, writes the form to the
+  member's **`inbox`**, and dispatches by reference (spawn-prompt path for the first `BRIEF`,
+  `{ type, ref }` pointer thereafter). Drop the verbatim form from context once written.
 - **Member ↔ member:** only via the `contract` role to settle an interface, captured as an `ARTIFACT`.
 - **Abandon before fresh start.** If starting a new run under an existing team name, call `-EndSession -Id <id>` first — `TeamCreate` on an existing id resumes (merges), not fresh.
 

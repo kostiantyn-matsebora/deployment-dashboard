@@ -6,10 +6,11 @@
     persists resumable, per-session run records.
 
     Each concurrent run owns a directory .team-process/sessions/<id>/ (gitignored
-    runtime state; <id> = sanitized team name) holding session.json (the ledger) and
-    outbox/ (member typed-form hand-backs). The EXISTENCE of ANY sessions/<id>/session.json
+    runtime state; <id> = sanitized team name) holding session.json (the ledger),
+    inbox/ (orchestrator typed-form dispatches: BRIEF/FIX) and outbox/ (member typed-form
+    hand-backs). The EXISTENCE of ANY sessions/<id>/session.json
     = team mode is active. A record is the durable run ledger: the hook
-    writes an initial record (and creates the outbox dir) on TeamCreate; the orchestrator
+    writes an initial record (and creates the inbox + outbox dirs) on TeamCreate; the orchestrator
     enriches it (roster, phase, ledger) as the run proceeds; it is read on SessionStart
     to resume + remind rather than wiped. 'workflow' classifies how to resume
     (feature-team vs freeform). The session roster is the source of truth for the lane
@@ -99,6 +100,13 @@ function Get-SessionFilePath {
 function Get-OutboxDir {
     param([string]$Root, [string]$Id)
     return (Join-Path (Get-SessionDir $Root $Id) 'outbox')
+}
+
+# Per-session inbox: the orchestrator drops typed-form dispatches (BRIEF/FIX) here; members
+# read their task by reference.
+function Get-InboxDir {
+    param([string]$Root, [string]$Id)
+    return (Join-Path (Get-SessionDir $Root $Id) 'inbox')
 }
 
 # Parse a session record from disk (-DateKind String keeps ISO timestamps as strings so
@@ -228,8 +236,11 @@ function Set-TeamSession {
     $record      = New-SessionRecord -Id $id -Team $Team -Workflow $Workflow -Branch $Branch -Now $Now -Existing $existing
     $dir         = Get-SessionDir -Root $Root -Id $id
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    # Create the outbox up front so a member that shares this worktree (non-isolated run)
-    # always finds the hand-back directory; worktree-isolated members mkdir their own.
+    # Create both boxes up front: the inbox so the orchestrator can drop dispatches, and the
+    # outbox so a member that shares this worktree (non-isolated run) always finds the hand-back
+    # directory; worktree-isolated members mkdir their own outbox.
+    $inbox = Get-InboxDir -Root $Root -Id $id
+    if (-not (Test-Path -LiteralPath $inbox)) { New-Item -ItemType Directory -Force -Path $inbox | Out-Null }
     $outbox = Get-OutboxDir -Root $Root -Id $id
     if (-not (Test-Path -LiteralPath $outbox)) { New-Item -ItemType Directory -Force -Path $outbox | Out-Null }
     Set-Content -LiteralPath $sessionFile -Value ($record | ConvertTo-Json -Depth 8) -Encoding utf8NoBOM

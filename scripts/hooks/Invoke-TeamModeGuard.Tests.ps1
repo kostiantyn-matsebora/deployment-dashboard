@@ -49,6 +49,9 @@ Describe 'Path helpers' {
     It 'outbox dir is sessions/<id>/outbox' {
         (Get-OutboxDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/sessions/feat-9/outbox$'
     }
+    It 'inbox dir is sessions/<id>/inbox' {
+        (Get-InboxDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/sessions/feat-9/inbox$'
+    }
     It 'sessions dir is directly under .team-process (no run/ layer)' {
         (Get-SessionsDir -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/sessions$'
     }
@@ -218,6 +221,15 @@ Describe 'Set/Clear/Get session round-trip (temp root)' {
         try {
             Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
             Test-Path -LiteralPath (Get-OutboxDir -Root $root -Id 'feat-1') | Should -BeTrue
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It 'Set-TeamSession creates the inbox dir up front' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
+            Test-Path -LiteralPath (Get-InboxDir -Root $root -Id 'feat-1') | Should -BeTrue
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }

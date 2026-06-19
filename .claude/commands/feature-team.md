@@ -58,13 +58,19 @@ explicit confirmation*).
   reboots; concurrent runs coexist as distinct directories; see [`process.md`](../team-process/process.md)
   → *Session state & resume*.)*
   *(Before `TeamCreate`: if a stale same-id session already exists, call `-EndSession -Id <id>` first — re-creating without clearing merges (resume path), not fresh.)*
+- **Write each member's `BRIEF` to its inbox** *before* spawning — normalize with
+  `Format-ProtocolForm.ps1`, then write to `.team-process/sessions/<id>/inbox/<role>.BRIEF.json`. The
+  spec / lane / task / gate / seed all live in this file; the spawn prompt only points at it (keeps the
+  task durable, auditable, and out of the lead's context). See
+  [`protocol.md`](../team-process/protocol.md) → *Message delivery*.
 - **Spawn each member** via the `Agent` tool to execute [`/implement`](implement.md) in its lane:
   - `team_name` = the team · `name` = the **role** (e.g. `backend`) or role-prefixed with a short task hint (e.g. `backend: extract HTTP adapter`) — the role must be the leading token so it is visible in the agent statusline; never set `name` to only the task · `subagent_type` = the mapped agent above.
   - `isolation: "worktree"` for every member that writes code in parallel (prevents same-file clobbers).
   - `run_in_background: true` so the lead can coordinate while members work.
-  - **Prompt = scoped brief:** owning spec + the member's named lane + "inherit your role file
-    `.claude/team-process/roles/<role>.md` and its guardrails" + the `/implement` self-verify gate
-    (build + own-change unit tests + lint, actual counts) + "do NOT commit/push; hand back to the lead."
+  - **Prompt = brief-by-reference (NOT the brief restated):** "Read your `BRIEF` at
+    `<absolute-path-to-inbox-BRIEF.json>` — it carries your spec / lane / task / gate." + "inherit your
+    role file `.claude/team-process/roles/<role>.md` and its guardrails" + the `/implement` self-verify
+    gate (build + own-change unit tests + lint, actual counts) + "do NOT commit/push; hand back to the lead."
     + "The session id is `<literal-id-value>`; your outbox is `<absolute-path-to-outbox-dir>` — use these verbatim, do NOT derive them from the team name. If running in a worktree, run `New-Item -ItemType Directory -Force -Path '<outbox-path>'` before writing your hand-back."
     + "NEVER return prose, markdown, or a .txt file as your final message — write the typed form to your outbox file first, then send the { type, ref } pointer."
 - **Assign work.** Create the task list (one task per lane); contract member first if cross-layer —
@@ -76,7 +82,7 @@ explicit confirmation*).
   **file + pointer**: the typed form is written to `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json`
   and a `{ type, ref }` pointer is sent via `SendMessage`. **Drain each wave** — read the outbox file by
   `ref`, fold it into the ledger, then delete it (see [`protocol.md`](../team-process/protocol.md) →
-  *Hand-back delivery*). Peer `SendMessage` is reserved for **contract negotiation** (contract ↔
+  *Message delivery*). Peer `SendMessage` is reserved for **contract negotiation** (contract ↔
   consumers); the outcome is recorded in the `ARTIFACT`, not left as chat.
 - **Verify state after every wave** — re-check repo/worktree state; catch out-of-lane edits, stray
   commits, mixed EOL before they compound.

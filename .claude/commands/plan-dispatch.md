@@ -15,5 +15,8 @@ The **Plan & dispatch** activity of the orchestration process
 3. **Surface the plan before launch** — scope + roster + lane map.
 4. **Confirm before N parallel members.** Get explicit approval to fan out. Autonomy waives the
    *wait*, not the *surface* — the plan is still emitted to the transcript to interject against.
+5. **Dispatch by reference.** Write each `BRIEF` to the member's `inbox`
+   (`.team-process/sessions/<id>/inbox/<role>.BRIEF.json`) and hand the agent the `ref`, not the
+   restated task — see [`protocol.md`](../team-process/protocol.md) → *Message delivery*.
 
-**Output:** a confirmed lane map + per-lane `BRIEF`s.
+**Output:** a confirmed lane map + per-lane `BRIEF`s, each written to its member's `inbox`.
