@@ -175,6 +175,7 @@ function New-SessionRecord {
         [string]$Workflow,
         [string]$Branch,
         [datetime]$Now,
+        [string]$ClaudeSessionId,
         $Existing
     )
     $ts  = $Now.ToUniversalTime().ToString('o')
@@ -182,6 +183,9 @@ function New-SessionRecord {
     $rec.id       = if ($Id) { $Id } elseif ($Existing -and $Existing.id) { [string]$Existing.id } else { ConvertTo-SessionId -Team $Team }
     $rec.workflow = if ($Workflow) { $Workflow } elseif ($Existing -and $Existing.workflow) { [string]$Existing.workflow } else { 'feature-team' }
     $rec.team     = if ($Team) { $Team } elseif ($Existing -and $Existing.team) { [string]$Existing.team } else { 'unknown' }
+    # Owning Claude session: a NEW value (resume re-create) refreshes; else preserve the existing.
+    $cs = if ($ClaudeSessionId) { $ClaudeSessionId } elseif ($Existing -and $Existing.claudeSessionId) { [string]$Existing.claudeSessionId } else { '' }
+    if ($cs) { $rec.claudeSessionId = $cs }
     if ($Branch) { $rec.branch = $Branch }
     elseif ($Existing -and $Existing.branch) { $rec.branch = [string]$Existing.branch }
     if ($Existing -and $Existing.issue)   { $rec.issue   = [string]$Existing.issue }
@@ -275,11 +279,11 @@ scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>. See
 
 # Write/merge a session record under $Root. Returns the written record.
 function Set-TeamSession {
-    param([string]$Root, [string]$Team, [string]$Workflow, [string]$Branch, [datetime]$Now)
+    param([string]$Root, [string]$Team, [string]$Workflow, [string]$Branch, [datetime]$Now, [string]$ClaudeSessionId)
     $id          = ConvertTo-SessionId -Team $Team
     $sessionFile = Get-SessionFilePath -Root $Root -Id $id
     $existing    = Read-SessionRecord -Path $sessionFile
-    $record      = New-SessionRecord -Id $id -Team $Team -Workflow $Workflow -Branch $Branch -Now $Now -Existing $existing
+    $record      = New-SessionRecord -Id $id -Team $Team -Workflow $Workflow -Branch $Branch -Now $Now -ClaudeSessionId $ClaudeSessionId -Existing $existing
     $dir         = Get-SessionDir -Root $Root -Id $id
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
     # Create both boxes up front: the inbox so the orchestrator can drop dispatches, and the
@@ -357,10 +361,13 @@ if (-not $AsLibrary) {
         $team   = if ($payload) { Get-TeamCreateName -Payload $payload } else { '' }
         $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null) | Select-Object -First 1
         $branch = ([string]$branch).Trim()
+        # The owning Claude session_id (present on the hook payload) — captured here and
+        # refreshed on every re-create, so it tracks the session that currently drives the run.
+        $claudeSessionId = if ($payload) { [string]$payload.session_id } else { '' }
         # Pass -Workflow through RAW (empty when not supplied) so New-SessionRecord can
         # PRESERVE an existing record's workflow on re-create and default only a brand-new
         # record to feature-team. Defaulting here would clobber a freeform session.
-        Set-TeamSession -Root $root -Team $team -Workflow $Workflow -Branch $branch -Now (Get-Date) | Out-Null
+        Set-TeamSession -Root $root -Team $team -Workflow $Workflow -Branch $branch -Now (Get-Date) -ClaudeSessionId $claudeSessionId | Out-Null
         exit 0
     }
 

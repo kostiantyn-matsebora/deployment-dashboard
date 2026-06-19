@@ -140,6 +140,23 @@ Describe 'New-SessionRecord' {
     It 'falls back to team=unknown when none supplied' {
         (New-SessionRecord -Id 'unknown' -Team '' -Branch '' -Now $script:FixedNow -Existing $null).team | Should -Be 'unknown'
     }
+    It 'captures the owning claudeSessionId when supplied' {
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -ClaudeSessionId 'sess-A' -Existing $null
+        $r.claudeSessionId | Should -Be 'sess-A'
+    }
+    It 'omits claudeSessionId when neither supplied nor existing' {
+        (New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $null).Contains('claudeSessionId') | Should -BeFalse
+    }
+    It 'refreshes claudeSessionId on re-create (new value overrides the existing)' {
+        $existing = [pscustomobject]@{ id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'; claudeSessionId = 'old-sess' }
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -ClaudeSessionId 'new-sess' -Existing $existing
+        $r.claudeSessionId | Should -Be 'new-sess'
+    }
+    It 'preserves an existing claudeSessionId when no new one is supplied' {
+        $existing = [pscustomobject]@{ id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'; claudeSessionId = 'keep-sess' }
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $existing
+        $r.claudeSessionId | Should -Be 'keep-sess'
+    }
     It 'preserves id, workflow, createdAt, ledger, roster, issue, task on re-create (merge)' {
         $existing = [pscustomobject]@{
             id = 'feat-1'; workflow = 'freeform'; team = 'feat-1'; branch = 'feat/x'; issue = '#42'; summary = 'glob filter'; task = 'do thing'; phase = 'implement'

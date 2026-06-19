@@ -14,7 +14,8 @@
       "enum": ["feature-team", "freeform"]
     },
     "team": { "type": "string", "minLength": 1, "description": "TeamCreate name (also the team_name members must set)." },
-    "branch": { "type": "string", "description": "Git branch the run targets." },
+    "claudeSessionId": { "type": "string", "description": "Claude Code session_id that owns / last attached to this run. Captured on TeamCreate, refreshed on resume (re-create). The unique key for correlating the run to the current Claude session — disambiguates the statusline's current run when several share a branch, and re-links a `--resume`d conversation to its run." },
+    "branch": { "type": "string", "description": "Git branch the run targets. Heuristic current-run key when claudeSessionId is unavailable; not unique when several runs share a branch." },
     "issue": { "type": "string", "description": "Owning issue / spec ref, e.g. '#321'." },
     "summary": { "type": "string", "description": "Short human description of what this team is doing — the issue title or a one-sentence feature essence. Shown in the statusline + resume reminder so a glance answers 'what is this run'." },
     "task": { "type": "string", "description": "Freeform: the scheduled-task description. Omitted for feature-team (its spec is the issue)." },

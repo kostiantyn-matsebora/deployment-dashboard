@@ -105,6 +105,27 @@ Describe 'Get-StatusLine' {
         $result = Get-StatusLine -Sessions @($s1, $s2) -CurrentBranch 'feat/dup'
         $result | Should -Be 'teams (2 active)'
     }
+
+    It 'resolves the current run by claudeSessionId even when the branch is shared' {
+        $s1 = [PSCustomObject]@{ id = 'feat-1a'; phase = 'plan'; branch = 'feat/dup'; claudeSessionId = 'sess-A' }
+        $s2 = [PSCustomObject]@{ id = 'feat-1b'; phase = 'implement'; branch = 'feat/dup'; claudeSessionId = 'sess-B' }
+        $result = Get-StatusLine -Sessions @($s1, $s2) -CurrentBranch 'feat/dup' -CurrentSessionId 'sess-B'
+        $result | Should -Be 'team: feat-1b (implement) (+1 other)'
+    }
+
+    It 'prefers claudeSessionId over branch when they point at different records' {
+        $s1 = [PSCustomObject]@{ id = 'owned'; phase = 'implement'; branch = 'feat/other'; claudeSessionId = 'sess-X' }
+        $s2 = [PSCustomObject]@{ id = 'on-branch'; phase = 'plan'; branch = 'feat/here' }
+        $result = Get-StatusLine -Sessions @($s1, $s2) -CurrentBranch 'feat/here' -CurrentSessionId 'sess-X'
+        $result | Should -Be 'team: owned (implement) (+1 other)'
+    }
+
+    It 'falls back to branch when the session id matches no record' {
+        $s1 = [PSCustomObject]@{ id = 'feat-1'; phase = 'plan'; branch = 'feat/1' }
+        $s2 = [PSCustomObject]@{ id = 'feat-2'; phase = 'implement'; branch = 'feat/2' }
+        $result = Get-StatusLine -Sessions @($s1, $s2) -CurrentBranch 'feat/2' -CurrentSessionId 'sess-unknown'
+        $result | Should -Be 'team: feat-2 (implement) (+1 other)'
+    }
 }
 
 Describe 'Limit-Text' {

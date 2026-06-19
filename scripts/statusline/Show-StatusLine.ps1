@@ -12,14 +12,15 @@
           "team: <id> - <summary> (<phase>) | <role>: <task>, <role>: <task>"
         where <summary> (the team's issue title / feature essence) and the agent digest
         are appended only when present; phase defaults to "?".
-      - Two or more sessions  -> show the CURRENT run's detail (the record whose `branch`
-        matches the checked-out branch) plus "(+N other)"; fall back to "teams (N active)"
-        when no single record matches the branch.
+      - Two or more sessions  -> show the CURRENT run's detail plus "(+N other)"; fall back
+        to "teams (N active)" when the current run can't be resolved.
 
-    "Current run" is resolved by git branch: a worktree has one branch checked out, and each
-    session record stores its `branch`, so at most one record matches — that is the run the
-    user is in. (Claude Code's own session_id does not map to a team-process team, so the
-    branch is the available disambiguator.)
+    Resolving the CURRENT run among many (in precedence order):
+      1. claudeSessionId — the record owned by the current Claude session_id (read from the
+         statusLine stdin payload). UNIQUE even when several runs share a branch.
+      2. branch — the record whose `branch` == the checked-out branch. A heuristic: a worktree
+         has one branch checked out, but it is NOT unique if several runs share that branch.
+      3. otherwise -> "teams (N active)".
 
     ASCII separators only ('-' and '|') — the statusline goes to a terminal and must not
     trip console (cp1252) encoding.
@@ -105,11 +106,11 @@ function Get-StatusLine {
         Returns the status string for the active sessions.
         - none      -> '' (empty).
         - one       -> that session's detail line.
-        - many      -> the CURRENT run (record whose `branch` == $CurrentBranch) detailed +
-                       "(+N other)"; falls back to "teams (N active)" when no single record
-                       matches the branch.
+        - many      -> the CURRENT run detailed + "(+N other)". "Current" is resolved by
+                       claudeSessionId first (unique), then branch (heuristic); falls back to
+                       "teams (N active)" when neither resolves a single record.
     #>
-    param([object[]]$Sessions, [string]$CurrentBranch)
+    param([object[]]$Sessions, [string]$CurrentBranch, [string]$CurrentSessionId)
 
     $s = @($Sessions)
     $n = $s.Count
@@ -117,11 +118,16 @@ function Get-StatusLine {
     if ($n -eq 0) { return '' }
     if ($n -eq 1) { return (Format-SessionDetail -Record $s[0]) }
 
-    # Multi-session: surface the run the user is actually in, matched by checked-out branch.
-    if (-not [string]::IsNullOrWhiteSpace($CurrentBranch)) {
-        $onBranch = @($s | Where-Object { $_.branch -and ([string]$_.branch) -eq $CurrentBranch })
-        if ($onBranch.Count -eq 1) {
-            return (Format-SessionDetail -Record $onBranch[0]) + " (+$($n - 1) other)"
+    # Multi-session: surface the run the user is actually in. Try the unique key first
+    # (the owning Claude session_id), then fall back to the checked-out branch heuristic.
+    foreach ($key in @(
+            @{ Value = $CurrentSessionId; Prop = 'claudeSessionId' },
+            @{ Value = $CurrentBranch;    Prop = 'branch' }
+        )) {
+        if ([string]::IsNullOrWhiteSpace($key.Value)) { continue }
+        $hit = @($s | Where-Object { $_.($key.Prop) -and ([string]$_.($key.Prop)) -eq $key.Value })
+        if ($hit.Count -eq 1) {
+            return (Format-SessionDetail -Record $hit[0]) + " (+$($n - 1) other)"
         }
     }
 
@@ -133,11 +139,24 @@ if (-not $ownAsLibrary) {
     if (-not $root) { $root = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path }
     $root = ([string]$root).Trim()
 
-    # The checked-out branch disambiguates which run is "current" when several are active.
+    # Claude Code pipes a JSON payload to the statusLine command on stdin; session_id is the
+    # unique key for "which run is this session in" when several are active.
+    $sessionId = ''
+    if ([Console]::IsInputRedirected) {
+        try {
+            $stdin = [Console]::In.ReadToEnd()
+            if (-not [string]::IsNullOrWhiteSpace($stdin)) {
+                $sessionId = [string]($stdin | ConvertFrom-Json -ErrorAction Stop).session_id
+            }
+        }
+        catch { $sessionId = '' }
+    }
+
+    # The checked-out branch is the fallback disambiguator when session_id can't resolve one.
     $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null) | Select-Object -First 1
     $branch = ([string]$branch).Trim()
 
     $sessions = Get-ActiveSessions -Root $root
-    $line     = Get-StatusLine -Sessions $sessions -CurrentBranch $branch
+    $line     = Get-StatusLine -Sessions $sessions -CurrentBranch $branch -CurrentSessionId $sessionId
     if (-not [string]::IsNullOrWhiteSpace($line)) { Write-Output $line }
 }
