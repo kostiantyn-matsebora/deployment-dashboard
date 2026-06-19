@@ -75,12 +75,35 @@ Describe 'Get-StatusLine' {
         $result.Length | Should -BeLessThan 65   # untruncated would be ~91
     }
 
-    It 'emits count for multiple sessions (summary/agents ignored)' {
-        $s1 = [PSCustomObject]@{ id = 'feat-1'; phase = 'plan'; summary = 'a' }
-        $s2 = [PSCustomObject]@{ id = 'feat-2'; phase = 'implement' }
-        $s3 = [PSCustomObject]@{ id = 'feat-3'; phase = 'review' }
+    It 'emits count for multiple sessions when no branch is given' {
+        $s1 = [PSCustomObject]@{ id = 'feat-1'; phase = 'plan'; summary = 'a'; branch = 'feat/1' }
+        $s2 = [PSCustomObject]@{ id = 'feat-2'; phase = 'implement'; branch = 'feat/2' }
+        $s3 = [PSCustomObject]@{ id = 'feat-3'; phase = 'review'; branch = 'feat/3' }
         $result = Get-StatusLine -Sessions @($s1, $s2, $s3)
         $result | Should -Be 'teams (3 active)'
+    }
+
+    It 'shows the CURRENT run (matched by branch) plus a count of the others' {
+        $s1 = [PSCustomObject]@{ id = 'feat-1'; phase = 'plan'; branch = 'feat/1' }
+        $s2 = [PSCustomObject]@{ id = 'feat-351'; phase = 'implement'; summary = 'glob filter'; branch = 'feat/351'
+            roster = @([PSCustomObject]@{ role = 'backend'; task = 'extract adapter' }) }
+        $s3 = [PSCustomObject]@{ id = 'feat-3'; phase = 'review'; branch = 'feat/3' }
+        $result = Get-StatusLine -Sessions @($s1, $s2, $s3) -CurrentBranch 'feat/351'
+        $result | Should -Be 'team: feat-351 - glob filter (implement) | backend: extract adapter (+2 other)'
+    }
+
+    It 'falls back to the count when the branch matches no record' {
+        $s1 = [PSCustomObject]@{ id = 'feat-1'; phase = 'plan'; branch = 'feat/1' }
+        $s2 = [PSCustomObject]@{ id = 'feat-2'; phase = 'implement'; branch = 'feat/2' }
+        $result = Get-StatusLine -Sessions @($s1, $s2) -CurrentBranch 'main'
+        $result | Should -Be 'teams (2 active)'
+    }
+
+    It 'falls back to the count when the branch is ambiguous (two records share it)' {
+        $s1 = [PSCustomObject]@{ id = 'feat-1a'; phase = 'plan'; branch = 'feat/dup' }
+        $s2 = [PSCustomObject]@{ id = 'feat-1b'; phase = 'implement'; branch = 'feat/dup' }
+        $result = Get-StatusLine -Sessions @($s1, $s2) -CurrentBranch 'feat/dup'
+        $result | Should -Be 'teams (2 active)'
     }
 }
 
