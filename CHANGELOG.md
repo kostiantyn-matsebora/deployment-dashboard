@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Changed
+
+- **Scripts tree ported from PowerShell to Python.** All scripts under `scripts/` are now Python 3 (stdlib-only runtime); test suites use pytest (sibling `*_test.py` files); lint runs via ruff (`scripts/pyproject.toml`). The `jsonschema` pip package is required for team-mode guard tests. Invocation form changed from `pwsh -NoProfile -File <path>.ps1 -PascalSwitch` to `python3 <path>.py --kebab-flags`. CI (`_scripts` workflow), docs, and CONTRIBUTING.md updated accordingly. The bash bootstrap exception (`scripts/hooks/install-dependencies.sh`) now installs the Python toolchain instead of PowerShell.
+
 
 ## [0.17.0] - 2026-06-19
 

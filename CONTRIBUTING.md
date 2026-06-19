@@ -14,12 +14,12 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). For sec
 | `gateway/` | nginx App Gateway config. |
 | `testing/` | `api` (integration) and `e2e` suites. |
 | `compose/` | Local-dev Docker Compose stack + `.env.example`. |
-| `scripts/` | PowerShell tooling + git hooks. |
+| `scripts/` | Python tooling + git hooks. |
 | `docs/` | All design + contract documentation (published as the docs site). |
 
 ## Local setup
 
-**Prerequisites.** .NET 10 SDK · Node.js 20+ · Docker (Compose v2) · PowerShell 7+ (for scripts).
+**Prerequisites.** .NET 10 SDK · Node.js 20+ · Docker (Compose v2) · Python 3.11+ with `pytest`, `ruff`, and `jsonschema` (for scripts).
 
 > **Just want to see it run?** For a quick look at the **released** images (not your local changes), run the zero-config demo — see the [Quickstart](docs/guide/quickstart.md). Everything below runs **your working tree**.
 
@@ -63,7 +63,7 @@ POSTGRES_HOST=localhost POSTGRES_USER=dev POSTGRES_PASSWORD=dev \
   dotnet run --project api/Dashboard.Api
 ```
 > The API assembles its connection from `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` (defaults: `postgres` / `5432` / `deployment_dashboard`).
-> PowerShell: set them on their own lines first — `$env:POSTGRES_HOST="localhost"; $env:POSTGRES_USER="dev"; $env:POSTGRES_PASSWORD="dev"` — then `dotnet run --project api/Dashboard.Api`.
+> Shell: export them first — `export POSTGRES_HOST=localhost POSTGRES_USER=dev POSTGRES_PASSWORD=dev` — then `dotnet run --project api/Dashboard.Api`.
 
 To point the **SPA at the real API** instead of the mock, change the `target` in `frontend/dashboard/proxy.conf.json` from `http://localhost:3002` to `http://localhost:5205`.
 
@@ -104,7 +104,7 @@ COMPOSE_PROFILES=db,api,demo-driver,gateway,github-emulator,fetcher-host \
 cd testing/api && npm ci && npm run test:integration
 ```
 
-**Scripts (PowerShell + Pester)** — see [Scripts](#scripts) below.
+**Scripts (Python + pytest)** — see [Scripts](#scripts) below.
 
 ## Workflow
 
@@ -123,27 +123,25 @@ Changes are routed to the area specialist (`api-architect` / `backend-developer`
 
 Every script (build / dev tooling / CI helper / automation) **must**:
 
-- Be **PowerShell** (`.ps1` / `.psm1`), targeting **PowerShell 7+** (Core) for cross-platform parity. No `bash`/`sh`/`python` scripts as the primary deliverable (single-line invocations inside CI YAML are exempt).
-- Have **Pester v5+** coverage. The suite is a **sibling** file: `scripts/install.ps1` → `scripts/install.Tests.ps1`. No mirror tree.
-- Pass **PSScriptAnalyzer** (`scripts/PSScriptAnalyzerSettings.psd1`).
+- Be **Python 3** (stdlib-only runtime), cross-platform. Invocation form: `python3 <path>.py --kebab-flags`. No bash/sh scripts as the primary deliverable (single-line CI YAML invocations and the bash bootstrap exception in `scripts/hooks/install-dependencies.sh` are exempt).
+- Have **pytest** coverage. The suite is a **sibling** file: `scripts/foo.py` → `scripts/foo_test.py`. No mirror tree. The `jsonschema` package is available for team-mode guard tests.
+- Pass **ruff** lint (`scripts/pyproject.toml`).
 
 Run locally:
-```powershell
-Invoke-Pester -Path scripts/
-Get-ChildItem scripts/ -Recurse -Filter *.ps1 |
-  Where-Object Name -notlike '*.Tests.ps1' |
-  ForEach-Object { Invoke-ScriptAnalyzer -Path $_.FullName -Settings scripts/PSScriptAnalyzerSettings.psd1 }
+```bash
+python3 -m pytest scripts/
+ruff check scripts/
 ```
 
 ### Documentation
 
-Docs follow an **index-first** convention: every directory under `docs/` has an `index.md` whose `children:` front-matter must match the files on disk. A pre-commit hook and the `docs` CI job (`Invoke-DocsKeeperMaintenance.ps1 -DriftOnly`) enforce this. When you add/move/remove a doc, regenerate the affected index (`/docs-index <dir>`) so the drift check stays green.
+Docs follow an **index-first** convention: every directory under `docs/` has an `index.md` whose `children:` front-matter must match the files on disk. A pre-commit hook and the `docs` CI job (`python3 scripts/hooks/invoke_docs_keeper_maintenance.py --drift-only`) enforce this. When you add/move/remove a doc, regenerate the affected index (`/docs-index <dir>`) so the drift check stays green.
 
 Authoring rules (binding): concise and LLM-optimized, structure over prose — steps as numbered lists, mappings as tables, "X means Y" as `**X.** Y`. See [`CLAUDE.md`](CLAUDE.md).
 
 ## Releasing
 
-To cut a release (maintainers only), follow the end-to-end flow in [RELEASING.md](RELEASING.md): run `New-Release.ps1` to open a changelog PR, merge it, then manually push the annotated tag to trigger the release workflow.
+To cut a release (maintainers only), follow the end-to-end flow in [RELEASING.md](RELEASING.md): run `new_release.py` to open a changelog PR, merge it, then manually push the annotated tag to trigger the release workflow.
 
 ## Reporting bugs & requesting features
 

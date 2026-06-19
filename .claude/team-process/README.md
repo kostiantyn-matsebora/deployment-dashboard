@@ -6,7 +6,7 @@ Portable orchestration framework: one lead, N role-specialists, any stack. Defin
 
 ## Session lifecycle
 
-Lifecycle is explicit, not hook-driven (`TeamCreate`/`TeamDelete` removed in Claude Code 2.1.178). The lead opens a run with `Invoke-TeamModeGuard.ps1 -SetMarker` (writes the session record + inbox/outbox, enables team mode) and closes it with `-EndSession`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
+Lifecycle is explicit, not hook-driven (`TeamCreate`/`TeamDelete` removed in Claude Code 2.1.178). The lead opens a run with `python3 scripts/hooks/invoke_team_mode_guard.py --set-marker` (writes the session record + inbox/outbox, enables team mode) and closes it with `--end-session`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
 
 ## Layout
 

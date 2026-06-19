@@ -35,8 +35,7 @@ setup() {
   # Capture absolute bash path once.  Used as shebang in all stubs so that
   # env -i (which clears PATH) can still execute them without /usr/bin/env.
   BASH_BIN="$(command -v bash)"
-  # Capture real chmod so the chmod stub can delegate to it; chmod calls inside
-  # apt-get/snap stubs must actually set execute permissions on the written pwsh stub.
+  # Capture real chmod so the chmod stub can delegate to it.
   CHMOD_BIN="$(command -v chmod)"
 
   SANDBOX="$(mktemp -d)"
@@ -46,56 +45,30 @@ setup() {
   printf '#!%s\necho "0"\n' "$BASH_BIN" > "$SANDBOX/id"
   chmod +x "$SANDBOX/id"
 
-  # pwsh stub — pre-installs a working pwsh (overridden per test as needed).
-  printf '#!%s\necho "PowerShell 7.4.0"\n' "$BASH_BIN" > "$SANDBOX/pwsh"
-  chmod +x "$SANDBOX/pwsh"
-
-  # curl stub — appends name to sentinel; writes the -o destination as an empty file.
-  # Explicit "exit 0" is required: without it the stub exits with the return code of
-  # the last command in the for-loop body ([ "$arg" = "-o" ]), which is 1 for the
-  # final argument (the destination path), causing set -e to abort the script.
-  cat > "$SANDBOX/curl" << STUB
+  # python3 stub — pre-installs a working python3.
+  # Handles: --version, -m pip install (no-op), -m pytest (no-op).
+  cat > "$SANDBOX/python3" << STUB
 #!$BASH_BIN
-echo "curl" >> "$SENTINEL"
-next_is_dest=0
-for arg in "\$@"; do
-  if [ "\$next_is_dest" = "1" ]; then
-    touch "\$arg"
-    next_is_dest=0
-  fi
-  [ "\$arg" = "-o" ] && next_is_dest=1
-done
+echo "python3" >> "$SENTINEL"
+if [ "\$1" = "--version" ]; then
+  echo "Python 3.11.0"
+  exit 0
+fi
+if [ "\$1" = "-m" ] && [ "\$2" = "pip" ]; then
+  exit 0
+fi
 exit 0
 STUB
-  chmod +x "$SANDBOX/curl"
+  chmod +x "$SANDBOX/python3"
 
-  # wget stub — appends name to sentinel; writes the -O destination as an empty file.
-  # Same exit-0 requirement as the curl stub above.
-  cat > "$SANDBOX/wget" << STUB
-#!$BASH_BIN
-echo "wget" >> "$SENTINEL"
-next_is_dest=0
-for arg in "\$@"; do
-  if [ "\$next_is_dest" = "1" ]; then
-    touch "\$arg"
-    next_is_dest=0
-  fi
-  [ "\$arg" = "-O" ] && next_is_dest=1
-done
-exit 0
-STUB
-  chmod +x "$SANDBOX/wget"
-
-  # dpkg stub — appends name to sentinel; exits 0.
-  cat > "$SANDBOX/dpkg" << STUB
-#!$BASH_BIN
-echo "dpkg" >> "$SENTINEL"
-STUB
-  chmod +x "$SANDBOX/dpkg"
+  # pip3 stub — pre-installs a working pip3.
+  printf '#!%s\necho "pip3" >> "%s"\nexit 0\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/pip3"
+  chmod +x "$SANDBOX/pip3"
 
   # apt-get stub — appends name to sentinel.
   # On "install", inspects package args and writes the correct bin stub(s):
-  #   powershell       → writes pwsh stub
+  #   python3          → writes python3 stub
+  #   python3-pip      → writes pip3 stub
   #   dotnet-sdk-10.0  → writes dotnet stub (--list-sdks + --version)
   # "update" and all other subcommands are logged and exit 0.
   cat > "$SANDBOX/apt-get" << STUB
@@ -104,9 +77,22 @@ echo "apt-get" >> "$SENTINEL"
 if [ "\$1" = "install" ]; then
   for _arg in "\$@"; do
     case "\$_arg" in
-      powershell)
-        printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
-        chmod +x "$SANDBOX/pwsh"
+      python3)
+        cat > "$SANDBOX/python3" << 'PYSTUB'
+#!BASH_BIN_PLACEHOLDER
+echo "python3" >> "SENTINEL_PLACEHOLDER"
+if [ "$1" = "--version" ]; then
+  echo "Python 3.11.0"
+  exit 0
+fi
+exit 0
+PYSTUB
+        sed -i "s|BASH_BIN_PLACEHOLDER|$BASH_BIN|g; s|SENTINEL_PLACEHOLDER|$SENTINEL|g" "$SANDBOX/python3"
+        chmod +x "$SANDBOX/python3"
+        ;;
+      python3-pip)
+        printf '#!$BASH_BIN\necho "pip3" >> "$SENTINEL"\nexit 0\n' > "$SANDBOX/pip3"
+        chmod +x "$SANDBOX/pip3"
         ;;
       dotnet-sdk-10.0)
         printf '#!$BASH_BIN\nif [ "\$1" = "--list-sdks" ]; then\n  echo "10.0.109 [/usr/lib/dotnet/sdk]"\nelif [ "\$1" = "--version" ]; then\n  echo "10.0.109"\nfi\nexit 0\n' > "$SANDBOX/dotnet"
@@ -118,18 +104,6 @@ fi
 STUB
   chmod +x "$SANDBOX/apt-get"
 
-  # snap stub — appends name to sentinel.
-  # On "install", writes a real pwsh stub so the post-install check passes.
-  cat > "$SANDBOX/snap" << STUB
-#!$BASH_BIN
-echo "snap" >> "$SENTINEL"
-if [ "\$1" = "install" ]; then
-  printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
-  chmod +x "$SANDBOX/pwsh"
-fi
-STUB
-  chmod +x "$SANDBOX/snap"
-
   # sudo stub — appends name to sentinel; forwards remaining args.
   cat > "$SANDBOX/sudo" << STUB
 #!$BASH_BIN
@@ -140,8 +114,7 @@ STUB
   chmod +x "$SANDBOX/sudo"
 
   # mktemp stub — echoes a deterministic path inside $SANDBOX.
-  # Handles both the file form (default; for .deb download) and directory form (-d;
-  # for the tokensave temp-dir).  Delegates mkdir to the real binary via its absolute path.
+  # Handles both the file form (default) and directory form (-d).
   MKDIR_BIN="$(command -v mkdir)"
   cat > "$SANDBOX/mktemp" << STUB
 #!$BASH_BIN
@@ -152,35 +125,31 @@ if [ "\$_make_dir" = "1" ]; then
   $MKDIR_BIN -p "\$_dest"
   echo "\$_dest"
 else
-  _dest="$SANDBOX/pkg.deb"
+  _dest="$SANDBOX/pkg.tmp"
   : > "\$_dest"
   echo "\$_dest"
 fi
 STUB
   chmod +x "$SANDBOX/mktemp"
 
-  # mkdir stub — delegates to the real mkdir binary (needed for $HOME/.local/bin creation).
+  # mkdir stub — delegates to the real mkdir binary.
   MKDIR_BIN="$(command -v mkdir)"
   printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$MKDIR_BIN" > "$SANDBOX/mkdir"
   chmod +x "$SANDBOX/mkdir"
 
-  # rm stub — no-op; prevents the script from deleting sandbox stubs or
-  # touching the real filesystem when it cleans up the temp .deb file.
+  # rm stub — no-op; prevents the script from touching the real filesystem.
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/rm"
   chmod +x "$SANDBOX/rm"
 
-  # chmod stub — delegates to the real chmod binary.  apt-get/snap stubs call
-  # chmod +x on the written pwsh stub; a no-op here would leave pwsh non-executable
-  # and cause the post-install "command -v pwsh" check in the script to fail.
+  # chmod stub — delegates to the real chmod binary.
   printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$CHMOD_BIN" > "$SANDBOX/chmod"
   chmod +x "$SANDBOX/chmod"
 
-  # touch stub — no-op; curl/wget stubs call touch when writing the download
-  # destination file; prevents "command not found" under env -i.
+  # touch stub — no-op.
   printf '#!%s\n: # no-op touch\n' "$BASH_BIN" > "$SANDBOX/touch"
   chmod +x "$SANDBOX/touch"
 
-  # serena stub — pre-installs a working serena (overridden per test as needed).
+  # serena stub — pre-installs a working serena.
   printf '#!%s\necho "Serena 1.5.4.dev0"\n' "$BASH_BIN" > "$SANDBOX/serena"
   chmod +x "$SANDBOX/serena"
 
@@ -189,17 +158,14 @@ STUB
   chmod +x "$SANDBOX/mcp-server-markdown"
 
   # playwright-mcp stub — pre-installs a working playwright-mcp.
-  # Accepts all subcommands (including "install-browser chrome-for-testing") and exits 0.
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright-mcp"
   chmod +x "$SANDBOX/playwright-mcp"
 
   # playwright stub — pre-installs a working playwright CLI.
-  # Treats "playwright install chromium" as a no-op success (exit 0).
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright"
   chmod +x "$SANDBOX/playwright"
 
   # dotnet stub — pre-installs a working dotnet with a 10.x SDK.
-  # Handles: --list-sdks (prints a 10.x line) and --version (prints version).
   cat > "$SANDBOX/dotnet" << STUB
 #!$BASH_BIN
 if [ "\$1" = "--list-sdks" ]; then
@@ -212,10 +178,7 @@ STUB
   chmod +x "$SANDBOX/dotnet"
 
   # uv stub — appends name to sentinel.
-  # On "tool install <pkg>", writes the correct bin stub into $SANDBOX so the
-  # post-install command -v check in the script succeeds:
-  #   serena               → writes serena stub
-  #   code-review-graph    → writes code-review-graph stub
+  # On "tool install <pkg>", writes the correct bin stub into $SANDBOX.
   cat > "$SANDBOX/uv" << STUB
 #!$BASH_BIN
 echo "uv" >> "$SENTINEL"
@@ -235,27 +198,53 @@ STUB
   chmod +x "$SANDBOX/uv"
 
   # code-review-graph stub — pre-installs a working code-review-graph.
-  # Accepts all subcommands (including "build") and exits 0.
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/code-review-graph"
   chmod +x "$SANDBOX/code-review-graph"
 
   # tokensave stub — pre-installs a working tokensave.
-  # Accepts all subcommands (including "serve", "init", "disable-upload-counter") and exits 0.
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/tokensave"
   chmod +x "$SANDBOX/tokensave"
 
+  # curl stub — appends name to sentinel; writes the -o destination as an empty file.
+  cat > "$SANDBOX/curl" << STUB
+#!$BASH_BIN
+echo "curl" >> "$SENTINEL"
+next_is_dest=0
+for arg in "\$@"; do
+  if [ "\$next_is_dest" = "1" ]; then
+    touch "\$arg"
+    next_is_dest=0
+  fi
+  [ "\$arg" = "-o" ] && next_is_dest=1
+done
+exit 0
+STUB
+  chmod +x "$SANDBOX/curl"
+
+  # wget stub — appends name to sentinel; writes the -O destination as an empty file.
+  cat > "$SANDBOX/wget" << STUB
+#!$BASH_BIN
+echo "wget" >> "$SENTINEL"
+next_is_dest=0
+for arg in "\$@"; do
+  if [ "\$next_is_dest" = "1" ]; then
+    touch "\$arg"
+    next_is_dest=0
+  fi
+  [ "\$arg" = "-O" ] && next_is_dest=1
+done
+exit 0
+STUB
+  chmod +x "$SANDBOX/wget"
+
   # tar stub — appends name to sentinel; extracts nothing (no-op).
-  # tokensave install uses tar -xzf; under env -i tar must be stubbed.
   printf '#!%s\necho "tar" >> "%s"\nexit 0\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/tar"
   chmod +x "$SANDBOX/tar"
 
-  # install stub — appends name to sentinel; copies the source file to the
-  # destination so command -v can resolve the installed binary.
-  # Usage: install -m 0755 <src> <dest>
+  # install stub — appends name to sentinel; copies source to destination.
   cat > "$SANDBOX/install" << STUB
 #!$BASH_BIN
 echo "install" >> "$SENTINEL"
-# Parse: install [-m <mode>] <src> <dest>
 _src=""
 _dest=""
 _skip_next=0
@@ -276,36 +265,27 @@ STUB
   chmod +x "$SANDBOX/install"
 
   # find stub — used by tokensave install to locate the extracted binary.
-  # Returns a deterministic path that the install stub will act on.
   cat > "$SANDBOX/find" << STUB
 #!$BASH_BIN
 echo "$SANDBOX/tokensave"
 STUB
   chmod +x "$SANDBOX/find"
 
-  # cargo stub — appends name to sentinel; exits 1 by default (crates.io blocked).
-  # Overridden per test for cargo-success scenarios.
+  # cargo stub — exits 1 by default (crates.io blocked).
   printf '#!%s\necho "cargo" >> "%s"\nexit 1\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/cargo"
   chmod +x "$SANDBOX/cargo"
 
-  # sed stub — used by tokensave version resolution (sed -E 's#.*/tag/v?##').
-  # Delegates to the real sed binary.
+  # sed stub — delegates to the real sed binary.
   SED_BIN="$(command -v sed)"
   printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$SED_BIN" > "$SANDBOX/sed"
   chmod +x "$SANDBOX/sed"
 
-  # head stub — used by tokensave install (find ... | head -n1).
-  # Delegates to the real head binary.
+  # head stub — delegates to the real head binary.
   HEAD_BIN="$(command -v head)"
   printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$HEAD_BIN" > "$SANDBOX/head"
   chmod +x "$SANDBOX/head"
 
-  # npm stub — appends name to sentinel.
-  # On "install -g <pkgs...>", writes the correct bin stub(s) into $SANDBOX
-  # based on which package names appear in the argument list:
-  #   mcp-server-markdown  → writes mcp-server-markdown stub
-  #   @playwright/mcp      → writes playwright-mcp stub
-  #   playwright           → writes playwright stub (CLI, not the MCP package)
+  # npm stub — appends name to sentinel; writes correct bin stub(s) on "install".
   cat > "$SANDBOX/npm" << STUB
 #!$BASH_BIN
 echo "npm" >> "$SENTINEL"
@@ -402,51 +382,41 @@ assert_no_installer_invoked() {
 }
 
 # ---------------------------------------------------------------------------
-# 5. Idempotent: remote + pwsh already on PATH
+# 5. Idempotent: remote + python3 + pip3 already on PATH
 # ---------------------------------------------------------------------------
 
-@test "idempotent: remote + pwsh present exits 0 without invoking any installer" {
-  # sandbox already has a pwsh stub from setup(); no further action needed.
+@test "idempotent: remote + python3 and pip3 present exits 0 without invoking apt-get install" {
+  # sandbox already has python3 and pip3 stubs from setup().
+  APT_INSTALL_LOG="$SANDBOX/apt-install.log"
+  cat > "$SANDBOX/apt-get" << STUB
+#!$BASH_BIN
+echo "apt-get" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  echo "\$@" >> "$APT_INSTALL_LOG"
+fi
+STUB
+  chmod +x "$SANDBOX/apt-get"
+
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
     PATH="$SANDBOX" \
     "$BASH_BIN" "$SCRIPT"
   [ "$status" -eq 0 ]
-  assert_no_installer_invoked
-}
-
-# ---------------------------------------------------------------------------
-# 6. Remote + no pwsh + no apt-get/snap → exits 1 with "no supported installer"
-# ---------------------------------------------------------------------------
-
-@test "remote + no pwsh + no installer exits 1 with 'no supported installer' on stderr" {
-  # Remove apt-get, snap, and pwsh from sandbox — only id remains.
-  rm -f "$SANDBOX/pwsh"
-  rm -f "$SANDBOX/apt-get"
-  rm -f "$SANDBOX/snap"
-
-  run env -i \
-    CLAUDE_CODE_REMOTE=1 \
-    PATH="$SANDBOX" \
-    "$BASH_BIN" "$SCRIPT"
-
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"no supported installer"* ]]
-}
-
-# ---------------------------------------------------------------------------
-# 7. Remote + no pwsh + apt-get present → installs via apt and exits 0
-# ---------------------------------------------------------------------------
-
-@test "remote + no pwsh + apt-get present: installs via apt and exits 0" {
-  # /etc/os-release must be readable for the script to determine the distro.
-  # On non-Linux hosts this file is absent; skip rather than fail spuriously.
-  if [ ! -f /etc/os-release ]; then
-    skip "/etc/os-release absent on this host; apt install path not exercisable"
+  # python3/python3-pip must NOT appear in any apt-get install invocation.
+  if [ -f "$APT_INSTALL_LOG" ] && grep -qE 'python3|python3-pip' "$APT_INSTALL_LOG"; then
+    echo "apt-get install python3/python3-pip was invoked despite python3+pip3 already present"
+    return 1
   fi
+}
 
-  # Remove the pre-installed pwsh from the sandbox — script must install it.
-  rm -f "$SANDBOX/pwsh"
+# ---------------------------------------------------------------------------
+# 6. Remote + no python3 + apt-get present → installs python3 and pip3, exits 0
+# ---------------------------------------------------------------------------
+
+@test "remote + no python3 + apt-get: installs python3 and pip3 and exits 0" {
+  # Remove the pre-installed python3 and pip3 stubs so the script must install them.
+  rm -f "$SANDBOX/python3"
+  rm -f "$SANDBOX/pip3"
 
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
@@ -458,12 +428,13 @@ assert_no_installer_invoked() {
 }
 
 # ---------------------------------------------------------------------------
-# 8. Remote + no pwsh + no apt-get + snap present → installs via snap and exits 0
+# 7. Remote + no python3 + no apt-get → exits 1 with 'apt-get not found'
 # ---------------------------------------------------------------------------
 
-@test "remote + no pwsh + snap fallback: installs via snap and exits 0" {
-  # Remove pwsh and apt-get from the sandbox so the script falls through to snap.
-  rm -f "$SANDBOX/pwsh"
+@test "remote + no python3 + no apt-get exits 1 with 'apt-get not found' on stderr" {
+  # Remove python3, pip3, and apt-get from sandbox.
+  rm -f "$SANDBOX/python3"
+  rm -f "$SANDBOX/pip3"
   rm -f "$SANDBOX/apt-get"
 
   run env -i \
@@ -471,21 +442,21 @@ assert_no_installer_invoked() {
     PATH="$SANDBOX" \
     "$BASH_BIN" "$SCRIPT"
 
-  [ "$status" -eq 0 ]
-  grep -q "^snap$" "$SENTINEL"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"apt-get not found"* ]]
 }
 
 # ---------------------------------------------------------------------------
-# 9. Remote + not root + sudo absent → exits 1
+# 8. Remote + not root + sudo absent → exits 1
 # ---------------------------------------------------------------------------
 
 @test "remote + not root + sudo absent exits 1 with 'sudo not found' on stderr" {
   # Override id stub to return a non-zero uid (non-root).
   printf '#!%s\necho "1001"\n' "$BASH_BIN" > "$SANDBOX/id"
   chmod +x "$SANDBOX/id"
-  # Remove sudo and pwsh from sandbox so the script hits the sudo-absent branch.
+  # Remove sudo and python3 from sandbox so the script hits the sudo-absent branch.
   rm -f "$SANDBOX/sudo"
-  rm -f "$SANDBOX/pwsh"
+  rm -f "$SANDBOX/python3"
 
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
@@ -497,31 +468,27 @@ assert_no_installer_invoked() {
 }
 
 # ---------------------------------------------------------------------------
-# 10. apt-get update is scoped to the Microsoft repo list (regression guard)
+# 9. pip install step runs when python3 + pip3 already present (idempotent upgrade)
 # ---------------------------------------------------------------------------
 
-@test "apt update is scoped to microsoft-prod.list, not a blanket update" {
-  # /etc/os-release must exist for the apt install path to be reached.
-  if [ ! -f /etc/os-release ]; then
-    skip "/etc/os-release absent on this host; apt install path not exercisable"
-  fi
-
-  # Remove pre-installed pwsh so the script attempts installation.
-  rm -f "$SANDBOX/pwsh"
-
-  # Replace the default apt-get stub with one that records full argv to a
-  # dedicated log file, so we can assert the exact flags used for `update`.
-  APT_ARGS_LOG="$SANDBOX/apt-args.log"
-  cat > "$SANDBOX/apt-get" << STUB
+@test "pip install: python3+pip3 present, python3 -m pip install is invoked" {
+  # The script always runs pip install after the python3 idempotency check.
+  # Track invocations via the sentinel.
+  PIP_ARGS_LOG="$SANDBOX/pip-args.log"
+  cat > "$SANDBOX/python3" << STUB
 #!$BASH_BIN
-echo "apt-get" >> "$SENTINEL"
-echo "\$@" >> "$APT_ARGS_LOG"
-if [ "\$1" = "install" ]; then
-  printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
-  chmod +x "$SANDBOX/pwsh"
+echo "python3" >> "$SENTINEL"
+if [ "\$1" = "--version" ]; then
+  echo "Python 3.11.0"
+  exit 0
 fi
+if [ "\$1" = "-m" ] && [ "\$2" = "pip" ]; then
+  echo "\$@" >> "$PIP_ARGS_LOG"
+  exit 0
+fi
+exit 0
 STUB
-  chmod +x "$SANDBOX/apt-get"
+  chmod +x "$SANDBOX/python3"
 
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
@@ -529,18 +496,18 @@ STUB
     "$BASH_BIN" "$SCRIPT"
 
   [ "$status" -eq 0 ]
-
-  # The update invocation must target only the Microsoft repo list.
-  grep -q "update" "$APT_ARGS_LOG"
-  grep -q "sources.list.d/microsoft-prod.list" "$APT_ARGS_LOG"
+  # python3 -m pip install must have been called with pytest ruff jsonschema.
+  [ -f "$PIP_ARGS_LOG" ]
+  grep -q "pytest" "$PIP_ARGS_LOG"
+  grep -q "ruff" "$PIP_ARGS_LOG"
+  grep -q "jsonschema" "$PIP_ARGS_LOG"
 }
 
 # ---------------------------------------------------------------------------
-# 11. serena: idempotent — serena already present, uv must NOT be invoked
+# 10. serena: idempotent — serena already present, uv must NOT be invoked
 # ---------------------------------------------------------------------------
 
 @test "serena idempotent: serena present exits 0 without invoking uv" {
-  # sandbox already has a serena stub from setup(); uv is present but must not run.
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
     PATH="$SANDBOX" \
@@ -553,11 +520,10 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# 12. serena: install path — serena absent, uv present → uv invoked, exit 0
+# 11. serena: install path — serena absent, uv present → uv invoked, exit 0
 # ---------------------------------------------------------------------------
 
 @test "serena install: serena absent + uv present installs serena and exits 0" {
-  # Remove the pre-installed serena stub so the script must install it.
   rm -f "$SANDBOX/serena"
 
   run env -i \
@@ -567,16 +533,14 @@ STUB
 
   [ "$status" -eq 0 ]
   grep -q "^uv$" "$SENTINEL"
-  # serena must now be resolvable (uv stub wrote it into $SANDBOX).
   [ -x "$SANDBOX/serena" ]
 }
 
 # ---------------------------------------------------------------------------
-# 13. serena: missing uv prereq → exit 1 with missing-uv error on stderr
+# 12. serena: missing uv prereq → exit 1 with missing-uv error on stderr
 # ---------------------------------------------------------------------------
 
 @test "serena missing uv: serena absent + uv absent exits 1 with 'uv not found' on stderr" {
-  # Remove both serena and uv from the sandbox.
   rm -f "$SANDBOX/serena"
   rm -f "$SANDBOX/uv"
 
@@ -590,11 +554,10 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# 14. markdown: idempotent — mcp-server-markdown present, npm must NOT be invoked
+# 13. markdown: idempotent — mcp-server-markdown present, npm must NOT be invoked
 # ---------------------------------------------------------------------------
 
 @test "markdown idempotent: mcp-server-markdown present exits 0 without invoking npm" {
-  # sandbox already has mcp-server-markdown and npm stubs from setup().
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
     PATH="$SANDBOX" \
@@ -607,11 +570,10 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# 15. markdown: install path — mcp-server-markdown absent, npm present → exit 0
+# 14. markdown: install path — mcp-server-markdown absent, npm present → exit 0
 # ---------------------------------------------------------------------------
 
 @test "markdown install: mcp-server-markdown absent + npm present installs it and exits 0" {
-  # Remove the pre-installed mcp-server-markdown stub.
   rm -f "$SANDBOX/mcp-server-markdown"
 
   run env -i \
@@ -621,16 +583,14 @@ STUB
 
   [ "$status" -eq 0 ]
   grep -q "^npm$" "$SENTINEL"
-  # mcp-server-markdown must now be resolvable (npm stub wrote it into $SANDBOX).
   [ -x "$SANDBOX/mcp-server-markdown" ]
 }
 
 # ---------------------------------------------------------------------------
-# 16. markdown: missing npm prereq → exit 1 with missing-npm error on stderr
+# 15. markdown: missing npm prereq → exit 1 with missing-npm error on stderr
 # ---------------------------------------------------------------------------
 
 @test "markdown missing npm: mcp-server-markdown absent + npm absent exits 1 with 'npm not found' on stderr" {
-  # Remove both mcp-server-markdown and npm from the sandbox.
   rm -f "$SANDBOX/mcp-server-markdown"
   rm -f "$SANDBOX/npm"
 
@@ -644,11 +604,10 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# 17. playwright: idempotent — playwright-mcp + playwright present, npm NOT invoked
+# 16. playwright: idempotent — playwright-mcp + playwright present, npm NOT invoked
 # ---------------------------------------------------------------------------
 
 @test "playwright idempotent: playwright-mcp and playwright present exits 0 without invoking npm" {
-  # sandbox already has playwright-mcp and playwright stubs from setup().
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
     PATH="$SANDBOX" \
@@ -661,12 +620,10 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# 18. playwright: install path — bins absent, npm present → npm invoked, exit 0,
-#     both bins resolvable afterward
+# 17. playwright: install path — bins absent, npm present → npm invoked, exit 0
 # ---------------------------------------------------------------------------
 
 @test "playwright install: playwright-mcp and playwright absent + npm present installs both and exits 0" {
-  # Remove the pre-installed playwright-mcp and playwright stubs.
   rm -f "$SANDBOX/playwright-mcp"
   rm -f "$SANDBOX/playwright"
 
@@ -677,17 +634,15 @@ STUB
 
   [ "$status" -eq 0 ]
   grep -q "^npm$" "$SENTINEL"
-  # Both bins must now be resolvable (npm stub wrote them into $SANDBOX).
   [ -x "$SANDBOX/playwright-mcp" ]
   [ -x "$SANDBOX/playwright" ]
 }
 
 # ---------------------------------------------------------------------------
-# 19. playwright: missing npm prereq → exit 1 with npm-not-found error on stderr
+# 18. playwright: missing npm prereq → exit 1 with npm-not-found error on stderr
 # ---------------------------------------------------------------------------
 
 @test "playwright missing npm: playwright-mcp and playwright absent + npm absent exits 1 with 'npm not found' on stderr" {
-  # Remove playwright-mcp, playwright, and npm from the sandbox.
   rm -f "$SANDBOX/playwright-mcp"
   rm -f "$SANDBOX/playwright"
   rm -f "$SANDBOX/npm"
@@ -702,29 +657,16 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# 20. playwright: browser download failure is non-fatal — script still exits 0
+# 19. playwright: browser download failure is non-fatal — script still exits 0
 # ---------------------------------------------------------------------------
 
 @test "playwright browser non-fatal: chromium download fails but script exits 0" {
-  # Strategy: place playwright-mcp and a failing-playwright stub BEFORE the npm
-  # stub runs, then use an npm stub that does NOT overwrite these pre-placed stubs.
-  # This way: the idempotency check fails (only one bin is present — we remove
-  # playwright-mcp so the install path runs), npm is invoked, it writes
-  # playwright-mcp, and the pre-placed failing playwright stub remains in place.
-  # The verify step passes (both bins exist), but the browser step returns non-zero
-  # — the non-fatal guard must let the script continue to exit 0.
-
-  # Remove playwright-mcp so idempotency check fails; keep a failing playwright stub.
   rm -f "$SANDBOX/playwright-mcp"
 
-  # Overwrite the default playwright stub with one that fails on "install".
   printf '#!%s\nif [ "$1" = "install" ]; then exit 1; fi\nexit 0\n' \
     "$BASH_BIN" > "$SANDBOX/playwright"
   chmod +x "$SANDBOX/playwright"
 
-  # Override the npm stub to write only playwright-mcp (not playwright),
-  # so the pre-placed failing playwright stub is used for the browser step.
-  # Uses only shell builtins + $BASH_BIN (no cat/sed/chmod in PATH under env -i).
   cat > "$SANDBOX/npm" << NPMSTUB
 #!$BASH_BIN
 echo "npm" >> "$SENTINEL"
@@ -740,26 +682,17 @@ NPMSTUB
     PATH="$SANDBOX" \
     "$BASH_BIN" "$SCRIPT"
 
-  # Browser failure must NOT abort the bootstrap.
   [ "$status" -eq 0 ]
-  # The chromium-failure warning must appear in stderr output.
   [[ "$output" == *"chromium download failed"* ]]
 }
 
 # ---------------------------------------------------------------------------
-# 20b. playwright: MCP browser download failure is non-fatal — script still exits 0
+# 20. playwright: MCP browser download failure is non-fatal — script still exits 0
 # ---------------------------------------------------------------------------
 
 @test "playwright MCP browser non-fatal: chrome-for-testing download fails but script exits 0" {
-  # Trigger the install path by removing playwright-mcp; keep a failing playwright-mcp stub
-  # for the browser sub-step while the npm stub writes a fresh bin for the post-install check.
-
-  # Remove playwright-mcp so the idempotency check fails and npm runs.
   rm -f "$SANDBOX/playwright-mcp"
 
-  # Override npm stub: write the post-install playwright-mcp inline via printf (bash builtin,
-  # always available under env -i).  The written stub exits 1 on install-browser to simulate
-  # a failed cdn download, and exits 0 for all other invocations.
   cat > "$SANDBOX/npm" << NPMSTUB
 #!$BASH_BIN
 echo "npm" >> "$SENTINEL"
@@ -775,9 +708,7 @@ NPMSTUB
     PATH="$SANDBOX" \
     "$BASH_BIN" "$SCRIPT"
 
-  # MCP browser failure must NOT abort the bootstrap.
   [ "$status" -eq 0 ]
-  # The chrome-for-testing failure warning must appear in stderr output.
   [[ "$output" == *"chrome-for-testing download failed"* ]]
 }
 
@@ -786,8 +717,6 @@ NPMSTUB
 # ---------------------------------------------------------------------------
 
 @test "dotnet idempotent: dotnet with 10.x SDK present exits 0 without invoking apt-get install" {
-  # sandbox already has a dotnet stub with a 10.x SDK from setup().
-  # Capture apt-get args to an install log so we can assert no dotnet install ran.
   APT_INSTALL_LOG="$SANDBOX/apt-install.log"
   cat > "$SANDBOX/apt-get" << STUB
 #!$BASH_BIN
@@ -804,7 +733,6 @@ STUB
     "$BASH_BIN" "$SCRIPT"
 
   [ "$status" -eq 0 ]
-  # dotnet-sdk-10.0 must NOT appear in any apt-get install invocation.
   if [ -f "$APT_INSTALL_LOG" ] && grep -q "dotnet-sdk-10.0" "$APT_INSTALL_LOG"; then
     echo "apt-get install dotnet-sdk-10.0 was invoked despite 10.x SDK already present"
     return 1
@@ -816,7 +744,6 @@ STUB
 # ---------------------------------------------------------------------------
 
 @test "dotnet install: dotnet absent + apt-get present installs dotnet and exits 0" {
-  # Remove the pre-installed dotnet stub so the script must install it.
   rm -f "$SANDBOX/dotnet"
 
   run env -i \
@@ -826,7 +753,6 @@ STUB
 
   [ "$status" -eq 0 ]
   grep -q "^apt-get$" "$SENTINEL"
-  # dotnet must now be resolvable (apt-get stub wrote it into $SANDBOX).
   [ -x "$SANDBOX/dotnet" ]
 }
 
@@ -835,8 +761,8 @@ STUB
 # ---------------------------------------------------------------------------
 
 @test "dotnet missing apt-get: dotnet absent + apt-get absent exits 1 with 'apt-get not found' on stderr" {
-  # Keep pwsh + serena + mcp-server-markdown + playwright-mcp + playwright so
-  # those sections skip; remove dotnet and apt-get to trigger the .NET prereq failure.
+  # Keep python3+pip3+serena+mcp-server-markdown+playwright-mcp+playwright so those
+  # sections skip; remove dotnet and apt-get to trigger the .NET prereq failure.
   rm -f "$SANDBOX/dotnet"
   rm -f "$SANDBOX/apt-get"
 
@@ -854,7 +780,6 @@ STUB
 # ---------------------------------------------------------------------------
 
 @test "dotnet wrong version: dotnet with only 8.x SDK present is not idempotent; installs 10.x and exits 0" {
-  # Override the default dotnet stub to report only an 8.x SDK — no 10.x line.
   cat > "$SANDBOX/dotnet" << STUB
 #!$BASH_BIN
 if [ "\$1" = "--list-sdks" ]; then
@@ -873,7 +798,6 @@ STUB
 
   [ "$status" -eq 0 ]
   grep -q "^apt-get$" "$SENTINEL"
-  # After install, dotnet stub written by apt-get stub must report a 10.x SDK.
   "$SANDBOX/dotnet" --list-sdks | grep -q '^10\.'
 }
 
@@ -882,13 +806,11 @@ STUB
 # ---------------------------------------------------------------------------
 
 @test "code-review-graph idempotent: code-review-graph present exits 0 without invoking uv" {
-  # sandbox already has a code-review-graph stub from setup(); uv must not run for it.
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
     PATH="$SANDBOX" \
     "$BASH_BIN" "$SCRIPT"
   [ "$status" -eq 0 ]
-  # uv must not have been invoked for code-review-graph (it may be absent from log entirely).
   if [ -f "$SENTINEL" ] && grep -q "^uv$" "$SENTINEL"; then
     echo "uv was invoked despite code-review-graph already being on PATH"
     return 1
@@ -900,7 +822,6 @@ STUB
 # ---------------------------------------------------------------------------
 
 @test "code-review-graph install: absent + uv present installs it and exits 0" {
-  # Remove the pre-installed code-review-graph stub so the script must install it.
   rm -f "$SANDBOX/code-review-graph"
 
   run env -i \
@@ -910,7 +831,6 @@ STUB
 
   [ "$status" -eq 0 ]
   grep -q "^uv$" "$SENTINEL"
-  # code-review-graph must now be resolvable (uv stub wrote it into $SANDBOX).
   [ -x "$SANDBOX/code-review-graph" ]
 }
 
@@ -919,7 +839,6 @@ STUB
 # ---------------------------------------------------------------------------
 
 @test "code-review-graph missing uv: absent + uv absent exits 1 with 'uv not found' on stderr" {
-  # Remove both code-review-graph and uv from the sandbox.
   rm -f "$SANDBOX/code-review-graph"
   rm -f "$SANDBOX/uv"
 
@@ -937,15 +856,11 @@ STUB
 # ---------------------------------------------------------------------------
 
 @test "tokensave idempotent: tokensave present exits 0 without attempting download" {
-  # sandbox already has a tokensave stub from setup().
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
     PATH="$SANDBOX" \
     "$BASH_BIN" "$SCRIPT"
   [ "$status" -eq 0 ]
-  # curl must not have been called for tokensave (idempotency check skips download).
-  # We check that no download path was entered by asserting tar was not invoked
-  # (the prebuilt download path calls tar; if tokensave is present it never runs).
   if [ -f "$SENTINEL" ] && grep -q "^tar$" "$SENTINEL"; then
     echo "tar was invoked despite tokensave already being on PATH"
     return 1
@@ -953,20 +868,11 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# 29. tokensave: prebuilt install success — absent; stub curl+tar+install so a
-#     fake tokensave bin is produced → exits 0, tokensave now resolvable
+# 29. tokensave: prebuilt install success
 # ---------------------------------------------------------------------------
 
 @test "tokensave prebuilt install: absent + curl+tar available installs binary and exits 0" {
-  # Remove the pre-installed tokensave stub — script must download and install it.
   rm -f "$SANDBOX/tokensave"
-
-  # The default curl stub writes the -o file as empty; tar is a no-op; the find
-  # stub returns $SANDBOX/tokensave as the extracted binary path; the install stub
-  # copies source to destination writing a real executable — all already set up in setup().
-  # We need curl to write a non-empty tarball path for tar to accept, but since
-  # tar is a stub (no-op) the content doesn't matter — curl just needs to write
-  # the -o file (which the existing curl stub does via touch).
 
   run env -i \
     CLAUDE_CODE_REMOTE=1 \
@@ -975,24 +881,18 @@ STUB
     "$BASH_BIN" "$SCRIPT"
 
   [ "$status" -eq 0 ]
-  # curl must have been invoked for the version redirect + download.
   grep -q "^curl$" "$SENTINEL"
-  # tokensave must now be resolvable.
   [ -x "$SANDBOX/.local/bin/tokensave" ] || [ -x "$SANDBOX/tokensave" ]
 }
 
 # ---------------------------------------------------------------------------
-# 30. tokensave: install failure is NON-FATAL — absent; curl fails, cargo absent
-#     → script still exits 0 and prints 'continuing without' warning
+# 30. tokensave: install failure is NON-FATAL
 # ---------------------------------------------------------------------------
 
 @test "tokensave install failure non-fatal: curl fails + cargo absent exits 0 with 'continuing without' warning" {
-  # Remove the pre-installed tokensave stub.
   rm -f "$SANDBOX/tokensave"
-  # Remove cargo so the fallback also fails.
   rm -f "$SANDBOX/cargo"
 
-  # Override the curl stub to fail on all invocations.
   printf '#!%s\necho "curl" >> "%s"\nexit 1\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/curl"
   chmod +x "$SANDBOX/curl"
 
@@ -1002,8 +902,6 @@ STUB
     HOME="$SANDBOX" \
     "$BASH_BIN" "$SCRIPT"
 
-  # Failure must NOT abort the bootstrap.
   [ "$status" -eq 0 ]
-  # The non-fatal warning must appear in output (bats merges stdout+stderr via `run`).
   [[ "$output" == *"continuing without"* ]]
 }

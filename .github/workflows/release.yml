@@ -216,35 +216,34 @@ jobs:
           fetch-depth: 0
 
       - name: Extract release notes
-        shell: pwsh
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
-          $changelog = 'CHANGELOG.md'
-          $notes = $null
-          if (Test-Path $changelog) {
-            $lines = Get-Content $changelog
-            $start = $null
-            for ($i = 0; $i -lt $lines.Count; $i++) {
-              if ($lines[$i] -match "^## \[$([regex]::Escape($version))\]") {
-                $start = $i + 1
-                break
-              }
-            }
-            if ($null -ne $start) {
-              $body = New-Object System.Collections.Generic.List[string]
-              for ($j = $start; $j -lt $lines.Count; $j++) {
-                if ($lines[$j] -match '^## \[') { break }
-                $body.Add($lines[$j])
-              }
-              $notes = ($body -join "`n").Trim()
-            }
-          }
-          if ([string]::IsNullOrWhiteSpace($notes)) {
-            $notes = "Release ${{ github.ref_name }}"
-          }
-          $notes | Out-File -FilePath release-notes.md -Encoding utf8
-          Write-Host "Release notes for ${version}:"
-          Write-Host $notes
+          python3 - <<'EOF'
+          import re, sys, os
+          version = os.environ.get('REF_NAME', '').lstrip('v')
+          changelog = 'CHANGELOG.md'
+          notes = None
+          if os.path.exists(changelog):
+              lines = open(changelog).readlines()
+              start = None
+              for i, line in enumerate(lines):
+                  if re.match(r'^## \[' + re.escape(version) + r'\]', line):
+                      start = i + 1
+                      break
+              if start is not None:
+                  body = []
+                  for line in lines[start:]:
+                      if re.match(r'^## \[', line):
+                          break
+                      body.append(line)
+                  notes = ''.join(body).strip()
+          if not notes:
+              notes = f"Release ${{ github.ref_name }}"
+          open('release-notes.md', 'w').write(notes + '\n')
+          print(f"Release notes for {version}:")
+          print(notes)
+          EOF
+        env:
+          REF_NAME: ${{ github.ref_name }}
 
       - name: Assemble compose bundle
         # Plain `zip` (bash) — no PowerShell dot-file/hidden-item semantics, so the

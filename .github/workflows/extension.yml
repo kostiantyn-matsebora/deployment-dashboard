@@ -41,10 +41,7 @@ jobs:
         run: npm run build
 
       - name: Package extension
-        shell: pwsh
-        run: |
-          & ../../scripts/Package-Extension.ps1 -DistPath dist -OutputDir dist-zips
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: python3 ../../scripts/package_extension.py --dist-path dist --output-dir dist-zips
 
       - name: Upload extension zips
         uses: actions/upload-artifact@v7
