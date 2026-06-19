@@ -124,3 +124,6 @@ site/
 # Added by code-review-graph
 .code-review-graph/
 .tokensave
+
+# serena MCP server local working dir (auto-generated)
+.serena/
