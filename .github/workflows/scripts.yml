@@ -3,53 +3,71 @@ name: _scripts
 on:
   push:
     branches: [main]
-    paths: ['scripts/**/*.ps1', '.github/workflows/scripts.yml']
+    paths:
+      - 'scripts/**/*.py'
+      - 'scripts/**/pyproject.toml'
+      - 'scripts/**/*.sh'
+      - 'scripts/**/*.bats'
+      - '.github/workflows/scripts.yml'
   # Called by ci.yml (the _ci-green orchestrator) for PR checks.
   workflow_call:
 
 jobs:
   scripts-check:
-    name: Lint and test PowerShell scripts
+    name: Lint and test scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install modules
-        shell: pwsh
-        run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          Install-Module Pester -MinimumVersion 5.0.0 -Force -Scope CurrentUser
+      - name: Install bats
+        # ubuntu-latest ships bats 1.x from apt; pinning via apt keeps the step
+        # hermetic without requiring npm/git clone.  Bump the package version if
+        # a specific Bats-core release is ever needed.
+        shell: bash
+        run: sudo apt-get update -qq && sudo apt-get install -y bats
 
-      - name: Lint
-        shell: pwsh
+      - name: Assert every .sh has a sibling .bats
+        shell: bash
         run: |
-          $files = Get-ChildItem -Path scripts/ -Recurse -Filter '*.ps1' |
-            Where-Object { $_.Name -notlike '*.Tests.ps1' }
-          $results = $files | ForEach-Object {
-            Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error,Warning `
-              -Settings scripts/PSScriptAnalyzerSettings.psd1
-          }
-          if ($results) {
-            $results | Format-Table -AutoSize
+          missing=()
+          while IFS= read -r -d '' sh; do
+            bats="${sh%.sh}.bats"
+            [[ -f "$bats" ]] || missing+=("$sh")
+          done < <(find scripts -name '*.sh' -print0)
+          if (( ${#missing[@]} > 0 )); then
+            printf 'ERROR: missing .bats suite for:\n'
+            printf '  %s\n' "${missing[@]}"
             exit 1
-          }
+          fi
+          echo "Sibling-existence gate passed (${#missing[@]} missing)"
 
-      - name: Test
-        shell: pwsh
+      - name: Test bash scripts (bats)
+        shell: bash
         run: |
-          $cfg = New-PesterConfiguration
-          $cfg.Run.Path = 'scripts/'
-          $cfg.TestResult.Enabled = $true
-          $cfg.TestResult.OutputPath = 'pester-results.xml'
-          $cfg.TestResult.OutputFormat = 'NUnitXml'
-          $cfg.Output.Verbosity = 'Detailed'
-          $result = Invoke-Pester -Configuration $cfg
-          exit $result.FailedCount
+          mapfile -d '' suites < <(find scripts -name '*.bats' -print0)
+          if (( ${#suites[@]} == 0 )); then
+            echo "No .bats suites found — skipping"
+            exit 0
+          fi
+          bats --tap "${suites[@]}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install pytest ruff jsonschema
+
+      - name: Lint (ruff)
+        run: ruff check scripts/
+
+      - name: Test (pytest)
+        run: python -m pytest scripts/ -q --junitxml=pytest-results.xml
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pester-results
-          path: pester-results.xml
+          name: pytest-results
+          path: pytest-results.xml

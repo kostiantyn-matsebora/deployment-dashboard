@@ -10,7 +10,7 @@ The **Intake & docs-first** activity of the orchestration process
 
 0. **Resume check first.** Before scoping new work, check for an active run already on this
    issue/feature and **propose to resume it** (don't fork a parallel run): issue mode →
-   `Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>`; informal ask → match against the active runs'
+   `python3 scripts/hooks/invoke_team_mode_guard.py --find-session --issue <ref>`; informal ask → match against the active runs'
    `summary` in the SessionStart reminder. See [`process.md`](../team-process/process.md) →
    *Session state & resume*.
 

@@ -39,7 +39,7 @@ right roles and owning the integration nobody else can.
    until green. Never ship red.
 8. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
    - **Publish the decision record** (issue mode): render with
-     `Update-IssueDecisionRecord.ps1 -DryRun`, show the user, and on approval upsert the managed
+     `python3 scripts/team-process/update_issue_decision_record.py --dry-run`, show the user, and on approval upsert the managed
      issue comment. Confirm-first — it is outward-facing. See `process.md` → *Decision record*.
 
 ## Communication
@@ -49,7 +49,7 @@ Hub-and-spoke; formats in [`protocol.md`](../protocol.md).
 - **Member → orch:** `RESULT` / `FINDING` — file in outbox + `{ type, ref }` pointer. Drain: read by `ref`, fold into run ledger, delete outbox file.
 - **Orch → member:** `BRIEF` / `FIX` — write to `inbox`, dispatch by reference (spawn-prompt path for first `BRIEF`; `{ type, ref }` pointer for re-dispatch). Drop verbatim form from context once written.
 - **Member ↔ member:** only `contract` role settling an interface → `ARTIFACT`.
-- **Abandon before fresh start.** `-EndSession -Id <id>` before `TeamCreate` on an existing id — re-create merges, not fresh.
+- **Abandon before fresh start.** `--end-session --id <id>` before re-running `--set-marker` on an existing id — re-running merges, not fresh.
 
 ## Context economy
 
