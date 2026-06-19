@@ -380,6 +380,25 @@ function Resolve-EnforcementMode {
     return 'block'
 }
 
+function Expand-HostContent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Content,
+        [Parameter(Mandatory)][scriptblock]$FileReader
+    )
+    $expanded = $Content
+    foreach ($line in ($Content -split "`r?`n")) {
+        if ($line -match '^@(\S+)\s*$') {
+            $importPath = $matches[1]
+            $imported = & $FileReader $importPath
+            if (-not [string]::IsNullOrWhiteSpace($imported)) {
+                $expanded = $expanded + "`n" + $imported
+            }
+        }
+    }
+    return $expanded
+}
+
 # ---------- Pure function: queue assembly ----------
 
 function Resolve-CommandQueue {
@@ -455,6 +474,7 @@ function Get-DocsDriftQueue {
     $roots = @(Get-RootIndexDirs -IndexDirs $indexDirs)
     $hostFile = Find-HostRootPromptFile -FileReader $FileReader
     $hostContent = if ($hostFile) { & $FileReader $hostFile } else { '' }
+    $hostContent = Expand-HostContent -Content $hostContent -FileReader $FileReader
     $registryDrift = $false
     foreach ($root in $roots) {
         if (-not (Test-RegistryHasEntry -Content $hostContent -DirPath $root)) {
