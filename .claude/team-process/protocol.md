@@ -249,6 +249,9 @@ Written to the member's `inbox` and delivered by `{ type, ref }` pointer — see
 ## Rules
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
+- A design decision in `RESULT.notes` is **folded by the lead into the session `decisions[]` record**
+  (durable, surfaced on resume, published to the issue) — see [`process.md`](process.md) →
+  *Decision record*. The member reports it; the lead curates it.
 - A `BRIEF` **references** the role's typed form here (`RESULT`/`REVIEW`/…); it MUST NOT restate or
   invent a hand-back shape — restating competes with the protocol, itself a breach.
 - A hand-back that is not valid typed-form JSON (not JSON, unknown `type`, extra/renamed fields,

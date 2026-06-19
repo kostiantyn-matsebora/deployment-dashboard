@@ -195,19 +195,61 @@ function New-SessionRecord {
     if ($roster.Count -gt 0) { $rec.roster = $roster }
     $ledger = if ($Existing -and $Existing.ledger) { @($Existing.ledger) } else { @() }
     if ($ledger.Count -gt 0) { $rec.ledger = $ledger }
+    # Acceptance criteria + decision record are durable resume state — preserve on re-create.
+    $acceptance = if ($Existing -and $Existing.acceptance) { @($Existing.acceptance) } else { @() }
+    if ($acceptance.Count -gt 0) { $rec.acceptance = $acceptance }
+    $decisions = if ($Existing -and $Existing.decisions) { @($Existing.decisions) } else { @() }
+    if ($decisions.Count -gt 0) { $rec.decisions = $decisions }
     return $rec
 }
 
-# One reminder line per active session record.
+# "role=status" digest of the roster, or '' when no roster. Tells the lead which member to
+# re-dispatch (and from what status) on resume.
+function Format-RosterStatus {
+    param($Record)
+    if (-not $Record.roster) { return '' }
+    $parts = @(@($Record.roster) | ForEach-Object {
+            $role = if ($_.role) { $_.role } else { '?' }
+            $st   = if ($_.status) { $_.status } else { 'spawned' }
+            "$role=$st"
+        })
+    return ($parts -join ', ')
+}
+
+# Compact digest of the locked/proposed decisions, capped so the reminder stays scannable.
+# Surfacing the CONTENT (not a count) is what lets the lead re-attach without re-reading the
+# file — and the decisions OVERRIDE a conflicting compaction summary. '' when none.
+function Format-DecisionDigest {
+    param($Record, [int]$Max = 6)
+    if (-not $Record.decisions) { return '' }
+    $all   = @($Record.decisions)
+    $shown = @($all | Select-Object -First $Max | ForEach-Object {
+            $id  = if ($null -ne $_.id) { "#$($_.id) " } else { '' }
+            $txt = if ($_.decision) { [string]$_.decision } else { '(unstated)' }
+            $sup = if ($_.supersedes) { " (supersedes: $($_.supersedes))" } else { '' }
+            "$id$txt$sup"
+        })
+    $line = ($shown -join '; ')
+    if ($all.Count -gt $Max) { $line += " (+$($all.Count - $Max) more)" }
+    return $line
+}
+
+# A per-session resume block: header line + (when present) agent statuses and the decision
+# digest. Multi-line so the lead sees CONTENT, not just counts.
 function Format-SessionLine {
     param($Record)
     $id     = if ($Record.id) { $Record.id } elseif ($Record.team) { $Record.team } else { 'unknown' }
     $wf     = if ($Record.workflow) { $Record.workflow } else { 'feature-team' }
     $branch = if ($Record.branch) { $Record.branch } else { '(unrecorded)' }
     $phase  = if ($Record.phase) { $Record.phase } else { '(unrecorded)' }
-    $nRost  = if ($Record.roster) { @($Record.roster).Count } else { 0 }
+    $issue  = if ($Record.issue) { " | issue: $($Record.issue)" } else { '' }
     $nLed   = if ($Record.ledger) { @($Record.ledger).Count } else { 0 }
-    return "  - $id [$wf] | branch: $branch | phase: $phase | roster: $nRost | ledger: $nLed wave(s)"
+    $lines  = @("  - $id [$wf] | branch: $branch | phase: $phase$issue | ledger: $nLed wave(s)")
+    $agents = Format-RosterStatus -Record $Record
+    if ($agents) { $lines += "      agents: $agents" }
+    $dec = Format-DecisionDigest -Record $Record
+    if ($dec) { $lines += "      decisions: $dec" }
+    return ($lines -join "`n")
 }
 
 # Compose the SessionStart resume reminder from the parsed session records.
@@ -219,9 +261,12 @@ function Get-SessionReminder {
     return @"
 [!] team-process session(s) ACTIVE - $n run(s) in progress (mode is sticky).
 $lines
-RESUME, do not restart: continue each run from its ledger; spawn members with team_name set, never
-foreground in-session subagents (the team-mode guard will block them). Records live at
-.team-process/sessions/<id>/session.json. To ABANDON one: pwsh -NoProfile -File
+RESUME, do not restart: continue each run from its record; spawn members with team_name set, never
+foreground in-session subagents (the team-mode guard will block them). Re-dispatch an in-flight member
+with its BRIEF (from the session inbox) + its roster progress + the decisions below.
+RECORD IS AUTHORITATIVE: the session record OVERRIDES any conflicting compaction summary - re-read its
+decisions before acting; do not trust a summary that contradicts a locked decision.
+Records live at .team-process/sessions/<id>/session.json. To ABANDON one: pwsh -NoProfile -File
 scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>. See
 .claude/team-process/process.md -> 'Session state & resume'.
 "@.Trim()

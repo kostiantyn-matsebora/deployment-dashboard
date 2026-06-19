@@ -86,6 +86,10 @@ explicit confirmation*).
   consumers); the outcome is recorded in the `ARTIFACT`, not left as chat.
 - **Verify state after every wave** — re-check repo/worktree state; catch out-of-lane edits, stray
   commits, mixed EOL before they compound.
+- **Update the session record each wave** — set each `roster[]` member's `status` + a short
+  `progress` note, fold the wave into the ledger, and append any decisions surfaced (incl. from a
+  member's `RESULT.notes`) to `decisions[]`. This is what a restart re-attaches to. See
+  [`process.md`](../team-process/process.md) → *Decision record* / *Session state & resume*.
 
 ## 4 — Integrate & review
 
@@ -100,11 +104,13 @@ explicit confirmation*).
   **reports red to the lead** (never fixes production code); the lead routes each failure to its
   owning member; loop until green.
 - Run [`/ship`](ship.md) — commit in logical groups → branch → open/update PR → watch CI green.
-  Never push the default branch.
-- **`TeamDelete`** once integrated. *(A `PostToolUse(TeamDelete)` hook removes that team's session
-  record. On a fresh session a leftover record is NOT auto-cleared — `SessionStart` reminds you to
-  resume or abandon it; abandon a stale one by id with
-  `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>`.)*
+  Never push the default branch. **Publish the decision record** to the issue (confirm-first) via
+  `scripts/team-process/Update-IssueDecisionRecord.ps1` — see [`/ship`](ship.md).
+- **`TeamDelete`** once integrated — but only **after** the decision record is published; `TeamDelete`
+  removes the session record (the decisions' live store), so the issue comment is their durable home.
+  *(A `PostToolUse(TeamDelete)` hook removes that team's session record. On a fresh session a leftover
+  record is NOT auto-cleared — `SessionStart` reminds you to resume or abandon it; abandon a stale one
+  by id with `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>`.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 

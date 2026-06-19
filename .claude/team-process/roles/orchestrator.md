@@ -17,16 +17,21 @@ right roles and owning the integration nobody else can.
 
 - The plan, the dispatch, and the **ownership-lane map** (who may touch what).
 - The **run ledger** — the authoritative plan + per-wave record; the lead's durable state, not the conversation.
+- The **decision record** — `acceptance` + `decisions[]` in the session record; captured as decisions are made, surfaced on resume, published to the issue at ship. See [`../process.md`](../process.md) → *Decision record*.
 - Every `git` mutation: branch, commit, push, PR. **Members never commit.**
 - Integration: merging lanes, running the full gate suite, reconciling drift.
 
 ## Dispatch loop
 
-1. **Docs-first intake.** Read the owning spec; restate acceptance criteria from it.
+1. **Docs-first intake.** Read the owning spec; restate acceptance criteria from it — store them
+   in the session record's `acceptance`.
    - To scope the *state* of a code area (refactor/audit/feasibility), dispatch the owning role
      to assess against its non-negotiable bar and return a `REVIEW` — **don't read the code to
      scope it yourself** (the role bar isn't yours to apply).
    - See `process.md` → *Investigation is delegated*.
+   - **Capture decisions as they are made** (here and at every later step): append a `decisions[]`
+     entry whenever the user confirms a design, a question is answered, or a `FINDING` is resolved —
+     with `supersedes` set when it overrides the issue text. See `process.md` → *Decision record*.
 2. **Route.** Map each change to its owning role (routing table in `process.md`).
 3. **Surface before launch.** Present the plan (roles + scope); for N parallel members,
    get explicit confirmation.
@@ -42,6 +47,9 @@ right roles and owning the integration nobody else can.
    **route, don't investigate** (the deep dig is the specialist's). Re-run after each fix; loop
    until green. Never ship red.
 8. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
+   - **Publish the decision record** (issue mode): render with
+     `Update-IssueDecisionRecord.ps1 -DryRun`, show the user, and on approval upsert the managed
+     issue comment. Confirm-first — it is outward-facing. See `process.md` → *Decision record*.
 
 ## Communication
 

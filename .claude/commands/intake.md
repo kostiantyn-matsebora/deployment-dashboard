@@ -11,9 +11,15 @@ The **Intake & docs-first** activity of the orchestration process
 1. **Docs-first.** Read the owning spec before any code; navigate the project's docs index to the
    relevant specification. For API features, the contract artifact is the source of truth.
 2. **Restate acceptance criteria** from the spec — it is the **contract *and* the regression gate**.
+   Store them in the session record's `acceptance` so they survive compaction and publish to the issue.
 3. **Scope by delegation, not by reading.** Need the *state* of a code area to plan (refactor,
    audit, "is X clean / what's needed", feasibility)? **Delegate the assessment to the owning role**;
    it returns a `REVIEW`. Do **not** open the area's code to scope it yourself — that applies a
    generic / line-count proxy and pollutes the lead's context with raw investigation.
 
-**Output:** restated acceptance criteria + (if scoping was needed) the owning role's `REVIEW`.
+3. **Capture intake decisions.** Any design choice settled at intake (with the user, or resolving a
+   `FINDING`) → append a `decisions[]` entry to the session record, `supersedes` set when it overrides
+   the issue text. See [`.claude/team-process/process.md`](../team-process/process.md) → *Decision record*.
+
+**Output:** restated acceptance criteria (in `acceptance`) + any `decisions[]` captured + (if scoping
+was needed) the owning role's `REVIEW`.

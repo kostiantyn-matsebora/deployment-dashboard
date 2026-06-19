@@ -27,5 +27,8 @@ The **Fix-loop** activity of the orchestration process
 - **Deep investigation is the owning agent's prerogative**, in that agent's own context.
 - **Re-run after each fix; loop until green.** Re-verify against the owning spec.
   **Never ship red.**
+- **Capture a non-obvious diagnosis** as a `decisions[]` entry (root cause + the fix chosen + why)
+  so it is not re-derived after a restart — see
+  [`process.md`](../team-process/process.md) → *Decision record*.
 
 **Output:** a green wider-net suite (verified against the owning spec).

@@ -30,5 +30,10 @@ scripts/hooks/Invoke-LaneGuard.Tests.ps1
 scripts/hooks/Invoke-TeamModeGuard.ps1
 scripts/hooks/Invoke-TeamModeGuard.Tests.ps1
 
+# --- team-process utility scripts (framework tooling the orchestrator runs) ---
+# Not hooks — orchestration utilities (e.g. publishing the session decision record to the
+# owning issue at ship). Authored + owned by the orchestrator as part of the framework.
+scripts/team-process/**
+
 # --- repo-level config the framework touches ---
 .gitignore

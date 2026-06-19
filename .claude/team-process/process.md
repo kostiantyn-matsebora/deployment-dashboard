@@ -107,6 +107,36 @@ concurrent runs in the same worktree coexist as distinct directories.
   with `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>` (omit
   `-Id` to abandon all).
 
+## Decision record — capture, surface, publish
+
+The most expensive recurring failure is **losing a decision** across a compaction / restart — the
+lead re-derives or reverts something already settled. The session record fixes this: decisions are
+**captured as they happen**, **surfaced on every resume**, and **published to the owning issue at
+ship**. Shape: [`schemas/session.schema.json`](schemas/session.schema.json) (`acceptance` ·
+`decisions[]` · `roster[].progress`).
+
+- **Capture at the moment, not at the end.** When a decision is made — the user confirms a design,
+  an `AskUserQuestion` is answered, a `FINDING` is resolved, or a member's `RESULT.notes` carries a
+  design choice — the lead appends a `decisions[]` entry: `{id, decision, why, supersedes, status,
+  refs}`. The losses were *capture* failures, not storage failures.
+  - **`supersedes` is mandatory when overriding the issue text / an earlier plan / a spec line** —
+    it is what stops an agreed decision from being silently re-lost (the recurring failure mode).
+  - **`refs` point at the artifact** the decision rests on (mockup SHA, contract anchor) — the
+    artifact is the source of truth, above any prose summary.
+  - Acceptance criteria restated at intake are stored in `acceptance` (the locked contract + gate).
+- **The record is AUTHORITATIVE over the conversation summary.** On resume / after compaction,
+  **re-read the decisions first**; if a compaction summary contradicts a locked decision, the
+  decision wins. The `SessionStart` reminder surfaces the decisions + each member's status inline
+  (content, not counts) so the lead re-attaches without re-reading the transcript.
+- **Per-member resume.** Each `roster[]` entry carries `status` + a `progress` note. Resume
+  re-dispatches a same-name member with its **`BRIEF` (from the inbox)** + its `progress` + the
+  relevant decisions — so the rebuilt member continues, not restarts.
+- **Publish to the issue at ship (issue mode only).** When the run has an `issue`, the *Ship* phase
+  publishes the decisions as a single **managed comment** (idempotent upsert, never clobbers the
+  body) via `scripts/team-process/Update-IssueDecisionRecord.ps1`. The issue comment is a **rendered
+  projection** of `session.json` — one source of truth, no drift. **Confirm-first**: render with
+  `-DryRun`, show the user, post only on approval (it is outward-facing).
+
 ## Autonomy
 
 "Autonomous mode" is a licence over **effort**, not over the **merge gate**. It means *act

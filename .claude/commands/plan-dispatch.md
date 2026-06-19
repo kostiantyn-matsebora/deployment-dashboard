@@ -18,5 +18,8 @@ The **Plan & dispatch** activity of the orchestration process
 5. **Dispatch by reference.** Write each `BRIEF` to the member's `inbox`
    (`.team-process/sessions/<id>/inbox/<role>.BRIEF.json`) and hand the agent the `ref`, not the
    restated task — see [`protocol.md`](../team-process/protocol.md) → *Message delivery*.
+6. **Capture plan decisions.** Record the design/architecture choices that shaped the lane map as
+   `decisions[]` entries (with `supersedes` when overriding the issue text) — see
+   [`process.md`](../team-process/process.md) → *Decision record*.
 
-**Output:** a confirmed lane map + per-lane `BRIEF`s, each written to its member's `inbox`.
+**Output:** a confirmed lane map + per-lane `BRIEF`s (each in its member's `inbox`) + captured `decisions[]`.

@@ -157,6 +157,20 @@ Describe 'New-SessionRecord' {
         @($r.ledger).Count | Should -Be 1
         $r.updatedAt | Should -Not -Be $r.createdAt
     }
+
+    It 'preserves acceptance + decisions (the durable resume state) on re-create' {
+        $existing = [pscustomobject]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'
+            createdAt = '2026-01-01T00:00:00Z'
+            acceptance = @('chevron toggles the row')
+            decisions  = @([pscustomobject]@{ id = 1; decision = 'glob widget'; supersedes = 'issue text'; status = 'locked' })
+        }
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $existing
+        @($r.acceptance).Count    | Should -Be 1
+        @($r.decisions).Count     | Should -Be 1
+        $r.decisions[0].decision  | Should -Be 'glob widget'
+        $r.decisions[0].supersedes| Should -Be 'issue text'
+    }
 }
 
 # ============================================================
@@ -176,6 +190,68 @@ Describe 'Schema conformance' {
     It 'rejects a record missing the required workflow field' {
         $bad = [ordered]@{ id = 'feat-1'; team = 'feat-1'; createdAt = '2026-01-01T00:00:00Z' }
         ($bad | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile -ErrorAction SilentlyContinue) | Should -BeFalse
+    }
+    It 'accepts a record carrying acceptance, decisions, and roster progress' {
+        $rec = [ordered]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'
+            createdAt = '2026-01-01T00:00:00Z'; updatedAt = '2026-01-02T00:00:00Z'
+            roster = @([ordered]@{ role = 'backend'; lane = 'backend/**'; status = 'in-progress'; progress = 'adapter extracted, tests pending' })
+            acceptance = @('chevron toggles the row')
+            decisions = @([ordered]@{ id = 1; decision = 'glob widget'; why = 'matches mockup'; supersedes = 'issue text'; status = 'locked'; refs = @('docs/design/mockup/x') })
+        }
+        ($rec | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile) | Should -BeTrue
+    }
+    It 'rejects a decision entry with an unknown field (additionalProperties:false)' {
+        $bad = [ordered]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'
+            decisions = @([ordered]@{ id = 1; decision = 'x'; bogus = 'y' })
+        }
+        ($bad | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile -ErrorAction SilentlyContinue) | Should -BeFalse
+    }
+    It 'rejects a decision with an invalid status enum' {
+        $bad = [ordered]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'
+            decisions = @([ordered]@{ id = 1; decision = 'x'; status = 'maybe' })
+        }
+        ($bad | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile -ErrorAction SilentlyContinue) | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Format-RosterStatus' {
+    It 'renders role=status pairs from the roster' {
+        $rec = [pscustomobject]@{ roster = @(
+                [pscustomobject]@{ role = 'backend'; status = 'in-progress' },
+                [pscustomobject]@{ role = 'frontend'; status = 'returned' }
+            ) }
+        Format-RosterStatus -Record $rec | Should -Be 'backend=in-progress, frontend=returned'
+    }
+    It 'defaults a missing status to spawned' {
+        $rec = [pscustomobject]@{ roster = @([pscustomobject]@{ role = 'docs' }) }
+        Format-RosterStatus -Record $rec | Should -Be 'docs=spawned'
+    }
+    It 'returns empty when there is no roster' {
+        Format-RosterStatus -Record ([pscustomobject]@{ id = 'x' }) | Should -Be ''
+    }
+}
+
+# ============================================================
+Describe 'Format-DecisionDigest' {
+    It 'renders id + decision + supersedes' {
+        $rec = [pscustomobject]@{ decisions = @(
+                [pscustomobject]@{ id = 3; decision = 'glob widget'; supersedes = 'issue text' }
+            ) }
+        $d = Format-DecisionDigest -Record $rec
+        $d | Should -Match '#3 glob widget'
+        $d | Should -Match 'supersedes: issue text'
+    }
+    It 'caps the list and notes the overflow count' {
+        $decisions = 1..8 | ForEach-Object { [pscustomobject]@{ id = $_; decision = "d$_" } }
+        $d = Format-DecisionDigest -Record ([pscustomobject]@{ decisions = $decisions }) -Max 6
+        $d | Should -Match '\(\+2 more\)'
+    }
+    It 'returns empty when there are no decisions' {
+        Format-DecisionDigest -Record ([pscustomobject]@{ id = 'x' }) | Should -Be ''
     }
 }
 
@@ -199,6 +275,23 @@ Describe 'Get-SessionReminder' {
         $msg | Should -Match 'task-2'
         $msg | Should -Match 'freeform'
         $msg | Should -Match '2 run\(s\)'
+    }
+    It 'surfaces agent statuses and the decision digest inline (content, not counts)' {
+        $rec = [pscustomobject]@{
+            id = 'feat-1'; workflow = 'feature-team'; branch = 'feat/x'; phase = 'implement'; issue = '#351'
+            roster = @([pscustomobject]@{ role = 'backend'; status = 'in-progress' })
+            decisions = @([pscustomobject]@{ id = 2; decision = 'glob widget'; supersedes = 'issue text' })
+        }
+        $msg = Get-SessionReminder -Records @($rec)
+        $msg | Should -Match 'agents: backend=in-progress'
+        $msg | Should -Match 'decisions: #2 glob widget'
+        $msg | Should -Match 'issue: #351'
+    }
+    It 'states the record-is-authoritative rule (overrides a conflicting summary)' {
+        $rec = [pscustomobject]@{ id = 'feat-1'; workflow = 'feature-team'; branch = 'b'; phase = 'implement' }
+        $msg = Get-SessionReminder -Records @($rec)
+        $msg | Should -Match 'AUTHORITATIVE'
+        $msg | Should -Match 'OVERRIDES'
     }
 }
 
