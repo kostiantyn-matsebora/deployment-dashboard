@@ -49,6 +49,9 @@ Describe 'Path helpers' {
     It 'outbox dir is sessions/<id>/outbox' {
         (Get-OutboxDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/sessions/feat-9/outbox$'
     }
+    It 'inbox dir is sessions/<id>/inbox' {
+        (Get-InboxDir -Root 'C:/r' -Id 'feat-9') -replace '\\', '/' | Should -Match '/\.team-process/sessions/feat-9/inbox$'
+    }
     It 'sessions dir is directly under .team-process (no run/ layer)' {
         (Get-SessionsDir -Root 'C:/r') -replace '\\', '/' | Should -Match '/\.team-process/sessions$'
     }
@@ -137,9 +140,26 @@ Describe 'New-SessionRecord' {
     It 'falls back to team=unknown when none supplied' {
         (New-SessionRecord -Id 'unknown' -Team '' -Branch '' -Now $script:FixedNow -Existing $null).team | Should -Be 'unknown'
     }
+    It 'captures the owning claudeSessionId when supplied' {
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -ClaudeSessionId 'sess-A' -Existing $null
+        $r.claudeSessionId | Should -Be 'sess-A'
+    }
+    It 'omits claudeSessionId when neither supplied nor existing' {
+        (New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $null).Contains('claudeSessionId') | Should -BeFalse
+    }
+    It 'refreshes claudeSessionId on re-create (new value overrides the existing)' {
+        $existing = [pscustomobject]@{ id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'; claudeSessionId = 'old-sess' }
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -ClaudeSessionId 'new-sess' -Existing $existing
+        $r.claudeSessionId | Should -Be 'new-sess'
+    }
+    It 'preserves an existing claudeSessionId when no new one is supplied' {
+        $existing = [pscustomobject]@{ id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'; claudeSessionId = 'keep-sess' }
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $existing
+        $r.claudeSessionId | Should -Be 'keep-sess'
+    }
     It 'preserves id, workflow, createdAt, ledger, roster, issue, task on re-create (merge)' {
         $existing = [pscustomobject]@{
-            id = 'feat-1'; workflow = 'freeform'; team = 'feat-1'; branch = 'feat/x'; issue = '#42'; task = 'do thing'; phase = 'implement'
+            id = 'feat-1'; workflow = 'freeform'; team = 'feat-1'; branch = 'feat/x'; issue = '#42'; summary = 'glob filter'; task = 'do thing'; phase = 'implement'
             createdAt = '2026-01-01T00:00:00Z'; updatedAt = '2026-01-01T00:00:00Z'
             roster = @([pscustomobject]@{ role = 'backend' }); ledger = @([pscustomobject]@{ wave = 1 })
         }
@@ -149,10 +169,25 @@ Describe 'New-SessionRecord' {
         $r.createdAt | Should -Be '2026-01-01T00:00:00Z'
         $r.phase     | Should -Be 'implement'
         $r.issue     | Should -Be '#42'
+        $r.summary   | Should -Be 'glob filter'
         $r.task      | Should -Be 'do thing'
         @($r.roster).Count | Should -Be 1
         @($r.ledger).Count | Should -Be 1
         $r.updatedAt | Should -Not -Be $r.createdAt
+    }
+
+    It 'preserves acceptance + decisions (the durable resume state) on re-create' {
+        $existing = [pscustomobject]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'
+            createdAt = '2026-01-01T00:00:00Z'
+            acceptance = @('chevron toggles the row')
+            decisions  = @([pscustomobject]@{ id = 1; decision = 'glob widget'; supersedes = 'issue text'; status = 'locked' })
+        }
+        $r = New-SessionRecord -Id 'feat-1' -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow -Existing $existing
+        @($r.acceptance).Count    | Should -Be 1
+        @($r.decisions).Count     | Should -Be 1
+        $r.decisions[0].decision  | Should -Be 'glob widget'
+        $r.decisions[0].supersedes| Should -Be 'issue text'
     }
 }
 
@@ -173,6 +208,98 @@ Describe 'Schema conformance' {
     It 'rejects a record missing the required workflow field' {
         $bad = [ordered]@{ id = 'feat-1'; team = 'feat-1'; createdAt = '2026-01-01T00:00:00Z' }
         ($bad | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile -ErrorAction SilentlyContinue) | Should -BeFalse
+    }
+    It 'accepts a record carrying acceptance, decisions, and roster progress' {
+        $rec = [ordered]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'
+            createdAt = '2026-01-01T00:00:00Z'; updatedAt = '2026-01-02T00:00:00Z'
+            roster = @([ordered]@{ role = 'backend'; lane = 'backend/**'; status = 'in-progress'; progress = 'adapter extracted, tests pending' })
+            acceptance = @('chevron toggles the row')
+            decisions = @([ordered]@{ id = 1; decision = 'glob widget'; why = 'matches mockup'; supersedes = 'issue text'; status = 'locked'; refs = @('docs/design/mockup/x') })
+        }
+        ($rec | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile) | Should -BeTrue
+    }
+    It 'rejects a decision entry with an unknown field (additionalProperties:false)' {
+        $bad = [ordered]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'
+            decisions = @([ordered]@{ id = 1; decision = 'x'; bogus = 'y' })
+        }
+        ($bad | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile -ErrorAction SilentlyContinue) | Should -BeFalse
+    }
+    It 'rejects a decision with an invalid status enum' {
+        $bad = [ordered]@{
+            id = 'feat-1'; workflow = 'feature-team'; team = 'feat-1'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z'
+            decisions = @([ordered]@{ id = 1; decision = 'x'; status = 'maybe' })
+        }
+        ($bad | ConvertTo-Json -Depth 8 | Test-Json -SchemaFile $script:SchemaFile -ErrorAction SilentlyContinue) | Should -BeFalse
+    }
+}
+
+# ============================================================
+Describe 'Format-RosterStatus' {
+    It 'renders role=status pairs from the roster' {
+        $rec = [pscustomobject]@{ roster = @(
+                [pscustomobject]@{ role = 'backend'; status = 'in-progress' },
+                [pscustomobject]@{ role = 'frontend'; status = 'returned' }
+            ) }
+        Format-RosterStatus -Record $rec | Should -Be 'backend=in-progress, frontend=returned'
+    }
+    It 'defaults a missing status to spawned' {
+        $rec = [pscustomobject]@{ roster = @([pscustomobject]@{ role = 'docs' }) }
+        Format-RosterStatus -Record $rec | Should -Be 'docs=spawned'
+    }
+    It 'returns empty when there is no roster' {
+        Format-RosterStatus -Record ([pscustomobject]@{ id = 'x' }) | Should -Be ''
+    }
+}
+
+# ============================================================
+Describe 'Format-DecisionDigest' {
+    It 'renders id + decision + supersedes' {
+        $rec = [pscustomobject]@{ decisions = @(
+                [pscustomobject]@{ id = 3; decision = 'glob widget'; supersedes = 'issue text' }
+            ) }
+        $d = Format-DecisionDigest -Record $rec
+        $d | Should -Match '#3 glob widget'
+        $d | Should -Match 'supersedes: issue text'
+    }
+    It 'caps the list and notes the overflow count' {
+        $decisions = 1..8 | ForEach-Object { [pscustomobject]@{ id = $_; decision = "d$_" } }
+        $d = Format-DecisionDigest -Record ([pscustomobject]@{ decisions = $decisions }) -Max 6
+        $d | Should -Match '\(\+2 more\)'
+    }
+    It 'returns empty when there are no decisions' {
+        Format-DecisionDigest -Record ([pscustomobject]@{ id = 'x' }) | Should -Be ''
+    }
+}
+
+# ============================================================
+Describe 'Find-SessionByIssue' {
+    BeforeEach {
+        $script:fbiRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fbi_" + [System.Guid]::NewGuid().ToString('N'))
+        foreach ($pair in @(@('feat-351', '#351'), @('feat-360', '#360'))) {
+            $d = Join-Path $script:fbiRoot '.team-process' 'sessions' $pair[0]
+            New-Item -ItemType Directory -Force -Path $d | Out-Null
+            @{ id = $pair[0]; workflow = 'feature-team'; team = $pair[0]; issue = $pair[1]; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z' } |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $d 'session.json') -Encoding utf8NoBOM
+        }
+    }
+    AfterEach { Remove-Item -LiteralPath $script:fbiRoot -Recurse -Force -ErrorAction SilentlyContinue }
+
+    It 'matches a record by bare issue number' {
+        $hits = Find-SessionByIssue -Root $script:fbiRoot -Issue '351'
+        @($hits).Count | Should -Be 1
+        $hits[0].id | Should -Be 'feat-351'
+    }
+    It 'matches regardless of # / GH- decoration' {
+        (Find-SessionByIssue -Root $script:fbiRoot -Issue '#351')[0].id | Should -Be 'feat-351'
+        (Find-SessionByIssue -Root $script:fbiRoot -Issue 'GH-360')[0].id | Should -Be 'feat-360'
+    }
+    It 'returns empty when no run matches the issue' {
+        @(Find-SessionByIssue -Root $script:fbiRoot -Issue '999').Count | Should -Be 0
+    }
+    It 'returns empty for a blank issue' {
+        @(Find-SessionByIssue -Root $script:fbiRoot -Issue '').Count | Should -Be 0
     }
 }
 
@@ -197,6 +324,23 @@ Describe 'Get-SessionReminder' {
         $msg | Should -Match 'freeform'
         $msg | Should -Match '2 run\(s\)'
     }
+    It 'surfaces agent statuses and the decision digest inline (content, not counts)' {
+        $rec = [pscustomobject]@{
+            id = 'feat-1'; workflow = 'feature-team'; branch = 'feat/x'; phase = 'implement'; issue = '#351'
+            roster = @([pscustomobject]@{ role = 'backend'; status = 'in-progress' })
+            decisions = @([pscustomobject]@{ id = 2; decision = 'glob widget'; supersedes = 'issue text' })
+        }
+        $msg = Get-SessionReminder -Records @($rec)
+        $msg | Should -Match 'agents: backend=in-progress'
+        $msg | Should -Match 'decisions: #2 glob widget'
+        $msg | Should -Match 'issue: #351'
+    }
+    It 'states the record-is-authoritative rule (overrides a conflicting summary)' {
+        $rec = [pscustomobject]@{ id = 'feat-1'; workflow = 'feature-team'; branch = 'b'; phase = 'implement' }
+        $msg = Get-SessionReminder -Records @($rec)
+        $msg | Should -Match 'AUTHORITATIVE'
+        $msg | Should -Match 'OVERRIDES'
+    }
 }
 
 # ============================================================
@@ -218,6 +362,15 @@ Describe 'Set/Clear/Get session round-trip (temp root)' {
         try {
             Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
             Test-Path -LiteralPath (Get-OutboxDir -Root $root -Id 'feat-1') | Should -BeTrue
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It 'Set-TeamSession creates the inbox dir up front' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'feat/x' -Now $script:FixedNow | Out-Null
+            Test-Path -LiteralPath (Get-InboxDir -Root $root -Id 'feat-1') | Should -BeTrue
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }

@@ -75,8 +75,9 @@ need to change it → surface as a decision, never slide back to in-session suba
 ## Session state & resume
 
 Each team-process run owns a directory `.team-process/sessions/<id>/` (gitignored runtime state;
-`<id>` = the sanitized team name) holding `session.json` (the durable record) and `outbox/` (member
-hand-backs). It **survives a session boundary or reboot** — this is what makes "mode is sticky" hold
+`<id>` = the sanitized team name) holding `session.json` (the durable record), `inbox/` (orchestrator
+dispatches — `BRIEF`/`FIX`) and `outbox/` (member hand-backs). It **survives a session boundary or
+reboot** — this is what makes "mode is sticky" hold
 across a fresh session instead of decaying into in-session subagent spawns. **One directory per run** —
 concurrent runs in the same worktree coexist as distinct directories.
 
@@ -97,14 +98,55 @@ concurrent runs in the same worktree coexist as distinct directories.
   **generated projection** of a member's `roster[].lane` — never hand-maintained. Project it with
   `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -SyncLane -Id <id> -Role <role>`.
 - **SessionStart reminds, never wipes.** On a fresh session it injects a resume summary listing
-  **every** active run (id · workflow · branch · phase · ledger) as context — so the lead re-attaches
-  rather than forgetting it was mid-run.
+  **every** active run (id · workflow · branch · phase · summary · agents · decisions) as context — so
+  the lead re-attaches rather than forgetting it was mid-run.
+- **Match new work to an existing run — propose resume, never silently fork.** Before starting work on
+  a feature/issue (a `/feature-team` launch *or* an informal "work on X"), check for an active run for
+  it; if one exists, **propose to the user to resume it** and continue in that session — do not start a
+  parallel run for the same issue.
+  - **Issue mode (a #number):** look it up mechanically —
+    `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>`; a non-empty
+    result is the run to propose resuming.
+  - **Informal ask:** match the request against the active runs' `summary` in the SessionStart reminder;
+    on a plausible match, propose resuming rather than restarting.
+  - Resuming re-attaches to the existing record (its decisions/roster/ledger) and re-creating the same
+    team id MERGES — see *Decision record* and *Resume reconstructs from the ledger*.
 - **Resume reconstructs from the ledger.** A reboot kills the live members; resuming re-creates the
   team and re-dispatches the in-flight wave from the ledger — the file is the durable truth, the
   live team is rebuilt.
 - **Abandon explicitly.** A stale session (run abandoned, no `TeamDelete` fired) is cleared by id
   with `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>` (omit
   `-Id` to abandon all).
+
+## Decision record — capture, surface, publish
+
+The most expensive recurring failure is **losing a decision** across a compaction / restart — the
+lead re-derives or reverts something already settled. The session record fixes this: decisions are
+**captured as they happen**, **surfaced on every resume**, and **published to the owning issue at
+ship**. Shape: [`schemas/session.schema.json`](schemas/session.schema.json) (`acceptance` ·
+`decisions[]` · `roster[].progress`).
+
+- **Capture at the moment, not at the end.** When a decision is made — the user confirms a design,
+  an `AskUserQuestion` is answered, a `FINDING` is resolved, or a member's `RESULT.notes` carries a
+  design choice — the lead appends a `decisions[]` entry: `{id, decision, why, supersedes, status,
+  refs}`. The losses were *capture* failures, not storage failures.
+  - **`supersedes` is mandatory when overriding the issue text / an earlier plan / a spec line** —
+    it is what stops an agreed decision from being silently re-lost (the recurring failure mode).
+  - **`refs` point at the artifact** the decision rests on (mockup SHA, contract anchor) — the
+    artifact is the source of truth, above any prose summary.
+  - Acceptance criteria restated at intake are stored in `acceptance` (the locked contract + gate).
+- **The record is AUTHORITATIVE over the conversation summary.** On resume / after compaction,
+  **re-read the decisions first**; if a compaction summary contradicts a locked decision, the
+  decision wins. The `SessionStart` reminder surfaces the decisions + each member's status inline
+  (content, not counts) so the lead re-attaches without re-reading the transcript.
+- **Per-member resume.** Each `roster[]` entry carries `status` + a `progress` note. Resume
+  re-dispatches a same-name member with its **`BRIEF` (from the inbox)** + its `progress` + the
+  relevant decisions — so the rebuilt member continues, not restarts.
+- **Publish to the issue at ship (issue mode only).** When the run has an `issue`, the *Ship* phase
+  publishes the decisions as a single **managed comment** (idempotent upsert, never clobbers the
+  body) via `scripts/team-process/Update-IssueDecisionRecord.ps1`. The issue comment is a **rendered
+  projection** of `session.json` — one source of truth, no drift. **Confirm-first**: render with
+  `-DryRun`, show the user, post only on approval (it is outward-facing).
 
 ## Autonomy
 
@@ -167,11 +209,12 @@ rendering, and rules — live in [`protocol.md`](protocol.md). Every cross-role 
 them, emitted verbatim; a non-conforming hand-back is returned **UNREAD** for re-emit. The
 orchestrator emits `BRIEF`/`FIX` and reads the rest; it never parses prose hand-backs.
 
-**Member OUTPUT forms are files, not inline messages.** A `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` is
-written to the session outbox `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json`; the
-`SendMessage` body is a `{ type, ref }` pointer that wakes the orchestrator. The orchestrator reads the
-file by `ref`, folds it into the run ledger, then deletes it. See [`protocol.md`](protocol.md) →
-*Hand-back delivery*.
+**Every cross-role message is a file, not an inline message — both directions.** Dispatch
+(`BRIEF`/`FIX`) is written to the member's `inbox`; hand-back (`RESULT`/`REVIEW`/`FINDING`/`ARTIFACT`)
+to its `outbox` (`.team-process/sessions/<id>/{inbox,outbox}/<role>.<TYPE>.json`). The pointer is
+`{ type, ref }` — the `SendMessage` body, or (for the spawning `BRIEF`) named in the spawn prompt. The
+reader resolves the `ref`, folds it into its working set (the orchestrator → the run ledger), then
+deletes the box file. See [`protocol.md`](protocol.md) → *Message delivery*.
 
 ## Phases
 

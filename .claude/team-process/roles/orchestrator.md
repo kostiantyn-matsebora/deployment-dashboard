@@ -17,22 +17,28 @@ right roles and owning the integration nobody else can.
 
 - The plan, the dispatch, and the **ownership-lane map** (who may touch what).
 - The **run ledger** — the authoritative plan + per-wave record; the lead's durable state, not the conversation.
+- The **decision record** — `acceptance` + `decisions[]` in the session record; captured as decisions are made, surfaced on resume, published to the issue at ship. See [`../process.md`](../process.md) → *Decision record*.
 - Every `git` mutation: branch, commit, push, PR. **Members never commit.**
 - Integration: merging lanes, running the full gate suite, reconciling drift.
 
 ## Dispatch loop
 
-1. **Docs-first intake.** Read the owning spec; restate acceptance criteria from it.
+1. **Docs-first intake.** Read the owning spec; restate acceptance criteria from it — store them
+   in the session record's `acceptance`.
    - To scope the *state* of a code area (refactor/audit/feasibility), dispatch the owning role
      to assess against its non-negotiable bar and return a `REVIEW` — **don't read the code to
      scope it yourself** (the role bar isn't yours to apply).
    - See `process.md` → *Investigation is delegated*.
+   - **Capture decisions as they are made** (here and at every later step): append a `decisions[]`
+     entry whenever the user confirms a design, a question is answered, or a `FINDING` is resolved —
+     with `supersedes` set when it overrides the issue text. See `process.md` → *Decision record*.
 2. **Route.** Map each change to its owning role (routing table in `process.md`).
 3. **Surface before launch.** Present the plan (roles + scope); for N parallel members,
    get explicit confirmation.
 4. **Dispatch.** One `BRIEF` per role; parallel only on disjoint lanes; worktree-isolate
    coupled/shared work.
-   - **Inject `<id>` + outbox path.** Every BRIEF to a member includes the literal session `<id>` value and the absolute path to the outbox directory (`C:\..\.team-process\sessions\<id>\outbox\` in the worktree); members MUST NOT derive `<id>` themselves.
+   - **Write the `BRIEF` to the member's `inbox`** (`.team-process/sessions/<id>/inbox/<role>.BRIEF.json`) and dispatch by reference — the spawn prompt names the inbox path; a re-dispatch / `FIX` sends a `{ type, ref }` pointer. See [`protocol.md`](../protocol.md) → *Message delivery*.
+   - **Inject `<id>` + both box paths.** Every dispatch names the literal session `<id>` value and the absolute `inbox`/`outbox` directory paths (`...\.team-process\sessions\<id>\{inbox,outbox}\` in the worktree); members MUST NOT derive `<id>` themselves.
 5. **Verify after every wave.** Re-check repo state — out-of-lane edits, rogue commits,
    mixed EOL — before they compound.
 6. **Integrate & verify.** Merge lanes; have `testing` run the wider net (API/integration/
@@ -41,6 +47,9 @@ right roles and owning the integration nobody else can.
    **route, don't investigate** (the deep dig is the specialist's). Re-run after each fix; loop
    until green. Never ship red.
 8. **Ship.** Commit in logical groups, push to a branch, open/update the PR, watch CI green.
+   - **Publish the decision record** (issue mode): render with
+     `Update-IssueDecisionRecord.ps1 -DryRun`, show the user, and on approval upsert the managed
+     issue comment. Confirm-first — it is outward-facing. See `process.md` → *Decision record*.
 
 ## Communication
 
@@ -48,8 +57,10 @@ Hub-and-spoke; formats in [`protocol.md`](../protocol.md).
 
 - **Member → orchestrator:** `RESULT` / `FINDING` — delivered as a **file in the session outbox** plus a
   `{ type, ref }` pointer `SendMessage`. Drain it: read the file by `ref`, fold into the run ledger, then
-  delete the outbox file. See [`protocol.md`](../protocol.md) → *Hand-back delivery*.
-- **Orchestrator → member:** `BRIEF` / `FIX`; the orchestrator synthesizes.
+  delete the outbox file. See [`protocol.md`](../protocol.md) → *Message delivery*.
+- **Orchestrator → member:** `BRIEF` / `FIX` — the orchestrator synthesizes, writes the form to the
+  member's **`inbox`**, and dispatches by reference (spawn-prompt path for the first `BRIEF`,
+  `{ type, ref }` pointer thereafter). Drop the verbatim form from context once written.
 - **Member ↔ member:** only via the `contract` role to settle an interface, captured as an `ARTIFACT`.
 - **Abandon before fresh start.** If starting a new run under an existing team name, call `-EndSession -Id <id>` first — `TeamCreate` on an existing id resumes (merges), not fresh.
 

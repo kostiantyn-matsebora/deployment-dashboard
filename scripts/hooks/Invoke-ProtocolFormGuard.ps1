@@ -3,17 +3,21 @@
 <#
 .SYNOPSIS
     PreToolUse(SendMessage | Edit|Write|MultiEdit) hook — enforces the JSON Communication
-    protocol (protocol.md). A cross-role hand-back must be one of the six typed forms:
+    protocol (protocol.md). A cross-role message must be one of the six typed forms:
         REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT
     serialized as a JSON object carrying a "type" discriminator.
 
+    Both directions are file + pointer, symmetric across two session boxes:
+      - inbox  — dispatch (orch → member): BRIEF / FIX.
+      - outbox — hand-back (member → orch): RESULT / REVIEW / FINDING / ARTIFACT.
+
     Two enforcement points:
       - SendMessage: the message body is a typed form, or a { type, ref } pointer whose
-        referenced outbox file is a typed form.
-      - Write into a session outbox: the written file MUST already be a valid typed-form
-        JSON — not prose / markdown / a .txt dump. Closes the gap where a member parks a
-        text "result" in the outbox (the SendMessage guard fires later, and only if a
-        pointer is ever sent).
+        referenced inbox/outbox file is a typed form.
+      - Write into a session inbox/outbox: the written file MUST already be a valid
+        typed-form JSON — not prose / markdown / a .txt dump. Closes the gap where a task
+        or result is parked as text in a box (the SendMessage guard fires later, and only
+        if a pointer is ever sent).
 
 .DESCRIPTION
     Validation is single-sourced: this hook dot-sources Format-ProtocolForm.ps1 with
@@ -53,7 +57,7 @@ $guardAsLibrary = [bool]$AsLibrary
 function Get-RenderRecipe {
     $script = 'scripts/hooks/Format-ProtocolForm.ps1'
     return @"
-Every cross-role message MUST be one of the six typed forms as a JSON object with a "type" field: REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT (fields + examples in .claude/team-process/protocol.md; schemas in .claude/team-process/schemas/). Build it: (1) write the form JSON to a temp file. (2) Normalize + validate: pwsh -NoProfile -File $script -InputFile <file>. (3) Send its stdout VERBATIM as the message. Free prose is returned UNREAD.
+Every cross-role message MUST be one of the six typed forms as a JSON object with a "type" field: REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT (fields + examples in .claude/team-process/protocol.md; schemas in .claude/team-process/schemas/). HAND BACK in one step: (1) write the rough form JSON to a temp file. (2) pwsh -NoProfile -File $script -InputFile <file> -OutboxDir <your outbox path> — it validates, writes <role>.<TYPE>.json to your outbox, and prints the exact { type, ref } pointer. (3) Send that stdout VERBATIM as the message. (Omit -OutboxDir to just normalize a form to stdout.) Free prose is returned UNREAD.
 "@.Trim()
 }
 
@@ -68,9 +72,9 @@ function Get-SendMessageText {
     return ''
 }
 
-# A file-based hand-back is sent as a POINTER: { "type": "<FORM>", "ref": "<path to the
-# outbox file>" }. The full typed form lives in the file (durable, in the session dir);
-# the SendMessage just wakes the orchestrator. Presence of a "ref" key = pointer intent.
+# A file-based message is sent as a POINTER: { "type": "<FORM>", "ref": "<path to the
+# inbox/outbox file>" }. The full typed form lives in the file (durable, in the session
+# dir); the SendMessage just wakes the peer. Presence of a "ref" key = pointer intent.
 function Get-PointerInfo {
     param([string]$Text)
     $info = @{ IsPointer = $false; Type = ''; Ref = ''; ExtraKeys = @() }
@@ -87,12 +91,13 @@ function Get-PointerInfo {
     return $info
 }
 
-# A pointer 'ref' must resolve INSIDE a session outbox — never an arbitrary file. Tested
+# A pointer 'ref' (or box write) must resolve INSIDE a session inbox (dispatch: BRIEF/FIX)
+# or outbox (hand-back: RESULT/REVIEW/FINDING/ARTIFACT) — never an arbitrary file. Tested
 # on the canonicalized (..-collapsed) absolute path.
-function Test-RefInOutbox {
+function Test-RefInSessionBox {
     param([string]$Path)
     $p = ([string]$Path -replace '\\', '/')
-    return ($p -match '/\.team-process/sessions/[^/]+/outbox/[^/]')
+    return ($p -match '/\.team-process/sessions/[^/]+/(inbox|outbox)/[^/]')
 }
 
 function Get-ProtocolFormDecision {
@@ -105,29 +110,29 @@ function Get-ProtocolFormDecision {
     # Not a cross-role hand-back; allow.
     if ([string]::IsNullOrWhiteSpace($Text)) { return @{ Block = $false } }
 
-    # Pointer hand-back: validate the REFERENCED outbox file, not the message.
+    # Pointer message: validate the REFERENCED inbox/outbox file, not the message.
     $ptr = Get-PointerInfo -Text $Text
     if ($ptr.IsPointer) {
         if ($ptr.ExtraKeys.Count -gt 0) {
-            return @{ Block = $true; Reason = "A file-based hand-back pointer must be exactly { type, ref } - remove: $($ptr.ExtraKeys -join ', '). $(Get-RenderRecipe)" }
+            return @{ Block = $true; Reason = "A file-based pointer must be exactly { type, ref } - remove: $($ptr.ExtraKeys -join ', '). $(Get-RenderRecipe)" }
         }
         if ([string]::IsNullOrWhiteSpace($ptr.Ref)) {
-            return @{ Block = $true; Reason = "Hand-back pointer 'ref' is empty - set it to the absolute path of the outbox form file. $(Get-RenderRecipe)" }
+            return @{ Block = $true; Reason = "Pointer 'ref' is empty - set it to the absolute path of the inbox/outbox form file. $(Get-RenderRecipe)" }
         }
         $path = $ptr.Ref
         if (-not [System.IO.Path]::IsPathRooted($path) -and -not [string]::IsNullOrWhiteSpace($Root)) {
             $path = Join-Path $Root $path
         }
         # Canonicalize (collapses any '..') and require the result to live inside a session
-        # outbox. Binds the pointer to the session tree: no arbitrary-file read / confused
-        # deputy, and no traversal out of the outbox.
+        # inbox/outbox. Binds the pointer to the session tree: no arbitrary-file read /
+        # confused deputy, and no traversal out of the box.
         $full = $null
         try { $full = [System.IO.Path]::GetFullPath($path) } catch { $full = $null }
-        if (-not $full -or -not (Test-RefInOutbox -Path $full)) {
-            return @{ Block = $true; Reason = "Hand-back pointer 'ref' must resolve to a file under .team-process/run/sessions/<id>/outbox/ - got '$($ptr.Ref)'. $(Get-RenderRecipe)" }
+        if (-not $full -or -not (Test-RefInSessionBox -Path $full)) {
+            return @{ Block = $true; Reason = "Pointer 'ref' must resolve to a file under .team-process/sessions/<id>/{inbox,outbox}/ - got '$($ptr.Ref)'. $(Get-RenderRecipe)" }
         }
         if (-not (Test-Path -LiteralPath $full)) {
-            return @{ Block = $true; Reason = "Hand-back pointer 'ref' not found: '$($ptr.Ref)'. Write the typed form to your session outbox first, then point at it. $(Get-RenderRecipe)" }
+            return @{ Block = $true; Reason = "Pointer 'ref' not found: '$($ptr.Ref)'. Write the typed form to the session box first, then point at it. $(Get-RenderRecipe)" }
         }
         $path = $full
         $content = Get-Content -LiteralPath $path -Raw
@@ -153,12 +158,12 @@ function Get-ProtocolFormDecision {
     }
 }
 
-# PreToolUse(Write) whose target is a session outbox file — the content being written MUST
-# already be a valid typed-form JSON, not prose/markdown/text. This rejects the "cheat" of
-# dropping a free-text result into the outbox at WRITE time, before any pointer is sent.
-# A non-outbox write, or an Edit/MultiEdit (no full content body to validate), is allowed
-# here — the SendMessage pointer guard still validates the final referenced file.
-function Get-OutboxWriteDecision {
+# PreToolUse(Write) whose target is a session inbox/outbox file — the content being written
+# MUST already be a valid typed-form JSON, not prose/markdown/text. This rejects the "cheat"
+# of dropping a free-text task or result into a box at WRITE time, before any pointer is sent.
+# A non-box write, or an Edit/MultiEdit (no full content body to validate), is allowed here —
+# the SendMessage pointer guard still validates the final referenced file.
+function Get-SessionBoxWriteDecision {
     param(
         [string]$FilePath,
         $Content,
@@ -172,17 +177,17 @@ function Get-OutboxWriteDecision {
     }
     $full = $null
     try { $full = [System.IO.Path]::GetFullPath($path) } catch { $full = $null }
-    # Not an outbox write — not this guard's concern (lane guard / lead-edit guard own it).
-    if (-not $full -or -not (Test-RefInOutbox -Path $full)) { return @{ Block = $false } }
+    # Not a box write — not this guard's concern (lane guard / lead-edit guard own it).
+    if (-not $full -or -not (Test-RefInSessionBox -Path $full)) { return @{ Block = $false } }
     # No content body (Edit / MultiEdit) — can't validate pre-write; the pointer guard will.
     if ($null -eq $Content -or $Content -isnot [string]) { return @{ Block = $false } }
     $check = Test-ProtocolJson -Json $Content -SchemaDir $SchemaDir
     if ($check.Ok) { return @{ Block = $false } }
-    $label  = if ($check.Type) { $check.Type } else { 'outbox hand-back' }
+    $label  = if ($check.Type) { $check.Type } else { 'session box form' }
     $errors = ($check.Errors) -join '; '
     return @{
         Block  = $true
-        Reason = "An outbox file must be a valid typed-form JSON, not prose/markdown/text. Malformed $label - $errors. $(Get-RenderRecipe)"
+        Reason = "A session inbox/outbox file must be a valid typed-form JSON, not prose/markdown/text. Malformed $label - $errors. $(Get-RenderRecipe)"
     }
 }
 
@@ -207,10 +212,10 @@ if (-not $guardAsLibrary) {
     if (-not $root) { $root = (Get-Location).Path }
     $root = ([string]$root).Trim()
 
-    # Two enforcement points keyed on the tool: Write into the outbox validates the written
-    # content; everything else is treated as a SendMessage hand-back (text or pointer).
+    # Two enforcement points keyed on the tool: Write into an inbox/outbox validates the
+    # written content; everything else is treated as a SendMessage message (text or pointer).
     if ($toolName -in @('Write', 'Edit', 'MultiEdit') -and $payload.tool_input) {
-        $decision = Get-OutboxWriteDecision -FilePath ([string]$payload.tool_input.file_path) `
+        $decision = Get-SessionBoxWriteDecision -FilePath ([string]$payload.tool_input.file_path) `
             -Content $payload.tool_input.content -Root $root
     }
     else {

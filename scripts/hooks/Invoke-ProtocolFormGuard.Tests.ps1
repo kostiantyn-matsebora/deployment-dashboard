@@ -121,48 +121,64 @@ Describe 'Get-PointerInfo' {
 }
 
 # ============================================================
-Describe 'Test-RefInOutbox' {
+Describe 'Test-RefInSessionBox' {
     It 'accepts a path inside a session outbox' {
-        Test-RefInOutbox -Path '/wt/.team-process/sessions/feat-1/outbox/backend.RESULT.json' | Should -BeTrue
+        Test-RefInSessionBox -Path '/wt/.team-process/sessions/feat-1/outbox/backend.RESULT.json' | Should -BeTrue
+    }
+    It 'accepts a path inside a session inbox (dispatch)' {
+        Test-RefInSessionBox -Path '/wt/.team-process/sessions/feat-1/inbox/backend.BRIEF.json' | Should -BeTrue
     }
     It 'accepts a Windows-separator outbox path' {
-        Test-RefInOutbox -Path 'C:\wt\.team-process\sessions\feat-1\outbox\backend.RESULT.json' | Should -BeTrue
+        Test-RefInSessionBox -Path 'C:\wt\.team-process\sessions\feat-1\outbox\backend.RESULT.json' | Should -BeTrue
     }
-    It 'rejects a path outside any outbox' {
-        Test-RefInOutbox -Path '/wt/secret.txt' | Should -BeFalse
+    It 'accepts a Windows-separator inbox path' {
+        Test-RefInSessionBox -Path 'C:\wt\.team-process\sessions\feat-1\inbox\backend.BRIEF.json' | Should -BeTrue
     }
-    It 'rejects the session record itself (not the outbox)' {
-        Test-RefInOutbox -Path '/wt/.team-process/sessions/feat-1/session.json' | Should -BeFalse
+    It 'rejects a path outside any box' {
+        Test-RefInSessionBox -Path '/wt/secret.txt' | Should -BeFalse
+    }
+    It 'rejects the session record itself (not a box)' {
+        Test-RefInSessionBox -Path '/wt/.team-process/sessions/feat-1/session.json' | Should -BeFalse
     }
 }
 
 # ============================================================
-Describe 'Get-OutboxWriteDecision — write-time JSON enforcement' {
+Describe 'Get-SessionBoxWriteDecision — write-time JSON enforcement' {
 
     It 'allows a valid typed-form JSON written to an outbox file' {
         $p = '/wt/.team-process/sessions/feat-1/outbox/backend.RESULT.json'
-        (Get-OutboxWriteDecision -FilePath $p -Content $script:ValidResult).Block | Should -BeFalse
+        (Get-SessionBoxWriteDecision -FilePath $p -Content $script:ValidResult).Block | Should -BeFalse
+    }
+    It 'allows a valid BRIEF written to an inbox file (dispatch)' {
+        $p = '/wt/.team-process/sessions/feat-1/inbox/backend.BRIEF.json'
+        (Get-SessionBoxWriteDecision -FilePath $p -Content $script:ValidBrief).Block | Should -BeFalse
     }
     It 'blocks prose written to an outbox file (the cheat)' {
         $p = '/wt/.team-process/sessions/feat-1/outbox/backend.RESULT.json'
-        $d = Get-OutboxWriteDecision -FilePath $p -Content 'Done! Build passes, 264/264 tests green.'
+        $d = Get-SessionBoxWriteDecision -FilePath $p -Content 'Done! Build passes, 264/264 tests green.'
+        $d.Block | Should -BeTrue
+        $d.Reason | Should -Match 'typed-form JSON'
+    }
+    It 'blocks prose written to an inbox file (the cheat — dispatch side)' {
+        $p = '/wt/.team-process/sessions/feat-1/inbox/backend.BRIEF.json'
+        $d = Get-SessionBoxWriteDecision -FilePath $p -Content 'Hey, go extract the HTTP adapter please.'
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'typed-form JSON'
     }
     It 'blocks a markdown .md dump written to an outbox file' {
         $p = '/wt/.team-process/sessions/feat-1/outbox/backend.result.md'
-        (Get-OutboxWriteDecision -FilePath $p -Content "# Result`n- changed X").Block | Should -BeTrue
+        (Get-SessionBoxWriteDecision -FilePath $p -Content "# Result`n- changed X").Block | Should -BeTrue
     }
-    It 'ignores a write OUTSIDE any outbox (not this guard concern)' {
-        (Get-OutboxWriteDecision -FilePath 'backend/fetcher/X.cs' -Content 'whatever' -Root '/repo').Block | Should -BeFalse
+    It 'ignores a write OUTSIDE any box (not this guard concern)' {
+        (Get-SessionBoxWriteDecision -FilePath 'backend/fetcher/X.cs' -Content 'whatever' -Root '/repo').Block | Should -BeFalse
     }
     It 'ignores a write with no content body (Edit/MultiEdit — pointer guard validates)' {
         $p = '/wt/.team-process/sessions/feat-1/outbox/backend.RESULT.json'
-        (Get-OutboxWriteDecision -FilePath $p -Content $null).Block | Should -BeFalse
+        (Get-SessionBoxWriteDecision -FilePath $p -Content $null).Block | Should -BeFalse
     }
-    It 'resolves a relative outbox file_path against -Root' {
-        $rel = '.team-process/sessions/feat-1/outbox/backend.RESULT.json'
-        (Get-OutboxWriteDecision -FilePath $rel -Content 'just prose' -Root '/repo').Block | Should -BeTrue
+    It 'resolves a relative inbox file_path against -Root' {
+        $rel = '.team-process/sessions/feat-1/inbox/backend.BRIEF.json'
+        (Get-SessionBoxWriteDecision -FilePath $rel -Content 'just prose' -Root '/repo').Block | Should -BeTrue
     }
 }
 
@@ -172,7 +188,9 @@ Describe 'Get-ProtocolFormDecision — file-based hand-back pointers' {
     BeforeEach {
         $script:PtrRoot = Join-Path ([System.IO.Path]::GetTempPath()) "pfg-$(New-Guid)"
         $script:Outbox  = Join-Path $script:PtrRoot '.team-process/sessions/feat-1/outbox'
+        $script:Inbox   = Join-Path $script:PtrRoot '.team-process/sessions/feat-1/inbox'
         New-Item -ItemType Directory -Path $script:Outbox -Force | Out-Null
+        New-Item -ItemType Directory -Path $script:Inbox -Force | Out-Null
     }
     AfterEach {
         Remove-Item -Recurse -Force -LiteralPath $script:PtrRoot -ErrorAction SilentlyContinue
@@ -182,6 +200,19 @@ Describe 'Get-ProtocolFormDecision — file-based hand-back pointers' {
         $f = Join-Path $script:Outbox 'backend.RESULT.json'
         Set-Content -LiteralPath $f -Value $script:ValidResult
         (Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$($f -replace '\\','/')"" }").Block | Should -BeFalse
+    }
+
+    It 'passes a pointer produced by the one-command emit mode (Save-ProtocolForm)' {
+        # End-to-end: the emit mode writes the outbox file and returns the exact pointer; the
+        # guard must accept that pointer with no further massaging — closing the block-loop.
+        $ptr = Save-ProtocolForm -Text $script:ValidResult -OutboxDir $script:Outbox
+        (Get-ProtocolFormDecision -Text $ptr).Block | Should -BeFalse
+    }
+
+    It 'passes a pointer to a valid BRIEF file in the inbox (dispatch)' {
+        $f = Join-Path $script:Inbox 'backend.BRIEF.json'
+        Set-Content -LiteralPath $f -Value $script:ValidBrief
+        (Get-ProtocolFormDecision -Text "{ ""type"":""BRIEF"",""ref"":""$($f -replace '\\','/')"" }").Block | Should -BeFalse
     }
 
     It 'resolves a relative ref against -Root' {
@@ -250,6 +281,7 @@ Describe 'Get-RenderRecipe — block reasons carry the JSON recipe' {
         $recipe | Should -Match 'REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT'
         $recipe | Should -Match 'Format-ProtocolForm\.ps1'
         $recipe | Should -Match '-InputFile'
+        $recipe | Should -Match '-OutboxDir'
         $recipe | Should -Match 'VERBATIM'
     }
     It 'a malformed-form reason embeds the recipe' {
@@ -304,8 +336,22 @@ Describe 'Invoke-ProtocolFormGuard.ps1 — real-process stdin entry point' {
         $out.Trim() | Should -BeNullOrEmpty
     }
 
-    It 'ignores a Write outside any outbox' {
+    It 'ignores a Write outside any box' {
         $payload = '{ "tool_name": "Write", "tool_input": { "file_path": "backend/fetcher/X.cs", "content": "// code" } }'
+        $out = ($payload | pwsh -NoProfile -File $script:ScriptPath) -join "`n"
+        $out.Trim() | Should -BeNullOrEmpty
+    }
+
+    It 'blocks a prose Write into a session inbox (dispatch)' {
+        $payload = '{ "tool_name": "Write", "tool_input": { "file_path": "/wt/.team-process/sessions/feat-1/inbox/backend.BRIEF.json", "content": "Go extract the HTTP adapter." } }'
+        $out = ($payload | pwsh -NoProfile -File $script:ScriptPath) -join "`n"
+        $out | Should -Match '"decision":\s*"block"'
+        $out | Should -Match 'typed-form JSON'
+    }
+
+    It 'allows a valid BRIEF Write into a session inbox' {
+        $valid = '{\"type\":\"BRIEF\",\"spec\":{\"path\":\"docs/x#y\",\"gate\":\"g\"},\"lane\":[\"backend/**\"],\"task\":\"do it\",\"gate\":[\"build ok\"]}'
+        $payload = '{ "tool_name": "Write", "tool_input": { "file_path": "/wt/.team-process/sessions/feat-1/inbox/backend.BRIEF.json", "content": "' + $valid + '" } }'
         $out = ($payload | pwsh -NoProfile -File $script:ScriptPath) -join "`n"
         $out.Trim() | Should -BeNullOrEmpty
     }
