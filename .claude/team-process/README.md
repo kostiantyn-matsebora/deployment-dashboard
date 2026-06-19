@@ -12,6 +12,7 @@ Portable orchestration framework: one lead, N role-specialists, any stack. Defin
 | [`protocol.md`](protocol.md) | The **communication protocol** — 6 typed **JSON** messages (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT`); fields · constraints · examples; inherited by every role. |
 | [`schemas/`](schemas/) | One **JSON Schema** per form — the machine-readable enforcement source for `protocol.md` (validated by the `SendMessage` guard + normalizer). |
 | [`guardrails.md`](guardrails.md) | Standing guardrails + tool-output economy; inherited by every role and mode. |
+| [`conventions.md`](conventions.md) | Cross-project conventions — plan format + authoring rules; inherited by every role and mode via @import in the host root prompt. |
 | [`roles/`](roles/) | One file per role: mission · owns · operating routine · self-verify gate · orchestration contract. |
 
 Roles: [`orchestrator`](roles/orchestrator.md) · [`contract`](roles/contract.md) ·

@@ -30,10 +30,4 @@ This agent is a **thin dispatcher**: it classifies the trigger, runs the matchin
 
 ## Authoring rules (binding)
 
-- **Concise + LLM-optimized.** Cut filler, marketing tone, preambles. Every sentence earns its tokens.
-- **Structure over prose:**
-  - Steps → numbered list.
-  - Choices / mappings → table.
-  - `"X means Y"` → `**X.** Y` on its own line.
-  - Multi-rule bullet → parent + sub-bullets, one rule per line.
-  - Prose paragraph stating > 2 rules → restructure.
+Defined in [`team-process/conventions.md`](../team-process/conventions.md) — loaded via the host root prompt @import.
