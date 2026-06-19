@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+
+## [0.17.0] - 2026-06-19
+
+### Added
+
+- **Filter the dashboard by namespace/service (#353).** Deployment events now carry an optional, CI/CD-agnostic `namespace` that scopes each service; the GitHub fetcher populates it with the source repository name, and existing rows are backfilled with the repository parsed from their run URL. The Matrix and Swimlanes are keyed by `(namespace, service)`, so the same service name reported from two repositories no longer collapses into one row (the `namespace/` prefix is shown only when a service name appears under more than one namespace). The services filter and notification preferences accept `namespace/service` glob patterns — a slashless pattern still matches the service segment across every namespace, so existing saved filters keep working — and the pattern autocomplete suggests namespaces and `namespace/service` composites derived from the live data.
+
+
+## [0.16.3] - 2026-06-18
+
+### Fixed
+
+- **Fetcher now reports GitHub API usage/rate-limit statistics during backfill (#361).** The per-cycle `rate-limit` usage report was emitted only at the end of a poll cycle. Because backfill runs as one long cycle that streams many chunks (one per repo×env), no usage stats appeared until the entire backfill finished — leaving operators blind to quota burn during the fetcher's heaviest-consumption phase. The report now fires per backfill chunk, so the dashboard's rate-limit indicator updates continuously throughout backfill; a normal poll still emits exactly one report per cycle.
+
+
+## [0.16.2] - 2026-06-18
+
+### Fixed
+
+- **Dashboard no longer exhausts the browser's per-host connection limit (#363).** The SPA opened three long-lived SSE (`EventSource`) connections per tab — two of them duplicate deployment-event streams — so two open tabs reached the browser's six-connections-per-host HTTP/1.1 limit and pages would hang indefinitely on refresh. The deployment-event and component-event streams are now multicast over a single shared `EventSource` each (one deployment + one component per tab), so multiple tabs can be open without exhausting connections. The always-on browser-notification subscription reuses the shared deployment stream instead of opening its own.
+
+
+## [0.16.1] - 2026-06-18
+
+### Fixed
+
+- **Backfill no longer lets a high-volume service starve quieter ones (#349).** The per-environment backfill scan treated an already-full service slot as "no progress", so a busy service could exhaust the stall window before quieter services in the same environment were scanned — leaving their deployment history under-filled after a reset/seed. The stall heuristic now counts only genuine no-data deployments and fills each service/environment slot independently (with an all-slots-full short-circuit); the configured age window remains the hard time boundary.
+
+
+## [0.16.0] - 2026-06-18
+
 ### Added
 
 - **Services and notifications glob filter (#351).** The services board (Matrix + Swimlanes) and notification preferences now filter services and environments using case-insensitive glob patterns (`*` any chars, `?` one char) instead of exact string matching. Notification service/environment filter chips changed from case-sensitive exact membership (#271) to case-insensitive glob, allowing patterns like `*-api` or `prod*`.

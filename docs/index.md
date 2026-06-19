@@ -60,7 +60,7 @@ hide:
 
 === "Services filter"
 
-    Narrow the board to exactly the services you care about — type a glob pattern (`front-*`, `? checkout`, or any literal name), choose "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads. The same widget powers the notification service and environment filters.
+    Narrow the board to exactly the services you care about — type a glob pattern (`front-*`, `api`, or a namespaced `org-a/gateway`), choose "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads. When the same service name exists under different namespaces (e.g. `org-a/gateway` and `org-b/gateway`), each appears as a distinct row with its `namespace/` prefix shown only when there is a collision. A slashless pattern matches across all namespaces — existing saved patterns keep working without change. The same widget powers the notification service and environment filters.
 
     ![Services glob filter](_assets/screenshots/services-filter-dark.png){ .dd-shot }
 

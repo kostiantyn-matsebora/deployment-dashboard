@@ -192,8 +192,13 @@ paths:
 
         DAG correlation is **client-side** — this endpoint never derives parent
         relationships beyond the explicit `parent_deployments` array on the event.
+
+        Each event carries an optional `namespace` (see
+        `DeploymentEventIngest.namespace`); the Swimlanes view keys lanes by the
+        composite `(namespace, service)` so same-named services in different
+        namespaces become separate lanes (issue #353).
       parameters:
-        - { name: service,       in: query, schema: { type: string }, description: Filter by service identifier. }
+        - { name: service,       in: query, schema: { type: string }, description: "Filter by service identity. A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite (see `getMatrix` for the shared glob semantics)." }
         - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
         - { name: status,        in: query, schema: { $ref: '#/components/schemas/Status' }, description: Filter by status. }
         - { name: deployment_id, in: query, schema: { type: string }, description: Filter to all rows of a single logical deployment. }
@@ -232,8 +237,8 @@ paths:
       operationId: getMatrix
       summary: Services × environments deployment matrix (denormalised).
       description: |
-        Returns one row per service. Each row contains a `slots` map keyed by
-        environment name. Each slot carries:
+        Returns one row per distinct **`(namespace, service)`** identity. Each
+        row contains a `slots` map keyed by environment name. Each slot carries:
 
           - `current` — the most recent **effective** event for that
             `(service, environment)`, where *effective* means `status` is one of
@@ -251,8 +256,23 @@ paths:
         The frontend resolves the **six box states** (SAD §7 / FR §"Box states (Matrix)")
         from `(current.status, last_successful presence)` — no server-side state
         field — and renders `next` (when present) as a secondary badge.
+
+        **Identity & re-keying (issue #353).** Rows are keyed by the composite
+        `(namespace, service)`, where `namespace` is the optional grouping
+        segment on each event (see `DeploymentEventIngest.namespace`). Two
+        distinct namespaces sharing a service name yield two distinct rows. The
+        label is `namespace/service` when `namespace` is present, else the bare
+        `service` (legacy / unprefixed).
+
+        **Glob filter semantics (services filter + notification prefs).** A
+        filter pattern is matched against the composite identity:
+          - a pattern **containing `/`** matches the full `namespace/service`
+            composite (e.g. `acme/*`, `*/checkout`);
+          - a pattern **without `/`** matches the **`service` segment only**,
+            across all namespaces — so every existing slashless saved pattern
+            keeps working unchanged.
       parameters:
-        - { name: service, in: query, schema: { type: string }, description: Filter to a single service (Matrix inline filter). }
+        - { name: service, in: query, schema: { type: string }, description: "Filter to a single service identity (Matrix inline filter). A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite." }
       responses:
         '200':
           description: The matrix snapshot.
@@ -526,7 +546,12 @@ paths:
         - name: service
           in: query
           schema: { type: string }
-          description: Optional server-side filter on service identifier.
+          description: |
+            Optional server-side filter on service identity. A value without `/`
+            matches the `service` segment across all namespaces; a value
+            containing `/` matches the full `namespace/service` composite (see
+            `getMatrix` for the shared glob semantics). The `data` payload
+            carries the optional `namespace` (a `DeploymentEvent` field).
       responses:
         '200':
           description: SSE stream opened.
@@ -539,7 +564,7 @@ paths:
                     : ping
                     id: 01J9F4WZK3W9G2T6X4QH3DKQF5
                     event: deployment
-                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","deployment_id":"gh-9491-1","service":"service-a","environment":"prod","version":"1.4.2","status":"success","happened_at":"2026-05-28T10:14:02Z","actor":"alice","run_number":"9491","parent_deployments":["gh-9482-1"]}
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","deployment_id":"gh-9491-1","service":"service-a","namespace":"api","environment":"prod","version":"1.4.2","status":"success","happened_at":"2026-05-28T10:14:02Z","actor":"alice","run_number":"9491","parent_deployments":["gh-9482-1"]}
 
   # ───── Fetcher state ──────────────────────────────────────────────────────
   /api/fetcher/state/{adapter}:
@@ -1233,6 +1258,24 @@ components:
           maxLength: 128
           description: Service / component identifier.
           examples: [service-a]
+        namespace:
+          type: string
+          maxLength: 128
+          nullable: true
+          description: |
+            Optional CI/CD-agnostic grouping segment that scopes `service`
+            (the source-project / pipeline namespace — e.g. the repo half of a
+            GitHub `owner/repo`, an Azure DevOps project, a Jenkins folder).
+            **Not** tied to any specific CI/CD vendor and never named "repo".
+
+            **Identity** is `namespace/service` when present, and the bare
+            `service` when `null`/absent — so legacy rows with no namespace
+            render unprefixed (full backward compatibility). Read surfaces key
+            rows/lanes by the composite `(namespace, service)`: two distinct
+            namespaces sharing a service name become two distinct
+            matrix rows / swimlanes (the #353 fix). See the `getMatrix`
+            description for the full re-keying + glob-filter semantics.
+          examples: [api]
         environment:
           type: string
           minLength: 1
@@ -1350,9 +1393,21 @@ components:
     MatrixRow:
       type: object
       required: [service, slots]
+      description: |
+        One row per distinct `(namespace, service)` identity. Rows sharing a
+        `service` but differing in `namespace` are separate rows; rows with a
+        `null` namespace render under the bare `service`.
       properties:
         service:
           type: string
+        namespace:
+          type: string
+          nullable: true
+          description: |
+            Grouping segment of this row's identity (see `DeploymentEventIngest.namespace`).
+            `null`/absent ⇒ the row is identified by the bare `service`. Together
+            `(namespace, service)` is the row key; the displayed label is
+            `namespace/service` when present, else `service`.
         slots:
           type: object
           additionalProperties:

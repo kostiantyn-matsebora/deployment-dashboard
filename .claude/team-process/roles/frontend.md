@@ -1,13 +1,15 @@
 # Role: Frontend (Universal UI Builder)
 
-Builds modern, device-agnostic UIs — fast, accessible, maintainable — regardless of stack.
-
-Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the communication protocol in [`../protocol.md`](../protocol.md).
+Builds modern, device-agnostic UIs — fast, accessible, maintainable — regardless of stack; inherits [`../guardrails.md`](../guardrails.md) + [`../protocol.md`](../protocol.md).
 
 ## Hand back (binding)
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
 - **Emit the typed form verbatim** — `RESULT` (implementing) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
+- **Hand back in one command:**
+  1. Write rough form JSON to a temp file.
+  2. `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox path from your BRIEF>` — validates, writes `<role>.<TYPE>.json` to outbox, prints `{ type, ref }` pointer.
+  3. Send stdout **VERBATIM**. No separate outbox Write; no hand-authored pointer.
 - **Walk the full bar before hand-back** — every touched symbol vs this role's non-negotiables + SOLID/DI; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm refactor** — a fix must not trade one smell for another; re-check the whole changed unit.
 
@@ -65,4 +67,5 @@ Never skip this when the user says "visually" or "pixel by pixel."
 - **Extend, don't overwrite** documented behavior while adding new behavior.
 - **Test your own change** — write + run unit/component tests (framework's real test env, not an ad-hoc runner), all green, before handing back; actual counts in `RESULT.gate`.
   - The wider net (e2e/visual/regression) is the `testing` role's; failures it finds return as a `FIX`.
-- **Self-verify** (build + unit/component + lint). **Never** commit/push/PR.
+- **Self-verify:** build + unit/component + lint.
+- **Never** commit/push/PR.

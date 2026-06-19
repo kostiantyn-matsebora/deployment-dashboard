@@ -18,7 +18,10 @@ public sealed class BackfillEventBuilder(
     VersionResolver versionResolver,
     ILogger<BackfillEventBuilder> logger)
 {
-    // Consecutive no-progress deployments before scanning stops for an environment (F1).
+    // Consecutive deployments with no new data before scanning stops for an environment (F13).
+    // "No data" means the service is unknown or has zero mapped statuses; a slot that is already
+    // full (eventsSoFar >= depth) is skipped silently so quieter services sharing the same
+    // environment can still reach depth — it does NOT count as no-progress.
     private const int StallWindow = 20;
 
     // ── per-env scan ──────────────────────────────────────────────────────────
@@ -67,6 +70,10 @@ public sealed class BackfillEventBuilder(
     /// Pass 1: pages through GitHub deployments for one environment and returns
     /// the chosen subset — up to <paramref name="depth"/> mapped statuses per service slot,
     /// stopping early when the stall window is exhausted or the cutoff is reached.
+    /// Each slot is filled independently: a deployment for an already-full service is skipped
+    /// (the scan keeps paging so quieter services in the same env can still reach depth),
+    /// and is never treated as no-progress. <c>consecutiveNoProgress</c> increments only when
+    /// a service is unknown or has zero mapped statuses.
     /// </summary>
     private async Task<List<(
             GhDeployment Deployment,
@@ -106,6 +113,20 @@ public sealed class BackfillEventBuilder(
                 break;
             }
 
+            // All known service slots for this env are full — stop; nothing left to fill.
+            // Starvation-safe: fires ONLY once EVERY known service reached depth (F13, #349),
+            // so a quiet service that has not appeared yet (filled.Count < allServiceNames.Count)
+            // is never cut off.
+            if (allServiceNames.Count > 0
+                && filled.Count == allServiceNames.Count
+                && filled.Values.All(v => v >= depth))
+            {
+                logger.LogDebug(
+                    "[Backfill] {Repo}/{Env}: all {N} service slots full — stopping scan",
+                    ctx.Repo, ctx.Env, allServiceNames.Count);
+                break;
+            }
+
             var statuses = await FetchAllStatusesAsync(ctx.Owner, ctx.RepoName, deployment.Id, ct);
             var runId = statuses
                 .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
@@ -115,13 +136,21 @@ public sealed class BackfillEventBuilder(
                 ctx.Owner, ctx.RepoName, ctx.Repo, runId, pathToService, serviceMap, ct);
 
             var eventsSoFar = filled.GetValueOrDefault(service, 0);
-            if (!allServiceNames.Contains(service) || eventsSoFar >= depth)
+
+            // (a) Slot already full — skip silently; this is NOT no-progress (F13).
+            if (allServiceNames.Contains(service) && eventsSoFar >= depth)
+                continue;
+
+            // (b) Unknown service — genuine no-data; bump stall counter.
+            if (!allServiceNames.Contains(service))
             {
                 consecutiveNoProgress++;
                 continue;
             }
 
             var mappedCount = statuses.Count(s => StatusMapper.Map(s.State) is not null);
+
+            // (c) Zero mapped statuses — genuine no-data; bump stall counter.
             if (mappedCount == 0)
             {
                 consecutiveNoProgress++;

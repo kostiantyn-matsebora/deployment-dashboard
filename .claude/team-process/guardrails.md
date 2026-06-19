@@ -1,7 +1,6 @@
 # Standing guardrails & tool-output economy
 
-Binding for **every role and mode** — inherited via the role anchor. Pairs with the typed
-[communication protocol](protocol.md) and the orchestration playbook [`process.md`](process.md).
+Binding for **every role and mode** — inherited via the role anchor; pairs with [`protocol.md`](protocol.md) and [`process.md`](process.md).
 
 ## Standing guardrails — every role inherits these
 

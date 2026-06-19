@@ -1,14 +1,15 @@
 # Role: Docs (Documentation Steward)
 
-Documentation writer + hierarchical indexer + sources-of-truth registrar. Stack-, domain-,
-product-agnostic.
-
-Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the communication protocol in [`../protocol.md`](../protocol.md).
+Documentation writer + hierarchical indexer + sources-of-truth registrar — stack-, domain-, product-agnostic; inherits [`../guardrails.md`](../guardrails.md) + [`../protocol.md`](../protocol.md).
 
 ## Hand back (binding)
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
 - **Emit the typed form verbatim** — `RESULT` (authoring) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
+- **Hand back in one command:**
+  1. Write rough form JSON to a temp file.
+  2. `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox path from your BRIEF>` — validates, writes `<role>.<TYPE>.json` to outbox, prints `{ type, ref }` pointer.
+  3. Send stdout **VERBATIM**. No separate outbox Write; no hand-authored pointer.
 - **Walk the full bar before hand-back** — every touched doc vs the authoring rules; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm** — a fix must not introduce a new authoring-rule violation; re-check the whole changed file.
 
@@ -50,8 +51,10 @@ recursive-descent discovery + non-overwrite gate to each ancestor, to the indexe
 
 ## README classification (binding)
 
-A `README.md` next to an `index.md` is NOT automatically legacy. Classify per file; default to
-**content-bearing** when ambiguous; never auto-delete owner content.
+A `README.md` next to an `index.md` is NOT automatically legacy:
+- Classify per file.
+- Default to **content-bearing** when ambiguous.
+- Never auto-delete owner content.
 
 | Class | Signals | Treatment |
 |---|---|---|
@@ -60,8 +63,7 @@ A `README.md` next to an `index.md` is NOT automatically legacy. Classify per fi
 
 ## Children path resolution (binding)
 
-Leading `/` is sibling-relative to the parent `index.md`'s dir, NOT repo root. Paths may nest
-(`/sub/file`) where discovery descended into a no-index sub-dir.
+Leading `/` is sibling-relative to the parent `index.md`'s dir (NOT repo root); paths may nest (`/sub/file`) where discovery descended into a no-index sub-dir.
 
 | Child entry | Resolves to |
 |---|---|
@@ -98,9 +100,9 @@ Rules of thumb:
 
 ## YAML front-matter quoting (binding)
 
-`: ` (colon-space) inside an unquoted value raises *"Nested mappings are not allowed in compact
-mappings."* Anchor chars: `: ` `#` `&` `*` `!` `|` `>` `%` `@` `?` `,` `[` `]` `{` `}`, leading
-`-`, or template syntax (`{% %}`, `{{ }}`).
+`: ` (colon-space) inside an unquoted value → *"Nested mappings are not allowed in compact mappings."*
+
+**Anchor chars:** `: ` `#` `&` `*` `!` `|` `>` `%` `@` `?` `,` `[` `]` `{` `}`, leading `-`, template syntax (`{% %}` / `{{ }}`).
 
 | Key | Treatment |
 |---|---|
@@ -113,14 +115,21 @@ Single quotes (not double) per github/docs convention; inside them escape `'` as
 
 ## Host authoring rules (binding)
 
-At dispatch start, load the host's doc rules (first hit wins): `CLAUDE.md` doc-authoring
-section → `AGENTS.md`/`.agent/RULES.md`/`.cursorrules` → `CONTRIBUTING.md` § docs →
-`docs/STYLE.md`. What you find is binding; quote the rule headings so the user can verify.
+At dispatch start, load the host's doc rules (first hit wins) — binding; quote matched headings so the user can verify:
+
+1. `CLAUDE.md` doc-authoring section
+2. `AGENTS.md` / `.agent/RULES.md` / `.cursorrules`
+3. `CONTRIBUTING.md` § docs
+4. `docs/STYLE.md`
 
 **Fallback** (only when discovery is empty):
 
 - **One source of truth** — others cite by path + section.
-- **Structure beats prose** — steps→list, mappings→table, "X means Y"→`**X.** Y`, multi-rule bullet→sub-bullets.
+- **Structure beats prose:**
+  - Steps → list.
+  - Mappings → table.
+  - "X means Y" → `**X.** Y` on its own line.
+  - Multi-rule bullet → parent + sub-bullets, one rule per line.
 - **Section atomicity** — each section reads standalone; cite prerequisites.
 - **One term per concept.**
 - **Front-load instructions** — most important first.
@@ -150,5 +159,7 @@ section → `AGENTS.md`/`.agent/RULES.md`/`.cursorrules` → `CONTRIBUTING.md` �
 ## Orchestration contract
 
 - After a behavior change ships, ensure its **owning spec matches reality** — the spec is the contract for the next docs-first read.
-  - Surface spec-vs-app conflicts as a `FINDING`; apply the agreed direction, don't guess.
-- **Self-verify** (links/anchors resolve, index reflects the tree, authoring rules honored); actual deltas in `RESULT`. **Never** commit/push/PR — hand back for integration.
+  - Surface spec-vs-app conflicts as a `FINDING`.
+  - Apply the agreed direction — don't guess.
+- **Self-verify:** links/anchors resolve · index reflects the tree · authoring rules honored; actual deltas in `RESULT`.
+- **Never** commit/push/PR — hand back for integration.

@@ -28,17 +28,32 @@
     Override the schema directory (tests). Defaults to the repo's
     .claude/team-process/schemas relative to this script.
 
+.PARAMETER OutboxDir
+    Emit-to-box mode. When set, the validated+normalized form is WRITTEN to this session box
+    as <role>.<TYPE>.json and the script prints the exact { type, ref } pointer to send
+    VERBATIM — collapsing the whole hand-back into one command (no separate outbox Write, no
+    hand-authored pointer). Omit it to just normalize the form to stdout.
+
+.PARAMETER Role
+    Optional filename disambiguator for -OutboxDir. Defaults to the form's own `role` field;
+    falls back to <TYPE>.json for role-less forms (e.g. a FINDING). Lets a role tag its
+    FINDING/ARTIFACT so two roles' files don't collide in one box.
+
 .PARAMETER AsLibrary
     Define functions without executing the entry block (for Pester / guard reuse).
 
 .EXAMPLE
-    # Robust shell flow:
-    #   1. Write the form JSON to a file (Write tool or here-string):
+    # One-command hand-back (member -> orchestrator):
+    #   1. Write the rough form JSON to a file (Write tool or here-string):
     #          { "type": "RESULT", "role": "backend",
     #            "changed": ["GithubActionsAdapter.cs"], "gate": ["build ok", "264/264 tests"] }
-    #   2. Normalize it:
+    #   2. Validate + write the outbox file + print the pointer:
+    pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile form.json -OutboxDir <outbox>
+    #   3. Send its stdout ({ "type": "RESULT", "ref": "<abs path>" }) VERBATIM as the SendMessage body.
+
+.EXAMPLE
+    # Normalize only (no file written): prints the canonical form to stdout.
     pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile form.json
-    #   3. Send its stdout VERBATIM as the SendMessage body.
 
 .EXAMPLE
     Get-Content form.json -Raw | pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1
@@ -49,6 +64,8 @@ param(
     [string]$Text,
     [string]$InputFile,
     [string]$SchemaDir,
+    [string]$OutboxDir,
+    [string]$Role,
     [switch]$AsLibrary
 )
 
@@ -242,6 +259,52 @@ function Format-ProtocolForm {
     return ($normalized | ConvertTo-Json -Depth 8)
 }
 
+# The session-box filename for a form: <role>.<TYPE>.json, or <TYPE>.json when role-less.
+# Matches the protocol.md naming (e.g. backend.RESULT.json).
+function Get-FormFileName {
+    param([string]$Type, [string]$Role)
+    if (-not [string]::IsNullOrWhiteSpace($Role)) { return "$Role.$Type.json" }
+    return "$Type.json"
+}
+
+# Emit-to-box: validate + normalize, WRITE the form to $OutboxDir as <role>.<TYPE>.json, and
+# return the exact { type, ref } pointer string (compact, absolute ref) to SendMessage verbatim.
+# Throws on invalid input (nothing is written). Writing here via PowerShell — not the Write tool
+# — is deliberate: the content is already schema-valid, and the SendMessage pointer guard
+# re-validates the referenced file, so no integrity is lost.
+function Save-ProtocolForm {
+    param(
+        [string]$Text,
+        [string]$OutboxDir,
+        [string]$Role,
+        [string]$SchemaDir
+    )
+    if ([string]::IsNullOrWhiteSpace($OutboxDir)) { throw 'OutboxDir is required to save a form.' }
+
+    $check = Test-ProtocolJson -Json $Text -SchemaDir $SchemaDir
+    if (-not $check.Ok) {
+        $label = if ($check.Type) { $check.Type } else { 'form' }
+        throw "Invalid ${label}: $(($check.Errors) -join '; ')"
+    }
+    $type       = $check.Type
+    $normalized = (ConvertTo-NormalizedForm -Object $check.Object -Type $type | ConvertTo-Json -Depth 8)
+
+    # Filename role: explicit -Role wins, else the form's own role field (RESULT/REVIEW carry one).
+    $resolvedRole = $Role
+    if ([string]::IsNullOrWhiteSpace($resolvedRole) -and ($check.Object.PSObject.Properties.Name -contains 'role')) {
+        $resolvedRole = [string]$check.Object.role
+    }
+    $fileName = Get-FormFileName -Type $type -Role $resolvedRole
+
+    if (-not (Test-Path -LiteralPath $OutboxDir)) {
+        $null = New-Item -ItemType Directory -Path $OutboxDir -Force
+    }
+    $full = [System.IO.Path]::GetFullPath((Join-Path $OutboxDir $fileName))
+    Set-Content -LiteralPath $full -Value $normalized -Encoding utf8
+
+    return ([ordered]@{ type = $type; ref = $full } | ConvertTo-Json -Compress)
+}
+
 # Resolve the form text from -Text, then -InputFile, then redirected stdin.
 function Resolve-FormText {
     param([string]$Text, [string]$InputFile)
@@ -258,7 +321,14 @@ if (-not $AsLibrary) {
     $formText = Resolve-FormText -Text $Text -InputFile $InputFile
     if ([string]::IsNullOrWhiteSpace($formText)) { exit 0 }
     try {
-        Format-ProtocolForm -Text $formText -SchemaDir $SchemaDir
+        if (-not [string]::IsNullOrWhiteSpace($OutboxDir)) {
+            # Emit-to-box: write the form and print the pointer to send verbatim.
+            Save-ProtocolForm -Text $formText -OutboxDir $OutboxDir -Role $Role -SchemaDir $SchemaDir
+        }
+        else {
+            # Normalize only: print the canonical form to stdout.
+            Format-ProtocolForm -Text $formText -SchemaDir $SchemaDir
+        }
     }
     catch {
         [Console]::Error.WriteLine($_.Exception.Message)

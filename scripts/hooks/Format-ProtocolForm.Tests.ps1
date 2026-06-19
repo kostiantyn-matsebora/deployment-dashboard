@@ -248,3 +248,129 @@ Describe 'Format-ProtocolForm.ps1 — -InputFile end to end (real process)' {
         finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
     }
 }
+
+# ============================================================
+Describe 'Get-FormFileName' {
+
+    It 'is <role>.<TYPE>.json when a role is given' {
+        Get-FormFileName -Type 'RESULT' -Role 'backend' | Should -Be 'backend.RESULT.json'
+    }
+    It 'is <TYPE>.json when role-less' {
+        Get-FormFileName -Type 'FINDING' -Role '' | Should -Be 'FINDING.json'
+    }
+}
+
+# ============================================================
+Describe 'Save-ProtocolForm — emit to outbox (one-command hand-back)' {
+
+    BeforeEach {
+        $script:Box = Join-Path ([System.IO.Path]::GetTempPath()) "fpf-$([System.IO.Path]::GetRandomFileName())"
+    }
+    AfterEach {
+        Remove-Item -Recurse -Force -LiteralPath $script:Box -ErrorAction SilentlyContinue
+    }
+
+    It 'writes <role>.<TYPE>.json and returns a { type, ref } pointer' {
+        $ptr = Save-ProtocolForm -Text (New-FormJson $script:ResultObj) -OutboxDir $script:Box -SchemaDir $script:SchemaDir
+        $p = $ptr | ConvertFrom-Json
+        $p.type | Should -Be 'RESULT'
+        $p.ref  | Should -Be ([System.IO.Path]::GetFullPath((Join-Path $script:Box 'backend.RESULT.json')))
+        Test-Path -LiteralPath $p.ref | Should -BeTrue
+    }
+
+    It 'writes a file that is itself a valid typed form' {
+        $ptr = Save-ProtocolForm -Text (New-FormJson $script:ResultObj) -OutboxDir $script:Box -SchemaDir $script:SchemaDir
+        $content = Get-Content -LiteralPath ($ptr | ConvertFrom-Json).ref -Raw
+        (Test-ProtocolJson -Json $content -SchemaDir $script:SchemaDir).Ok | Should -BeTrue
+    }
+
+    It 'returns an absolute ref path' {
+        $ptr = Save-ProtocolForm -Text (New-FormJson $script:ResultObj) -OutboxDir $script:Box -SchemaDir $script:SchemaDir
+        [System.IO.Path]::IsPathRooted(($ptr | ConvertFrom-Json).ref) | Should -BeTrue
+    }
+
+    It 'creates the outbox directory when missing' {
+        Test-Path -LiteralPath $script:Box | Should -BeFalse
+        $null = Save-ProtocolForm -Text (New-FormJson $script:ResultObj) -OutboxDir $script:Box -SchemaDir $script:SchemaDir
+        Test-Path -LiteralPath $script:Box | Should -BeTrue
+    }
+
+    It 'uses the form role for the filename by default' {
+        $ptr = Save-ProtocolForm -Text (New-FormJson $script:ReviewPassObj) -OutboxDir $script:Box -SchemaDir $script:SchemaDir
+        ($ptr | ConvertFrom-Json).ref | Should -Match 'backend\.REVIEW\.json$'
+    }
+
+    It '-Role overrides the filename role' {
+        $ptr = Save-ProtocolForm -Text (New-FormJson $script:ResultObj) -OutboxDir $script:Box -Role 'frontend' -SchemaDir $script:SchemaDir
+        ($ptr | ConvertFrom-Json).ref | Should -Match 'frontend\.RESULT\.json$'
+    }
+
+    It 'falls back to <TYPE>.json for a role-less form (FINDING)' {
+        $ptr = Save-ProtocolForm -Text (New-FormJson $script:FindingObj) -OutboxDir $script:Box -SchemaDir $script:SchemaDir
+        ($ptr | ConvertFrom-Json).ref | Should -Match '[\\/]FINDING\.json$'
+    }
+
+    It '-Role tags an otherwise role-less FINDING' {
+        $ptr = Save-ProtocolForm -Text (New-FormJson $script:FindingObj) -OutboxDir $script:Box -Role 'backend' -SchemaDir $script:SchemaDir
+        ($ptr | ConvertFrom-Json).ref | Should -Match 'backend\.FINDING\.json$'
+    }
+
+    It 'normalizes the written form (canonical key order, dropped empty optionals)' {
+        $messy = '{ "gate":["ok"], "type":"result", "changed":["A.cs"], "role":"backend", "notes":[] }'
+        $ptr = Save-ProtocolForm -Text $messy -OutboxDir $script:Box -SchemaDir $script:SchemaDir
+        $obj = Get-Content -LiteralPath ($ptr | ConvertFrom-Json).ref -Raw | ConvertFrom-Json
+        @($obj.PSObject.Properties.Name) | Should -Be @('type', 'role', 'changed', 'gate')
+    }
+
+    It 'throws on invalid input and writes nothing' {
+        { Save-ProtocolForm -Text '{ "type":"RESULT" }' -OutboxDir $script:Box -SchemaDir $script:SchemaDir } |
+            Should -Throw '*Invalid RESULT*'
+        if (Test-Path -LiteralPath $script:Box) {
+            @(Get-ChildItem -LiteralPath $script:Box -File).Count | Should -Be 0
+        }
+    }
+
+    It 'throws when OutboxDir is empty' {
+        { Save-ProtocolForm -Text (New-FormJson $script:ResultObj) -OutboxDir '' -SchemaDir $script:SchemaDir } |
+            Should -Throw '*OutboxDir is required*'
+    }
+}
+
+# ============================================================
+Describe 'Format-ProtocolForm.ps1 — -OutboxDir end to end (real process)' {
+
+    BeforeEach {
+        $script:Box = Join-Path ([System.IO.Path]::GetTempPath()) "fpf-$([System.IO.Path]::GetRandomFileName())"
+    }
+    AfterEach {
+        Remove-Item -Recurse -Force -LiteralPath $script:Box -ErrorAction SilentlyContinue
+    }
+
+    It 'writes the outbox file and prints the pointer via the script entry point' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).json"
+        try {
+            Set-Content -LiteralPath $tmp -Value '{ "gate":["build ok"], "type":"result", "changed":["a.cs"], "role":"backend" }' -NoNewline
+            $out = (pwsh -NoProfile -File $script:ScriptPath -InputFile $tmp -OutboxDir $script:Box) -join "`n"
+            $LASTEXITCODE | Should -Be 0
+            $p = $out | ConvertFrom-Json
+            $p.type | Should -Be 'RESULT'
+            Test-Path -LiteralPath $p.ref | Should -BeTrue
+            (Join-Path $script:Box 'backend.RESULT.json') | Should -Exist
+        }
+        finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+
+    It 'exits non-zero on invalid input and writes no file' {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) "form-$([System.IO.Path]::GetRandomFileName()).json"
+        try {
+            Set-Content -LiteralPath $tmp -Value '{ "type":"RESULT" }' -NoNewline
+            $err = (pwsh -NoProfile -File $script:ScriptPath -InputFile $tmp -OutboxDir $script:Box 2>&1) -join "`n"
+            $LASTEXITCODE | Should -Be 1
+            $err | Should -Match 'Invalid RESULT'
+            if (Test-Path -LiteralPath $script:Box) {
+                @(Get-ChildItem -LiteralPath $script:Box -File).Count | Should -Be 0
+            }
+        }
+        finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+}

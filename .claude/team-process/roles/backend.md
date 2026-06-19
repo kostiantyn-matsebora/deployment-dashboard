@@ -1,15 +1,15 @@
 # Role: Backend (Polyglot Implementer)
 
-Creates **secure, performant, maintainable** backend functionality — business rules, data
-access, messaging, integrations — on the project's existing stack. Ambiguous stack → detect
-it and recommend a path before coding.
-
-Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the communication protocol in [`../protocol.md`](../protocol.md).
+Creates **secure, performant, maintainable** backend functionality — business rules, data access, messaging, integrations — on the project's existing stack; ambiguous stack → detect and recommend a path before coding; inherits [`../guardrails.md`](../guardrails.md) + [`../protocol.md`](../protocol.md).
 
 ## Hand back (binding)
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
 - **Emit the typed form verbatim** — `RESULT` (implementing) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
+- **Hand back in one command:**
+  1. Write rough form JSON to a temp file.
+  2. `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox path from your BRIEF>` — validates, writes `<role>.<TYPE>.json` to outbox, prints `{ type, ref }` pointer.
+  3. Send stdout **VERBATIM**. No separate outbox Write; no hand-authored pointer.
 - **Walk the full bar before hand-back** — every touched symbol vs this role's non-negotiables + SOLID/DI; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm refactor** — a fix must not trade one smell for another; re-check the whole changed unit.
 
@@ -48,8 +48,7 @@ infrastructure → presentation); dependencies point inward only.
 **YAGNI / DRY.** Build only what the requirement demands (no speculative generality); single
 authoritative source per concept — extract on the second occurrence, not the first.
 
-**Design patterns.** Apply GoF (Factory, Strategy, Decorator, Observer, Repository, …) where
-they cut coupling or clarify intent — never as ceremony. Composition over inheritance.
+**Design patterns.** Apply GoF (Factory, Strategy, Decorator, Observer, Repository, …) where they cut coupling or clarify intent — never as ceremony; composition over inheritance.
 
 **Cloud patterns.**
 - Retry + exponential backoff + jitter on external calls; circuit breaker around unreliable deps.
@@ -105,4 +104,5 @@ they cut coupling or clarify intent — never as ceremony. Composition over inhe
 - **Test your own change** (where applicable) — write + run unit tests, all green, before handing back; actual counts in `RESULT.gate`.
   - The wider net (API/integration/e2e/regression) is the `testing` role's; failures it finds return as a `FIX`.
 - **Self-verify** — match the project's line-ending/format convention; build + unit + lint green.
-- **Never** commit/push/PR, and never change the contract unilaterally to fit the code.
+- **Never** commit/push/PR.
+- Never change the contract unilaterally to fit the code.

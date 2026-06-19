@@ -267,6 +267,15 @@ A reusable glob pattern filter widget used at three sites: the topbar Services p
 
 **Glob syntax.** `*` = any sequence of characters, `?` = any single character. All other characters are literal. Matching is case-insensitive.
 
+**Composite service identity (services board + notification service axis).**
+- Each slot is keyed by `(namespace, service)`. Namespaced services have the composite identity `namespace/service`; null-namespace services use the bare service name.
+- Autocomplete is populated from these composite identities derived from received data — no configuration required.
+- Pattern matching:
+  - Pattern **with `/`** → matched against the full `namespace/service` string.
+  - Pattern **without `/`** → matched against the `service` segment across all namespaces — backward-compatible with all existing saved patterns.
+
+**Render-on-collision.** In the Matrix and Swimlanes views the `namespace/` prefix is shown in the row/lane label only when two or more services share the same name under different namespaces.
+
 **Visibility logic.**
 - Exclude mode: an item is visible when it does not match any active pattern (empty pattern list = show all).
 - Include mode: an item is visible when it matches at least one active pattern (empty pattern list = show all).
@@ -303,7 +312,7 @@ Accessible from the bell toggle area when notifications are enabled. Three indep
 
 **Status filter.** One `p-checkbox` per deployment status (all 8). Checked = notify on that status. Default: all ON.
 
-**Service filter.** A [Pattern Filter](#pattern-filter-services--notifications) widget — mode "Watch all except" (exclude) / "Watch only" (include) + pattern chips + autocomplete input. Default: "Watch all except", empty pattern list.
+**Service filter.** A [Pattern Filter](#pattern-filter-services--notifications) widget — mode "Watch all except" (exclude) / "Watch only" (include) + pattern chips + autocomplete input. Composite `namespace/service` matching applies (same rules as the services board). Default: "Watch all except", empty pattern list.
 
 **Environment filter.** Same Pattern Filter widget, keyed by environment name. Default: "Watch all except", empty pattern list.
 

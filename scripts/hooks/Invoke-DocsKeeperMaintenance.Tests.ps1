@@ -82,7 +82,8 @@ BeforeAll {
             'docs/api/index.md'           = New-IndexMd @('/openapi.yaml', '/api-guidelines')
             'docs/design/index.md'        = New-IndexMd @('/README', '/design-tokens', '/components', '/views', '/behavior', '/data-model', '/libraries', '/mockup')
             'docs/design/mockup/index.md' = New-IndexMd @('/index.html')
-            'CLAUDE.md'                   = "# Project`n`n## Sources of truth`n`n- [docs/](docs/) — x.`n`n## Other`n"
+            'CLAUDE.md'                   = "# Project`n`n@.claude/team-process/conventions.md`n"
+            '.claude/team-process/conventions.md' = "## Sources of truth`n`n- [docs/](docs/) — x.`n`n## Other`n"
         }
     }
 
@@ -391,6 +392,47 @@ Describe 'Resolve-CommandQueue' {
         $queue = Resolve-CommandQueue -DriftedIndexDirs @() -RegistryDrift $true
         @($queue).Count | Should -Be 1
         $queue[0].Command | Should -Be '/docs-registry-sync'
+    }
+}
+
+Describe 'Expand-HostContent' {
+    It 'returns content unchanged when no @import lines present' {
+        $reader = New-FileReader -Files @{}
+        $result = Expand-HostContent -Content "# Title`n`n## Section`nsome content`n" -FileReader $reader
+        $result | Should -Be "# Title`n`n## Section`nsome content`n"
+    }
+    It 'appends the imported file content when a @path line is found' {
+        $reader = New-FileReader -Files @{ 'extra.md' = "## Sources of truth`n`n- entry" }
+        $result = Expand-HostContent -Content "# Base`n`n@extra.md`n" -FileReader $reader
+        $result | Should -Match '## Sources of truth'
+        $result | Should -Match 'entry'
+        $result | Should -Match '# Base'
+    }
+    It 'appends multiple imported files in order' {
+        $reader = New-FileReader -Files @{ 'a.md' = 'content-a'; 'b.md' = 'content-b' }
+        $result = Expand-HostContent -Content "@a.md`n@b.md`n" -FileReader $reader
+        $result | Should -Match 'content-a'
+        $result | Should -Match 'content-b'
+    }
+    It 'silently skips an import path that returns empty content' {
+        $reader = New-FileReader -Files @{ 'present.md' = 'real' }
+        # @notfound.md has no entry in FileReader so it returns '' — nothing appended for it
+        $result = Expand-HostContent -Content "@notfound.md`n@present.md`n" -FileReader $reader
+        $result | Should -Match 'real'
+    }
+    It 'does not recurse into @import lines within imported content' {
+        $reader = New-FileReader -Files @{
+            'level1.md' = "@level2.md`nfrom-level1"
+            'level2.md' = 'from-level2'
+        }
+        $result = Expand-HostContent -Content "@level1.md`n" -FileReader $reader
+        $result | Should -Match 'from-level1'
+        $result | Should -Not -Match 'from-level2'
+    }
+    It 'ignores @reference that is not at the start of a line' {
+        $reader = New-FileReader -Files @{ 'nope.md' = 'should-not-appear' }
+        $result = Expand-HostContent -Content "text @nope.md more`n" -FileReader $reader
+        $result | Should -Not -Match 'should-not-appear'
     }
 }
 

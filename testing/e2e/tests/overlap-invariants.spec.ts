@@ -168,6 +168,24 @@ const COMBOS_UNDER_TEST: ComboUnderTest[] = [
     ],
   },
 
+  // ── iteration-1: matrix with namespace collision (#353) ──────────────────
+
+  {
+    id: 'matrix-row-heads-namespace-collision-dark',
+    description: 'Matrix — all row headers must not overlap when namespace collision rows present — dark theme',
+    setup: async (page) => {
+      await page.goto('http://localhost:4200/matrix');
+      await page.waitForSelector('.row-head', { timeout: 20_000 });
+      await page.waitForTimeout(400);
+    },
+    overlapGroups: [
+      {
+        label: 'matrix row headers',
+        selector: '.row-head',
+      },
+    ],
+  },
+
   // ── iteration-0: swimlanes with minimal fields ────────────────────────────
 
   {

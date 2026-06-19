@@ -102,7 +102,7 @@ services:
       # Repoint the fetcher at the in-stack github-emulator instead of api.github.com.
       GITHUB_BASE_URL: "http://github-emulator:3100"
       GITHUB_TOKEN: "demo-token"
-      GITHUB_REPOS: "demo-org/auth-bff,demo-org/billing-webhook,demo-org/catalog-edge,demo-org/data-pipeline,demo-org/ledger-projector,demo-org/notification-worker,demo-org/order-svc,demo-org/payments-api,demo-org/platform-proxy,demo-org/search-indexer"
+      GITHUB_REPOS: "demo-org/storefront,demo-org/platform,demo-org/operations,demo-org/data-pipeline"
       GITHUB_VERSION_SOURCE: "artifact:version.txt"
       GITHUB_RATE_LIMIT: "${GITHUB_SIM_RATE_LIMIT:-5000}"
       GITHUB_RATE_LIMIT_BUDGET_PCT: "80"

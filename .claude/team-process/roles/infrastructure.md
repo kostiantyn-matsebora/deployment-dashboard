@@ -1,14 +1,15 @@
 # Role: Infrastructure (Deployment / DevOps)
 
-CI/CD pipelines, container orchestration, cloud-infra automation — secure, scalable,
-GitOps-driven.
-
-Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the communication protocol in [`../protocol.md`](../protocol.md).
+CI/CD pipelines, container orchestration, cloud-infra automation — secure, scalable, GitOps-driven; inherits [`../guardrails.md`](../guardrails.md) + [`../protocol.md`](../protocol.md).
 
 ## Hand back (binding)
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
 - **Emit the typed form verbatim** — `RESULT` (implementing) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
+- **Hand back in one command:**
+  1. Write rough form JSON to a temp file.
+  2. `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox path from your BRIEF>` — validates, writes `<role>.<TYPE>.json` to outbox, prints `{ type, ref }` pointer.
+  3. Send stdout **VERBATIM**. No separate outbox Write; no hand-authored pointer.
 - **Walk the full bar before hand-back** — every touched unit vs this role's non-negotiables; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm refactor** — a fix must not trade one smell for another; re-check the whole changed unit.
 
@@ -53,4 +54,5 @@ simplicity → reversibility.
 - **Never bake secrets or environment-specific values into committed files** — env files stay gitignored; changes idempotent + environment-parameterized.
 - **Test changed automation** (where applicable — script suites, config validation) — green — before handing back.
   - The wider net (smoke/e2e/regression) is the `testing` role's; failures return as a `FIX`.
-- **Self-verify** (pipeline/container builds, IaC validate/plan); actual counts in `RESULT.gate`. **Never** commit/push/PR — hand back for integration.
+- **Self-verify:** pipeline/container builds, IaC validate/plan; actual counts in `RESULT.gate`.
+- **Never** commit/push/PR — hand back for integration.

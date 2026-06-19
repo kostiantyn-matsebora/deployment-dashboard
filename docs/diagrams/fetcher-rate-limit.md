@@ -18,7 +18,7 @@ sequenceDiagram
     participant DD as demo-driver panel
     participant SPA as dashboard SPA
 
-    Note over F: end of EVERY poll cycle<br/>(backfill + normal poll)
+    Note over F: normal poll — once per cycle<br/>backfill — once per repo×env chunk
     F->>API: POST /api/control/events<br/>X-Api-Key + X-Component-Id: dashboard-fetcher<br/>{event_type:"rate-limit", state:"running",<br/> payload:{adapter, ci_limit, ci_remaining,<br/> own_budget, own_used, reset_at}}
     API->>DB: append row (payload stored verbatim)
     API-->>F: 204
@@ -83,6 +83,6 @@ Posted to the existing `POST /api/control/events` (auth `X-Api-Key` + `X-Compone
 |---|---|---|
 | 1 | **Reuse the existing control-plane transport; zero `Dashboard.Api` change.** | Payload is already opaque jsonb; the stream + broadcaster already fan out component events. |
 | 2 | **New `event_type: "rate-limit"`** (not overloaded onto `status`). | Clean filter on both UIs; additive to the open `event_type` vocabulary. |
-| 3 | **Emit after every cycle (backfill + normal), gated on having a GitHub snapshot.** | Matches "after each cycle"; avoids meaningless all-null reports. |
+| 3 | **Emit gated on having a GitHub snapshot: once per cycle (normal poll); once per repo×env chunk (backfill — continuous visibility throughout).** | Avoids meaningless all-null reports; backfill chunks give real-time quota burn during long backfills. |
 | 4 | **Both surfaces** — demo-driver panel card + main-SPA header chip. | Operator (demo) and end-user (SPA) both see usage/limits. |
 | 5 | **OpenAPI stays behaviour-only** — the payload shape is documented in `api-guidelines.md`, not `openapi.yaml` (payload remains `additionalProperties` opaque). | Project rule: openapi = observable behaviour; payload mechanics live in guidelines. |

@@ -805,12 +805,18 @@
 
 .icon-btn.has-active .badge-dot { display: block; }
 
-/* ── Notification popover ────────────────────────────────────────────────── */
-/* Width override for the richer notification popover. */
-:host ::ng-deep .notif-popover { min-width: 320px; }
+/* ── Services filter content wrapper ─────────────────────────────────────── */
+/* Scoped class on the services picker only — avoids touching .picker-content
+   used by legend/columns/fields/correlation which don't need a width cap. */
+.svc-filter-content { width: 320px; max-width: 320px; }
 
-/* Content wrapper — uses shared .picker-content base; only deltas here. */
-.notif-content { min-width: 300px; gap: 6px; }
+/* ── Notification popover ────────────────────────────────────────────────── */
+/* Width is set globally in styles.css (.glass-popover.notif-popover) because
+   the popover is appendTo="body" and lives outside this component's scope. */
+
+/* Content wrapper — uses shared .picker-content base; only deltas here.
+   width:100% fills the globally-capped 420px popover container. */
+.notif-content { min-width: 300px; width: 100%; max-width: 100%; gap: 6px; }
 
 /* Master toggle hint text */
 .notif-hint {
