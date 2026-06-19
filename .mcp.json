@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] && exec serena start-mcp-server --context ide-assistant --project-from-cwd || exit 0"
+      ],
+      "env": { "PYTHONUTF8": "1" }
+    },
+    "markdown": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] && exec npx -y mcp-server-markdown || exit 0"
+      ]
+    },
+    "playwright": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] && exec playwright-mcp --headless --browser chromium || exit 0"
+      ]
+    }
+  }
+}

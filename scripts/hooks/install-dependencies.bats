@@ -94,14 +94,26 @@ STUB
   chmod +x "$SANDBOX/dpkg"
 
   # apt-get stub — appends name to sentinel.
-  # On "install powershell", writes a real pwsh stub so the post-install
-  # command -v check in the script succeeds.
+  # On "install", inspects package args and writes the correct bin stub(s):
+  #   powershell       → writes pwsh stub
+  #   dotnet-sdk-10.0  → writes dotnet stub (--list-sdks + --version)
+  # "update" and all other subcommands are logged and exit 0.
   cat > "$SANDBOX/apt-get" << STUB
 #!$BASH_BIN
 echo "apt-get" >> "$SENTINEL"
 if [ "\$1" = "install" ]; then
-  printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
-  chmod +x "$SANDBOX/pwsh"
+  for _arg in "\$@"; do
+    case "\$_arg" in
+      powershell)
+        printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
+        chmod +x "$SANDBOX/pwsh"
+        ;;
+      dotnet-sdk-10.0)
+        printf '#!$BASH_BIN\nif [ "\$1" = "--list-sdks" ]; then\n  echo "10.0.109 [/usr/lib/dotnet/sdk]"\nelif [ "\$1" = "--version" ]; then\n  echo "10.0.109"\nfi\nexit 0\n' > "$SANDBOX/dotnet"
+        chmod +x "$SANDBOX/dotnet"
+        ;;
+    esac
+  done
 fi
 STUB
   chmod +x "$SANDBOX/apt-get"
@@ -152,6 +164,79 @@ STUB
   # destination file; prevents "command not found" under env -i.
   printf '#!%s\n: # no-op touch\n' "$BASH_BIN" > "$SANDBOX/touch"
   chmod +x "$SANDBOX/touch"
+
+  # serena stub — pre-installs a working serena (overridden per test as needed).
+  printf '#!%s\necho "Serena 1.5.4.dev0"\n' "$BASH_BIN" > "$SANDBOX/serena"
+  chmod +x "$SANDBOX/serena"
+
+  # mcp-server-markdown stub — pre-installs a working mcp-server-markdown.
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/mcp-server-markdown"
+  chmod +x "$SANDBOX/mcp-server-markdown"
+
+  # playwright-mcp stub — pre-installs a working playwright-mcp.
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright-mcp"
+  chmod +x "$SANDBOX/playwright-mcp"
+
+  # playwright stub — pre-installs a working playwright CLI.
+  # Treats "playwright install chromium" as a no-op success (exit 0).
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright"
+  chmod +x "$SANDBOX/playwright"
+
+  # dotnet stub — pre-installs a working dotnet with a 10.x SDK.
+  # Handles: --list-sdks (prints a 10.x line) and --version (prints version).
+  cat > "$SANDBOX/dotnet" << STUB
+#!$BASH_BIN
+if [ "\$1" = "--list-sdks" ]; then
+  echo "10.0.109 [/usr/lib/dotnet/sdk]"
+elif [ "\$1" = "--version" ]; then
+  echo "10.0.109"
+fi
+exit 0
+STUB
+  chmod +x "$SANDBOX/dotnet"
+
+  # uv stub — appends name to sentinel.
+  # On "tool install ...", writes an executable serena stub into $SANDBOX so
+  # the post-install command -v check in the script succeeds.
+  cat > "$SANDBOX/uv" << STUB
+#!$BASH_BIN
+echo "uv" >> "$SENTINEL"
+if [ "\$1" = "tool" ] && [ "\$2" = "install" ]; then
+  printf '#!$BASH_BIN\necho "Serena 1.5.4.dev0"\n' > "$SANDBOX/serena"
+  chmod +x "$SANDBOX/serena"
+fi
+STUB
+  chmod +x "$SANDBOX/uv"
+
+  # npm stub — appends name to sentinel.
+  # On "install -g <pkgs...>", writes the correct bin stub(s) into $SANDBOX
+  # based on which package names appear in the argument list:
+  #   mcp-server-markdown  → writes mcp-server-markdown stub
+  #   @playwright/mcp      → writes playwright-mcp stub
+  #   playwright           → writes playwright stub (CLI, not the MCP package)
+  cat > "$SANDBOX/npm" << STUB
+#!$BASH_BIN
+echo "npm" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  for _arg in "\$@"; do
+    case "\$_arg" in
+      mcp-server-markdown)
+        printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/mcp-server-markdown"
+        chmod +x "$SANDBOX/mcp-server-markdown"
+        ;;
+      @playwright/mcp)
+        printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/playwright-mcp"
+        chmod +x "$SANDBOX/playwright-mcp"
+        ;;
+      playwright)
+        printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/playwright"
+        chmod +x "$SANDBOX/playwright"
+        ;;
+    esac
+  done
+fi
+STUB
+  chmod +x "$SANDBOX/npm"
 }
 
 teardown() {
@@ -174,9 +259,9 @@ assert_sentinel_empty() {
 
 # Assert none of the installer tools appear in the sentinel log.
 assert_no_installer_invoked() {
-  if [ -f "$SENTINEL" ] && grep -qE '^(apt-get|snap|dpkg|wget|curl)$' "$SENTINEL"; then
+  if [ -f "$SENTINEL" ] && grep -qE '^(apt-get|snap|dpkg|wget|curl|uv|npm)$' "$SENTINEL"; then
     echo "Unexpected installer invocation in sentinel log:"
-    grep -E '^(apt-get|snap|dpkg|wget|curl)$' "$SENTINEL"
+    grep -E '^(apt-get|snap|dpkg|wget|curl|uv|npm)$' "$SENTINEL"
     return 1
   fi
 }
@@ -356,4 +441,311 @@ STUB
   # The update invocation must target only the Microsoft repo list.
   grep -q "update" "$APT_ARGS_LOG"
   grep -q "sources.list.d/microsoft-prod.list" "$APT_ARGS_LOG"
+}
+
+# ---------------------------------------------------------------------------
+# 11. serena: idempotent — serena already present, uv must NOT be invoked
+# ---------------------------------------------------------------------------
+
+@test "serena idempotent: serena present exits 0 without invoking uv" {
+  # sandbox already has a serena stub from setup(); uv is present but must not run.
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  if [ -f "$SENTINEL" ] && grep -q "^uv$" "$SENTINEL"; then
+    echo "uv was invoked despite serena already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 12. serena: install path — serena absent, uv present → uv invoked, exit 0
+# ---------------------------------------------------------------------------
+
+@test "serena install: serena absent + uv present installs serena and exits 0" {
+  # Remove the pre-installed serena stub so the script must install it.
+  rm -f "$SANDBOX/serena"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^uv$" "$SENTINEL"
+  # serena must now be resolvable (uv stub wrote it into $SANDBOX).
+  [ -x "$SANDBOX/serena" ]
+}
+
+# ---------------------------------------------------------------------------
+# 13. serena: missing uv prereq → exit 1 with missing-uv error on stderr
+# ---------------------------------------------------------------------------
+
+@test "serena missing uv: serena absent + uv absent exits 1 with 'uv not found' on stderr" {
+  # Remove both serena and uv from the sandbox.
+  rm -f "$SANDBOX/serena"
+  rm -f "$SANDBOX/uv"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"uv not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 14. markdown: idempotent — mcp-server-markdown present, npm must NOT be invoked
+# ---------------------------------------------------------------------------
+
+@test "markdown idempotent: mcp-server-markdown present exits 0 without invoking npm" {
+  # sandbox already has mcp-server-markdown and npm stubs from setup().
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  if [ -f "$SENTINEL" ] && grep -q "^npm$" "$SENTINEL"; then
+    echo "npm was invoked despite mcp-server-markdown already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 15. markdown: install path — mcp-server-markdown absent, npm present → exit 0
+# ---------------------------------------------------------------------------
+
+@test "markdown install: mcp-server-markdown absent + npm present installs it and exits 0" {
+  # Remove the pre-installed mcp-server-markdown stub.
+  rm -f "$SANDBOX/mcp-server-markdown"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^npm$" "$SENTINEL"
+  # mcp-server-markdown must now be resolvable (npm stub wrote it into $SANDBOX).
+  [ -x "$SANDBOX/mcp-server-markdown" ]
+}
+
+# ---------------------------------------------------------------------------
+# 16. markdown: missing npm prereq → exit 1 with missing-npm error on stderr
+# ---------------------------------------------------------------------------
+
+@test "markdown missing npm: mcp-server-markdown absent + npm absent exits 1 with 'npm not found' on stderr" {
+  # Remove both mcp-server-markdown and npm from the sandbox.
+  rm -f "$SANDBOX/mcp-server-markdown"
+  rm -f "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"npm not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 17. playwright: idempotent — playwright-mcp + playwright present, npm NOT invoked
+# ---------------------------------------------------------------------------
+
+@test "playwright idempotent: playwright-mcp and playwright present exits 0 without invoking npm" {
+  # sandbox already has playwright-mcp and playwright stubs from setup().
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  if [ -f "$SENTINEL" ] && grep -q "^npm$" "$SENTINEL"; then
+    echo "npm was invoked despite playwright-mcp and playwright already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 18. playwright: install path — bins absent, npm present → npm invoked, exit 0,
+#     both bins resolvable afterward
+# ---------------------------------------------------------------------------
+
+@test "playwright install: playwright-mcp and playwright absent + npm present installs both and exits 0" {
+  # Remove the pre-installed playwright-mcp and playwright stubs.
+  rm -f "$SANDBOX/playwright-mcp"
+  rm -f "$SANDBOX/playwright"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^npm$" "$SENTINEL"
+  # Both bins must now be resolvable (npm stub wrote them into $SANDBOX).
+  [ -x "$SANDBOX/playwright-mcp" ]
+  [ -x "$SANDBOX/playwright" ]
+}
+
+# ---------------------------------------------------------------------------
+# 19. playwright: missing npm prereq → exit 1 with npm-not-found error on stderr
+# ---------------------------------------------------------------------------
+
+@test "playwright missing npm: playwright-mcp and playwright absent + npm absent exits 1 with 'npm not found' on stderr" {
+  # Remove playwright-mcp, playwright, and npm from the sandbox.
+  rm -f "$SANDBOX/playwright-mcp"
+  rm -f "$SANDBOX/playwright"
+  rm -f "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"npm not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 20. playwright: browser download failure is non-fatal — script still exits 0
+# ---------------------------------------------------------------------------
+
+@test "playwright browser non-fatal: chromium download fails but script exits 0" {
+  # Strategy: place playwright-mcp and a failing-playwright stub BEFORE the npm
+  # stub runs, then use an npm stub that does NOT overwrite these pre-placed stubs.
+  # This way: the idempotency check fails (only one bin is present — we remove
+  # playwright-mcp so the install path runs), npm is invoked, it writes
+  # playwright-mcp, and the pre-placed failing playwright stub remains in place.
+  # The verify step passes (both bins exist), but the browser step returns non-zero
+  # — the non-fatal guard must let the script continue to exit 0.
+
+  # Remove playwright-mcp so idempotency check fails; keep a failing playwright stub.
+  rm -f "$SANDBOX/playwright-mcp"
+
+  # Overwrite the default playwright stub with one that fails on "install".
+  printf '#!%s\nif [ "$1" = "install" ]; then exit 1; fi\nexit 0\n' \
+    "$BASH_BIN" > "$SANDBOX/playwright"
+  chmod +x "$SANDBOX/playwright"
+
+  # Override the npm stub to write only playwright-mcp (not playwright),
+  # so the pre-placed failing playwright stub is used for the browser step.
+  # Uses only shell builtins + $BASH_BIN (no cat/sed/chmod in PATH under env -i).
+  cat > "$SANDBOX/npm" << NPMSTUB
+#!$BASH_BIN
+echo "npm" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/playwright-mcp"
+  $CHMOD_BIN +x "$SANDBOX/playwright-mcp"
+fi
+NPMSTUB
+  chmod +x "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  # Browser failure must NOT abort the bootstrap.
+  [ "$status" -eq 0 ]
+  # The chromium-failure warning must appear in stderr output.
+  [[ "$output" == *"chromium download failed"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 21. dotnet: idempotent — dotnet already present with 10.x SDK, apt NOT invoked
+# ---------------------------------------------------------------------------
+
+@test "dotnet idempotent: dotnet with 10.x SDK present exits 0 without invoking apt-get install" {
+  # sandbox already has a dotnet stub with a 10.x SDK from setup().
+  # Capture apt-get args to an install log so we can assert no dotnet install ran.
+  APT_INSTALL_LOG="$SANDBOX/apt-install.log"
+  cat > "$SANDBOX/apt-get" << STUB
+#!$BASH_BIN
+echo "apt-get" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  echo "\$@" >> "$APT_INSTALL_LOG"
+fi
+STUB
+  chmod +x "$SANDBOX/apt-get"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  # dotnet-sdk-10.0 must NOT appear in any apt-get install invocation.
+  if [ -f "$APT_INSTALL_LOG" ] && grep -q "dotnet-sdk-10.0" "$APT_INSTALL_LOG"; then
+    echo "apt-get install dotnet-sdk-10.0 was invoked despite 10.x SDK already present"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 22. dotnet: install path — dotnet absent, apt-get present → installed, exit 0
+# ---------------------------------------------------------------------------
+
+@test "dotnet install: dotnet absent + apt-get present installs dotnet and exits 0" {
+  # Remove the pre-installed dotnet stub so the script must install it.
+  rm -f "$SANDBOX/dotnet"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^apt-get$" "$SENTINEL"
+  # dotnet must now be resolvable (apt-get stub wrote it into $SANDBOX).
+  [ -x "$SANDBOX/dotnet" ]
+}
+
+# ---------------------------------------------------------------------------
+# 23. dotnet: missing apt-get prereq → exit 1 with apt-get-not-found on stderr
+# ---------------------------------------------------------------------------
+
+@test "dotnet missing apt-get: dotnet absent + apt-get absent exits 1 with 'apt-get not found' on stderr" {
+  # Keep pwsh + serena + mcp-server-markdown + playwright-mcp + playwright so
+  # those sections skip; remove dotnet and apt-get to trigger the .NET prereq failure.
+  rm -f "$SANDBOX/dotnet"
+  rm -f "$SANDBOX/apt-get"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"apt-get not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 24. dotnet: wrong-version not idempotent — 8.x SDK present → installs 10.x, exit 0
+# ---------------------------------------------------------------------------
+
+@test "dotnet wrong version: dotnet with only 8.x SDK present is not idempotent; installs 10.x and exits 0" {
+  # Override the default dotnet stub to report only an 8.x SDK — no 10.x line.
+  cat > "$SANDBOX/dotnet" << STUB
+#!$BASH_BIN
+if [ "\$1" = "--list-sdks" ]; then
+  echo "8.0.404 [/usr/lib/dotnet/sdk]"
+elif [ "\$1" = "--version" ]; then
+  echo "8.0.404"
+fi
+exit 0
+STUB
+  chmod +x "$SANDBOX/dotnet"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^apt-get$" "$SENTINEL"
+  # After install, dotnet stub written by apt-get stub must report a 10.x SDK.
+  "$SANDBOX/dotnet" --list-sdks | grep -q '^10\.'
 }
