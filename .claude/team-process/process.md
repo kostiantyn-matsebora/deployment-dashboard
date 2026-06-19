@@ -53,11 +53,12 @@ Roles + guardrails identical across modes — only substrate differs. Full matri
 
 ## Session state & resume
 
-`.team-process/sessions/<id>/` — gitignored; `<id>` = sanitized `TeamCreate` name; survives boundaries/reboots; concurrent runs coexist as distinct dirs.
+`.team-process/sessions/<id>/` — gitignored; `<id>` = sanitized session/team name (set at `-SetMarker`); survives boundaries/reboots; concurrent runs coexist as distinct dirs.
 
 - **Contents.** `session.json` (durable record = run ledger), `inbox/` (orch→member `BRIEF`/`FIX`), `outbox/` (member hand-backs).
-- **Id.** Sanitized `TeamCreate` name = each member's `team_name`. Re-creating the same id **merges** (resume path, not fresh). Fresh start: `-EndSession -Id <id>` before `TeamCreate`; omit `-Id` to abandon all.
-- **Team mode active** whenever any session record exists — blocks foreground in-session `Agent`/`Task` spawns. Spans reboots. Legacy single-file `session.json` read for back-compat.
+- **Id.** Sanitized `-SetMarker -Team` name. Re-running `-SetMarker` with the same id **merges** (resume path, not fresh). Fresh start: `-EndSession -Id <id>` before `-SetMarker`; omit `-Id` to abandon all.
+- **Lifecycle is explicit, not hook-driven.** `TeamCreate`/`TeamDelete` were removed from Claude Code (2.1.178); the lead opens the run with `Invoke-TeamModeGuard.ps1 -SetMarker` and closes it with `-EndSession`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
+- **Team mode active** whenever any session record exists — blocks foreground in-session `Agent`/`Task` spawns (a member is recognized by `run_in_background`, or `team_name` for back-compat). Spans reboots. Legacy single-file `session.json` read for back-compat.
 - **Workflow classifier.** `workflow`: `feature-team` (follows phase enum) | `freeform` (free-form phase string).
 - **Run ledger = `session.json`.** Orchestrator enriches it (roster · phase · per-wave changed/decided/deferred). Shape: [`schemas/session.schema.json`](schemas/session.schema.json).
 - **Lanes = generated projection.** `roster[].lane` → `lane` field (read by lane guard). Never hand-maintain. Sync: `Invoke-TeamModeGuard.ps1 -SyncLane -Id <id> -Role <role>`.
@@ -65,7 +66,7 @@ Roles + guardrails identical across modes — only substrate differs. Full matri
 - **Match work to existing run — propose resume, never fork.** Before `/feature-team` or "work on X":
   - **Issue (#number):** `Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>` — non-empty result = propose resume.
   - **Informal:** match against `summary` in SessionStart reminder; plausible match → propose resume.
-- **Resume.** Reboot kills live members; re-create team + re-dispatch in-flight wave from ledger — ledger is durable truth, live team rebuilt from it.
+- **Resume.** Reboot kills live members; re-run `-SetMarker` (merges the record) + re-spawn the in-flight wave's background Agents from the ledger — ledger is durable truth, live members rebuilt from it.
 - **Abandon.** `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>` (omit `-Id` for all).
 
 ## Decision record — capture, surface, publish

@@ -135,26 +135,6 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "TeamCreate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -SetMarker",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "TeamDelete",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -ClearMarker",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "Skill",
         "hooks": [
           {

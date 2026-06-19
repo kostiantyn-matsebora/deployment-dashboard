@@ -1,5 +1,5 @@
 ---
-description: Launch a plan-and-confirm Claude agent team for a multi-layer issue. The lead does docs-first intake, drafts a lane map + member roster, SURFACES the plan, and only TeamCreate + spawns members after approval. Implements .claude/team-process/.
+description: Launch a plan-and-confirm Claude agent team for a multi-layer issue. The lead does docs-first intake, drafts a lane map + member roster, SURFACES the plan, and only opens the session (-SetMarker) + spawns background-Agent members after approval. Implements .claude/team-process/.
 argument-hint: <issue-number | task description>
 ---
 
@@ -16,8 +16,11 @@ command. Members **never** commit; the lead is the sole integration gate.
 
 ## Prerequisite
 
-Experimental teams feature enabled: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in user or project
-settings. If unset, stop and tell the user to enable it.
+Agent-teams surface enabled: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in user or project settings —
+this gates `SendMessage` / `TaskCreate` / background `Agent`. If unset, stop and tell the user to
+enable it. **`TeamCreate` / `TeamDelete` are no longer used** (removed from Claude Code in 2.1.178);
+members run as **background Agents** and the session lifecycle is driven by an explicit
+`Invoke-TeamModeGuard.ps1` call (below), not a tool hook.
 
 ## Member roster (role → `subagent_type`)
 
@@ -56,29 +59,33 @@ Only proceed to a fresh plan when no existing run matches (or the user declines 
 ## 1 — Plan (NO team yet)
 
 Run [`/intake`](intake.md) → [`/contract`](contract.md) (if cross-layer) → [`/plan-dispatch`](plan-dispatch.md)
-**solo**. Then **surface and STOP** — present scope + roster + lane map; do **not** `TeamCreate` or
-spawn anything until the user approves (repo rule: *surface before launch; for N parallel members get
-explicit confirmation*).
+**solo**. Then **surface and STOP** — present scope + roster + lane map; do **not** open the session
+(`-SetMarker`) or spawn anything until the user approves (repo rule: *surface before launch; for N
+parallel members get explicit confirmation*).
 
 ## 2 — Spawn (after approval)
 
-- **`TeamCreate`** with a name derived from the target (e.g. `feat-<issue>`), description = the issue
-  summary. *(A `PostToolUse(TeamCreate)` hook writes the durable session record
-  `.team-process/sessions/<id>/session.json` with `workflow: feature-team` (`<id>` = sanitized team
-  name); the team-mode guard then blocks any foreign in-session `Agent`/Task subagent — every member spawn
-  below MUST set `team_name`, or it is rejected as an in-session downgrade. The record persists across
-  reboots; concurrent runs coexist as distinct directories; see [`process.md`](../team-process/process.md)
-  → *Session state & resume*.)*
-  *(Before `TeamCreate`: if a stale same-id session already exists, call `-EndSession -Id <id>` first — re-creating without clearing merges (resume path), not fresh.)*
+- **Open the session record** — run (no `TeamCreate` tool exists):
+  ```
+  pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -SetMarker -Team feat-<issue> -Workflow feature-team -Issue <ref> -Summary "<essence>"
+  ```
+  This writes the durable record `.team-process/sessions/<id>/session.json` with `workflow:
+  feature-team` (`<id>` = sanitized `-Team`) and creates its `inbox/` + `outbox/`. The record's
+  EXISTENCE flips team mode on: the team-mode guard then blocks any foreground in-session `Agent`/Task
+  subagent — every member spawn below MUST be a **background Agent** (`run_in_background: true`), or it
+  is rejected as an in-session downgrade. The record persists across reboots; concurrent runs coexist
+  as distinct directories; see [`process.md`](../team-process/process.md) → *Session state & resume*.
+  *(If a stale same-id session already exists, call `-EndSession -Id <id>` first — re-running `-SetMarker` without clearing merges (resume path), not fresh.)*
 - **Write each member's `BRIEF` to its inbox** *before* spawning — normalize with
   `Format-ProtocolForm.ps1`, then write to `.team-process/sessions/<id>/inbox/<role>.BRIEF.json`. The
   spec / lane / task / gate / seed all live in this file; the spawn prompt only points at it (keeps the
   task durable, auditable, and out of the lead's context). See
   [`protocol.md`](../team-process/protocol.md) → *Message delivery*.
 - **Spawn each member** via the `Agent` tool to execute [`/implement`](implement.md) in its lane:
-  - `team_name` = the team · `name` = the **role** (e.g. `backend`) or role-prefixed with a short task hint (e.g. `backend: extract HTTP adapter`) — the role must be the leading token so it is visible in the agent statusline; never set `name` to only the task · `subagent_type` = the mapped agent above.
+  - `run_in_background: true` — **the member substrate**: spawns a background Agent the lead coordinates with via `SendMessage` while it works. Also what the team-mode guard recognizes as a legitimate member (vs a blocked foreground subagent).
+  - `name` = the **role** (e.g. `backend`) or role-prefixed with a short task hint (e.g. `backend: extract HTTP adapter`) — the role must be the leading token so it is visible in the agent statusline AND is the `SendMessage` address; never set `name` to only the task · `subagent_type` = the mapped agent above.
   - `isolation: "worktree"` for every member that writes code in parallel (prevents same-file clobbers).
-  - `run_in_background: true` so the lead can coordinate while members work.
+  - `team_name` is **optional** (back-compat only) — set it to the `<id>` if your runtime still supports named teams; not required, and the guard accepts the spawn on `run_in_background` alone.
   - **Prompt = brief-by-reference (NOT the brief restated):** "Read your `BRIEF` at
     `<absolute-path-to-inbox-BRIEF.json>` — it carries your spec / lane / task / gate." + "inherit your
     role file `.claude/team-process/roles/<role>.md` and its guardrails" + the `/implement` self-verify
@@ -121,11 +128,11 @@ explicit confirmation*).
 - Run [`/ship`](ship.md) — commit in logical groups → branch → open/update PR → watch CI green.
   Never push the default branch. **Publish the decision record** to the issue (confirm-first) via
   `scripts/team-process/Update-IssueDecisionRecord.ps1` — see [`/ship`](ship.md).
-- **`TeamDelete`** once integrated — but only **after** the decision record is published; `TeamDelete`
-  removes the session record (the decisions' live store), so the issue comment is their durable home.
-  *(A `PostToolUse(TeamDelete)` hook removes that team's session record. On a fresh session a leftover
-  record is NOT auto-cleared — `SessionStart` reminds you to resume or abandon it; abandon a stale one
-  by id with `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>`.)*
+- **Close the session** once integrated — run `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>` (there is
+  no `TeamDelete` tool), but only **after** the decision record is published; teardown removes the
+  session record (the decisions' live store), so the issue comment is their durable home.
+  *(On a fresh session a leftover record is NOT auto-cleared — `SessionStart` reminds you to resume or
+  abandon it; abandon a stale one by id with the same `-EndSession -Id <id>`.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 
