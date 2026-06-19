@@ -21,17 +21,19 @@ Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FIN
 - **The per-form tables below are the authoring source** (field · meaning · constraint · examples);
   the schema is the enforcement source. They are kept in lock-step.
 
-**Emit + validate.** Build the JSON, then validate/normalize it with
-`scripts/hooks/Format-ProtocolForm.ps1` — it validates against the schema (plus the one cross-field
-rule), canonicalizes key order, drops empty optional fields, and pretty-prints. The `SendMessage`
-guard rejects any non-conforming message.
+**Emit + validate (one command).** `scripts/hooks/Format-ProtocolForm.ps1` validates against the
+schema (plus the one cross-field rule), canonicalizes key order, drops empty optional fields, and —
+with `-OutboxDir` — writes the box file and prints the pointer to send. The `SendMessage` guard rejects
+any non-conforming message, so do the work up front:
 
-1. **Write the form JSON to a temp file** (rough order/casing is fine — the normalizer fixes it).
-2. **Normalize:** `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file>`
-   (or pipe the JSON in via stdin). Non-zero exit + a stderr message means it's invalid — fix and retry.
-3. **Deliver the normalized form by reference** — write it to the session box (`inbox` for a dispatch
-   `BRIEF`/`FIX`, `outbox` for a hand-back) and send a `{ type, ref }` pointer (see *Message delivery*
-   below). A full form sent inline as the `SendMessage` body still validates (back-compat).
+1. **Write the rough form JSON to a temp file** (rough order/casing is fine — the normalizer fixes it).
+2. **Hand back in one step** (member → orch):
+   `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox>`
+   It validates, writes `<role>.<TYPE>.json` to your `outbox`, and **prints the exact
+   `{ type, ref }` pointer**. Non-zero exit + a stderr message means it's invalid — fix and retry.
+3. **Send that stdout VERBATIM** as the `SendMessage` body. (Omit `-OutboxDir` to just normalize a form
+   to stdout — e.g. when the orchestrator writes a dispatch `BRIEF`/`FIX` to a member `inbox`, or to
+   inline a full form for back-compat.)
 
 ```jsonc
 // rough input (unordered, lowercase type, empty optionals)   ->   normalized output sent verbatim
@@ -60,10 +62,12 @@ the durable payload; `SendMessage` (or, for the first dispatch, the spawn prompt
 
 `<id>` = the `team_name` sanitized; `<TYPE>` = the form (e.g. `backend.BRIEF.json`, `backend.RESULT.json`).
 
-1. **Write the normalized form** to the box: dispatch → the orchestrator writes the member's `inbox`;
-   hand-back → the member writes its own `outbox`.
+1. **Write the normalized form** to the box: hand-back → the member runs
+   `Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox>` (one command writes its `outbox`
+   file *and* prints the pointer — see *Emit + validate* above); dispatch → the orchestrator writes the
+   member's `inbox`.
 2. **Deliver the pointer** — exactly `{ "type": "<FORM>", "ref": "<ABSOLUTE path to the file>" }`, no
-   other keys:
+   other keys (the hand-back command prints this for you):
    - **Hand-back + re-dispatch** (member already live) → the `{ type, ref }` pointer is the `SendMessage`
      body.
    - **First dispatch** (the spawning `BRIEF`) → the spawn prompt names the inbox `ref` path and tells

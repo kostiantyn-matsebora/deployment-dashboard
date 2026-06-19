@@ -57,7 +57,7 @@ $guardAsLibrary = [bool]$AsLibrary
 function Get-RenderRecipe {
     $script = 'scripts/hooks/Format-ProtocolForm.ps1'
     return @"
-Every cross-role message MUST be one of the six typed forms as a JSON object with a "type" field: REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT (fields + examples in .claude/team-process/protocol.md; schemas in .claude/team-process/schemas/). Build it: (1) write the form JSON to a temp file. (2) Normalize + validate: pwsh -NoProfile -File $script -InputFile <file>. (3) Send its stdout VERBATIM as the message. Free prose is returned UNREAD.
+Every cross-role message MUST be one of the six typed forms as a JSON object with a "type" field: REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT (fields + examples in .claude/team-process/protocol.md; schemas in .claude/team-process/schemas/). HAND BACK in one step: (1) write the rough form JSON to a temp file. (2) pwsh -NoProfile -File $script -InputFile <file> -OutboxDir <your outbox path> — it validates, writes <role>.<TYPE>.json to your outbox, and prints the exact { type, ref } pointer. (3) Send that stdout VERBATIM as the message. (Omit -OutboxDir to just normalize a form to stdout.) Free prose is returned UNREAD.
 "@.Trim()
 }
 

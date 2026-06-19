@@ -9,6 +9,7 @@ Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
 - **Emit the typed form verbatim** — `RESULT` / `ARTIFACT` (settled interface) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
+- **Hand back in one command** — write the rough form JSON to a temp file, then `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox path from your BRIEF>`; it validates, writes `<role>.<TYPE>.json` to your outbox, and prints the `{ type, ref }` pointer — send that stdout **VERBATIM** as the message. No separate outbox Write, no hand-authored pointer.
 - **Walk the full bar before hand-back** — every touched part of the spec vs this role's non-negotiables; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm** — a change must not trade one defect for another; re-check the whole changed unit.
 

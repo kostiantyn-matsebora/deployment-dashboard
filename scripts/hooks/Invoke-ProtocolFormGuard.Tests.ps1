@@ -202,6 +202,13 @@ Describe 'Get-ProtocolFormDecision — file-based hand-back pointers' {
         (Get-ProtocolFormDecision -Text "{ ""type"":""RESULT"",""ref"":""$($f -replace '\\','/')"" }").Block | Should -BeFalse
     }
 
+    It 'passes a pointer produced by the one-command emit mode (Save-ProtocolForm)' {
+        # End-to-end: the emit mode writes the outbox file and returns the exact pointer; the
+        # guard must accept that pointer with no further massaging — closing the block-loop.
+        $ptr = Save-ProtocolForm -Text $script:ValidResult -OutboxDir $script:Outbox
+        (Get-ProtocolFormDecision -Text $ptr).Block | Should -BeFalse
+    }
+
     It 'passes a pointer to a valid BRIEF file in the inbox (dispatch)' {
         $f = Join-Path $script:Inbox 'backend.BRIEF.json'
         Set-Content -LiteralPath $f -Value $script:ValidBrief
@@ -274,6 +281,7 @@ Describe 'Get-RenderRecipe — block reasons carry the JSON recipe' {
         $recipe | Should -Match 'REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT'
         $recipe | Should -Match 'Format-ProtocolForm\.ps1'
         $recipe | Should -Match '-InputFile'
+        $recipe | Should -Match '-OutboxDir'
         $recipe | Should -Match 'VERBATIM'
     }
     It 'a malformed-form reason embeds the recipe' {
