@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [0.17.0] - 2026-06-19
 
+### Added
+
+- **Filter the dashboard by namespace/service (#353).** Deployment events now carry an optional, CI/CD-agnostic `namespace` that scopes each service; the GitHub fetcher populates it with the source repository name, and existing rows are backfilled with the repository parsed from their run URL. The Matrix and Swimlanes are keyed by `(namespace, service)`, so the same service name reported from two repositories no longer collapses into one row (the `namespace/` prefix is shown only when a service name appears under more than one namespace). The services filter and notification preferences accept `namespace/service` glob patterns — a slashless pattern still matches the service segment across every namespace, so existing saved filters keep working — and the pattern autocomplete suggests namespaces and `namespace/service` composites derived from the live data.
+
 
 ## [0.16.3] - 2026-06-18
 
