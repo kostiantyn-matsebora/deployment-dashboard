@@ -139,15 +139,30 @@ exec "\$@"
 STUB
   chmod +x "$SANDBOX/sudo"
 
-  # mktemp stub — echoes a deterministic path inside $SANDBOX and touches it
-  # so the script can write to it and rm it without hitting the real filesystem.
+  # mktemp stub — echoes a deterministic path inside $SANDBOX.
+  # Handles both the file form (default; for .deb download) and directory form (-d;
+  # for the tokensave temp-dir).  Delegates mkdir to the real binary via its absolute path.
+  MKDIR_BIN="$(command -v mkdir)"
   cat > "$SANDBOX/mktemp" << STUB
 #!$BASH_BIN
-_dest="$SANDBOX/pkg.deb"
-touch "\$_dest"
-echo "\$_dest"
+_make_dir=0
+for _a in "\$@"; do [ "\$_a" = "-d" ] && _make_dir=1; done
+if [ "\$_make_dir" = "1" ]; then
+  _dest="$SANDBOX/mktemp-dir-\$\$"
+  $MKDIR_BIN -p "\$_dest"
+  echo "\$_dest"
+else
+  _dest="$SANDBOX/pkg.deb"
+  : > "\$_dest"
+  echo "\$_dest"
+fi
 STUB
   chmod +x "$SANDBOX/mktemp"
+
+  # mkdir stub — delegates to the real mkdir binary (needed for $HOME/.local/bin creation).
+  MKDIR_BIN="$(command -v mkdir)"
+  printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$MKDIR_BIN" > "$SANDBOX/mkdir"
+  chmod +x "$SANDBOX/mkdir"
 
   # rm stub — no-op; prevents the script from deleting sandbox stubs or
   # touching the real filesystem when it cleans up the temp .deb file.
@@ -174,6 +189,7 @@ STUB
   chmod +x "$SANDBOX/mcp-server-markdown"
 
   # playwright-mcp stub — pre-installs a working playwright-mcp.
+  # Accepts all subcommands (including "install-browser chrome-for-testing") and exits 0.
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright-mcp"
   chmod +x "$SANDBOX/playwright-mcp"
 
@@ -196,17 +212,93 @@ STUB
   chmod +x "$SANDBOX/dotnet"
 
   # uv stub — appends name to sentinel.
-  # On "tool install ...", writes an executable serena stub into $SANDBOX so
-  # the post-install command -v check in the script succeeds.
+  # On "tool install <pkg>", writes the correct bin stub into $SANDBOX so the
+  # post-install command -v check in the script succeeds:
+  #   serena               → writes serena stub
+  #   code-review-graph    → writes code-review-graph stub
   cat > "$SANDBOX/uv" << STUB
 #!$BASH_BIN
 echo "uv" >> "$SENTINEL"
 if [ "\$1" = "tool" ] && [ "\$2" = "install" ]; then
-  printf '#!$BASH_BIN\necho "Serena 1.5.4.dev0"\n' > "$SANDBOX/serena"
-  chmod +x "$SANDBOX/serena"
+  case "\$3" in
+    *serena*)
+      printf '#!$BASH_BIN\necho "Serena 1.5.4.dev0"\n' > "$SANDBOX/serena"
+      chmod +x "$SANDBOX/serena"
+      ;;
+    code-review-graph)
+      printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/code-review-graph"
+      chmod +x "$SANDBOX/code-review-graph"
+      ;;
+  esac
 fi
 STUB
   chmod +x "$SANDBOX/uv"
+
+  # code-review-graph stub — pre-installs a working code-review-graph.
+  # Accepts all subcommands (including "build") and exits 0.
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/code-review-graph"
+  chmod +x "$SANDBOX/code-review-graph"
+
+  # tokensave stub — pre-installs a working tokensave.
+  # Accepts all subcommands (including "serve", "init", "disable-upload-counter") and exits 0.
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/tokensave"
+  chmod +x "$SANDBOX/tokensave"
+
+  # tar stub — appends name to sentinel; extracts nothing (no-op).
+  # tokensave install uses tar -xzf; under env -i tar must be stubbed.
+  printf '#!%s\necho "tar" >> "%s"\nexit 0\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/tar"
+  chmod +x "$SANDBOX/tar"
+
+  # install stub — appends name to sentinel; copies the source file to the
+  # destination so command -v can resolve the installed binary.
+  # Usage: install -m 0755 <src> <dest>
+  cat > "$SANDBOX/install" << STUB
+#!$BASH_BIN
+echo "install" >> "$SENTINEL"
+# Parse: install [-m <mode>] <src> <dest>
+_src=""
+_dest=""
+_skip_next=0
+for _a in "\$@"; do
+  if [ "\$_skip_next" = "1" ]; then _skip_next=0; continue; fi
+  case "\$_a" in
+    -m) _skip_next=1 ;;
+    -*) ;;
+    *) if [ -z "\$_src" ]; then _src="\$_a"; else _dest="\$_a"; fi ;;
+  esac
+done
+if [ -n "\$_src" ] && [ -n "\$_dest" ]; then
+  printf '#!$BASH_BIN\nexit 0\n' > "\$_dest"
+  chmod +x "\$_dest"
+fi
+exit 0
+STUB
+  chmod +x "$SANDBOX/install"
+
+  # find stub — used by tokensave install to locate the extracted binary.
+  # Returns a deterministic path that the install stub will act on.
+  cat > "$SANDBOX/find" << STUB
+#!$BASH_BIN
+echo "$SANDBOX/tokensave"
+STUB
+  chmod +x "$SANDBOX/find"
+
+  # cargo stub — appends name to sentinel; exits 1 by default (crates.io blocked).
+  # Overridden per test for cargo-success scenarios.
+  printf '#!%s\necho "cargo" >> "%s"\nexit 1\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/cargo"
+  chmod +x "$SANDBOX/cargo"
+
+  # sed stub — used by tokensave version resolution (sed -E 's#.*/tag/v?##').
+  # Delegates to the real sed binary.
+  SED_BIN="$(command -v sed)"
+  printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$SED_BIN" > "$SANDBOX/sed"
+  chmod +x "$SANDBOX/sed"
+
+  # head stub — used by tokensave install (find ... | head -n1).
+  # Delegates to the real head binary.
+  HEAD_BIN="$(command -v head)"
+  printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$HEAD_BIN" > "$SANDBOX/head"
+  chmod +x "$SANDBOX/head"
 
   # npm stub — appends name to sentinel.
   # On "install -g <pkgs...>", writes the correct bin stub(s) into $SANDBOX
@@ -259,9 +351,9 @@ assert_sentinel_empty() {
 
 # Assert none of the installer tools appear in the sentinel log.
 assert_no_installer_invoked() {
-  if [ -f "$SENTINEL" ] && grep -qE '^(apt-get|snap|dpkg|wget|curl|uv|npm)$' "$SENTINEL"; then
+  if [ -f "$SENTINEL" ] && grep -qE '^(apt-get|snap|dpkg|wget|curl|uv|npm|cargo)$' "$SENTINEL"; then
     echo "Unexpected installer invocation in sentinel log:"
-    grep -E '^(apt-get|snap|dpkg|wget|curl|uv|npm)$' "$SENTINEL"
+    grep -E '^(apt-get|snap|dpkg|wget|curl|uv|npm|cargo)$' "$SENTINEL"
     return 1
   fi
 }
@@ -655,6 +747,41 @@ NPMSTUB
 }
 
 # ---------------------------------------------------------------------------
+# 20b. playwright: MCP browser download failure is non-fatal — script still exits 0
+# ---------------------------------------------------------------------------
+
+@test "playwright MCP browser non-fatal: chrome-for-testing download fails but script exits 0" {
+  # Trigger the install path by removing playwright-mcp; keep a failing playwright-mcp stub
+  # for the browser sub-step while the npm stub writes a fresh bin for the post-install check.
+
+  # Remove playwright-mcp so the idempotency check fails and npm runs.
+  rm -f "$SANDBOX/playwright-mcp"
+
+  # Override npm stub: write the post-install playwright-mcp inline via printf (bash builtin,
+  # always available under env -i).  The written stub exits 1 on install-browser to simulate
+  # a failed cdn download, and exits 0 for all other invocations.
+  cat > "$SANDBOX/npm" << NPMSTUB
+#!$BASH_BIN
+echo "npm" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  printf '#!$BASH_BIN\nif [ "\$1" = "install-browser" ]; then exit 1; fi\nexit 0\n' > "$SANDBOX/playwright-mcp"
+  chmod +x "$SANDBOX/playwright-mcp"
+fi
+NPMSTUB
+  chmod +x "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  # MCP browser failure must NOT abort the bootstrap.
+  [ "$status" -eq 0 ]
+  # The chrome-for-testing failure warning must appear in stderr output.
+  [[ "$output" == *"chrome-for-testing download failed"* ]]
+}
+
+# ---------------------------------------------------------------------------
 # 21. dotnet: idempotent — dotnet already present with 10.x SDK, apt NOT invoked
 # ---------------------------------------------------------------------------
 
@@ -748,4 +875,135 @@ STUB
   grep -q "^apt-get$" "$SENTINEL"
   # After install, dotnet stub written by apt-get stub must report a 10.x SDK.
   "$SANDBOX/dotnet" --list-sdks | grep -q '^10\.'
+}
+
+# ---------------------------------------------------------------------------
+# 25. code-review-graph: idempotent — present, uv must NOT be invoked
+# ---------------------------------------------------------------------------
+
+@test "code-review-graph idempotent: code-review-graph present exits 0 without invoking uv" {
+  # sandbox already has a code-review-graph stub from setup(); uv must not run for it.
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  # uv must not have been invoked for code-review-graph (it may be absent from log entirely).
+  if [ -f "$SENTINEL" ] && grep -q "^uv$" "$SENTINEL"; then
+    echo "uv was invoked despite code-review-graph already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 26. code-review-graph: install path — absent + uv present → installs, exits 0
+# ---------------------------------------------------------------------------
+
+@test "code-review-graph install: absent + uv present installs it and exits 0" {
+  # Remove the pre-installed code-review-graph stub so the script must install it.
+  rm -f "$SANDBOX/code-review-graph"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^uv$" "$SENTINEL"
+  # code-review-graph must now be resolvable (uv stub wrote it into $SANDBOX).
+  [ -x "$SANDBOX/code-review-graph" ]
+}
+
+# ---------------------------------------------------------------------------
+# 27. code-review-graph: missing uv prereq → exit 1 with 'uv not found' on stderr
+# ---------------------------------------------------------------------------
+
+@test "code-review-graph missing uv: absent + uv absent exits 1 with 'uv not found' on stderr" {
+  # Remove both code-review-graph and uv from the sandbox.
+  rm -f "$SANDBOX/code-review-graph"
+  rm -f "$SANDBOX/uv"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"uv not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 28. tokensave: idempotent — present, no download attempted
+# ---------------------------------------------------------------------------
+
+@test "tokensave idempotent: tokensave present exits 0 without attempting download" {
+  # sandbox already has a tokensave stub from setup().
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  # curl must not have been called for tokensave (idempotency check skips download).
+  # We check that no download path was entered by asserting tar was not invoked
+  # (the prebuilt download path calls tar; if tokensave is present it never runs).
+  if [ -f "$SENTINEL" ] && grep -q "^tar$" "$SENTINEL"; then
+    echo "tar was invoked despite tokensave already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 29. tokensave: prebuilt install success — absent; stub curl+tar+install so a
+#     fake tokensave bin is produced → exits 0, tokensave now resolvable
+# ---------------------------------------------------------------------------
+
+@test "tokensave prebuilt install: absent + curl+tar available installs binary and exits 0" {
+  # Remove the pre-installed tokensave stub — script must download and install it.
+  rm -f "$SANDBOX/tokensave"
+
+  # The default curl stub writes the -o file as empty; tar is a no-op; the find
+  # stub returns $SANDBOX/tokensave as the extracted binary path; the install stub
+  # copies source to destination writing a real executable — all already set up in setup().
+  # We need curl to write a non-empty tarball path for tar to accept, but since
+  # tar is a stub (no-op) the content doesn't matter — curl just needs to write
+  # the -o file (which the existing curl stub does via touch).
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    HOME="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  # curl must have been invoked for the version redirect + download.
+  grep -q "^curl$" "$SENTINEL"
+  # tokensave must now be resolvable.
+  [ -x "$SANDBOX/.local/bin/tokensave" ] || [ -x "$SANDBOX/tokensave" ]
+}
+
+# ---------------------------------------------------------------------------
+# 30. tokensave: install failure is NON-FATAL — absent; curl fails, cargo absent
+#     → script still exits 0 and prints 'continuing without' warning
+# ---------------------------------------------------------------------------
+
+@test "tokensave install failure non-fatal: curl fails + cargo absent exits 0 with 'continuing without' warning" {
+  # Remove the pre-installed tokensave stub.
+  rm -f "$SANDBOX/tokensave"
+  # Remove cargo so the fallback also fails.
+  rm -f "$SANDBOX/cargo"
+
+  # Override the curl stub to fail on all invocations.
+  printf '#!%s\necho "curl" >> "%s"\nexit 1\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/curl"
+  chmod +x "$SANDBOX/curl"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    HOME="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  # Failure must NOT abort the bootstrap.
+  [ "$status" -eq 0 ]
+  # The non-fatal warning must appear in output (bats merges stdout+stderr via `run`).
+  [[ "$output" == *"continuing without"* ]]
 }

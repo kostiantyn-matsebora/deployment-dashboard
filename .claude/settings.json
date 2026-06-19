@@ -24,18 +24,6 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/scripts/hooks/install-dependencies.sh\"",
-            "timeout": 180,
-            "statusMessage": "Installing remote-env dependencies"
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
             "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -OnSessionStart",
             "timeout": 10
           }
@@ -56,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || echo 'Not a git repo, skipping'",
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"${CLAUDE_PROJECT_DIR}\" || echo 'Not a git repo, skipping'",
             "timeout": 10
           }
         ]
@@ -170,7 +158,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || true",
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"${CLAUDE_PROJECT_DIR}\" || true",
             "timeout": 30
           }
         ]
