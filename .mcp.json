@@ -14,6 +14,13 @@
         "-c",
         "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] && exec npx -y mcp-server-markdown || exit 0"
       ]
+    },
+    "playwright": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] && exec playwright-mcp --headless --browser chromium || exit 0"
+      ]
     }
   }
 }

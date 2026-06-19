@@ -161,6 +161,15 @@ STUB
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/mcp-server-markdown"
   chmod +x "$SANDBOX/mcp-server-markdown"
 
+  # playwright-mcp stub — pre-installs a working playwright-mcp.
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright-mcp"
+  chmod +x "$SANDBOX/playwright-mcp"
+
+  # playwright stub — pre-installs a working playwright CLI.
+  # Treats "playwright install chromium" as a no-op success (exit 0).
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright"
+  chmod +x "$SANDBOX/playwright"
+
   # uv stub — appends name to sentinel.
   # On "tool install ...", writes an executable serena stub into $SANDBOX so
   # the post-install command -v check in the script succeeds.
@@ -175,14 +184,31 @@ STUB
   chmod +x "$SANDBOX/uv"
 
   # npm stub — appends name to sentinel.
-  # On "install -g ...", writes an executable mcp-server-markdown stub into
-  # $SANDBOX so the post-install command -v check in the script succeeds.
+  # On "install -g <pkgs...>", writes the correct bin stub(s) into $SANDBOX
+  # based on which package names appear in the argument list:
+  #   mcp-server-markdown  → writes mcp-server-markdown stub
+  #   @playwright/mcp      → writes playwright-mcp stub
+  #   playwright           → writes playwright stub (CLI, not the MCP package)
   cat > "$SANDBOX/npm" << STUB
 #!$BASH_BIN
 echo "npm" >> "$SENTINEL"
 if [ "\$1" = "install" ]; then
-  printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/mcp-server-markdown"
-  chmod +x "$SANDBOX/mcp-server-markdown"
+  for _arg in "\$@"; do
+    case "\$_arg" in
+      mcp-server-markdown)
+        printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/mcp-server-markdown"
+        chmod +x "$SANDBOX/mcp-server-markdown"
+        ;;
+      @playwright/mcp)
+        printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/playwright-mcp"
+        chmod +x "$SANDBOX/playwright-mcp"
+        ;;
+      playwright)
+        printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/playwright"
+        chmod +x "$SANDBOX/playwright"
+        ;;
+    esac
+  done
 fi
 STUB
   chmod +x "$SANDBOX/npm"
@@ -498,4 +524,107 @@ STUB
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"npm not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 17. playwright: idempotent — playwright-mcp + playwright present, npm NOT invoked
+# ---------------------------------------------------------------------------
+
+@test "playwright idempotent: playwright-mcp and playwright present exits 0 without invoking npm" {
+  # sandbox already has playwright-mcp and playwright stubs from setup().
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  if [ -f "$SENTINEL" ] && grep -q "^npm$" "$SENTINEL"; then
+    echo "npm was invoked despite playwright-mcp and playwright already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 18. playwright: install path — bins absent, npm present → npm invoked, exit 0,
+#     both bins resolvable afterward
+# ---------------------------------------------------------------------------
+
+@test "playwright install: playwright-mcp and playwright absent + npm present installs both and exits 0" {
+  # Remove the pre-installed playwright-mcp and playwright stubs.
+  rm -f "$SANDBOX/playwright-mcp"
+  rm -f "$SANDBOX/playwright"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^npm$" "$SENTINEL"
+  # Both bins must now be resolvable (npm stub wrote them into $SANDBOX).
+  [ -x "$SANDBOX/playwright-mcp" ]
+  [ -x "$SANDBOX/playwright" ]
+}
+
+# ---------------------------------------------------------------------------
+# 19. playwright: missing npm prereq → exit 1 with npm-not-found error on stderr
+# ---------------------------------------------------------------------------
+
+@test "playwright missing npm: playwright-mcp and playwright absent + npm absent exits 1 with 'npm not found' on stderr" {
+  # Remove playwright-mcp, playwright, and npm from the sandbox.
+  rm -f "$SANDBOX/playwright-mcp"
+  rm -f "$SANDBOX/playwright"
+  rm -f "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"npm not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 20. playwright: browser download failure is non-fatal — script still exits 0
+# ---------------------------------------------------------------------------
+
+@test "playwright browser non-fatal: chromium download fails but script exits 0" {
+  # Strategy: place playwright-mcp and a failing-playwright stub BEFORE the npm
+  # stub runs, then use an npm stub that does NOT overwrite these pre-placed stubs.
+  # This way: the idempotency check fails (only one bin is present — we remove
+  # playwright-mcp so the install path runs), npm is invoked, it writes
+  # playwright-mcp, and the pre-placed failing playwright stub remains in place.
+  # The verify step passes (both bins exist), but the browser step returns non-zero
+  # — the non-fatal guard must let the script continue to exit 0.
+
+  # Remove playwright-mcp so idempotency check fails; keep a failing playwright stub.
+  rm -f "$SANDBOX/playwright-mcp"
+
+  # Overwrite the default playwright stub with one that fails on "install".
+  printf '#!%s\nif [ "$1" = "install" ]; then exit 1; fi\nexit 0\n' \
+    "$BASH_BIN" > "$SANDBOX/playwright"
+  chmod +x "$SANDBOX/playwright"
+
+  # Override the npm stub to write only playwright-mcp (not playwright),
+  # so the pre-placed failing playwright stub is used for the browser step.
+  # Uses only shell builtins + $BASH_BIN (no cat/sed/chmod in PATH under env -i).
+  cat > "$SANDBOX/npm" << NPMSTUB
+#!$BASH_BIN
+echo "npm" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/playwright-mcp"
+  $CHMOD_BIN +x "$SANDBOX/playwright-mcp"
+fi
+NPMSTUB
+  chmod +x "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  # Browser failure must NOT abort the bootstrap.
+  [ "$status" -eq 0 ]
+  # The chromium-failure warning must appear in stderr output.
+  [[ "$output" == *"chromium download failed"* ]]
 }
