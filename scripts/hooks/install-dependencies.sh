@@ -2,22 +2,23 @@
 # install-dependencies.sh
 #
 # PURPOSE: Remote-only bootstrap for dependencies that must exist before any
-#          .ps1 hook or MCP server can run: PowerShell 7+, serena MCP server,
-#          markdown MCP server, Playwright MCP server + CLI, and .NET 10 SDK.
+#          Python hook or MCP server can run: Python 3 + pip + pytest/ruff/jsonschema,
+#          serena MCP server, markdown MCP server, Playwright MCP server + CLI,
+#          and .NET 10 SDK.
 #          Guarded on CLAUDE_CODE_REMOTE; idempotent — safe to call repeatedly.
 #
-# WHY BASH, NOT PWSH:
-#   Every other hook in this project is PowerShell (.ps1) per .claude/scripts.md.
-#   This file is the ONE unavoidable exception: you cannot use pwsh to install
-#   pwsh. The remote container starts with no PowerShell present, so the
+# WHY BASH, NOT PYTHON:
+#   Every other hook in this project is Python (.py) per .claude/scripts.md.
+#   This file is the ONE unavoidable exception: you cannot use python3 to install
+#   python3. The remote container may start without Python present, so the
 #   bootstrap must be a POSIX shell script.
 #   Precedent for inline bash in this repo's hooks exists in .claude/settings.json
-#   (the `git rev-parse` SessionStart command that runs in sh, not pwsh).
+#   (the `git rev-parse` SessionStart command that runs in sh, not python3).
 #
-# PESTER COVERAGE:
-#   Not applicable. Pester is a PowerShell test framework; it cannot load or
-#   exercise a bash script. The .claude/scripts.md Pester mandate applies only
-#   to .ps1/.psm1 files.
+# BATS COVERAGE:
+#   Covered by install-dependencies.bats (Bats-core).  Python's pytest cannot
+#   load or exercise a bash script; the .claude/scripts.md pytest mandate applies
+#   only to .py files.
 #
 # ADDING A NEW DEPENDENCY:
 #   Append a clearly delimited "## <dep>" section below the existing ones,
@@ -48,72 +49,43 @@ if [[ "$(id -u)" != "0" ]]; then
 fi
 
 # ===========================================================================
-## PowerShell 7+
+## Python 3 + pip + script toolchain (pytest, ruff, jsonschema)
 # ===========================================================================
 
-# Idempotency — nothing to do if pwsh is already available.
-if command -v pwsh >/dev/null 2>&1; then
-  echo "install-dependencies.sh: pwsh already on PATH — skipping." >&2
+# Idempotency — check python3 and pip together; install only if either is absent.
+if command -v python3 >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
+  echo "install-dependencies.sh: python3 and pip3 already on PATH — skipping system install." >&2
 else
-  # Install — Debian/Ubuntu via Microsoft apt repo; fallback to snap.
   if command -v apt-get >/dev/null 2>&1; then
-    echo "install-dependencies.sh: installing pwsh via Microsoft apt repo..." >&2
-
-    # Source os-release to get distro ID and version.
-    if [[ ! -f /etc/os-release ]]; then
-      echo "install-dependencies.sh: /etc/os-release not found; cannot determine distro." >&2
-      exit 1
-    fi
-    # shellcheck source=/dev/null
-    source /etc/os-release
-
-    _pkg_url="https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb"
-    _tmp_deb="$(mktemp /tmp/packages-microsoft-prod.XXXXXX.deb)"
-
-    echo "install-dependencies.sh: fetching ${_pkg_url}" >&2
-    if command -v curl >/dev/null 2>&1; then
-      curl -fsSL "$_pkg_url" -o "$_tmp_deb" >&2
-    elif command -v wget >/dev/null 2>&1; then
-      wget -qO "$_tmp_deb" "$_pkg_url" >&2
-    else
-      echo "install-dependencies.sh: neither curl nor wget found." >&2
-      rm -f "$_tmp_deb"
-      exit 1
-    fi
-
-    $_sudo dpkg -i "$_tmp_deb" >&2
-    rm -f "$_tmp_deb"
-
-    # Refresh ONLY the Microsoft repo list. A blanket `apt-get update` aborts the
-    # whole bootstrap (set -e) whenever an unrelated third-party repo shipped in
-    # the base image is unreachable under the remote network policy — e.g. the
-    # deadsnakes / ondrej PPAs returning HTTP 403. Scoping the update to
-    # packages.microsoft.com keeps pwsh installable regardless of other repos'
-    # health.
-    $_sudo apt-get update -qq \
-      -o Dir::Etc::sourcelist="sources.list.d/microsoft-prod.list" \
-      -o Dir::Etc::sourceparts="-" \
-      -o APT::Get::List-Cleanup="0" >&2
-    $_sudo apt-get install -y powershell >&2
-
-  elif command -v snap >/dev/null 2>&1; then
-    echo "install-dependencies.sh: apt-get not found; falling back to snap..." >&2
-    $_sudo snap install powershell --classic >&2
-
+    echo "install-dependencies.sh: installing python3 and pip via apt-get..." >&2
+    # Refresh package lists (best-effort; NON-FATAL so a broken third-party repo
+    # does not abort the bootstrap).
+    $_sudo apt-get update -qq >&2 || echo "install-dependencies.sh: apt-get update reported errors; continuing with cached lists." >&2
+    $_sudo apt-get install -y python3 python3-pip >&2
   else
-    echo "install-dependencies.sh: no supported installer found (apt-get or snap required)." >&2
+    echo "install-dependencies.sh: apt-get not found — cannot install python3/pip." >&2
     exit 1
   fi
 
-  # Verify — confirm pwsh is now on PATH and emit its version.
-  if ! command -v pwsh >/dev/null 2>&1; then
-    echo "install-dependencies.sh: installation completed but pwsh is still not on PATH." >&2
+  # Verify — confirm python3 and pip3 are now on PATH.
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "install-dependencies.sh: installation completed but python3 is still not on PATH." >&2
+    exit 1
+  fi
+  if ! command -v pip3 >/dev/null 2>&1; then
+    echo "install-dependencies.sh: installation completed but pip3 is still not on PATH." >&2
     exit 1
   fi
 
-  _version="$(pwsh --version 2>&1)"
-  echo "install-dependencies.sh: pwsh installed successfully — ${_version}" >&2
+  _py_version="$(python3 --version 2>&1)"
+  echo "install-dependencies.sh: python3 installed successfully — ${_py_version}" >&2
 fi
+
+# Install / upgrade the script-toolchain packages (pytest, ruff, jsonschema).
+# pip install --quiet is idempotent: already-satisfied versions are skipped.
+echo "install-dependencies.sh: installing/verifying pytest, ruff, jsonschema via pip..." >&2
+python3 -m pip install --quiet --upgrade pytest ruff jsonschema >&2
+echo "install-dependencies.sh: pytest/ruff/jsonschema ready." >&2
 
 # ===========================================================================
 ## serena (MCP server)
