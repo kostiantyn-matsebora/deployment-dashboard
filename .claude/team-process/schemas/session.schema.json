@@ -16,6 +16,7 @@
     "team": { "type": "string", "minLength": 1, "description": "TeamCreate name (also the team_name members must set)." },
     "branch": { "type": "string", "description": "Git branch the run targets." },
     "issue": { "type": "string", "description": "Owning issue / spec ref, e.g. '#321'." },
+    "summary": { "type": "string", "description": "Short human description of what this team is doing — the issue title or a one-sentence feature essence. Shown in the statusline + resume reminder so a glance answers 'what is this run'." },
     "task": { "type": "string", "description": "Freeform: the scheduled-task description. Omitted for feature-team (its spec is the issue)." },
     "phase": {
       "type": "string",
@@ -35,6 +36,7 @@
           "role": { "type": "string" },
           "lane": { "type": "string" },
           "status": { "type": "string", "enum": ["spawned", "in-progress", "returned", "done"] },
+          "task": { "type": "string", "description": "Short imperative description of this member's task (mirrors the BRIEF task). Shown next to the role in the statusline." },
           "progress": { "type": "string", "description": "Last-known progress note for resume re-dispatch (free text). Lets the lead re-spawn a same-name member with its prior context: BRIEF (from inbox) + this progress + relevant decisions." }
         }
       }

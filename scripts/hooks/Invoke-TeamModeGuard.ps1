@@ -184,8 +184,9 @@ function New-SessionRecord {
     $rec.team     = if ($Team) { $Team } elseif ($Existing -and $Existing.team) { [string]$Existing.team } else { 'unknown' }
     if ($Branch) { $rec.branch = $Branch }
     elseif ($Existing -and $Existing.branch) { $rec.branch = [string]$Existing.branch }
-    if ($Existing -and $Existing.issue) { $rec.issue = [string]$Existing.issue }
-    if ($Existing -and $Existing.task)  { $rec.task  = [string]$Existing.task }
+    if ($Existing -and $Existing.issue)   { $rec.issue   = [string]$Existing.issue }
+    if ($Existing -and $Existing.summary) { $rec.summary = [string]$Existing.summary }
+    if ($Existing -and $Existing.task)    { $rec.task    = [string]$Existing.task }
     $rec.phase     = if ($Existing -and $Existing.phase) { [string]$Existing.phase } else { 'created' }
     $rec.createdAt = if ($Existing -and $Existing.createdAt) { [string]$Existing.createdAt } else { $ts }
     $rec.updatedAt = $ts

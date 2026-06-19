@@ -32,8 +32,10 @@ scripts/hooks/Invoke-TeamModeGuard.Tests.ps1
 
 # --- team-process utility scripts (framework tooling the orchestrator runs) ---
 # Not hooks — orchestration utilities (e.g. publishing the session decision record to the
-# owning issue at ship). Authored + owned by the orchestrator as part of the framework.
+# owning issue at ship; rendering the team statusline from session records). Authored +
+# owned by the orchestrator as part of the framework.
 scripts/team-process/**
+scripts/statusline/**
 
 # --- repo-level config the framework touches ---
 .gitignore

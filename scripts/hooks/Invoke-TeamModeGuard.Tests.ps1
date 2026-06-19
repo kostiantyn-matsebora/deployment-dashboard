@@ -142,7 +142,7 @@ Describe 'New-SessionRecord' {
     }
     It 'preserves id, workflow, createdAt, ledger, roster, issue, task on re-create (merge)' {
         $existing = [pscustomobject]@{
-            id = 'feat-1'; workflow = 'freeform'; team = 'feat-1'; branch = 'feat/x'; issue = '#42'; task = 'do thing'; phase = 'implement'
+            id = 'feat-1'; workflow = 'freeform'; team = 'feat-1'; branch = 'feat/x'; issue = '#42'; summary = 'glob filter'; task = 'do thing'; phase = 'implement'
             createdAt = '2026-01-01T00:00:00Z'; updatedAt = '2026-01-01T00:00:00Z'
             roster = @([pscustomobject]@{ role = 'backend' }); ledger = @([pscustomobject]@{ wave = 1 })
         }
@@ -152,6 +152,7 @@ Describe 'New-SessionRecord' {
         $r.createdAt | Should -Be '2026-01-01T00:00:00Z'
         $r.phase     | Should -Be 'implement'
         $r.issue     | Should -Be '#42'
+        $r.summary   | Should -Be 'glob filter'
         $r.task      | Should -Be 'do thing'
         @($r.roster).Count | Should -Be 1
         @($r.ledger).Count | Should -Be 1

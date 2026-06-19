@@ -29,12 +29,77 @@ Describe 'Get-StatusLine' {
         $result | Should -Be 'team: feat-1 (?)'
     }
 
-    It 'emits count for multiple sessions' {
-        $s1 = [PSCustomObject]@{ id = 'feat-1'; phase = 'plan' }
+    It 'appends the team summary when present' {
+        $session = [PSCustomObject]@{ id = 'feat-351'; phase = 'implement'; summary = 'service visibility glob filter' }
+        $result = Get-StatusLine -Sessions @($session)
+        $result | Should -Be 'team: feat-351 - service visibility glob filter (implement)'
+    }
+
+    It 'appends the agent digest (role: task) when a roster is present' {
+        $session = [PSCustomObject]@{
+            id = 'feat-1'; phase = 'implement'
+            roster = @(
+                [PSCustomObject]@{ role = 'backend'; task = 'extract adapter' },
+                [PSCustomObject]@{ role = 'frontend'; task = 'glob widget' }
+            )
+        }
+        $result = Get-StatusLine -Sessions @($session)
+        $result | Should -Be 'team: feat-1 (implement) | backend: extract adapter, frontend: glob widget'
+    }
+
+    It 'combines summary and agent digest' {
+        $session = [PSCustomObject]@{
+            id = 'feat-351'; phase = 'implement'; summary = 'glob filter'
+            roster = @([PSCustomObject]@{ role = 'backend'; task = 'extract adapter' })
+        }
+        $result = Get-StatusLine -Sessions @($session)
+        $result | Should -Be 'team: feat-351 - glob filter (implement) | backend: extract adapter'
+    }
+
+    It 'falls back to the bare role when a member has no task' {
+        $session = [PSCustomObject]@{
+            id = 'feat-1'; phase = 'plan'
+            roster = @([PSCustomObject]@{ role = 'backend' }, [PSCustomObject]@{ role = 'docs'; task = 'index' })
+        }
+        $result = Get-StatusLine -Sessions @($session)
+        $result | Should -Be 'team: feat-1 (plan) | backend, docs: index'
+    }
+
+    It 'truncates a long member task' {
+        $session = [PSCustomObject]@{
+            id = 'feat-1'; phase = 'implement'
+            roster = @([PSCustomObject]@{ role = 'backend'; task = 'this is a very long task description that should be cut' })
+        }
+        $result = Get-StatusLine -Sessions @($session)
+        $result | Should -Match 'backend: this is a very long .+\.$'
+        $result.Length | Should -BeLessThan 65   # untruncated would be ~91
+    }
+
+    It 'emits count for multiple sessions (summary/agents ignored)' {
+        $s1 = [PSCustomObject]@{ id = 'feat-1'; phase = 'plan'; summary = 'a' }
         $s2 = [PSCustomObject]@{ id = 'feat-2'; phase = 'implement' }
         $s3 = [PSCustomObject]@{ id = 'feat-3'; phase = 'review' }
         $result = Get-StatusLine -Sessions @($s1, $s2, $s3)
         $result | Should -Be 'teams (3 active)'
+    }
+}
+
+Describe 'Limit-Text' {
+    It 'returns the text unchanged when within the limit' {
+        Limit-Text -Text 'short' -Max 24 | Should -Be 'short'
+    }
+    It 'truncates and appends an ellipsis when over the limit' {
+        Limit-Text -Text 'abcdefghij' -Max 5 | Should -Be 'abcd.'
+    }
+}
+
+Describe 'Format-AgentDigest' {
+    It 'returns empty when there is no roster' {
+        Format-AgentDigest -Record ([PSCustomObject]@{ id = 'x' }) | Should -Be ''
+    }
+    It 'renders role: task pairs' {
+        $rec = [PSCustomObject]@{ roster = @([PSCustomObject]@{ role = 'backend'; task = 'do it' }) }
+        Format-AgentDigest -Record $rec | Should -Be 'backend: do it'
     }
 }
 

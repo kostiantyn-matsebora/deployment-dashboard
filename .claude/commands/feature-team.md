@@ -75,6 +75,9 @@ explicit confirmation*).
     + "NEVER return prose, markdown, or a .txt file as your final message — write the typed form to your outbox file first, then send the { type, ref } pointer."
 - **Assign work.** Create the task list (one task per lane); contract member first if cross-layer —
   its `ARTIFACT` unblocks the rest.
+- **Populate the statusline fields.** Set the session `summary` (issue title / feature essence) and
+  each `roster[]` member's `task` (short description) — these render in the team statusline
+  (`team: <id> - <summary> (<phase>) | <role>: <task>, ...`).
 
 ## 3 — Coordinate (hub-and-spoke)
 
