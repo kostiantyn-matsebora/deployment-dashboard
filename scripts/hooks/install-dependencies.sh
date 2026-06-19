@@ -3,7 +3,7 @@
 #
 # PURPOSE: Remote-only bootstrap for dependencies that must exist before any
 #          .ps1 hook or MCP server can run: PowerShell 7+, serena MCP server,
-#          and markdown MCP server.
+#          markdown MCP server, and Playwright MCP server + CLI.
 #          Guarded on CLAUDE_CODE_REMOTE; idempotent — safe to call repeatedly.
 #
 # WHY BASH, NOT PWSH:
@@ -168,6 +168,44 @@ else
   fi
 
   echo "install-dependencies.sh: mcp-server-markdown installed successfully." >&2
+fi
+
+# ===========================================================================
+## playwright (MCP server + CLI)
+# ===========================================================================
+
+# Idempotency — nothing to do if both playwright-mcp and playwright are already on PATH.
+if command -v playwright-mcp >/dev/null 2>&1 && command -v playwright >/dev/null 2>&1; then
+  echo "install-dependencies.sh: playwright-mcp and playwright already on PATH — skipping." >&2
+else
+  # Prereq — npm must be available (both packages are installed via npm).
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "install-dependencies.sh: npm not found on PATH — cannot install @playwright/mcp or playwright; install Node.js/npm first." >&2
+    exit 1
+  fi
+
+  # Install — global npm install of both the MCP server and the CLI.
+  echo "install-dependencies.sh: installing @playwright/mcp and playwright via npm install -g..." >&2
+  $_sudo npm install -g @playwright/mcp playwright >&2
+
+  # Install browser (NON-FATAL — egress-gated).
+  # cdn.playwright.dev may be blocked by the remote network egress allowlist;
+  # a failure here must NOT abort the bootstrap.
+  if ! playwright install chromium >&2; then
+    echo "install-dependencies.sh: chromium download failed (is cdn.playwright.dev in the network egress allowlist?) — continuing; install it later with 'playwright install chromium'." >&2
+  fi
+
+  # Verify — confirm BOTH bins are now on PATH (browser availability is not checked here).
+  if ! command -v playwright-mcp >/dev/null 2>&1; then
+    echo "install-dependencies.sh: installation completed but playwright-mcp is still not on PATH." >&2
+    exit 1
+  fi
+  if ! command -v playwright >/dev/null 2>&1; then
+    echo "install-dependencies.sh: installation completed but playwright is still not on PATH." >&2
+    exit 1
+  fi
+
+  echo "install-dependencies.sh: playwright-mcp and playwright installed successfully." >&2
 fi
 
 # ===========================================================================
