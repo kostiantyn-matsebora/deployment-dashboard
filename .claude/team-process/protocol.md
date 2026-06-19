@@ -1,8 +1,6 @@
 # Communication protocol
 
-The typed forms every cross-role message uses. Inherited by every role — members emit/read them; the
-orchestrator emits `BRIEF`/`FIX` and reads the rest. Part of the team-process kit core; the
-orchestrator drives the phases that exchange these in [`process.md`](process.md).
+Typed forms every cross-role message uses — inherited by every role; orchestrator drives the phases that exchange them in [`process.md`](process.md).
 
 Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT.
 
@@ -21,10 +19,7 @@ Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FIN
 - **The per-form tables below are the authoring source** (field · meaning · constraint · examples);
   the schema is the enforcement source. They are kept in lock-step.
 
-**Emit + validate (one command).** `scripts/hooks/Format-ProtocolForm.ps1` validates against the
-schema (plus the one cross-field rule), canonicalizes key order, drops empty optional fields, and —
-with `-OutboxDir` — writes the box file and prints the pointer to send. The `SendMessage` guard rejects
-any non-conforming message, so do the work up front:
+**Emit + validate (one command).** `scripts/hooks/Format-ProtocolForm.ps1` validates against the schema, canonicalizes key order, drops empty optional fields, writes the box file, and prints the pointer — `SendMessage` rejects non-conforming messages; do the work up front:
 
 1. **Write the rough form JSON to a temp file** (rough order/casing is fine — the normalizer fixes it).
 2. **Hand back in one step** (member → orch):
@@ -51,9 +46,7 @@ any non-conforming message, so do the work up front:
 
 ## Message delivery — file + pointer (both directions)
 
-Every cross-role message is a **file in the session directory**, not inline in the message. The file is
-the durable payload; `SendMessage` (or, for the first dispatch, the spawn prompt) carries only a
-**pointer** that wakes the peer. Two boxes, symmetric:
+Every cross-role message is a **file in the session directory** (durable payload) — `SendMessage` carries only a **pointer** that wakes the peer. Two boxes, symmetric:
 
 | Box | Direction | Forms | File |
 |---|---|---|---|
@@ -86,10 +79,8 @@ the durable payload; `SendMessage` (or, for the first dispatch, the spawn prompt
 - **Never message as terminal/chat prose.** Write the typed form to the box file first, then deliver the
   `{ type, ref }` pointer. A plain-text message or chat-embedded JSON is not a valid message.
 
-- **Why a file.** Durable · auditable · survives a compacted or dropped session — the ledger, not the
-  conversation, is the source of truth. A dispatched task is recoverable on resume from its inbox file.
-- **Absolute `ref`.** Worktree-isolated members have a separate filesystem; the absolute path lets the
-  peer read the file. A relative `ref` resolves against the repo root.
+- **Why a file.** Durable · auditable · survives compaction/reboot; ledger is source of truth; dispatched tasks recover from inbox on resume.
+- **Absolute `ref`.** Worktree-isolated members have a separate filesystem — absolute path lets the peer read the file; a relative `ref` resolves against repo root.
 - **Lane exemption.** Neither box is part of a member's code lane; the lane guard allows writes under
   `**/.team-process/sessions/*/outbox/**` (the lead writes the inbox from the main worktree, outside any
   lane file).
@@ -253,17 +244,15 @@ Written to the member's `inbox` and delivered by `{ type, ref }` pointer — see
 ## Rules
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
-- A design decision in `RESULT.notes` is **folded by the lead into the session `decisions[]` record**
-  (durable, surfaced on resume, published to the issue) — see [`process.md`](process.md) →
-  *Decision record*. The member reports it; the lead curates it.
+- A design decision in `RESULT.notes` is **folded by the lead into `decisions[]`** (durable, surfaced on resume, published to the issue) — see [`process.md`](process.md) → *Decision record*; member reports, lead curates.
 - A `BRIEF` **references** the role's typed form here (`RESULT`/`REVIEW`/…); it MUST NOT restate or
   invent a hand-back shape — restating competes with the protocol, itself a breach.
 - A hand-back that is not valid typed-form JSON (not JSON, unknown `type`, extra/renamed fields,
   missing required fields, wrong value types) is returned **UNREAD** — the orchestrator **MUST** reply
   *re-emit as `RESULT`/`REVIEW`* and **MUST NOT** parse it.
 - `REVIEW.verdict` is `"pass"` **only** with zero remarks; `"changes-requested"` requires ≥1 remark.
-- A `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer;
-  loop until every competency `pass`es (see [`process.md`](process.md) *Review loop*). Peer review precedes `testing`.
+- `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer; loop until every competency passes (→ [`process.md`](process.md) *Review loop*).
+- Peer review precedes `testing`.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see [`process.md`](process.md) *Fix loop*).
 - Members **MUST NOT** commit/push/PR — hand back via `RESULT`; only the orchestrator integrates.
