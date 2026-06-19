@@ -35,7 +35,7 @@ docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deplo
 To pin to a specific release version:
 
 ```bash
-docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.16.3 --profile demo up
+docker compose --project-directory . -f oci://ghcr.io/kostiantyn-matsebora/deployment-dashboard-compose-demo:0.17.0 --profile demo up
 ```
 
 !!! question "Why `--project-directory .`?"
@@ -59,7 +59,7 @@ docker compose -f docker-compose.yaml -f docker-compose.demo.yaml --profile demo
 !!! note "PowerShell"
     Replace the trailing `\` line-continuations with backticks (`` ` ``).
 
-To pin to a specific release, replace `main` in the URLs with the release tag (e.g. `.../v0.16.3/compose/...`) and set `DASHBOARD_VERSION=0.16.3` for a reproducible deploy — see [Pinning a release version](./install.md#pinning-a-release-version).
+To pin to a specific release, replace `main` in the URLs with the release tag (e.g. `.../v0.17.0/compose/...`) and set `DASHBOARD_VERSION=0.17.0` for a reproducible deploy — see [Pinning a release version](./install.md#pinning-a-release-version).
 
 Then open:
 
