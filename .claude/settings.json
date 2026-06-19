@@ -6,6 +6,7 @@
     ]
   },
   "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "DOCS_KEEPER_ENFORCE": "warn"
   },
   "worktree": {
@@ -17,6 +18,18 @@
   },
   "hooks": {
     "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/scripts/hooks/install-dependencies.sh\"",
+            "timeout": 180,
+            "statusMessage": "Installing remote-env dependencies"
+          }
+        ]
+      },
       {
         "matcher": "",
         "hooks": [
