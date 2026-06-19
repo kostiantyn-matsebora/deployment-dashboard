@@ -30,6 +30,10 @@ internal sealed class DeploymentEventConfiguration : IEntityTypeConfiguration<De
               .HasColumnName("service")
               .IsRequired();
 
+        entity.Property(e => e.Namespace)
+              .HasColumnName("namespace")
+              .HasMaxLength(128);
+
         entity.Property(e => e.Environment)
               .HasColumnName("environment")
               .IsRequired();

@@ -103,17 +103,20 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
             .Where(e => terminalStatuses.Contains(e.Status) &&
                         // (b) This is the latest terminal event in the slot.
                         !db.DeploymentEvents.Any(e2 =>
+                            e2.Namespace == e.Namespace &&
                             e2.Service == e.Service &&
                             e2.Environment == e.Environment &&
                             terminalStatuses.Contains(e2.Status) &&
                             e2.HappenedAt > e.HappenedAt) &&
                         // (a) The latest effective event in this slot is in-progress.
                         db.DeploymentEvents.Any(e2 =>
+                            e2.Namespace == e.Namespace &&
                             e2.Service == e.Service &&
                             e2.Environment == e.Environment &&
                             e2.Status == DeploymentStatus.InProgress &&
                             e2.HappenedAt > e.HappenedAt &&
                             !db.DeploymentEvents.Any(e3 =>
+                                e3.Namespace == e.Namespace &&
                                 e3.Service == e.Service &&
                                 e3.Environment == e.Environment &&
                                 effectiveStatuses.Contains(e3.Status) &&
@@ -172,6 +175,7 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
         var raw = await q
             .Where(e => statuses.Contains(e.Status) &&
                         !db.DeploymentEvents.Any(e2 =>
+                            e2.Namespace == e.Namespace &&
                             e2.Service == e.Service &&
                             e2.Environment == e.Environment &&
                             statuses.Contains(e2.Status) &&
@@ -183,7 +187,7 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
 
     private static IReadOnlyList<DeploymentEvent> LatestPerSlot(List<DeploymentEvent> raw) =>
         raw
-            .GroupBy(e => (e.Service, e.Environment))
+            .GroupBy(e => (e.Namespace, e.Service, e.Environment))
             .Select(g => g.OrderByDescending(e => e.Id).First())
             .ToList();
 }

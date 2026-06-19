@@ -82,6 +82,13 @@ body::after {
   border: 1px solid var(--glass-edge-2);
   border-radius: var(--radius-md);
   box-shadow: 0 24px 64px -28px rgba(0, 0, 0, 0.6);
+  min-width: 260px;
+}
+/* Notification popover — cap width so SERVICES/ENVIRONMENTS chips wrap;
+   420px fits ~3 chips per row; STATUS grid (1fr 1fr) stays intact. */
+.glass-popover.notif-popover[data-pc-name='popover'] {
+  width: 420px;
+  max-width: 420px;
 }
 .glass-popover [data-pc-section='content'] { background: transparent !important; }
 /* Arrow tip matches the surface */

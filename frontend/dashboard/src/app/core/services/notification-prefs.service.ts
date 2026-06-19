@@ -1,6 +1,6 @@
 import { effect, Injectable, signal } from '@angular/core';
 import { Status } from '../models/deployment.model';
-import { matchesAny } from '../utils/glob.util';
+import { matchesAny, matchesComposite } from '../utils/glob.util';
 
 /** All 8 deployment statuses in the order shown in the notification prefs popover. */
 export const NOTIFICATION_STATUSES: Status[] = [
@@ -75,23 +75,56 @@ export class NotificationPrefsService {
   }
 
   /**
-   * Return true if a deployment event with the given (status, service, environment)
-   * should fire a notification given the current preferences.
+   * Return true if a deployment event with the given (status, service, namespace,
+   * environment) should fire a notification given the current preferences.
+   *
+   * Service matching uses composite glob rules (issue #353):
+   *   - Slashed chip patterns match `namespace/service`; slashless match bare service.
+   *   - Null namespace → bare service matching only.
    */
-  shouldNotify(status: Status, service: string, environment: string): boolean {
+  shouldNotify(
+    status: Status,
+    service: string,
+    environment: string,
+    namespace?: string | null,
+  ): boolean {
     const p = this.prefs();
     if (!p.enabled) return false;
     if (!p.statuses.includes(status)) return false;
-    if (!this.matchesAxis(service, p.serviceMode, p.serviceChips)) return false;
+    if (!this.matchesServiceAxis(service, namespace, p.serviceMode, p.serviceChips)) return false;
     if (!this.matchesAxis(environment, p.envMode, p.envChips)) return false;
     return true;
   }
 
   /**
-   * Returns true when `value` passes the given mode+chips filter.
+   * Returns true when a (service, namespace) pair passes the given mode+chips
+   * filter using composite glob matching (issue #353).
    *
    * NOTE: matching changed from case-sensitive exact membership (#271) to
-   * case-insensitive glob via matchesAny (#351, intentional behavior change).
+   * case-insensitive glob via matchesAny (#351). Extended to composite matching
+   * for namespace-aware filtering (#353).
+   */
+  private matchesServiceAxis(
+    service: string,
+    namespace: string | null | undefined,
+    mode: NotifFilterMode,
+    chips: string[],
+  ): boolean {
+    if (chips.length === 0) {
+      // blank = all (regardless of mode)
+      return true;
+    }
+    const matched = matchesComposite(service, namespace, chips);
+    if (mode === 'watch-all-except') {
+      return !matched;
+    }
+    // watch-only
+    return matched;
+  }
+
+  /**
+   * Returns true when `value` passes the given mode+chips filter.
+   * Used for the environment axis (no namespace; plain glob matching).
    */
   private matchesAxis(value: string, mode: NotifFilterMode, chips: string[]): boolean {
     if (chips.length === 0) {

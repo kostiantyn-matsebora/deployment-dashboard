@@ -24,6 +24,11 @@ public sealed record DeploymentEventIngest
     [JsonPropertyName("service")]
     public required string Service { get; init; }
 
+    /// <summary>CI/CD-agnostic namespace grouping this service. GitHub adapter sets this to the repo short name. Max 128 chars. Omit when not applicable.</summary>
+    [MaxLength(128)]
+    [JsonPropertyName("namespace")]
+    public string? Namespace { get; init; }
+
     [Required]
     [MinLength(1)]
     [MaxLength(64)]

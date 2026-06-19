@@ -36,13 +36,15 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         string environment = "prod",
         string status = DeploymentStatus.Success,
         DateTimeOffset? happenedAt = null,
-        string? deploymentId = null)
+        string? deploymentId = null,
+        string? @namespace = null)
     {
         var ev = new DeploymentEvent
         {
             Id = Guid.CreateVersion7(),
             DeploymentId = deploymentId ?? $"dep-{Guid.NewGuid():N}",
             Service = service,
+            Namespace = @namespace,
             Environment = environment,
             Status = status,
             HappenedAt = happenedAt ?? DateTimeOffset.UtcNow,
@@ -721,6 +723,118 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
             DefaultQuery() with { Cursor = "this-is-not-a-valid-cursor" }, CancellationToken.None);
 
         Assert.Single(items);
+    }
+
+    // ── Namespace disambiguation (#353) ───────────────────────────────────────
+
+    [Fact]
+    public async Task GetEffectivePerSlotAsync_SameServiceDifferentNamespace_ReturnsBothSlots()
+    {
+        // Two events share the same service name but live in different namespaces.
+        // The re-keyed slot identity is (Namespace, Service, Environment) so both
+        // must surface as independent slots — no cross-namespace deduplication.
+        var nsA = await SeedAsync(service: "gateway", environment: "prod",
+            status: DeploymentStatus.Success, @namespace: "org-a");
+        var nsB = await SeedAsync(service: "gateway", environment: "prod",
+            status: DeploymentStatus.Failure, @namespace: "org-b");
+
+        var result = await _repo.GetEffectivePerSlotAsync(null, CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        var ids = result.Select(e => e.Id).ToHashSet();
+        Assert.Contains(nsA.Id, ids);
+        Assert.Contains(nsB.Id, ids);
+    }
+
+    [Fact]
+    public async Task GetEffectivePerSlotAsync_NullNamespaceIsDistinctFromNamedNamespace()
+    {
+        // A null-namespace slot and a named-namespace slot for the same service
+        // are two independent identity slots — neither should suppress the other.
+        var nullNs = await SeedAsync(service: "api", environment: "dev",
+            status: DeploymentStatus.Success, @namespace: null);
+        var namedNs = await SeedAsync(service: "api", environment: "dev",
+            status: DeploymentStatus.Failure, @namespace: "org-a");
+
+        var result = await _repo.GetEffectivePerSlotAsync(null, CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        var ids = result.Select(e => e.Id).ToHashSet();
+        Assert.Contains(nullNs.Id, ids);
+        Assert.Contains(namedNs.Id, ids);
+    }
+
+    [Fact]
+    public async Task GetEffectivePerSlotAsync_MultipleEventsInNamespacedSlot_ReturnsLatestPerNamespace()
+    {
+        // Within a (Namespace, Service, Environment) slot the latest effective
+        // event wins, just as before — namespace does not break per-slot dedup.
+        var baseTime = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        await SeedAsync(service: "worker", environment: "prod",
+            status: DeploymentStatus.Success, happenedAt: baseTime,
+            @namespace: "org-a");
+        var latest = await SeedAsync(service: "worker", environment: "prod",
+            status: DeploymentStatus.Failure, happenedAt: baseTime.AddHours(1),
+            @namespace: "org-a");
+
+        var result = await _repo.GetEffectivePerSlotAsync(null, CancellationToken.None);
+
+        Assert.Single(result);
+        Assert.Equal(latest.Id, result[0].Id);
+    }
+
+    [Fact]
+    public async Task GetLastSuccessfulPerSlotAsync_SameServiceDifferentNamespace_ReturnsBothSuccesses()
+    {
+        // Last-successful resolution must respect namespace boundaries so that
+        // org-a's success does not count as org-b's last successful deployment.
+        var successA = await SeedAsync(service: "deploy", environment: "prod",
+            status: DeploymentStatus.Success, @namespace: "ns-x");
+        var successB = await SeedAsync(service: "deploy", environment: "prod",
+            status: DeploymentStatus.Success, @namespace: "ns-y");
+
+        var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        var ids = result.Select(e => e.Id).ToHashSet();
+        Assert.Contains(successA.Id, ids);
+        Assert.Contains(successB.Id, ids);
+    }
+
+    [Fact]
+    public async Task GetLatestTerminalBeforeCurrentPerSlotAsync_NamespacedSlots_DoNotCrossContaminate()
+    {
+        // The prev_failed flag (GetLatestTerminalBeforeCurrentPerSlotAsync) must
+        // be scoped to each (Namespace, Service, Environment) slot independently.
+        // A failure in org-a must not affect the prev_failed state of org-b.
+        var baseTime = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+
+        // org-a: failure → in-progress  → prev_failed flag applies to org-a
+        var failureA = await SeedAsync(service: "batch", environment: "prod",
+            status: DeploymentStatus.Failure, happenedAt: baseTime, @namespace: "org-a");
+        await SeedAsync(service: "batch", environment: "prod",
+            status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5),
+            @namespace: "org-a");
+
+        // org-b: success → in-progress  → prev_failed does NOT apply to org-b
+        await SeedAsync(service: "batch", environment: "prod",
+            status: DeploymentStatus.Success, happenedAt: baseTime, @namespace: "org-b");
+        await SeedAsync(service: "batch", environment: "prod",
+            status: DeploymentStatus.InProgress, happenedAt: baseTime.AddMinutes(5),
+            @namespace: "org-b");
+
+        var result = await _repo.GetLatestTerminalBeforeCurrentPerSlotAsync(null, CancellationToken.None);
+
+        // Only org-a's failure terminal should be returned; org-b's success terminal
+        // is its latest terminal and is returned too — both are returned but
+        // the failure is only for org-a's slot.
+        Assert.Equal(2, result.Count);
+        var failureEntry = result.Single(e => e.Namespace == "org-a");
+        Assert.Equal(failureA.Id, failureEntry.Id);
+        Assert.Equal(DeploymentStatus.Failure, failureEntry.Status);
+
+        var successEntry = result.Single(e => e.Namespace == "org-b");
+        Assert.Equal(DeploymentStatus.Success, successEntry.Status);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

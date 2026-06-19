@@ -31,7 +31,11 @@ A DORA-anchored analytics view covering the last 7, 14, or 30 days (bounded by `
 
 ## :material-filter-outline: Services filter { #services-filter }
 
-Glob pattern filter for services: type a pattern (`front-*`, `checkout`, etc.), pick "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads. The same widget appears in the notification preferences popover for service and environment axes.
+Glob pattern filter for services: type a pattern (`front-*`, `checkout`, `org-a/gateway`, etc.), pick "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads.
+
+**Namespace-aware matching.** Services fetched from different GitHub repositories (or posted with a non-null `namespace` field) can share the same workflow/service name. Each `(namespace, service)` pair is a distinct row. When a name collision exists, the row label shows the `namespace/` prefix; otherwise the bare name is shown. A pattern containing `/` matches the full `namespace/service` identity; a slashless pattern matches the service name across all namespaces — existing saved patterns keep working without change. Autocomplete offers both bare names and composite `namespace/service` identities derived from received data.
+
+The same widget appears in the notification preferences popover for service and environment axes.
 
 ![Services glob filter — services board](../_assets/screenshots/services-filter-dark.png){ .dd-shot }
 

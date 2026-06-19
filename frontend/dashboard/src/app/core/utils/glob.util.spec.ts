@@ -1,8 +1,15 @@
 /**
- * Unit tests for glob.util — globMatch, matchesAny, applyGlobFilter.
+ * Unit tests for glob.util — globMatch, matchesAny, applyGlobFilter,
+ * matchesComposite, applyCompositeGlobFilter.
  */
 import { describe, it, expect } from 'vitest';
-import { globMatch, matchesAny, applyGlobFilter } from './glob.util';
+import {
+  globMatch,
+  matchesAny,
+  applyGlobFilter,
+  matchesComposite,
+  applyCompositeGlobFilter,
+} from './glob.util';
 
 describe('globMatch', () => {
   it('matches an exact string', () => {
@@ -158,5 +165,106 @@ describe('applyGlobFilter', () => {
   it('returns a copy (not the original array)', () => {
     const result = applyGlobFilter(items, 'exclude', []);
     expect(result).not.toBe(items);
+  });
+});
+
+describe('matchesComposite', () => {
+  it('slashless pattern matches the bare service name (no namespace)', () => {
+    expect(matchesComposite('auth-bff', null, ['auth-bff'])).toBe(true);
+    expect(matchesComposite('auth-bff', null, ['order-svc'])).toBe(false);
+  });
+
+  it('slashless pattern matches service with a namespace — namespace-agnostic', () => {
+    expect(matchesComposite('auth-bff', 'org-a', ['auth-bff'])).toBe(true);
+    expect(matchesComposite('auth-bff', 'org-b', ['auth-bff'])).toBe(true);
+  });
+
+  it('slashless glob pattern matches service segment across any namespace', () => {
+    expect(matchesComposite('payments-api', 'org-a', ['*-api'])).toBe(true);
+    expect(matchesComposite('payments-api', null,    ['*-api'])).toBe(true);
+    expect(matchesComposite('auth-svc',     'org-a', ['*-api'])).toBe(false);
+  });
+
+  it('slashed pattern matches full composite (namespace/service)', () => {
+    expect(matchesComposite('auth-bff', 'org-a', ['org-a/auth-bff'])).toBe(true);
+    expect(matchesComposite('auth-bff', 'org-b', ['org-a/auth-bff'])).toBe(false);
+  });
+
+  it('slashed glob pattern matches full composite with wildcards', () => {
+    expect(matchesComposite('payments-api', 'org-a', ['org-a/*'])).toBe(true);
+    expect(matchesComposite('order-svc',    'org-b', ['org-a/*'])).toBe(false);
+    expect(matchesComposite('any-svc',      'org-a', ['*/any-svc'])).toBe(true);
+    expect(matchesComposite('other-svc',    'org-a', ['*/any-svc'])).toBe(false);
+  });
+
+  it('slashed pattern against null-namespace: matches bare service as the composite', () => {
+    // null namespace → composite is just the service name; a slashed pattern requires a slash
+    expect(matchesComposite('auth-bff', null, ['*/auth-bff'])).toBe(false);
+    expect(matchesComposite('auth-bff', null, ['auth-bff'])).toBe(true);
+  });
+
+  it('matching is case-insensitive', () => {
+    expect(matchesComposite('Auth-BFF', 'ORG-A', ['org-a/auth-bff'])).toBe(true);
+    expect(matchesComposite('Auth-BFF', 'org-a', ['ORG-A/*'])).toBe(true);
+  });
+
+  it('returns false for empty patterns', () => {
+    expect(matchesComposite('auth-bff', 'org-a', [])).toBe(false);
+  });
+
+  it('mixed slashed + slashless patterns — any match returns true', () => {
+    // slashless pattern matches service regardless of namespace
+    expect(matchesComposite('gateway', 'org-a', ['org-b/*', 'gateway'])).toBe(true);
+    // slashed pattern targeting the specific namespace
+    expect(matchesComposite('gateway', 'org-b', ['org-b/gateway', 'other'])).toBe(true);
+  });
+});
+
+describe('applyCompositeGlobFilter', () => {
+  const ids = [
+    { service: 'auth-bff',   namespace: 'org-a' },
+    { service: 'auth-bff',   namespace: 'org-b' },
+    { service: 'gateway',    namespace: null     },
+    { service: 'order-svc',  namespace: 'org-a' },
+  ];
+
+  it('returns all when patterns empty (exclude)', () => {
+    expect(applyCompositeGlobFilter(ids, 'exclude', [])).toEqual(ids);
+  });
+
+  it('returns all when patterns empty (include)', () => {
+    expect(applyCompositeGlobFilter(ids, 'include', [])).toEqual(ids);
+  });
+
+  it('exclude mode: hides items matching a slashless pattern across all namespaces', () => {
+    const result = applyCompositeGlobFilter(ids, 'exclude', ['auth-bff']);
+    expect(result).toEqual([
+      { service: 'gateway',   namespace: null    },
+      { service: 'order-svc', namespace: 'org-a' },
+    ]);
+  });
+
+  it('include mode: shows only items matching a slashed pattern', () => {
+    const result = applyCompositeGlobFilter(ids, 'include', ['org-a/*']);
+    expect(result).toEqual([
+      { service: 'auth-bff',  namespace: 'org-a' },
+      { service: 'order-svc', namespace: 'org-a' },
+    ]);
+  });
+
+  it('include mode: slashed pattern does not match null-namespace rows', () => {
+    const result = applyCompositeGlobFilter(ids, 'include', ['org-a/*', 'org-b/*']);
+    expect(result).not.toContainEqual({ service: 'gateway', namespace: null });
+  });
+
+  it('last-visible guard: returns all when exclude hides everything', () => {
+    const single = [{ service: 'only', namespace: null }];
+    const result = applyCompositeGlobFilter(single, 'exclude', ['only']);
+    expect(result).toEqual(single);
+  });
+
+  it('last-visible guard: returns all when include matches nothing', () => {
+    const result = applyCompositeGlobFilter(ids, 'include', ['nonexistent/*']);
+    expect(result).toEqual(ids);
   });
 });

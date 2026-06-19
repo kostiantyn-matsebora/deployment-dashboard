@@ -535,6 +535,45 @@ describe('MatrixComponent', () => {
 
   });
 
+  // ── 4a. track-key uniqueness (issue #353 fix) ────────────────────────────
+  //
+  // When the same service name exists under two different namespaces, the two
+  // rows must be treated as distinct — the composite `namespace|service` track
+  // expression prevents Angular from collapsing them into a single DOM node.
+
+  describe('composite track-key — same service name under different namespaces', () => {
+
+    it('filteredRows returns two distinct rows for same service name in different namespaces', async () => {
+      const { component, state } = await createMatrix();
+      state.matrixData.set(mkMatrix(['dev'], [
+        { service: 'api', namespace: 'team-a', slots: { dev: mkSlot('api', 'dev') } },
+        { service: 'api', namespace: 'team-b', slots: { dev: mkSlot('api', 'dev') } },
+      ] as any));
+      state.serviceFilter.set('');
+      state.failuresOnly.set(false);
+      const rows = priv(component).filteredRows() as Array<{ service: string; namespace?: string | null }>;
+      expect(rows).toHaveLength(2);
+      expect(rows[0].namespace).toBe('team-a');
+      expect(rows[1].namespace).toBe('team-b');
+    });
+
+    it('renders two distinct row-head cells for same service under different namespaces', async () => {
+      const { fixture, state } = await createMatrix();
+      state.matrixData.set(mkMatrix(['dev'], [
+        { service: 'api', namespace: 'team-a', slots: { dev: mkSlot('api', 'dev') } },
+        { service: 'api', namespace: 'team-b', slots: { dev: mkSlot('api', 'dev') } },
+      ] as any));
+      state.serviceFilter.set('');
+      state.failuresOnly.set(false);
+      state.matrixColOrder.set(['dev']);
+      state.matrixColHidden.set(new Set());
+      fixture.detectChanges();
+      const rowHeads = fixture.debugElement.queryAll(By.css('.row-head'));
+      expect(rowHeads).toHaveLength(2);
+    });
+
+  });
+
   // ── 5. Rendering (DOM) ───────────────────────────────────────────────────
 
   describe('DOM rendering', () => {
