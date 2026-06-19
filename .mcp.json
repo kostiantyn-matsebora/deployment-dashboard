@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] || exit 0; i=0; while [ $i -lt 90 ] && ! command -v serena >/dev/null 2>&1; do sleep 2; i=$((i+1)); done; command -v serena >/dev/null 2>&1 || uv tool install 'git+https://github.com/oraios/serena' >&2; exec serena start-mcp-server --context ide-assistant --project-from-cwd"
+      ],
+      "env": { "PYTHONUTF8": "1" }
+    },
+    "markdown": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] && exec npx -y mcp-server-markdown || exit 0"
+      ]
+    },
+    "playwright": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] || exit 0; i=0; while [ $i -lt 90 ] && ! command -v playwright-mcp >/dev/null 2>&1; do sleep 2; i=$((i+1)); done; command -v playwright-mcp >/dev/null 2>&1 && exec playwright-mcp --headless --browser chromium; exec npx -y @playwright/mcp@latest --headless --browser chromium"
+      ]
+    },
+    "tokensave": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] || exit 0; i=0; while [ $i -lt 90 ] && ! command -v tokensave >/dev/null 2>&1; do sleep 2; i=$((i+1)); done; exec tokensave serve"
+      ]
+    },
+    "code-review-graph": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] || exit 0; i=0; while [ $i -lt 90 ] && ! command -v code-review-graph >/dev/null 2>&1; do sleep 2; i=$((i+1)); done; command -v code-review-graph >/dev/null 2>&1 || uv tool install code-review-graph >&2; exec code-review-graph serve"
+      ]
+    }
+  }
+}
