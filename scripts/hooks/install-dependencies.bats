@@ -318,3 +318,42 @@ assert_no_installer_invoked() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"sudo not found"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# 10. apt-get update is scoped to the Microsoft repo list (regression guard)
+# ---------------------------------------------------------------------------
+
+@test "apt update is scoped to microsoft-prod.list, not a blanket update" {
+  # /etc/os-release must exist for the apt install path to be reached.
+  if [ ! -f /etc/os-release ]; then
+    skip "/etc/os-release absent on this host; apt install path not exercisable"
+  fi
+
+  # Remove pre-installed pwsh so the script attempts installation.
+  rm -f "$SANDBOX/pwsh"
+
+  # Replace the default apt-get stub with one that records full argv to a
+  # dedicated log file, so we can assert the exact flags used for `update`.
+  APT_ARGS_LOG="$SANDBOX/apt-args.log"
+  cat > "$SANDBOX/apt-get" << STUB
+#!$BASH_BIN
+echo "apt-get" >> "$SENTINEL"
+echo "\$@" >> "$APT_ARGS_LOG"
+if [ "\$1" = "install" ]; then
+  printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
+  chmod +x "$SANDBOX/pwsh"
+fi
+STUB
+  chmod +x "$SANDBOX/apt-get"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+
+  # The update invocation must target only the Microsoft repo list.
+  grep -q "update" "$APT_ARGS_LOG"
+  grep -q "sources.list.d/microsoft-prod.list" "$APT_ARGS_LOG"
+}
