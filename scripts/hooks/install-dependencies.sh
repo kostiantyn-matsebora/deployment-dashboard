@@ -218,6 +218,114 @@ else
 fi
 
 # ===========================================================================
+## code-review-graph (MCP server)
+# ===========================================================================
+
+# Idempotency — nothing to do if code-review-graph is already on PATH.
+if command -v code-review-graph >/dev/null 2>&1; then
+  echo "install-dependencies.sh: code-review-graph already on PATH — skipping." >&2
+else
+  # Prereq — uv must be available (code-review-graph is a uv-managed Python tool).
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "install-dependencies.sh: uv not found on PATH — cannot install code-review-graph; install uv first." >&2
+    exit 1
+  fi
+
+  # Install — per-user uv tool.
+  echo "install-dependencies.sh: installing code-review-graph via uv tool install..." >&2
+  uv tool install code-review-graph >&2
+
+  # Verify — confirm code-review-graph is now on PATH.
+  if ! command -v code-review-graph >/dev/null 2>&1; then
+    echo "install-dependencies.sh: installation completed but code-review-graph is still not on PATH." >&2
+    exit 1
+  fi
+
+  echo "install-dependencies.sh: code-review-graph installed successfully." >&2
+
+  # Build initial graph NON-FATALLY — parsing can fail on fresh repos; the server
+  # will rebuild on first update, so a failure here must not abort the bootstrap.
+  if ! code-review-graph build >&2; then
+    echo "install-dependencies.sh: code-review-graph initial build failed — continuing; it will build on first update." >&2
+  fi
+fi
+
+# ===========================================================================
+## tokensave (MCP server)
+# ===========================================================================
+# NON-FATAL overall — depends on GitHub release egress; a failure must NOT abort
+# the bootstrap. crates.io is blocked in this environment, so cargo is a last resort.
+
+# Idempotency — nothing to do if tokensave is already on PATH.
+if command -v tokensave >/dev/null 2>&1; then
+  echo "install-dependencies.sh: tokensave already on PATH — skipping." >&2
+else
+  _tokensave_installed=0
+
+  # Attempt prebuilt binary install from GitHub releases.
+  # github.com and release downloads are accessible; api.github.com is blocked.
+  if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
+    echo "install-dependencies.sh: attempting tokensave prebuilt binary install..." >&2
+
+    _ts_tmpdir="$(mktemp -d)"
+    _ts_ok=0
+
+    if _ts_ver="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+          https://github.com/aovestdipaperino/tokensave/releases/latest 2>/dev/null \
+          | sed -E 's#.*/tag/v?##')"; then
+      _ts_url="https://github.com/aovestdipaperino/tokensave/releases/download/v${_ts_ver}/tokensave-v${_ts_ver}-x86_64-linux.tar.gz"
+      if curl -fsSL "$_ts_url" -o "$_ts_tmpdir/ts.tar.gz" >&2; then
+        if tar -xzf "$_ts_tmpdir/ts.tar.gz" -C "$_ts_tmpdir" >&2; then
+          _ts_bin="$(find "$_ts_tmpdir" -type f -name 'tokensave' | head -n1)"
+          if [ -n "$_ts_bin" ]; then
+            mkdir -p "$HOME/.local/bin"
+            if install -m 0755 "$_ts_bin" "$HOME/.local/bin/tokensave"; then
+              _ts_ok=1
+            fi
+          fi
+        fi
+      fi
+    fi
+
+    # Clean up temp dir using real rm (not the stub) — POSIX fallback.
+    command rm -rf "$_ts_tmpdir" 2>/dev/null || true
+
+    if [ "$_ts_ok" = "1" ] && command -v tokensave >/dev/null 2>&1; then
+      _tokensave_installed=1
+      echo "install-dependencies.sh: tokensave prebuilt binary installed successfully." >&2
+    else
+      echo "install-dependencies.sh: tokensave prebuilt binary install failed." >&2
+    fi
+  else
+    echo "install-dependencies.sh: curl or tar not found — skipping tokensave prebuilt install." >&2
+  fi
+
+  # Fallback: cargo install (requires crates.io egress — may be blocked).
+  if [ "$_tokensave_installed" = "0" ]; then
+    if command -v cargo >/dev/null 2>&1; then
+      echo "install-dependencies.sh: falling back to cargo install tokensave (crates.io egress required; may be blocked)..." >&2
+      if cargo install tokensave >&2; then
+        if command -v tokensave >/dev/null 2>&1; then
+          _tokensave_installed=1
+          echo "install-dependencies.sh: tokensave installed via cargo successfully." >&2
+        fi
+      else
+        echo "install-dependencies.sh: cargo install tokensave failed." >&2
+      fi
+    fi
+  fi
+
+  if [ "$_tokensave_installed" = "1" ]; then
+    # Telemetry opt-out — NON-FATAL.
+    tokensave disable-upload-counter >&2 2>&1 || true
+    # One-time index build — NON-FATAL.
+    tokensave init >&2 2>&1 || echo "install-dependencies.sh: tokensave init (index) failed — continuing; the MCP server falls back gracefully." >&2
+  else
+    echo "install-dependencies.sh: tokensave unavailable (prebuilt download + cargo both failed) — continuing without it." >&2
+  fi
+fi
+
+# ===========================================================================
 ## .NET 10 SDK
 # ===========================================================================
 
