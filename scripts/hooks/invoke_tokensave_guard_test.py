@@ -4,6 +4,9 @@ pytest suite for invoke_tokensave_guard.py.
 Faithful translation of every Pester It block in Invoke-TokensaveGuard.Tests.ps1.
 """
 
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 from invoke_tokensave_guard import (
@@ -11,6 +14,19 @@ from invoke_tokensave_guard import (
     get_tokensave_guard_decision,
     is_code_path,
 )
+
+SCRIPT_PATH = Path(__file__).parent / "invoke_tokensave_guard.py"
+
+
+def _run_script(stdin_data: str, cwd: Path) -> subprocess.CompletedProcess:
+    """Run the tokensave guard script as a subprocess."""
+    return subprocess.run(
+        [sys.executable, str(SCRIPT_PATH)],
+        input=stdin_data,
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+    )
 
 # ============================================================
 # Describe: get_tokensave_guard_decision
@@ -111,3 +127,35 @@ class DescribeIsCodePath:
 
     def test_returns_false_for_an_empty_path(self):
         assert is_code_path("", [".cs"]) is False
+
+
+# ============================================================
+# Describe: Entry block plumbing (subprocess) — parity tests
+# ============================================================
+
+
+class DescribeEntryBlockPlumbing:
+    def test_empty_stdin_exits_0_with_no_output(self, tmp_path: Path):
+        """Empty stdin is a no-op (exit 0, no stdout) — matches PowerShell original."""
+        result = _run_script("", cwd=tmp_path)
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""
+
+    def test_json_array_stdin_exits_0_with_no_output(self, tmp_path: Path):
+        """JSON array on stdin is a no-op — PowerShell $payload.tool_name yields $null,
+        not a throw; the Python port must match (exit 0, no stdout)."""
+        result = _run_script('["a","b"]', cwd=tmp_path)
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""
+
+    def test_json_scalar_stdin_exits_0_with_no_output(self, tmp_path: Path):
+        """JSON scalar (non-dict) on stdin is a no-op — same PS null-access parity."""
+        result = _run_script('"just-a-string"', cwd=tmp_path)
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""
+
+    def test_invalid_json_stdin_exits_0_with_no_output(self, tmp_path: Path):
+        """Invalid JSON on stdin is a no-op (exit 0, no stdout)."""
+        result = _run_script("not json {", cwd=tmp_path)
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""

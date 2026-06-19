@@ -630,17 +630,17 @@ def get_session_start_context(root: str) -> str:
 # Stdin payload reader (hook I/O contract).
 # ---------------------------------------------------------------------------
 
-def read_payload() -> dict:
-    """Read stdin JSON payload; return {} on empty / non-redirected / invalid."""
+def read_payload() -> dict | None:
+    """Read stdin JSON payload; return None on empty / non-redirected / invalid."""
     if sys.stdin.isatty():
-        return {}
+        return None
     raw = sys.stdin.read()
     if not raw.strip():
-        return {}
+        return None
     try:
         return json.loads(raw)
     except (ValueError, TypeError):
-        return {}
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -758,7 +758,9 @@ def main() -> None:
 
     # PreToolUse mode (default, no switches).
     payload = read_payload()
-    if not payload:
+    if payload is None:
+        sys.exit(0)
+    if not isinstance(payload, dict):
         sys.exit(0)
 
     is_subagent = bool(

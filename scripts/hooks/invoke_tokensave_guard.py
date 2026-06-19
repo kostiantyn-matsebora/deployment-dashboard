@@ -164,17 +164,17 @@ def get_tokensave_guard_decision(
 # Hook entry point — stdin JSON -> decision -> stdout + exit 0.
 # ---------------------------------------------------------------------------
 
-def read_payload() -> dict:
-    """Read stdin JSON payload; return {} on empty / non-redirected / invalid."""
+def read_payload() -> dict | None:
+    """Read stdin JSON payload; return None on empty / non-redirected / invalid."""
     if sys.stdin.isatty():
-        return {}
+        return None
     raw = sys.stdin.read()
     if not raw.strip():
-        return {}
+        return None
     try:
         return json.loads(raw)
     except (ValueError, TypeError):
-        return {}
+        return None
 
 
 def main(
@@ -183,7 +183,9 @@ def main(
     file_reader=meta_file_reader,
 ) -> None:
     payload = read_payload()
-    if not payload:
+    if payload is None:
+        sys.exit(0)
+    if not isinstance(payload, dict):
         sys.exit(0)
 
     tool_name = str(payload.get("tool_name") or "")
