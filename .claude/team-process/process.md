@@ -98,8 +98,19 @@ concurrent runs in the same worktree coexist as distinct directories.
   **generated projection** of a member's `roster[].lane` — never hand-maintained. Project it with
   `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -SyncLane -Id <id> -Role <role>`.
 - **SessionStart reminds, never wipes.** On a fresh session it injects a resume summary listing
-  **every** active run (id · workflow · branch · phase · ledger) as context — so the lead re-attaches
-  rather than forgetting it was mid-run.
+  **every** active run (id · workflow · branch · phase · summary · agents · decisions) as context — so
+  the lead re-attaches rather than forgetting it was mid-run.
+- **Match new work to an existing run — propose resume, never silently fork.** Before starting work on
+  a feature/issue (a `/feature-team` launch *or* an informal "work on X"), check for an active run for
+  it; if one exists, **propose to the user to resume it** and continue in that session — do not start a
+  parallel run for the same issue.
+  - **Issue mode (a #number):** look it up mechanically —
+    `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>`; a non-empty
+    result is the run to propose resuming.
+  - **Informal ask:** match the request against the active runs' `summary` in the SessionStart reminder;
+    on a plausible match, propose resuming rather than restarting.
+  - Resuming re-attaches to the existing record (its decisions/roster/ledger) and re-creating the same
+    team id MERGES — see *Decision record* and *Resume reconstructs from the ledger*.
 - **Resume reconstructs from the ledger.** A reboot kills the live members; resuming re-creates the
   team and re-dispatches the in-flight wave from the ledger — the file is the durable truth, the
   live team is rebuilt.

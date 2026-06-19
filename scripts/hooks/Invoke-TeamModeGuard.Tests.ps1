@@ -274,6 +274,36 @@ Describe 'Format-DecisionDigest' {
 }
 
 # ============================================================
+Describe 'Find-SessionByIssue' {
+    BeforeEach {
+        $script:fbiRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fbi_" + [System.Guid]::NewGuid().ToString('N'))
+        foreach ($pair in @(@('feat-351', '#351'), @('feat-360', '#360'))) {
+            $d = Join-Path $script:fbiRoot '.team-process' 'sessions' $pair[0]
+            New-Item -ItemType Directory -Force -Path $d | Out-Null
+            @{ id = $pair[0]; workflow = 'feature-team'; team = $pair[0]; issue = $pair[1]; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z' } |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $d 'session.json') -Encoding utf8NoBOM
+        }
+    }
+    AfterEach { Remove-Item -LiteralPath $script:fbiRoot -Recurse -Force -ErrorAction SilentlyContinue }
+
+    It 'matches a record by bare issue number' {
+        $hits = Find-SessionByIssue -Root $script:fbiRoot -Issue '351'
+        @($hits).Count | Should -Be 1
+        $hits[0].id | Should -Be 'feat-351'
+    }
+    It 'matches regardless of # / GH- decoration' {
+        (Find-SessionByIssue -Root $script:fbiRoot -Issue '#351')[0].id | Should -Be 'feat-351'
+        (Find-SessionByIssue -Root $script:fbiRoot -Issue 'GH-360')[0].id | Should -Be 'feat-360'
+    }
+    It 'returns empty when no run matches the issue' {
+        @(Find-SessionByIssue -Root $script:fbiRoot -Issue '999').Count | Should -Be 0
+    }
+    It 'returns empty for a blank issue' {
+        @(Find-SessionByIssue -Root $script:fbiRoot -Issue '').Count | Should -Be 0
+    }
+}
+
+# ============================================================
 Describe 'Get-SessionReminder' {
     It 'lists a single active record and names the abandon command' {
         $rec = [pscustomobject]@{ id = 'feat-1'; workflow = 'feature-team'; branch = 'feat/x'; phase = 'implement'; createdAt = '2026-01-01T00:00:00Z' }

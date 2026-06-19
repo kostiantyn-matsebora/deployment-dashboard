@@ -32,6 +32,9 @@
                      (-Id <id> -Role <role>). Session roster = source of truth.
       -OnSessionStart SessionStart: if any session record exists, emit a resume reminder
                      listing every active run as additionalContext. Does NOT clear.
+      -FindSession   Look up an active run for -Issue <ref> (digits compared, so
+                     '#351'/'351' match). Prints the matching run(s) so the lead can PROPOSE
+                     resuming instead of starting a parallel team; empty stdout = no match.
 
 .PARAMETER AsLibrary    Define functions without executing entry block (for Pester).
 .PARAMETER SetMarker    Write/merge the session record and exit.
@@ -39,9 +42,11 @@
 .PARAMETER EndSession   Manual abandon (one -Id, or all) and exit.
 .PARAMETER SyncLane     Project run/lane from a roster entry and exit.
 .PARAMETER OnSessionStart Emit the resume reminder (SessionStart) and exit.
+.PARAMETER FindSession  Print any active run matching -Issue (propose-resume lookup) and exit.
 .PARAMETER Id           Session id (filename stem) for -EndSession / -SyncLane.
 .PARAMETER Role         Member role for -SyncLane.
 .PARAMETER Workflow     Workflow classifier for -SetMarker (feature-team | freeform).
+.PARAMETER Issue        Issue ref for -FindSession.
 #>
 
 [CmdletBinding()]
@@ -52,9 +57,11 @@ param(
     [switch]$EndSession,
     [switch]$SyncLane,
     [switch]$OnSessionStart,
+    [switch]$FindSession,
     [string]$Id,
     [string]$Role,
-    [string]$Workflow
+    [string]$Workflow,
+    [string]$Issue
 )
 
 function Get-TeamProcessBaseDir  { param([string]$Root) return (Join-Path $Root '.team-process') }
@@ -269,12 +276,31 @@ $lines
 RESUME, do not restart: continue each run from its record; spawn members with team_name set, never
 foreground in-session subagents (the team-mode guard will block them). Re-dispatch an in-flight member
 with its BRIEF (from the session inbox) + its roster progress + the decisions below.
+PROPOSE RESUME on a new ask: if the user asks to work on one of the issues/features above, propose
+continuing THAT run rather than starting a parallel one (issue lookup: -FindSession -Issue <ref>).
 RECORD IS AUTHORITATIVE: the session record OVERRIDES any conflicting compaction summary - re-read its
 decisions before acting; do not trust a summary that contradicts a locked decision.
 Records live at .team-process/sessions/<id>/session.json. To ABANDON one: pwsh -NoProfile -File
 scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>. See
 .claude/team-process/process.md -> 'Session state & resume'.
 "@.Trim()
+}
+
+# Active session records whose `issue` matches the given ref (compared by bare digits, so
+# '#351' / '351' / 'GH-351' all match). Used to PROPOSE resuming an existing run instead of
+# starting a parallel one for the same issue.
+function Find-SessionByIssue {
+    param([string]$Root, [string]$Issue)
+    $want = ([string]$Issue -replace '\D', '')
+    if ([string]::IsNullOrWhiteSpace($want)) { return @() }
+    $out = @()
+    foreach ($f in (Get-ActiveSessionFiles -Root $Root)) {
+        $r = Read-SessionRecord -Path $f
+        if (-not $r -or -not $r.issue) { continue }
+        $have = ([string]$r.issue) -replace '\D', ''
+        if ($have -and $have -eq $want) { $out += $r }
+    }
+    return @($out)
 }
 
 # Write/merge a session record under $Root. Returns the written record.
@@ -401,6 +427,17 @@ if (-not $AsLibrary) {
     if ($OnSessionStart) {
         $ctx = Get-SessionStartContext -Root $root
         if (-not [string]::IsNullOrWhiteSpace($ctx)) { [Console]::Out.WriteLine($ctx) }
+        exit 0
+    }
+
+    if ($FindSession) {
+        # Look up an existing active run for this issue so the lead can PROPOSE resuming it
+        # instead of starting a parallel run. Empty stdout = no match (safe to start fresh).
+        $hits = Find-SessionByIssue -Root $root -Issue $Issue
+        if (@($hits).Count -gt 0) {
+            $lines = @($hits | ForEach-Object { Format-SessionLine -Record $_ }) -join "`n"
+            [Console]::Out.WriteLine("Existing active run(s) for issue $Issue - PROPOSE RESUME (continue this run; do NOT start a parallel team for the same issue):`n$lines")
+        }
         exit 0
     }
 

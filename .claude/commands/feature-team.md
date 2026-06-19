@@ -41,6 +41,18 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
 | [`/integrate`](integrate.md) · [`/review-loop`](review-loop.md) | Lead integrates; spawns one reviewer per competency (reviewer ≠ implementer). |
 | [`/fix-loop`](fix-loop.md) · [`/ship`](ship.md) | Lead drives; the testing member reports red, the lead routes `FIX`es. |
 
+## 0 — Resume check (before anything)
+
+**Don't fork an existing run.** Before planning, check for an active run already working this
+issue/feature and **propose to resume it** instead of creating a parallel team:
+
+- Issue mode: `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>`
+  — a non-empty result is the run to propose resuming (re-create the same team id → merges/resumes).
+- Informal ask: match the request against the active runs' `summary` in the SessionStart reminder.
+
+Only proceed to a fresh plan when no existing run matches (or the user declines to resume). See
+[`process.md`](../team-process/process.md) → *Session state & resume*.
+
 ## 1 — Plan (NO team yet)
 
 Run [`/intake`](intake.md) → [`/contract`](contract.md) (if cross-layer) → [`/plan-dispatch`](plan-dispatch.md)

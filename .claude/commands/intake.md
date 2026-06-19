@@ -8,6 +8,12 @@ argument-hint: <issue number | task description>
 The **Intake & docs-first** activity of the orchestration process
 ([`.claude/team-process/process.md`](../team-process/process.md)).
 
+0. **Resume check first.** Before scoping new work, check for an active run already on this
+   issue/feature and **propose to resume it** (don't fork a parallel run): issue mode →
+   `Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>`; informal ask → match against the active runs'
+   `summary` in the SessionStart reminder. See [`process.md`](../team-process/process.md) →
+   *Session state & resume*.
+
 1. **Docs-first.** Read the owning spec before any code; navigate the project's docs index to the
    relevant specification. For API features, the contract artifact is the source of truth.
    - Record a one-line `summary` in the session record (the issue title or the feature's essence) —
