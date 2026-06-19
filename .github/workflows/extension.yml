@@ -49,3 +49,42 @@ jobs:
           name: extension-zips
           path: frontend/extension/dist-zips/*.zip
           if-no-files-found: error
+
+  # ── Extension E2E ────────────────────────────────────────────────────────────
+  e2e:
+    name: Extension E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            testing/e2e/package-lock.json
+            frontend/mock/package-lock.json
+            frontend/extension/package-lock.json
+
+      - name: Install (e2e)
+        run: npm ci
+        working-directory: testing/e2e
+
+      - name: Install (mock)
+        run: npm ci
+        working-directory: frontend/mock
+
+      - name: Install (extension)
+        run: npm ci
+        working-directory: frontend/extension
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: testing/e2e
+
+      - name: Run extension E2E
+        env:
+          CI: '1'
+        run: xvfb-run npm --prefix testing/e2e run test:extension

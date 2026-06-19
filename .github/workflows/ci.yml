@@ -74,6 +74,7 @@ jobs:
               - 'frontend/extension/**'
               - '.github/workflows/extension.yml'
               - 'scripts/package_extension.py'
+              - 'testing/e2e/**'
             gateway:
               - 'gateway/**'
               - '.github/workflows/gateway.yml'
