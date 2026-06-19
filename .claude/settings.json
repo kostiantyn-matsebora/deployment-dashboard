@@ -12,6 +12,7 @@
   "worktree": {
     "bgIsolation": "worktree"
   },
+  "enableAllProjectMcpServers": true,
   "statusLine": {
     "type": "command",
     "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/statusline/Show-StatusLine.ps1\""
