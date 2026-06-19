@@ -4,6 +4,10 @@ Portable orchestration framework: one lead, N role-specialists, any stack. Defin
 
 **Core** (`process.md` · `protocol.md` · `guardrails.md` · `roles/`) is stack-, domain-, and runtime-agnostic. Only client-specific wiring: one *Claude Code binding* in `process.md` (and the reference agents below), swappable by runtime.
 
+## Session lifecycle
+
+Lifecycle is explicit, not hook-driven (`TeamCreate`/`TeamDelete` removed in Claude Code 2.1.178). The lead opens a run with `Invoke-TeamModeGuard.ps1 -SetMarker` (writes the session record + inbox/outbox, enables team mode) and closes it with `-EndSession`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
+
 ## Layout
 
 | File | Role |
@@ -50,7 +54,7 @@ Per-vendor glue (extension, location, frontmatter) is the only thing that differ
 
 | Runtime | Agent file | Spawn primitive |
 |---|---|---|
-| Claude Code | `.claude/agents/<role>.md` | `Agent`/Task · `/feature-team` → `TeamCreate` |
+| Claude Code | `.claude/agents/<role>.md` | `Agent`/Task · `/feature-team` → background Agents (`run_in_background`) |
 | GitHub Copilot | `.github/agents/<role>.agent.md` | `@<role>` · `/fleet` |
 
 Keep `agents/` and `team-process/` under the **same parent** so `../team-process/roles/…` resolves for both. See *Execution modes* in `process.md` for the full runtime binding.

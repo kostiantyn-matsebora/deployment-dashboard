@@ -9,25 +9,31 @@
     runtime state; <id> = sanitized team name) holding session.json (the ledger),
     inbox/ (orchestrator typed-form dispatches: BRIEF/FIX) and outbox/ (member typed-form
     hand-backs). The EXISTENCE of ANY sessions/<id>/session.json
-    = team mode is active. A record is the durable run ledger: the hook
-    writes an initial record (and creates the inbox + outbox dirs) on TeamCreate; the orchestrator
-    enriches it (roster, phase, ledger) as the run proceeds; it is read on SessionStart
-    to resume + remind rather than wiped. 'workflow' classifies how to resume
-    (feature-team vs freeform). The session roster is the source of truth for the lane
-    file, which is a generated projection (see -SyncLane).
+    = team mode is active. A record is the durable run ledger: the orchestrator
+    writes an initial record (and creates the inbox + outbox dirs) by calling -SetMarker
+    explicitly from /feature-team (TeamCreate/TeamDelete were removed from Claude Code, so the
+    lifecycle is no longer hook-driven); the orchestrator enriches it (roster, phase, ledger) as
+    the run proceeds; it is read on SessionStart to resume + remind rather than wiped. 'workflow'
+    classifies how to resume (feature-team vs freeform). The session roster is the source of truth
+    for the lane file, which is a generated projection (see -SyncLane).
 
     A legacy single-file record at .team-process/session.json (pre-multi-session)
     is still read as one active session for back-compat.
 
     Modes:
       (default, PreToolUse(Agent|Task)) when any session record exists, block foreground
-        in-session subagent spawns (no team_name). Subagents and member spawns
-        (tool_input.team_name present) pass through.
-      -SetMarker     PostToolUse(TeamCreate): create/merge the session record for the
-                     created team (preserves an existing record's ledger/roster/createdAt).
-                     -Workflow sets the classifier (default feature-team).
-      -ClearMarker   PostToolUse(TeamDelete): remove the named team's session record + lane.
-      -EndSession    Manual abandon. -Id <id> abandons one session; no -Id abandons all.
+        in-session subagent spawns. A spawn is a legitimate member (passes through) when it is a
+        background Agent (tool_input.run_in_background truthy) OR carries tool_input.team_name
+        (back-compat for any runtime where named teams still exist). Nested subagents pass through.
+      -SetMarker     Create/merge the session record for the run (preserves an existing record's
+                     ledger/roster/createdAt). Called explicitly by /feature-team before spawning
+                     members; -Team names the run (else read from a piped payload, legacy).
+                     -Workflow sets the classifier (default feature-team); -Issue/-Summary seed a
+                     brand-new record.
+      -ClearMarker   Remove the named team's session record + lane (reads a piped payload). Legacy:
+                     no longer hook-wired (TeamDelete is gone) - prefer -EndSession -Id for teardown.
+      -EndSession    Manual abandon (the documented teardown). -Id <id> abandons one session; no
+                     -Id abandons all.
       -SyncLane      Project a member's lane from the session roster into run/lane
                      (-Id <id> -Role <role>). Session roster = source of truth.
       -OnSessionStart SessionStart: if any session record exists, emit a resume reminder
@@ -38,7 +44,7 @@
 
 .PARAMETER AsLibrary    Define functions without executing entry block (for Pester).
 .PARAMETER SetMarker    Write/merge the session record and exit.
-.PARAMETER ClearMarker  Remove the named team's session record + lane and exit.
+.PARAMETER ClearMarker  Remove the named team's session record + lane and exit (legacy; prefer -EndSession).
 .PARAMETER EndSession   Manual abandon (one -Id, or all) and exit.
 .PARAMETER SyncLane     Project run/lane from a roster entry and exit.
 .PARAMETER OnSessionStart Emit the resume reminder (SessionStart) and exit.
@@ -46,7 +52,9 @@
 .PARAMETER Id           Session id (filename stem) for -EndSession / -SyncLane.
 .PARAMETER Role         Member role for -SyncLane.
 .PARAMETER Workflow     Workflow classifier for -SetMarker (feature-team | freeform).
-.PARAMETER Issue        Issue ref for -FindSession.
+.PARAMETER Issue        Issue ref for -FindSession; also seeds a brand-new record on -SetMarker.
+.PARAMETER Team         Run/team name for an explicit -SetMarker (preferred over a piped payload).
+.PARAMETER Summary      Short run summary that seeds a brand-new record on -SetMarker.
 #>
 
 [CmdletBinding()]
@@ -61,7 +69,9 @@ param(
     [string]$Id,
     [string]$Role,
     [string]$Workflow,
-    [string]$Issue
+    [string]$Issue,
+    [string]$Team,
+    [string]$Summary
 )
 
 function Get-TeamProcessBaseDir  { param([string]$Root) return (Join-Path $Root '.team-process') }
@@ -145,24 +155,28 @@ function Test-AnySessionActive {
     return ((Get-ActiveSessionFiles -Root $Root).Count -gt 0)
 }
 
-# PreToolUse decision — unchanged rule, now keyed on "any session record exists".
+# PreToolUse decision — keyed on "any session record exists". A spawn is a legitimate member
+# when it is a background Agent (run_in_background) OR carries team_name (back-compat); a
+# foreground in-session subagent (neither) is blocked while a run is active.
 function Get-TeamModeDecision {
     param(
         [bool]$IsSubagent,
         [bool]$SessionActive,
-        [bool]$HasTeamName
+        [bool]$HasTeamName,
+        [bool]$IsBackground
     )
-    if ($IsSubagent)         { return @{ Block = $false } }
-    if (-not $SessionActive) { return @{ Block = $false } }
-    if ($HasTeamName)        { return @{ Block = $false } }
+    if ($IsSubagent)             { return @{ Block = $false } }
+    if (-not $SessionActive)     { return @{ Block = $false } }
+    if ($HasTeamName -or $IsBackground) { return @{ Block = $false } }
     return @{
         Block  = $true
-        Reason = "Team mode is active (a team-process run is in progress): dispatch to a spawned member via SendMessage, or spawn a member with 'team_name' set - not a foreground in-session subagent. Mode is sticky; to change substrate, surface it as a decision. To abandon a stale session: pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>. See .claude/team-process/process.md -> 'Mode is sticky' / 'Session state & resume'."
+        Reason = "Team mode is active (a team-process run is in progress): dispatch to a spawned member via SendMessage, or spawn a member as a background Agent ('run_in_background: true', 'name' = role) - not a foreground in-session subagent. Mode is sticky; to change substrate, surface it as a decision. To abandon a stale session: pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -EndSession -Id <id>. See .claude/team-process/process.md -> 'Mode is sticky' / 'Session state & resume'."
     }
 }
 
-# Extract the team name from a PostToolUse(TeamCreate|TeamDelete) payload (tool_input/tool_response).
-function Get-TeamCreateName {
+# Extract the team name from a piped payload (tool_input/tool_response). Used by the legacy
+# -ClearMarker path and as a fallback team source for -SetMarker when -Team is not supplied.
+function Get-PayloadTeamName {
     param($Payload)
     foreach ($src in @($Payload.tool_input, $Payload.tool_response)) {
         if ($null -eq $src) { continue }
@@ -183,6 +197,8 @@ function New-SessionRecord {
         [string]$Branch,
         [datetime]$Now,
         [string]$ClaudeSessionId,
+        [string]$Issue,
+        [string]$Summary,
         $Existing
     )
     $ts  = $Now.ToUniversalTime().ToString('o')
@@ -195,8 +211,11 @@ function New-SessionRecord {
     if ($cs) { $rec.claudeSessionId = $cs }
     if ($Branch) { $rec.branch = $Branch }
     elseif ($Existing -and $Existing.branch) { $rec.branch = [string]$Existing.branch }
-    if ($Existing -and $Existing.issue)   { $rec.issue   = [string]$Existing.issue }
-    if ($Existing -and $Existing.summary) { $rec.summary = [string]$Existing.summary }
+    # Explicit -Issue/-Summary seed a brand-new record; an existing value is preserved on re-create.
+    if ($Issue)                           { $rec.issue   = $Issue }
+    elseif ($Existing -and $Existing.issue) { $rec.issue = [string]$Existing.issue }
+    if ($Summary)                         { $rec.summary = $Summary }
+    elseif ($Existing -and $Existing.summary) { $rec.summary = [string]$Existing.summary }
     if ($Existing -and $Existing.task)    { $rec.task    = [string]$Existing.task }
     $rec.phase     = if ($Existing -and $Existing.phase) { [string]$Existing.phase } else { 'created' }
     $rec.createdAt = if ($Existing -and $Existing.createdAt) { [string]$Existing.createdAt } else { $ts }
@@ -273,9 +292,9 @@ function Get-SessionReminder {
     return @"
 [!] team-process session(s) ACTIVE - $n run(s) in progress (mode is sticky).
 $lines
-RESUME, do not restart: continue each run from its record; spawn members with team_name set, never
-foreground in-session subagents (the team-mode guard will block them). Re-dispatch an in-flight member
-with its BRIEF (from the session inbox) + its roster progress + the decisions below.
+RESUME, do not restart: continue each run from its record; spawn members as background Agents
+(run_in_background: true), never foreground in-session subagents (the team-mode guard will block them).
+Re-dispatch an in-flight member with its BRIEF (from the session inbox) + its roster progress + the decisions below.
 PROPOSE RESUME on a new ask: if the user asks to work on one of the issues/features above, propose
 continuing THAT run rather than starting a parallel one (issue lookup: -FindSession -Issue <ref>).
 RECORD IS AUTHORITATIVE: the session record OVERRIDES any conflicting compaction summary - re-read its
@@ -305,11 +324,11 @@ function Find-SessionByIssue {
 
 # Write/merge a session record under $Root. Returns the written record.
 function Set-TeamSession {
-    param([string]$Root, [string]$Team, [string]$Workflow, [string]$Branch, [datetime]$Now, [string]$ClaudeSessionId)
+    param([string]$Root, [string]$Team, [string]$Workflow, [string]$Branch, [datetime]$Now, [string]$ClaudeSessionId, [string]$Issue, [string]$Summary)
     $id          = ConvertTo-SessionId -Team $Team
     $sessionFile = Get-SessionFilePath -Root $Root -Id $id
     $existing    = Read-SessionRecord -Path $sessionFile
-    $record      = New-SessionRecord -Id $id -Team $Team -Workflow $Workflow -Branch $Branch -Now $Now -ClaudeSessionId $ClaudeSessionId -Existing $existing
+    $record      = New-SessionRecord -Id $id -Team $Team -Workflow $Workflow -Branch $Branch -Now $Now -ClaudeSessionId $ClaudeSessionId -Issue $Issue -Summary $Summary -Existing $existing
     $dir         = Get-SessionDir -Root $Root -Id $id
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
     # Create both boxes up front: the inbox so the orchestrator can drop dispatches, and the
@@ -378,33 +397,43 @@ if (-not $AsLibrary) {
     $root = ([string]$root).Trim()
 
     if ($SetMarker) {
+        # Read the piped payload ONLY on the legacy path (no -Team). When -Team is supplied
+        # (the explicit /feature-team call) we must NOT touch stdin: a child process launched
+        # with an inherited-but-open redirected stdin would block forever in ReadToEnd waiting
+        # for an EOF that never arrives.
         $hookInputJson = ''
-        if ([Console]::IsInputRedirected) { try { $hookInputJson = [Console]::In.ReadToEnd() } catch { $hookInputJson = '' } }
+        if (-not $Team -and [Console]::IsInputRedirected) { try { $hookInputJson = [Console]::In.ReadToEnd() } catch { $hookInputJson = '' } }
         $payload = $null
         if (-not [string]::IsNullOrWhiteSpace($hookInputJson)) {
             try { $payload = $hookInputJson | ConvertFrom-Json -ErrorAction Stop } catch { $null = $_ }
         }
-        $team   = if ($payload) { Get-TeamCreateName -Payload $payload } else { '' }
+        # Team source precedence: explicit -Team (the /feature-team call) > a piped payload (legacy).
+        $team = if ($Team) { $Team } elseif ($payload) { Get-PayloadTeamName -Payload $payload } else { '' }
         $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null) | Select-Object -First 1
-        $branch = ([string]$branch).Trim()
-        # The owning Claude session_id (present on the hook payload) — captured here and
+        # "$branch" (not [string]$branch) so an empty git result -> '' rather than a null whose
+        # .Trim() throws — -SetMarker is now callable outside a git repo (explicit /feature-team call).
+        $branch = "$branch".Trim()
+        # The owning Claude session_id (present on a piped payload) — captured here and
         # refreshed on every re-create, so it tracks the session that currently drives the run.
         $claudeSessionId = if ($payload) { [string]$payload.session_id } else { '' }
         # Pass -Workflow through RAW (empty when not supplied) so New-SessionRecord can
         # PRESERVE an existing record's workflow on re-create and default only a brand-new
         # record to feature-team. Defaulting here would clobber a freeform session.
-        Set-TeamSession -Root $root -Team $team -Workflow $Workflow -Branch $branch -Now (Get-Date) -ClaudeSessionId $claudeSessionId | Out-Null
+        Set-TeamSession -Root $root -Team $team -Workflow $Workflow -Branch $branch -Now (Get-Date) -ClaudeSessionId $claudeSessionId -Issue $Issue -Summary $Summary | Out-Null
         exit 0
     }
 
     if ($ClearMarker) {
+        # As with -SetMarker: only consume stdin on the legacy (no -Team) path, so an explicit
+        # call with an inherited-open redirected stdin can't block in ReadToEnd.
         $hookInputJson = ''
-        if ([Console]::IsInputRedirected) { try { $hookInputJson = [Console]::In.ReadToEnd() } catch { $hookInputJson = '' } }
+        if (-not $Team -and [Console]::IsInputRedirected) { try { $hookInputJson = [Console]::In.ReadToEnd() } catch { $hookInputJson = '' } }
         $payload = $null
         if (-not [string]::IsNullOrWhiteSpace($hookInputJson)) {
             try { $payload = $hookInputJson | ConvertFrom-Json -ErrorAction Stop } catch { $null = $_ }
         }
-        $team = if ($payload) { Get-TeamCreateName -Payload $payload } else { '' }
+        # Legacy path (no longer hook-wired — TeamDelete is gone; -EndSession -Id is the teardown).
+        $team = if ($Team) { $Team } elseif ($payload) { Get-PayloadTeamName -Payload $payload } else { '' }
         # Only clear the named team's session — never nuke concurrent runs on a missing name.
         if (-not [string]::IsNullOrWhiteSpace($team)) {
             Clear-TeamSession -Root $root -Id (ConvertTo-SessionId -Team $team)
@@ -413,7 +442,7 @@ if (-not $AsLibrary) {
     }
 
     if ($EndSession) {
-        # Sanitize the id through the same gate as TeamCreate names — a raw '..' must
+        # Sanitize the id through the same gate as session ids — a raw '..' must
         # never reach -Recurse removal.
         if ($Id) { Clear-TeamSession -Root $root -Id (ConvertTo-SessionId -Team $Id) } else { Clear-TeamSession -Root $root }
         exit 0
@@ -457,8 +486,12 @@ if (-not $AsLibrary) {
     $sessionActive = Test-AnySessionActive -Root $root
     $hasTeamName   = $payload.tool_input -and
                      (-not [string]::IsNullOrWhiteSpace($payload.tool_input.team_name))
+    # A background Agent (run_in_background truthy) is the new member substrate — JSON may carry a
+    # real bool or the string 'true'; treat both as background.
+    $rib           = if ($payload.tool_input) { $payload.tool_input.run_in_background } else { $null }
+    $isBackground  = ($rib -eq $true) -or ("$rib" -eq 'true')
 
-    $decision = Get-TeamModeDecision -IsSubagent $isSubagent -SessionActive $sessionActive -HasTeamName $hasTeamName
+    $decision = Get-TeamModeDecision -IsSubagent $isSubagent -SessionActive $sessionActive -HasTeamName $hasTeamName -IsBackground $isBackground
 
     if ($decision.Block) {
         $json = @{ decision = 'block'; reason = $decision.Reason } | ConvertTo-Json -Compress

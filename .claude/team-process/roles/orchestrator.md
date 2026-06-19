@@ -49,7 +49,7 @@ Hub-and-spoke; formats in [`protocol.md`](../protocol.md).
 - **Member → orch:** `RESULT` / `FINDING` — file in outbox + `{ type, ref }` pointer. Drain: read by `ref`, fold into run ledger, delete outbox file.
 - **Orch → member:** `BRIEF` / `FIX` — write to `inbox`, dispatch by reference (spawn-prompt path for first `BRIEF`; `{ type, ref }` pointer for re-dispatch). Drop verbatim form from context once written.
 - **Member ↔ member:** only `contract` role settling an interface → `ARTIFACT`.
-- **Abandon before fresh start.** `-EndSession -Id <id>` before `TeamCreate` on an existing id — re-create merges, not fresh.
+- **Abandon before fresh start.** `-EndSession -Id <id>` before re-running `-SetMarker` on an existing id — re-running merges, not fresh.
 
 ## Context economy
 

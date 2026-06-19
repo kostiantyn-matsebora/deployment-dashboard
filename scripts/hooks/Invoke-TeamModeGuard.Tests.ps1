@@ -23,18 +23,25 @@ Describe 'Get-TeamModeDecision' {
     It 'allows when no session is active' {
         (Get-TeamModeDecision -IsSubagent $false -SessionActive $false -HasTeamName $false).Block | Should -BeFalse
     }
-    It 'allows a member spawn (session active + team_name set)' {
-        (Get-TeamModeDecision -IsSubagent $false -SessionActive $true -HasTeamName $true).Block | Should -BeFalse
+    It 'allows a member spawn as a background Agent (session active + run_in_background)' {
+        (Get-TeamModeDecision -IsSubagent $false -SessionActive $true -HasTeamName $false -IsBackground $true).Block | Should -BeFalse
+    }
+    It 'allows a member spawn with team_name set (back-compat, session active)' {
+        (Get-TeamModeDecision -IsSubagent $false -SessionActive $true -HasTeamName $true -IsBackground $false).Block | Should -BeFalse
     }
     It 'blocks a foreground in-session subagent when a session is active' {
-        $d = Get-TeamModeDecision -IsSubagent $false -SessionActive $true -HasTeamName $false
+        $d = Get-TeamModeDecision -IsSubagent $false -SessionActive $true -HasTeamName $false -IsBackground $false
         $d.Block | Should -BeTrue
         $d.Reason | Should -Match 'Team mode is active'
-        $d.Reason | Should -Match 'team_name'
+        $d.Reason | Should -Match 'background Agent'
+        $d.Reason | Should -Match 'run_in_background'
         $d.Reason | Should -Match 'EndSession'
     }
+    It 'allows a background spawn without an active session yet' {
+        (Get-TeamModeDecision -IsSubagent $false -SessionActive $false -HasTeamName $false -IsBackground $true).Block | Should -BeFalse
+    }
     It 'allows team_name present without an active session yet' {
-        (Get-TeamModeDecision -IsSubagent $false -SessionActive $false -HasTeamName $true).Block | Should -BeFalse
+        (Get-TeamModeDecision -IsSubagent $false -SessionActive $false -HasTeamName $true -IsBackground $false).Block | Should -BeFalse
     }
 }
 
@@ -98,18 +105,18 @@ Describe 'Test-SafeSessionId' {
 }
 
 # ============================================================
-Describe 'Get-TeamCreateName' {
+Describe 'Get-PayloadTeamName' {
     It 'reads tool_input.team_name' {
-        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{ team_name = 'feat-9' } }) | Should -Be 'feat-9'
+        Get-PayloadTeamName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{ team_name = 'feat-9' } }) | Should -Be 'feat-9'
     }
     It 'falls back to tool_input.name' {
-        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{ name = 'feat-x' } }) | Should -Be 'feat-x'
+        Get-PayloadTeamName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{ name = 'feat-x' } }) | Should -Be 'feat-x'
     }
     It 'reads from tool_response when tool_input lacks it' {
-        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{}; tool_response = [pscustomobject]@{ team = 'feat-r' } }) | Should -Be 'feat-r'
+        Get-PayloadTeamName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{}; tool_response = [pscustomobject]@{ team = 'feat-r' } }) | Should -Be 'feat-r'
     }
     It 'returns empty when no name is present' {
-        Get-TeamCreateName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{} }) | Should -Be ''
+        Get-PayloadTeamName -Payload ([pscustomobject]@{ tool_input = [pscustomobject]@{} }) | Should -Be ''
     }
 }
 
@@ -566,6 +573,36 @@ Describe 'Entry block dispatch (subprocess, temp root)' {
             try { $out = ($payload | pwsh -NonInteractive -NoProfile -File $script:ScriptPath) -join "`n" }
             finally { Pop-Location }
             $out.Trim() | Should -BeNullOrEmpty
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It 'PreToolUse ALLOWS a background Agent member spawn (run_in_background) when a session is active' {
+        $root = New-TmpRoot
+        try {
+            Set-TeamSession -Root $root -Team 'feat-1' -Branch 'b' -Now $script:FixedNow | Out-Null
+            $payload = @{ tool_name = 'Agent'; agent_type = ''; agent_id = ''; tool_input = @{ run_in_background = $true } } | ConvertTo-Json -Compress
+            Push-Location $root
+            try { $out = ($payload | pwsh -NonInteractive -NoProfile -File $script:ScriptPath) -join "`n" }
+            finally { Pop-Location }
+            $out.Trim() | Should -BeNullOrEmpty
+        }
+        finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
+    }
+
+    It '-SetMarker -Team writes a record seeded with -Issue/-Summary via the entry block' {
+        $root = New-TmpRoot
+        try {
+            Push-Location $root
+            try { pwsh -NonInteractive -NoProfile -File $script:ScriptPath -SetMarker -Team 'feat-7' -Workflow 'feature-team' -Issue '#7' -Summary 'glob filter' | Out-Null }
+            finally { Pop-Location }
+            $file = Get-SessionFilePath -Root $root -Id 'feat-7'
+            Test-Path -LiteralPath $file | Should -BeTrue
+            $rec = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json
+            $rec.issue   | Should -Be '#7'
+            $rec.summary | Should -Be 'glob filter'
+            Test-Path -LiteralPath (Get-InboxDir -Root $root -Id 'feat-7') | Should -BeTrue
+            Test-Path -LiteralPath (Get-OutboxDir -Root $root -Id 'feat-7') | Should -BeTrue
         }
         finally { Remove-Item -Recurse -Force -LiteralPath $root -ErrorAction SilentlyContinue }
     }

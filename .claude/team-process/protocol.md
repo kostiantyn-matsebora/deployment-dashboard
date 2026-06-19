@@ -53,7 +53,7 @@ Every cross-role message is a **file in the session directory** (durable payload
 | **inbox** | orch → member · dispatch | `BRIEF` · `FIX` | `.team-process/sessions/<id>/inbox/<role>.<TYPE>.json` |
 | **outbox** | member → orch · hand-back | `RESULT` · `REVIEW` · `FINDING` · `ARTIFACT` | `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json` |
 
-`<id>` = the `team_name` sanitized; `<TYPE>` = the form (e.g. `backend.BRIEF.json`, `backend.RESULT.json`).
+`<id>` = the session id (sanitized `-SetMarker -Team` name); `<TYPE>` = the form (e.g. `backend.BRIEF.json`, `backend.RESULT.json`).
 
 1. **Write the normalized form** to the box: hand-back → the member runs
    `Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox>` (one command writes its `outbox`
