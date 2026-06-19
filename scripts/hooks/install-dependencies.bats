@@ -152,6 +152,40 @@ STUB
   # destination file; prevents "command not found" under env -i.
   printf '#!%s\n: # no-op touch\n' "$BASH_BIN" > "$SANDBOX/touch"
   chmod +x "$SANDBOX/touch"
+
+  # serena stub — pre-installs a working serena (overridden per test as needed).
+  printf '#!%s\necho "Serena 1.5.4.dev0"\n' "$BASH_BIN" > "$SANDBOX/serena"
+  chmod +x "$SANDBOX/serena"
+
+  # mcp-server-markdown stub — pre-installs a working mcp-server-markdown.
+  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/mcp-server-markdown"
+  chmod +x "$SANDBOX/mcp-server-markdown"
+
+  # uv stub — appends name to sentinel.
+  # On "tool install ...", writes an executable serena stub into $SANDBOX so
+  # the post-install command -v check in the script succeeds.
+  cat > "$SANDBOX/uv" << STUB
+#!$BASH_BIN
+echo "uv" >> "$SENTINEL"
+if [ "\$1" = "tool" ] && [ "\$2" = "install" ]; then
+  printf '#!$BASH_BIN\necho "Serena 1.5.4.dev0"\n' > "$SANDBOX/serena"
+  chmod +x "$SANDBOX/serena"
+fi
+STUB
+  chmod +x "$SANDBOX/uv"
+
+  # npm stub — appends name to sentinel.
+  # On "install -g ...", writes an executable mcp-server-markdown stub into
+  # $SANDBOX so the post-install command -v check in the script succeeds.
+  cat > "$SANDBOX/npm" << STUB
+#!$BASH_BIN
+echo "npm" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  printf '#!$BASH_BIN\nexit 0\n' > "$SANDBOX/mcp-server-markdown"
+  chmod +x "$SANDBOX/mcp-server-markdown"
+fi
+STUB
+  chmod +x "$SANDBOX/npm"
 }
 
 teardown() {
@@ -174,9 +208,9 @@ assert_sentinel_empty() {
 
 # Assert none of the installer tools appear in the sentinel log.
 assert_no_installer_invoked() {
-  if [ -f "$SENTINEL" ] && grep -qE '^(apt-get|snap|dpkg|wget|curl)$' "$SENTINEL"; then
+  if [ -f "$SENTINEL" ] && grep -qE '^(apt-get|snap|dpkg|wget|curl|uv|npm)$' "$SENTINEL"; then
     echo "Unexpected installer invocation in sentinel log:"
-    grep -E '^(apt-get|snap|dpkg|wget|curl)$' "$SENTINEL"
+    grep -E '^(apt-get|snap|dpkg|wget|curl|uv|npm)$' "$SENTINEL"
     return 1
   fi
 }
@@ -356,4 +390,112 @@ STUB
   # The update invocation must target only the Microsoft repo list.
   grep -q "update" "$APT_ARGS_LOG"
   grep -q "sources.list.d/microsoft-prod.list" "$APT_ARGS_LOG"
+}
+
+# ---------------------------------------------------------------------------
+# 11. serena: idempotent — serena already present, uv must NOT be invoked
+# ---------------------------------------------------------------------------
+
+@test "serena idempotent: serena present exits 0 without invoking uv" {
+  # sandbox already has a serena stub from setup(); uv is present but must not run.
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  if [ -f "$SENTINEL" ] && grep -q "^uv$" "$SENTINEL"; then
+    echo "uv was invoked despite serena already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 12. serena: install path — serena absent, uv present → uv invoked, exit 0
+# ---------------------------------------------------------------------------
+
+@test "serena install: serena absent + uv present installs serena and exits 0" {
+  # Remove the pre-installed serena stub so the script must install it.
+  rm -f "$SANDBOX/serena"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^uv$" "$SENTINEL"
+  # serena must now be resolvable (uv stub wrote it into $SANDBOX).
+  [ -x "$SANDBOX/serena" ]
+}
+
+# ---------------------------------------------------------------------------
+# 13. serena: missing uv prereq → exit 1 with missing-uv error on stderr
+# ---------------------------------------------------------------------------
+
+@test "serena missing uv: serena absent + uv absent exits 1 with 'uv not found' on stderr" {
+  # Remove both serena and uv from the sandbox.
+  rm -f "$SANDBOX/serena"
+  rm -f "$SANDBOX/uv"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"uv not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 14. markdown: idempotent — mcp-server-markdown present, npm must NOT be invoked
+# ---------------------------------------------------------------------------
+
+@test "markdown idempotent: mcp-server-markdown present exits 0 without invoking npm" {
+  # sandbox already has mcp-server-markdown and npm stubs from setup().
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+  [ "$status" -eq 0 ]
+  if [ -f "$SENTINEL" ] && grep -q "^npm$" "$SENTINEL"; then
+    echo "npm was invoked despite mcp-server-markdown already being on PATH"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 15. markdown: install path — mcp-server-markdown absent, npm present → exit 0
+# ---------------------------------------------------------------------------
+
+@test "markdown install: mcp-server-markdown absent + npm present installs it and exits 0" {
+  # Remove the pre-installed mcp-server-markdown stub.
+  rm -f "$SANDBOX/mcp-server-markdown"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^npm$" "$SENTINEL"
+  # mcp-server-markdown must now be resolvable (npm stub wrote it into $SANDBOX).
+  [ -x "$SANDBOX/mcp-server-markdown" ]
+}
+
+# ---------------------------------------------------------------------------
+# 16. markdown: missing npm prereq → exit 1 with missing-npm error on stderr
+# ---------------------------------------------------------------------------
+
+@test "markdown missing npm: mcp-server-markdown absent + npm absent exits 1 with 'npm not found' on stderr" {
+  # Remove both mcp-server-markdown and npm from the sandbox.
+  rm -f "$SANDBOX/mcp-server-markdown"
+  rm -f "$SANDBOX/npm"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"npm not found"* ]]
 }
