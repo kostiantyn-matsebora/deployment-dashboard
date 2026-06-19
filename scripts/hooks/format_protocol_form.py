@@ -60,13 +60,26 @@ NESTED_KEY_ORDER: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 # Minimal JSON Schema validator (draft-07 subset used by our schemas).
 # stdlib-only; covers: type, enum, required, additionalProperties, properties,
-# minItems, items (object schema), minLength.
+# minItems, maxItems, items (object schema), minLength, allOf.
 # Returns a list of error strings (empty = valid).
 # ---------------------------------------------------------------------------
 
 def _validate_schema(value: Any, schema: dict, path: str = "") -> list[str]:  # noqa: C901
     """Recursively validate *value* against *schema*; return list of error strings."""
     errors: list[str] = []
+
+    # --- allOf: every subschema must validate ---
+    if "allOf" in schema:
+        for sub in schema["allOf"]:
+            sub_errors = _validate_schema(value, sub, path)
+            errors.extend(sub_errors)
+
+    # --- if/then (used inside allOf entries in session.schema.json) ---
+    if "if" in schema and "then" in schema:
+        if_errors = _validate_schema(value, schema["if"], path)
+        if not if_errors:
+            # condition matched — must satisfy "then"
+            errors.extend(_validate_schema(value, schema["then"], path))
 
     # --- type constraint ---
     schema_type = schema.get("type")
@@ -101,6 +114,12 @@ def _validate_schema(value: Any, schema: dict, path: str = "") -> list[str]:  # 
                 f"{'Value' if not path else path} must have at least {min_items} item(s) "
                 f"(got {len(value)})"
             )
+        max_items = schema.get("maxItems")
+        if max_items is not None and len(value) > max_items:
+            errors.append(
+                f"{'Value' if not path else path} must have at most {max_items} item(s) "
+                f"(got {len(value)})"
+            )
         items_schema = schema.get("items")
         if items_schema:
             for i, item in enumerate(value):
@@ -117,12 +136,38 @@ def _validate_schema(value: Any, schema: dict, path: str = "") -> list[str]:  # 
                 f"{'Value' if not path else path} must have at least {min_length} character(s)"
             )
 
+    elif schema_type is None and isinstance(value, dict):
+        # No explicit type but object-like constraints may still be present
+        # (common in allOf subschemas like {"required": [...]} or
+        # {"properties": {...}} with no "type" key).
+        for req in schema.get("required", []):
+            if req not in value:
+                label = f"'{req}'" if not path else f"'{path}.{req}'"
+                errors.append(f"Required property {label} is missing")
+        if schema.get("additionalProperties") is False:
+            allowed = set(schema.get("properties", {}).keys())
+            for key in value:
+                if key not in allowed:
+                    errors.append(f"Additional property '{key}' is not allowed")
+        for prop, prop_schema in schema.get("properties", {}).items():
+            if prop in value:
+                child_path = f"{path}.{prop}" if path else prop
+                errors.extend(_validate_schema(value[prop], prop_schema, child_path))
+
     # --- enum constraint (can appear without type on its own) ---
     if "enum" in schema:
         if value not in schema["enum"]:
             errors.append(
                 f"{'Value' if not path else path} must be one of "
                 f"{schema['enum']!r} (got {value!r})"
+            )
+
+    # --- const constraint (used in allOf if/then branches) ---
+    if "const" in schema:
+        if value != schema["const"]:
+            errors.append(
+                f"{'Value' if not path else path} must equal "
+                f"{schema['const']!r} (got {value!r})"
             )
 
     return errors

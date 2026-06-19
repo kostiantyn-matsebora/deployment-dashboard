@@ -67,7 +67,7 @@ def get_active_session_files(root: str) -> list[str]:
     files: list[str] = []
     sessions_dir = _get_sessions_dir(root)
     if sessions_dir.is_dir():
-        for child in sessions_dir.iterdir():
+        for child in sorted(sessions_dir.iterdir()):
             if child.is_dir():
                 candidate = child / "session.json"
                 if candidate.exists():

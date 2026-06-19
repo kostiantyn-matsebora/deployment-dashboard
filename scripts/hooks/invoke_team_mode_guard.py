@@ -284,7 +284,7 @@ def new_session_record(
     Build a fresh session record. existing (if any) preserves resume data on
     re-create (createdAt, phase, roster, ledger, acceptance, decisions, etc.).
     """
-    ts = now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ts = now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
     rec: dict = {}
 

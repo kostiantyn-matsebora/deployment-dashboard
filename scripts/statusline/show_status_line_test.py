@@ -8,6 +8,7 @@ import json
 
 from show_status_line import (
     format_agent_digest,
+    get_active_session_files,
     get_active_sessions,
     get_status_line,
     limit_text,
@@ -176,3 +177,17 @@ class DescribeGetActiveSessions:
         # tmp_path exists but has no .team-process/sessions subdirectory
         result = get_active_sessions(str(tmp_path))
         assert len(result) == 0
+
+    def test_returns_sessions_in_deterministic_sorted_order(self, tmp_path):
+        """get_active_session_files must return paths in sorted (lexicographic) order."""
+        sessions_base = tmp_path / ".team-process" / "sessions"
+        # Create sessions with names whose filesystem order may differ from sorted order.
+        for sid in ["feat-z", "feat-a", "feat-m"]:
+            d = sessions_base / sid
+            d.mkdir(parents=True)
+            (d / "session.json").write_text(
+                json.dumps({"id": sid, "phase": "implement"}), encoding="utf-8"
+            )
+        files = get_active_session_files(str(tmp_path))
+        ids = [f.split("/")[-2] for f in files]
+        assert ids == sorted(ids)

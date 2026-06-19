@@ -5,6 +5,11 @@ Faithful translation of every Pester It block in
 Update-IssueDecisionRecord.Tests.ps1.
 """
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 from update_issue_decision_record import (
     convert_to_decision_markdown,
     find_managed_comment_id,
@@ -163,3 +168,50 @@ class DescribeRoundTrip:
         body = convert_to_decision_markdown(FULL_RECORD)
         comments = [{"id": 42, "body": body}]
         assert find_managed_comment_id(comments) == 42
+
+
+# ============================================================
+SCRIPT_PATH = str(Path(__file__).parent / "update_issue_decision_record.py")
+
+
+class DescribeGhApiFailurePath:
+    """Verify that a gh api non-zero exit is caught, stderr is printed, and the
+    script exits 1 — mirrors the PowerShell $LASTEXITCODE handling."""
+
+    def test_gh_api_post_failure_exits_1_and_prints_stderr(self, tmp_path):
+        """A fake gh that exits non-zero must cause the script to exit 1 with a message."""
+        # Write a minimal session file.
+        session_dir = tmp_path / ".team-process" / "sessions" / "feat-1"
+        session_dir.mkdir(parents=True)
+        session_file = session_dir / "session.json"
+        session_file.write_text(
+            '{"id":"feat-1","workflow":"feature-team","team":"feat-1",'
+            '"issue":"#1","phase":"ship","createdAt":"2026-01-01T00:00:00Z"}',
+            encoding="utf-8",
+        )
+
+        # Write a stub gh that: (a) for `repo view` succeeds and prints owner/repo,
+        # (b) for `api …/comments --paginate` succeeds with an empty list,
+        # (c) for all other `api` calls exits 1 with a fake error on stderr.
+        gh_stub = tmp_path / "gh"
+        gh_stub.write_text(
+            "#!/bin/sh\n"
+            'if [ "$2" = "view" ]; then echo "owner/repo"; exit 0; fi\n'
+            'if echo "$@" | grep -q "paginate"; then echo "[]"; exit 0; fi\n'
+            'echo "gh api error: simulated failure" >&2\n'
+            "exit 1\n",
+            encoding="utf-8",
+        )
+        gh_stub.chmod(0o755)
+
+        env = os.environ.copy()
+        env["PATH"] = str(tmp_path) + ":" + env.get("PATH", "")
+
+        result = subprocess.run(
+            [sys.executable, SCRIPT_PATH, "--session-file", str(session_file), "--repo", "owner/repo"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert result.returncode == 1
+        assert "gh api" in result.stderr or "simulated failure" in result.stderr

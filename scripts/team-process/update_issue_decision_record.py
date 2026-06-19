@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from subprocess import CalledProcessError
 
 # ---------------------------------------------------------------------------
 # Pure functions (fully unit-tested)
@@ -248,16 +249,30 @@ def main() -> None:
 
     try:
         if managed_id:
-            subprocess.run(
-                ["gh", "api", "-X", "PATCH", f"repos/{repo}/issues/comments/{managed_id}", "-F", f"body=@{tmp_path}"],
-                check=True,
-            )
+            try:
+                subprocess.run(
+                    ["gh", "api", "-X", "PATCH", f"repos/{repo}/issues/comments/{managed_id}", "-F", f"body=@{tmp_path}"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except CalledProcessError as exc:
+                print(exc.stderr or "(no stderr)", file=sys.stderr)
+                print(f"gh api PATCH failed for comment {managed_id} on #{issue_num}.", file=sys.stderr)
+                sys.exit(1)
             print(f"Updated decision-record comment on #{issue_num} (comment {managed_id}).")
         else:
-            subprocess.run(
-                ["gh", "api", "-X", "POST", f"repos/{repo}/issues/{issue_num}/comments", "-F", f"body=@{tmp_path}"],
-                check=True,
-            )
+            try:
+                subprocess.run(
+                    ["gh", "api", "-X", "POST", f"repos/{repo}/issues/{issue_num}/comments", "-F", f"body=@{tmp_path}"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except CalledProcessError as exc:
+                print(exc.stderr or "(no stderr)", file=sys.stderr)
+                print(f"gh api POST failed for issue #{issue_num}.", file=sys.stderr)
+                sys.exit(1)
             print(f"Posted decision-record comment on #{issue_num}.")
     finally:
         Path(tmp_path).unlink(missing_ok=True)

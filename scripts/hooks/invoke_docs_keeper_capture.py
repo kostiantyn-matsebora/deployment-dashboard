@@ -170,8 +170,8 @@ def _resolve_repo_root() -> str:
 
 
 def _utc_now_iso() -> str:
-    """Return the current UTC time as an ISO 8601 string."""
-    return datetime.now(tz=UTC).isoformat()
+    """Return the current UTC time as an ISO 8601 string (millisecond precision, Z suffix)."""
+    return datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def main(clock=_utc_now_iso) -> None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -428,7 +429,7 @@ class DescribeInvokeProtocolFormGuardRealProcess:
             capture_output=True,
             text=True,
         )
-        assert '"decision"' in result.stdout and '"block"' in result.stdout
+        assert re.search(r'"decision"\s*:\s*"block"', result.stdout)
         assert "not valid JSON" in result.stdout
 
     def test_emits_a_block_decision_for_a_schema_invalid_form(self):
@@ -440,7 +441,7 @@ class DescribeInvokeProtocolFormGuardRealProcess:
             capture_output=True,
             text=True,
         )
-        assert '"decision"' in result.stdout and '"block"' in result.stdout
+        assert re.search(r'"decision"\s*:\s*"block"', result.stdout)
         assert "RESULT" in result.stdout
 
     def test_stays_silent_allows_for_a_valid_form(self):
@@ -482,7 +483,7 @@ class DescribeInvokeProtocolFormGuardRealProcess:
             capture_output=True,
             text=True,
         )
-        assert '"decision"' in result.stdout and '"block"' in result.stdout
+        assert re.search(r'"decision"\s*:\s*"block"', result.stdout)
         assert "typed-form JSON" in result.stdout
 
     def test_allows_a_valid_form_write_into_a_session_outbox(self):
@@ -528,7 +529,7 @@ class DescribeInvokeProtocolFormGuardRealProcess:
             capture_output=True,
             text=True,
         )
-        assert '"decision"' in result.stdout and '"block"' in result.stdout
+        assert re.search(r'"decision"\s*:\s*"block"', result.stdout)
         assert "typed-form JSON" in result.stdout
 
     def test_allows_a_valid_brief_write_into_a_session_inbox(self):

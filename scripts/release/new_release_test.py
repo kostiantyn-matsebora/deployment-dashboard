@@ -98,15 +98,15 @@ class DescribeGetNextVersion:
         assert get_next_version(current, bump) == expected
 
     def test_throws_on_invalid_bump_keyword(self):
-        with pytest.raises((ValueError, Exception)):
+        with pytest.raises(ValueError):
             get_next_version("1.0.0", "huge")
 
     def test_throws_on_invalid_current_version(self):
-        with pytest.raises((ValueError, Exception)):
+        with pytest.raises(ValueError):
             get_next_version("v1.0.0", "patch")
 
     def test_throws_on_empty_current_version(self):
-        with pytest.raises((ValueError, Exception)):
+        with pytest.raises(ValueError):
             get_next_version("", "patch")
 
 

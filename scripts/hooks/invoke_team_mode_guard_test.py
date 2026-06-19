@@ -137,7 +137,7 @@ class DescribeGetTeamModeDecision:
         assert "Team mode is active" in result["reason"]
         assert "background Agent" in result["reason"]
         assert "run_in_background" in result["reason"]
-        assert "end-session" in result["reason"].lower() or "EndSession" in result["reason"]
+        assert "--end-session" in result["reason"]
 
     def test_allows_background_spawn_without_active_session_yet(self):
         result = get_team_mode_decision(
@@ -676,7 +676,7 @@ class DescribeGetSessionReminder:
         assert "feat-1" in msg
         assert "feat/x" in msg
         assert "implement" in msg
-        assert "end-session" in msg.lower() or "EndSession" in msg
+        assert "--end-session" in msg
         assert "RESUME" in msg
         assert "1 run(s)" in msg
 

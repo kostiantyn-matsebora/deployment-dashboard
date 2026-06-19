@@ -16,6 +16,7 @@ import sys
 
 import pytest
 from format_protocol_form import (
+    _validate_schema,
     check_protocol_json,
     format_protocol_form,
     get_form_file_name,
@@ -332,7 +333,7 @@ class DescribeResolveFormText:
         f = tmp_path / "form.json"
         f.write_text('{ "type":"RESULT" }', encoding="utf-8")
         result = resolve_form_text(text="", input_file=str(f))
-        assert '"type":"RESULT"' in result or '"type": "RESULT"' in result
+        assert '"type":"RESULT"' in result
 
     def test_raises_clear_error_when_input_file_does_not_exist(self):
         with pytest.raises(FileNotFoundError, match="InputFile not found"):
@@ -510,3 +511,59 @@ class DescribeFormatProtocolFormOutboxDirEndToEnd:
         assert "Invalid RESULT" in combined
         if box.exists():
             assert len(list(box.iterdir())) == 0
+
+
+# ---------------------------------------------------------------------------
+# Describe: _validate_schema — maxItems and allOf enforcement
+# ---------------------------------------------------------------------------
+
+class DescribeValidateSchemaMaxItemsAndAllOf:
+    def test_rejects_a_result_notes_array_exceeding_maxItems_3(self):
+        """RESULT.notes has maxItems: 3 in result.schema.json."""
+        obj = {
+            "type": "RESULT",
+            "role": "backend",
+            "changed": ["A.cs"],
+            "gate": ["build ok"],
+            "notes": ["n1", "n2", "n3", "n4"],  # 4 items > maxItems:3
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+        assert any("at most 3" in e for e in r["errors"])
+
+    def test_accepts_a_result_notes_array_at_the_maxItems_3_limit(self):
+        """Three notes exactly at the limit must pass."""
+        obj = {
+            "type": "RESULT",
+            "role": "backend",
+            "changed": ["A.cs"],
+            "gate": ["build ok"],
+            "notes": ["n1", "n2", "n3"],
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is True
+
+    def test_rejects_an_allOf_violation_via_validate_schema(self):
+        """allOf: every subschema must pass; a violation in any branch is an error."""
+        schema = {
+            "type": "object",
+            "allOf": [
+                {"required": ["a"]},
+                {"required": ["b"]},
+            ],
+        }
+        # Missing field 'b' violates the second allOf branch.
+        errors = _validate_schema({"a": 1}, schema)
+        assert any("'b'" in e for e in errors)
+
+    def test_accepts_a_value_satisfying_all_allOf_branches(self):
+        """An object meeting every allOf subschema must produce no errors."""
+        schema = {
+            "type": "object",
+            "allOf": [
+                {"required": ["a"]},
+                {"required": ["b"]},
+            ],
+        }
+        errors = _validate_schema({"a": 1, "b": 2}, schema)
+        assert errors == []
