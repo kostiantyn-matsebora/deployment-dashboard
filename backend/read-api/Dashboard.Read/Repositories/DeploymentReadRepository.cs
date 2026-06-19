@@ -157,10 +157,6 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
     }
 
     /// <summary>
-    /// In-memory tiebreak: given multiple events per slot (same max happened_at),
-    /// keep the one with the greatest Id (most recently inserted UUIDv7).
-    /// </summary>
-    /// <summary>
     /// Latest event per slot whose status is in <paramref name="statuses"/>: the row for which
     /// no newer same-set event exists in the same (service, environment) slot. The correlated
     /// NOT EXISTS translates to SQL on both Postgres and SQLite.
@@ -185,6 +181,13 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
         return LatestPerSlot(raw);
     }
 
+    /// <summary>
+    /// In-memory tiebreak when several events in a slot share the max <c>happened_at</c>: keep the
+    /// one with the greatest <c>Id</c>. Per API spec D2/D3 the UUIDv7 <c>Id</c> is the canonical
+    /// insert-time-ordered cursor, so "greatest Id" deterministically means "latest insert" — the
+    /// same key the listing/pagination tiebreak uses; there is no other insertion-order column to
+    /// appeal to.
+    /// </summary>
     private static IReadOnlyList<DeploymentEvent> LatestPerSlot(List<DeploymentEvent> raw) =>
         raw
             .GroupBy(e => (e.Namespace, e.Service, e.Environment))

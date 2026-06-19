@@ -37,11 +37,12 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         string status = DeploymentStatus.Success,
         DateTimeOffset? happenedAt = null,
         string? deploymentId = null,
-        string? @namespace = null)
+        string? @namespace = null,
+        Guid? id = null)
     {
         var ev = new DeploymentEvent
         {
-            Id = Guid.CreateVersion7(),
+            Id = id ?? Guid.CreateVersion7(),
             DeploymentId = deploymentId ?? $"dep-{Guid.NewGuid():N}",
             Service = service,
             Namespace = @namespace,
@@ -381,19 +382,25 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task GetLastSuccessfulPerSlotAsync_SameHappenedAtInSlot_LatestIdWins()
+    public async Task GetLastSuccessfulPerSlotAsync_SameHappenedAtInSlot_GreatestIdWins()
     {
-        // LatestPerSlot in-memory tiebreak: when two events share the same happenedAt,
-        // the one with the greater UUIDv7 (most recently inserted) must win.
+        // Per API spec D2/D3 the row `id` (UUIDv7) is the canonical insert-order cursor, so the
+        // per-slot tiebreak is defined as "greatest `id` wins" (DeploymentReadRepository.LatestPerSlot).
+        // Seed the GREATER id FIRST so a pass proves the winner is chosen by id, not by insertion
+        // order — the assertion must never depend on Guid.CreateVersion7() being strictly increasing
+        // within a single millisecond (which .NET does not guarantee).
         var sameTime = new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
-        await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime);
-        // Seeded second → Guid.CreateVersion7() is strictly greater → must win.
-        var laterInserted = await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime);
+        var a = Guid.CreateVersion7();
+        var b = Guid.CreateVersion7();
+        var (greater, smaller) = Comparer<Guid>.Default.Compare(a, b) >= 0 ? (a, b) : (b, a);
+
+        await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime, id: greater);
+        await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime, id: smaller);
 
         var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
 
         Assert.Single(result);
-        Assert.Equal(laterInserted.Id, result[0].Id);
+        Assert.Equal(greater, result[0].Id);
     }
 
     // ── GetLatestTerminalBeforeCurrentPerSlotAsync ────────────────────────────
