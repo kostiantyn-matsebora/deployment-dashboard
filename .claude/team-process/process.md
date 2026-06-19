@@ -53,21 +53,21 @@ Roles + guardrails identical across modes — only substrate differs. Full matri
 
 ## Session state & resume
 
-`.team-process/sessions/<id>/` — gitignored; `<id>` = sanitized session/team name (set at `-SetMarker`); survives boundaries/reboots; concurrent runs coexist as distinct dirs.
+`.team-process/sessions/<id>/` — gitignored; `<id>` = sanitized session/team name (set at `--set-marker`); survives boundaries/reboots; concurrent runs coexist as distinct dirs.
 
 - **Contents.** `session.json` (durable record = run ledger), `inbox/` (orch→member `BRIEF`/`FIX`), `outbox/` (member hand-backs).
-- **Id.** Sanitized `-SetMarker -Team` name. Re-running `-SetMarker` with the same id **merges** (resume path, not fresh). Fresh start: `-EndSession -Id <id>` before `-SetMarker`; omit `-Id` to abandon all.
-- **Lifecycle is explicit, not hook-driven.** `TeamCreate`/`TeamDelete` were removed from Claude Code (2.1.178); the lead opens the run with `Invoke-TeamModeGuard.ps1 -SetMarker` and closes it with `-EndSession`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
+- **Id.** Sanitized `--set-marker --team` name. Re-running `--set-marker` with the same id **merges** (resume path, not fresh). Fresh start: `--end-session --id <id>` before `--set-marker`; omit `--id` to abandon all.
+- **Lifecycle is explicit, not hook-driven.** `TeamCreate`/`TeamDelete` were removed from Claude Code (2.1.178); the lead opens the run with `python3 scripts/hooks/invoke_team_mode_guard.py --set-marker` and closes it with `--end-session`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
 - **Team mode active** whenever any session record exists — blocks foreground in-session `Agent`/`Task` spawns (a member is recognized by `run_in_background`, or `team_name` for back-compat). Spans reboots. Legacy single-file `session.json` read for back-compat.
 - **Workflow classifier.** `workflow`: `feature-team` (follows phase enum) | `freeform` (free-form phase string).
 - **Run ledger = `session.json`.** Orchestrator enriches it (roster · phase · per-wave changed/decided/deferred). Shape: [`schemas/session.schema.json`](schemas/session.schema.json).
-- **Lanes = generated projection.** `roster[].lane` → `lane` field (read by lane guard). Never hand-maintain. Sync: `Invoke-TeamModeGuard.ps1 -SyncLane -Id <id> -Role <role>`.
+- **Lanes = generated projection.** `roster[].lane` → `lane` field (read by lane guard). Never hand-maintain. Sync: `python3 scripts/hooks/invoke_team_mode_guard.py --sync-lane --id <id> --role <role>`.
 - **SessionStart reminds, never wipes.** Injects resume summary of every active run (id · workflow · branch · phase · summary · agents · decisions) — lead re-attaches without re-reading transcript.
 - **Match work to existing run — propose resume, never fork.** Before `/feature-team` or "work on X":
-  - **Issue (#number):** `Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>` — non-empty result = propose resume.
+  - **Issue (#number):** `python3 scripts/hooks/invoke_team_mode_guard.py --find-session --issue <ref>` — non-empty result = propose resume.
   - **Informal:** match against `summary` in SessionStart reminder; plausible match → propose resume.
-- **Resume.** Reboot kills live members; re-run `-SetMarker` (merges the record) + re-spawn the in-flight wave's background Agents from the ledger — ledger is durable truth, live members rebuilt from it.
-- **Abandon.** `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>` (omit `-Id` for all).
+- **Resume.** Reboot kills live members; re-run `--set-marker` (merges the record) + re-spawn the in-flight wave's background Agents from the ledger — ledger is durable truth, live members rebuilt from it.
+- **Abandon.** `python3 scripts/hooks/invoke_team_mode_guard.py --end-session --id <id>` (omit `--id` for all).
 
 ## Decision record — capture, surface, publish
 
@@ -79,7 +79,7 @@ Decisions captured as they happen · surfaced on every resume · published to th
   - Acceptance criteria at intake → `acceptance` (locked contract + gate).
 - **Record AUTHORITATIVE over conversation summary.** After compaction: re-read decisions first; decision wins over summary. `SessionStart` surfaces decisions + member status inline (content, not counts).
 - **Per-member resume.** `roster[]` carries `status` + `progress`. Resume re-dispatches member with its `BRIEF` + `progress` + relevant decisions — continues, not restarts.
-- **Publish at ship (issue mode).** `Update-IssueDecisionRecord.ps1` upserts a managed comment (idempotent, never clobbers body). Confirm-first: `-DryRun` → show user → post on approval.
+- **Publish at ship (issue mode).** `update_issue_decision_record.py` upserts a managed comment (idempotent, never clobbers body). Confirm-first: `--dry-run` → show user → post on approval.
 
 ## Autonomy
 

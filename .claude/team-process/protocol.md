@@ -19,14 +19,14 @@ Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FIN
 - **The per-form tables below are the authoring source** (field · meaning · constraint · examples);
   the schema is the enforcement source. They are kept in lock-step.
 
-**Emit + validate (one command).** `scripts/hooks/Format-ProtocolForm.ps1` validates against the schema, canonicalizes key order, drops empty optional fields, writes the box file, and prints the pointer — `SendMessage` rejects non-conforming messages; do the work up front:
+**Emit + validate (one command).** `scripts/hooks/format_protocol_form.py` validates against the schema, canonicalizes key order, drops empty optional fields, writes the box file, and prints the pointer — `SendMessage` rejects non-conforming messages; do the work up front:
 
 1. **Write the rough form JSON to a temp file** (rough order/casing is fine — the normalizer fixes it).
 2. **Hand back in one step** (member → orch):
-   `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox>`
+   `python3 scripts/hooks/format_protocol_form.py --input-file <file> --outbox-dir <outbox>`
    It validates, writes `<role>.<TYPE>.json` to your `outbox`, and **prints the exact
    `{ type, ref }` pointer**. Non-zero exit + a stderr message means it's invalid — fix and retry.
-3. **Send that stdout VERBATIM** as the `SendMessage` body. (Omit `-OutboxDir` to just normalize a form
+3. **Send that stdout VERBATIM** as the `SendMessage` body. (Omit `--outbox-dir` to just normalize a form
    to stdout — e.g. when the orchestrator writes a dispatch `BRIEF`/`FIX` to a member `inbox`, or to
    inline a full form for back-compat.)
 
@@ -53,10 +53,10 @@ Every cross-role message is a **file in the session directory** (durable payload
 | **inbox** | orch → member · dispatch | `BRIEF` · `FIX` | `.team-process/sessions/<id>/inbox/<role>.<TYPE>.json` |
 | **outbox** | member → orch · hand-back | `RESULT` · `REVIEW` · `FINDING` · `ARTIFACT` | `.team-process/sessions/<id>/outbox/<role>.<TYPE>.json` |
 
-`<id>` = the session id (sanitized `-SetMarker -Team` name); `<TYPE>` = the form (e.g. `backend.BRIEF.json`, `backend.RESULT.json`).
+`<id>` = the session id (sanitized `--set-marker --team` name); `<TYPE>` = the form (e.g. `backend.BRIEF.json`, `backend.RESULT.json`).
 
 1. **Write the normalized form** to the box: hand-back → the member runs
-   `Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox>` (one command writes its `outbox`
+   `python3 scripts/hooks/format_protocol_form.py --input-file <file> --outbox-dir <outbox>` (one command writes its `outbox`
    file *and* prints the pointer — see *Emit + validate* above); dispatch → the orchestrator writes the
    member's `inbox`.
 2. **Deliver the pointer** — exactly `{ "type": "<FORM>", "ref": "<ABSOLUTE path to the file>" }`, no
@@ -85,7 +85,7 @@ Every cross-role message is a **file in the session directory** (durable payload
   `**/.team-process/sessions/*/outbox/**` (the lead writes the inbox from the main worktree, outside any
   lane file).
 - **Back-compat.** A full typed form sent inline (no `ref`) still validates and is accepted.
-- **Write-time guard.** The box-write guard (`Invoke-ProtocolFormGuard.ps1`) rejects any non-JSON or
+- **Write-time guard.** The box-write guard (`invoke_protocol_form_guard.py`) rejects any non-JSON or
   non-typed-form Write to an inbox/outbox at write time — not only when the pointer fires. Writing prose,
   markdown, or `.txt` to a box is blocked immediately.
 

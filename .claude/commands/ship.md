@@ -20,8 +20,8 @@ The **Ship** activity of the orchestration process
 5. **Publish the decision record (issue mode).** Project the session `decisions[]` / `acceptance`
    to the owning issue as a single managed comment (idempotent upsert; never touches the issue
    body). **Confirm-first** — it is outward-facing:
-   - Render: `pwsh -NoProfile -File scripts/team-process/Update-IssueDecisionRecord.ps1 -Id <id> -DryRun`
-   - Show the user; on approval, re-run without `-DryRun` to upsert the comment.
+   - Render: `python3 scripts/team-process/update_issue_decision_record.py --id <id> --dry-run`
+   - Show the user; on approval, re-run without `--dry-run` to upsert the comment.
    - See [`.claude/team-process/process.md`](../team-process/process.md) → *Decision record*.
 
 ## Gate (binding)

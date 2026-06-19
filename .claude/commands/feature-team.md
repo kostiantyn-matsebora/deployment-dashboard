@@ -1,5 +1,5 @@
 ---
-description: Launch a plan-and-confirm Claude agent team for a multi-layer issue. The lead does docs-first intake, drafts a lane map + member roster, SURFACES the plan, and only opens the session (-SetMarker) + spawns background-Agent members after approval. Implements .claude/team-process/.
+description: Launch a plan-and-confirm Claude agent team for a multi-layer issue. The lead does docs-first intake, drafts a lane map + member roster, SURFACES the plan, and only opens the session (--set-marker) + spawns background-Agent members after approval. Implements .claude/team-process/.
 argument-hint: <issue-number | task description>
 ---
 
@@ -20,7 +20,7 @@ Agent-teams surface enabled: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in user or
 this gates `SendMessage` / `TaskCreate` / background `Agent`. If unset, stop and tell the user to
 enable it. **`TeamCreate` / `TeamDelete` are no longer used** (removed from Claude Code in 2.1.178);
 members run as **background Agents** and the session lifecycle is driven by an explicit
-`Invoke-TeamModeGuard.ps1` call (below), not a tool hook.
+`invoke_team_mode_guard.py` call (below), not a tool hook.
 
 ## Member roster (role → `subagent_type`)
 
@@ -49,7 +49,7 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
 **Don't fork an existing run.** Before planning, check for an active run already working this
 issue/feature and **propose to resume it** instead of creating a parallel team:
 
-- Issue mode: `pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -FindSession -Issue <ref>`
+- Issue mode: `python3 scripts/hooks/invoke_team_mode_guard.py --find-session --issue <ref>`
   — a non-empty result is the run to propose resuming (re-create the same team id → merges/resumes).
 - Informal ask: match the request against the active runs' `summary` in the SessionStart reminder.
 
@@ -60,14 +60,14 @@ Only proceed to a fresh plan when no existing run matches (or the user declines 
 
 Run [`/intake`](intake.md) → [`/contract`](contract.md) (if cross-layer) → [`/plan-dispatch`](plan-dispatch.md)
 **solo**. Then **surface and STOP** — present scope + roster + lane map; do **not** open the session
-(`-SetMarker`) or spawn anything until the user approves (repo rule: *surface before launch; for N
+(`--set-marker`) or spawn anything until the user approves (repo rule: *surface before launch; for N
 parallel members get explicit confirmation*).
 
 ## 2 — Spawn (after approval)
 
 - **Open the session record** — run (no `TeamCreate` tool exists):
   ```
-  pwsh -NoProfile -File scripts/hooks/Invoke-TeamModeGuard.ps1 -SetMarker -Team feat-<issue> -Workflow feature-team -Issue <ref> -Summary "<essence>"
+  python3 scripts/hooks/invoke_team_mode_guard.py --set-marker --team feat-<issue> --workflow feature-team --issue <ref> --summary "<essence>"
   ```
   This writes the durable record `.team-process/sessions/<id>/session.json` with `workflow:
   feature-team` (`<id>` = sanitized `-Team`) and creates its `inbox/` + `outbox/`. The record's
@@ -75,9 +75,9 @@ parallel members get explicit confirmation*).
   subagent — every member spawn below MUST be a **background Agent** (`run_in_background: true`), or it
   is rejected as an in-session downgrade. The record persists across reboots; concurrent runs coexist
   as distinct directories; see [`process.md`](../team-process/process.md) → *Session state & resume*.
-  *(If a stale same-id session already exists, call `-EndSession -Id <id>` first — re-running `-SetMarker` without clearing merges (resume path), not fresh.)*
+  *(If a stale same-id session already exists, call `--end-session --id <id>` first — re-running `--set-marker` without clearing merges (resume path), not fresh.)*
 - **Write each member's `BRIEF` to its inbox** *before* spawning — normalize with
-  `Format-ProtocolForm.ps1`, then write to `.team-process/sessions/<id>/inbox/<role>.BRIEF.json`. The
+  `format_protocol_form.py`, then write to `.team-process/sessions/<id>/inbox/<role>.BRIEF.json`. The
   spec / lane / task / gate / seed all live in this file; the spawn prompt only points at it (keeps the
   task durable, auditable, and out of the lead's context). See
   [`protocol.md`](../team-process/protocol.md) → *Message delivery*.
@@ -90,7 +90,7 @@ parallel members get explicit confirmation*).
     `<absolute-path-to-inbox-BRIEF.json>` — it carries your spec / lane / task / gate." + "inherit your
     role file `.claude/team-process/roles/<role>.md` and its guardrails" + the `/implement` self-verify
     gate (build + own-change unit tests + lint, actual counts) + "do NOT commit/push; hand back to the lead."
-    + "The session id is `<literal-id-value>`; your outbox is `<absolute-path-to-outbox-dir>` — use these verbatim, do NOT derive them from the team name. If running in a worktree, run `New-Item -ItemType Directory -Force -Path '<outbox-path>'` before writing your hand-back."
+    + "The session id is `<literal-id-value>`; your outbox is `<absolute-path-to-outbox-dir>` — use these verbatim, do NOT derive them from the team name. If running in a worktree, run `mkdir -p '<outbox-path>'` before writing your hand-back."
     + "NEVER return prose, markdown, or a .txt file as your final message — write the typed form to your outbox file first, then send the { type, ref } pointer."
 - **Assign work.** Create the task list (one task per lane); contract member first if cross-layer —
   its `ARTIFACT` unblocks the rest.
@@ -127,12 +127,12 @@ parallel members get explicit confirmation*).
   owning member; loop until green.
 - Run [`/ship`](ship.md) — commit in logical groups → branch → open/update PR → watch CI green.
   Never push the default branch. **Publish the decision record** to the issue (confirm-first) via
-  `scripts/team-process/Update-IssueDecisionRecord.ps1` — see [`/ship`](ship.md).
-- **Close the session** once integrated — run `Invoke-TeamModeGuard.ps1 -EndSession -Id <id>` (there is
+  `scripts/team-process/update_issue_decision_record.py` — see [`/ship`](ship.md).
+- **Close the session** once integrated — run `python3 scripts/hooks/invoke_team_mode_guard.py --end-session --id <id>` (there is
   no `TeamDelete` tool), but only **after** the decision record is published; teardown removes the
   session record (the decisions' live store), so the issue comment is their durable home.
   *(On a fresh session a leftover record is NOT auto-cleared — `SessionStart` reminds you to resume or
-  abandon it; abandon a stale one by id with the same `-EndSession -Id <id>`.)*
+  abandon it; abandon a stale one by id with the same `--end-session --id <id>`.)*
 
 ## Guardrails (inherited from .claude/team-process/guardrails.md — binding)
 
