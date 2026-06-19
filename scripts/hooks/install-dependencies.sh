@@ -3,7 +3,7 @@
 #
 # PURPOSE: Remote-only bootstrap for dependencies that must exist before any
 #          .ps1 hook or MCP server can run: PowerShell 7+, serena MCP server,
-#          markdown MCP server, and Playwright MCP server + CLI.
+#          markdown MCP server, Playwright MCP server + CLI, and .NET 10 SDK.
 #          Guarded on CLAUDE_CODE_REMOTE; idempotent — safe to call repeatedly.
 #
 # WHY BASH, NOT PWSH:
@@ -206,6 +206,50 @@ else
   fi
 
   echo "install-dependencies.sh: playwright-mcp and playwright installed successfully." >&2
+fi
+
+# ===========================================================================
+## .NET 10 SDK
+# ===========================================================================
+
+# Idempotency — nothing to do if dotnet is already on PATH with a 10.x SDK.
+# Uses a shell read-loop to avoid requiring grep on PATH (env -i sandbox safe).
+_dotnet_has_10sdk() {
+  command -v dotnet >/dev/null 2>&1 || return 1
+  while IFS= read -r _sdk_line; do
+    case "$_sdk_line" in 10.*) return 0 ;; esac
+  done < <(dotnet --list-sdks 2>/dev/null)
+  return 1
+}
+
+if _dotnet_has_10sdk; then
+  echo "install-dependencies.sh: .NET 10.x SDK already present — skipping." >&2
+else
+  # Prereq — apt-get must be available (.NET SDK comes from the distro feed).
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "install-dependencies.sh: apt-get not found — cannot install .NET 10 SDK." >&2
+    exit 1
+  fi
+
+  echo "install-dependencies.sh: installing dotnet-sdk-10.0 via apt-get..." >&2
+
+  # Refresh distro package lists (resilient, NON-FATAL).
+  # The SDK ships in the distro feed (noble-updates/security); lists are usually
+  # pre-cached in the base image.  Refresh them, but do NOT let an unreachable
+  # third-party repo (broken PPAs returning 403) abort the bootstrap.
+  $_sudo apt-get update -qq >&2 || echo "install-dependencies.sh: apt-get update reported errors (unreachable repos); continuing with cached package lists." >&2
+
+  # Install.
+  $_sudo apt-get install -y dotnet-sdk-10.0 >&2
+
+  # Verify — confirm dotnet is now on PATH and a 10.x SDK is listed.
+  if ! _dotnet_has_10sdk; then
+    echo "install-dependencies.sh: installation completed but .NET 10.x SDK is not available." >&2
+    exit 1
+  fi
+
+  _dotnet_version="$(dotnet --version 2>&1)"
+  echo "install-dependencies.sh: dotnet-sdk-10.0 installed successfully — ${_dotnet_version}" >&2
 fi
 
 # ===========================================================================

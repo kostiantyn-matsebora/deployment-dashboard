@@ -94,14 +94,26 @@ STUB
   chmod +x "$SANDBOX/dpkg"
 
   # apt-get stub — appends name to sentinel.
-  # On "install powershell", writes a real pwsh stub so the post-install
-  # command -v check in the script succeeds.
+  # On "install", inspects package args and writes the correct bin stub(s):
+  #   powershell       → writes pwsh stub
+  #   dotnet-sdk-10.0  → writes dotnet stub (--list-sdks + --version)
+  # "update" and all other subcommands are logged and exit 0.
   cat > "$SANDBOX/apt-get" << STUB
 #!$BASH_BIN
 echo "apt-get" >> "$SENTINEL"
 if [ "\$1" = "install" ]; then
-  printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
-  chmod +x "$SANDBOX/pwsh"
+  for _arg in "\$@"; do
+    case "\$_arg" in
+      powershell)
+        printf '#!$BASH_BIN\necho "PowerShell 7.4.0"\n' > "$SANDBOX/pwsh"
+        chmod +x "$SANDBOX/pwsh"
+        ;;
+      dotnet-sdk-10.0)
+        printf '#!$BASH_BIN\nif [ "\$1" = "--list-sdks" ]; then\n  echo "10.0.109 [/usr/lib/dotnet/sdk]"\nelif [ "\$1" = "--version" ]; then\n  echo "10.0.109"\nfi\nexit 0\n' > "$SANDBOX/dotnet"
+        chmod +x "$SANDBOX/dotnet"
+        ;;
+    esac
+  done
 fi
 STUB
   chmod +x "$SANDBOX/apt-get"
@@ -169,6 +181,19 @@ STUB
   # Treats "playwright install chromium" as a no-op success (exit 0).
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/playwright"
   chmod +x "$SANDBOX/playwright"
+
+  # dotnet stub — pre-installs a working dotnet with a 10.x SDK.
+  # Handles: --list-sdks (prints a 10.x line) and --version (prints version).
+  cat > "$SANDBOX/dotnet" << STUB
+#!$BASH_BIN
+if [ "\$1" = "--list-sdks" ]; then
+  echo "10.0.109 [/usr/lib/dotnet/sdk]"
+elif [ "\$1" = "--version" ]; then
+  echo "10.0.109"
+fi
+exit 0
+STUB
+  chmod +x "$SANDBOX/dotnet"
 
   # uv stub — appends name to sentinel.
   # On "tool install ...", writes an executable serena stub into $SANDBOX so
@@ -627,4 +652,100 @@ NPMSTUB
   [ "$status" -eq 0 ]
   # The chromium-failure warning must appear in stderr output.
   [[ "$output" == *"chromium download failed"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 21. dotnet: idempotent — dotnet already present with 10.x SDK, apt NOT invoked
+# ---------------------------------------------------------------------------
+
+@test "dotnet idempotent: dotnet with 10.x SDK present exits 0 without invoking apt-get install" {
+  # sandbox already has a dotnet stub with a 10.x SDK from setup().
+  # Capture apt-get args to an install log so we can assert no dotnet install ran.
+  APT_INSTALL_LOG="$SANDBOX/apt-install.log"
+  cat > "$SANDBOX/apt-get" << STUB
+#!$BASH_BIN
+echo "apt-get" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  echo "\$@" >> "$APT_INSTALL_LOG"
+fi
+STUB
+  chmod +x "$SANDBOX/apt-get"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  # dotnet-sdk-10.0 must NOT appear in any apt-get install invocation.
+  if [ -f "$APT_INSTALL_LOG" ] && grep -q "dotnet-sdk-10.0" "$APT_INSTALL_LOG"; then
+    echo "apt-get install dotnet-sdk-10.0 was invoked despite 10.x SDK already present"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 22. dotnet: install path — dotnet absent, apt-get present → installed, exit 0
+# ---------------------------------------------------------------------------
+
+@test "dotnet install: dotnet absent + apt-get present installs dotnet and exits 0" {
+  # Remove the pre-installed dotnet stub so the script must install it.
+  rm -f "$SANDBOX/dotnet"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^apt-get$" "$SENTINEL"
+  # dotnet must now be resolvable (apt-get stub wrote it into $SANDBOX).
+  [ -x "$SANDBOX/dotnet" ]
+}
+
+# ---------------------------------------------------------------------------
+# 23. dotnet: missing apt-get prereq → exit 1 with apt-get-not-found on stderr
+# ---------------------------------------------------------------------------
+
+@test "dotnet missing apt-get: dotnet absent + apt-get absent exits 1 with 'apt-get not found' on stderr" {
+  # Keep pwsh + serena + mcp-server-markdown + playwright-mcp + playwright so
+  # those sections skip; remove dotnet and apt-get to trigger the .NET prereq failure.
+  rm -f "$SANDBOX/dotnet"
+  rm -f "$SANDBOX/apt-get"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"apt-get not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 24. dotnet: wrong-version not idempotent — 8.x SDK present → installs 10.x, exit 0
+# ---------------------------------------------------------------------------
+
+@test "dotnet wrong version: dotnet with only 8.x SDK present is not idempotent; installs 10.x and exits 0" {
+  # Override the default dotnet stub to report only an 8.x SDK — no 10.x line.
+  cat > "$SANDBOX/dotnet" << STUB
+#!$BASH_BIN
+if [ "\$1" = "--list-sdks" ]; then
+  echo "8.0.404 [/usr/lib/dotnet/sdk]"
+elif [ "\$1" = "--version" ]; then
+  echo "8.0.404"
+fi
+exit 0
+STUB
+  chmod +x "$SANDBOX/dotnet"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^apt-get$" "$SENTINEL"
+  # After install, dotnet stub written by apt-get stub must report a 10.x SDK.
+  "$SANDBOX/dotnet" --list-sdks | grep -q '^10\.'
 }
