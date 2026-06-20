@@ -14,6 +14,11 @@ namespace Dashboard.Fetcher.GitHub.Backfill;
 /// to reduce its class coupling (§S1200). Owns Pass 1 (collect chosen deployments), Pass 2
 /// (build ingest events), slot trimming, env-map merging, and shared per-deployment helpers.
 /// </summary>
+// S1200: This class is itself the coupling-reduction extraction from BackfillRunner (§S1200).
+// The ServiceFilter dependency added by #348 is required for service-scope filtering during
+// backfill scans and cannot be removed.  Splitting further would fragment cohesive scan logic
+// without a genuine coupling benefit.
+[SuppressMessage("SonarAnalyzer", "S1200", Justification = "Class is a coupling-reduction extraction from BackfillRunner; ServiceFilter dependency is required for #348 service-scope filter. Further splitting would fragment cohesive scan logic without genuine coupling benefit.")]
 public sealed class BackfillEventBuilder(
     GithubClient github,
     WorkflowGraphCache graphCache,
