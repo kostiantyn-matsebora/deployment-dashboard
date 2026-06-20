@@ -251,6 +251,36 @@ describe('Scenario: GitHub emulator → fetcher backfill → API state', () => {
     }
   });
 
+  // ── GITHUB_WORKFLOW_EXCLUDE black-box probe (issue #348) ─────────────────────
+  //
+  // fixtures.json adds a "Probe Excluded Workflow" to demo-org/storefront with one
+  // run (2026-06-02T10:00Z) that is INSIDE the 7-day backfill window anchored at
+  // FETCHER_NOW=2026-06-06T12:00Z (window opens 2026-05-30T12:00Z). Without the
+  // exclude filter that run would produce a service named "Probe Excluded Workflow"
+  // and push the service count from 10 to 11. The compose override
+  //   GITHUB_WORKFLOW_EXCLUDE: "demo-org/storefront/Probe Excluded Workflow"
+  // suppresses the entire workflow, so the fetcher never ingests it.
+  //
+  // These two assertions prove the exclude at the API level:
+  //   1. /api/services still has exactly 10 items (covered by the earlier count test).
+  //   2. "Probe Excluded Workflow" (service name derived from the workflow YAML name)
+  //      is absent from both /api/services and /api/matrix.
+
+  it('GITHUB_WORKFLOW_EXCLUDE — probe service absent from /api/services (issue #348)', async () => {
+    const body = await getJson('/api/services');
+    const names = (body.items as any[]).map((s: any) => s.name ?? s.service ?? s);
+    expect(names).not.toContain('Probe Excluded Workflow');
+    // Count invariant: 10 services, not 11, confirming the exclude suppressed ingestion.
+    expect(body.items.length).toBe(EXPECTED_SERVICE_COUNT);
+  });
+
+  it('GITHUB_WORKFLOW_EXCLUDE — probe service absent from /api/matrix (issue #348)', async () => {
+    const matrix = await getJson('/api/matrix');
+    const services = (matrix.rows as any[]).map((r: any) => r.service);
+    expect(services).not.toContain('Probe Excluded Workflow');
+    expect(matrix.rows.length).toBe(EXPECTED_SERVICE_COUNT);
+  });
+
   // ── Box-state regression suite (demo fixture — fixtures.json _doc.box_state_slots) ──
   //
   // Each case maps to one named slot from the demo data. All assertions target
