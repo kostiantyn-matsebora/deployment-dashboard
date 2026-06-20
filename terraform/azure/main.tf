@@ -40,11 +40,11 @@ resource "azurerm_subnet" "infrastructure" {
 # -----------------------------------------------------------------------------
 
 resource "azurerm_container_app_environment" "main" {
-  name                       = var.ca_environment_name
-  location                   = var.location
-  resource_group_name        = azurerm_resource_group.main.name
-  tags                       = var.tags
-  infrastructure_subnet_id   = azurerm_subnet.infrastructure.id
+  name                     = var.ca_environment_name
+  location                 = var.location
+  resource_group_name      = azurerm_resource_group.main.name
+  tags                     = var.tags
+  infrastructure_subnet_id = azurerm_subnet.infrastructure.id
 
   # Consumption profile is required for Workload Profiles environments.
   # If omitted, it cannot be added later (requires environment recreation).

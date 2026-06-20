@@ -49,6 +49,7 @@ terraform apply
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `subscription_id` | *(required)* | Azure subscription ID (azurerm v4 — no default) |
 | `location` | `westeurope` | Azure region |
 | `resource_group_name` | `rg-deployment-dashboard` | Resource group |
 | `environment` | `dev` | Environment suffix |
@@ -99,6 +100,8 @@ terraform apply
 
 ## Known Limitations
 
+- **Fetcher requires a real GitHub PAT.** `Program.cs` unconditionally sends `Authorization: Bearer <token>`, so a missing or placeholder token causes the Fetcher to 401 immediately. Anonymous mode is also impractical at GitHub's 60 req/hr rate limit. Set `github-token` in Key Vault to a valid read-only PAT before the Fetcher starts — see [Post-Deploy](#post-deploy).
+- **Gateway is fully public by default** (`allowed_ip_ranges = []`). Set `allowed_ip_ranges` to a CIDR list to restrict access; set `enable_easy_auth = true` to require Entra ID login.
 - Terraform provider enforces `/21` subnet (Azure accepts `/27`): [GitHub #24596](https://github.com/hashicorp/terraform-provider-azurerm/issues/24596)
 - PostgreSQL region restrictions may apply (check with `az postgres flexible-server list-skus`)
 - The Container Apps Environment `maximum_count` must be `0` for Consumption profiles (API returns `0` regardless of config)

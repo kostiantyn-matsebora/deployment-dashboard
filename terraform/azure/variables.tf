@@ -2,6 +2,11 @@
 # Core
 # -----------------------------------------------------------------------------
 
+variable "subscription_id" {
+  description = "Azure subscription ID (required by azurerm v4)"
+  type        = string
+}
+
 variable "location" {
   description = "Azure region for all resources"
   type        = string

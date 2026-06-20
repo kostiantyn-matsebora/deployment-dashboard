@@ -224,10 +224,10 @@ resource "azurerm_container_app" "api" {
 
       # Startup probe — .NET needs generous timeouts for cold start
       startup_probe {
-        transport       = "HTTP"
-        port            = 8080
-        path            = "/healthz"
-        interval_seconds       = 10
+        transport               = "HTTP"
+        port                    = 8080
+        path                    = "/healthz"
+        interval_seconds        = 10
         timeout                 = 5
         failure_count_threshold = 10
       }
