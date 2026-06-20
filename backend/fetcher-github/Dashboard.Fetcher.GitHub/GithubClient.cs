@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
 
 namespace Dashboard.Fetcher.GitHub;
@@ -182,6 +183,63 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
 
         var cutIndex = items.FindIndex(item => stopBefore(item));
         return cutIndex >= 0 ? items[..cutIndex] : null;
+    }
+
+    /// <summary>
+    /// Lists all repos accessible with the configured token, with optional owner scoping.
+    /// When <paramref name="owner"/> is non-null, lists that owner's repos (org or user);
+    /// when null, lists all repos accessible by the authenticated user.
+    /// Returns fully-qualified <c>owner/repo</c> strings.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ListReposAsync(string? owner, CancellationToken ct)
+    {
+        var repos = new List<string>();
+
+        string path;
+        if (owner is null)
+        {
+            // All repos accessible by the token.
+            path = "/user/repos?type=all";
+        }
+        else
+        {
+            // Try org first; fall through to user if needed.
+            // We use a common path that works for both: /orgs/{owner}/repos falls back via ListOrgOrUserReposAsync.
+            // Strategy: try /orgs/{owner}/repos; on 404 fall back to /users/{owner}/repos.
+            var orgItems = await TryListOwnerReposAsync($"/orgs/{owner}/repos", owner, ct);
+            if (orgItems is not null)
+                return orgItems;
+
+            path = $"/users/{owner}/repos?type=all";
+        }
+
+        await foreach (var item in GetPagedAsync<GhRepoItem>(path, ct))
+        {
+            if (!string.IsNullOrEmpty(item.FullName))
+                repos.Add(item.FullName);
+        }
+
+        return repos;
+    }
+
+    private async Task<IReadOnlyList<string>?> TryListOwnerReposAsync(
+        string path, string owner, CancellationToken ct)
+    {
+        var repos = new List<string>();
+        var found = false;
+
+        await foreach (var item in GetPagedAsync<GhRepoItem>(path, ct))
+        {
+            found = true;
+            if (!string.IsNullOrEmpty(item.FullName))
+                repos.Add(item.FullName);
+        }
+
+        // GetPagedAsync yields nothing on 404, so we cannot distinguish 404 from empty-org.
+        // Use a HEAD probe on the org URL to distinguish. However, to keep it simple and
+        // avoid an extra round-trip, we check for the org endpoint: if we got items it succeeded;
+        // if not, we optimistically try the user path too.  An empty org is an acceptable false-miss.
+        return found ? repos : null;
     }
 
     /// <summary>Downloads raw bytes (e.g. ZIP archive). Returns null on any non-2xx.</summary>

@@ -1,184 +1,153 @@
 namespace Dashboard.Shared.ServiceFiltering;
 
 /// <summary>
-/// Deployment-wide service include/exclude filter.
-/// Parses four CSV env-var pattern lists (<c>SERVICE_INCLUDE</c>, <c>SERVICE_EXCLUDE</c>,
-/// <c>REPO_INCLUDE</c>, <c>REPO_EXCLUDE</c>) and exposes a single <c>Permits</c> method
-/// used identically by the fetcher (poll-time) and the read API (read-time).
+/// Deployment-wide service exclude filter (issue #348).
+/// Parses one CSV env-var pattern list (<c>SERVICE_EXCLUDE</c>) of <c>owner/repo/service</c>
+/// glob patterns and exposes two <c>IsExcluded</c> matchers:
+/// <list type="bullet">
+///   <item>Fetcher — full <c>(owner, repo, service)</c> triple: all three segments matched.</item>
+///   <item>API — <c>(namespace, service)</c> pair: matched against the pattern's last two
+///     <c>repo/service</c> segments; the leading <c>owner</c> segment is wildcarded because
+///     the API does not store owner.</item>
+/// </list>
 /// </summary>
 /// <remarks>
-/// <para><b>SERVICE glob rules</b> (mirrors the existing matrix/services-filter semantics):</para>
-/// <list type="bullet">
-///   <item>Pattern containing <c>'/'</c> → matched against the full <c>namespace/service</c> composite.</item>
-///   <item>Pattern without <c>'/'</c> → matched against the <c>service</c> segment only, across all namespaces.</item>
-///   <item><c>'*'</c> is the only supported wildcard — matches any sequence of characters (including empty).</item>
-/// </list>
-/// <para><b>REPO glob rules</b>:</para>
-/// <list type="bullet">
-///   <item>Fetcher overload (<see cref="Permits(string,string,string)"/>) — pattern matched against the full <c>owner/repo</c> string.</item>
-///   <item>Read-API overload (<see cref="Permits(string,string)"/>) — pattern's <em>name segment</em> (right of '/') matched against <c>namespace</c> (which equals the repo short name).</item>
-/// </list>
-/// <para><b>Precedence</b>: exclude wins over include.</para>
-/// <para><b>Empty defaults</b>: empty include list ⇒ match all; empty exclude list ⇒ exclude none.</para>
-/// <para><b>Effective rule</b>: passes iff
-///   (SERVICE_INCLUDE+REPO_INCLUDE both empty OR service matches SERVICE_INCLUDE OR repo matches REPO_INCLUDE)
-///   AND NOT (service matches SERVICE_EXCLUDE OR repo matches REPO_EXCLUDE).
-/// </para>
+/// <para><b>Pattern form:</b> <c>owner/repo/service</c>.
+///   Each segment may contain <c>'*'</c> as a wildcard matching any sequence of characters
+///   (including empty). Examples: <c>acme/web/legacy-*</c>, <c>acme/*/internal</c>,
+///   <c>*/*/canary</c>.</para>
+/// <para><b>Empty default:</b> empty <c>SERVICE_EXCLUDE</c> ⇒ exclude nothing.</para>
+/// <para><b>Fast path:</b> when <see cref="IsEmpty"/> is true, both matchers return
+///   <c>false</c> without any pattern evaluation (pass-all).</para>
 /// </remarks>
 public sealed class ServiceFilter
 {
-    private readonly IReadOnlyList<string> _serviceInclude;
-    private readonly IReadOnlyList<string> _serviceExclude;
-    private readonly IReadOnlyList<string> _repoInclude;
-    private readonly IReadOnlyList<string> _repoExclude;
+    // Each pattern is stored as three pre-split segments: [owner, repo, service].
+    private readonly IReadOnlyList<string[]> _patterns;
 
-    /// <summary>A pass-all filter: no patterns on any list.</summary>
-    public static readonly ServiceFilter PassAll = new([], [], [], []);
+    /// <summary>A pass-all filter: no exclude patterns.</summary>
+    public static readonly ServiceFilter PassAll = new([]);
 
     /// <summary>
-    /// Returns <c>true</c> when this filter carries no include or exclude patterns,
-    /// meaning every event is permitted and no in-memory post-filtering is needed.
+    /// Returns <c>true</c> when this filter carries no patterns — every event passes and
+    /// no in-memory matching is needed.
     /// </summary>
-    public bool IsPassAll =>
-        _serviceInclude.Count == 0 &&
-        _serviceExclude.Count == 0 &&
-        _repoInclude.Count == 0 &&
-        _repoExclude.Count == 0;
+    public bool IsEmpty => _patterns.Count == 0;
 
-    public ServiceFilter(
-        IReadOnlyList<string> serviceInclude,
-        IReadOnlyList<string> serviceExclude,
-        IReadOnlyList<string> repoInclude,
-        IReadOnlyList<string> repoExclude)
+    /// <summary>
+    /// <see cref="IsEmpty"/> exposed as <see cref="IsPassAll"/> for API-consumer symmetry.
+    /// </summary>
+    public bool IsPassAll => IsEmpty;
+
+    private ServiceFilter(IReadOnlyList<string[]> patterns)
     {
-        _serviceInclude = serviceInclude;
-        _serviceExclude = serviceExclude;
-        _repoInclude = repoInclude;
-        _repoExclude = repoExclude;
+        _patterns = patterns;
     }
 
     /// <summary>
-    /// Parses the four CSV pattern strings into a <see cref="ServiceFilter"/>.
-    /// Each value may be <c>null</c> or empty (treated as an empty list).
+    /// Parses a CSV of <c>owner/repo/service</c> glob patterns.
+    /// <c>null</c> or empty ⇒ <see cref="PassAll"/>.
     /// </summary>
-    public static ServiceFilter Parse(
-        string? serviceIncludeCsv,
-        string? serviceExcludeCsv,
-        string? repoIncludeCsv,
-        string? repoExcludeCsv)
+    public static ServiceFilter Parse(string? serviceExcludeCsv)
     {
-        return new ServiceFilter(
-            ParseCsv(serviceIncludeCsv),
-            ParseCsv(serviceExcludeCsv),
-            ParseCsv(repoIncludeCsv),
-            ParseCsv(repoExcludeCsv));
+        if (string.IsNullOrWhiteSpace(serviceExcludeCsv))
+            return PassAll;
+
+        var patterns = serviceExcludeCsv
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(p => p.Length > 0)
+            .Select(SplitPattern)
+            .ToList();
+
+        return patterns.Count == 0 ? PassAll : new ServiceFilter(patterns);
     }
 
+    // ── Fetcher overload ─────────────────────────────────────────────────────
+
     /// <summary>
-    /// Read-API overload: tests whether a stored event should be visible.
+    /// Fetcher overload: returns <c>true</c> when the full <c>(owner, repo, service)</c>
+    /// triple matches any configured exclude pattern (all three segments).
+    /// Used at poll time — the fetcher knows the owner from the repo it polls.
     /// </summary>
-    /// <param name="service">The event's service field.</param>
-    /// <param name="namespace">
-    /// The event's namespace field (= repo short name, e.g. "my-api").
-    /// REPO patterns are matched via the pattern's name segment (right of '/').
-    /// </param>
-    /// <returns><c>true</c> when the event passes the filter.</returns>
-    public bool Permits(string service, string? @namespace)
+    public bool IsExcluded(string owner, string repo, string service)
     {
-        var includeEmpty = _serviceInclude.Count == 0 && _repoInclude.Count == 0;
+        if (IsEmpty) return false;
 
-        var includedByService = _serviceInclude.Count > 0 && MatchesServicePatterns(service, @namespace, _serviceInclude);
-        var includedByRepo = _repoInclude.Count > 0 && MatchesRepoNameSegmentPatterns(@namespace, _repoInclude);
+        foreach (var segments in _patterns)
+        {
+            if (GlobMatch(segments[0], owner) &&
+                GlobMatch(segments[1], repo) &&
+                GlobMatch(segments[2], service))
+                return true;
+        }
 
-        var passesInclude = includeEmpty || includedByService || includedByRepo;
-        if (!passesInclude)
-            return false;
-
-        var excludedByService = _serviceExclude.Count > 0 && MatchesServicePatterns(service, @namespace, _serviceExclude);
-        var excludedByRepo = _repoExclude.Count > 0 && MatchesRepoNameSegmentPatterns(@namespace, _repoExclude);
-
-        return !(excludedByService || excludedByRepo);
+        return false;
     }
 
+    // ── API overload (read + write) ───────────────────────────────────────────
+
     /// <summary>
-    /// Fetcher overload: tests whether a polled event should be ingested.
+    /// API overload: returns <c>true</c> when <c>(namespace, service)</c> matches any
+    /// configured exclude pattern's last two <c>repo/service</c> segments.
+    /// The leading <c>owner</c> segment is wildcarded — the API does not store owner.
+    /// <paramref name="namespace"/> may be <c>null</c>; a null namespace is matched against
+    /// the pattern's repo segment as-is (GlobMatch("*", null-as-empty) is always true
+    /// when pattern is "*"; a literal pattern never matches empty).
     /// </summary>
-    /// <param name="service">The resolved service name.</param>
-    /// <param name="namespace">The repo short name (= namespace).</param>
-    /// <param name="ownerRepo">The full owner/repo string the fetcher polls (e.g. "acme/my-api").</param>
-    /// <returns><c>true</c> when the event passes the filter.</returns>
+    public bool IsExcluded(string service, string? @namespace)
+    {
+        if (IsEmpty) return false;
+
+        foreach (var segments in _patterns)
+        {
+            // segments[0] = owner → wildcarded (ignore)
+            // segments[1] = repo  → matched against namespace
+            // segments[2] = svc   → matched against service
+            var nsValue = @namespace ?? string.Empty;
+            if (GlobMatch(segments[1], nsValue) &&
+                GlobMatch(segments[2], service))
+                return true;
+        }
+
+        return false;
+    }
+
+    // ── Permits helpers (for callers using the old positive-sense API) ────────
+
+    /// <summary>
+    /// Read-API convenience wrapper: returns <c>true</c> when the event should be visible
+    /// (i.e., NOT excluded). Mirrors the old <c>Permits(service, namespace)</c> API.
+    /// </summary>
+    public bool Permits(string service, string? @namespace) => !IsExcluded(service, @namespace);
+
+    /// <summary>
+    /// Fetcher convenience wrapper: returns <c>true</c> when the event should be ingested
+    /// (i.e., NOT excluded). Mirrors the old <c>Permits(service, namespace, ownerRepo)</c> API.
+    /// </summary>
     public bool Permits(string service, string? @namespace, string ownerRepo)
     {
-        var includeEmpty = _serviceInclude.Count == 0 && _repoInclude.Count == 0;
-
-        var includedByService = _serviceInclude.Count > 0 && MatchesServicePatterns(service, @namespace, _serviceInclude);
-        var includedByRepo = _repoInclude.Count > 0 && MatchesRepoFullPatterns(ownerRepo, _repoInclude);
-
-        var passesInclude = includeEmpty || includedByService || includedByRepo;
-        if (!passesInclude)
-            return false;
-
-        var excludedByService = _serviceExclude.Count > 0 && MatchesServicePatterns(service, @namespace, _serviceExclude);
-        var excludedByRepo = _repoExclude.Count > 0 && MatchesRepoFullPatterns(ownerRepo, _repoExclude);
-
-        return !(excludedByService || excludedByRepo);
+        // ownerRepo is in "owner/repo" form; split for the three-segment match.
+        var parts = ownerRepo.Split('/', 2);
+        var owner = parts.Length == 2 ? parts[0] : string.Empty;
+        var repo = parts.Length == 2 ? parts[1] : ownerRepo;
+        return !IsExcluded(owner, repo, service);
     }
 
     // ── private helpers ───────────────────────────────────────────────────────
 
-    private static bool MatchesServicePatterns(string service, string? @namespace, IReadOnlyList<string> patterns)
+    /// <summary>
+    /// Splits a pattern into exactly three segments <c>[owner, repo, service]</c>.
+    /// Patterns with fewer slashes get <c>"*"</c> prepended for missing leading segments.
+    /// </summary>
+    private static string[] SplitPattern(string pattern)
     {
-        foreach (var pattern in patterns)
+        var parts = pattern.Split('/', 3);
+        return parts.Length switch
         {
-            if (pattern.Contains('/'))
-            {
-                // Composite match: pattern has slash — match against namespace/service.
-                var composite = @namespace is not null ? $"{@namespace}/{service}" : service;
-                if (GlobMatch(pattern, composite))
-                    return true;
-            }
-            else
-            {
-                // Segment match: match against service name only, across all namespaces.
-                if (GlobMatch(pattern, service))
-                    return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool MatchesRepoFullPatterns(string ownerRepo, IReadOnlyList<string> patterns)
-    {
-        foreach (var pattern in patterns)
-        {
-            if (GlobMatch(pattern, ownerRepo))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool MatchesRepoNameSegmentPatterns(string? @namespace, IReadOnlyList<string> patterns)
-    {
-        if (@namespace is null)
-            return false;
-
-        foreach (var pattern in patterns)
-        {
-            // Use the name segment (right of '/') of the pattern for namespace matching.
-            var nameSegment = ExtractNameSegment(pattern);
-            if (GlobMatch(nameSegment, @namespace))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static string ExtractNameSegment(string pattern)
-    {
-        var slashIndex = pattern.IndexOf('/');
-        return slashIndex >= 0 ? pattern[(slashIndex + 1)..] : pattern;
+            3 => parts,
+            2 => ["*", parts[0], parts[1]],
+            _ => ["*", "*", parts[0]],
+        };
     }
 
     /// <summary>
@@ -219,16 +188,5 @@ public sealed class ServiceFilter
         }
 
         return dp[pLen, vLen];
-    }
-
-    private static IReadOnlyList<string> ParseCsv(string? csv)
-    {
-        if (string.IsNullOrWhiteSpace(csv))
-            return [];
-
-        return csv
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(p => p.Length > 0)
-            .ToList();
     }
 }

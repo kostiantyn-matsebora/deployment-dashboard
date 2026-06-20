@@ -55,6 +55,28 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         return ev;
     }
 
+    private async Task<DeploymentEvent> SeedWithIdAsync(
+        Guid id,
+        string service = "svc-a",
+        string environment = "prod",
+        string status = DeploymentStatus.Success,
+        DateTimeOffset? happenedAt = null)
+    {
+        var ev = new DeploymentEvent
+        {
+            Id = id,
+            DeploymentId = $"dep-{id:N}",
+            Service = service,
+            Namespace = null,
+            Environment = environment,
+            Status = status,
+            HappenedAt = happenedAt ?? DateTimeOffset.UtcNow,
+        };
+        _ctx.DeploymentEvents.Add(ev);
+        await _ctx.SaveChangesAsync();
+        return ev;
+    }
+
     // ── GetByIdAsync ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -385,16 +407,23 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
     public async Task GetLastSuccessfulPerSlotAsync_SameHappenedAtInSlot_LatestIdWins()
     {
         // LatestPerSlot in-memory tiebreak: when two events share the same happenedAt,
-        // the one with the greater UUIDv7 (most recently inserted) must win.
+        // the one with the greater id must win.
+        // Use explicit, deterministic UUIDv7-shaped ids so the winner is unambiguous
+        // and the test never flakes on sub-millisecond Guid.CreateVersion7() ordering.
         var sameTime = new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
-        await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime);
-        // Seeded second → Guid.CreateVersion7() is strictly greater → must win.
-        var laterInserted = await SeedAsync(status: DeploymentStatus.Success, happenedAt: sameTime);
+
+        // "Smaller" id — earlier version-7 timestamp prefix.
+        var smallerId = Guid.Parse("01960000-0000-7000-8000-000000000001");
+        // "Greater" id — later version-7 timestamp prefix; must win the tiebreak.
+        var greaterId = Guid.Parse("01960000-0001-7000-8000-000000000001");
+
+        await SeedWithIdAsync(smallerId, status: DeploymentStatus.Success, happenedAt: sameTime);
+        var winner = await SeedWithIdAsync(greaterId, status: DeploymentStatus.Success, happenedAt: sameTime);
 
         var result = await _repo.GetLastSuccessfulPerSlotAsync(null, CancellationToken.None);
 
         Assert.Single(result);
-        Assert.Equal(laterInserted.Id, result[0].Id);
+        Assert.Equal(winner.Id, result[0].Id);
     }
 
     // ── GetLatestTerminalBeforeCurrentPerSlotAsync ────────────────────────────

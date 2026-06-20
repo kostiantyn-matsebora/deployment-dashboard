@@ -30,11 +30,8 @@ public static class ReadServiceExtensions
 
         services.AddSingleton(analyticsOptions);
 
-        var serviceFilter = ServiceFilter.Parse(
-            serviceIncludeCsv: configuration["SERVICE_INCLUDE"],
-            serviceExcludeCsv: configuration["SERVICE_EXCLUDE"],
-            repoIncludeCsv: configuration["REPO_INCLUDE"],
-            repoExcludeCsv: configuration["REPO_EXCLUDE"]);
+        // Parse SERVICE_EXCLUDE once at composition root — never per-request.
+        var serviceFilter = ServiceFilter.Parse(configuration["SERVICE_EXCLUDE"]);
         services.AddSingleton(serviceFilter);
 
         services.AddScoped<IDeploymentReadRepository, DeploymentReadRepository>();

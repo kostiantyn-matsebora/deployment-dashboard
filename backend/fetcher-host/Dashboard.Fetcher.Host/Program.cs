@@ -78,6 +78,19 @@ builder.Services.AddHttpClient("github", c =>
     c.DefaultRequestHeaders.Add("User-Agent", "deployment-dashboard-fetcher");
 });
 
+// ── GITHUB_REPOS glob expansion ───────────────────────────────────────────────
+// Expand any glob specs (owner/*, *) into concrete owner/repo strings using the
+// GitHub REST API before singletons are built.  Exact specs need no discovery.
+// An empty GITHUB_REPOS = no repos and no polling; bare "*" = all accessible repos.
+{
+    var specs = githubOptions.RepoSpecs;
+    if (specs.Count > 0 && specs.Any(s => s.Contains('*')))
+    {
+        var resolvedRepos = await ExpandRepoSpecsAsync(githubOptions, CancellationToken.None);
+        githubOptions.Repos = string.Join(",", resolvedRepos);
+    }
+}
+
 // ── Singletons ────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(fetcherOptions);
 builder.Services.AddSingleton(githubOptions);
@@ -245,3 +258,33 @@ static object? BuildRateLimitPayload(RateLimitSnapshot? rl) =>
         ci_limit = rl.CiLimit,
         ci_remaining = rl.CiRemaining,
     };
+
+static async Task<IReadOnlyList<string>> ExpandRepoSpecsAsync(
+    GithubAdapterOptions options, CancellationToken ct)
+{
+    // Build a minimal temporary GithubClient for discovery (rate-limit budget is
+    // discovered inside CreateAsync; pass 0 so it calls GET /rate_limit).
+    var discoveryHttp = new System.Net.Http.HttpClient
+    {
+        BaseAddress = new Uri(options.BaseUrl),
+    };
+    discoveryHttp.DefaultRequestHeaders.Add("Authorization", $"Bearer {options.Token}");
+    discoveryHttp.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+    discoveryHttp.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+    discoveryHttp.DefaultRequestHeaders.Add("User-Agent", "deployment-dashboard-fetcher");
+
+    using var _ = discoveryHttp;
+
+    var discoveryLogger = LoggerFactory.Create(b => b.AddConsole())
+        .CreateLogger<Dashboard.Fetcher.GitHub.RateLimit.RateLimitBudget>();
+
+    var discoveryBudget = await Dashboard.Fetcher.GitHub.RateLimit.RateLimitBudget.CreateAsync(
+        discoveryHttp, options.RateLimit, options.RateLimitBudgetPct, discoveryLogger, ct);
+
+    var discoveryClient = new GithubClient(discoveryHttp, discoveryBudget);
+
+    return await RepoSpecExpander.ExpandAsync(
+        options.RepoSpecs,
+        (owner, token) => discoveryClient.ListReposAsync(owner, token),
+        ct);
+}

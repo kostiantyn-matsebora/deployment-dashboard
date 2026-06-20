@@ -211,6 +211,30 @@ public sealed class GithubAdapterOptionsEnvTests
         Assert.Equal(30, options.RateLimitBudgetPct);
     }
 
+    // ── SERVICE_EXCLUDE ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void ServiceExclude_OverridesDefault_WhenKeyPresent()
+    {
+        var options = new GithubAdapterOptions();
+        var config = BuildConfig(new Dictionary<string, string?> { ["SERVICE_EXCLUDE"] = "acme/*/legacy-*" });
+
+        GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
+
+        Assert.Equal("acme/*/legacy-*", options.ServiceExclude);
+    }
+
+    [Fact]
+    public void ServiceExclude_KeepsDefault_WhenKeyAbsent()
+    {
+        var options = new GithubAdapterOptions();
+        var config = BuildConfig(new Dictionary<string, string?>());
+
+        GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
+
+        Assert.Equal("", options.ServiceExclude);
+    }
+
     // ── absent keys — all defaults survive together ───────────────────────────
 
     [Fact]
@@ -228,6 +252,7 @@ public sealed class GithubAdapterOptionsEnvTests
         Assert.Equal("", options.ServiceMap);
         Assert.Equal(0, options.RateLimit);
         Assert.Equal(30, options.RateLimitBudgetPct);
+        Assert.Equal("", options.ServiceExclude);
     }
 
     // ── layering integration: flat GITHUB_* overrides appsettings GitHub: base ─

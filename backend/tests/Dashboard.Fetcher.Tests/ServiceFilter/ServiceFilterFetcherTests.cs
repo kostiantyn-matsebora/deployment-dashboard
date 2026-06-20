@@ -6,98 +6,53 @@ using Microsoft.Extensions.Configuration;
 namespace Dashboard.Fetcher.Tests.ServiceFiltering;
 
 /// <summary>
-/// Tests that the fetcher correctly parses SERVICE_INCLUDE/EXCLUDE/REPO_INCLUDE/REPO_EXCLUDE
-/// env vars into GithubAdapterOptions and that the resulting ServiceFilter blocks/passes
-/// events at poll time.
+/// Tests that the fetcher correctly parses the <c>SERVICE_EXCLUDE</c> env var into
+/// <see cref="GithubAdapterOptions"/> and that the resulting <see cref="ServiceFilter"/>
+/// blocks/passes services at poll time using the three-argument fetcher overload.
 /// No mocks — all real implementations.
 /// </summary>
 public sealed class ServiceFilterFetcherTests
 {
-    // ── GithubAdapterOptionsEnv wires the four filter keys ─────────────────────
-
-    [Fact]
-    public void ServiceInclude_BoundFromEnv_WhenPresent()
-    {
-        var options = new GithubAdapterOptions();
-        var config = BuildConfig(new Dictionary<string, string?> { ["SERVICE_INCLUDE"] = "checkout,billing" });
-
-        GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
-
-        Assert.Equal("checkout,billing", options.ServiceInclude);
-    }
+    // ── GithubAdapterOptionsEnv wires SERVICE_EXCLUDE ──────────────────────────
 
     [Fact]
     public void ServiceExclude_BoundFromEnv_WhenPresent()
     {
         var options = new GithubAdapterOptions();
-        var config = BuildConfig(new Dictionary<string, string?> { ["SERVICE_EXCLUDE"] = "legacy-*" });
+        var config = BuildConfig(new Dictionary<string, string?> { ["SERVICE_EXCLUDE"] = "acme/*/legacy-*" });
 
         GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
 
-        Assert.Equal("legacy-*", options.ServiceExclude);
+        Assert.Equal("acme/*/legacy-*", options.ServiceExclude);
     }
 
     [Fact]
-    public void RepoInclude_BoundFromEnv_WhenPresent()
-    {
-        var options = new GithubAdapterOptions();
-        var config = BuildConfig(new Dictionary<string, string?> { ["REPO_INCLUDE"] = "acme/api" });
-
-        GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
-
-        Assert.Equal("acme/api", options.RepoInclude);
-    }
-
-    [Fact]
-    public void RepoExclude_BoundFromEnv_WhenPresent()
-    {
-        var options = new GithubAdapterOptions();
-        var config = BuildConfig(new Dictionary<string, string?> { ["REPO_EXCLUDE"] = "acme/legacy" });
-
-        GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
-
-        Assert.Equal("acme/legacy", options.RepoExclude);
-    }
-
-    [Fact]
-    public void AllFilterKeys_KeepDefaults_WhenAbsent()
+    public void ServiceExclude_KeepsDefault_WhenAbsent()
     {
         var options = new GithubAdapterOptions();
         var config = BuildConfig(new Dictionary<string, string?>());
 
         GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
 
-        Assert.Equal("", options.ServiceInclude);
         Assert.Equal("", options.ServiceExclude);
-        Assert.Equal("", options.RepoInclude);
-        Assert.Equal("", options.RepoExclude);
     }
 
     // ── BuildServiceFilter produces correct ServiceFilter ─────────────────────
 
     [Fact]
-    public void BuildServiceFilter_AllEmpty_ProducesPassAllFilter()
+    public void BuildServiceFilter_Empty_ProducesPassAllFilter()
     {
         var options = new GithubAdapterOptions();
         var filter = options.BuildServiceFilter();
 
+        Assert.True(filter.IsPassAll);
         Assert.True(filter.Permits("any-service", "any-namespace", "any/repo"));
     }
 
     [Fact]
-    public void BuildServiceFilter_ServiceInclude_OnlyAllowsMatchingService()
+    public void BuildServiceFilter_SingleSegment_ExcludesMatchingService()
     {
-        var options = new GithubAdapterOptions { ServiceInclude = "checkout" };
-        var filter = options.BuildServiceFilter();
-
-        Assert.True(filter.Permits("checkout", "ns", "acme/api"));
-        Assert.False(filter.Permits("billing", "ns", "acme/api"));
-    }
-
-    [Fact]
-    public void BuildServiceFilter_ServiceExclude_BlocksMatchingService()
-    {
-        var options = new GithubAdapterOptions { ServiceExclude = "legacy-*" };
+        var options = new GithubAdapterOptions { ServiceExclude = "legacy-crm" };
         var filter = options.BuildServiceFilter();
 
         Assert.False(filter.Permits("legacy-crm", "ns", "acme/api"));
@@ -105,83 +60,88 @@ public sealed class ServiceFilterFetcherTests
     }
 
     [Fact]
-    public void BuildServiceFilter_RepoInclude_OnlyAllowsMatchingOwnerRepo()
+    public void BuildServiceFilter_ThreeSegment_ExcludesMatchingTriple()
     {
-        var options = new GithubAdapterOptions { RepoInclude = "acme/api" };
+        var options = new GithubAdapterOptions { ServiceExclude = "acme/web/legacy-*" };
         var filter = options.BuildServiceFilter();
 
-        Assert.True(filter.Permits("svc", "api", "acme/api"));
-        Assert.False(filter.Permits("svc", "web", "acme/web"));
+        Assert.False(filter.Permits("legacy-crm", "web", "acme/web"));
+        Assert.True(filter.Permits("checkout", "web", "acme/web")); // different service
+        Assert.True(filter.Permits("legacy-crm", "api", "acme/api")); // different repo
+        Assert.True(filter.Permits("legacy-crm", "web", "org-b/web")); // different owner
     }
 
     [Fact]
-    public void BuildServiceFilter_RepoExclude_BlocksMatchingOwnerRepo()
+    public void BuildServiceFilter_MultiPattern_ExcludesAnyMatch()
     {
-        var options = new GithubAdapterOptions { RepoExclude = "acme/legacy" };
+        var options = new GithubAdapterOptions { ServiceExclude = "acme/*/canary,*/*/legacy" };
         var filter = options.BuildServiceFilter();
 
-        Assert.False(filter.Permits("svc", "legacy", "acme/legacy"));
-        Assert.True(filter.Permits("svc", "api", "acme/api"));
+        Assert.False(filter.Permits("canary", "api", "acme/api"));
+        Assert.False(filter.Permits("legacy", "web", "org-b/web"));
+        Assert.True(filter.Permits("checkout", "api", "acme/api"));
     }
 
-    // ── Filter skip semantics: fetcher overload Permits(service, namespace, ownerRepo) ──
+    // ── Fetcher skip semantics: IsExcluded(owner, repo, service) ─────────────
 
     [Fact]
-    public void FetcherFilter_AllowsWhenNoFiltersSet()
+    public void FetcherFilter_Empty_AllowsEverything()
     {
-        var filter = ServiceFilter.Parse(null, null, null, null);
+        var filter = ServiceFilter.Parse(null);
 
-        Assert.True(filter.Permits("checkout", "api-repo", "acme/api-repo"));
-    }
-
-    [Fact]
-    public void FetcherFilter_RejectsWhenServiceNotInInclude()
-    {
-        var filter = ServiceFilter.Parse("allowed-svc", null, null, null);
-
-        Assert.False(filter.Permits("blocked-svc", "ns", "acme/repo"));
-        Assert.True(filter.Permits("allowed-svc", "ns", "acme/repo"));
+        Assert.False(filter.IsExcluded("acme", "api", "checkout"));
+        Assert.False(filter.IsExcluded("acme", "api", "legacy-crm"));
     }
 
     [Fact]
-    public void FetcherFilter_RejectsWhenRepoNotInInclude()
+    public void FetcherFilter_OwnerWildcard_ExcludesMatchingServiceInAnyOrg()
     {
-        var filter = ServiceFilter.Parse(null, null, "acme/included-repo", null);
+        // "*/web/checkout" → excluded regardless of owner.
+        var filter = ServiceFilter.Parse("*/web/checkout");
 
-        Assert.False(filter.Permits("svc", "excluded-repo", "acme/excluded-repo"));
-        Assert.True(filter.Permits("svc", "included-repo", "acme/included-repo"));
+        Assert.True(filter.IsExcluded("acme", "web", "checkout"));
+        Assert.True(filter.IsExcluded("org-b", "web", "checkout"));
+        Assert.False(filter.IsExcluded("acme", "api", "checkout")); // different repo
     }
 
     [Fact]
-    public void FetcherFilter_RejectsWhenServiceInExclude_EvenIfAlsoInInclude()
+    public void FetcherFilter_RepoWildcard_ExcludesMatchingServiceInAnyRepo()
     {
-        // Exclude wins over include.
-        var filter = ServiceFilter.Parse("checkout", "checkout", null, null);
+        var filter = ServiceFilter.Parse("acme/*/internal");
 
-        Assert.False(filter.Permits("checkout", "ns", "acme/repo"));
+        Assert.True(filter.IsExcluded("acme", "web", "internal"));
+        Assert.True(filter.IsExcluded("acme", "api", "internal"));
+        Assert.False(filter.IsExcluded("org-b", "web", "internal")); // wrong owner
     }
 
     [Fact]
-    public void FetcherFilter_RejectsWhenRepoInExclude()
+    public void FetcherFilter_ServiceGlob_ExcludesMatchingServiceName()
     {
-        var filter = ServiceFilter.Parse(null, null, null, "acme/excluded-repo");
+        var filter = ServiceFilter.Parse("acme/api/legacy-*");
 
-        Assert.False(filter.Permits("svc", "excluded-repo", "acme/excluded-repo"));
-        Assert.True(filter.Permits("svc", "other-repo", "acme/other-repo"));
+        Assert.True(filter.IsExcluded("acme", "api", "legacy-crm"));
+        Assert.True(filter.IsExcluded("acme", "api", "legacy-billing"));
+        Assert.False(filter.IsExcluded("acme", "api", "checkout"));
     }
 
     [Fact]
-    public void FetcherFilter_ServiceOrRepoInclude_PassesWhenEitherMatches()
+    public void FetcherFilter_ExactPattern_OnlyExcludesExactMatch()
     {
-        // Passes when service matches SERVICE_INCLUDE even if REPO_INCLUDE doesn't match.
-        var filter = ServiceFilter.Parse("checkout", null, "acme/billing-repo", null);
+        var filter = ServiceFilter.Parse("acme/api/checkout");
 
-        // Service matches but repo doesn't match REPO_INCLUDE.
-        Assert.True(filter.Permits("checkout", "api-repo", "acme/api-repo"));
-        // Repo matches but service doesn't match SERVICE_INCLUDE.
-        Assert.True(filter.Permits("billing", "billing-repo", "acme/billing-repo"));
-        // Neither matches → blocked.
-        Assert.False(filter.Permits("gateway", "api-repo", "acme/api-repo"));
+        Assert.True(filter.IsExcluded("acme", "api", "checkout"));
+        Assert.False(filter.IsExcluded("acme", "api", "checkout-v2"));
+        Assert.False(filter.IsExcluded("org-b", "api", "checkout"));
+    }
+
+    [Fact]
+    public void FetcherFilter_EmptyServiceExclude_IsPassAll_NoIngestionBlocked()
+    {
+        // An empty SERVICE_EXCLUDE must produce IsPassAll = true and block nothing.
+        var filter = ServiceFilter.Parse("");
+
+        Assert.True(filter.IsPassAll);
+        Assert.False(filter.IsExcluded("acme", "api", "any-service"));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

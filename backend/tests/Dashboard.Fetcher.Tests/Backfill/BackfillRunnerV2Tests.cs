@@ -1013,7 +1013,7 @@ public sealed class BackfillRunnerV2Tests
         // Build runner with SERVICE_EXCLUDE = "Deploy API": every deployment is filtered out.
         var (runner, _) = BuildRunnerWithFilter(
             handler,
-            serviceFilter: ServiceFilter.Parse(null, "Deploy API", null, null),
+            serviceFilter: ServiceFilter.Parse("Deploy API"),
             depth: 1);
 
         var (events, _) = await DrainAsync(runner);

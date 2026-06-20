@@ -8,7 +8,11 @@ public sealed class GithubAdapterOptions
     public string BaseUrl { get; set; } = "https://api.github.com";
     public string Token { get; set; } = "";
 
-    /// <summary>Comma-separated "owner/repo" values.</summary>
+    /// <summary>
+    /// Comma-separated repo specifiers. Supports exact <c>owner/repo</c>, owner-wildcard
+    /// <c>owner/*</c>, and bare <c>*</c> (all accessible repos). Empty = no repos / no polling.
+    /// Globs are expanded at startup via the GitHub API (list repos).
+    /// </summary>
     public string Repos { get; set; } = "";
 
     /// <summary>
@@ -32,28 +36,37 @@ public sealed class GithubAdapterOptions
     /// </summary>
     public TimeSpan BackfillMaxAge { get; set; } = TimeSpan.Zero;
 
-    // ── service filter ────────────────────────────────────────────────────────
+    // ── service exclude filter ────────────────────────────────────────────────
 
-    /// <summary>CSV glob patterns: only these services are ingested. Empty = all.</summary>
-    public string ServiceInclude { get; set; } = "";
-
-    /// <summary>CSV glob patterns: these services are always skipped. Empty = none.</summary>
+    /// <summary>
+    /// CSV of <c>owner/repo/service</c> glob patterns. Matching services are never ingested.
+    /// Empty = exclude nothing. Bound from <c>SERVICE_EXCLUDE</c> env var.
+    /// </summary>
     public string ServiceExclude { get; set; } = "";
 
-    /// <summary>CSV glob patterns (owner/repo): only these repos are ingested. Empty = all.</summary>
-    public string RepoInclude { get; set; } = "";
-
-    /// <summary>CSV glob patterns (owner/repo): these repos are always skipped. Empty = none.</summary>
-    public string RepoExclude { get; set; } = "";
-
-    /// <summary>Builds the <see cref="ServiceFilter"/> from the four CSV pattern properties.</summary>
-    public ServiceFilter BuildServiceFilter() =>
-        ServiceFilter.Parse(ServiceInclude, ServiceExclude, RepoInclude, RepoExclude);
+    /// <summary>Builds the <see cref="ServiceFilter"/> from the <c>ServiceExclude</c> CSV.</summary>
+    public ServiceFilter BuildServiceFilter() => ServiceFilter.Parse(ServiceExclude);
 
     // ── derived helpers ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Returns the raw repo specifiers (possibly containing globs). Exact <c>owner/repo</c>
+    /// entries need no discovery; entries containing <c>*</c> are expanded at startup.
+    /// An empty string yields an empty list — meaning no repos and no polling.
+    /// </summary>
+    public IReadOnlyList<string> RepoSpecs =>
+        string.IsNullOrWhiteSpace(Repos)
+            ? []
+            : Repos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                   .Where(s => s.Length > 0)
+                   .ToList();
+
+    /// <summary>
+    /// Returns only the exact <c>owner/repo</c> specifiers (no glob characters).
+    /// These are used directly without GitHub API discovery.
+    /// </summary>
     public IReadOnlyList<string> RepoList =>
-        Repos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        RepoSpecs.Where(s => !s.Contains('*')).ToList();
 
     public IReadOnlyDictionary<string, string> ServiceMapDict =>
         ServiceMap
