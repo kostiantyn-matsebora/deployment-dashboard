@@ -91,14 +91,18 @@ public static class ReadEndpoints
     private static async Task<IResult> HandleGetByIdAsync(
         Guid id,
         IDeploymentReadRepository repository,
+        ServiceFilter serviceFilter,
         CancellationToken ct)
     {
         var ev = await repository.GetByIdAsync(id, ct);
-        return ev is null
-            ? Results.Problem(
+        // Treat an excluded-service event identically to a missing row: return 404.
+        // The contract (api-guidelines.md §5) states excluded services are hidden in
+        // the API even if stored — there is no carve-out for the id endpoint.
+        if (ev is null || !serviceFilter.Permits(ev.Service, ev.Namespace))
+            return Results.Problem(
                 title: "Deployment event not found.",
-                statusCode: StatusCodes.Status404NotFound)
-            : Results.Ok(ev);
+                statusCode: StatusCodes.Status404NotFound);
+        return Results.Ok(ev);
     }
 
     private static async Task<IResult> HandleMatrixAsync(

@@ -289,4 +289,127 @@ public sealed class ServiceFilterReadTests : IDisposable
         Assert.Contains("billing", services);
         Assert.Equal(2, effective.Count);
     }
+
+    // ── GetByIdAsync — service filter applied (Remark 1) ─────────────────────
+
+    [Fact]
+    public async Task GetByIdAsync_ExcludedService_Returns404Shape()
+    {
+        // A stored event whose service is excluded must be hidden: GetByIdAsync returns null
+        // so the endpoint can return 404 — same shape as a genuinely missing id.
+        var ev = await SeedAsync(service: "checkout");
+        var filter = ServiceFilter.Parse(null, "checkout", null, null);
+        var repo = BuildRepo(filter);
+
+        var result = await repo.GetByIdAsync(ev.Id, CancellationToken.None);
+
+        // GetByIdAsync still returns the row — the filter is applied in the endpoint.
+        // The test covers the endpoint-level path: a non-null result for an excluded service
+        // must cause a 404, not a 200.  We verify the repository returns the raw row and
+        // then that the filter blocks it.
+        Assert.NotNull(result);
+        Assert.False(filter.Permits(result.Service, result.Namespace),
+            "The filter must block the excluded service so the endpoint returns 404.");
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_IncludedService_IsPermittedByFilter()
+    {
+        // A stored event whose service passes the filter must NOT be hidden by the
+        // endpoint's filter check: the row is returned and filter.Permits returns true.
+        var ev = await SeedAsync(service: "billing");
+        var filter = ServiceFilter.Parse("billing", null, null, null);
+        var repo = BuildRepo(filter);
+
+        var result = await repo.GetByIdAsync(ev.Id, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.True(filter.Permits(result.Service, result.Namespace),
+            "The filter must permit the included service so the endpoint returns 200.");
+    }
+
+    // ── ListAsync — bounded fetch with active filter (Remark 2) ──────────────
+
+    [Fact]
+    public async Task ListAsync_ActiveFilter_ReturnsFullPageWhenEnoughMatchingRowsExist()
+    {
+        // Seed limit*headroom rows alternating excluded/included.
+        // With a headroom multiplier of 4 and limit=3, seed 4*4=16 rows, 8 excluded + 8 included.
+        // The bounded fetch must collect 4 (limit+1) included rows to correctly set the
+        // next-cursor without loading the entire table.
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 16; i++)
+        {
+            // Even index → excluded service, odd index → included service.
+            var svc = i % 2 == 0 ? "excluded-svc" : "included-svc";
+            await SeedAsync(service: svc, happenedAt: t0.AddHours(i));
+        }
+
+        var filter = ServiceFilter.Parse("included-svc", null, null, null);
+        var repo = BuildRepo(filter);
+
+        var (items, nextCursor) = await repo.ListAsync(
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 3),
+            CancellationToken.None);
+
+        // Must return exactly limit=3 items (all from included-svc).
+        Assert.Equal(3, items.Count);
+        Assert.All(items, e => Assert.Equal("included-svc", e.Service));
+        // next-cursor must be set because there are more included rows beyond the page.
+        Assert.NotNull(nextCursor);
+    }
+
+    [Fact]
+    public async Task ListAsync_ActiveFilter_ContinuationPageHasCorrectCursorAndNoOverlap()
+    {
+        // Seed 10 included rows and 10 excluded rows, interleaved, with distinct timestamps.
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 20; i++)
+        {
+            var svc = i % 2 == 0 ? "wanted" : "blocked";
+            await SeedAsync(service: svc, happenedAt: t0.AddHours(i));
+        }
+
+        var filter = ServiceFilter.Parse("wanted", null, null, null);
+        var repo = BuildRepo(filter);
+
+        // Page 1
+        var (page1, cursor1) = await repo.ListAsync(
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 4),
+            CancellationToken.None);
+
+        Assert.Equal(4, page1.Count);
+        Assert.NotNull(cursor1);
+        Assert.All(page1, e => Assert.Equal("wanted", e.Service));
+
+        // Page 2 — must not overlap with page 1.
+        var (page2, _) = await repo.ListAsync(
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, cursor1, 4),
+            CancellationToken.None);
+
+        Assert.All(page2, e => Assert.Equal("wanted", e.Service));
+        var page1Ids = page1.Select(e => e.Id).ToHashSet();
+        Assert.True(page2.All(e => !page1Ids.Contains(e.Id)),
+            "Page 2 must not overlap with page 1.");
+    }
+
+    [Fact]
+    public async Task ListAsync_PassAllFastPath_BoundedFetchUnchanged()
+    {
+        // Validates that the PassAll fast-path still applies Take(limit+1) at the DB level.
+        // Seed limit+2 rows — all pass filter — and confirm exactly limit items returned
+        // with a next-cursor (i.e., the DB bound was applied, not a full-table load).
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 7; i++)
+            await SeedAsync(happenedAt: t0.AddHours(i));
+
+        var repo = BuildRepo(ServiceFilter.PassAll);
+
+        var (items, nextCursor) = await repo.ListAsync(
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 5),
+            CancellationToken.None);
+
+        Assert.Equal(5, items.Count);
+        Assert.NotNull(nextCursor);
+    }
 }

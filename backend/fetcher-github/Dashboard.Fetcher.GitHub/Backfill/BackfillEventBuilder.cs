@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
@@ -77,6 +78,12 @@ public sealed class BackfillEventBuilder(
     /// and is never treated as no-progress. <c>consecutiveNoProgress</c> increments only when
     /// a service is unknown or has zero mapped statuses.
     /// </summary>
+    // S3776/S1541: The five distinct skip/continue branches (cutoff, stall, all-slots-full,
+    // filter-excluded, already-full, unknown, zero-mapped) are all required for correct
+    // backfill semantics.  Extracting them into sub-methods would destroy the shared
+    // mutable state (filled, consecutiveNoProgress) without reducing real complexity.
+    [SuppressMessage("SonarAnalyzer", "S3776", Justification = "Backfill scan loop: multiple mutually-exclusive skip branches share mutable stall/fill state; structural complexity is irreducible.")]
+    [SuppressMessage("SonarAnalyzer", "S1541", Justification = "Backfill scan loop: multiple mutually-exclusive skip branches share mutable stall/fill state; structural complexity is irreducible.")]
     private async Task<List<(
             GhDeployment Deployment,
             List<GhDeploymentStatus> Statuses,
@@ -138,9 +145,16 @@ public sealed class BackfillEventBuilder(
                 ctx.Owner, ctx.RepoName, ctx.Repo, runId, pathToService, serviceMap, ct);
 
             // Apply deployment-wide filter: skip deployments whose service is excluded.
+            // A filtered-out service produces no data for us, so it counts as no-progress
+            // for the stall/early-exit logic — identical treatment to an unknown service.
+            // This prevents a repo where every deployment maps to excluded services from
+            // scanning all the way to the cutoff date instead of halting at the stall window.
             var @namespace = ctx.Repo.Split('/').Last();
             if (!serviceFilter.Permits(service, @namespace, ctx.Repo))
+            {
+                consecutiveNoProgress++;
                 continue;
+            }
 
             var eventsSoFar = filled.GetValueOrDefault(service, 0);
 

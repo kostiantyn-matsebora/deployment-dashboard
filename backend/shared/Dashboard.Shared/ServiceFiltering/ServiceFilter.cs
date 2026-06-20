@@ -35,6 +35,16 @@ public sealed class ServiceFilter
     /// <summary>A pass-all filter: no patterns on any list.</summary>
     public static readonly ServiceFilter PassAll = new([], [], [], []);
 
+    /// <summary>
+    /// Returns <c>true</c> when this filter carries no include or exclude patterns,
+    /// meaning every event is permitted and no in-memory post-filtering is needed.
+    /// </summary>
+    public bool IsPassAll =>
+        _serviceInclude.Count == 0 &&
+        _serviceExclude.Count == 0 &&
+        _repoInclude.Count == 0 &&
+        _repoExclude.Count == 0;
+
     public ServiceFilter(
         IReadOnlyList<string> serviceInclude,
         IReadOnlyList<string> serviceExclude,
