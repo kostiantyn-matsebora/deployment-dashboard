@@ -75,7 +75,7 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 | Var | Required | Default | Purpose |
 |---|---|---|---|
 | `GITHUB_TOKEN` | **yes** (pull) | — | GitHub token (PAT / App token) for polling real GitHub. |
-| `GITHUB_REPOS` | **yes** (pull) | — | Comma-separated `owner/repo` list to poll, e.g. `acme/api,acme/web`. |
+| `GITHUB_REPOS` | **yes** (pull) | — | Repos to poll. Accepts exact `owner/repo`, `owner/*` (all repos of one owner), or bare `*` (every repo the token can access). Glob forms trigger GitHub API discovery within the existing rate-limit budget. **Empty = no repos polled** — empty is NOT equivalent to `*`. |
 | `GITHUB_BASE_URL` | no | `https://api.github.com` | REST base URL. GitHub Enterprise Server: `https://<host>/api/v3`. |
 | `GITHUB_VERSION_SOURCE` | no | `attribute:sha` | Where the version string comes from: `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>`. |
 | `GITHUB_RATE_LIMIT_BUDGET_PCT` | no | `30` | Percent of the GitHub hourly quota the fetcher may consume (1–100). |
@@ -93,27 +93,25 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 
 ## :material-filter-outline: Service-scope filter { #service-scope-filter }
 
-Deployment-wide filter that limits which services are fetched, stored, and surfaced. Set the same four vars on **both** the API container and the Fetcher container — the two tiers share the same effective rule so they stay consistent.
+Deployment-wide filter that limits which services are fetched and surfaced. Set `SERVICE_EXCLUDE` on **both** the API container and the Fetcher container — both tiers enforce the same list.
 
-**How it works.** A service passes the filter iff:
+**`SERVICE_EXCLUDE`.** A CSV of glob patterns in `owner/repo/service` form. `*` wildcard in any segment.
 
-- At least one include list is non-empty and the service (or its repo) matches it — OR both include lists are empty (match all); AND
-- The service does not match any exclude pattern. Exclude always wins.
-
-**Glob semantics (service patterns).** A pattern containing `/` matches the full `namespace/service` composite (e.g. `acme/*`). A slashless pattern matches the `service` segment across all namespaces (e.g. `checkout-api`). `*` is the wildcard.
-
-**Repo patterns** are `owner/name` (e.g. `acme/api`). The Fetcher matches against the full repo it polls; the API maps the `name` segment against the stored `namespace` (on the GitHub fetcher path, `namespace` is the repo short name).
+| Example | Excludes |
+|---|---|
+| `acme/web/legacy-*` | services starting `legacy-` in `acme/web` |
+| `acme/*/internal` | the `internal` service in any `acme` repo |
+| `*/*/canary` | the `canary` service anywhere |
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `SERVICE_INCLUDE` | no | *(empty — match all)* | CSV of service glob patterns to include. Empty = match all services. |
-| `SERVICE_EXCLUDE` | no | *(empty — exclude none)* | CSV of service glob patterns to exclude. Exclude wins over include. |
-| `REPO_INCLUDE` | no | *(empty — match all)* | CSV of `owner/name` repo glob patterns to include. Empty = match all. |
-| `REPO_EXCLUDE` | no | *(empty — exclude none)* | CSV of `owner/name` repo glob patterns to exclude. Exclude wins over include. |
+| `SERVICE_EXCLUDE` | no | *(empty — exclude nothing)* | CSV of `owner/repo/service` glob patterns to exclude. Empty = exclude nothing. |
 
-**API effect.** Excluded services are hidden from `/api/services`, `/api/matrix`, `/api/deployments`, and `/api/events/stream`. Events for an excluded service remain in storage but are never surfaced; storage-clearing semantics (reset / backfill) are unchanged.
+**Fetcher effect.** Matching `owner/repo/service` triples are **never polled or ingested**, reducing CI/CD API rate-limit consumption.
 
-**Fetcher effect.** Non-matching services are skipped at poll time and never ingested, reducing CI/CD API rate-limit consumption.
+**API write effect.** `POST /api/deployments` **rejects** a matching event with `403` (problem+json). Match uses the last two `repo/service` segments vs `(namespace, service)` — the owner segment is only enforced by the fetcher (the API does not store owner).
+
+**API read effect.** Matching events are filtered from `/api/services`, `/api/matrix`, `/api/deployments`, and the SSE stream (live + replay). By-id (`/api/deployments/{id}`) returns `404`. Already-stored events for a now-excluded service remain in storage but are never surfaced; storage-clearing (reset / backfill) semantics are unchanged.
 
 ## :material-flask-outline: Demo / dev only { #demo-dev-only }
 

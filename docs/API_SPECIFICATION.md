@@ -190,7 +190,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 
 | Surface | Method · Path | Auth | Behaviour |
 |---|---|---|---|
-| ingest | `POST /api/deployments` | `X-Api-Key` | append 1 row → `NOTIFY deployment_events` → `201` + `Location`; **`503` + `Retry-After`** during the reset data-clearing window (state `resetting`) |
+| ingest | `POST /api/deployments` | `X-Api-Key` | append 1 row → `NOTIFY deployment_events` → `201` + `Location`; **`403`** (problem+json) when event matches `SERVICE_EXCLUDE`; **`503` + `Retry-After`** during the reset data-clearing window (state `resetting`) |
 | deployments | `GET /api/deployments` | none | cursor page, `happened_at DESC, id DESC`; filters: service/environment/status/deployment_id/since/until |
 | deployments | `GET /api/deployments/{id}` | none | single row / `404` |
 | matrix | `GET /api/matrix` | none | `current` (latest **effective**: `in-progress`/`success`/`failure`) + `last_successful` + optional `next` (latest **non-effective**: `pending`/`queued`/`waiting`/`cancelled`/`rejected`, only when newer than `current`) per slot; weak `ETag` + `If-None-Match` |
@@ -293,10 +293,7 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 | `CONTROL_API_KEY` | — | control stream + reset secret (`X-Control-API-Key`, D8) |
 | `CORS_ALLOWED_ORIGINS` | *(empty)* | CSV of allowed origins; empty disables CORS |
 | `HISTORY_RETENTION_DAYS` | `365` | deployment-events retention window (≥ 90); control-plane tables always use fixed 2 h |
-| `SERVICE_INCLUDE` | *(empty)* | CSV of service glob patterns to include in the deployment-wide service-scope filter. Empty = match all. Pattern with `/` matches full `namespace/service`; slashless matches the `service` segment across all namespaces; `*` wildcard. Exclude wins over include. Applied to `/api/services`, `/api/matrix`, `/api/deployments`, and `/api/events/stream` — excluded services are hidden from all read surfaces even if already stored. See `api-guidelines.md` §5. |
-| `SERVICE_EXCLUDE` | *(empty)* | CSV of service glob patterns to exclude. Empty = exclude none. Same glob semantics as `SERVICE_INCLUDE`. Exclude wins over include. |
-| `REPO_INCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to include. Empty = match all. The API matches the pattern `name` segment against the stored `namespace` (the GitHub fetcher sets `namespace` to the repo short name). Exclude wins over include. |
-| `REPO_EXCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to exclude. Empty = exclude none. Same cross-tier mapping as `REPO_INCLUDE`. Exclude wins over include. |
+| `SERVICE_EXCLUDE` | *(empty)* | CSV of glob patterns in `owner/repo/service` form. `*` wildcard in any segment (e.g. `acme/web/legacy-*`, `acme/*/internal`, `*/*/canary`). Empty = exclude nothing. **Ingest:** `POST /api/deployments` rejects a matching event with `403` (problem+json). **Read:** matching events filtered from `/api/services`, `/api/matrix`, `/api/deployments`, and `/api/events/stream` (live + replay); by-id returns `404`. Match uses the last two `repo/service` segments vs `(namespace, service)` — owner segment is enforced only by the fetcher (the API does not store owner). See `api-guidelines.md` §5. |
 
 **Reset choreography (appsettings + env, D12–D13).** These bind from `appsettings.json` (PascalCase `Reset` section) **and** are overridable via flat `SCREAMING_SNAKE` env vars. `RESET_EXPECTED_COMPONENTS` is a CSV string (replaces the old indexed-array `Reset__ExpectedComponents__0…` override, eliminating the array-append footgun).
 

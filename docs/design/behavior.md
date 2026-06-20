@@ -132,11 +132,11 @@ Distinct from the client watch filter above. A deployment operator may configure
 
 | Dimension | Client watch filter | Server-side scope filter |
 |---|---|---|
-| **Where configured** | Per-browser, in the extension | Deployment-wide, in container env vars (`SERVICE_INCLUDE`, `SERVICE_EXCLUDE`, `REPO_INCLUDE`, `REPO_EXCLUDE`) |
-| **Scope** | Badge updates and notifications only | All read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`) + Fetcher poll |
-| **Effect on storage** | None — all events remain in storage | Fetcher: excluded services never polled or ingested. API: already-stored events for excluded services are hidden (storage unchanged) |
-| **Precedence** | Applied client-side after the API response | Applied server-side before any data reaches the client; exclude wins over include |
-| **Glob semantics** | Per-browser preferences | Pattern with `/` = `namespace/service` composite; slashless = `service` segment across all namespaces; `*` wildcard. Same semantics as the matrix services filter. |
+| **Where configured** | Per-browser, in the extension | Deployment-wide, in container env var `SERVICE_EXCLUDE` |
+| **Scope** | Badge updates and notifications only | Fetcher poll + write ingest + all read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`) |
+| **Effect on storage** | None — all events remain in storage | Fetcher: excluded services never polled or ingested. API write: matching ingest rejected `403`. API read: already-stored events for excluded services hidden (storage unchanged) |
+| **Precedence** | Applied client-side after the API response | Applied server-side before any data reaches the client |
+| **Glob semantics** | Per-browser preferences | `owner/repo/service` form; `*` wildcard in any segment. API uses last two `repo/service` segments (owner enforced only by the fetcher). |
 
 The server-side filter is invisible to the extension — the watch filter only sees the services the API exposes. A service excluded by the server-side filter will not appear in the extension's services list and cannot be added to the watch scope.
 

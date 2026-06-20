@@ -630,19 +630,16 @@ Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level 
 | `BACKFILL_DEPTH` | `2` | number of latest status events to seed per `(service, environment)` slot during backfill (F13); default 2 |
 | `GITHUB_BASE_URL` | `https://api.github.com` | overridable for the integration mock |
 | `GITHUB_TOKEN` | *(secret)* | PAT / GitHub App token |
-| `GITHUB_REPOS` | `acme/api,acme/web` | repos to poll |
+| `GITHUB_REPOS` | `acme/api,acme/web` | Repos to poll. Accepts exact `owner/repo`, `owner/*` (all repos of one owner), or bare `*` (every repo the token can access). Glob forms trigger GitHub API discovery (honoured within the rate-limit budget — F16); discovery runs only when a glob is set. **Empty = no repos polled** (unchanged current behaviour — empty is NOT equivalent to `*`). |
 | `GITHUB_SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
 | `GITHUB_VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
 | `GITHUB_RATE_LIMIT` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
 | `GITHUB_RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
-| `SERVICE_INCLUDE` | *(empty)* | CSV of service glob patterns to include. Empty = match all. Pattern with `/` matches full `namespace/service`; slashless matches the `service` segment across all namespaces; `*` wildcard. Applied after `ResolveService` (§5.8.3) at poll time — non-matching services are skipped before ingest. Exclude wins over include. |
-| `SERVICE_EXCLUDE` | *(empty)* | CSV of service glob patterns to exclude. Empty = exclude none. Same glob semantics as `SERVICE_INCLUDE`. Exclude wins over include. |
-| `REPO_INCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to include. Empty = match all. The fetcher matches against the full `owner/name` it polls. Exclude wins over include. |
-| `REPO_EXCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to exclude. Empty = exclude none. Exclude wins over include. |
+| `SERVICE_EXCLUDE` | *(empty)* | CSV of glob patterns in `owner/repo/service` form. `*` wildcard in any segment (e.g. `acme/web/legacy-*`, `acme/*/internal`, `*/*/canary`). Empty = exclude nothing. Applied after `ResolveService` (§5.8.3) at poll time — matching `owner/repo/service` triples are **never ingested**. See `api-guidelines.md` §5. |
 
 > **Explicit-binding vars.** All vars in this table are read explicitly by name — `FetcherOptionsEnv.ApplyEnvOverrides` (for the fetcher vars) and `GithubAdapterOptionsEnv.ApplyEnvOverrides` (for the `GITHUB_*` vars). The appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it. A missing or unparseable value leaves the property at its default without throwing.
 
-> **Service-scope filter (`SERVICE_*` / `REPO_*`).** Read via the same `FetcherOptionsEnv.ApplyEnvOverrides` pattern. Effective rule: a service passes iff `(SERVICE_INCLUDE + REPO_INCLUDE both empty OR service matches SERVICE_INCLUDE OR repo matches REPO_INCLUDE) AND NOT (service matches SERVICE_EXCLUDE OR repo matches REPO_EXCLUDE)`. Non-matching services are never ingested, saving rate-limit budget. Configure identically on the API container — the two tiers share the same effective filter (cross-tier mapping: the GitHub fetcher sets `namespace` to the repo short name, so `REPO_*` maps onto `namespace`). See `api-guidelines.md` §5.
+> **Service-scope filter (`SERVICE_EXCLUDE`).** Single var, both tiers. The fetcher matches the full `owner/repo/service` triple at poll time; non-matching services are never ingested, saving rate-limit budget. The API tier enforces the same list on ingest and read surfaces (see `api-guidelines.md` §5). Repo scoping (excluding all services of a repo) is expressed as `owner/repo/*`.
 
 **Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
