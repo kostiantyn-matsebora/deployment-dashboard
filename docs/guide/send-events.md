@@ -95,7 +95,7 @@ Add a step at the end of your deploy job (and optionally one at the start with `
             }'
 ```
 
-> Prefer pull mode over editing every workflow? The optional **Fetcher** polls the GitHub Actions API and posts for you — see [Install § pull mode](./install.md#deployment-shapes) and the [Fetcher spec](../FETCHER_SPECIFICATION.md).
+> Prefer pull mode over editing every workflow? The optional **Fetcher** polls the GitHub Actions API and posts for you — see [Install § pull mode](./install/index.md#deployment-shapes) and the [Fetcher spec](../FETCHER_SPECIFICATION.md).
 
 ### Azure DevOps Pipelines
 

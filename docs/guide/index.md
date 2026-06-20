@@ -32,16 +32,30 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Demo control panel](./screenshots.md#demo-control-panel)
 - [Footer](./screenshots.md#footer)
 
-### `install.md`
+### `install/` — Install & deploy
 
-- [Concepts in one minute](./install.md#concepts-in-one-minute)
-- [Deployment shapes](./install.md#deployment-shapes)
-- [Get the stack](./install.md#1-get-the-stack)
-- [Configure & run](./install.md#2-configure--run)
-- [Running from local source](./install.md#running-from-local-source)
-- [Production checklist](./install.md#production-checklist)
-- [Pinning a release version](./install.md#pinning-a-release-version)
-- [Hosting notes](./install.md#hosting-notes)
+- [Concepts in one minute](./install/index.md#concepts-in-one-minute)
+- [Deployment shapes](./install/index.md#deployment-shapes)
+- [Choose a deployment method](./install/index.md#choose-a-deployment-method)
+- [Production checklist](./install/index.md#production-checklist)
+- [Pinning a release version](./install/index.md#pinning-a-release-version)
+- [Hosting notes](./install/index.md#hosting-notes)
+
+#### `install/docker-compose.md`
+
+- [Get the stack](./install/docker-compose.md#1-get-the-stack)
+- [Configure & run](./install/docker-compose.md#2-configure--run)
+- [Running from local source](./install/docker-compose.md#running-from-local-source)
+- [Pinning a release version](./install/docker-compose.md#pinning-a-release-version)
+
+#### `install/azure-terraform.md`
+
+- [Topology](./install/azure-terraform.md#topology)
+- [Prerequisites](./install/azure-terraform.md#prerequisites)
+- [Deploy](./install/azure-terraform.md#deploy)
+- [Post-deploy steps](./install/azure-terraform.md#post-deploy-steps)
+- [Cost](./install/azure-terraform.md#cost)
+- [Networking & security](./install/azure-terraform.md#networking--security)
 
 ### `configuration.md`
 

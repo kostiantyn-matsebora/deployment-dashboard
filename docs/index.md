@@ -179,9 +179,9 @@ A handful of containers behind one gateway: a stateless .NET API tier, PostgreSQ
 
     Run the whole stack locally in two minutes, zero config.
 
--   :material-server-network:{ .lg .middle } &nbsp; **[Install & deploy](guide/install.md)**
+-   :material-server-network:{ .lg .middle } &nbsp; **[Install & deploy](guide/install/index.md)**
 
-    Compose profiles, production checklist, hosting notes.
+    Compose profiles, production checklist, and Azure/Terraform Container Apps deploy path.
 
 -   :material-cog:{ .lg .middle } &nbsp; **[Configuration](guide/configuration.md)**
 
