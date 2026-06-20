@@ -1,14 +1,15 @@
 /**
  * Extension test fixtures.
  *
- * Launches the runner's system Google Chrome (channel: 'chrome') via launchPersistentContext
+ * Launches Playwright's bundled Chromium (channel: 'chromium') via launchPersistentContext
  * with the built, unpacked MV3 extension loaded.  Resolves the extension id from the
  * registered service worker, then navigates the options page to configure the mock
  * backend URL (http://localhost:3002).
  *
- * channel: 'chrome' uses the OS-installed Google Chrome (preinstalled on ubuntu-latest
- * GitHub runners), avoiding the unreliable Playwright CDN download.  MV3 extension
- * loading via --load-extension works the same on branded Chrome.
+ * The Extension E2E CI job runs inside the official Playwright container image, so the
+ * bundled Chromium browser is pre-installed — no CDN download required.  Bundled Chromium
+ * is required here because branded Google Chrome 137+ removed the --load-extension
+ * command-line flag needed to side-load an unpacked MV3 extension.
  *
  * All extension tests extend the `extensionTest` fixture exported from this file.
  */
@@ -22,7 +23,7 @@ const MOCK_URL = 'http://localhost:3002';
 const EXTENSION_DIST = path.resolve(__dirname, '../../../../frontend/extension/dist');
 
 export interface ExtensionFixtures {
-  /** A Chrome persistent context with the extension loaded. */
+  /** A Chromium persistent context with the extension loaded. */
   context: BrowserContext;
   /** The resolved chrome-extension:// ID. */
   extensionId: string;
@@ -88,7 +89,7 @@ export const extensionTest = base.extend<ExtensionFixtures>({
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pw-ext-'));
 
     const context = await chromium.launchPersistentContext(userDataDir, {
-      channel: 'chrome',
+      channel: 'chromium',
       // MV3 extension service workers do not register reliably in headless Chrome.
       // Run headed under the CI xvfb-run virtual display (canonical Playwright MV3 recipe).
       headless: false,

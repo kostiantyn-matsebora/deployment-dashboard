@@ -55,6 +55,11 @@ jobs:
     name: Extension E2E
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # Image ships Chromium pre-installed at the matching Playwright version —
+    # no cdn.playwright.dev download needed; bundled Chromium can side-load
+    # an unpacked MV3 extension (branded Chrome dropped --load-extension in v137).
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
 
     steps:
       - uses: actions/checkout@v6
@@ -84,14 +89,6 @@ jobs:
       - name: Install (extension)
         run: npm ci
         working-directory: frontend/extension
-
-      - name: Install Playwright system deps
-        # The E2E fixtures launch the runner's preinstalled Google Chrome
-        # (channel: 'chrome'), so no Playwright browser binary download is needed.
-        # This installs only the OS shared libraries Playwright needs, via apt
-        # (no cdn.playwright.dev fetch — that download stalls in this environment).
-        run: npx playwright install-deps chromium
-        working-directory: testing/e2e
 
       - name: Run extension E2E
         env:
