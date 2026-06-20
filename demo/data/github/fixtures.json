@@ -34,14 +34,8 @@
     {
       "owner": "demo-org",
       "repo": "storefront",
-      "_note": "MULTI-SERVICE repo — 4 workflows: payments-api (fully connected), search-indexer (fully connected + F15 artifact), order-svc (fan-in merge), Probe Excluded Workflow (GITHUB_WORKFLOW_EXCLUDE sentinel — never ingested). namespace=storefront, service=workflow name.",
+      "_note": "MULTI-SERVICE repo — 3 workflows: payments-api (fully connected), search-indexer (fully connected + F15 artifact), order-svc (fan-in merge). namespace=storefront, service=workflow name.",
       "workflows": [
-        {
-          "id": 1011,
-          "name": "Probe Excluded Workflow",
-          "path": ".github/workflows/probe-excluded.yml",
-          "yaml": "name: Probe Excluded Workflow\non:\n  push:\n    branches: [main]\n\njobs:\n  deploy-dev:\n    runs-on: ubuntu-latest\n    environment: dev\n    steps:\n      - run: echo probe excluded\n"
-        },
         {
           "id": 1001,
           "name": "payments-api",
@@ -322,22 +316,6 @@
           "statuses": [
             { "id": 29201001, "state": "in_progress", "created_at": "2026-05-29T07:00:30Z" },
             { "id": 29201002, "state": "success",     "created_at": "2026-05-29T07:04:00Z" }
-          ]
-        },
-        {
-          "_note": "GITHUB_WORKFLOW_EXCLUDE probe — this deployment is INSIDE the backfill window (2026-06-02) and would produce service 'Probe Excluded Workflow' if not excluded. The exclude filter demo-org/storefront/Probe Excluded Workflow suppresses it entirely, keeping EXPECTED_SERVICE_COUNT=10.",
-          "id": 9900001,
-          "sha": "aabbccdd",
-          "ref": "main",
-          "environment": "dev",
-          "payload": { "version": "v1.0.0" },
-          "creator": "probe-bot",
-          "created_at": "2026-06-02T10:00:00Z",
-          "run_id": 9900,
-          "workflow_id": 1011,
-          "statuses": [
-            { "id": 99000011, "state": "in_progress", "created_at": "2026-06-02T10:00:30Z" },
-            { "id": 99000012, "state": "success",     "created_at": "2026-06-02T10:01:00Z" }
           ]
         }
       ]

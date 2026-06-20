@@ -90,9 +90,3 @@ services:
       # outside, run 826001 (06-06T07:58 waiting) stays inside — exactly the
       # billing-webhook/prod never-deployed assertion the suite relies on.
       FETCHER_NOW: "2026-06-06T12:00:00Z"
-      # GITHUB_WORKFLOW_EXCLUDE sentinel (issue #348) — black-box e2e probe.
-      # Excludes the synthetic "Probe Excluded Workflow" in demo-org/storefront added
-      # to fixtures.json. Its run (2026-06-02) is inside the 7-day backfill window so
-      # without this exclude it WOULD produce an 11th service. With the exclude the
-      # fetcher never ingests it, confirming EXPECTED_SERVICE_COUNT stays at 10.
-      GITHUB_WORKFLOW_EXCLUDE: "demo-org/storefront/Probe Excluded Workflow"
