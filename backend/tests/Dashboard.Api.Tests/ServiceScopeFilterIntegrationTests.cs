@@ -7,60 +7,66 @@ namespace Dashboard.Api.Tests;
 
 /// <summary>
 /// HTTP+Postgres integration tests for the deployment-wide service-scope filter
-/// (SERVICE_INCLUDE / SERVICE_EXCLUDE / REPO_INCLUDE / REPO_EXCLUDE).
+/// (single <c>SERVICE_EXCLUDE</c> variable — issue #348 / PR #382).
 ///
-/// Verifies that the filter hides excluded services on every read surface:
+/// <c>SERVICE_EXCLUDE</c> is a CSV of <c>owner/repo/service</c> glob patterns.
+/// On the API, the match uses the pattern's last two segments <c>repo/service</c>
+/// against the event's <c>(namespace, service)</c>; the leading owner segment is
+/// wildcarded because the API does not store owner (<c>namespace</c> == repo short name).
+///
+/// Surfaces verified:
 /// <list type="bullet">
-///   <item><c>GET /api/services</c> — excluded service absent from items.</item>
-///   <item><c>GET /api/matrix</c> — excluded service has no row.</item>
-///   <item><c>GET /api/deployments</c> — excluded service absent from items.</item>
-///   <item><c>GET /api/deployments/{id}</c> — excluded-service row returns 404.</item>
-///   <item>SSE replay (<c>Last-Event-ID</c>) — excluded service absent.</item>
-///   <item>SSE live stream (<c>UseRealNotifier</c>) — excluded service events not emitted.</item>
+///   <item>READ: <c>GET /api/services</c>, <c>GET /api/matrix</c>,
+///     <c>GET /api/deployments</c>, <c>GET /api/deployments/{id}</c>.</item>
+///   <item>WRITE: <c>POST /api/deployments</c> — excluded event → 403 problem+json;
+///     non-excluded → 201.</item>
+///   <item>SSE replay (<c>Last-Event-ID</c>) — excluded events suppressed.</item>
+///   <item>SSE live stream (<c>UseRealNotifier=true</c>) — excluded events not emitted.</item>
+///   <item>Glob coverage: owner wildcard, namespace-qualified patterns, wildcard service segment.</item>
+///   <item>Empty <c>SERVICE_EXCLUDE</c> — pass-all; all services visible and POST returns 201.</item>
 /// </list>
 ///
-/// Test class layout mirrors the existing <see cref="ReadEndpointTests"/> /
-/// <see cref="SseReplayTests"/> / <see cref="SseLiveStreamTests"/> pattern.
-/// Each class owns one factory configured with specific filter env vars via
-/// <see cref="TestApiFactory.ExtraConfiguration"/>.
-///
-/// GATE NOTE: These tests require a Postgres container (TestContainers).
-/// Compilation is verified in the worktree; execution is CI-gated (ci.yml → api.yml on PR).
+/// GATE NOTE: These tests require a Postgres container (Testcontainers / Docker).
+/// Compilation is verified locally; execution is CI-gated (ci.yml → api.yml on PR).
 /// </summary>
 
-// ── Service exclude filter ────────────────────────────────────────────────────
+// ── READ filtering — excluded service absent on all read surfaces ─────────────
 
 /// <summary>
-/// Tests the SERVICE_EXCLUDE filter across all read surfaces.
-/// Two services are seeded: <c>scope-visible-svc</c> (passes) and <c>scope-noisy-svc</c>
-/// (excluded). Every assertion checks that the excluded service is hidden.
+/// Verifies that a service matching <c>SERVICE_EXCLUDE</c> is hidden on every read
+/// surface and that a non-excluded service remains fully visible.
+///
+/// Pattern used: single-segment <c>scope-excl-read-svc</c> (owner/repo wildcarded
+/// by <see cref="ServiceFilter.SplitPattern"/>).
 /// </summary>
 [Collection("api-postgres")]
-public sealed class ServiceExcludeFilterTests : IAsyncLifetime
+public sealed class ServiceExcludeReadFilterTests : IAsyncLifetime
 {
     private readonly PostgresFixture _fixture;
     private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
 
-    // Names are unique to this class so other test classes' data does not bleed in.
-    private const string VisibleService = "scope-visible-svc";
-    private const string ExcludedService = "scope-noisy-svc";
+    // Unique service names — prevent bleed from other test classes in the shared DB.
+    private const string VisibleService = "scope-excl-read-visible";
+    private const string ExcludedService = "scope-excl-read-hidden";
 
-    public ServiceExcludeFilterTests(PostgresFixture fixture) => _fixture = fixture;
+    public ServiceExcludeReadFilterTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
         await _fixture.ResetAsync();
+
+        // Single-segment pattern: owner and repo are wildcarded; only service is literal.
         _factory = new TestApiFactory(_fixture.ConnectionString)
         {
             ExtraConfiguration = new Dictionary<string, string?>
             {
-                // Exclude one specific service by name — no wildcard needed.
                 ["SERVICE_EXCLUDE"] = ExcludedService,
             },
         };
         _client = _factory.CreateClient();
-        // Seed both services so the filter has meaningful data to hide.
+
+        // Seed both services so the filter has data to hide and data to show.
         await IngestAsync(service: VisibleService, happenedAt: "2024-01-01T10:00:00Z");
         await IngestAsync(service: ExcludedService, happenedAt: "2024-01-01T11:00:00Z");
     }
@@ -73,6 +79,7 @@ public sealed class ServiceExcludeFilterTests : IAsyncLifetime
 
     private async Task<JsonElement> IngestAsync(
         string service,
+        string? @namespace = null,
         string environment = "prod",
         string status = "success",
         string happenedAt = "2024-01-01T10:00:00Z")
@@ -81,6 +88,7 @@ public sealed class ServiceExcludeFilterTests : IAsyncLifetime
         {
             deployment_id = $"gh-{Guid.NewGuid():N}",
             service,
+            @namespace,
             environment,
             status,
             happened_at = happenedAt,
@@ -143,12 +151,12 @@ public sealed class ServiceExcludeFilterTests : IAsyncLifetime
         Assert.DoesNotContain(ExcludedService, services);
     }
 
-    // ── GET /api/deployments/{id} ─────────────────────────────────────────────
+    // ── GET /api/deployments/{id} — excluded → 404 ───────────────────────────
 
     [Fact]
-    public async Task ServiceExclude_GetDeploymentById_ExcludedServiceReturns404()
+    public async Task ServiceExclude_GetDeploymentById_ExcludedServiceReturns404ProblemJson()
     {
-        // Ingest a fresh excluded-service event and capture its id.
+        // Ingest a fresh excluded event; capture its id directly from the POST response.
         var ingested = await IngestAsync(service: ExcludedService, happenedAt: "2024-06-01T00:00:00Z");
         var id = ingested.GetProperty("id").GetString();
 
@@ -158,32 +166,195 @@ public sealed class ServiceExcludeFilterTests : IAsyncLifetime
         Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
     }
 
+    // ── GET /api/deployments/{id} — visible → 200 ────────────────────────────
+
     [Fact]
     public async Task ServiceExclude_GetDeploymentById_VisibleServiceReturns200()
     {
-        // Verify that the visible service is still fetchable by id.
         var ingested = await IngestAsync(service: VisibleService, happenedAt: "2024-06-02T00:00:00Z");
         var id = ingested.GetProperty("id").GetString();
 
         var res = await _client.GetAsync($"/api/deployments/{id}");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(id, body.GetProperty("id").GetString());
     }
+}
 
-    // ── SSE replay (Last-Event-ID) ────────────────────────────────────────────
+// ── WRITE rejection — POST returns 403 for excluded, 201 for visible ─────────
+
+/// <summary>
+/// Verifies that the ingest endpoint enforces <c>SERVICE_EXCLUDE</c> on POST:
+/// an event whose <c>(namespace, service)</c> matches the filter receives
+/// <c>403 Forbidden</c> with <c>application/problem+json</c>; a non-matching event
+/// still returns <c>201 Created</c>.
+/// </summary>
+[Collection("api-postgres")]
+public sealed class ServiceExcludeWriteRejectionTests : IAsyncLifetime
+{
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
+    private HttpClient _client = null!;
+
+    private const string VisibleService = "scope-excl-write-visible";
+    private const string ExcludedService = "scope-excl-write-hidden";
+
+    public ServiceExcludeWriteRejectionTests(PostgresFixture fixture) => _fixture = fixture;
+
+    public async Task InitializeAsync()
+    {
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = ExcludedService,
+            },
+        };
+        _client = _factory.CreateClient();
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    private HttpRequestMessage BuildPost(string service, string? @namespace = null)
+    {
+        var payload = new
+        {
+            deployment_id = $"gh-{Guid.NewGuid():N}",
+            service,
+            @namespace,
+            environment = "prod",
+            status = "success",
+            happened_at = "2024-07-01T10:00:00Z",
+        };
+        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = JsonContent.Create(payload),
+        };
+        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
+        return msg;
+    }
+
+    // ── Excluded service → 403 problem+json ──────────────────────────────────
+
+    [Fact]
+    public async Task ServiceExclude_Post_ExcludedServiceReturns403ProblemJson()
+    {
+        var res = await _client.SendAsync(BuildPost(ExcludedService));
+
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task ServiceExclude_Post_ExcludedServiceWithNamespace_Returns403()
+    {
+        // Two-segment pattern "my-ns/scope-excl-write-ns-svc" ensures namespace is matched.
+        var factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = "my-ns/scope-excl-write-ns-svc",
+            },
+        };
+        await using var _ = factory;
+        using var client = factory.CreateClient();
+
+        // Matching namespace + service → 403.
+        var matchRes = await client.SendAsync(
+            BuildPost("scope-excl-write-ns-svc", @namespace: "my-ns"));
+        Assert.Equal(HttpStatusCode.Forbidden, matchRes.StatusCode);
+
+        // Different namespace → 201 (namespace pattern mismatch).
+        var noMatchRes = await client.SendAsync(
+            BuildPost("scope-excl-write-ns-svc", @namespace: "other-ns"));
+        Assert.Equal(HttpStatusCode.Created, noMatchRes.StatusCode);
+    }
+
+    // ── Visible (non-excluded) service → 201 ─────────────────────────────────
+
+    [Fact]
+    public async Task ServiceExclude_Post_VisibleServiceReturns201()
+    {
+        var res = await _client.SendAsync(BuildPost(VisibleService));
+
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
+        Assert.NotNull(res.Headers.Location);
+    }
+}
+
+// ── SSE replay — excluded events suppressed in Last-Event-ID replay ───────────
+
+/// <summary>
+/// Verifies that SSE replay (via <c>Last-Event-ID</c>) omits events for excluded services.
+/// Uses the default NullNotifier so no LISTEN/NOTIFY is required.
+/// </summary>
+[Collection("api-postgres")]
+public sealed class ServiceExcludeSseReplayTests : IAsyncLifetime
+{
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
+    private HttpClient _client = null!;
+
+    private const string ReplayVisibleService = "scope-sse-replay-visible";
+    private const string ReplayExcludedService = "scope-sse-replay-hidden";
+
+    public ServiceExcludeSseReplayTests(PostgresFixture fixture) => _fixture = fixture;
+
+    public async Task InitializeAsync()
+    {
+        await _fixture.ResetAsync();
+        _factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = ReplayExcludedService,
+            },
+        };
+        _client = _factory.CreateClient();
+
+        // Seed both before connecting — replay will replay them through the filter.
+        await IngestAsync(ReplayVisibleService, "2024-01-02T10:00:00Z");
+        await IngestAsync(ReplayExcludedService, "2024-01-02T11:00:00Z");
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    private async Task IngestAsync(string service, string happenedAt)
+    {
+        var payload = new
+        {
+            deployment_id = $"gh-{Guid.NewGuid():N}",
+            service,
+            environment = "prod",
+            status = "success",
+            happened_at = happenedAt,
+        };
+        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = JsonContent.Create(payload),
+        };
+        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
+        var res = await _client.SendAsync(msg);
+        res.EnsureSuccessStatusCode();
+    }
 
     [Fact]
     public async Task ServiceExclude_SseReplay_ExcludedServiceAbsentFromReplay()
     {
-        // Connect with an anchor id that predates all seeded events.
-        var anchorId = Guid.Empty.ToString();
-
+        // Anchor at Guid.Empty — predates every seeded row — so all rows replay.
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-
         var request = new HttpRequestMessage(HttpMethod.Get, "/api/events/stream");
-        request.Headers.Add("Last-Event-ID", anchorId);
+        request.Headers.Add("Last-Event-ID", Guid.Empty.ToString());
 
         using var response = await _client.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
@@ -191,24 +362,21 @@ public sealed class ServiceExcludeFilterTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
-        // Read up to 10 events — we only seeded a few visible and excluded events, so 10 is safe.
-        var receivedServices = await ReadSseEventServicesAsync(stream, count: 10, cts.Token);
+        var receivedServices = await ReadSseServicesAsync(stream, maxEvents: 10, cts.Token);
 
-        Assert.Contains(VisibleService, receivedServices);
-        Assert.DoesNotContain(ExcludedService, receivedServices);
+        Assert.Contains(ReplayVisibleService, receivedServices);
+        Assert.DoesNotContain(ReplayExcludedService, receivedServices);
     }
 
-    // ── Helper: read 'service' field from SSE data lines ─────────────────────
+    // ── SSE data-line reader ─────────────────────────────────────────────────
 
-    private static async Task<List<string>> ReadSseEventServicesAsync(
-        Stream stream,
-        int count,
-        CancellationToken ct)
+    private static async Task<List<string>> ReadSseServicesAsync(
+        Stream stream, int maxEvents, CancellationToken ct)
     {
         using var reader = new StreamReader(stream, leaveOpen: true);
         var services = new List<string>();
 
-        while (services.Count < count && !ct.IsCancellationRequested)
+        while (services.Count < maxEvents && !ct.IsCancellationRequested)
         {
             string? line;
             try { line = await reader.ReadLineAsync(ct); }
@@ -227,484 +395,25 @@ public sealed class ServiceExcludeFilterTests : IAsyncLifetime
     }
 }
 
-// ── Service include filter (allowlist) ───────────────────────────────────────
+// ── SSE live stream — excluded events not emitted via LISTEN/NOTIFY ───────────
 
 /// <summary>
-/// Tests the SERVICE_INCLUDE allowlist filter: only explicitly included services
-/// appear on every read surface; all others are hidden.
+/// Verifies that the SSE live path (pg_notify → broadcaster → channel) suppresses
+/// events for excluded services. Uses <c>UseRealNotifier = true</c> so the full
+/// ingest → pg_notify → <see cref="DeploymentEventBroadcaster"/> → SSE fan-out
+/// path is exercised end-to-end.
 /// </summary>
 [Collection("api-postgres")]
-public sealed class ServiceIncludeFilterTests : IAsyncLifetime
+public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
 {
     private readonly PostgresFixture _fixture;
     private TestApiFactory _factory = null!;
     private HttpClient _client = null!;
 
-    private const string AllowedService = "scope-allowed-svc";
-    private const string BlockedService = "scope-blocked-svc";
+    private const string LiveVisibleService = "scope-sse-live-visible";
+    private const string LiveExcludedService = "scope-sse-live-hidden";
 
-    public ServiceIncludeFilterTests(PostgresFixture fixture) => _fixture = fixture;
-
-    public async Task InitializeAsync()
-    {
-        await _fixture.ResetAsync();
-        _factory = new TestApiFactory(_fixture.ConnectionString)
-        {
-            ExtraConfiguration = new Dictionary<string, string?>
-            {
-                // Only the allowed service passes; blocked-svc is implicitly hidden.
-                ["SERVICE_INCLUDE"] = AllowedService,
-            },
-        };
-        _client = _factory.CreateClient();
-        await IngestAsync(service: AllowedService, happenedAt: "2024-02-01T10:00:00Z");
-        await IngestAsync(service: BlockedService, happenedAt: "2024-02-01T11:00:00Z");
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
-    private async Task<JsonElement> IngestAsync(
-        string service,
-        string environment = "prod",
-        string happenedAt = "2024-02-01T10:00:00Z")
-    {
-        var payload = new
-        {
-            deployment_id = $"gh-{Guid.NewGuid():N}",
-            service,
-            environment,
-            status = "success",
-            happened_at = happenedAt,
-        };
-        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
-        {
-            Content = JsonContent.Create(payload),
-        };
-        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var res = await _client.SendAsync(msg);
-        res.EnsureSuccessStatusCode();
-        return await res.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
-    // ── GET /api/services ─────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task ServiceInclude_GetServices_OnlyAllowedServiceVisible()
-    {
-        var res = await _client.GetAsync("/api/services");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var items = body.GetProperty("items").EnumerateArray()
-            .Select(e => e.GetString()).ToList();
-
-        Assert.Contains(AllowedService, items);
-        Assert.DoesNotContain(BlockedService, items);
-    }
-
-    // ── GET /api/matrix ───────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task ServiceInclude_GetMatrix_OnlyAllowedServiceHasRow()
-    {
-        var res = await _client.GetAsync("/api/matrix");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var rowServices = body.GetProperty("rows").EnumerateArray()
-            .Select(r => r.GetProperty("service").GetString()).ToList();
-
-        Assert.Contains(AllowedService, rowServices);
-        Assert.DoesNotContain(BlockedService, rowServices);
-    }
-
-    // ── GET /api/deployments ──────────────────────────────────────────────────
-
-    [Fact]
-    public async Task ServiceInclude_GetDeployments_OnlyAllowedServiceInItems()
-    {
-        var res = await _client.GetAsync("/api/deployments");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var services = body.GetProperty("items").EnumerateArray()
-            .Select(e => e.GetProperty("service").GetString()).ToList();
-
-        Assert.Contains(AllowedService, services);
-        Assert.DoesNotContain(BlockedService, services);
-    }
-
-    // ── GET /api/deployments/{id} ─────────────────────────────────────────────
-
-    [Fact]
-    public async Task ServiceInclude_GetDeploymentById_NonIncludedServiceReturns404()
-    {
-        var ingested = await IngestAsync(service: BlockedService, happenedAt: "2024-06-03T00:00:00Z");
-        var id = ingested.GetProperty("id").GetString();
-
-        var res = await _client.GetAsync($"/api/deployments/{id}");
-
-        Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
-    }
-}
-
-// ── Repo include/exclude filter ───────────────────────────────────────────────
-
-/// <summary>
-/// Tests REPO_EXCLUDE filter. The namespace field on the ingest payload
-/// (= repo short name) is matched against the pattern's name segment (right of '/').
-/// Two namespaces: <c>ns-visible</c> and <c>ns-hidden</c>.
-/// </summary>
-[Collection("api-postgres")]
-public sealed class RepoFilterTests : IAsyncLifetime
-{
-    private readonly PostgresFixture _fixture;
-    private TestApiFactory _factory = null!;
-    private HttpClient _client = null!;
-
-    private const string VisibleNamespace = "ns-visible";
-    private const string HiddenNamespace = "ns-hidden";
-    private const string SharedService = "repo-filter-svc";
-
-    public RepoFilterTests(PostgresFixture fixture) => _fixture = fixture;
-
-    public async Task InitializeAsync()
-    {
-        await _fixture.ResetAsync();
-        _factory = new TestApiFactory(_fixture.ConnectionString)
-        {
-            ExtraConfiguration = new Dictionary<string, string?>
-            {
-                // REPO_EXCLUDE pattern: "org/ns-hidden" — name segment "ns-hidden" matched
-                // against the namespace field.
-                ["REPO_EXCLUDE"] = $"org/{HiddenNamespace}",
-            },
-        };
-        _client = _factory.CreateClient();
-        // Same service name, different namespaces.
-        await IngestWithNamespaceAsync(SharedService, VisibleNamespace, "2024-03-01T10:00:00Z");
-        await IngestWithNamespaceAsync(SharedService, HiddenNamespace, "2024-03-01T11:00:00Z");
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
-    private async Task<JsonElement> IngestWithNamespaceAsync(
-        string service,
-        string @namespace,
-        string happenedAt)
-    {
-        var payload = new
-        {
-            deployment_id = $"gh-{Guid.NewGuid():N}",
-            service,
-            @namespace,
-            environment = "prod",
-            status = "success",
-            happened_at = happenedAt,
-        };
-        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
-        {
-            Content = JsonContent.Create(payload),
-        };
-        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var res = await _client.SendAsync(msg);
-        res.EnsureSuccessStatusCode();
-        return await res.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
-    // ── GET /api/deployments ──────────────────────────────────────────────────
-
-    [Fact]
-    public async Task RepoExclude_GetDeployments_HiddenNamespaceAbsentFromItems()
-    {
-        var res = await _client.GetAsync("/api/deployments");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var namespaces = body.GetProperty("items").EnumerateArray()
-            .Select(e =>
-            {
-                e.TryGetProperty("namespace", out var ns);
-                return ns.GetString();
-            }).ToList();
-
-        // The visible namespace must be present; the hidden one must not appear.
-        Assert.Contains(VisibleNamespace, namespaces);
-        Assert.DoesNotContain(HiddenNamespace, namespaces);
-    }
-
-    // ── GET /api/deployments/{id} ─────────────────────────────────────────────
-
-    [Fact]
-    public async Task RepoExclude_GetDeploymentById_HiddenNamespaceReturns404()
-    {
-        var ingested = await IngestWithNamespaceAsync(SharedService, HiddenNamespace, "2024-06-04T00:00:00Z");
-        var id = ingested.GetProperty("id").GetString();
-
-        var res = await _client.GetAsync($"/api/deployments/{id}");
-
-        Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
-    }
-
-    // ── GET /api/services ─────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task RepoExclude_GetServices_HiddenNamespaceServiceAbsent()
-    {
-        // Both events use the same service name but different namespaces.
-        // When ALL namespaces for a service are excluded, the service name must vanish.
-        // Here only HiddenNamespace events are excluded; VisibleNamespace events remain,
-        // so the service name itself stays visible.
-        var res = await _client.GetAsync("/api/services");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var items = body.GetProperty("items").EnumerateArray()
-            .Select(e => e.GetString()).ToList();
-
-        // SharedService is still visible via ns-visible.
-        Assert.Contains(SharedService, items);
-    }
-}
-
-// ── Exclude-wins precedence: service in both include AND exclude → excluded ───
-
-/// <summary>
-/// Tests that exclude wins over include when a service appears on both lists.
-/// The service is in SERVICE_INCLUDE and SERVICE_EXCLUDE simultaneously;
-/// it must be hidden on all read surfaces.
-/// </summary>
-[Collection("api-postgres")]
-public sealed class ExcludeWinsPrecedenceTests : IAsyncLifetime
-{
-    private readonly PostgresFixture _fixture;
-    private TestApiFactory _factory = null!;
-    private HttpClient _client = null!;
-
-    private const string ConflictedService = "scope-conflict-svc";
-    private const string SafeService = "scope-safe-svc";
-
-    public ExcludeWinsPrecedenceTests(PostgresFixture fixture) => _fixture = fixture;
-
-    public async Task InitializeAsync()
-    {
-        await _fixture.ResetAsync();
-        _factory = new TestApiFactory(_fixture.ConnectionString)
-        {
-            ExtraConfiguration = new Dictionary<string, string?>
-            {
-                // Both lists contain the same service — exclude must win.
-                ["SERVICE_INCLUDE"] = $"{ConflictedService},{SafeService}",
-                ["SERVICE_EXCLUDE"] = ConflictedService,
-            },
-        };
-        _client = _factory.CreateClient();
-        await IngestAsync(service: ConflictedService, happenedAt: "2024-04-01T10:00:00Z");
-        await IngestAsync(service: SafeService, happenedAt: "2024-04-01T11:00:00Z");
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
-    private async Task<JsonElement> IngestAsync(string service, string happenedAt)
-    {
-        var payload = new
-        {
-            deployment_id = $"gh-{Guid.NewGuid():N}",
-            service,
-            environment = "prod",
-            status = "success",
-            happened_at = happenedAt,
-        };
-        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
-        {
-            Content = JsonContent.Create(payload),
-        };
-        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var res = await _client.SendAsync(msg);
-        res.EnsureSuccessStatusCode();
-        return await res.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
-    [Fact]
-    public async Task ExcludeWins_GetServices_ConflictedServiceIsHidden()
-    {
-        var res = await _client.GetAsync("/api/services");
-
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var items = body.GetProperty("items").EnumerateArray()
-            .Select(e => e.GetString()).ToList();
-
-        // Exclude wins: ConflictedService must be hidden even though it is also in SERVICE_INCLUDE.
-        Assert.DoesNotContain(ConflictedService, items);
-        Assert.Contains(SafeService, items);
-    }
-
-    [Fact]
-    public async Task ExcludeWins_GetDeployments_ConflictedServiceAbsentFromItems()
-    {
-        var res = await _client.GetAsync("/api/deployments");
-
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var services = body.GetProperty("items").EnumerateArray()
-            .Select(e => e.GetProperty("service").GetString()).ToList();
-
-        Assert.DoesNotContain(ConflictedService, services);
-        Assert.Contains(SafeService, services);
-    }
-
-    [Fact]
-    public async Task ExcludeWins_GetDeploymentById_ConflictedServiceReturns404()
-    {
-        var ingested = await IngestAsync(ConflictedService, "2024-06-05T00:00:00Z");
-        var id = ingested.GetProperty("id").GetString();
-
-        var res = await _client.GetAsync($"/api/deployments/{id}");
-
-        Assert.Equal(HttpStatusCode.NotFound, res.StatusCode);
-    }
-
-    [Fact]
-    public async Task ExcludeWins_GetMatrix_ConflictedServiceHasNoRow()
-    {
-        var res = await _client.GetAsync("/api/matrix");
-
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var rowServices = body.GetProperty("rows").EnumerateArray()
-            .Select(r => r.GetProperty("service").GetString()).ToList();
-
-        Assert.DoesNotContain(ConflictedService, rowServices);
-        Assert.Contains(SafeService, rowServices);
-    }
-}
-
-// ── Empty defaults: no vars → everything visible (no regression) ──────────────
-
-/// <summary>
-/// Tests the empty-defaults case: when no SERVICE_*/REPO_* vars are set, all
-/// seeded services appear on every read surface (pass-all behaviour preserved).
-/// </summary>
-[Collection("api-postgres")]
-public sealed class EmptyDefaultsNoFilterTests : IAsyncLifetime
-{
-    private readonly PostgresFixture _fixture;
-    private TestApiFactory _factory = null!;
-    private HttpClient _client = null!;
-
-    private const string ServiceA = "scope-default-svc-a";
-    private const string ServiceB = "scope-default-svc-b";
-
-    public EmptyDefaultsNoFilterTests(PostgresFixture fixture) => _fixture = fixture;
-
-    public async Task InitializeAsync()
-    {
-        await _fixture.ResetAsync();
-        // No ExtraConfiguration — SERVICE_*/REPO_* are absent; filter is pass-all.
-        _factory = new TestApiFactory(_fixture.ConnectionString);
-        _client = _factory.CreateClient();
-        await IngestAsync(service: ServiceA, happenedAt: "2024-05-01T10:00:00Z");
-        await IngestAsync(service: ServiceB, happenedAt: "2024-05-01T11:00:00Z");
-    }
-
-    public async Task DisposeAsync()
-    {
-        _client.Dispose();
-        await _factory.DisposeAsync();
-    }
-
-    private async Task<JsonElement> IngestAsync(string service, string happenedAt)
-    {
-        var payload = new
-        {
-            deployment_id = $"gh-{Guid.NewGuid():N}",
-            service,
-            environment = "prod",
-            status = "success",
-            happened_at = happenedAt,
-        };
-        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
-        {
-            Content = JsonContent.Create(payload),
-        };
-        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
-        var res = await _client.SendAsync(msg);
-        res.EnsureSuccessStatusCode();
-        return await res.Content.ReadFromJsonAsync<JsonElement>();
-    }
-
-    [Fact]
-    public async Task EmptyDefaults_GetServices_AllServicesVisible()
-    {
-        var res = await _client.GetAsync("/api/services");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var items = body.GetProperty("items").EnumerateArray()
-            .Select(e => e.GetString()).ToList();
-
-        Assert.Contains(ServiceA, items);
-        Assert.Contains(ServiceB, items);
-    }
-
-    [Fact]
-    public async Task EmptyDefaults_GetMatrix_AllServicesHaveRows()
-    {
-        var res = await _client.GetAsync("/api/matrix");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var rowServices = body.GetProperty("rows").EnumerateArray()
-            .Select(r => r.GetProperty("service").GetString()).ToList();
-
-        Assert.Contains(ServiceA, rowServices);
-        Assert.Contains(ServiceB, rowServices);
-    }
-
-    [Fact]
-    public async Task EmptyDefaults_GetDeployments_AllServicesInItems()
-    {
-        var res = await _client.GetAsync("/api/deployments");
-
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        var services = body.GetProperty("items").EnumerateArray()
-            .Select(e => e.GetProperty("service").GetString()).ToList();
-
-        Assert.Contains(ServiceA, services);
-        Assert.Contains(ServiceB, services);
-    }
-}
-
-// ── SSE live stream with service-scope filter ────────────────────────────────
-
-/// <summary>
-/// Tests the SSE live-stream path with SERVICE_EXCLUDE active.
-/// Uses <c>UseRealNotifier = true</c> so the ingest → pg_notify → broadcaster →
-/// SSE channel fan-out path is fully exercised.
-/// Excluded-service events must not arrive on the SSE stream.
-/// </summary>
-[Collection("api-postgres")]
-public sealed class ServiceScopeFilterSseLiveTests : IAsyncLifetime
-{
-    private readonly PostgresFixture _fixture;
-    private TestApiFactory _factory = null!;
-    private HttpClient _client = null!;
-
-    private const string LiveVisibleService = "scope-live-visible-svc";
-    private const string LiveExcludedService = "scope-live-excluded-svc";
-
-    public ServiceScopeFilterSseLiveTests(PostgresFixture fixture) => _fixture = fixture;
+    public ServiceExcludeSseLiveTests(PostgresFixture fixture) => _fixture = fixture;
 
     public async Task InitializeAsync()
     {
@@ -746,18 +455,20 @@ public sealed class ServiceScopeFilterSseLiveTests : IAsyncLifetime
         return await res.Content.ReadFromJsonAsync<JsonElement>();
     }
 
+    // ── Visible service event arrives on live stream ──────────────────────────
+
     [Fact]
     public async Task ServiceExclude_SseLive_VisibleServiceEventArrives()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         var sseRequest = new HttpRequestMessage(HttpMethod.Get, "/api/events/stream");
-        using var sseResponse = await _client.SendAsync(
+        using var sseResp = await _client.SendAsync(
             sseRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
-        Assert.Equal(HttpStatusCode.OK, sseResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, sseResp.StatusCode);
 
-        await using var stream = await sseResponse.Content.ReadAsStreamAsync(cts.Token);
+        await using var stream = await sseResp.Content.ReadAsStreamAsync(cts.Token);
         using var reader = new StreamReader(stream);
 
         var receivedId = new TaskCompletionSource<string>(
@@ -770,7 +481,7 @@ public sealed class ServiceScopeFilterSseLiveTests : IAsyncLifetime
         // Allow the SSE subscription to register before ingesting.
         await Task.Delay(300, cts.Token);
 
-        var ingested = await IngestAsync(service: LiveVisibleService);
+        var ingested = await IngestAsync(LiveVisibleService);
         var expectedId = ingested.GetProperty("id").GetString()!;
 
         var arrived = await receivedId.Task.WaitAsync(cts.Token);
@@ -780,23 +491,26 @@ public sealed class ServiceScopeFilterSseLiveTests : IAsyncLifetime
         try { await readTask; } catch (OperationCanceledException) { }
     }
 
+    // ── Excluded service event is NOT emitted on live stream ─────────────────
+
     [Fact]
     public async Task ServiceExclude_SseLive_ExcludedServiceEventNeverArrives()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         var sseRequest = new HttpRequestMessage(HttpMethod.Get, "/api/events/stream");
-        using var sseResponse = await _client.SendAsync(
+        using var sseResp = await _client.SendAsync(
             sseRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
-        Assert.Equal(HttpStatusCode.OK, sseResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, sseResp.StatusCode);
 
-        await using var stream = await sseResponse.Content.ReadAsStreamAsync(cts.Token);
+        await using var stream = await sseResp.Content.ReadAsStreamAsync(cts.Token);
         using var reader = new StreamReader(stream);
 
-        // Brief watch window: 3 s after ingest to catch any leaked events.
+        // 3-second observation window after ingest to detect any leaked event.
         using var watchCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, watchCts.Token);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            cts.Token, watchCts.Token);
 
         var leaked = new TaskCompletionSource<bool>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -807,21 +521,19 @@ public sealed class ServiceScopeFilterSseLiveTests : IAsyncLifetime
 
         await Task.Delay(200, cts.Token);
 
-        // Ingest the excluded service event — it must not reach the SSE stream.
-        await IngestAsync(service: LiveExcludedService);
+        // Ingest the excluded-service event — must not reach the SSE stream.
+        await IngestAsync(LiveExcludedService);
 
         try { await readTask; } catch (OperationCanceledException) { }
 
-        Assert.False(leaked.Task.IsCompletedSuccessfully && await leaked.Task,
-            $"SSE live stream must not emit events for service '{LiveExcludedService}' (SERVICE_EXCLUDE).");
+        Assert.False(
+            leaked.Task.IsCompletedSuccessfully && await leaked.Task,
+            $"SSE live stream must not emit events for service '{LiveExcludedService}' " +
+            "when it matches SERVICE_EXCLUDE.");
     }
 
-    // ── SSE stream background-reader helpers ─────────────────────────────────
+    // ── SSE stream reader helpers ─────────────────────────────────────────────
 
-    /// <summary>
-    /// Reads SSE data lines until an event for <paramref name="targetService"/> arrives,
-    /// then signals <paramref name="result"/> with the event id.
-    /// </summary>
     private static async Task WaitForServiceEventAsync(
         StreamReader reader,
         string targetService,
@@ -847,10 +559,6 @@ public sealed class ServiceScopeFilterSseLiveTests : IAsyncLifetime
         }
     }
 
-    /// <summary>
-    /// Reads SSE data lines; sets <paramref name="leaked"/> to <c>true</c> if any event
-    /// for <paramref name="excludedService"/> arrives within the cancellation window.
-    /// </summary>
     private static async Task DetectServiceEventAsync(
         StreamReader reader,
         string excludedService,
@@ -874,5 +582,309 @@ public sealed class ServiceScopeFilterSseLiveTests : IAsyncLifetime
                 return;
             }
         }
+    }
+}
+
+// ── Glob pattern coverage ─────────────────────────────────────────────────────
+
+/// <summary>
+/// Verifies the three main pattern forms understood by <see cref="ServiceFilter"/>
+/// when exercised through the full HTTP+Postgres stack:
+/// <list type="bullet">
+///   <item><c>*/{repo}/{service}</c> — owner wildcard, specific repo+service.</item>
+///   <item><c>{repo}/{service}</c> — two-segment; owner wildcarded by <see cref="ServiceFilter.SplitPattern"/>.</item>
+///   <item><c>*/{repo}/*</c> — service wildcard; all services under a given namespace excluded.</item>
+/// </list>
+/// A non-excluded service is always seeded alongside to prove the filter is not
+/// rejecting everything.
+/// </summary>
+[Collection("api-postgres")]
+public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
+{
+    private readonly PostgresFixture _fixture;
+
+    public ServiceExcludeGlobCoverageTests(PostgresFixture fixture) => _fixture = fixture;
+
+    public async Task InitializeAsync() => await _fixture.ResetAsync();
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    // ── Three-segment owner-wildcard: */repo/service ──────────────────────────
+
+    [Fact]
+    public async Task GlobCoverage_OwnerWildcard_ThreeSegmentPattern_ExcludesMatchingService()
+    {
+        // Pattern "*/glob-ns-a/glob-svc-a" — owner segment is "*"
+        using var factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = "*/glob-ns-a/glob-svc-a",
+            },
+        };
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, service: "glob-svc-a", @namespace: "glob-ns-a",
+            happenedAt: "2024-02-01T10:00:00Z");
+        await IngestAsync(client, service: "glob-svc-safe", @namespace: "glob-ns-a",
+            happenedAt: "2024-02-01T11:00:00Z");
+
+        var res = await client.GetAsync("/api/services");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray()
+            .Select(e => e.GetString()).ToList();
+
+        Assert.DoesNotContain("glob-svc-a", items);   // excluded
+        Assert.Contains("glob-svc-safe", items);   // not excluded
+    }
+
+    // ── Two-segment repo/service (owner implicit wildcard) ────────────────────
+
+    [Fact]
+    public async Task GlobCoverage_TwoSegmentPattern_ExcludesMatchingNamespaceAndService()
+    {
+        // Pattern "glob-ns-b/glob-svc-b" — parsed as ["*","glob-ns-b","glob-svc-b"].
+        using var factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = "glob-ns-b/glob-svc-b",
+            },
+        };
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, service: "glob-svc-b", @namespace: "glob-ns-b",
+            happenedAt: "2024-02-02T10:00:00Z");
+        // Same service, different namespace — must remain visible.
+        await IngestAsync(client, service: "glob-svc-b", @namespace: "other-ns",
+            happenedAt: "2024-02-02T11:00:00Z");
+
+        var res = await client.GetAsync("/api/deployments");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+
+        // The "glob-ns-b" namespace event must be hidden.
+        var hiddenRow = items.FirstOrDefault(e =>
+            e.TryGetProperty("namespace", out var ns) &&
+            ns.GetString() == "glob-ns-b");
+        Assert.Equal(default, hiddenRow);
+
+        // The "other-ns" row must still be present.
+        var visibleRow = items.FirstOrDefault(e =>
+            e.TryGetProperty("namespace", out var ns) &&
+            ns.GetString() == "other-ns");
+        Assert.NotEqual(default, visibleRow);
+    }
+
+    // ── Service wildcard: */namespace/* (all services under a namespace) ──────
+
+    [Fact]
+    public async Task GlobCoverage_ServiceWildcard_ExcludesAllServicesUnderNamespace()
+    {
+        // Pattern "*/glob-ns-c/*" — excludes every service in namespace glob-ns-c.
+        using var factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = "*/glob-ns-c/*",
+            },
+        };
+        using var client = factory.CreateClient();
+
+        await IngestAsync(client, service: "glob-svc-c1", @namespace: "glob-ns-c",
+            happenedAt: "2024-02-03T10:00:00Z");
+        await IngestAsync(client, service: "glob-svc-c2", @namespace: "glob-ns-c",
+            happenedAt: "2024-02-03T11:00:00Z");
+        // Different namespace — must remain visible.
+        await IngestAsync(client, service: "glob-svc-c3", @namespace: "glob-ns-d",
+            happenedAt: "2024-02-03T12:00:00Z");
+
+        var res = await client.GetAsync("/api/deployments");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+
+        var nsValues = items
+            .Select(e => e.TryGetProperty("namespace", out var ns) ? ns.GetString() : null)
+            .ToList();
+
+        // All glob-ns-c rows must be gone.
+        Assert.DoesNotContain("glob-ns-c", nsValues);
+        // glob-ns-d row must be present.
+        Assert.Contains("glob-ns-d", nsValues);
+    }
+
+    // ── POST 403 with three-segment owner-wildcard pattern ────────────────────
+
+    [Fact]
+    public async Task GlobCoverage_OwnerWildcard_PostReturns403ForMatchingService()
+    {
+        using var factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = "*/glob-ns-e/glob-svc-e",
+            },
+        };
+        using var client = factory.CreateClient();
+
+        var res = await PostAsync(client, service: "glob-svc-e", @namespace: "glob-ns-e");
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static async Task<JsonElement> IngestAsync(
+        HttpClient client,
+        string service,
+        string? @namespace = null,
+        string happenedAt = "2024-01-01T10:00:00Z")
+    {
+        var res = await PostAsync(client, service, @namespace, happenedAt);
+        res.EnsureSuccessStatusCode();
+        return await res.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static Task<HttpResponseMessage> PostAsync(
+        HttpClient client,
+        string service,
+        string? @namespace = null,
+        string happenedAt = "2024-01-01T10:00:00Z")
+    {
+        var payload = new
+        {
+            deployment_id = $"gh-{Guid.NewGuid():N}",
+            service,
+            @namespace,
+            environment = "prod",
+            status = "success",
+            happened_at = happenedAt,
+        };
+        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = JsonContent.Create(payload),
+        };
+        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
+        return client.SendAsync(msg);
+    }
+}
+
+// ── Empty SERVICE_EXCLUDE — pass-all; everything visible + POST returns 201 ───
+
+/// <summary>
+/// No-regression test: when <c>SERVICE_EXCLUDE</c> is absent (or empty) the filter
+/// is pass-all. Every seeded service must appear on every read surface and every
+/// POST must return <c>201 Created</c>.
+/// </summary>
+[Collection("api-postgres")]
+public sealed class ServiceExcludeEmptyDefaultsTests : IAsyncLifetime
+{
+    private readonly PostgresFixture _fixture;
+    private TestApiFactory _factory = null!;
+    private HttpClient _client = null!;
+
+    private const string ServiceA = "scope-no-filter-svc-a";
+    private const string ServiceB = "scope-no-filter-svc-b";
+
+    public ServiceExcludeEmptyDefaultsTests(PostgresFixture fixture) => _fixture = fixture;
+
+    public async Task InitializeAsync()
+    {
+        await _fixture.ResetAsync();
+        // No ExtraConfiguration → SERVICE_EXCLUDE absent → pass-all.
+        _factory = new TestApiFactory(_fixture.ConnectionString);
+        _client = _factory.CreateClient();
+
+        await IngestAsync(ServiceA, "2024-05-01T10:00:00Z");
+        await IngestAsync(ServiceB, "2024-05-01T11:00:00Z");
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    private async Task IngestAsync(string service, string happenedAt)
+    {
+        var payload = new
+        {
+            deployment_id = $"gh-{Guid.NewGuid():N}",
+            service,
+            environment = "prod",
+            status = "success",
+            happened_at = happenedAt,
+        };
+        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = JsonContent.Create(payload),
+        };
+        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
+        var res = await _client.SendAsync(msg);
+        res.EnsureSuccessStatusCode();
+    }
+
+    // ── All services visible ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task EmptyServiceExclude_GetServices_AllServicesVisible()
+    {
+        var res = await _client.GetAsync("/api/services");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray()
+            .Select(e => e.GetString()).ToList();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Contains(ServiceA, items);
+        Assert.Contains(ServiceB, items);
+    }
+
+    [Fact]
+    public async Task EmptyServiceExclude_GetMatrix_AllServicesHaveRows()
+    {
+        var res = await _client.GetAsync("/api/matrix");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var rowServices = body.GetProperty("rows").EnumerateArray()
+            .Select(r => r.GetProperty("service").GetString()).ToList();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Contains(ServiceA, rowServices);
+        Assert.Contains(ServiceB, rowServices);
+    }
+
+    [Fact]
+    public async Task EmptyServiceExclude_GetDeployments_AllServicesInItems()
+    {
+        var res = await _client.GetAsync("/api/deployments");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var services = body.GetProperty("items").EnumerateArray()
+            .Select(e => e.GetProperty("service").GetString()).ToList();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Contains(ServiceA, services);
+        Assert.Contains(ServiceB, services);
+    }
+
+    // ── POST → 201 with no filter active ─────────────────────────────────────
+
+    [Fact]
+    public async Task EmptyServiceExclude_Post_AnyServiceReturns201()
+    {
+        var payload = new
+        {
+            deployment_id = $"gh-{Guid.NewGuid():N}",
+            service = ServiceA,
+            environment = "staging",
+            status = "success",
+            happened_at = "2024-08-01T10:00:00Z",
+        };
+        var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
+        {
+            Content = JsonContent.Create(payload),
+        };
+        msg.Headers.Add("X-Api-Key", TestApiFactory.TestApiKey);
+
+        var res = await _client.SendAsync(msg);
+
+        Assert.Equal(HttpStatusCode.Created, res.StatusCode);
     }
 }
