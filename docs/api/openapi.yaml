@@ -164,6 +164,18 @@ paths:
                 $ref: '#/components/schemas/DeploymentEvent'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: |
+            Excluded by the server-side `SERVICE_EXCLUDE` config (issue #348). The
+            event's `(namespace, service)` matches a configured exclude pattern, so
+            the write is refused and no row is appended. Matching uses the pattern's
+            last two `repo/service` segments against `(namespace, service)`; the
+            leading `owner` segment is treated as a wildcard on the API (the API does
+            not store owner). Empty `SERVICE_EXCLUDE` ⇒ nothing is refused. See
+            `api-guidelines.md` §5 (config) and §6 (status-code matrix).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '422':
           description: |
             Payload validation failed — missing required field, bad enum,
@@ -198,11 +210,11 @@ paths:
         composite `(namespace, service)` so same-named services in different
         namespaces become separate lanes (issue #353).
 
-        Subject to the **deployment-wide service-scope filter** (server config,
-        issue #348): events for services excluded by the configured scope are
-        omitted from every page — even rows already in storage are hidden. This
-        is independent of the `service` query param below (which targets a single
-        identity). See `getMatrix` and `api-guidelines.md` §5.
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): events matching the configured exclude list are omitted from
+        every page — even rows already in storage are hidden. This is independent
+        of the `service` query param below (which targets a single identity). See
+        `getMatrix` and `api-guidelines.md` §5.
       parameters:
         - { name: service,       in: query, schema: { type: string }, description: "Filter by service identity. A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite (see `getMatrix` for the shared glob semantics)." }
         - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
@@ -225,6 +237,12 @@ paths:
       tags: [deployments]
       operationId: getDeployment
       summary: Fetch a single event row by surrogate id.
+      description: |
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): a row whose `(namespace, service)` matches the configured
+        exclude list is **hidden** even though it remains in storage — this op
+        returns `404` for such an id, indistinguishable from an unknown id. See
+        `getMatrix` and `api-guidelines.md` §5.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -278,21 +296,22 @@ paths:
             across all namespaces — so every existing slashless saved pattern
             keeps working unchanged.
 
-        **Deployment-wide service-scope filter (server config — issue #348).**
-        Independently of the `service` query param above, a deployment may be
-        configured to expose only a subset of services. This scope filter is
-        **server configuration, not a request parameter** — it is applied
-        server-side to every read surface (`/api/services`, `/api/matrix`,
-        `/api/deployments`, `/api/events/stream`) and is enforced with the same
-        effective rule at fetch time, so excluded services are never polled or
-        stored. An already-stored event for a now-excluded service is **hidden**
-        by this filter even though it remains in storage (storage-clearing
-        semantics are unchanged). The scope is expressed over service identity
-        and over repo identity (`REPO_*` patterns map onto the stored
-        `namespace`, which the GitHub fetcher sets to the repo short name).
-        See `api-guidelines.md` §5 for the configuration keys, glob semantics,
-        precedence (exclude wins), empty-list defaults, and the cross-tier
-        mapping.
+        **Server-side `SERVICE_EXCLUDE` filter (server config — issue #348).**
+        Independently of the `service` query param above, a single server-side
+        config var `SERVICE_EXCLUDE` (CSV of `owner/repo/service` globs, `*` the
+        wildcard in any segment) may hide a subset of services. It is **server
+        configuration, not a request parameter** — applied to every read surface
+        (`/api/services`, `/api/matrix`, `/api/deployments`,
+        `/api/deployments/{id}`, `/api/events/stream`). The fetcher applies the
+        same list at poll time (full `owner/repo/service`), so excluded services
+        are never ingested; an already-stored event for a now-excluded service is
+        **hidden** by this filter even though it remains in storage (storage-clearing
+        semantics are unchanged). On the read/write API the match uses the pattern's
+        **last two `repo/service` segments** against `(namespace, service)` — the
+        leading `owner` segment is wildcarded API-side because the API does not store
+        owner (on the GitHub fetcher path `namespace` is the repo short name). Empty
+        `SERVICE_EXCLUDE` ⇒ exclude nothing. There is no include list and no
+        request query param for scope. See `api-guidelines.md` §5.
       parameters:
         - { name: service, in: query, schema: { type: string }, description: "Filter to a single service identity (Matrix inline filter). A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite." }
       responses:
@@ -315,12 +334,12 @@ paths:
       description: |
         Distinct service identities discovered from stored events.
 
-        Subject to the **deployment-wide service-scope filter** (server config,
-        issue #348): services excluded by the configured scope are absent from
-        this list — they are never polled, stored, or surfaced. See `getMatrix`
-        for the cross-surface filter overview and `api-guidelines.md` §5 for the
-        configuration keys, precedence, and the repo->`namespace` mapping
-        (GitHub fetcher path).
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): services matching the configured exclude list are absent from
+        this list — they are never ingested (fetcher-side) and hidden at read time.
+        See `getMatrix` for the cross-surface filter overview and `api-guidelines.md`
+        §5 for the `owner/repo/service` glob, the repo/service (owner-wildcard) API
+        match, and the empty default.
       responses:
         '200':
           description: Sorted list of distinct service identifiers.
@@ -570,11 +589,11 @@ paths:
         Backed by PostgreSQL `LISTEN/NOTIFY` — each API instance fans out only to
         its own connected clients (NFR-05 statelessness).
 
-        Subject to the **deployment-wide service-scope filter** (server config,
-        issue #348): events for services excluded by the configured scope are
-        never emitted on this stream (including replay via `Last-Event-ID`).
-        This is independent of the optional `service` query param below. See
-        `getMatrix` and `api-guidelines.md` §5.
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): events matching the configured exclude list are never emitted
+        on this stream — neither live nor on replay via `Last-Event-ID`. This is
+        independent of the optional `service` query param below. See `getMatrix`
+        and `api-guidelines.md` §5.
       parameters:
         - name: Last-Event-ID
           in: header
