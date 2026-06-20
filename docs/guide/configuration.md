@@ -102,7 +102,7 @@ Deployment-wide filter that limits which services are fetched, stored, and surfa
 
 **Glob semantics (service patterns).** A pattern containing `/` matches the full `namespace/service` composite (e.g. `acme/*`). A slashless pattern matches the `service` segment across all namespaces (e.g. `checkout-api`). `*` is the wildcard.
 
-**Repo patterns** are `owner/name` (e.g. `acme/api`). The Fetcher matches against the full repo it polls; the API maps the `name` segment against the stored `namespace` (the two are equivalent: `namespace == repo short name`).
+**Repo patterns** are `owner/name` (e.g. `acme/api`). The Fetcher matches against the full repo it polls; the API maps the `name` segment against the stored `namespace` (on the GitHub fetcher path, `namespace` is the repo short name).
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
