@@ -54,6 +54,7 @@ jobs:
   e2e:
     name: Extension E2E
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v6
@@ -85,7 +86,12 @@ jobs:
         working-directory: frontend/extension
 
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: |
+          for attempt in 1 2 3; do
+            timeout 360 npx playwright install --with-deps chromium && exit 0
+            echo "Attempt $attempt failed or timed out; retrying..."
+          done
+          exit 1
         working-directory: testing/e2e
 
       - name: Run extension E2E
