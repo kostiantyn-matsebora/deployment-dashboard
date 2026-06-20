@@ -15,7 +15,8 @@ namespace Dashboard.Api.Tests;
 ///
 /// <c>SERVICE_EXCLUDE</c> is a CSV of glob patterns matched against the opaque
 /// <c>namespace/service</c> composite identity. Slashless patterns match service
-/// name only (all namespaces); slashed patterns match the composite identity.
+/// name only (all namespaces); slashed patterns match the composite identity where
+/// <c>'*'</c> spans <c>'/'</c> (namespace is opaque and MAY contain <c>'/'</c>).
 ///
 /// Surfaces verified:
 /// <list type="bullet">
@@ -25,8 +26,8 @@ namespace Dashboard.Api.Tests;
 ///     non-excluded → 201.</item>
 ///   <item>SSE replay (<c>Last-Event-ID</c>) — excluded events suppressed.</item>
 ///   <item>SSE live stream (<c>UseRealNotifier=true</c>) — excluded events not emitted.</item>
-///   <item>Glob coverage: owner wildcard, namespace-qualified patterns, wildcard service segment.</item>
-///   <item>Empty <c>SERVICE_EXCLUDE</c> — pass-all; all services visible and POST returns 201.</item>
+///   <item>Glob coverage for the opaque identity: slashless, composite, wildcard,
+///     multi-segment namespace with slash, and empty pass-all.</item>
 /// </list>
 ///
 /// GATE NOTE: These tests require a Postgres container (Testcontainers / Docker).
@@ -63,7 +64,7 @@ public sealed class ServiceExcludeReadFilterTests : IAsyncLifetime
     {
         await _fixture.ResetAsync();
 
-        // Single-segment pattern: owner and repo are wildcarded; only service is literal.
+        // Single-segment pattern: matched against service name only across all namespaces.
         _factory = new TestApiFactory(_fixture.ConnectionString)
         {
             ExtraConfiguration = new Dictionary<string, string?>
@@ -305,7 +306,8 @@ public sealed class ServiceExcludeWriteRejectionTests : IAsyncLifetime
     [Fact]
     public async Task ServiceExclude_Post_ExcludedServiceWithNamespace_Returns403()
     {
-        // Two-segment pattern "my-ns/scope-excl-write-ns-svc" ensures namespace is matched.
+        // Two-segment pattern "my-ns/scope-excl-write-ns-svc" — slashed composite identity.
+        // The pattern contains a slash so it is matched against the "namespace/service" composite.
         var factory = new TestApiFactory(_fixture.ConnectionString)
         {
             ExtraConfiguration = new Dictionary<string, string?>
@@ -720,19 +722,26 @@ public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
 // ── Glob pattern coverage ─────────────────────────────────────────────────────
 
 /// <summary>
-/// Verifies the three main pattern forms understood by <see cref="ServiceFilter"/>
-/// when exercised through the full HTTP+Postgres stack:
+/// Exercises the full glob pattern vocabulary against the opaque
+/// <c>namespace/service</c> composite identity model through the HTTP+Postgres stack.
+///
+/// Patterns under test:
 /// <list type="bullet">
-///   <item><c>*/{repo}/{service}</c> — owner wildcard, specific repo+service.</item>
-///   <item><c>{repo}/{service}</c> — two-segment slashed pattern (namespace/service composite).</item>
-///   <item><c>*/{repo}/*</c> — service wildcard; all services under a given namespace excluded.</item>
+///   <item>(a) <b>Slashless</b> — <c>svc</c> excludes that service across all namespaces.</item>
+///   <item>(b) <b>Composite</b> — <c>ns/svc</c> excludes only that namespace's service;
+///     a different namespace with the same service name remains visible.</item>
+///   <item>(c) <b>Wildcard composite</b> — <c>*/svc</c> matches the service under any namespace
+///     (requires a namespace to be present; no-namespace identity is just <c>svc</c> without a slash).</item>
+///   <item>(d) <b>Namespace with slash</b> — namespace <c>acme/api</c>, service <c>checkout</c>;
+///     pattern <c>acme/api/checkout</c> (full literal), <c>acme/*</c> (star spans <c>/</c>),
+///     and slashless <c>checkout</c> all exclude it.</item>
+///   <item>(e) <b>Empty SERVICE_EXCLUDE</b> — pass-all; everything visible and POST returns 201
+///     (covered by <see cref="ServiceExcludeEmptyDefaultsTests"/>).</item>
 /// </list>
-/// A non-excluded service is always seeded alongside to prove the filter is not
-/// rejecting everything.
 ///
 /// Excluded events are seeded directly into the database (bypassing the write
 /// endpoint, which correctly rejects them with 403) to represent the
-/// "already-stored / legacy" scenario that the read filter is designed to handle.
+/// "already-stored / legacy" scenario that the read filter handles.
 /// </summary>
 [Collection("api-postgres")]
 public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
@@ -744,46 +753,53 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
     public async Task InitializeAsync() => await _fixture.ResetAsync();
     public Task DisposeAsync() => Task.CompletedTask;
 
-    // ── Three-segment owner-wildcard: */repo/service ──────────────────────────
+    // ── (a) Slashless pattern — excludes matching service across all namespaces ─
 
     [Fact]
-    public async Task GlobCoverage_OwnerWildcard_ThreeSegmentPattern_ExcludesMatchingService()
+    public async Task GlobCoverage_Slashless_ExcludesServiceAcrossAllNamespaces()
     {
-        // Pattern "*/glob-ns-a/glob-svc-a" — owner segment is "*"
+        // Pattern "glob-svc-a" is slashless — matched against service name only.
+        // The same service under any namespace (or no namespace) must be excluded.
         using var factory = new TestApiFactory(_fixture.ConnectionString)
         {
             ExtraConfiguration = new Dictionary<string, string?>
             {
-                ["SERVICE_EXCLUDE"] = "*/glob-ns-a/glob-svc-a",
+                ["SERVICE_EXCLUDE"] = "glob-svc-a",
             },
         };
         using var client = factory.CreateClient();
 
-        // Seed the excluded service directly into the DB (POST would return 403).
+        // Excluded: same service under two different namespaces, seeded directly into DB.
         await SeedExcludedEventAsync(
             service: "glob-svc-a",
-            @namespace: "glob-ns-a",
+            @namespace: "ns-one",
             happenedAt: "2024-02-01T10:00:00Z");
+        await SeedExcludedEventAsync(
+            service: "glob-svc-a",
+            @namespace: "ns-two",
+            happenedAt: "2024-02-01T10:01:00Z");
 
-        // Seed the visible (non-excluded) service via POST.
-        await IngestAsync(client, service: "glob-svc-safe", @namespace: "glob-ns-a",
+        // Visible: different service under the same namespace — POST is permitted.
+        await IngestAsync(client, service: "glob-svc-safe", @namespace: "ns-one",
             happenedAt: "2024-02-01T11:00:00Z");
 
         var res = await client.GetAsync("/api/services");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         var items = body.GetProperty("items").EnumerateArray()
             .Select(e => e.GetString()).ToList();
 
-        Assert.DoesNotContain("glob-svc-a", items);   // excluded
-        Assert.Contains("glob-svc-safe", items);   // not excluded
+        Assert.DoesNotContain("glob-svc-a", items);   // excluded across all namespaces
+        Assert.Contains("glob-svc-safe", items);       // not excluded
     }
 
-    // ── Two-segment repo/service (owner implicit wildcard) ────────────────────
+    // ── (b) Composite ns/svc — excludes only that namespace's service ──────────
 
     [Fact]
-    public async Task GlobCoverage_TwoSegmentPattern_ExcludesMatchingNamespaceAndService()
+    public async Task GlobCoverage_CompositePattern_ExcludesMatchingNamespaceServiceOnly()
     {
-        // Pattern "glob-ns-b/glob-svc-b" — parsed as ["*","glob-ns-b","glob-svc-b"].
+        // Pattern "glob-ns-b/glob-svc-b" — slashed, matched against the composite identity.
+        // A different namespace with the same service name must remain visible.
         using var factory = new TestApiFactory(_fixture.ConnectionString)
         {
             ExtraConfiguration = new Dictionary<string, string?>
@@ -793,17 +809,18 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
         };
         using var client = factory.CreateClient();
 
-        // Seed the excluded namespace+service directly into the DB (POST would return 403).
+        // Excluded namespace+service: seeded directly into the DB (POST would return 403).
         await SeedExcludedEventAsync(
             service: "glob-svc-b",
             @namespace: "glob-ns-b",
             happenedAt: "2024-02-02T10:00:00Z");
 
-        // Same service under a different (non-excluded) namespace — seed via POST.
+        // Same service, different namespace — POST is permitted (pattern mismatch).
         await IngestAsync(client, service: "glob-svc-b", @namespace: "other-ns",
             happenedAt: "2024-02-02T11:00:00Z");
 
         var res = await client.GetAsync("/api/deployments");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         var items = body.GetProperty("items").EnumerateArray().ToList();
 
@@ -820,59 +837,150 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
         Assert.NotEqual(default, visibleRow);
     }
 
-    // ── Service wildcard: */namespace/* (all services under a namespace) ──────
+    // ── (c) Wildcard composite */svc — matches service under any namespace ──────
 
     [Fact]
-    public async Task GlobCoverage_ServiceWildcard_ExcludesAllServicesUnderNamespace()
+    public async Task GlobCoverage_WildcardComposite_MatchesServiceUnderAnyNamespace()
     {
-        // Pattern "*/glob-ns-c/*" — excludes every service in namespace glob-ns-c.
+        // Pattern "*/glob-svc-c" — slashed (contains '/'), so matched against the composite
+        // identity "namespace/service". The '*' spans '/', but the leading segment requires
+        // a namespace to be present. The same service without a namespace is NOT excluded
+        // (its identity is just "glob-svc-c" — no slash, pattern won't match).
         using var factory = new TestApiFactory(_fixture.ConnectionString)
         {
             ExtraConfiguration = new Dictionary<string, string?>
             {
-                ["SERVICE_EXCLUDE"] = "*/glob-ns-c/*",
+                ["SERVICE_EXCLUDE"] = "*/glob-svc-c",
             },
         };
         using var client = factory.CreateClient();
 
-        // Seed both excluded services directly into the DB (POST would return 403).
+        // Excluded: service under two different namespaces — seeded directly (POST 403).
         await SeedExcludedEventAsync(
-            service: "glob-svc-c1",
-            @namespace: "glob-ns-c",
+            service: "glob-svc-c",
+            @namespace: "ns-alpha",
             happenedAt: "2024-02-03T10:00:00Z");
         await SeedExcludedEventAsync(
-            service: "glob-svc-c2",
-            @namespace: "glob-ns-c",
+            service: "glob-svc-c",
+            @namespace: "ns-beta",
+            happenedAt: "2024-02-03T10:01:00Z");
+
+        // Visible: different service under a namespace — POST is permitted.
+        await IngestAsync(client, service: "glob-svc-c-safe", @namespace: "ns-alpha",
             happenedAt: "2024-02-03T11:00:00Z");
 
-        // Seed the visible service (different namespace) via POST.
-        await IngestAsync(client, service: "glob-svc-c3", @namespace: "glob-ns-d",
-            happenedAt: "2024-02-03T12:00:00Z");
-
         var res = await client.GetAsync("/api/deployments");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         var items = body.GetProperty("items").EnumerateArray().ToList();
 
-        var nsValues = items
-            .Select(e => e.TryGetProperty("namespace", out var ns) ? ns.GetString() : null)
-            .ToList();
+        var excludedRows = items.Where(e =>
+            e.TryGetProperty("service", out var svc) &&
+            svc.GetString() == "glob-svc-c").ToList();
 
-        // All glob-ns-c rows must be gone.
-        Assert.DoesNotContain("glob-ns-c", nsValues);
-        // glob-ns-d row must be present.
-        Assert.Contains("glob-ns-d", nsValues);
+        // All rows for "glob-svc-c" (regardless of namespace) must be gone.
+        Assert.Empty(excludedRows);
+
+        // The safe service must still appear.
+        var visibleRow = items.FirstOrDefault(e =>
+            e.TryGetProperty("service", out var svc) &&
+            svc.GetString() == "glob-svc-c-safe");
+        Assert.NotEqual(default, visibleRow);
     }
 
-    // ── POST 403 with three-segment owner-wildcard pattern ────────────────────
+    // ── (d) Namespace that itself contains a slash ─────────────────────────────
 
-    [Fact]
-    public async Task GlobCoverage_OwnerWildcard_PostReturns403ForMatchingService()
+    /// <summary>
+    /// Namespace <c>acme/api</c>, service <c>checkout</c>; the composite identity is
+    /// <c>acme/api/checkout</c>. Verifies three pattern forms that must each exclude it:
+    /// <list type="bullet">
+    ///   <item><c>acme/api/checkout</c> — full literal composite match.</item>
+    ///   <item><c>acme/*</c> — <c>'*'</c> spans <c>'/'</c>, so it matches the three-segment identity.</item>
+    ///   <item><c>checkout</c> (slashless) — matched against service name only, namespace irrelevant.</item>
+    /// </list>
+    /// </summary>
+    [Theory]
+    [InlineData("acme/api/checkout", "Full literal composite match excludes acme/api checkout")]
+    [InlineData("acme/*", "Star-spans-slash wildcard excludes acme/api checkout")]
+    [InlineData("checkout", "Slashless pattern excludes checkout regardless of namespace")]
+    public async Task GlobCoverage_NamespaceWithSlash_PatternExcludesCompositeIdentity(
+        string excludePattern, string _reason)
     {
         using var factory = new TestApiFactory(_fixture.ConnectionString)
         {
             ExtraConfiguration = new Dictionary<string, string?>
             {
-                ["SERVICE_EXCLUDE"] = "*/glob-ns-e/glob-svc-e",
+                ["SERVICE_EXCLUDE"] = excludePattern,
+            },
+        };
+        using var client = factory.CreateClient();
+
+        // Excluded: namespace "acme/api" contains a slash; identity = "acme/api/checkout".
+        // POST is rejected (matches the pattern); seed directly into DB.
+        await SeedExcludedEventAsync(
+            service: "checkout",
+            @namespace: "acme/api",
+            happenedAt: "2024-02-04T10:00:00Z");
+
+        // Visible: a different service under the same namespace — POST permitted
+        // (none of the patterns above match "billing" or "acme/api/billing" for
+        // the slashless case, and for "checkout" the visible service is "billing").
+        await IngestAsync(client, service: "billing", @namespace: "acme/api",
+            happenedAt: "2024-02-04T11:00:00Z");
+
+        var res = await client.GetAsync("/api/deployments");
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+
+        // "checkout" under "acme/api" must be absent.
+        var hiddenRow = items.FirstOrDefault(e =>
+            e.TryGetProperty("service", out var svc) && svc.GetString() == "checkout" &&
+            e.TryGetProperty("namespace", out var ns) && ns.GetString() == "acme/api");
+        Assert.Equal(default, hiddenRow);
+
+        // "billing" under "acme/api" must be present (for slashless "checkout" pattern
+        // and slashed patterns that don't match billing).
+        var visibleRow = items.FirstOrDefault(e =>
+            e.TryGetProperty("service", out var svc) && svc.GetString() == "billing" &&
+            e.TryGetProperty("namespace", out var ns) && ns.GetString() == "acme/api");
+        Assert.NotEqual(default, visibleRow);
+    }
+
+    [Fact]
+    public async Task GlobCoverage_NamespaceWithSlash_SlashlessCheckoutPatternAlsoBlocksPost()
+    {
+        // Slashless "checkout" → matched against service name only.
+        // POST for service="checkout", namespace="acme/api" must return 403.
+        using var factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = "checkout",
+            },
+        };
+        using var client = factory.CreateClient();
+
+        var res = await PostAsync(client, service: "checkout", @namespace: "acme/api");
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+
+        // Unrelated service is still permitted.
+        var okRes = await PostAsync(client, service: "billing", @namespace: "acme/api");
+        Assert.Equal(HttpStatusCode.Created, okRes.StatusCode);
+    }
+
+    // ── POST 403 with composite pattern (write-side spot check) ──────────────
+
+    [Fact]
+    public async Task GlobCoverage_CompositePattern_PostReturns403ForMatchingService()
+    {
+        // Pattern "glob-ns-e/glob-svc-e" — composite, two-segment.
+        using var factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            ExtraConfiguration = new Dictionary<string, string?>
+            {
+                ["SERVICE_EXCLUDE"] = "glob-ns-e/glob-svc-e",
             },
         };
         using var client = factory.CreateClient();
