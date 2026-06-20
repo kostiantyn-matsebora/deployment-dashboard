@@ -85,29 +85,25 @@ The dev/local fake key is configured in the API container's environment and is *
 
 ### Deployment-wide service exclusion — `SERVICE_EXCLUDE` (server config, issue #348)
 
-A single server-side config var hides a subset of services across the whole deployment. It is **server configuration, not a request parameter** — there is no query param for it, and there is **no include list and no separate repo list** (repo scoping is fetcher-side via `GITHUB_REPOS`, documented in the fetcher spec).
+A single server-side config var hides a subset of services across the whole deployment. It is **server configuration, not a request parameter** — there is no query param for it, and there is **no include list**.
 
-**`SERVICE_EXCLUDE`.** A CSV of glob patterns in `owner/repo/service` form. `*` is the wildcard and may appear in any of the three segments.
+**`SERVICE_EXCLUDE`.** A CSV of glob patterns matched against the event's opaque `namespace/service` **identity**. `namespace` is emitter-supplied and adopter-defined (see `DeploymentEventIngest.namespace`); the API makes **no assumptions** about its format — it may even contain `/` (e.g. a push-mode adopter using `owner/repo` as the namespace). Patterns are therefore matched as **glob strings** against the identity, not split into fixed segments — the **same glob semantics** documented for the Matrix `service` filter (`getMatrix`):
 
-| Example pattern | Excludes |
-|---|---|
-| `acme/web/legacy-*` | services starting `legacy-` in `acme/web` |
-| `acme/*/internal` | the `internal` service in any `acme` repo |
-| `*/*/canary` | the `canary` service anywhere |
+- a pattern **without `/`** matches the `service` segment across all namespaces (e.g. `checkout`);
+- a pattern **containing `/`** is globbed against the full `namespace/service` composite, where `*` spans `/` (e.g. `acme/api/checkout`, `acme/*`, `*/checkout`).
 
-**Two-tier enforcement — same list, both tiers:**
+**Same list, write + read:**
 
-| Tier | Where | Match input | Effect |
-|---|---|---|---|
-| Fetcher | poll time | full `owner/repo/service` (the fetcher knows the owner) | matching services are **never ingested** |
-| Write API (`POST /api/deployments`) | ingest | last two `repo/service` segments vs `(namespace, service)` | matching event **rejected `403`** (problem+json) |
-| Read API (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/deployments/{id}`, `/api/events/stream`) | read | last two `repo/service` segments vs `(namespace, service)` | matching events **filtered out**; by-id returns `404`; SSE live + replay suppressed |
-
-**Owner segment is fetcher-only.** The API does not store owner, so on the read/write API the pattern's leading `owner` segment is treated as a wildcard — matching uses the **last two `repo/service` segments** against `(namespace, service)`. `namespace` is CI/CD-agnostic (see `DeploymentEventIngest.namespace` — never named `repo`); on the **GitHub fetcher path** `namespace` is the repository short name, so `repo/service` patterns line up with `(namespace, service)`. This identity is GitHub-scoped, not universal.
+| Surface | Where | Effect |
+|---|---|---|
+| Write API (`POST /api/deployments`) | ingest | matching event **rejected `403`** (problem+json) |
+| Read API (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/deployments/{id}`, `/api/events/stream`) | read | matching events **filtered out**; by-id returns `404`; SSE live + replay suppressed |
 
 **Hidden, not deleted.** An already-stored event for a now-excluded service is **hidden** by the read filter though it remains in storage; storage-clearing (reset / backfill) semantics are unchanged.
 
 **Empty default.** Empty `SERVICE_EXCLUDE` ⇒ exclude nothing (current behavior).
+
+**Fetcher-side scoping is separate.** Source-level exclusion at the fetcher (a provider-specific concern over the provider's own identifiers) is fetcher configuration documented in the fetcher spec — not part of this API contract and not a request parameter.
 
 ---
 
