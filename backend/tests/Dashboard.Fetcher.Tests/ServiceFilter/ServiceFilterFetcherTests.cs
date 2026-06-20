@@ -142,7 +142,7 @@ public sealed class ServiceFilterFetcherTests
     }
 
     [Fact]
-    public void WorkflowFilter_EmptyWorkflowExclude_IsPassAll_NoIngestionBlocked()
+    public void WorkflowFilter_EmptyWorkflowExclude_IsEmpty_NoIngestionBlocked()
     {
         var filter = WorkflowExcludeFilter.Parse("");
 

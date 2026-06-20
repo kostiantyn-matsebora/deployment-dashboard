@@ -9,7 +9,8 @@ public static class Glob
     /// <summary>
     /// Returns <c>true</c> when <paramref name="value"/> matches the glob
     /// <paramref name="pattern"/>, where <c>'*'</c> matches any sequence of characters
-    /// (including empty, including '/') and <c>'?'</c> matches exactly one character.
+    /// (including empty, including <c>'/'</c>) and <c>'?'</c> matches exactly one
+    /// character (also including <c>'/'</c> — both wildcards span path separators).
     /// Case-sensitive. Delegates to
     /// <see cref="System.IO.Enumeration.FileSystemName.MatchesSimpleExpression"/>; the
     /// empty-<paramref name="value"/> case is handled explicitly because that matcher does

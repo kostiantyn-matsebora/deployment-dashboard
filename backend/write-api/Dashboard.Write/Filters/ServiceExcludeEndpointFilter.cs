@@ -6,12 +6,13 @@ namespace Dashboard.Write.Filters;
 
 /// <summary>
 /// Returns <c>403 Forbidden</c> with <c>application/problem+json</c> when the ingest
-/// event's <c>(namespace, service)</c> matches the server-side <c>SERVICE_EXCLUDE</c>
-/// configuration (issue #348).
+/// event's <c>(namespace, service)</c> matches a <c>SERVICE_EXCLUDE</c> pattern
+/// (issue #348).
 ///
-/// Matching uses the pattern's last two <c>repo/service</c> segments against
-/// <c>(namespace, service)</c> — the leading <c>owner</c> segment is wildcarded
-/// because the API does not store owner (api-guidelines.md §5).
+/// A slashless pattern is matched against <c>service</c> only (all namespaces).
+/// A pattern containing <c>'/'</c> is glob-matched against the composite
+/// <c>namespace/service</c> identity, where <c>'*'</c> spans <c>'/'</c>
+/// (the namespace itself may contain <c>'/'</c>).
 ///
 /// An empty <c>SERVICE_EXCLUDE</c> ⇒ <see cref="ServiceFilter.IsEmpty"/> is true ⇒
 /// this filter is a no-op and adds zero overhead on the hot ingest path.

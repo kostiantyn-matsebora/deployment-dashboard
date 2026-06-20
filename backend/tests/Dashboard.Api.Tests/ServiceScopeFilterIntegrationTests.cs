@@ -916,35 +916,57 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
         using var client = factory.CreateClient();
 
         // Excluded: namespace "acme/api" contains a slash; identity = "acme/api/checkout".
-        // POST is rejected (matches the pattern); seed directly into DB.
+        // POST is rejected (matches all three patterns); seed directly into DB.
         await SeedExcludedEventAsync(
             service: "checkout",
             @namespace: "acme/api",
             happenedAt: "2024-02-04T10:00:00Z");
 
-        // Visible: a different service under the same namespace — POST permitted
-        // (none of the patterns above match "billing" or "acme/api/billing" for
-        // the slashless case, and for "checkout" the visible service is "billing").
-        await IngestAsync(client, service: "billing", @namespace: "acme/api",
+        // Visible control: service "billing" under namespace "globex/web"
+        // (identity "globex/web/billing"). This is NOT matched by any of the three
+        // patterns under test:
+        //   "acme/api/checkout" — literal mismatch on every segment.
+        //   "acme/*"            — requires prefix "acme/"; "globex/web/billing" does not start with it.
+        //   "checkout"          — slashless, matched against service name only; "billing" ≠ "checkout".
+        // POST is permitted for all three patterns.
+        await IngestAsync(client, service: "billing", @namespace: "globex/web",
             happenedAt: "2024-02-04T11:00:00Z");
+
+        // For the composite-exact pattern only, ALSO assert that a same-namespace
+        // different-service event stays visible — "acme/api/billing" does not match
+        // the literal "acme/api/checkout".
+        if (excludePattern == "acme/api/checkout")
+        {
+            await IngestAsync(client, service: "billing", @namespace: "acme/api",
+                happenedAt: "2024-02-04T11:30:00Z");
+        }
 
         var res = await client.GetAsync("/api/deployments");
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         var items = body.GetProperty("items").EnumerateArray().ToList();
 
-        // "checkout" under "acme/api" must be absent.
+        // "checkout" under "acme/api" must be absent for every pattern.
         var hiddenRow = items.FirstOrDefault(e =>
             e.TryGetProperty("service", out var svc) && svc.GetString() == "checkout" &&
             e.TryGetProperty("namespace", out var ns) && ns.GetString() == "acme/api");
         Assert.Equal(default, hiddenRow);
 
-        // "billing" under "acme/api" must be present (for slashless "checkout" pattern
-        // and slashed patterns that don't match billing).
+        // "billing" under "globex/web" must be present — valid control for all three patterns.
         var visibleRow = items.FirstOrDefault(e =>
             e.TryGetProperty("service", out var svc) && svc.GetString() == "billing" &&
-            e.TryGetProperty("namespace", out var ns) && ns.GetString() == "acme/api");
+            e.TryGetProperty("namespace", out var ns) && ns.GetString() == "globex/web");
         Assert.NotEqual(default, visibleRow);
+
+        // For the composite-exact pattern, also assert the same-namespace different-service
+        // event is visible ("acme/api/billing" does not match "acme/api/checkout").
+        if (excludePattern == "acme/api/checkout")
+        {
+            var sameNsVisibleRow = items.FirstOrDefault(e =>
+                e.TryGetProperty("service", out var svc) && svc.GetString() == "billing" &&
+                e.TryGetProperty("namespace", out var ns) && ns.GetString() == "acme/api");
+            Assert.NotEqual(default, sameNsVisibleRow);
+        }
     }
 
     [Fact]
