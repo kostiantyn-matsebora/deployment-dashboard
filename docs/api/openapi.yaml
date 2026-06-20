@@ -288,7 +288,8 @@ paths:
         stored. An already-stored event for a now-excluded service is **hidden**
         by this filter even though it remains in storage (storage-clearing
         semantics are unchanged). The scope is expressed over service identity
-        and over repo identity (which maps to `namespace == repo short name`).
+        and over repo identity (`REPO_*` patterns map onto the stored
+        `namespace`, which the GitHub fetcher sets to the repo short name).
         See `api-guidelines.md` §5 for the configuration keys, glob semantics,
         precedence (exclude wins), empty-list defaults, and the cross-tier
         mapping.
@@ -318,8 +319,8 @@ paths:
         issue #348): services excluded by the configured scope are absent from
         this list — they are never polled, stored, or surfaced. See `getMatrix`
         for the cross-surface filter overview and `api-guidelines.md` §5 for the
-        configuration keys, precedence, and the `namespace == repo short name`
-        mapping.
+        configuration keys, precedence, and the repo->`namespace` mapping
+        (GitHub fetcher path).
       responses:
         '200':
           description: Sorted list of distinct service identifiers.

@@ -98,7 +98,7 @@ Beyond the per-request query params above, a deployment may be configured to exp
 
 **Service glob semantics.** Mirror the existing matrix / services-filter globs (see `getMatrix` in `openapi.yaml`): a pattern **containing `/`** matches the full `namespace/service` composite; a pattern **without `/`** matches the `service` segment across all namespaces; `*` is the wildcard.
 
-**Repo glob + cross-tier mapping.** A repo pattern is `owner/name`. The **fetcher** matches it against the full `owner/name` it polls. The read API stores `(namespace, service)`, **not** `owner/repo` — so the API matches a repo pattern's **`name` segment** against the stored `namespace`. This works because **`namespace == repo short name`** (the `name` half of `owner/repo`; see `DeploymentEventIngest.namespace` in `openapi.yaml`). Document and rely on this `namespace == repo-short-name` identity as the cross-tier consistency rule.
+**Repo glob + cross-tier mapping.** A repo pattern is `owner/name`. The **fetcher** matches it against the full `owner/name` it polls. The read API stores `(namespace, service)`, **not** `owner/repo` — so the API matches a repo pattern's **`name` segment** against the stored `namespace`. `namespace` is CI/CD-agnostic (see `DeploymentEventIngest.namespace` in `openapi.yaml` -- it is never named `repo`), but the **GitHub fetcher** sets it to the repository short name, so on the GitHub path `REPO_*` patterns map cleanly onto the stored `namespace`. For a source that sets `namespace` to anything other than the repo short name, `REPO_*` simply won't match -- scope those services with `SERVICE_*` instead.
 
 **Precedence — exclude wins.** A match in any exclude list removes the service even if an include list also matches it.
 
