@@ -152,41 +152,15 @@ public sealed class ServiceFilter
 
     /// <summary>
     /// Matches <paramref name="value"/> against a glob <paramref name="pattern"/> where
-    /// <c>'*'</c> is the only wildcard (matches any sequence of characters including empty).
-    /// Case-sensitive. DP-based O(m*n) implementation — no regex, no third-party deps.
+    /// <c>'*'</c> matches any sequence of characters (including empty) and <c>'?'</c> a single
+    /// character. Case-sensitive. Delegates to the BCL
+    /// <see cref="System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(System.ReadOnlySpan{char}, System.ReadOnlySpan{char}, bool)"/>;
+    /// the empty-<paramref name="value"/> case is handled explicitly because that matcher does
+    /// not treat an all-<c>'*'</c> pattern as matching the empty string (a service-only pattern
+    /// must still exclude a null-namespace event).
     /// </summary>
     public static bool GlobMatch(string pattern, string value)
-    {
-        var pLen = pattern.Length;
-        var vLen = value.Length;
-
-        // dp[i][j] = true iff pattern[0..i-1] matches value[0..j-1]
-        var dp = new bool[pLen + 1, vLen + 1];
-        dp[0, 0] = true;
-
-        // A run of leading '*' wildcards can match the empty string.
-        for (var i = 1; i <= pLen; i++)
-        {
-            if (pattern[i - 1] == '*')
-                dp[i, 0] = dp[i - 1, 0];
-        }
-
-        for (var i = 1; i <= pLen; i++)
-        {
-            for (var j = 1; j <= vLen; j++)
-            {
-                if (pattern[i - 1] == '*')
-                {
-                    // '*' matches zero chars (dp[i-1,j]) or one more char (dp[i,j-1]).
-                    dp[i, j] = dp[i - 1, j] || dp[i, j - 1];
-                }
-                else
-                {
-                    dp[i, j] = dp[i - 1, j - 1] && pattern[i - 1] == value[j - 1];
-                }
-            }
-        }
-
-        return dp[pLen, vLen];
-    }
+        => value.Length == 0
+            ? pattern.AsSpan().IndexOfAnyExcept('*') < 0
+            : System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, value, ignoreCase: false);
 }
