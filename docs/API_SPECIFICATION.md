@@ -293,6 +293,10 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 | `CONTROL_API_KEY` | — | control stream + reset secret (`X-Control-API-Key`, D8) |
 | `CORS_ALLOWED_ORIGINS` | *(empty)* | CSV of allowed origins; empty disables CORS |
 | `HISTORY_RETENTION_DAYS` | `365` | deployment-events retention window (≥ 90); control-plane tables always use fixed 2 h |
+| `SERVICE_INCLUDE` | *(empty)* | CSV of service glob patterns to include in the deployment-wide service-scope filter. Empty = match all. Pattern with `/` matches full `namespace/service`; slashless matches the `service` segment across all namespaces; `*` wildcard. Exclude wins over include. Applied to `/api/services`, `/api/matrix`, `/api/deployments`, and `/api/events/stream` — excluded services are hidden from all read surfaces even if already stored. See `api-guidelines.md` §5. |
+| `SERVICE_EXCLUDE` | *(empty)* | CSV of service glob patterns to exclude. Empty = exclude none. Same glob semantics as `SERVICE_INCLUDE`. Exclude wins over include. |
+| `REPO_INCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to include. Empty = match all. The API matches the pattern `name` segment against the stored `namespace` (`namespace == repo short name`). Exclude wins over include. |
+| `REPO_EXCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to exclude. Empty = exclude none. Same cross-tier mapping as `REPO_INCLUDE`. Exclude wins over include. |
 
 **Reset choreography (appsettings + env, D12–D13).** These bind from `appsettings.json` (PascalCase `Reset` section) **and** are overridable via flat `SCREAMING_SNAKE` env vars. `RESET_EXPECTED_COMPONENTS` is a CSV string (replaces the old indexed-array `Reset__ExpectedComponents__0…` override, eliminating the array-append footgun).
 

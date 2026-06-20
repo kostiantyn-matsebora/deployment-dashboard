@@ -91,6 +91,30 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 !!! note "Settings layering"
     An appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it (same pattern as the rest of the stack).
 
+## :material-filter-outline: Service-scope filter { #service-scope-filter }
+
+Deployment-wide filter that limits which services are fetched, stored, and surfaced. Set the same four vars on **both** the API container and the Fetcher container — the two tiers share the same effective rule so they stay consistent.
+
+**How it works.** A service passes the filter iff:
+
+- At least one include list is non-empty and the service (or its repo) matches it — OR both include lists are empty (match all); AND
+- The service does not match any exclude pattern. Exclude always wins.
+
+**Glob semantics (service patterns).** A pattern containing `/` matches the full `namespace/service` composite (e.g. `acme/*`). A slashless pattern matches the `service` segment across all namespaces (e.g. `checkout-api`). `*` is the wildcard.
+
+**Repo patterns** are `owner/name` (e.g. `acme/api`). The Fetcher matches against the full repo it polls; the API maps the `name` segment against the stored `namespace` (the two are equivalent: `namespace == repo short name`).
+
+| Var | Required | Default | Purpose |
+|---|---|---|---|
+| `SERVICE_INCLUDE` | no | *(empty — match all)* | CSV of service glob patterns to include. Empty = match all services. |
+| `SERVICE_EXCLUDE` | no | *(empty — exclude none)* | CSV of service glob patterns to exclude. Exclude wins over include. |
+| `REPO_INCLUDE` | no | *(empty — match all)* | CSV of `owner/name` repo glob patterns to include. Empty = match all. |
+| `REPO_EXCLUDE` | no | *(empty — exclude none)* | CSV of `owner/name` repo glob patterns to exclude. Exclude wins over include. |
+
+**API effect.** Excluded services are hidden from `/api/services`, `/api/matrix`, `/api/deployments`, and `/api/events/stream`. Events for an excluded service remain in storage but are never surfaced; storage-clearing semantics (reset / backfill) are unchanged.
+
+**Fetcher effect.** Non-matching services are skipped at poll time and never ingested, reducing CI/CD API rate-limit consumption.
+
 ## :material-flask-outline: Demo / dev only { #demo-dev-only }
 
 Set by [`docker-compose.demo.yaml`](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/compose/docker-compose.demo.yaml) for the zero-config `demo` profile — **not required for any production profile.** Override only to tune the simulated deployment stream.

@@ -126,6 +126,20 @@ The mode control determines how the service and environment checkbox selections 
 
 An empty selection in "Watch only" mode results in an empty watch scope — no badge updates or notifications.
 
+### Server-Side Deployment-Wide Service-Scope Filter
+
+Distinct from the client watch filter above. A deployment operator may configure a server-side scope that restricts which services are available at all — across **both** the Fetcher and the read API.
+
+| Dimension | Client watch filter | Server-side scope filter |
+|---|---|---|
+| **Where configured** | Per-browser, in the extension | Deployment-wide, in container env vars (`SERVICE_INCLUDE`, `SERVICE_EXCLUDE`, `REPO_INCLUDE`, `REPO_EXCLUDE`) |
+| **Scope** | Badge updates and notifications only | All read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`) + Fetcher poll |
+| **Effect on storage** | None — all events remain in storage | Fetcher: excluded services never polled or ingested. API: already-stored events for excluded services are hidden (storage unchanged) |
+| **Precedence** | Applied client-side after the API response | Applied server-side before any data reaches the client; exclude wins over include |
+| **Glob semantics** | Per-browser preferences | Pattern with `/` = `namespace/service` composite; slashless = `service` segment across all namespaces; `*` wildcard. Same semantics as the matrix services filter. |
+
+The server-side filter is invisible to the extension — the watch filter only sees the services the API exposes. A service excluded by the server-side filter will not appear in the extension's services list and cannot be added to the watch scope.
+
 ---
 
 ## Responsive Rules

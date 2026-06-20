@@ -635,8 +635,14 @@ Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level 
 | `GITHUB_VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
 | `GITHUB_RATE_LIMIT` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
 | `GITHUB_RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
+| `SERVICE_INCLUDE` | *(empty)* | CSV of service glob patterns to include. Empty = match all. Pattern with `/` matches full `namespace/service`; slashless matches the `service` segment across all namespaces; `*` wildcard. Applied after `ResolveService` (§5.8.3) at poll time — non-matching services are skipped before ingest. Exclude wins over include. |
+| `SERVICE_EXCLUDE` | *(empty)* | CSV of service glob patterns to exclude. Empty = exclude none. Same glob semantics as `SERVICE_INCLUDE`. Exclude wins over include. |
+| `REPO_INCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to include. Empty = match all. The fetcher matches against the full `owner/name` it polls. Exclude wins over include. |
+| `REPO_EXCLUDE` | *(empty)* | CSV of repo glob patterns (`owner/name`) to exclude. Empty = exclude none. Exclude wins over include. |
 
 > **Explicit-binding vars.** All vars in this table are read explicitly by name — `FetcherOptionsEnv.ApplyEnvOverrides` (for the fetcher vars) and `GithubAdapterOptionsEnv.ApplyEnvOverrides` (for the `GITHUB_*` vars). The appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it. A missing or unparseable value leaves the property at its default without throwing.
+
+> **Service-scope filter (`SERVICE_*` / `REPO_*`).** Read via the same `FetcherOptionsEnv.ApplyEnvOverrides` pattern. Effective rule: a service passes iff `(SERVICE_INCLUDE + REPO_INCLUDE both empty OR service matches SERVICE_INCLUDE OR repo matches REPO_INCLUDE) AND NOT (service matches SERVICE_EXCLUDE OR repo matches REPO_EXCLUDE)`. Non-matching services are never ingested, saving rate-limit budget. Configure identically on the API container — the two tiers share the same effective filter (cross-tier mapping: `namespace == repo short name`). See `api-guidelines.md` §5.
 
 **Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
