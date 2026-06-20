@@ -126,19 +126,24 @@ The mode control determines how the service and environment checkbox selections 
 
 An empty selection in "Watch only" mode results in an empty watch scope — no badge updates or notifications.
 
-### Server-Side Deployment-Wide Service-Scope Filter
+### Server-Side Excludes
 
-Distinct from the client watch filter above. A deployment operator may configure a server-side scope that restricts which services are available at all — across **both** the Fetcher and the read API.
+Distinct from the client watch filter above. Two separate server-side excludes operate at different tiers:
 
-| Dimension | Client watch filter | Server-side scope filter |
-|---|---|---|
-| **Where configured** | Per-browser, in the extension | Deployment-wide, in container env var `SERVICE_EXCLUDE` |
-| **Scope** | Badge updates and notifications only | Fetcher poll + write ingest + all read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`) |
-| **Effect on storage** | None — all events remain in storage | Fetcher: excluded services never polled or ingested. API write: matching ingest rejected `403`. API read: already-stored events for excluded services hidden (storage unchanged) |
-| **Precedence** | Applied client-side after the API response | Applied server-side before any data reaches the client |
-| **Glob semantics** | Per-browser preferences | `owner/repo/service` form; `*` wildcard in any segment. API uses last two `repo/service` segments (owner enforced only by the fetcher). |
+| Dimension | Client watch filter | Fetcher `GITHUB_WORKFLOW_EXCLUDE` | API `SERVICE_EXCLUDE` |
+|---|---|---|---|
+| **Where configured** | Per-browser, in the extension | Fetcher container env var | API container env var |
+| **Identity matched** | Per-browser service/environment prefs | `owner/repo/workflow` — GitHub-specific 3-segment glob | Opaque `namespace/service` identity glob |
+| **Scope** | Badge updates and notifications only | GitHub fetcher poll only — matching workflows never polled or ingested | Write ingest + all read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`) |
+| **Effect on storage** | None — all events remain in storage | Excluded workflows cost no CI/CD API quota and produce no rows | API write: matching ingest rejected `403`. API read: already-stored events hidden (storage unchanged) |
+| **Precedence** | Applied client-side after the API response | Applied before any ingest attempt | Applied server-side before any data reaches the client |
+| **Provider scope** | n/a | GitHub adapter only — future adapters (Azure DevOps, Jenkins, …) add their own analogous exclude | Provider-agnostic — applies to all ingested events regardless of source |
 
-The server-side filter is invisible to the extension — the watch filter only sees the services the API exposes. A service excluded by the server-side filter will not appear in the extension's services list and cannot be added to the watch scope.
+**`GITHUB_WORKFLOW_EXCLUDE`** uses three clean segments (`owner/repo/workflow`). GitHub identifiers never contain `/`, so `*` matches within each segment. Example: `acme/*/canary` excludes the `canary` workflow across all `acme` repos.
+
+**`SERVICE_EXCLUDE`** matches the event's opaque `namespace/service` identity. A pattern without `/` matches the `service` segment across all namespaces; a pattern with `/` is globbed against the full composite, where `*` spans `/`.
+
+Both server-side excludes are invisible to the extension — the watch filter only sees the services the API exposes. A service excluded by `SERVICE_EXCLUDE` will not appear in the extension's services list and cannot be added to the watch scope.
 
 ---
 

@@ -91,25 +91,41 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 !!! note "Settings layering"
     An appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it (same pattern as the rest of the stack).
 
-## :material-filter-outline: Service-scope filter { #service-scope-filter }
+## :material-filter-outline: Fetcher: workflow exclude { #github-workflow-exclude }
 
-Deployment-wide filter that limits which services are fetched and surfaced. Set `SERVICE_EXCLUDE` on **both** the API container and the Fetcher container — both tiers enforce the same list.
+GitHub-adapter filter that prevents specific workflows from being polled or ingested. Reduces CI/CD API rate-limit consumption for unwanted pipelines.
 
-**`SERVICE_EXCLUDE`.** A CSV of glob patterns in `owner/repo/service` form. `*` wildcard in any segment.
+**`GITHUB_WORKFLOW_EXCLUDE`.** A CSV of glob patterns over `owner/repo/workflow`. GitHub owner, repo, and workflow names never contain `/`, so each segment is clean and `*` matches within the segment only.
 
 | Example | Excludes |
 |---|---|
-| `acme/web/legacy-*` | services starting `legacy-` in `acme/web` |
-| `acme/*/internal` | the `internal` service in any `acme` repo |
-| `*/*/canary` | the `canary` service anywhere |
+| `acme/web/legacy-*` | workflows starting `legacy-` in `acme/web` |
+| `acme/*/internal` | the `internal` workflow in any `acme` repo |
+| `*/*/canary` | the `canary` workflow in any repo |
+| `acme/web/*` | all workflows in `acme/web` |
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `SERVICE_EXCLUDE` | no | *(empty — exclude nothing)* | CSV of `owner/repo/service` glob patterns to exclude. Empty = exclude nothing. |
+| `GITHUB_WORKFLOW_EXCLUDE` | no | *(empty — exclude nothing)* | CSV of `owner/repo/workflow` glob patterns. Matching workflows are **never polled or ingested** by the GitHub fetcher. Empty = exclude nothing. |
 
-**Fetcher effect.** Matching `owner/repo/service` triples are **never polled or ingested**, reducing CI/CD API rate-limit consumption.
+This exclude is **GitHub-specific** — it lives in the GitHub adapter. Future CI/CD provider adapters (Azure DevOps, Jenkins, …) will each expose their own analogous exclude over their own provider entity identifiers.
 
-**API write effect.** `POST /api/deployments` **rejects** a matching event with `403` (problem+json). Match uses the last two `repo/service` segments vs `(namespace, service)` — the owner segment is only enforced by the fetcher (the API does not store owner).
+## :material-filter-outline: API: service exclude { #service-scope-filter }
+
+Deployment-wide filter that hides a subset of services across **all** API read and write surfaces. Configured on the API container only — the fetcher does not use this var.
+
+**`SERVICE_EXCLUDE`.** A CSV of glob patterns matched against the event's opaque `namespace/service` identity. `namespace` is emitter-supplied and adopter-defined; the identity may itself contain `/`. Glob semantics match the Matrix `service` filter:
+
+| Pattern form | Matches |
+|---|---|
+| Without `/` (e.g. `canary`) | `service` segment across all namespaces |
+| With `/` (e.g. `acme/*`, `*/canary`) | full `namespace/service` composite; `*` spans `/` |
+
+| Var | Required | Default | Purpose |
+|---|---|---|---|
+| `SERVICE_EXCLUDE` | no | *(empty — exclude nothing)* | CSV of `namespace/service` glob patterns. Empty = exclude nothing. |
+
+**API write effect.** `POST /api/deployments` **rejects** a matching event with `403` (problem+json).
 
 **API read effect.** Matching events are filtered from `/api/services`, `/api/matrix`, `/api/deployments`, and the SSE stream (live + replay). By-id (`/api/deployments/{id}`) returns `404`. Already-stored events for a now-excluded service remain in storage but are never surfaced; storage-clearing (reset / backfill) semantics are unchanged.
 
