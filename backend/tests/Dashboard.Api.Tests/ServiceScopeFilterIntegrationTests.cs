@@ -2,6 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dashboard.Api.Tests.Helpers;
+using Dashboard.Shared.Data;
+using Dashboard.Shared.Entities;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Dashboard.Api.Tests;
 
@@ -38,6 +42,10 @@ namespace Dashboard.Api.Tests;
 ///
 /// Pattern used: single-segment <c>scope-excl-read-svc</c> (owner/repo wildcarded
 /// by <see cref="ServiceFilter.SplitPattern"/>).
+///
+/// Excluded events are seeded directly into the database (bypassing the write
+/// endpoint, which correctly rejects them with 403) to represent the
+/// "already-stored / legacy" scenario that the read filter is designed to handle.
 /// </summary>
 [Collection("api-postgres")]
 public sealed class ServiceExcludeReadFilterTests : IAsyncLifetime
@@ -66,15 +74,56 @@ public sealed class ServiceExcludeReadFilterTests : IAsyncLifetime
         };
         _client = _factory.CreateClient();
 
-        // Seed both services so the filter has data to hide and data to show.
+        // Seed the visible service via POST (permitted — not excluded).
         await IngestAsync(service: VisibleService, happenedAt: "2024-01-01T10:00:00Z");
-        await IngestAsync(service: ExcludedService, happenedAt: "2024-01-01T11:00:00Z");
+
+        // Seed the excluded service directly into the DB, bypassing the write endpoint
+        // (which correctly rejects it with 403). This represents the "already-stored /
+        // legacy" scenario that the read-side filter is designed to handle.
+        await SeedExcludedEventAsync(
+            service: ExcludedService,
+            @namespace: null,
+            happenedAt: "2024-01-01T11:00:00Z");
     }
 
     public async Task DisposeAsync()
     {
         _client.Dispose();
         await _factory.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Inserts a <see cref="DeploymentEvent"/> row directly into the database via EF Core,
+    /// bypassing the write endpoint. Used to represent events that were stored before
+    /// SERVICE_EXCLUDE was configured (the "legacy / already-stored" scenario).
+    /// Returns the assigned UUIDv7 id so callers can assert per-id behaviour.
+    /// </summary>
+    private async Task<Guid> SeedExcludedEventAsync(
+        string service,
+        string? @namespace,
+        string happenedAt,
+        string environment = "prod",
+        string status = "success")
+    {
+        var opts = new DbContextOptionsBuilder<DashboardDbContext>()
+            .UseNpgsql(_fixture.ConnectionString)
+            .Options;
+        await using var db = new DashboardDbContext(opts);
+
+        var ev = new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = $"seed-{Guid.NewGuid():N}",
+            Service = service,
+            Namespace = @namespace,
+            Environment = environment,
+            Status = status,
+            HappenedAt = DateTimeOffset.Parse(happenedAt),
+        };
+
+        db.DeploymentEvents.Add(ev);
+        await db.SaveChangesAsync();
+        return ev.Id;
     }
 
     private async Task<JsonElement> IngestAsync(
@@ -156,9 +205,12 @@ public sealed class ServiceExcludeReadFilterTests : IAsyncLifetime
     [Fact]
     public async Task ServiceExclude_GetDeploymentById_ExcludedServiceReturns404ProblemJson()
     {
-        // Ingest a fresh excluded event; capture its id directly from the POST response.
-        var ingested = await IngestAsync(service: ExcludedService, happenedAt: "2024-06-01T00:00:00Z");
-        var id = ingested.GetProperty("id").GetString();
+        // Insert an excluded event directly into the DB to obtain its id.
+        // (POST is correctly rejected with 403 for excluded services.)
+        var id = await SeedExcludedEventAsync(
+            service: ExcludedService,
+            @namespace: null,
+            happenedAt: "2024-06-01T00:00:00Z");
 
         var res = await _client.GetAsync($"/api/deployments/{id}");
 
@@ -293,6 +345,10 @@ public sealed class ServiceExcludeWriteRejectionTests : IAsyncLifetime
 /// <summary>
 /// Verifies that SSE replay (via <c>Last-Event-ID</c>) omits events for excluded services.
 /// Uses the default NullNotifier so no LISTEN/NOTIFY is required.
+///
+/// The excluded event is inserted directly into the database (bypassing the write
+/// endpoint, which correctly rejects it with 403) to represent the "already-stored /
+/// legacy" scenario the replay filter is designed to suppress.
 /// </summary>
 [Collection("api-postgres")]
 public sealed class ServiceExcludeSseReplayTests : IAsyncLifetime
@@ -318,15 +374,43 @@ public sealed class ServiceExcludeSseReplayTests : IAsyncLifetime
         };
         _client = _factory.CreateClient();
 
-        // Seed both before connecting — replay will replay them through the filter.
+        // Seed the visible service via POST (permitted — not excluded).
         await IngestAsync(ReplayVisibleService, "2024-01-02T10:00:00Z");
-        await IngestAsync(ReplayExcludedService, "2024-01-02T11:00:00Z");
+
+        // Seed the excluded service directly into the DB so replay has something to filter.
+        // The write endpoint correctly rejects excluded services with 403; direct DB insert
+        // represents the "already-stored / legacy" scenario.
+        await SeedExcludedEventAsync(ReplayExcludedService, "2024-01-02T11:00:00Z");
     }
 
     public async Task DisposeAsync()
     {
         _client.Dispose();
         await _factory.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Inserts a <see cref="DeploymentEvent"/> row directly into the database via EF Core,
+    /// bypassing the write endpoint. Used to represent events stored before SERVICE_EXCLUDE
+    /// was configured.
+    /// </summary>
+    private async Task SeedExcludedEventAsync(string service, string happenedAt)
+    {
+        var opts = new DbContextOptionsBuilder<DashboardDbContext>()
+            .UseNpgsql(_fixture.ConnectionString)
+            .Options;
+        await using var db = new DashboardDbContext(opts);
+
+        db.DeploymentEvents.Add(new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = $"seed-{Guid.NewGuid():N}",
+            Service = service,
+            Environment = "prod",
+            Status = "success",
+            HappenedAt = DateTimeOffset.Parse(happenedAt),
+        });
+        await db.SaveChangesAsync();
     }
 
     private async Task IngestAsync(string service, string happenedAt)
@@ -402,6 +486,13 @@ public sealed class ServiceExcludeSseReplayTests : IAsyncLifetime
 /// events for excluded services. Uses <c>UseRealNotifier = true</c> so the full
 /// ingest → pg_notify → <see cref="DeploymentEventBroadcaster"/> → SSE fan-out
 /// path is exercised end-to-end.
+///
+/// The excluded event cannot be POSTed (the write endpoint correctly returns 403).
+/// Instead, it is inserted directly into the database and then
+/// <c>pg_notify('deployment_events', '&lt;id&gt;')</c> is issued on the fixture
+/// connection, replicating the notification that the write endpoint would have
+/// issued. The broadcaster receives the notification, resolves the row, applies the
+/// SERVICE_EXCLUDE read filter, and must suppress the event before fan-out.
 /// </summary>
 [Collection("api-postgres")]
 public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
@@ -453,6 +544,46 @@ public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
         var res = await _client.SendAsync(msg);
         res.EnsureSuccessStatusCode();
         return await res.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    /// <summary>
+    /// Inserts a <see cref="DeploymentEvent"/> row directly into the database and then
+    /// issues <c>pg_notify('deployment_events', '&lt;id&gt;')</c> to drive the live
+    /// broadcaster path without going through the write endpoint (which correctly
+    /// returns 403 for excluded services).
+    /// </summary>
+    private async Task<Guid> SeedExcludedEventAndNotifyAsync(
+        string service,
+        string happenedAt = "2024-07-01T12:00:00Z")
+    {
+        var opts = new DbContextOptionsBuilder<DashboardDbContext>()
+            .UseNpgsql(_fixture.ConnectionString)
+            .Options;
+        await using var db = new DashboardDbContext(opts);
+
+        var ev = new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = $"seed-{Guid.NewGuid():N}",
+            Service = service,
+            Environment = "prod",
+            Status = "success",
+            HappenedAt = DateTimeOffset.Parse(happenedAt),
+        };
+        db.DeploymentEvents.Add(ev);
+        await db.SaveChangesAsync();
+
+        // Issue the same NOTIFY that PostgresDeploymentNotifier would have sent,
+        // so the broadcaster's LISTEN loop receives the event id and tries to fan it out.
+        // The broadcaster resolves the row via IDeploymentReadRepository (which applies
+        // the SERVICE_EXCLUDE read filter) and must suppress the event.
+        await using var conn = new NpgsqlConnection(_fixture.ConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT pg_notify('deployment_events', '{ev.Id}')";
+        await cmd.ExecuteNonQueryAsync();
+
+        return ev.Id;
     }
 
     // ── Visible service event arrives on live stream ──────────────────────────
@@ -507,7 +638,7 @@ public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
         await using var stream = await sseResp.Content.ReadAsStreamAsync(cts.Token);
         using var reader = new StreamReader(stream);
 
-        // 3-second observation window after ingest to detect any leaked event.
+        // 3-second observation window after notify to detect any leaked event.
         using var watchCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, watchCts.Token);
@@ -521,8 +652,10 @@ public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
 
         await Task.Delay(200, cts.Token);
 
-        // Ingest the excluded-service event — must not reach the SSE stream.
-        await IngestAsync(LiveExcludedService);
+        // Insert the excluded-service event into the DB and notify the broadcaster.
+        // The broadcaster must resolve and then suppress the event because it matches
+        // SERVICE_EXCLUDE. The event must never reach the SSE stream.
+        await SeedExcludedEventAndNotifyAsync(LiveExcludedService);
 
         try { await readTask; } catch (OperationCanceledException) { }
 
@@ -597,6 +730,10 @@ public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
 /// </list>
 /// A non-excluded service is always seeded alongside to prove the filter is not
 /// rejecting everything.
+///
+/// Excluded events are seeded directly into the database (bypassing the write
+/// endpoint, which correctly rejects them with 403) to represent the
+/// "already-stored / legacy" scenario that the read filter is designed to handle.
 /// </summary>
 [Collection("api-postgres")]
 public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
@@ -623,8 +760,13 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
         };
         using var client = factory.CreateClient();
 
-        await IngestAsync(client, service: "glob-svc-a", @namespace: "glob-ns-a",
+        // Seed the excluded service directly into the DB (POST would return 403).
+        await SeedExcludedEventAsync(
+            service: "glob-svc-a",
+            @namespace: "glob-ns-a",
             happenedAt: "2024-02-01T10:00:00Z");
+
+        // Seed the visible (non-excluded) service via POST.
         await IngestAsync(client, service: "glob-svc-safe", @namespace: "glob-ns-a",
             happenedAt: "2024-02-01T11:00:00Z");
 
@@ -652,9 +794,13 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
         };
         using var client = factory.CreateClient();
 
-        await IngestAsync(client, service: "glob-svc-b", @namespace: "glob-ns-b",
+        // Seed the excluded namespace+service directly into the DB (POST would return 403).
+        await SeedExcludedEventAsync(
+            service: "glob-svc-b",
+            @namespace: "glob-ns-b",
             happenedAt: "2024-02-02T10:00:00Z");
-        // Same service, different namespace — must remain visible.
+
+        // Same service under a different (non-excluded) namespace — seed via POST.
         await IngestAsync(client, service: "glob-svc-b", @namespace: "other-ns",
             happenedAt: "2024-02-02T11:00:00Z");
 
@@ -690,11 +836,17 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
         };
         using var client = factory.CreateClient();
 
-        await IngestAsync(client, service: "glob-svc-c1", @namespace: "glob-ns-c",
+        // Seed both excluded services directly into the DB (POST would return 403).
+        await SeedExcludedEventAsync(
+            service: "glob-svc-c1",
+            @namespace: "glob-ns-c",
             happenedAt: "2024-02-03T10:00:00Z");
-        await IngestAsync(client, service: "glob-svc-c2", @namespace: "glob-ns-c",
+        await SeedExcludedEventAsync(
+            service: "glob-svc-c2",
+            @namespace: "glob-ns-c",
             happenedAt: "2024-02-03T11:00:00Z");
-        // Different namespace — must remain visible.
+
+        // Seed the visible service (different namespace) via POST.
         await IngestAsync(client, service: "glob-svc-c3", @namespace: "glob-ns-d",
             happenedAt: "2024-02-03T12:00:00Z");
 
@@ -732,6 +884,36 @@ public sealed class ServiceExcludeGlobCoverageTests : IAsyncLifetime
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Inserts a <see cref="DeploymentEvent"/> row directly into the database via EF Core,
+    /// bypassing the write endpoint. Used for excluded services that the API correctly
+    /// rejects with 403 on POST. Represents events stored before SERVICE_EXCLUDE was set.
+    /// </summary>
+    private async Task SeedExcludedEventAsync(
+        string service,
+        string? @namespace,
+        string happenedAt,
+        string environment = "prod",
+        string status = "success")
+    {
+        var opts = new DbContextOptionsBuilder<DashboardDbContext>()
+            .UseNpgsql(_fixture.ConnectionString)
+            .Options;
+        await using var db = new DashboardDbContext(opts);
+
+        db.DeploymentEvents.Add(new DeploymentEvent
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = $"seed-{Guid.NewGuid():N}",
+            Service = service,
+            Namespace = @namespace,
+            Environment = environment,
+            Status = status,
+            HappenedAt = DateTimeOffset.Parse(happenedAt),
+        });
+        await db.SaveChangesAsync();
+    }
 
     private static async Task<JsonElement> IngestAsync(
         HttpClient client,
