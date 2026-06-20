@@ -89,7 +89,9 @@ export const extensionTest = base.extend<ExtensionFixtures>({
 
     const context = await chromium.launchPersistentContext(userDataDir, {
       channel: 'chrome',
-      headless: true,
+      // MV3 extension service workers do not register reliably in headless Chrome.
+      // Run headed under the CI xvfb-run virtual display (canonical Playwright MV3 recipe).
+      headless: false,
       args: [
         `--disable-extensions-except=${EXTENSION_DIST}`,
         `--load-extension=${EXTENSION_DIST}`,
