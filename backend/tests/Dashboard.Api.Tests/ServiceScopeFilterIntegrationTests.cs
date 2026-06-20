@@ -13,10 +13,9 @@ namespace Dashboard.Api.Tests;
 /// HTTP+Postgres integration tests for the deployment-wide service-scope filter
 /// (single <c>SERVICE_EXCLUDE</c> variable — issue #348 / PR #382).
 ///
-/// <c>SERVICE_EXCLUDE</c> is a CSV of <c>owner/repo/service</c> glob patterns.
-/// On the API, the match uses the pattern's last two segments <c>repo/service</c>
-/// against the event's <c>(namespace, service)</c>; the leading owner segment is
-/// wildcarded because the API does not store owner (<c>namespace</c> == repo short name).
+/// <c>SERVICE_EXCLUDE</c> is a CSV of glob patterns matched against the opaque
+/// <c>namespace/service</c> composite identity. Slashless patterns match service
+/// name only (all namespaces); slashed patterns match the composite identity.
 ///
 /// Surfaces verified:
 /// <list type="bullet">
@@ -40,8 +39,8 @@ namespace Dashboard.Api.Tests;
 /// Verifies that a service matching <c>SERVICE_EXCLUDE</c> is hidden on every read
 /// surface and that a non-excluded service remains fully visible.
 ///
-/// Pattern used: single-segment <c>scope-excl-read-svc</c> (owner/repo wildcarded
-/// by <see cref="ServiceFilter.SplitPattern"/>).
+/// Pattern used: single-segment (slashless) pattern — matched against service name
+/// across all namespaces.
 ///
 /// Excluded events are seeded directly into the database (bypassing the write
 /// endpoint, which correctly rejects them with 403) to represent the
@@ -725,7 +724,7 @@ public sealed class ServiceExcludeSseLiveTests : IAsyncLifetime
 /// when exercised through the full HTTP+Postgres stack:
 /// <list type="bullet">
 ///   <item><c>*/{repo}/{service}</c> — owner wildcard, specific repo+service.</item>
-///   <item><c>{repo}/{service}</c> — two-segment; owner wildcarded by <see cref="ServiceFilter.SplitPattern"/>.</item>
+///   <item><c>{repo}/{service}</c> — two-segment slashed pattern (namespace/service composite).</item>
 ///   <item><c>*/{repo}/*</c> — service wildcard; all services under a given namespace excluded.</item>
 /// </list>
 /// A non-excluded service is always seeded alongside to prove the filter is not

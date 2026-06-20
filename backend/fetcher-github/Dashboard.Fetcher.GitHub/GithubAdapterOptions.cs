@@ -1,5 +1,3 @@
-using Dashboard.Shared.ServiceFiltering;
-
 namespace Dashboard.Fetcher.GitHub;
 
 /// <summary>Config bound from the appsettings <c>GitHub</c> section; overridden by flat <c>GITHUB_*</c> env vars (§6).</summary>
@@ -36,16 +34,16 @@ public sealed class GithubAdapterOptions
     /// </summary>
     public TimeSpan BackfillMaxAge { get; set; } = TimeSpan.Zero;
 
-    // ── service exclude filter ────────────────────────────────────────────────
+    // ── workflow exclude filter (GitHub-specific) ─────────────────────────────
 
     /// <summary>
-    /// CSV of <c>owner/repo/service</c> glob patterns. Matching services are never ingested.
-    /// Empty = exclude nothing. Bound from <c>SERVICE_EXCLUDE</c> env var.
+    /// CSV of <c>owner/repo/workflow</c> glob patterns. Matching workflows are never ingested.
+    /// Empty = exclude nothing. Bound from <c>GITHUB_WORKFLOW_EXCLUDE</c> env var.
     /// </summary>
-    public string ServiceExclude { get; set; } = "";
+    public string WorkflowExclude { get; set; } = "";
 
-    /// <summary>Builds the <see cref="ServiceFilter"/> from the <c>ServiceExclude</c> CSV.</summary>
-    public ServiceFilter BuildServiceFilter() => ServiceFilter.Parse(ServiceExclude);
+    /// <summary>Builds the <see cref="WorkflowExcludeFilter"/> from the <c>WorkflowExclude</c> CSV.</summary>
+    public WorkflowExcludeFilter BuildWorkflowExcludeFilter() => WorkflowExcludeFilter.Parse(WorkflowExclude);
 
     // ── derived helpers ───────────────────────────────────────────────────────
 

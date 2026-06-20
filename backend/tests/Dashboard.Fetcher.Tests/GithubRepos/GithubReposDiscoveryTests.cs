@@ -13,7 +13,7 @@ namespace Dashboard.Fetcher.Tests.GithubRepos;
 /// <list type="bullet">
 ///   <item><see cref="GithubClient.ListReposAsync"/> — discovery via GitHub REST API.</item>
 ///   <item><see cref="GithubAdapterOptions.RepoSpecs"/> / <see cref="GithubAdapterOptions.RepoList"/> — derived helpers.</item>
-///   <item>Glob filtering of discovered repos using <see cref="ServiceFilter.GlobMatch"/>.</item>
+///   <item>Glob filtering of discovered repos using <see cref="Glob.Matches"/>.</item>
 ///   <item>Empty GITHUB_REPOS = no repos, NOT *.</item>
 /// </list>
 /// No mocks — real implementations, fake HTTP handlers.
@@ -173,28 +173,28 @@ public sealed class GithubReposDiscoveryTests
     [Fact]
     public void GlobMatch_OwnerWildcard_MatchesAllReposForOwner()
     {
-        // After discovery, we filter discovered repos with ServiceFilter.GlobMatch.
+        // After discovery, we filter discovered repos with Glob.Matches.
         // "acme/*" should match "acme/api" and "acme/web" but not "org-b/service".
-        Assert.True(ServiceFilter.GlobMatch("acme/*", "acme/api"));
-        Assert.True(ServiceFilter.GlobMatch("acme/*", "acme/web"));
-        Assert.False(ServiceFilter.GlobMatch("acme/*", "org-b/service"));
+        Assert.True(Glob.Matches("acme/*", "acme/api"));
+        Assert.True(Glob.Matches("acme/*", "acme/web"));
+        Assert.False(Glob.Matches("acme/*", "org-b/service"));
     }
 
     [Fact]
     public void GlobMatch_BareWildcard_MatchesAllRepos()
     {
         // "*" matches any "owner/repo" string.
-        Assert.True(ServiceFilter.GlobMatch("*", "acme/api"));
-        Assert.True(ServiceFilter.GlobMatch("*", "org-b/service"));
-        Assert.True(ServiceFilter.GlobMatch("*", "any/repo"));
+        Assert.True(Glob.Matches("*", "acme/api"));
+        Assert.True(Glob.Matches("*", "org-b/service"));
+        Assert.True(Glob.Matches("*", "any/repo"));
     }
 
     [Fact]
     public void GlobMatch_ExactSpec_OnlyMatchesExactString()
     {
-        Assert.True(ServiceFilter.GlobMatch("acme/api", "acme/api"));
-        Assert.False(ServiceFilter.GlobMatch("acme/api", "acme/web"));
-        Assert.False(ServiceFilter.GlobMatch("acme/api", "org-b/api"));
+        Assert.True(Glob.Matches("acme/api", "acme/api"));
+        Assert.False(Glob.Matches("acme/api", "acme/web"));
+        Assert.False(Glob.Matches("acme/api", "org-b/api"));
     }
 
     // ── Empty GITHUB_REPOS = no repos (NOT *) ────────────────────────────────

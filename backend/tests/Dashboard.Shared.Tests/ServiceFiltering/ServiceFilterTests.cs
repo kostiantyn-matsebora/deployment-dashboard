@@ -3,13 +3,12 @@ using Dashboard.Shared.ServiceFiltering;
 namespace Dashboard.Shared.Tests.ServiceFiltering;
 
 /// <summary>
-/// Unit tests for <see cref="ServiceFilter"/> covering glob matching, the exclude-only design,
-/// empty defaults, three-segment owner/repo/service patterns, and the two IsExcluded overloads.
-/// No mocks — all real implementations.
+/// Unit tests for <see cref="ServiceFilter"/> (opaque namespace/service composite identity model)
+/// and the <see cref="Glob"/> helper. No mocks — all real implementations.
 /// </summary>
 public sealed class ServiceFilterTests
 {
-    // ── GlobMatch ─────────────────────────────────────────────────────────────
+    // ── Glob helper ───────────────────────────────────────────────────────────
 
     [Theory]
     [InlineData("api", "api", true)]
@@ -26,16 +25,15 @@ public sealed class ServiceFilterTests
     [InlineData("a*b", "ab", true)]
     [InlineData("a*b", "a-middle-b", true)]
     [InlineData("a*b", "ax", false)]
-    [InlineData("org-a/gateway", "org-a/gateway", true)]
-    [InlineData("org-a/gateway", "org-b/gateway", false)]
-    [InlineData("org-*/gateway", "org-a/gateway", true)]
-    [InlineData("org-*/gateway", "org-b/gateway", true)]
-    [InlineData("*/gateway", "org-a/gateway", true)]
-    public void GlobMatch_VariousPatterns_MatchesExpected(string pattern, string value, bool expected)
+    // Glob spans '/' — used by composite patterns
+    [InlineData("acme/api/checkout", "acme/api/checkout", true)]
+    [InlineData("acme/api/checkout", "acme/api/billing", false)]
+    [InlineData("acme/*", "acme/api/checkout", true)]
+    [InlineData("*/checkout", "api/checkout", true)]
+    [InlineData("*/checkout", "acme/api/checkout", true)]
+    public void Glob_Matches_VariousPatterns(string pattern, string value, bool expected)
     {
-        var result = ServiceFilter.GlobMatch(pattern, value);
-
-        Assert.Equal(expected, result);
+        Assert.Equal(expected, Glob.Matches(pattern, value));
     }
 
     // ── Empty defaults (pass-all) ─────────────────────────────────────────────
@@ -47,7 +45,6 @@ public sealed class ServiceFilterTests
 
         Assert.True(filter.Permits("any-service", "any-namespace"));
         Assert.True(filter.Permits("my-api", null));
-        Assert.True(filter.IsEmpty);
         Assert.True(filter.IsEmpty);
     }
 
@@ -79,95 +76,98 @@ public sealed class ServiceFilterTests
         Assert.True(filter.Permits("any-svc", "any-ns"));
     }
 
-    // ── Single-segment pattern (wildcard owner and repo) ─────────────────────
+    // ── Slashless pattern (service only) ─────────────────────────────────────
 
     [Fact]
-    public void SingleSegment_ExcludesMatchingServiceAcrossAllOwnersAndRepos()
+    public void SlashlessPattern_ExcludesMatchingServiceAcrossAllNamespaces()
     {
-        // "checkout" → parsed as ["*", "*", "checkout"]
         var filter = ServiceFilter.Parse("checkout");
 
         Assert.True(filter.IsExcluded("checkout", "any-ns"));
-        Assert.True(filter.IsExcluded("acme", "api", "checkout"));
-        Assert.True(filter.IsExcluded("org-b", "web", "checkout"));
+        Assert.True(filter.IsExcluded("checkout", null));
+        Assert.True(filter.IsExcluded("checkout", "org-a"));
         Assert.False(filter.IsExcluded("billing", "any-ns"));
     }
 
     [Fact]
-    public void SingleSegment_Wildcard_ExcludesEverything()
+    public void SlashlessPattern_Wildcard_ExcludesEverything()
     {
         var filter = ServiceFilter.Parse("*");
 
-        Assert.True(filter.IsExcluded("acme", "api", "any-service"));
         Assert.True(filter.IsExcluded("any-service", null));
+        Assert.True(filter.IsExcluded("checkout", "acme"));
     }
 
     [Fact]
-    public void SingleSegment_GlobSuffix_ExcludesMatchingServices()
+    public void SlashlessPattern_GlobSuffix_ExcludesMatchingServices()
     {
         var filter = ServiceFilter.Parse("legacy-*");
 
-        Assert.True(filter.IsExcluded("acme", "web", "legacy-crm"));
-        Assert.True(filter.IsExcluded("legacy-payments", null));
+        Assert.True(filter.IsExcluded("legacy-crm", null));
+        Assert.True(filter.IsExcluded("legacy-payments", "acme"));
         Assert.False(filter.IsExcluded("checkout", null));
     }
 
-    // ── Two-segment pattern (owner wildcarded) ────────────────────────────────
+    // ── Pattern WITH slash — composite namespace/service identity ─────────────
 
     [Fact]
-    public void TwoSegment_ExcludesMatchingRepoAndService()
+    public void SlashedPattern_ExcludesMatchingCompositeIdentity()
     {
-        // "my-repo/checkout" → parsed as ["*", "my-repo", "checkout"]
-        var filter = ServiceFilter.Parse("my-repo/checkout");
+        // "org-a/gateway" matches identity "org-a/gateway" exactly.
+        var filter = ServiceFilter.Parse("org-a/gateway");
 
-        // Fetcher overload: any owner, repo="my-repo", service="checkout" → excluded.
-        Assert.True(filter.IsExcluded("acme", "my-repo", "checkout"));
-        Assert.True(filter.IsExcluded("org-b", "my-repo", "checkout"));
-        // Different repo → not excluded.
-        Assert.False(filter.IsExcluded("acme", "other-repo", "checkout"));
-        // API overload: namespace="my-repo", service="checkout" → excluded.
-        Assert.True(filter.IsExcluded("checkout", "my-repo"));
-        Assert.False(filter.IsExcluded("checkout", "other-ns"));
-    }
-
-    // ── Three-segment pattern (full owner/repo/service) ───────────────────────
-
-    [Fact]
-    public void ThreeSegment_ExcludesOnlyExactMatch()
-    {
-        var filter = ServiceFilter.Parse("acme/web/legacy-*");
-
-        // Fetcher overload.
-        Assert.True(filter.IsExcluded("acme", "web", "legacy-crm"));
-        Assert.True(filter.IsExcluded("acme", "web", "legacy-billing"));
-        Assert.False(filter.IsExcluded("acme", "api", "legacy-crm")); // wrong repo
-        Assert.False(filter.IsExcluded("org-b", "web", "legacy-crm")); // wrong owner
-        Assert.False(filter.IsExcluded("acme", "web", "new-crm"));    // no prefix match
-
-        // API overload: owner is wildcarded → repo/service match only.
-        Assert.True(filter.IsExcluded("legacy-crm", "web"));
-        Assert.False(filter.IsExcluded("legacy-crm", "api"));
+        Assert.True(filter.IsExcluded("gateway", "org-a"));
+        Assert.False(filter.IsExcluded("gateway", "org-b"));
+        Assert.False(filter.IsExcluded("gateway", null));   // null → identity="gateway", no slash in pattern
+        Assert.False(filter.IsExcluded("billing", "org-a"));
     }
 
     [Fact]
-    public void ThreeSegment_OwnerWildcard_ExcludesAcrossAllOwners()
+    public void SlashedPattern_StarSpansSlash_MatchesMultiSegmentNamespace()
     {
-        var filter = ServiceFilter.Parse("*/api/canary");
+        // namespace "acme/api" (contains slash), service "checkout"
+        // identity = "acme/api/checkout"
+        // pattern "acme/api/checkout" → full literal match
+        var filter = ServiceFilter.Parse("acme/api/checkout");
 
-        Assert.True(filter.IsExcluded("acme", "api", "canary"));
-        Assert.True(filter.IsExcluded("org-b", "api", "canary"));
-        Assert.False(filter.IsExcluded("acme", "web", "canary"));
+        Assert.True(filter.IsExcluded("checkout", "acme/api"));
+        Assert.False(filter.IsExcluded("checkout", "acme/web"));
+        Assert.False(filter.IsExcluded("billing", "acme/api"));
     }
 
     [Fact]
-    public void ThreeSegment_RepoWildcard_ExcludesAcrossAllRepos()
+    public void SlashedPattern_StarSpansSlash_WildcardMatchesDeepNamespace()
     {
-        var filter = ServiceFilter.Parse("acme/*/internal");
+        // "acme/*" — star spans '/', so matches "acme/api/checkout" identity
+        var filter = ServiceFilter.Parse("acme/*");
 
-        Assert.True(filter.IsExcluded("acme", "api", "internal"));
-        Assert.True(filter.IsExcluded("acme", "web", "internal"));
-        Assert.False(filter.IsExcluded("org-b", "api", "internal")); // wrong owner
-        Assert.False(filter.IsExcluded("acme", "api", "public"));
+        Assert.True(filter.IsExcluded("checkout", "acme/api"));   // identity = "acme/api/checkout"
+        Assert.True(filter.IsExcluded("billing", "acme/web"));    // identity = "acme/web/billing"
+        Assert.False(filter.IsExcluded("checkout", "other-org")); // identity = "other-org/checkout"
+    }
+
+    [Fact]
+    public void SlashedPattern_StarSlashService_MatchesAcrossAllNamespaces()
+    {
+        // "*/checkout" matches any identity ending in "/checkout"
+        var filter = ServiceFilter.Parse("*/checkout");
+
+        Assert.True(filter.IsExcluded("checkout", "api"));          // identity = "api/checkout"
+        Assert.True(filter.IsExcluded("checkout", "acme/api"));     // identity = "acme/api/checkout"
+        Assert.False(filter.IsExcluded("billing", "api"));
+        Assert.False(filter.IsExcluded("checkout", null));           // identity = "checkout" — no slash, "*/checkout" won't match
+    }
+
+    [Fact]
+    public void SlashedPattern_GlobWildcard_ExcludesMatchingNamespaceAndService()
+    {
+        // "org-*/gateway" matches "org-a/gateway", "org-b/gateway", etc.
+        var filter = ServiceFilter.Parse("org-*/gateway");
+
+        Assert.True(filter.IsExcluded("gateway", "org-a"));
+        Assert.True(filter.IsExcluded("gateway", "org-b"));
+        Assert.False(filter.IsExcluded("gateway", "other-org"));
+        Assert.False(filter.IsExcluded("billing", "org-a"));
     }
 
     // ── Multi-pattern CSV ─────────────────────────────────────────────────────
@@ -175,11 +175,12 @@ public sealed class ServiceFilterTests
     [Fact]
     public void MultiPattern_ExcludesAnyMatchingPattern()
     {
-        var filter = ServiceFilter.Parse("acme/web/legacy-*,acme/*/canary");
+        var filter = ServiceFilter.Parse("checkout,org-a/gateway");
 
-        Assert.True(filter.IsExcluded("acme", "web", "legacy-crm"));
-        Assert.True(filter.IsExcluded("acme", "api", "canary"));
-        Assert.False(filter.IsExcluded("acme", "web", "checkout"));
+        Assert.True(filter.IsExcluded("checkout", "any-ns"));
+        Assert.True(filter.IsExcluded("gateway", "org-a"));
+        Assert.False(filter.IsExcluded("gateway", "org-b"));
+        Assert.False(filter.IsExcluded("billing", null));
     }
 
     [Fact]
@@ -192,10 +193,10 @@ public sealed class ServiceFilterTests
         Assert.False(filter.IsExcluded("gateway", null));
     }
 
-    // ── Permits wrappers ──────────────────────────────────────────────────────
+    // ── Permits wrapper ───────────────────────────────────────────────────────
 
     [Fact]
-    public void Permits_TwoArg_ReturnsFalseForExcluded()
+    public void Permits_ReturnsFalseForExcluded()
     {
         var filter = ServiceFilter.Parse("checkout");
 
@@ -203,47 +204,29 @@ public sealed class ServiceFilterTests
         Assert.True(filter.Permits("billing", "ns"));
     }
 
-    [Fact]
-    public void Permits_ThreeArg_ReturnsFalseForExcluded()
-    {
-        var filter = ServiceFilter.Parse("acme/web/legacy-*");
+    // ── Null namespace ────────────────────────────────────────────────────────
 
-        Assert.False(filter.Permits("legacy-crm", "web", "acme/web"));
-        Assert.True(filter.Permits("checkout", "web", "acme/web"));
+    [Fact]
+    public void IsExcluded_NullNamespace_SlashlessPattern_Matches()
+    {
+        // Slashless "checkout" → matched against service only; namespace irrelevant.
+        var filter = ServiceFilter.Parse("checkout");
+
+        Assert.True(filter.IsExcluded("checkout", null));
     }
 
     [Fact]
-    public void Permits_ThreeArg_OwnerRepoSplit_MatchesFetcherTriple()
+    public void IsExcluded_NullNamespace_SlashedPattern_DoesNotMatch()
     {
-        // Permits(service, ns, "owner/repo") delegates to IsExcluded(owner, repo, service).
-        var filter = ServiceFilter.Parse("acme/api/checkout");
+        // "org-a/gateway" is a slashed pattern; identity for null namespace = "gateway" (no slash).
+        // "org-a/gateway" won't match the identity "gateway".
+        var filter = ServiceFilter.Parse("org-a/gateway");
 
-        Assert.False(filter.Permits("checkout", "api", "acme/api"));
-        Assert.True(filter.Permits("checkout", "web", "acme/web")); // different repo
+        Assert.False(filter.IsExcluded("gateway", null));
+        Assert.True(filter.IsExcluded("gateway", "org-a"));
     }
 
-    // ── IsExcluded API overload: null namespace matches empty string ───────────
-
-    [Fact]
-    public void IsExcluded_NullNamespace_MatchedAsEmpty()
-    {
-        // Pattern "*/*" (two segments) → [*, *, *] → should match any service/namespace including null.
-        var filter = ServiceFilter.Parse("*");
-
-        Assert.True(filter.IsExcluded("any-service", null));
-    }
-
-    [Fact]
-    public void IsExcluded_LiteralPatternRepoSegment_DoesNotMatchNull()
-    {
-        // Pattern "my-repo/checkout" → segments[1]="my-repo". Null namespace ≠ "my-repo".
-        var filter = ServiceFilter.Parse("my-repo/checkout");
-
-        Assert.False(filter.IsExcluded("checkout", null)); // null → empty; GlobMatch("my-repo","") is false
-        Assert.True(filter.IsExcluded("checkout", "my-repo"));
-    }
-
-    // ── Empty SERVICE_EXCLUDE → all events pass ────────────────────────────────
+    // ── Empty SERVICE_EXCLUDE → all events pass ───────────────────────────────
 
     [Fact]
     public void EmptyExclude_NothingIsExcluded()
@@ -251,7 +234,7 @@ public sealed class ServiceFilterTests
         var filter = ServiceFilter.Parse(null);
 
         Assert.False(filter.IsExcluded("checkout", null));
-        Assert.False(filter.IsExcluded("acme", "web", "checkout"));
+        Assert.False(filter.IsExcluded("checkout", "acme/api"));
         Assert.True(filter.Permits("checkout", "ns"));
     }
 }

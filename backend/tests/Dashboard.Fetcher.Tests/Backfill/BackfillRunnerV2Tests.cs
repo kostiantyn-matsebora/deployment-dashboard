@@ -10,7 +10,7 @@ using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
-using Dashboard.Shared.ServiceFiltering;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dashboard.Fetcher.Tests.Backfill;
@@ -1010,10 +1010,10 @@ public sealed class BackfillRunnerV2Tests
 
         var handler = new CountingFakeGithubHandler(urlMap);
 
-        // Build runner with SERVICE_EXCLUDE = "Deploy API": every deployment is filtered out.
+        // Build runner with GITHUB_WORKFLOW_EXCLUDE = "Deploy API": every deployment is filtered out.
         var (runner, _) = BuildRunnerWithFilter(
             handler,
-            serviceFilter: ServiceFilter.Parse("Deploy API"),
+            workflowExcludeFilter: WorkflowExcludeFilter.Parse("Deploy API"),
             depth: 1);
 
         var (events, _) = await DrainAsync(runner);
@@ -1190,7 +1190,7 @@ public sealed class BackfillRunnerV2Tests
 
         var eventBuilder = new BackfillEventBuilder(
             githubClient, graphCache, versionResolver,
-            ServiceFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
+            WorkflowExcludeFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
 
         var runner = new BackfillRunner(
             githubClient,
@@ -1203,11 +1203,11 @@ public sealed class BackfillRunnerV2Tests
     }
 
     /// <summary>
-    /// Variant of <see cref="BuildRunner"/> that injects a custom <see cref="ServiceFilter"/>
-    /// so tests can exercise the stall-counter behaviour for excluded services.
+    /// Variant of <see cref="BuildRunner"/> that injects a custom <see cref="WorkflowExcludeFilter"/>
+    /// so tests can exercise the stall-counter behaviour for excluded workflows.
     /// </summary>
     private static (BackfillRunner Runner, WorkflowGraphCache GraphCache) BuildRunnerWithFilter(
-        HttpMessageHandler handler, ServiceFilter serviceFilter, int depth = 2)
+        HttpMessageHandler handler, WorkflowExcludeFilter workflowExcludeFilter, int depth = 2)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
 
@@ -1238,7 +1238,7 @@ public sealed class BackfillRunnerV2Tests
 
         var eventBuilder = new BackfillEventBuilder(
             githubClient, graphCache, versionResolver,
-            serviceFilter, NullLogger<BackfillEventBuilder>.Instance);
+            workflowExcludeFilter, NullLogger<BackfillEventBuilder>.Instance);
 
         var runner = new BackfillRunner(
             githubClient,

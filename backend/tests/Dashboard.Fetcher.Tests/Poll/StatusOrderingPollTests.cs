@@ -12,7 +12,6 @@ using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
-using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dashboard.Fetcher.Tests.Poll;
@@ -314,13 +313,13 @@ public sealed class StatusOrderingPollTests
             VersionSourceConfig.Default, graphCache, githubClient);
         var eventBuilder = new BackfillEventBuilder(
             githubClient, graphCache, versionResolver,
-            ServiceFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
+            WorkflowExcludeFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
         var backfillRunner = new BackfillRunner(
             githubClient, adapterOptions, fetcherOptions,
             eventBuilder, NullLogger<BackfillRunner>.Instance);
         var statusEventMapper = new DeploymentStatusEventMapper(
             githubClient, graphCache, versionResolver,
-            ServiceFilter.PassAll, NullLogger<DeploymentStatusEventMapper>.Instance);
+            WorkflowExcludeFilter.PassAll, NullLogger<DeploymentStatusEventMapper>.Instance);
 
         return new GithubActionsAdapter(
             githubClient, adapterOptions, fetcherOptions,

@@ -67,7 +67,7 @@ public static class RepoSpecExpander
             var discovered = await listReposAsync(owner, ct);
             foreach (var repo in discovered)
             {
-                if (ServiceFilter.GlobMatch(spec, repo))
+                if (Glob.Matches(spec, repo))
                     resolved.Add(repo);
             }
         }

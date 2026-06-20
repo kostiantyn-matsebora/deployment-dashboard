@@ -4,7 +4,6 @@ using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
-using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Logging;
 
 namespace Dashboard.Fetcher.GitHub.Backfill;
@@ -15,15 +14,15 @@ namespace Dashboard.Fetcher.GitHub.Backfill;
 /// (build ingest events), slot trimming, env-map merging, and shared per-deployment helpers.
 /// </summary>
 // S1200: This class is itself the coupling-reduction extraction from BackfillRunner (§S1200).
-// The ServiceFilter dependency added by #348 is required for service-scope filtering during
+// The WorkflowExcludeFilter dependency added by #348 is required for workflow-scope filtering during
 // backfill scans and cannot be removed.  Splitting further would fragment cohesive scan logic
 // without a genuine coupling benefit.
-[SuppressMessage("SonarAnalyzer", "S1200", Justification = "Class is a coupling-reduction extraction from BackfillRunner; ServiceFilter dependency is required for #348 service-scope filter. Further splitting would fragment cohesive scan logic without genuine coupling benefit.")]
+[SuppressMessage("SonarAnalyzer", "S1200", Justification = "Class is a coupling-reduction extraction from BackfillRunner; WorkflowExcludeFilter dependency is required for #348 workflow-scope filter. Further splitting would fragment cohesive scan logic without genuine coupling benefit.")]
 public sealed class BackfillEventBuilder(
     GithubClient github,
     WorkflowGraphCache graphCache,
     VersionResolver versionResolver,
-    ServiceFilter serviceFilter,
+    WorkflowExcludeFilter workflowExcludeFilter,
     ILogger<BackfillEventBuilder> logger)
 {
     // Consecutive deployments with no new data before scanning stops for an environment (F13).
@@ -146,16 +145,16 @@ public sealed class BackfillEventBuilder(
                 .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
                 .FirstOrDefault(r => r.HasValue);
 
-            var service = await ResolveServiceFromRunAsync(
+            var (service, workflowName) = await ResolveServiceAndWorkflowFromRunAsync(
                 ctx.Owner, ctx.RepoName, ctx.Repo, runId, pathToService, serviceMap, ct);
 
-            // Apply deployment-wide filter: skip deployments whose service is excluded.
-            // A filtered-out service produces no data for us, so it counts as no-progress
+            // Apply workflow exclude filter: skip deployments whose workflow is excluded.
+            // A filtered-out workflow produces no data for us, so it counts as no-progress
             // for the stall/early-exit logic — identical treatment to an unknown service.
-            // This prevents a repo where every deployment maps to excluded services from
+            // This prevents a repo where every deployment maps to excluded workflows from
             // scanning all the way to the cutoff date instead of halting at the stall window.
-            var @namespace = ctx.Repo.Split('/').Last();
-            if (!serviceFilter.Permits(service, @namespace, ctx.Repo))
+            // When the workflow name is null (graph unavailable), only '*' patterns match — acceptable.
+            if (workflowExcludeFilter.IsExcluded(ctx.Owner, ctx.RepoName, workflowName ?? string.Empty))
             {
                 consecutiveNoProgress++;
                 continue;
@@ -300,7 +299,7 @@ public sealed class BackfillEventBuilder(
         return statuses;
     }
 
-    internal async Task<string> ResolveServiceFromRunAsync(
+    internal async Task<(string Service, string? WorkflowName)> ResolveServiceAndWorkflowFromRunAsync(
         string owner, string repoName, string repo,
         long? runId,
         IReadOnlyDictionary<string, string> pathToService,
@@ -308,12 +307,13 @@ public sealed class BackfillEventBuilder(
         CancellationToken ct)
     {
         if (!runId.HasValue)
-            return ServiceResolver.Resolve(null, repo, serviceMap);
+            return (ServiceResolver.Resolve(null, repo, serviceMap), null);
 
         var (path, name) = await graphCache.GetOrFetchRunInfoAsync(owner, repoName, runId.Value, github, ct);
-        if (path is not null && pathToService.TryGetValue(path, out var serviceFromPath))
-            return serviceFromPath;
+        var service = (path is not null && pathToService.TryGetValue(path, out var serviceFromPath))
+            ? serviceFromPath
+            : ServiceResolver.Resolve(name, repo, serviceMap);
 
-        return ServiceResolver.Resolve(name, repo, serviceMap);
+        return (service, name);
     }
 }

@@ -1,113 +1,111 @@
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Configuration;
-using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Configuration;
 
 namespace Dashboard.Fetcher.Tests.ServiceFiltering;
 
 /// <summary>
-/// Tests that the fetcher correctly parses the <c>SERVICE_EXCLUDE</c> env var into
-/// <see cref="GithubAdapterOptions"/> and that the resulting <see cref="ServiceFilter"/>
-/// blocks/passes services at poll time using the three-argument fetcher overload.
+/// Tests that the fetcher correctly parses <c>GITHUB_WORKFLOW_EXCLUDE</c> into
+/// <see cref="GithubAdapterOptions"/> and that the resulting <see cref="WorkflowExcludeFilter"/>
+/// blocks/passes workflows at poll time using the three-segment (owner/repo/workflow) glob.
 /// No mocks — all real implementations.
 /// </summary>
 public sealed class ServiceFilterFetcherTests
 {
-    // ── GithubAdapterOptionsEnv wires SERVICE_EXCLUDE ──────────────────────────
+    // ── GithubAdapterOptionsEnv wires GITHUB_WORKFLOW_EXCLUDE ─────────────────
 
     [Fact]
-    public void ServiceExclude_BoundFromEnv_WhenPresent()
+    public void WorkflowExclude_BoundFromEnv_WhenPresent()
     {
         var options = new GithubAdapterOptions();
-        var config = BuildConfig(new Dictionary<string, string?> { ["SERVICE_EXCLUDE"] = "acme/*/legacy-*" });
+        var config = BuildConfig(new Dictionary<string, string?> { ["GITHUB_WORKFLOW_EXCLUDE"] = "acme/*/legacy-*" });
 
         GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
 
-        Assert.Equal("acme/*/legacy-*", options.ServiceExclude);
+        Assert.Equal("acme/*/legacy-*", options.WorkflowExclude);
     }
 
     [Fact]
-    public void ServiceExclude_KeepsDefault_WhenAbsent()
+    public void WorkflowExclude_KeepsDefault_WhenAbsent()
     {
         var options = new GithubAdapterOptions();
         var config = BuildConfig(new Dictionary<string, string?>());
 
         GithubAdapterOptionsEnv.ApplyEnvOverrides(config, options);
 
-        Assert.Equal("", options.ServiceExclude);
+        Assert.Equal("", options.WorkflowExclude);
     }
 
-    // ── BuildServiceFilter produces correct ServiceFilter ─────────────────────
+    // ── BuildWorkflowExcludeFilter produces correct WorkflowExcludeFilter ──────
 
     [Fact]
-    public void BuildServiceFilter_Empty_ProducesPassAllFilter()
+    public void BuildWorkflowExcludeFilter_Empty_ProducesPassAllFilter()
     {
         var options = new GithubAdapterOptions();
-        var filter = options.BuildServiceFilter();
+        var filter = options.BuildWorkflowExcludeFilter();
 
         Assert.True(filter.IsEmpty);
-        Assert.True(filter.Permits("any-service", "any-namespace", "any/repo"));
+        Assert.False(filter.IsExcluded("acme", "api", "any-workflow"));
     }
 
     [Fact]
-    public void BuildServiceFilter_SingleSegment_ExcludesMatchingService()
+    public void BuildWorkflowExcludeFilter_SingleSegment_ExcludesMatchingWorkflow()
     {
-        var options = new GithubAdapterOptions { ServiceExclude = "legacy-crm" };
-        var filter = options.BuildServiceFilter();
+        var options = new GithubAdapterOptions { WorkflowExclude = "deploy" };
+        var filter = options.BuildWorkflowExcludeFilter();
 
-        Assert.False(filter.Permits("legacy-crm", "ns", "acme/api"));
-        Assert.True(filter.Permits("checkout", "ns", "acme/api"));
+        Assert.True(filter.IsExcluded("acme", "api", "deploy"));
+        Assert.False(filter.IsExcluded("acme", "api", "release"));
     }
 
     [Fact]
-    public void BuildServiceFilter_ThreeSegment_ExcludesMatchingTriple()
+    public void BuildWorkflowExcludeFilter_ThreeSegment_ExcludesMatchingTriple()
     {
-        var options = new GithubAdapterOptions { ServiceExclude = "acme/web/legacy-*" };
-        var filter = options.BuildServiceFilter();
+        var options = new GithubAdapterOptions { WorkflowExclude = "acme/web/legacy-*" };
+        var filter = options.BuildWorkflowExcludeFilter();
 
-        Assert.False(filter.Permits("legacy-crm", "web", "acme/web"));
-        Assert.True(filter.Permits("checkout", "web", "acme/web")); // different service
-        Assert.True(filter.Permits("legacy-crm", "api", "acme/api")); // different repo
-        Assert.True(filter.Permits("legacy-crm", "web", "org-b/web")); // different owner
+        Assert.True(filter.IsExcluded("acme", "web", "legacy-deploy"));
+        Assert.False(filter.IsExcluded("acme", "api", "legacy-deploy")); // different repo
+        Assert.False(filter.IsExcluded("org-b", "web", "legacy-deploy")); // different owner
+        Assert.False(filter.IsExcluded("acme", "web", "new-deploy"));
     }
 
     [Fact]
-    public void BuildServiceFilter_MultiPattern_ExcludesAnyMatch()
+    public void BuildWorkflowExcludeFilter_MultiPattern_ExcludesAnyMatch()
     {
-        var options = new GithubAdapterOptions { ServiceExclude = "acme/*/canary,*/*/legacy" };
-        var filter = options.BuildServiceFilter();
+        var options = new GithubAdapterOptions { WorkflowExclude = "acme/*/canary,*/*/legacy" };
+        var filter = options.BuildWorkflowExcludeFilter();
 
-        Assert.False(filter.Permits("canary", "api", "acme/api"));
-        Assert.False(filter.Permits("legacy", "web", "org-b/web"));
-        Assert.True(filter.Permits("checkout", "api", "acme/api"));
+        Assert.True(filter.IsExcluded("acme", "api", "canary"));
+        Assert.True(filter.IsExcluded("org-b", "web", "legacy"));
+        Assert.False(filter.IsExcluded("acme", "api", "deploy"));
     }
 
-    // ── Fetcher skip semantics: IsExcluded(owner, repo, service) ─────────────
+    // ── WorkflowExcludeFilter 3-segment glob — each segment wildcard ───────────
 
     [Fact]
-    public void FetcherFilter_Empty_AllowsEverything()
+    public void WorkflowFilter_Empty_AllowsEverything()
     {
-        var filter = ServiceFilter.Parse(null);
+        var filter = WorkflowExcludeFilter.Parse(null);
 
-        Assert.False(filter.IsExcluded("acme", "api", "checkout"));
+        Assert.False(filter.IsExcluded("acme", "api", "deploy"));
         Assert.False(filter.IsExcluded("acme", "api", "legacy-crm"));
     }
 
     [Fact]
-    public void FetcherFilter_OwnerWildcard_ExcludesMatchingServiceInAnyOrg()
+    public void WorkflowFilter_OwnerWildcard_ExcludesMatchingWorkflowInAnyOrg()
     {
-        // "*/web/checkout" → excluded regardless of owner.
-        var filter = ServiceFilter.Parse("*/web/checkout");
+        var filter = WorkflowExcludeFilter.Parse("*/web/deploy");
 
-        Assert.True(filter.IsExcluded("acme", "web", "checkout"));
-        Assert.True(filter.IsExcluded("org-b", "web", "checkout"));
-        Assert.False(filter.IsExcluded("acme", "api", "checkout")); // different repo
+        Assert.True(filter.IsExcluded("acme", "web", "deploy"));
+        Assert.True(filter.IsExcluded("org-b", "web", "deploy"));
+        Assert.False(filter.IsExcluded("acme", "api", "deploy")); // different repo
     }
 
     [Fact]
-    public void FetcherFilter_RepoWildcard_ExcludesMatchingServiceInAnyRepo()
+    public void WorkflowFilter_RepoWildcard_ExcludesMatchingWorkflowInAnyRepo()
     {
-        var filter = ServiceFilter.Parse("acme/*/internal");
+        var filter = WorkflowExcludeFilter.Parse("acme/*/internal");
 
         Assert.True(filter.IsExcluded("acme", "web", "internal"));
         Assert.True(filter.IsExcluded("acme", "api", "internal"));
@@ -115,33 +113,52 @@ public sealed class ServiceFilterFetcherTests
     }
 
     [Fact]
-    public void FetcherFilter_ServiceGlob_ExcludesMatchingServiceName()
+    public void WorkflowFilter_WorkflowGlob_ExcludesMatchingWorkflowName()
     {
-        var filter = ServiceFilter.Parse("acme/api/legacy-*");
+        var filter = WorkflowExcludeFilter.Parse("acme/api/legacy-*");
 
-        Assert.True(filter.IsExcluded("acme", "api", "legacy-crm"));
-        Assert.True(filter.IsExcluded("acme", "api", "legacy-billing"));
-        Assert.False(filter.IsExcluded("acme", "api", "checkout"));
+        Assert.True(filter.IsExcluded("acme", "api", "legacy-deploy"));
+        Assert.True(filter.IsExcluded("acme", "api", "legacy-release"));
+        Assert.False(filter.IsExcluded("acme", "api", "deploy"));
     }
 
     [Fact]
-    public void FetcherFilter_ExactPattern_OnlyExcludesExactMatch()
+    public void WorkflowFilter_ExactPattern_OnlyExcludesExactMatch()
     {
-        var filter = ServiceFilter.Parse("acme/api/checkout");
+        var filter = WorkflowExcludeFilter.Parse("acme/api/deploy");
 
-        Assert.True(filter.IsExcluded("acme", "api", "checkout"));
-        Assert.False(filter.IsExcluded("acme", "api", "checkout-v2"));
-        Assert.False(filter.IsExcluded("org-b", "api", "checkout"));
+        Assert.True(filter.IsExcluded("acme", "api", "deploy"));
+        Assert.False(filter.IsExcluded("acme", "api", "deploy-v2"));
+        Assert.False(filter.IsExcluded("org-b", "api", "deploy"));
     }
 
     [Fact]
-    public void FetcherFilter_EmptyServiceExclude_IsPassAll_NoIngestionBlocked()
+    public void WorkflowFilter_AllWildcard_ExcludesEverything()
     {
-        // An empty SERVICE_EXCLUDE must produce IsPassAll = true and block nothing.
-        var filter = ServiceFilter.Parse("");
+        var filter = WorkflowExcludeFilter.Parse("*/*/*");
+
+        Assert.True(filter.IsExcluded("acme", "api", "deploy"));
+        Assert.True(filter.IsExcluded("org-b", "web", "release"));
+    }
+
+    [Fact]
+    public void WorkflowFilter_EmptyWorkflowExclude_IsPassAll_NoIngestionBlocked()
+    {
+        var filter = WorkflowExcludeFilter.Parse("");
 
         Assert.True(filter.IsEmpty);
-        Assert.False(filter.IsExcluded("acme", "api", "any-service"));
+        Assert.False(filter.IsExcluded("acme", "api", "any-workflow"));
+    }
+
+    [Fact]
+    public void WorkflowFilter_NullWorkflowName_OnlyStarPatternMatches()
+    {
+        // When workflow name is empty (unavailable), only an all-'*' workflow segment matches.
+        var filterAll = WorkflowExcludeFilter.Parse("*/*/*");
+        var filterLiteral = WorkflowExcludeFilter.Parse("acme/api/deploy");
+
+        Assert.True(filterAll.IsExcluded("acme", "api", ""));     // '*' matches empty
+        Assert.False(filterLiteral.IsExcluded("acme", "api", "")); // literal won't match empty
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
