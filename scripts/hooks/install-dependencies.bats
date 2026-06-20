@@ -201,89 +201,10 @@ STUB
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/code-review-graph"
   chmod +x "$SANDBOX/code-review-graph"
 
-  # tokensave stub — pre-installs a working tokensave.
-  printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/tokensave"
-  chmod +x "$SANDBOX/tokensave"
-
-  # curl stub — appends name to sentinel; writes the -o destination as an empty file.
-  cat > "$SANDBOX/curl" << STUB
-#!$BASH_BIN
-echo "curl" >> "$SENTINEL"
-next_is_dest=0
-for arg in "\$@"; do
-  if [ "\$next_is_dest" = "1" ]; then
-    touch "\$arg"
-    next_is_dest=0
-  fi
-  [ "\$arg" = "-o" ] && next_is_dest=1
-done
-exit 0
-STUB
-  chmod +x "$SANDBOX/curl"
-
-  # wget stub — appends name to sentinel; writes the -O destination as an empty file.
-  cat > "$SANDBOX/wget" << STUB
-#!$BASH_BIN
-echo "wget" >> "$SENTINEL"
-next_is_dest=0
-for arg in "\$@"; do
-  if [ "\$next_is_dest" = "1" ]; then
-    touch "\$arg"
-    next_is_dest=0
-  fi
-  [ "\$arg" = "-O" ] && next_is_dest=1
-done
-exit 0
-STUB
-  chmod +x "$SANDBOX/wget"
-
-  # tar stub — appends name to sentinel; extracts nothing (no-op).
-  printf '#!%s\necho "tar" >> "%s"\nexit 0\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/tar"
-  chmod +x "$SANDBOX/tar"
-
-  # install stub — appends name to sentinel; copies source to destination.
-  cat > "$SANDBOX/install" << STUB
-#!$BASH_BIN
-echo "install" >> "$SENTINEL"
-_src=""
-_dest=""
-_skip_next=0
-for _a in "\$@"; do
-  if [ "\$_skip_next" = "1" ]; then _skip_next=0; continue; fi
-  case "\$_a" in
-    -m) _skip_next=1 ;;
-    -*) ;;
-    *) if [ -z "\$_src" ]; then _src="\$_a"; else _dest="\$_a"; fi ;;
-  esac
-done
-if [ -n "\$_src" ] && [ -n "\$_dest" ]; then
-  printf '#!$BASH_BIN\nexit 0\n' > "\$_dest"
-  chmod +x "\$_dest"
-fi
-exit 0
-STUB
-  chmod +x "$SANDBOX/install"
-
-  # find stub — used by tokensave install to locate the extracted binary.
-  cat > "$SANDBOX/find" << STUB
-#!$BASH_BIN
-echo "$SANDBOX/tokensave"
-STUB
-  chmod +x "$SANDBOX/find"
-
-  # cargo stub — exits 1 by default (crates.io blocked).
-  printf '#!%s\necho "cargo" >> "%s"\nexit 1\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/cargo"
-  chmod +x "$SANDBOX/cargo"
-
   # sed stub — delegates to the real sed binary.
   SED_BIN="$(command -v sed)"
   printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$SED_BIN" > "$SANDBOX/sed"
   chmod +x "$SANDBOX/sed"
-
-  # head stub — delegates to the real head binary.
-  HEAD_BIN="$(command -v head)"
-  printf '#!%s\nexec %s "$@"\n' "$BASH_BIN" "$HEAD_BIN" > "$SANDBOX/head"
-  chmod +x "$SANDBOX/head"
 
   # npm stub — appends name to sentinel; writes correct bin stub(s) on "install".
   cat > "$SANDBOX/npm" << STUB
@@ -849,59 +770,4 @@ STUB
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"uv not found"* ]]
-}
-
-# ---------------------------------------------------------------------------
-# 28. tokensave: idempotent — present, no download attempted
-# ---------------------------------------------------------------------------
-
-@test "tokensave idempotent: tokensave present exits 0 without attempting download" {
-  run env -i \
-    CLAUDE_CODE_REMOTE=1 \
-    PATH="$SANDBOX" \
-    "$BASH_BIN" "$SCRIPT"
-  [ "$status" -eq 0 ]
-  if [ -f "$SENTINEL" ] && grep -q "^tar$" "$SENTINEL"; then
-    echo "tar was invoked despite tokensave already being on PATH"
-    return 1
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# 29. tokensave: prebuilt install success
-# ---------------------------------------------------------------------------
-
-@test "tokensave prebuilt install: absent + curl+tar available installs binary and exits 0" {
-  rm -f "$SANDBOX/tokensave"
-
-  run env -i \
-    CLAUDE_CODE_REMOTE=1 \
-    PATH="$SANDBOX" \
-    HOME="$SANDBOX" \
-    "$BASH_BIN" "$SCRIPT"
-
-  [ "$status" -eq 0 ]
-  grep -q "^curl$" "$SENTINEL"
-  [ -x "$SANDBOX/.local/bin/tokensave" ] || [ -x "$SANDBOX/tokensave" ]
-}
-
-# ---------------------------------------------------------------------------
-# 30. tokensave: install failure is NON-FATAL
-# ---------------------------------------------------------------------------
-
-@test "tokensave install failure non-fatal: curl fails + cargo absent exits 0 with 'continuing without' warning" {
-  rm -f "$SANDBOX/tokensave"
-  rm -f "$SANDBOX/cargo"
-
-  printf '#!%s\necho "curl" >> "%s"\nexit 1\n' "$BASH_BIN" "$SENTINEL" > "$SANDBOX/curl"
-  chmod +x "$SANDBOX/curl"
-
-  run env -i \
-    CLAUDE_CODE_REMOTE=1 \
-    PATH="$SANDBOX" \
-    HOME="$SANDBOX" \
-    "$BASH_BIN" "$SCRIPT"
-
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"continuing without"* ]]
 }

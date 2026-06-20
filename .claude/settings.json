@@ -110,16 +110,6 @@
             "timeout": 10
           }
         ]
-      },
-      {
-        "matcher": "Read|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_tokensave_guard.py\"",
-            "timeout": 10
-          }
-        ]
       }
     ],
     "PostToolUse": [
