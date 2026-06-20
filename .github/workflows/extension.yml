@@ -85,13 +85,12 @@ jobs:
         run: npm ci
         working-directory: frontend/extension
 
-      - name: Install Playwright Chromium
-        run: |
-          for attempt in 1 2 3; do
-            timeout 360 npx playwright install --with-deps chromium && exit 0
-            echo "Attempt $attempt failed or timed out; retrying..."
-          done
-          exit 1
+      - name: Install Playwright system deps
+        # The E2E fixtures launch the runner's preinstalled Google Chrome
+        # (channel: 'chrome'), so no Playwright browser binary download is needed.
+        # This installs only the OS shared libraries Playwright needs, via apt
+        # (no cdn.playwright.dev fetch — that download stalls in this environment).
+        run: npx playwright install-deps chromium
         working-directory: testing/e2e
 
       - name: Run extension E2E

@@ -1,10 +1,14 @@
 /**
  * Extension test fixtures.
  *
- * Launches a real Chromium browser (channel: 'chromium') via launchPersistentContext
+ * Launches the runner's system Google Chrome (channel: 'chrome') via launchPersistentContext
  * with the built, unpacked MV3 extension loaded.  Resolves the extension id from the
  * registered service worker, then navigates the options page to configure the mock
  * backend URL (http://localhost:3002).
+ *
+ * channel: 'chrome' uses the OS-installed Google Chrome (preinstalled on ubuntu-latest
+ * GitHub runners), avoiding the unreliable Playwright CDN download.  MV3 extension
+ * loading via --load-extension works the same on branded Chrome.
  *
  * All extension tests extend the `extensionTest` fixture exported from this file.
  */
@@ -18,7 +22,7 @@ const MOCK_URL = 'http://localhost:3002';
 const EXTENSION_DIST = path.resolve(__dirname, '../../../../frontend/extension/dist');
 
 export interface ExtensionFixtures {
-  /** A Chromium persistent context with the extension loaded. */
+  /** A Chrome persistent context with the extension loaded. */
   context: BrowserContext;
   /** The resolved chrome-extension:// ID. */
   extensionId: string;
@@ -84,7 +88,7 @@ export const extensionTest = base.extend<ExtensionFixtures>({
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pw-ext-'));
 
     const context = await chromium.launchPersistentContext(userDataDir, {
-      channel: 'chromium',
+      channel: 'chrome',
       headless: true,
       args: [
         `--disable-extensions-except=${EXTENSION_DIST}`,
