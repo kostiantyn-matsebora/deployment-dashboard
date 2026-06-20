@@ -134,7 +134,7 @@ Distinct from the client watch filter above. Two separate server-side excludes o
 |---|---|---|---|
 | **Where configured** | Per-browser, in the extension | Fetcher container env var | API container env var |
 | **Identity matched** | Per-browser service/environment prefs | `owner/repo/workflow` — GitHub-specific 3-segment glob | Opaque `namespace/service` identity glob |
-| **Scope** | Badge updates and notifications only | GitHub fetcher poll only — matching workflows never polled or ingested | Write ingest + all read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`) |
+| **Scope** | Badge updates and notifications only | GitHub fetcher poll only — matching workflows never ingested | Write ingest + all read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`) |
 | **Effect on storage** | None — all events remain in storage | Excluded workflows cost no CI/CD API quota and produce no rows | API write: matching ingest rejected `403`. API read: already-stored events hidden (storage unchanged) |
 | **Precedence** | Applied client-side after the API response | Applied before any ingest attempt | Applied server-side before any data reaches the client |
 | **Provider scope** | n/a | GitHub adapter only — future adapters (Azure DevOps, Jenkins, …) add their own analogous exclude | Provider-agnostic — applies to all ingested events regardless of source |

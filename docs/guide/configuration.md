@@ -106,7 +106,7 @@ GitHub-adapter filter that prevents specific workflows from being polled or inge
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `GITHUB_WORKFLOW_EXCLUDE` | no | *(empty — exclude nothing)* | CSV of `owner/repo/workflow` glob patterns. Matching workflows are **never polled or ingested** by the GitHub fetcher. Empty = exclude nothing. |
+| `GITHUB_WORKFLOW_EXCLUDE` | no | *(empty — exclude nothing)* | CSV of `owner/repo/workflow` glob patterns. Matching workflows are **never ingested** by the GitHub fetcher. Empty = exclude nothing. |
 
 This exclude is **GitHub-specific** — it lives in the GitHub adapter. Future CI/CD provider adapters (Azure DevOps, Jenkins, …) will each expose their own analogous exclude over their own provider entity identifiers.
 
