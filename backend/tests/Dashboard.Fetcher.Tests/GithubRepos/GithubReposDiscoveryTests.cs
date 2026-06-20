@@ -130,11 +130,12 @@ public sealed class GithubReposDiscoveryTests
     [Fact]
     public async Task ListReposAsync_OrgOwner_NotFound_FallsBackToUserRepos()
     {
-        // /orgs/bob/repos returns no items → falls back to /users/bob/repos.
+        // /orgs/bob/repos returns 404 (bob is not an org) → falls back to /users/bob/repos.
         var repos = new[] { "bob/project-a", "bob/project-b" };
         var handler = new FakeRepoListHandler(
             primaryPath: "/orgs/bob/repos",
-            primaryRepos: [],    // empty = GetPagedAsync yields nothing → fallback
+            primaryRepos: [],
+            primaryStatus: HttpStatusCode.NotFound,   // 404 = not an org → fall back
             fallbackPath: "/users/bob/repos",
             fallbackRepos: repos);
         var (client, http) = BuildClient(handler);
@@ -145,6 +146,26 @@ public sealed class GithubReposDiscoveryTests
         Assert.Equal(2, result.Count);
         Assert.Contains("bob/project-a", result);
         Assert.Contains("bob/project-b", result);
+    }
+
+    [Fact]
+    public async Task ListReposAsync_OrgOwner_EmptyOrg_ReturnsEmptyWithoutFallingBack()
+    {
+        // /orgs/acme/repos returns 200 + [] (org exists, zero repos).
+        // Must NOT fall back to /users/acme/repos — a 200 is authoritative.
+        var userRepos = new[] { "acme/unrelated" };
+        var handler = new FakeRepoListHandler(
+            primaryPath: "/orgs/acme/repos",
+            primaryRepos: [],
+            primaryStatus: HttpStatusCode.OK,         // 200 + [] = empty org, no fallback
+            fallbackPath: "/users/acme/repos",
+            fallbackRepos: userRepos);
+        var (client, http) = BuildClient(handler);
+        using var _ = http;
+
+        var result = await client.ListReposAsync(owner: "acme", CancellationToken.None);
+
+        Assert.Empty(result);
     }
 
     // ── Glob filtering applied after discovery ────────────────────────────────
@@ -217,11 +238,15 @@ public sealed class GithubReposDiscoveryTests
     /// <summary>
     /// Returns a JSON array of GhRepoItem objects at the configured path.
     /// Supports an optional fallback path (for org → user fallback).
+    /// <paramref name="primaryStatus"/> overrides the primary path's HTTP status code —
+    /// use <see cref="HttpStatusCode.NotFound"/> to simulate a non-org owner, or
+    /// <see cref="HttpStatusCode.OK"/> (default) for an empty or populated org.
     /// Any path not matching primary or fallback returns 404.
     /// </summary>
     private sealed class FakeRepoListHandler(
         string primaryPath,
         IReadOnlyList<string> primaryRepos,
+        HttpStatusCode primaryStatus = HttpStatusCode.OK,
         string? fallbackPath = null,
         IReadOnlyList<string>? fallbackRepos = null) : HttpMessageHandler
     {
@@ -232,6 +257,9 @@ public sealed class GithubReposDiscoveryTests
 
             if (path.StartsWith(primaryPath, StringComparison.OrdinalIgnoreCase))
             {
+                if (primaryStatus != HttpStatusCode.OK)
+                    return Task.FromResult(new HttpResponseMessage(primaryStatus));
+
                 return Task.FromResult(
                     primaryRepos.Count > 0
                         ? JsonResponse(primaryRepos)

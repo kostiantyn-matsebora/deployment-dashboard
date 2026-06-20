@@ -34,11 +34,6 @@ public sealed class ServiceFilter
     /// </summary>
     public bool IsEmpty => _patterns.Count == 0;
 
-    /// <summary>
-    /// <see cref="IsEmpty"/> exposed as <see cref="IsPassAll"/> for API-consumer symmetry.
-    /// </summary>
-    public bool IsPassAll => IsEmpty;
-
     private ServiceFilter(IReadOnlyList<string[]> patterns)
     {
         _patterns = patterns;
@@ -55,7 +50,6 @@ public sealed class ServiceFilter
 
         var patterns = serviceExcludeCsv
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(p => p.Length > 0)
             .Select(SplitPattern)
             .ToList();
 

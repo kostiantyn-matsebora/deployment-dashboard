@@ -58,7 +58,6 @@ public sealed class GithubAdapterOptions
         string.IsNullOrWhiteSpace(Repos)
             ? []
             : Repos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                   .Where(s => s.Length > 0)
                    .ToList();
 
     /// <summary>

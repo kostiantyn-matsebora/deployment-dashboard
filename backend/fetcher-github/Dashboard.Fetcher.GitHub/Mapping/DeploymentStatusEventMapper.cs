@@ -104,11 +104,13 @@ public sealed class DeploymentStatusEventMapper(
         if (contractStatus is null)
             return null;
 
-        // Resolve service early so we can apply the deployment-wide filter before
-        // fetching expensive workflow graph + version data.
+        // Early pre-filter using the repo-fallback service name (workflow not yet resolved).
+        // This short-circuits only when the repo-fallback name itself is excluded; events
+        // whose exclusion depends on the workflow-name-resolved service are caught by the
+        // re-check after the graph fetch below.
         var runId = EventMapper.ExtractRunId(status.TargetUrl);
         var service = ServiceResolver.Resolve(
-            workflowName: null, // resolved later via graph; use repo fallback for filter check
+            workflowName: null, // resolved later via graph; repo fallback used here
             repo: ctx.Repo,
             serviceMap: serviceMap);
 

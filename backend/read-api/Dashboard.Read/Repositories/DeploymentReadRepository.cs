@@ -49,7 +49,7 @@ internal sealed class DeploymentReadRepository(
 
         // Fast-path: when no service filter is active every DB row passes — fetch
         // exactly limit+1 rows in one round-trip (original single-query behaviour).
-        if (serviceFilter.IsPassAll)
+        if (serviceFilter.IsEmpty)
         {
             var fastQ = initialCursorAt.HasValue
                 ? orderedBase.Where(e => e.HappenedAt < initialCursorAt.Value)

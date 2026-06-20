@@ -82,11 +82,18 @@ builder.Services.AddHttpClient("github", c =>
 // Expand any glob specs (owner/*, *) into concrete owner/repo strings using the
 // GitHub REST API before singletons are built.  Exact specs need no discovery.
 // An empty GITHUB_REPOS = no repos and no polling; bare "*" = all accessible repos.
+//
+// The RateLimitBudget is created once here and reused as the runtime singleton so
+// that requests spent during discovery are accounted against the same budget instance
+// (avoids a second GET /rate_limit and ensures discovery consumption is not invisible
+// to the runtime poller).
+RateLimitBudget? sharedBudget = null;
 {
     var specs = githubOptions.RepoSpecs;
     if (specs.Count > 0 && specs.Any(s => s.Contains('*')))
     {
-        var resolvedRepos = await ExpandRepoSpecsAsync(githubOptions, CancellationToken.None);
+        (var resolvedRepos, sharedBudget) =
+            await ExpandRepoSpecsAsync(githubOptions, CancellationToken.None);
         githubOptions.Repos = string.Join(",", resolvedRepos);
     }
 }
@@ -100,8 +107,13 @@ builder.Services.AddSingleton<FetcherReadinessIndicator>();
 builder.Services.AddSingleton<IFetcherReadinessIndicator>(
     sp => sp.GetRequiredService<FetcherReadinessIndicator>());
 
+// Reuse the budget built during discovery (if any) so discovery requests are
+// accounted in the same budget; otherwise build a fresh one now.
 builder.Services.AddSingleton<RateLimitBudget>(sp =>
 {
+    if (sharedBudget is not null)
+        return sharedBudget;
+
     var factory = sp.GetRequiredService<IHttpClientFactory>();
     var http = factory.CreateClient("github");
     var logger = sp.GetRequiredService<ILogger<RateLimitBudget>>();
@@ -259,11 +271,12 @@ static object? BuildRateLimitPayload(RateLimitSnapshot? rl) =>
         ci_remaining = rl.CiRemaining,
     };
 
-static async Task<IReadOnlyList<string>> ExpandRepoSpecsAsync(
+static async Task<(IReadOnlyList<string> Repos, RateLimitBudget Budget)> ExpandRepoSpecsAsync(
     GithubAdapterOptions options, CancellationToken ct)
 {
-    // Build a minimal temporary GithubClient for discovery (rate-limit budget is
-    // discovered inside CreateAsync; pass 0 so it calls GET /rate_limit).
+    // Build a GithubClient for discovery. The budget created here is returned to the
+    // caller so it can be reused as the runtime singleton — discovery's GET /rate_limit
+    // and any listing requests are then accounted against the same budget instance.
     var discoveryHttp = new System.Net.Http.HttpClient
     {
         BaseAddress = new Uri(options.BaseUrl),
@@ -275,16 +288,20 @@ static async Task<IReadOnlyList<string>> ExpandRepoSpecsAsync(
 
     using var _ = discoveryHttp;
 
-    var discoveryLogger = LoggerFactory.Create(b => b.AddConsole())
+    // Dispose the temporary logger factory after use — it holds a console sink.
+    using var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+    var discoveryLogger = loggerFactory
         .CreateLogger<Dashboard.Fetcher.GitHub.RateLimit.RateLimitBudget>();
 
-    var discoveryBudget = await Dashboard.Fetcher.GitHub.RateLimit.RateLimitBudget.CreateAsync(
+    var budget = await Dashboard.Fetcher.GitHub.RateLimit.RateLimitBudget.CreateAsync(
         discoveryHttp, options.RateLimit, options.RateLimitBudgetPct, discoveryLogger, ct);
 
-    var discoveryClient = new GithubClient(discoveryHttp, discoveryBudget);
+    var discoveryClient = new GithubClient(discoveryHttp, budget);
 
-    return await RepoSpecExpander.ExpandAsync(
+    var repos = await RepoSpecExpander.ExpandAsync(
         options.RepoSpecs,
         (owner, token) => discoveryClient.ListReposAsync(owner, token),
         ct);
+
+    return (repos, budget);
 }

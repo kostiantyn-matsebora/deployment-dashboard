@@ -45,7 +45,7 @@ public sealed class ServiceFilterFetcherTests
         var options = new GithubAdapterOptions();
         var filter = options.BuildServiceFilter();
 
-        Assert.True(filter.IsPassAll);
+        Assert.True(filter.IsEmpty);
         Assert.True(filter.Permits("any-service", "any-namespace", "any/repo"));
     }
 
@@ -140,7 +140,7 @@ public sealed class ServiceFilterFetcherTests
         // An empty SERVICE_EXCLUDE must produce IsPassAll = true and block nothing.
         var filter = ServiceFilter.Parse("");
 
-        Assert.True(filter.IsPassAll);
+        Assert.True(filter.IsEmpty);
         Assert.False(filter.IsExcluded("acme", "api", "any-service"));
     }
 

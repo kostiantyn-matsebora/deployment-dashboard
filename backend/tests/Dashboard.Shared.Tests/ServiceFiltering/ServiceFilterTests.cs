@@ -47,7 +47,7 @@ public sealed class ServiceFilterTests
 
         Assert.True(filter.Permits("any-service", "any-namespace"));
         Assert.True(filter.Permits("my-api", null));
-        Assert.True(filter.IsPassAll);
+        Assert.True(filter.IsEmpty);
         Assert.True(filter.IsEmpty);
     }
 
@@ -56,7 +56,7 @@ public sealed class ServiceFilterTests
     {
         var filter = ServiceFilter.Parse(null);
 
-        Assert.True(filter.IsPassAll);
+        Assert.True(filter.IsEmpty);
         Assert.True(filter.Permits("svc", "ns"));
         Assert.True(filter.Permits("svc", null));
     }
@@ -66,7 +66,7 @@ public sealed class ServiceFilterTests
     {
         var filter = ServiceFilter.Parse("");
 
-        Assert.True(filter.IsPassAll);
+        Assert.True(filter.IsEmpty);
         Assert.True(filter.Permits("anything", "anywhere"));
     }
 
@@ -75,7 +75,7 @@ public sealed class ServiceFilterTests
     {
         var filter = ServiceFilter.Parse("   ");
 
-        Assert.True(filter.IsPassAll);
+        Assert.True(filter.IsEmpty);
         Assert.True(filter.Permits("any-svc", "any-ns"));
     }
 
