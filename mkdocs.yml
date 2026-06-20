@@ -88,12 +88,18 @@ nav:
   - Home: index.md
   - Built by Claude: built-by-ai.md
   - Quickstart: guide/quickstart.md
-  - Install: guide/install.md
+  - Install & deploy:
+      - guide/install/index.md
+      - Docker Compose: guide/install/docker-compose.md
+      - Azure (Terraform): guide/install/azure-terraform.md
   - Guide:
       - guide/index.md
       - Quickstart: guide/quickstart.md
       - Screenshots: guide/screenshots.md
-      - Install & deploy: guide/install.md
+      - Install & deploy:
+          - guide/install/index.md
+          - Docker Compose: guide/install/docker-compose.md
+          - Azure (Terraform): guide/install/azure-terraform.md
       - Configuration: guide/configuration.md
       - Integrate your CI/CD: guide/send-events.md
       - Architecture overview: guide/architecture-overview.md

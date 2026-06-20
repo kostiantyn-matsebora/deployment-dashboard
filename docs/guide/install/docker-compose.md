@@ -1,56 +1,6 @@
-# Install & deploy
+# Install with Docker Compose
 
-How to run Deployment Dashboard for a real team. For a zero-config local trial, see the [Quickstart](./quickstart.md).
-
-## Concepts in one minute
-
-<div class="grid cards" markdown>
-
--   :material-upload-outline:{ .lg .middle } **Push-first ingestion**
-
-    ---
-
-    Your CI/CD pipeline `POST`s a deployment event to `POST /api/deployments` — one extra step. [Integrate your CI/CD](./send-events.md).
-
--   :material-sync:{ .lg .middle } **Pull mode is optional**
-
-    ---
-
-    The Fetcher can poll a CI/CD API (GitHub Actions today) and post through the same endpoint — see the [`-pull` profiles](#2-configure--run).
-
--   :material-lan-connect:{ .lg .middle } **One published port**
-
-    ---
-
-    The gateway (`:8080`) is the only exposed surface. API, frontend, and PostgreSQL stay internal.
-
--   :material-server-network:{ .lg .middle } **Stateless backend**
-
-    ---
-
-    Scale API instances behind the gateway; SSE fan-out works across them via PostgreSQL `LISTEN/NOTIFY`.
-
-</div>
-
-## Deployment shapes
-
-Two independent axes pick your profile:
-
-<div class="grid cards" markdown>
-
--   :material-database:{ .lg .middle } **Database**
-
-    ---
-
-    `full` bundles PostgreSQL in a Docker volume; `standalone` connects to an external managed PostgreSQL (e.g. Azure Database for PostgreSQL) and scales the app tier behind the gateway.
-
--   :material-swap-vertical:{ .lg .middle } **Ingestion**
-
-    ---
-
-    The base profile is push-only; the **`-pull`** variant adds the [Fetcher](#2-configure--run) for pull-mode ingestion.
-
-</div>
+Run Deployment Dashboard on any Linux or Windows host with Docker installed. For a zero-config local trial, see the [Quickstart](../quickstart.md). For an overview of deployment shapes and shared prerequisites, see the [Install & deploy landing](./index.md).
 
 ## 1. Get the stack
 
@@ -96,7 +46,7 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
     docker compose --profile full up -d
     ```
 
-    Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
+    Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](../send-events.md).
 
 === "standalone"
 
@@ -121,7 +71,7 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
     docker compose --profile standalone up -d
     ```
 
-    Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](./send-events.md).
+    Then point your CI/CD at `http://<host>:8080/api/deployments` — see [Integrate your CI/CD](../send-events.md).
 
 === "full-pull"
 
@@ -144,7 +94,7 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
 
     </div>
 
-    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](./configuration.md#fetcher-pull-mode).
+    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration.md#fetcher-pull-mode).
 
     ??? info "GitHub token scope — read-only; the Fetcher never writes"
 
@@ -182,7 +132,7 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
 
     </div>
 
-    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](./configuration.md#fetcher-pull-mode).
+    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration.md#fetcher-pull-mode).
 
     ??? info "GitHub token scope — read-only; the Fetcher never writes"
 
@@ -202,18 +152,6 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
 
 Building from a clone is a **contributor** workflow — see [CONTRIBUTING.md → Local setup](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CONTRIBUTING.md#local-setup).
 
-## Production checklist
-
-!!! warning ""
-
-    - **Set a strong `API_KEY`.** Writes are rejected `401` without it.
-    - **Set `CONTROL_API_KEY`** (distinct from `API_KEY`) only if you need the reset surface; leave it unset to hide `POST /api/control/reset`.
-    - **Front the stack with TLS** and keep it on your internal network — reads are unauthenticated by design ([Architecture](./architecture-overview.md)).
-    - **Set `HISTORY_RETENTION_DAYS`** (minimum 90; 365 recommended).
-    - **Scale the API** horizontally behind the gateway as needed — it's stateless.
-
-See [Configuration](./configuration.md) for every environment variable.
-
 ## Pinning a release version
 
 By default the stack pulls `latest` (tracks `main`). For a reproducible deploy, pin in `.env`:
@@ -224,14 +162,3 @@ DASHBOARD_VERSION=0.17.0
 
 !!! warning "No leading `v`"
     The git tag `v0.17.0` publishes images as `0.17.0`. Each GitHub Release also attaches a compose bundle (`deployment-dashboard-compose-vX.Y.Z.zip`). Full process: [RELEASING.md](https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/RELEASING.md).
-
-## Hosting notes
-
-!!! info ""
-    The reference target is **Azure** (≤ $30/month, container-based — [SAD §5–6](../SAD.md#5-non-functional-requirements)), but nothing is Azure-specific: every component is a standard OCI container. Terraform modules for Azure are planned (`infrastructure/`, not yet present).
-
-!!! tip "Azure Container Apps"
-    The gateway deploys to ACA unchanged — the same image used in Docker Compose. Each proxy location sets the `Host` header to the upstream FQDN so ACA's internal Envoy routes correctly; no ACA-specific config is needed.
-
-!!! note "Demo gateway image"
-    The production profiles above use `deployment-dashboard-gateway`. The **demo profile** uses a separate `deployment-dashboard-gateway-demo` image that layers `/demo/*` routing on top of the production image. Production deployments carry no demo routes or demo-driver configuration.
