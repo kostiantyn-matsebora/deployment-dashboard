@@ -3,6 +3,7 @@ using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Logging;
 
 namespace Dashboard.Fetcher.GitHub.Backfill;
@@ -16,6 +17,7 @@ public sealed class BackfillEventBuilder(
     GithubClient github,
     WorkflowGraphCache graphCache,
     VersionResolver versionResolver,
+    ServiceFilter serviceFilter,
     ILogger<BackfillEventBuilder> logger)
 {
     // Consecutive deployments with no new data before scanning stops for an environment (F13).
@@ -134,6 +136,11 @@ public sealed class BackfillEventBuilder(
 
             var service = await ResolveServiceFromRunAsync(
                 ctx.Owner, ctx.RepoName, ctx.Repo, runId, pathToService, serviceMap, ct);
+
+            // Apply deployment-wide filter: skip deployments whose service is excluded.
+            var @namespace = ctx.Repo.Split('/').Last();
+            if (!serviceFilter.Permits(service, @namespace, ctx.Repo))
+                continue;
 
             var eventsSoFar = filled.GetValueOrDefault(service, 0);
 

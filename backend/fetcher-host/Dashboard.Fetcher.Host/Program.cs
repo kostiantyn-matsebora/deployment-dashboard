@@ -11,6 +11,7 @@ using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Fetcher.Host.Workers;
 using Dashboard.Fetcher.Ingest;
 using Dashboard.Fetcher.Orchestration;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -80,6 +81,7 @@ builder.Services.AddHttpClient("github", c =>
 // ── Singletons ────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(fetcherOptions);
 builder.Services.AddSingleton(githubOptions);
+builder.Services.AddSingleton(githubOptions.BuildServiceFilter());
 builder.Services.AddSingleton<WorkflowGraphCache>();
 builder.Services.AddSingleton<FetcherReadinessIndicator>();
 builder.Services.AddSingleton<IFetcherReadinessIndicator>(

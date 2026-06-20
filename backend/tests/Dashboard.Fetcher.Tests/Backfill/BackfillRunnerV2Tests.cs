@@ -10,6 +10,7 @@ using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dashboard.Fetcher.Tests.Backfill;
@@ -1119,7 +1120,7 @@ public sealed class BackfillRunnerV2Tests
 
         var eventBuilder = new BackfillEventBuilder(
             githubClient, graphCache, versionResolver,
-            NullLogger<BackfillEventBuilder>.Instance);
+            ServiceFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
 
         var runner = new BackfillRunner(
             githubClient,

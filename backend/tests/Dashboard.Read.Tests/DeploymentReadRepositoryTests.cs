@@ -3,6 +3,7 @@ using Dashboard.Read.Repositories;
 using Dashboard.Shared.Contracts;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Read.Tests;
@@ -20,7 +21,7 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         _ctx = new DashboardDbContext(options);
         _ctx.Database.OpenConnection();
         _ctx.Database.EnsureCreated();
-        _repo = new DeploymentReadRepository(_ctx);
+        _repo = new DeploymentReadRepository(_ctx, ServiceFilter.PassAll);
     }
 
     public void Dispose()

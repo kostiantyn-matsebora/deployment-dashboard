@@ -26,6 +26,10 @@ public static class GithubAdapterOptionsEnv
         ApplyString(config, "GITHUB_SERVICE_MAP", v => options.ServiceMap = v);
         ApplyInt(config, "GITHUB_RATE_LIMIT", v => options.RateLimit = v);
         ApplyInt(config, "GITHUB_RATE_LIMIT_BUDGET_PCT", v => options.RateLimitBudgetPct = v);
+        ApplyString(config, "SERVICE_INCLUDE", v => options.ServiceInclude = v);
+        ApplyString(config, "SERVICE_EXCLUDE", v => options.ServiceExclude = v);
+        ApplyString(config, "REPO_INCLUDE", v => options.RepoInclude = v);
+        ApplyString(config, "REPO_EXCLUDE", v => options.RepoExclude = v);
     }
 
     // ── private helpers ───────────────────────────────────────────────────────

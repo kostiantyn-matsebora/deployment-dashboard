@@ -8,6 +8,7 @@ using Dashboard.Read.Repositories;
 using Dashboard.Read.Services;
 using Dashboard.Read.Sse;
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -149,12 +150,13 @@ public static class ReadEndpoints
         [FromQuery] string? service,
         IDeploymentEventBroadcaster broadcaster,
         IDeploymentReadRepository repository,
+        ServiceFilter deploymentWideFilter,
         HttpContext httpContext,
         CancellationToken ct)
     {
         await WriteSseHeadersAsync(httpContext, ct);
         await ReplaySinceAsync(lastEventId, service, repository, httpContext, ct);
-        await StreamLiveEventsAsync(service, broadcaster, httpContext, ct);
+        await StreamLiveEventsAsync(service, deploymentWideFilter, broadcaster, httpContext, ct);
     }
 
     private static async Task WriteSseHeadersAsync(HttpContext httpContext, CancellationToken ct)
@@ -187,6 +189,7 @@ public static class ReadEndpoints
 
     private static async Task StreamLiveEventsAsync(
         string? service,
+        ServiceFilter deploymentWideFilter,
         IDeploymentEventBroadcaster broadcaster,
         HttpContext httpContext,
         CancellationToken ct)
@@ -214,7 +217,7 @@ public static class ReadEndpoints
 
                 if (!hasData) break; // channel completed (broadcaster shutting down)
 
-                await DrainChannelAsync(reader, service, httpContext, ct);
+                await DrainChannelAsync(reader, service, deploymentWideFilter, httpContext, ct);
             }
         }
         finally
@@ -226,12 +229,14 @@ public static class ReadEndpoints
     private static async Task DrainChannelAsync(
         ChannelReader<DeploymentEvent> reader,
         string? service,
+        ServiceFilter deploymentWideFilter,
         HttpContext httpContext,
         CancellationToken ct)
     {
         while (reader.TryRead(out var ev))
         {
-            if (service is null || ev.Service == service)
+            if ((service is null || ev.Service == service) &&
+                deploymentWideFilter.Permits(ev.Service, ev.Namespace))
                 await WriteSseEventAsync(httpContext, ev, ct);
         }
     }

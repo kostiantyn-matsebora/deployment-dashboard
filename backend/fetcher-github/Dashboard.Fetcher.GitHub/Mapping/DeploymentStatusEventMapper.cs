@@ -1,7 +1,9 @@
+using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Logging;
 
 namespace Dashboard.Fetcher.GitHub.Mapping;
@@ -16,6 +18,7 @@ public sealed class DeploymentStatusEventMapper(
     GithubClient github,
     WorkflowGraphCache graphCache,
     VersionResolver versionResolver,
+    ServiceFilter serviceFilter,
     ILogger<DeploymentStatusEventMapper> logger)
 {
     /// <summary>
@@ -101,7 +104,19 @@ public sealed class DeploymentStatusEventMapper(
         if (contractStatus is null)
             return null;
 
+        // Resolve service early so we can apply the deployment-wide filter before
+        // fetching expensive workflow graph + version data.
         var runId = EventMapper.ExtractRunId(status.TargetUrl);
+        var service = ServiceResolver.Resolve(
+            workflowName: null, // resolved later via graph; use repo fallback for filter check
+            repo: ctx.Repo,
+            serviceMap: serviceMap);
+
+        var @namespace = ctx.Repo.Split('/').Last();
+
+        if (!serviceFilter.Permits(service, @namespace, ctx.Repo))
+            return null;
+
         WorkflowGraph? graph = null;
         if (runId.HasValue)
         {
@@ -116,6 +131,11 @@ public sealed class DeploymentStatusEventMapper(
                     "[{Repo}] workflow graph fetch failed for run {RunId}", ctx.Repo, runId);
             }
         }
+
+        // Re-check the filter using the full resolved service name (may differ from repo fallback).
+        var resolvedService = ServiceResolver.Resolve(graph?.WorkflowName, ctx.Repo, serviceMap);
+        if (!serviceFilter.Permits(resolvedService, @namespace, ctx.Repo))
+            return null;
 
         // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
         if (StatusMapper.IsFailureStatus(contractStatus))

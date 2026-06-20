@@ -2,6 +2,7 @@ using Dashboard.Read.Analytics;
 using Dashboard.Read.Repositories;
 using Dashboard.Read.Services;
 using Dashboard.Read.Sse;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,6 +29,13 @@ public static class ReadServiceExtensions
             RetentionDays: retentionDays);
 
         services.AddSingleton(analyticsOptions);
+
+        var serviceFilter = ServiceFilter.Parse(
+            serviceIncludeCsv: configuration["SERVICE_INCLUDE"],
+            serviceExcludeCsv: configuration["SERVICE_EXCLUDE"],
+            repoIncludeCsv: configuration["REPO_INCLUDE"],
+            repoExcludeCsv: configuration["REPO_EXCLUDE"]);
+        services.AddSingleton(serviceFilter);
 
         services.AddScoped<IDeploymentReadRepository, DeploymentReadRepository>();
         services.AddScoped<IMatrixService, MatrixService>();

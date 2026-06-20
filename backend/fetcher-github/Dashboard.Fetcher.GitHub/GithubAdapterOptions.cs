@@ -1,3 +1,5 @@
+using Dashboard.Shared.ServiceFiltering;
+
 namespace Dashboard.Fetcher.GitHub;
 
 /// <summary>Config bound from the appsettings <c>GitHub</c> section; overridden by flat <c>GITHUB_*</c> env vars (§6).</summary>
@@ -29,6 +31,24 @@ public sealed class GithubAdapterOptions
     /// Defaults to the host's INITIAL_LOOKBACK when zero (§6, F13).
     /// </summary>
     public TimeSpan BackfillMaxAge { get; set; } = TimeSpan.Zero;
+
+    // ── service filter ────────────────────────────────────────────────────────
+
+    /// <summary>CSV glob patterns: only these services are ingested. Empty = all.</summary>
+    public string ServiceInclude { get; set; } = "";
+
+    /// <summary>CSV glob patterns: these services are always skipped. Empty = none.</summary>
+    public string ServiceExclude { get; set; } = "";
+
+    /// <summary>CSV glob patterns (owner/repo): only these repos are ingested. Empty = all.</summary>
+    public string RepoInclude { get; set; } = "";
+
+    /// <summary>CSV glob patterns (owner/repo): these repos are always skipped. Empty = none.</summary>
+    public string RepoExclude { get; set; } = "";
+
+    /// <summary>Builds the <see cref="ServiceFilter"/> from the four CSV pattern properties.</summary>
+    public ServiceFilter BuildServiceFilter() =>
+        ServiceFilter.Parse(ServiceInclude, ServiceExclude, RepoInclude, RepoExclude);
 
     // ── derived helpers ───────────────────────────────────────────────────────
 
