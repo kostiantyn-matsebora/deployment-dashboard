@@ -83,6 +83,36 @@ The dev/local fake key is configured in the API container's environment and is *
 - **Filtering** is via flat query params. No JSON filter DSL.
 - `since` / `until` are RFC 3339 UTC timestamps; the server treats `[since, until)`.
 
+### Deployment-wide service-scope filter (server config, issue #348)
+
+Beyond the per-request query params above, a deployment may be configured to expose only a subset of services. This is **server configuration, not a request parameter** — there is no query param for it. The same effective filter is computed on the fetcher and the read API so the two tiers stay consistent: the fetcher **skips excluded services at poll time** (never stored), and the read API **filters both REST and SSE** at read time. An already-stored event for a now-excluded service is **hidden** by the API filter even though it remains in storage; storage-clearing (reset / backfill) semantics are unchanged.
+
+**Configuration keys.** Four keys, identical on both tiers, flat `SCREAMING_SNAKE`; each a CSV of glob patterns:
+
+| Key | Scope | Pattern shape |
+|---|---|---|
+| `SERVICE_INCLUDE` | service identity | service glob (matrix glob semantics, below) |
+| `SERVICE_EXCLUDE` | service identity | service glob |
+| `REPO_INCLUDE` | repo identity | `owner/name` glob |
+| `REPO_EXCLUDE` | repo identity | `owner/name` glob |
+
+**Service glob semantics.** Mirror the existing matrix / services-filter globs (see `getMatrix` in `openapi.yaml`): a pattern **containing `/`** matches the full `namespace/service` composite; a pattern **without `/`** matches the `service` segment across all namespaces; `*` is the wildcard.
+
+**Repo glob + cross-tier mapping.** A repo pattern is `owner/name`. The **fetcher** matches it against the full `owner/name` it polls. The read API stores `(namespace, service)`, **not** `owner/repo` — so the API matches a repo pattern's **`name` segment** against the stored `namespace`. This works because **`namespace == repo short name`** (the `name` half of `owner/repo`; see `DeploymentEventIngest.namespace` in `openapi.yaml`). Document and rely on this `namespace == repo-short-name` identity as the cross-tier consistency rule.
+
+**Precedence — exclude wins.** A match in any exclude list removes the service even if an include list also matches it.
+
+**Empty-list defaults.** Empty include ⇒ match all; empty exclude ⇒ exclude none.
+
+**Effective rule.** A service passes iff:
+
+```
+(SERVICE_INCLUDE+REPO_INCLUDE both empty
+   OR service matches SERVICE_INCLUDE
+   OR repo matches REPO_INCLUDE)
+AND NOT (service matches SERVICE_EXCLUDE OR repo matches REPO_EXCLUDE)
+```
+
 ---
 
 ## 6. Error envelope (RFC 9457)

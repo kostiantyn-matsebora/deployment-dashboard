@@ -197,6 +197,12 @@ paths:
         `DeploymentEventIngest.namespace`); the Swimlanes view keys lanes by the
         composite `(namespace, service)` so same-named services in different
         namespaces become separate lanes (issue #353).
+
+        Subject to the **deployment-wide service-scope filter** (server config,
+        issue #348): events for services excluded by the configured scope are
+        omitted from every page — even rows already in storage are hidden. This
+        is independent of the `service` query param below (which targets a single
+        identity). See `getMatrix` and `api-guidelines.md` §5.
       parameters:
         - { name: service,       in: query, schema: { type: string }, description: "Filter by service identity. A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite (see `getMatrix` for the shared glob semantics)." }
         - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
@@ -271,6 +277,21 @@ paths:
           - a pattern **without `/`** matches the **`service` segment only**,
             across all namespaces — so every existing slashless saved pattern
             keeps working unchanged.
+
+        **Deployment-wide service-scope filter (server config — issue #348).**
+        Independently of the `service` query param above, a deployment may be
+        configured to expose only a subset of services. This scope filter is
+        **server configuration, not a request parameter** — it is applied
+        server-side to every read surface (`/api/services`, `/api/matrix`,
+        `/api/deployments`, `/api/events/stream`) and is enforced with the same
+        effective rule at fetch time, so excluded services are never polled or
+        stored. An already-stored event for a now-excluded service is **hidden**
+        by this filter even though it remains in storage (storage-clearing
+        semantics are unchanged). The scope is expressed over service identity
+        and over repo identity (which maps to `namespace == repo short name`).
+        See `api-guidelines.md` §5 for the configuration keys, glob semantics,
+        precedence (exclude wins), empty-list defaults, and the cross-tier
+        mapping.
       parameters:
         - { name: service, in: query, schema: { type: string }, description: "Filter to a single service identity (Matrix inline filter). A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite." }
       responses:
@@ -290,6 +311,15 @@ paths:
       tags: [discovery]
       operationId: listServices
       summary: Distinct service identifiers derived from stored events.
+      description: |
+        Distinct service identities discovered from stored events.
+
+        Subject to the **deployment-wide service-scope filter** (server config,
+        issue #348): services excluded by the configured scope are absent from
+        this list — they are never polled, stored, or surfaced. See `getMatrix`
+        for the cross-surface filter overview and `api-guidelines.md` §5 for the
+        configuration keys, precedence, and the `namespace == repo short name`
+        mapping.
       responses:
         '200':
           description: Sorted list of distinct service identifiers.
@@ -538,6 +568,12 @@ paths:
 
         Backed by PostgreSQL `LISTEN/NOTIFY` — each API instance fans out only to
         its own connected clients (NFR-05 statelessness).
+
+        Subject to the **deployment-wide service-scope filter** (server config,
+        issue #348): events for services excluded by the configured scope are
+        never emitted on this stream (including replay via `Last-Event-ID`).
+        This is independent of the optional `service` query param below. See
+        `getMatrix` and `api-guidelines.md` §5.
       parameters:
         - name: Last-Event-ID
           in: header
