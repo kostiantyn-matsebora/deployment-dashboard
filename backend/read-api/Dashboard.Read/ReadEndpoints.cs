@@ -8,6 +8,7 @@ using Dashboard.Read.Repositories;
 using Dashboard.Read.Services;
 using Dashboard.Read.Sse;
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -90,14 +91,18 @@ public static class ReadEndpoints
     private static async Task<IResult> HandleGetByIdAsync(
         Guid id,
         IDeploymentReadRepository repository,
+        ServiceFilter serviceFilter,
         CancellationToken ct)
     {
         var ev = await repository.GetByIdAsync(id, ct);
-        return ev is null
-            ? Results.Problem(
+        // Treat an excluded-service event identically to a missing row: return 404.
+        // The contract (api-guidelines.md §5) states excluded services are hidden in
+        // the API even if stored — there is no carve-out for the id endpoint.
+        if (ev is null || !serviceFilter.Permits(ev.Service, ev.Namespace))
+            return Results.Problem(
                 title: "Deployment event not found.",
-                statusCode: StatusCodes.Status404NotFound)
-            : Results.Ok(ev);
+                statusCode: StatusCodes.Status404NotFound);
+        return Results.Ok(ev);
     }
 
     private static async Task<IResult> HandleMatrixAsync(
@@ -149,12 +154,13 @@ public static class ReadEndpoints
         [FromQuery] string? service,
         IDeploymentEventBroadcaster broadcaster,
         IDeploymentReadRepository repository,
+        ServiceFilter deploymentWideFilter,
         HttpContext httpContext,
         CancellationToken ct)
     {
         await WriteSseHeadersAsync(httpContext, ct);
         await ReplaySinceAsync(lastEventId, service, repository, httpContext, ct);
-        await StreamLiveEventsAsync(service, broadcaster, httpContext, ct);
+        await StreamLiveEventsAsync(service, deploymentWideFilter, broadcaster, httpContext, ct);
     }
 
     private static async Task WriteSseHeadersAsync(HttpContext httpContext, CancellationToken ct)
@@ -187,6 +193,7 @@ public static class ReadEndpoints
 
     private static async Task StreamLiveEventsAsync(
         string? service,
+        ServiceFilter deploymentWideFilter,
         IDeploymentEventBroadcaster broadcaster,
         HttpContext httpContext,
         CancellationToken ct)
@@ -214,7 +221,7 @@ public static class ReadEndpoints
 
                 if (!hasData) break; // channel completed (broadcaster shutting down)
 
-                await DrainChannelAsync(reader, service, httpContext, ct);
+                await DrainChannelAsync(reader, service, deploymentWideFilter, httpContext, ct);
             }
         }
         finally
@@ -226,12 +233,14 @@ public static class ReadEndpoints
     private static async Task DrainChannelAsync(
         ChannelReader<DeploymentEvent> reader,
         string? service,
+        ServiceFilter deploymentWideFilter,
         HttpContext httpContext,
         CancellationToken ct)
     {
         while (reader.TryRead(out var ev))
         {
-            if (service is null || ev.Service == service)
+            if ((service is null || ev.Service == service) &&
+                deploymentWideFilter.Permits(ev.Service, ev.Namespace))
                 await WriteSseEventAsync(httpContext, ev, ct);
         }
     }

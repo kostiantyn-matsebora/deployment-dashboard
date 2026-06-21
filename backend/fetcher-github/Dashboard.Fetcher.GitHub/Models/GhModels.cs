@@ -86,6 +86,16 @@ public sealed record GhArtifactListResponse
     [JsonPropertyName("artifacts")] public List<GhArtifact> Artifacts { get; init; } = [];
 }
 
+/// <summary>
+/// Minimal projection of a GitHub repository — only the fields needed for repo discovery.
+/// Returned by <c>GET /user/repos</c>, <c>GET /orgs/{owner}/repos</c>, and
+/// <c>GET /users/{owner}/repos</c>.
+/// </summary>
+public sealed record GhRepoItem
+{
+    [JsonPropertyName("full_name")] public string FullName { get; init; } = "";
+}
+
 public sealed record GhRateLimitResponse
 {
     [JsonPropertyName("resources")] public GhRateLimitResources? Resources { get; init; }

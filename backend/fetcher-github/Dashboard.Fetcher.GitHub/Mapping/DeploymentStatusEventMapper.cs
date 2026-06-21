@@ -1,3 +1,4 @@
+using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.Version;
@@ -16,6 +17,7 @@ public sealed class DeploymentStatusEventMapper(
     GithubClient github,
     WorkflowGraphCache graphCache,
     VersionResolver versionResolver,
+    WorkflowExcludeFilter workflowExcludeFilter,
     ILogger<DeploymentStatusEventMapper> logger)
 {
     /// <summary>
@@ -102,6 +104,7 @@ public sealed class DeploymentStatusEventMapper(
             return null;
 
         var runId = EventMapper.ExtractRunId(status.TargetUrl);
+
         WorkflowGraph? graph = null;
         if (runId.HasValue)
         {
@@ -116,6 +119,12 @@ public sealed class DeploymentStatusEventMapper(
                     "[{Repo}] workflow graph fetch failed for run {RunId}", ctx.Repo, runId);
             }
         }
+
+        // Apply workflow exclude filter once the workflow name is resolved.
+        // When the workflow name is null (graph unavailable), only '*' patterns match — acceptable.
+        var workflowName = graph?.WorkflowName ?? string.Empty;
+        if (workflowExcludeFilter.IsExcluded(ctx.Owner, ctx.RepoName, workflowName))
+            return null;
 
         // Refine failure → cancelled/rejected by cross-referencing run conclusion + reviews.
         if (StatusMapper.IsFailureStatus(contractStatus))

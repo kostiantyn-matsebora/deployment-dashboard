@@ -479,13 +479,13 @@ public sealed class TerminalCachePollTests
             VersionSourceConfig.Default, graphCache, githubClient);
         var eventBuilder = new BackfillEventBuilder(
             githubClient, graphCache, versionResolver,
-            NullLogger<BackfillEventBuilder>.Instance);
+            WorkflowExcludeFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
         var backfillRunner = new BackfillRunner(
             githubClient, adapterOptions, fetcherOptions,
             eventBuilder, NullLogger<BackfillRunner>.Instance);
         var statusEventMapper = new DeploymentStatusEventMapper(
             githubClient, graphCache, versionResolver,
-            NullLogger<DeploymentStatusEventMapper>.Instance);
+            WorkflowExcludeFilter.PassAll, NullLogger<DeploymentStatusEventMapper>.Instance);
 
         return new GithubActionsAdapter(
             githubClient, adapterOptions, fetcherOptions,

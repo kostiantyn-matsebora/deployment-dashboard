@@ -630,13 +630,16 @@ Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level 
 | `BACKFILL_DEPTH` | `2` | number of latest status events to seed per `(service, environment)` slot during backfill (F13); default 2 |
 | `GITHUB_BASE_URL` | `https://api.github.com` | overridable for the integration mock |
 | `GITHUB_TOKEN` | *(secret)* | PAT / GitHub App token |
-| `GITHUB_REPOS` | `acme/api,acme/web` | repos to poll |
+| `GITHUB_REPOS` | `acme/api,acme/web` | Repos to poll. Accepts exact `owner/repo`, `owner/*` (all repos of one owner), or bare `*` (every repo the token can access). Glob forms trigger GitHub API discovery (honoured within the rate-limit budget — F16); discovery runs only when a glob is set. **Empty = no repos polled** (unchanged current behaviour — empty is NOT equivalent to `*`). |
 | `GITHUB_SERVICE_MAP` | `Deploy Checkout API=checkout-api,acme/api=api` | optional overrides; key without `/` = workflow-level, key with `/` = repo-level (§5.8.3) |
 | `GITHUB_VERSION_SOURCE` | `attribute:sha` | `attribute:<attr>` \| `payload:<field>` \| `artifact:<filename>` — see §5.7 |
 | `GITHUB_RATE_LIMIT` | *(unset)* | Total hourly request quota for the token. Unset = discovered via `GET /rate_limit` on startup; discovery failure → 5 000. |
 | `GITHUB_RATE_LIMIT_BUDGET_PCT` | `30` | Percentage of the quota the fetcher may consume per hour (1–100). Default `30` (e.g. 1 500 of 5 000). |
+| `GITHUB_WORKFLOW_EXCLUDE` | *(empty)* | CSV of glob patterns over `owner/repo/workflow` — three clean segments (GitHub owner, repo, and workflow names never contain `/`; each segment may use `*`, e.g. `acme/web/legacy-*`, `acme/*/internal`, `*/*/canary`). Empty = exclude nothing. Applied after `ResolveService` (§5.8.3) at poll time — matching `owner/repo/workflow` triples are **never ingested**. GitHub-specific: future CI/CD adapters (Azure DevOps, Jenkins, …) will add their own analogous exclude over their own provider entities. |
 
 > **Explicit-binding vars.** All vars in this table are read explicitly by name — `FetcherOptionsEnv.ApplyEnvOverrides` (for the fetcher vars) and `GithubAdapterOptionsEnv.ApplyEnvOverrides` (for the `GITHUB_*` vars). The appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it. A missing or unparseable value leaves the property at its default without throwing.
+
+> **`GITHUB_WORKFLOW_EXCLUDE` — GitHub adapter only.** Matched against the `owner/repo/workflow` triple resolved during poll. Three clean segments — GitHub identifiers never contain `/`, so each `*` matches within its own segment only. Repo scoping (all workflows of a repo) is expressed as `owner/repo/*`. This is a provider-specific exclude that lives in the GitHub adapter; each future provider adapter will expose its own analogous exclude over its own entity identifiers. The API-tier deployment-wide exclude (`SERVICE_EXCLUDE`) is a separate concern documented in `API_SPECIFICATION.md` §9 and `api-guidelines.md` §5 — the fetcher does NOT use `SERVICE_EXCLUDE`.
 
 **Health endpoint port.** The `GET /health` listener uses the standard ASP.NET `ASPNETCORE_URLS` environment variable (e.g. `http://+:8080`). Default container port is `8080`; the demo driver's `FETCHER_URL` (DEMO_DRIVER_SPEC §9) must match.
 
