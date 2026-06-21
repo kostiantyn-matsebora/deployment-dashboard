@@ -20,11 +20,14 @@ change set. **Reviewers report, never fix.**
 3. **Provision pools.** One reviewer pool per competency; **pool size ∝ that bucket's
    file-count**, capped by the concurrency limit. e.g. 10 backend + 3 frontend files →
    ~3 backend reviewers : 1 frontend reviewer — *not* 13 agents.
-4. **Independence.** Every reviewer is a fresh instance, **≠ that lane's implementer**.
+4. **Always provision a `security` reviewer.** One generic agent running the `security-review`
+   skill over the **whole integrated diff** (not a per-file bucket) — a cross-cutting dimension that
+   runs **every** review wave, no competency gating.
+5. **Independence.** Every reviewer is a fresh instance, **≠ that lane's implementer**.
 
 ## 2 — Review (each agent drains its bucket)
 
-Each reviewer loops until its bucket is empty:
+Each competency reviewer loops until its bucket is empty:
 
 - **Take** the next file from its competency bucket.
 - **Walk the role's FULL non-negotiable bar, per symbol** — every code-smell + SOLID/DI;
@@ -32,6 +35,14 @@ Each reviewer loops until its bucket is empty:
 - **Emit a `REVIEW`** (`scope` · `checked` · `verdict` · `remarks`). `checked` is mandatory;
   `verdict: pass` is invalid without it — a skim is not a review.
 - Read-only: a reviewer **never edits production code**.
+
+The **`security` reviewer** runs in parallel by its own method:
+
+- **Run the `security-review` skill** over the integrated diff (not a role-bar walk — its own
+  vulnerability methodology).
+- **Emit a `REVIEW` with `role: "security"`** — `checked` = the audited surface, `remarks` =
+  each finding `{smell = vuln class, location, change = remediation}`.
+- Read-only, reports never fixes — same as every other reviewer.
 
 ## 3 — Cross-review (barrier → verify + dedup)
 

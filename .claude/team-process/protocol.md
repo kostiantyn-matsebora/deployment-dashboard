@@ -2,18 +2,18 @@
 
 Typed forms every cross-role message uses — inherited by every role; orchestrator drives the phases that exchange them in [`process.md`](process.md).
 
-Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT.
+Seven typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT · RESEARCH.
 
 - **Every cross-role message MUST be one of these forms**, emitted as a **JSON object** — never free prose.
 - **Binds the orchestrator too** — `BRIEF` to dispatch, `FIX` to route — not only members.
-- **Each form is a JSON object** keyed by a `"type"` discriminator (one of the six, uppercase).
+- **Each form is a JSON object** keyed by a `"type"` discriminator (one of the seven, uppercase).
 - **Multi-value fields are JSON arrays.** What reads as a bulleted list is encoded as an array.
 - **Some fields nest** one level: `BRIEF.spec`, `REVIEW.remarks[]`, `FINDING.options[]`, `FIX.failure` — objects/arrays-of-objects, not flattened strings.
 
 ## Wire format
 
 - **Schema is the contract.** Each form's machine-readable shape lives as a JSON Schema under
-  [`schemas/`](schemas/) (`brief` · `result` · `review` · `finding` · `fix` · `artifact`).
+  [`schemas/`](schemas/) (`brief` · `result` · `review` · `finding` · `fix` · `artifact` · `research`).
   `additionalProperties:false` — extra or renamed fields are rejected.
 - **Omit empty optional fields** — don't send `null` or `[]`; leave the key out.
 - **The per-form tables below are the authoring source** (field · meaning · constraint · examples);
@@ -41,6 +41,7 @@ Six typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FIN
 ```
 
 `role` (in `RESULT`/`REVIEW`) is one of: `contract` · `backend` · `frontend` · `infrastructure` · `testing` · `docs`.
+`REVIEW.role` additionally accepts `security` — a **review-only** competency (a generic agent running the `security-review` skill); it never appears in `RESULT` and never implements.
 
 ---
 
@@ -88,6 +89,20 @@ Every cross-role message is a **file in the session directory** (durable payload
 - **Write-time guard.** The box-write guard (`invoke_protocol_form_guard.py`) rejects any non-JSON or
   non-typed-form Write to an inbox/outbox at write time — not only when the pointer fires. Writing prose,
   markdown, or `.txt` to a box is blocked immediately.
+
+---
+
+## Prime the hand-back — few-shot at dispatch
+
+**Problem.** A member told only "return a `RESULT`" writes prose first → gets **blocked** by the write-time guard → reads the schema → re-emits. Wasted round-trip on every hand-back.
+
+**Fix.** Every dispatch primes the exact expected output so the member emits conforming JSON on the **first** attempt. The spawn/dispatch prompt MUST carry all three:
+
+1. **The form name** — `RESULT` for `/implement`, `REVIEW` for `/review-loop`, `RESEARCH` for `Explore`, etc.
+2. **Its canonical example** — copied **verbatim** from this file's section for that form (a real filled instance, not invented or paraphrased; copying the canonical example is *not* the forbidden "restate a divergent shape").
+3. **The one-step recipe** — write the filled JSON to a temp file, run `python3 scripts/hooks/format_protocol_form.py --input-file <file> --outbox-dir <your outbox>`, send the printed `{ type, ref }` pointer **verbatim**. Explicit warning: *do not write a prose summary file — the guard blocks it.*
+
+The BRIEF JSON itself stays clean (references the form by name only).
 
 ---
 
@@ -241,17 +256,55 @@ Written to the member's `inbox` and delivered by `{ type, ref }` pointer — see
 
 ---
 
+## RESEARCH — explorer → orch · broad discovery hand-back
+
+Produced by a read-only **`Explore`** agent during intake (not a project role). Covers where the relevant code lives, how it works today, and candidate solution paths. **Complements `REVIEW`** (role-bar scoping) — does not replace it.
+
+- `Explore` has no `Write` tool: it returns the form as its **final message**; the orchestrator persists it to the run dir via the normalizer.
+- No `role` field.
+
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"RESEARCH"` | `"RESEARCH"` |
+| topic | what was explored | required; one line | `"how swimlane collapse state is held today"` |
+| findings | how it works today + where the code lives | array, ≥1 | `["row state lives in swimlane.component.ts signals","no persistence — resets on reload"]` |
+| options | candidate solution paths, each `{id, approach, tradeoffs}` | optional array of objects, ≥2 when present | `[{"id":"a","approach":"persist in localStorage","tradeoffs":"per-device, no server write"},{"id":"b","approach":"server-side pref","tradeoffs":"needs an API + auth"}]` |
+| refs | files / specs / sources consulted | optional array | `["docs/frontend/swimlane.md","swimlane.component.ts"]` |
+| open | open questions for the lead | optional array; omit if none | `["should collapse state sync across devices?"]` |
+
+```json
+{
+  "type": "RESEARCH",
+  "topic": "how swimlane collapse state is held today",
+  "findings": [
+    "row state lives in swimlane.component.ts signals",
+    "no persistence — resets on reload"
+  ],
+  "options": [
+    { "id": "a", "approach": "persist in localStorage", "tradeoffs": "per-device, no server write" },
+    { "id": "b", "approach": "server-side preference", "tradeoffs": "needs an API + auth, heavier" }
+  ],
+  "refs": ["docs/frontend/swimlane.md", "swimlane.component.ts"],
+  "open": ["should collapse state sync across devices?"]
+}
+```
+
+---
+
 ## Rules
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
 - A design decision in `RESULT.notes` is **folded by the lead into `decisions[]`** (durable, surfaced on resume, published to the issue) — see [`process.md`](process.md) → *Decision record*; member reports, lead curates.
-- A `BRIEF` **references** the role's typed form here (`RESULT`/`REVIEW`/…); it MUST NOT restate or
-  invent a hand-back shape — restating competes with the protocol, itself a breach.
+- A `BRIEF` **references** the role's typed form here (`RESULT`/`REVIEW`/…); the BRIEF JSON MUST NOT
+  invent or restate a **divergent** hand-back shape (that competes with the schema). The few-shot lives
+  in the **spawn prompt**, copied verbatim from this file — see *Prime the hand-back* above.
 - A hand-back that is not valid typed-form JSON (not JSON, unknown `type`, extra/renamed fields,
   missing required fields, wrong value types) is returned **UNREAD** — the orchestrator **MUST** reply
   *re-emit as `RESULT`/`REVIEW`* and **MUST NOT** parse it.
 - `REVIEW.verdict` is `"pass"` **only** with zero remarks; `"changes-requested"` requires ≥1 remark.
 - `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer; loop until every competency passes (→ [`process.md`](process.md) *Review loop*).
+- A `REVIEW` with `role: "security"` (the `security-review`-skill audit) folds + routes exactly like any other competency — each remark goes to the **owning implementer**; security reports, never fixes.
+- A `RESEARCH` form is **lead-persisted discovery input**, not a gate: the orchestrator folds its `findings`/`options` into the run ledger to inform the plan. It carries no verdict and never blocks a merge.
 - Peer review precedes `testing`.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see [`process.md`](process.md) *Fix loop*).
