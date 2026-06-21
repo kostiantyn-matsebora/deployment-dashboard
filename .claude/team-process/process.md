@@ -57,7 +57,7 @@ Roles + guardrails identical across modes — only substrate differs. Full matri
 
 - **Contents.** `session.json` (durable record = run ledger), `inbox/` (orch→member `BRIEF`/`FIX`), `outbox/` (member hand-backs).
 - **Id.** Sanitized `--set-marker --team` name. Re-running `--set-marker` with the same id **merges** (resume path, not fresh). Fresh start: `--end-session --id <id>` before `--set-marker`; omit `--id` to abandon all.
-- **Lifecycle is explicit, not hook-driven.** `TeamCreate`/`TeamDelete` were removed from Claude Code (2.1.178); the lead opens the run with `python3 scripts/hooks/invoke_team_mode_guard.py --set-marker` and closes it with `--end-session`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
+- **Lifecycle is explicit, not hook-driven.** The lead opens the run with `python3 scripts/hooks/invoke_team_mode_guard.py --set-marker` and closes it with `--end-session`. Members run as **background agents** the lead drives asynchronously and coordinates with by message — the runtime's spawn + message primitives; see [`execution-modes.md`](execution-modes.md).
 - **Team mode active** whenever any session record exists — blocks foreground in-session `Agent`/`Task` spawns (a member is recognized by `run_in_background`, or `team_name` for back-compat). Spans reboots. Legacy single-file `session.json` read for back-compat.
 - **Workflow classifier.** `workflow`: `feature-team` (follows phase enum) | `freeform` (free-form phase string).
 - **Run ledger = `session.json`.** Orchestrator enriches it (roster · phase · per-wave changed/decided/deferred). Shape: [`schemas/session.schema.json`](schemas/session.schema.json).
@@ -101,19 +101,23 @@ One orchestrator (sole integration/commit gate): members produce in-lane; orches
 - **Compressed messages only.** Reads `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` — never test logs, full diffs, or source. Decision needing an artifact read → delegate it.
 - **Working set = `plan + current wave`.** Run ledger (lane map + one line per wave: changed / decided / deferred). Fold each `RESULT` in; drop the verbatim message. Team mode: shared task list is the ledger.
 
-## Investigation is delegated — including scoping
+## Investigation is delegated — including exploration and scoping
 
-The orchestrator routes to the owning role — it does not investigate; applies to the first read of a code area, not only the fix loop.
+The orchestrator routes investigation out — it does not explore or scope in its own context; applies to the first read of a code area, not only the fix loop. **Two delegated shapes, picked by need:**
 
-- **No role bar.** Lead reading code to scope it applies a generic / line-count proxy — misses exactly the role-specific smells.
-- **Scoping = delegated assessment.** Refactor / audit / feasibility / "is X clean" → dispatch the owning role; lead does NOT open the code.
-- **Role walks its full bar per symbol** (line-spans, responsibility counts — measured) → `REVIEW` (`scope` · `checked` · `verdict` · `remarks`). Same form for pre-implementation scoping and post-implementation peer review.
-- **Lead keeps aggregate, drops raw.** Fold `REVIEW.remarks` into the run ledger; never pull file reads / diffs into lead context.
+- **Broad discovery → `Explore` agent → `RESEARCH`.** "How does this work today / where's the relevant code / what are the options" → dispatch a read-only **`Explore`** agent.
+  - Its exploration loops run in its **disposable** context; it returns a [`RESEARCH`](protocol.md) form (`topic` · `findings` · `options` · `refs` · `open`).
+  - Lead **never runs the exploration loops itself** — that is exactly the agent-loop context pollution this rule exists to prevent.
+  - `Explore` is read-only (no `Write`): returns the form as its final message; orchestrator persists it via the normalizer, folds `findings`/`options` into the ledger as plan input.
+- **Bar-level scoping → owning role → `REVIEW`.** When a role's non-negotiable bar must be judged (refactor / audit / feasibility / "is X clean"), dispatch the **owning role**; it walks its full bar per symbol (line-spans, responsibility counts — measured) → `REVIEW` (`scope` · `checked` · `verdict` · `remarks`). Same form for pre-implementation scoping and post-implementation peer review.
+- **`Explore` complements `REVIEW`, never replaces it.** Discovery answers *where / how / what-are-the-options*; the role `REVIEW` answers *does it meet the bar*. Use discovery to find the area, the role to judge it.
+- **No role bar in the lead.** A lead reading code to scope it applies a generic / line-count proxy — misses exactly the role-specific smells.
+- **Lead keeps aggregate, drops raw.** Fold `RESEARCH.findings` / `REVIEW.remarks` into the run ledger; never pull file reads / diffs into lead context.
 - **Fix-loop = same rule.** `FINDING` → pick owning role → `FIX`; route, don't investigate.
 
 ## Communication protocol
 
-6 typed forms (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT`) — fields, rendering, rules: [`protocol.md`](protocol.md).
+7 typed forms (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT` · `RESEARCH`) — fields, rendering, rules: [`protocol.md`](protocol.md).
 
 - Every cross-role message MUST be one of these forms; non-conforming → **UNREAD**.
 - Orchestrator: emits `BRIEF`/`FIX` · reads the rest.
@@ -131,14 +135,27 @@ The orchestrator routes to the owning role — it does not investigate; applies 
 
 | # | Phase | Command | Purpose |
 |---|---|---|---|
-| 0 | Intake & docs-first | [`/intake`](../commands/intake.md) | Read owning spec; restate acceptance criteria; delegate scoping (never read code to scope). |
+| 0 | Intake & docs-first | [`/intake`](../commands/intake.md) | Read owning spec; restate acceptance criteria; delegate exploration to `Explore` (→ `RESEARCH`) + scoping to the owning role (→ `REVIEW`) — never read code to explore/scope. |
 | 1 | Contract | [`/contract`](../commands/contract.md) | Cross-layer → define/update the shared contract first (→ `ARTIFACT`). |
 | 2 | Plan & dispatch | [`/plan-dispatch`](../commands/plan-dispatch.md) | Map work to roles; declare lanes in a `BRIEF`; surface; confirm before N parallel. |
 | 3 | Implement | [`/implement`](../commands/implement.md) | Parallel on disjoint lanes; each self-verifies → `RESULT`. Members never commit. |
 | 4 | Integrate | [`/integrate`](../commands/integrate.md) | Sole integrator merges lanes into the branch; verify repo state. |
-| 5 | Cross-review | [`/review-loop`](../commands/review-loop.md) | Pool reviewers per competency; verify + dedup → consolidated `REVIEW`. |
+| 5 | Cross-review | [`/review-loop`](../commands/review-loop.md) | Pool reviewers per competency + a `security` reviewer (generic agent running the `security-review` skill); verify + dedup → consolidated `REVIEW`. |
 | 6 | Verify | [`/fix-loop`](../commands/fix-loop.md) | `testing`'s wider net; red → `FIX`, loop until green; never ship red. |
 | 7 | Ship | [`/ship`](../commands/ship.md) | Commit groups → branch → PR → CI green. **Never push the default branch.** |
+
+## Post-PR iteration — the loop doesn't end at PR-open
+
+PR-open + CI green is a **checkpoint awaiting acceptance, not termination** (see *Autonomy* → *Done*). Each user change request on the open PR is a **new wave through the same phases**, not an inline patch.
+
+- **Re-enter the loop.** Post-PR request re-runs Implement → Integrate → **Cross-review** → **Verify** → Ship for the changed unit.
+  - **Review-loop and fix-loop are NOT skipped** on follow-ups — the most-violated gap: later edits bypass the gates the initial work passed.
+- **Proportional, never zero.** A one-line tweak gets a focused review + fix pass over the changed unit — never the full fan-out, but never zero.
+- **Trigger depends on mode:**
+  - **Autonomous** → re-enter the implement→review→fix→ship loop automatically; surface the intent.
+  - **Interactive** → surface the re-entry plan + let the user choose the depth before dispatching.
+- **Lane rule still holds.** Lead does not patch the PR itself — emit a `BRIEF`, exactly like the first wave. Re-review by a **different instance** than the implementer.
+- **Security re-runs too.** The `security-review` dimension is part of the review loop; a post-PR wave re-audits the new diff (see *Cross-review*).
 
 ## Standing guardrails & tool-output economy
 
@@ -170,6 +187,10 @@ Re-check repo state between waves — members may have committed, pushed, made o
   doesn't hold AND swells the lead's expensive context, ballooning long-session token cost.
 - Lead scopes an area by its own read → generic / line-count proxy, misses the role's
   non-negotiables; pollutes the lead's context with raw investigation (delegate the assessment).
+- Lead runs the exploration/options research in its own context (agent loops, code spelunking) →
+  swells the lead's expensive context (dispatch an `Explore` agent → `RESEARCH` instead).
+- Post-PR change patched inline or shipped without re-review → follow-up edits bypass the cross-review +
+  verify gates the initial work passed (re-enter the loop; see *Post-PR iteration*).
 - "Autonomous" read as auto-merge or run-silent → shipped to the default branch unaccepted,
   or no plan surfaced to interject against.
 - Silent truncation/re-scoping when blocked → the request quietly unmet.

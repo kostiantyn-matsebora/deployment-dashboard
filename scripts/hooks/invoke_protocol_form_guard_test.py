@@ -400,9 +400,9 @@ class DescribeGetProtocolFormDecisionFileBasedPointers:
 # ---------------------------------------------------------------------------
 
 class DescribeGetRenderRecipe:
-    def test_recipe_names_the_six_forms_the_schema_location_and_the_normalizer_invocation(self):
+    def test_recipe_names_the_seven_forms_the_schema_location_and_the_normalizer_invocation(self):
         recipe = get_render_recipe()
-        assert "REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT" in recipe
+        assert "REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT / RESEARCH" in recipe
         assert "format_protocol_form.py" in recipe
         assert "--input-file" in recipe
         assert "--outbox-dir" in recipe
@@ -549,3 +549,90 @@ class DescribeInvokeProtocolFormGuardRealProcess:
             text=True,
         )
         assert result.stdout.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# Describe: get_protocol_form_decision — RESEARCH form
+# ---------------------------------------------------------------------------
+
+VALID_RESEARCH = json.dumps({
+    "type": "RESEARCH",
+    "topic": "Where does the SlotUpdateBroker buffer overflow?",
+    "findings": [
+        "Ring buffer cap is 256 in BrokerConfig.cs:14",
+        "Overflow silently drops oldest entry",
+    ],
+    "options": [
+        {"id": "a", "approach": "Raise cap to 1024", "tradeoffs": "More memory"},
+        {"id": "b", "approach": "Back-pressure", "tradeoffs": "Latency risk"},
+    ],
+})
+
+
+class DescribeGetProtocolFormDecisionResearch:
+    def test_passes_a_well_formed_research(self):
+        d = get_protocol_form_decision(VALID_RESEARCH, schema_dir=SCHEMA_DIR)
+        assert d["block"] is False
+
+    def test_passes_a_research_with_only_required_fields(self):
+        minimal = json.dumps({
+            "type": "RESEARCH",
+            "topic": "Where is config loaded?",
+            "findings": ["ConfigLoader.cs:22 calls IConfiguration.Bind"],
+        })
+        d = get_protocol_form_decision(minimal, schema_dir=SCHEMA_DIR)
+        assert d["block"] is False
+
+    def test_blocks_a_research_missing_findings(self):
+        bad = json.dumps({"type": "RESEARCH", "topic": "t"})
+        d = get_protocol_form_decision(bad, schema_dir=SCHEMA_DIR)
+        assert d["block"] is True
+        assert "RESEARCH" in d["reason"]
+
+    def test_blocks_a_research_with_fewer_than_two_options(self):
+        bad = json.dumps({
+            "type": "RESEARCH",
+            "topic": "t",
+            "findings": ["f1"],
+            "options": [
+                {"id": "a", "approach": "approach A", "tradeoffs": "some"},
+            ],
+        })
+        d = get_protocol_form_decision(bad, schema_dir=SCHEMA_DIR)
+        assert d["block"] is True
+        assert "RESEARCH" in d["reason"]
+
+    def test_passes_a_research_pointer_to_a_valid_file(self, tmp_path):
+        outbox = tmp_path / ".team-process" / "sessions" / "feat-1" / "outbox"
+        outbox.mkdir(parents=True)
+        f = outbox / "RESEARCH.json"
+        f.write_text(VALID_RESEARCH, encoding="utf-8")
+        ref = str(f).replace("\\", "/")
+        d = get_protocol_form_decision(
+            f'{{"type":"RESEARCH","ref":"{ref}"}}', schema_dir=SCHEMA_DIR
+        )
+        assert d["block"] is False
+
+
+# ---------------------------------------------------------------------------
+# Describe: get_protocol_form_decision — REVIEW with role "security"
+# ---------------------------------------------------------------------------
+
+VALID_REVIEW_SECURITY = json.dumps({
+    "type": "REVIEW",
+    "role": "security",
+    "scope": ["backend/fetcher/**"],
+    "checked": ["OWASP Top-10 x PollLoop"],
+    "verdict": "pass",
+})
+
+
+class DescribeGetProtocolFormDecisionReviewSecurity:
+    def test_passes_a_review_with_role_security_and_pass_verdict(self):
+        d = get_protocol_form_decision(VALID_REVIEW_SECURITY, schema_dir=SCHEMA_DIR)
+        assert d["block"] is False
+
+    def test_passes_a_review_security_written_to_a_session_outbox(self):
+        p = "/wt/.team-process/sessions/feat-1/outbox/security.REVIEW.json"
+        d = get_session_box_write_decision(p, VALID_REVIEW_SECURITY, schema_dir=SCHEMA_DIR)
+        assert d["block"] is False

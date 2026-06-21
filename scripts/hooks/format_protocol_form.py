@@ -1,6 +1,6 @@
 """
 Validates and normalizes a typed protocol form (REVIEW / RESULT / BRIEF / FINDING /
-FIX / ARTIFACT) as JSON per protocol.md.
+FIX / ARTIFACT / RESEARCH) as JSON per protocol.md.
 
 Single source of validation truth — the SendMessage guard (invoke_protocol_form_guard.py)
 imports pure functions from this module.
@@ -38,6 +38,7 @@ FORM_KEY_ORDER: dict[str, list[str]] = {
     "FINDING":  ["type", "where", "issue", "options", "need"],
     "FIX":      ["type", "failure", "suspect"],
     "ARTIFACT": ["type", "spec", "delta", "open"],
+    "RESEARCH": ["type", "topic", "findings", "options", "refs", "open"],
 }
 
 FORM_OPTIONAL_KEYS: dict[str, list[str]] = {
@@ -47,13 +48,17 @@ FORM_OPTIONAL_KEYS: dict[str, list[str]] = {
     "FINDING":  [],
     "FIX":      [],
     "ARTIFACT": ["open"],
+    "RESEARCH": ["options", "refs", "open"],
 }
 
 NESTED_KEY_ORDER: dict[str, list[str]] = {
     "spec":    ["path", "gate"],           # BRIEF.spec
     "failure": ["test", "expect", "actual"],  # FIX.failure
     "remark":  ["smell", "location", "change"],  # REVIEW.remarks[] item
-    "option":  ["id", "path"],             # FINDING.options[] item
+    # Both FINDING.options[] {id,path} and RESEARCH.options[] {id,approach,tradeoffs} serialize
+    # under the same "options" key and share this entry. order_by_keys emits only keys that are
+    # present in the item, so the superset order is harmless — no key is fabricated.
+    "option":  ["id", "path", "approach", "tradeoffs"],
 }
 
 
