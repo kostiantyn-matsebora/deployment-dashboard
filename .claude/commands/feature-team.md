@@ -41,7 +41,7 @@ Spawn only the roles the change actually needs (routing table in `process.md`).
 |---|---|
 | [`/intake`](intake.md) · [`/contract`](contract.md) · [`/plan-dispatch`](plan-dispatch.md) | Lead runs them **solo, before any team exists** → surface the plan + STOP for approval. |
 | [`/implement`](implement.md) | Each lane runs as a **spawned member** (worktree-isolated, background). |
-| [`/integrate`](integrate.md) · [`/review-loop`](review-loop.md) | Lead integrates; spawns one reviewer per competency (reviewer ≠ implementer). |
+| [`/integrate`](integrate.md) · [`/review-loop`](review-loop.md) | Lead integrates; spawns one reviewer per competency + a `security` reviewer (generic Agent running the `security-review` skill); reviewer ≠ implementer. |
 | [`/fix-loop`](fix-loop.md) · [`/ship`](ship.md) | Lead drives; the testing member reports red, the lead routes `FIX`es. |
 
 ## 0 — Resume check (before anything)
@@ -92,6 +92,12 @@ parallel members get explicit confirmation*).
     gate (build + own-change unit tests + lint, actual counts) + "do NOT commit/push; hand back to the lead."
     + "The session id is `<literal-id-value>`; your outbox is `<absolute-path-to-outbox-dir>` — use these verbatim, do NOT derive them from the team name. If running in a worktree, run `mkdir -p '<outbox-path>'` before writing your hand-back."
     + "NEVER return prose, markdown, or a .txt file as your final message — write the typed form to your outbox file first, then send the { type, ref } pointer."
+    + **the hand-back few-shot:** three items — (1) the expected form name, (2) its **canonical example
+    copied verbatim from [`protocol.md`](../team-process/protocol.md)** (e.g. the `RESULT` example for
+    `/implement`), (3) the one-step recipe: write filled JSON to a temp file →
+    `python3 scripts/hooks/format_protocol_form.py --input-file <file> --outbox-dir <outbox>` → send the
+    printed pointer verbatim. Primes a first-try conforming hand-back; no blocked-write +
+    schema-exploration round-trip. See [`protocol.md`](../team-process/protocol.md) → *Prime the hand-back*.
 - **Assign work.** Create the task list (one task per lane); contract member first if cross-layer —
   its `ARTIFACT` unblocks the rest.
 - **Populate the statusline fields.** Set the session `summary` (issue title / feature essence) and
@@ -117,8 +123,9 @@ parallel members get explicit confirmation*).
 
 - Run [`/integrate`](integrate.md) — merge member lanes/worktrees into the branch.
 - Run [`/review-loop`](review-loop.md) — dispatch one reviewer per touched competency as a **fresh
-  instance ≠ that lane's implementer**; route `changes-requested` remarks to the owning implementer;
-  loop until all `pass`. Reviewers report, never fix.
+  instance ≠ that lane's implementer**, **plus a `security` reviewer** (a generic Agent running the
+  `security-review` skill over the integrated diff → `REVIEW` with `role: "security"`); route
+  `changes-requested` remarks to the owning implementer; loop until all `pass`. Reviewers report, never fix.
 
 ## 5 — Verify & ship
 

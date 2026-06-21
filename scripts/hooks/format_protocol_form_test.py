@@ -567,3 +567,144 @@ class DescribeValidateSchemaMaxItemsAndAllOf:
         }
         errors = _validate_schema({"a": 1, "b": 2}, schema)
         assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for RESEARCH and REVIEW(security) tests
+# ---------------------------------------------------------------------------
+
+RESEARCH_OBJ = {
+    "type": "RESEARCH",
+    "topic": "Where does the SlotUpdateBroker buffer overflow?",
+    "findings": [
+        "Ring buffer cap is set to 256 in BrokerConfig.cs:14",
+        "Overflow silently drops oldest entry — no log emitted",
+    ],
+    "options": [
+        {
+            "id": "a",
+            "approach": "Raise cap to 1024 via config knob",
+            "tradeoffs": "More memory; still unbounded under extreme load",
+        },
+        {
+            "id": "b",
+            "approach": "Back-pressure: block producer when buffer is 80% full",
+            "tradeoffs": "Latency risk on the hot path; prevents silent drops",
+        },
+    ],
+    "refs": ["backend/shared/BrokerConfig.cs#L14", "docs/architecture.md#ring-buffer"],
+    "open": ["Should the cap be runtime-configurable or compile-time?"],
+}
+
+
+# ---------------------------------------------------------------------------
+# Describe: Test-ProtocolJson — RESEARCH form validation
+# ---------------------------------------------------------------------------
+
+class DescribeTestProtocolJsonResearch:
+    def test_accepts_a_well_formed_research(self):
+        r = check_protocol_json(form_json(RESEARCH_OBJ), SCHEMA_DIR)
+        assert r["ok"] is True
+
+    def test_accepts_a_research_with_only_required_fields(self):
+        obj = {
+            "type": "RESEARCH",
+            "topic": "Where is the config loaded?",
+            "findings": ["ConfigLoader.cs:22 calls IConfiguration.Bind"],
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is True
+
+    def test_rejects_a_research_missing_findings(self):
+        obj = {
+            "type": "RESEARCH",
+            "topic": "Where is the config loaded?",
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+        assert any("findings" in e for e in r["errors"])
+
+    def test_rejects_a_research_with_empty_findings_array(self):
+        obj = {
+            "type": "RESEARCH",
+            "topic": "Where is the config loaded?",
+            "findings": [],
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+
+    def test_rejects_a_research_options_item_missing_tradeoffs(self):
+        obj = {
+            "type": "RESEARCH",
+            "topic": "t",
+            "findings": ["f1"],
+            "options": [
+                {"id": "a", "approach": "approach A"},  # missing tradeoffs
+                {"id": "b", "approach": "approach B", "tradeoffs": "some"},
+            ],
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+        assert any("tradeoffs" in e for e in r["errors"])
+
+    def test_accepts_a_review_with_role_security(self):
+        obj = {
+            "type": "REVIEW",
+            "role": "security",
+            "scope": ["backend/fetcher/**"],
+            "checked": ["OWASP Top-10 x PollLoop"],
+            "verdict": "pass",
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# Describe: format_protocol_form — RESEARCH normalization
+# ---------------------------------------------------------------------------
+
+class DescribeFormatProtocolFormResearchNormalization:
+    def test_normalizes_research_keys_in_canonical_order(self):
+        messy = {
+            "open": ["q1"],
+            "findings": ["f1"],
+            "type": "RESEARCH",
+            "refs": ["r1"],
+            "topic": "t",
+            "options": [
+                {"id": "a", "approach": "app A", "tradeoffs": "trd A"},
+                {"id": "b", "approach": "app B", "tradeoffs": "trd B"},
+            ],
+        }
+        out = format_protocol_form(form_json(messy), schema_dir=SCHEMA_DIR)
+        keys = list(json.loads(out).keys())
+        assert keys == ["type", "topic", "findings", "options", "refs", "open"]
+
+    def test_drops_absent_optional_fields_refs_and_open(self):
+        # refs and open are optional; when omitted they must not appear in output.
+        # (The schema requires minItems:1 when the key is present, so the correct
+        # "empty" representation is to omit the key entirely, not pass [].)
+        obj = {
+            "type": "RESEARCH",
+            "topic": "t",
+            "findings": ["f1"],
+        }
+        out = format_protocol_form(form_json(obj), schema_dir=SCHEMA_DIR)
+        names = list(json.loads(out).keys())
+        assert "refs" not in names
+        assert "open" not in names
+
+    def test_orders_research_options_items_id_approach_tradeoffs(self):
+        obj = {
+            "type": "RESEARCH",
+            "topic": "t",
+            "findings": ["f1"],
+            "options": [
+                {"tradeoffs": "trd A", "id": "a", "approach": "app A"},
+                {"approach": "app B", "tradeoffs": "trd B", "id": "b"},
+            ],
+        }
+        out = format_protocol_form(form_json(obj), schema_dir=SCHEMA_DIR)
+        items = json.loads(out)["options"]
+        assert list(items[0].keys()) == ["id", "approach", "tradeoffs"]
+        assert list(items[1].keys()) == ["id", "approach", "tradeoffs"]
