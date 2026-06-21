@@ -127,7 +127,7 @@ Deployment-wide filter that hides a subset of services across **all** API read a
 
 **API write effect.** `POST /api/deployments` **rejects** a matching event with `403` (problem+json).
 
-**API read effect.** Matching events are filtered from `/api/services`, `/api/matrix`, `/api/deployments`, and the SSE stream (live + replay). By-id (`/api/deployments/{id}`) returns `404`. Already-stored events for a now-excluded service remain in storage but are never surfaced; storage-clearing (reset / backfill) semantics are unchanged.
+**API read effect.** Matching events are filtered from `/api/services`, `/api/matrix`, `/api/deployments`, the SSE stream (live + replay), and `/api/analytics/*` (excluded services contribute to no analytics aggregate). By-id (`/api/deployments/{id}`) returns `404`. Already-stored events for a now-excluded service remain in storage but are never surfaced; storage-clearing (reset / backfill) semantics are unchanged.
 
 ## :material-flask-outline: Demo / dev only { #demo-dev-only }
 

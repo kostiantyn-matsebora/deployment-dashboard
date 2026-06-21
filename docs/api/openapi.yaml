@@ -84,6 +84,9 @@ tags:
       (`AnalyticsWindow`: `days`, `from`, `to`, `retention_days`, `clamped`).
       Reads are unauthenticated (internal-only, same trust tier as the other reads)
       and carry a weak `ETag`; clients SHOULD send `If-None-Match`.
+      Subject to the deployment-wide `SERVICE_EXCLUDE` filter — events from excluded
+      services do not contribute to any aggregate (same read-surface filter as
+      `getMatrix`; filter semantics in `api-guidelines.md` §5).
   - name: stream
     description: Real-time SSE fan-out of deployment events.
   - name: fetcher

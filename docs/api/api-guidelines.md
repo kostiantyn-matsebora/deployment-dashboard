@@ -97,7 +97,7 @@ A single server-side config var hides a subset of services across the whole depl
 | Surface | Where | Effect |
 |---|---|---|
 | Write API (`POST /api/deployments`) | ingest | matching event **rejected `403`** (problem+json) |
-| Read API (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/deployments/{id}`, `/api/events/stream`) | read | matching events **filtered out**; by-id returns `404`; SSE live + replay suppressed |
+| Read API (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/deployments/{id}`, `/api/events/stream`, `/api/analytics/*`) | read | matching events **filtered out**; by-id returns `404`; SSE live + replay suppressed; excluded services do not contribute to any analytics aggregate (dora, frequency, change-failure-rate, duration-histogram, promotion-funnel, status-distribution, heatmap, top-deployers, incidents) |
 
 **Hidden, not deleted.** An already-stored event for a now-excluded service is **hidden** by the read filter though it remains in storage; storage-clearing (reset / backfill) semantics are unchanged.
 
@@ -495,6 +495,10 @@ the value as measured commit→prod lead time.
   first. `severity` is derived from `duration_minutes` (longer → higher; unresolved
   → `critical`).
 - **All ordering is by `happened_at`** (emitter-supplied), consistent with §8.
+- **`SERVICE_EXCLUDE` applies.** Every `/api/analytics/*` aggregate is computed over the
+  same exclusion-filtered read surface as the rest of the API — events from excluded
+  services do not contribute to any aggregate. Glob semantics + the shared exclude list
+  are defined in §5.
 
 ---
 
