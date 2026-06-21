@@ -589,6 +589,19 @@ class DescribeGetProtocolFormDecisionResearch:
         assert d["block"] is True
         assert "RESEARCH" in d["reason"]
 
+    def test_blocks_a_research_with_fewer_than_two_options(self):
+        bad = json.dumps({
+            "type": "RESEARCH",
+            "topic": "t",
+            "findings": ["f1"],
+            "options": [
+                {"id": "a", "approach": "approach A", "tradeoffs": "some"},
+            ],
+        })
+        d = get_protocol_form_decision(bad, schema_dir=SCHEMA_DIR)
+        assert d["block"] is True
+        assert "RESEARCH" in d["reason"]
+
     def test_passes_a_research_pointer_to_a_valid_file(self, tmp_path):
         outbox = tmp_path / ".team-process" / "sessions" / "feat-1" / "outbox"
         outbox.mkdir(parents=True)

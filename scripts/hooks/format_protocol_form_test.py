@@ -647,6 +647,25 @@ class DescribeTestProtocolJsonResearch:
         assert r["ok"] is False
         assert any("tradeoffs" in e for e in r["errors"])
 
+    def test_rejects_a_research_with_fewer_than_two_options(self):
+        obj = {
+            "type": "RESEARCH",
+            "topic": "t",
+            "findings": ["f1"],
+            "options": [
+                {"id": "a", "approach": "approach A", "tradeoffs": "some"},
+            ],
+        }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+        assert any("at least 2" in e for e in r["errors"])
+
+
+# ---------------------------------------------------------------------------
+# Describe: Test-ProtocolJson — REVIEW with role "security"
+# ---------------------------------------------------------------------------
+
+class DescribeTestProtocolJsonReviewSecurity:
     def test_accepts_a_review_with_role_security(self):
         obj = {
             "type": "REVIEW",
