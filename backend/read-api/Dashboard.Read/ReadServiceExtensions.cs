@@ -36,6 +36,7 @@ public static class ReadServiceExtensions
 
         services.AddScoped<IDeploymentReadRepository, DeploymentReadRepository>();
         services.AddScoped<IMatrixService, MatrixService>();
+        services.AddScoped<AnalyticsExcludeFilter>();
         services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
 
         // SSE broadcaster: one singleton instance serves as both IDeploymentEventBroadcaster
