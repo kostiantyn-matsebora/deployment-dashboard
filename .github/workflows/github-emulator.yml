@@ -27,7 +27,7 @@ jobs:
         working-directory: demo/github-emulator
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node 24
         uses: actions/setup-node@v6
@@ -59,7 +59,7 @@ jobs:
       security-events: write  # required for SARIF upload to the Security tab
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
