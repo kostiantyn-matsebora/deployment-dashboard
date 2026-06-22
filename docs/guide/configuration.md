@@ -145,11 +145,11 @@ A preset captures the full UI settings snapshot at the moment it is saved:
 
 | Action | How |
 |---|---|
-| **Save** | Open the preset panel; type a name; click **Save current settings**. |
+| **Save** | Open the preset panel; type a name; click **Save**. |
 | **Apply** | Click a preset name — all captured settings take effect immediately. |
-| **Clone** | Open a preset's context menu; choose **Clone** — saves a copy with `(copy)` appended. |
-| **Rename** | Open the context menu; choose **Rename**; confirm. |
-| **Delete** | Open the context menu; choose **Delete** — a confirmation prompt prevents accidental removal. |
+| **Clone** | Hover a preset row; click **Clone** — saves a copy with `(copy)` appended. |
+| **Rename** | Hover a preset row; click **Rename** — edit the name inline; confirm. |
+| **Delete** | Hover a preset row; click **Delete** — a confirmation prompt prevents accidental removal. |
 
 ### File-based sharing
 
@@ -157,7 +157,7 @@ Presets can be shared without a server. Each preset exports as a single `dd-pres
 
 **Sharing flow:**
 
-1. Open the preset context menu and choose **Export** — the file downloads instantly.
+1. Hover a preset row; click **Export** — the file downloads instantly.
 2. Share the file by email, Slack, or by committing it to a git repo alongside your pipeline config.
 3. The recipient opens the preset panel, clicks **Import**, and selects the file — the preset appears in their list immediately.
 
