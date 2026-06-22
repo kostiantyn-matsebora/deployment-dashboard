@@ -3224,6 +3224,123 @@
     padding-bottom: 4px;
     border-bottom: 1px solid var(--glass-edge);
   }
+
+  /* =================================================================
+     PRESETS POPOVER
+     ================================================================= */
+  .preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .preset-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--field-toggle-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--ink-1);
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    user-select: none;
+  }
+  .preset-item:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .preset-item.is-active {
+    color: var(--ink-0);
+    border-color: rgba(var(--accent-rgb), 0.5);
+    background: rgba(var(--accent-rgb), 0.10);
+  }
+  .preset-item-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .preset-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .preset-item:hover .preset-item-actions,
+  .preset-item.is-active .preset-item-actions {
+    opacity: 1;
+  }
+  .preset-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ink-2);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    transition: color .12s, border-color .12s, background .12s;
+  }
+  .preset-action-btn:hover {
+    color: var(--ink-0);
+    border-color: var(--glass-edge-2);
+    background: var(--glass);
+  }
+  .preset-action-btn.is-danger:hover {
+    color: var(--coral);
+    border-color: var(--coral-edge);
+    background: var(--coral-wash);
+  }
+  .preset-empty-hint {
+    font-size: 11.5px;
+    color: var(--ink-3);
+    font-style: italic;
+    text-align: center;
+    padding: 10px 0 4px;
+  }
+  .preset-io-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .preset-io-row .ext-btn { flex: 1; }
+  .preset-name-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 6px;
+    color: var(--ink-0);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 8px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .preset-name-input:focus { border-color: rgba(var(--accent-rgb), 0.7); }
+  .preset-save-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    align-items: center;
+  }
+  .preset-save-row .ext-btn { flex-shrink: 0; }
+  .preset-section-label {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -3666,6 +3783,50 @@
 
         </div><!-- /pop-notif -->
       </div><!-- /notif wrapper -->
+
+      <!-- Presets — save / apply / clone / rename / delete + export / import -->
+      <div style="position:relative" id="hdr-presets-btn">
+        <button class="icon-btn" id="btn-presets"
+                title="Presets — save and restore view configurations"
+                aria-label="Presets" aria-haspopup="true">
+          <!-- bookmark icon matching the topbar weight -->
+          <svg aria-hidden="true" width="14" height="15" viewBox="0 0 14 15" fill="none"
+               stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 2h10v12l-5-3-5 3V2z"/>
+          </svg>
+          <span class="badge-dot" id="presets-badge-dot" aria-hidden="true"></span>
+        </button>
+        <div class="popover" id="pop-presets" role="dialog" aria-label="Presets" style="min-width:300px;right:0">
+          <div class="popover-title">Presets</div>
+
+          <!-- Saved presets list -->
+          <div class="preset-section-label">Saved</div>
+          <div class="preset-list" id="preset-list" aria-label="Saved presets">
+            <!-- items injected by JS -->
+          </div>
+          <div class="preset-empty-hint" id="preset-empty-hint">No presets saved yet.</div>
+
+          <!-- Save current state as new preset -->
+          <div class="preset-save-row">
+            <input type="text" class="preset-name-input" id="preset-name-input"
+                   placeholder="preset name…" aria-label="Preset name" spellcheck="false" autocomplete="off"
+                   maxlength="60">
+            <button class="ext-btn is-primary" type="button" id="btn-preset-save"
+                    title="Save current settings as a new preset" aria-label="Save preset">Save</button>
+          </div>
+
+          <!-- Export / Import -->
+          <div class="preset-io-row">
+            <button class="ext-btn" type="button" id="btn-preset-export"
+                    title="Export all presets as a JSON file" aria-label="Export presets">⬇ Export</button>
+            <button class="ext-btn" type="button" id="btn-preset-import"
+                    title="Import presets from a JSON file" aria-label="Import presets">⬆ Import</button>
+          </div>
+          <!-- Hidden file input for import -->
+          <input type="file" id="preset-import-file" accept=".json,application/json"
+                 style="display:none" aria-hidden="true">
+        </div>
+      </div><!-- /presets wrapper -->
 
     </div><!-- /hdr-icons -->
 
@@ -4966,6 +5127,7 @@ const POPOVERS = [
   { btn: 'btn-fields',      pop: 'pop-fields' },
   { btn: 'btn-legend',      pop: 'pop-legend' },
   { btn: 'btn-notif',       pop: 'pop-notif' },
+  { btn: 'btn-presets',     pop: 'pop-presets' },
 ];
 function closeAllPopovers() {
   POPOVERS.forEach(({btn, pop}) => {
@@ -7781,6 +7943,579 @@ computeKPIs();
     if (mq.addEventListener) mq.addEventListener('change', onChange);
     else if (mq.addListener) mq.addListener(onChange);
   }
+})();
+
+/* =================================================================
+   PRESETS — save / apply / clone / rename / delete + export / import
+   Storage key: dd:presets  →  JSON array of preset envelopes.
+   Preset envelope: { version: 1, name: string, settings: { ... } }
+   Settings keys captured: theme, notifEnabled, notifStatuses,
+     notifSvcMode, notifSvcPatterns, notifEnvMode, notifEnvPatterns,
+     view, svcFilterMode, svcPatterns, failuresOnly,
+     matFieldsOn (array), visFieldsOn (array),
+     colOrder (array), colHidden (array),
+     laneCollapsed (object svc→bool), laneAutoScroll (bool),
+     predicate (string), timeWindow (string).
+   Apply writes-through to all live settings exactly as the UI does.
+   ================================================================= */
+(function setupPresets() {
+  const PRESETS_KEY    = 'dd:presets';
+  const PRESET_VERSION = 1;
+
+  /* ---- localStorage helpers ---- */
+  function loadPresets() {
+    try {
+      const raw = localStorage.getItem(PRESETS_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      // Filter to known-version envelopes only
+      return arr.filter(p => p && p.version === PRESET_VERSION && typeof p.name === 'string');
+    } catch (_) { return []; }
+  }
+  function savePresets(arr) {
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(arr)); } catch (_) {}
+  }
+
+  /* ---- Snapshot: capture the current live UI state ---- */
+  function captureSettings() {
+    // theme
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+
+    // notifEnabled — read from DOM (the JS var is in a closure; DOM is the canonical truth)
+    const notifMasterEl = document.getElementById('notif-master-toggle');
+    const notifEnabledVal = notifMasterEl ? notifMasterEl.classList.contains('is-on') : true;
+
+    // notifStatuses — which chips have is-on
+    const notifStatusesVal = [];
+    document.querySelectorAll('.notif-status-chip').forEach(c => {
+      if (c.classList.contains('is-on')) notifStatusesVal.push(c.dataset.notifStatus);
+    });
+
+    // svcFilterMode / svcPatterns — from the module-level vars (set before presets IIFE runs)
+    const svcFilterModeVal = typeof svcFilterMode !== 'undefined' ? svcFilterMode : 'exclude';
+    const svgPatternsVal   = typeof svcPatterns   !== 'undefined' ? [...svcPatterns]   : [];
+
+    // failuresOnly — from module-level var
+    const failuresOnlyVal = typeof failuresOnly !== 'undefined' ? failuresOnly : false;
+
+    // view — from module-level var
+    const viewVal = typeof currentView !== 'undefined' ? currentView : 'matrix';
+
+    // matFieldsOn / visFieldsOn — from module-level Sets
+    const matFieldsOnVal = typeof matrixFieldsOn !== 'undefined' ? [...matrixFieldsOn] : [];
+    const visFieldsOnVal = typeof visFieldsOn     !== 'undefined' ? [...visFieldsOn]   : [];
+
+    // colOrder / colHidden — from module-level vars
+    const colOrderVal  = typeof colOrder  !== 'undefined' ? [...colOrder]  : [];
+    const colHiddenVal = typeof colHidden !== 'undefined' ? [...colHidden] : [];
+
+    // laneCollapsed — from module-level Map
+    const laneCollapsedVal = {};
+    if (typeof laneCollapsed !== 'undefined' && laneCollapsed instanceof Map) {
+      laneCollapsed.forEach((v, k) => { laneCollapsedVal[k] = v; });
+    }
+
+    // laneAutoScroll — from module-level var
+    const laneAutoScrollVal = typeof laneAutoScroll !== 'undefined' ? laneAutoScroll : true;
+
+    // predicate — which .predicate.is-on
+    const activePred = document.querySelector('.predicate.is-on');
+    const predicateVal = activePred ? activePred.dataset.p : 'parent';
+
+    // timeWindow — from the select element
+    const twEl = document.getElementById('timewin-select');
+    const timeWindowVal = twEl ? twEl.value : '1h';
+
+    // notifSvcMode / notifSvcPatterns / notifEnvMode / notifEnvPatterns —
+    // read from the DOM seg buttons + chips (the vars live in the notifFilters IIFE closure)
+    const notifSvcSeg   = document.getElementById('notif-svc-mode-seg');
+    const notifSvcModeVal = notifSvcSeg
+      ? (notifSvcSeg.querySelector('.an-period-btn.is-active') || {}).dataset?.notifSvcMode || 'exclude'
+      : 'exclude';
+    const notifSvcPatsVal = [];
+    document.querySelectorAll('#notif-svc-chips .ext-filter-chip').forEach(c => {
+      const txt = c.querySelector('.chip-label') || c;
+      if (txt.textContent.trim()) notifSvcPatsVal.push(txt.textContent.trim());
+    });
+
+    const notifEnvSeg     = document.getElementById('notif-env-mode-seg');
+    const notifEnvModeVal = notifEnvSeg
+      ? (notifEnvSeg.querySelector('.an-period-btn.is-active') || {}).dataset?.notifEnvMode || 'exclude'
+      : 'exclude';
+    const notifEnvPatsVal = [];
+    document.querySelectorAll('#notif-env-chips .ext-filter-chip').forEach(c => {
+      const txt = c.querySelector('.chip-label') || c;
+      if (txt.textContent.trim()) notifEnvPatsVal.push(txt.textContent.trim());
+    });
+
+    return {
+      theme:             theme,
+      notifEnabled:      notifEnabledVal,
+      notifStatuses:     notifStatusesVal,
+      notifSvcMode:      notifSvcModeVal,
+      notifSvcPatterns:  notifSvcPatsVal,
+      notifEnvMode:      notifEnvModeVal,
+      notifEnvPatterns:  notifEnvPatsVal,
+      view:              viewVal,
+      svcFilterMode:     svcFilterModeVal,
+      svcPatterns:       svgPatternsVal,
+      failuresOnly:      failuresOnlyVal,
+      matFieldsOn:       matFieldsOnVal,
+      visFieldsOn:       visFieldsOnVal,
+      colOrder:          colOrderVal,
+      colHidden:         colHiddenVal,
+      laneCollapsed:     laneCollapsedVal,
+      laneAutoScroll:    laneAutoScrollVal,
+      predicate:         predicateVal,
+      timeWindow:        timeWindowVal,
+    };
+  }
+
+  /* ---- Apply: write a settings snapshot back to the live UI ---- */
+  function applySettings(s) {
+    if (!s || typeof s !== 'object') return;
+
+    // theme
+    if (s.theme) {
+      const valid = new Set(['dark', 'light', 'auto']);
+      const t = valid.has(s.theme) ? s.theme : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('theme', t); } catch (_) {}
+      // sync theme-switch radios
+      document.querySelectorAll('.ts-opt').forEach(b => {
+        const on = b.dataset.themePick === t;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+      // rebuild swimlanes (baked SVG colors)
+      if (typeof buildSwim === 'function') {
+        window.__visNodeDims = null;
+        buildSwim();
+        if (typeof selectVisNode === 'function') selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
+      }
+    }
+
+    // notifEnabled
+    if (typeof s.notifEnabled === 'boolean') {
+      const masterEl = document.getElementById('notif-master-toggle');
+      const masterTxtEl = document.getElementById('notif-master-label-txt');
+      const bellBtn  = document.getElementById('btn-notif');
+      const filtersAreaEl = document.getElementById('notif-filters-area');
+      if (masterEl) {
+        masterEl.classList.toggle('is-on', s.notifEnabled);
+        if (masterTxtEl) masterTxtEl.textContent = s.notifEnabled ? 'Notify — browser alerts' : 'Notify — off';
+        if (bellBtn)     bellBtn.classList.toggle('has-active', s.notifEnabled);
+        if (filtersAreaEl) filtersAreaEl.classList.toggle('is-paused', !s.notifEnabled);
+      }
+    }
+
+    // notifStatuses
+    if (Array.isArray(s.notifStatuses)) {
+      const onSet = new Set(s.notifStatuses);
+      document.querySelectorAll('.notif-status-chip').forEach(c => {
+        const on = onSet.has(c.dataset.notifStatus);
+        c.classList.toggle('is-on', on);
+        c.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+    }
+
+    // view
+    if (s.view && typeof setView === 'function') {
+      setView(s.view);
+    }
+
+    // svcFilterMode + svcPatterns
+    if (s.svcFilterMode && typeof svcFilterMode !== 'undefined') {
+      svcFilterMode = s.svcFilterMode === 'include' ? 'include' : 'exclude';
+      if (Array.isArray(s.svcPatterns)) svcPatterns = [...s.svcPatterns];
+      try { localStorage.setItem(MX_SVC_MODE_KEY, svcFilterMode); } catch (_) {}
+      try { localStorage.setItem(MX_SVC_PATTERNS_KEY, JSON.stringify(svcPatterns)); } catch (_) {}
+      if (typeof buildSvcsPicker === 'function') buildSvcsPicker();
+      if (typeof applySvcFilter === 'function') applySvcFilter();
+    }
+
+    // failuresOnly
+    if (typeof s.failuresOnly === 'boolean' && typeof failuresOnly !== 'undefined') {
+      failuresOnly = s.failuresOnly;
+      const ft = document.getElementById('fail-toggle');
+      if (ft) ft.classList.toggle('is-on', failuresOnly);
+      if (typeof applyFilters === 'function') applyFilters();
+    }
+
+    // matFieldsOn
+    if (Array.isArray(s.matFieldsOn) && typeof matrixFieldsOn !== 'undefined') {
+      const allowed = new Set(MATRIX_FIELDS.map(f => f.key));
+      matrixFieldsOn.clear();
+      s.matFieldsOn.forEach(k => { if (allowed.has(k)) matrixFieldsOn.add(k); });
+      // Ensure all fields default ON if none valid supplied
+      if (matrixFieldsOn.size === 0) MATRIX_FIELDS.forEach(f => matrixFieldsOn.add(f.key));
+      if (typeof buildFieldsPicker === 'function') {
+        buildFieldsPicker('fields-grid-matrix', MATRIX_FIELDS, matrixFieldsOn, () => {
+          renderMatrix(); computeKPIs();
+          syncFieldsBtn();
+        });
+      }
+      renderMatrix(); computeKPIs();
+    }
+
+    // visFieldsOn
+    if (Array.isArray(s.visFieldsOn) && typeof visFieldsOn !== 'undefined') {
+      const allowed = new Set(VIS_FIELDS.map(f => f.key));
+      visFieldsOn.clear();
+      s.visFieldsOn.forEach(k => { if (allowed.has(k)) visFieldsOn.add(k); });
+      if (visFieldsOn.size === 0) VIS_FIELDS.forEach(f => visFieldsOn.add(f.key));
+      if (typeof buildFieldsPicker === 'function') {
+        buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
+          window.__visNodeDims = null;
+          buildSwim();
+          syncFieldsBtn();
+        });
+      }
+      if (typeof buildSwim === 'function') { window.__visNodeDims = null; buildSwim(); }
+    }
+
+    // colOrder + colHidden
+    if (Array.isArray(s.colOrder) && typeof colOrder !== 'undefined') {
+      const validEnvs = new Set(ENVS);
+      const filtered = s.colOrder.filter(e => validEnvs.has(e));
+      // rebuild to full permutation: supplied order first, then any missing envs appended
+      const supplied = new Set(filtered);
+      colOrder = [...filtered, ...ENVS.filter(e => !supplied.has(e))];
+      try { localStorage.setItem(MX_ORDER_KEY, JSON.stringify(colOrder)); } catch (_) {}
+    }
+    if (Array.isArray(s.colHidden) && typeof colHidden !== 'undefined') {
+      colHidden = new Set(s.colHidden.filter(e => ENVS.includes(e)));
+      try { localStorage.setItem(MX_HIDDEN_KEY, [...colHidden].join(',')); } catch (_) {}
+    }
+    if (Array.isArray(s.colOrder) || Array.isArray(s.colHidden)) {
+      if (typeof buildColsPicker === 'function') buildColsPicker();
+      renderMatrix(); computeKPIs();
+    }
+
+    // laneCollapsed
+    if (s.laneCollapsed && typeof laneCollapsed !== 'undefined' && laneCollapsed instanceof Map) {
+      Object.entries(s.laneCollapsed).forEach(([svc, val]) => {
+        if (SWIM_SERVICES.includes(svc)) laneCollapsed.set(svc, Boolean(val));
+      });
+      try {
+        const obj = {};
+        laneCollapsed.forEach((v, k) => { obj[k] = v; });
+        localStorage.setItem('dd:laneCollapsed', JSON.stringify(obj));
+      } catch (_) {}
+      if (typeof buildSwim === 'function') { window.__visNodeDims = null; buildSwim(); }
+    }
+
+    // laneAutoScroll
+    if (typeof s.laneAutoScroll === 'boolean' && typeof laneAutoScroll !== 'undefined') {
+      laneAutoScroll = s.laneAutoScroll;
+      try { localStorage.setItem('dd:laneAutoScroll', String(laneAutoScroll)); } catch (_) {}
+      const autoScrollToggle = document.getElementById('sv-autoscroll-toggle');
+      if (autoScrollToggle) autoScrollToggle.classList.toggle('is-on', laneAutoScroll);
+    }
+
+    // predicate
+    if (s.predicate) {
+      const predEl = document.querySelector(`.predicate[data-p="${CSS.escape(s.predicate)}"]`);
+      if (predEl && typeof selectPredicate === 'function') selectPredicate(predEl);
+    }
+
+    // timeWindow
+    if (s.timeWindow) {
+      const twEl2 = document.getElementById('timewin-select');
+      if (twEl2) {
+        // Find the matching option; fallback to current value if not found
+        const opt = [...twEl2.options].find(o => o.value === s.timeWindow);
+        if (opt) twEl2.value = s.timeWindow;
+      }
+    }
+  }
+
+  /* ---- Validate an imported preset array ---- */
+  function validateImport(parsed) {
+    if (!Array.isArray(parsed)) return null;
+    const valid = parsed.filter(p =>
+      p &&
+      typeof p === 'object' &&
+      p.version === PRESET_VERSION &&
+      typeof p.name === 'string' &&
+      p.name.trim().length > 0 &&
+      typeof p.settings === 'object' &&
+      p.settings !== null
+    );
+    return valid.length > 0 ? valid : null;
+  }
+
+  /* ---- State ---- */
+  let presets = loadPresets();
+  let activePresetName = null; // tracks which preset is currently "applied"
+
+  /* ---- Badge dot: shows when at least one preset is saved ---- */
+  function syncBadgeDot() {
+    const dot = document.getElementById('presets-badge-dot');
+    if (dot) dot.style.display = presets.length > 0 ? 'block' : 'none';
+  }
+
+  /* ---- Render the preset list inside the popover ---- */
+  function renderPresetList() {
+    const listEl  = document.getElementById('preset-list');
+    const emptyEl = document.getElementById('preset-empty-hint');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    if (presets.length === 0) {
+      if (emptyEl) emptyEl.style.display = '';
+      syncBadgeDot();
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    presets.forEach((preset, idx) => {
+      const item = document.createElement('div');
+      item.className = 'preset-item' + (preset.name === activePresetName ? ' is-active' : '');
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('aria-label', `Apply preset: ${preset.name}`);
+      item.id = `preset-item-${idx}`;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'preset-item-name';
+      nameSpan.textContent = preset.name;
+      nameSpan.title = preset.name;
+
+      const actions = document.createElement('span');
+      actions.className = 'preset-item-actions';
+
+      // Apply button (tick)
+      const applyBtn = document.createElement('button');
+      applyBtn.className = 'preset-action-btn';
+      applyBtn.type = 'button';
+      applyBtn.title = 'Apply this preset';
+      applyBtn.setAttribute('aria-label', `Apply preset ${preset.name}`);
+      applyBtn.textContent = '✓';
+      applyBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        applyPreset(idx);
+      });
+
+      // Clone button
+      const cloneBtn = document.createElement('button');
+      cloneBtn.className = 'preset-action-btn';
+      cloneBtn.type = 'button';
+      cloneBtn.title = 'Clone this preset';
+      cloneBtn.setAttribute('aria-label', `Clone preset ${preset.name}`);
+      cloneBtn.textContent = '⊕';
+      cloneBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        clonePreset(idx);
+      });
+
+      // Rename button
+      const renameBtn = document.createElement('button');
+      renameBtn.className = 'preset-action-btn';
+      renameBtn.type = 'button';
+      renameBtn.title = 'Rename this preset';
+      renameBtn.setAttribute('aria-label', `Rename preset ${preset.name}`);
+      renameBtn.textContent = '✎';
+      renameBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        renamePreset(idx, item, nameSpan);
+      });
+
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'preset-action-btn is-danger';
+      deleteBtn.type = 'button';
+      deleteBtn.title = 'Delete this preset';
+      deleteBtn.setAttribute('aria-label', `Delete preset ${preset.name}`);
+      deleteBtn.textContent = '✕';
+      deleteBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        deletePreset(idx);
+      });
+
+      actions.appendChild(applyBtn);
+      actions.appendChild(cloneBtn);
+      actions.appendChild(renameBtn);
+      actions.appendChild(deleteBtn);
+
+      item.appendChild(nameSpan);
+      item.appendChild(actions);
+
+      // Click on item name = apply
+      item.addEventListener('click', () => applyPreset(idx));
+      item.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') applyPreset(idx); });
+
+      listEl.appendChild(item);
+    });
+
+    syncBadgeDot();
+  }
+
+  /* ---- Save current state as a new preset ---- */
+  function saveCurrentAsPreset(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    const envelope = {
+      version:  PRESET_VERSION,
+      name:     trimmed,
+      settings: captureSettings(),
+    };
+    presets.push(envelope);
+    savePresets(presets);
+    activePresetName = trimmed;
+    renderPresetList();
+    return true;
+  }
+
+  /* ---- Apply preset by index ---- */
+  function applyPreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    applySettings(p.settings);
+    activePresetName = p.name;
+    renderPresetList();
+  }
+
+  /* ---- Clone preset by index ---- */
+  function clonePreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    const cloneName = p.name + ' (copy)';
+    const clone = { version: PRESET_VERSION, name: cloneName, settings: JSON.parse(JSON.stringify(p.settings)) };
+    presets.splice(idx + 1, 0, clone);
+    savePresets(presets);
+    activePresetName = cloneName;
+    renderPresetList();
+  }
+
+  /* ---- Rename preset inline ---- */
+  function renamePreset(idx, itemEl, nameSpanEl) {
+    const p = presets[idx];
+    if (!p) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'preset-name-input';
+    input.value = p.name;
+    input.style.flex = '1';
+    input.style.marginRight = '4px';
+    input.setAttribute('aria-label', 'Rename preset');
+
+    const confirm = () => {
+      const newName = input.value.trim();
+      if (newName && newName !== p.name) {
+        const oldName = p.name;
+        p.name = newName;
+        if (activePresetName === oldName) activePresetName = newName;
+        savePresets(presets);
+      }
+      renderPresetList();
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  { e.preventDefault(); confirm(); }
+      if (e.key === 'Escape') { e.stopPropagation(); renderPresetList(); }
+    });
+    input.addEventListener('blur', confirm);
+
+    // Replace name span with input in-place
+    nameSpanEl.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
+  /* ---- Delete preset by index ---- */
+  function deletePreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    if (activePresetName === p.name) activePresetName = null;
+    presets.splice(idx, 1);
+    savePresets(presets);
+    renderPresetList();
+  }
+
+  /* ---- Export all presets as a JSON file ---- */
+  function exportPresets() {
+    if (presets.length === 0) return;
+    const payload = JSON.stringify(presets, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'dd-presets.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /* ---- Import presets from a JSON file ---- */
+  function importPresets(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        const valid  = validateImport(parsed);
+        if (!valid) {
+          alert('Import failed: file does not contain valid dd:presets v1 data.');
+          return;
+        }
+        // Merge: add imported presets that don't clash by name; duplicates get a suffix
+        const existingNames = new Set(presets.map(p => p.name));
+        valid.forEach(p => {
+          let name = p.name;
+          let suffix = 1;
+          while (existingNames.has(name)) { name = `${p.name} (${++suffix})`; }
+          existingNames.add(name);
+          presets.push({ version: PRESET_VERSION, name, settings: p.settings });
+        });
+        savePresets(presets);
+        renderPresetList();
+      } catch (_) {
+        alert('Import failed: could not parse JSON file.');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  /* ---- Wire save button + Enter key ---- */
+  const nameInput = document.getElementById('preset-name-input');
+  const saveBtn   = document.getElementById('btn-preset-save');
+  if (nameInput && saveBtn) {
+    const doSave = () => {
+      const ok = saveCurrentAsPreset(nameInput.value);
+      if (ok) nameInput.value = '';
+    };
+    saveBtn.addEventListener('click', e => { e.stopPropagation(); doSave(); });
+    nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+    });
+  }
+
+  /* ---- Wire export button ---- */
+  const exportBtn = document.getElementById('btn-preset-export');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', e => { e.stopPropagation(); exportPresets(); });
+  }
+
+  /* ---- Wire import button + hidden file input ---- */
+  const importBtn  = document.getElementById('btn-preset-import');
+  const importFile = document.getElementById('preset-import-file');
+  if (importBtn && importFile) {
+    importBtn.addEventListener('click', e => { e.stopPropagation(); importFile.click(); });
+    importFile.addEventListener('change', () => {
+      const file = importFile.files[0];
+      if (file) importPresets(file);
+      importFile.value = ''; // reset so same file can be re-imported
+    });
+  }
+
+  /* ---- Initial render ---- */
+  renderPresetList();
+
 })();
 
 /* =================================================================
