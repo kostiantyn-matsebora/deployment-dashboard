@@ -70,6 +70,58 @@ version → sha → ref → run_number
 
 ---
 
+## Presets
+
+### Save
+
+1. User types a name (max 60 chars) in the name input and clicks Save (or presses Enter).
+2. `captureSettings()` snapshots the full live UI state into a `settings` object.
+3. Envelope `{ version: 1, name, settings }` is appended to the `dd:presets` array in `localStorage`.
+4. The new preset becomes the active preset; badge dot becomes visible.
+
+### Apply
+
+1. User clicks a preset row (or its ✓ Apply action button).
+2. `applySettings(p.settings)` writes each captured key back through the same code paths used by direct UI interaction — no short-circuit: theme flip triggers swimlane rebuild; field changes trigger matrix/swimlane re-render; view change calls `setView()`; filter changes call `applySvcFilter()`; column changes trigger grid recompute.
+3. The applied preset is marked `.is-active`.
+4. Unknown/missing fields in the snapshot fall back to current defaults — no error thrown.
+
+### Clone
+
+1. User clicks ⊕ Clone.
+2. A deep copy of the envelope is created with name `<original> (copy)`.
+3. Clone is inserted immediately after the source in the list; becomes active.
+
+### Rename
+
+1. User clicks ✎ Rename.
+2. The name span is replaced in-place with a text input pre-filled with the current name.
+3. Commit on Enter or blur; cancel on Escape (restores the list without saving).
+4. If the name changed and the preset was the active one, `activePresetName` updates to match.
+
+### Delete
+
+1. User clicks ✕ Delete.
+2. `window.confirm()` prompt: `Delete preset "<name>"?` — user must confirm.
+3. On confirm: the preset is removed from the array, `localStorage` is updated, active tracking clears if the deleted preset was active.
+
+### Export (per-preset)
+
+- Produces a single-envelope JSON file: `dd-preset-<slug>.json`.
+- Slug is the name lowercased with non-alphanumeric runs replaced by `-`.
+- File contains the full envelope (`{ version, name, settings }`) — one preset per file.
+
+### Import (per-preset)
+
+1. User clicks ⬆ Import; a hidden file input (`accept=".json"`) opens the OS picker.
+2. File is read as text and JSON-parsed.
+3. Validation: must be a non-array object with `version === 1`, non-empty string `name`, and a non-null `settings` object. Array inputs (old bulk format) are rejected.
+4. Name-clash: if a preset with the same name already exists, a numeric suffix `(2)`, `(3)`, … is appended until unique.
+5. Envelope is appended to the list; `localStorage` updated; list re-rendered.
+6. The file input is reset after each import so the same file can be re-imported.
+
+---
+
 ## Theme System
 
 ### Implementation

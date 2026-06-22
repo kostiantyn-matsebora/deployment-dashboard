@@ -36,6 +36,7 @@ flowchart LR
 | Icon buttons — Columns (⊞) | Custom | **Matrix-only** (hidden in Swimlanes). Opens Columns picker popover. Shows accent state + hidden-count badge when any environments are hidden. Tooltip: `Columns — show/hide environments` (normal); `Columns — N environment(s) hidden` when N > 0. |
 | Icon buttons — Correlation (⇆) | Custom | **Swimlanes-only**. Opens Correlation picker popover. |
 | Bell toggle (🔔) | Custom | Enables/disables browser notifications. Toggling ON for the first time triggers the browser permission prompt (lazy — never on load). Hidden when the Notifications API is unsupported, permission is denied, or the context is insecure. Tooltip: `Notifications — enable/disable desktop alerts`. |
+| Presets (bookmark) | Custom | Shared (all views). Opens Presets popover. Shows filled badge dot (`presets-badge-dot`) when at least one preset is saved. Tooltip: `Presets — save and restore view configurations`. |
 | Live indicator | Custom | Green dot with `pulseRing` animation (1.8s). Shows SSE connection status. |
 
 **Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, bell toggle, and the Live pill.
@@ -317,6 +318,40 @@ Accessible from the bell toggle area when notifications are enabled. Three indep
 **Environment filter.** Same Pattern Filter widget, keyed by environment name. Default: "Watch all except", empty pattern list.
 
 **Persistence.** All three axes persisted to `localStorage` (key `dd.notifPrefs`). Restored on init.
+
+### Presets Popover
+
+Accessible from the bookmark icon button (`btn-presets`) in the topbar icon cluster. Shared across all views (Matrix, Swimlanes, Analytics).
+
+**PrimeNG component:** `p-popover` with `[dismissable]="true"`, `appendTo="body"`. Min-width: 300px; anchored right-aligned to the button.
+
+**Structure (top-to-bottom):**
+
+1. **"Saved" section label** — uppercase 10.5px muted heading.
+2. **Preset list** (`.preset-list`) — scrollable column (max-height 220px); one `.preset-item` row per saved preset. Empty state: italic "No presets saved yet." hint.
+3. **Save row** (`.preset-save-row`) — name input (`.preset-name-input`, max 60 chars, JetBrains Mono) + primary "Save" button.
+4. **Import row** (`.preset-io-row`) — "⬆ Import" button; triggers a hidden `<input type="file">` accepting `.json`.
+
+**Preset item row (`.preset-item`):**
+
+| Element | Description |
+|---|---|
+| Name span (`.preset-item-name`) | Truncated monospace label; full name in `title` tooltip. |
+| Actions cluster (`.preset-item-actions`) | Hidden by default; revealed on hover or when item `is-active`. |
+
+**Per-item action buttons (`.preset-action-btn`):**
+
+| Button | Glyph | Action |
+|---|---|---|
+| Apply | ✓ | Writes the preset's settings snapshot back to the live UI. Marks item `.is-active`. |
+| Clone | ⊕ | Duplicates the preset as `<name> (copy)`, inserts immediately after, marks copy active. |
+| Rename | ✎ | Replaces the name span with an inline text input; commits on Enter / blur; cancels on Escape. |
+| Export | ⬇ | Downloads the single-preset envelope as `dd-preset-<slug>.json`. |
+| Delete | ✕ | `.is-danger` styling; prompts `window.confirm` before removing. |
+
+**Active state (`.is-active`):** accent border + accent background tint (10% opacity). Applied to the most recently applied or saved preset.
+
+**Badge dot.** The topbar bookmark button shows a filled dot (`presets-badge-dot`) when the saved list is non-empty; hidden otherwise.
 
 ---
 
