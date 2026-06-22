@@ -497,6 +497,27 @@ describe('PresetsService', () => {
       expect(service.presets()).toHaveLength(2);
       expect(service.presets()[1].name).toBe('Imported');
     });
+
+    it('suffixes with " (2)" when a preset with the same name already exists', () => {
+      service.save('Duplicate');
+      service.importPreset(makeEnvelope('Duplicate'));
+      expect(service.presets()).toHaveLength(2);
+      expect(service.presets()[1].name).toBe('Duplicate (2)');
+    });
+
+    it('increments the counter until unique: " (3)" when " (2)" is also taken', () => {
+      service.save('Duplicate');
+      service.importPreset(makeEnvelope('Duplicate'));    // becomes 'Duplicate (2)'
+      service.importPreset(makeEnvelope('Duplicate'));    // becomes 'Duplicate (3)'
+      expect(service.presets()).toHaveLength(3);
+      expect(service.presets()[2].name).toBe('Duplicate (3)');
+    });
+
+    it('does not suffix when the name is unique', () => {
+      service.save('Alpha');
+      service.importPreset(makeEnvelope('Beta'));
+      expect(service.presets()[1].name).toBe('Beta');
+    });
   });
 
   // ── toSlug ────────────────────────────────────────────────────────────────

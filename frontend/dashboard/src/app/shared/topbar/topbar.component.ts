@@ -653,10 +653,16 @@ export class TopbarComponent {
       this.presetsMsg.set('Name cannot be blank.');
       return;
     }
-    this.presetsService.rename(target, newName);
+    // Invariant: clear the renaming signal BEFORE persist so that if
+    // presetsService.rename() swallows a localStorage quota error the inline
+    // input is never left pointing at a ghost object.
     this.renamingPreset.set(null);
     this.presetRenameValue = '';
-    this.presetsMsg.set(null);
+    try {
+      this.presetsService.rename(target, newName);
+    } finally {
+      this.presetsMsg.set(null);
+    }
   }
 
   /** Cancel an in-progress rename. */

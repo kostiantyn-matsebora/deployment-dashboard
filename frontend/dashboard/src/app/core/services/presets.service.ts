@@ -252,6 +252,10 @@ export class PresetsService {
   /**
    * Rename a preset in-place by reference equality.
    * Rejects blank names.
+   *
+   * Invariant: callers MUST clear their renaming UI state BEFORE calling this
+   * method (or wrap in try/finally) so that a swallowed localStorage quota
+   * error cannot leave an inline input pointing at a ghost object.
    */
   rename(target: PresetEnvelope, newName: string): void {
     const trimmed = newName.trim();
@@ -347,9 +351,22 @@ export class PresetsService {
 
   /**
    * Import a validated preset, appending it to the stored list.
+   * If a preset with the same name already exists, suffixes the name with
+   * ' (2)', ' (3)', … until unique — matching the mockup's importPresets()
+   * dedup loop (docs/design/mockup/index.html).
    */
   importPreset(envelope: PresetEnvelope): void {
-    const updated = [...this.presets(), envelope];
+    const existing = this.presets();
+    const existingNames = new Set(existing.map((p) => p.name));
+    let name = envelope.name;
+    if (existingNames.has(name)) {
+      let counter = 2;
+      while (existingNames.has(`${name} (${counter})`)) {
+        counter++;
+      }
+      name = `${name} (${counter})`;
+    }
+    const updated = [...existing, { ...envelope, name }];
     this.persist(updated);
   }
 

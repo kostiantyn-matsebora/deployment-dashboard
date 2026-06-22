@@ -520,7 +520,7 @@
           @if (hasPresets()) {
             <div class="presets-divider" aria-hidden="true"></div>
             <ul class="presets-list" role="list" aria-label="Saved presets">
-              @for (p of savedPresets(); track p) {
+              @for (p of savedPresets(); track p.name) {
                 <li class="presets-row" role="listitem">
                   @if (renamingPreset() !== p) {
                     <!-- Normal row -->
