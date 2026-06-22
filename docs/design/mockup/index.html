@@ -3815,12 +3815,10 @@
                     title="Save current settings as a new preset" aria-label="Save preset">Save</button>
           </div>
 
-          <!-- Export / Import -->
+          <!-- Import -->
           <div class="preset-io-row">
-            <button class="ext-btn" type="button" id="btn-preset-export"
-                    title="Export all presets as a JSON file" aria-label="Export presets">⬇ Export</button>
             <button class="ext-btn" type="button" id="btn-preset-import"
-                    title="Import presets from a JSON file" aria-label="Import presets">⬆ Import</button>
+                    title="Import a preset from a JSON file" aria-label="Import preset">⬆ Import</button>
           </div>
           <!-- Hidden file input for import -->
           <input type="file" id="preset-import-file" accept=".json,application/json"
@@ -8231,19 +8229,29 @@ computeKPIs();
     }
   }
 
-  /* ---- Validate an imported preset array ---- */
+  /* ---- Validate a single imported preset envelope ---- */
   function validateImport(parsed) {
-    if (!Array.isArray(parsed)) return null;
-    const valid = parsed.filter(p =>
-      p &&
-      typeof p === 'object' &&
-      p.version === PRESET_VERSION &&
-      typeof p.name === 'string' &&
-      p.name.trim().length > 0 &&
-      typeof p.settings === 'object' &&
-      p.settings !== null
-    );
-    return valid.length > 0 ? valid : null;
+    if (Array.isArray(parsed)) return null; // reject old bulk-array format
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed.version === PRESET_VERSION &&
+      typeof parsed.name === 'string' &&
+      parsed.name.trim().length > 0 &&
+      typeof parsed.settings === 'object' &&
+      parsed.settings !== null
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+
+  /* ---- Slugify a preset name for use in a filename ---- */
+  function slugifyPresetName(name) {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'preset';
   }
 
   /* ---- State ---- */
@@ -8335,9 +8343,22 @@ computeKPIs();
         deletePreset(idx);
       });
 
+      // Export button
+      const exportBtn2 = document.createElement('button');
+      exportBtn2.className = 'preset-action-btn';
+      exportBtn2.type = 'button';
+      exportBtn2.title = 'Export this preset as a JSON file';
+      exportBtn2.setAttribute('aria-label', `Export preset ${preset.name}`);
+      exportBtn2.textContent = '⬇';
+      exportBtn2.addEventListener('click', e => {
+        e.stopPropagation();
+        exportPreset(idx);
+      });
+
       actions.appendChild(applyBtn);
       actions.appendChild(cloneBtn);
       actions.appendChild(renameBtn);
+      actions.appendChild(exportBtn2);
       actions.appendChild(deleteBtn);
 
       item.appendChild(nameSpan);
@@ -8430,28 +8451,31 @@ computeKPIs();
   function deletePreset(idx) {
     const p = presets[idx];
     if (!p) return;
+    if (!window.confirm(`Delete preset "${p.name}"?`)) return;
     if (activePresetName === p.name) activePresetName = null;
     presets.splice(idx, 1);
     savePresets(presets);
     renderPresetList();
   }
 
-  /* ---- Export all presets as a JSON file ---- */
-  function exportPresets() {
-    if (presets.length === 0) return;
-    const payload = JSON.stringify(presets, null, 2);
+  /* ---- Export a single preset as a JSON file ---- */
+  function exportPreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    const envelope = { version: p.version, name: p.name, settings: p.settings };
+    const payload = JSON.stringify(envelope, null, 2);
     const blob = new Blob([payload], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = 'dd-presets.json';
+    a.download = `dd-preset-${slugifyPresetName(p.name)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 
-  /* ---- Import presets from a JSON file ---- */
+  /* ---- Import a single preset from a JSON file ---- */
   function importPresets(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -8460,18 +8484,15 @@ computeKPIs();
         const parsed = JSON.parse(e.target.result);
         const valid  = validateImport(parsed);
         if (!valid) {
-          alert('Import failed: file does not contain valid dd:presets v1 data.');
+          alert('Import failed: file does not contain a valid single dd:preset v1 envelope.');
           return;
         }
-        // Merge: add imported presets that don't clash by name; duplicates get a suffix
+        // Apply name-clash suffix if a preset with this name already exists
         const existingNames = new Set(presets.map(p => p.name));
-        valid.forEach(p => {
-          let name = p.name;
-          let suffix = 1;
-          while (existingNames.has(name)) { name = `${p.name} (${++suffix})`; }
-          existingNames.add(name);
-          presets.push({ version: PRESET_VERSION, name, settings: p.settings });
-        });
+        let name = valid.name;
+        let suffix = 1;
+        while (existingNames.has(name)) { name = `${valid.name} (${++suffix})`; }
+        presets.push({ version: PRESET_VERSION, name, settings: valid.settings });
         savePresets(presets);
         renderPresetList();
       } catch (_) {
@@ -8493,12 +8514,6 @@ computeKPIs();
     nameInput.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); doSave(); }
     });
-  }
-
-  /* ---- Wire export button ---- */
-  const exportBtn = document.getElementById('btn-preset-export');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', e => { e.stopPropagation(); exportPresets(); });
   }
 
   /* ---- Wire import button + hidden file input ---- */
