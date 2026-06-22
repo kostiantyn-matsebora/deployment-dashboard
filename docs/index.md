@@ -71,6 +71,13 @@ hide:
     ![Notifications](_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
     ![Notifications](_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
 
+=== "Presets"
+
+    Save named sets of UI settings — active filters, view preferences, notification options — and apply them in one click. Export any preset as a `dd-preset-<slug>.json` file to share by email or by committing it to a git repo; teammates import it — no server involved.
+
+    ![UI settings presets](_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
+    ![UI settings presets](_assets/screenshots/presets-light.png#only-light){ .dd-shot }
+
 !!! quote ""
     **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
 
