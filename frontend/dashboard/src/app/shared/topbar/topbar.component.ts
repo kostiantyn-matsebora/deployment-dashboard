@@ -27,6 +27,7 @@ import {
 } from '../../core/models/deployment.model';
 import { PatternFilterComponent } from '../pattern-filter/pattern-filter.component';
 import { matchesAny } from '../../core/utils/glob.util';
+import { PresetsService, PresetEnvelope } from '../../core/services/presets.service';
 
 interface ViewOption {
   label: string;
@@ -73,6 +74,7 @@ export class TopbarComponent {
   protected readonly notifPrefs      = inject(NotificationPrefsService);
   protected readonly notifService    = inject(BrowserNotificationService);
   protected readonly router          = inject(Router);
+  protected readonly presetsService  = inject(PresetsService);
 
   // Popovers
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
@@ -81,6 +83,7 @@ export class TopbarComponent {
   protected readonly legendPopover        = viewChild<Popover>('legendPopover');
   protected readonly notifPopover         = viewChild<Popover>('notifPopover');
   protected readonly servicesPopover      = viewChild<Popover>('servicesPopover');
+  protected readonly presetsPopover       = viewChild<Popover>('presetsPopover');
   protected readonly rateLimitPopovers    = viewChildren<Popover>('rateLimitPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
@@ -90,7 +93,20 @@ export class TopbarComponent {
   protected readonly legendPopoverOpen      = signal(false);
   protected readonly notifPopoverOpen       = signal(false);
   protected readonly servicesPopoverOpen    = signal(false);
+  protected readonly presetsPopoverOpen     = signal(false);
   protected readonly rateLimitPopoverOpen   = signal<Map<string, boolean>>(new Map());
+
+  // ── Presets UI state ─────────────────────────────────────────────────────
+  /** Name field for saving a new preset. */
+  protected presetSaveName = '';
+  /** Whether the save-new-preset input row is visible. */
+  protected readonly presetSaveOpen = signal(false);
+  /** Which preset is currently being renamed (null = none). */
+  protected readonly renamingPreset = signal<PresetEnvelope | null>(null);
+  /** Rename input value. */
+  protected presetRenameValue = '';
+  /** Error / info message shown in the popover (clears on next action). */
+  protected readonly presetsMsg = signal<string | null>(null);
 
   // ── View tabs ─────────────────────────────────────────────
   protected readonly viewOptions: ViewOption[] = [
@@ -457,6 +473,20 @@ export class TopbarComponent {
     }
   }
 
+  protected togglePresetsPopover(event: MouseEvent): void {
+    const p = this.presetsPopover();
+    if (p) {
+      p.toggle(event);
+      this.presetsPopoverOpen.update(v => !v);
+      // Reset transient UI state when opening
+      this.presetSaveOpen.set(false);
+      this.presetSaveName = '';
+      this.renamingPreset.set(null);
+      this.presetRenameValue = '';
+      this.presetsMsg.set(null);
+    }
+  }
+
   // ── Notification prefs ────────────────────────────────────
 
   /** All 8 statuses in display order. */
@@ -554,6 +584,131 @@ export class TopbarComponent {
     this.notifPrefs.updatePrefs({
       envChips: this.notifPrefs.prefs().envChips.filter(x => x !== chip),
     });
+  }
+
+  // ── Presets ───────────────────────────────────────────────────────────────
+
+  /** Reactive list of saved presets from PresetsService. */
+  protected readonly savedPresets = computed(() => this.presetsService.presets());
+
+  /** Whether any presets are saved. */
+  protected readonly hasPresets = computed(() => this.savedPresets().length > 0);
+
+  /** Open / close the save-new-preset name input. */
+  protected togglePresetSaveInput(): void {
+    this.presetSaveOpen.update(v => !v);
+    if (this.presetSaveOpen()) {
+      this.presetSaveName = '';
+    }
+    this.presetsMsg.set(null);
+  }
+
+  /** Confirm saving the new preset with the current name input. */
+  protected confirmSavePreset(): void {
+    const name = this.presetSaveName.trim();
+    if (!name) {
+      this.presetsMsg.set('Name cannot be blank.');
+      return;
+    }
+    this.presetsService.save(name);
+    this.presetSaveName = '';
+    this.presetSaveOpen.set(false);
+    this.presetsMsg.set(`Saved "${name}".`);
+  }
+
+  /** Apply a saved preset. */
+  protected applyPreset(p: PresetEnvelope): void {
+    this.presetsService.apply(p);
+    this.presetsMsg.set(`Applied "${p.name}".`);
+  }
+
+  /** Export (download) a single saved preset as a JSON file. */
+  protected exportPreset(p: PresetEnvelope): void {
+    this.presetsService.exportPreset(p);
+  }
+
+  /** Export the current live settings as a JSON file (no save). */
+  protected exportCurrentSettings(): void {
+    const env: PresetEnvelope = {
+      version: 1,
+      name: 'current-settings',
+      settings: this.presetsService.captureSettings(),
+    };
+    this.presetsService.exportPreset(env);
+  }
+
+  /** Begin renaming a preset — opens the inline rename input for that row. */
+  protected beginRenamePreset(p: PresetEnvelope): void {
+    this.renamingPreset.set(p);
+    this.presetRenameValue = p.name;
+    this.presetsMsg.set(null);
+  }
+
+  /** Confirm the rename for the currently-renaming preset. */
+  protected confirmRenamePreset(): void {
+    const target = this.renamingPreset();
+    if (!target) return;
+    const newName = this.presetRenameValue.trim();
+    if (!newName) {
+      this.presetsMsg.set('Name cannot be blank.');
+      return;
+    }
+    this.presetsService.rename(target, newName);
+    this.renamingPreset.set(null);
+    this.presetRenameValue = '';
+    this.presetsMsg.set(null);
+  }
+
+  /** Cancel an in-progress rename. */
+  protected cancelRenamePreset(): void {
+    this.renamingPreset.set(null);
+    this.presetRenameValue = '';
+    this.presetsMsg.set(null);
+  }
+
+  /** Clone a preset — adds a copy with " (copy)" suffix. */
+  protected clonePreset(p: PresetEnvelope): void {
+    this.presetsService.clone(p, `${p.name} (copy)`);
+    this.presetsMsg.set(`Cloned "${p.name}".`);
+  }
+
+  /** Delete a preset — shows native confirm before proceeding. */
+  protected deletePreset(p: PresetEnvelope): void {
+    // Session decision #4: delete requires native confirm naming the preset.
+    if (!confirm(`Delete preset "${p.name}"?\nThis cannot be undone.`)) return;
+    this.presetsService.delete(p);
+    this.presetsMsg.set(null);
+  }
+
+  /** Import a preset from a file chosen via a hidden <input type="file">. */
+  protected triggerImportFile(): void {
+    const input = document.createElement('input');
+    input.type   = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) { document.body.removeChild(input); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result as string;
+        const result = this.presetsService.validateImport(text);
+        if (typeof result === 'string') {
+          this.presetsMsg.set(result);
+        } else {
+          this.presetsService.importPreset(result);
+          this.presetsMsg.set(`Imported "${result.name}".`);
+        }
+        document.body.removeChild(input);
+      };
+      reader.onerror = () => {
+        this.presetsMsg.set('Could not read file.');
+        document.body.removeChild(input);
+      };
+      reader.readAsText(file);
+    }, { once: true });
+    input.click();
   }
 
 }
