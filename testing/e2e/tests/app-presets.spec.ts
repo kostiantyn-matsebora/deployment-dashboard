@@ -17,6 +17,10 @@
  *   F) Delete a preset — native confirm is handled; preset is removed from list.
  *   G) Export current — triggers a file download named "dd-preset-current-settings.json".
  *   H) Export a saved preset — triggers a download named "dd-preset-<slug>.json".
+ *   J) Apply restores service filter — matrix row count visibly shrinks after applying
+ *      a preset that captured a text filter.
+ *   K) Reset all settings — confirm dialog accepted → defaults restored (filter cleared,
+ *      failOnly off, theme dark).
  *
  * Screenshots (adopter docs):
  *   - docs/_assets/screenshots/presets-dark.png
@@ -521,6 +525,143 @@ test.describe('Export saved preset', () => {
     ]);
 
     expect(download.suggestedFilename()).toBe('dd-preset-my-export.json');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// J) Apply restores service filter — VISIBLE matrix change
+// ---------------------------------------------------------------------------
+
+test.describe('Apply preset restores service filter', () => {
+  test.beforeEach(async ({ page }) => {
+    await openMatrixClean(page);
+  });
+
+  test('J) applying a preset that captured a text filter narrows the matrix rows', async ({
+    page,
+  }) => {
+    // Step 1: wait for the matrix to render all rows with no filter active.
+    // The mock serves 10 services; wait until at least one row-head is present.
+    await page.waitForSelector('.row-head', { timeout: 15_000 });
+    const allRows = await page.locator('.row-head').count();
+    expect(allRows).toBeGreaterThan(1);
+
+    // Step 2: type "payment" into the service-filter input — only "payments-api"
+    // matches, so the visible row count drops to 1.
+    const filterInput = page.locator('input[aria-label="Filter services by name"]');
+    await filterInput.fill('payment');
+    await page.waitForTimeout(300);
+
+    const filteredCount = await page.locator('.row-head').count();
+    expect(filteredCount).toBe(1);
+
+    // Step 3: save a preset while "payment" is the active filter.
+    await openPresetsPopover(page);
+    await page.locator('[data-testid="presets-save-btn"]').click();
+    await page.locator('[data-testid="presets-name-input"]').fill('Payment filter');
+    await page.locator('[data-testid="presets-save-confirm-btn"]').click();
+    await expect(page.locator('.presets-list .presets-name')).toHaveCount(1, { timeout: 5_000 });
+
+    // Step 4: clear the filter — all rows return.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.presets-content')).toHaveCount(0);
+    await filterInput.fill('');
+    await page.waitForTimeout(300);
+    const restoredCount = await page.locator('.row-head').count();
+    expect(restoredCount).toBe(allRows);
+
+    // Step 5: apply the "Payment filter" preset.
+    await openPresetsPopover(page);
+    await page.locator('[data-testid="preset-apply-btn"]').first().click();
+
+    // Close the popover so the matrix is fully visible.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.presets-content')).toHaveCount(0);
+
+    // Step 6: assert the matrix rows have shrunk back to the filtered subset.
+    await page.waitForTimeout(300);
+    const afterApply = await page.locator('.row-head').count();
+    expect(afterApply).toBeLessThan(allRows);
+    expect(afterApply).toBe(1);
+
+    // Step 7: confirm the filter input itself reflects the restored value.
+    await expect(filterInput).toHaveValue('payment');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// K) Reset all settings restores defaults
+// ---------------------------------------------------------------------------
+
+test.describe('Reset all settings', () => {
+  test.beforeEach(async ({ page }) => {
+    await openMatrixClean(page);
+  });
+
+  test('K) accepting the reset confirm clears the service filter and failOnly toggle', async ({
+    page,
+  }) => {
+    // Arrange: set a text filter so the matrix shows a subset of rows.
+    await page.waitForSelector('.row-head', { timeout: 15_000 });
+    const allRows = await page.locator('.row-head').count();
+
+    const filterInput = page.locator('input[aria-label="Filter services by name"]');
+    await filterInput.fill('payment');
+    await page.waitForTimeout(300);
+    expect(await page.locator('.row-head').count()).toBeLessThan(allRows);
+
+    // Also turn on failures-only so we can verify it resets too.
+    await page.locator('label.hdr-fail-toggle').click();
+    await page.waitForTimeout(200);
+
+    // Act: open presets popover, accept the reset confirm.
+    await openPresetsPopover(page);
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.locator('[data-testid="presets-reset-all-btn"]').click();
+
+    // Close the popover.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.presets-content')).toHaveCount(0);
+
+    // Assert: matrix shows all rows again (filter cleared).
+    await page.waitForTimeout(400);
+    const afterReset = await page.locator('.row-head').count();
+    expect(afterReset).toBe(allRows);
+
+    // Assert: the filter input is empty.
+    await expect(filterInput).toHaveValue('');
+
+    // Assert: failOnly is off — the toggle must not carry the is-on class.
+    const failToggle = page.locator('label.hdr-fail-toggle');
+    await expect(failToggle).not.toHaveClass(/is-on/);
+  });
+
+  test('K) dismissing the reset confirm leaves settings unchanged', async ({
+    page,
+  }) => {
+    // Arrange: set a text filter.
+    await page.waitForSelector('.row-head', { timeout: 15_000 });
+    const filterInput = page.locator('input[aria-label="Filter services by name"]');
+    await filterInput.fill('auth');
+    await page.waitForTimeout(300);
+    const filteredCount = await page.locator('.row-head').count();
+
+    // Act: dismiss the reset confirm.
+    await openPresetsPopover(page);
+    page.on('dialog', (dialog) => dialog.dismiss());
+    await page.locator('[data-testid="presets-reset-all-btn"]').click();
+
+    // Close the popover.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.presets-content')).toHaveCount(0);
+
+    // Assert: filter remains — same row count.
+    await page.waitForTimeout(300);
+    const afterDismiss = await page.locator('.row-head').count();
+    expect(afterDismiss).toBe(filteredCount);
+
+    // Assert: filter input still has the value.
+    await expect(filterInput).toHaveValue('auth');
   });
 });
 
