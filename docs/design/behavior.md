@@ -83,14 +83,14 @@ version → sha → ref → run_number
 
 1. User clicks a preset row (or its ✓ Apply action button).
 2. `applySettings(p.settings)` writes each captured key back through the same code paths used by direct UI interaction — no short-circuit: theme flip triggers swimlane rebuild; field changes trigger matrix/swimlane re-render; view change calls `setView()`; filter changes call `applySvcFilter()`; column changes trigger grid recompute.
-3. The applied preset is marked `.is-active`.
+3. The applied preset is marked `.is-active`: accent border + tint, `aria-current="true"`, and an "Active" badge on its row. The name is persisted to `localStorage` (`dd:presetActive`), so the indicator survives page reload.
 4. Unknown/missing fields in the snapshot fall back to current defaults — no error thrown.
 
 ### Clone
 
 1. User clicks ⊕ Clone.
 2. A deep copy of the envelope is created with name `<original> (copy)`.
-3. Clone is inserted immediately after the source in the list; becomes active.
+3. Clone is inserted immediately after the source in the list. The active indicator does NOT transfer to the clone — the previously active preset (if any) remains active.
 
 ### Update
 
@@ -103,20 +103,20 @@ version → sha → ref → run_number
 1. User clicks ✎ Rename.
 2. The name span is replaced in-place with a text input pre-filled with the current name.
 3. Commit on Enter or blur; cancel on Escape (restores the list without saving).
-4. If the name changed and the preset was the active one, `activePresetName` updates to match.
+4. If the renamed preset was the active one, the stored `dd:presetActive` key updates to the new name — the active indicator follows the rename.
 
 ### Delete
 
 1. User clicks ✕ Delete.
 2. `window.confirm()` prompt: `Delete preset "<name>"?` — user must confirm.
-3. On confirm: the preset is removed from the array, `localStorage` is updated, active tracking clears if the deleted preset was active.
+3. On confirm: the preset is removed from the array, `localStorage` is updated. If the deleted preset was the active one, the active indicator is cleared (`dd:presetActive` removed) — no preset is considered active.
 
 ### Reset All Settings
 
 1. User clicks **Reset all settings** in the Presets popover.
 2. `window.confirm()` prompt: `Reset all settings to defaults?` — user must confirm.
 3. On confirm: every captured setting key is removed from `localStorage` and each setting returns to its framework default (theme → `dark`; field pickers → all ON; filters → clear; view → Matrix; etc.).
-4. Active preset tracking clears — no preset is considered active after a reset.
+4. The active indicator is cleared (`dd:presetActive` removed) — no preset is considered active after a reset. The saved preset list is not affected; only the active tracking is cleared.
 
 ### Export (per-preset)
 

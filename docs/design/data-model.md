@@ -109,7 +109,12 @@ Classification logic is server-side (in `GET /api/analytics/dora`); the SPA appl
 
 ## Presets Envelope
 
-**Storage key:** `dd:presets` → JSON array of preset envelopes.
+**Storage keys:**
+
+| Key | Type | Purpose |
+|---|---|---|
+| `dd:presets` | JSON array | All saved preset envelopes. |
+| `dd:presetActive` | string | Name of the last-applied preset. Absent when no preset has been applied, or after the active preset is deleted or all settings are reset. |
 
 **Envelope shape:**
 

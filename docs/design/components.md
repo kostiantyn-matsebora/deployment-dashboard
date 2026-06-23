@@ -352,7 +352,7 @@ Accessible from the bookmark icon button (`btn-presets`) in the topbar icon clus
 
 **Reset all settings button.** A text-button below the preset list that resets every captured setting to its framework default after a `window.confirm` prompt. Clears all `localStorage` preset-related keys and removes the active-preset tracking state.
 
-**Active state (`.is-active`):** accent border + accent background tint (10% opacity). Applied to the most recently applied or saved preset.
+**Active state (`.is-active`):** accent border + accent background tint (10% opacity). Applied to the last-applied preset row. The row also carries `aria-current="true"` and an inline `"Active"` text badge (`.preset-active-badge`, `aria-hidden="true"`). **Note:** saving a new preset does NOT mark it active — only Apply sets the active indicator.
 
 **Badge dot.** The topbar bookmark button shows a filled dot (`presets-badge-dot`) when the saved list is non-empty; hidden otherwise.
 

@@ -144,10 +144,12 @@ A preset captures the full UI settings snapshot at the moment it is saved:
 
 ### Working with presets
 
+The preset list marks the last-applied preset with an "Active" badge. The indicator persists across reloads and follows renames; it is cleared when the active preset is deleted or all settings are reset.
+
 | Action | How |
 |---|---|
 | **Save** | Open the preset panel; type a name; click **Save**. |
-| **Apply** | Hover a preset row; click the **Apply** icon — all captured settings take effect immediately. |
+| **Apply** | Hover a preset row; click the **Apply** icon — all captured settings take effect immediately. The row is marked Active. |
 | **Clone** | Hover a preset row; click the **Clone** icon — saves a copy with `(copy)` appended. |
 | **Update** | Hover a preset row; click the **Update** icon — overwrites the preset with the current settings after a confirmation. Name unchanged. |
 | **Rename** | Hover a preset row; click the **Rename** icon — edit the name inline; confirm. |
