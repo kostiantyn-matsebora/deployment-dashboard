@@ -309,7 +309,7 @@ Two phases — service identity resolution (always) and needs-graph fetch (opt-i
 | 1a | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` | obtain `workflow_id`, `path` (e.g. `.github/workflows/deploy.yml`), and `head_sha` |
 | 1b | `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}` | read `name` field → **service identity** (F12) |
 
-Service identity comes from the workflow `name` field returned by the workflow endpoint, **not** `run.Name` (which can be overridden by `run-name:` and changes per run). Non-2xx on step 1a → `parent_deployments = []` for all events in this run; service identity falls back to repo short name (non-Actions path). Non-2xx on step 1b → service identity falls back to the `path` basename without extension; `parent_deployments = []` for all events in this run.
+Service identity comes from the workflow `name` field returned by the workflow endpoint, **not** `run.Name` (which can be overridden by `run-name:` and changes per run). Non-2xx on step 1a → `parent_deployments = []` for all events in this run; service identity falls back to repo short name (non-Actions path). Non-2xx on step 1b → service identity falls back to `run.Name` (from step 1a), then the repo short name; `parent_deployments = []` for all events in this run.
 
 **Phase 2 — needs-graph fetch (Contents:read; opt-in)**
 
