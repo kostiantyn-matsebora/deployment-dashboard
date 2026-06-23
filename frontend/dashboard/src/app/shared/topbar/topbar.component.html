@@ -559,6 +559,14 @@
                         data-testid="preset-rename-btn"
                       >Rename</button>
                       <button
+                        class="preset-action-btn"
+                        type="button"
+                        [title]="'Update this preset with current settings'"
+                        [attr.aria-label]="'Update preset ' + p.name + ' with current settings'"
+                        (click)="updatePreset(p)"
+                        data-testid="preset-update-btn"
+                      >Update</button>
+                      <button
                         class="preset-action-btn is-danger"
                         type="button"
                         [title]="'Delete preset: ' + p.name"

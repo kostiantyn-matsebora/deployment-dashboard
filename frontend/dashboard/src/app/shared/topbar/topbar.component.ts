@@ -678,6 +678,13 @@ export class TopbarComponent {
     this.presetsMsg.set(`Cloned "${p.name}".`);
   }
 
+  /** Update a preset — overwrites its stored settings with the current live settings after confirm. */
+  protected updatePreset(p: PresetEnvelope): void {
+    if (!confirm(`Update preset "${p.name}" with the current settings?\nThis will overwrite its stored settings.`)) return;
+    this.presetsService.update(p);
+    this.presetsMsg.set(`Updated "${p.name}".`);
+  }
+
   /** Delete a preset — shows native confirm before proceeding. */
   protected deletePreset(p: PresetEnvelope): void {
     // Session decision #4: delete requires native confirm naming the preset.

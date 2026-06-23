@@ -266,6 +266,21 @@ export class PresetsService {
     this.persist(updated);
   }
 
+  // ── Update ───────────────────────────────────────────────────────────────
+
+  /**
+   * Overwrite an existing preset's settings with the current live UI state.
+   * Preserves the preset's name and version (version stays 1).
+   * Callers are responsible for showing the native confirm dialog before
+   * calling this method.
+   */
+  update(target: PresetEnvelope): void {
+    const updated = this.presets().map((p) =>
+      p === target ? { ...p, settings: this.captureSettings() } : p,
+    );
+    this.persist(updated);
+  }
+
   // ── Delete ───────────────────────────────────────────────────────────────
 
   /**

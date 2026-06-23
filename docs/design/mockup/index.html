@@ -8331,6 +8331,18 @@ computeKPIs();
         renamePreset(idx, item, nameSpan);
       });
 
+      // Update button
+      const updateBtn = document.createElement('button');
+      updateBtn.className = 'preset-action-btn';
+      updateBtn.type = 'button';
+      updateBtn.title = 'Update this preset with current settings';
+      updateBtn.setAttribute('aria-label', `Update preset ${preset.name} with current settings`);
+      updateBtn.textContent = '↺';
+      updateBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        updatePreset(idx);
+      });
+
       // Delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'preset-action-btn is-danger';
@@ -8359,6 +8371,7 @@ computeKPIs();
       actions.appendChild(cloneBtn);
       actions.appendChild(renameBtn);
       actions.appendChild(exportBtn2);
+      actions.appendChild(updateBtn);
       actions.appendChild(deleteBtn);
 
       item.appendChild(nameSpan);
@@ -8454,6 +8467,16 @@ computeKPIs();
     if (!window.confirm(`Delete preset "${p.name}"?`)) return;
     if (activePresetName === p.name) activePresetName = null;
     presets.splice(idx, 1);
+    savePresets(presets);
+    renderPresetList();
+  }
+
+  /* ---- Update preset by index (re-capture current settings) ---- */
+  function updatePreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    if (!window.confirm(`Update preset "${p.name}" with the current settings?\nThis will overwrite its stored settings.`)) return;
+    p.settings = captureSettings();
     savePresets(presets);
     renderPresetList();
   }

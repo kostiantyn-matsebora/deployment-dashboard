@@ -417,6 +417,63 @@ describe('PresetsService', () => {
     });
   });
 
+  // ── update ────────────────────────────────────────────────────────────────
+
+  describe('update()', () => {
+    it('replaces the target preset settings with the current live settings', () => {
+      service.save('Snapshot');
+      const target = service.presets()[0];
+      // Change a live signal so the re-capture differs from the original
+      themeService.setTheme('light');
+      service.update(target);
+      const updated = service.presets()[0];
+      expect(updated.name).toBe('Snapshot');
+      expect(updated.version).toBe(1);
+      expect(updated.settings.theme).toBe('light');
+    });
+
+    it('preserves the preset name and version after update', () => {
+      service.save('StableName');
+      const target = service.presets()[0];
+      state.failuresOnly.set(true);
+      service.update(target);
+      const updated = service.presets()[0];
+      expect(updated.name).toBe('StableName');
+      expect(updated.version).toBe(1);
+    });
+
+    it('re-captures current settings into the existing envelope (replaced settings)', () => {
+      service.save('ToUpdate');
+      const target = service.presets()[0];
+      const settingsBefore = target.settings.failOnly;
+      state.failuresOnly.set(!settingsBefore);
+      service.update(target);
+      expect(service.presets()[0].settings.failOnly).toBe(!settingsBefore);
+    });
+
+    it('only updates the target preset, leaving others unchanged', () => {
+      service.save('Alpha');
+      service.save('Beta');
+      const alpha = service.presets().find((p) => p.name === 'Alpha')!;
+      themeService.setTheme('dark');
+      service.update(alpha);
+      const betaAfter = service.presets().find((p) => p.name === 'Beta')!;
+      expect(betaAfter).toBeDefined();
+      expect(service.presets()).toHaveLength(2);
+    });
+
+    it('persists the updated preset to localStorage', () => {
+      service.save('Persist');
+      const target = service.presets()[0];
+      state.failuresOnly.set(true);
+      service.update(target);
+      const raw = localStorage.getItem('dd:presets');
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw!);
+      expect(parsed[0].settings.failOnly).toBe(true);
+    });
+  });
+
   // ── exportPreset ──────────────────────────────────────────────────────────
 
   describe('exportPreset()', () => {
