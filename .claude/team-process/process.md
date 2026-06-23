@@ -98,26 +98,33 @@ One orchestrator (sole integration/commit gate): members produce in-lane; orches
 - **Hub-and-spoke.** Members report to orchestrator; it holds the plan + merge.
 - **Peer-to-peer only for contract negotiation.** `contract` role settles an interface directly with consumers → `ARTIFACT`, never left as chat.
 - **Fan-out is deterministic.** Drive parallel phases from an explicit plan, not chatter.
-- **Compressed messages only.** Reads `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT` — never test logs, full diffs, or source. Decision needing an artifact read → delegate it.
+- **Compressed messages only.** Reads `RESULT`/`REVIEW`/`FINDING`/`ARTIFACT`/`RESEARCH`/`ANALYSIS` — never test logs, full diffs, or source. Decision needing an artifact read → delegate it (→ `ANALYSIS`).
 - **Working set = `plan + current wave`.** Run ledger (lane map + one line per wave: changed / decided / deferred). Fold each `RESULT` in; drop the verbatim message. Team mode: shared task list is the ledger.
 
-## Investigation is delegated — including exploration and scoping
+## Investigation and analysis are delegated — at every stage
 
-The orchestrator routes investigation out — it does not explore or scope in its own context; applies to the first read of a code area, not only the fix loop. **Two delegated shapes, picked by need:**
+**Pure coordinator.** The orchestrator decides, routes, assigns, and handles errors — it does **not** explore, scope, or *analyze* in its own context. **Stage-independent** — applies to intake, propose-solution, lane-map rationale, `FINDING` option-weighing, fix-loop layer-selection, and human-in-the-loop / post-PR iteration. **Three delegated shapes, picked by need:**
 
 - **Broad discovery → `Explore` agent → `RESEARCH`.** "How does this work today / where's the relevant code / what are the options" → dispatch a read-only **`Explore`** agent.
   - Its exploration loops run in its **disposable** context; it returns a [`RESEARCH`](protocol.md) form (`topic` · `findings` · `options` · `refs` · `open`).
   - Lead **never runs the exploration loops itself** — that is exactly the agent-loop context pollution this rule exists to prevent.
-  - `Explore` is read-only (no `Write`): returns the form as its final message; orchestrator persists it via the normalizer, folds `findings`/`options` into the ledger as plan input.
+  - `Explore` is read-only (no `Write`): returns the form as its final message; orchestrator persists it via the normalizer, folds `findings`/`options` into the ledger as plan input. **Discovery carries no verdict.**
+- **Judgment / synthesis → analyst (owning role or `Plan`/general agent) → `ANALYSIS`.** "Which approach, is X feasible, weigh these options, what's the root layer" → delegate the **evaluation**, don't perform it in-context.
+  - Owning role for in-domain judgment; a general analyst / `Plan` agent for cross-cutting / architectural decisions. Returns an [`ANALYSIS`](protocol.md) form (`question` · `evaluated` · `recommendation` · `rationale` · `confidence?` · `risks?`).
+  - The orchestrator **ratifies** the `recommendation` and folds it into `decisions[]` — it **never derives** it. Proposing the solution, choosing among `RESEARCH.options`, and picking the owning layer for an ambiguous `FINDING` are all `ANALYSIS`, not lead cognition.
 - **Bar-level scoping → owning role → `REVIEW`.** When a role's non-negotiable bar must be judged (refactor / audit / feasibility / "is X clean"), dispatch the **owning role**; it walks its full bar per symbol (line-spans, responsibility counts — measured) → `REVIEW` (`scope` · `checked` · `verdict` · `remarks`). Same form for pre-implementation scoping and post-implementation peer review.
-- **`Explore` complements `REVIEW`, never replaces it.** Discovery answers *where / how / what-are-the-options*; the role `REVIEW` answers *does it meet the bar*. Use discovery to find the area, the role to judge it.
+- **The three are distinct, never interchangeable.** Discovery (`RESEARCH`) answers *where / how / what-are-the-options*; analysis (`ANALYSIS`) answers *which option / is it feasible / what's the root layer*; the role `REVIEW` answers *does it meet the bar*. Discovery feeds analysis; analysis informs the plan; review gates the change.
+- **Tool-enforced.** Code-cognition (`Read` / `Grep` / `Glob` over source) is **blocked for the orchestrator while a run is active** by `invoke_orchestrator_read_guard.py`.
+  - Lead may read only orchestration state (`.team-process/**`, `.claude/**`) and the owning spec (`docs/**`). Subagents pass through.
+  - The one judgment the lead legitimately keeps: **choosing among options an analyst already evaluated**. Re-deriving from already-returned forms is forbidden by rule.
 - **No role bar in the lead.** A lead reading code to scope it applies a generic / line-count proxy — misses exactly the role-specific smells.
-- **Lead keeps aggregate, drops raw.** Fold `RESEARCH.findings` / `REVIEW.remarks` into the run ledger; never pull file reads / diffs into lead context.
-- **Fix-loop = same rule.** `FINDING` → pick owning role → `FIX`; route, don't investigate.
+- **Lead keeps aggregate, drops raw.** Fold `RESEARCH.findings` / `ANALYSIS.recommendation` / `REVIEW.remarks` into the run ledger; never pull file reads / diffs into lead context.
+- **Fix-loop = same rule.** `FINDING` → pick owning role → `FIX`; route, don't investigate. Owning layer ambiguous across roles → delegate an `ANALYSIS` to pick it, don't deepen the dig in-context.
+- **Integration is untouched.** This guard bans code-*cognition*, never the orchestrator's mechanics: it keeps every `git` mutation, box-file write, and script run (single-integrator model preserved — see *Single-integrator model*).
 
 ## Communication protocol
 
-7 typed forms (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT` · `RESEARCH`) — fields, rendering, rules: [`protocol.md`](protocol.md).
+8 typed forms (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT` · `RESEARCH` · `ANALYSIS`) — fields, rendering, rules: [`protocol.md`](protocol.md).
 
 - Every cross-role message MUST be one of these forms; non-conforming → **UNREAD**.
 - Orchestrator: emits `BRIEF`/`FIX` · reads the rest.
@@ -135,9 +142,9 @@ The orchestrator routes investigation out — it does not explore or scope in it
 
 | # | Phase | Command | Purpose |
 |---|---|---|---|
-| 0 | Intake & docs-first | [`/intake`](../commands/intake.md) | Read owning spec; restate acceptance criteria; delegate exploration to `Explore` (→ `RESEARCH`) + scoping to the owning role (→ `REVIEW`) — never read code to explore/scope. |
+| 0 | Intake & docs-first | [`/intake`](../commands/intake.md) | Read owning spec; restate acceptance criteria; delegate exploration to `Explore` (→ `RESEARCH`), judgment to an analyst (→ `ANALYSIS`), scoping to the owning role (→ `REVIEW`) — never read code to explore/scope or synthesize the approach in-context. |
 | 1 | Contract | [`/contract`](../commands/contract.md) | Cross-layer → define/update the shared contract first (→ `ARTIFACT`). |
-| 2 | Plan & dispatch | [`/plan-dispatch`](../commands/plan-dispatch.md) | Map work to roles; declare lanes in a `BRIEF`; surface; confirm before N parallel. |
+| 2 | Plan & dispatch | [`/plan-dispatch`](../commands/plan-dispatch.md) | Ratify the delegated `ANALYSIS` recommendation; map work to roles; declare lanes in a `BRIEF`; surface; confirm before N parallel. |
 | 3 | Implement | [`/implement`](../commands/implement.md) | Parallel on disjoint lanes; each self-verifies → `RESULT`. Members never commit. |
 | 4 | Integrate | [`/integrate`](../commands/integrate.md) | Sole integrator merges lanes into the branch; verify repo state. |
 | 5 | Cross-review | [`/review-loop`](../commands/review-loop.md) | Pool reviewers per competency + a `security` reviewer (generic agent running the `security-review` skill); verify + dedup → consolidated `REVIEW`. |
@@ -189,6 +196,8 @@ Re-check repo state between waves — members may have committed, pushed, made o
   non-negotiables; pollutes the lead's context with raw investigation (delegate the assessment).
 - Lead runs the exploration/options research in its own context (agent loops, code spelunking) →
   swells the lead's expensive context (dispatch an `Explore` agent → `RESEARCH` instead).
+- Lead evaluates options / judges feasibility / synthesizes the approach in-context → delegate an `ANALYSIS`; the lead **ratifies**, it does not **derive**.
+- Lead reads/greps source to scope or decide → tool-blocked by the read-guard; dispatch `Explore` (→ `RESEARCH`) or the owning role (→ `ANALYSIS`/`REVIEW`) instead.
 - Post-PR change patched inline or shipped without re-review → follow-up edits bypass the cross-review +
   verify gates the initial work passed (re-enter the loop; see *Post-PR iteration*).
 - "Autonomous" read as auto-merge or run-silent → shipped to the default branch unaccepted,
