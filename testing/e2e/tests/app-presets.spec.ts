@@ -59,6 +59,7 @@ async function openMatrixClean(page: Page): Promise<void> {
     // Clear presets + common app-state keys so state carried from prior tests
     // does not interfere.
     localStorage.removeItem(key);
+    localStorage.removeItem('dd:presetActive');
     localStorage.removeItem('dd:svcPatterns');
     localStorage.removeItem('dd:svcFilterMode');
     localStorage.removeItem('dd:matFields');
@@ -662,6 +663,111 @@ test.describe('Reset all settings', () => {
 
     // Assert: filter input still has the value.
     await expect(filterInput).toHaveValue('auth');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L) Active preset indicator — last-applied badge, persistence, and clearing
+// ---------------------------------------------------------------------------
+
+/** localStorage key used by PresetsService to track the active preset name. */
+const ACTIVE_STORAGE_KEY = 'dd:presetActive';
+
+test.describe('Active preset indicator', () => {
+  test.beforeEach(async ({ page }) => {
+    await openMatrixClean(page);
+    // Seed two presets so we can verify only one shows the badge.
+    await seedPreset(page, 'Alpha preset');
+    await seedPreset(page, 'Beta preset');
+  });
+
+  test('L) applying a preset shows the Active badge on its row and not the other', async ({
+    page,
+  }) => {
+    await openPresetsPopover(page);
+
+    // The list is ordered: Alpha first, Beta second (insertion order).
+    const rows = page.locator('[data-testid="preset-item"]');
+    await expect(rows).toHaveCount(2, { timeout: 5_000 });
+
+    // Apply the first preset (Alpha).
+    await page.locator('[data-testid="preset-apply-btn"]').first().click();
+
+    // Alpha row must show the badge; Beta row must not.
+    const alphaBadge = rows.nth(0).locator('[data-testid="preset-active-badge"]');
+    const betaBadge  = rows.nth(1).locator('[data-testid="preset-active-badge"]');
+    await expect(alphaBadge).toBeVisible({ timeout: 5_000 });
+    await expect(betaBadge).toHaveCount(0);
+  });
+
+  test('L) the Active badge persists after a page reload', async ({ page }) => {
+    await openPresetsPopover(page);
+
+    // Apply the first preset (Alpha).
+    await page.locator('[data-testid="preset-apply-btn"]').first().click();
+
+    // Confirm the badge is visible before reloading.
+    const rows = page.locator('[data-testid="preset-item"]');
+    await expect(rows.nth(0).locator('[data-testid="preset-active-badge"]')).toBeVisible({ timeout: 5_000 });
+
+    // Close the popover and reload the page.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.presets-content')).toHaveCount(0);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('app-root', { timeout: 20_000 });
+    await page.waitForTimeout(600);
+
+    // Re-open the popover and verify the badge is still on Alpha.
+    await openPresetsPopover(page);
+    const rowsAfterReload = page.locator('[data-testid="preset-item"]');
+    await expect(rowsAfterReload).toHaveCount(2, { timeout: 5_000 });
+    await expect(rowsAfterReload.nth(0).locator('[data-testid="preset-active-badge"]')).toBeVisible();
+    await expect(rowsAfterReload.nth(1).locator('[data-testid="preset-active-badge"]')).toHaveCount(0);
+
+    // dd:presetActive in localStorage must still hold the applied name.
+    const stored = await page.evaluate((key: string) => localStorage.getItem(key), ACTIVE_STORAGE_KEY);
+    expect(stored).toBe('Alpha preset');
+  });
+
+  test('L) Reset all settings clears the Active badge', async ({ page }) => {
+    await openPresetsPopover(page);
+
+    // Apply the first preset so a badge appears.
+    await page.locator('[data-testid="preset-apply-btn"]').first().click();
+    const rows = page.locator('[data-testid="preset-item"]');
+    await expect(rows.nth(0).locator('[data-testid="preset-active-badge"]')).toBeVisible({ timeout: 5_000 });
+
+    // Accept the reset confirm.
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.locator('[data-testid="presets-reset-all-btn"]').click();
+
+    // No row should show the Active badge after reset.
+    await expect(page.locator('[data-testid="preset-active-badge"]')).toHaveCount(0, { timeout: 5_000 });
+
+    // dd:presetActive must be absent from localStorage.
+    const stored = await page.evaluate((key: string) => localStorage.getItem(key), ACTIVE_STORAGE_KEY);
+    expect(stored).toBeNull();
+  });
+
+  test('L) deleting the active preset clears the Active badge', async ({ page }) => {
+    await openPresetsPopover(page);
+
+    // Apply the first preset (Alpha).
+    await page.locator('[data-testid="preset-apply-btn"]').first().click();
+    const rows = page.locator('[data-testid="preset-item"]');
+    await expect(rows.nth(0).locator('[data-testid="preset-active-badge"]')).toBeVisible({ timeout: 5_000 });
+
+    // Accept the delete confirm for Alpha (first row).
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.locator('[data-testid="preset-delete-btn"]').first().click();
+
+    // Alpha is gone; only Beta remains, and it must not show the badge.
+    await expect(page.locator('[data-testid="preset-item"]')).toHaveCount(1, { timeout: 5_000 });
+    await expect(page.locator('[data-testid="preset-active-badge"]')).toHaveCount(0);
+
+    // dd:presetActive must be absent from localStorage.
+    const stored = await page.evaluate((key: string) => localStorage.getItem(key), ACTIVE_STORAGE_KEY);
+    expect(stored).toBeNull();
   });
 });
 
