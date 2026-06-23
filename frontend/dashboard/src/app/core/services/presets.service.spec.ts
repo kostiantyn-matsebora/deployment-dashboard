@@ -32,7 +32,8 @@ import { AppStateService }                from './app-state.service';
 import { ThemeService }                   from './theme.service';
 import { NotificationPrefsService }       from './notification-prefs.service';
 
-const STORAGE_KEY = 'dd:presets';
+const STORAGE_KEY        = 'dd:presets';
+const ACTIVE_STORAGE_KEY = 'dd:presetActive';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -714,6 +715,96 @@ describe('PresetsService', () => {
       service.save('Alpha');
       service.importPreset(makeEnvelope('Beta'));
       expect(service.presets()[1].name).toBe('Beta');
+    });
+  });
+
+  // ── activePresetName ─────────────────────────────────────────────────────
+
+  describe('activePresetName', () => {
+    it('is null when no preset has been applied', () => {
+      expect(service.activePresetName()).toBeNull();
+    });
+
+    it('apply() marks the applied preset active', () => {
+      service.save('Alpha');
+      const alpha = service.presets()[0];
+      service.apply(alpha);
+      expect(service.activePresetName()).toBe('Alpha');
+    });
+
+    it('apply() persists the active name to localStorage', () => {
+      service.save('Bravo');
+      service.apply(service.presets()[0]);
+      expect(localStorage.getItem(ACTIVE_STORAGE_KEY)).toBe('Bravo');
+    });
+
+    it('activePresetName survives a fresh service construction (persisted)', async () => {
+      service.save('Charlie');
+      service.apply(service.presets()[0]);
+
+      TestBed.resetTestingModule();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(service.presets()));
+      // dd:presetActive is already set by the apply() call above
+      await TestBed.configureTestingModule({
+        providers: [PresetsService, AppStateService, ThemeService, NotificationPrefsService, { provide: DOCUMENT, useValue: document }],
+      }).compileComponents();
+      const freshService = TestBed.inject(PresetsService);
+
+      expect(freshService.activePresetName()).toBe('Charlie');
+    });
+
+    it('resetAllSettings() clears activePresetName', () => {
+      service.save('Delta');
+      service.apply(service.presets()[0]);
+      expect(service.activePresetName()).toBe('Delta');
+
+      service.resetAllSettings();
+      expect(service.activePresetName()).toBeNull();
+      expect(localStorage.getItem(ACTIVE_STORAGE_KEY)).toBeNull();
+    });
+
+    it('delete() of the active preset clears activePresetName', () => {
+      service.save('Echo');
+      const echo = service.presets()[0];
+      service.apply(echo);
+      expect(service.activePresetName()).toBe('Echo');
+
+      service.delete(echo);
+      expect(service.activePresetName()).toBeNull();
+      expect(localStorage.getItem(ACTIVE_STORAGE_KEY)).toBeNull();
+    });
+
+    it('delete() of a non-active preset does not clear activePresetName', () => {
+      service.save('Foxtrot');
+      service.save('Golf');
+      const foxtrot = service.presets()[0];
+      const golf    = service.presets()[1];
+      service.apply(foxtrot);
+
+      service.delete(golf);
+      expect(service.activePresetName()).toBe('Foxtrot');
+    });
+
+    it('rename() of the active preset follows the new name', () => {
+      service.save('Hotel');
+      const hotel = service.presets()[0];
+      service.apply(hotel);
+      expect(service.activePresetName()).toBe('Hotel');
+
+      service.rename(hotel, 'India');
+      expect(service.activePresetName()).toBe('India');
+      expect(localStorage.getItem(ACTIVE_STORAGE_KEY)).toBe('India');
+    });
+
+    it('rename() of a non-active preset does not change activePresetName', () => {
+      service.save('Juliet');
+      service.save('Kilo');
+      const juliet = service.presets()[0];
+      const kilo   = service.presets()[1];
+      service.apply(juliet);
+
+      service.rename(kilo, 'Lima');
+      expect(service.activePresetName()).toBe('Juliet');
     });
   });
 

@@ -594,6 +594,14 @@ export class TopbarComponent {
   /** Whether any presets are saved. */
   protected readonly hasPresets = computed(() => this.savedPresets().length > 0);
 
+  /** The name of the last-applied preset (null = none). */
+  protected readonly activePresetName = computed(() => this.presetsService.activePresetName());
+
+  /** True when the given preset is the last-applied one. */
+  protected isPresetActive(p: PresetEnvelope): boolean {
+    return this.activePresetName() === p.name;
+  }
+
   /** Open / close the save-new-preset name input. */
   protected togglePresetSaveInput(): void {
     this.presetSaveOpen.update(v => !v);

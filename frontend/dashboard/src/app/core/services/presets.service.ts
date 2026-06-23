@@ -63,8 +63,9 @@ export interface PresetEnvelope {
 /** Stored collection: array of envelopes. */
 type PresetsStore = PresetEnvelope[];
 
-const STORAGE_KEY = 'dd:presets';
-const ENVELOPE_VERSION = 1 as const;
+const STORAGE_KEY        = 'dd:presets';
+const ACTIVE_STORAGE_KEY = 'dd:presetActive';
+const ENVELOPE_VERSION   = 1 as const;
 
 /**
  * PresetsService — save, apply, clone, rename, delete, export, and import
@@ -91,6 +92,14 @@ export class PresetsService {
 
   /** Reactive list of saved presets; refreshed on every mutating operation. */
   readonly presets = signal<PresetEnvelope[]>(this.loadFromStorage());
+
+  /**
+   * The name of the last-applied preset, persisted to localStorage under
+   * dd:presetActive.  null when no preset has been applied, or after the
+   * active preset is deleted or all settings are reset.
+   * Active = LAST APPLIED — not auto-cleared when the user changes settings.
+   */
+  readonly activePresetName = signal<string | null>(this.loadActiveFromStorage());
 
   // ── Capture ─────────────────────────────────────────────────────────────
 
@@ -232,6 +241,8 @@ export class PresetsService {
     if (s.correlation !== undefined && this.isCorrelation(s.correlation)) {
       this.state.correlationPredicate.set(s.correlation);
     }
+
+    this.persistActive(envelope.name);
   }
 
   // ── Clone ────────────────────────────────────────────────────────────────
@@ -265,6 +276,9 @@ export class PresetsService {
   rename(target: PresetEnvelope, newName: string): void {
     const trimmed = newName.trim();
     if (!trimmed) return;
+    if (this.activePresetName() === target.name) {
+      this.persistActive(trimmed);
+    }
     const updated = this.presets().map((p) =>
       p === target ? { ...p, name: trimmed } : p,
     );
@@ -311,6 +325,7 @@ export class PresetsService {
     this.state.autoScrollOnChange.set(true);
     this.state.timeWindow.set('1 day' as TimeWindow);
     this.state.correlationPredicate.set('explicit parent' as CorrelationPredicate);
+    this.persistActive(null);
   }
 
   // ── Update ───────────────────────────────────────────────────────────────
@@ -336,6 +351,9 @@ export class PresetsService {
    * (per session decision #4) before calling this method.
    */
   delete(target: PresetEnvelope): void {
+    if (this.activePresetName() === target.name) {
+      this.persistActive(null);
+    }
     const updated = this.presets().filter((p) => p !== target);
     this.persist(updated);
   }
@@ -444,6 +462,29 @@ export class PresetsService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       || 'preset';
+  }
+
+  /** Persist the active preset name to localStorage and refresh the signal. */
+  private persistActive(name: string | null): void {
+    try {
+      if (name === null) {
+        localStorage.removeItem(ACTIVE_STORAGE_KEY);
+      } else {
+        localStorage.setItem(ACTIVE_STORAGE_KEY, name);
+      }
+    } catch {
+      // quota exceeded or private mode — silently ignore
+    }
+    this.activePresetName.set(name);
+  }
+
+  /** Load the last-applied preset name from localStorage. */
+  private loadActiveFromStorage(): string | null {
+    try {
+      return localStorage.getItem(ACTIVE_STORAGE_KEY) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** Persist updated store to localStorage and refresh the signal. */

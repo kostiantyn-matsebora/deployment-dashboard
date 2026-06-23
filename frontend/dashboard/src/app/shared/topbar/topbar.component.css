@@ -1217,6 +1217,28 @@
   background: rgba(255, 93, 93, 0.08);
 }
 
+/* Active-preset row highlight — matches mockup .preset-item.is-active */
+.presets-row.is-active {
+  color: var(--ink-0);
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: rgba(var(--accent-rgb), 0.10);
+}
+
+/* "Active" badge pill — visible only on the last-applied row */
+.preset-active-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(var(--accent-rgb), 1);
+  background: rgba(var(--accent-rgb), 0.14);
+  border: 1px solid rgba(var(--accent-rgb), 0.40);
+}
+
 /* Empty state hint */
 .presets-empty-hint {
   font-family: 'JetBrains Mono', monospace;

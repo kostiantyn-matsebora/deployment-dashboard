@@ -521,10 +521,23 @@
             <div class="presets-divider" aria-hidden="true"></div>
             <ul class="presets-list" role="list" aria-label="Saved presets">
               @for (p of savedPresets(); track p.name) {
-                <li class="presets-row" role="listitem">
+                <li
+                  class="presets-row"
+                  [class.is-active]="isPresetActive(p)"
+                  role="listitem"
+                  [attr.aria-current]="isPresetActive(p) ? 'true' : null"
+                  data-testid="preset-item"
+                >
                   @if (renamingPreset() !== p) {
                     <!-- Normal row -->
                     <span class="presets-name" [title]="p.name">{{ p.name }}</span>
+                    @if (isPresetActive(p)) {
+                      <span
+                        class="preset-active-badge"
+                        aria-hidden="true"
+                        data-testid="preset-active-badge"
+                      >Active</span>
+                    }
                     <div class="presets-row-actions" role="group" [attr.aria-label]="'Actions for ' + p.name">
                       <button
                         class="preset-action-btn"

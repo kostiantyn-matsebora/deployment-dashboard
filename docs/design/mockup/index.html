@@ -3256,6 +3256,19 @@
     border-color: rgba(var(--accent-rgb), 0.5);
     background: rgba(var(--accent-rgb), 0.10);
   }
+  .preset-active-badge {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: rgba(var(--accent-rgb), 1);
+    background: rgba(var(--accent-rgb), 0.14);
+    border: 1px solid rgba(var(--accent-rgb), 0.40);
+  }
   .preset-item-name {
     flex: 1;
     min-width: 0;
@@ -8274,9 +8287,21 @@ computeKPIs();
       .replace(/^-+|-+$/g, '') || 'preset';
   }
 
+  /* ---- Active-preset persistence ---- */
+  const ACTIVE_PRESET_KEY = 'dd:presetActive';
+  function loadActivePreset() {
+    try { return localStorage.getItem(ACTIVE_PRESET_KEY) || null; } catch { return null; }
+  }
+  function saveActivePreset(name) {
+    try {
+      if (name === null) { localStorage.removeItem(ACTIVE_PRESET_KEY); }
+      else               { localStorage.setItem(ACTIVE_PRESET_KEY, name); }
+    } catch { /* quota / private mode — ignore */ }
+  }
+
   /* ---- State ---- */
   let presets = loadPresets();
-  let activePresetName = null; // tracks which preset is currently "applied"
+  let activePresetName = loadActivePreset(); // tracks which preset is currently "applied"; persisted
 
   /* ---- Badge dot: shows when at least one preset is saved ---- */
   function syncBadgeDot() {
@@ -8311,6 +8336,15 @@ computeKPIs();
       nameSpan.className = 'preset-item-name';
       nameSpan.textContent = preset.name;
       nameSpan.title = preset.name;
+
+      // "Active" badge — visible only on the last-applied row
+      let activeBadge = null;
+      if (preset.name === activePresetName) {
+        activeBadge = document.createElement('span');
+        activeBadge.className = 'preset-active-badge';
+        activeBadge.setAttribute('aria-hidden', 'true');
+        activeBadge.textContent = 'Active';
+      }
 
       const actions = document.createElement('span');
       actions.className = 'preset-item-actions';
@@ -8395,6 +8429,7 @@ computeKPIs();
       actions.appendChild(deleteBtn);
 
       item.appendChild(nameSpan);
+      if (activeBadge) item.appendChild(activeBadge);
       item.appendChild(actions);
 
       // Click on item name = apply
@@ -8419,6 +8454,7 @@ computeKPIs();
     presets.push(envelope);
     savePresets(presets);
     activePresetName = trimmed;
+    saveActivePreset(activePresetName);
     renderPresetList();
     return true;
   }
@@ -8429,6 +8465,7 @@ computeKPIs();
     if (!p) return;
     applySettings(p.settings);
     activePresetName = p.name;
+    saveActivePreset(activePresetName);
     renderPresetList();
   }
 
@@ -8441,6 +8478,7 @@ computeKPIs();
     presets.splice(idx + 1, 0, clone);
     savePresets(presets);
     activePresetName = cloneName;
+    saveActivePreset(activePresetName);
     renderPresetList();
   }
 
@@ -8462,7 +8500,10 @@ computeKPIs();
       if (newName && newName !== p.name) {
         const oldName = p.name;
         p.name = newName;
-        if (activePresetName === oldName) activePresetName = newName;
+        if (activePresetName === oldName) {
+          activePresetName = newName;
+          saveActivePreset(activePresetName);
+        }
         savePresets(presets);
       }
       renderPresetList();
@@ -8485,7 +8526,10 @@ computeKPIs();
     const p = presets[idx];
     if (!p) return;
     if (!window.confirm(`Delete preset "${p.name}"?`)) return;
-    if (activePresetName === p.name) activePresetName = null;
+    if (activePresetName === p.name) {
+      activePresetName = null;
+      saveActivePreset(null);
+    }
     presets.splice(idx, 1);
     savePresets(presets);
     renderPresetList();
@@ -8608,14 +8652,17 @@ function resetAllSettings() {
   // failuresOnly → false
   if (typeof failuresOnly !== 'undefined') window.failuresOnly = false;
 
-  // Clear all stored settings keys
+  // Clear all stored settings keys (including active preset)
   const keysToRemove = [
     'dd:svcFilter', 'dd:failOnly', 'dd:svcFilterMode', 'dd:svcPatterns',
     'dd:matFields', 'dd:swFields', 'dd:correlation', 'dd:timeWindow',
     'dd:colOrder', 'dd:colHidden', 'dd:swimCollapsed', 'dd:swimAutoScroll',
-    'dd:notifPrefs',
+    'dd:notifPrefs', 'dd:presetActive',
   ];
   keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+
+  // Clear the in-scope activePresetName so the list re-renders correctly
+  if (typeof saveActivePreset === 'function') saveActivePreset(null);
 
   // Rebuild affected views if available
   if (typeof renderMatrix === 'function') renderMatrix();
