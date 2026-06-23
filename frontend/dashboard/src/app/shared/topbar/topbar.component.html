@@ -491,7 +491,7 @@
                 class="presets-name-input"
                 type="text"
                 placeholder="Preset name…"
-                maxlength="80"
+                maxlength="50"
                 autocomplete="off"
                 spellcheck="false"
                 [(ngModel)]="presetSaveName"
@@ -533,7 +533,7 @@
                         [attr.aria-label]="'Apply preset: ' + p.name"
                         (click)="applyPreset(p)"
                         data-testid="preset-apply-btn"
-                      >Apply</button>
+                      >✓</button>
                       <button
                         class="preset-action-btn"
                         type="button"
@@ -541,7 +541,7 @@
                         [attr.aria-label]="'Export preset: ' + p.name"
                         (click)="exportPreset(p)"
                         data-testid="preset-export-btn"
-                      >Export</button>
+                      >⬇</button>
                       <button
                         class="preset-action-btn"
                         type="button"
@@ -549,7 +549,7 @@
                         [attr.aria-label]="'Clone preset: ' + p.name"
                         (click)="clonePreset(p)"
                         data-testid="preset-clone-btn"
-                      >Clone</button>
+                      >⊕</button>
                       <button
                         class="preset-action-btn"
                         type="button"
@@ -557,7 +557,7 @@
                         [attr.aria-label]="'Rename preset: ' + p.name"
                         (click)="beginRenamePreset(p)"
                         data-testid="preset-rename-btn"
-                      >Rename</button>
+                      >✎</button>
                       <button
                         class="preset-action-btn"
                         type="button"
@@ -565,7 +565,7 @@
                         [attr.aria-label]="'Update preset ' + p.name + ' with current settings'"
                         (click)="updatePreset(p)"
                         data-testid="preset-update-btn"
-                      >Update</button>
+                      >↺</button>
                       <button
                         class="preset-action-btn is-danger"
                         type="button"
@@ -573,14 +573,14 @@
                         [attr.aria-label]="'Delete preset: ' + p.name"
                         (click)="deletePreset(p)"
                         data-testid="preset-delete-btn"
-                      >Del</button>
+                      >✕</button>
                     </div>
                   } @else {
                     <!-- Rename inline input -->
                     <input
                       class="presets-name-input presets-rename-input"
                       type="text"
-                      maxlength="80"
+                      maxlength="50"
                       autocomplete="off"
                       spellcheck="false"
                       [(ngModel)]="presetRenameValue"
@@ -611,6 +611,16 @@
           } @else {
             <p class="presets-empty-hint">No presets saved yet. Save the current settings to create one.</p>
           }
+
+          <!-- Reset all settings -->
+          <div class="presets-divider" aria-hidden="true"></div>
+          <button
+            class="cols-reset-btn presets-reset-all-btn"
+            type="button"
+            (click)="resetAllSettings()"
+            aria-label="Reset all settings to defaults"
+            data-testid="presets-reset-all-btn"
+          >Reset all settings</button>
 
         </div><!-- /presets-content -->
       </p-popover>

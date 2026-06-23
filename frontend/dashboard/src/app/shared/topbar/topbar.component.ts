@@ -693,6 +693,13 @@ export class TopbarComponent {
     this.presetsMsg.set(null);
   }
 
+  /** Reset all settings to framework defaults after native confirm. */
+  protected resetAllSettings(): void {
+    if (!confirm('Reset ALL settings to defaults?\nThis will clear all filters, field choices, and preferences.')) return;
+    this.presetsService.resetAllSettings();
+    this.presetsMsg.set('All settings reset to defaults.');
+  }
+
   /** Import a preset from a file chosen via a hidden <input type="file">. */
   protected triggerImportFile(): void {
     const input = document.createElement('input');

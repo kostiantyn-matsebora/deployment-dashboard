@@ -3258,9 +3258,9 @@
   }
   .preset-item-name {
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 0;
+    word-break: break-word;
+    line-height: 1.4;
     font-family: 'JetBrains Mono', monospace;
   }
   .preset-item-actions {
@@ -3810,7 +3810,7 @@
           <div class="preset-save-row">
             <input type="text" class="preset-name-input" id="preset-name-input"
                    placeholder="preset name…" aria-label="Preset name" spellcheck="false" autocomplete="off"
-                   maxlength="60">
+                   maxlength="50">
             <button class="ext-btn is-primary" type="button" id="btn-preset-save"
                     title="Save current settings as a new preset" aria-label="Save preset">Save</button>
           </div>
@@ -3823,6 +3823,13 @@
           <!-- Hidden file input for import -->
           <input type="file" id="preset-import-file" accept=".json,application/json"
                  style="display:none" aria-hidden="true">
+
+          <!-- Reset all settings -->
+          <div style="height:1px;background:var(--glass-edge);margin:6px 0 2px"></div>
+          <button class="ext-btn" type="button" id="btn-reset-all-settings"
+                  title="Reset all settings to defaults"
+                  aria-label="Reset all settings to defaults"
+                  style="width:100%;color:var(--ink-2)">Reset all settings</button>
         </div>
       </div><!-- /presets wrapper -->
 
@@ -7949,7 +7956,7 @@ computeKPIs();
    Preset envelope: { version: 1, name: string, settings: { ... } }
    Settings keys captured: theme, notifEnabled, notifStatuses,
      notifSvcMode, notifSvcPatterns, notifEnvMode, notifEnvPatterns,
-     view, svcFilterMode, svcPatterns, failuresOnly,
+     view, svcFilter, svcFilterMode, svcPatterns, failuresOnly,
      matFieldsOn (array), visFieldsOn (array),
      colOrder (array), colHidden (array),
      laneCollapsed (object svc→bool), laneAutoScroll (bool),
@@ -7989,6 +7996,10 @@ computeKPIs();
     document.querySelectorAll('.notif-status-chip').forEach(c => {
       if (c.classList.contains('is-on')) notifStatusesVal.push(c.dataset.notifStatus);
     });
+
+    // svcFilter — from the text input (DOM is canonical truth for free-text filter)
+    const svcFilterEl  = document.getElementById('svc-filter');
+    const svcFilterVal = svcFilterEl ? svcFilterEl.value : '';
 
     // svcFilterMode / svcPatterns — from the module-level vars (set before presets IIFE runs)
     const svcFilterModeVal = typeof svcFilterMode !== 'undefined' ? svcFilterMode : 'exclude';
@@ -8056,6 +8067,7 @@ computeKPIs();
       notifEnvMode:      notifEnvModeVal,
       notifEnvPatterns:  notifEnvPatsVal,
       view:              viewVal,
+      svcFilter:         svcFilterVal,
       svcFilterMode:     svcFilterModeVal,
       svcPatterns:       svgPatternsVal,
       failuresOnly:      failuresOnlyVal,
@@ -8121,6 +8133,14 @@ computeKPIs();
     // view
     if (s.view && typeof setView === 'function') {
       setView(s.view);
+    }
+
+    // svcFilter — free-text service name filter (the inline text input)
+    if (typeof s.svcFilter === 'string') {
+      const svcFilterInput = document.getElementById('svc-filter');
+      if (svcFilterInput) svcFilterInput.value = s.svcFilter;
+      try { localStorage.setItem('dd:svcFilter', s.svcFilter); } catch (_) {}
+      if (typeof applyFilters === 'function') applyFilters();
     }
 
     // svcFilterMode + svcPatterns
@@ -8551,10 +8571,58 @@ computeKPIs();
     });
   }
 
+  /* ---- Wire reset-all button ---- */
+  const resetAllBtn = document.getElementById('btn-reset-all-settings');
+  if (resetAllBtn) {
+    resetAllBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (typeof resetAllSettings === 'function') resetAllSettings();
+    });
+  }
+
   /* ---- Initial render ---- */
   renderPresetList();
 
 })();
+
+/* =================================================================
+   RESET ALL SETTINGS — restore every captured UI setting to its
+   framework default.  Mirrors PresetsService.resetAllSettings().
+   ================================================================= */
+function resetAllSettings() {
+  if (!confirm('Reset ALL settings to defaults?\nThis will clear all filters, field choices, and preferences.')) return;
+
+  // theme → dark
+  document.documentElement.setAttribute('data-theme', 'dark');
+  try { localStorage.setItem('theme', 'dark'); } catch (_) {}
+  document.querySelectorAll('.ts-opt').forEach(b => {
+    const on = b.dataset.themePick === 'dark';
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+
+  // svcFilter → '' / svcFilterMode → exclude / svcPatterns → []
+  if (typeof svcFilterMode !== 'undefined') window.svcFilterMode = 'exclude';
+  if (typeof svcPatterns   !== 'undefined') window.svcPatterns   = [];
+
+  // failuresOnly → false
+  if (typeof failuresOnly !== 'undefined') window.failuresOnly = false;
+
+  // Clear all stored settings keys
+  const keysToRemove = [
+    'dd:svcFilter', 'dd:failOnly', 'dd:svcFilterMode', 'dd:svcPatterns',
+    'dd:matFields', 'dd:swFields', 'dd:correlation', 'dd:timeWindow',
+    'dd:colOrder', 'dd:colHidden', 'dd:swimCollapsed', 'dd:swimAutoScroll',
+    'dd:notifPrefs',
+  ];
+  keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+
+  // Rebuild affected views if available
+  if (typeof renderMatrix === 'function') renderMatrix();
+  if (typeof buildSwim === 'function') buildSwim();
+
+  alert('All settings have been reset to defaults. Reload the page to see full effect.');
+}
 
 /* =================================================================
    PRE-OPEN drawer on initial load — demonstrates full 11-field record

@@ -36,6 +36,7 @@ export interface PresetSettings {
   notifEnvMode?: string;
   notifEnvChips?: string[];
   view?: string;
+  svcFilter?: string;
   svcFilterMode?: string;
   svcPatterns?: string[];
   failOnly?: boolean;
@@ -108,6 +109,7 @@ export class PresetsService {
       notifEnvMode:      notif.envMode,
       notifEnvChips:     [...notif.envChips],
       view:              this.state.activeView(),
+      svcFilter:         this.state.serviceFilter(),
       svcFilterMode:     this.state.serviceFilterMode(),
       svcPatterns:       [...this.state.servicePatterns()],
       failOnly:          this.state.failuresOnly(),
@@ -185,6 +187,9 @@ export class PresetsService {
 
     if (s.view !== undefined && this.isView(s.view)) {
       this.state.activeView.set(s.view);
+    }
+    if (s.svcFilter !== undefined) {
+      this.state.serviceFilter.set(s.svcFilter);
     }
     if (s.svcFilterMode !== undefined) {
       const mode: ServiceFilterMode =
@@ -264,6 +269,48 @@ export class PresetsService {
       p === target ? { ...p, name: trimmed } : p,
     );
     this.persist(updated);
+  }
+
+  // ── Reset all settings ───────────────────────────────────────────────────
+
+  /**
+   * Reset every captured UI setting to its framework default.
+   * Callers are responsible for showing a native confirm dialog before
+   * calling this method.
+   *
+   * Defaults mirror the AppStateService / ThemeService / NotificationPrefsService
+   * signal initialisers:
+   *   theme: 'dark' · notif: disabled, success+failure statuses, no filters ·
+   *   view: 'matrix' · svcFilterMode: 'exclude' · svcPatterns: [] ·
+   *   failOnly: false · matFields: all · swFields: all ·
+   *   colOrder: [] · colHidden: {} · swimCollapsed: {} · swimAutoScroll: true ·
+   *   timeWindow: '1 day' · correlation: 'explicit parent'
+   */
+  resetAllSettings(): void {
+    this.themeService.setTheme('dark');
+
+    this.notifPrefs.updatePrefs({
+      enabled:      false,
+      statuses:     ['success', 'failure'],
+      serviceMode:  'watch-all-except',
+      serviceChips: [],
+      envMode:      'watch-all-except',
+      envChips:     [],
+    });
+
+    this.state.activeView.set('matrix');
+    this.state.serviceFilter.set('');
+    this.state.serviceFilterMode.set('exclude');
+    this.state.servicePatterns.set([]);
+    this.state.failuresOnly.set(false);
+    this.state.matrixVisibleFields.set(new Set(MATRIX_FIELDS));
+    this.state.swimlaneVisibleFields.set(new Set(SWIMLANE_FIELDS));
+    this.state.matrixColOrder.set([]);
+    this.state.matrixColHidden.set(new Set());
+    this.state.collapsedLanes.set(new Set());
+    this.state.autoScrollOnChange.set(true);
+    this.state.timeWindow.set('1 day' as TimeWindow);
+    this.state.correlationPredicate.set('explicit parent' as CorrelationPredicate);
   }
 
   // ── Update ───────────────────────────────────────────────────────────────

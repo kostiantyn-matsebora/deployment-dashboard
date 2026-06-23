@@ -49,6 +49,7 @@ function makeEnvelope(name = 'test', overrides: Partial<PresetEnvelope['settings
       notifEnvMode:      'watch-all-except',
       notifEnvChips:     [],
       view:              'matrix',
+      svcFilter:         '',
       svcFilterMode:     'exclude',
       svcPatterns:       [],
       failOnly:          false,
@@ -130,6 +131,11 @@ describe('PresetsService', () => {
     it('captures svcPatterns from AppStateService', () => {
       state.servicePatterns.set(['*-api', 'auth-bff']);
       expect(service.captureSettings().svcPatterns).toEqual(['*-api', 'auth-bff']);
+    });
+
+    it('captures svcFilter from AppStateService', () => {
+      state.serviceFilter.set('auth');
+      expect(service.captureSettings().svcFilter).toBe('auth');
     });
 
     it('captures notifEnabled from NotificationPrefsService', () => {
@@ -227,6 +233,12 @@ describe('PresetsService', () => {
       state.servicePatterns.set([]);
       service.apply(makeEnvelope('t', { svcPatterns: ['*-api'] }));
       expect(state.servicePatterns()).toEqual(['*-api']);
+    });
+
+    it('sets serviceFilter on AppStateService', () => {
+      state.serviceFilter.set('');
+      service.apply(makeEnvelope('t', { svcFilter: 'auth' }));
+      expect(state.serviceFilter()).toBe('auth');
     });
 
     it('sets swimAutoScroll on AppStateService', () => {
@@ -471,6 +483,134 @@ describe('PresetsService', () => {
       expect(raw).not.toBeNull();
       const parsed = JSON.parse(raw!);
       expect(parsed[0].settings.failOnly).toBe(true);
+    });
+  });
+
+  // ── resetAllSettings ─────────────────────────────────────────────────────
+
+  describe('resetAllSettings()', () => {
+    it('resets theme to dark', () => {
+      themeService.setTheme('light');
+      service.resetAllSettings();
+      expect(themeService.theme()).toBe('dark');
+    });
+
+    it('resets failuresOnly to false', () => {
+      state.failuresOnly.set(true);
+      service.resetAllSettings();
+      expect(state.failuresOnly()).toBe(false);
+    });
+
+    it('resets servicePatterns to empty array', () => {
+      state.servicePatterns.set(['*-api', 'bff']);
+      service.resetAllSettings();
+      expect(state.servicePatterns()).toEqual([]);
+    });
+
+    it('resets serviceFilter to empty string', () => {
+      state.serviceFilter.set('auth');
+      service.resetAllSettings();
+      expect(state.serviceFilter()).toBe('');
+    });
+
+    it('resets serviceFilterMode to exclude', () => {
+      state.serviceFilterMode.set('include');
+      service.resetAllSettings();
+      expect(state.serviceFilterMode()).toBe('exclude');
+    });
+
+    it('resets matrixVisibleFields to all fields', () => {
+      state.matrixVisibleFields.set(new Set(['version']));
+      service.resetAllSettings();
+      expect(state.matrixVisibleFields().size).toBe(7); // all MATRIX_FIELDS
+    });
+
+    it('resets autoScrollOnChange to true', () => {
+      state.autoScrollOnChange.set(false);
+      service.resetAllSettings();
+      expect(state.autoScrollOnChange()).toBe(true);
+    });
+
+    it('resets notif prefs to defaults', () => {
+      notifPrefs.updatePrefs({ enabled: true, statuses: ['queued'], serviceChips: ['svc-a'] });
+      service.resetAllSettings();
+      const p = notifPrefs.prefs();
+      expect(p.enabled).toBe(false);
+      expect(p.statuses).toContain('success');
+      expect(p.statuses).toContain('failure');
+      expect(p.serviceChips).toEqual([]);
+    });
+
+    it('resets timeWindow to "1 day"', () => {
+      state.timeWindow.set('7 days');
+      service.resetAllSettings();
+      expect(state.timeWindow()).toBe('1 day');
+    });
+
+    it('resets correlationPredicate to "explicit parent"', () => {
+      state.correlationPredicate.set('same sha');
+      service.resetAllSettings();
+      expect(state.correlationPredicate()).toBe('explicit parent');
+    });
+  });
+
+  // ── apply propagation regression ──────────────────────────────────────────
+  //
+  // Regression gate: apply() MUST write the preset's filter settings to the
+  // live app-state signals — not just persist to localStorage.  A consumer
+  // reading the signals (e.g. MatrixComponent.filteredRows) will reactively
+  // see different data after apply().
+
+  describe('apply() propagation regression', () => {
+    it('applies svcPatterns and serviceFilterMode to app-state signals immediately', () => {
+      // Start with no filter
+      state.servicePatterns.set([]);
+      state.serviceFilterMode.set('exclude');
+
+      // Save a preset with a distinctive exclude pattern
+      state.servicePatterns.set(['except-svc*']);
+      state.serviceFilterMode.set('exclude');
+      service.save('filter-preset');
+
+      // Undo the filter (simulate user changing settings after saving)
+      state.servicePatterns.set([]);
+      state.serviceFilterMode.set('exclude');
+      expect(state.servicePatterns()).toEqual([]);
+
+      // Apply the preset — signals must change immediately
+      service.apply(service.presets()[0]);
+
+      expect(state.servicePatterns()).toEqual(['except-svc*']);
+      expect(state.serviceFilterMode()).toBe('exclude');
+    });
+
+    it('applies failuresOnly change to app-state signal immediately', () => {
+      // Save a preset with failOnly = true
+      state.failuresOnly.set(true);
+      service.save('fail-only');
+
+      // Change it
+      state.failuresOnly.set(false);
+      expect(state.failuresOnly()).toBe(false);
+
+      // Apply — the SIGNAL (not just localStorage) must reflect the change
+      service.apply(service.presets()[0]);
+
+      expect(state.failuresOnly()).toBe(true);
+    });
+
+    it('applies theme change to ThemeService signal immediately', () => {
+      themeService.setTheme('dark');
+      service.save('light-theme');
+      // (captured theme is 'dark' in the preset just saved)
+
+      // Switch to light, save a preset
+      themeService.setTheme('light');
+      service.save('light-theme-2');
+
+      // Apply the first preset (dark) — ThemeService.theme() must change
+      service.apply(service.presets()[0]);
+      expect(themeService.theme()).toBe('dark');
     });
   });
 
