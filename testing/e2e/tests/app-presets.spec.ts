@@ -389,6 +389,95 @@ test.describe('Delete preset', () => {
 });
 
 // ---------------------------------------------------------------------------
+// I) Update a preset with current settings
+// ---------------------------------------------------------------------------
+
+test.describe('Update preset', () => {
+  test.beforeEach(async ({ page }) => {
+    await openMatrixClean(page);
+  });
+
+  test('I) Update accepted overwrites the preset settings with the current live state', async ({
+    page,
+  }) => {
+    // Step 1: save a preset while failOnly is OFF (the default after openMatrixClean).
+    await openPresetsPopover(page);
+    await page.locator('[data-testid="presets-save-btn"]').click();
+    await page.locator('[data-testid="presets-name-input"]').fill('Snapshot B');
+    await page.locator('[data-testid="presets-save-confirm-btn"]').click();
+
+    // Confirm the preset is saved before proceeding.
+    await expect(page.locator('.presets-list .presets-name')).toHaveCount(1, { timeout: 5_000 });
+
+    // Close the popover by pressing Escape so we can interact with the topbar.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.presets-content')).toHaveCount(0);
+
+    // Step 2: toggle failures-only ON in the live UI.
+    await page.locator('label.hdr-fail-toggle').click();
+    // Give Angular change detection a tick to update the signal.
+    await page.waitForTimeout(200);
+
+    // Step 3: open the popover and click Update for "Snapshot B".
+    await openPresetsPopover(page);
+
+    // Register the dialog handler BEFORE clicking Update.
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.locator('[data-testid="preset-update-btn"]').first().click();
+
+    // Step 4: assert the confirmation message.
+    const msg = page.locator('.presets-msg');
+    await expect(msg).toBeVisible({ timeout: 5_000 });
+    await expect(msg).toContainText('Updated');
+    await expect(msg).toContainText('Snapshot B');
+
+    // Step 5: verify the stored preset now captures failOnly: true.
+    const stored = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as Array<{ name: string; settings: { failOnly?: boolean } }>) : [];
+    }, STORAGE_KEY);
+    const updated = stored.find((e) => e.name === 'Snapshot B');
+    expect(updated).toBeDefined();
+    expect(updated!.settings.failOnly).toBe(true);
+  });
+
+  test('I) Update dismissed leaves the preset settings unchanged', async ({ page }) => {
+    // Save a preset while failOnly is OFF.
+    await openPresetsPopover(page);
+    await page.locator('[data-testid="presets-save-btn"]').click();
+    await page.locator('[data-testid="presets-name-input"]').fill('Snapshot C');
+    await page.locator('[data-testid="presets-save-confirm-btn"]').click();
+    await expect(page.locator('.presets-list .presets-name')).toHaveCount(1, { timeout: 5_000 });
+
+    // Record the original stored settings.
+    const before = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as Array<{ name: string; settings: Record<string, unknown> }>) : [];
+    }, STORAGE_KEY);
+    const originalSettings = before.find((e) => e.name === 'Snapshot C')!.settings;
+
+    // Toggle failures-only ON so the live state differs from the saved preset.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.presets-content')).toHaveCount(0);
+    await page.locator('label.hdr-fail-toggle').click();
+    await page.waitForTimeout(200);
+
+    // Dismiss the Update confirm dialog.
+    await openPresetsPopover(page);
+    page.on('dialog', (dialog) => dialog.dismiss());
+    await page.locator('[data-testid="preset-update-btn"]').first().click();
+
+    // Settings in localStorage must be unchanged.
+    const after = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as Array<{ name: string; settings: Record<string, unknown> }>) : [];
+    }, STORAGE_KEY);
+    const afterSettings = after.find((e) => e.name === 'Snapshot C')!.settings;
+    expect(afterSettings).toEqual(originalSettings);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // G) Export current settings
 // ---------------------------------------------------------------------------
 
