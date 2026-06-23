@@ -2,8 +2,8 @@
 PreToolUse(SendMessage | Edit | Write | MultiEdit) hook — enforces the JSON
 Communication protocol (protocol.md).
 
-A cross-role message must be one of the seven typed forms:
-    REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT / RESEARCH
+A cross-role message must be one of the eight typed forms:
+    REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT / RESEARCH / ANALYSIS
 serialized as a JSON object carrying a "type" discriminator.
 
 Hook I/O contract:
@@ -51,8 +51,8 @@ def get_render_recipe() -> str:
     """Return the normalizer invocation recipe for block reason messages."""
     script = "scripts/hooks/format_protocol_form.py"
     return (
-        'Every cross-role message MUST be one of the seven typed forms as a JSON object with a "type" field: '
-        "REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT / RESEARCH "
+        'Every cross-role message MUST be one of the eight typed forms as a JSON object with a "type" field: '
+        "REVIEW / RESULT / BRIEF / FINDING / FIX / ARTIFACT / RESEARCH / ANALYSIS "
         "(fields + examples in .claude/team-process/protocol.md; schemas in .claude/team-process/schemas/). "
         "HAND BACK in one step: "
         "(1) write the rough form JSON to a temp file. "

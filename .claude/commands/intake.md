@@ -27,10 +27,17 @@ The **Intake & docs-first** activity of the orchestration process
 4. **Scope by delegation, not by reading.** Need the *state* of a code area judged against a role's bar (refactor, audit, "is X clean / what's needed", feasibility)?
    - **Delegate to the owning role**; it returns a `REVIEW`. Do **not** open the code yourself — that applies a generic / line-count proxy and pollutes the lead's context.
    - `Explore` (discovery: where/how/options) **complements** the owning-role `REVIEW` (bar judgment: does it meet the non-negotiables) — they are not interchangeable.
+   - Code-cognition (`Read`/`Grep`/`Glob` over source) is **tool-blocked** for the orchestrator while a run is active — discovery + scoping MUST be delegated.
+5. **Analyze by delegation, not in your head.** Need the approach *chosen* — which `RESEARCH.option` wins, is X feasible, what does the lane map imply?
+   - **Delegate an `ANALYSIS`** to an analyst (owning role for in-domain judgment; a `Plan`/general agent for cross-cutting / architectural decisions); it returns `question` · `evaluated` · `recommendation` · `rationale`.
+   - **Ratify** the `recommendation` — fold it into `decisions[]`; do **not** synthesize the approach in your own context.
+   - `RESEARCH` = discovery, no verdict. `ANALYSIS` = evaluation → recommendation. The lead ratifies, never derives.
 
-5. **Capture intake decisions.** Any design choice settled at intake (with the user, or resolving a
-   `FINDING`) → append a `decisions[]` entry to the session record, `supersedes` set when it overrides
-   the issue text. See [`.claude/team-process/process.md`](../team-process/process.md) → *Decision record*.
+6. **Capture intake decisions.** Any design choice settled at intake (with the user, by ratifying an
+   `ANALYSIS`, or resolving a `FINDING`) → append a `decisions[]` entry to the session record,
+   `supersedes` set when it overrides the issue text. See
+   [`.claude/team-process/process.md`](../team-process/process.md) → *Decision record*.
 
 **Output:** restated acceptance criteria (in `acceptance`) + any `decisions[]` captured + (if discovery
-was needed) the `Explore` agent's `RESEARCH` + (if scoping was needed) the owning role's `REVIEW`.
+was needed) the `Explore` agent's `RESEARCH` + (if the approach needed evaluating) the analyst's
+`ANALYSIS` + (if scoping was needed) the owning role's `REVIEW`.
