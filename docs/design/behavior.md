@@ -111,6 +111,13 @@ version → sha → ref → run_number
 2. `window.confirm()` prompt: `Delete preset "<name>"?` — user must confirm.
 3. On confirm: the preset is removed from the array, `localStorage` is updated, active tracking clears if the deleted preset was active.
 
+### Reset All Settings
+
+1. User clicks **Reset all settings** in the Presets popover.
+2. `window.confirm()` prompt: `Reset all settings to defaults?` — user must confirm.
+3. On confirm: every captured setting key is removed from `localStorage` and each setting returns to its framework default (theme → `dark`; field pickers → all ON; filters → clear; view → Matrix; etc.).
+4. Active preset tracking clears — no preset is considered active after a reset.
+
 ### Export (per-preset)
 
 - Produces a single-envelope JSON file: `dd-preset-<slug>.json`.

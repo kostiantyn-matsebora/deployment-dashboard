@@ -146,6 +146,7 @@ Classification logic is server-side (in `GET /api/analytics/dora`); the SPA appl
 | `laneAutoScroll` | `boolean` | Auto-scroll-to-change state (Swimlanes). |
 | `predicate` | `string` | Active correlation predicate key (Swimlanes). |
 | `timeWindow` | `string` | Active correlation time-window value (Swimlanes). |
+| `svcFilter` | `string` | Free-text service filter input value (Matrix + Swimlanes). Persisted under `dd:svcFilter`. |
 
 **Apply fallback.** Unknown or missing keys in `settings` are silently ignored; the corresponding live setting retains its current value. Unknown array entries for field keys are dropped; if the result is empty, all fields default ON.
 

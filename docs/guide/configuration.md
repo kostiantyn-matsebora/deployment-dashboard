@@ -137,6 +137,7 @@ Presets are a **client-side feature** — no env vars, no backend, no accounts. 
 
 A preset captures the full UI settings snapshot at the moment it is saved:
 
+- free-text service filter input value
 - active service, environment, and notification glob filter patterns
 - view and display preferences (visible columns, layout options)
 - notification filter settings (status, service, environment axes)
@@ -146,11 +147,13 @@ A preset captures the full UI settings snapshot at the moment it is saved:
 | Action | How |
 |---|---|
 | **Save** | Open the preset panel; type a name; click **Save**. |
-| **Apply** | Click a preset name — all captured settings take effect immediately. |
-| **Clone** | Hover a preset row; click **Clone** — saves a copy with `(copy)` appended. |
-| **Update** | Hover a preset row; click **Update** — overwrites the preset with the current settings after a confirmation. Name unchanged. |
-| **Rename** | Hover a preset row; click **Rename** — edit the name inline; confirm. |
-| **Delete** | Hover a preset row; click **Delete** — a confirmation prompt prevents accidental removal. |
+| **Apply** | Hover a preset row; click the **Apply** icon — all captured settings take effect immediately. |
+| **Clone** | Hover a preset row; click the **Clone** icon — saves a copy with `(copy)` appended. |
+| **Update** | Hover a preset row; click the **Update** icon — overwrites the preset with the current settings after a confirmation. Name unchanged. |
+| **Rename** | Hover a preset row; click the **Rename** icon — edit the name inline; confirm. |
+| **Export** | Hover a preset row; click the **Export** icon — the file downloads instantly. |
+| **Delete** | Hover a preset row; click the **Delete** icon — a confirmation prompt prevents accidental removal. |
+| **Reset all settings** | Click **Reset all settings** at the bottom of the panel — a confirmation prompt resets every setting to its default and clears the active preset. |
 
 ### File-based sharing
 

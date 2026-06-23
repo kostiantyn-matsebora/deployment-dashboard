@@ -339,9 +339,9 @@ Accessible from the bookmark icon button (`btn-presets`) in the topbar icon clus
 | Name span (`.preset-item-name`) | Truncated monospace label; full name in `title` tooltip. |
 | Actions cluster (`.preset-item-actions`) | Hidden by default; revealed on hover or when item `is-active`. |
 
-**Per-item action buttons (`.preset-action-btn`):**
+**Per-item action buttons (`.preset-action-btn`).** Rendered as icon buttons — each action is an icon (no label text) with a tooltip. Actions are hidden by default and revealed on row hover or when the item is `.is-active`.
 
-| Button | Glyph | Action |
+| Button | Icon | Action |
 |---|---|---|
 | Apply | ✓ | Writes the preset's settings snapshot back to the live UI. Marks item `.is-active`. |
 | Clone | ⊕ | Duplicates the preset as `<name> (copy)`, inserts immediately after, marks copy active. |
@@ -349,6 +349,8 @@ Accessible from the bookmark icon button (`btn-presets`) in the topbar icon clus
 | Rename | ✎ | Replaces the name span with an inline text input; commits on Enter / blur; cancels on Escape. |
 | Export | ⬇ | Downloads the single-preset envelope as `dd-preset-<slug>.json`. |
 | Delete | ✕ | `.is-danger` styling; prompts `window.confirm` before removing. |
+
+**Reset all settings button.** A text-button below the preset list that resets every captured setting to its framework default after a `window.confirm` prompt. Clears all `localStorage` preset-related keys and removes the active-preset tracking state.
 
 **Active state (`.is-active`):** accent border + accent background tint (10% opacity). Applied to the most recently applied or saved preset.
 
