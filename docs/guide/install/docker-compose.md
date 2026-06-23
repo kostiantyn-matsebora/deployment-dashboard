@@ -98,10 +98,15 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
 
     ??? info "GitHub token scope — read-only; the Fetcher never writes"
 
-        | Repos | Classic PAT | Fine-grained PAT |
-        |---|---|---|
-        | Public | no scopes | Public repositories → read-only |
-        | Private | `repo` scope | Contents · Deployments · Actions: Read |
+        | Repos | Classic PAT | Fine-grained PAT — minimal | Fine-grained PAT — full Swimlanes |
+        |---|---|---|---|
+        | Public | no scopes | Public repositories → read-only | Public repositories → read-only |
+        | Private | `repo` scope | Deployments · Actions: Read | Deployments · Actions · Contents: Read |
+
+        **Two tiers for private repos (fine-grained PAT):**
+
+        - **`Deployments + Actions: Read` (minimal)** — full-fidelity Matrix (stable service identity, version, status, actor) and a working Swimlanes view using non-explicit correlation. No source-code access required.
+        - **`+ Contents: Read` (full Swimlanes)** — adds explicit `parent_deployments` edges derived from the workflow `needs:` graph, enabling the Swimlanes explicit-parent correlation predicate.
 
         - **Classic `repo` over-grants** — it grants full read/write to every private repo, far beyond what the Fetcher uses. Prefer a fine-grained PAT where org policy allows.
         - **Org repos with SAML SSO** — after creating a classic `repo` PAT, click **Configure SSO → Authorize**, then re-authorize after every rotation. An unauthorized token returns **HTTP 403** (`X-GitHub-SSO` header), not 401.
@@ -136,10 +141,15 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
 
     ??? info "GitHub token scope — read-only; the Fetcher never writes"
 
-        | Repos | Classic PAT | Fine-grained PAT |
-        |---|---|---|
-        | Public | no scopes | Public repositories → read-only |
-        | Private | `repo` scope | Contents · Deployments · Actions: Read |
+        | Repos | Classic PAT | Fine-grained PAT — minimal | Fine-grained PAT — full Swimlanes |
+        |---|---|---|---|
+        | Public | no scopes | Public repositories → read-only | Public repositories → read-only |
+        | Private | `repo` scope | Deployments · Actions: Read | Deployments · Actions · Contents: Read |
+
+        **Two tiers for private repos (fine-grained PAT):**
+
+        - **`Deployments + Actions: Read` (minimal)** — full-fidelity Matrix (stable service identity, version, status, actor) and a working Swimlanes view using non-explicit correlation. No source-code access required.
+        - **`+ Contents: Read` (full Swimlanes)** — adds explicit `parent_deployments` edges derived from the workflow `needs:` graph, enabling the Swimlanes explicit-parent correlation predicate.
 
         - **Classic `repo` over-grants** — it grants full read/write to every private repo, far beyond what the Fetcher uses. Prefer a fine-grained PAT where org policy allows.
         - **Org repos with SAML SSO** — after creating a classic `repo` PAT, click **Configure SSO → Authorize**, then re-authorize after every rotation. An unauthorized token returns **HTTP 403** (`X-GitHub-SSO` header), not 401.

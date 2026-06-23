@@ -44,10 +44,10 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F7 | **Bounded initial backfill.** On a `404` (no cursor yet) the adapter starts from `now − INITIAL_LOOKBACK`, not from repo genesis. | Avoids flooding the store with full history on first run. |
 | F8 | **Adapter handles conditional requests + rate limits.** ETag / `If-None-Match`, `X-RateLimit-*`, `Retry-After`, backoff. | Keeps polling cheap and a good API citizen — internal to the adapter. |
 | F9 | **Config-driven; base URL overridable.** Repos + service/version mapping + GitHub base URL from env. | Integration repoints the GitHub base URL at a mock; production points at `api.github.com`. |
-| F10 | **`parent_deployments` derived from workflow `needs` graph.** The adapter fetches the workflow YAML for each run, parses the deployment-job subgraph (`environment:` + `needs:`), and resolves parent edges to `deployment_id` values (§5.6). Any resolution failure → `parent_deployments = []`; ingest is never blocked. | Reproduces the deployment graph GitHub surfaces in the Actions Run UI. `explicit parent` is the Swimlanes default correlation predicate — accurate population here makes it work out of the box. |
-| F11 | **Workflow graph cached in-memory per `(repo, run_id)`.** Bounded LRU (≤ 200 entries). Cache entry includes workflow `name` (used as service identity), `path`, `head_sha`, and parsed deployment-job subgraph. | Avoids re-fetching the workflow YAML for each status event that shares a run; workflow runs are immutable so no invalidation is needed. |
-| F12 | **Service identity = workflow YAML `name:` field**, resolved via the run's `path` (e.g. `.github/workflows/deploy.yml`) → the active workflow with that path → its YAML `name:` field. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB_SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: path→workflow-name lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; SERVICE_MAP handles edge cases without restructuring the pipeline. |
-| F13 | **Backfill fills the last `BACKFILL_DEPTH` status events per `(service, environment)` slot** (default 2). Enumerates active workflows and environments per repo; paginates deployments newest-first. For each candidate deployment, fetches its statuses and counts the mapped ones (§5.3; `inactive` is skipped and does not count; `waiting` now maps to a real status event and counts toward depth like the other pre-run states `pending`/`queued` — consistent with the invariant that the status-event count matches what the history drawer shows). Each `(service, environment)` slot fills **independently** up to `BACKFILL_DEPTH`: a deployment for an already-full service is **skipped** (the scan keeps paging so quieter services sharing the same environment still reach depth), never treated as no-progress. After collecting candidate events, trims to the `BACKFILL_DEPTH` latest by `status.created_at` per slot before posting. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress **only** when its service is unknown or has zero mapped statuses (an already-full service does **not** count). The age cutoff (`BACKFILL_MAX_AGE` / `INITIAL_LOOKBACK`) is the **hard time-window boundary**: paging stops at the first deployment older than the cutoff, so a slot with fewer than `BACKFILL_DEPTH` deployments inside the window simply gets fewer events — the scan never digs past the cutoff to top a slot up. The YAML graph is fetched **only** for deployments contributing kept events; discarded deployments cost only statuses + run-metadata. | Controls how many history drawer entries seed each slot at startup; status-event count matches what the history drawer shows. Per-slot independence stops a busy service from starving a quiet one in the same env (#349); window + defer-YAML bound API cost; once every known service slot is full an all-slots-full early-stop fires before the next status fetch, so per-slot independence does not raise worst-case API cost once saturation is reached. |
+| F10 | **`parent_deployments` derived from workflow `needs` graph (opt-in).** When `Contents:read` is granted, the adapter fetches the workflow YAML for each run, parses the deployment-job subgraph (`environment:` + `needs:`), and resolves parent edges to `deployment_id` values (§5.6). A `403` on the YAML fetch (token lacks `Contents:read`) or any other resolution failure → `parent_deployments = []`; ingest is never blocked. Without `Contents:read`, Swimlanes uses a non-explicit correlation predicate — the view still renders, without explicit graph edges. | Service identity and the Matrix are unaffected — those depend on the workflow metadata endpoint (F12), not the YAML file. `Contents:read` is required only for Swimlanes explicit-parent edges. |
+| F11 | **Workflow graph cached in-memory per `(repo, run_id)`.** Bounded LRU (≤ 200 entries). Cache entry includes workflow `name` (used as service identity), `path`, `head_sha`, and parsed deployment-job subgraph. Workflow `name` is sourced from `GET /repos/{o}/{r}/actions/workflows/{workflow_id}` (Actions:read, §5.6.2) — not from the YAML file — so it is always available, even when `Contents:read` is absent. | Avoids re-fetching workflow metadata for each status event that shares a run; workflow runs are immutable so no invalidation is needed. |
+| F12 | **Service identity = workflow `name` field from `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}`** (Actions:read). The run object provides `workflow_id` directly; the workflow endpoint returns the static `name` used as service identity. `run.Name` (the run-name display value, overridable via `run-name:`) is **not** used for identity. `GITHUB_SERVICE_MAP` overrides at two levels — workflow name (key without `/`) or repo (key = `owner/repo`). Resolution order: workflow-id lookup → workflow-level override → repo-level override → workflow name as-is. Non-Actions deployments (no `target_url`) fall back to the repo's short name. | Stable across `run-name:` overrides; decoupled from `Contents:read` so service identity is never degraded by a missing YAML fetch permission; SERVICE_MAP handles edge cases without restructuring the pipeline. |
+| F13 | **Backfill fills the last `BACKFILL_DEPTH` status events per `(service, environment)` slot** (default 2). Enumerates active workflows and environments per repo; paginates deployments newest-first. For each candidate deployment, fetches its statuses and counts the mapped ones (§5.3; `inactive` is skipped and does not count; `waiting` now maps to a real status event and counts toward depth like the other pre-run states `pending`/`queued` — consistent with the invariant that the status-event count matches what the history drawer shows). Each `(service, environment)` slot fills **independently** up to `BACKFILL_DEPTH`: a deployment for an already-full service is **skipped** (the scan keeps paging so quieter services sharing the same environment still reach depth), never treated as no-progress. After collecting candidate events, trims to the `BACKFILL_DEPTH` latest by `status.created_at` per slot before posting. Stops for an environment when `consecutiveNoProgress ≥ StallWindow` (20) — a deployment makes no progress **only** when its service is unknown or has zero mapped statuses (an already-full service does **not** count). The age cutoff (`BACKFILL_MAX_AGE` / `INITIAL_LOOKBACK`) is the **hard time-window boundary**: paging stops at the first deployment older than the cutoff, so a slot with fewer than `BACKFILL_DEPTH` deployments inside the window simply gets fewer events — the scan never digs past the cutoff to top a slot up. The workflow YAML (Contents:read, needs-graph) is fetched **only** for deployments contributing kept events, and only when `Contents:read` is granted; discarded deployments cost only statuses + run-metadata. | Controls how many history drawer entries seed each slot at startup; status-event count matches what the history drawer shows. Per-slot independence stops a busy service from starving a quiet one in the same env (#349); window + defer-YAML bound API cost for the Contents fetch; once every known service slot is full an all-slots-full early-stop fires before the next status fetch, so per-slot independence does not raise worst-case API cost once saturation is reached. |
 | F14 | **Backfill triggers on null cursor (first run) or `BACKFILL=true`.** After completion cursor advances to `max(status.created_at)` seen, preventing re-post in the subsequent normal poll. | `BACKFILL=true` supports the "reset data" scenario without redeploying or clearing the fetcher-state row manually. |
 | F15 | **Version source is `type:key` configurable; no fallback, no truncation except `sha`.** Three types: `attribute` (deployment field; `sha` key → 7-char truncation, all others as-is), `payload` (deployment payload JSON field), `artifact` (Actions artifact archive — archive name = filename, content is a plain-text version string). Missing / null / unreachable source → `version = null`; ingest is never blocked. Default: `attribute:sha`. | Covers the three real-world versioning patterns without a silent fallback that would mask misconfiguration. |
 | F16 | **Rate-limit budget on OWN usage.** Adapter self-throttles to at most `GITHUB_RATE_LIMIT_BUDGET_PCT`% (default 30) of its hourly request quota. Quota is read from `GITHUB_RATE_LIMIT` when set; otherwise discovered via `GET /rate_limit` on startup (failure → safe default of 5 000). The fetcher tracks its **own request count since process start** (not `X-RateLimit-Used`, which counts all consumers of the token). When own count reaches the budget, the adapter waits until `X-RateLimit-Reset`. Counter resets after the window rolls over. | Prevents sleeping when the token is heavily used by other consumers; the fetcher is a background process and must not monopolise a shared token. |
@@ -143,25 +143,35 @@ while (!ct.IsCancellationRequested)
 
 ### 5.1 Endpoints
 
-| Purpose | Call |
-|---|---|
-| List deployments per repo | `GET /repos/{owner}/{repo}/deployments?environment=&per_page=` |
-| Status lifecycle of a deployment | `GET /repos/{owner}/{repo}/deployments/{deployment_id}/statuses` |
-| Workflow run metadata | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` |
-| Workflow file contents | `GET /repos/{owner}/{repo}/contents/{path}?ref={sha}` |
-| List active workflows (backfill) | `GET /repos/{owner}/{repo}/actions/workflows?per_page=100` |
-| List environments (backfill) | `GET /repos/{owner}/{repo}/environments` |
-| List artifacts for a run | `GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts` |
-| Download artifact archive | `GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip` |
+| Purpose | Call | Permission |
+|---|---|---|
+| List deployments per repo | `GET /repos/{owner}/{repo}/deployments?environment=&per_page=` | Deployments:read |
+| Status lifecycle of a deployment | `GET /repos/{owner}/{repo}/deployments/{deployment_id}/statuses` | Deployments:read |
+| Workflow run metadata | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` | Actions:read |
+| **Workflow identity** (service name, §5.6.2) | `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}` | Actions:read |
+| Workflow file contents (needs-graph, §5.6.2) | `GET /repos/{owner}/{repo}/contents/{path}?ref={sha}` | Contents:read (opt-in) |
+| List active workflows (backfill) | `GET /repos/{owner}/{repo}/actions/workflows?per_page=100` | Actions:read |
+| List environments (backfill) | `GET /repos/{owner}/{repo}/environments` | Actions:read |
+| List artifacts for a run | `GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts` | Actions:read |
+| Download artifact archive | `GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip` | Actions:read |
 
 Auth: `Authorization: Bearer <token>` + `Accept: application/vnd.github+json` + `X-GitHub-Api-Version`. Base URL from config (`https://api.github.com` default; overridable for the integration mock).
+
+**Two permission tiers for private repos:**
+
+| Tier | Token permissions | Capability |
+|---|---|---|
+| Minimal | `Deployments:read` + `Actions:read` | Full-fidelity Matrix (stable service identity, version, status, actor); Swimlanes via non-explicit correlation |
+| Full | + `Contents:read` | Adds explicit `parent_deployments` edges derived from the workflow `needs:` graph (Swimlanes explicit-parent mode) |
+
+Public repos are unaffected — `contents` is readable without a scope.
 
 ### 5.2 Field mapping → `DeploymentEventIngest`
 
 | Contract field | GitHub source |
 |---|---|
 | `deployment_id` | `gh-deploy-{deployment.id}` (correlation key; all status rows of one deployment share it) |
-| `service` | workflow YAML `name:` field from run metadata (§5.6.2 cache); resolved via `ResolveService` (§5.8.3) |
+| `service` | workflow `name` from `GET .../actions/workflows/{workflow_id}` (§5.6.2 Phase 1 cache); resolved via `ResolveService` (§5.8.3) |
 | `environment` | `deployment.environment` |
 | `status` | mapped from `status.state` (§5.3) |
 | `happened_at` | `status.created_at` (UTC) |
@@ -231,7 +241,8 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 - GitHub `5xx` / transport error → throw; orchestrator keeps the old cursor and retries next interval.
 - `403`/`429` with rate-limit headers → honour `Retry-After` / `X-RateLimit-Reset`, back off.
 - `304 Not Modified` → no events, cursor unchanged.
-- Workflow run or file fetch non-2xx, YAML parse error, or missing `target_url` → `parent_deployments = []` for the affected events; never throw / never block ingest (F10).
+- Workflow run non-2xx or missing `target_url` → `parent_deployments = []` for the affected events; never throw / never block ingest (F10). Service identity is unaffected (sourced from the workflow endpoint, not the YAML).
+- Workflow file contents (`GET .../contents/{path}`) `403` (token lacks `Contents:read`) or any non-2xx, or YAML parse error → `parent_deployments = []` for all events in the run; never throw / never block ingest. Service identity is **not** affected — it was resolved earlier via the workflow endpoint (§5.6.2, F12).
 - Artifact list or download non-2xx, or artifact name not found → `version = null`; never throw / never block ingest (F15).
 
 #### 5.5.1 Poll efficiency — terminal deployment skip
@@ -289,12 +300,24 @@ For every deployment status, extract `run_id` from `status.target_url` via patte
 
 #### 5.6.2 Workflow graph fetch and parse *(F11 — LRU-cached per `(repo, run_id)`)*
 
+Two phases — service identity resolution (always) and needs-graph fetch (opt-in, `Contents:read` only):
+
+**Phase 1 — service identity (Actions:read; always runs)**
+
 | Step | Call | Use |
 |---|---|---|
-| 1 | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` | obtain `path` (e.g. `.github/workflows/deploy.yml`) and `head_sha`; `name` (run display name) is used only as a last-resort fallback if the YAML `name:` field is absent |
-| 2 | `GET /repos/{owner}/{repo}/contents/{path}?ref={head_sha}` | Base64-decode `content` → workflow YAML; parse top-level `name:` field → **service identity** (F2 / F12) |
+| 1a | `GET /repos/{owner}/{repo}/actions/runs/{run_id}` | obtain `workflow_id`, `path` (e.g. `.github/workflows/deploy.yml`), and `head_sha` |
+| 1b | `GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}` | read `name` field → **service identity** (F12) |
 
-Service identity comes from the YAML `name:` field (the workflow's static definition name), **not** `run.Name` (which can be overridden by `run-name:` and changes per run). When the YAML `name:` field is absent, the parser falls back to `run.Name`; if that is also absent, the repo short name.
+Service identity comes from the workflow `name` field returned by the workflow endpoint, **not** `run.Name` (which can be overridden by `run-name:` and changes per run). Non-2xx on step 1a → `parent_deployments = []` for all events in this run; service identity falls back to repo short name (non-Actions path). Non-2xx on step 1b → service identity falls back to the `path` basename without extension; `parent_deployments = []` for all events in this run.
+
+**Phase 2 — needs-graph fetch (Contents:read; opt-in)**
+
+| Step | Call | Use |
+|---|---|---|
+| 2 | `GET /repos/{owner}/{repo}/contents/{path}?ref={head_sha}` | Base64-decode `content` → workflow YAML; parse `jobs:` map for `needs:` graph |
+
+This step runs only when `Contents:read` is granted. A `403` (token lacks permission) or any non-2xx response, or a YAML parse error → `parent_deployments = []` for all events in this run; **service identity is unaffected** (resolved in Phase 1). Ingest is never blocked.
 
 Parse the `jobs:` map. Normalise per-job fields:
 
@@ -307,8 +330,6 @@ Parse the `jobs:` map. Normalise per-job fields:
 | `needs` | absent | `[]` |
 
 **Deployment jobs** = jobs where `environment` is non-null after normalisation.
-
-Non-2xx on either call or YAML parse error → `parent_deployments = []` for all events in this run; stop.
 
 #### 5.6.3 BFS ancestor search
 
@@ -405,7 +426,7 @@ envs        ← GET /repos/{owner}/{repo}/environments → [env.name]
               filter: env ∉ doneEnvs                         // resume: skip completed envs
 
 for each remaining env E:
-  // Pass 1: collect candidates for this env (depth, no-progress, defer-YAML as before).
+  // Pass 1: collect candidates for this env (depth, no-progress, defer-Contents-YAML as before).
   // …(same per-env scan as before)…
 
   // Pass 2: build + trim events (same trimming logic as before).
@@ -427,7 +448,7 @@ yield FetchResult([], runningCursor.Encode())
 
 - `repos[repo].since` is set **only by `WithBackfillComplete`** (or normal poll). Never advanced mid-backfill — backfill walks newest-first, so an early `since` would make the next poll skip not-yet-seeded older deployments. The `done_envs` list is the mid-backfill progress marker.
 - **Parent-map choice (within-repo edges).** The per-repo `envToDeploymentId` map is accumulated incrementally as each env's deployments are collected. Within-repo parent edges from earlier envs resolve correctly. A parent in a not-yet-processed env is a forward reference (§5.6.5) — Swimlanes resolves dangling ids at render time.
-- Discarded deployments cost only statuses + run-metadata; the YAML fetch is deferred until a deployment is kept (F1).
+- Discarded deployments cost only statuses + run-metadata; the workflow YAML (Contents:read, needs-graph) fetch is deferred until a deployment is kept, and only when `Contents:read` is granted (F10).
 
 #### 5.8.3 Service resolution
 
@@ -441,7 +462,7 @@ ResolveService(workflowName, repo):
 
 - Keys without `/` → workflow-level; keys matching `owner/repo` → repo-level.
 - GitHub workflow names cannot contain `/` — no key ambiguity.
-- `workflowName` here is the YAML `name:` field — resolved via `path → active-workflow` lookup (F2 / F12), NOT the run's display name.
+- `workflowName` here is the `name` field from `GET /repos/{o}/{r}/actions/workflows/{workflow_id}` (F12, §5.6.2 Phase 1), NOT the run's display name and NOT from the YAML file.
 
 ---
 
@@ -452,7 +473,8 @@ ResolveService(workflowName, repo):
 | Workflow + environment discovery | 5 + 5 = 10 |
 | Deployment list pages (1 per env per repo) | ~20 |
 | Status fetches (one per filled slot max) | ≤ 200 |
-| Workflow graph calls (run metadata + YAML) | nearly all absorbed by F11 LRU cache |
+| Workflow graph calls (run + workflow-id metadata) | nearly all absorbed by F11 LRU cache |
+| Workflow YAML fetches (Contents:read, needs-graph only) | nearly all absorbed by F11 LRU cache (skipped entirely when Contents:read is absent) |
 
 ---
 
