@@ -1,6 +1,6 @@
 """
 Validates and normalizes a typed protocol form (REVIEW / RESULT / BRIEF / FINDING /
-FIX / ARTIFACT / RESEARCH) as JSON per protocol.md.
+FIX / ARTIFACT / RESEARCH / ANALYSIS) as JSON per protocol.md.
 
 Single source of validation truth — the SendMessage guard (invoke_protocol_form_guard.py)
 imports pure functions from this module.
@@ -39,6 +39,7 @@ FORM_KEY_ORDER: dict[str, list[str]] = {
     "FIX":      ["type", "failure", "suspect"],
     "ARTIFACT": ["type", "spec", "delta", "open"],
     "RESEARCH": ["type", "topic", "findings", "options", "refs", "open"],
+    "ANALYSIS": ["type", "role", "question", "evaluated", "recommendation", "rationale", "confidence", "risks", "refs"],
 }
 
 FORM_OPTIONAL_KEYS: dict[str, list[str]] = {
@@ -49,6 +50,7 @@ FORM_OPTIONAL_KEYS: dict[str, list[str]] = {
     "FIX":      [],
     "ARTIFACT": ["open"],
     "RESEARCH": ["options", "refs", "open"],
+    "ANALYSIS": ["role", "confidence", "risks", "refs"],
 }
 
 NESTED_KEY_ORDER: dict[str, list[str]] = {
@@ -59,6 +61,7 @@ NESTED_KEY_ORDER: dict[str, list[str]] = {
     # under the same "options" key and share this entry. order_by_keys emits only keys that are
     # present in the item, so the superset order is harmless — no key is fabricated.
     "option":  ["id", "path", "approach", "tradeoffs"],
+    "evaluated": ["id", "option", "assessment"],  # ANALYSIS.evaluated[] item
 }
 
 
@@ -358,6 +361,13 @@ def normalize_form(obj: dict, form_type: str) -> OrderedDict:
             if isinstance(val, list):
                 val = [
                     order_by_keys(item, NESTED_KEY_ORDER["option"])
+                    if isinstance(item, dict) else item
+                    for item in val
+                ]
+        elif key == "evaluated":
+            if isinstance(val, list):
+                val = [
+                    order_by_keys(item, NESTED_KEY_ORDER["evaluated"])
                     if isinstance(item, dict) else item
                     for item in val
                 ]
