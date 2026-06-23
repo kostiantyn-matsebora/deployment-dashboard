@@ -345,6 +345,7 @@ Accessible from the bookmark icon button (`btn-presets`) in the topbar icon clus
 |---|---|---|
 | Apply | ✓ | Writes the preset's settings snapshot back to the live UI. Marks item `.is-active`. |
 | Clone | ⊕ | Duplicates the preset as `<name> (copy)`, inserts immediately after, marks copy active. |
+| Update | ↺ | Overwrites the preset's saved settings with the current live settings after a `window.confirm`. Name and version unchanged. |
 | Rename | ✎ | Replaces the name span with an inline text input; commits on Enter / blur; cancels on Escape. |
 | Export | ⬇ | Downloads the single-preset envelope as `dd-preset-<slug>.json`. |
 | Delete | ✕ | `.is-danger` styling; prompts `window.confirm` before removing. |

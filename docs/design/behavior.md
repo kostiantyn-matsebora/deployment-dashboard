@@ -92,6 +92,12 @@ version → sha → ref → run_number
 2. A deep copy of the envelope is created with name `<original> (copy)`.
 3. Clone is inserted immediately after the source in the list; becomes active.
 
+### Update
+
+1. User clicks Update on a preset row.
+2. `window.confirm()` prompt: `Update preset "<name>" with the current settings?` — user must confirm.
+3. On confirm: `captureSettings()` snapshots the current live UI state; the preset's `settings` field is replaced with the snapshot. Name and version remain unchanged.
+
 ### Rename
 
 1. User clicks ✎ Rename.

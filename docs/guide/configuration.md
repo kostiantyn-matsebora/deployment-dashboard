@@ -148,6 +148,7 @@ A preset captures the full UI settings snapshot at the moment it is saved:
 | **Save** | Open the preset panel; type a name; click **Save**. |
 | **Apply** | Click a preset name — all captured settings take effect immediately. |
 | **Clone** | Hover a preset row; click **Clone** — saves a copy with `(copy)` appended. |
+| **Update** | Hover a preset row; click **Update** — overwrites the preset with the current settings after a confirmation. Name unchanged. |
 | **Rename** | Hover a preset row; click **Rename** — edit the name inline; confirm. |
 | **Delete** | Hover a preset row; click **Delete** — a confirmation prompt prevents accidental removal. |
 
