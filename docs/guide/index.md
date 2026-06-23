@@ -29,6 +29,9 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Swimlanes](./screenshots.md#swimlanes)
 - [History drawer](./screenshots.md#history-drawer)
 - [Analytics](./screenshots.md#analytics)
+- [Services filter](./screenshots.md#services-filter)
+- [Browser notifications](./screenshots.md#browser-notifications)
+- [UI settings presets](./screenshots.md#ui-settings-presets)
 - [Demo control panel](./screenshots.md#demo-control-panel)
 - [Footer](./screenshots.md#footer)
 
@@ -63,7 +66,12 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [API](./configuration.md#api)
 - [PostgreSQL: bundled profiles](./configuration.md#postgresql-bundled-profiles)
 - [PostgreSQL: external profiles](./configuration.md#postgresql-external-profiles)
+- [PostgreSQL: auth modes](./configuration.md#postgresql-auth-modes)
 - [Fetcher: pull mode](./configuration.md#fetcher-pull-mode)
+- [Fetcher: workflow exclude](./configuration.md#github-workflow-exclude)
+- [API: service exclude](./configuration.md#service-scope-filter)
+- [UI settings presets](./configuration.md#ui-settings-presets)
+- [Demo / dev only](./configuration.md#demo-dev-only)
 
 ### `send-events.md`
 

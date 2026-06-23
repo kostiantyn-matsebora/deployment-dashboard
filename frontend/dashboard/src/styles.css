@@ -90,6 +90,11 @@ body::after {
   width: 420px;
   max-width: 420px;
 }
+/* Presets popover — wider to accommodate the preset list + action buttons. */
+.glass-popover.presets-popover[data-pc-name='popover'] {
+  width: 400px;
+  max-width: 400px;
+}
 .glass-popover [data-pc-section='content'] { background: transparent !important; }
 /* Arrow tip matches the surface */
 .glass-popover [data-pc-section='arrow']::before,

@@ -48,6 +48,15 @@ Opt-in desktop notifications triggered by deployment status transitions. Enable 
 ![Browser notifications — dark](../_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
 ![Browser notifications — light](../_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
 
+## :material-bookmark-box-multiple-outline: UI settings presets { #ui-settings-presets }
+
+Save and reuse sets of UI settings — active filter patterns, view preferences, and notification options — as named presets stored in the browser. Apply any preset in one click to switch context instantly; clone or rename to create variants; delete removes with a confirmation prompt.
+
+**File-based sharing.** Export any preset as a `dd-preset-<slug>.json` file (one file per preset). Share it by email or by committing it to a git repo. Recipients import it via the same preset panel — the app never fetches preset files from the network.
+
+![UI settings presets — dark](../_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
+![UI settings presets — light](../_assets/screenshots/presets-light.png#only-light){ .dd-shot }
+
 ## :material-tune-variant: Demo control panel { #demo-control-panel }
 
 The demo profile ships a **Demo Driver** control panel (`/demo/`): ingest the curated or random dataset, seed the GitHub emulator, drive live emission, trigger a system reset, and watch the deployment feed and component event streams in real time.

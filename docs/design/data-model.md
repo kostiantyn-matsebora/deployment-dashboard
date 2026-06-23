@@ -107,6 +107,58 @@ Classification logic is server-side (in `GET /api/analytics/dora`); the SPA appl
 
 ---
 
+## Presets Envelope
+
+**Storage keys:**
+
+| Key | Type | Purpose |
+|---|---|---|
+| `dd:presets` | JSON array | All saved preset envelopes. |
+| `dd:presetActive` | string | Name of the last-applied preset. Absent when no preset has been applied, or after the active preset is deleted or all settings are reset. |
+
+**Envelope shape:**
+
+```json
+{
+  "version": 1,
+  "name": "<user-supplied string, max 60 chars>",
+  "settings": { ... }
+}
+```
+
+**Version guard.** On load, envelopes with `version !== 1` are silently dropped. The `version` field is checked before any field access.
+
+**Settings keys captured in `settings`:**
+
+| Key | Type | Description |
+|---|---|---|
+| `theme` | `"dark" \| "light" \| "auto"` | Active theme token. |
+| `notifEnabled` | `boolean` | Notification master switch state. |
+| `notifStatuses` | `string[]` | Enabled notification statuses (subset of the 8). |
+| `notifSvcMode` | `"exclude" \| "include"` | Notification service filter mode. |
+| `notifSvcPatterns` | `string[]` | Notification service glob patterns. |
+| `notifEnvMode` | `"exclude" \| "include"` | Notification environment filter mode. |
+| `notifEnvPatterns` | `string[]` | Notification environment glob patterns. |
+| `view` | `"matrix" \| "swimlanes" \| "analytics"` | Active view tab. |
+| `svcFilterMode` | `"exclude" \| "include"` | Services board glob filter mode. |
+| `svcPatterns` | `string[]` | Services board glob patterns. |
+| `failuresOnly` | `boolean` | Failures-only toggle state (Matrix). |
+| `matFieldsOn` | `string[]` | Active Matrix field keys. |
+| `visFieldsOn` | `string[]` | Active Swimlanes field keys. |
+| `colOrder` | `string[]` | Environment column order (Matrix). |
+| `colHidden` | `string[]` | Hidden environment names (Matrix). |
+| `laneCollapsed` | `object` (`svc → boolean`) | Collapse state per service lane (Swimlanes). |
+| `laneAutoScroll` | `boolean` | Auto-scroll-to-change state (Swimlanes). |
+| `predicate` | `string` | Active correlation predicate key (Swimlanes). |
+| `timeWindow` | `string` | Active correlation time-window value (Swimlanes). |
+| `svcFilter` | `string` | Free-text service filter input value (Matrix + Swimlanes). Persisted under `dd:svcFilter`. |
+
+**Apply fallback.** Unknown or missing keys in `settings` are silently ignored; the corresponding live setting retains its current value. Unknown array entries for field keys are dropped; if the result is empty, all fields default ON.
+
+**Export/import format.** Each exported file is a single envelope (not an array). Filename: `dd-preset-<slug>.json`. Import rejects array inputs (old bulk format) and requires `version === 1`.
+
+---
+
 ## Derived Field Rendering
 
 - The `ref` field renders as a branch name or PR number per its domain definition.
