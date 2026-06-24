@@ -100,6 +100,7 @@ nav:
           - guide/install/index.md
           - Docker Compose: guide/install/docker-compose.md
           - Azure (Terraform): guide/install/azure-terraform.md
+      - Install as an app: guide/install-app.md
       - Configuration: guide/configuration.md
       - Integrate your CI/CD: guide/send-events.md
       - Architecture overview: guide/architecture-overview.md

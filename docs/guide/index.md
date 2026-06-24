@@ -6,6 +6,7 @@ children:
   - /quickstart
   - /screenshots
   - /install
+  - /install-app
   - /configuration
   - /send-events
   - /architecture-overview
@@ -29,9 +30,7 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Swimlanes](./screenshots.md#swimlanes)
 - [History drawer](./screenshots.md#history-drawer)
 - [Analytics](./screenshots.md#analytics)
-- [Services filter](./screenshots.md#services-filter)
-- [Browser notifications](./screenshots.md#browser-notifications)
-- [UI settings presets](./screenshots.md#ui-settings-presets)
+- [Install as an app](./screenshots.md#install-as-an-app)
 - [Demo control panel](./screenshots.md#demo-control-panel)
 - [Footer](./screenshots.md#footer)
 
@@ -60,18 +59,20 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Cost](./install/azure-terraform.md#cost)
 - [Networking & security](./install/azure-terraform.md#networking--security)
 
+### `install-app.md` — Install as an app
+
+- [What you get](./install-app.md#what-you-get)
+- [Install in Chrome or Edge](./install-app.md#install-in-chrome-or-edge)
+- [Requirements](./install-app.md#requirements)
+- [Uninstall](./install-app.md#uninstall)
+
 ### `configuration.md`
 
 - [Stack version](./configuration.md#stack-version)
 - [API](./configuration.md#api)
 - [PostgreSQL: bundled profiles](./configuration.md#postgresql-bundled-profiles)
 - [PostgreSQL: external profiles](./configuration.md#postgresql-external-profiles)
-- [PostgreSQL: auth modes](./configuration.md#postgresql-auth-modes)
 - [Fetcher: pull mode](./configuration.md#fetcher-pull-mode)
-- [Fetcher: workflow exclude](./configuration.md#github-workflow-exclude)
-- [API: service exclude](./configuration.md#service-scope-filter)
-- [UI settings presets](./configuration.md#ui-settings-presets)
-- [Demo / dev only](./configuration.md#demo-dev-only)
 
 ### `send-events.md`
 
