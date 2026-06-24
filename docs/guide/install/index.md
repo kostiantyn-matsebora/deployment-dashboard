@@ -102,7 +102,7 @@ Both methods require images from GHCR. No registry credentials are needed for pu
     - **Set `HISTORY_RETENTION_DAYS`** (minimum 90; 365 recommended).
     - **Scale the API** horizontally behind the gateway as needed — it's stateless.
 
-See [Configuration](../configuration.md) for every environment variable.
+See [Configuration](../configuration/index.md) for every environment variable.
 
 ## Pinning a release version
 
