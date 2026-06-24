@@ -1,6 +1,6 @@
-# Configuration — UI
+# UI settings & presets
 
-UI settings presets are a client-side feature stored in the browser — no server configuration required.
+Presets are a client-side feature of the running dashboard — no server configuration, no env vars, no accounts. State lives in `localStorage` in the browser.
 
 ## :material-bookmark-box-multiple-outline: UI settings presets { #ui-settings-presets }
 
@@ -45,4 +45,4 @@ The app **never fetches preset files from the network**. Import is always an exp
 !!! tip "Team starter kit"
     Commit a `presets/` directory to your repo with a `dd-preset-<name>.json` for each standard view (e.g. `dd-preset-prod-services.json`, `dd-preset-on-call.json`). New team members import them on first launch and are up to speed in seconds.
 
-[:octicons-arrow-right-24: See the preset panel in action](../screenshots.md#ui-settings-presets)
+[:octicons-arrow-right-24: See the preset panel in action](./screenshots.md#ui-settings-presets)

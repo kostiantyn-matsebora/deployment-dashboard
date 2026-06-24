@@ -5,6 +5,7 @@ intro: 'Adopter guides — run, deploy, configure, and feed the dashboard from a
 children:
   - /quickstart
   - /screenshots
+  - /ui-settings
   - /install
   - /configuration
   - /send-events
@@ -34,6 +35,13 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [UI settings presets](./screenshots.md#ui-settings-presets)
 - [Demo control panel](./screenshots.md#demo-control-panel)
 - [Footer](./screenshots.md#footer)
+
+### `ui-settings.md`
+
+- [UI settings & presets](./ui-settings.md#ui-settings-presets)
+- [What a preset saves](./ui-settings.md#what-a-preset-saves)
+- [Working with presets](./ui-settings.md#working-with-presets)
+- [File-based sharing](./ui-settings.md#file-based-sharing)
 
 ### `install/` — Install & deploy
 
@@ -65,9 +73,12 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 #### `configuration/general.md` — General
 
 - [Stack version](./configuration/general.md#stack-version)
-- [PostgreSQL: bundled profiles](./configuration/general.md#postgresql-bundled-profiles)
-- [PostgreSQL: external profiles](./configuration/general.md#postgresql-external-profiles)
-- [PostgreSQL: auth modes](./configuration/general.md#postgresql-auth-modes)
+
+#### `configuration/postgres.md` — PostgreSQL
+
+- [PostgreSQL: bundled profiles](./configuration/postgres.md#postgresql-bundled-profiles)
+- [PostgreSQL: external profiles](./configuration/postgres.md#postgresql-external-profiles)
+- [PostgreSQL: auth modes](./configuration/postgres.md#postgresql-auth-modes)
 
 #### `configuration/api.md` — API
 
@@ -82,10 +93,6 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 #### `configuration/demo.md` — Demo
 
 - [Demo / dev only](./configuration/demo.md#demo-dev-only)
-
-#### `configuration/ui.md` — UI
-
-- [UI settings presets](./configuration/ui.md#ui-settings-presets)
 
 ### `send-events.md`
 

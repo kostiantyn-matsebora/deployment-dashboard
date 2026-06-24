@@ -1,13 +1,13 @@
 ---
 title: Configuration
 shortTitle: Configuration
-intro: 'Every environment variable grouped by concern — General, API, Fetcher, Demo, and UI.'
+intro: 'Every environment variable grouped by concern — General, PostgreSQL, API, Fetcher, and Demo.'
 children:
   - /general
+  - /postgres
   - /api
   - /fetcher
   - /demo
-  - /ui
 ---
 
 # Configuration
@@ -19,9 +19,12 @@ Every environment variable, grouped by concern. Source of truth: [`compose/.env.
 ### `general.md` — General
 
 - [Stack version](./general.md#stack-version)
-- [PostgreSQL: bundled profiles](./general.md#postgresql-bundled-profiles)
-- [PostgreSQL: external profiles](./general.md#postgresql-external-profiles)
-- [PostgreSQL: auth modes](./general.md#postgresql-auth-modes)
+
+### `postgres.md` — PostgreSQL
+
+- [PostgreSQL: bundled profiles](./postgres.md#postgresql-bundled-profiles)
+- [PostgreSQL: external profiles](./postgres.md#postgresql-external-profiles)
+- [PostgreSQL: auth modes](./postgres.md#postgresql-auth-modes)
 
 ### `api.md` — API
 
@@ -38,9 +41,3 @@ Every environment variable, grouped by concern. Source of truth: [`compose/.env.
 - [Demo / dev only](./demo.md#demo-dev-only)
 - [Demo-gateway image vars](./demo.md#demo-gateway-image-vars)
 
-### `ui.md` — UI
-
-- [UI settings presets](./ui.md#ui-settings-presets)
-- [What a preset saves](./ui.md#what-a-preset-saves)
-- [Working with presets](./ui.md#working-with-presets)
-- [File-based sharing](./ui.md#file-based-sharing)
