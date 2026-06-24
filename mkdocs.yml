@@ -100,7 +100,13 @@ nav:
           - guide/install/index.md
           - Docker Compose: guide/install/docker-compose.md
           - Azure (Terraform): guide/install/azure-terraform.md
-      - Configuration: guide/configuration.md
+      - Configuration:
+          - guide/configuration/index.md
+          - General: guide/configuration/general.md
+          - API: guide/configuration/api.md
+          - Fetcher: guide/configuration/fetcher.md
+          - Demo: guide/configuration/demo.md
+          - UI: guide/configuration/ui.md
       - Integrate your CI/CD: guide/send-events.md
       - Architecture overview: guide/architecture-overview.md
       - FAQ & troubleshooting: guide/faq.md

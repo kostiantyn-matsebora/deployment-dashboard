@@ -60,18 +60,32 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Cost](./install/azure-terraform.md#cost)
 - [Networking & security](./install/azure-terraform.md#networking--security)
 
-### `configuration.md`
+### `configuration/` — Configuration
 
-- [Stack version](./configuration.md#stack-version)
-- [API](./configuration.md#api)
-- [PostgreSQL: bundled profiles](./configuration.md#postgresql-bundled-profiles)
-- [PostgreSQL: external profiles](./configuration.md#postgresql-external-profiles)
-- [PostgreSQL: auth modes](./configuration.md#postgresql-auth-modes)
-- [Fetcher: pull mode](./configuration.md#fetcher-pull-mode)
-- [Fetcher: workflow exclude](./configuration.md#github-workflow-exclude)
-- [API: service exclude](./configuration.md#service-scope-filter)
-- [UI settings presets](./configuration.md#ui-settings-presets)
-- [Demo / dev only](./configuration.md#demo-dev-only)
+#### `configuration/general.md` — General
+
+- [Stack version](./configuration/general.md#stack-version)
+- [PostgreSQL: bundled profiles](./configuration/general.md#postgresql-bundled-profiles)
+- [PostgreSQL: external profiles](./configuration/general.md#postgresql-external-profiles)
+- [PostgreSQL: auth modes](./configuration/general.md#postgresql-auth-modes)
+
+#### `configuration/api.md` — API
+
+- [API](./configuration/api.md#api)
+- [API: service exclude](./configuration/api.md#service-scope-filter)
+
+#### `configuration/fetcher.md` — Fetcher
+
+- [Fetcher: pull mode](./configuration/fetcher.md#fetcher-pull-mode)
+- [Fetcher: workflow exclude](./configuration/fetcher.md#github-workflow-exclude)
+
+#### `configuration/demo.md` — Demo
+
+- [Demo / dev only](./configuration/demo.md#demo-dev-only)
+
+#### `configuration/ui.md` — UI
+
+- [UI settings presets](./configuration/ui.md#ui-settings-presets)
 
 ### `send-events.md`
 

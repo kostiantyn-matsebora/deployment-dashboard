@@ -94,7 +94,7 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
 
     </div>
 
-    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration.md#fetcher-pull-mode).
+    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration/fetcher.md#fetcher-pull-mode).
 
     ??? info "GitHub token scope — read-only; the Fetcher never writes"
 
@@ -132,7 +132,7 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
 
     </div>
 
-    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration.md#fetcher-pull-mode).
+    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration/fetcher.md#fetcher-pull-mode).
 
     ??? info "GitHub token scope — read-only; the Fetcher never writes"
 

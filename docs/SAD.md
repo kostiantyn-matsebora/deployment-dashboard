@@ -87,7 +87,7 @@ The project is a **microservices architecture** — Write API, Read API, Fetcher
 
 > 2. **Separation of concerns (CQRS) consolidation in container** write and read api separated as two different components but consolidated as container.
 
-> 3. **Passwordless Postgres auth (managed identity).** For the Azure cloud target (NFR-01 / NFR-06), the stack auto-detects auth mode from credential presence: omit `POSTGRES_PASSWORD` and the API authenticates as its ambient Azure Workload / Managed Identity, obtaining a short-lived access token at connection time refreshed transparently — no static password in the environment. Set `POSTGRES_PASSWORD` to use static credentials (default for local Compose, CI, and tests). The seam is provider-agnostic. See [Configuration — PostgreSQL: auth modes](guide/configuration.md#postgresql-auth-modes).
+> 3. **Passwordless Postgres auth (managed identity).** For the Azure cloud target (NFR-01 / NFR-06), the stack auto-detects auth mode from credential presence: omit `POSTGRES_PASSWORD` and the API authenticates as its ambient Azure Workload / Managed Identity, obtaining a short-lived access token at connection time refreshed transparently — no static password in the environment. Set `POSTGRES_PASSWORD` to use static credentials (default for local Compose, CI, and tests). The seam is provider-agnostic. See [Configuration — PostgreSQL: auth modes](guide/configuration/general.md#postgresql-auth-modes).
 
 
 ---
