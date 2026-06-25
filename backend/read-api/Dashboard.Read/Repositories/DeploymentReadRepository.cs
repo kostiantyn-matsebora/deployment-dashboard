@@ -4,12 +4,25 @@ using Dashboard.Read.Queries;
 using Dashboard.Shared.Contracts;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Read.Repositories;
 
-internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploymentReadRepository
+internal sealed class DeploymentReadRepository(
+    DashboardDbContext db,
+    ServiceFilter serviceFilter) : IDeploymentReadRepository
 {
+    // When a service filter is active, we need more rows per round-trip than the
+    // requested limit because some rows will be filtered out in memory.  This
+    // multiplier gives headroom without materialising the whole table.
+    private const int FilteredHeadroomMultiplier = 4;
+
+    // S3776/S1541: The two-path structure (fast-path vs. windowed-loop) and the six
+    // per-query DB filters combine to push complexity above the threshold.  Both code
+    // paths are independently simple; the complexity is structural and irreducible.
+    [SuppressMessage("SonarAnalyzer", "S3776", Justification = "Fast-path + windowed-loop pagination: structural complexity is irreducible without breaking LINQ-to-SQL translation.")]
+    [SuppressMessage("SonarAnalyzer", "S1541", Justification = "Fast-path + windowed-loop pagination: structural complexity is irreducible without breaking LINQ-to-SQL translation.")]
     public async Task<(IReadOnlyList<DeploymentEvent> Items, string? NextCursor)> ListAsync(
         DeploymentListQuery query, CancellationToken ct)
     {
@@ -22,48 +35,111 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
         if (query.Since.HasValue) q = q.Where(e => e.HappenedAt >= query.Since.Value);
         if (query.Until.HasValue) q = q.Where(e => e.HappenedAt < query.Until.Value);
 
+        DateTimeOffset? initialCursorAt = null;
         if (query.Cursor is not null && CursorCodec.TryDecode(query.Cursor, out var cursor))
         {
             // Seek to events that come after the cursor in the happened_at DESC ordering.
             // The cursor's id is encoded for future id-level tiebreaking; for now we use
             // happened_at only. Same-second events at a page boundary are an acceptable
             // edge case for emitter-supplied CI/CD timestamps.
-            var cursorAt = cursor.HappenedAt;
-            q = q.Where(e => e.HappenedAt < cursorAt);
+            initialCursorAt = cursor.HappenedAt;
         }
 
-        q = q.OrderByDescending(e => e.HappenedAt).ThenByDescending(e => e.Id);
+        var orderedBase = q.OrderByDescending(e => e.HappenedAt).ThenByDescending(e => e.Id);
 
-        // Fetch limit + 1 to detect whether a next page exists.
-        var items = await q.Take(query.Limit + 1).ToListAsync(ct);
+        // Fast-path: when no service filter is active every DB row passes — fetch
+        // exactly limit+1 rows in one round-trip (original single-query behaviour).
+        if (serviceFilter.IsEmpty)
+        {
+            var fastQ = initialCursorAt.HasValue
+                ? orderedBase.Where(e => e.HappenedAt < initialCursorAt.Value)
+                : orderedBase;
+            var raw = await fastQ.Take(query.Limit + 1).ToListAsync(ct);
+
+            string? nextCursorFast = null;
+            IReadOnlyList<DeploymentEvent> pageFast;
+            if (raw.Count > query.Limit)
+            {
+                var lastReturned = raw[query.Limit - 1];
+                nextCursorFast = CursorCodec.Encode(lastReturned.HappenedAt, lastReturned.Id);
+                pageFast = raw.Take(query.Limit).ToList();
+            }
+            else
+            {
+                pageFast = raw;
+            }
+            return (pageFast, nextCursorFast);
+        }
+
+        // Active-filter path: fetch bounded windows and apply the in-memory glob filter
+        // until limit+1 filtered rows are collected or the source is exhausted.
+        // Each window uses the keyset cursor (happened_at < seekAt) so we never
+        // re-materialise rows we already processed.
+        var filtered = new List<DeploymentEvent>(query.Limit + 1);
+        var windowSize = (query.Limit + 1) * FilteredHeadroomMultiplier;
+        var seekAt = initialCursorAt;
+
+        while (filtered.Count <= query.Limit)
+        {
+            var windowQ = seekAt.HasValue
+                ? orderedBase.Where(e => e.HappenedAt < seekAt.Value)
+                : orderedBase;
+
+            var window = await windowQ.Take(windowSize).ToListAsync(ct);
+            if (window.Count == 0)
+                break; // source exhausted
+
+            foreach (var ev in window)
+            {
+                if (serviceFilter.Permits(ev.Service, ev.Namespace))
+                    filtered.Add(ev);
+
+                if (filtered.Count > query.Limit)
+                    break;
+            }
+
+            if (window.Count < windowSize)
+                break; // source exhausted (last window was partial)
+
+            // Advance the keyset cursor to the last row of this window so the next
+            // iteration starts strictly after it — preserving happened_at DESC ordering.
+            seekAt = window[^1].HappenedAt;
+        }
 
         string? nextCursor = null;
-        if (items.Count > query.Limit)
+        IReadOnlyList<DeploymentEvent> page;
+        if (filtered.Count > query.Limit)
         {
-            items.RemoveAt(items.Count - 1);
-            var last = items[^1];
-            nextCursor = CursorCodec.Encode(last.HappenedAt, last.Id);
+            // Encode cursor from the last item that IS returned (index Limit-1),
+            // so the next page seeks to HappenedAt < that item's timestamp.
+            var lastReturned = filtered[query.Limit - 1];
+            nextCursor = CursorCodec.Encode(lastReturned.HappenedAt, lastReturned.Id);
+            page = filtered.Take(query.Limit).ToList();
+        }
+        else
+        {
+            page = filtered;
         }
 
-        return (items, nextCursor);
+        return (page, nextCursor);
     }
 
     public async Task<DeploymentEvent?> GetByIdAsync(Guid id, CancellationToken ct)
         => await db.DeploymentEvents.FindAsync([id], ct);
 
     public Task<IReadOnlyList<DeploymentEvent>> GetEffectivePerSlotAsync(
-        string? serviceFilter, CancellationToken ct)
+        string? slotServiceFilter, CancellationToken ct)
         // Effective = in-progress | success | failure. Latest effective per slot.
         => LatestPerSlotByStatusAsync(
-            serviceFilter,
+            slotServiceFilter,
             [DeploymentStatus.InProgress, DeploymentStatus.Success, DeploymentStatus.Failure],
             ct);
 
     public Task<IReadOnlyList<DeploymentEvent>> GetLatestNonEffectivePerSlotAsync(
-        string? serviceFilter, CancellationToken ct)
+        string? slotServiceFilter, CancellationToken ct)
         // Non-effective = pending | queued | waiting | cancelled | rejected. Latest per slot.
         => LatestPerSlotByStatusAsync(
-            serviceFilter,
+            slotServiceFilter,
             [
                 DeploymentStatus.Pending, DeploymentStatus.Queued, DeploymentStatus.Waiting,
                 DeploymentStatus.Cancelled, DeploymentStatus.Rejected,
@@ -71,9 +147,9 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
             ct);
 
     public Task<IReadOnlyList<DeploymentEvent>> GetLastSuccessfulPerSlotAsync(
-        string? serviceFilter, CancellationToken ct)
+        string? slotServiceFilter, CancellationToken ct)
         // Last successful per slot.
-        => LatestPerSlotByStatusAsync(serviceFilter, [DeploymentStatus.Success], ct);
+        => LatestPerSlotByStatusAsync(slotServiceFilter, [DeploymentStatus.Success], ct);
 
     // S1541: The correlated NOT-EXISTS pattern requires checking (a) latest terminal per slot
     // and (b) latest effective event in-progress above it — two nested existence sub-queries
@@ -81,11 +157,11 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
     // translation.  Cyclomatic complexity is irreducible for this query shape.
     [SuppressMessage("SonarAnalyzer", "S1541", Justification = "Correlated NOT-EXISTS sub-queries for prev_failed rule: cyclomatic complexity is irreducible without breaking LINQ-to-SQL translation.")]
     public async Task<IReadOnlyList<DeploymentEvent>> GetLatestTerminalBeforeCurrentPerSlotAsync(
-        string? serviceFilter, CancellationToken ct)
+        string? slotServiceFilter, CancellationToken ct)
     {
         var q = db.DeploymentEvents.AsQueryable();
-        if (serviceFilter is not null)
-            q = q.Where(e => e.Service == serviceFilter);
+        if (slotServiceFilter is not null)
+            q = q.Where(e => e.Service == slotServiceFilter);
 
         // Terminal = success | failure.
         var terminalStatuses = new[] { DeploymentStatus.Success, DeploymentStatus.Failure };
@@ -123,16 +199,29 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
                                 e3.HappenedAt > e2.HappenedAt)))
             .ToListAsync(ct);
 
-        // In-memory tiebreak: keep the event with the greatest Id per slot.
-        return LatestPerSlot(rawTerminal);
+        // Apply deployment-wide filter then tiebreak per slot.
+        var slotFiltered = ApplyDeploymentWideFilter(rawTerminal);
+        return LatestPerSlot(slotFiltered);
     }
 
     public async Task<IReadOnlyList<string>> GetDistinctServicesAsync(CancellationToken ct)
-        => await db.DeploymentEvents
-            .Select(e => e.Service)
+    {
+        var all = await db.DeploymentEvents
+            .Select(e => new { e.Service, e.Namespace })
             .Distinct()
-            .OrderBy(s => s)
+            .OrderBy(x => x.Service)
             .ToListAsync(ct);
+
+        // Apply deployment-wide filter: include only service names where at least one
+        // (service, namespace) combination passes the filter. Deduplicate after filtering
+        // so a name visible under one namespace is not hidden if another namespace is excluded.
+        return all
+            .Where(x => serviceFilter.Permits(x.Service, x.Namespace))
+            .Select(x => x.Service)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(s => s, StringComparer.Ordinal)
+            .ToList();
+    }
 
     public async Task<IReadOnlyList<string>> GetDistinctEnvironmentsAsync(CancellationToken ct)
         => await db.DeploymentEvents
@@ -142,7 +231,7 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<DeploymentEvent>> GetSinceAsync(
-        Guid lastId, string? serviceFilter, CancellationToken ct)
+        Guid lastId, string? slotServiceFilter, CancellationToken ct)
     {
         // EF Core cannot express `uuid > @lastId` via LINQ (Guid has no > operator).
         // FromSqlInterpolated produces a safe parameterised query; Postgres uuid > operator
@@ -150,27 +239,26 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
         var q = db.DeploymentEvents
             .FromSqlInterpolated($"SELECT * FROM deployment_events WHERE id > {lastId}");
 
-        if (serviceFilter is not null)
-            q = q.Where(e => e.Service == serviceFilter);
+        if (slotServiceFilter is not null)
+            q = q.Where(e => e.Service == slotServiceFilter);
 
-        return await q.OrderBy(e => e.Id).ToListAsync(ct);
+        var raw = await q.OrderBy(e => e.Id).ToListAsync(ct);
+        return ApplyDeploymentWideFilter(raw);
     }
 
-    /// <summary>
-    /// In-memory tiebreak: given multiple events per slot (same max happened_at),
-    /// keep the one with the greatest Id (most recently inserted UUIDv7).
-    /// </summary>
+    // ── private helpers ───────────────────────────────────────────────────────
+
     /// <summary>
     /// Latest event per slot whose status is in <paramref name="statuses"/>: the row for which
     /// no newer same-set event exists in the same (service, environment) slot. The correlated
     /// NOT EXISTS translates to SQL on both Postgres and SQLite.
     /// </summary>
     private async Task<IReadOnlyList<DeploymentEvent>> LatestPerSlotByStatusAsync(
-        string? serviceFilter, string[] statuses, CancellationToken ct)
+        string? slotServiceFilter, string[] statuses, CancellationToken ct)
     {
         var q = db.DeploymentEvents.AsQueryable();
-        if (serviceFilter is not null)
-            q = q.Where(e => e.Service == serviceFilter);
+        if (slotServiceFilter is not null)
+            q = q.Where(e => e.Service == slotServiceFilter);
 
         var raw = await q
             .Where(e => statuses.Contains(e.Status) &&
@@ -182,9 +270,17 @@ internal sealed class DeploymentReadRepository(DashboardDbContext db) : IDeploym
                             e2.HappenedAt > e.HappenedAt))
             .ToListAsync(ct);
 
-        return LatestPerSlot(raw);
+        var filtered = ApplyDeploymentWideFilter(raw);
+        return LatestPerSlot(filtered);
     }
 
+    private List<DeploymentEvent> ApplyDeploymentWideFilter(List<DeploymentEvent> events) =>
+        events.Where(e => serviceFilter.Permits(e.Service, e.Namespace)).ToList();
+
+    /// <summary>
+    /// In-memory tiebreak: given multiple events per slot (same max happened_at),
+    /// keep the one with the greatest Id (most recently inserted UUIDv7).
+    /// </summary>
     private static IReadOnlyList<DeploymentEvent> LatestPerSlot(List<DeploymentEvent> raw) =>
         raw
             .GroupBy(e => (e.Namespace, e.Service, e.Environment))

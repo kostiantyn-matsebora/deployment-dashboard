@@ -41,10 +41,7 @@ jobs:
         run: npm run build
 
       - name: Package extension
-        shell: pwsh
-        run: |
-          & ../../scripts/Package-Extension.ps1 -DistPath dist -OutputDir dist-zips
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: python3 ../../scripts/package_extension.py --dist-path dist --output-dir dist-zips
 
       - name: Upload extension zips
         uses: actions/upload-artifact@v7
@@ -52,3 +49,48 @@ jobs:
           name: extension-zips
           path: frontend/extension/dist-zips/*.zip
           if-no-files-found: error
+
+  # ── Extension E2E ────────────────────────────────────────────────────────────
+  e2e:
+    name: Extension E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Image ships Chromium pre-installed at the matching Playwright version —
+    # no cdn.playwright.dev download needed; bundled Chromium can side-load
+    # an unpacked MV3 extension (branded Chrome dropped --load-extension in v137).
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            testing/e2e/package-lock.json
+            frontend/mock/package-lock.json
+            frontend/extension/package-lock.json
+
+      - name: Install (e2e)
+        run: npm ci
+        working-directory: testing/e2e
+
+      - name: Install (mock)
+        # --legacy-peer-deps: frontend/mock lockfile has a pre-existing NestJS peer-dep
+        # mismatch (@nestjs/common vs @nestjs/core minor version skew) that causes npm ci
+        # to abort with ERESOLVE. The flag suppresses the conflict without altering the
+        # installed tree; all other Install steps install cleanly without it.
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend/mock
+
+      - name: Install (extension)
+        run: npm ci
+        working-directory: frontend/extension
+
+      - name: Run extension E2E
+        env:
+          CI: '1'
+        run: xvfb-run npm --prefix testing/e2e run test:extension

@@ -8,7 +8,7 @@ Documentation writer + hierarchical indexer + sources-of-truth registrar — sta
 - **Emit the typed form verbatim** — `RESULT` (authoring) / `REVIEW` (reviewing) / `FINDING` (blocked); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
 - **Hand back in one command:**
   1. Write rough form JSON to a temp file.
-  2. `pwsh -NoProfile -File scripts/hooks/Format-ProtocolForm.ps1 -InputFile <file> -OutboxDir <outbox path from your BRIEF>` — validates, writes `<role>.<TYPE>.json` to outbox, prints `{ type, ref }` pointer.
+  2. `python3 scripts/hooks/format_protocol_form.py --input-file <file> --outbox-dir <outbox path from your BRIEF>` — validates, writes `<role>.<TYPE>.json` to outbox, prints `{ type, ref }` pointer.
   3. Send stdout **VERBATIM**. No separate outbox Write; no hand-authored pointer.
 - **Walk the full bar before hand-back** — every touched doc vs the authoring rules; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm** — a fix must not introduce a new authoring-rule violation; re-check the whole changed file.

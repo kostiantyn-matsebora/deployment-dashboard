@@ -10,6 +10,7 @@ using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
 using Dashboard.Fetcher.GitHub.Version;
 using Dashboard.Shared.Contracts;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dashboard.Fetcher.Tests.Backfill;
@@ -815,11 +816,13 @@ public sealed class BackfillRunnerV2Tests
         var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
         var status = MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24);
 
-        // Run has a run-name override ("Release v1.2.3") but path maps to "Release API".
+        // Run has a run-name override ("Release v1.2.3") but WorkflowId 1 maps to "Release API".
+        // Under F12 / §5.6.2 the stable identity comes from GET /actions/workflows/{workflow_id}.
         var workflowRun = new GhWorkflowRun
         {
             Id = RunId,
-            Name = "Release v1.2.3",   // run-name: override
+            WorkflowId = 1,            // links to the "Release API" workflow definition
+            Name = "Release v1.2.3",   // run-name: override — must NOT win over workflow name
             Path = ".github/workflows/release.yml",
             HeadSha = "abc0001"
         };
@@ -959,6 +962,76 @@ public sealed class BackfillRunnerV2Tests
         Assert.Equal(statusSuccess.CreatedAt, cursor.Repos[FullRepo].Since);
     }
 
+    // ── Remark 3: filtered service counts as no-progress for stall/early-exit ──
+
+    /// <summary>
+    /// A repo whose deployments ALL resolve to an excluded service must halt at the
+    /// stall window (StallWindow=20 consecutive no-progress hits) rather than scanning
+    /// all the way to the cutoff date.
+    ///
+    /// Setup:
+    ///   - One active workflow "Deploy API" → service name "Deploy API".
+    ///   - SERVICE_EXCLUDE = "Deploy API" → every deployment is filtered out.
+    ///   - 22 deployments in window (StallWindow=20): the scan must break after
+    ///     20 filtered-out deployments and never reach deploy 21 or 22's status URLs.
+    ///
+    /// Under the old code (no bump for filtered): consecutiveNoProgress never advanced
+    /// for filtered deployments → scan ran to the cutoff date → regression.
+    /// Under the fixed code: each filtered deployment bumps consecutiveNoProgress → stall
+    /// fires after 20 hits → deploy 21 is never status-fetched.
+    /// </summary>
+    [Fact]
+    public async Task FilteredService_CountsAsNoProgress_StallsAtStallWindow()
+    {
+        // All deployments resolve to "Deploy API", which is in the exclude list.
+        // 22 deployments: stall fires after 20 → deploy 21 and 22 must never be status-fetched.
+        const long runBase = 100L;
+
+        var allDeploys = Enumerable.Range(1, 22)
+            .Select(i => MakeDeployment(id: i, env: "prod", daysAgo: i))
+            .ToList();
+
+        var statusesById = new Dictionary<long, List<GhDeploymentStatus>>();
+        foreach (var d in allDeploys)
+            statusesById[d.Id] = [MakeStatus(deployId: d.Id, state: "success", runId: runBase + d.Id, hoursAgo: (int)(d.Id * 24))];
+
+        var urlMap = BuildUrlMap(
+            workflows: [MakeWorkflow("Deploy API")],
+            environments: ["prod"],
+            deploymentsPerEnv: new Dictionary<string, List<GhDeployment>>
+            {
+                ["prod"] = allDeploys,
+            },
+            statusesById: statusesById,
+            workflowRunId: runBase + 1);
+
+        // Register run metadata for all deployments so service resolution works.
+        for (var i = 1; i <= 22; i++)
+            urlMap[$"/repos/{Owner}/{Repo}/actions/runs/{runBase + i}"] =
+                new GhWorkflowRun { Id = runBase + i, Name = "Deploy API", Path = ".github/workflows/deploy.yml", HeadSha = "abc" };
+
+        var handler = new CountingFakeGithubHandler(urlMap);
+
+        // Build runner with GITHUB_WORKFLOW_EXCLUDE = "Deploy API": every deployment is filtered out.
+        var (runner, _) = BuildRunnerWithFilter(
+            handler,
+            workflowExcludeFilter: WorkflowExcludeFilter.Parse("Deploy API"),
+            depth: 1);
+
+        var (events, _) = await DrainAsync(runner);
+
+        // No events emitted: all deployments are excluded.
+        Assert.Empty(events);
+
+        // Deploy 21's statuses must have been fetched (it is the 21st hit; stall fires after 20).
+        // Deploy 22's statuses must NEVER have been fetched (stall fires after deploy 20's
+        // status fetch, so deploy 21 IS checked but stops the loop — deploy 22 is never reached).
+        // With 0-based indexing: deploys 1-20 → 20 no-progress hits → stall fires → deploy 21
+        // is processed (stall check is BEFORE the filter) → stall breaks; deploy 22 never reached.
+        var statusUrlForDeploy22 = $"/repos/{Owner}/{Repo}/deployments/22/statuses";
+        Assert.DoesNotContain(handler.Calls, c => c.StartsWith(statusUrlForDeploy22));
+    }
+
     // ── infrastructure ────────────────────────────────────────────────────────
 
     private static GhDeployment MakeDeployment(long id, string env, int daysAgo) =>
@@ -1053,7 +1126,7 @@ public sealed class BackfillRunnerV2Tests
             """;
         var yamlBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(yaml));
 
-        return new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             [$"/repos/{Owner}/{Repo}/actions/workflows"] = new GhWorkflowListResponse { Workflows = [workflow] },
             [$"/repos/{Owner}/{Repo}/environments"] = new GhEnvironmentListResponse
@@ -1069,6 +1142,13 @@ public sealed class BackfillRunnerV2Tests
                 Encoding = "base64",
             },
         };
+
+        // Also register the per-id workflow endpoint (§5.6.2 F12): identity now comes from
+        // GET /actions/workflows/{workflow_id} rather than the YAML name: field.
+        if (run.WorkflowId != 0)
+            map[$"/repos/{Owner}/{Repo}/actions/workflows/{run.WorkflowId}"] = workflow;
+
+        return map;
     }
 
     // ── compatibility helper: collect all chunks into the old tuple shape ────
@@ -1119,7 +1199,55 @@ public sealed class BackfillRunnerV2Tests
 
         var eventBuilder = new BackfillEventBuilder(
             githubClient, graphCache, versionResolver,
-            NullLogger<BackfillEventBuilder>.Instance);
+            WorkflowExcludeFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
+
+        var runner = new BackfillRunner(
+            githubClient,
+            adapterOptions,
+            fetcherOptions,
+            eventBuilder,
+            NullLogger<BackfillRunner>.Instance);
+
+        return (runner, graphCache);
+    }
+
+    /// <summary>
+    /// Variant of <see cref="BuildRunner"/> that injects a custom <see cref="WorkflowExcludeFilter"/>
+    /// so tests can exercise the stall-counter behaviour for excluded workflows.
+    /// </summary>
+    private static (BackfillRunner Runner, WorkflowGraphCache GraphCache) BuildRunnerWithFilter(
+        HttpMessageHandler handler, WorkflowExcludeFilter workflowExcludeFilter, int depth = 2)
+    {
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
+
+        var rateLimitBudget = RateLimitBudget.CreateAsync(
+            httpClient, configuredLimit: 5000, budgetPct: 100,
+            NullLogger<RateLimitBudget>.Instance, default).GetAwaiter().GetResult();
+
+        var githubClient = new GithubClient(httpClient, rateLimitBudget);
+        var graphCache = new WorkflowGraphCache();
+
+        var adapterOptions = new GithubAdapterOptions
+        {
+            Repos = FullRepo,
+            VersionSource = "attribute:sha",
+        };
+
+        var fetcherOptions = new FetcherOptions
+        {
+            InitialLookback = TimeSpan.FromDays(30),
+            BackfillMaxAge = TimeSpan.FromDays(30),
+            BackfillDepth = depth,
+        };
+
+        var versionResolver = new VersionResolver(
+            VersionSourceConfig.Default,
+            graphCache,
+            githubClient);
+
+        var eventBuilder = new BackfillEventBuilder(
+            githubClient, graphCache, versionResolver,
+            workflowExcludeFilter, NullLogger<BackfillEventBuilder>.Instance);
 
         var runner = new BackfillRunner(
             githubClient,

@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'scripts/**/*.ps1'
+      - 'scripts/**/*.py'
+      - 'scripts/**/pyproject.toml'
       - 'scripts/**/*.sh'
       - 'scripts/**/*.bats'
       - '.github/workflows/scripts.yml'
@@ -13,7 +14,7 @@ on:
 
 jobs:
   scripts-check:
-    name: Lint and test PowerShell scripts
+    name: Lint and test scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -50,42 +51,23 @@ jobs:
           fi
           bats --tap "${suites[@]}"
 
-      - name: Install modules
-        shell: pwsh
-        run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          Install-Module Pester -MinimumVersion 5.0.0 -Force -Scope CurrentUser
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Lint
-        shell: pwsh
-        run: |
-          $files = Get-ChildItem -Path scripts/ -Recurse -Filter '*.ps1' |
-            Where-Object { $_.Name -notlike '*.Tests.ps1' }
-          $results = $files | ForEach-Object {
-            Invoke-ScriptAnalyzer -Path $_.FullName -Severity Error,Warning `
-              -Settings scripts/PSScriptAnalyzerSettings.psd1
-          }
-          if ($results) {
-            $results | Format-Table -AutoSize
-            exit 1
-          }
+      - name: Install Python dependencies
+        run: pip install pytest ruff jsonschema
 
-      - name: Test
-        shell: pwsh
-        run: |
-          $cfg = New-PesterConfiguration
-          $cfg.Run.Path = 'scripts/'
-          $cfg.TestResult.Enabled = $true
-          $cfg.TestResult.OutputPath = 'pester-results.xml'
-          $cfg.TestResult.OutputFormat = 'NUnitXml'
-          $cfg.Output.Verbosity = 'Detailed'
-          $result = Invoke-Pester -Configuration $cfg
-          exit $result.FailedCount
+      - name: Lint (ruff)
+        run: ruff check scripts/
+
+      - name: Test (pytest)
+        run: python -m pytest scripts/ -q --junitxml=pytest-results.xml
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pester-results
-          path: pester-results.xml
+          name: pytest-results
+          path: pytest-results.xml

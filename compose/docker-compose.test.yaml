@@ -56,6 +56,14 @@ services:
       # CSV replaces the whole expected-components set (no index-overlay footgun).
       RESET_EXPECTED_COMPONENTS: "api-test-reset"
       RESET_GATE_MAX_TTL_SECONDS: "15"
+      # ── SERVICE_EXCLUDE (issue #348) — black-box integration sentinels ────────
+      # Two synthetic patterns that no demo dataset, driver, emulator, or other
+      # spec ever emits.  Verified by grep: zero matches across the whole repo
+      # before this commit.
+      #   "svc-exclude-probe"   — slashless pattern (service across all namespaces)
+      #   "probe-ns/probe-*"    — composite glob (namespace/service)
+      # The test suite in service-exclude.spec.ts expects these exact values.
+      SERVICE_EXCLUDE: "svc-exclude-probe,probe-ns/probe-*"
 
   github-emulator:
     environment:

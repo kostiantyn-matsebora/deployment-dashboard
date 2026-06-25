@@ -20,6 +20,7 @@ Post one event whenever a deployment changes state. A typical deployment emits t
 |---|---|---|---|
 | `deployment_id` | **yes** | string | Correlation key grouping the rows of one logical deployment (e.g. a run id). **Not** a uniqueness key. |
 | `service` | **yes** | string | Service name (matrix row). |
+| `namespace` | no | string | Optional grouping segment that scopes `service` — typically the repository or project the service lives in (the repo half of a GitHub `owner/repo`, e.g. `acme/api` → `api`). Same `service` under two namespaces ⇒ two distinct matrix rows, labelled `namespace/service`. Omit ⇒ rows render unprefixed. |
 | `environment` | **yes** | string | Environment name (matrix column), e.g. `dev`, `prod`. |
 | `status` | **yes** | enum | `in-progress` \| `success` \| `failure`. |
 | `happened_at` | **yes** | string | RFC 3339 UTC timestamp of when the state changed **on the CI/CD side** (not when the dashboard received it). |
@@ -60,6 +61,7 @@ curl -fsS -X POST "$DASHBOARD_URL/api/deployments" \
   -d '{
     "deployment_id": "'"$RUN_ID"'",
     "service": "checkout",
+    "namespace": "storefront",
     "environment": "prod",
     "version": "'"$VERSION"'",
     "status": "success",
@@ -83,6 +85,7 @@ Add a step at the end of your deploy job (and optionally one at the start with `
             -d '{
               "deployment_id": "gh-${{ github.run_id }}",
               "service": "checkout",
+              "namespace": "${{ github.event.repository.name }}",
               "environment": "prod",
               "version": "${{ github.sha }}",
               "status": "${{ job.status == 'success' && 'success' || 'failure' }}",
@@ -95,7 +98,7 @@ Add a step at the end of your deploy job (and optionally one at the start with `
             }'
 ```
 
-> Prefer pull mode over editing every workflow? The optional **Fetcher** polls the GitHub Actions API and posts for you — see [Install § pull mode](./install.md#deployment-shapes) and the [Fetcher spec](../FETCHER_SPECIFICATION.md).
+> Prefer pull mode over editing every workflow? The optional **Fetcher** polls the GitHub Actions API and posts for you — see [Install § pull mode](./install/index.md#deployment-shapes) and the [Fetcher spec](../FETCHER_SPECIFICATION.md).
 
 ### Azure DevOps Pipelines
 
@@ -112,6 +115,7 @@ Add a step at the end of your deploy job (and optionally one at the start with `
         -d '{
           "deployment_id": "ado-$(Build.BuildId)",
           "service": "checkout",
+          "namespace": "$(Build.Repository.Name)",
           "environment": "prod",
           "version": "$(Build.SourceVersion)",
           "status": "success",
@@ -135,6 +139,7 @@ notify_dashboard:
         -d "{
           \"deployment_id\": \"gl-$CI_PIPELINE_ID\",
           \"service\": \"checkout\",
+          \"namespace\": \"$CI_PROJECT_NAME\",
           \"environment\": \"prod\",
           \"version\": \"$CI_COMMIT_SHORT_SHA\",
           \"status\": \"success\",
@@ -156,6 +161,7 @@ post {
         -d '{
           "deployment_id": "jenkins-'"$BUILD_TAG"'",
           "service": "checkout",
+          "namespace": "storefront",
           "environment": "prod",
           "version": "'"$GIT_COMMIT"'",
           "status": "success",

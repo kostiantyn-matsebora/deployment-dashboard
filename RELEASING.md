@@ -29,13 +29,13 @@ All images are published to `ghcr.io/kostiantyn-matsebora/<image-name>`.
 
 2. **Run the prep script** from the repo root on `main` with a clean working tree:
 
-   ```powershell
-   pwsh scripts/release/New-Release.ps1 -Bump minor
+   ```bash
+   python3 scripts/release/new_release.py --bump minor
    ```
 
-   - `-Bump` choices: `major`, `minor`, `patch`. Use whichever matches the scope of the changes.
-   - `-Version X.Y.Z` overrides the bump calculation for an explicit version (no leading `v`).
-   - `-DryRun` previews without mutating anything.
+   - `--bump` choices: `major`, `minor`, `patch`. Use whichever matches the scope of the changes.
+   - `--version X.Y.Z` overrides the bump calculation for an explicit version (no leading `v`).
+   - `--dry-run` previews without mutating anything.
 
    The script validates a clean tree on `main` with no existing tag, renames `## [Unreleased]` to `## [X.Y.Z] - <date>`, inserts a fresh empty `## [Unreleased]` above it, creates a `release/vX.Y.Z` branch, commits `chore(release): vX.Y.Z`, pushes, and opens a PR.
 

@@ -7,6 +7,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.19.0] - 2026-06-25
+
+### Changed
+
+- **Fetcher decouples service identity from `Contents:read` — the permission is now opt-in (#389).** Service identity now resolves from the GitHub Actions API (`GET /actions/workflows/{workflow_id}`, which needs only `Actions:read` and is always available), so the workflow-contents fetch that builds the `needs` graph is best-effort and gated on `Contents:read`. A token without `Contents:read` gets a 403 on that fetch, which now degrades `parent_deployments` to `[]` instead of degrading identity: the Matrix stays full-fidelity and Swimlanes falls back to non-explicit correlation. Adopters can run with a narrower fine-grained PAT (Actions:read only) and still get full service identity — see the two-tier PAT token tables in the Docker Compose install guide.
+
+### Security
+
+- **Demo runtime images no longer bundle npm (CVE-2026-12151) (#387).** The `node:lts-alpine` base image ships a global npm whose vendored `undici` tripped the release Trivy gate on HIGH CVE-2026-12151 (undici DoS). The demo-driver and github-emulator images run via `node dist/main` and need npm only at build time, so it is now removed from the runtime stage after the production install — the apps run unchanged and the bundled-undici CVE is gone.
+
+
+## [0.18.0] - 2026-06-23
+
+### Added
+
+- **UI settings presets — save, apply, and share named UI configurations (#357).** Capture the dashboard's UI settings (theme, notification preferences, active view, service/environment filters, failures-only, visible fields, column order/visibility, swimlane collapse/auto-scroll, time window, and correlation) into named presets stored in the browser. Save the current state as a preset, apply one with a click (it writes through to the live settings, so the board updates immediately and stays editable), update a preset in place, or clone, rename, and delete it — and a Reset all settings action restores every setting to its default. Presets export to and import from per-preset JSON files (`dd-preset-<slug>.json`), so a configuration is portable and shareable: commit the file to a repo or send it to a teammate, who imports it — nothing is fetched or stored server-side. The list marks which preset was applied last. Fully client-side and backward compatible: with no presets saved, behavior is identical to before.
+
+### Changed
+
+- **Scripts tree ported from PowerShell to Python.** All scripts under `scripts/` are now Python 3 (stdlib-only runtime); test suites use pytest (sibling `*_test.py` files); lint runs via ruff (`scripts/pyproject.toml`). The `jsonschema` pip package is required for team-mode guard tests. Invocation form changed from `pwsh -NoProfile -File <path>.ps1 -PascalSwitch` to `python3 <path>.py --kebab-flags`. CI (`_scripts` workflow), docs, and CONTRIBUTING.md updated accordingly. The bash bootstrap exception (`scripts/hooks/install-dependencies.sh`) now installs the Python toolchain instead of PowerShell.
+
+
 ## [0.17.0] - 2026-06-19
 
 ### Added

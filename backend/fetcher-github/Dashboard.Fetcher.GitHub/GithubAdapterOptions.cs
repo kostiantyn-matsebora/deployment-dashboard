@@ -6,7 +6,11 @@ public sealed class GithubAdapterOptions
     public string BaseUrl { get; set; } = "https://api.github.com";
     public string Token { get; set; } = "";
 
-    /// <summary>Comma-separated "owner/repo" values.</summary>
+    /// <summary>
+    /// Comma-separated repo specifiers. Supports exact <c>owner/repo</c>, owner-wildcard
+    /// <c>owner/*</c>, and bare <c>*</c> (all accessible repos). Empty = no repos / no polling.
+    /// Globs are expanded at startup via the GitHub API (list repos).
+    /// </summary>
     public string Repos { get; set; } = "";
 
     /// <summary>
@@ -30,10 +34,36 @@ public sealed class GithubAdapterOptions
     /// </summary>
     public TimeSpan BackfillMaxAge { get; set; } = TimeSpan.Zero;
 
+    // ── workflow exclude filter (GitHub-specific) ─────────────────────────────
+
+    /// <summary>
+    /// CSV of <c>owner/repo/workflow</c> glob patterns. Matching workflows are never ingested.
+    /// Empty = exclude nothing. Bound from <c>GITHUB_WORKFLOW_EXCLUDE</c> env var.
+    /// </summary>
+    public string WorkflowExclude { get; set; } = "";
+
+    /// <summary>Builds the <see cref="WorkflowExcludeFilter"/> from the <c>WorkflowExclude</c> CSV.</summary>
+    public WorkflowExcludeFilter BuildWorkflowExcludeFilter() => WorkflowExcludeFilter.Parse(WorkflowExclude);
+
     // ── derived helpers ───────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Returns the raw repo specifiers (possibly containing globs). Exact <c>owner/repo</c>
+    /// entries need no discovery; entries containing <c>*</c> are expanded at startup.
+    /// An empty string yields an empty list — meaning no repos and no polling.
+    /// </summary>
+    public IReadOnlyList<string> RepoSpecs =>
+        string.IsNullOrWhiteSpace(Repos)
+            ? []
+            : Repos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                   .ToList();
+
+    /// <summary>
+    /// Returns only the exact <c>owner/repo</c> specifiers (no glob characters).
+    /// These are used directly without GitHub API discovery.
+    /// </summary>
     public IReadOnlyList<string> RepoList =>
-        Repos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        RepoSpecs.Where(s => !s.Contains('*')).ToList();
 
     public IReadOnlyDictionary<string, string> ServiceMapDict =>
         ServiceMap

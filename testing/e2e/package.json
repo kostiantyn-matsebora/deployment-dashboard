@@ -6,13 +6,15 @@
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
-    "test:headed": "playwright test --headed"
+    "test:headed": "playwright test --headed",
+    "test:extension": "playwright test --config=playwright.extension.config.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@playwright/test": "^1.60.0"
+    "@playwright/test": "1.56.1",
+    "@types/node": "^26.0.0"
   }
 }

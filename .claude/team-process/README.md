@@ -4,12 +4,16 @@ Portable orchestration framework: one lead, N role-specialists, any stack. Defin
 
 **Core** (`process.md` · `protocol.md` · `guardrails.md` · `roles/`) is stack-, domain-, and runtime-agnostic. Only client-specific wiring: one *Claude Code binding* in `process.md` (and the reference agents below), swappable by runtime.
 
+## Session lifecycle
+
+Lifecycle is explicit, not hook-driven (`TeamCreate`/`TeamDelete` removed in Claude Code 2.1.178). The lead opens a run with `python3 scripts/hooks/invoke_team_mode_guard.py --set-marker` (writes the session record + inbox/outbox, enables team mode) and closes it with `--end-session`. Members run as **background Agents** (`run_in_background: true`), addressed via `SendMessage`.
+
 ## Layout
 
 | File | Role |
 |---|---|
 | [`process.md`](process.md) | Orchestration playbook: routing, execution modes, single-integrator model, phases, fix/review loops, when-to-use threshold. |
-| [`protocol.md`](protocol.md) | The **communication protocol** — 6 typed **JSON** messages (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT`); fields · constraints · examples; inherited by every role. |
+| [`protocol.md`](protocol.md) | The **communication protocol** — 8 typed **JSON** messages (`BRIEF` · `RESULT` · `REVIEW` · `FINDING` · `FIX` · `ARTIFACT` · `RESEARCH` · `ANALYSIS`); fields · constraints · examples; inherited by every role. |
 | [`schemas/`](schemas/) | One **JSON Schema** per form — the machine-readable enforcement source for `protocol.md` (validated by the `SendMessage` guard + normalizer). |
 | [`guardrails.md`](guardrails.md) | Standing guardrails + tool-output economy; inherited by every role and mode. |
 | [`conventions.md`](conventions.md) | Cross-project conventions — plan format + authoring rules; inherited by every role and mode via @import in the host root prompt. |
@@ -50,7 +54,7 @@ Per-vendor glue (extension, location, frontmatter) is the only thing that differ
 
 | Runtime | Agent file | Spawn primitive |
 |---|---|---|
-| Claude Code | `.claude/agents/<role>.md` | `Agent`/Task · `/feature-team` → `TeamCreate` |
+| Claude Code | `.claude/agents/<role>.md` | `Agent`/Task · `/feature-team` → background Agents (`run_in_background`) |
 | GitHub Copilot | `.github/agents/<role>.agent.md` | `@<role>` · `/fleet` |
 
 Keep `agents/` and `team-process/` under the **same parent** so `../team-process/roles/…` resolves for both. See *Execution modes* in `process.md` for the full runtime binding.

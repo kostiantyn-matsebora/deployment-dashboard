@@ -12,9 +12,10 @@
   "worktree": {
     "bgIsolation": "worktree"
   },
+  "enableAllProjectMcpServers": true,
   "statusLine": {
     "type": "command",
-    "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/statusline/Show-StatusLine.ps1\""
+    "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/statusline/show_status_line.py\""
   },
   "hooks": {
     "SessionStart": [
@@ -23,19 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/scripts/hooks/install-dependencies.sh\"",
-            "timeout": 180,
-            "statusMessage": "Installing remote-env dependencies"
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -OnSessionStart",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_team_mode_guard.py\" --on-session-start",
             "timeout": 10
           }
         ]
@@ -45,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -SnapshotSession",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --snapshot-session",
             "timeout": 30
           }
         ]
@@ -55,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || echo 'Not a git repo, skipping'",
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"${CLAUDE_PROJECT_DIR}\" || echo 'Not a git repo, skipping'",
             "timeout": 10
           }
         ]
@@ -67,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_maintenance.py\"",
             "timeout": 30
           }
         ]
@@ -77,7 +66,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-BranchGuard.ps1\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_branch_guard.py\"",
             "timeout": 10
           }
         ]
@@ -87,17 +76,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-LaneGuard.ps1\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_lane_guard.py\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-LeadEditGuard.ps1\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_lead_edit_guard.py\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-ProtocolFormGuard.ps1\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_protocol_form_guard.py\"",
             "timeout": 10
           }
         ]
@@ -107,7 +96,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_team_mode_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_orchestrator_read_guard.py\"",
             "timeout": 10
           }
         ]
@@ -117,17 +116,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-ProtocolFormGuard.ps1\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TokensaveGuard.ps1\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_protocol_form_guard.py\"",
             "timeout": 10
           }
         ]
@@ -135,31 +124,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "TeamCreate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -SetMarker",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "TeamDelete",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-TeamModeGuard.ps1\" -ClearMarker",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "Skill",
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -MarkRevised",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --mark-revised",
             "timeout": 10
           }
         ]
@@ -169,7 +138,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"C:/Users/kmats/Projects/__Personal/deployment-dashboard\" || true",
+            "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"${CLAUDE_PROJECT_DIR}\" || true",
             "timeout": 30
           }
         ]
@@ -181,7 +150,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperCapture.ps1\" -CaptureFromSummary",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_capture.py\" --capture-from-summary",
             "timeout": 30
           }
         ]
@@ -193,7 +162,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -Track",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --track",
             "timeout": 30
           }
         ]
@@ -205,7 +174,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pwsh -NoProfile -NonInteractive -File \"${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperSession.ps1\" -SessionEnd",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --session-end",
             "timeout": 30
           }
         ]
