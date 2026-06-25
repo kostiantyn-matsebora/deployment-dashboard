@@ -27,6 +27,34 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 !!! note "Settings layering"
     An appsettings `GitHub` section provides base values; `GITHUB_*` env vars override it (same pattern as the rest of the stack).
 
+## :material-key: Fetcher: GitHub token permissions { #github-token-permissions }
+
+`GITHUB_TOKEN` is **read-only** — the Fetcher only polls GitHub and never writes. Grant the least it needs.
+
+| Repos | Classic PAT | Fine-grained PAT |
+|---|---|---|
+| Public only | no scopes | **Public repositories** → read-only |
+| Private / org | `repo` scope | **Repository permissions** → Contents · Deployments · Actions, all **Read-only** (Metadata: Read-only is mandatory and auto-included) |
+
+What each permission unlocks — the endpoints the Fetcher polls:
+
+| Fine-grained permission | Used for |
+|---|---|
+| **Deployments: Read-only** | Deployments, deployment statuses + reviews — `GET …/deployments`, `…/deployments/{id}/statuses`, `…/deployments/{id}/reviews` |
+| **Actions: Read-only** | Workflow runs, workflows, artifacts — `GET …/actions/runs/{id}`, `…/actions/workflows`, `…/actions/runs/{id}/artifacts`, `…/actions/artifacts/{id}/zip` |
+| **Contents: Read-only** | Workflow YAML + artifact files for version extraction (`GITHUB_VERSION_SOURCE`) — `GET …/contents/{path}` |
+| **Metadata: Read-only** *(mandatory)* | Repo discovery for `owner/*` / `*` globs and environment listing — `GET /orgs/{owner}/repos`, `GET …/environments` |
+
+For a single classic PAT the `repo` scope covers all of the above on private repos; public-only tokens need no scopes. The startup rate-limit probe (`GET /rate_limit`, F16) works with any token.
+
+!!! warning "Classic `repo` over-grants"
+    The classic `repo` scope grants full read/**write** to every private repo — far beyond the read-only access the Fetcher uses. Prefer a fine-grained PAT where org policy allows.
+
+!!! note "Org repos with SAML SSO"
+    After creating a classic `repo` PAT, click **Configure SSO → Authorize**, then re-authorize after every rotation. An unauthorized token returns **HTTP 403** (`X-GitHub-SSO` header), not 401.
+
+The [install guide](../install/docker-compose.md) links here when setting `GITHUB_TOKEN` for the `-pull` profiles.
+
 ## :material-filter-outline: Fetcher: workflow exclude { #github-workflow-exclude }
 
 GitHub-adapter filter that prevents specific workflows from being polled or ingested. Reduces CI/CD API rate-limit consumption for unwanted pipelines.
