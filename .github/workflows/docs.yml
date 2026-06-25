@@ -7,6 +7,13 @@ on:
   # Called by ci.yml (the _ci-green orchestrator) for PR checks.
   workflow_call:
 
+# The docs drift gate is provided by the external docs-keeper plugin (opt-in).
+# CI runs the plugin's platform-neutral core CLI from a pinned checkout; when the
+# plugin repo/ref is unavailable, the check skips gracefully (does not fail the build).
+env:
+  DOCS_KEEPER_REPO: kostiantyn-matsebora/docs-keeper
+  DOCS_KEEPER_REF: main
+
 jobs:
   docs-check:
     name: Docs drift check
@@ -14,5 +21,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Check index and registry integrity
-        run: python3 scripts/hooks/invoke_docs_keeper_maintenance.py --drift-only
+      - name: Check out docs-keeper (neutral core)
+        id: dk
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.DOCS_KEEPER_REPO }}
+          ref: ${{ env.DOCS_KEEPER_REF }}
+          path: .docs-keeper-tool
+
+      - name: Check index and registry integrity (plugin-aware; skips if absent)
+        env:
+          DOCS_KEEPER_ENFORCE: block
+        run: |
+          cli=".docs-keeper-tool/core/engine/cli.py"
+          if [ "${{ steps.dk.outcome }}" != "success" ] || [ ! -f "$cli" ]; then
+            echo "::notice::docs-keeper plugin not available (${DOCS_KEEPER_REPO}@${DOCS_KEEPER_REF}); skipping docs drift gate."
+            exit 0
+          fi
+          python3 "$cli" --drift-only --repo-root "$GITHUB_WORKSPACE"

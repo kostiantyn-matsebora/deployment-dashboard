@@ -17,7 +17,7 @@ The main loop **orchestrates** — plans, sequences, synthesizes returns; no sep
 | Frontend / SPA / UI | [`frontend`](roles/frontend.md) |
 | CI/CD, containers, release, IaC | [`infrastructure`](roles/infrastructure.md) |
 | Tests + verification | [`testing`](roles/testing.md) |
-| Markdown docs / indexes / sources-of-truth | [`docs`](roles/docs.md) |
+| Markdown docs / indexes / sources-of-truth | [`docs`](roles/docs.md) — *plugin-provided (docs-keeper); opt-in. Unstaffed when the plugin is absent.* |
 | Plan, dispatch, integrate, ship | [`orchestrator`](roles/orchestrator.md) |
 
 ## Rules

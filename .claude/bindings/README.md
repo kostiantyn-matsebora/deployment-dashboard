@@ -11,6 +11,6 @@ these files are the project-specific bindings those roles inherit at runtime.
 | frontend | `frontend-developer` | [`frontend.md`](frontend.md) |
 | infrastructure | `deployment-engineer` | [`infrastructure.md`](infrastructure.md) |
 | testing | `testing-specialist` | [`testing.md`](testing.md) |
-| docs | `docs-keeper` | [`docs.md`](docs.md) |
+| docs *(plugin-provided / opt-in)* | `docs-keeper` | [`docs.md`](docs.md) |
 
 Routing index + the shared tool-output-economy guardrail: root prompt `CLAUDE.md` § *Project bindings*.

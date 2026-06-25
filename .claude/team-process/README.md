@@ -44,7 +44,7 @@ reference implementation** (`.claude/agents/*.md`); another runtime maps its own
 | `frontend-developer` | [`frontend`](roles/frontend.md) |
 | `deployment-engineer` | [`infrastructure`](roles/infrastructure.md) |
 | `testing-specialist` | [`testing`](roles/testing.md) |
-| `docs-keeper` | [`docs`](roles/docs.md) |
+| `docs-keeper` *(plugin-provided / opt-in)* | [`docs`](roles/docs.md) |
 | main loop (no agent file) | [`orchestrator`](roles/orchestrator.md) |
 
 The agent's **body** is vendor- and project-agnostic — just the anchor:

@@ -1,0 +1,63 @@
+"""
+docs-keeper core engine — neutral CLI.
+
+Platform-independent drift gate for CI on any repo / agent platform. Computes
+index + registry drift and exits 0 (clean) or 2 (drift; message on stderr).
+No hook payload, no platform host required.
+
+    python3 core/engine/cli.py --drift-only [--repo-root <path>] [--enforce warn|block]
+
+Runnable as a module (`python3 -m core.engine.cli`) or by path; import works
+either way via the fallback below.
+"""
+
+import argparse
+import os
+import sys
+
+try:  # package context (python3 -m core.engine.cli, or the vendored _engine package)
+    from .drift import format_block_message, get_docs_drift_queue, resolve_enforcement_mode
+    from .gitio import make_dir_lister, make_file_reader, resolve_repo_root_from_git
+except ImportError:  # script context (python3 <…>/cli.py) — flat sibling import, location-independent
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from drift import format_block_message, get_docs_drift_queue, resolve_enforcement_mode
+    from gitio import make_dir_lister, make_file_reader, resolve_repo_root_from_git
+
+
+def run_drift_only(repo_root: str, enforcement_mode: str) -> int:
+    """Compute drift and return the exit code; prints the message to stderr."""
+    dir_lister = make_dir_lister(repo_root)
+    file_reader = make_file_reader(repo_root)
+    queue = get_docs_drift_queue(dir_lister, file_reader)
+    if not queue:
+        return 0
+    mode = resolve_enforcement_mode(enforcement_mode)
+    msg = format_block_message(queue, standalone=True, mode=mode)
+    print(msg, file=sys.stderr)
+    return 0 if mode == "warn" else 2
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="docs-keeper neutral drift gate.")
+    parser.add_argument("--drift-only", action="store_true", help="Index + registry drift check only.")
+    parser.add_argument("--repo-root", default="", help="Repo working tree (default: git root / cwd).")
+    parser.add_argument(
+        "--enforce",
+        default="",
+        help="Enforcement: 'warn' (exit 0) or 'block' (exit 2 on drift). "
+        "Defaults to the DOCS_KEEPER_ENFORCE env var, else 'block'.",
+    )
+    args = parser.parse_args()
+
+    repo_root = args.repo_root or resolve_repo_root_from_git() or os.getcwd()
+    enforcement_mode = args.enforce or os.environ.get("DOCS_KEEPER_ENFORCE", "")
+
+    if args.drift_only:
+        sys.exit(run_drift_only(repo_root, enforcement_mode))
+
+    parser.print_help()
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

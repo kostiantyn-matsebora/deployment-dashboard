@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    name: ruff + pytest + assemble-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev tools
+        run: python3 -m pip install --quiet ruff pytest
+
+      - name: Lint (ruff)
+        run: python3 -m ruff check .
+
+      - name: Assemble check (core <-> adapter in sync)
+        run: python3 build/assemble.py --check
+
+      - name: Tests (core + adapter + build)
+        run: python3 -m pytest -q
+
+      - name: Neutral drift gate self-check (clean scratch repo)
+        run: |
+          tmp="$(mktemp -d)"
+          python3 core/engine/cli.py --drift-only --repo-root "$tmp"
+          echo "neutral CLI exit: $?"
+
+  plugin-validate:
+    name: claude plugin validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate marketplace + plugin JSON
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          for path in (".claude-plugin/marketplace.json",
+                       "adapters/claude-code/.claude-plugin/plugin.json",
+                       "adapters/claude-code/hooks/hooks.json"):
+              with open(path) as fh:
+                  json.load(fh)
+              print(f"valid: {path}")
+          PY
+
+      # When the Claude Code CLI is available on the runner, prefer the real validator:
+      #   - run: claude plugin validate --strict adapters/claude-code

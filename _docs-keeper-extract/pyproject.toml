@@ -1,0 +1,26 @@
+# docs-keeper — root tooling config (ruff + pytest).
+# Core engine and build tooling are stdlib-only Python 3.11+.
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+# Vendored copy of core/ inside the assembled adapter is generated, not edited.
+extend-exclude = ["adapters/claude-code/hooks/_engine"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP", "BLE"]
+ignore = [
+  "E501",   # line length governed by formatter, not lint
+  "E731",   # assigning lambdas is idiomatic in the test fakes
+]
+
+[tool.ruff.lint.per-file-ignores]
+"*_test.py" = ["B011"]
+
+[tool.pytest.ini_options]
+# Repo root on sys.path so `from core.engine...` and `from build...` resolve.
+pythonpath = ["."]
+python_files = ["*_test.py"]
+python_classes = ["Describe*"]
+python_functions = ["test_*"]
+testpaths = ["core", "adapters", "build"]

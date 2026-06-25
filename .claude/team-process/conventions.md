@@ -12,7 +12,7 @@ Cross-project conventions — inherited by every role, mode, and session; no pro
 
 ## Agent dispatch
 
-Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [`process.md`](process.md).
+Route each change to the specialist that owns it (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`); the main loop orchestrates. Inline execution is the exception. See [`process.md`](process.md). The `docs-keeper` agent is **plugin-provided (opt-in)** — present only when the docs-keeper plugin is installed; otherwise the docs role is unstaffed.
 
 Each agent is a **project-agnostic anchor** to its generic role in `roles/*` (mission, principles, guardrails, communication protocol, tool-output economy). The **project-specific bindings** in the host root prompt are the *only* place stack lives — agents carry no stack.
 

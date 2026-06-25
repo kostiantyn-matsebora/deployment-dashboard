@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "docs-keeper",
+  "owner": {
+    "name": "docs-keeper maintainers"
+  },
+  "metadata": {
+    "description": "Single-plugin marketplace for docs-keeper — the platform-neutral documentation steward, packaged as a Claude Code plugin."
+  },
+  "plugins": [
+    {
+      "name": "docs-keeper",
+      "source": "./adapters/claude-code",
+      "description": "Documentation writer + hierarchical indexer + sources-of-truth registrar; agent + /docs-keeper:* commands + commit/session/capture hooks.",
+      "version": "0.1.0",
+      "category": "documentation"
+    }
+  ]
+}

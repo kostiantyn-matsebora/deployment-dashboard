@@ -56,8 +56,8 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
-      # Match the repo's GFM/kramdown anchor convention (docs-keeper index TOCs
-      # use it) so generated index links resolve on the published site.
+      # Match the repo's GFM/kramdown anchor convention (the docs-keeper plugin's
+      # index TOCs use it) so generated index links resolve on the published site.
       slugify: !!python/object/apply:pymdownx.slugs.slugify
         kwds:
           case: lower

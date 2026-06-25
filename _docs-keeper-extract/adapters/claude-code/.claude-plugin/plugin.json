@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "docs-keeper",
+  "version": "0.1.0",
+  "description": "Documentation writer + hierarchical indexer + sources-of-truth registrar — stack-, domain-, product-agnostic. Provides the docs-keeper agent, /docs-keeper:* commands, and commit/session/capture hooks backed by a platform-neutral core engine.",
+  "author": {
+    "name": "docs-keeper maintainers"
+  },
+  "license": "MIT",
+  "keywords": ["documentation", "index", "markdown", "docs", "sources-of-truth", "drift"],
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "DOCS_KEEPER_ENFORCE": {
+      "type": "string",
+      "enum": ["block", "warn"],
+      "default": "warn",
+      "description": "Commit-time drift gate enforcement: 'block' fails the commit (exit 2) on documentation drift; 'warn' surfaces the queue but never blocks (exit 0). Exported to the hooks as the DOCS_KEEPER_ENFORCE environment variable."
+    }
+  }
+}

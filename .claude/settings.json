@@ -13,6 +13,17 @@
     "bgIsolation": "worktree"
   },
   "enableAllProjectMcpServers": true,
+  "extraKnownMarketplaces": {
+    "docs-keeper": {
+      "source": {
+        "source": "github",
+        "repo": "kostiantyn-matsebora/docs-keeper"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "docs-keeper@docs-keeper": true
+  },
   "statusLine": {
     "type": "command",
     "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/statusline/show_status_line.py\""
@@ -34,16 +45,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --snapshot-session",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
             "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph status --repo \"${CLAUDE_PROJECT_DIR}\" || echo 'Not a git repo, skipping'",
             "timeout": 10
           }
@@ -51,16 +52,6 @@
       }
     ],
     "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_maintenance.py\"",
-            "timeout": 30
-          }
-        ]
-      },
       {
         "matcher": "Bash",
         "hooks": [
@@ -124,57 +115,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --mark-revised",
-            "timeout": 10
-          }
-        ]
-      },
-      {
         "matcher": "Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
             "command": "cat >/dev/null || true; git rev-parse --git-dir >/dev/null 2>&1 && code-review-graph update --skip-flows --repo \"${CLAUDE_PROJECT_DIR}\" || true",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "PostCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_capture.py\" --capture-from-summary",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --track",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_session.py\" --session-end",
             "timeout": 30
           }
         ]

@@ -31,7 +31,7 @@ members run as **background Agents** and the session lifecycle is driven by an e
 | [frontend](../team-process/roles/frontend.md) | `frontend-developer` |
 | [infrastructure](../team-process/roles/infrastructure.md) | `deployment-engineer` |
 | [testing](../team-process/roles/testing.md) | `testing-specialist` |
-| [docs](../team-process/roles/docs.md) | `docs-keeper` |
+| [docs](../team-process/roles/docs.md) | `docs-keeper` *(plugin-provided / opt-in — staffable only when the docs-keeper plugin is installed)* |
 
 Spawn only the roles the change actually needs (routing table in `process.md`).
 

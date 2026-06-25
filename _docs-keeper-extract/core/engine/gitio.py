@@ -1,0 +1,100 @@
+"""
+docs-keeper core engine — filesystem + git collaborators (platform-neutral).
+
+Factory functions that build the impure callables the pure engine consumes:
+a git runner, a directory lister, and a file reader, each rooted at a repo
+working tree. No host/platform coupling — adapters and the neutral CLI both
+use these.
+"""
+
+import subprocess
+from pathlib import Path
+
+
+def git_lines(argv: list[str], repo_root: str = "") -> list[str]:
+    """Run git with argv; return stdout split into lines (stderr suppressed)."""
+    cmd = ["git"]
+    if repo_root:
+        cmd += ["-C", repo_root]
+    cmd += argv
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result.stdout.splitlines()
+
+
+def git_text(argv: list[str], repo_root: str = "") -> str:
+    """Run git with argv; return stdout as a single string (stderr suppressed)."""
+    cmd = ["git"]
+    if repo_root:
+        cmd += ["-C", repo_root]
+    cmd += argv
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result.stdout
+
+
+def make_git_lines_runner(repo_root: str = ""):
+    """Return a runner(argv) -> list[str] bound to repo_root."""
+
+    def runner(argv: list[str]) -> list[str]:
+        return git_lines(argv, repo_root)
+
+    return runner
+
+
+def make_git_text_runner(repo_root: str = ""):
+    """Return a runner(argv) -> str bound to repo_root."""
+
+    def runner(argv: list[str]) -> str:
+        return git_text(argv, repo_root)
+
+    return runner
+
+
+def make_dir_lister(repo_root: str):
+    """
+    Return a dir_lister(rel_dir) -> list[{"name", "is_dir"}] rooted at repo_root.
+
+    Used by the drift engine (get_index_dirs / get_expected_children).
+    """
+
+    def dir_lister(rel_dir: str) -> list[dict]:
+        base = Path(repo_root) / rel_dir if repo_root else Path(rel_dir)
+        if not base.exists():
+            return []
+        entries = []
+        try:
+            for child in sorted(base.iterdir()):
+                entries.append({"name": child.name, "is_dir": child.is_dir()})
+        except OSError:
+            pass
+        return entries
+
+    return dir_lister
+
+
+def make_file_reader(repo_root: str):
+    """Return a file_reader(rel_path) -> str rooted at repo_root ('' if absent)."""
+
+    def file_reader(rel_path: str) -> str:
+        abs_path = Path(repo_root) / rel_path if repo_root else Path(rel_path)
+        try:
+            return abs_path.read_text(encoding="utf-8")
+        except (OSError, ValueError):
+            return ""
+
+    return file_reader
+
+
+def resolve_repo_root_from_git() -> str:
+    """Return the git working-tree root via `git rev-parse`, or '' on failure."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+        )
+        detected = result.stdout.strip()
+        if detected:
+            return detected
+    except Exception:  # noqa: BLE001
+        pass
+    return ""

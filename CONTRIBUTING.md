@@ -117,7 +117,7 @@ cd testing/api && npm ci && npm run test:integration
 
 ### Specialist routing
 
-Changes are routed to the area specialist (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`). See [`.claude/team-process/process.md`](.claude/team-process/process.md). For API features, [`docs/api/openapi.yaml`](docs/api/openapi.yaml) is the contract source of truth — update it first.
+Changes are routed to the area specialist (`api-architect` / `backend-developer` / `frontend-developer` / `deployment-engineer` / `testing-specialist` / `docs-keeper`). See [`.claude/team-process/process.md`](.claude/team-process/process.md). The `docs-keeper` specialist is **plugin-provided (opt-in)** — install the docs-keeper plugin to staff the docs role; without it, doc work falls back to the orchestrator's assignment. For API features, [`docs/api/openapi.yaml`](docs/api/openapi.yaml) is the contract source of truth — update it first.
 
 ### Scripts
 
@@ -135,7 +135,7 @@ ruff check scripts/
 
 ### Documentation
 
-Docs follow an **index-first** convention: every directory under `docs/` has an `index.md` whose `children:` front-matter must match the files on disk. A pre-commit hook and the `docs` CI job (`python3 scripts/hooks/invoke_docs_keeper_maintenance.py --drift-only`) enforce this. When you add/move/remove a doc, regenerate the affected index (`/docs-index <dir>`) so the drift check stays green.
+Docs follow an **index-first** convention: every directory under `docs/` has an `index.md` whose `children:` front-matter must match the files on disk. The `docs` CI job enforces this via the **docs-keeper** plugin's neutral core drift gate (`core/engine/cli.py --drift-only`, run from a pinned checkout); when the plugin is installed it also runs as a commit-time hook. When you add/move/remove a doc, regenerate the affected index with `/docs-keeper:docs-index <dir>` so the drift check stays green.
 
 Authoring rules (binding): concise and LLM-optimized, structure over prose — steps as numbered lists, mappings as tables, "X means Y" as `**X.** Y`. See [`CLAUDE.md`](CLAUDE.md).
 
