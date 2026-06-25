@@ -18,6 +18,8 @@
 
 > **`id`** is synthetic — it NEVER appears in any visible UI surface. No fields outside this 11-field whitelist may appear in the UI.
 
+> **`namespace`** (optional, ≤ 128 chars) scopes `service` into the composite identity surfaced as `component`. It is **not** a standalone visible field: when present it prefixes the `component`/lane header as `namespace/service`, and only when a bare service name collides across namespaces (#353). Absent ⇒ the component renders unprefixed (legacy rows unchanged).
+
 ## Swimlane Edge Derivation
 
 Edges derived from each node's `parrent_deployments` array. Only intra-service edges are rendered — cross-service relationships are ignored.
