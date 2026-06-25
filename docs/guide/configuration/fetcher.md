@@ -34,15 +34,21 @@ Opt-in pull→push edge. Only needed on a `-pull` profile against real GitHub. T
 | Repos | Classic PAT | Fine-grained PAT |
 |---|---|---|
 | Public only | no scopes | **Public repositories** → read-only |
-| Private / org | `repo` scope | **Repository permissions** → Contents · Deployments · Actions, all **Read-only** (Metadata: Read-only is mandatory and auto-included) |
+| Private / org — minimal | `repo` scope | **Repository permissions** → Deployments · Actions, both **Read-only** (Metadata: Read-only is mandatory and auto-included) |
+| Private / org — full Swimlanes | `repo` scope | the minimal set **+ Contents: Read-only** |
+
+**Two tiers for private/org repos (fine-grained PAT):**
+
+- **Minimal — `Deployments + Actions: Read-only`.** Full-fidelity Matrix (stable service identity, version, status, actor) and a working Swimlanes view via non-explicit correlation. No source-code access — service identity resolves from the Actions *workflows* endpoint, not the workflow YAML.
+- **Full Swimlanes — `+ Contents: Read-only` (opt-in).** Adds explicit `parent_deployments` edges derived from the workflow `needs:` graph, enabling the Swimlanes explicit-parent correlation predicate. Without it the needs-graph fetch is skipped (parent edges empty) and identity is **unaffected** — ingest never blocks. Public repos read `contents` without a scope, so they get explicit edges regardless.
 
 What each permission unlocks — the endpoints the Fetcher polls:
 
 | Fine-grained permission | Used for |
 |---|---|
 | **Deployments: Read-only** | Deployments, deployment statuses + reviews — `GET …/deployments`, `…/deployments/{id}/statuses`, `…/deployments/{id}/reviews` |
-| **Actions: Read-only** | Workflow runs, workflows, artifacts — `GET …/actions/runs/{id}`, `…/actions/workflows`, `…/actions/runs/{id}/artifacts`, `…/actions/artifacts/{id}/zip` |
-| **Contents: Read-only** | Workflow YAML + artifact files for version extraction (`GITHUB_VERSION_SOURCE`) — `GET …/contents/{path}` |
+| **Actions: Read-only** | Workflow runs, **service identity** (workflow name), workflows, artifacts — `GET …/actions/runs/{id}`, `…/actions/workflows/{workflow_id}`, `…/actions/workflows`, `…/actions/runs/{id}/artifacts`, `…/actions/artifacts/{id}/zip` |
+| **Contents: Read-only** *(opt-in)* | Workflow YAML for the `needs:` graph — explicit Swimlanes `parent_deployments` edges only — `GET …/contents/{path}`. Omit it and parent edges resolve to `[]`; everything else is unaffected. |
 | **Metadata: Read-only** *(mandatory)* | Repo discovery for `owner/*` / `*` globs and environment listing — `GET /orgs/{owner}/repos`, `GET …/environments` |
 
 For a single classic PAT the `repo` scope covers all of the above on private repos; public-only tokens need no scopes. The startup rate-limit probe (`GET /rate_limit`, F16) works with any token.
