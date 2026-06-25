@@ -89,22 +89,15 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
         | `API_KEY` | Write-endpoint secret (`X-Api-Key`) |
         | `POSTGRES_USER` | Bundled DB user |
         | `POSTGRES_PASSWORD` | Bundled DB password |
-        | `GITHUB_TOKEN` | Read-only GitHub PAT — see token scope below |
+        | `GITHUB_TOKEN` | Read-only GitHub PAT — see [Configuration → Fetcher → GitHub token permissions](../configuration/fetcher.md#github-token-permissions) |
         | `GITHUB_REPOS` | `owner/repo,owner/repo` to poll |
 
     </div>
 
-    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration.md#fetcher-pull-mode).
+    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration/fetcher.md#fetcher-pull-mode).
 
-    ??? info "GitHub token scope — read-only; the Fetcher never writes"
-
-        | Repos | Classic PAT | Fine-grained PAT |
-        |---|---|---|
-        | Public | no scopes | Public repositories → read-only |
-        | Private | `repo` scope | Contents · Deployments · Actions: Read |
-
-        - **Classic `repo` over-grants** — it grants full read/write to every private repo, far beyond what the Fetcher uses. Prefer a fine-grained PAT where org policy allows.
-        - **Org repos with SAML SSO** — after creating a classic `repo` PAT, click **Configure SSO → Authorize**, then re-authorize after every rotation. An unauthorized token returns **HTTP 403** (`X-GitHub-SSO` header), not 401.
+    !!! info "GitHub token scope"
+        Read-only — the Fetcher never writes. Classic vs fine-grained PAT permissions are documented once in [Configuration → Fetcher → GitHub token permissions](../configuration/fetcher.md#github-token-permissions).
 
     ```bash
     docker compose --profile full-pull up -d
@@ -127,22 +120,15 @@ Pick the tab for your profile, set the listed variables in `.env`, then run its 
         | `POSTGRES_USER` | External DB user |
         | `POSTGRES_PASSWORD` | External DB password |
         | `POSTGRES_HOST` | External DB hostname |
-        | `GITHUB_TOKEN` | Read-only GitHub PAT — see token scope below |
+        | `GITHUB_TOKEN` | Read-only GitHub PAT — see [Configuration → Fetcher → GitHub token permissions](../configuration/fetcher.md#github-token-permissions) |
         | `GITHUB_REPOS` | `owner/repo,owner/repo` to poll |
 
     </div>
 
-    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration.md#fetcher-pull-mode).
+    First start runs a bounded backfill, so the matrix fills after a poll cycle or two. Other fetcher options have sane defaults — see [Configuration → Fetcher](../configuration/fetcher.md#fetcher-pull-mode).
 
-    ??? info "GitHub token scope — read-only; the Fetcher never writes"
-
-        | Repos | Classic PAT | Fine-grained PAT |
-        |---|---|---|
-        | Public | no scopes | Public repositories → read-only |
-        | Private | `repo` scope | Contents · Deployments · Actions: Read |
-
-        - **Classic `repo` over-grants** — it grants full read/write to every private repo, far beyond what the Fetcher uses. Prefer a fine-grained PAT where org policy allows.
-        - **Org repos with SAML SSO** — after creating a classic `repo` PAT, click **Configure SSO → Authorize**, then re-authorize after every rotation. An unauthorized token returns **HTTP 403** (`X-GitHub-SSO` header), not 401.
+    !!! info "GitHub token scope"
+        Read-only — the Fetcher never writes. Classic vs fine-grained PAT permissions are documented once in [Configuration → Fetcher → GitHub token permissions](../configuration/fetcher.md#github-token-permissions).
 
     ```bash
     docker compose --profile standalone-pull up -d

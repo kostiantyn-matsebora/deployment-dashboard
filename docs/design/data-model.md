@@ -18,6 +18,8 @@
 
 > **`id`** is synthetic — it NEVER appears in any visible UI surface. No fields outside this 11-field whitelist may appear in the UI.
 
+> **`namespace`** (optional, ≤ 128 chars) scopes `service` into the composite identity surfaced as `component`. It is **not** a standalone visible field: when present it prefixes the `component`/lane header as `namespace/service`, and only when a bare service name collides across namespaces (#353). Absent ⇒ the component renders unprefixed (legacy rows unchanged).
+
 ## Swimlane Edge Derivation
 
 Edges derived from each node's `parrent_deployments` array. Only intra-service edges are rendered — cross-service relationships are ignored.
@@ -82,7 +84,7 @@ Analytics metrics are **server-computed** from the `deployment_events` log. They
 
 **Lead-time approximation (binding).** True DORA lead time (commit → prod) is NOT in the event log — the store carries deployment-state events, not commit timestamps. Lead time is approximated via `parent_deployments` promotion chains that reach the configured production terminal. The API flags this with `approximated: true`; the SPA MUST surface the label.
 
-> **Operator note.** The promotion-funnel ladder and the production terminal are operator-configured via `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`; last entry = production terminal for lead-time; values matched case-insensitively against deployment `environment`). See [Configuration — API](../guide/configuration.md#api).
+> **Operator note.** The promotion-funnel ladder and the production terminal are operator-configured via `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`; last entry = production terminal for lead-time; values matched case-insensitively against deployment `environment`). See [Configuration — API](../guide/configuration/api.md#api).
 
 ### Classification Thresholds
 

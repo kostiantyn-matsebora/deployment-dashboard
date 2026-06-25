@@ -15,12 +15,12 @@ No. It's read-only / notification-only — a view of state, not a deployment eng
 No. They're discovered from the events you post. A new `service`/`environment` appears automatically.
 
 **How long is history kept?**
-Per `HISTORY_RETENTION_DAYS` (default 365; minimum 90 — smaller values are clamped up). Pruned daily by a background job. See [Configuration](./configuration.md).
+Per `HISTORY_RETENTION_DAYS` (default 365; minimum 90 — smaller values are clamped up). Pruned daily by a background job. See [Configuration](./configuration/api.md#api).
 
 ## Troubleshooting
 
 **`401 Unauthorized` on POST.**
-`X-Api-Key` is missing or doesn't match `API_KEY`. Confirm the header name and the configured value. See [Configuration](./configuration.md#api).
+`X-Api-Key` is missing or doesn't match `API_KEY`. Confirm the header name and the configured value. See [Configuration](./configuration/api.md#api).
 
 **`422 Unprocessable Entity` on POST.**
 Validation failed. The `application/problem+json` body has an `errors[]` array pinpointing the field. Common causes: missing a required field (`deployment_id`, `service`, `environment`, `status`, `happened_at`); `status` not one of `in-progress|success|failure`; `happened_at` not RFC 3339 UTC; `run_number` not an integer; an unknown field (write bodies are closed). See [Integrate your CI/CD](./send-events.md#payload).
@@ -37,7 +37,7 @@ SSE is being buffered by a proxy in front of the gateway. The bundled nginx gate
 The DB is unreachable, a required `LISTEN` channel isn't attached, or a reset is in progress. Check PostgreSQL connectivity and `GET /readyz`.
 
 **`POST /api/control/reset` returns `404`.**
-`CONTROL_API_KEY` is unset — the reset surface is hidden by design. Set it (distinct from `API_KEY`) to enable. See [Configuration](./configuration.md#api).
+`CONTROL_API_KEY` is unset — the reset surface is hidden by design. Set it (distinct from `API_KEY`) to enable. See [Configuration](./configuration/api.md#api).
 
 **Duplicate rows after a retry.**
 Expected — ingest is append-only, retries append. The matrix still shows the latest; the history drawer shows every row. Make retries idempotent on your side if you want to avoid history noise. See [Integrate your CI/CD](./send-events.md#append-only-semantics).

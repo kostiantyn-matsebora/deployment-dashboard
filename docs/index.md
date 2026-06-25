@@ -161,6 +161,7 @@ curl -X POST "$DASHBOARD_URL/api/deployments" \
   -d '{
     "deployment_id": "build-42",
     "service":       "checkout",
+    "namespace":     "storefront",
     "environment":   "prod",
     "version":       "1.4.2",
     "status":        "success",
@@ -191,7 +192,7 @@ A handful of containers behind one gateway: a stateless .NET API tier, PostgreSQ
 
     Compose profiles, production checklist, and Azure/Terraform Container Apps deploy path.
 
--   :material-cog:{ .lg .middle } &nbsp; **[Configuration](guide/configuration.md)**
+-   :material-cog:{ .lg .middle } &nbsp; **[Configuration](guide/configuration/index.md)**
 
     Every environment variable, grouped by concern.
 
