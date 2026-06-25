@@ -1,10 +1,10 @@
-# acme-stack-docs-keeper-example
+# docs-keeper-example
 
 **Example host repo / pair-repo for [docs-keeper](https://github.com/kostiantyn-matsebora/docs-keeper).**
 It is NOT a real product — it exists to exercise docs-keeper against a realistic multi-layer
 project and to serve as a runnable example of an index-first documented repo.
 
-"Acme Stack" is the fictional app inside: a parcel-tracking dashboard spread across
+The sample app inside is **Acme Stack** — a fictional parcel-tracking dashboard spread across
 **frontend + backend + infrastructure + testing + documentation**.
 
 ## What docs-keeper sees here

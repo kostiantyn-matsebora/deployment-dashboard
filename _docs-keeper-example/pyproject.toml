@@ -1,4 +1,4 @@
-# acme-stack-docs-keeper-example — tooling for the pairing test only.
+# docs-keeper-example (Acme Stack) — tooling for the pairing test only.
 # The sample app (frontend/backend/infrastructure/testing) is illustrative, not linted.
 
 [tool.ruff]

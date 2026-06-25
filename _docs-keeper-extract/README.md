@@ -65,9 +65,9 @@ Exit 0 (clean) or 2 (drift; message on stderr). No hook host required.
 
 ## Example host repo (pair-repo)
 
-`acme-stack-docs-keeper-example` is a standalone sample host project (frontend + backend +
-infrastructure + testing + docs) used to exercise docs-keeper end-to-end and as a runnable
-example. It ships a clean docs baseline and a pairing test that runs this engine against
+`docs-keeper-example` is a standalone sample host project — the **Acme Stack** app (frontend +
+backend + infrastructure + testing + docs) — used to exercise docs-keeper end-to-end and as a
+runnable example. It ships a clean docs baseline and a pairing test that runs this engine against
 itself. Keep it checked out next to this repo to run the pairing suite.
 
 ## Develop
