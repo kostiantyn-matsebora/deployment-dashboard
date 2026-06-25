@@ -20,6 +20,7 @@ Post one event whenever a deployment changes state. A typical deployment emits t
 |---|---|---|---|
 | `deployment_id` | **yes** | string | Correlation key grouping the rows of one logical deployment (e.g. a run id). **Not** a uniqueness key. |
 | `service` | **yes** | string | Service name (matrix row). |
+| `namespace` | no | string | Optional grouping segment that scopes `service` (e.g. the owner half of a GitHub `owner/repo`, an Azure DevOps project, a Jenkins folder). Same `service` under two namespaces ⇒ two distinct matrix rows, labelled `namespace/service`. Omit ⇒ rows render unprefixed. |
 | `environment` | **yes** | string | Environment name (matrix column), e.g. `dev`, `prod`. |
 | `status` | **yes** | enum | `in-progress` \| `success` \| `failure`. |
 | `happened_at` | **yes** | string | RFC 3339 UTC timestamp of when the state changed **on the CI/CD side** (not when the dashboard received it). |
