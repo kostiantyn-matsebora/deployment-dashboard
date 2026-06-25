@@ -102,6 +102,16 @@
         ]
       },
       {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_orchestrator_read_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "SendMessage",
         "hooks": [
           {

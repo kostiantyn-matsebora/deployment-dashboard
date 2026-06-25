@@ -54,7 +54,9 @@ The **`security` reviewer** runs in parallel by its own method:
 ## 4 — Integrate
 
 Orchestrator merges surviving findings into **one consolidated `REVIEW`**: `pass`, or
-`changes-requested` + remarks (principle/smell · location · required change).
+`changes-requested` + remarks (principle/smell · location · required change). **Mechanical merge only:**
+- The orchestrator does **not** open the reviewed code to adjudicate (code-cognition is tool-blocked while a run is active).
+- A disputed finding routes back to a reviewer or the owning role (→ `REVIEW` / `ANALYSIS`); it is not resolved by the lead reading the source.
 
 ## 5 — Internal loop / exit
 

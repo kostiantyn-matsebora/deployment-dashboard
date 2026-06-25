@@ -24,6 +24,15 @@
 - **Service filter:** inline `pInputText` in topbar. Case-insensitive substring match against component name. Matching toggles `.is-hidden` on `.row` elements.
 - **Failures-only:** inline `p-toggleSwitch` pill. When ON, hides service rows that have no failed states (fail-last, run-fail-last, run-fail-only).
 
+### Presets Control (all views)
+
+The bookmark icon (`btn-presets`) sits in the `.hdr-icons` topbar cluster, to the right of the bell toggle, before the Live pill. It is **shared across all views** (Matrix, Swimlanes, Analytics) — the button and popover are never hidden on any tab switch.
+
+- Opens the [Presets popover](./components.md#presets-popover) when clicked.
+- The badge dot on the button is visible whenever one or more presets exist in `localStorage`.
+
+---
+
 ### Service Controls (glob filter — Matrix + Swimlanes)
 
 A topbar **Services** button opens a [Pattern Filter](./components.md#pattern-filter-services--notifications) popover. Active on both Matrix and Swimlanes views.

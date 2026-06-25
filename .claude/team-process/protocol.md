@@ -2,11 +2,11 @@
 
 Typed forms every cross-role message uses — inherited by every role; orchestrator drives the phases that exchange them in [`process.md`](process.md).
 
-Seven typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT · RESEARCH.
+Eight typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · FINDING · FIX · ARTIFACT · RESEARCH · ANALYSIS.
 
 - **Every cross-role message MUST be one of these forms**, emitted as a **JSON object** — never free prose.
 - **Binds the orchestrator too** — `BRIEF` to dispatch, `FIX` to route — not only members.
-- **Each form is a JSON object** keyed by a `"type"` discriminator (one of the seven, uppercase).
+- **Each form is a JSON object** keyed by a `"type"` discriminator (one of the eight, uppercase).
 - **Multi-value fields are JSON arrays.** What reads as a bulleted list is encoded as an array.
 - **Some fields nest** one level: `BRIEF.spec`, `REVIEW.remarks[]`, `FINDING.options[]`, `FIX.failure` — objects/arrays-of-objects, not flattened strings.
 
@@ -258,9 +258,10 @@ Written to the member's `inbox` and delivered by `{ type, ref }` pointer — see
 
 ## RESEARCH — explorer → orch · broad discovery hand-back
 
-Produced by a read-only **`Explore`** agent during intake (not a project role). Covers where the relevant code lives, how it works today, and candidate solution paths. **Complements `REVIEW`** (role-bar scoping) — does not replace it.
+Produced by a read-only **`Explore`** agent at **any stage** that needs broad discovery — intake, propose-solution, post-PR iteration (not a project role). Covers where the relevant code lives, how it works today, and candidate solution paths. **Complements `REVIEW`** (role-bar scoping) and **precedes `ANALYSIS`** (it surfaces options; `ANALYSIS` evaluates them) — does not replace either.
 
 - `Explore` has no `Write` tool: it returns the form as its **final message**; the orchestrator persists it to the run dir via the normalizer.
+- **Discovery only — carries no verdict.** It lists options + tradeoffs; it never recommends one (that is `ANALYSIS`).
 - No `role` field.
 
 | Field | What belongs | Constraint | Examples |
@@ -291,6 +292,43 @@ Produced by a read-only **`Explore`** agent during intake (not a project role). 
 
 ---
 
+## ANALYSIS — analyst → orch · delegated judgment hand-back
+
+Produced by an **analyst** at any stage that needs an evaluated recommendation — propose-solution, lane-map rationale, `FINDING` option-weighing, fix-loop layer-selection, human-in-the-loop / post-PR iteration.
+
+- **Analyst identity.** Owning role for in-domain judgment; a general analyst / `Plan` agent for cross-cutting / architectural decisions (analogous to `Explore` producing `RESEARCH`).
+- **Evaluation, not discovery.** Where `RESEARCH` surfaces options with no verdict and `REVIEW` walks a role's bar (`pass`/`changes-requested`), `ANALYSIS` **weighs the options and recommends one with a rationale**.
+- **Lead-ratified plan input, never a gate.** The orchestrator folds the `recommendation` into `decisions[]` and routes — it **does not re-derive** it. No merge-blocking verdict.
+- **`role` field.** Optional; names the owning role when one produced it; omit for a cross-cutting analysis.
+
+| Field | What belongs | Constraint | Examples |
+|---|---|---|---|
+| type | form discriminator | `"ANALYSIS"` | `"ANALYSIS"` |
+| role | owning role, when one produced it | optional; a role name | `"frontend"` · `"backend"` |
+| question | the decision analyzed | required; one line | `"Where should preset state live?"` |
+| evaluated | options weighed, each `{id, option, assessment}` | array of objects, ≥2 | `[{"id":"a","option":"localStorage","assessment":"per-device, no server write"},{"id":"b","option":"server pref","assessment":"needs an API + auth"}]` |
+| recommendation | the chosen path (names the `id`) | required; one line | `"a — localStorage; the feature is frontend-only"` |
+| rationale | why the recommendation wins | array, ≥1 | `["no backend in scope","matches the mockup contract"]` |
+| confidence | the analyst's confidence | optional; `high` · `medium` · `low` | `"high"` |
+| risks | caveats / what would change the call | optional array | `["revisit if a server-side sync requirement appears"]` |
+| refs | forms / specs / sources consulted | optional array | `["docs/design/mockup/index.html","prior RESEARCH"]` |
+
+```json
+{
+  "type": "ANALYSIS",
+  "question": "Where should preset state live?",
+  "evaluated": [
+    { "id": "a", "option": "localStorage", "assessment": "per-device, no server write" },
+    { "id": "b", "option": "server preference", "assessment": "needs an API + auth, heavier" }
+  ],
+  "recommendation": "a — localStorage; the feature is frontend-only",
+  "rationale": ["no backend in scope", "matches the mockup contract"],
+  "confidence": "high"
+}
+```
+
+---
+
 ## Rules
 
 - `RESULT.gate` carries **actual** counts — a narrative claim is never accepted as a gate result.
@@ -305,6 +343,8 @@ Produced by a read-only **`Explore`** agent during intake (not a project role). 
 - `changes-requested` `REVIEW` → orchestrator routes each remark to the owning implementer; loop until every competency passes (→ [`process.md`](process.md) *Review loop*).
 - A `REVIEW` with `role: "security"` (the `security-review`-skill audit) folds + routes exactly like any other competency — each remark goes to the **owning implementer**; security reports, never fixes.
 - A `RESEARCH` form is **lead-persisted discovery input**, not a gate: the orchestrator folds its `findings`/`options` into the run ledger to inform the plan. It carries no verdict and never blocks a merge.
+- An `ANALYSIS` form is **lead-ratified judgment input**, not a gate: the orchestrator folds its `recommendation` into `decisions[]` (with `supersedes` when it overrides issue text / earlier plan) and routes. **The lead MUST NOT re-derive the recommendation.** It carries no merge-blocking verdict.
+- **Three discovery/judgment forms, distinct roles:** `RESEARCH` = *where/how/what-are-the-options* (discovery, **no verdict**) · `ANALYSIS` = *which option, is X feasible, what's the root layer* (evaluation → **recommendation + rationale**) · `REVIEW` = *does the code meet the role's bar* (**`pass`/`changes-requested`**). Discovery feeds analysis; analysis informs the plan; review gates the change.
 - Peer review precedes `testing`.
 - A red gate surfaced by `testing` → orchestrator issues a `FIX` to the owning role; loop
   until green (see [`process.md`](process.md) *Fix loop*).

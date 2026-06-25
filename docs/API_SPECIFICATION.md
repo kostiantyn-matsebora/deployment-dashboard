@@ -94,6 +94,7 @@ backend/
 | `id` | uuid PK | no | `Guid.CreateVersion7()` — surrogate **and** stream cursor (D2) |
 | `deployment_id` | text | no | correlation key; NOT unique, NO dedup |
 | `service` | text | no | |
+| `namespace` | text | yes | ≤ 128; optional grouping segment scoping `service`. Identity = `namespace/service` when present, bare `service` when null. Two namespaces sharing a service name ⇒ two distinct rows/lanes (#353) |
 | `environment` | text | no | |
 | `version` | text | yes | ≤ 50 chars |
 | `status` | text | no | `pending` \| `queued` \| `waiting` \| `in-progress` \| `success` \| `failure` \| `cancelled` \| `rejected` |

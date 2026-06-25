@@ -85,6 +85,17 @@ ARTIFACT_OBJ = {
     "delta": ["GET /things"],
 }
 
+ANALYSIS_OBJ = {
+    "type": "ANALYSIS",
+    "question": "Where should preset state live?",
+    "evaluated": [
+        {"id": "a", "option": "localStorage", "assessment": "per-device, no server write"},
+        {"id": "b", "option": "server pref", "assessment": "needs an API + auth, heavier"},
+    ],
+    "recommendation": "a — localStorage; the feature is frontend-only",
+    "rationale": ["no backend in scope", "matches the mockup contract"],
+}
+
 
 def form_json(obj: dict) -> str:
     return json.dumps(obj)
@@ -121,6 +132,15 @@ class DescribeTestProtocolJsonValidFormPass:
 
     def test_accepts_an_artifact(self):
         r = check_protocol_json(form_json(ARTIFACT_OBJ), SCHEMA_DIR)
+        assert r["ok"] is True
+
+    def test_accepts_an_analysis_with_nested_evaluated(self):
+        r = check_protocol_json(form_json(ANALYSIS_OBJ), SCHEMA_DIR)
+        assert r["ok"] is True
+
+    def test_accepts_an_analysis_with_optional_role(self):
+        obj = {**ANALYSIS_OBJ, "role": "frontend", "confidence": "high"}
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
         assert r["ok"] is True
 
     def test_normalizes_a_lowercase_type_discriminator(self):
@@ -210,6 +230,22 @@ class DescribeTestProtocolJsonInvalidFormsBlock:
             "options": [{"id": "a", "path": "p"}],
             "need": "n",
         }
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+
+    def test_rejects_an_analysis_missing_recommendation(self):
+        obj = {k: v for k, v in ANALYSIS_OBJ.items() if k != "recommendation"}
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+        assert "recommendation" in " ".join(r["errors"])
+
+    def test_rejects_an_analysis_with_an_invalid_confidence_enum(self):
+        obj = {**ANALYSIS_OBJ, "confidence": "maybe"}
+        r = check_protocol_json(form_json(obj), SCHEMA_DIR)
+        assert r["ok"] is False
+
+    def test_rejects_an_analysis_with_fewer_than_two_evaluated_options(self):
+        obj = {**ANALYSIS_OBJ, "evaluated": [ANALYSIS_OBJ["evaluated"][0]]}
         r = check_protocol_json(form_json(obj), SCHEMA_DIR)
         assert r["ok"] is False
 
@@ -314,6 +350,26 @@ class DescribeFormatProtocolFormNormalization:
         out = format_protocol_form(form_json(obj), schema_dir=SCHEMA_DIR)
         remark = json.loads(out)["remarks"][0]
         assert list(remark.keys()) == ["smell", "location", "change"]
+
+    def test_normalizes_an_analysis_canonical_order_and_orders_evaluated_items(self):
+        messy = {
+            "rationale": ["frontend-only"],
+            "type": "analysis",
+            "recommendation": "a",
+            "evaluated": [
+                {"assessment": "x", "id": "a", "option": "localStorage"},
+                {"id": "b", "option": "server", "assessment": "heavier"},
+            ],
+            "question": "where?",
+        }
+        out = format_protocol_form(form_json(messy), schema_dir=SCHEMA_DIR)
+        obj = json.loads(out)
+        assert list(obj.keys()) == [
+            "type", "question", "evaluated", "recommendation", "rationale",
+        ]
+        assert obj["type"] == "ANALYSIS"
+        # Nested evaluated[] items are reordered to id, option, assessment.
+        assert list(obj["evaluated"][0].keys()) == ["id", "option", "assessment"]
 
     def test_throws_on_invalid_input_with_a_descriptive_message(self):
         with pytest.raises(ValueError, match="Invalid RESULT"):

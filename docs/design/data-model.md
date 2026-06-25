@@ -18,6 +18,8 @@
 
 > **`id`** is synthetic — it NEVER appears in any visible UI surface. No fields outside this 11-field whitelist may appear in the UI.
 
+> **`namespace`** (optional, ≤ 128 chars) scopes `service` into the composite identity surfaced as `component`. It is **not** a standalone visible field: when present it prefixes the `component`/lane header as `namespace/service`, and only when a bare service name collides across namespaces (#353). Absent ⇒ the component renders unprefixed (legacy rows unchanged).
+
 ## Swimlane Edge Derivation
 
 Edges derived from each node's `parrent_deployments` array. Only intra-service edges are rendered — cross-service relationships are ignored.
@@ -82,7 +84,7 @@ Analytics metrics are **server-computed** from the `deployment_events` log. They
 
 **Lead-time approximation (binding).** True DORA lead time (commit → prod) is NOT in the event log — the store carries deployment-state events, not commit timestamps. Lead time is approximated via `parent_deployments` promotion chains that reach the configured production terminal. The API flags this with `approximated: true`; the SPA MUST surface the label.
 
-> **Operator note.** The promotion-funnel ladder and the production terminal are operator-configured via `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`; last entry = production terminal for lead-time; values matched case-insensitively against deployment `environment`). See [Configuration — API](../guide/configuration.md#api).
+> **Operator note.** The promotion-funnel ladder and the production terminal are operator-configured via `ANALYTICS_FUNNEL_ENVIRONMENTS` (default `dev,staging,qa,preprod,prod`; last entry = production terminal for lead-time; values matched case-insensitively against deployment `environment`). See [Configuration — API](../guide/configuration/api.md#api).
 
 ### Classification Thresholds
 
@@ -104,6 +106,58 @@ Classification logic is server-side (in `GET /api/analytics/dora`); the SPA appl
 - **Incident.** A `failure` in a `(service, environment)` slot followed by a later `success` in the same slot. An unresolved failure (no subsequent success in the window) has `restored_at: null` / `duration_minutes: null` and sorts first. `severity` is derived from `duration_minutes` (longer → higher; unresolved → `critical`).
 - **All ordering** by `happened_at` (emitter-supplied), consistent with §8 of `api-guidelines.md`.
 - **Window clamp.** The requested `window` is clamped server-side to `HISTORY_RETENTION_DAYS`; `window.clamped = true` when narrowed. The SPA surfaces the clamp.
+
+---
+
+## Presets Envelope
+
+**Storage keys:**
+
+| Key | Type | Purpose |
+|---|---|---|
+| `dd:presets` | JSON array | All saved preset envelopes. |
+| `dd:presetActive` | string | Name of the last-applied preset. Absent when no preset has been applied, or after the active preset is deleted or all settings are reset. |
+
+**Envelope shape:**
+
+```json
+{
+  "version": 1,
+  "name": "<user-supplied string, max 60 chars>",
+  "settings": { ... }
+}
+```
+
+**Version guard.** On load, envelopes with `version !== 1` are silently dropped. The `version` field is checked before any field access.
+
+**Settings keys captured in `settings`:**
+
+| Key | Type | Description |
+|---|---|---|
+| `theme` | `"dark" \| "light" \| "auto"` | Active theme token. |
+| `notifEnabled` | `boolean` | Notification master switch state. |
+| `notifStatuses` | `string[]` | Enabled notification statuses (subset of the 8). |
+| `notifSvcMode` | `"exclude" \| "include"` | Notification service filter mode. |
+| `notifSvcPatterns` | `string[]` | Notification service glob patterns. |
+| `notifEnvMode` | `"exclude" \| "include"` | Notification environment filter mode. |
+| `notifEnvPatterns` | `string[]` | Notification environment glob patterns. |
+| `view` | `"matrix" \| "swimlanes" \| "analytics"` | Active view tab. |
+| `svcFilterMode` | `"exclude" \| "include"` | Services board glob filter mode. |
+| `svcPatterns` | `string[]` | Services board glob patterns. |
+| `failuresOnly` | `boolean` | Failures-only toggle state (Matrix). |
+| `matFieldsOn` | `string[]` | Active Matrix field keys. |
+| `visFieldsOn` | `string[]` | Active Swimlanes field keys. |
+| `colOrder` | `string[]` | Environment column order (Matrix). |
+| `colHidden` | `string[]` | Hidden environment names (Matrix). |
+| `laneCollapsed` | `object` (`svc → boolean`) | Collapse state per service lane (Swimlanes). |
+| `laneAutoScroll` | `boolean` | Auto-scroll-to-change state (Swimlanes). |
+| `predicate` | `string` | Active correlation predicate key (Swimlanes). |
+| `timeWindow` | `string` | Active correlation time-window value (Swimlanes). |
+| `svcFilter` | `string` | Free-text service filter input value (Matrix + Swimlanes). Persisted under `dd:svcFilter`. |
+
+**Apply fallback.** Unknown or missing keys in `settings` are silently ignored; the corresponding live setting retains its current value. Unknown array entries for field keys are dropped; if the result is empty, all fields default ON.
+
+**Export/import format.** Each exported file is a single envelope (not an array). Filename: `dd-preset-<slug>.json`. Import rejects array inputs (old bulk format) and requires `version === 1`.
 
 ---
 
