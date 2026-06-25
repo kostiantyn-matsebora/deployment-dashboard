@@ -160,6 +160,7 @@ curl -X POST "$DASHBOARD_URL/api/deployments" \
   -d '{
     "deployment_id": "build-42",
     "service":       "checkout",
+    "namespace":     "storefront",
     "environment":   "prod",
     "version":       "1.4.2",
     "status":        "success",
