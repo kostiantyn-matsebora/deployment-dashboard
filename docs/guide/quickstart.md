@@ -99,7 +99,7 @@ The gateway (`:8080`) is the **only** published port. Frontend, API, and Postgre
 
     ---
 
-    Switch to the Analytics tab to see DORA Four Keys (deployment frequency, lead time, change failure rate, MTTR) and eight supporting charts across a 7 / 14 / 30-day window. See [Screenshots — Analytics](./screenshots.md#analytics) and [Configuration — API](./configuration.md#api) for the two tuning knobs.
+    Switch to the Analytics tab to see DORA Four Keys (deployment frequency, lead time, change failure rate, MTTR) and eight supporting charts across a 7 / 14 / 30-day window. See [Screenshots — Analytics](./screenshots.md#analytics) and [Configuration — API](./configuration/api.md#api) for the two tuning knobs.
 
 </div>
 
@@ -110,7 +110,7 @@ Use the **Demo Driver control panel** to trigger deployment scenarios and a rese
 | You want to… | Go to |
 |---|---|
 | Deploy this for your team | [Install & deploy](./install/index.md) |
-| Set the API key, database, retention, etc. | [Configuration](./configuration.md) |
+| Set the API key, database, retention, etc. | [Configuration](./configuration/index.md) |
 | Send real deployments from your pipeline | [Integrate your CI/CD](./send-events.md) |
 | Understand how the pieces fit | [Architecture overview](./architecture-overview.md) |
 | Troubleshoot | [FAQ & troubleshooting](./faq.md) |

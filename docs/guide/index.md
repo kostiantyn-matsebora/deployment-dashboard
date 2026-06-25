@@ -5,6 +5,7 @@ intro: 'Adopter guides — run, deploy, configure, and feed the dashboard from a
 children:
   - /quickstart
   - /screenshots
+  - /ui-settings
   - /install
   - /configuration
   - /send-events
@@ -35,6 +36,13 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Demo control panel](./screenshots.md#demo-control-panel)
 - [Footer](./screenshots.md#footer)
 
+### `ui-settings.md`
+
+- [UI settings & presets](./ui-settings.md#ui-settings-presets)
+- [What a preset saves](./ui-settings.md#what-a-preset-saves)
+- [Working with presets](./ui-settings.md#working-with-presets)
+- [File-based sharing](./ui-settings.md#file-based-sharing)
+
 ### `install/` — Install & deploy
 
 - [Concepts in one minute](./install/index.md#concepts-in-one-minute)
@@ -60,18 +68,31 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Cost](./install/azure-terraform.md#cost)
 - [Networking & security](./install/azure-terraform.md#networking--security)
 
-### `configuration.md`
+### `configuration/` — Configuration
 
-- [Stack version](./configuration.md#stack-version)
-- [API](./configuration.md#api)
-- [PostgreSQL: bundled profiles](./configuration.md#postgresql-bundled-profiles)
-- [PostgreSQL: external profiles](./configuration.md#postgresql-external-profiles)
-- [PostgreSQL: auth modes](./configuration.md#postgresql-auth-modes)
-- [Fetcher: pull mode](./configuration.md#fetcher-pull-mode)
-- [Fetcher: workflow exclude](./configuration.md#github-workflow-exclude)
-- [API: service exclude](./configuration.md#service-scope-filter)
-- [UI settings presets](./configuration.md#ui-settings-presets)
-- [Demo / dev only](./configuration.md#demo-dev-only)
+#### `configuration/general.md` — General
+
+- [Stack version](./configuration/general.md#stack-version)
+
+#### `configuration/postgres.md` — PostgreSQL
+
+- [PostgreSQL: bundled profiles](./configuration/postgres.md#postgresql-bundled-profiles)
+- [PostgreSQL: external profiles](./configuration/postgres.md#postgresql-external-profiles)
+- [PostgreSQL: auth modes](./configuration/postgres.md#postgresql-auth-modes)
+
+#### `configuration/api.md` — API
+
+- [API](./configuration/api.md#api)
+- [API: service exclude](./configuration/api.md#service-scope-filter)
+
+#### `configuration/fetcher.md` — Fetcher
+
+- [Fetcher: pull mode](./configuration/fetcher.md#fetcher-pull-mode)
+- [Fetcher: workflow exclude](./configuration/fetcher.md#github-workflow-exclude)
+
+#### `configuration/demo.md` — Demo
+
+- [Demo / dev only](./configuration/demo.md#demo-dev-only)
 
 ### `send-events.md`
 

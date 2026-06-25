@@ -26,7 +26,6 @@ theme:
   features:
     - navigation.tabs
     - navigation.tabs.sticky
-    - navigation.sections
     - navigation.top
     - navigation.indexes
     - navigation.tracking
@@ -100,7 +99,14 @@ nav:
           - guide/install/index.md
           - Docker Compose: guide/install/docker-compose.md
           - Azure (Terraform): guide/install/azure-terraform.md
-      - Configuration: guide/configuration.md
+      - Configuration:
+          - guide/configuration/index.md
+          - General: guide/configuration/general.md
+          - PostgreSQL: guide/configuration/postgres.md
+          - API: guide/configuration/api.md
+          - Fetcher: guide/configuration/fetcher.md
+          - Demo: guide/configuration/demo.md
+      - UI settings: guide/ui-settings.md
       - Integrate your CI/CD: guide/send-events.md
       - Architecture overview: guide/architecture-overview.md
       - FAQ & troubleshooting: guide/faq.md
