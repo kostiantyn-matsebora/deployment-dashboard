@@ -34,6 +34,9 @@ build/
   assemble.py  Vendors core/ into the adapter so the plugin is self-contained
                (Claude Code plugins cannot reference files outside their root);
                `assemble.py --check` guards core <-> adapter sync in CI.
+fixtures/
+  acme-stack/  A pair-repo sample app (frontend/backend/infra/testing/docs) — a
+               consistent baseline target for testing docs-keeper + a runnable example.
 .claude-plugin/marketplace.json   This repo as a single-plugin marketplace.
 ```
 

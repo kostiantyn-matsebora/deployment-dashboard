@@ -4,8 +4,12 @@
 [tool.ruff]
 line-length = 130
 target-version = "py311"
-# Vendored copy of core/ inside the assembled adapter is generated, not edited.
-extend-exclude = ["adapters/claude-code/hooks/_engine"]
+# Generated (vendored core inside the adapter) + fixture sample app are not hand-edited
+# Python and must not be linted as project source.
+extend-exclude = [
+  "adapters/claude-code/hooks/_engine",
+  "fixtures/acme-stack",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP", "BLE"]
@@ -23,4 +27,5 @@ pythonpath = ["."]
 python_files = ["*_test.py"]
 python_classes = ["Describe*"]
 python_functions = ["test_*"]
-testpaths = ["core", "adapters", "build"]
+# fixtures/ holds the integration test; the acme-stack sample app under it has no tests.
+testpaths = ["core", "adapters", "build", "fixtures"]

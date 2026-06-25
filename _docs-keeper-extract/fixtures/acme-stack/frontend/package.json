@@ -1,0 +1,6 @@
+{
+  "name": "acme-stack-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": { "build": "echo build", "test": "echo test" }
+}
