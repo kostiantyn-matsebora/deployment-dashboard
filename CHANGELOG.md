@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.19.0] - 2026-06-25
+
+### Changed
+
+- **Fetcher decouples service identity from `Contents:read` — the permission is now opt-in (#389).** Service identity now resolves from the GitHub Actions API (`GET /actions/workflows/{workflow_id}`, which needs only `Actions:read` and is always available), so the workflow-contents fetch that builds the `needs` graph is best-effort and gated on `Contents:read`. A token without `Contents:read` gets a 403 on that fetch, which now degrades `parent_deployments` to `[]` instead of degrading identity: the Matrix stays full-fidelity and Swimlanes falls back to non-explicit correlation. Adopters can run with a narrower fine-grained PAT (Actions:read only) and still get full service identity — see the two-tier PAT token tables in the Docker Compose install guide.
+
+### Security
+
+- **Demo runtime images no longer bundle npm (CVE-2026-12151) (#387).** The `node:lts-alpine` base image ships a global npm whose vendored `undici` tripped the release Trivy gate on HIGH CVE-2026-12151 (undici DoS). The demo-driver and github-emulator images run via `node dist/main` and need npm only at build time, so it is now removed from the runtime stage after the production install — the apps run unchanged and the bundled-undici CVE is gone.
+
+
 ## [0.18.0] - 2026-06-23
 
 ### Added
