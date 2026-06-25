@@ -39,7 +39,6 @@ decision verbs, or plugin-root references in `core/` (CI greps for `CLAUDE_PLUGI
 | Claude Code plugin manifest / hooks | `adapters/claude-code/.claude-plugin/plugin.json` · `adapters/claude-code/hooks/hooks.json` |
 | Thin CC entrypoints (payload ↔ engine) | `adapters/claude-code/hooks/cc_*.py` |
 | Vendoring (core → adapter) + drift guard | `build/assemble.py` |
-| Pair-repo test fixture (sample full-stack app) | `fixtures/acme-stack/` |
 
 **Generated — never hand-edit:** `adapters/claude-code/hooks/_engine/` and
 `adapters/claude-code/spec/`. They are vendored from `core/` by `build/assemble.py` and

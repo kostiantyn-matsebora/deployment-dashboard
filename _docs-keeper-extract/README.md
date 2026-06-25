@@ -34,9 +34,6 @@ build/
   assemble.py  Vendors core/ into the adapter so the plugin is self-contained
                (Claude Code plugins cannot reference files outside their root);
                `assemble.py --check` guards core <-> adapter sync in CI.
-fixtures/
-  acme-stack/  A pair-repo sample app (frontend/backend/infra/testing/docs) — a
-               consistent baseline target for testing docs-keeper + a runnable example.
 .claude-plugin/marketplace.json   This repo as a single-plugin marketplace.
 ```
 
@@ -65,6 +62,13 @@ python3 core/engine/cli.py --drift-only [--repo-root <path>] [--enforce warn|blo
 ```
 
 Exit 0 (clean) or 2 (drift; message on stderr). No hook host required.
+
+## Example host repo (pair-repo)
+
+`acme-stack-docs-keeper-example` is a standalone sample host project (frontend + backend +
+infrastructure + testing + docs) used to exercise docs-keeper end-to-end and as a runnable
+example. It ships a clean docs baseline and a pairing test that runs this engine against
+itself. Keep it checked out next to this repo to run the pairing suite.
 
 ## Develop
 

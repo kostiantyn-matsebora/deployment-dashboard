@@ -1,0 +1,16 @@
+# acme-stack-docs-keeper-example — tooling for the pairing test only.
+# The sample app (frontend/backend/infrastructure/testing) is illustrative, not linted.
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+extend-exclude = ["frontend", "backend", "infrastructure", "testing"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+python_files = ["*_test.py"]
+python_classes = ["Describe*"]
+python_functions = ["test_*"]
