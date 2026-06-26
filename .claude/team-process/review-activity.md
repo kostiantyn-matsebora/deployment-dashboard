@@ -1,11 +1,6 @@
 # Review Workflow — Activity Diagram
 
-Visual companion to the executable command [`/review-loop`](../commands/review-loop.md) — the
-parallelized realization of the **Review loop** in [`process.md`](process.md): partition changed files
-into **per-competency buckets**, provision a **reviewer pool per competency sized proportionally to
-effort** (file count), let each reviewer drain its bucket one file at a time, then **cross-review**
-(adversarially verify + dedup findings across files) and **integrate** into one consolidated result.
-Pairs with the activity view in [`process-activity.md`](process-activity.md).
+Visual companion to [`/review-loop`](../commands/review-loop.md); pairs with [`process-activity.md`](process-activity.md). Depicts: partition changed files into per-competency buckets → provision reviewer pool ∝ effort (file count) → drain bucket one file at a time → cross-review (adversarially verify + dedup) → integrate into one consolidated `REVIEW`.
 
 ```mermaid
 flowchart TD
@@ -44,7 +39,7 @@ flowchart TD
 
 ## Modeling notes
 
-- **Pools, not one-agent-per-file.** Files are bucketed by owning competency; each competency gets a *pool* whose size is proportional to that bucket's effort (file count), capped by the concurrency limit. 10 backend + 3 frontend files → ~3 backend reviewers : 1 frontend reviewer, not 13 agents.
+- **Pools, not one-agent-per-file.** Files are bucketed by owning competency; pool size ∝ effort (file count), capped by concurrency (e.g. 10 backend + 3 frontend → ~3 back : 1 front, not 13 agents).
 - **Work-queue drain.** Each agent takes the next file from its bucket, reviews it (full bar per symbol → `REVIEW`), and repeats until the bucket is empty — so "one reviewer per file" holds *at a time*, with a bounded, balanced worker pool.
 - **Reviewer ≠ implementer.** Within a competency, reviewers are independent of that lane's implementers.
 - **Barrier before cross-review.** All findings are collected once every bucket is drained, because cross-review needs the full set to dedup and reconcile findings spanning multiple files.

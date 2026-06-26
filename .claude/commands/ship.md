@@ -17,6 +17,12 @@ The **Ship** activity of the orchestration process
 3. **Open / update the PR.** Fill the template; link the issue; summarize scope + verification
    (actual test counts), not raw logs.
 4. **Watch CI to green.** Red → route each failure to its owning role; never leave CI red.
+5. **Publish the decision record (issue mode).** Project the session `decisions[]` / `acceptance`
+   to the owning issue as a single managed comment (idempotent upsert; never touches the issue
+   body). **Confirm-first** — it is outward-facing:
+   - Render: `python3 scripts/team-process/update_issue_decision_record.py --id <id> --dry-run`
+   - Show the user; on approval, re-run without `--dry-run` to upsert the comment.
+   - See [`.claude/team-process/process.md`](../team-process/process.md) → *Decision record*.
 
 ## Gate (binding)
 
@@ -26,4 +32,17 @@ The **Ship** activity of the orchestration process
   to the default branch and never disbands at PR-open.
 - **Done** = user-accepted AND merged AND default branch green — never advanced on its own.
 
-**Output:** an open PR with CI green, awaiting user acceptance.
+## Post-PR iteration (binding)
+
+PR-open + green is a **checkpoint awaiting acceptance, not termination.** A user change request is a **new wave**, not an inline patch.
+
+- **Re-enter the loop.** dispatch (`BRIEF`) → integrate → **cross-review (incl. `security`)** → **fix** → ship for the changed unit.
+  - Review + fix gates are **never skipped** on follow-ups.
+- **Proportional, never zero.** A one-line tweak gets a focused review + fix over the changed unit — but never zero.
+- **Trigger depends on mode:**
+  - **Autonomous** → auto-loop, surface intent.
+  - **Interactive** → surface the re-entry plan + let the user pick the depth before dispatching.
+- **Lead does not patch the PR itself.** See [`process.md`](../team-process/process.md) → *Post-PR iteration*.
+
+**Output:** an open PR with CI green, awaiting user acceptance + (issue mode) the decision record
+published to the issue.

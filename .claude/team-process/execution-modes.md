@@ -1,9 +1,6 @@
 # Execution modes
 
-Substrate reference for [`process.md`](process.md) — a companion alongside
-[`protocol.md`](protocol.md) and [`guardrails.md`](guardrails.md). Roles + guardrails are identical
-across modes; only the substrate differs. **Default flow is unchanged; teams never replace it —
-opt-in escalation only.**
+Substrate reference for [`process.md`](process.md), [`protocol.md`](protocol.md), and [`guardrails.md`](guardrails.md) — roles + guardrails identical across modes; only the substrate differs. **Default flow unchanged — teams are opt-in escalation only.**
 
 ## The two modes
 
@@ -24,17 +21,10 @@ opt-in escalation only.**
 
 ## Runtime bindings
 
-The modes are runtime-neutral; each runtime maps them to its own primitives. Two bindings ship:
+Each runtime maps the two modes to its own primitives.
 
-**Claude Code:**
-
-- In-session subagent = the `Agent`/Task tool.
-- Spawned team = `/feature-team <issue>` → plan-confirm → `TeamCreate` + spawn members (`subagent_type` = role), coordinating via `SendMessage` + a shared task list.
-- Project bindings: `CLAUDE.md` § *Project bindings*.
-
-**GitHub Copilot:**
-
-- Role member = a custom agent `.github/agents/<role>.agent.md` (body = the role anchor), invoked `@<role>`.
-- In-session subagent = invoke `@<role>` directly.
-- Spawned team = `/fleet` (Copilot CLI) — decomposes the objective into parallel tracks dispatched to the role agents; the lead integrates.
-- Project bindings: `.github/copilot-instructions.md`.
+| | Claude Code | GitHub Copilot |
+|---|---|---|
+| **In-session subagent** | `Agent`/Task tool | `@<role>` direct |
+| **Spawned team** | `/feature-team` → `--set-marker` opens the run + background-Agent members (`run_in_background`, `subagent_type`=role) via `SendMessage` | `/fleet` (Copilot CLI) — parallel tracks to role agents; lead integrates |
+| **Project bindings** | `CLAUDE.md` § *Project bindings* | `.github/copilot-instructions.md` |

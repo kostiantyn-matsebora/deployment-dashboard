@@ -1,0 +1,167 @@
+/* ============================================================
+   PatternFilterComponent — scoped styles
+   Mirrors mockup .ext-mode-seg / .ext-config-filter-chips /
+   .pat-input-row / .ac-dropdown / .ext-filter-chip classes.
+   ============================================================ */
+
+/* Allow host to fill its flex/grid container and enable chip wrapping.
+   Without display:block the host stays inline and ignores width constraints. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
+/* -- Mode segmented control ---------------------------------- */
+.pf-mode-seg {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.pf-mode-btn {
+  flex: 1;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--glass-edge-2, rgba(255,255,255,0.10));
+  background: var(--field-toggle-bg, rgba(10,12,20,0.45));
+  color: var(--ink-2, #7c829a);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pf-mode-btn.is-active {
+  background: rgba(var(--accent-rgb, 120,110,255), 0.22);
+  color: var(--ink-0, #e9ecf4);
+  border-color: rgba(var(--accent-rgb, 120,110,255), 0.50);
+}
+
+/* -- Chip list ----------------------------------------------- */
+.pf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.pf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  border-radius: 99px;
+  background: rgba(var(--accent-rgb, 120,110,255), 0.18);
+  color: var(--ink-0, #e9ecf4);
+  border: 1px solid rgba(var(--accent-rgb, 120,110,255), 0.40);
+}
+
+.pf-chip-x {
+  cursor: pointer;
+  color: var(--ink-2, #7c829a);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 50%;
+  transition: color 0.15s;
+}
+
+.pf-chip-x:hover {
+  color: var(--coral, #ff5d5d);
+}
+
+/* -- Add button --------------------------------------------- */
+.pf-add-btn {
+  padding: 3px 9px;
+  font-size: 12px;
+  border-radius: 99px;
+  border: 1px dashed var(--glass-edge-2, rgba(255,255,255,0.10));
+  background: transparent;
+  color: var(--ink-2, #7c829a);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.pf-add-btn:hover {
+  color: var(--ink-0, #e9ecf4);
+  border-color: rgba(var(--accent-rgb, 120,110,255), 0.50);
+}
+
+/* -- Input row ---------------------------------------------- */
+.pf-input-row {
+  position: relative;
+  margin-top: 6px;
+}
+
+.pf-input {
+  width: 100%;
+  padding: 5px 9px;
+  font-size: 12.5px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--glass-edge-2, rgba(255,255,255,0.10));
+  background: var(--input-bg, rgba(10,12,20,0.55));
+  color: var(--ink-0, #e9ecf4);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pf-input:focus {
+  border-color: rgba(var(--accent-rgb, 120,110,255), 0.55);
+}
+
+.pf-input-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--ink-3, #555b73);
+}
+
+/* -- Dropdown ----------------------------------------------- */
+.pf-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--popover-bg, rgba(18,22,34,0.95));
+  border: 1px solid var(--glass-edge-2, rgba(255,255,255,0.10));
+  border-radius: var(--radius-sm, 8px);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.40);
+}
+
+.pf-ac-item {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--ink-1, #b8bdcc);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.pf-ac-item:hover,
+.pf-ac-item.is-active {
+  background: rgba(var(--accent-rgb, 120,110,255), 0.18);
+  color: var(--ink-0, #e9ecf4);
+}
+
+.pf-ac-hint {
+  font-size: 11px;
+  color: var(--ink-3, #555b73);
+}
+
+.pf-ac-hint-row {
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: var(--ink-3, #555b73);
+  font-style: italic;
+}
+
+/* -- Caption ------------------------------------------------- */
+.pf-caption {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--ink-2, #7c829a);
+}

@@ -29,11 +29,45 @@ A DORA-anchored analytics view covering the last 7, 14, or 30 days (bounded by `
 ![Analytics — dark](../_assets/screenshots/analytics-dark.png#only-dark){ .dd-shot }
 ![Analytics — light](../_assets/screenshots/analytics-light.png#only-light){ .dd-shot }
 
+## :material-filter-outline: Services filter { #services-filter }
+
+Glob pattern filter for services: type a pattern (`front-*`, `checkout`, `org-a/gateway`, etc.), pick "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads.
+
+**Namespace-aware matching.** Services fetched from different GitHub repositories (or posted with a non-null `namespace` field) can share the same workflow/service name. Each `(namespace, service)` pair is a distinct row. When a name collision exists, the row label shows the `namespace/` prefix; otherwise the bare name is shown. A pattern containing `/` matches the full `namespace/service` identity; a slashless pattern matches the service name across all namespaces — existing saved patterns keep working without change. Autocomplete offers both bare names and composite `namespace/service` identities derived from received data.
+
+The same widget appears in the notification preferences popover for service and environment axes.
+
+![Services glob filter — services board](../_assets/screenshots/services-filter-dark.png){ .dd-shot }
+
+![Services glob filter — notifications](../_assets/screenshots/services-filter-notifications-dark.png){ .dd-shot }
+
+## :material-bell-outline: Browser notifications { #browser-notifications }
+
+Opt-in desktop notifications triggered by deployment status transitions. Enable the bell toggle in the topbar — the browser permission is requested once, lazily. Filter notifications by status, service, and environment via the notification preferences popover.
+
+![Browser notifications — dark](../_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
+![Browser notifications — light](../_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
+
+## :material-bookmark-box-multiple-outline: UI settings presets { #ui-settings-presets }
+
+Save and reuse sets of UI settings — active filter patterns, view preferences, and notification options — as named presets stored in the browser. Apply any preset in one click to switch context instantly; clone or rename to create variants; delete removes with a confirmation prompt.
+
+**File-based sharing.** Export any preset as a `dd-preset-<slug>.json` file (one file per preset). Share it by email or by committing it to a git repo. Recipients import it via the same preset panel — the app never fetches preset files from the network.
+
+![UI settings presets — dark](../_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
+![UI settings presets — light](../_assets/screenshots/presets-light.png#only-light){ .dd-shot }
+
 ## :material-tune-variant: Demo control panel { #demo-control-panel }
 
 The demo profile ships a **Demo Driver** control panel (`/demo/`): ingest the curated or random dataset, seed the GitHub emulator, drive live emission, trigger a system reset, and watch the deployment feed and component event streams in real time.
 
 ![Demo Driver control panel](../_assets/screenshots/demo-panel-dark.png){ .dd-shot }
+
+## :material-dock-bottom: Footer { #footer }
+
+A fixed glass footer persists across all views. The left side shows the running version (sourced from `GET /api/version`, prefixed `v`) and a **Documentation** link. The right side carries the copyright and MIT License attribution.
+
+![Dashboard footer](../_assets/screenshots/footer.png){ .dd-shot }
 
 ---
 

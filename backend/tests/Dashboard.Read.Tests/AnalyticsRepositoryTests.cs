@@ -2,6 +2,7 @@ using Dashboard.Read.Analytics;
 using Dashboard.Shared.Contracts;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -66,7 +67,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     public async Task GetFunnelCountsAsync_CustomLadder_ReturnsExactlyConfiguredStagesInOrder()
     {
         var opts = CustomOptions("dev", "staging", "production");
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         await SeedAsync(
             Ev("d1", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
@@ -93,7 +94,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     public async Task GetFunnelCountsAsync_CustomLadder_CountsDistinctDeploymentIds()
     {
         var opts = CustomOptions("dev", "staging", "production");
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         await SeedAsync(
             // "dev" — 2 distinct deployment IDs.
@@ -131,7 +132,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     public async Task GetLeadTimeHourSamplesAsync_CustomLadder_ResolvesTerminalAsLastEntry()
     {
         var opts = CustomOptions("dev", "staging", "production");
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         // Parent deployment in "dev" — no ParentDeployments itself.
         var parentId = "parent-001";
@@ -162,7 +163,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     public async Task GetLeadTimeHourSamplesAsync_CustomLadder_NoTerminalEvents_ReturnsEmpty()
     {
         var opts = CustomOptions("dev", "staging", "production");
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         // Only seed "dev" events — "production" terminal has nothing.
         await SeedAsync(
@@ -184,7 +185,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     public async Task GetFunnelCountsAsync_DefaultLadder_ReturnsFiveCanonicalStagesInOrder()
     {
         var opts = DefaultOptions();
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         await SeedAsync(
             Ev("d1", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
@@ -218,7 +219,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     {
         // Parse normalizes "PROD" → "prod"; DB stores "prod" → LOWER("prod") = "prod" → match.
         var opts = OptionsFromParsed("dev", "staging", "PROD");
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         await SeedAsync(
             Ev("d1", "svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
@@ -243,7 +244,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     public async Task GetFunnelCountsAsync_MixedCaseDbValues_MatchViaLower()
     {
         var opts = CustomOptions("dev", "staging", "prod");
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         // Seed with mixed-case — real-world DB convention is lowercase, but an operator
         // might have seeded with different casing before the convention was enforced.
@@ -269,7 +270,7 @@ public sealed class AnalyticsRepositoryTests : IDisposable
     {
         // "PROD" normalized to "prod" by Parse; DB stores "prod".
         var opts = OptionsFromParsed("dev", "staging", "PROD");
-        var repo = new AnalyticsRepository(_db, opts);
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
 
         var parentId = "parent-case-001";
         var parentAt = WindowFrom.AddDays(1);
@@ -330,6 +331,24 @@ public sealed class AnalyticsRepositoryTests : IDisposable
             ParentDeployments = parentDeployments,
         };
 
+    private static DeploymentEvent EvWithActor(
+        string deploymentId,
+        string service,
+        string environment,
+        string status,
+        DateTimeOffset happenedAt,
+        string actor) =>
+        new()
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = deploymentId,
+            Service = service,
+            Environment = environment,
+            Status = status,
+            HappenedAt = happenedAt,
+            Actor = actor,
+        };
+
     /// <summary>
     /// Options built from pre-lowercased tokens — simulates what the composition root
     /// produces after <see cref="AnalyticsFunnelEnvironments.Parse"/> normalizes the input.
@@ -349,6 +368,206 @@ public sealed class AnalyticsRepositoryTests : IDisposable
 
     private static AnalyticsOptions DefaultOptions() =>
         new(AnalyticsFunnelEnvironments.Default, AnalyticsWindowGranularity.Day, 365);
+
+    private static AnalyticsExcludeFilter ExcludeFilter(string serviceExcludeCsv) =>
+        new(ServiceFilter.Parse(serviceExcludeCsv));
+
+    // ── C: SERVICE_EXCLUDE filter applied to analytics ────────────────────────
+
+    /// <summary>
+    /// Empty filter (SERVICE_EXCLUDE not set): all events contribute — existing
+    /// aggregate behaviour is completely unchanged (the fast path is exercised).
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_EmptyFilter_AllEventsContribute()
+    {
+        var opts = DefaultOptions();
+        var repo = new AnalyticsRepository(_db, opts, new AnalyticsExcludeFilter(ServiceFilter.PassAll));
+
+        await SeedAsync(
+            Ev("d1", "included", "prod", DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d2", "also-included", "prod", DeploymentStatus.Success, WindowFrom.AddDays(2))
+        );
+
+        var counts = await repo.GetStatusCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
+        Assert.Equal(2, counts.Sum(c => c.Count));
+    }
+
+    /// <summary>
+    /// Excluded service events do NOT contribute to status-distribution counts.
+    /// Included service events are unaffected.
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_StatusCounts_ExcludedServiceOmitted()
+    {
+        var opts = DefaultOptions();
+        var repo = new AnalyticsRepository(_db, opts, ExcludeFilter("excluded-svc"));
+
+        await SeedAsync(
+            Ev("d1", "included-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d2", "excluded-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(2))
+        );
+
+        var counts = await repo.GetStatusCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
+        // Only the 1 included-svc event remains.
+        Assert.Equal(1, counts.Sum(c => c.Count));
+    }
+
+    /// <summary>
+    /// Excluded service events do NOT contribute to daily terminal counts
+    /// (frequency / CFR / DORA deployment-frequency path).
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_DailyTerminalCounts_ExcludedServiceOmitted()
+    {
+        var opts = DefaultOptions();
+        var repo = new AnalyticsRepository(_db, opts, ExcludeFilter("ghost-svc"));
+
+        await SeedAsync(
+            Ev("d1", "real-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d2", "ghost-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(2))
+        );
+
+        var counts = await repo.GetDailyTerminalCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
+        // Only real-svc's success event remains.
+        Assert.Equal(1, counts.Sum(c => c.SuccessCount + c.FailureCount));
+    }
+
+    /// <summary>
+    /// Top-deployers: excluded service deployments do not count toward any actor's tally.
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_TopDeployers_ExcludedServiceDeploymentsOmitted()
+    {
+        var opts = DefaultOptions();
+        var repo = new AnalyticsRepository(_db, opts, ExcludeFilter("ghost-svc"));
+
+        await SeedAsync(
+            // included-svc — 1 success deployment for alice.
+            EvWithActor("dep-a", "included-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(1), "alice"),
+            // ghost-svc — 2 success deployments for bob — must be excluded.
+            EvWithActor("dep-b", "ghost-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(2), "bob"),
+            EvWithActor("dep-c", "ghost-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(3), "bob")
+        );
+
+        var deployers = await repo.GetTopDeployersAsync(WindowFrom, WindowTo, 10, CancellationToken.None);
+        // Only alice with 1 deployment; bob entirely absent.
+        Assert.Single(deployers);
+        Assert.Equal("alice", deployers[0].Actor);
+        Assert.Equal(1, deployers[0].Count);
+    }
+
+    /// <summary>
+    /// Funnel counts: excluded service events do not count toward any funnel stage.
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_FunnelCounts_ExcludedServiceOmitted()
+    {
+        var opts = CustomOptions("dev", "staging", "prod");
+        var repo = new AnalyticsRepository(_db, opts, ExcludeFilter("ghost-svc"));
+
+        await SeedAsync(
+            Ev("d1", "real-svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d2", "ghost-svc", "dev", DeploymentStatus.Success, WindowFrom.AddDays(2)),
+            Ev("d3", "real-svc", "staging", DeploymentStatus.Success, WindowFrom.AddDays(3))
+        );
+
+        var counts = await repo.GetFunnelCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
+        Assert.Equal(3, counts.Count);
+        // dev: only d1 (real-svc); d2 (ghost-svc) excluded.
+        Assert.Equal(1, counts[0].Count);
+        // staging: only d3 (real-svc).
+        Assert.Equal(1, counts[1].Count);
+        // prod: none.
+        Assert.Equal(0, counts[2].Count);
+    }
+
+    /// <summary>
+    /// Glob pattern excludes multiple services matching the pattern.
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_GlobPattern_ExcludesMatchingServices()
+    {
+        var opts = DefaultOptions();
+        var repo = new AnalyticsRepository(_db, opts, ExcludeFilter("ghost-*"));
+
+        await SeedAsync(
+            Ev("d1", "real-svc", "prod", DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            Ev("d2", "ghost-a", "prod", DeploymentStatus.Success, WindowFrom.AddDays(2)),
+            Ev("d3", "ghost-b", "prod", DeploymentStatus.Success, WindowFrom.AddDays(3))
+        );
+
+        var counts = await repo.GetStatusCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
+        // Only real-svc survives.
+        Assert.Equal(1, counts.Sum(c => c.Count));
+    }
+
+    /// <summary>
+    /// Namespace/service composite exclude: only events where BOTH namespace and service
+    /// match are excluded; same service name under a different namespace is kept.
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_NamespacedPattern_ExcludesOnlyMatchingNamespace()
+    {
+        var opts = DefaultOptions();
+        // Exclude org-b/gateway but NOT org-a/gateway.
+        var repo = new AnalyticsRepository(_db, opts, ExcludeFilter("org-b/gateway"));
+
+        await SeedAsync(
+            EvNs("d1", "gateway", "org-a", "prod", DeploymentStatus.Success, WindowFrom.AddDays(1)),
+            EvNs("d2", "gateway", "org-b", "prod", DeploymentStatus.Success, WindowFrom.AddDays(2))
+        );
+
+        var counts = await repo.GetStatusCountsAsync(WindowFrom, WindowTo, CancellationToken.None);
+        // Only org-a/gateway survives.
+        Assert.Equal(1, counts.Sum(c => c.Count));
+    }
+
+    /// <summary>
+    /// Heatmap: excluded service events do not contribute any cells.
+    /// </summary>
+    [Fact]
+    public async Task ServiceExclude_Heatmap_ExcludedServiceOmitted()
+    {
+        var opts = DefaultOptions();
+        var repo = new AnalyticsRepository(_db, opts, ExcludeFilter("ghost-svc"));
+
+        // A specific known timestamp so we can check the heatmap cell count.
+        // 2026-01-05 is a Monday (DayOfWeek == 1), hour 10.
+        var includedAt = new DateTimeOffset(2026, 1, 5, 10, 0, 0, TimeSpan.Zero);
+        var excludedAt = new DateTimeOffset(2026, 1, 6, 11, 0, 0, TimeSpan.Zero); // different cell
+
+        await SeedAsync(
+            Ev("d1", "real-svc", "prod", DeploymentStatus.Success, includedAt),
+            Ev("d2", "ghost-svc", "prod", DeploymentStatus.Success, excludedAt)
+        );
+
+        var cells = await repo.GetHeatmapCellsAsync(WindowFrom, WindowTo, CancellationToken.None);
+        // Only real-svc's cell remains — ghost-svc's distinct cell is absent.
+        Assert.Single(cells);
+        Assert.Equal((int)includedAt.UtcDateTime.DayOfWeek, cells[0].DayOfWeek);
+        Assert.Equal(includedAt.UtcDateTime.Hour, cells[0].Hour);
+    }
+
+    // ── Helpers: namespace-carrying event ─────────────────────────────────────
+
+    private static DeploymentEvent EvNs(
+        string deploymentId,
+        string service,
+        string ns,
+        string environment,
+        string status,
+        DateTimeOffset happenedAt) =>
+        new()
+        {
+            Id = Guid.CreateVersion7(),
+            DeploymentId = deploymentId,
+            Service = service,
+            Namespace = ns,
+            Environment = environment,
+            Status = status,
+            HappenedAt = happenedAt,
+        };
 }
 
 // ── SQLite array support ──────────────────────────────────────────────────────

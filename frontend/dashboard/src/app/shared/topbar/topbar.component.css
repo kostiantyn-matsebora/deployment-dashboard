@@ -787,3 +787,475 @@
   white-space: nowrap;
   text-align: right;
 }
+
+/* ── Bell badge-dot (coral dot when notifications enabled) ───────────────── */
+/* Placed inside .icon-btn; visible only via .has-active parent class. */
+.badge-dot {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: 0 0 6px var(--coral-glow);
+  display: none;
+  pointer-events: none;
+}
+
+.icon-btn.has-active .badge-dot { display: block; }
+
+/* ── Services filter content wrapper ─────────────────────────────────────── */
+/* Scoped class on the services picker only — avoids touching .picker-content
+   used by legend/columns/fields/correlation which don't need a width cap. */
+.svc-filter-content { width: 320px; max-width: 320px; }
+
+/* ── Notification popover ────────────────────────────────────────────────── */
+/* Width is set globally in styles.css (.glass-popover.notif-popover) because
+   the popover is appendTo="body" and lives outside this component's scope. */
+
+/* Content wrapper — uses shared .picker-content base; only deltas here.
+   width:100% fills the globally-capped 420px popover container. */
+.notif-content { min-width: 300px; width: 100%; max-width: 100%; gap: 6px; }
+
+/* Master toggle hint text */
+.notif-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin-top: -2px;
+  margin-bottom: 2px;
+}
+
+/* Filter block dims when master is OFF (mirrors .ext-option-block.is-paused) */
+.notif-filters {
+  border: 1px solid var(--glass-edge-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: opacity 0.2s ease;
+}
+
+.notif-filters.is-paused {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Axis sub-label */
+.notif-axis-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--ink-2);
+}
+
+.notif-axis-hint {
+  font-size: 10.5px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Status chips — 2-col grid, tinted by [data-status] when .is-on */
+.notif-status-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 6px;
+}
+
+.notif-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px 4px 9px;
+  background: var(--glass);
+  border: 1px solid var(--glass-edge-2);
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--ink-1);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.notif-status-chip:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+
+/* Per-status tints when active */
+.notif-status-chip[data-status="success"].is-on    { border-color: rgba(34,210,154,0.55);  background: rgba(34,210,154,0.12);  color: var(--emerald); }
+.notif-status-chip[data-status="failure"].is-on    { border-color: rgba(255,93,93,0.55);   background: rgba(255,93,93,0.12);   color: var(--coral); }
+.notif-status-chip[data-status="in-progress"].is-on{ border-color: rgba(245,165,36,0.55);  background: rgba(245,165,36,0.12);  color: var(--amber); }
+.notif-status-chip[data-status="pending"].is-on    { border-color: rgba(139,147,173,0.55); background: rgba(139,147,173,0.12); color: var(--slate); }
+.notif-status-chip[data-status="queued"].is-on     { border-color: rgba(74,163,240,0.55);  background: rgba(74,163,240,0.12);  color: var(--blue); }
+.notif-status-chip[data-status="waiting"].is-on    { border-color: rgba(154,133,255,0.55); background: rgba(154,133,255,0.12); color: var(--violet); }
+.notif-status-chip[data-status="cancelled"].is-on  { border-color: rgba(154,160,181,0.55); background: rgba(154,160,181,0.12); color: var(--grey); }
+.notif-status-chip[data-status="rejected"].is-on   { border-color: rgba(207,128,149,0.55); background: rgba(207,128,149,0.12); color: var(--rose); }
+
+/* Mode segmented control */
+.notif-mode-row { display: flex; }
+
+.notif-mode-seg {
+  display: flex;
+  gap: 2px;
+  background: var(--tabs-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+}
+
+.notif-period-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+
+.notif-period-btn:hover { color: var(--ink-0); }
+
+.notif-period-btn.is-active {
+  color: var(--ink-0);
+  background: rgba(var(--accent-rgb), 0.18);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.35),
+    0 2px 6px -2px rgba(var(--accent-rgb), 0.25);
+}
+
+/* Filter chips */
+.notif-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-height: 0;
+}
+
+.notif-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 9px;
+  background: var(--glass);
+  border: 1px solid var(--glass-edge-2);
+  border-radius: 999px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--ink-1);
+}
+
+.notif-chip-x {
+  color: var(--ink-3);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  margin-left: 1px;
+  transition: color 0.12s;
+}
+
+.notif-chip-x:hover { color: var(--coral); }
+
+/* Caption summary */
+.notif-caption {
+  font-size: 10.5px;
+  color: var(--ink-2);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* "add" input + button row */
+.notif-add-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.notif-add-input {
+  flex: 1;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 7px;
+  padding: 4px 8px;
+  color: var(--ink-0);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  min-width: 0;
+  transition: border-color .15s;
+}
+
+.notif-add-input::placeholder { color: var(--ink-3); }
+
+.notif-add-input:focus {
+  outline: 0;
+  border-color: rgba(var(--accent-rgb), 0.55);
+}
+
+.notif-add-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--glass-edge-2);
+  border-radius: 7px;
+  padding: 3px 9px;
+  color: rgba(var(--accent-rgb), 0.85);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .12s, border-color .12s;
+}
+
+.notif-add-btn:hover {
+  color: rgba(var(--accent-rgb), 1);
+  border-color: rgba(var(--accent-rgb), 0.55);
+}
+
+/* Save actions row */
+.notif-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--glass-edge);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+/* ── ext-btn — shared button (mirrors .ext-btn in the mockup / extension) ── */
+.ext-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--glass-edge-2);
+  border-radius: var(--radius-sm);
+  padding: 5px 14px;
+  color: var(--ink-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s, background .15s;
+}
+
+.ext-btn:hover {
+  color: var(--ink-0);
+  border-color: rgba(var(--accent-rgb), 0.5);
+}
+
+.ext-btn.is-primary {
+  background: rgba(var(--accent-rgb), 0.15);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  color: var(--ink-0);
+  font-weight: 600;
+}
+
+.ext-btn.is-primary:hover { background: rgba(var(--accent-rgb), 0.22); }
+
+/* Master toggle — emerald ON to signal "notifications live" */
+.notif-master-toggle.is-on {
+  color: var(--emerald);
+  border-color: rgba(52, 210, 154, 0.45);
+  background: rgba(52, 210, 154, 0.10);
+}
+
+.notif-master-toggle.is-on .switch { background: var(--emerald); }
+
+/* ── Presets popover ─────────────────────────────────────────────────────────
+   Width is set globally in styles.css (.glass-popover.presets-popover)
+   because the popover is appendTo="body" and lives outside this component's scope.
+   The .presets-content below handles internal layout.
+   ─────────────────────────────────────────────────────────────────────────── */
+.presets-content {
+  min-width: 320px;
+  width: 100%;
+  max-width: 100%;
+  gap: 6px;
+}
+
+/* Feedback / status message */
+.presets-msg {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: rgba(var(--accent-rgb), 0.9);
+  padding: 4px 6px;
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  border-radius: 6px;
+}
+
+/* Top action row: Save / Export current / Import */
+.presets-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* Save-name input row */
+.presets-save-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+/* Name input — used for both save and rename */
+.presets-name-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: var(--ink-0);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  transition: border-color 0.15s;
+}
+
+.presets-name-input::placeholder { color: var(--ink-3); }
+
+.presets-name-input:focus {
+  outline: 0;
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+/* Rename input slightly narrower since it's inline in the list row */
+.presets-rename-input {
+  font-size: 11px;
+  padding: 3px 7px;
+}
+
+/* Divider between actions and list */
+.presets-divider {
+  height: 1px;
+  background: var(--glass-edge);
+  margin: 2px 0;
+}
+
+/* Preset list — no default list styles */
+.presets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* Individual preset row */
+.presets-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.presets-row:hover {
+  background: rgba(var(--accent-rgb), 0.06);
+  border-color: var(--glass-edge);
+}
+
+/* Preset name label — full name, wraps when needed */
+.presets-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-0);
+  line-height: 1.4;
+}
+
+/* Row actions group */
+.presets-row-actions {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+/* Per-row action icon buttons — 20×20 square, matching mockup */
+.preset-action-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: 1px solid var(--glass-edge);
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.preset-action-btn:hover {
+  color: var(--ink-0);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+/* Danger variant — delete */
+.preset-action-btn.is-danger:hover {
+  color: var(--coral);
+  border-color: rgba(255, 93, 93, 0.45);
+  background: rgba(255, 93, 93, 0.08);
+}
+
+/* Active-preset row highlight — matches mockup .preset-item.is-active */
+.presets-row.is-active {
+  color: var(--ink-0);
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: rgba(var(--accent-rgb), 0.10);
+}
+
+/* "Active" badge pill — visible only on the last-applied row */
+.preset-active-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(var(--accent-rgb), 1);
+  background: rgba(var(--accent-rgb), 0.14);
+  border: 1px solid rgba(var(--accent-rgb), 0.40);
+}
+
+/* Empty state hint */
+.presets-empty-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin: 4px 0 2px;
+  line-height: 1.5;
+}
+
+/* Reset-all button — full-width, danger-adjacent styling */
+.presets-reset-all-btn {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.presets-reset-all-btn:hover {
+  color: var(--coral);
+  border-color: rgba(255, 93, 93, 0.45);
+  background: rgba(255, 93, 93, 0.08);
+}

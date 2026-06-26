@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dashboard.Api.Version;
 using Dashboard.Control;
 using Dashboard.Control.Sse;
 using Dashboard.Read;
@@ -171,6 +172,65 @@ public sealed class OpsEndpointsUnitTests : IAsyncLifetime
         Assert.Equal("ok", body.GetProperty("status").GetString());
     }
 
+    // ── /api/version — endpoint ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetVersion_ReleaseStyle_EchoedVerbatim()
+    {
+        // A release-stamped value ("v1.2.3") must be returned exactly as provided.
+        await using var factory = new VersionTestFactory(version: "v1.2.3");
+        using var client = factory.CreateClient();
+
+        var res = await client.GetAsync("/api/version");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal("v1.2.3", body.GetProperty("version").GetString());
+    }
+
+    [Fact]
+    public async Task GetVersion_CiStyleWithPlus_EchoedVerbatim()
+    {
+        // A CI build value containing '+' (e.g. "main+abc1234") must survive the round-trip
+        // unchanged — the provider no longer strips the +<metadata> suffix.
+        await using var factory = new VersionTestFactory(version: "main+abc1234");
+        using var client = factory.CreateClient();
+
+        var res = await client.GetAsync("/api/version");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal("main+abc1234", body.GetProperty("version").GetString());
+    }
+
+    // ── AssemblyAppVersionProvider — unit ─────────────────────────────────────
+
+    [Fact]
+    public void AssemblyAppVersionProvider_ReturnsNonEmpty()
+    {
+        // The real provider must always return a non-empty string (either the baked-in
+        // InformationalVersion or the "0.0.0-dev" fallback).
+        var provider = new AssemblyAppVersionProvider();
+        Assert.False(string.IsNullOrEmpty(provider.Version));
+    }
+
+    [Fact]
+    public void AssemblyAppVersionProvider_FallbackValue_IsDevSentinel()
+    {
+        // "0.0.0-dev" is the contract sentinel agreed with the infra member; verify it
+        // directly so a rename of the constant surfaces here.
+        const string expected = "0.0.0-dev";
+
+        // The test-runner entry assembly carries no meaningful InformationalVersion, so
+        // the real provider will return either the sentinel or the runner's own version.
+        // To test the fallback path deterministically, verify the constant via the type.
+        var field = typeof(AssemblyAppVersionProvider)
+            .GetField("Fallback",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(field);
+        Assert.Equal(expected, field.GetValue(null));
+    }
+
     // ── Stubs ─────────────────────────────────────────────────────────────────
 
     private sealed class StubReadinessIndicator : IReadinessIndicator
@@ -320,5 +380,72 @@ public sealed class OpsEndpointsUnitTests : IAsyncLifetime
                 services.AddSingleton(componentEvent);
             });
         }
+    }
+
+    // ── /api/version factory ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Minimal in-process factory for the <c>GET /api/version</c> endpoint test.
+    /// Boots the app with SQLite (same as <see cref="ReadyzTestFactory"/>) and replaces
+    /// <see cref="IAppVersionProvider"/> with a controllable stub so tests are independent
+    /// of the real assembly's informational version attribute.
+    /// </summary>
+    private sealed class VersionTestFactory(string version)
+        : WebApplicationFactory<Program>
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Test");
+
+            builder.UseSetting("API_KEY", "unit-test-key");
+            builder.UseSetting("CONTROL_API_KEY", "unit-test-control-key");
+            builder.UseSetting("POSTGRES_HOST", "localhost");
+            builder.UseSetting("POSTGRES_PORT", "5432");
+            builder.UseSetting("POSTGRES_DB", "test");
+            builder.UseSetting("POSTGRES_USER", "test");
+            builder.UseSetting("POSTGRES_PASSWORD", "test");
+
+            builder.ConfigureServices(services =>
+            {
+                // Swap Postgres for in-memory SQLite — same technique as ReadyzTestFactory.
+                var toRemove = services
+                    .Where(d =>
+                        d.ServiceType == typeof(DashboardDbContext) ||
+                        d.ServiceType == typeof(DbContextOptions<DashboardDbContext>) ||
+                        d.ServiceType == typeof(DbContextOptions) ||
+                        (d.ServiceType.IsGenericType &&
+                         d.ServiceType.GetGenericTypeDefinition() == typeof(IDbContextOptionsConfiguration<>) &&
+                         d.ServiceType.GetGenericArguments()[0] == typeof(DashboardDbContext)))
+                    .ToList();
+
+                foreach (var d in toRemove)
+                    services.Remove(d);
+
+                services.AddDbContext<DashboardDbContext>(o =>
+                    o.UseSqlite("DataSource=:memory:"));
+
+                // Replace the real assembly version provider with a controllable stub.
+                services.RemoveAll<IAppVersionProvider>();
+                services.AddSingleton<IAppVersionProvider>(new StubAppVersionProvider(version));
+
+                // Stubs for all readiness indicators so the app starts cleanly.
+                services.RemoveAll<IReadinessIndicator>();
+                services.AddSingleton<IReadinessIndicator>(new StubReadinessIndicator());
+
+                services.RemoveAll<IControlReadinessIndicator>();
+                services.AddSingleton<IControlReadinessIndicator>(new StubControlReadinessIndicator());
+
+                services.RemoveAll<IAckReadinessIndicator>();
+                services.AddSingleton<IAckReadinessIndicator>(new StubAckReadinessIndicator());
+
+                services.RemoveAll<IComponentEventReadinessIndicator>();
+                services.AddSingleton<IComponentEventReadinessIndicator>(new StubComponentEventReadinessIndicator());
+            });
+        }
+    }
+
+    private sealed class StubAppVersionProvider(string version) : IAppVersionProvider
+    {
+        public string Version => version;
     }
 }

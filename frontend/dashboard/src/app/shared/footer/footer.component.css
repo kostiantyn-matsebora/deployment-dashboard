@@ -1,0 +1,57 @@
+/* Fixed glass footer bar — variant-H design */
+.site-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.3px;
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  border-top: 1px solid var(--glass-edge);
+}
+
+/* Light theme: raise body-text contrast from ~2.5:1 (ink-3) to ~4.6:1 (ink-2) — WCAG AA */
+:host-context([data-theme="light"]) .site-footer,
+:host-context([data-theme="auto"]) .site-footer {
+  color: var(--ink-2);
+}
+
+.sf-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sf-spacer {
+  flex: 1;
+}
+
+.brand-ver-chip {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--ink-1);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  letter-spacing: 0.2px;
+}
+
+a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--ink-1);
+}

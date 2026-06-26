@@ -1,0 +1,27 @@
+# Python tooling config for the `scripts/` tree.
+#
+# Scripts here are the project's build / install / dev tooling, CI helpers,
+# Claude Code hooks, and one-off automation: plain Python 3 modules
+# (stdlib-only at runtime) invocable directly by path — e.g. a hook wired into
+# .claude/settings.json runs `python3 scripts/hooks/<name>.py`.
+#
+# Tests are pytest suites living as siblings next to the script under test
+# (no mirror tree), named `<script-basename>_test.py`.
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = ["*_test.py"]
+python_classes = ["Test*", "Describe*"]
+python_functions = ["test_*"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"*_test.py" = ["B011", "F811"]

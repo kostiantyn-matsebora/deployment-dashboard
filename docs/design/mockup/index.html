@@ -375,8 +375,32 @@
        Cap is comfortable on ultrawide, but no longer the dominant constraint. */
     max-width: 100%;
     margin: 0 auto;
-    padding: 14px 18px 24px;
+    padding: 14px 18px 80px; /* bottom clearance for fixed footer */
   }
+
+  /* ----- site footer (fixed glass bar) — #340 ── */
+  .site-footx {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 18px;
+    font-size: 10.5px; color: var(--ink-3); letter-spacing: .3px;
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    border-top: 1px solid var(--glass-edge);
+  }
+  .site-footx .sf-left { display: flex; align-items: center; gap: 10px; }
+  .site-footx .sf-spacer { flex: 1; }
+  .brand-ver-chip {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; line-height: 1; color: var(--ink-1);
+    padding: 3px 8px; border-radius: 999px;
+    background: var(--input-bg); border: 1px solid var(--glass-edge);
+    letter-spacing: .2px;
+  }
+  .site-footx a { color: var(--ink-2); text-decoration: none; }
+  .site-footx a:hover { color: var(--ink-1); }
 
   /* ----- top header bar ----- */
   .topbar {
@@ -720,6 +744,38 @@
     border-radius: 3px;
     background: linear-gradient(to right, rgba(var(--accent-rgb),0.6), rgba(var(--accent-rgb),1));
     transition: width .3s ease;
+  }
+
+  /* ----- notification popover — reuses .ext-option-block / .ext-filter-chip / .toggle / .ext-btn ----- */
+  .notif-popover { min-width: 320px; }
+
+  /* status chips grid — 4-col narrow pill grid (status axis only, no segmented mode) */
+  .notif-status-chips {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 6px;
+  }
+  /* status chip: reuse .ext-filter-chip visual + tint by status colour when on */
+  .notif-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px 4px 9px;
+    background: var(--glass);
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 999px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-1);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color .15s, color .15s, background .15s;
+  }
+  .notif-status-chip:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .notif-status-chip.is-on {
+    color: var(--ink-0);
+    border-color: rgba(var(--status-rgb, var(--accent-rgb)), 0.55);
+    background: rgba(var(--status-rgb, var(--accent-rgb)), 0.12);
   }
 
   /* popover surface */
@@ -2384,6 +2440,62 @@
   }
   .ext-filter-add:hover { color: var(--ink-1); border-color: rgba(var(--accent-rgb), 0.4); }
 
+  /* Pattern input row — inline text field + autocomplete dropdown */
+  .pat-input-row {
+    display: none; /* shown by JS when + add is clicked */
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+    position: relative;
+  }
+  .pat-input-row.is-open { display: flex; }
+  .pat-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-0);
+    outline: none;
+    transition: border-color .12s;
+  }
+  .pat-input:focus { border-color: rgba(var(--accent-rgb), 0.6); }
+  .pat-input-hint {
+    font-size: 10px;
+    color: var(--ink-3);
+    line-height: 1.3;
+  }
+  /* Autocomplete suggestion dropdown */
+  .ac-dropdown {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0; right: 0;
+    background: var(--panel-bg, var(--glass));
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    overflow: hidden;
+    z-index: 200;
+    display: none;
+  }
+  .ac-dropdown.is-open { display: block; }
+  .ac-item {
+    padding: 5px 10px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-1);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background .08s;
+  }
+  .ac-item:hover, .ac-item.is-active { background: rgba(var(--accent-rgb), 0.15); color: var(--ink-0); }
+  .ac-item-hint { font-size: 10px; color: var(--ink-3); font-family: inherit; padding: 4px 10px 5px; }
+
   /* =========================================================
      VISUALISATION VIEW
      ========================================================= */
@@ -3112,6 +3224,136 @@
     padding-bottom: 4px;
     border-bottom: 1px solid var(--glass-edge);
   }
+
+  /* =================================================================
+     PRESETS POPOVER
+     ================================================================= */
+  .preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .preset-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--field-toggle-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--ink-1);
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    user-select: none;
+  }
+  .preset-item:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+  .preset-item.is-active {
+    color: var(--ink-0);
+    border-color: rgba(var(--accent-rgb), 0.5);
+    background: rgba(var(--accent-rgb), 0.10);
+  }
+  .preset-active-badge {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: rgba(var(--accent-rgb), 1);
+    background: rgba(var(--accent-rgb), 0.14);
+    border: 1px solid rgba(var(--accent-rgb), 0.40);
+  }
+  .preset-item-name {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    line-height: 1.4;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .preset-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .preset-item:hover .preset-item-actions,
+  .preset-item.is-active .preset-item-actions {
+    opacity: 1;
+  }
+  .preset-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--ink-2);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    transition: color .12s, border-color .12s, background .12s;
+  }
+  .preset-action-btn:hover {
+    color: var(--ink-0);
+    border-color: var(--glass-edge-2);
+    background: var(--glass);
+  }
+  .preset-action-btn.is-danger:hover {
+    color: var(--coral);
+    border-color: var(--coral-edge);
+    background: var(--coral-wash);
+  }
+  .preset-empty-hint {
+    font-size: 11.5px;
+    color: var(--ink-3);
+    font-style: italic;
+    text-align: center;
+    padding: 10px 0 4px;
+  }
+  .preset-io-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .preset-io-row .ext-btn { flex: 1; }
+  .preset-name-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 1px solid var(--glass-edge-2);
+    border-radius: 6px;
+    color: var(--ink-0);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 8px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .preset-name-input:focus { border-color: rgba(var(--accent-rgb), 0.7); }
+  .preset-save-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    align-items: center;
+  }
+  .preset-save-row .ext-btn { flex-shrink: 0; }
+  .preset-section-label {
+    font-size: 10.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -3124,7 +3366,6 @@
       <div class="brand-mark"></div>
       <div>
         <div class="brand-name">Deployment Dashboard</div>
-        <div class="brand-sub">Monitoring · Live</div>
       </div>
     </div>
 
@@ -3245,6 +3486,41 @@
               <div class="timewin-hint">time window bounds parent search for sha/run_number/actor/version; not applicable for explicit parent</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Services picker (matrix + swimlanes — pattern-based include/exclude filter) -->
+      <div style="position:relative" id="hdr-svcs-btn">
+        <button class="icon-btn" id="btn-services" title="Services — filter services" aria-label="Services" aria-haspopup="true">
+          <span aria-hidden="true">☰</span>
+          <span class="hidden-count-badge" id="svc-hidden-badge" aria-hidden="true"></span>
+        </button>
+        <div class="popover" id="pop-services" role="dialog" aria-label="Service filter" style="min-width:280px">
+          <div class="popover-title">Services</div>
+          <!-- Mode segmented control -->
+          <div class="ext-option-mode-row" role="group" aria-label="Service filter mode" style="margin-bottom:6px">
+            <div class="ext-mode-seg" id="svc-mode-seg">
+              <button class="an-period-btn is-active" type="button" data-svc-mode="exclude" id="svc-mode-exclude">Show all except</button>
+              <button class="an-period-btn" type="button" data-svc-mode="include" id="svc-mode-include">Show only</button>
+            </div>
+          </div>
+          <!-- Pattern chips -->
+          <div class="ext-config-filter-chips" id="svc-pattern-chips" aria-label="Service patterns">
+            <!-- chips injected by JS -->
+            <button class="ext-filter-add" type="button" id="btn-svc-add-pattern" aria-label="Add service pattern">+ add pattern</button>
+          </div>
+          <!-- Inline pattern input + autocomplete (hidden until + add pattern clicked) -->
+          <div class="pat-input-row" id="svc-pattern-input-row">
+            <input type="text" class="pat-input" id="svc-pattern-input"
+                   placeholder="type name or *-api glob…"
+                   aria-label="Service pattern (glob: * any, ? one char)" spellcheck="false" autocomplete="off">
+            <div class="ac-dropdown" id="svc-ac-dropdown" role="listbox" aria-label="Matching services"></div>
+            <span class="pat-input-hint">* any · ? one char · Enter to add · Esc to cancel</span>
+          </div>
+          <!-- Result caption -->
+          <div class="ext-option-caption" id="svc-filter-caption" style="margin-top:6px"></div>
+          <!-- Show all reset -->
+          <button class="cols-reset-link" id="btn-svcs-reset" aria-label="Clear all patterns and show all services" style="margin-top:8px">Show all</button>
         </div>
       </div>
 
@@ -3406,7 +3682,171 @@
 
         </div>
       </div>
-    </div>
+
+      <!-- Notification bell — persistent icon-button; has-active = coral dot when notifications ON -->
+      <div style="position:relative">
+        <button class="icon-btn has-active" id="btn-notif"
+                title="Notification settings — browser alerts on deployment events"
+                aria-label="Notification settings" aria-haspopup="true">
+          <!-- monochrome stroke bell inheriting currentColor, matching ⊞ ▦ ☷ weight -->
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+               stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7.5 1.5a4 4 0 0 1 4 4v2.5l1 1.5H2.5l1-1.5V5.5a4 4 0 0 1 4-4z"/>
+            <path d="M6 11.5a1.5 1.5 0 0 0 3 0"/>
+          </svg>
+          <span class="badge-dot" aria-hidden="true"></span>
+        </button>
+        <div class="popover notif-popover" id="pop-notif" role="dialog" aria-label="Notification settings">
+          <div class="popover-title">Browser Notifications</div>
+
+          <!-- Master enable switch — same visual pattern as ext-master-toggle -->
+          <label class="toggle is-on" id="notif-master-toggle"
+                 title="Enable or disable all browser notifications" aria-label="Enable notifications">
+            <span class="switch" aria-hidden="true"></span>
+            <span id="notif-master-label-txt">Notify — browser alerts</span>
+          </label>
+          <span class="ext-config-hint" style="display:block;margin-top:4px;margin-bottom:8px">Off = no browser notifications fired for any event.</span>
+
+          <!-- Filter block — dims (is-paused) when master is OFF -->
+          <div class="ext-option-block" id="notif-filters-area">
+
+            <!-- Status axis — FIRST (issue #271 requirement) -->
+            <div class="ext-option-axis-label">
+              Status
+              <span class="ext-config-label-hint">(select statuses that trigger a notification)</span>
+            </div>
+            <div class="notif-status-chips">
+              <!-- success  emerald  34,210,154 -->
+              <span class="notif-status-chip is-on" style="--status-rgb:34,210,154"
+                    role="checkbox" aria-checked="true" data-notif-status="success">success</span>
+              <!-- failure  coral  255,93,93 -->
+              <span class="notif-status-chip is-on" style="--status-rgb:255,93,93"
+                    role="checkbox" aria-checked="true" data-notif-status="failure">failure</span>
+              <!-- in-progress  amber  245,165,36 -->
+              <span class="notif-status-chip" style="--status-rgb:245,165,36"
+                    role="checkbox" aria-checked="false" data-notif-status="in-progress">in-progress</span>
+              <!-- pending  slate  139,147,173 -->
+              <span class="notif-status-chip" style="--status-rgb:139,147,173"
+                    role="checkbox" aria-checked="false" data-notif-status="pending">pending</span>
+              <!-- queued  blue  74,163,240 -->
+              <span class="notif-status-chip" style="--status-rgb:74,163,240"
+                    role="checkbox" aria-checked="false" data-notif-status="queued">queued</span>
+              <!-- waiting  violet  154,133,255 -->
+              <span class="notif-status-chip" style="--status-rgb:154,133,255"
+                    role="checkbox" aria-checked="false" data-notif-status="waiting">waiting</span>
+              <!-- cancelled  grey  154,160,181 -->
+              <span class="notif-status-chip" style="--status-rgb:154,160,181"
+                    role="checkbox" aria-checked="false" data-notif-status="cancelled">cancelled</span>
+              <!-- rejected  rose  207,128,149 -->
+              <span class="notif-status-chip" style="--status-rgb:207,128,149"
+                    role="checkbox" aria-checked="false" data-notif-status="rejected">rejected</span>
+            </div>
+
+            <!-- Services axis -->
+            <div class="ext-option-axis-label">
+              Services
+              <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+            </div>
+            <div class="ext-option-mode-row" role="group" aria-label="Service notify mode">
+              <div class="ext-mode-seg" id="notif-svc-mode-seg">
+                <button class="an-period-btn is-active" type="button" data-notif-svc-mode="exclude">Watch all except</button>
+                <button class="an-period-btn" type="button" data-notif-svc-mode="include">Watch only</button>
+              </div>
+            </div>
+            <div class="ext-config-filter-chips" id="notif-svc-chips" aria-label="Service patterns">
+              <button class="ext-filter-add" type="button" id="btn-notif-svc-add" aria-label="Add service pattern">+ add pattern</button>
+            </div>
+            <div class="pat-input-row" id="notif-svc-input-row">
+              <input type="text" class="pat-input" id="notif-svc-input"
+                     placeholder="type name or *-api glob…"
+                     aria-label="Service pattern (glob: * any, ? one char)" spellcheck="false" autocomplete="off">
+              <div class="ac-dropdown" id="notif-svc-ac" role="listbox" aria-label="Matching services"></div>
+              <span class="pat-input-hint">* any · ? one char · Enter to add · Esc to cancel</span>
+            </div>
+            <div class="ext-option-caption" id="notif-svc-caption">Watching all services</div>
+
+            <!-- Environments axis -->
+            <div class="ext-option-axis-label">
+              Environments
+              <span class="ext-config-label-hint">(optional &mdash; blank = all)</span>
+            </div>
+            <div class="ext-option-mode-row" role="group" aria-label="Environment notify mode">
+              <div class="ext-mode-seg" id="notif-env-mode-seg">
+                <button class="an-period-btn is-active" type="button" data-notif-env-mode="exclude">Watch all except</button>
+                <button class="an-period-btn" type="button" data-notif-env-mode="include">Watch only</button>
+              </div>
+            </div>
+            <div class="ext-config-filter-chips" id="notif-env-chips" aria-label="Environment patterns">
+              <button class="ext-filter-add" type="button" id="btn-notif-env-add" aria-label="Add environment pattern">+ add pattern</button>
+            </div>
+            <div class="pat-input-row" id="notif-env-input-row">
+              <input type="text" class="pat-input" id="notif-env-input"
+                     placeholder="type name or prod* glob…"
+                     aria-label="Environment pattern (glob: * any, ? one char)" spellcheck="false" autocomplete="off">
+              <div class="ac-dropdown" id="notif-env-ac" role="listbox" aria-label="Matching environments"></div>
+              <span class="pat-input-hint">* any · ? one char · Enter to add · Esc to cancel</span>
+            </div>
+            <div class="ext-option-caption" id="notif-env-caption">Watching all environments</div>
+
+          </div><!-- /notif-filters-area -->
+
+          <div class="ext-config-actions" style="margin-top:10px">
+            <button class="ext-btn is-primary" type="button">Save</button>
+          </div>
+
+        </div><!-- /pop-notif -->
+      </div><!-- /notif wrapper -->
+
+      <!-- Presets — save / apply / clone / rename / delete + export / import -->
+      <div style="position:relative" id="hdr-presets-btn">
+        <button class="icon-btn" id="btn-presets"
+                title="Presets — save and restore view configurations"
+                aria-label="Presets" aria-haspopup="true">
+          <!-- bookmark icon matching the topbar weight -->
+          <svg aria-hidden="true" width="14" height="15" viewBox="0 0 14 15" fill="none"
+               stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 2h10v12l-5-3-5 3V2z"/>
+          </svg>
+          <span class="badge-dot" id="presets-badge-dot" aria-hidden="true"></span>
+        </button>
+        <div class="popover" id="pop-presets" role="dialog" aria-label="Presets" style="min-width:300px;right:0">
+          <div class="popover-title">Presets</div>
+
+          <!-- Saved presets list -->
+          <div class="preset-section-label">Saved</div>
+          <div class="preset-list" id="preset-list" aria-label="Saved presets">
+            <!-- items injected by JS -->
+          </div>
+          <div class="preset-empty-hint" id="preset-empty-hint">No presets saved yet.</div>
+
+          <!-- Save current state as new preset -->
+          <div class="preset-save-row">
+            <input type="text" class="preset-name-input" id="preset-name-input"
+                   placeholder="preset name…" aria-label="Preset name" spellcheck="false" autocomplete="off"
+                   maxlength="50">
+            <button class="ext-btn is-primary" type="button" id="btn-preset-save"
+                    title="Save current settings as a new preset" aria-label="Save preset">Save</button>
+          </div>
+
+          <!-- Import -->
+          <div class="preset-io-row">
+            <button class="ext-btn" type="button" id="btn-preset-import"
+                    title="Import a preset from a JSON file" aria-label="Import preset">⬆ Import</button>
+          </div>
+          <!-- Hidden file input for import -->
+          <input type="file" id="preset-import-file" accept=".json,application/json"
+                 style="display:none" aria-hidden="true">
+
+          <!-- Reset all settings -->
+          <div style="height:1px;background:var(--glass-edge);margin:6px 0 2px"></div>
+          <button class="ext-btn" type="button" id="btn-reset-all-settings"
+                  title="Reset all settings to defaults"
+                  aria-label="Reset all settings to defaults"
+                  style="width:100%;color:var(--ink-2)">Reset all settings</button>
+        </div>
+      </div><!-- /presets wrapper -->
+
+    </div><!-- /hdr-icons -->
 
     <div class="live-pill" title="Server-sent events — live deployment updates" aria-label="Live connection status">
       <span class="live-dot"></span>
@@ -3756,6 +4196,15 @@
   </section>
 
 </div>
+
+<footer class="site-footx">
+  <span class="sf-left">
+    <span class="brand-ver-chip" title="Deployed version">v0.13.1</span>
+    <a href="https://kostiantyn-matsebora.github.io/deployment-dashboard/" target="_blank" rel="noopener">Documentation</a>
+  </span>
+  <span class="sf-spacer"></span>
+  <span class="sf-right">© 2026 <a href="https://github.com/kostiantyn-matsebora" target="_blank" rel="noopener">@kostiantyn-matsebora</a> · <a href="https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a></span>
+</footer>
 
 <!-- ============== DRAWER ============== -->
 <div class="drawer-overlay" id="overlay"></div>
@@ -4269,8 +4718,8 @@ function renderMatrix() {
     matrixEl.appendChild(head);
   });
 
-  // ---- Service rows — visible envs only ----
-  SERVICES.forEach(svc => {
+  // ---- Service rows — visible envs × visible services only ----
+  visibleServices().forEach(svc => {
     const rowFrag = document.createDocumentFragment();
     const rowMarker = document.createElement('div');
     rowMarker.className = 'row-head row';
@@ -4544,6 +4993,23 @@ function renderSlot(svc, env, slot, key) {
   return wrap;
 }
 
+/* Services picker state — declared here so visibleServices() is usable
+   from renderMatrix() below; picker functions and constants follow after the Columns block. */
+const MX_SVC_MODE_KEY     = 'mx.svcMode';
+const MX_SVC_PATTERNS_KEY = 'mx.svcPatterns';
+
+let svcFilterMode = (function () {
+  try { return localStorage.getItem(MX_SVC_MODE_KEY) === 'include' ? 'include' : 'exclude'; } catch (_) { return 'exclude'; }
+})();
+
+let svcPatterns = (function () {
+  try {
+    const raw = localStorage.getItem(MX_SVC_PATTERNS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter(p => typeof p === 'string' && p.length > 0) : [];
+  } catch (_) { return []; }
+})();
+
 renderMatrix();
 
 /* =================================================================
@@ -4622,6 +5088,8 @@ function setView(view) {
   document.getElementById('hdr-matrix-filter').style.display = view === 'matrix' ? 'flex' : 'none';
   document.getElementById('hdr-cols-btn').style.display      = view === 'matrix' ? ''     : 'none';
   document.getElementById('hdr-vis-icons').style.display     = view === 'vis'    ? ''     : 'none';
+  // services picker is visible on matrix + swimlanes; hidden on analytics + extension
+  document.getElementById('hdr-svcs-btn').style.display = (view === 'matrix' || view === 'vis') ? '' : 'none';
   // Fields + Legend buttons hidden on analytics and extension (no per-cell fields there)
   const hideFields = view === 'analytics' || view === 'extension';
   document.getElementById('btn-fields').parentElement.style.display  = hideFields ? 'none' : '';
@@ -4671,10 +5139,13 @@ document.querySelectorAll('.tab').forEach(t => {
    and shared fields-picker popover remain. */
 const POPOVERS = [
   { btn: 'btn-ratelimit',   pop: 'pop-ratelimit' },
+  { btn: 'btn-services',    pop: 'pop-services' },
   { btn: 'btn-columns',     pop: 'pop-columns' },
   { btn: 'btn-correlation', pop: 'pop-correlation' },
   { btn: 'btn-fields',      pop: 'pop-fields' },
   { btn: 'btn-legend',      pop: 'pop-legend' },
+  { btn: 'btn-notif',       pop: 'pop-notif' },
+  { btn: 'btn-presets',     pop: 'pop-presets' },
 ];
 function closeAllPopovers() {
   POPOVERS.forEach(({btn, pop}) => {
@@ -4929,6 +5400,7 @@ function buildColsPicker() {
       lbl.classList.toggle('is-on', !colHidden.has(env));
       syncColsBtn();
       renderMatrix();
+      computeKPIs();
     });
     container.appendChild(lbl);
   });
@@ -4945,6 +5417,363 @@ document.getElementById('btn-cols-reset').addEventListener('click', e => {
   try { localStorage.removeItem(MX_HIDDEN_KEY); } catch (_) {}
   buildColsPicker();  // rebuilds picker + calls syncColsBtn()
   renderMatrix();
+  computeKPIs();
+});
+
+/* =================================================================
+   SERVICES PICKER — pattern-based include/exclude filter
+   Scales to any number of services via glob patterns (*, ?)
+   instead of a per-service checkbox list.
+
+   The picker uses:
+     svcFilterMode    : 'exclude' | 'include'
+     svcPatterns      : string[]  — glob patterns (e.g. '*-api', 'auth-bff')
+
+   visibleServices() re-evaluates from SERVICES × mode × patterns every call.
+   Persisted to localStorage keys:
+     mx.svcMode     : 'exclude' | 'include'
+     mx.svcPatterns : JSON array of pattern strings
+   ================================================================= */
+
+/* State (MX_SVC_MODE_KEY, MX_SVC_PATTERNS_KEY, svcFilterMode, svcPatterns)
+   declared above at first renderMatrix() call. */
+
+/* Persist current filter state. */
+function saveSvcFilter() {
+  try {
+    localStorage.setItem(MX_SVC_MODE_KEY, svcFilterMode);
+    localStorage.setItem(MX_SVC_PATTERNS_KEY, JSON.stringify(svcPatterns));
+  } catch (_) {}
+}
+
+/* Glob match: supports * (any substring) and ? (any single char).
+   Case-insensitive. */
+function svcGlobMatch(pattern, name) {
+  // Escape regex special chars except * and ?
+  const re = new RegExp(
+    '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                 .replace(/\*/g, '.*')
+                 .replace(/\?/g, '.') + '$',
+    'i'
+  );
+  return re.test(name);
+}
+
+/* Returns true if service name matches ANY of svcPatterns. */
+function svcMatchesAnyPattern(name) {
+  return svcPatterns.some(p => svcGlobMatch(p, name));
+}
+
+/* Derive the visible service list from SERVICES × mode × patterns.
+   exclude mode: show everything EXCEPT names matching a pattern.
+   include mode: show ONLY names matching a pattern (empty patterns = show all).
+   Last-visible guard: always show at least 1 service. */
+function visibleServices() {
+  if (svcPatterns.length === 0) return [...SERVICES];
+  let visible;
+  if (svcFilterMode === 'exclude') {
+    visible = SERVICES.filter(s => !svcMatchesAnyPattern(s));
+  } else {
+    visible = SERVICES.filter(s => svcMatchesAnyPattern(s));
+  }
+  // Guard: never return an empty list
+  return visible.length > 0 ? visible : [...SERVICES];
+}
+
+/* Derive visible swim services from SWIM_SERVICES × same filter. */
+function visibleSwimServices() {
+  if (svcPatterns.length === 0) return [...SWIM_SERVICES];
+  let visible;
+  if (svcFilterMode === 'exclude') {
+    visible = SWIM_SERVICES.filter(s => !svcMatchesAnyPattern(s));
+  } else {
+    visible = SWIM_SERVICES.filter(s => svcMatchesAnyPattern(s));
+  }
+  return visible.length > 0 ? visible : [...SWIM_SERVICES];
+}
+
+/* Rebuild all views after filter change. */
+function applySvcFilter() {
+  renderMatrix();
+  computeKPIs();
+  if (currentView === 'vis') {
+    window.__visNodeDims = null;
+    buildSwim();
+  }
+}
+
+/* Recompute caption text: "Showing N of M services" or mode-specific hint. */
+function svcCaption() {
+  const vis = visibleServices();
+  const total = SERVICES.length;
+  if (svcPatterns.length === 0) return `Showing all ${total} services`;
+  const hidden = total - vis.length;
+  if (svcFilterMode === 'exclude') {
+    return hidden === 0
+      ? `Showing all ${total} services`
+      : `Hiding ${hidden} of ${total} · showing ${vis.length}`;
+  } else {
+    return vis.length === total
+      ? `Showing all ${total} services`
+      : `Showing ${vis.length} of ${total} services`;
+  }
+}
+
+/* =================================================================
+   SHARED PATTERN WIDGET — reusable chip list + glob input + autocomplete
+   Used by: Services picker, Notification services axis, Notification envs axis.
+
+   makePatternWidget(cfg) wires a complete add/remove/autocomplete UX onto
+   existing DOM elements (all must be present in the HTML).
+
+   cfg = {
+     chipsId      : id of the .ext-config-filter-chips container
+     addBtnId     : id of the .ext-filter-add button
+     inputRowId   : id of the .pat-input-row wrapper
+     inputId      : id of the .pat-input <input>
+     dropdownId   : id of the .ac-dropdown list
+     captionId    : id of the .ext-option-caption element
+     suggestions  : string[]  — full candidate list for autocomplete
+     getPatterns  : () => string[]     — current pattern list (read)
+     setPatterns  : (arr) => void      — update pattern list + persist + side-effects
+     getCaption   : () => string       — caption text to display after any change
+     onChipChange : () => void         — called after any add/remove (re-renders etc.)
+   }
+   ================================================================= */
+function makePatternWidget(cfg) {
+  const chipsEl   = document.getElementById(cfg.chipsId);
+  const addBtn    = document.getElementById(cfg.addBtnId);
+  const inputRow  = document.getElementById(cfg.inputRowId);
+  const input     = document.getElementById(cfg.inputId);
+  const dropdown  = document.getElementById(cfg.dropdownId);
+  const captionEl = document.getElementById(cfg.captionId);
+
+  if (!chipsEl || !addBtn || !inputRow || !input || !dropdown) return;
+
+  let activeIdx = -1; // keyboard-navigated row in the dropdown
+
+  /* ---- Autocomplete ---- */
+  function getFilteredSuggestions(q) {
+    const already = new Set(cfg.getPatterns());
+    if (!q) {
+      // Show all candidates not already added (up to 8)
+      return cfg.suggestions.filter(s => !already.has(s)).slice(0, 8);
+    }
+    // Fuzzy-prefix: items whose name contains the query string (case-insensitive).
+    // Also keep items that would be matched by the typed glob if it contains *.
+    const lower = q.toLowerCase();
+    return cfg.suggestions
+      .filter(s => !already.has(s) && s.toLowerCase().includes(lower))
+      .slice(0, 8);
+  }
+
+  function renderDropdown(q) {
+    const items = getFilteredSuggestions(q);
+    activeIdx = -1;
+    if (items.length === 0 && !q) {
+      dropdown.classList.remove('is-open');
+      dropdown.innerHTML = '';
+      return;
+    }
+    dropdown.innerHTML = '';
+    const hasGlob = q && (q.includes('*') || q.includes('?'));
+
+    // Verbatim glob row — always first when query contains glob chars
+    if (hasGlob) {
+      const verbatim = document.createElement('div');
+      verbatim.className = 'ac-item';
+      verbatim.setAttribute('role', 'option');
+      verbatim.setAttribute('aria-selected', 'false');
+      verbatim.textContent = `${q}  (glob pattern)`;
+      verbatim.addEventListener('mousedown', e => {
+        e.preventDefault();
+        commitValue(q);
+      });
+      dropdown.appendChild(verbatim);
+    }
+
+    if (items.length === 0 && !hasGlob) {
+      if (q) {
+        // Typed text, no glob chars, no name matches — "no match" hint
+        const hint = document.createElement('div');
+        hint.className = 'ac-item-hint';
+        hint.textContent = 'No matches — press Enter to add as exact pattern';
+        dropdown.appendChild(hint);
+      }
+    } else {
+      items.forEach(name => {
+        const row = document.createElement('div');
+        row.className = 'ac-item';
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', 'false');
+        row.textContent = name;
+        row.addEventListener('mousedown', e => {
+          e.preventDefault();
+          commitValue(name);
+        });
+        dropdown.appendChild(row);
+      });
+    }
+    dropdown.classList.toggle('is-open', dropdown.children.length > 0);
+  }
+
+  function highlightItem(idx) {
+    const rows = dropdown.querySelectorAll('.ac-item');
+    rows.forEach((r, i) => r.classList.toggle('is-active', i === idx));
+  }
+
+  /* ---- Chip rendering ---- */
+  function renderChip(pattern) {
+    const chip = document.createElement('span');
+    chip.className = 'ext-filter-chip';
+    chip.setAttribute('data-pattern', pattern);
+    chip.innerHTML = `${pattern}<span class="ext-filter-chip-x" role="button" aria-label="Remove ${pattern}" title="Remove">&#215;</span>`;
+    chip.querySelector('.ext-filter-chip-x').addEventListener('click', e => {
+      e.stopPropagation();
+      cfg.setPatterns(cfg.getPatterns().filter(p => p !== pattern));
+      chip.remove();
+      if (captionEl) captionEl.textContent = cfg.getCaption();
+      cfg.onChipChange();
+    });
+    chipsEl.insertBefore(chip, addBtn);
+  }
+
+  /* ---- Commit a value (from Enter, suggestion click, or blur) ---- */
+  function commitValue(val) {
+    const trimmed = val.trim();
+    closeInput();
+    if (!trimmed || cfg.getPatterns().includes(trimmed)) return;
+    cfg.setPatterns([...cfg.getPatterns(), trimmed]);
+    renderChip(trimmed);
+    if (captionEl) captionEl.textContent = cfg.getCaption();
+    cfg.onChipChange();
+  }
+
+  function closeInput() {
+    inputRow.classList.remove('is-open');
+    dropdown.classList.remove('is-open');
+    dropdown.innerHTML = '';
+    input.value = '';
+    activeIdx = -1;
+  }
+
+  /* ---- Wire events ---- */
+  // "+ add pattern" opens the input
+  addBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    inputRow.classList.add('is-open');
+    input.value = '';
+    input.focus();
+    renderDropdown('');
+  });
+
+  input.addEventListener('input', () => renderDropdown(input.value.trim()));
+
+  input.addEventListener('keydown', e => {
+    const rows = dropdown.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, rows.length - 1);
+      highlightItem(activeIdx);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, -1);
+      highlightItem(activeIdx);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIdx >= 0 && rows[activeIdx]) {
+        commitValue(rows[activeIdx].textContent.replace(/\s*\(glob pattern\)$/, ''));
+      } else {
+        commitValue(input.value);
+      }
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      closeInput();
+    }
+  });
+
+  // Blur: commit typed value if input row is still open
+  input.addEventListener('blur', () => {
+    // Delay so mousedown on ac-item fires first
+    setTimeout(() => {
+      if (inputRow.classList.contains('is-open')) commitValue(input.value);
+    }, 120);
+  });
+
+  // Prevent clicks inside the input row from closing the popover
+  inputRow.addEventListener('click', e => e.stopPropagation());
+  dropdown.addEventListener('click', e => e.stopPropagation());
+
+  /* ---- Public rebuild — called by buildSvcsPicker() and notif setup ---- */
+  return {
+    rebuildChips(patterns) {
+      chipsEl.querySelectorAll('.ext-filter-chip').forEach(c => c.remove());
+      patterns.forEach(p => renderChip(p));
+      if (captionEl) captionEl.textContent = cfg.getCaption();
+    },
+  };
+}
+
+/* Keep the Services button badge + title in sync. */
+function syncSvcsBtn() {
+  const n = SERVICES.length - visibleServices().length;
+  syncIconBtn(
+    'btn-services', 'svc-hidden-badge',
+    n,
+    'Services — filter services',
+    'Services — filter services',
+    'service'
+  );
+}
+
+/* Build / rebuild the Services picker chip list + mode buttons. */
+function buildSvcsPicker() {
+  document.getElementById('svc-mode-exclude').classList.toggle('is-active', svcFilterMode === 'exclude');
+  document.getElementById('svc-mode-include').classList.toggle('is-active', svcFilterMode === 'include');
+  svcWidget.rebuildChips(svcPatterns);
+  syncSvcsBtn();
+}
+
+// Instantiate the Services picker widget
+const svcWidget = makePatternWidget({
+  chipsId:     'svc-pattern-chips',
+  addBtnId:    'btn-svc-add-pattern',
+  inputRowId:  'svc-pattern-input-row',
+  inputId:     'svc-pattern-input',
+  dropdownId:  'svc-ac-dropdown',
+  captionId:   'svc-filter-caption',
+  suggestions: SERVICES,
+  getPatterns: () => svcPatterns,
+  setPatterns: arr => { svcPatterns = arr; saveSvcFilter(); },
+  getCaption:  svcCaption,
+  onChipChange: () => { syncSvcsBtn(); applySvcFilter(); },
+});
+buildSvcsPicker();
+
+// Mode toggle — "Show all except" / "Show only"
+document.getElementById('svc-mode-seg').addEventListener('click', e => {
+  const btn = e.target.closest('[data-svc-mode]');
+  if (!btn) return;
+  e.stopPropagation();
+  const mode = btn.dataset.svcMode;
+  if (mode === svcFilterMode) return;
+  svcFilterMode = mode;
+  saveSvcFilter();
+  document.getElementById('svc-mode-exclude').classList.toggle('is-active', mode === 'exclude');
+  document.getElementById('svc-mode-include').classList.toggle('is-active', mode === 'include');
+  document.getElementById('svc-filter-caption').textContent = svcCaption();
+  syncSvcsBtn();
+  applySvcFilter();
+});
+
+// "Show all" reset button
+document.getElementById('btn-svcs-reset').addEventListener('click', e => {
+  e.stopPropagation();
+  svcPatterns   = [];
+  svcFilterMode = 'exclude';
+  saveSvcFilter();
+  buildSvcsPicker();
+  applySvcFilter();
 });
 
 // initial view sync
@@ -6181,7 +7010,7 @@ function buildSwim() {
   const dimMap = window.__visNodeDims || new Map();
   const dimOf = id => dimMap.get(id) || { w: DEFAULT_W, h: DEFAULT_H };
 
-  const svcLayouts = SWIM_SERVICES.map(svc => {
+  const svcLayouts = visibleSwimServices().map(svc => {
     const collapsed = laneCollapsed.get(svc) !== false; // default true
 
     // Collapsed lane: restrict the effective node set to the newest-event
@@ -6901,11 +7730,14 @@ document.querySelectorAll('.predicate').forEach(p => {
    KPI BAR — derive from fixture (no invented metrics)
    ================================================================= */
 function computeKPIs() {
-  const svcSet = new Set();
-  const envSet = new Set();
+  const visSvcs = new Set(visibleServices());
+  const visEnvs = new Set(visibleEnvs());
+  const svcSet  = new Set();
+  const envSet  = new Set();
   let inflight = 0, failed = 0;
   Object.entries(SLOTS).forEach(([key, slot]) => {
     const [svc, env] = key.split('|');
+    if (!visSvcs.has(svc) || !visEnvs.has(env)) return;
     svcSet.add(svc); envSet.add(env);
     if (slot.state === 'running-only' || slot.state === 'run-last' ||
         slot.state === 'run-fail-last' || slot.state === 'run-fail-only') inflight++;
@@ -6917,6 +7749,156 @@ function computeKPIs() {
   document.getElementById('kpi-failed').textContent   = failed;
 }
 computeKPIs();
+
+/* =================================================================
+   NOTIFICATION SETTINGS — master toggle + per-status chip toggles
+   ================================================================= */
+(function setupNotifications() {
+  const btn         = document.getElementById('btn-notif');
+  const masterLbl   = document.getElementById('notif-master-toggle');
+  const masterTxt   = document.getElementById('notif-master-label-txt');
+  const filtersArea = document.getElementById('notif-filters-area');
+  if (!btn || !masterLbl || !filtersArea) return;
+
+  let notifEnabled = true; // master ON by default (matches initial HTML state)
+
+  function syncBell() {
+    // coral badge-dot visible when notifications are ON (has-active drives .badge-dot display)
+    btn.classList.toggle('has-active', notifEnabled);
+    masterLbl.classList.toggle('is-on', notifEnabled);
+    masterTxt.textContent = notifEnabled ? 'Notify — browser alerts' : 'Notify — off';
+    // dims the filter block without blocking pointer on chips inside
+    filtersArea.classList.toggle('is-paused', !notifEnabled);
+  }
+
+  // Master toggle click
+  masterLbl.addEventListener('click', e => {
+    e.preventDefault();
+    notifEnabled = !notifEnabled;
+    syncBell();
+  });
+
+  // Per-status chip toggles
+  document.querySelectorAll('.notif-status-chip').forEach(chip => {
+    chip.addEventListener('click', e => {
+      e.preventDefault();
+      const on = chip.classList.toggle('is-on');
+      chip.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  });
+
+  syncBell();
+})();
+
+/* =================================================================
+   NOTIFICATION FILTER AXES — services + environments
+   Wire the include/exclude pattern chips + glob autocomplete for both
+   axes inside the browser-notifications popover.
+   These axes are display-only in the mockup (no real notification
+   filtering), but the chip/pattern/autocomplete interaction is fully live.
+   ================================================================= */
+(function setupNotifFilters() {
+  /* ---- Shared caption helpers ---- */
+  function notifCaption(patterns, mode, allItems, noun) {
+    if (patterns.length === 0) return `Watching all ${noun}s`;
+    // Expand glob patterns against allItems to count matches
+    const matched = allItems.filter(s =>
+      patterns.some(p => svcGlobMatch(p, s))
+    );
+    if (mode === 'exclude') {
+      const watching = allItems.length - matched.length;
+      return watching === allItems.length
+        ? `Watching all ${noun}s`
+        : `Watching ${watching} of ${allItems.length} ${noun}s`;
+    } else {
+      return matched.length === 0
+        ? `Watching no ${noun}s`
+        : matched.length === allItems.length
+          ? `Watching all ${noun}s`
+          : `Watching ${matched.length} of ${allItems.length} ${noun}s`;
+    }
+  }
+
+  /* ---- Services axis ---- */
+  let notifSvcMode     = 'exclude';
+  let notifSvcPatterns = [];
+
+  function notifSvcCaption() {
+    return notifCaption(notifSvcPatterns, notifSvcMode, SERVICES, 'service');
+  }
+
+  const notifSvcWidget = makePatternWidget({
+    chipsId:     'notif-svc-chips',
+    addBtnId:    'btn-notif-svc-add',
+    inputRowId:  'notif-svc-input-row',
+    inputId:     'notif-svc-input',
+    dropdownId:  'notif-svc-ac',
+    captionId:   'notif-svc-caption',
+    suggestions: SERVICES,
+    getPatterns: () => notifSvcPatterns,
+    setPatterns: arr => { notifSvcPatterns = arr; },
+    getCaption:  notifSvcCaption,
+    onChipChange: () => {},  // display-only; no dashboard re-render
+  });
+  notifSvcWidget.rebuildChips(notifSvcPatterns);
+
+  // Mode toggle
+  const notifSvcSeg = document.getElementById('notif-svc-mode-seg');
+  if (notifSvcSeg) {
+    notifSvcSeg.addEventListener('click', e => {
+      const btn = e.target.closest('[data-notif-svc-mode]');
+      if (!btn) return;
+      e.stopPropagation();
+      const mode = btn.dataset.notifSvcMode;
+      if (mode === notifSvcMode) return;
+      notifSvcMode = mode;
+      notifSvcSeg.querySelectorAll('[data-notif-svc-mode]').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.notifSvcMode === mode)
+      );
+      document.getElementById('notif-svc-caption').textContent = notifSvcCaption();
+    });
+  }
+
+  /* ---- Environments axis ---- */
+  let notifEnvMode     = 'exclude';
+  let notifEnvPatterns = [];
+
+  function notifEnvCaption() {
+    return notifCaption(notifEnvPatterns, notifEnvMode, ENVS, 'environment');
+  }
+
+  const notifEnvWidget = makePatternWidget({
+    chipsId:     'notif-env-chips',
+    addBtnId:    'btn-notif-env-add',
+    inputRowId:  'notif-env-input-row',
+    inputId:     'notif-env-input',
+    dropdownId:  'notif-env-ac',
+    captionId:   'notif-env-caption',
+    suggestions: ENVS,
+    getPatterns: () => notifEnvPatterns,
+    setPatterns: arr => { notifEnvPatterns = arr; },
+    getCaption:  notifEnvCaption,
+    onChipChange: () => {},
+  });
+  notifEnvWidget.rebuildChips(notifEnvPatterns);
+
+  // Mode toggle
+  const notifEnvSeg = document.getElementById('notif-env-mode-seg');
+  if (notifEnvSeg) {
+    notifEnvSeg.addEventListener('click', e => {
+      const btn = e.target.closest('[data-notif-env-mode]');
+      if (!btn) return;
+      e.stopPropagation();
+      const mode = btn.dataset.notifEnvMode;
+      if (mode === notifEnvMode) return;
+      notifEnvMode = mode;
+      notifEnvSeg.querySelectorAll('[data-notif-env-mode]').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.notifEnvMode === mode)
+      );
+      document.getElementById('notif-env-caption').textContent = notifEnvCaption();
+    });
+  }
+})();
 
 /* =================================================================
    THEME SWITCHER — dark / light / auto
@@ -6980,6 +7962,714 @@ computeKPIs();
     else if (mq.addListener) mq.addListener(onChange);
   }
 })();
+
+/* =================================================================
+   PRESETS — save / apply / clone / rename / delete + export / import
+   Storage key: dd:presets  →  JSON array of preset envelopes.
+   Preset envelope: { version: 1, name: string, settings: { ... } }
+   Settings keys captured: theme, notifEnabled, notifStatuses,
+     notifSvcMode, notifSvcPatterns, notifEnvMode, notifEnvPatterns,
+     view, svcFilter, svcFilterMode, svcPatterns, failuresOnly,
+     matFieldsOn (array), visFieldsOn (array),
+     colOrder (array), colHidden (array),
+     laneCollapsed (object svc→bool), laneAutoScroll (bool),
+     predicate (string), timeWindow (string).
+   Apply writes-through to all live settings exactly as the UI does.
+   ================================================================= */
+(function setupPresets() {
+  const PRESETS_KEY    = 'dd:presets';
+  const PRESET_VERSION = 1;
+
+  /* ---- localStorage helpers ---- */
+  function loadPresets() {
+    try {
+      const raw = localStorage.getItem(PRESETS_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      // Filter to known-version envelopes only
+      return arr.filter(p => p && p.version === PRESET_VERSION && typeof p.name === 'string');
+    } catch (_) { return []; }
+  }
+  function savePresets(arr) {
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(arr)); } catch (_) {}
+  }
+
+  /* ---- Snapshot: capture the current live UI state ---- */
+  function captureSettings() {
+    // theme
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+
+    // notifEnabled — read from DOM (the JS var is in a closure; DOM is the canonical truth)
+    const notifMasterEl = document.getElementById('notif-master-toggle');
+    const notifEnabledVal = notifMasterEl ? notifMasterEl.classList.contains('is-on') : true;
+
+    // notifStatuses — which chips have is-on
+    const notifStatusesVal = [];
+    document.querySelectorAll('.notif-status-chip').forEach(c => {
+      if (c.classList.contains('is-on')) notifStatusesVal.push(c.dataset.notifStatus);
+    });
+
+    // svcFilter — from the text input (DOM is canonical truth for free-text filter)
+    const svcFilterEl  = document.getElementById('svc-filter');
+    const svcFilterVal = svcFilterEl ? svcFilterEl.value : '';
+
+    // svcFilterMode / svcPatterns — from the module-level vars (set before presets IIFE runs)
+    const svcFilterModeVal = typeof svcFilterMode !== 'undefined' ? svcFilterMode : 'exclude';
+    const svgPatternsVal   = typeof svcPatterns   !== 'undefined' ? [...svcPatterns]   : [];
+
+    // failuresOnly — from module-level var
+    const failuresOnlyVal = typeof failuresOnly !== 'undefined' ? failuresOnly : false;
+
+    // view — from module-level var
+    const viewVal = typeof currentView !== 'undefined' ? currentView : 'matrix';
+
+    // matFieldsOn / visFieldsOn — from module-level Sets
+    const matFieldsOnVal = typeof matrixFieldsOn !== 'undefined' ? [...matrixFieldsOn] : [];
+    const visFieldsOnVal = typeof visFieldsOn     !== 'undefined' ? [...visFieldsOn]   : [];
+
+    // colOrder / colHidden — from module-level vars
+    const colOrderVal  = typeof colOrder  !== 'undefined' ? [...colOrder]  : [];
+    const colHiddenVal = typeof colHidden !== 'undefined' ? [...colHidden] : [];
+
+    // laneCollapsed — from module-level Map
+    const laneCollapsedVal = {};
+    if (typeof laneCollapsed !== 'undefined' && laneCollapsed instanceof Map) {
+      laneCollapsed.forEach((v, k) => { laneCollapsedVal[k] = v; });
+    }
+
+    // laneAutoScroll — from module-level var
+    const laneAutoScrollVal = typeof laneAutoScroll !== 'undefined' ? laneAutoScroll : true;
+
+    // predicate — which .predicate.is-on
+    const activePred = document.querySelector('.predicate.is-on');
+    const predicateVal = activePred ? activePred.dataset.p : 'parent';
+
+    // timeWindow — from the select element
+    const twEl = document.getElementById('timewin-select');
+    const timeWindowVal = twEl ? twEl.value : '1h';
+
+    // notifSvcMode / notifSvcPatterns / notifEnvMode / notifEnvPatterns —
+    // read from the DOM seg buttons + chips (the vars live in the notifFilters IIFE closure)
+    const notifSvcSeg   = document.getElementById('notif-svc-mode-seg');
+    const notifSvcModeVal = notifSvcSeg
+      ? (notifSvcSeg.querySelector('.an-period-btn.is-active') || {}).dataset?.notifSvcMode || 'exclude'
+      : 'exclude';
+    const notifSvcPatsVal = [];
+    document.querySelectorAll('#notif-svc-chips .ext-filter-chip').forEach(c => {
+      const txt = c.querySelector('.chip-label') || c;
+      if (txt.textContent.trim()) notifSvcPatsVal.push(txt.textContent.trim());
+    });
+
+    const notifEnvSeg     = document.getElementById('notif-env-mode-seg');
+    const notifEnvModeVal = notifEnvSeg
+      ? (notifEnvSeg.querySelector('.an-period-btn.is-active') || {}).dataset?.notifEnvMode || 'exclude'
+      : 'exclude';
+    const notifEnvPatsVal = [];
+    document.querySelectorAll('#notif-env-chips .ext-filter-chip').forEach(c => {
+      const txt = c.querySelector('.chip-label') || c;
+      if (txt.textContent.trim()) notifEnvPatsVal.push(txt.textContent.trim());
+    });
+
+    return {
+      theme:             theme,
+      notifEnabled:      notifEnabledVal,
+      notifStatuses:     notifStatusesVal,
+      notifSvcMode:      notifSvcModeVal,
+      notifSvcPatterns:  notifSvcPatsVal,
+      notifEnvMode:      notifEnvModeVal,
+      notifEnvPatterns:  notifEnvPatsVal,
+      view:              viewVal,
+      svcFilter:         svcFilterVal,
+      svcFilterMode:     svcFilterModeVal,
+      svcPatterns:       svgPatternsVal,
+      failuresOnly:      failuresOnlyVal,
+      matFieldsOn:       matFieldsOnVal,
+      visFieldsOn:       visFieldsOnVal,
+      colOrder:          colOrderVal,
+      colHidden:         colHiddenVal,
+      laneCollapsed:     laneCollapsedVal,
+      laneAutoScroll:    laneAutoScrollVal,
+      predicate:         predicateVal,
+      timeWindow:        timeWindowVal,
+    };
+  }
+
+  /* ---- Apply: write a settings snapshot back to the live UI ---- */
+  function applySettings(s) {
+    if (!s || typeof s !== 'object') return;
+
+    // theme
+    if (s.theme) {
+      const valid = new Set(['dark', 'light', 'auto']);
+      const t = valid.has(s.theme) ? s.theme : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('theme', t); } catch (_) {}
+      // sync theme-switch radios
+      document.querySelectorAll('.ts-opt').forEach(b => {
+        const on = b.dataset.themePick === t;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+      // rebuild swimlanes (baked SVG colors)
+      if (typeof buildSwim === 'function') {
+        window.__visNodeDims = null;
+        buildSwim();
+        if (typeof selectVisNode === 'function') selectVisNode(currentSelectedNodeId || PRESELECTED_NODE_ID);
+      }
+    }
+
+    // notifEnabled
+    if (typeof s.notifEnabled === 'boolean') {
+      const masterEl = document.getElementById('notif-master-toggle');
+      const masterTxtEl = document.getElementById('notif-master-label-txt');
+      const bellBtn  = document.getElementById('btn-notif');
+      const filtersAreaEl = document.getElementById('notif-filters-area');
+      if (masterEl) {
+        masterEl.classList.toggle('is-on', s.notifEnabled);
+        if (masterTxtEl) masterTxtEl.textContent = s.notifEnabled ? 'Notify — browser alerts' : 'Notify — off';
+        if (bellBtn)     bellBtn.classList.toggle('has-active', s.notifEnabled);
+        if (filtersAreaEl) filtersAreaEl.classList.toggle('is-paused', !s.notifEnabled);
+      }
+    }
+
+    // notifStatuses
+    if (Array.isArray(s.notifStatuses)) {
+      const onSet = new Set(s.notifStatuses);
+      document.querySelectorAll('.notif-status-chip').forEach(c => {
+        const on = onSet.has(c.dataset.notifStatus);
+        c.classList.toggle('is-on', on);
+        c.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+    }
+
+    // view
+    if (s.view && typeof setView === 'function') {
+      setView(s.view);
+    }
+
+    // svcFilter — free-text service name filter (the inline text input)
+    if (typeof s.svcFilter === 'string') {
+      const svcFilterInput = document.getElementById('svc-filter');
+      if (svcFilterInput) svcFilterInput.value = s.svcFilter;
+      try { localStorage.setItem('dd:svcFilter', s.svcFilter); } catch (_) {}
+      if (typeof applyFilters === 'function') applyFilters();
+    }
+
+    // svcFilterMode + svcPatterns
+    if (s.svcFilterMode && typeof svcFilterMode !== 'undefined') {
+      svcFilterMode = s.svcFilterMode === 'include' ? 'include' : 'exclude';
+      if (Array.isArray(s.svcPatterns)) svcPatterns = [...s.svcPatterns];
+      try { localStorage.setItem(MX_SVC_MODE_KEY, svcFilterMode); } catch (_) {}
+      try { localStorage.setItem(MX_SVC_PATTERNS_KEY, JSON.stringify(svcPatterns)); } catch (_) {}
+      if (typeof buildSvcsPicker === 'function') buildSvcsPicker();
+      if (typeof applySvcFilter === 'function') applySvcFilter();
+    }
+
+    // failuresOnly
+    if (typeof s.failuresOnly === 'boolean' && typeof failuresOnly !== 'undefined') {
+      failuresOnly = s.failuresOnly;
+      const ft = document.getElementById('fail-toggle');
+      if (ft) ft.classList.toggle('is-on', failuresOnly);
+      if (typeof applyFilters === 'function') applyFilters();
+    }
+
+    // matFieldsOn
+    if (Array.isArray(s.matFieldsOn) && typeof matrixFieldsOn !== 'undefined') {
+      const allowed = new Set(MATRIX_FIELDS.map(f => f.key));
+      matrixFieldsOn.clear();
+      s.matFieldsOn.forEach(k => { if (allowed.has(k)) matrixFieldsOn.add(k); });
+      // Ensure all fields default ON if none valid supplied
+      if (matrixFieldsOn.size === 0) MATRIX_FIELDS.forEach(f => matrixFieldsOn.add(f.key));
+      if (typeof buildFieldsPicker === 'function') {
+        buildFieldsPicker('fields-grid-matrix', MATRIX_FIELDS, matrixFieldsOn, () => {
+          renderMatrix(); computeKPIs();
+          syncFieldsBtn();
+        });
+      }
+      renderMatrix(); computeKPIs();
+    }
+
+    // visFieldsOn
+    if (Array.isArray(s.visFieldsOn) && typeof visFieldsOn !== 'undefined') {
+      const allowed = new Set(VIS_FIELDS.map(f => f.key));
+      visFieldsOn.clear();
+      s.visFieldsOn.forEach(k => { if (allowed.has(k)) visFieldsOn.add(k); });
+      if (visFieldsOn.size === 0) VIS_FIELDS.forEach(f => visFieldsOn.add(f.key));
+      if (typeof buildFieldsPicker === 'function') {
+        buildFieldsPicker('fields-grid-vis', VIS_FIELDS, visFieldsOn, () => {
+          window.__visNodeDims = null;
+          buildSwim();
+          syncFieldsBtn();
+        });
+      }
+      if (typeof buildSwim === 'function') { window.__visNodeDims = null; buildSwim(); }
+    }
+
+    // colOrder + colHidden
+    if (Array.isArray(s.colOrder) && typeof colOrder !== 'undefined') {
+      const validEnvs = new Set(ENVS);
+      const filtered = s.colOrder.filter(e => validEnvs.has(e));
+      // rebuild to full permutation: supplied order first, then any missing envs appended
+      const supplied = new Set(filtered);
+      colOrder = [...filtered, ...ENVS.filter(e => !supplied.has(e))];
+      try { localStorage.setItem(MX_ORDER_KEY, JSON.stringify(colOrder)); } catch (_) {}
+    }
+    if (Array.isArray(s.colHidden) && typeof colHidden !== 'undefined') {
+      colHidden = new Set(s.colHidden.filter(e => ENVS.includes(e)));
+      try { localStorage.setItem(MX_HIDDEN_KEY, [...colHidden].join(',')); } catch (_) {}
+    }
+    if (Array.isArray(s.colOrder) || Array.isArray(s.colHidden)) {
+      if (typeof buildColsPicker === 'function') buildColsPicker();
+      renderMatrix(); computeKPIs();
+    }
+
+    // laneCollapsed
+    if (s.laneCollapsed && typeof laneCollapsed !== 'undefined' && laneCollapsed instanceof Map) {
+      Object.entries(s.laneCollapsed).forEach(([svc, val]) => {
+        if (SWIM_SERVICES.includes(svc)) laneCollapsed.set(svc, Boolean(val));
+      });
+      try {
+        const obj = {};
+        laneCollapsed.forEach((v, k) => { obj[k] = v; });
+        localStorage.setItem('dd:laneCollapsed', JSON.stringify(obj));
+      } catch (_) {}
+      if (typeof buildSwim === 'function') { window.__visNodeDims = null; buildSwim(); }
+    }
+
+    // laneAutoScroll
+    if (typeof s.laneAutoScroll === 'boolean' && typeof laneAutoScroll !== 'undefined') {
+      laneAutoScroll = s.laneAutoScroll;
+      try { localStorage.setItem('dd:laneAutoScroll', String(laneAutoScroll)); } catch (_) {}
+      const autoScrollToggle = document.getElementById('sv-autoscroll-toggle');
+      if (autoScrollToggle) autoScrollToggle.classList.toggle('is-on', laneAutoScroll);
+    }
+
+    // predicate
+    if (s.predicate) {
+      const predEl = document.querySelector(`.predicate[data-p="${CSS.escape(s.predicate)}"]`);
+      if (predEl && typeof selectPredicate === 'function') selectPredicate(predEl);
+    }
+
+    // timeWindow
+    if (s.timeWindow) {
+      const twEl2 = document.getElementById('timewin-select');
+      if (twEl2) {
+        // Find the matching option; fallback to current value if not found
+        const opt = [...twEl2.options].find(o => o.value === s.timeWindow);
+        if (opt) twEl2.value = s.timeWindow;
+      }
+    }
+  }
+
+  /* ---- Validate a single imported preset envelope ---- */
+  function validateImport(parsed) {
+    if (Array.isArray(parsed)) return null; // reject old bulk-array format
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed.version === PRESET_VERSION &&
+      typeof parsed.name === 'string' &&
+      parsed.name.trim().length > 0 &&
+      typeof parsed.settings === 'object' &&
+      parsed.settings !== null
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+
+  /* ---- Slugify a preset name for use in a filename ---- */
+  function slugifyPresetName(name) {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'preset';
+  }
+
+  /* ---- Active-preset persistence ---- */
+  const ACTIVE_PRESET_KEY = 'dd:presetActive';
+  function loadActivePreset() {
+    try { return localStorage.getItem(ACTIVE_PRESET_KEY) || null; } catch { return null; }
+  }
+  function saveActivePreset(name) {
+    try {
+      if (name === null) { localStorage.removeItem(ACTIVE_PRESET_KEY); }
+      else               { localStorage.setItem(ACTIVE_PRESET_KEY, name); }
+    } catch { /* quota / private mode — ignore */ }
+  }
+
+  /* ---- State ---- */
+  let presets = loadPresets();
+  let activePresetName = loadActivePreset(); // tracks which preset is currently "applied"; persisted
+
+  /* ---- Badge dot: shows when at least one preset is saved ---- */
+  function syncBadgeDot() {
+    const dot = document.getElementById('presets-badge-dot');
+    if (dot) dot.style.display = presets.length > 0 ? 'block' : 'none';
+  }
+
+  /* ---- Render the preset list inside the popover ---- */
+  function renderPresetList() {
+    const listEl  = document.getElementById('preset-list');
+    const emptyEl = document.getElementById('preset-empty-hint');
+    if (!listEl) return;
+
+    listEl.innerHTML = '';
+
+    if (presets.length === 0) {
+      if (emptyEl) emptyEl.style.display = '';
+      syncBadgeDot();
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    presets.forEach((preset, idx) => {
+      const item = document.createElement('div');
+      item.className = 'preset-item' + (preset.name === activePresetName ? ' is-active' : '');
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('aria-label', `Apply preset: ${preset.name}`);
+      item.id = `preset-item-${idx}`;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'preset-item-name';
+      nameSpan.textContent = preset.name;
+      nameSpan.title = preset.name;
+
+      // "Active" badge — visible only on the last-applied row
+      let activeBadge = null;
+      if (preset.name === activePresetName) {
+        activeBadge = document.createElement('span');
+        activeBadge.className = 'preset-active-badge';
+        activeBadge.setAttribute('aria-hidden', 'true');
+        activeBadge.textContent = 'Active';
+      }
+
+      const actions = document.createElement('span');
+      actions.className = 'preset-item-actions';
+
+      // Apply button (tick)
+      const applyBtn = document.createElement('button');
+      applyBtn.className = 'preset-action-btn';
+      applyBtn.type = 'button';
+      applyBtn.title = 'Apply this preset';
+      applyBtn.setAttribute('aria-label', `Apply preset ${preset.name}`);
+      applyBtn.textContent = '✓';
+      applyBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        applyPreset(idx);
+      });
+
+      // Clone button
+      const cloneBtn = document.createElement('button');
+      cloneBtn.className = 'preset-action-btn';
+      cloneBtn.type = 'button';
+      cloneBtn.title = 'Clone this preset';
+      cloneBtn.setAttribute('aria-label', `Clone preset ${preset.name}`);
+      cloneBtn.textContent = '⊕';
+      cloneBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        clonePreset(idx);
+      });
+
+      // Rename button
+      const renameBtn = document.createElement('button');
+      renameBtn.className = 'preset-action-btn';
+      renameBtn.type = 'button';
+      renameBtn.title = 'Rename this preset';
+      renameBtn.setAttribute('aria-label', `Rename preset ${preset.name}`);
+      renameBtn.textContent = '✎';
+      renameBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        renamePreset(idx, item, nameSpan);
+      });
+
+      // Update button
+      const updateBtn = document.createElement('button');
+      updateBtn.className = 'preset-action-btn';
+      updateBtn.type = 'button';
+      updateBtn.title = 'Update this preset with current settings';
+      updateBtn.setAttribute('aria-label', `Update preset ${preset.name} with current settings`);
+      updateBtn.textContent = '↺';
+      updateBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        updatePreset(idx);
+      });
+
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'preset-action-btn is-danger';
+      deleteBtn.type = 'button';
+      deleteBtn.title = 'Delete this preset';
+      deleteBtn.setAttribute('aria-label', `Delete preset ${preset.name}`);
+      deleteBtn.textContent = '✕';
+      deleteBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        deletePreset(idx);
+      });
+
+      // Export button
+      const exportBtn2 = document.createElement('button');
+      exportBtn2.className = 'preset-action-btn';
+      exportBtn2.type = 'button';
+      exportBtn2.title = 'Export this preset as a JSON file';
+      exportBtn2.setAttribute('aria-label', `Export preset ${preset.name}`);
+      exportBtn2.textContent = '⬇';
+      exportBtn2.addEventListener('click', e => {
+        e.stopPropagation();
+        exportPreset(idx);
+      });
+
+      actions.appendChild(applyBtn);
+      actions.appendChild(cloneBtn);
+      actions.appendChild(renameBtn);
+      actions.appendChild(exportBtn2);
+      actions.appendChild(updateBtn);
+      actions.appendChild(deleteBtn);
+
+      item.appendChild(nameSpan);
+      if (activeBadge) item.appendChild(activeBadge);
+      item.appendChild(actions);
+
+      // Click on item name = apply
+      item.addEventListener('click', () => applyPreset(idx));
+      item.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') applyPreset(idx); });
+
+      listEl.appendChild(item);
+    });
+
+    syncBadgeDot();
+  }
+
+  /* ---- Save current state as a new preset ---- */
+  function saveCurrentAsPreset(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    const envelope = {
+      version:  PRESET_VERSION,
+      name:     trimmed,
+      settings: captureSettings(),
+    };
+    presets.push(envelope);
+    savePresets(presets);
+    activePresetName = trimmed;
+    saveActivePreset(activePresetName);
+    renderPresetList();
+    return true;
+  }
+
+  /* ---- Apply preset by index ---- */
+  function applyPreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    applySettings(p.settings);
+    activePresetName = p.name;
+    saveActivePreset(activePresetName);
+    renderPresetList();
+  }
+
+  /* ---- Clone preset by index ---- */
+  function clonePreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    const cloneName = p.name + ' (copy)';
+    const clone = { version: PRESET_VERSION, name: cloneName, settings: JSON.parse(JSON.stringify(p.settings)) };
+    presets.splice(idx + 1, 0, clone);
+    savePresets(presets);
+    activePresetName = cloneName;
+    saveActivePreset(activePresetName);
+    renderPresetList();
+  }
+
+  /* ---- Rename preset inline ---- */
+  function renamePreset(idx, itemEl, nameSpanEl) {
+    const p = presets[idx];
+    if (!p) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'preset-name-input';
+    input.value = p.name;
+    input.style.flex = '1';
+    input.style.marginRight = '4px';
+    input.setAttribute('aria-label', 'Rename preset');
+
+    const confirm = () => {
+      const newName = input.value.trim();
+      if (newName && newName !== p.name) {
+        const oldName = p.name;
+        p.name = newName;
+        if (activePresetName === oldName) {
+          activePresetName = newName;
+          saveActivePreset(activePresetName);
+        }
+        savePresets(presets);
+      }
+      renderPresetList();
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter')  { e.preventDefault(); confirm(); }
+      if (e.key === 'Escape') { e.stopPropagation(); renderPresetList(); }
+    });
+    input.addEventListener('blur', confirm);
+
+    // Replace name span with input in-place
+    nameSpanEl.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
+  /* ---- Delete preset by index ---- */
+  function deletePreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    if (!window.confirm(`Delete preset "${p.name}"?`)) return;
+    if (activePresetName === p.name) {
+      activePresetName = null;
+      saveActivePreset(null);
+    }
+    presets.splice(idx, 1);
+    savePresets(presets);
+    renderPresetList();
+  }
+
+  /* ---- Update preset by index (re-capture current settings) ---- */
+  function updatePreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    if (!window.confirm(`Update preset "${p.name}" with the current settings?\nThis will overwrite its stored settings.`)) return;
+    p.settings = captureSettings();
+    savePresets(presets);
+    renderPresetList();
+  }
+
+  /* ---- Export a single preset as a JSON file ---- */
+  function exportPreset(idx) {
+    const p = presets[idx];
+    if (!p) return;
+    const envelope = { version: p.version, name: p.name, settings: p.settings };
+    const payload = JSON.stringify(envelope, null, 2);
+    const blob = new Blob([payload], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `dd-preset-${slugifyPresetName(p.name)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /* ---- Import a single preset from a JSON file ---- */
+  function importPresets(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        const valid  = validateImport(parsed);
+        if (!valid) {
+          alert('Import failed: file does not contain a valid single dd:preset v1 envelope.');
+          return;
+        }
+        // Apply name-clash suffix if a preset with this name already exists
+        const existingNames = new Set(presets.map(p => p.name));
+        let name = valid.name;
+        let suffix = 1;
+        while (existingNames.has(name)) { name = `${valid.name} (${++suffix})`; }
+        presets.push({ version: PRESET_VERSION, name, settings: valid.settings });
+        savePresets(presets);
+        renderPresetList();
+      } catch (_) {
+        alert('Import failed: could not parse JSON file.');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  /* ---- Wire save button + Enter key ---- */
+  const nameInput = document.getElementById('preset-name-input');
+  const saveBtn   = document.getElementById('btn-preset-save');
+  if (nameInput && saveBtn) {
+    const doSave = () => {
+      const ok = saveCurrentAsPreset(nameInput.value);
+      if (ok) nameInput.value = '';
+    };
+    saveBtn.addEventListener('click', e => { e.stopPropagation(); doSave(); });
+    nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+    });
+  }
+
+  /* ---- Wire import button + hidden file input ---- */
+  const importBtn  = document.getElementById('btn-preset-import');
+  const importFile = document.getElementById('preset-import-file');
+  if (importBtn && importFile) {
+    importBtn.addEventListener('click', e => { e.stopPropagation(); importFile.click(); });
+    importFile.addEventListener('change', () => {
+      const file = importFile.files[0];
+      if (file) importPresets(file);
+      importFile.value = ''; // reset so same file can be re-imported
+    });
+  }
+
+  /* ---- Wire reset-all button ---- */
+  const resetAllBtn = document.getElementById('btn-reset-all-settings');
+  if (resetAllBtn) {
+    resetAllBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (typeof resetAllSettings === 'function') resetAllSettings();
+    });
+  }
+
+  /* ---- Initial render ---- */
+  renderPresetList();
+
+})();
+
+/* =================================================================
+   RESET ALL SETTINGS — restore every captured UI setting to its
+   framework default.  Mirrors PresetsService.resetAllSettings().
+   ================================================================= */
+function resetAllSettings() {
+  if (!confirm('Reset ALL settings to defaults?\nThis will clear all filters, field choices, and preferences.')) return;
+
+  // theme → dark
+  document.documentElement.setAttribute('data-theme', 'dark');
+  try { localStorage.setItem('theme', 'dark'); } catch (_) {}
+  document.querySelectorAll('.ts-opt').forEach(b => {
+    const on = b.dataset.themePick === 'dark';
+    b.classList.toggle('is-on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+
+  // svcFilter → '' / svcFilterMode → exclude / svcPatterns → []
+  if (typeof svcFilterMode !== 'undefined') window.svcFilterMode = 'exclude';
+  if (typeof svcPatterns   !== 'undefined') window.svcPatterns   = [];
+
+  // failuresOnly → false
+  if (typeof failuresOnly !== 'undefined') window.failuresOnly = false;
+
+  // Clear all stored settings keys (including active preset)
+  const keysToRemove = [
+    'dd:svcFilter', 'dd:failOnly', 'dd:svcFilterMode', 'dd:svcPatterns',
+    'dd:matFields', 'dd:swFields', 'dd:correlation', 'dd:timeWindow',
+    'dd:colOrder', 'dd:colHidden', 'dd:swimCollapsed', 'dd:swimAutoScroll',
+    'dd:notifPrefs', 'dd:presetActive',
+  ];
+  keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+
+  // Clear the in-scope activePresetName so the list re-renders correctly
+  if (typeof saveActivePreset === 'function') saveActivePreset(null);
+
+  // Rebuild affected views if available
+  if (typeof renderMatrix === 'function') renderMatrix();
+  if (typeof buildSwim === 'function') buildSwim();
+
+  alert('All settings have been reset to defaults. Reload the page to see full effect.');
+}
 
 /* =================================================================
    PRE-OPEN drawer on initial load — demonstrates full 11-field record

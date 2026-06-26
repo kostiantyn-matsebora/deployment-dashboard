@@ -3,8 +3,10 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { Subscription, filter } from 'rxjs';
 
 import { TopbarComponent } from './shared/topbar/topbar.component';
+import { FooterComponent } from './shared/footer/footer.component';
 import { AppStateService } from './core/services/app-state.service';
 import { DeploymentApiService } from './core/services/deployment-api.service';
+import { BrowserNotificationService } from './core/services/browser-notification.service';
 import { RateLimitReport } from './core/models/deployment.model';
 
 /**
@@ -17,21 +19,26 @@ import { RateLimitReport } from './core/models/deployment.model';
  *
  * Data flow:
  *   ngOnInit → GET /api/matrix → state.matrixData.set(snapshot)
- *            → subscribe /api/events/stream
+ *            → subscribe /api/events/stream (shared; one EventSource per tab)
  *              → each event:  state.applyDeploymentEvent(ev)
  *              → reconnect:   browser EventSource sends Last-Event-ID automatically;
  *                             server replays missed events (spec §7); no poll needed.
+ *            → subscribe deploymentConnectionState$ (separate Subject on the service)
+ *              → 'connected' → state.sseConnected.set(true)
+ *              → 'error'     → state.sseConnected.set(false)
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, TopbarComponent],
+  imports: [RouterOutlet, TopbarComponent, FooterComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
 export class App implements OnInit, OnDestroy {
-  private readonly state  = inject(AppStateService);
-  private readonly api    = inject(DeploymentApiService);
-  private readonly router = inject(Router);
+  private readonly state         = inject(AppStateService);
+  private readonly api           = inject(DeploymentApiService);
+  private readonly router        = inject(Router);
+  // Inject to activate the effect that watches lastEffectiveEvent and fires notifications.
+  private readonly _notifications = inject(BrowserNotificationService);
 
   private subs: Subscription[] = [];
 
@@ -70,14 +77,19 @@ export class App implements OnInit, OnDestroy {
   }
 
   private connectSSE(): void {
-    const sub = this.api.streamEvents({
-      onOpen:  () => this.state.sseConnected.set(true),
-      onError: () => this.state.sseConnected.set(false),
-    }).subscribe({
+    // Subscribe to the shared deployment stream (one EventSource for the tab).
+    const eventSub = this.api.streamEvents().subscribe({
       next:  (ev) => this.state.applyDeploymentEvent(ev),
       error: ()   => this.state.sseConnected.set(false),
     });
-    this.subs.push(sub);
+    this.subs.push(eventSub);
+
+    // Connection-state is reported via a dedicated Subject on the service so
+    // that onOpen/onError callbacks do not require a per-subscriber EventSource.
+    const stateSub = this.api.deploymentConnectionState$.subscribe((s) => {
+      this.state.sseConnected.set(s === 'connected');
+    });
+    this.subs.push(stateSub);
   }
 
   /**

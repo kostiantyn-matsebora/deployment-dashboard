@@ -18,7 +18,9 @@ RUN apk upgrade --no-cache
 
 WORKDIR /app
 COPY github-emulator/package*.json ./
-RUN npm ci --omit=dev
+# Install production deps then strip npm — removes bundled undici (CVE-2026-12151, HIGH)
+RUN npm ci --omit=dev \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=builder /app/dist ./dist
 # Bake default fixture data; override SCENARIOS_DIR at runtime if needed
 COPY data/ /app/data/

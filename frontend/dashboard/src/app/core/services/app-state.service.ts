@@ -15,6 +15,8 @@ import {
   TimeWindow,
   isContextStatus,
 } from '../models/deployment.model';
+export type { ServiceIdentity } from '../utils/glob.util';
+import { applyCompositeGlobFilter, ServiceIdentity } from '../utils/glob.util';
 
 export interface Kpi {
   services: number;
@@ -22,6 +24,9 @@ export interface Kpi {
   inFlight: number;
   failed: number;
 }
+
+/** Filter mode for the services picker — mirrors svcFilterMode in mockup. */
+export type ServiceFilterMode = 'exclude' | 'include';
 
 /** Canonical environment sort order; unknowns sort alphabetically after. */
 const ENV_ORDER = ['dev', 'staging', 'qa', 'preprod', 'prod'];
@@ -41,6 +46,8 @@ const K = {
   view:              'dd:view',
   svcFilter:         'dd:svcFilter',
   failOnly:          'dd:failOnly',
+  svcFilterMode:     'dd:svcFilterMode',
+  svcPatterns:       'dd:svcPatterns',
   matFields:         'dd:matFields',
   swFields:          'dd:swFields',
   correlation:       'dd:correlation',
@@ -77,6 +84,34 @@ export class AppStateService {
   );
   readonly failuresOnly = signal<boolean>(
     this.ls(K.failOnly, v => v === 'true' ? true : v === 'false' ? false : null, false),
+  );
+
+  /**
+   * Glob pattern filter mode for the services picker.
+   * exclude = "Show all except" (default); include = "Show only".
+   * Persisted under dd:svcFilterMode.
+   * Spec: docs/design/mockup/index.html §buildSvcsPicker / §visibleServices
+   */
+  readonly serviceFilterMode = signal<ServiceFilterMode>(
+    this.ls(K.svcFilterMode, v => (v === 'include' ? 'include' : null), 'exclude'),
+  );
+
+  /**
+   * Glob pattern list for the services picker.
+   * Each entry is a glob string (e.g. '*-api', 'auth-bff').
+   * Empty list → all services visible (blank = all).
+   * Persisted under dd:svcPatterns (JSON array).
+   * Spec: docs/design/mockup/index.html §svcPatterns
+   */
+  readonly servicePatterns = signal<string[]>(
+    this.ls(K.svcPatterns, v => {
+      const arr: unknown = JSON.parse(v);
+      if (!Array.isArray(arr)) return null;
+      const patterns = (arr as unknown[]).filter(
+        (x): x is string => typeof x === 'string' && x.length > 0,
+      );
+      return patterns;
+    }, []),
   );
 
   // ── Field visibility (all ON by default per spec) ─────────
@@ -241,25 +276,46 @@ export class AppStateService {
   );
 
   // ── KPIs ─────────────────────────────────────────────────
+  /**
+   * KPIs derived from visible services × visible environments.
+   * Respects the glob service filter (serviceFilterMode + servicePatterns)
+   * and the column hidden set (matrixColHidden), matching mockup §computeKPIs.
+   */
   readonly kpi = computed<Kpi>(() => {
     const matrix = this.matrixData();
     if (!matrix) return { services: 0, environments: 0, inFlight: 0, failed: 0 };
 
+    const visIds  = new Set(
+      this.visibleServiceIdentities(matrix.rows.map((r) => ({ service: r.service, namespace: r.namespace ?? null })))
+        .map((i) => `${i.namespace ?? ''}|${i.service}`),
+    );
+    const hidden  = this.matrixColHidden();
+
+    const svcSet = new Set<string>();
+    const envSet = new Set<string>();
     let inFlight = 0, failed = 0;
+
     for (const row of matrix.rows) {
-      for (const slot of Object.values(row.slots)) {
+      if (!visIds.has(`${row.namespace ?? ''}|${row.service}`)) continue;
+      for (const [env, slot] of Object.entries(row.slots)) {
+        if (hidden.has(env)) continue;
+        svcSet.add(`${row.namespace ?? ''}|${row.service}`);
+        envSet.add(env);
         if (slot.current.status === 'in-progress') inFlight++;
         else if (slot.current.status === 'failure')  failed++;
       }
     }
-    return { services: matrix.rows.length, environments: matrix.environments.length, inFlight, failed };
+
+    return { services: svcSet.size, environments: envSet.size, inFlight, failed };
   });
 
   constructor() {
     // ── Persist user preferences on every change ──────────
-    effect(() => this.save(K.view,        this.activeView()));
-    effect(() => this.save(K.svcFilter,   this.serviceFilter()));
-    effect(() => this.save(K.failOnly,    String(this.failuresOnly())));
+    effect(() => this.save(K.view,           this.activeView()));
+    effect(() => this.save(K.svcFilter,      this.serviceFilter()));
+    effect(() => this.save(K.failOnly,       String(this.failuresOnly())));
+    effect(() => this.save(K.svcFilterMode,  this.serviceFilterMode()));
+    effect(() => this.save(K.svcPatterns,    JSON.stringify(this.servicePatterns())));
     effect(() => this.save(K.matFields,   JSON.stringify([...this.matrixVisibleFields()])));
     effect(() => this.save(K.swFields,    JSON.stringify([...this.swimlaneVisibleFields()])));
     effect(() => this.save(K.correlation, this.correlationPredicate()));
@@ -306,7 +362,9 @@ export class AppStateService {
     const matrix = this.matrixData();
     if (!matrix) return;
 
-    const existingRow  = matrix.rows.find((r) => r.service === ev.service);
+    const existingRow  = matrix.rows.find(
+      (r) => r.service === ev.service && (r.namespace ?? null) === (ev.namespace ?? null),
+    );
     const existingSlot = existingRow?.slots[ev.environment] as MatrixSlot | undefined;
 
     let newSlot: MatrixSlot;
@@ -350,12 +408,16 @@ export class AppStateService {
     let rows = matrix.rows;
     if (existingRow) {
       rows = rows.map((r) =>
-        r.service === ev.service
+        r.service === ev.service && (r.namespace ?? null) === (ev.namespace ?? null)
           ? { ...r, slots: { ...r.slots, [ev.environment]: newSlot } }
           : r,
       );
     } else {
-      const newRow: MatrixRow = { service: ev.service, slots: { [ev.environment]: newSlot } };
+      const newRow: MatrixRow = {
+        service:   ev.service,
+        namespace: ev.namespace ?? null,
+        slots:     { [ev.environment]: newSlot },
+      };
       rows = [...rows, newRow].sort((a, b) => a.service.localeCompare(b.service));
     }
 
@@ -439,6 +501,87 @@ export class AppStateService {
     }
     this.collapsedLanes.set(collapsed);
     try { localStorage.setItem(K.swimKnown, JSON.stringify([...known])); } catch { /* quota */ }
+  }
+
+  // ── Services glob filter ─────────────────────────────────
+
+  /**
+   * Derive the visible service identity list from `allIdentities` applying the
+   * current glob filter mode + patterns using composite matching (issue #353).
+   *
+   * exclude mode: show everything EXCEPT identities matching a pattern.
+   * include mode: show ONLY identities matching a pattern.
+   * Empty pattern list → return all (blank = all).
+   * Last-visible guard via applyCompositeGlobFilter: always returns at least one item.
+   *
+   * A slashed pattern matches the full `namespace/service` composite.
+   * A slashless pattern matches the service segment only (backward-compatible).
+   *
+   * Spec: docs/design/mockup/index.html §visibleServices
+   */
+  visibleServiceIdentities(allIdentities: ServiceIdentity[]): ServiceIdentity[] {
+    return applyCompositeGlobFilter(allIdentities, this.serviceFilterMode(), this.servicePatterns());
+  }
+
+  /**
+   * Convenience overload — derive the visible service list (bare names) from
+   * `allServices` without namespace. Used by callers that have no namespace
+   * context (e.g. KPI band, legacy paths). Delegates to visibleServiceIdentities.
+   */
+  visibleServices(allServices: string[]): string[] {
+    const identities: ServiceIdentity[] = allServices.map((s) => ({ service: s, namespace: null }));
+    return this.visibleServiceIdentities(identities).map((i) => i.service);
+  }
+
+  /**
+   * Build autocomplete suggestions for the services pattern filter.
+   *
+   * Returns distinct values from the matrix rows in insertion order:
+   *   1. All bare service names (backward-compat; slashless patterns match these).
+   *   2. All distinct namespaces (so users can type `myorg/*`).
+   *   3. All `namespace/service` composites for namespaced services.
+   *
+   * Null-namespace services are only represented by their bare service name.
+   */
+  buildServiceSuggestions(rows: MatrixRow[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    // Pass 1: bare service names
+    for (const r of rows) {
+      if (!seen.has(r.service)) { seen.add(r.service); result.push(r.service); }
+    }
+    // Pass 2: namespaces + namespace/service composites
+    for (const r of rows) {
+      if (!r.namespace) continue;
+      if (!seen.has(r.namespace)) { seen.add(r.namespace); result.push(r.namespace); }
+      const composite = `${r.namespace}/${r.service}`;
+      if (!seen.has(composite)) { seen.add(composite); result.push(composite); }
+    }
+    return result;
+  }
+
+  /**
+   * Returns the display label for a matrix row / swimlane lane.
+   *
+   * Render-on-collision rule (issue #353):
+   *   Show `namespace/service` prefix on a label ONLY when the same service name
+   *   appears under more than one namespace in the visible row set; otherwise show
+   *   the bare service name. Null-namespace rows are always unprefixed.
+   *
+   * @param service   The service name for the row.
+   * @param namespace The row's namespace (null = bare, always unprefixed).
+   * @param allRows   All visible rows in the current view (used for collision check).
+   */
+  rowLabel(service: string, namespace: string | null | undefined, allRows: MatrixRow[]): string {
+    if (!namespace) return service;
+    // Count distinct non-null namespaces for this service name across all rows.
+    const namespacesForService = new Set(
+      allRows
+        .filter((r) => r.service === service && r.namespace)
+        .map((r) => r.namespace as string),
+    );
+    return namespacesForService.size > 1 ? `${namespace}/${service}` : service;
   }
 
   /** Raw localStorage get — null when absent or storage unavailable. */

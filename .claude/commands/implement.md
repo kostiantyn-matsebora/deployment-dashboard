@@ -13,7 +13,9 @@ The **Implement** activity of the orchestration process
 - **Each member self-verifies** before handing back: build + **unit tests for its own change** +
   lint. No change is handed back unit-untested.
 - **Returns a `RESULT`** with **actual counts** — never "builds locally". Unverified hand-backs cost
-  a red-CI round-trip.
+  a red-CI round-trip. The dispatch primes the `RESULT` shape as a **few-shot example** (canonical
+  example + normalizer recipe) — emit conforming JSON first-try; don't write a prose summary (the guard
+  blocks it). See [`protocol.md`](../team-process/protocol.md) → *Prime the hand-back*.
 - **Members never commit** — the orchestrator is the sole integration gate.
 
 **Output:** per-lane `RESULT`s with actual build / test / lint counts.

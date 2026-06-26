@@ -51,6 +51,8 @@ testing/e2e/blob-report/
 **/playwright/.cache/
 # Scratch capture directories written by ad-hoc oracle runs (O5 etc.).
 testing/e2e/__o5-captures__/
+# Screenshots written by E2E specs at runtime (e.g. footer-header visual capture).
+testing/e2e/screenshots/
 
 # ---- Mockup-visual capture / diagnostic scratch --------------------------
 # Ad-hoc Playwright capture scripts (capture-*.mjs, diag-*.mjs, probe-*.mjs)
@@ -73,6 +75,10 @@ testing/e2e/captures/*-inspect.png
 testing/e2e/captures/*-inspect-*.png
 testing/e2e/captures/head-*.png
 
+# ---- Python ---------------------------------------------------------------
+__pycache__/
+*.pyc
+
 # ---- Code coverage / test runners ----------------------------------------
 **/coverage/
 **/.nyc_output/
@@ -80,6 +86,7 @@ testing/e2e/captures/head-*.png
 **/test-results*.xml
 **/testResults.xml
 **/pester-results.xml
+**/pytest-results.xml
 **/bats-results.tap
 
 # ---- Terraform (state must never live in the repo, per devops-engineer
@@ -121,4 +128,9 @@ site/
 .tmp-card-shots/
 # Added by code-review-graph
 .code-review-graph/
-.tokensave
+
+# serena MCP server local working dir (auto-generated)
+.serena/
+
+# playwright MCP server local output dir (auto-generated)
+.playwright-mcp/

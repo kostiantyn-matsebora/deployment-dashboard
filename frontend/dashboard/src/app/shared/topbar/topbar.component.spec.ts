@@ -12,22 +12,36 @@
  *   - sseConnected liveness: signal reflects open/error, not event arrival (Fix 3)
  *   - localStorage hydrate/persist round-trip (Fix 2)
  *
+ * Notification UX (#271):
+ *   - toggleNotifEnabled → requestPermission on first enable
+ *   - toggleNotifStatus add/remove
+ *   - addNotifServiceChip adds + clears input + no duplicate
+ *   - Enter-key adds chip
+ *   - notifEnabled() drives the .has-active badge-dot class binding
+ *
  * Strategy: provide a mock AppStateService with writable signals; feed the
  * component reports directly without hitting a real EventSource.
  * NO_ERRORS_SCHEMA skips PrimeNG rendering.
  */
 import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { TestBed }                   from '@angular/core/testing';
+import { RouterModule }              from '@angular/router';
+import { vi }                        from 'vitest';
 
 import { TopbarComponent }  from './topbar.component';
 import { AppStateService }  from '../../core/services/app-state.service';
 import { ThemeService }     from '../../core/services/theme.service';
+import { NotificationPrefsService, NotifPrefs } from '../../core/services/notification-prefs.service';
+import { BrowserNotificationService } from '../../core/services/browser-notification.service';
 import {
+  Matrix,
   MatrixField,
   RateLimitReport,
+  Status,
   SwimlaneField,
   Theme,
 } from '../../core/models/deployment.model';
+import { ServiceIdentity } from '../../core/services/app-state.service';
 
 // ── Minimal mock helpers ─────────────────────────────────────────────────────
 
@@ -64,6 +78,11 @@ describe('TopbarComponent — rate-limit indicator', () => {
       activeView:             signal('matrix' as const),
       serviceFilter:          signal(''),
       failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -77,6 +96,8 @@ describe('TopbarComponent — rate-limit indicator', () => {
       // #309 collapse/expand signals
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
+      // #271 browser-notifications
+      lastEffectiveEvent:     signal(null) as never,
     };
 
     const mockTheme: Partial<ThemeService> = {
@@ -84,11 +105,25 @@ describe('TopbarComponent — rate-limit indicator', () => {
       setTheme: () => {},
     };
 
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
+
     await TestBed.configureTestingModule({
       imports:   [TopbarComponent],
       providers: [
-        { provide: AppStateService, useValue: mockState },
-        { provide: ThemeService,    useValue: mockTheme },
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -304,6 +339,11 @@ describe('TopbarComponent — legend popover guard', () => {
       activeView:             activeViewSig as never,
       serviceFilter:          signal(''),
       failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -317,16 +357,30 @@ describe('TopbarComponent — legend popover guard', () => {
       // #309 collapse/expand signals
       collapsedLanes:         signal(new Set<string>()),
       autoScrollOnChange:     signal(true),
+      // #271 browser-notifications
+      lastEffectiveEvent:     signal(null) as never,
     };
     const mockTheme: Partial<ThemeService> = {
       theme: signal<Theme>('dark'),
       setTheme: () => {},
     };
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
     await TestBed.configureTestingModule({
       imports:   [TopbarComponent],
       providers: [
-        { provide: AppStateService, useValue: mockState },
-        { provide: ThemeService,    useValue: mockTheme },
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
       ],
       schemas: [NO_ERRORS_SCHEMA],
     }).compileComponents();
@@ -440,5 +494,364 @@ describe('AppStateService.rateLimitMap — localStorage hydration (Fix 2)', () =
     expect(service.rateLimitMap().size).toBe(0);
 
     TestBed.resetTestingModule();
+  });
+});
+
+// ── TopbarComponent notification UX tests (#271) ─────────────────────────────
+//
+// Covers:
+//   - toggleNotifEnabled → calls requestPermission on first enable
+//   - toggleNotifStatus: add and remove a status
+//   - addNotifServiceChip: adds chip, clears input, rejects duplicate
+//   - Enter-key on service input adds chip
+//   - notifEnabled() computed: true drives .has-active on the bell button
+
+describe('TopbarComponent — notification UX (#271)', () => {
+  let component: TopbarComponent;
+  let prefsSignal: ReturnType<typeof signal<NotifPrefs>>;
+  let requestPermissionSpy: ReturnType<typeof vi.fn>;
+
+  // Build a fully functional mocked NotifPrefs so mutations are observable.
+  function buildMockPrefs(enabled = false): {
+    prefs: ReturnType<typeof signal<NotifPrefs>>;
+    updatePrefs: (patch: Partial<NotifPrefs>) => void;
+  } {
+    const s = signal<NotifPrefs>({
+      enabled,
+      statuses: ['success', 'failure'] as Status[],
+      serviceMode: 'watch-all-except',
+      serviceChips: [],
+      envMode: 'watch-all-except',
+      envChips: [],
+    });
+    const updatePrefs = (patch: Partial<NotifPrefs>) => {
+      s.set({ ...s(), ...patch });
+    };
+    return { prefs: s, updatePrefs };
+  }
+
+  beforeEach(async () => {
+    requestPermissionSpy = vi.fn().mockResolvedValue('granted' as NotificationPermission);
+
+    const { prefs, updatePrefs } = buildMockPrefs(false);
+    prefsSignal = prefs;
+
+    const mockState: Partial<AppStateService> = {
+      activeView:             signal('matrix' as const),
+      serviceFilter:          signal(''),
+      failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
+      matrixVisibleFields:    signal(new Set<MatrixField>()),
+      swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
+      correlationPredicate:   signal('explicit parent' as const),
+      timeWindow:             signal('1 day' as const),
+      sseConnected:           signal(false),
+      kpi:                    signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:           signal(new Map()),
+      matrixData:             signal(null),
+      matrixColHidden:        signal(new Set<string>()),
+      matrixColOrder:         signal([] as string[]),
+      collapsedLanes:         signal(new Set<string>()),
+      autoScrollOnChange:     signal(true),
+      lastEffectiveEvent:     signal(null) as never,
+    };
+
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs: prefsSignal as never,
+      updatePrefs,
+      shouldNotify: () => false,
+    };
+
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => true,
+      requestPermission: requestPermissionSpy as unknown as () => Promise<NotificationPermission>,
+      currentPermission: 'default' as const,
+    };
+
+    const mockTheme: Partial<ThemeService> = {
+      theme: signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent, RouterModule.forRoot([])],
+      providers: [
+        { provide: AppStateService,            useValue: mockState         },
+        { provide: ThemeService,               useValue: mockTheme         },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs    },
+        { provide: BrowserNotificationService, useValue: mockNotifService  },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TopbarComponent);
+    component     = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  // ── toggleNotifEnabled ──────────────────────────────────────────────────
+
+  describe('toggleNotifEnabled()', () => {
+    it('calls requestPermission when enabling for the first time (enabled was false)', async () => {
+      expect(prefsSignal().enabled).toBe(false);
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      expect(prefsSignal().enabled).toBe(true);
+      expect(requestPermissionSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call requestPermission when disabling', async () => {
+      // First enable.
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      requestPermissionSpy.mockClear();
+      // Now disable.
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      expect(prefsSignal().enabled).toBe(false);
+      expect(requestPermissionSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── toggleNotifStatus ────────────────────────────────────────────────────
+
+  describe('toggleNotifStatus()', () => {
+    it('adds a status when it is not yet in the list', () => {
+      // Remove 'failure' to give a clean starting state.
+      priv<(s: Status) => void>(component, 'toggleNotifStatus').call(component, 'failure');
+      expect(prefsSignal().statuses).not.toContain('failure');
+
+      priv<(s: Status) => void>(component, 'toggleNotifStatus').call(component, 'pending');
+      expect(prefsSignal().statuses).toContain('pending');
+    });
+
+    it('removes a status when it is already in the list', () => {
+      // 'success' starts enabled by default in the mock prefs.
+      priv<(s: Status) => void>(component, 'toggleNotifStatus').call(component, 'success');
+      expect(prefsSignal().statuses).not.toContain('success');
+    });
+  });
+
+  // ── onNotifServicePatternsChange ─────────────────────────────────────────
+  // The notification chip input is now handled by PatternFilterComponent.
+  // TopbarComponent receives patternsChange output and delegates to updatePrefs.
+
+  describe('onNotifServicePatternsChange()', () => {
+    it('updates serviceChips in prefs', () => {
+      priv<(chips: string[]) => void>(component, 'onNotifServicePatternsChange').call(component, ['my-service', '*-api']);
+      expect(prefsSignal().serviceChips).toEqual(['my-service', '*-api']);
+    });
+
+    it('clears serviceChips when called with empty array', () => {
+      priv<(chips: string[]) => void>(component, 'onNotifServicePatternsChange').call(component, ['x']);
+      priv<(chips: string[]) => void>(component, 'onNotifServicePatternsChange').call(component, []);
+      expect(prefsSignal().serviceChips).toEqual([]);
+    });
+  });
+
+  // ── onNotifEnvPatternsChange ─────────────────────────────────────────────
+
+  describe('onNotifEnvPatternsChange()', () => {
+    it('updates envChips in prefs', () => {
+      priv<(chips: string[]) => void>(component, 'onNotifEnvPatternsChange').call(component, ['prod', 'staging']);
+      expect(prefsSignal().envChips).toEqual(['prod', 'staging']);
+    });
+  });
+
+  // ── notifEnabled badge-dot ────────────────────────────────────────────────
+
+  describe('notifEnabled() computed — badge-dot class', () => {
+    it('notifEnabled() is false when prefs.enabled is false', () => {
+      expect(priv<() => boolean>(component, 'notifEnabled')()).toBe(false);
+    });
+
+    it('notifEnabled() is true after enabling', () => {
+      priv<() => void>(component, 'toggleNotifEnabled').call(component);
+      expect(priv<() => boolean>(component, 'notifEnabled')()).toBe(true);
+    });
+  });
+});
+
+// ── TopbarComponent — svcHiddenCount / servicesCaption namespace identity (#353) ─
+//
+// Validates that badge count and caption text use distinct matrix-row identities
+// (namespace|service pairs) as the denominator, NOT the autocomplete suggestion list
+// which also contains bare names + namespaces + composites.
+
+describe('TopbarComponent — svcHiddenCount / servicesCaption namespace identity (#353)', () => {
+  let matrixDataSignal: ReturnType<typeof signal<Matrix | null>>;
+  let servicePatternsSignal: ReturnType<typeof signal<string[]>>;
+  let visibleServiceIdentitiesFn: (ids: ServiceIdentity[]) => ServiceIdentity[];
+  let component: TopbarComponent;
+
+  /** Build a minimal Matrix with namespaced rows. */
+  function mkMatrix(rows: Array<{ service: string; namespace?: string | null }>): Matrix {
+    return {
+      generated_at: '2026-06-18T00:00:00Z',
+      environments: ['dev'],
+      rows: rows.map(r => ({ ...r, slots: {} })),
+    };
+  }
+
+  async function buildComponent(
+    matrixRows: Array<{ service: string; namespace?: string | null }>,
+    patterns: string[],
+    filterMode: 'exclude' | 'include',
+    identitiesFilter: (ids: ServiceIdentity[]) => ServiceIdentity[],
+  ): Promise<TopbarComponent> {
+    matrixDataSignal        = signal<Matrix | null>(mkMatrix(matrixRows));
+    servicePatternsSignal   = signal<string[]>(patterns);
+    visibleServiceIdentitiesFn = identitiesFilter;
+
+    const mockState: Partial<AppStateService> = {
+      activeView:                 signal('matrix' as const),
+      serviceFilter:              signal(''),
+      failuresOnly:               signal(false),
+      serviceFilterMode:          signal(filterMode),
+      servicePatterns:            servicePatternsSignal,
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   identitiesFilter,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
+      matrixVisibleFields:        signal(new Set<MatrixField>()),
+      swimlaneVisibleFields:      signal(new Set<SwimlaneField>()),
+      correlationPredicate:       signal('explicit parent' as const),
+      timeWindow:                 signal('1 day' as const),
+      sseConnected:               signal(false),
+      kpi:                        signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:               signal(new Map()),
+      matrixData:                 matrixDataSignal,
+      matrixColHidden:            signal(new Set<string>()),
+      matrixColOrder:             signal([] as string[]),
+      collapsedLanes:             signal(new Set<string>()),
+      autoScrollOnChange:         signal(true),
+      lastEffectiveEvent:         signal(null) as never,
+    };
+
+    const mockTheme: Partial<ThemeService> = {
+      theme: signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
+
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent, RouterModule.forRoot([])],
+      providers: [
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TopbarComponent);
+    component     = fixture.componentInstance;
+    fixture.detectChanges();
+    return component;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  // ── (a) distinct identity count ──────────────────────────────────────────
+
+  it('svcHiddenCount uses matrix-row count as denominator, not suggestion list length', async () => {
+    // 2 rows: same service name "api" under two namespaces (team-a, team-b).
+    // Include filter matches only team-a/api → 1 visible, 1 hidden.
+    // A broken impl using allServiceNames would inflate the denominator by
+    // counting bare "api", "team-a", "team-b", and "team-a/api", "team-b/api".
+    const c = await buildComponent(
+      [
+        { service: 'api', namespace: 'team-a' },
+        { service: 'api', namespace: 'team-b' },
+      ],
+      ['team-a/api'],
+      'include',
+      (ids: ServiceIdentity[]) => ids.filter(i => i.namespace === 'team-a'),
+    );
+
+    const hidden = priv<() => number>(c, 'svcHiddenCount')();
+    // denominator = 2 rows; visible = 1 → hidden = 1
+    expect(hidden).toBe(1);
+  });
+
+  it('svcHiddenCount is 0 when all rows are visible (no patterns)', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'api', namespace: 'team-a' },
+        { service: 'api', namespace: 'team-b' },
+      ],
+      [],
+      'exclude',
+      (ids: ServiceIdentity[]) => ids,
+    );
+
+    expect(priv<() => number>(c, 'svcHiddenCount')()).toBe(0);
+  });
+
+  // ── (b) servicesCaption text ─────────────────────────────────────────────
+
+  it('servicesCaption reports correct counts from row identities in exclude mode', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'api',  namespace: 'team-a' },
+        { service: 'api',  namespace: 'team-b' },
+        { service: 'auth', namespace: 'team-a' },
+      ],
+      ['team-a/*'],
+      'exclude',
+      // exclude team-a: only team-b/api remains visible
+      (ids: ServiceIdentity[]) => ids.filter(i => i.namespace !== 'team-a'),
+    );
+
+    const caption = priv<() => string>(c, 'servicesCaption')();
+    // 3 total rows; 1 visible; hidden = 2
+    expect(caption).toBe('Hiding 2 of 3 · showing 1');
+  });
+
+  it('servicesCaption reports correct counts from row identities in include mode', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'api',  namespace: 'team-a' },
+        { service: 'api',  namespace: 'team-b' },
+        { service: 'auth', namespace: 'team-a' },
+      ],
+      ['team-a/*'],
+      'include',
+      // include team-a: 2 rows visible
+      (ids: ServiceIdentity[]) => ids.filter(i => i.namespace === 'team-a'),
+    );
+
+    const caption = priv<() => string>(c, 'servicesCaption')();
+    // 3 total rows; 2 visible
+    expect(caption).toBe('Showing 2 of 3 services');
+  });
+
+  it('servicesCaption shows "all N services" when no patterns are set', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'alpha', namespace: null },
+        { service: 'beta',  namespace: null },
+      ],
+      [],
+      'exclude',
+      (ids: ServiceIdentity[]) => ids,
+    );
+
+    const caption = priv<() => string>(c, 'servicesCaption')();
+    expect(caption).toBe('Showing all 2 services');
   });
 });

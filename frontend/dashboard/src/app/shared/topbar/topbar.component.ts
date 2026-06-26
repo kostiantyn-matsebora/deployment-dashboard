@@ -6,8 +6,14 @@ import { SelectButton } from 'primeng/selectbutton';
 import { InputText } from 'primeng/inputtext';
 import { Popover } from 'primeng/popover';
 
-import { AppStateService } from '../../core/services/app-state.service';
+import { AppStateService, ServiceFilterMode } from '../../core/services/app-state.service';
 import { ThemeService } from '../../core/services/theme.service';
+import {
+  NotificationPrefsService,
+  NOTIFICATION_STATUSES,
+  NotifFilterMode,
+} from '../../core/services/notification-prefs.service';
+import { BrowserNotificationService } from '../../core/services/browser-notification.service';
 import {
   CORRELATION_PREDICATES,
   CorrelationPredicate,
@@ -15,9 +21,13 @@ import {
   MatrixField,
   RateLimitReport,
   SWIMLANE_FIELDS,
+  Status,
   SwimlaneField,
   Theme,
 } from '../../core/models/deployment.model';
+import { PatternFilterComponent } from '../pattern-filter/pattern-filter.component';
+import { matchesAny } from '../../core/utils/glob.util';
+import { PresetsService, PresetEnvelope } from '../../core/services/presets.service';
 
 interface ViewOption {
   label: string;
@@ -52,21 +62,28 @@ interface ThemeOption {
     SelectButton,
     InputText,
     Popover,
+    PatternFilterComponent,
   ],
   templateUrl: './topbar.component.html',
   styleUrl: './topbar.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TopbarComponent {
-  protected readonly state        = inject(AppStateService);
-  protected readonly themeService = inject(ThemeService);
-  protected readonly router       = inject(Router);
+  protected readonly state           = inject(AppStateService);
+  protected readonly themeService    = inject(ThemeService);
+  protected readonly notifPrefs      = inject(NotificationPrefsService);
+  protected readonly notifService    = inject(BrowserNotificationService);
+  protected readonly router          = inject(Router);
+  protected readonly presetsService  = inject(PresetsService);
 
   // Popovers
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
   protected readonly columnsPopover       = viewChild<Popover>('columnsPopover');
   protected readonly correlationPopover   = viewChild<Popover>('correlationPopover');
   protected readonly legendPopover        = viewChild<Popover>('legendPopover');
+  protected readonly notifPopover         = viewChild<Popover>('notifPopover');
+  protected readonly servicesPopover      = viewChild<Popover>('servicesPopover');
+  protected readonly presetsPopover       = viewChild<Popover>('presetsPopover');
   protected readonly rateLimitPopovers    = viewChildren<Popover>('rateLimitPopover');
 
   // Popover open state (for icon-btn.is-active highlight)
@@ -74,7 +91,22 @@ export class TopbarComponent {
   protected readonly columnsPopoverOpen     = signal(false);
   protected readonly correlationPopoverOpen = signal(false);
   protected readonly legendPopoverOpen      = signal(false);
+  protected readonly notifPopoverOpen       = signal(false);
+  protected readonly servicesPopoverOpen    = signal(false);
+  protected readonly presetsPopoverOpen     = signal(false);
   protected readonly rateLimitPopoverOpen   = signal<Map<string, boolean>>(new Map());
+
+  // ── Presets UI state ─────────────────────────────────────────────────────
+  /** Name field for saving a new preset. */
+  protected presetSaveName = '';
+  /** Whether the save-new-preset input row is visible. */
+  protected readonly presetSaveOpen = signal(false);
+  /** Which preset is currently being renamed (null = none). */
+  protected readonly renamingPreset = signal<PresetEnvelope | null>(null);
+  /** Rename input value. */
+  protected presetRenameValue = '';
+  /** Error / info message shown in the popover (clears on next action). */
+  protected readonly presetsMsg = signal<string | null>(null);
 
   // ── View tabs ─────────────────────────────────────────────
   protected readonly viewOptions: ViewOption[] = [
@@ -117,6 +149,90 @@ export class TopbarComponent {
 
   protected onFailuresOnlyChange(value: boolean): void {
     this.state.failuresOnly.set(value);
+  }
+
+  // ── Services picker (glob include/exclude filter) ─────────
+  /** Current glob filter mode for the services picker. */
+  protected readonly serviceFilterMode = computed(() => this.state.serviceFilterMode());
+  /** Current glob patterns for the services picker. */
+  protected readonly servicePatterns   = computed(() => this.state.servicePatterns());
+
+  /**
+   * Autocomplete suggestions for the services pattern filter (issue #353).
+   * Includes: bare service names, distinct namespaces, and `namespace/service` composites.
+   * Bare names come first for backward compatibility; namespaced composites follow.
+   */
+  protected readonly allServiceNames = computed(() => {
+    const rows = this.state.matrixData()?.rows ?? [];
+    return this.state.buildServiceSuggestions(rows);
+  });
+
+  /**
+   * Distinct matrix-row identities (namespace + service pairs).
+   * Used as the denominator for badge/caption counts so that autocomplete
+   * suggestions (bare names + namespaces + composites in allServiceNames) do
+   * not inflate the total.
+   */
+  private readonly rowIdentities = computed(() =>
+    this.state.matrixData()?.rows.map((r) => ({
+      service:   r.service,
+      namespace: r.namespace ?? null,
+    })) ?? [],
+  );
+
+  /** Badge count: number of distinct matrix rows hidden by the current filter. */
+  protected readonly svcHiddenCount = computed(() => {
+    const all = this.rowIdentities();
+    if (!all.length) return 0;
+    const vis = this.state.visibleServiceIdentities(all);
+    return all.length - vis.length;
+  });
+
+  /** Title / aria label for the Services button, reflecting hidden count. */
+  protected readonly servicesBtnTitle = computed(() => {
+    const n = this.svcHiddenCount();
+    return n > 0
+      ? `Services — ${n} service${n === 1 ? '' : 's'} hidden`
+      : 'Services — filter services';
+  });
+
+  /** Caption line shown inside the services picker popover. */
+  protected readonly servicesCaption = computed(() => {
+    const all      = this.rowIdentities();
+    const patterns = this.servicePatterns();
+    if (!patterns.length) return `Showing all ${all.length} service${all.length === 1 ? '' : 's'}`;
+    const vis    = this.state.visibleServiceIdentities(all);
+    const hidden = all.length - vis.length;
+    if (this.serviceFilterMode() === 'exclude') {
+      return hidden === 0
+        ? `Showing all ${all.length} services`
+        : `Hiding ${hidden} of ${all.length} · showing ${vis.length}`;
+    } else {
+      return vis.length === all.length
+        ? `Showing all ${all.length} services`
+        : `Showing ${vis.length} of ${all.length} services`;
+    }
+  });
+
+  protected onServiceFilterModeChange(mode: ServiceFilterMode): void {
+    this.state.serviceFilterMode.set(mode);
+  }
+
+  protected onServicePatternsChange(patterns: string[]): void {
+    this.state.servicePatterns.set(patterns);
+  }
+
+  protected resetServicesFilter(): void {
+    this.state.servicePatterns.set([]);
+    this.state.serviceFilterMode.set('exclude');
+  }
+
+  protected toggleServicesPopover(event: MouseEvent): void {
+    const p = this.servicesPopover();
+    if (p) {
+      p.toggle(event);
+      this.servicesPopoverOpen.update((v) => !v);
+    }
   }
 
   // ── KPIs ──────────────────────────────────────────────────
@@ -348,4 +464,280 @@ export class TopbarComponent {
       this.rateLimitPopoverOpen.set(current);
     }
   }
+
+  protected toggleNotifPopover(event: MouseEvent): void {
+    const p = this.notifPopover();
+    if (p) {
+      p.toggle(event);
+      this.notifPopoverOpen.update(v => !v);
+    }
+  }
+
+  protected togglePresetsPopover(event: MouseEvent): void {
+    const p = this.presetsPopover();
+    if (p) {
+      p.toggle(event);
+      this.presetsPopoverOpen.update(v => !v);
+      // Reset transient UI state when opening
+      this.presetSaveOpen.set(false);
+      this.presetSaveName = '';
+      this.renamingPreset.set(null);
+      this.presetRenameValue = '';
+      this.presetsMsg.set(null);
+    }
+  }
+
+  // ── Notification prefs ────────────────────────────────────
+
+  /** All 8 statuses in display order. */
+  protected readonly notifStatuses: Status[] = NOTIFICATION_STATUSES;
+
+  /** Derived: true when notifications are enabled (for badge-dot display). */
+  protected readonly notifEnabled = computed(() => this.notifPrefs.prefs().enabled);
+
+  protected toggleNotifEnabled(): void {
+    const enabling = !this.notifPrefs.prefs().enabled;
+    this.notifPrefs.updatePrefs({ enabled: enabling });
+    // Request permission lazily on first explicit opt-in.
+    if (enabling) {
+      void this.notifService.requestPermission();
+    }
+  }
+
+  protected isNotifStatusOn(s: Status): boolean {
+    return this.notifPrefs.prefs().statuses.includes(s);
+  }
+
+  protected toggleNotifStatus(s: Status): void {
+    const current = this.notifPrefs.prefs().statuses;
+    const updated = current.includes(s)
+      ? current.filter(x => x !== s)
+      : [...current, s];
+    this.notifPrefs.updatePrefs({ statuses: updated });
+  }
+
+  protected readonly notifServiceMode = computed(() => this.notifPrefs.prefs().serviceMode);
+  protected readonly notifServiceChips = computed(() => this.notifPrefs.prefs().serviceChips);
+  protected readonly notifServiceCaption = computed(() => {
+    const p       = this.notifPrefs.prefs();
+    const allSvcs = this.allServiceNames();
+    if (!p.serviceChips.length) return 'Watching all services';
+    const matched = allSvcs.filter((s) => matchesAny(s, p.serviceChips));
+    if (p.serviceMode === 'watch-all-except') {
+      const watching = allSvcs.length - matched.length;
+      return watching === allSvcs.length
+        ? 'Watching all services'
+        : `Watching ${watching} of ${allSvcs.length} services`;
+    } else {
+      return matched.length === 0
+        ? 'Watching no services'
+        : matched.length === allSvcs.length
+          ? 'Watching all services'
+          : `Watching ${matched.length} of ${allSvcs.length} services`;
+    }
+  });
+
+  protected setNotifServiceMode(mode: NotifFilterMode): void {
+    this.notifPrefs.updatePrefs({ serviceMode: mode });
+  }
+
+  protected onNotifServicePatternsChange(chips: string[]): void {
+    this.notifPrefs.updatePrefs({ serviceChips: chips });
+  }
+
+  protected removeNotifServiceChip(chip: string): void {
+    this.notifPrefs.updatePrefs({
+      serviceChips: this.notifPrefs.prefs().serviceChips.filter(x => x !== chip),
+    });
+  }
+
+  protected readonly notifEnvMode = computed(() => this.notifPrefs.prefs().envMode);
+  protected readonly notifEnvChips = computed(() => this.notifPrefs.prefs().envChips);
+  protected readonly notifEnvCaption = computed(() => {
+    const p       = this.notifPrefs.prefs();
+    const allEnvs = this.allEnvironments();
+    if (!p.envChips.length) return 'Watching all environments';
+    const matched = allEnvs.filter((e) => matchesAny(e, p.envChips));
+    if (p.envMode === 'watch-all-except') {
+      const watching = allEnvs.length - matched.length;
+      return watching === allEnvs.length
+        ? 'Watching all environments'
+        : `Watching ${watching} of ${allEnvs.length} environments`;
+    } else {
+      return matched.length === 0
+        ? 'Watching no environments'
+        : matched.length === allEnvs.length
+          ? 'Watching all environments'
+          : `Watching ${matched.length} of ${allEnvs.length} environments`;
+    }
+  });
+
+  protected setNotifEnvMode(mode: NotifFilterMode): void {
+    this.notifPrefs.updatePrefs({ envMode: mode });
+  }
+
+  protected onNotifEnvPatternsChange(chips: string[]): void {
+    this.notifPrefs.updatePrefs({ envChips: chips });
+  }
+
+  protected removeNotifEnvChip(chip: string): void {
+    this.notifPrefs.updatePrefs({
+      envChips: this.notifPrefs.prefs().envChips.filter(x => x !== chip),
+    });
+  }
+
+  // ── Presets ───────────────────────────────────────────────────────────────
+
+  /** Reactive list of saved presets from PresetsService. */
+  protected readonly savedPresets = computed(() => this.presetsService.presets());
+
+  /** Whether any presets are saved. */
+  protected readonly hasPresets = computed(() => this.savedPresets().length > 0);
+
+  /** The name of the last-applied preset (null = none). */
+  protected readonly activePresetName = computed(() => this.presetsService.activePresetName());
+
+  /** True when the given preset is the last-applied one. */
+  protected isPresetActive(p: PresetEnvelope): boolean {
+    return this.activePresetName() === p.name;
+  }
+
+  /** Open / close the save-new-preset name input. */
+  protected togglePresetSaveInput(): void {
+    this.presetSaveOpen.update(v => !v);
+    if (this.presetSaveOpen()) {
+      this.presetSaveName = '';
+    }
+    this.presetsMsg.set(null);
+  }
+
+  /** Confirm saving the new preset with the current name input. */
+  protected confirmSavePreset(): void {
+    const name = this.presetSaveName.trim();
+    if (!name) {
+      this.presetsMsg.set('Name cannot be blank.');
+      return;
+    }
+    this.presetsService.save(name);
+    this.presetSaveName = '';
+    this.presetSaveOpen.set(false);
+    this.presetsMsg.set(`Saved "${name}".`);
+  }
+
+  /** Apply a saved preset. */
+  protected applyPreset(p: PresetEnvelope): void {
+    this.presetsService.apply(p);
+    this.presetsMsg.set(`Applied "${p.name}".`);
+  }
+
+  /** Export (download) a single saved preset as a JSON file. */
+  protected exportPreset(p: PresetEnvelope): void {
+    this.presetsService.exportPreset(p);
+  }
+
+  /** Export the current live settings as a JSON file (no save). */
+  protected exportCurrentSettings(): void {
+    const env: PresetEnvelope = {
+      version: 1,
+      name: 'current-settings',
+      settings: this.presetsService.captureSettings(),
+    };
+    this.presetsService.exportPreset(env);
+  }
+
+  /** Begin renaming a preset — opens the inline rename input for that row. */
+  protected beginRenamePreset(p: PresetEnvelope): void {
+    this.renamingPreset.set(p);
+    this.presetRenameValue = p.name;
+    this.presetsMsg.set(null);
+  }
+
+  /** Confirm the rename for the currently-renaming preset. */
+  protected confirmRenamePreset(): void {
+    const target = this.renamingPreset();
+    if (!target) return;
+    const newName = this.presetRenameValue.trim();
+    if (!newName) {
+      this.presetsMsg.set('Name cannot be blank.');
+      return;
+    }
+    // Invariant: clear the renaming signal BEFORE persist so that if
+    // presetsService.rename() swallows a localStorage quota error the inline
+    // input is never left pointing at a ghost object.
+    this.renamingPreset.set(null);
+    this.presetRenameValue = '';
+    try {
+      this.presetsService.rename(target, newName);
+    } finally {
+      this.presetsMsg.set(null);
+    }
+  }
+
+  /** Cancel an in-progress rename. */
+  protected cancelRenamePreset(): void {
+    this.renamingPreset.set(null);
+    this.presetRenameValue = '';
+    this.presetsMsg.set(null);
+  }
+
+  /** Clone a preset — adds a copy with " (copy)" suffix. */
+  protected clonePreset(p: PresetEnvelope): void {
+    this.presetsService.clone(p, `${p.name} (copy)`);
+    this.presetsMsg.set(`Cloned "${p.name}".`);
+  }
+
+  /** Update a preset — overwrites its stored settings with the current live settings after confirm. */
+  protected updatePreset(p: PresetEnvelope): void {
+    if (!confirm(`Update preset "${p.name}" with the current settings?\nThis will overwrite its stored settings.`)) return;
+    this.presetsService.update(p);
+    this.presetsMsg.set(`Updated "${p.name}".`);
+  }
+
+  /** Delete a preset — shows native confirm before proceeding. */
+  protected deletePreset(p: PresetEnvelope): void {
+    // Session decision #4: delete requires native confirm naming the preset.
+    if (!confirm(`Delete preset "${p.name}"?\nThis cannot be undone.`)) return;
+    this.presetsService.delete(p);
+    this.presetsMsg.set(null);
+  }
+
+  /** Reset all settings to framework defaults after native confirm. */
+  protected resetAllSettings(): void {
+    if (!confirm('Reset ALL settings to defaults?\nThis will clear all filters, field choices, and preferences.')) return;
+    this.presetsService.resetAllSettings();
+    this.presetsMsg.set('All settings reset to defaults.');
+  }
+
+  /** Import a preset from a file chosen via a hidden <input type="file">. */
+  protected triggerImportFile(): void {
+    const input = document.createElement('input');
+    input.type   = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) { document.body.removeChild(input); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result as string;
+        const result = this.presetsService.validateImport(text);
+        if (typeof result === 'string') {
+          this.presetsMsg.set(result);
+        } else {
+          this.presetsService.importPreset(result);
+          this.presetsMsg.set(`Imported "${result.name}".`);
+        }
+        document.body.removeChild(input);
+      };
+      reader.onerror = () => {
+        this.presetsMsg.set('Could not read file.');
+        document.body.removeChild(input);
+      };
+      reader.readAsText(file);
+    }, { once: true });
+    input.click();
+  }
+
 }
+

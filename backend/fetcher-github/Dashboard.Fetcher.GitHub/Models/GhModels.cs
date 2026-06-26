@@ -32,6 +32,8 @@ public sealed record GhWorkflowRun
 {
     [JsonPropertyName("id")] public long Id { get; init; }
     [JsonPropertyName("name")] public string? Name { get; init; }
+    /// <summary>Stable numeric ID of the workflow definition (F12 / §5.6.2 — Actions:read, no Contents needed).</summary>
+    [JsonPropertyName("workflow_id")] public long WorkflowId { get; init; }
     [JsonPropertyName("path")] public string Path { get; init; } = "";
     [JsonPropertyName("head_sha")] public string HeadSha { get; init; } = "";
     /// <summary>Run conclusion (e.g. "success", "failure", "cancelled", "timed_out", "skipped", null when still in progress).</summary>
@@ -84,6 +86,16 @@ public sealed record GhArtifact
 public sealed record GhArtifactListResponse
 {
     [JsonPropertyName("artifacts")] public List<GhArtifact> Artifacts { get; init; } = [];
+}
+
+/// <summary>
+/// Minimal projection of a GitHub repository — only the fields needed for repo discovery.
+/// Returned by <c>GET /user/repos</c>, <c>GET /orgs/{owner}/repos</c>, and
+/// <c>GET /users/{owner}/repos</c>.
+/// </summary>
+public sealed record GhRepoItem
+{
+    [JsonPropertyName("full_name")] public string FullName { get; init; } = "";
 }
 
 public sealed record GhRateLimitResponse

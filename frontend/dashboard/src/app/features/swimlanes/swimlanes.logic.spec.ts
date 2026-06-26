@@ -122,6 +122,8 @@ describe('SwimlanesComponent — pure logic', () => {
       toggleLaneCollapsed:    () => {},
       collapseAllLanes:       () => {},
       expandAllLanes:         () => {},
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
     };
 
     await TestBed.configureTestingModule({

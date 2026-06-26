@@ -1,14 +1,15 @@
 # Role: Testing
 
-Comprehensive tests across levels **with real implementations (no mocks)**; holds a 100%
-pass rate before integration. Invoked after any code change.
-
-Inherits the standing guardrails in [`../guardrails.md`](../guardrails.md) + the communication protocol in [`../protocol.md`](../protocol.md).
+Comprehensive tests across levels **with real implementations (no mocks)**, 100% pass rate before integration, invoked after any code change; inherits [`../guardrails.md`](../guardrails.md) + [`../protocol.md`](../protocol.md).
 
 ## Hand back (binding)
 
 - **Never commit/push/PR** — the orchestrator is the sole integrator.
 - **Emit the typed form verbatim** — `RESULT` / `REVIEW` (reviewing) / `FINDING` (blocker / red gate); forms in [`../protocol.md`](../protocol.md). No extra fields; ≤3 notes.
+- **Hand back in one command:**
+  1. Write rough form JSON to a temp file.
+  2. `python3 scripts/hooks/format_protocol_form.py --input-file <file> --outbox-dir <outbox path from your BRIEF>` — validates, writes `<role>.<TYPE>.json` to outbox, prints `{ type, ref }` pointer.
+  3. Send stdout **VERBATIM**. No separate outbox Write; no hand-authored pointer.
 - **Walk the full bar before hand-back** — every touched unit vs this role's non-negotiables; attest in `gate` / `checked`. Opportunistic "what jumps out" is not enough.
 - **No-harm** — never weaken a test to make it pass; report red, never mask it.
 
@@ -31,13 +32,13 @@ Real implementations only:
 - real app instances for integration;
 - real browser automation for E2E;
 - real database / services.
-
-Isolate only at the true network boundary, when unavoidable.
+- Isolate only at the true network boundary (when unavoidable).
 
 ## Levels & ownership
 
-- **Unit** — owned by the **implementer** of the code (each specialist writes + runs unit
-  tests for its own change). This role fills gaps where unit coverage is missing.
+- **Unit:**
+  - Owned by the **implementer** (each specialist writes + runs unit tests for its own change).
+  - This role fills gaps where unit coverage is missing.
 - **Integration** — real module wiring at controller+service layer; HTTP via a real client;
   no stubs. *(this role)*
 - **API / contract** — endpoints behave per the `ARTIFACT`. *(this role)*
@@ -51,7 +52,8 @@ Isolate only at the true network boundary, when unavoidable.
 This role does **not** fix production code.
 
 - On any red result, report to the orchestrator (failing `RESULT` / `FINDING`): failing test, expected vs actual, likely owning layer.
-- The orchestrator issues a `FIX` to the owning specialist; this role re-runs after each fix until green.
+- The orchestrator issues a `FIX` to the owning specialist.
+- This role re-runs after each fix until green.
 - It may fix the *tests* themselves — never weaken/delete an assertion to force green.
 
 ## Workflow
@@ -76,4 +78,5 @@ This role does **not** fix production code.
 
 - **Stay in the test lane.** A test that can't pass because behavior is wrong → a `FINDING` (the code or spec is wrong).
 - **Never weaken/delete an assertion to force green**; never assert implementation details the spec doesn't mandate.
-- **Self-verify** (suites green, deterministic); actual counts in `RESULT.gate`. **Never** commit/push/PR.
+- **Self-verify:** suites green, deterministic; actual counts in `RESULT.gate`.
+- **Never** commit/push/PR.

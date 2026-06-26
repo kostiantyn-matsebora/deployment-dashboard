@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "team-process/schemas/research.schema.json",
+  "title": "RESEARCH",
+  "description": "explorer -> orch - broad discovery hand-back. Produced by a read-only Explore agent during intake: where the relevant code lives, how it works today, candidate solution paths. Complements REVIEW (role-bar scoping), never replaces it. No 'role' field - the explorer is a generic discovery agent, not a project role. Canonical key order: type, topic, findings, options, refs, open.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "topic", "findings"],
+  "properties": {
+    "type": { "enum": ["RESEARCH"] },
+    "topic": { "type": "string", "minLength": 1 },
+    "findings": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "approach", "tradeoffs"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "approach": { "type": "string", "minLength": 1 },
+          "tradeoffs": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "open": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+  }
+}

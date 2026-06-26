@@ -111,6 +111,9 @@ describe('SwimlanesComponent', () => {
       toggleLaneCollapsed:    () => {},
       collapseAllLanes:       () => {},
       expandAllLanes:         () => {},
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
     };
 
     await TestBed.configureTestingModule({
@@ -191,6 +194,28 @@ describe('SwimlanesComponent', () => {
       const names = getLanes(component).map(l => l.service);
       expect(names).toEqual(['alpha', 'zeta']);
     });
+  });
+
+  // ── composite track-key — same service under different namespaces (#353) ──
+  //
+  // When the same service name exists in two namespaces the lanes computed must
+  // produce two distinct SwimLane objects (composite namespace|service identity).
+
+  describe('composite track-key — same service name under different namespaces', () => {
+
+    it('produces two distinct lanes when service name collides across namespaces', () => {
+      matrixSignal.set(mkMatrix([
+        { service: 'api', namespace: 'team-a', slots: { dev: { current: mkEv('dev', { service: 'api' }) } } },
+        { service: 'api', namespace: 'team-b', slots: { dev: { current: mkEv('dev', { service: 'api' }) } } },
+      ] as any));
+
+      const lanes = getLanes(component);
+      expect(lanes).toHaveLength(2);
+      // Both lanes carry the same service name but distinct namespace values.
+      const namespaces = lanes.map(l => (l as any).namespace ?? '').sort();
+      expect(namespaces).toEqual(['team-a', 'team-b']);
+    });
+
   });
 
   // ── SSE live-change wiring (#309) ────────────────────────────────────────
