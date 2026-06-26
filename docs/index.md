@@ -71,12 +71,13 @@ hide:
     ![Notifications](_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
     ![Notifications](_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
 
-=== "Presets"
+=== "Install as an app"
 
-    Save named sets of UI settings — active filters, view preferences, notification options — and apply them in one click. Export any preset as a `dd-preset-<slug>.json` file to share by email or by committing it to a git repo; teammates import it — no server involved.
+    Install the dashboard as a standalone app in Chrome or Edge — dedicated window, taskbar icon, no browser chrome. Works behind your gateway; no extra deployment needed.
 
-    ![UI settings presets](_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
-    ![UI settings presets](_assets/screenshots/presets-light.png#only-light){ .dd-shot }
+    ![Dashboard running as an installed standalone app](_assets/screenshots/install-app-dark.png){ .dd-shot }
+
+    [:octicons-arrow-right-24: How to install](guide/install-app.md){ .md-button }
 
 !!! quote ""
     **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
@@ -160,6 +161,7 @@ curl -X POST "$DASHBOARD_URL/api/deployments" \
   -d '{
     "deployment_id": "build-42",
     "service":       "checkout",
+    "namespace":     "storefront",
     "environment":   "prod",
     "version":       "1.4.2",
     "status":        "success",

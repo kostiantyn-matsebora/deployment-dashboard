@@ -36,7 +36,7 @@ Key variables:
 | Variable | Notes |
 |---|---|
 | `subscription_id` | **Required** — no default (azurerm v4) |
-| `dashboard_version` | Pin to a release tag, e.g. `0.17.0` |
+| `dashboard_version` | Pin to a release tag, e.g. `0.19.0` |
 | `github_repos` | Comma-separated `owner/repo` list; leave empty to disable the Fetcher |
 | `allowed_ip_ranges` | CIDR list to restrict gateway access; default `[]` = fully public |
 | `enable_easy_auth` | `true` to require Entra ID login on the gateway |

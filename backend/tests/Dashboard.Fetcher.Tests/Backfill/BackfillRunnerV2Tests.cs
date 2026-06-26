@@ -816,11 +816,13 @@ public sealed class BackfillRunnerV2Tests
         var deployment = MakeDeployment(id: 1, env: "prod", daysAgo: 1);
         var status = MakeStatus(deployId: 1, state: "success", runId: RunId, hoursAgo: 24);
 
-        // Run has a run-name override ("Release v1.2.3") but path maps to "Release API".
+        // Run has a run-name override ("Release v1.2.3") but WorkflowId 1 maps to "Release API".
+        // Under F12 / §5.6.2 the stable identity comes from GET /actions/workflows/{workflow_id}.
         var workflowRun = new GhWorkflowRun
         {
             Id = RunId,
-            Name = "Release v1.2.3",   // run-name: override
+            WorkflowId = 1,            // links to the "Release API" workflow definition
+            Name = "Release v1.2.3",   // run-name: override — must NOT win over workflow name
             Path = ".github/workflows/release.yml",
             HeadSha = "abc0001"
         };
@@ -1124,7 +1126,7 @@ public sealed class BackfillRunnerV2Tests
             """;
         var yamlBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(yaml));
 
-        return new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             [$"/repos/{Owner}/{Repo}/actions/workflows"] = new GhWorkflowListResponse { Workflows = [workflow] },
             [$"/repos/{Owner}/{Repo}/environments"] = new GhEnvironmentListResponse
@@ -1140,6 +1142,13 @@ public sealed class BackfillRunnerV2Tests
                 Encoding = "base64",
             },
         };
+
+        // Also register the per-id workflow endpoint (§5.6.2 F12): identity now comes from
+        // GET /actions/workflows/{workflow_id} rather than the YAML name: field.
+        if (run.WorkflowId != 0)
+            map[$"/repos/{Owner}/{Repo}/actions/workflows/{run.WorkflowId}"] = workflow;
+
+        return map;
     }
 
     // ── compatibility helper: collect all chunks into the old tuple shape ────

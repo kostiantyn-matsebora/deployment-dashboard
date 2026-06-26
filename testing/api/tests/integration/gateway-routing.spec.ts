@@ -11,8 +11,13 @@
  * docker-compose.demo.local.yaml supplies the demo image in CI.
  *
  * PROD assertions run in every environment (the stack always starts with a gateway).
+ *
+ * PWA assertions (#314):
+ *   Verifies that the frontend nginx correctly serves manifest.webmanifest with
+ *   Content-Type: application/manifest+json through the gateway, and that each
+ *   icon listed in the manifest returns 200 image/png through the gateway.
  */
-import { get } from './helpers';
+import { get, BASE } from './helpers';
 
 /** True when the stack is running the demo gateway (Dockerfile.demo). */
 const IS_DEMO_GATEWAY = process.env.DEMO_GATEWAY === '1';
@@ -60,4 +65,72 @@ describe('Gateway routing — demo image (/demo/* routes to demo-driver)', () =>
     // resolver or proxy_pass is broken.
     expect(res.status).not.toBe(502);
   });
+});
+
+// ---------------------------------------------------------------------------
+// PWA — manifest + icons through the gateway (#314)
+//
+// The gateway proxies / to the frontend container (GW3) blindly, so the
+// frontend nginx Content-Type header for .webmanifest passes through unchanged.
+// These assertions verify the full chain: gateway → frontend nginx → file.
+// ---------------------------------------------------------------------------
+
+/** Manifest icon shape (matches the contract in contract-manifest.md). */
+interface ManifestIcon {
+  src: string;
+  sizes: string;
+  type?: string;
+  purpose?: string;
+}
+
+describe('Gateway PWA (#314) — manifest served with correct Content-Type', () => {
+
+  it('GET /manifest.webmanifest returns 200 through the gateway', async () => {
+    const res = await get('/manifest.webmanifest');
+    expect(res.status).toBe(200);
+  });
+
+  it('GET /manifest.webmanifest Content-Type includes application/manifest+json', async () => {
+    const res = await get('/manifest.webmanifest');
+    const ct = res.headers.get('content-type') ?? '';
+    expect(ct).toMatch(/application\/manifest\+json/);
+  });
+
+  it('GET /manifest.webmanifest response body is valid JSON', async () => {
+    const res = await get('/manifest.webmanifest');
+    const body = await res.json();
+    expect(typeof body).toBe('object');
+    expect(body).not.toBeNull();
+  });
+
+});
+
+describe('Gateway PWA (#314) — icons reachable through the gateway', () => {
+
+  /**
+   * Fetch the manifest through the gateway and return its icons array.
+   * Fails the test immediately if the manifest is not reachable.
+   */
+  async function gatewayIcons(): Promise<ManifestIcon[]> {
+    const res = await fetch(`${BASE}/manifest.webmanifest`);
+    if (!res.ok) throw new Error(`GET /manifest.webmanifest -> ${res.status}`);
+    const body = (await res.json()) as { icons?: ManifestIcon[] };
+    return body.icons ?? [];
+  }
+
+  it('each icon listed in the manifest returns 200 image/png through the gateway', async () => {
+    const iconList = await gatewayIcons();
+
+    expect(iconList.length).toBeGreaterThan(0);
+
+    for (const icon of iconList) {
+      // Icon src values are relative (no leading /) — resolve against the SPA root.
+      const url = `${BASE}/${icon.src}`;
+      const res = await fetch(url);
+      expect(res.status).toBe(200);
+      const ct = res.headers.get('content-type') ?? '';
+      expect(ct).toMatch(/image\/png/);
+    }
+  });
+
 });

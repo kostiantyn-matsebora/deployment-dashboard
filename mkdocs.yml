@@ -99,6 +99,7 @@ nav:
           - guide/install/index.md
           - Docker Compose: guide/install/docker-compose.md
           - Azure (Terraform): guide/install/azure-terraform.md
+      - Install as an app: guide/install-app.md
       - Configuration:
           - guide/configuration/index.md
           - General: guide/configuration/general.md

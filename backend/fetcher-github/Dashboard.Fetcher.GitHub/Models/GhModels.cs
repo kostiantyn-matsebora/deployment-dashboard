@@ -32,6 +32,8 @@ public sealed record GhWorkflowRun
 {
     [JsonPropertyName("id")] public long Id { get; init; }
     [JsonPropertyName("name")] public string? Name { get; init; }
+    /// <summary>Stable numeric ID of the workflow definition (F12 / §5.6.2 — Actions:read, no Contents needed).</summary>
+    [JsonPropertyName("workflow_id")] public long WorkflowId { get; init; }
     [JsonPropertyName("path")] public string Path { get; init; } = "";
     [JsonPropertyName("head_sha")] public string HeadSha { get; init; } = "";
     /// <summary>Run conclusion (e.g. "success", "failure", "cancelled", "timed_out", "skipped", null when still in progress).</summary>
