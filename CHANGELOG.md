@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.20.0] - 2026-06-26
+
+### Added
+
+- **Install the dashboard as an in-browser app (#314).** The SPA now ships a web app manifest (`manifest.webmanifest`) with a full icon set (192/512 px, standard and maskable), `standalone` display, scope `/`, and theme/background colors, plus the `<link rel="manifest">` and `theme-color` meta in the page head. Chromium browsers (Chrome/Edge) offer an "Install" action that runs the dashboard in its own standalone window with an app icon, separate from browser tabs. The gateway serves `.webmanifest` as `application/manifest+json`. See [Install as an app](guide/install-app.md).
+
+
 ## [0.19.0] - 2026-06-25
 
 ### Changed
