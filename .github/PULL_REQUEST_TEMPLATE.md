@@ -22,7 +22,7 @@
 - [ ] Tests added/updated and passing locally.
 - [ ] For API changes: `docs/api/openapi.yaml` updated (contract source of truth).
 - [ ] For new/moved/removed docs: affected `index.md` regenerated (`/docs-index`), drift check green.
-- [ ] For scripts: PowerShell 7+, with a sibling `*.Tests.ps1` Pester suite.
+- [ ] For scripts: Python 3 (stdlib-only runtime), with a sibling `*_test.py` pytest suite and ruff-clean source.
 
 ## Notes for reviewers
 

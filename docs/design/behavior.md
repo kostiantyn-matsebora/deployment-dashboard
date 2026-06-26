@@ -70,6 +70,71 @@ version → sha → ref → run_number
 
 ---
 
+## Presets
+
+### Save
+
+1. User types a name (max 60 chars) in the name input and clicks Save (or presses Enter).
+2. `captureSettings()` snapshots the full live UI state into a `settings` object.
+3. Envelope `{ version: 1, name, settings }` is appended to the `dd:presets` array in `localStorage`.
+4. The new preset becomes the active preset; badge dot becomes visible.
+
+### Apply
+
+1. User clicks a preset row (or its ✓ Apply action button).
+2. `applySettings(p.settings)` writes each captured key back through the same code paths used by direct UI interaction — no short-circuit: theme flip triggers swimlane rebuild; field changes trigger matrix/swimlane re-render; view change calls `setView()`; filter changes call `applySvcFilter()`; column changes trigger grid recompute.
+3. The applied preset is marked `.is-active`: accent border + tint, `aria-current="true"`, and an "Active" badge on its row. The name is persisted to `localStorage` (`dd:presetActive`), so the indicator survives page reload.
+4. Unknown/missing fields in the snapshot fall back to current defaults — no error thrown.
+
+### Clone
+
+1. User clicks ⊕ Clone.
+2. A deep copy of the envelope is created with name `<original> (copy)`.
+3. Clone is inserted immediately after the source in the list. The active indicator does NOT transfer to the clone — the previously active preset (if any) remains active.
+
+### Update
+
+1. User clicks Update on a preset row.
+2. `window.confirm()` prompt: `Update preset "<name>" with the current settings?` — user must confirm.
+3. On confirm: `captureSettings()` snapshots the current live UI state; the preset's `settings` field is replaced with the snapshot. Name and version remain unchanged.
+
+### Rename
+
+1. User clicks ✎ Rename.
+2. The name span is replaced in-place with a text input pre-filled with the current name.
+3. Commit on Enter or blur; cancel on Escape (restores the list without saving).
+4. If the renamed preset was the active one, the stored `dd:presetActive` key updates to the new name — the active indicator follows the rename.
+
+### Delete
+
+1. User clicks ✕ Delete.
+2. `window.confirm()` prompt: `Delete preset "<name>"?` — user must confirm.
+3. On confirm: the preset is removed from the array, `localStorage` is updated. If the deleted preset was the active one, the active indicator is cleared (`dd:presetActive` removed) — no preset is considered active.
+
+### Reset All Settings
+
+1. User clicks **Reset all settings** in the Presets popover.
+2. `window.confirm()` prompt: `Reset all settings to defaults?` — user must confirm.
+3. On confirm: every captured setting key is removed from `localStorage` and each setting returns to its framework default (theme → `dark`; field pickers → all ON; filters → clear; view → Matrix; etc.).
+4. The active indicator is cleared (`dd:presetActive` removed) — no preset is considered active after a reset. The saved preset list is not affected; only the active tracking is cleared.
+
+### Export (per-preset)
+
+- Produces a single-envelope JSON file: `dd-preset-<slug>.json`.
+- Slug is the name lowercased with non-alphanumeric runs replaced by `-`.
+- File contains the full envelope (`{ version, name, settings }`) — one preset per file.
+
+### Import (per-preset)
+
+1. User clicks ⬆ Import; a hidden file input (`accept=".json"`) opens the OS picker.
+2. File is read as text and JSON-parsed.
+3. Validation: must be a non-array object with `version === 1`, non-empty string `name`, and a non-null `settings` object. Array inputs (old bulk format) are rejected.
+4. Name-clash: if a preset with the same name already exists, a numeric suffix `(2)`, `(3)`, … is appended until unique.
+5. Envelope is appended to the list; `localStorage` updated; list re-rendered.
+6. The file input is reset after each import so the same file can be re-imported.
+
+---
+
 ## Theme System
 
 ### Implementation
@@ -125,6 +190,25 @@ The mode control determines how the service and environment checkbox selections 
 | Watch only | Included in watch scope | Excluded from watch scope |
 
 An empty selection in "Watch only" mode results in an empty watch scope — no badge updates or notifications.
+
+### Server-Side Excludes
+
+Distinct from the client watch filter above. Two separate server-side excludes operate at different tiers:
+
+| Dimension | Client watch filter | Fetcher `GITHUB_WORKFLOW_EXCLUDE` | API `SERVICE_EXCLUDE` |
+|---|---|---|---|
+| **Where configured** | Per-browser, in the extension | Fetcher container env var | API container env var |
+| **Identity matched** | Per-browser service/environment prefs | `owner/repo/workflow` — GitHub-specific 3-segment glob | Opaque `namespace/service` identity glob |
+| **Scope** | Badge updates and notifications only | GitHub fetcher poll only — matching workflows never ingested | Write ingest + all read surfaces (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream`, `/api/analytics/*`) — excluded services contribute to no analytics aggregate |
+| **Effect on storage** | None — all events remain in storage | Excluded workflows cost no CI/CD API quota and produce no rows | API write: matching ingest rejected `403`. API read: already-stored events hidden (storage unchanged) |
+| **Precedence** | Applied client-side after the API response | Applied before any ingest attempt | Applied server-side before any data reaches the client |
+| **Provider scope** | n/a | GitHub adapter only — future adapters (Azure DevOps, Jenkins, …) add their own analogous exclude | Provider-agnostic — applies to all ingested events regardless of source |
+
+**`GITHUB_WORKFLOW_EXCLUDE`** uses three clean segments (`owner/repo/workflow`). GitHub identifiers never contain `/`, so `*` matches within each segment. Example: `acme/*/canary` excludes the `canary` workflow across all `acme` repos.
+
+**`SERVICE_EXCLUDE`** matches the event's opaque `namespace/service` identity. A pattern without `/` matches the `service` segment across all namespaces; a pattern with `/` is globbed against the full composite, where `*` spans `/`.
+
+Both server-side excludes are invisible to the extension — the watch filter only sees the services the API exposes. A service excluded by `SERVICE_EXCLUDE` will not appear in the extension's services list and cannot be added to the watch scope.
 
 ---
 

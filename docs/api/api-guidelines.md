@@ -83,6 +83,28 @@ The dev/local fake key is configured in the API container's environment and is *
 - **Filtering** is via flat query params. No JSON filter DSL.
 - `since` / `until` are RFC 3339 UTC timestamps; the server treats `[since, until)`.
 
+### Deployment-wide service exclusion — `SERVICE_EXCLUDE` (server config, issue #348)
+
+A single server-side config var hides a subset of services across the whole deployment. It is **server configuration, not a request parameter** — there is no query param for it, and there is **no include list**.
+
+**`SERVICE_EXCLUDE`.** A CSV of glob patterns matched against the event's opaque `namespace/service` **identity**. `namespace` is emitter-supplied and adopter-defined (see `DeploymentEventIngest.namespace`); the API makes **no assumptions** about its format — it may even contain `/` (e.g. a push-mode adopter using `owner/repo` as the namespace). Patterns are therefore matched as **glob strings** against the identity, not split into fixed segments — the **same glob semantics** documented for the Matrix `service` filter (`getMatrix`):
+
+- a pattern **without `/`** matches the `service` segment across all namespaces (e.g. `checkout`);
+- a pattern **containing `/`** is globbed against the full `namespace/service` composite, where `*` spans `/` (e.g. `acme/api/checkout`, `acme/*`, `*/checkout`).
+
+**Same list, write + read:**
+
+| Surface | Where | Effect |
+|---|---|---|
+| Write API (`POST /api/deployments`) | ingest | matching event **rejected `403`** (problem+json) |
+| Read API (`/api/services`, `/api/matrix`, `/api/deployments`, `/api/deployments/{id}`, `/api/events/stream`, `/api/analytics/*`) | read | matching events **filtered out**; by-id returns `404`; SSE live + replay suppressed; excluded services do not contribute to any analytics aggregate (dora, frequency, change-failure-rate, duration-histogram, promotion-funnel, status-distribution, heatmap, top-deployers, incidents) |
+
+**Hidden, not deleted.** An already-stored event for a now-excluded service is **hidden** by the read filter though it remains in storage; storage-clearing (reset / backfill) semantics are unchanged.
+
+**Empty default.** Empty `SERVICE_EXCLUDE` ⇒ exclude nothing (current behavior).
+
+**Fetcher-side scoping is separate.** Source-level exclusion at the fetcher (a provider-specific concern over the provider's own identifiers) is fetcher configuration documented in the fetcher spec — not part of this API contract and not a request parameter.
+
 ---
 
 ## 6. Error envelope (RFC 9457)
@@ -473,6 +495,10 @@ the value as measured commit→prod lead time.
   first. `severity` is derived from `duration_minutes` (longer → higher; unresolved
   → `critical`).
 - **All ordering is by `happened_at`** (emitter-supplied), consistent with §8.
+- **`SERVICE_EXCLUDE` applies.** Every `/api/analytics/*` aggregate is computed over the
+  same exclusion-filtered read surface as the rest of the API — events from excluded
+  services do not contribute to any aggregate. Glob semantics + the shared exclude list
+  are defined in §5.
 
 ---
 

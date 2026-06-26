@@ -32,7 +32,9 @@
     "billing-webhook",
     "catalog-edge",
     "data-pipeline",
+    "gateway",
     "ledger-projector",
+    "metrics-exporter",
     "notification-worker",
     "order-svc",
     "payments-api",
@@ -121,7 +123,14 @@
     { "deployment_id": "gh-search-prod-1420",     "service": "search-indexer",      "environment": "prod",    "status": "queued",      "elapsed_minutes": 8,    "version": "v0.8.1-rc1",  "sha": "b2c3d4e", "ref": "release/0.8",        "actor": "mreyes",      "run_number": "1420", "run_url": "https://ci.internal/runs/1420", "parent_deployments": [] },
     { "deployment_id": "gh-billhook-prod-826",    "service": "billing-webhook",     "environment": "prod",    "status": "waiting",     "elapsed_minutes": 2,    "version": "v1.4.1-rc1",  "sha": "6e7f8a1", "ref": "feat/retry-jitter-v2", "actor": "l.osman",   "run_number": "826",  "run_url": "https://ci.internal/runs/826",  "parent_deployments": [] },
     { "deployment_id": "gh-ledger-prod-1831",     "service": "ledger-projector",    "environment": "prod",    "status": "cancelled",   "elapsed_minutes": 3,    "version": "v2.0.2-rc1",  "sha": "6b7c8d9", "ref": "main",               "actor": "r.iyer",      "run_number": "1831", "run_url": "https://ci.internal/runs/1831", "parent_deployments": [] },
-    { "deployment_id": "gh-catalog-prod-5161",    "service": "catalog-edge",        "environment": "prod",    "status": "rejected",    "elapsed_minutes": 1,    "version": "v5.0.0-rc2",  "sha": "2d9e0f1", "ref": "feat/v5-rewrite",    "actor": "tcheng",      "run_number": "5161", "run_url": "https://ci.internal/runs/5161", "parent_deployments": [] }
+    { "deployment_id": "gh-catalog-prod-5161",    "service": "catalog-edge",        "environment": "prod",    "status": "rejected",    "elapsed_minutes": 1,    "version": "v5.0.0-rc2",  "sha": "2d9e0f1", "ref": "feat/v5-rewrite",    "actor": "tcheng",      "run_number": "5161", "run_url": "https://ci.internal/runs/5161", "parent_deployments": [] },
+
+    { "deployment_id": "orga-gateway-prod-100",   "service": "gateway", "namespace": "org-a", "environment": "prod",    "status": "success",     "elapsed_minutes": 50,   "version": "v1.2.0",  "sha": "aaa1111", "ref": "main", "actor": "bot-a", "run_number": "100", "run_url": "https://ci.internal/runs/100", "parent_deployments": [] },
+    { "deployment_id": "orga-gateway-staging-100","service": "gateway", "namespace": "org-a", "environment": "staging", "status": "success",     "elapsed_minutes": 80,   "version": "v1.2.0",  "sha": "aaa1111", "ref": "main", "actor": "bot-a", "run_number": "100", "run_url": "https://ci.internal/runs/100", "parent_deployments": [] },
+    { "deployment_id": "orgb-gateway-prod-200",   "service": "gateway", "namespace": "org-b", "environment": "prod",    "status": "in-progress", "elapsed_minutes": 7,    "version": "v0.9.1",  "sha": "bbb2222", "ref": "feat/edge-cache", "actor": "bot-b", "run_number": "200", "run_url": "https://ci.internal/runs/200", "parent_deployments": [] },
+    { "deployment_id": "orgb-gateway-dev-200",    "service": "gateway", "namespace": "org-b", "environment": "dev",     "status": "success",     "elapsed_minutes": 25,   "version": "v0.9.1",  "sha": "bbb2222", "ref": "feat/edge-cache", "actor": "bot-b", "run_number": "200", "run_url": "https://ci.internal/runs/200", "parent_deployments": [] },
+
+    { "deployment_id": "metrics-prod-500",        "service": "metrics-exporter",    "environment": "prod",    "status": "success",     "elapsed_minutes": 100,  "version": "v3.0.0",  "sha": "ccc3333", "ref": "main", "actor": "devops",  "run_number": "500", "run_url": "https://ci.internal/runs/500", "parent_deployments": [] }
 
   ],
 

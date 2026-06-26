@@ -190,6 +190,7 @@ public sealed class IngestValidatorTests
         {
             nameof(DeploymentEventIngest.DeploymentId) => ValidBody() with { DeploymentId = overlong },
             nameof(DeploymentEventIngest.Service) => ValidBody() with { Service = overlong },
+            nameof(DeploymentEventIngest.Namespace) => ValidBody() with { Namespace = overlong },
             nameof(DeploymentEventIngest.Environment) => ValidBody() with { Environment = overlong },
             nameof(DeploymentEventIngest.Version) => ValidBody() with { Version = overlong },
             nameof(DeploymentEventIngest.RunUrl) => ValidBody() with { RunUrl = overlong },

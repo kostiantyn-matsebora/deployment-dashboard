@@ -21,10 +21,18 @@ The **Fix-loop** activity of the orchestration process
 ## Loop
 
 - **Orchestrator diagnoses to *route*, not to fix.** From the `FINDING`
-  (`expect` / `actual` / `suspect`) it picks the owning specialist and issues a `FIX` — it does
-  **not** open the code itself.
+  (`expect` / `actual` / `suspect`) it picks the owning specialist and issues a `FIX` — written to that
+  member's `inbox` and delivered by `{ type, ref }` pointer (see
+  [`protocol.md`](../team-process/protocol.md) → *Message delivery*). It does **not** open the code itself
+  (code-cognition is tool-blocked while a run is active).
+- **Keep the route-diagnosis shallow.**
+  - `suspect` already names the layer → route directly.
+  - Layer genuinely **ambiguous across roles** → delegate an [`ANALYSIS`](../team-process/protocol.md) to pick it; do **not** deepen the dig in your own context.
 - **Deep investigation is the owning agent's prerogative**, in that agent's own context.
 - **Re-run after each fix; loop until green.** Re-verify against the owning spec.
   **Never ship red.**
+- **Capture a non-obvious diagnosis** as a `decisions[]` entry (root cause + the fix chosen + why)
+  so it is not re-derived after a restart — see
+  [`process.md`](../team-process/process.md) → *Decision record*.
 
 **Output:** a green wider-net suite (verified against the owning spec).

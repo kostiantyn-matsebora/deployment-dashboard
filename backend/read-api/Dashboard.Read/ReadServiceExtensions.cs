@@ -2,6 +2,7 @@ using Dashboard.Read.Analytics;
 using Dashboard.Read.Repositories;
 using Dashboard.Read.Services;
 using Dashboard.Read.Sse;
+using Dashboard.Shared.ServiceFiltering;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,8 +30,13 @@ public static class ReadServiceExtensions
 
         services.AddSingleton(analyticsOptions);
 
+        // Parse SERVICE_EXCLUDE once at composition root — never per-request.
+        var serviceFilter = ServiceFilter.Parse(configuration["SERVICE_EXCLUDE"]);
+        services.AddSingleton(serviceFilter);
+
         services.AddScoped<IDeploymentReadRepository, DeploymentReadRepository>();
         services.AddScoped<IMatrixService, MatrixService>();
+        services.AddScoped<AnalyticsExcludeFilter>();
         services.AddScoped<IAnalyticsRepository, AnalyticsRepository>();
 
         // SSE broadcaster: one singleton instance serves as both IDeploymentEventBroadcaster
