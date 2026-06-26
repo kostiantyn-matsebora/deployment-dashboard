@@ -17,7 +17,7 @@ jobs:
     name: Lint and test scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install bats
         # ubuntu-latest ships bats 1.x from apt; pinning via apt keeps the step
@@ -52,7 +52,7 @@ jobs:
           bats --tap "${suites[@]}"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
